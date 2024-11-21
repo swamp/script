@@ -1,92 +1,116 @@
-print('hello world')
+/// This is a doc comment
 
-fn test(s: String, value: Int) -> String {
-    'cool {s} {value}'
+// Primitive types and literals
+int_val = 42
+float_val = 3.14
+string_val = "normal string"
+interpolated = 'value is {int_val}'
+bool_val = true
+unit_val = ()
+
+// Arrays
+numbers = [1, 2, 3, 4, 5]
+first = numbers[0]
+
+// Tuples
+point = (10, "hello", 3.14)
+
+
+// Struct definition
+struct Vector2 {
+    x: Float,
+    y: Float,
 }
 
-
-result = test('testing', 9494)
-print(result)
-
-tup = (10, 'hello', 222.2)
-print(tup)
-
-struct Position {
-    x: Int,
-    y: Int,
-}
-
-impl Position {
-    fn sum(self) -> Int {
-        self.x + self.y
+// Implementation block
+impl Vector2 {
+    fn sqr_len(self) -> Float {
+        self.x * self.x + self.y * self.y
     }
 
-    fn set_x(mut self, x: Int) {
-        self.x = x
+    fn scale(mut self, factor: Float) -> Vector2 {
+        self.x = self.x * factor
+        self.y = self.y * factor
+        self
     }
 }
 
-struct Enemy {
-    position: Position,
+
+// Enum 
+enum Shape {
+    Circle(Float),
+    Rectangle { width: Float, height: Float },
+    Point,
+}
+
+
+// Function definition
+fn calculate_area(shape: Shape) -> Float {
+    match shape {
+        Circle(radius) => 3.14 * radius * radius,
+        Rectangle { width, height } => width * height,
+        Point => 0.0,
+    }
+}
+
+
+// Loops
+mut sum = 0
+for i in 0..5 {
+    sum = sum + i
+}
+print('loop sum: {sum}') // loops 0 to 4, so result is 10. (0, 1, 1+2, 3+3, 6+4)
+
+
+mut counter = 0
+while counter < 8 {
+    if counter == 2 {
+        counter = counter + 1
+        print('I continued at {counter}')
+        continue
+    }
+    if counter == 4 {
+        break
+    }
+    counter = counter + 1
+}
+print('counter after while is: {counter}') // Should be 4
+
+
+struct Player {
     name: String,
+    health: Int,
+    position: Vector2
 }
 
-impl Enemy {
-    fn pos(self) -> Position {
-        self.position
-    }
+player = Player {
+    name: "Hero",
+    health: 100,
+    position: Vector2 { x: 10.0, y: 20.0 }
 }
-
-mut pos = Position { x: -9998, y : 20, }
-print(pos)
-
-// print('sum of x and y {pos.sum()}')
+print('player:{player}')
 
 
-enemy = Enemy { position: pos, name: 'Dracus' }
-print(enemy)
-
-print('chaining_sum: {enemy.pos().sum()}')
-
-pos.set_x(1234)
-print('after set_x(): {pos}')
-
-
-
-enum Something {
-   First(Int, String, Float),
-   Second { test: Int, another: Float },
-   Single
+// Pattern matching with multiple patterns
+status = match player.health {
+    100 => "Full health",
+    health => 'Critical: {health}'
 }
-
-first = Something::First(10, "hello", 99.99)
-print(first)
-
-second = Something::Second {
-    test: -9292,
-    another: 0.9418,
-}
-print(second)
-
-single = Something::Single
-print(single)
-
-x = match second {
-    First(_, _) => "it should not be first",
-    Second { test } => 'correct! {test}',
-    Single => "it should not be single",
-}
-print(x)
+print('status:{status}')
 
 
+shapes = [
+    Shape::Circle(5.0),
+    Shape::Rectangle { width: 10.0, height: 20.0 },
+    Shape::Point
+]
 
-x = 98
-match_str = match x {
-   _ => "not correct",
-   32 => "not quite right",
-   98 => "you found it!",
-}
-print('match_str: {match_str}')
+print('area:{calculate_area(shapes[1])}') // Should be 200
 
+mut vec = Vector2 { x: 1.0, y: 2.0 }
+length = vec.scale(2.0).sqr_len()  // 2*2 + 4*4 = 20
 
-second // will be returned
+print('Final sqr-length: {length}') // 20
+
+// Return the last expression
+length

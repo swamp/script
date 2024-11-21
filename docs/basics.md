@@ -2,20 +2,20 @@
 
 ## Primitive Types
 
-- Int (32-bit)
-- Float (fixed point)
-- String
-- Bool
-- Unit ("nothing")
+- `Int`: Whole numbers (`42`). Represented as 32-bit integer.
+- `Float`: Decimal numbers (`12.98`). Represented as a 32-bit fixed point number.
+- `String`: Text (`"hello"` or `'hello'`)
+- `Bool`: True/false (`true` or `false`)
+- `Unit`: Nothing (`()`)
 
 ## Composite Types
 
-- Struct
-- Tuple
-- Array
-- Enum
-- _Map - under development_
-- _Any (used internally in the compiler)
+- `Struct`: Named fields
+- `Tuple`: Ordered values
+- `Array`: Lists
+- `Enum`: Variants
+- `Map`: Key-value pairs _(coming soon!)_
+- `_Any`: _(used internally in the compiler)_
 
 ## Literals
 
@@ -96,7 +96,7 @@
 ## Statements
 
 - Let. `variable = 3`
-- If. `if a < 0 { "value is negative" }`. Has an *optional* `else`.
+- If. `if a < 0 { "value is negative" }`. `else` is optional.
 - For. `for a in 0..3`.
 - While. `while s < 2 { s = s + 1 }`
 - Return. `return 19.49`. Return early from a scope.
@@ -108,17 +108,17 @@
 ## Definitions
 
 - Struct `struct Name { a: Int, b: String }`
-- Enum `enum SomeName { Single, Multi(Int, Float, Int), MoreInfo{amount: Int}}`
+- Enum `enum SomeName { Single, Multi(Int, Float, Int), MoreInfo { amount: Int } }`
 - Function. `fn some_name(param1: Int, param2: Float) -> Int` or optional return if there are side effects: `fn some_name(param1: String)`
 - Impl `impl SomeStruct { fn some_name(self) -> { self.x }  fn another(mut self, v: Int) { self.x = v} }`
 - External `external fn a_name(param1: Float) -> Float`. 
-- Import. `import math` (not supported yet)
+- _Import. `import math` (not supported yet)_
 - DocComment `/// this will be documentation`
 
 
 ## Patterns
 
-- **variable**: Matches everything, basically a `let`
+- **Variable**: Matches everything, basically a `let`
 - **Tuple**: `(x, _, y)`
 - **Struct**:  `{ x, y }`
 - **Literal**: `23`
@@ -127,4 +127,3 @@
 - **Enum Simple**: `VariantName`
 - **Wildcard** `_`: Matches everything
   
- 
