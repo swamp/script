@@ -8,10 +8,9 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
 use std::{fs, io};
-use swamp_script_eval::value::Value::Unit;
 use swamp_script_eval::{ExecuteError, Interpreter, ValueWithSignal};
 use swamp_script_parser::prelude::*;
-use tracing::{debug, error, info};
+use tracing::{debug, info};
 use tracing_subscriber::EnvFilter;
 
 #[derive(Parser)]
@@ -46,36 +45,15 @@ fn init_logging() {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     init_logging();
+
     let cli = Cli::parse();
-    let result = command(&cli.command);
 
-    match result {
-        Ok(value_with_signal) => {
-            info!("returned: {:?}", value_with_signal);
-            match value_with_signal {
-                ValueWithSignal::Value(v) => {
-                    eprintln!("{}", v);
-                }
-
-                ValueWithSignal::Return(_) => panic!("return() should not happen"),
-                ValueWithSignal::Break => panic!("break should not happen"),
-                ValueWithSignal::Continue => panic!("continue should not be a value"),
-            }
-            Ok(())
-        }
-        Err(err) => {
-            error!("{err:?}");
-            Err(Box::new(err))
-        }
-    }
+    Ok(command(&cli.command)?)
 }
 
-fn command(command: &Commands) -> Result<ValueWithSignal, CliError> {
+fn command(command: &Commands) -> Result<(), CliError> {
     match command {
-        Commands::Build { path } => {
-            let _ = build(path)?;
-            Ok(ValueWithSignal::Value(Unit))
-        }
+        Commands::Build { path } => build(path),
         Commands::Run { path } => run(path),
     }
 }
@@ -157,13 +135,25 @@ fn compile(path: &Path) -> Result<Program, CliError> {
 
 fn build(path: &PathBuf) -> Result<(), CliError> {
     let program = compile(path)?;
-    debug!("compiled to:\n{}", program);
+    eprintln!("{}", program);
     Ok(())
 }
 
-fn run(path: &PathBuf) -> Result<ValueWithSignal, CliError> {
+fn run(path: &PathBuf) -> Result<(), CliError> {
     let program = compile(path)?;
     let mut eval = Interpreter::new();
 
-    Ok(eval.eval_program(program)?)
+    let value_with_signal = eval.eval_program(program)?;
+
+    info!("returned: {:?}", value_with_signal);
+    match value_with_signal {
+        ValueWithSignal::Value(v) => {
+            eprintln!("{}", v);
+        }
+
+        ValueWithSignal::Return(_) => panic!("return() should not happen"),
+        ValueWithSignal::Break => panic!("break should not happen"),
+        ValueWithSignal::Continue => panic!("continue should not be a value"),
+    }
+    Ok(())
 }
