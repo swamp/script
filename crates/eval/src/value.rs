@@ -176,7 +176,7 @@ impl Value {
             Value::Unit => SwampTypeId::Void,
             Value::ExclusiveRange(_, _) => SwampTypeId::Range,
             Value::Reference(r) => r.borrow().swamp_type_id(),
-            Value::Struct(struct_type, _) => struct_type.swamp_type_id().clone(),
+            Value::Struct(struct_type, _) => SwampTypeId::Struct(struct_type.clone()),
             Value::Tuple(tuple_type, _values) => SwampTypeId::Tuple(tuple_type.clone()),
             Value::EnumVariant(enum_variant_type_ref, _data) => {
                 SwampTypeId::EnumVariant(enum_variant_type_ref.clone())

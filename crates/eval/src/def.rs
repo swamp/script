@@ -35,7 +35,7 @@ impl DefinitionRunner {
             Type::Float => SwampTypeId::Float,
             Type::String => SwampTypeId::String,
             Type::Bool => SwampTypeId::Bool,
-            Type::Void => SwampTypeId::Void,
+            Type::Unit => SwampTypeId::Void,
             Type::Any => SwampTypeId::Any,
 
             Type::Struct(local_struct_type_name) => {

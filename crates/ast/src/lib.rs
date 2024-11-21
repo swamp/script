@@ -7,6 +7,7 @@ use seq_map::SeqMap;
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
+use std::hash::Hash;
 
 #[derive(Clone)]
 pub struct Variable {
@@ -274,15 +275,17 @@ impl Debug for Parameter {
 /// Expressions are things that "converts" to a value when being evaluated.
 #[derive(Debug, Clone)]
 pub enum Expression {
-    // Lookup values
+    // Access Lookup values
     FieldAccess(Box<Expression>, LocalTypeIdentifier),
-    Variable(Variable),
+    VariableAccess(Variable),
     MutRef(MutVariableRef), // Used when passing with mut keyword. mut are implicitly passed by reference
     ArrayAccess(Box<Expression>, Box<Expression>), // Read from an array: arr[3]
-    ArrayAssignment(Box<Expression>, Box<Expression>, Box<Expression>), // target, index, source. Write to an index in an array: arr[3] = 42
+
+    // Assignment
 
     // Since it is a cool language, we can "chain" assignments together. like a = b = c = 1. Even for field assignments, like a.b = c.d = e.f = 1
-    Assignment(Box<Expression>, Box<Expression>),
+    VariableAssignment(Box<Expression>, Box<Expression>),
+    ArrayAssignment(Box<Expression>, Box<Expression>, Box<Expression>), // target, index, source. Write to an index in an array: arr[3] = 42
     FieldAssignment(Box<Expression>, LocalTypeIdentifier, Box<Expression>),
 
     // Operators
@@ -333,14 +336,14 @@ pub enum Literal {
 
 pub fn seq_map_to_string<K, V>(map: &SeqMap<K, V>) -> String
 where
-    K: Debug + std::cmp::Eq + std::hash::Hash + std::clone::Clone,
+    K: Debug + Eq + Hash + Clone,
     V: Debug,
 {
     let entries = map
         .iter()
-        .map(|(k, v)| format!("{:?}: {:?}", k, v)) // Format each key-value pair
-        .collect::<Vec<String>>() // Collect into a Vec of Strings
-        .join(", "); // Join with a comma and space
+        .map(|(k, v)| format!("{:?}: {:?}", k, v))
+        .collect::<Vec<String>>()
+        .join(", ");
 
     entries.trim().to_string()
 }
@@ -352,17 +355,17 @@ impl Debug for Literal {
                 EnumLiteralData::Nothing => {
                     write!(f, "EnumVariant({}::{})", enum_type, variant_name)
                 }
-                EnumLiteralData::Tuple(exprs) => write!(
+                EnumLiteralData::Tuple(expressions) => write!(
                     f,
                     "EnumVariant({}::{}({:?}))",
-                    enum_type, variant_name, exprs
+                    enum_type, variant_name, expressions
                 ),
-                EnumLiteralData::Struct(exprs) => write!(
+                EnumLiteralData::Struct(expressions) => write!(
                     f,
                     "EnumVariant({}::{}{{ {} }})",
                     enum_type,
                     variant_name,
-                    seq_map_to_string(exprs)
+                    seq_map_to_string(expressions)
                 ),
             },
 
@@ -419,7 +422,7 @@ pub enum Type {
     Struct(ScopedTypeIdentifier), // TODO: Module support for name
     Array(Box<Type>),
     Map(Box<Type>, Box<Type>), // TODO: not implemented yet
-    Void,
+    Unit,
     Tuple(Vec<Type>),
     Enum(ScopedTypeIdentifier), // TODO: Module support
     Any,

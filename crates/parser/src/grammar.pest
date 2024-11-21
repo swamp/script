@@ -100,11 +100,6 @@ field_definitions = { (field_def ~ ("," ~ field_def)*)? }
 // Single field definition
 field_def = { identifier ~ ":" ~ type_name }
 
-// Function definition
-//function_def = { "fn" ~ identifier ~ parameters? ~ return_type? ~ "{" ~ statement* ~ "}" }
-
-//function_def = { "fn" ~ identifier ~ "(" ~ parameter_list? ~ ")" ~ return_type? ~ "{" ~ statement* ~ "}" }
-
 
 // Testing this way
 function_def = {

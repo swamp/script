@@ -278,7 +278,7 @@ impl AstParser {
         let field = LocalTypeIdentifier::new(&self.expect_identifier(&mut inner)?);
 
         Ok(Expression::FieldAccess(
-            Box::new(Expression::Variable(base)),
+            Box::new(Expression::VariableAccess(base)),
             field,
         ))
     }
@@ -379,7 +379,7 @@ impl AstParser {
         let name = LocalTypeIdentifier::new(&self.expect_identifier(&mut inner)?);
 
         let mut params = Vec::new();
-        let mut return_type = Type::Void;
+        let mut return_type = Type::Unit;
         let mut body = Vec::new();
 
         while let Some(pair) = inner.next() {
@@ -462,7 +462,7 @@ impl AstParser {
         let name = LocalTypeIdentifier::new(&self.expect_identifier(&mut inner)?);
         let mut params = Vec::new();
         let mut self_param = None;
-        let mut return_type = Type::Void;
+        let mut return_type = Type::Unit;
         let mut body = Vec::new();
 
         // Parse the rest of the method definition
@@ -759,7 +759,10 @@ impl AstParser {
 
     fn parse_expression(&self, pair: Pair<Rule>) -> Result<Expression, Error<Rule>> {
         match pair.as_rule() {
-            Rule::variable => Ok(Expression::Variable(Variable::new(pair.as_str(), false))),
+            Rule::variable => Ok(Expression::VariableAccess(Variable::new(
+                pair.as_str(),
+                false,
+            ))),
             Rule::block => {
                 // Block in expression context - expect single expression
                 let inner = self.next_inner_pair(pair)?;
@@ -798,15 +801,15 @@ impl AstParser {
                 let array = Variable::new(&self.expect_identifier(&mut subscript_inner)?, false);
                 let index = self.parse_expression(self.next_pair(&mut subscript_inner)?)?;
                 Ok(Expression::ArrayAssignment(
-                    Box::new(Expression::Variable(array)),
+                    Box::new(Expression::VariableAccess(array)),
                     Box::new(index),
                     Box::new(expr),
                 ))
             }
             Rule::identifier => {
                 let var = Variable::new(left.as_str(), false);
-                Ok(Expression::Assignment(
-                    Box::new(Expression::Variable(var)),
+                Ok(Expression::VariableAssignment(
+                    Box::new(Expression::VariableAccess(var)),
                     Box::new(expr),
                 ))
             }
@@ -941,7 +944,7 @@ impl AstParser {
         let base_pair = self.next_pair(&mut inner)?;
         let base = match base_pair.as_rule() {
             Rule::array_literal => self.parse_array_literal(base_pair)?,
-            Rule::variable => Expression::Variable(Variable::new(base_pair.as_str(), false)),
+            Rule::variable => Expression::VariableAccess(Variable::new(base_pair.as_str(), false)),
             Rule::function_call => self.parse_function_call(base_pair)?,
             Rule::struct_instantiation => self.parse_struct_instantiation(base_pair)?,
             Rule::literal => Expression::Literal(self.parse_literal(base_pair)?),
@@ -1058,7 +1061,10 @@ impl AstParser {
             Rule::interpolated_string => self.parse_interpolated_string(pair),
             Rule::array_subscript => self.parse_array_access(pair),
             Rule::literal => Ok(Expression::Literal(self.parse_literal(pair)?)),
-            Rule::variable => Ok(Expression::Variable(Variable::new(pair.as_str(), false))),
+            Rule::variable => Ok(Expression::VariableAccess(Variable::new(
+                pair.as_str(),
+                false,
+            ))),
             Rule::field_access => self.parse_field_access(pair),
             Rule::function_call => self.parse_function_call(pair),
             Rule::match_expr => self.parse_match_expr(pair),
@@ -1171,7 +1177,7 @@ impl AstParser {
         let var = Variable::new(&self.expect_identifier(&mut inner)?, false);
         let index = self.parse_expression(self.next_pair(&mut inner)?)?;
         Ok(Expression::ArrayAccess(
-            Box::new(Expression::Variable(var)),
+            Box::new(Expression::VariableAccess(var)),
             Box::new(index),
         ))
     }
@@ -1336,7 +1342,7 @@ impl AstParser {
 
                 if has_mut {
                     match expr {
-                        Expression::Variable(var) => {
+                        Expression::VariableAccess(var) => {
                             args.push(Expression::MutRef(MutVariableRef(var)));
                         }
                         _ => {
@@ -1361,7 +1367,7 @@ impl AstParser {
         }
 
         Ok(Expression::FunctionCall(
-            Box::new(Expression::Variable(Variable::new(&func_name, false))),
+            Box::new(Expression::VariableAccess(Variable::new(&func_name, false))),
             args,
         ))
     }

@@ -269,7 +269,7 @@ impl Interpreter {
                     param_type: Type::Any,
                     is_mutable: false,
                 }],
-                Type::Void,
+                Type::Unit,
             ),
             Rc::new(Box::new(move |args: &[Value]| {
                 if let Some(value) = args.first() {
@@ -330,7 +330,7 @@ impl Interpreter {
             if param.is_mutable {
                 match arg {
                     Expression::MutRef(_) => (), // This is fine
-                    Expression::Variable(var) => {
+                    Expression::VariableAccess(var) => {
                         return Err(format!("Parameter '{}' is marked as mut but variable '{}' is passed without mut keyword",
                                            param.variable.name(), var.name()))?;
                     }
@@ -776,10 +776,10 @@ impl Interpreter {
             }
 
             // ==================== ASSIGNMENT ====================
-            Expression::Assignment(target, value_expr) => {
+            Expression::VariableAssignment(target, value_expr) => {
                 let new_value = self.evaluate_expression(value_expr)?;
 
-                if let Expression::Variable(name) = &**target {
+                if let Expression::VariableAccess(name) = &**target {
                     match self.scope_stack.last().unwrap().variables.get(name.name()) {
                         Some(Value::Reference(r)) => {
                             *r.borrow_mut() = new_value.clone();
@@ -861,7 +861,7 @@ impl Interpreter {
             }
 
             // ------------- LOOKUP ---------------------
-            Expression::Variable(var) => {
+            Expression::VariableAccess(var) => {
                 // First check local scope
                 if let Some(value) = self.lookup_in_scope(&var.name) {
                     trace!("found lookup: {var:?} {value:?}");
@@ -986,11 +986,16 @@ impl Interpreter {
                 self.evaluate_function_call(func_expr, arg_exprs)
             }
 
-            Expression::MemberCall(obj_expr, method_name, args) => {
-                let obj = self.evaluate_expression(obj_expr)?;
-                let type_id = obj.swamp_type_id();
+            Expression::MemberCall(member_expression, method_name, args) => {
+                let member_value = self.evaluate_expression(member_expression)?;
+                let type_id = member_value.swamp_type_id();
 
-                trace!("{} > member call {:?} {:?}", self.tabs(), type_id, obj);
+                trace!(
+                    "{} > member call {:?} {:?}",
+                    self.tabs(),
+                    type_id,
+                    member_value
+                );
                 // Look up the method
                 let method = {
                     let module = self.current_module.borrow();
@@ -1011,20 +1016,14 @@ impl Interpreter {
                         .clone()
                 };
 
-                self.push_scope(ScopeType::Function);
+                self.push_scope(ScopeType::Function); // TODO: maybe have automatic pop on Drop
 
-                // Create a new scope for method parameters
-                let mut method_args = Vec::new();
-
-                // Add self as first argument
-                method_args.push(obj);
-
-                // Add other arguments
+                let mut member_call_arguments = Vec::new();
+                member_call_arguments.push(member_value);
                 for arg in args {
-                    method_args.push(self.evaluate_expression(arg)?);
+                    member_call_arguments.push(self.evaluate_expression(arg)?);
                 }
 
-                // Bind all parameters including self
                 let mut all_params = vec![Parameter {
                     variable: Variable::new("self", method.self_param.is_mutable),
                     param_type: Type::Any, // The actual type doesn't matter here
@@ -1032,25 +1031,22 @@ impl Interpreter {
                 }];
                 all_params.extend(method.params.iter().cloned());
 
-                // Bind all parameters at once
-                self.bind_parameters(&all_params, method_args)?;
+                self.bind_parameters(&all_params, member_call_arguments)?;
 
-                // Execute method body
                 let result = self.execute_statements(&method.body)?;
 
-                // Pop the method scope
                 self.pop_scope();
 
                 match result {
                     ValueWithSignal::Value(v) => Ok(v),
                     ValueWithSignal::Return(_) => {
-                        return Err("not allowed with return in member calls".to_string())?
+                        Err("not allowed with return in member calls".to_string())?
                     }
                     ValueWithSignal::Break => {
-                        return Err("not allowed with break in member calls".to_string())?
+                        Err("not allowed with break in member calls".to_string())?
                     }
                     ValueWithSignal::Continue => {
-                        return Err("not allowed with continue in member calls".to_string())?
+                        Err("not allowed with continue in member calls".to_string())?
                     }
                 }
             }
@@ -1062,13 +1058,13 @@ impl Interpreter {
                 match result {
                     ValueWithSignal::Value(v) => Ok(v),
                     ValueWithSignal::Return(_) => {
-                        return Err("return is not allowed in expressions".to_string())?
+                        Err("return is not allowed in expressions".to_string())?
                     }
                     ValueWithSignal::Break => {
-                        return Err("break is not allowed in expressions".to_string())?
+                        Err("break is not allowed in expressions".to_string())?
                     }
                     ValueWithSignal::Continue => {
-                        return Err("continue is not allowed in expressions".to_string())?
+                        Err("continue is not allowed in expressions".to_string())?
                     }
                 }
             }

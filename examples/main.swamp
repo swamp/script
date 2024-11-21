@@ -26,10 +26,27 @@ impl Position {
     }
 }
 
+struct Enemy {
+    position: Position,
+    name: String,
+}
+
+impl Enemy {
+    fn pos(self) -> Position {
+        self.position
+    }
+}
+
 mut pos = Position { x: -9998, y : 20, }
 print(pos)
 
-print('sum of x and y {pos.sum()}')
+// print('sum of x and y {pos.sum()}')
+
+
+enemy = Enemy { position: pos, name: 'Dracus' }
+print(enemy)
+
+print('chaining_sum: {enemy.pos().sum()}')
 
 pos.set_x(1234)
 print('after set_x(): {pos}')

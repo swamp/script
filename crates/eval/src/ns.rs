@@ -17,7 +17,6 @@ pub type StructTypeRef = Rc<StructType>;
 #[derive(Debug, Eq, PartialEq, Hash)]
 pub struct StructType {
     pub fields: SeqMap<LocalTypeIdentifier, SwampTypeId>,
-    pub swamp_type_id: SwampTypeId,
     pub name: LocalTypeIdentifier,
 }
 
@@ -26,14 +25,7 @@ impl StructType {
         name: LocalTypeIdentifier,
         fields: SeqMap<LocalTypeIdentifier, SwampTypeId>,
     ) -> Self {
-        Self {
-            fields,
-            swamp_type_id: SwampTypeId::Int, // TODO: FIX
-            name,
-        }
-    }
-    pub fn swamp_type_id(&self) -> &SwampTypeId {
-        &self.swamp_type_id
+        Self { fields, name }
     }
 
     pub fn field_index(&self, field_name: &LocalTypeIdentifier) -> Option<usize> {
@@ -249,7 +241,7 @@ impl ModuleNamespace {
     pub fn add_impl(
         &mut self,
         name: &LocalTypeIdentifier,
-        struct_type: StructTypeRef,
+        struct_swamp_type: StructTypeRef,
         methods: ImplType,
     ) -> Result<(), String> {
         for method_name in methods.members.keys() {
@@ -258,7 +250,7 @@ impl ModuleNamespace {
         }
 
         self.impl_members
-            .insert(struct_type.swamp_type_id().clone(), methods);
+            .insert(SwampTypeId::Struct(struct_swamp_type), methods);
         Ok(())
     }
 
