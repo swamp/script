@@ -13,7 +13,7 @@ Read about it in the [cli](crates/cli/README.md) documentation.
 
 ## 📗 Documentation
 
-Not done yet, but check out the [main.swamp](examples/main.swamp) example for now.
+Not done yet, but check out the [main.swamp](examples/main.swamp) example and [basics](docs/basics.md) for now.
 
 ## 📜 License
 
