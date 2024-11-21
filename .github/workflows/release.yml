@@ -38,6 +38,11 @@ jobs:
     - name: Add target
       run: rustup target add ${{ matrix.target }}
 
+    - name: Install zip (Windows) # Zip is not installed in the runner, love it :)
+      if: matrix.os == 'windows-latest'
+      run: choco install zip
+
+
     - name: Build
       run: cargo build --release --target ${{ matrix.target }}
 
