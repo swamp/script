@@ -1,0 +1,434 @@
+WHITESPACE = _{ " " | "\t" | NEWLINE | "//" ~ (!NEWLINE ~ ANY)* ~ NEWLINE }
+
+program = { SOI ~ statement* ~ EOI }
+
+// Doc comments must be on their own line. Not working yet, since // is consumed by WHITESPACE
+doc_comment = { "///" ~ (!NEWLINE ~ ANY)* ~ NEWLINE }
+
+
+
+// Separate out definitions
+definition = {
+    import_stmt
+    | struct_def
+    | enum_def
+    | function_def
+    | impl_def
+    | doc_comment
+}
+
+control_statement = {
+    let_statement
+    | for_loop
+    | while_loop
+    | if_stmt
+    | return_stmt
+    | break_stmt
+    | continue_stmt
+    | expression_statement
+}
+
+// STATEMENTS ------------------------------------------------------------
+statement = {
+    definition
+    | control_statement
+}
+
+
+impl_def = {
+    "impl" ~ identifier ~ "{" ~ impl_item* ~ "}"
+}
+
+
+impl_item = {
+    member_def
+    | function_def  // Allow both methods and functions in impl blocks
+}
+
+// member_def rule specifically for impl blocks
+member_def = {
+    "fn" ~
+    identifier ~
+    "(" ~
+    (self_parameter ~ ("," ~ parameter_list)? | parameter_list)? ~
+    ")" ~
+    return_type? ~
+    "{" ~
+    statement* ~
+    "}"
+}
+
+// Self parameter can be mut or not
+self_parameter = {
+    mut_keyword? ~ "self"
+}
+
+
+let_statement = {
+    mut_keyword? ~ (struct_destructure | tuple_destructure | identifier) ~ "=" ~ expression
+}
+
+// Struct destructuring
+struct_destructure = { "{" ~ identifier ~ ("," ~ " "* ~ identifier)* ~ "}" }  // PEST BUG: need explicit spaces after comma
+
+// Tuple destructuring
+tuple_destructure = { "(" ~ identifier ~ ("," ~ " "* ~ identifier)* ~ ")" }  // PEST BUG: need explicit spaces after comma
+
+// Struct definition
+trailing_comma = _{ "," }
+
+
+struct_def = { "struct" ~ identifier ~ "{" ~ field_definitions? ~ trailing_comma? ~ "}" }
+
+// Update enum rules to handle variants properly
+enum_def = { "enum" ~ identifier ~ "{" ~ enum_variants? ~ "}" }
+enum_variants = { enum_variant ~ ("," ~ enum_variant)* ~ ","? }
+enum_variant = {
+    struct_variant  // Struct variant must come first
+    | tuple_variant  // Then tuple variant
+    | simple_variant // Simple variant must come last
+}
+
+simple_variant = { identifier }
+tuple_variant = { identifier ~ "(" ~ type_name ~ ("," ~ type_name)* ~ ")" }
+
+struct_variant = { identifier ~ "{" ~ struct_type_field ~ ("," ~ struct_type_field)* ~ trailing_comma? ~ "}" }
+
+// Field definitions within a struct
+field_definitions = { (field_def ~ ("," ~ field_def)*)? }
+
+// Single field definition
+field_def = { identifier ~ ":" ~ type_name }
+
+// Function definition
+//function_def = { "fn" ~ identifier ~ parameters? ~ return_type? ~ "{" ~ statement* ~ "}" }
+
+//function_def = { "fn" ~ identifier ~ "(" ~ parameter_list? ~ ")" ~ return_type? ~ "{" ~ statement* ~ "}" }
+
+
+// Testing this way
+function_def = {
+    "fn" ~
+    identifier ~
+    "(" ~
+    (parameter_list ~ ","?)? ~  // Make parameter list more explicit
+    ")" ~
+    return_type? ~
+    stmt_block
+}
+
+
+// Parameters
+parameters = { "(" ~ parameter_list? ~ ")" }
+parameter_list = { parameter ~ ("," ~ " "* ~ parameter)* }  // PEST BUG: need explicit spaces after comma
+
+parameter = { mut_keyword? ~ identifier ~ ":" ~ type_name }
+mut_keyword = { "mut" }
+
+// Return type
+return_type = { "->" ~ type_name }
+
+
+// Update the for loop rule to use identifier directly instead of loop_vars
+for_loop = { "for" ~ identifier ~ "in" ~ expression ~ stmt_block }
+
+// While-loop
+while_loop = { "while" ~ expression ~ stmt_block }
+
+// Import statements
+import_stmt = {
+    "import" ~ (
+        import_list_from |  // import { sin, cos } from math
+        import_path        // import math or import geometry.shapes
+    )
+}
+
+import_path = @{ identifier ~ ("." ~ identifier)* }
+import_list = { "{" ~ identifier ~ ("," ~ identifier)* ~ "}" }
+import_list_from = { import_list ~ "from" ~ import_path }
+
+// Return statement
+return_stmt = { "return" ~ expression }
+
+
+continue_stmt = { "continue" }
+
+// Break statement
+break_stmt = { "break" }
+
+// Expression statement (an expression evaluated for its side effects)
+expression_statement = { expression }
+
+// Expression is the entry point
+expression = { assignment | logical }
+
+
+// This is the base rule for array access
+array_subscript = { identifier ~ "[" ~ expression ~ "]" }
+
+
+assignment = {
+    (array_subscript | identifier | field_access) ~
+    "=" ~
+    (assignment | logical)
+}
+
+field_access = { identifier ~ "." ~ identifier }
+field_assignment = { field_access ~ "=" ~ expression }
+
+// OPERATORS ------------------------------------------------------------
+
+// Logical operators (lowest precedence)
+logical = { comparison ~ ((op_and | op_or) ~ comparison)* }
+
+// Comparison operators
+comparison = { addition ~ ((op_eq | op_neq | op_lt | op_gt | op_lte | op_gte) ~ addition)* }
+
+// Addition and subtraction
+addition = { multiplication ~ ((op_add | op_sub | range_op) ~ multiplication)* }
+
+// Multiplication and division (highest precedence for binary ops)
+multiplication = { prefix ~ ((op_mul | op_div | op_mod) ~ prefix)* }
+
+operator = { "+" | "-" | "*" | "/" } // TODO: these should be op_add, op_sub, op_mul, op_div ?
+
+// Unary operators (highest precedence)
+unary = { (op_neg | op_not)* ~ member_chain }
+
+// Prefix operators
+prefix = { prefix_op* ~ primary }
+prefix_op = { op_not | op_neg }
+
+// Add range_op to infix operators
+infix_op = { range_op | op_or | op_and | op_eq | op_neq | op_lt | op_gt | op_lte | op_gte | op_add | op_sub | op_mul | op_div }
+
+// Define range operator
+range_op = { ".." }
+
+// Operator definitions as rules
+op_or = { "||" }
+op_and = { "&&" }
+op_eq = { "==" }
+op_neq = { "!=" }
+op_lt = { "<" }
+op_gt = { ">" }
+op_lte = { "<=" }
+op_gte = { ">=" }
+op_add = { "+" }
+op_sub = { "-" }
+op_mul = { "*" }
+op_div = { "/" }
+op_not = { "!" }
+op_neg = { "-" }
+op_mod = { "%" }
+
+
+// Basics ----------------------------------------------------------------
+
+identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+
+
+// EXPRESSIONS ------------------------------------------------------------
+variable = { identifier }
+
+argument_list = { expression ~ ("," ~ " "* ~ expression)* }  // PEST BUG: need explicit spaces after comma
+parenthesized = { "(" ~ expression ~ ")" }
+
+function_argument = {
+    mut_keyword? ~ expression
+}
+
+// Function and method related
+function_call = {
+    identifier ~ "(" ~ (function_argument ~ ("," ~ " "* ~ function_argument)*)? ~ ")" // PEST BUG: need to be explicit about spaces after ,
+}
+
+member_call = { identifier ~ "(" ~ argument_list? ~ ")" }
+member_access_or_call = {
+    member_call
+    | identifier ~ ("(" ~ argument_list? ~ ")")?
+}
+
+array_index = { "[" ~ expression ~ "]" }
+
+
+// Method chains. These are a bit tricky.
+member_chain = {
+    (array_literal | variable | function_call | struct_instantiation | literal | parenthesized) ~
+    ("." ~ (member_access_or_call | array_index))+ ~  ("=" ~ expression)?  // Optional assignment part
+}
+
+
+
+// // Primary expressions with proper float handling
+primary = {
+    if_expr
+    | match_expr
+    | interpolated_string
+    | member_chain
+    | enum_literal
+    | float_lit ~ ("." ~ member_access_or_call)*  // Add explicit float handling, why is this needed?
+    | function_call
+    | struct_instantiation
+    | map_literal
+    | parenthesized
+    | literal ~ ("." ~ member_access_or_call)*
+    | array_literal
+    | array_subscript
+    | variable
+}
+
+
+identifier_pattern = { identifier }
+
+
+// If expression
+if_expr = { "if" ~ expression ~ block ~ "else" ~ block } // when used as an expression, the else part is mandatory
+
+if_stmt = {
+    "if" ~ expression ~ stmt_block ~
+    ("else" ~ (if_stmt | stmt_block))?
+}
+
+// Blocks
+stmt_block = { "{" ~ statement* ~ "}" } // Only for a small part of the language, for function definition and while and for loops.
+block = { "{" ~ expression ~ "}" } // This should be the most common one
+match_block = { "{" ~ statement* ~ expression? ~ "}" } // Match blocks can be a single expression. might be cool to try to have this for a normal block as well.
+
+// Match expression
+match_expr = { "match" ~ expression ~ "{" ~ match_arms ~ "}" }
+
+match_arms = { match_arm ~ ("," ~ match_arm)* ~ ","? }
+match_arm = {
+    match_pattern ~ "=>" ~ (match_block | expression)
+}
+
+
+binary_expr = { primary ~ (operator ~ primary)* }
+
+
+// MATCH PATTERNS ------------------------------------------------------------
+
+// ENUM =================
+match_pattern = {
+    wildcard_pattern
+    | enum_pattern
+    | literal
+    | tuple_pattern
+    | struct_pattern
+    | identifier_pattern
+}
+
+enum_pattern = {
+    identifier ~ (
+        enum_pattern_tuple
+        | enum_pattern_struct
+    )?
+}
+
+enum_pattern_tuple = {
+    "(" ~ pattern_field ~ ("," ~ " "* ~ pattern_field)* ~ ")"  // PEST BUG: need explicit spaces after comma
+}
+
+enum_pattern_struct = {
+    "{" ~ struct_pattern_field ~ ("," ~ " "* ~ struct_pattern_field)* ~ "}"  // PEST BUG: need explicit spaces after comma
+}
+
+// OTHER
+struct_pattern_field = { identifier }  // For struct patterns, we only need identifiers
+pattern_field = { identifier | "_" }
+
+tuple_pattern = {
+    "(" ~ pattern_field ~ ("," ~ pattern_field)* ~ ")"
+}
+
+struct_pattern = { "{" ~ pattern_field ~ ("," ~ pattern_field)* ~ "}" }
+wildcard_pattern = { "_" }
+
+
+
+
+// TYPES ------------------------------------------------------------
+built_in_type = { "Int" | "Float" | "String" | "Bool" }
+array_type = { "[" ~ type_name ~ "]" }
+map_type = { "map[" ~ type_name ~ ":" ~ type_name ~ "]" } // TODO: add support for map[key: value]
+tuple_type = { "(" ~ type_name ~ ("," ~ type_name)* ~ ")" }
+struct_type_field = { identifier ~ ":" ~ type_name }
+
+type_name = {
+    built_in_type
+    | identifier
+    | array_type
+    | map_type
+    | tuple_type
+}
+
+
+
+
+// LITERALS ------------------------------------------------------------
+
+literal = { tuple_lit | float_lit | int_lit | string_lit | bool_lit | unit_lit }
+
+
+// Integer literal
+int_lit = @{ "-"? ~ ASCII_DIGIT+ }
+
+// Floating-point literal
+float_lit = @{ "-"? ~ ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT+ }
+
+// String literal
+string_lit = @{ "\"" ~ ( "\\\"" | !"\"" ~ ANY )* ~ "\"" }
+
+// Interpolated string. Took a while to get this right due to Pest bug not handling space after comma correctly
+interpolated_string = ${
+    "'" ~ interpolated_content ~ "'"
+}
+
+interpolated_content = _{
+    (interpolation | text)*
+}
+
+interpolation = {
+    "{" ~ expression ~ (":" ~ format_specifier)? ~ "}"
+}
+
+text = @{
+    (!"'" ~ !"{" ~ ANY)+
+}
+
+format_specifier = @{
+    "?"
+  | "x"
+  | "X"
+  | "b"
+  | "f"
+  | ".." ~ ASCII_DIGIT+ ~ ("f" | "s")
+}
+
+// Boolean literal
+bool_lit = { "true" | "false" }
+
+unit_lit = { "()" }
+
+enum_literal = { identifier ~ "::" ~ identifier ~ (struct_fields_lit | tuple_fields)? }
+
+// Add tuple literal definition
+tuple_lit = { "(" ~ expression ~ ("," ~ " "* ~ expression)* ~ ")" }  // PEST BUG: need explicit spaces after comma
+
+struct_fields_lit = { "{" ~ struct_field ~ ("," ~ " "* ~ struct_field)* ~ ","? ~ "}" }  // PEST BUG: need explicit spaces after comma
+
+// Array and map literals
+array_literal = { "[" ~ (expression ~ ("," ~ " "* ~ expression)*)? ~ "]" }  // PEST BUG: need explicit spaces after comma
+map_literal = { "map[" ~ type_name ~ ":" ~ type_name ~ "]" }
+
+// Struct related
+struct_fields = { (struct_field ~ ("," ~ " "* ~ struct_field)* ~ trailing_comma? )? }  // PEST BUG: need explicit spaces after comma
+struct_field = { identifier ~ ":" ~ expression }
+
+struct_instantiation = {
+    (identifier ~ "{" ~ struct_fields? ~ "}")
+    | ("{" ~ struct_fields? ~ "}")  // Anonymous struct, not sure if we want to implement it, since it is a pain to write out.
+}
+
+tuple_fields = { "(" ~ expression ~ ("," ~ " "* ~ expression)* ~ ","? ~ ")" }  // PEST BUG: need explicit spaces after comma

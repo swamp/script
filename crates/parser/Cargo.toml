@@ -1,0 +1,15 @@
+[package]
+name = "swamp-script-parser"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+pest = "2.7.14"
+pest_derive = "2.7.14"
+seq-map = "0.0.8"
+
+swamp-script-ast = { path = "../ast", version = "0.0.1" }
+tracing = "0.1.40"
+
+[dev-dependencies]
+test-log = { version = "0.2.16", features = ["trace", "log", "color"] }

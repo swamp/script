@@ -1,0 +1,24 @@
+[package]
+name = "swamp-script-cli"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.4", features = ["derive"] }
+swamp-script-eval = { path = "../eval", version = "0.0.1" }
+swamp-script-parser = { path = "../parser", version = "0.0.1" }
+
+pest = "2.7.14" # TODO: remove pest
+tracing = "0.1.40"
+
+
+tracing-log = "0.2.0"
+tracing-subscriber = { version = "0.3.18", features = [
+    "registry",
+    "env-filter",
+] }
+
+
+[[bin]]
+name = "swamp"
+path = "src/main.rs"

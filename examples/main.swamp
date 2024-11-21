@@ -1,0 +1,72 @@
+print('hello world')
+
+fn test(s: String, value: Int) -> String {
+    'cool {s} {value}'
+}
+
+
+result = test('testing', 9494)
+print(result)
+
+tup = (10, 'hello', 222.2)
+print(tup)
+
+struct Position {
+    x: Int,
+    y: Int,
+}
+
+impl Position {
+    fn sum(self) -> Int {
+        self.x + self.y
+    }
+
+    fn set_x(mut self, x: Int) {
+        self.x = x
+    }
+}
+
+mut pos = Position { x: -9998, y : 20, }
+print(pos)
+
+print('sum of x and y {pos.sum()}')
+
+pos.set_x(1234)
+print('after set_x(): {pos}')
+
+
+
+enum Something {
+   First(Int, String, Float),
+   Second { test: Int, another: Float },
+   Single
+}
+
+first = Something::First(10, "hello", 99.99)
+print(first)
+
+second = Something::Second {
+    test: -9292,
+    another: 0.9418,
+}
+print(second)
+
+single = Something::Single
+print(single)
+
+x = match second {
+    First(_, _) => "it should not be first",
+    Second { test } => 'correct! {test}',
+    Single => "it should not be single",
+}
+print(x)
+
+
+
+x = 98
+match_str = match x {
+   _ => "not correct",
+   32 => "not quite right",
+   98 => "you found it!",
+}
+print('match_str: {match_str}')
