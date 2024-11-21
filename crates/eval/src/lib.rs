@@ -1268,46 +1268,56 @@ impl Interpreter {
             self.tabs()
         );
 
-        let result = match (left_val, op, right_val) {
+        let result: Value = match (left_val, op, right_val) {
             // Integer operations
-            (Value::Int(a), BinaryOperator::Add, Value::Int(b)) => Ok(Value::Int(a + b)),
-            (Value::Int(a), BinaryOperator::Subtract, Value::Int(b)) => Ok(Value::Int(a - b)),
-            (Value::Int(a), BinaryOperator::Multiply, Value::Int(b)) => Ok(Value::Int(a * b)),
+            (Value::Int(a), BinaryOperator::Add, Value::Int(b)) => Value::Int(a + b),
+            (Value::Int(a), BinaryOperator::Subtract, Value::Int(b)) => Value::Int(a - b),
+            (Value::Int(a), BinaryOperator::Multiply, Value::Int(b)) => Value::Int(a * b),
             (Value::Int(a), BinaryOperator::Divide, Value::Int(b)) => {
                 if b == 0 {
                     return Err("Division by zero".to_string())?;
                 }
-                Ok(Value::Int(a / b))
+                Value::Int(a / b)
             }
-            (Value::Int(a), BinaryOperator::Modulo, Value::Int(b)) => Ok(Value::Int(a % b)),
+            (Value::Int(a), BinaryOperator::Modulo, Value::Int(b)) => Value::Int(a % b),
+
+            // Float operations
+            (Value::Float(a), BinaryOperator::Add, Value::Float(b)) => Value::Float(a + b),
+            (Value::Float(a), BinaryOperator::Subtract, Value::Float(b)) => Value::Float(a - b),
+            (Value::Float(a), BinaryOperator::Multiply, Value::Float(b)) => Value::Float(a * b),
+            (Value::Float(a), BinaryOperator::Divide, Value::Float(b)) => {
+                if b.abs() <= 0.001 {
+                    return Err("Division by zero".to_string())?;
+                }
+                Value::Float(a / b)
+            }
+            (Value::Float(a), BinaryOperator::Modulo, Value::Float(b)) => Value::Float(a % b),
 
             // Boolean operations
-            (Value::Bool(a), BinaryOperator::LogicalAnd, Value::Bool(b)) => Ok(Value::Bool(a && b)),
-            (Value::Bool(a), BinaryOperator::LogicalOr, Value::Bool(b)) => Ok(Value::Bool(a || b)),
+            (Value::Bool(a), BinaryOperator::LogicalAnd, Value::Bool(b)) => Value::Bool(a && b),
+            (Value::Bool(a), BinaryOperator::LogicalOr, Value::Bool(b)) => Value::Bool(a || b),
 
             // Comparison operations
-            (Value::Int(a), BinaryOperator::Equal, Value::Int(b)) => Ok(Value::Bool(a == b)),
-            (Value::Int(a), BinaryOperator::NotEqual, Value::Int(b)) => Ok(Value::Bool(a != b)),
-            (Value::Int(a), BinaryOperator::LessThan, Value::Int(b)) => Ok(Value::Bool(a < b)),
-            (Value::Int(a), BinaryOperator::GreaterThan, Value::Int(b)) => Ok(Value::Bool(a > b)),
-            (Value::Int(a), BinaryOperator::LessThanOrEqual, Value::Int(b)) => {
-                Ok(Value::Bool(a <= b))
-            }
+            (Value::Int(a), BinaryOperator::Equal, Value::Int(b)) => Value::Bool(a == b),
+            (Value::Int(a), BinaryOperator::NotEqual, Value::Int(b)) => Value::Bool(a != b),
+            (Value::Int(a), BinaryOperator::LessThan, Value::Int(b)) => Value::Bool(a < b),
+            (Value::Int(a), BinaryOperator::GreaterThan, Value::Int(b)) => Value::Bool(a > b),
+            (Value::Int(a), BinaryOperator::LessThanOrEqual, Value::Int(b)) => Value::Bool(a <= b),
             (Value::Int(a), BinaryOperator::GreaterThanOrEqual, Value::Int(b)) => {
-                Ok(Value::Bool(a >= b))
+                Value::Bool(a >= b)
             }
 
             // String operations
-            (Value::String(a), BinaryOperator::Add, Value::String(b)) => Ok(Value::String(a + &b)),
+            (Value::String(a), BinaryOperator::Add, Value::String(b)) => Value::String(a + &b),
             (Value::String(a), BinaryOperator::Add, Value::Int(b)) => {
-                Ok(Value::String(a + &b.to_string()))
+                Value::String(a + &b.to_string())
             }
             (Value::Int(a), BinaryOperator::Add, Value::String(b)) => {
-                Ok(Value::String(a.to_string() + &b))
+                Value::String(a.to_string() + &b)
             }
 
-            _ => Err(format!("Invalid binary operation")),
-        }?;
+            _ => return Err(format!("Invalid binary operation {op:?} ").into()),
+        };
 
         Ok(result)
     }
