@@ -3,27 +3,26 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use crate::module::Module;
-use crate::name::{DefinitionKind, NameRegistry};
-use crate::value::{FunctionRef, Value};
 use seq_map::SeqMap;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use std::rc::Rc;
 use swamp_script_ast::{ImplMember, LocalTypeIdentifier, Parameter, ScopedTypeIdentifier, Type};
+use crate::module::Module;
+use crate::ResolvedType;
 
 pub type StructTypeRef = Rc<StructType>;
 
 #[derive(Debug, Eq, PartialEq, Hash)]
 pub struct StructType {
-    pub fields: SeqMap<LocalTypeIdentifier, SwampTypeId>,
+    pub fields: SeqMap<LocalTypeIdentifier, ResolvedType>,
     pub name: LocalTypeIdentifier,
 }
 
 impl StructType {
     pub fn new(
         name: LocalTypeIdentifier,
-        fields: SeqMap<LocalTypeIdentifier, SwampTypeId>,
+        fields: SeqMap<LocalTypeIdentifier, ResolvedType>,
     ) -> Self {
         Self { fields, name }
     }
@@ -40,10 +39,10 @@ impl StructType {
 pub type TupleTypeRef = Rc<TupleType>;
 
 #[derive(Debug, Eq, PartialEq, Hash)]
-pub struct TupleType(Vec<SwampTypeId>);
+pub struct TupleType(Vec<ResolvedType>);
 
 impl TupleType {
-    pub fn new(types: Vec<SwampTypeId>) -> Self {
+    pub fn new(types: Vec<ResolvedType>) -> Self {
         Self(types)
     }
 }
@@ -118,7 +117,7 @@ pub struct ImplType {
 }
 
 impl ImplType {
-    pub(crate) fn new(
+    pub fn new(
         members: SeqMap<String, ImplMember>,
         associated_with_struct_type: StructTypeRef,
     ) -> Self {
@@ -129,22 +128,7 @@ impl ImplType {
     }
 }
 
-#[derive(Debug, Clone, Eq, Hash, PartialEq)]
-pub enum SwampTypeId {
-    Int,
-    Float,
-    String,
-    Bool,
-    Array(Box<SwampTypeId>),
-    Tuple(TupleTypeRef),
-    Struct(StructTypeRef), // The name of the struct
-    Enum(EnumTypeRef), // Combination of the EnumTypeName and the variant name and the type of the data
-    EnumVariant(EnumVariantTypeRef),
-    Function,
-    Void,
-    Range,
-    Any,
-}
+
 
 pub struct CanonicalTypeName {
     pub module: Rc<Module>,
@@ -159,16 +143,15 @@ impl Debug for CanonicalTypeName {
 
 #[derive(Default, Debug)]
 pub struct ModuleNamespace {
-    registry: NameRegistry,
+    all_owned_types: SeqMap<LocalTypeIdentifier, ResolvedType>,
 
     structs: HashMap<LocalTypeIdentifier, StructTypeRef>, // They are created by the module, so they are owned here
     enum_types: HashMap<LocalTypeIdentifier, EnumTypeRef>, // They are created by the module, so they are owned here
     enum_variant_types: HashMap<LocalTypeIdentifier, EnumVariantTypeRef>, // They are created by the module, so they are owned here
 
     tuples: Vec<TupleTypeRef>,
-    functions: HashMap<String, (Vec<Parameter>, Type)>,
-    impl_members: HashMap<SwampTypeId, ImplType>,
-    pub(crate) values: HashMap<String, Value>,
+    functions: HashMap<String, (Vec<Parameter>, ResolvedType)>,
+    impl_members: HashMap<ResolvedType, ImplType>,
 }
 
 impl ModuleNamespace {
@@ -215,7 +198,7 @@ impl ModuleNamespace {
         Ok(())
     }
 
-    pub fn get_or_create_tuple(&mut self, types: Vec<SwampTypeId>) -> TupleTypeRef {
+    pub fn get_or_create_tuple(&mut self, types: Vec<ResolvedType>) -> TupleTypeRef {
         // TODO: for now, just create new types, in the future we should check if we can reuse a type
         let tuple_type = Rc::new(TupleType::new(types));
         self.tuples.push(tuple_type.clone());
@@ -226,7 +209,7 @@ impl ModuleNamespace {
     pub fn add_function(
         &mut self,
         name: String,
-        signature: (Vec<Parameter>, Type),
+        signature: (Vec<Parameter>, ResolvedType),
         func_ref: FunctionRef,
     ) -> Result<(), String> {
         // Register the name only once
@@ -250,7 +233,7 @@ impl ModuleNamespace {
         }
 
         self.impl_members
-            .insert(SwampTypeId::Struct(struct_swamp_type), methods);
+            .insert(ResolvedType::Struct(struct_swamp_type), methods);
         Ok(())
     }
 
@@ -285,11 +268,11 @@ impl ModuleNamespace {
             .get(&LocalTypeIdentifier::new(&*full_name))
     }
 
-    pub fn get_function(&self, name: &str) -> Option<&(Vec<Parameter>, Type)> {
+    pub fn get_function(&self, name: &str) -> Option<&(Vec<Parameter>, ResolvedType)> {
         self.functions.get(name)
     }
 
-    pub fn get_impl(&self, type_id: &SwampTypeId) -> Option<&ImplType> {
+    pub fn get_impl(&self, type_id: &ResolvedType) -> Option<&ImplType> {
         self.impl_members.get(type_id)
     }
 

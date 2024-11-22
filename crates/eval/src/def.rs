@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use crate::ns::{EnumVariantContainerType, ImplType, ModuleNamespace, StructType, SwampTypeId};
+use semantic::ns::{EnumVariantContainerType, ImplType, ModuleNamespace, StructType, SwampTypeId};
 use crate::value::{FunctionRef, Value};
 use seq_map::SeqMap;
 use swamp_script_ast::SelfParameter;

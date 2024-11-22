@@ -5,5 +5,5 @@ members = [
     "crates/derive",
     "crates/eval",
     "crates/parser",
-    "crates/examples", "crates/cli",
+    "crates/examples", "crates/cli", "crates/semantic",
 ]

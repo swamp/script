@@ -3,8 +3,8 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use crate::def::DefinitionRunner;
-use crate::module::Module;
-use crate::ns::{EnumVariantContainerType, ModuleNamespace, SwampTypeId};
+use semantic::module::Module;
+use semantic::ns::{EnumVariantContainerType, ModuleNamespace, SwampTypeId};
 use crate::value::{FunctionRef, SwampExport, Value};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use swamp_script_ast::{
@@ -17,9 +17,7 @@ use tracing::{debug, error, trace};
 use value::format_value;
 
 mod def;
-pub mod module;
 pub mod name;
-pub mod ns;
 pub mod value;
 
 pub struct SwampFunction {

@@ -3,13 +3,13 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use crate::ns::ModuleNamespace;
 use std::rc::Rc;
 use swamp_script_ast::LocalTypeIdentifier;
+use crate::ns::ModuleNamespace;
 
 #[derive(Default, Debug)]
 pub struct Module {
-    pub(crate) namespace: ModuleNamespace, // pub is probably more performant
+    pub namespace: ModuleNamespace, // pub is probably more performant
     parent_module: Option<Rc<Module>>,
     identifier: LocalTypeIdentifier,
 }

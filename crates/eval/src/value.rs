@@ -2,7 +2,7 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use crate::ns::{EnumVariantTypeRef, StructTypeRef, SwampTypeId, TupleTypeRef};
+use semantic::ns::{EnumVariantTypeRef, StructTypeRef, SwampTypeId, TupleTypeRef};
 use crate::{ExecuteError, Interpreter, ScopeType, ValueWithSignal};
 use std::cell::RefCell;
 use std::fmt::Debug;
@@ -55,53 +55,9 @@ impl SwampExport for i32 {
     }
 }
 
-type FunctionDef = (Vec<Parameter>, Type);
 type FunctionFn = Box<dyn Fn(&[Value]) -> Result<Value, ExecuteError>>;
 
-pub enum FunctionRef {
-    External(LocalTypeIdentifier, FunctionDef, Rc<FunctionFn>),
-    Internal(LocalTypeIdentifier, FunctionDef, Vec<Statement>),
-}
-
-impl Debug for FunctionRef {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "FunctionRef {}({:?})",
-            self.identifier(),
-            self.parameters(),
-        )
-    }
-}
-
-impl Clone for FunctionRef {
-    fn clone(&self) -> Self {
-        match self {
-            FunctionRef::External(debug_name, def, f) => {
-                FunctionRef::External(debug_name.clone(), def.clone(), f.clone())
-            }
-            FunctionRef::Internal(debug_name, def, body) => {
-                FunctionRef::Internal(debug_name.clone(), def.clone(), body.clone())
-            }
-        }
-    }
-}
-
 impl FunctionRef {
-    pub fn parameters(&self) -> &Vec<Parameter> {
-        match self {
-            FunctionRef::External(_, (params, _), _) => params,
-            FunctionRef::Internal(_, (params, _), _) => params,
-        }
-    }
-
-    pub fn identifier(&self) -> &LocalTypeIdentifier {
-        match self {
-            FunctionRef::External(debug_name, _, _) => debug_name,
-            FunctionRef::Internal(debug_name, _, _) => debug_name,
-        }
-    }
-
     pub fn execute(
         &self,
         interpreter: &mut Interpreter,
