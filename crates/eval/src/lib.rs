@@ -3,8 +3,6 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use crate::def::DefinitionRunner;
-use semantic::module::Module;
-use semantic::ns::{EnumVariantContainerType, ModuleNamespace, SwampTypeId};
 use crate::value::{FunctionRef, SwampExport, Value};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use swamp_script_ast::{
@@ -13,11 +11,13 @@ use swamp_script_ast::{
     UnaryOperator, Variable,
 };
 use swamp_script_parser::AstParser;
+use swamp_script_semantic::module::Module;
+use swamp_script_semantic::ns::{EnumVariantContainerType, ModuleNamespace};
+use swamp_script_semantic::ResolvedType;
 use tracing::{debug, error, trace};
 use value::format_value;
 
 mod def;
-pub mod name;
 pub mod value;
 
 pub struct SwampFunction {
@@ -104,13 +104,13 @@ impl Interpreter {
 
     // Helper method to check type compatibility
     #[allow(unused)]
-    fn type_matches(&self, actual: &SwampTypeId, expected: &Type) -> bool {
+    fn type_matches(&self, actual: &ResolvedType, expected: &Type) -> bool {
         match (actual, expected) {
-            (SwampTypeId::Int, Type::Int) => true,
-            (SwampTypeId::Float, Type::Float) => true,
-            (SwampTypeId::String, Type::String) => true,
-            (SwampTypeId::Bool, Type::Bool) => true,
-            (SwampTypeId::Struct(struct_type), Type::Struct(ast_struct_name)) => {
+            (ResolvedType::Int, Type::Int) => true,
+            (ResolvedType::Float, Type::Float) => true,
+            (ResolvedType::String, Type::String) => true,
+            (ResolvedType::Bool, Type::Bool) => true,
+            (ResolvedType::Struct(struct_type), Type::Struct(ast_struct_name)) => {
                 let mentioned_struct_type = {
                     let module = self.current_module.borrow();
                     module
@@ -123,7 +123,7 @@ impl Interpreter {
 
                 *struct_type == mentioned_struct_type
             }
-            (SwampTypeId::Array(t1), Type::Array(t2)) => self.type_matches(t1, t2),
+            (ResolvedType::Array(t1), Type::Array(t2)) => self.type_matches(t1, t2),
             // TODO: Add more type matching rules
             _ => false,
         }
@@ -694,7 +694,7 @@ impl Interpreter {
                     values.push(self.evaluate_expression(element)?);
                 }
                 let array_type = if values.is_empty() {
-                    SwampTypeId::Any // empty array has all array types
+                    ResolvedType::Any // empty array has all array types
                 } else {
                     values[0].swamp_type_id()
                 };
@@ -868,16 +868,15 @@ impl Interpreter {
                 }
 
                 // Then check module namespace
+                /* TODO:
                 let module = self.current_module.borrow();
                 if let Some(value) = module.namespace.get_value(&var.name) {
                     return Ok(value.clone());
                 }
 
-                Err(format!(
-                    "Variable '{}' not found in module '{}'",
-                    var.name,
-                    module.name()
-                ))?
+                 */
+
+                Err(format!("Variable '{}' not found in module", var.name,))?
             }
 
             Expression::ArrayAccess(array, index) => {

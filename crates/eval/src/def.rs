@@ -3,12 +3,13 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use semantic::ns::{EnumVariantContainerType, ImplType, ModuleNamespace, StructType, SwampTypeId};
-use crate::value::{FunctionRef, Value};
+use swamp_script_semantic::ns::{EnumVariantContainerType, ImplType, ModuleNamespace, StructType, SwampTypeId};
+use crate::value::{Value};
 use seq_map::SeqMap;
 use swamp_script_ast::SelfParameter;
 use swamp_script_ast::{Definition, EnumVariant, ImplItem, ImplMember, LocalTypeIdentifier, Type};
 use tracing::debug;
+use swamp_script_semantic::ResolvedFunctionReference;
 
 pub struct DefinitionRunner;
 
@@ -150,7 +151,7 @@ impl DefinitionRunner {
                 Value::Unit
             }
             Definition::FunctionDef(name, data) => {
-                let func_ref = FunctionRef::Internal(
+                let func_ref = ResolvedFunctionReference::Internal(
                     LocalTypeIdentifier::new(&*name.0),
                     (data.params.clone(), data.return_type.clone()),
                     data.body.clone(),

@@ -7,9 +7,9 @@ use seq_map::SeqMap;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use std::rc::Rc;
-use swamp_script_ast::{ImplMember, LocalTypeIdentifier, Parameter, ScopedTypeIdentifier, Type};
+use swamp_script_ast::{ImplMember, LocalTypeIdentifier, Parameter, ScopedTypeIdentifier};
 use crate::module::Module;
-use crate::ResolvedType;
+use crate::{ResolvedFunctionRef, ResolvedType};
 
 pub type StructTypeRef = Rc<StructType>;
 
@@ -168,7 +168,6 @@ impl ModuleNamespace {
         name: &LocalTypeIdentifier,
         struct_type: StructType,
     ) -> Result<StructTypeRef, String> {
-        self.registry.register(&name.0, DefinitionKind::Struct)?;
         let struct_ref = Rc::new(struct_type);
         self.structs.insert(name.clone(), struct_ref.clone());
         Ok(struct_ref)
@@ -179,7 +178,6 @@ impl ModuleNamespace {
         name: &LocalTypeIdentifier,
         containers: SeqMap<&LocalTypeIdentifier, EnumVariantContainerType>,
     ) -> Result<(), String> {
-        self.registry.register(&name.0, DefinitionKind::Enum)?;
 
         let boxed = Rc::new(EnumType::new(name.clone()));
 
@@ -210,14 +208,12 @@ impl ModuleNamespace {
         &mut self,
         name: String,
         signature: (Vec<Parameter>, ResolvedType),
-        func_ref: FunctionRef,
+        func_ref: ResolvedFunctionRef,
     ) -> Result<(), String> {
         // Register the name only once
-        self.registry.register(&name, DefinitionKind::Function)?;
 
         // Add both signature and value
         self.functions.insert(name.clone(), signature);
-        self.values.insert(name, Value::Function(func_ref));
         Ok(())
     }
 
@@ -227,19 +223,8 @@ impl ModuleNamespace {
         struct_swamp_type: StructTypeRef,
         methods: ImplType,
     ) -> Result<(), String> {
-        for method_name in methods.members.keys() {
-            self.registry
-                .register(method_name, DefinitionKind::ImplMethod(name.0.clone()))?;
-        }
-
         self.impl_members
             .insert(ResolvedType::Struct(struct_swamp_type), methods);
-        Ok(())
-    }
-
-    pub fn add_value(&mut self, name: String, value: Value) -> Result<(), String> {
-        self.registry.register(&name, DefinitionKind::Variable)?;
-        self.values.insert(name, value);
         Ok(())
     }
 
@@ -274,9 +259,5 @@ impl ModuleNamespace {
 
     pub fn get_impl(&self, type_id: &ResolvedType) -> Option<&ImplType> {
         self.impl_members.get(type_id)
-    }
-
-    pub fn get_value(&self, name: &str) -> Option<&Value> {
-        self.values.get(name)
     }
 }

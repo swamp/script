@@ -7,6 +7,7 @@ use swamp_script_ast::{BinaryOperator, Expression, FormatSpecifier, LocalTypeIde
 pub mod module;
 pub mod ns;
 
+#[derive(Debug, Clone)]
 pub struct ResolvedParameter {
     pub name: String,
     pub resolved_type: ResolvedType,
@@ -31,12 +32,12 @@ pub enum ResolvedType {
 
 type FunctionDef = (Vec<ResolvedParameter>, ResolvedType);
 
-pub enum ResolvedFunctionRef {
+pub enum ResolvedFunctionReference {
     External(LocalTypeIdentifier, FunctionDef),
     Internal(LocalTypeIdentifier, FunctionDef, Vec<ResolvedStatement>),
 }
 
-impl Debug for ResolvedFunctionRef {
+impl Debug for ResolvedFunctionReference {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -47,31 +48,18 @@ impl Debug for ResolvedFunctionRef {
     }
 }
 
-impl Clone for ResolvedFunctionRef {
-    fn clone(&self) -> Self {
-        match self {
-            FunctionRef::External(debug_name, def) => {
-                FunctionRef::External(debug_name.clone(), def.clone())
-            }
-            FunctionRef::Internal(debug_name, def, body) => {
-                FunctionRef::Internal(debug_name.clone(), def.clone(), body.clone())
-            }
-        }
-    }
-}
-
-impl ResolvedFunctionRef {
+impl ResolvedFunctionReference {
     pub fn parameters(&self) -> &Vec<ResolvedParameter> {
         match self {
-            FunctionRef::External(_, (params, _)) => params,
-            FunctionRef::Internal(_, (params, _), _) => params,
+            ResolvedFunctionReference::External(_, (params, _)) => params,
+            ResolvedFunctionReference::Internal(_, (params, _), _) => params,
         }
     }
 
     pub fn identifier(&self) -> &LocalTypeIdentifier {
         match self {
-            FunctionRef::External(debug_name, _) => debug_name,
-            FunctionRef::Internal(debug_name, _, _) => debug_name,
+            ResolvedFunctionReference::External(debug_name, _) => debug_name,
+            ResolvedFunctionReference::Internal(debug_name, _, _) => debug_name,
         }
     }
 }
@@ -90,6 +78,9 @@ pub struct ResolvedBinaryOperator {
 
 pub struct ResolvedStruct {}
 type ResolvedStructRef = Rc<ResolvedStruct>;
+#[derive(Hash)]
+#[derive(Eq)]
+#[derive(PartialEq)]
 pub struct ResolvedStructField {}
 
 type ResolvedStructFieldRef = Rc<ResolvedStructField>;
@@ -186,7 +177,7 @@ pub enum ResolvedExpression {
     UnaryOp(UnaryOperator, Box<ResolvedExpression>),
 
     // Calls
-    FunctionCall(ResolvedFunctionRef, Vec<ResolvedExpression>),
+    FunctionCall(ResolvedFunctionReference, Vec<ResolvedExpression>),
 
     MutMemberCall(
         MutMemberRef,

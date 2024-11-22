@@ -2,7 +2,7 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use semantic::ns::{EnumVariantTypeRef, StructTypeRef, SwampTypeId, TupleTypeRef};
+use swamp_script_semantic::ns::{EnumVariantTypeRef, StructTypeRef, ResolvedType, TupleTypeRef};
 use crate::{ExecuteError, Interpreter, ScopeType, ValueWithSignal};
 use std::cell::RefCell;
 use std::fmt::Debug;
@@ -10,6 +10,7 @@ use std::rc::Rc;
 use swamp_script_ast::{
     FormatSpecifier, LocalTypeIdentifier, Parameter, PrecisionType, Statement, Type,
 };
+use swamp_script_semantic::ResolvedFunctionReference;
 
 pub trait SwampExport {
     fn generate_swamp_definition() -> String;
@@ -64,11 +65,11 @@ impl FunctionRef {
         args: Vec<Value>,
     ) -> Result<Value, ExecuteError> {
         match self {
-            FunctionRef::External(_, (_, _), f) => {
+            ResolvedFunctionReference::External(_, (_, _), f) => {
                 let v = f(&args)?;
                 Ok(v)
             }
-            FunctionRef::Internal(_, (params, _), body) => {
+            ResolvedFunctionReference::Internal(_, (params, _), body) => {
                 interpreter.push_scope(ScopeType::Function);
 
                 // Bind parameters before executing body
@@ -121,21 +122,21 @@ impl Value {
         }
     }
 
-    pub fn swamp_type_id(&self) -> SwampTypeId {
+    pub fn swamp_type_id(&self) -> ResolvedType {
         match self {
-            Value::Int(_) => SwampTypeId::Int,
-            Value::Float(_) => SwampTypeId::Float,
-            Value::String(_) => SwampTypeId::String,
-            Value::Bool(_) => SwampTypeId::Bool,
-            Value::Array(item_type, _) => SwampTypeId::Array(Box::new(item_type.clone())),
-            Value::Function(_) => SwampTypeId::Function,
-            Value::Unit => SwampTypeId::Void,
-            Value::ExclusiveRange(_, _) => SwampTypeId::Range,
+            Value::Int(_) => ResolvedType::Int,
+            Value::Float(_) => ResolvedType::Float,
+            Value::String(_) => ResolvedType::String,
+            Value::Bool(_) => ResolvedType::Bool,
+            Value::Array(item_type, _) => ResolvedType::Array(Box::new(item_type.clone())),
+            Value::Function(_) => ResolvedType::Function,
+            Value::Unit => ResolvedType::Void,
+            Value::ExclusiveRange(_, _) => ResolvedType::Range,
             Value::Reference(r) => r.borrow().swamp_type_id(),
-            Value::Struct(struct_type, _) => SwampTypeId::Struct(struct_type.clone()),
-            Value::Tuple(tuple_type, _values) => SwampTypeId::Tuple(tuple_type.clone()),
+            Value::Struct(struct_type, _) => ResolvedType::Struct(struct_type.clone()),
+            Value::Tuple(tuple_type, _values) => ResolvedType::Tuple(tuple_type.clone()),
             Value::EnumVariant(enum_variant_type_ref, _data) => {
-                SwampTypeId::EnumVariant(enum_variant_type_ref.clone())
+                ResolvedType::EnumVariant(enum_variant_type_ref.clone())
             }
         }
     }
