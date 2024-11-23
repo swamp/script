@@ -6,9 +6,10 @@ pub mod prelude;
 
 use swamp_script_ast::{
     BinaryOperator, Definition, EnumLiteralData, EnumVariant, Expression, FormatSpecifier,
-    FunctionData, ImplItem, ImplMember, Import, ImportItems, Literal, LocalTypeIdentifier,
-    MatchArm, MutVariableRef, Parameter, Pattern, PrecisionType, Program, ScopedTypeIdentifier,
-    SelfParameter, Statement, StringConst, StringPart, Type, UnaryOperator, Variable,
+    FunctionData, ImplItem, ImplMember, Import, ImportItems, Literal, LocalIdentifier,
+    LocalTypeIdentifier, MatchArm, ModulePath, MutVariableRef, Node, Parameter, Pattern, Position,
+    PrecisionType, Program, QualifiedTypeIdentifier, SelfParameter, Span, Statement, StringConst,
+    StringPart, StructType, Type, TypeIdentifier, UnaryOperator, Variable,
 };
 
 use pest::error::{Error, ErrorVariant};
@@ -18,6 +19,7 @@ use pest::Parser;
 use pest_derive::Parser;
 use seq_map::SeqMap;
 use std::collections::HashMap;
+use swamp_script_ast::Definition::StructDef;
 use tracing::debug;
 
 #[derive(Parser)]
@@ -357,10 +359,9 @@ impl AstParser {
                 .expect("duplicate field name"); // TODO: should be error
         }
 
-        Ok(Definition::StructDef(
-            LocalTypeIdentifier::new(&name),
-            fields,
-        ))
+        let struct_def = StructType::new(LocalTypeIdentifier::new(&name), fields);
+
+        Ok(Definition::StructDef(struct_def))
     }
 
     fn parse_function_def(&self, pair: Pair<Rule>) -> Result<Definition, Error<Rule>> {
@@ -717,27 +718,27 @@ impl AstParser {
                     .collect();
 
                 // Parse module path (e.g., "geometry.shapes" -> ["geometry", "shapes"])
-                let path: Vec<LocalTypeIdentifier> = module_path
+                let path: Vec<LocalIdentifier> = module_path
                     .as_str()
                     .split('.')
-                    .map(|s| LocalTypeIdentifier::new(s))
+                    .map(|s| LocalIdentifier::new(s))
                     .collect();
 
                 Ok(Definition::Import(Import {
-                    module_path: path,
+                    module_path: ModulePath(path),
                     items: ImportItems::Specific(items),
                 }))
             }
             Rule::import_path => {
                 // Handle: import math or import geometry.shapes
-                let path: Vec<LocalTypeIdentifier> = import_type
+                let path: Vec<LocalIdentifier> = import_type
                     .as_str()
                     .split('.')
-                    .map(|s| LocalTypeIdentifier::new(s))
+                    .map(|s| LocalIdentifier::new(s))
                     .collect();
 
                 Ok(Definition::Import(Import {
-                    module_path: path,
+                    module_path: ModulePath(path),
                     items: ImportItems::Module,
                 }))
             }
@@ -1028,11 +1029,53 @@ impl AstParser {
         Ok(expr)
     }
 
+    fn parse_qualified_type_identifier(
+        &self,
+        pair: Pair<Rule>,
+    ) -> Result<QualifiedTypeIdentifier, Error<Rule>> {
+        match pair.as_rule() {
+            Rule::qualified_type_identifier => {
+                let mut inner = Self::get_inner_pairs(&pair);
+                let mut path = Vec::new();
+
+                // Parse prefix if it exists
+                if let Some(prefix) = inner.next() {
+                    if prefix.as_rule() == Rule::qualified_prefix {
+                        for part in Self::get_inner_pairs(&prefix) {
+                            if part.as_rule() == Rule::identifier {
+                                path.push(LocalIdentifier::new(&*part.as_str().to_string()));
+                            }
+                        }
+                    }
+                }
+
+                // Parse the type identifier
+                let type_id = self.expect_next(&mut inner, Rule::type_identifier)?;
+
+                Ok(QualifiedTypeIdentifier::new(
+                    TypeIdentifier::new(convert_from_pair(&type_id), type_id.as_str()),
+                    path,
+                ))
+            }
+            Rule::type_identifier => Ok(QualifiedTypeIdentifier::new(
+                TypeIdentifier::new(convert_from_pair(&pair), pair.as_str()),
+                [].to_vec(),
+            )),
+            _ => Err(self.create_error(
+                &format!(
+                    "Expected qualified type or type identifier, got {:?}",
+                    pair.as_rule()
+                ),
+                pair.as_span(),
+            )),
+        }
+    }
+
     fn parse_struct_instantiation(&self, pair: Pair<Rule>) -> Result<Expression, Error<Rule>> {
         let mut inner = Self::get_inner_pairs(&pair);
 
         // Get struct name (required)
-        let struct_name = ScopedTypeIdentifier::new(&self.expect_identifier(&mut inner)?);
+        let struct_name = self.parse_qualified_type_identifier(inner.next().unwrap())?;
         let mut fields = SeqMap::new(); // Use sequence map since hashmaps are literally random in how they are inserted
 
         // Parse fields if they exist
@@ -1052,6 +1095,7 @@ impl AstParser {
 
         Ok(Expression::StructInstantiation(struct_name, fields))
     }
+
     fn parse_primary(&self, pair: Pair<Rule>) -> Result<Expression, Error<Rule>> {
         match pair.as_rule() {
             Rule::primary => {
@@ -1189,7 +1233,7 @@ impl AstParser {
         let mut inner = Self::get_inner_pairs(&pair);
 
         // Parse enum type name
-        let enum_type = ScopedTypeIdentifier::new(&self.expect_identifier(&mut inner)?);
+        let enum_type = self.parse_qualified_type_identifier(inner.next().unwrap())?;
 
         // Parse variant name
         let variant = LocalTypeIdentifier::new(&self.expect_identifier(&mut inner)?);
@@ -1379,11 +1423,14 @@ impl AstParser {
                 if let Some(inner_pair) = inner.next() {
                     self.parse_type(inner_pair)
                 } else {
-                    self.parse_type_from_str(pair.as_str(), pair.as_span())
+                    self.parse_type_from_str(&pair)
                 }
             }
-            Rule::built_in_type => self.parse_type_from_str(pair.as_str(), pair.as_span()),
-            Rule::identifier => Ok(Type::Struct(ScopedTypeIdentifier::new(pair.as_str()))),
+            Rule::built_in_type => self.parse_type_from_str(&pair),
+            Rule::identifier => Ok(Type::Struct(QualifiedTypeIdentifier::new(
+                TypeIdentifier::new(convert_from_pair(&pair), pair.as_str()),
+                [].to_vec(),
+            ))),
             Rule::tuple_type => {
                 let mut types = Vec::new();
                 for type_pair in pair.into_inner() {
@@ -1401,17 +1448,16 @@ impl AstParser {
         }
     }
 
-    fn parse_type_from_str(
-        &self,
-        type_str: &str,
-        _span: pest::Span<'_>,
-    ) -> Result<Type, pest::error::Error<Rule>> {
-        match type_str {
+    fn parse_type_from_str(&self, pair: &Pair<Rule>) -> Result<Type, pest::error::Error<Rule>> {
+        match pair.as_str() {
             "Int" => Ok(Type::Int),
             "Float" => Ok(Type::Float),
             "String" => Ok(Type::String),
             "Bool" => Ok(Type::Bool),
-            _ => Ok(Type::Struct(ScopedTypeIdentifier::new(type_str))),
+            _ => Ok(Type::Struct(QualifiedTypeIdentifier::new(
+                TypeIdentifier::new(convert_from_pair(&pair), pair.as_str()),
+                [].to_vec(),
+            ))),
         }
     }
 
@@ -1612,4 +1658,22 @@ impl AstParser {
             )),
         }
     }
+}
+
+fn convert_from_pair(pair: &Pair<Rule>) -> Node {
+    let pair_span = pair.as_span();
+    let span = Span {
+        start: Position {
+            offset: pair_span.start(),
+            line: pair_span.start_pos().line_col().0,
+            column: pair_span.start_pos().line_col().1,
+        },
+        end: Position {
+            offset: pair_span.end(),
+            line: pair_span.end_pos().line_col().0,
+            column: pair_span.end_pos().line_col().1,
+        },
+    };
+
+    Node { span }
 }

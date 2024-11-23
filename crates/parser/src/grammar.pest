@@ -220,7 +220,20 @@ op_mod = { "%" }
 
 // Basics ----------------------------------------------------------------
 
-identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+identifier = @{
+    (ASCII_ALPHA_LOWER | "_") ~
+    (ASCII_ALPHANUMERIC | "_")* ~
+    !(ASCII_ALPHA_UPPER)
+}
+
+// Type identifiers must have CamelCase
+type_identifier = @{ ASCII_ALPHA_UPPER ~ (ASCII_ALPHANUMERIC | "_")* }
+
+constant_identifier = @{
+    "_"? ~ ASCII_ALPHA_UPPER ~
+    (ASCII_ALPHA_UPPER | ASCII_DIGIT | "_")* ~
+    !(ASCII_ALPHA_LOWER)
+}
 
 
 // EXPRESSIONS ------------------------------------------------------------
@@ -406,7 +419,7 @@ bool_lit = { "true" | "false" }
 
 unit_lit = { "()" }
 
-enum_literal = { identifier ~ "::" ~ identifier ~ (struct_fields_lit | tuple_fields)? }
+enum_literal = { qualified_type_identifier ~ "::" ~ identifier ~ (struct_fields_lit | tuple_fields)? }
 
 // Add tuple literal definition
 tuple_lit = { "(" ~ expression ~ ("," ~ " "* ~ expression)* ~ ")" }  // PEST BUG: need explicit spaces after comma
@@ -420,6 +433,19 @@ map_literal = { "map[" ~ type_name ~ ":" ~ type_name ~ "]" }
 // Struct related
 struct_fields = { (struct_field ~ ("," ~ " "* ~ struct_field)* ~ trailing_comma? )? }  // PEST BUG: need explicit spaces after comma
 struct_field = { identifier ~ ":" ~ expression }
+
+
+qualified_identifier = {
+    qualified_prefix? ~ identifier
+}
+
+qualified_prefix = {
+    (identifier ~ "::")+
+}
+
+qualified_type_identifier = {
+    qualified_prefix? ~ type_identifier
+}
 
 struct_instantiation = {
     (identifier ~ "{" ~ struct_fields? ~ "}")

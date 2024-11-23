@@ -3,17 +3,17 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
+use crate::module::Module;
+use crate::{ResolvedFunctionRef, ResolvedType};
 use seq_map::SeqMap;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use std::rc::Rc;
-use swamp_script_ast::{ImplMember, LocalTypeIdentifier, Parameter, ScopedTypeIdentifier};
-use crate::module::Module;
-use crate::{ResolvedFunctionRef, ResolvedType};
+use swamp_script_ast::{ImplMember, LocalTypeIdentifier, Parameter, QualifiedTypeIdentifier, Type};
 
 pub type StructTypeRef = Rc<StructType>;
 
-#[derive(Debug, Eq, PartialEq, Hash)]
+#[derive(Debug)]
 pub struct StructType {
     pub fields: SeqMap<LocalTypeIdentifier, ResolvedType>,
     pub name: LocalTypeIdentifier,
@@ -36,9 +36,37 @@ impl StructType {
     }
 }
 
+#[derive(Debug)]
+pub struct IntType;
+pub type IntTypeRef = Rc<IntType>;
+
+#[derive(Debug)]
+pub struct FloatType;
+pub type FloatTypeRef = Rc<FloatType>;
+
+#[derive(Debug)]
+pub struct BoolType;
+pub type BoolTypeRef = Rc<BoolType>;
+
+#[derive(Debug)]
+pub struct StringType;
+pub type StringTypeRef = Rc<StringType>;
+
+#[derive(Debug)]
+pub struct UnitType;
+pub type UnitTypeRef = Rc<UnitType>;
+
+pub type ResolvedArrayTypeRef = Rc<ResolvedArrayType>;
+
+#[derive(Debug)]
+pub struct ResolvedArrayType {
+    pub(crate) item_type: ResolvedType,
+    pub(crate) ast_type: Type,
+}
+
 pub type TupleTypeRef = Rc<TupleType>;
 
-#[derive(Debug, Eq, PartialEq, Hash)]
+#[derive(Debug)]
 pub struct TupleType(Vec<ResolvedType>);
 
 impl TupleType {
@@ -49,7 +77,7 @@ impl TupleType {
 
 pub type EnumTypeRef = Rc<EnumType>;
 
-#[derive(Debug, Eq, PartialEq, Hash, Default)]
+#[derive(Debug)]
 pub struct EnumType {
     pub name: LocalTypeIdentifier,
 }
@@ -66,7 +94,6 @@ impl EnumType {
 
 pub type EnumVariantTypeRef = Rc<EnumVariantType>;
 
-#[derive(Eq, PartialEq, Hash)]
 pub struct EnumVariantType {
     pub owner: EnumTypeRef,
     pub data: EnumVariantContainerType,
@@ -103,7 +130,7 @@ impl Debug for EnumVariantType {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Hash, Clone)]
+#[derive(Debug)]
 pub enum EnumVariantContainerType {
     Struct(StructTypeRef),
     Tuple(TupleTypeRef),
@@ -127,8 +154,6 @@ impl ImplType {
         }
     }
 }
-
-
 
 pub struct CanonicalTypeName {
     pub module: Rc<Module>,
@@ -178,7 +203,6 @@ impl ModuleNamespace {
         name: &LocalTypeIdentifier,
         containers: SeqMap<&LocalTypeIdentifier, EnumVariantContainerType>,
     ) -> Result<(), String> {
-
         let boxed = Rc::new(EnumType::new(name.clone()));
 
         self.enum_types.insert(name.clone(), boxed.clone());
@@ -208,7 +232,7 @@ impl ModuleNamespace {
         &mut self,
         name: String,
         signature: (Vec<Parameter>, ResolvedType),
-        func_ref: ResolvedFunctionRef,
+        _func_ref: ResolvedFunctionRef,
     ) -> Result<(), String> {
         // Register the name only once
 
@@ -219,7 +243,7 @@ impl ModuleNamespace {
 
     pub fn add_impl(
         &mut self,
-        name: &LocalTypeIdentifier,
+        _name: &LocalTypeIdentifier,
         struct_swamp_type: StructTypeRef,
         methods: ImplType,
     ) -> Result<(), String> {
@@ -228,26 +252,26 @@ impl ModuleNamespace {
         Ok(())
     }
 
-    pub fn get_struct(&self, name: &ScopedTypeIdentifier) -> Option<&StructTypeRef> {
+    pub fn get_struct(&self, name: &QualifiedTypeIdentifier) -> Option<&StructTypeRef> {
         // TODO: Add scope support, for now just ignore it
-        self.structs.get(&LocalTypeIdentifier::new(&*name.0))
+        self.structs.get(&LocalTypeIdentifier::new(name.name))
     }
 
     pub fn get_local_struct(&self, name: &LocalTypeIdentifier) -> Option<&StructTypeRef> {
         self.structs.get(&*name)
     }
 
-    pub fn get_enum(&self, name: &ScopedTypeIdentifier) -> Option<&EnumTypeRef> {
-        self.enum_types.get(&LocalTypeIdentifier::new(&*name.0))
+    pub fn get_enum(&self, name: &QualifiedTypeIdentifier) -> Option<&EnumTypeRef> {
+        self.enum_types.get(&LocalTypeIdentifier::new(name.name))
     }
 
     pub fn get_enum_variant_type(
         &self,
-        name: &ScopedTypeIdentifier,
+        name: &QualifiedTypeIdentifier,
         identifier: LocalTypeIdentifier,
     ) -> Option<&EnumVariantTypeRef> {
         // TODO: add scope/module support, ignore for now
-        let full_name = format!("{}::{}", name.0, identifier);
+        let full_name = format!("{:?}::{}", name.name, identifier);
 
         self.enum_variant_types
             .get(&LocalTypeIdentifier::new(&*full_name))

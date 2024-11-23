@@ -59,26 +59,6 @@ impl Variable {
     }
 }
 
-#[derive(Clone)]
-pub struct ScopedIdentifier(pub String);
-impl ScopedIdentifier {
-    pub fn new(s: &str) -> Self {
-        Self(s.to_string())
-    }
-}
-
-impl Debug for ScopedIdentifier {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl Display for ScopedIdentifier {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Default)]
 pub struct LocalIdentifier(pub String); // pub is probably better for performance
 
@@ -88,24 +68,78 @@ impl LocalIdentifier {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Default)]
-pub struct ScopedTypeIdentifier(pub String); // pub is probably better for performance
+// Common metadata that can be shared across all AST nodes
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Node {
+    pub span: Span,
+    // TODO: Add comments and attributes
+}
 
-impl ScopedTypeIdentifier {
-    pub fn new(s: &str) -> Self {
-        Self(s.to_string())
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Span {
+    pub start: Position,
+    pub end: Position,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Position {
+    pub offset: usize, // Octet offset into file
+    pub line: usize,   // 0-based line number
+    pub column: usize, // 0-based column number
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub struct TypeIdentifier {
+    pub node: Node,
+    pub name: String,
+}
+
+impl TypeIdentifier {
+    pub fn new(node: Node, name: &str) -> TypeIdentifier {
+        Self {
+            node,
+            name: name.to_string(),
+        }
     }
 }
 
-impl Debug for ScopedTypeIdentifier {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct QualifiedTypeIdentifier {
+    pub name: TypeIdentifier,
+    pub module_path: Option<ModulePath>,
+}
+
+impl QualifiedTypeIdentifier {
+    pub fn new(name: TypeIdentifier, module_path: Vec<LocalIdentifier>) -> Self {
+        let module_path = if module_path.is_empty() {
+            None
+        } else {
+            Some(ModulePath(module_path))
+        };
+
+        Self { name, module_path }
+    }
+
+    pub fn type_identifier(&self) -> &TypeIdentifier {
+        &self.name
     }
 }
 
-impl Display for ScopedTypeIdentifier {
+impl Debug for QualifiedTypeIdentifier {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
+        if let Some(module_path) = &self.module_path {
+            write!(f, "{}::", module_path)?;
+        }
+        write!(f, "{}", self.name.name)
+    }
+}
+
+impl Display for QualifiedTypeIdentifier {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        if let Some(module_path) = &self.module_path {
+            write!(f, "{}::", module_path)?;
+        }
+        write!(f, "{}", self.name.name)
     }
 }
 
@@ -145,9 +179,18 @@ impl Debug for StringConst {
     }
 }
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct ModulePath(pub Vec<LocalIdentifier>);
+
+impl Display for ModulePath {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{:?}", self.0)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Import {
-    pub module_path: Vec<LocalTypeIdentifier>, // For handling paths like "geometry.shapes"
+    pub module_path: ModulePath, // For handling paths like "geometry.shapes"
     pub items: ImportItems,
 }
 
@@ -157,16 +200,28 @@ pub enum ImportItems {
     Specific(Vec<LocalTypeIdentifier>), // import { sin, cos } from math
 }
 
+#[derive(Clone, Debug)]
+pub struct StructType {
+    pub identifier: LocalTypeIdentifier,
+    pub fields: SeqMap<LocalTypeIdentifier, Type>,
+}
+
+impl StructType {
+    pub fn new(identifier: LocalTypeIdentifier, fields: SeqMap<LocalTypeIdentifier, Type>) -> Self {
+        Self { identifier, fields }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Definition {
-    StructDef(LocalTypeIdentifier, SeqMap<LocalTypeIdentifier, Type>),
+    StructDef(StructType),
     EnumDef(
         LocalTypeIdentifier,
         SeqMap<LocalTypeIdentifier, EnumVariant>,
     ),
     FunctionDef(LocalTypeIdentifier, FunctionData),
     ImplDef(LocalTypeIdentifier, SeqMap<LocalTypeIdentifier, ImplItem>),
-    ExternalFunctionDef(ScopedIdentifier, FunctionData),
+    ExternalFunctionDef(QualifiedTypeIdentifier, FunctionData),
     Import(Import),
     // Other
     Comment(String),
@@ -301,7 +356,7 @@ pub enum Expression {
 
     // Constructing
     StructInstantiation(
-        ScopedTypeIdentifier,
+        QualifiedTypeIdentifier,
         SeqMap<LocalTypeIdentifier, Expression>,
     ),
     Array(Vec<Expression>),
@@ -329,7 +384,11 @@ pub enum Literal {
     Float(f32), // TODO: Change to fixed point 32 bit
     String(StringConst),
     Bool(bool),
-    EnumVariant(ScopedTypeIdentifier, LocalTypeIdentifier, EnumLiteralData), // EnumTypeName::Identifier tuple|struct
+    EnumVariant(
+        QualifiedTypeIdentifier,
+        LocalTypeIdentifier,
+        EnumLiteralData,
+    ), // EnumTypeName::Identifier tuple|struct
     Tuple(Vec<Expression>),
     Unit, // ()
 }
@@ -419,12 +478,12 @@ pub enum Type {
     Float,
     String,
     Bool,
-    Struct(ScopedTypeIdentifier), // TODO: Module support for name
+    Struct(QualifiedTypeIdentifier), // TODO: Module support for name
     Array(Box<Type>),
     Map(Box<Type>, Box<Type>), // TODO: not implemented yet
     Unit,
     Tuple(Vec<Type>),
-    Enum(ScopedTypeIdentifier), // TODO: Module support
+    Enum(QualifiedTypeIdentifier), // TODO: Module support
     Any,
 }
 

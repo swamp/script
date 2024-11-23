@@ -7,7 +7,7 @@ use crate::value::{FunctionRef, SwampExport, Value};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use swamp_script_ast::{
     BinaryOperator, Definition, EnumLiteralData, Expression, Literal, LocalTypeIdentifier,
-    MatchArm, Parameter, Pattern, Program, ScopedIdentifier, Statement, StringPart, Type,
+    MatchArm, Parameter, Pattern, Program, QualifiedTypeIdentifier, Statement, StringPart, Type,
     UnaryOperator, Variable,
 };
 use swamp_script_parser::AstParser;
@@ -291,7 +291,7 @@ impl Interpreter {
 
     pub fn register_external_function(
         &mut self,
-        name: &ScopedIdentifier,
+        name: &QualifiedTypeIdentifier,
         params: Vec<Parameter>,
         return_type: Type,
         handler: Box<dyn Fn(&[Value]) -> Result<Value, ExecuteError> + Send + Sync>,
