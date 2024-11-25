@@ -25,7 +25,8 @@ impl DependencyGraph {
         }
     }
 
-    pub fn add_module(&mut self, module_path: ModulePath, parsed_module: ParseModule) {
+    pub fn add_ast_module(&mut self, module_path: ModulePath, parsed_module: ParseModule) {
+        info!("Adding ast module {:?}", module_path);
         self.parsed_modules
             .insert(module_path, parsed_module)
             .expect("can not add parsed module")
@@ -70,17 +71,27 @@ impl DependencyGraph {
                 continue;
             }
 
-            info!("a module we haven't seen before: {path:?}");
-            let parse_module = parse_root.parse(&path)?;
-            info!("module parsed: {parse_module:?}");
-            let imports = get_all_import_paths(&parse_module);
+            let parsed_module_to_scan = if let Some(parsed_module) = self.parsed_modules.get(&path)
+            {
+                parsed_module
+            } else {
+                info!("a module we haven't seen before: {path:?}");
+                let parse_module = parse_root.parse(&path)?;
+                info!("module parsed: {parse_module:?}");
+
+                self.parsed_modules
+                    .insert(path.clone(), parse_module)
+                    .expect("TODO: panic message");
+
+                self.parsed_modules
+                    .get(&path.clone())
+                    .expect("we just inserted it")
+            };
+
+            let imports = get_all_import_paths(parsed_module_to_scan);
             for import in &imports {
                 info!("..found import: {import:?}");
             }
-
-            self.parsed_modules
-                .insert(path.clone(), parse_module)
-                .expect("TODO: panic message");
 
             self.modules
                 .insert(

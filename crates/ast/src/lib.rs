@@ -175,7 +175,10 @@ pub struct ModulePath(pub Vec<LocalIdentifier>);
 
 impl Display for ModulePath {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{:?}", self.0)
+        for x in &self.0 {
+            write!(f, "::{}", x.0)?;
+        }
+        Ok(())
     }
 }
 

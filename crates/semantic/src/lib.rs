@@ -51,6 +51,29 @@ pub enum ResolvedType {
     Any,
 }
 
+impl Display for ResolvedType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ResolvedType::Int(int_type) => write!(f, "Int"),
+            ResolvedType::Float(_) => todo!(),
+            ResolvedType::String(_) => todo!(),
+            ResolvedType::Bool(_) => todo!(),
+            Unit(_) => todo!(),
+            ResolvedType::Array(_) => todo!(),
+            ResolvedType::Tuple(_) => todo!(),
+            ResolvedType::Struct(struct_type) => {
+                write!(f, "{}", struct_type)
+            }
+            ResolvedType::Enum(_) => todo!(),
+            ResolvedType::EnumVariant(_) => todo!(),
+            ResolvedType::Function => todo!(),
+            ResolvedType::Void => todo!(),
+            ResolvedType::Range => todo!(),
+            ResolvedType::Any => todo!(),
+        }
+    }
+}
+
 type FunctionDef = (Vec<ResolvedParameter>, ResolvedType);
 
 pub enum ResolvedFunctionReference {
@@ -256,6 +279,7 @@ pub enum ResolvedDefinition {
     ImplType(),
 }
 
+#[derive(Debug)]
 pub struct Modules {
     pub modules: SeqMap<ModulePath, ResolvedModuleRef>,
 }
@@ -276,6 +300,16 @@ impl Modules {
     }
 }
 
+impl Display for Modules {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (module_path, module) in &self.modules {
+            writeln!(f, "{}\n: {}", module_path, module.namespace)?
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
 pub struct ResolvedProgram {
     pub modules: Modules,
     int_type: ResolvedIntTypeRef,
@@ -288,7 +322,7 @@ pub struct ResolvedProgram {
 
 impl Display for ResolvedProgram {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "resolved program")
+        write!(f, "modules: {}", self.modules)
     }
 }
 
@@ -368,6 +402,12 @@ pub struct ResolvedModule {
     pub module_path: ModulePath,
 }
 
+impl Display for ResolvedModule {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "namespace: {}", self.namespace)
+    }
+}
+
 impl ResolvedModule {
     pub fn new(module_path: ModulePath) -> Self {
         Self {
@@ -430,7 +470,7 @@ impl ResolvedProgram {
                 ResolvedType::Array(self.resolve_array_type(current_module, ast_type)?)
             }
             Type::Map(_, _) => todo!(),
-            Type::Tuple(_) => todo!(),
+            Type::Tuple(types) => todo!(),
             Type::Enum(_) => todo!(),
             Type::Any => todo!(),
         };
@@ -513,7 +553,7 @@ impl ResolvedProgram {
         Ok(())
     }
 
-    pub(crate) fn resolve_module(
+    pub fn resolve_module(
         &mut self,
         module_path: ModulePath,
         module: &ParseModule,
@@ -570,34 +610,37 @@ fn get_current_dir() -> Result<PathBuf, std::io::Error> {
 
 pub fn resolve(base_path: PathBuf) -> Result<ResolvedProgram, ResolveError> {
     let mut graph = DependencyGraph::new();
-    resolve_with_graph(base_path, &mut graph)
+    let module_path = ModulePath(vec![LocalIdentifier::new("main")]);
+    let mut resolved_program = ResolvedProgram::new();
+    resolve_with_graph(base_path, module_path, &mut graph, &mut resolved_program)?;
+    Ok(resolved_program)
 }
 
 pub fn resolve_with_graph(
     base_path: PathBuf,
+    module_path: ModulePath,
     mut graph: &mut DependencyGraph,
-) -> Result<ResolvedProgram, ResolveError> {
-    let mut resolved_program = ResolvedProgram::new();
+    mut resolved_program: &mut ResolvedProgram,
+) -> Result<(), ResolveError> {
     info!(
         "{:?}",
         get_current_dir().expect("failed to get current directory")
     );
     let parse_root = ParseRoot::new(base_path);
-    graph.build_graph(parse_root, ModulePath(vec![LocalIdentifier::new("main")]))?;
+    graph.build_graph(parse_root, module_path)?;
     let module_paths = graph.get_analysis_order()?;
-
-    let mut resolved_modules = Vec::new();
+    info!(module_paths=?module_paths, "analysis module");
+    //let mut resolved_modules = Vec::new();
 
     for module_path in module_paths {
         info!(module_path=?module_path, "ordered module");
 
         if let Some(parse_module) = graph.get_parsed_module(&module_path) {
             let resolved_module = resolved_program.resolve_module(module_path, parse_module)?;
-            resolved_modules.push(resolved_module);
         } else {
             panic!("not found module");
         }
     }
 
-    Ok(resolved_program)
+    Ok(())
 }

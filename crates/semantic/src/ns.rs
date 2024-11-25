@@ -24,6 +24,17 @@ pub struct ResolvedStructType {
     pub name: LocalTypeIdentifier,
     pub ast_struct: StructType,
 }
+
+impl Display for ResolvedStructType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} {{", self.name)?;
+        for (name, value) in &self.fields {
+            write!(f, "{}: {}", name, value)?;
+        }
+        write!(f, "}}")
+    }
+}
+
 impl ResolvedStructType {
     pub fn new(
         // TODO: defined_in_module: ResolvedModuleRef,
@@ -194,6 +205,16 @@ pub struct ResolvedModuleNamespace {
     tuples: Vec<TupleTypeRef>,
     functions: HashMap<String, (Vec<Parameter>, ResolvedType)>,
     impl_members: HashMap<ResolvedType, ImplType>,
+}
+
+impl Display for ResolvedModuleNamespace {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "structs:")?;
+        for (_struct_name, struct_type_ref) in &self.structs {
+            writeln!(f, "{}", struct_type_ref)?;
+        }
+        Ok(())
+    }
 }
 
 impl Into<LocalTypeName> for &String {

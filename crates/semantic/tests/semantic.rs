@@ -2,14 +2,16 @@ use crate::util::check;
 
 mod util;
 #[test_log::test]
-fn test1() {
+fn basic() {
     check(
-        r#"struct Hello {
+        r#"
+        struct Hello {
             x: Int,
+            y: (Int, Int),
         }
         "#,
         r#"
-          resolved program
+
         "#,
     )
 }

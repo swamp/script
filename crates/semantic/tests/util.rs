@@ -4,10 +4,10 @@
  */
 use std::env;
 use std::path::PathBuf;
-use swamp_script_ast::ModulePath;
+use swamp_script_ast::{LocalIdentifier, ModulePath};
 use swamp_script_parser::AstParser;
 use swamp_script_semantic::dep::DependencyGraph;
-use swamp_script_semantic::{resolve, ParseModule, ParseRoot};
+use swamp_script_semantic::{resolve, resolve_with_graph, ParseModule, ParseRoot, ResolvedModule, ResolvedProgram};
 use tracing::{info, warn};
 
 fn get_test_fixtures_directory(suffix: &str) -> PathBuf {
@@ -30,14 +30,20 @@ pub fn check(script: &str, expected_output: &str) {
     let parse_module = ParseModule { ast_program };
 
     let mut graph = DependencyGraph::new();
-    let root = ModulePath(vec![]);
-    graph.add_module(root, parse_module);
+    let mut vec = Vec::new();
+    vec.push(LocalIdentifier::new("test"));
+    let root = ModulePath(vec);
+    graph.add_ast_module(root.clone(), parse_module);
 
     let root_path = get_test_fixtures_directory("first");
     info!("root path is {root_path:?}");
-    let resolved = resolve(root_path).expect("Failed to resolve program");
+    let mut resolved_program = ResolvedProgram::new();
 
-    let formatted_output = resolved.to_string();
+
+    let resolved = resolve_with_graph(root_path, root, &mut graph, &mut resolved_program)
+        .expect("Failed to resolve program");
+
+    let formatted_output = resolved_program.to_string();
 
     let actual = formatted_output
         .lines()
