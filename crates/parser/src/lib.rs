@@ -5,11 +5,11 @@
 pub mod prelude;
 
 use swamp_script_ast::{
-    BinaryOperator, Definition, EnumLiteralData, EnumVariant, Expression, FormatSpecifier,
-    FunctionData, ImplItem, ImplMember, Import, ImportItems, Literal, LocalIdentifier,
-    LocalTypeIdentifier, MatchArm, ModulePath, MutVariableRef, Node, Parameter, Pattern, Position,
-    PrecisionType, Program, QualifiedTypeIdentifier, SelfParameter, Span, Statement, StringConst,
-    StringPart, StructType, Type, UnaryOperator, Variable,
+    AnonymousStruct, BinaryOperator, Definition, EnumLiteralData, EnumVariant, Expression,
+    FormatSpecifier, FunctionData, ImplItem, ImplMember, Import, ImportItems, Literal,
+    LocalIdentifier, LocalTypeIdentifier, MatchArm, ModulePath, MutVariableRef, Node, Parameter,
+    Pattern, Position, PrecisionType, Program, QualifiedTypeIdentifier, SelfParameter, Span,
+    Statement, StringConst, StringPart, StructType, Type, UnaryOperator, Variable,
 };
 
 use pest::error::{Error, ErrorVariant};
@@ -286,7 +286,10 @@ impl AstParser {
         let mut inner = Self::get_inner_pairs(&pair);
 
         let base = Variable::new(&self.expect_identifier(&mut inner)?, false);
-        let field = LocalTypeIdentifier::new( convert_from_pair(&pair), &self.expect_identifier(&mut inner)?);
+        let field = LocalTypeIdentifier::new(
+            convert_from_pair(&pair),
+            &self.expect_identifier(&mut inner)?,
+        );
 
         Ok(Expression::FieldAccess(
             Box::new(Expression::VariableAccess(base)),
@@ -311,7 +314,9 @@ impl AstParser {
         let expr_pair = self.next_pair(&mut inner)?;
 
         let pattern = match pattern_pair.as_rule() {
-            Rule::identifier => Pattern::VariableAssignment(Variable::new(pattern_pair.as_str(), is_mutable)),
+            Rule::identifier => {
+                Pattern::VariableAssignment(Variable::new(pattern_pair.as_str(), is_mutable))
+            }
             Rule::struct_destructure => self.parse_struct_pattern(&pattern_pair)?,
             Rule::tuple_destructure => self.parse_tuple_pattern(&pattern_pair)?,
             _ => {
@@ -330,7 +335,10 @@ impl AstParser {
         let mut fields = Vec::new();
         for field in Self::get_inner_pairs(pair) {
             if field.as_rule() == Rule::identifier {
-                fields.push(LocalTypeIdentifier::new(convert_from_pair(&pair),field.as_str()));
+                fields.push(LocalTypeIdentifier::new(
+                    convert_from_pair(&pair),
+                    field.as_str(),
+                ));
             }
         }
         Ok(Pattern::Struct(fields))
@@ -340,7 +348,10 @@ impl AstParser {
         let mut fields = Vec::new();
         for field in Self::get_inner_pairs(pair) {
             if field.as_rule() == Rule::identifier {
-                fields.push(LocalTypeIdentifier::new(convert_from_pair(&pair),field.as_str()));
+                fields.push(LocalTypeIdentifier::new(
+                    convert_from_pair(&pair),
+                    field.as_str(),
+                ));
             }
         }
         Ok(Pattern::Tuple(fields))
@@ -364,11 +375,17 @@ impl AstParser {
             let field_type = self.parse_type(self.next_pair(&mut field_parts)?)?;
 
             fields
-                .insert(LocalTypeIdentifier::new(convert_from_pair(&pair),&field_name), field_type)
+                .insert(
+                    LocalTypeIdentifier::new(convert_from_pair(&pair), &field_name),
+                    field_type,
+                )
                 .expect("duplicate field name"); // TODO: should be error
         }
 
-        let struct_def = StructType::new(LocalTypeIdentifier::new(convert_from_pair(&pair),&name), fields);
+        let struct_def = StructType::new(
+            LocalTypeIdentifier::new(convert_from_pair(&pair), &name),
+            fields,
+        );
 
         Ok(Definition::StructDef(struct_def))
     }
@@ -386,7 +403,10 @@ impl AstParser {
         pair: Pair<Rule>,
     ) -> Result<(LocalTypeIdentifier, FunctionData), Error<Rule>> {
         let mut inner = Self::get_inner_pairs(&pair);
-        let name = LocalTypeIdentifier::new(convert_from_pair(&pair), &self.expect_identifier(&mut inner)?);
+        let name = LocalTypeIdentifier::new(
+            convert_from_pair(&pair),
+            &self.expect_identifier(&mut inner)?,
+        );
 
         let mut params = Vec::new();
         let mut return_type = Type::Unit;
@@ -469,7 +489,10 @@ impl AstParser {
         let mut inner = Self::get_inner_pairs(&pair);
 
         // Parse method name
-        let name = LocalTypeIdentifier::new(convert_from_pair(&pair),&self.expect_identifier(&mut inner)?);
+        let name = LocalTypeIdentifier::new(
+            convert_from_pair(&pair),
+            &self.expect_identifier(&mut inner)?,
+        );
         let mut params = Vec::new();
         let mut self_param = None;
         let mut return_type = Type::Unit;
@@ -630,7 +653,10 @@ impl AstParser {
 
     fn parse_impl_def(&self, pair: Pair<Rule>) -> Result<Definition, Error<Rule>> {
         let mut inner = Self::get_inner_pairs(&pair);
-        let type_name = LocalTypeIdentifier::new(convert_from_pair(&pair),&self.expect_type_identifier(&mut inner)?);
+        let type_name = LocalTypeIdentifier::new(
+            convert_from_pair(&pair),
+            &self.expect_type_identifier(&mut inner)?,
+        );
         let mut items = SeqMap::new();
 
         while let Some(item_pair) = inner.next() {
@@ -723,7 +749,7 @@ impl AstParser {
                 // Parse specific items
                 let items: Vec<LocalTypeIdentifier> = Self::get_inner_pairs(&import_list)
                     .filter(|p| p.as_rule() == Rule::identifier)
-                    .map(|p| LocalTypeIdentifier::new(convert_from_pair(&pair),p.as_str()))
+                    .map(|p| LocalTypeIdentifier::new(convert_from_pair(&pair), p.as_str()))
                     .collect();
 
                 // Parse module path (e.g., "geometry.shapes" -> ["geometry", "shapes"])
@@ -988,7 +1014,7 @@ impl AstParser {
 
                             expr = Expression::MemberCall(
                                 Box::new(expr),
-                                LocalTypeIdentifier::new(convert_from_pair(&pair),&member_name),
+                                LocalTypeIdentifier::new(convert_from_pair(&pair), &member_name),
                                 args,
                             );
                         }
@@ -996,7 +1022,7 @@ impl AstParser {
                             let field_name = access_part.as_str().to_string();
                             expr = Expression::FieldAccess(
                                 Box::new(expr),
-                                LocalTypeIdentifier::new(convert_from_pair(&pair),&field_name),
+                                LocalTypeIdentifier::new(convert_from_pair(&pair), &field_name),
                             );
                         }
                         _ => {
@@ -1071,13 +1097,19 @@ impl AstParser {
                     ))
                 } else {
                     Err(self.create_error(
-                        &format!("Expected qualified prefix or type identifier, got {:?}", first.as_rule()),
+                        &format!(
+                            "Expected qualified prefix or type identifier, got {:?}",
+                            first.as_rule()
+                        ),
                         first.as_span(),
                     ))
                 }
             }
             _ => Err(self.create_error(
-                &format!("Expected qualified type identifier, got {:?}", pair.as_rule()),
+                &format!(
+                    "Expected qualified type identifier, got {:?}",
+                    pair.as_rule()
+                ),
                 pair.as_span(),
             )),
         }
@@ -1095,8 +1127,10 @@ impl AstParser {
             for field in Self::get_inner_pairs(&fields_pair) {
                 if field.as_rule() == Rule::struct_field {
                     let mut field_inner = Self::get_inner_pairs(&field);
-                    let field_name =
-                        LocalTypeIdentifier::new(convert_from_pair(&pair),&self.expect_identifier(&mut field_inner)?);
+                    let field_name = LocalTypeIdentifier::new(
+                        convert_from_pair(&pair),
+                        &self.expect_identifier(&mut field_inner)?,
+                    );
                     let field_value = self.parse_expression(self.next_pair(&mut field_inner)?)?;
                     fields
                         .insert(field_name, field_value)
@@ -1259,7 +1293,8 @@ impl AstParser {
                     for field in Self::get_inner_pairs(&fields_pair) {
                         if field.as_rule() == Rule::struct_field {
                             let mut field_inner = Self::get_inner_pairs(&field);
-                            let field_name = LocalTypeIdentifier::new(convert_from_pair(&pair),
+                            let field_name = LocalTypeIdentifier::new(
+                                convert_from_pair(&pair),
                                 &self.expect_identifier(&mut field_inner)?,
                             );
                             let field_value =
@@ -1440,7 +1475,7 @@ impl AstParser {
                 }
             }
             Rule::built_in_type => self.parse_type_from_str(&pair),
-            Rule::identifier => Ok(Type::Struct(QualifiedTypeIdentifier::new(
+            Rule::qualified_type_identifier => Ok(Type::Struct(QualifiedTypeIdentifier::new(
                 LocalTypeIdentifier::new(convert_from_pair(&pair), pair.as_str()),
                 [].to_vec(),
             ))),
@@ -1474,16 +1509,21 @@ impl AstParser {
         }
     }
 
-    fn parse_local_type_identifier(&self, pair: Pair<Rule>) -> Result<LocalTypeIdentifier, Error<Rule>> {
+    fn parse_local_type_identifier(
+        &self,
+        pair: Pair<Rule>,
+    ) -> Result<LocalTypeIdentifier, Error<Rule>> {
         if pair.as_rule() != Rule::type_identifier {
             return Err(self.create_error(
                 &format!("Expected type_identifier, found {:?}", pair.as_rule()),
                 pair.as_span(),
             ));
         }
-        Ok(LocalTypeIdentifier::new(convert_from_pair(&pair), pair.as_str()))
+        Ok(LocalTypeIdentifier::new(
+            convert_from_pair(&pair),
+            pair.as_str(),
+        ))
     }
-
 
     fn parse_local_type_identifier_next<'a>(
         &self,
@@ -1496,7 +1536,10 @@ impl AstParser {
                 pair.as_span(),
             ));
         }
-        Ok(LocalTypeIdentifier::new(convert_from_pair(&pair), pair.as_str()))
+        Ok(LocalTypeIdentifier::new(
+            convert_from_pair(&pair),
+            pair.as_str(),
+        ))
     }
 
     fn parse_enum_def(&self, pair: Pair<Rule>) -> Result<Definition, Error<Rule>> {
@@ -1532,11 +1575,17 @@ impl AstParser {
         match pair.as_rule() {
             Rule::simple_variant => {
                 let name = self.next_inner_pair(pair.clone())?;
-                Ok((LocalTypeIdentifier::new(convert_from_pair(&pair),name.as_str()), EnumVariant::Simple))
+                Ok((
+                    LocalTypeIdentifier::new(convert_from_pair(&pair), name.as_str()),
+                    EnumVariant::Simple,
+                ))
             }
             Rule::tuple_variant => {
                 let mut inner = Self::get_inner_pairs(&pair);
-                let name = LocalTypeIdentifier::new(convert_from_pair(&pair),&self.expect_type_identifier(&mut inner)?);
+                let name = LocalTypeIdentifier::new(
+                    convert_from_pair(&pair),
+                    &self.expect_type_identifier(&mut inner)?,
+                );
 
                 let mut types = Vec::new();
                 while let Some(type_pair) = inner.next() {
@@ -1547,20 +1596,26 @@ impl AstParser {
             }
             Rule::struct_variant => {
                 let mut inner = Self::get_inner_pairs(&pair);
-                let name = LocalTypeIdentifier::new(convert_from_pair(&pair),&self.expect_type_identifier(&mut inner)?);
+                let name = LocalTypeIdentifier::new(
+                    convert_from_pair(&pair),
+                    &self.expect_type_identifier(&mut inner)?,
+                );
 
                 let mut fields = SeqMap::new();
                 while let Some(field_pair) = inner.next() {
                     let mut field_inner = Self::get_inner_pairs(&field_pair);
-                    let field_name =
-                        LocalTypeIdentifier::new(convert_from_pair(&pair),&self.expect_identifier(&mut field_inner)?);
+                    let field_name = LocalTypeIdentifier::new(
+                        convert_from_pair(&pair),
+                        &self.expect_identifier(&mut field_inner)?,
+                    );
                     let field_type = self.parse_type(self.next_pair(&mut field_inner)?)?;
                     fields
                         .insert(field_name, field_type)
                         .expect("duplicate field field"); // TODO: Handle as Err()
                 }
 
-                Ok((name, EnumVariant::Struct(fields)))
+                let anon = AnonymousStruct::new(fields);
+                Ok((name, EnumVariant::Struct(anon)))
             }
             _ => Err(self.create_error(
                 &format!("Unknown enum variant type: {:?}", pair.as_rule()),
@@ -1634,7 +1689,10 @@ impl AstParser {
             }
             Rule::enum_pattern => {
                 let mut inner = Self::get_inner_pairs(&pair);
-                let variant = LocalTypeIdentifier::new(convert_from_pair(&pair),&self.expect_type_identifier(&mut inner)?);
+                let variant = LocalTypeIdentifier::new(
+                    convert_from_pair(&pair),
+                    &self.expect_type_identifier(&mut inner)?,
+                );
 
                 // Check for optional tuple or struct pattern
                 if let Some(pattern) = inner.next() {
@@ -1643,7 +1701,10 @@ impl AstParser {
                             let mut fields = Vec::new();
                             for field in Self::get_inner_pairs(&pattern) {
                                 if field.as_rule() == Rule::pattern_field {
-                                    fields.push(LocalTypeIdentifier::new(convert_from_pair(&pair),field.as_str()));
+                                    fields.push(LocalTypeIdentifier::new(
+                                        convert_from_pair(&pair),
+                                        field.as_str(),
+                                    ));
                                 }
                             }
                             Ok(Pattern::EnumTuple(variant, fields))
@@ -1652,7 +1713,10 @@ impl AstParser {
                             let mut fields = Vec::new();
                             for field in Self::get_inner_pairs(&pattern) {
                                 if field.as_rule() == Rule::struct_pattern_field {
-                                    fields.push(LocalTypeIdentifier::new(convert_from_pair(&pair),field.as_str()));
+                                    fields.push(LocalTypeIdentifier::new(
+                                        convert_from_pair(&pair),
+                                        field.as_str(),
+                                    ));
                                 }
                             }
                             Ok(Pattern::EnumStruct(variant, fields))
@@ -1675,7 +1739,10 @@ impl AstParser {
                 let mut fields = Vec::new();
                 for field in Self::get_inner_pairs(&pair) {
                     if field.as_rule() == Rule::pattern_field {
-                        fields.push(LocalTypeIdentifier::new(convert_from_pair(&pair),field.as_str()));
+                        fields.push(LocalTypeIdentifier::new(
+                            convert_from_pair(&pair),
+                            field.as_str(),
+                        ));
                     }
                 }
                 Ok(Pattern::Tuple(fields))
@@ -1684,13 +1751,19 @@ impl AstParser {
                 let mut fields = Vec::new();
                 for field in Self::get_inner_pairs(&pair) {
                     if field.as_rule() == Rule::pattern_field {
-                        fields.push(LocalTypeIdentifier::new(convert_from_pair(&pair),field.as_str()));
+                        fields.push(LocalTypeIdentifier::new(
+                            convert_from_pair(&pair),
+                            field.as_str(),
+                        ));
                     }
                 }
                 Ok(Pattern::Struct(fields))
             }
             Rule::wildcard_pattern => Ok(Pattern::Wildcard),
-            Rule::identifier_pattern => Ok(Pattern::VariableAssignment(Variable::new(pair.as_str(), false))),
+            Rule::identifier_pattern => Ok(Pattern::VariableAssignment(Variable::new(
+                pair.as_str(),
+                false,
+            ))),
             _ => Err(self.create_error(
                 &format!("Unknown match pattern type: {:?}", pair.as_rule()),
                 pair.as_span(),

@@ -88,7 +88,7 @@ pub struct Position {
     pub column: usize, // 0-based column number
 }
 
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone,Debug, PartialEq, Eq, Hash)]
 pub struct QualifiedTypeIdentifier {
     pub name: LocalTypeIdentifier,
     pub module_path: Option<ModulePath>,
@@ -110,14 +110,6 @@ impl QualifiedTypeIdentifier {
     }
 }
 
-impl Debug for QualifiedTypeIdentifier {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        if let Some(module_path) = &self.module_path {
-            write!(f, "{}::", module_path)?;
-        }
-        write!(f, "{}", self.name.text)
-    }
-}
 
 impl Display for QualifiedTypeIdentifier {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
@@ -128,7 +120,7 @@ impl Display for QualifiedTypeIdentifier {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct LocalTypeIdentifier {
     pub node: Node,
     pub text: String,
@@ -140,12 +132,6 @@ impl LocalTypeIdentifier {
             node,
             text: str.to_string(),
         }
-    }
-}
-
-impl Debug for LocalTypeIdentifier {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}", self.text)
     }
 }
 
@@ -449,11 +435,23 @@ impl Debug for EnumLiteralData {
     }
 }
 
+#[derive(Clone, Eq, PartialEq)]
+#[derive(Debug)]
+pub struct AnonymousStruct {
+    pub fields: SeqMap<LocalTypeIdentifier, Type>,
+}
+
+impl AnonymousStruct {
+    pub fn new(fields: SeqMap<LocalTypeIdentifier, Type>) -> Self {
+        Self { fields }
+    }
+}
+
 #[derive(Clone, PartialEq, Eq)]
 pub enum EnumVariant {
     Simple,
     Tuple(Vec<Type>),
-    Struct(SeqMap<LocalTypeIdentifier, Type>),
+    Struct(AnonymousStruct),
 }
 
 impl Debug for EnumVariant {
@@ -461,7 +459,7 @@ impl Debug for EnumVariant {
         match self {
             Self::Simple => write!(f, ""),
             Self::Tuple(types) => write!(f, "{:?}", types),
-            Self::Struct(types) => write!(f, "{:?}", types),
+            Self::Struct(anon_struct) => write!(f, "{:?}", anon_struct),
         }
     }
 }

@@ -10,15 +10,18 @@ use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use std::rc::Rc;
 use swamp_script_ast::{
-    ImplMember, LocalTypeIdentifier, ModulePath, Parameter, QualifiedTypeIdentifier, StructType,
-    Type,
+    AnonymousStruct, ImplMember, LocalTypeIdentifier, ModulePath, Parameter,
+    QualifiedTypeIdentifier, StructType, Type,
 };
 
 pub type ResolvedStructTypeRef = Rc<ResolvedStructType>;
 
+pub type TypeNumber = u32;
+
 #[derive(Debug)]
 pub struct ResolvedStructType {
     // TODO:  pub defined_in_module: ResolvedModuleRef,
+    pub number: TypeNumber,
     pub module_path: ModulePath,
     pub fields: SeqMap<LocalTypeIdentifier, ResolvedType>,
     pub name: LocalTypeIdentifier,
@@ -35,6 +38,39 @@ impl Display for ResolvedStructType {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct ResolvedAnonymousStructType {
+    // TODO:  pub defined_in_module: ResolvedModuleRef,
+    pub module_path: ModulePath,
+    pub fields: SeqMap<LocalTypeIdentifier, ResolvedType>,
+    pub ast_anon_struct: AnonymousStruct,
+}
+
+impl ResolvedAnonymousStructType {
+    pub fn new(
+        // TODO: defined_in_module: ResolvedModuleRef,
+        module_path: ModulePath,
+        fields: SeqMap<LocalTypeIdentifier, ResolvedType>,
+        ast_anon_struct: AnonymousStruct,
+    ) -> Self {
+        Self {
+            //defined_in_module,
+            module_path,
+            ast_anon_struct,
+            fields,
+        }
+    }
+}
+
+impl Display for ResolvedAnonymousStructType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (name, value) in &self.fields {
+            write!(f, "{}: {}", name, value)?;
+        }
+        write!(f, "}}")
+    }
+}
+
 impl ResolvedStructType {
     pub fn new(
         // TODO: defined_in_module: ResolvedModuleRef,
@@ -42,8 +78,10 @@ impl ResolvedStructType {
         name: LocalTypeIdentifier,
         fields: SeqMap<LocalTypeIdentifier, ResolvedType>,
         ast_struct: StructType,
+        number: TypeNumber,
     ) -> Self {
         Self {
+            number,
             //defined_in_module,
             module_path,
             ast_struct,
@@ -89,27 +127,28 @@ pub struct ResolvedArrayType {
     pub(crate) ast_type: Type,
 }
 
-pub type TupleTypeRef = Rc<TupleType>;
+pub type ResolvedTupleTypeRef = Rc<ResolvedTupleType>;
 
 #[derive(Debug)]
-pub struct TupleType(Vec<ResolvedType>);
+pub struct ResolvedTupleType(Vec<ResolvedType>);
 
-impl TupleType {
+impl ResolvedTupleType {
     pub fn new(types: Vec<ResolvedType>) -> Self {
         Self(types)
     }
 }
 
-pub type EnumTypeRef = Rc<EnumType>;
+pub type ResolvedEnumTypeRef = Rc<ResolvedEnumType>;
 
 #[derive(Debug)]
-pub struct EnumType {
+pub struct ResolvedEnumType {
     pub name: LocalTypeIdentifier,
+    pub number: TypeNumber,
 }
 
-impl EnumType {
-    pub fn new(name: LocalTypeIdentifier) -> Self {
-        Self { name }
+impl ResolvedEnumType {
+    pub fn new(name: LocalTypeIdentifier, number: TypeNumber) -> Self {
+        Self { name, number }
     }
 
     pub fn name(&self) -> &LocalTypeIdentifier {
@@ -117,48 +156,69 @@ impl EnumType {
     }
 }
 
-pub type EnumVariantTypeRef = Rc<EnumVariantType>;
+pub type ResolvedEnumVariantTypeRef = Rc<ResolvedEnumVariantType>;
 
-pub struct EnumVariantType {
-    pub owner: EnumTypeRef,
-    pub data: EnumVariantContainerType,
+pub struct ResolvedEnumVariantType {
+    pub owner: ResolvedEnumTypeRef,
+    pub data: ResolvedEnumVariantContainerType,
     pub name: LocalTypeIdentifier,
+    pub number: TypeNumber,
 }
 
-impl EnumVariantType {
+impl ResolvedEnumVariantType {
     pub fn new(
-        owner: EnumTypeRef,
+        owner: ResolvedEnumTypeRef,
         name: LocalTypeIdentifier,
-        data: EnumVariantContainerType,
+        data: ResolvedEnumVariantContainerType,
+        number: TypeNumber,
     ) -> Self {
-        Self { owner, data, name }
+        Self {
+            owner,
+            data,
+            name,
+            number,
+        }
     }
 
-    pub fn container(&self) -> &EnumVariantContainerType {
+    pub fn container(&self) -> &ResolvedEnumVariantContainerType {
         &self.data
     }
 
     pub fn name(&self) -> &LocalTypeIdentifier {
         &self.name
     }
-}
 
-impl Display for EnumVariantType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}::{}", self.owner.name(), self.name)
+    pub fn complete_name(&self) -> String {
+        self.owner.name.to_string() + "::" + &*self.name.to_string()
     }
 }
 
-impl Debug for EnumVariantType {
+impl Display for ResolvedEnumVariantType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}::{}", self.owner.name(), self.name);
+
+        match &self.data {
+            ResolvedEnumVariantContainerType::Struct(_) => {
+                write!(f, "{}::{}", self.name, self.complete_name());
+            }
+            ResolvedEnumVariantContainerType::Tuple(tuple_ref) => write!(f, "{:?}", tuple_ref)?,
+            ResolvedEnumVariantContainerType::Nothing => write!(f, "")?,
+        }
+
+        Ok(())
+    }
+}
+
+impl Debug for ResolvedEnumVariantType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}::{}", self.owner.name(), self.name)
     }
 }
 
 #[derive(Debug, Clone)]
-pub enum EnumVariantContainerType {
-    Struct(ResolvedStructTypeRef),
-    Tuple(TupleTypeRef),
+pub enum ResolvedEnumVariantContainerType {
+    Struct(ResolvedAnonymousStructType),
+    Tuple(ResolvedTupleTypeRef),
     Nothing,
 }
 
@@ -199,20 +259,39 @@ pub struct ResolvedModuleNamespace {
     all_owned_types: SeqMap<LocalTypeIdentifier, ResolvedType>,
 
     structs: HashMap<LocalTypeName, ResolvedStructTypeRef>, // They are created by the module, so they are owned here
-    enum_types: HashMap<LocalTypeName, EnumTypeRef>, // They are created by the module, so they are owned here
-    enum_variant_types: HashMap<LocalTypeName, EnumVariantTypeRef>, // They are created by the module, so they are owned here
+    enum_types: HashMap<LocalTypeName, ResolvedEnumTypeRef>, // They are created by the module, so they are owned here
+    enum_variant_types: HashMap<LocalTypeName, ResolvedEnumVariantTypeRef>, // They are created by the module, so they are owned here
 
-    tuples: Vec<TupleTypeRef>,
+    tuples: Vec<ResolvedTupleTypeRef>,
     functions: HashMap<String, (Vec<Parameter>, ResolvedType)>,
     impl_members: HashMap<ResolvedType, ImplType>,
+
+    type_number: TypeNumber,
+}
+
+impl ResolvedModuleNamespace {
+    pub fn allocate_number(&mut self) -> TypeNumber {
+        self.type_number += 1;
+        self.type_number
+    }
 }
 
 impl Display for ResolvedModuleNamespace {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "structs:")?;
-        for (_struct_name, struct_type_ref) in &self.structs {
-            writeln!(f, "{}", struct_type_ref)?;
+        if !self.structs.is_empty() {
+            writeln!(f, "structs:")?;
+            for (_struct_name, struct_type_ref) in &self.structs {
+                writeln!(f, "{}", struct_type_ref)?;
+            }
         }
+
+        if !self.enum_variant_types.is_empty() {
+            writeln!(f, "enum_variants:")?;
+            for (_struct_name, enum_variant_ref) in &self.enum_variant_types {
+                writeln!(f, "{}", enum_variant_ref)?;
+            }
+        }
+
         Ok(())
     }
 }
@@ -248,18 +327,35 @@ impl ResolvedModuleNamespace {
         Ok(struct_ref)
     }
 
+    pub(crate) fn add_enum_variant(
+        &mut self,
+        enum_variant: ResolvedEnumVariantType,
+    ) -> Result<ResolvedEnumVariantTypeRef, String> {
+        let enum_variant_ref = Rc::new(enum_variant);
+        self.enum_variant_types.insert(
+            (&enum_variant_ref.complete_name()).into(),
+            enum_variant_ref.clone(),
+        );
+        Ok(enum_variant_ref)
+    }
+
     pub fn create_enum_type(
         &mut self,
         name: &LocalTypeIdentifier,
-        containers: SeqMap<&LocalTypeIdentifier, EnumVariantContainerType>,
+        containers: SeqMap<&LocalTypeIdentifier, ResolvedEnumVariantContainerType>,
+        type_number: TypeNumber,
     ) -> Result<(), String> {
-        let boxed = Rc::new(EnumType::new(name.clone()));
+        let boxed = Rc::new(ResolvedEnumType::new(name.clone(), type_number));
 
         self.enum_types.insert((&name.text).into(), boxed.clone());
 
         for (ident, variant) in &containers {
-            let converted_variant =
-                EnumVariantType::new(boxed.clone(), (*ident).clone(), variant.clone());
+            let converted_variant = ResolvedEnumVariantType::new(
+                boxed.clone(),
+                (*ident).clone(),
+                variant.clone(),
+                type_number,
+            );
             let complete_name = &*(name.to_string() + "::" + &*ident.to_string());
             self.enum_variant_types
                 .insert(complete_name.into(), Rc::new(converted_variant));
@@ -268,9 +364,9 @@ impl ResolvedModuleNamespace {
         Ok(())
     }
 
-    pub fn get_or_create_tuple(&mut self, types: Vec<ResolvedType>) -> TupleTypeRef {
+    pub fn get_or_create_tuple(&mut self, types: Vec<ResolvedType>) -> ResolvedTupleTypeRef {
         // TODO: for now, just create new types, in the future we should check if we can reuse a type
-        let tuple_type = Rc::new(TupleType::new(types));
+        let tuple_type = Rc::new(ResolvedTupleType::new(types));
         self.tuples.push(tuple_type.clone());
 
         tuple_type
@@ -309,7 +405,7 @@ impl ResolvedModuleNamespace {
         self.structs.get(&(&name.text).into())
     }
 
-    pub fn get_enum(&self, name: &LocalTypeIdentifier) -> Option<&EnumTypeRef> {
+    pub fn get_enum(&self, name: &LocalTypeIdentifier) -> Option<&ResolvedEnumTypeRef> {
         self.enum_types.get(&(&name.text).into())
     }
 
@@ -317,7 +413,7 @@ impl ResolvedModuleNamespace {
         &self,
         name: &QualifiedTypeIdentifier,
         identifier: LocalTypeIdentifier,
-    ) -> Option<&EnumVariantTypeRef> {
+    ) -> Option<&ResolvedEnumVariantTypeRef> {
         // TODO: add scope/module support, ignore for now
         let full_name = format!("{:?}::{}", name.name, identifier);
 

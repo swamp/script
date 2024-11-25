@@ -2,7 +2,7 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use swamp_script_semantic::ns::{EnumVariantTypeRef, ResolvedStructTypeRef, ResolvedType, TupleTypeRef};
+use swamp_script_semantic::ns::{ResolvedEnumVariantTypeRef, ResolvedStructTypeRef, ResolvedType, ResolvedTupleTypeRef};
 use crate::{ExecuteError, Interpreter, ScopeType, ValueWithSignal};
 use std::cell::RefCell;
 use std::fmt::Debug;
@@ -103,9 +103,9 @@ pub enum Value {
 
     // Containers
     Array(SwampTypeId, Vec<Value>),
-    Tuple(TupleTypeRef, Vec<Value>),
+    Tuple(ResolvedTupleTypeRef, Vec<Value>),
     Struct(ResolvedStructTypeRef, Vec<Value>), // type of the struct, and the fields themselves in strict order
-    EnumVariant(EnumVariantTypeRef, Box<Value>), // (enum_type_name, variant_name, value). value is either tuple or struct
+    EnumVariant(ResolvedEnumVariantTypeRef, Box<Value>), // (enum_type_name, variant_name, value). value is either tuple or struct
 
     // Number generators
     ExclusiveRange(Box<i32>, Box<i32>),

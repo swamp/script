@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use swamp_script_semantic::ns::{EnumVariantContainerType, ImplType, ResolvedModuleNamespace, ResolvedStructType, SwampTypeId};
+use swamp_script_semantic::ns::{ResolvedEnumVariantContainerType, ImplType, ResolvedModuleNamespace, ResolvedStructType, SwampTypeId};
 use crate::value::{Value};
 use seq_map::SeqMap;
 use swamp_script_ast::SelfParameter;
@@ -105,12 +105,12 @@ impl DefinitionRunner {
 
                 for (ident, variant) in variants {
                     let container_type = match variant {
-                        EnumVariant::Simple => EnumVariantContainerType::Nothing,
+                        EnumVariant::Simple => ResolvedEnumVariantContainerType::Nothing,
 
                         EnumVariant::Tuple(ast_types) => {
                             let converted_types = Self::evaluate_types(namespace, ast_types)?;
                             let tuple_type = namespace.get_or_create_tuple(converted_types);
-                            EnumVariantContainerType::Tuple(tuple_type)
+                            ResolvedEnumVariantContainerType::Tuple(tuple_type)
                         }
 
                         EnumVariant::Struct(ast_fields) => {
@@ -130,7 +130,7 @@ impl DefinitionRunner {
                             let created_struct_type_ref = namespace
                                 .add_struct_type(&internal_struct_type_name, internal_struct_type)
                                 .expect("should work with internal struct type");
-                            EnumVariantContainerType::Struct(created_struct_type_ref)
+                            ResolvedEnumVariantContainerType::Struct(created_struct_type_ref)
                         }
                     };
 

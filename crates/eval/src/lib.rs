@@ -12,7 +12,7 @@ use swamp_script_ast::{
 };
 use swamp_script_parser::AstParser;
 use swamp_script_semantic::module::Module;
-use swamp_script_semantic::ns::{EnumVariantContainerType, ResolvedModuleNamespace};
+use swamp_script_semantic::ns::{ResolvedEnumVariantContainerType, ResolvedModuleNamespace};
 use swamp_script_semantic::ResolvedType;
 use tracing::{debug, error, trace};
 use value::format_value;
@@ -635,7 +635,7 @@ impl Interpreter {
                             .clone() // Extend the lifetime by cloning
                     };
                     let variant_container_value: Value = match &enum_variant_type.data {
-                        EnumVariantContainerType::Tuple(_) => match data {
+                        ResolvedEnumVariantContainerType::Tuple(_) => match data {
                             EnumLiteralData::Tuple(tuple_expressions) => {
                                 let eval_expressions =
                                     self.evaluate_expressions(tuple_expressions)?;
@@ -653,7 +653,7 @@ impl Interpreter {
                             _ => return Err("wrong container type".to_string())?,
                         },
 
-                        EnumVariantContainerType::Struct(struct_type_ref) => match data {
+                        ResolvedEnumVariantContainerType::Struct(struct_type_ref) => match data {
                             EnumLiteralData::Struct(ast_struct_fields) => {
                                 let mut values = Vec::with_capacity(ast_struct_fields.len());
                                 for ast_expression in ast_struct_fields.values() {
@@ -665,7 +665,7 @@ impl Interpreter {
                             _ => return Err("wrong container type".to_string())?,
                         },
 
-                        EnumVariantContainerType::Nothing => Value::Unit,
+                        ResolvedEnumVariantContainerType::Nothing => Value::Unit,
                     };
 
                     Value::EnumVariant(enum_variant_type.clone(), Box::new(variant_container_value))

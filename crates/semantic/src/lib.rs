@@ -1,10 +1,12 @@
 use crate::dep::{DependencyError, DependencyGraph, ModuleInfo};
 use crate::module::Module;
 use crate::ns::{
-    EnumTypeRef, EnumVariantTypeRef, ResolveBoolTypeRef, ResolvedArrayType, ResolvedArrayTypeRef,
-    ResolvedBoolType, ResolvedFloatType, ResolvedFloatTypeRef, ResolvedIntType, ResolvedIntTypeRef,
-    ResolvedModuleNamespace, ResolvedStructType, ResolvedStructTypeRef, StringType, StringTypeRef,
-    TupleTypeRef, UnitType, UnitTypeRef,
+    ResolveBoolTypeRef, ResolvedAnonymousStructType, ResolvedArrayType, ResolvedArrayTypeRef,
+    ResolvedBoolType, ResolvedEnumType, ResolvedEnumTypeRef, ResolvedEnumVariantContainerType,
+    ResolvedEnumVariantType, ResolvedEnumVariantTypeRef, ResolvedFloatType, ResolvedFloatTypeRef,
+    ResolvedIntType, ResolvedIntTypeRef, ResolvedModuleNamespace, ResolvedStructType,
+    ResolvedStructTypeRef, ResolvedTupleType, ResolvedTupleTypeRef, StringType, StringTypeRef,
+    UnitType, UnitTypeRef,
 };
 use crate::ResolvedType::Unit;
 use pest::error::Error;
@@ -16,8 +18,9 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::{env, fs};
 use swamp_script_ast::{
-    BinaryOperator, Definition, Expression, FormatSpecifier, LocalIdentifier, LocalTypeIdentifier,
-    MatchArm, ModulePath, Program, QualifiedTypeIdentifier, StructType, Type, UnaryOperator,
+    BinaryOperator, Definition, EnumVariant, Expression, FormatSpecifier, LocalIdentifier,
+    LocalTypeIdentifier, MatchArm, ModulePath, Program, QualifiedTypeIdentifier, StructType, Type,
+    UnaryOperator,
 };
 use swamp_script_parser::Rule::parameters;
 use swamp_script_parser::{AstParser, Rule};
@@ -41,10 +44,10 @@ pub enum ResolvedType {
     Bool(ResolveBoolTypeRef),
     Unit(UnitTypeRef),
     Array(ResolvedArrayTypeRef),
-    Tuple(TupleTypeRef),
+    Tuple(ResolvedTupleTypeRef),
     Struct(ResolvedStructTypeRef),
-    Enum(EnumTypeRef),
-    EnumVariant(EnumVariantTypeRef),
+    Enum(ResolvedEnumTypeRef),
+    EnumVariant(ResolvedEnumVariantTypeRef),
     Function,
     Void,
     Range,
@@ -259,7 +262,7 @@ pub enum ResolvedStatement {
 pub enum ResolveError {
     DependencyError(DependencyError),
     CanNotFindModule(ModulePath),
-    UnknownStruct(QualifiedTypeIdentifier),
+    UnknownStructTypeReference(QualifiedTypeIdentifier),
     DuplicateFieldName(LocalTypeIdentifier),
     Unknown(String),
 }
@@ -303,7 +306,7 @@ impl Modules {
 impl Display for Modules {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (module_path, module) in &self.modules {
-            writeln!(f, "{}\n: {}", module_path, module.namespace)?
+            writeln!(f, "{}\n  {}", module_path, module.namespace)?
         }
         Ok(())
     }
@@ -322,7 +325,7 @@ pub struct ResolvedProgram {
 
 impl Display for ResolvedProgram {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "modules: {}", self.modules)
+        write!(f, "modules:\n{}", self.modules)
     }
 }
 
@@ -499,7 +502,7 @@ impl ResolvedProgram {
         if let Some(found) = resolve_module.get_struct(&type_name.name) {
             Ok(found.clone())
         } else {
-            Err(ResolveError::UnknownStruct(type_name.clone()))
+            Err(ResolveError::UnknownStructTypeReference(type_name.clone()))
         }
     }
 
@@ -522,6 +525,7 @@ impl ResolvedProgram {
             ast_struct.identifier.clone(),
             resolved_fields,
             ast_struct.clone(),
+            current_module.namespace.allocate_number(),
         );
 
         // Move ownership to module namespace
@@ -530,6 +534,72 @@ impl ResolvedProgram {
             .add_struct_type(&ast_struct.identifier, resolved_struct)?;
 
         Ok(resolved_struct_ref)
+    }
+
+    fn resolve_enum_type_definition(
+        &mut self,
+        current_module: &mut ResolvedModule,
+        enum_type_name: &LocalTypeIdentifier,
+        ast_variants: &SeqMap<LocalTypeIdentifier, EnumVariant>,
+    ) -> Result<Vec<ResolvedEnumVariantTypeRef>, ResolveError> {
+        let mut resolved_variants = Vec::new();
+
+        let resolved_parent_type = ResolvedEnumType::new(
+            enum_type_name.clone(),
+            current_module.namespace.allocate_number(),
+        );
+
+        let parent_ref = Rc::new(resolved_parent_type);
+
+        for (name, ast_enum_variant) in ast_variants {
+            //let resolved_type = self.resolve_type(current_module, ast_variant)?;
+            //resolved_fields
+            //  .insert(name.clone(), resolved_type)
+            //.map_err(|_| ResolveError::DuplicateFieldName(name.clone()))?;
+
+            let container = match ast_enum_variant {
+                EnumVariant::Simple => ResolvedEnumVariantContainerType::Nothing,
+                EnumVariant::Tuple(types) => {
+                    let mut vec = Vec::new();
+                    for tuple_type in types {
+                        let resolved_type = self.resolve_type(current_module, tuple_type)?;
+                        vec.push(resolved_type)
+                    }
+
+                    let resolved_tuple_type = ResolvedTupleType::new(vec);
+                    let resolved_tuple_type_ref = Rc::new(resolved_tuple_type);
+
+                    ResolvedEnumVariantContainerType::Tuple(resolved_tuple_type_ref)
+                }
+                EnumVariant::Struct(ast_struct_fields) => {
+                    let mut fields = SeqMap::new();
+                    for (field, field_type) in &ast_struct_fields.fields {
+                        let resolved_type = self.resolve_type(current_module, field_type)?;
+                        fields
+                            .insert(field.clone(), resolved_type)
+                            .map_err(|_| ResolveError::DuplicateFieldName(name.clone()))?;
+                    }
+                    let anonym = ResolvedAnonymousStructType::new(
+                        current_module.module_path.clone(),
+                        fields,
+                        ast_struct_fields.clone(),
+                    );
+                    ResolvedEnumVariantContainerType::Struct(anonym)
+                }
+            };
+
+            let variant = ResolvedEnumVariantType::new(
+                parent_ref.clone(),
+                name.clone(),
+                container,
+                current_module.namespace.allocate_number(),
+            );
+            let variant_ref = current_module.namespace.add_enum_variant(variant)?;
+
+            resolved_variants.push(variant_ref);
+        }
+
+        Ok(resolved_variants)
     }
 
     pub fn resolve_definitions(
@@ -542,9 +612,11 @@ impl ResolvedProgram {
                 Definition::StructDef(ref ast_struct) => {
                     self.resolve_struct_type_definition(current_module, ast_struct)?;
                 }
-                Definition::EnumDef(_, _) => todo!(),
-                Definition::FunctionDef(_, _) => todo!(),
+                Definition::EnumDef(identifier, variants) => {
+                    self.resolve_enum_type_definition(current_module, identifier, variants)?;
+                }
                 Definition::ImplDef(_, _) => todo!(),
+                Definition::FunctionDef(_, _) => todo!(),
                 Definition::ExternalFunctionDef(_, _) => todo!(),
                 Definition::Comment(_) => continue,
                 Definition::Import(_) => continue,
