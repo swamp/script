@@ -510,7 +510,7 @@ pub enum UnaryOperator {
 #[derive(Debug, Clone)]
 pub enum Pattern {
     // Just the normal identifier
-    Variable(Variable),
+    VariableAssignment(Variable),
 
     Tuple(Vec<LocalTypeIdentifier>),  // Change to SetVec
     Struct(Vec<LocalTypeIdentifier>), // Change to SetVec

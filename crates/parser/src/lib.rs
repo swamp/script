@@ -20,7 +20,7 @@ use pest_derive::Parser;
 use seq_map::SeqMap;
 use std::collections::HashMap;
 use swamp_script_ast::Definition::StructDef;
-use tracing::debug;
+use tracing::{debug, info};
 
 #[derive(Parser)]
 #[grammar = "grammar.pest"]
@@ -72,7 +72,16 @@ impl AstParser {
         Ok(pair.as_str().to_string())
     }
 
+    fn expect_type_identifier<'a>(
+        &self,
+        pairs: &mut impl Iterator<Item = Pair<'a, Rule>>,
+    ) -> Result<String, Error<Rule>> {
+        let pair = self.expect_next(pairs, Rule::type_identifier)?;
+        Ok(pair.as_str().to_string())
+    }
+
     fn get_inner_pairs<'a>(pair: &'a Pair<'a, Rule>) -> impl Iterator<Item = Pair<'a, Rule>> {
+        info!("get_inner_pairs: {:?}", pair.as_rule());
         pair.clone().into_inner()
     }
 
@@ -302,7 +311,7 @@ impl AstParser {
         let expr_pair = self.next_pair(&mut inner)?;
 
         let pattern = match pattern_pair.as_rule() {
-            Rule::identifier => Pattern::Variable(Variable::new(pattern_pair.as_str(), is_mutable)),
+            Rule::identifier => Pattern::VariableAssignment(Variable::new(pattern_pair.as_str(), is_mutable)),
             Rule::struct_destructure => self.parse_struct_pattern(&pattern_pair)?,
             Rule::tuple_destructure => self.parse_tuple_pattern(&pattern_pair)?,
             _ => {
@@ -341,7 +350,7 @@ impl AstParser {
         let mut inner = Self::get_inner_pairs(&pair);
 
         // Parse struct name
-        let name = self.expect_identifier(&mut inner)?;
+        let name = self.expect_type_identifier(&mut inner)?;
 
         // Get field definitions
         let field_defs = self.next_pair(&mut inner)?;
@@ -621,7 +630,7 @@ impl AstParser {
 
     fn parse_impl_def(&self, pair: Pair<Rule>) -> Result<Definition, Error<Rule>> {
         let mut inner = Self::get_inner_pairs(&pair);
-        let type_name = LocalTypeIdentifier::new(convert_from_pair(&pair),&self.expect_identifier(&mut inner)?);
+        let type_name = LocalTypeIdentifier::new(convert_from_pair(&pair),&self.expect_type_identifier(&mut inner)?);
         let mut items = SeqMap::new();
 
         while let Some(item_pair) = inner.next() {
@@ -657,7 +666,7 @@ impl AstParser {
 
         // Parse loop variable
         let var_pair = self.next_pair(&mut inner)?;
-        let var_pattern = Pattern::Variable(Variable::new(var_pair.as_str(), false));
+        let var_pattern = Pattern::VariableAssignment(Variable::new(var_pair.as_str(), false));
 
         // Parse iterable expression
         let iterable = self.parse_expression(self.next_pair(&mut inner)?)?;
@@ -1038,34 +1047,37 @@ impl AstParser {
                 let mut inner = Self::get_inner_pairs(&pair);
                 let mut path = Vec::new();
 
-                // Parse prefix if it exists
-                if let Some(prefix) = inner.next() {
-                    if prefix.as_rule() == Rule::qualified_prefix {
-                        for part in Self::get_inner_pairs(&prefix) {
-                            if part.as_rule() == Rule::identifier {
-                                path.push(LocalIdentifier::new(&*part.as_str().to_string()));
-                            }
+                // First element could be either qualified_prefix or type_identifier
+                let first = inner.next().unwrap();
+
+                if first.as_rule() == Rule::qualified_prefix {
+                    // Handle prefix
+                    for part in Self::get_inner_pairs(&first) {
+                        if part.as_rule() == Rule::identifier {
+                            path.push(LocalIdentifier::new(&*part.as_str().to_string()));
                         }
                     }
+                    // Get the type identifier after the prefix
+                    let type_id = self.expect_next(&mut inner, Rule::type_identifier)?;
+                    Ok(QualifiedTypeIdentifier::new(
+                        LocalTypeIdentifier::new(convert_from_pair(&type_id), type_id.as_str()),
+                        path,
+                    ))
+                } else if first.as_rule() == Rule::type_identifier {
+                    // No prefix, just a type identifier
+                    Ok(QualifiedTypeIdentifier::new(
+                        LocalTypeIdentifier::new(convert_from_pair(&first), first.as_str()),
+                        [].to_vec(),
+                    ))
+                } else {
+                    Err(self.create_error(
+                        &format!("Expected qualified prefix or type identifier, got {:?}", first.as_rule()),
+                        first.as_span(),
+                    ))
                 }
-
-                // Parse the type identifier
-                let type_id = self.expect_next(&mut inner, Rule::type_identifier)?;
-
-                Ok(QualifiedTypeIdentifier::new(
-                    LocalTypeIdentifier::new(convert_from_pair(&type_id), type_id.as_str()),
-                    path,
-                ))
             }
-            Rule::type_identifier => Ok(QualifiedTypeIdentifier::new(
-                LocalTypeIdentifier::new(convert_from_pair(&pair), pair.as_str()),
-                [].to_vec(),
-            )),
             _ => Err(self.create_error(
-                &format!(
-                    "Expected qualified type or type identifier, got {:?}",
-                    pair.as_rule()
-                ),
+                &format!("Expected qualified type identifier, got {:?}", pair.as_rule()),
                 pair.as_span(),
             )),
         }
@@ -1236,7 +1248,8 @@ impl AstParser {
         let enum_type = self.parse_qualified_type_identifier(inner.next().unwrap())?;
 
         // Parse variant name
-        let variant = LocalTypeIdentifier::new(convert_from_pair(&pair),&self.expect_identifier(&mut inner)?);
+        let variant_pair = self.expect_next(&mut inner, Rule::type_identifier)?;
+        let variant = LocalTypeIdentifier::new(convert_from_pair(&pair), variant_pair.as_str());
 
         // Parse fields if they exist
         let outer_data = if let Some(fields_pair) = inner.next() {
@@ -1461,11 +1474,37 @@ impl AstParser {
         }
     }
 
+    fn parse_local_type_identifier(&self, pair: Pair<Rule>) -> Result<LocalTypeIdentifier, Error<Rule>> {
+        if pair.as_rule() != Rule::type_identifier {
+            return Err(self.create_error(
+                &format!("Expected type_identifier, found {:?}", pair.as_rule()),
+                pair.as_span(),
+            ));
+        }
+        Ok(LocalTypeIdentifier::new(convert_from_pair(&pair), pair.as_str()))
+    }
+
+
+    fn parse_local_type_identifier_next<'a>(
+        &self,
+        pairs: &mut impl Iterator<Item = Pair<'a, Rule>>,
+    ) -> Result<LocalTypeIdentifier, Error<Rule>> {
+        let pair = self.next_pair(pairs)?;
+        if pair.as_rule() != Rule::type_identifier {
+            return Err(self.create_error(
+                &format!("Expected type_identifier, found {:?}", pair.as_rule()),
+                pair.as_span(),
+            ));
+        }
+        Ok(LocalTypeIdentifier::new(convert_from_pair(&pair), pair.as_str()))
+    }
+
     fn parse_enum_def(&self, pair: Pair<Rule>) -> Result<Definition, Error<Rule>> {
         let mut inner = Self::get_inner_pairs(&pair);
 
+        //let identifier = self.expect_identifier(&mut inner)?;
         // Parse enum name
-        let name = LocalTypeIdentifier::new(convert_from_pair(&pair),&self.expect_identifier(&mut inner)?);
+        let name = self.parse_local_type_identifier_next(&mut inner)?;
         let mut variants = SeqMap::new();
 
         // Parse enum variants if present
@@ -1497,7 +1536,7 @@ impl AstParser {
             }
             Rule::tuple_variant => {
                 let mut inner = Self::get_inner_pairs(&pair);
-                let name = LocalTypeIdentifier::new(convert_from_pair(&pair),&self.expect_identifier(&mut inner)?);
+                let name = LocalTypeIdentifier::new(convert_from_pair(&pair),&self.expect_type_identifier(&mut inner)?);
 
                 let mut types = Vec::new();
                 while let Some(type_pair) = inner.next() {
@@ -1508,7 +1547,7 @@ impl AstParser {
             }
             Rule::struct_variant => {
                 let mut inner = Self::get_inner_pairs(&pair);
-                let name = LocalTypeIdentifier::new(convert_from_pair(&pair),&self.expect_identifier(&mut inner)?);
+                let name = LocalTypeIdentifier::new(convert_from_pair(&pair),&self.expect_type_identifier(&mut inner)?);
 
                 let mut fields = SeqMap::new();
                 while let Some(field_pair) = inner.next() {
@@ -1595,7 +1634,7 @@ impl AstParser {
             }
             Rule::enum_pattern => {
                 let mut inner = Self::get_inner_pairs(&pair);
-                let variant = LocalTypeIdentifier::new(convert_from_pair(&pair),&self.expect_identifier(&mut inner)?);
+                let variant = LocalTypeIdentifier::new(convert_from_pair(&pair),&self.expect_type_identifier(&mut inner)?);
 
                 // Check for optional tuple or struct pattern
                 if let Some(pattern) = inner.next() {
@@ -1651,7 +1690,7 @@ impl AstParser {
                 Ok(Pattern::Struct(fields))
             }
             Rule::wildcard_pattern => Ok(Pattern::Wildcard),
-            Rule::identifier_pattern => Ok(Pattern::Variable(Variable::new(pair.as_str(), false))),
+            Rule::identifier_pattern => Ok(Pattern::VariableAssignment(Variable::new(pair.as_str(), false))),
             _ => Err(self.create_error(
                 &format!("Unknown match pattern type: {:?}", pair.as_rule()),
                 pair.as_span(),

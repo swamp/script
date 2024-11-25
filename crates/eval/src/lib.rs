@@ -464,7 +464,7 @@ impl Interpreter {
 
                             for i in *start..*end {
                                 match var_pattern {
-                                    Pattern::Variable(ident) => {
+                                    Pattern::VariableAssignment(ident) => {
                                         // Use scope_stack instead of variables
                                         self.scope_stack
                                             .last_mut()
@@ -497,7 +497,7 @@ impl Interpreter {
 
                             for element in elements {
                                 match var_pattern {
-                                    Pattern::Variable(ident) => {
+                                    Pattern::VariableAssignment(ident) => {
                                         self.scope_stack
                                             .last_mut()
                                             .unwrap()
@@ -536,7 +536,7 @@ impl Interpreter {
             }
 
             value = match statement {
-                Statement::Let(Pattern::Variable(var), expr) => {
+                Statement::Let(Pattern::VariableAssignment(var), expr) => {
                     let value = self.evaluate_expression(expr)?;
                     self.set_existing_var_or_create_new_one(
                         var.name().to_string(),
@@ -1119,7 +1119,7 @@ impl Interpreter {
 
         for arm in match_arms {
             match &arm.pattern {
-                Pattern::Variable(var) => {
+                Pattern::VariableAssignment(var) => {
                     // Variable pattern matches anything, so it is basically a let expression
                     self.push_scope(ScopeType::Block);
                     self.set_existing_var_or_create_new_one(
