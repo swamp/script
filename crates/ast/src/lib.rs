@@ -88,29 +88,14 @@ pub struct Position {
     pub column: usize, // 0-based column number
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
-pub struct TypeIdentifier {
-    pub node: Node,
-    pub name: String,
-}
-
-impl TypeIdentifier {
-    pub fn new(node: Node, name: &str) -> TypeIdentifier {
-        Self {
-            node,
-            name: name.to_string(),
-        }
-    }
-}
-
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct QualifiedTypeIdentifier {
-    pub name: TypeIdentifier,
+    pub name: LocalTypeIdentifier,
     pub module_path: Option<ModulePath>,
 }
 
 impl QualifiedTypeIdentifier {
-    pub fn new(name: TypeIdentifier, module_path: Vec<LocalIdentifier>) -> Self {
+    pub fn new(name: LocalTypeIdentifier, module_path: Vec<LocalIdentifier>) -> Self {
         let module_path = if module_path.is_empty() {
             None
         } else {
@@ -120,7 +105,7 @@ impl QualifiedTypeIdentifier {
         Self { name, module_path }
     }
 
-    pub fn type_identifier(&self) -> &TypeIdentifier {
+    pub fn type_identifier(&self) -> &LocalTypeIdentifier {
         &self.name
     }
 }
@@ -130,7 +115,7 @@ impl Debug for QualifiedTypeIdentifier {
         if let Some(module_path) = &self.module_path {
             write!(f, "{}::", module_path)?;
         }
-        write!(f, "{}", self.name.name)
+        write!(f, "{}", self.name.text)
     }
 }
 
@@ -139,28 +124,34 @@ impl Display for QualifiedTypeIdentifier {
         if let Some(module_path) = &self.module_path {
             write!(f, "{}::", module_path)?;
         }
-        write!(f, "{}", self.name.name)
+        write!(f, "{}", self.name.text)
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Default)]
-pub struct LocalTypeIdentifier(pub String); // pub is probably better for performance
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct LocalTypeIdentifier {
+    pub node: Node,
+    pub text: String,
+} // pub is probably better for performance
 
 impl LocalTypeIdentifier {
-    pub fn new(s: &str) -> Self {
-        LocalTypeIdentifier(s.to_string())
+    pub fn new(node: Node, str: &str) -> Self {
+        LocalTypeIdentifier {
+            node,
+            text: str.to_string(),
+        }
     }
 }
 
 impl Debug for LocalTypeIdentifier {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "{}", self.text)
     }
 }
 
 impl Display for LocalTypeIdentifier {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "{}", self.text)
     }
 }
 

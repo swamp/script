@@ -1,6 +1,6 @@
 use crate::{ParseModule, ParseRoot, ParseRootError};
 use seq_map::SeqMap;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use swamp_script_ast::{Definition, ModulePath};
 use tracing::info;
 
@@ -23,6 +23,12 @@ impl DependencyGraph {
             modules: SeqMap::new(),
             parsed_modules: SeqMap::new(),
         }
+    }
+
+    pub fn add_module(&mut self, module_path: ModulePath, parsed_module: ParseModule) {
+        self.parsed_modules
+            .insert(module_path, parsed_module)
+            .expect("can not add parsed module")
     }
 }
 

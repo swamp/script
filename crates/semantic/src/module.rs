@@ -4,21 +4,21 @@
  */
 
 use std::rc::Rc;
-use swamp_script_ast::LocalTypeIdentifier;
-use crate::ns::ModuleNamespace;
+use swamp_script_ast::{LocalIdentifier, LocalTypeIdentifier};
+use crate::ns::ResolvedModuleNamespace;
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct Module {
-    pub namespace: ModuleNamespace, // pub is probably more performant
+    pub namespace: ResolvedModuleNamespace, // pub is probably more performant
     parent_module: Option<Rc<Module>>,
-    identifier: LocalTypeIdentifier,
+    identifier: LocalIdentifier,
 }
 
 impl Module {
     pub fn new(
         parent_module: Option<Rc<Module>>,
-        identifier: LocalTypeIdentifier,
-        namespace: ModuleNamespace,
+        identifier: LocalIdentifier,
+        namespace: ResolvedModuleNamespace,
     ) -> Self {
         Self {
             namespace,
@@ -27,7 +27,7 @@ impl Module {
         }
     }
 
-    pub fn namespace(&self) -> &ModuleNamespace {
+    pub fn namespace(&self) -> &ResolvedModuleNamespace {
         &self.namespace
     }
 

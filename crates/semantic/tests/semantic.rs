@@ -4,9 +4,9 @@ mod util;
 #[test_log::test]
 fn test1() {
     check(
-        r#"
-        a = 33
-        a = "hello"
+        r#"struct Hello {
+            x: Int,
+        }
         "#,
         r#"
           resolved program

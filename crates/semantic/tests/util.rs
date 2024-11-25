@@ -4,12 +4,14 @@
  */
 use std::env;
 use std::path::PathBuf;
+use swamp_script_ast::ModulePath;
 use swamp_script_parser::AstParser;
-use swamp_script_semantic::resolve;
+use swamp_script_semantic::dep::DependencyGraph;
+use swamp_script_semantic::{resolve, ParseModule, ParseRoot};
 use tracing::{info, warn};
 
-fn get_test_fixtures(suffix: &str) -> PathBuf {
-    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+fn get_test_fixtures_directory(suffix: &str) -> PathBuf {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("fixtures")
         .join(suffix);
@@ -23,7 +25,15 @@ fn get_test_fixtures(suffix: &str) -> PathBuf {
 pub fn check(script: &str, expected_output: &str) {
     let parser = AstParser::new();
 
-    let root_path = get_test_fixtures("first");
+    let ast_program = parser.parse_script(script).expect("failed to parse script");
+
+    let parse_module = ParseModule { ast_program };
+
+    let mut graph = DependencyGraph::new();
+    let root = ModulePath(vec![]);
+    graph.add_module(root, parse_module);
+
+    let root_path = get_test_fixtures_directory("first");
     info!("root path is {root_path:?}");
     let resolved = resolve(root_path).expect("Failed to resolve program");
 

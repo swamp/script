@@ -12,7 +12,7 @@ use swamp_script_ast::{
 };
 use swamp_script_parser::AstParser;
 use swamp_script_semantic::module::Module;
-use swamp_script_semantic::ns::{EnumVariantContainerType, ModuleNamespace};
+use swamp_script_semantic::ns::{EnumVariantContainerType, ResolvedModuleNamespace};
 use swamp_script_semantic::ResolvedType;
 use tracing::{debug, error, trace};
 use value::format_value;
@@ -71,7 +71,7 @@ impl Interpreter {
         let main_module = Rc::new(RefCell::new(Module::new(
             None,
             LocalTypeIdentifier::new(&*"main".to_string()),
-            ModuleNamespace::default(),
+            ResolvedModuleNamespace::default(),
         )));
         let mut interpreter = Self {
             scope_stack: vec![Scope::default()],
@@ -348,7 +348,7 @@ impl Interpreter {
     }
 
     fn definitions(&mut self, definitions: &Vec<Definition>) -> Result<(), String> {
-        let mut namespace = ModuleNamespace::new();
+        let mut namespace = ResolvedModuleNamespace::new();
 
         debug!("starting creating definitions");
 

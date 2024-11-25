@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use swamp_script_semantic::ns::{EnumVariantContainerType, ImplType, ModuleNamespace, StructType, SwampTypeId};
+use swamp_script_semantic::ns::{EnumVariantContainerType, ImplType, ResolvedModuleNamespace, ResolvedStructType, SwampTypeId};
 use crate::value::{Value};
 use seq_map::SeqMap;
 use swamp_script_ast::SelfParameter;
@@ -15,7 +15,7 @@ pub struct DefinitionRunner;
 
 impl DefinitionRunner {
     pub fn evaluate_types(
-        namespace: &mut ModuleNamespace,
+        namespace: &mut ResolvedModuleNamespace,
         ast_type_types: &[Type],
     ) -> Result<Vec<SwampTypeId>, String> {
         let mut items = vec![];
@@ -28,7 +28,7 @@ impl DefinitionRunner {
     }
 
     pub fn evaluate_type(
-        namespace: &mut ModuleNamespace,
+        namespace: &mut ResolvedModuleNamespace,
         ast_type: &Type,
     ) -> Result<SwampTypeId, String> {
         let t = match ast_type {
@@ -76,7 +76,7 @@ impl DefinitionRunner {
     }
 
     pub(crate) fn execute_definition(
-        namespace: &mut ModuleNamespace,
+        namespace: &mut ResolvedModuleNamespace,
         definition: &Definition,
     ) -> Result<Value, String> {
         debug!("defining {:?}", definition);
@@ -89,7 +89,7 @@ impl DefinitionRunner {
                         .unwrap(); // TODO: Error handling
                 }
 
-                let struct_type = StructType::new(name.clone(), fields_in_order);
+                let struct_type = ResolvedStructType::new(name.clone(), fields_in_order);
 
                 namespace.add_struct_type(&name, struct_type).map_err(|e| {
                     format!(
@@ -126,7 +126,7 @@ impl DefinitionRunner {
                             let internal_struct_type_name =
                                 LocalTypeIdentifier::new(&*("_".to_string() + &ident.0));
                             let internal_struct_type =
-                                StructType::new(LocalTypeIdentifier::new(""), fields);
+                                ResolvedStructType::new(LocalTypeIdentifier::new(""), fields);
                             let created_struct_type_ref = namespace
                                 .add_struct_type(&internal_struct_type_name, internal_struct_type)
                                 .expect("should work with internal struct type");

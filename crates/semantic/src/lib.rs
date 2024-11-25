@@ -1,20 +1,29 @@
 use crate::dep::{DependencyError, DependencyGraph, ModuleInfo};
-use crate::ns::{ResolvedArrayType, ResolvedArrayTypeRef, BoolType, BoolTypeRef, EnumTypeRef, EnumVariantTypeRef, FloatType, FloatTypeRef, IntType, IntTypeRef, StringType, StringTypeRef, StructTypeRef, TupleTypeRef, UnitTypeRef, UnitType, StructType};
+use crate::module::Module;
+use crate::ns::{
+    EnumTypeRef, EnumVariantTypeRef, ResolveBoolTypeRef, ResolvedArrayType, ResolvedArrayTypeRef,
+    ResolvedBoolType, ResolvedFloatType, ResolvedFloatTypeRef, ResolvedIntType, ResolvedIntTypeRef,
+    ResolvedModuleNamespace, ResolvedStructType, ResolvedStructTypeRef, StringType, StringTypeRef,
+    TupleTypeRef, UnitType, UnitTypeRef,
+};
+use crate::ResolvedType::Unit;
 use pest::error::Error;
 use seq_map::SeqMap;
+use std::cell::RefCell;
 use std::fmt::{Debug, Display};
+use std::mem::take;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::{env, fs};
 use swamp_script_ast::{
     BinaryOperator, Definition, Expression, FormatSpecifier, LocalIdentifier, LocalTypeIdentifier,
-    MatchArm, ModulePath, Program, Type, UnaryOperator,
+    MatchArm, ModulePath, Program, QualifiedTypeIdentifier, StructType, Type, UnaryOperator,
 };
+use swamp_script_parser::Rule::parameters;
 use swamp_script_parser::{AstParser, Rule};
 use tracing::info;
-use crate::ResolvedType::Unit;
 
-mod dep;
+pub mod dep;
 pub mod module;
 pub mod ns;
 
@@ -24,17 +33,17 @@ pub struct ResolvedParameter {
     pub resolved_type: ResolvedType,
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub enum ResolvedType {
-    Int(IntTypeRef),
-    Float(FloatTypeRef),
+    Int(ResolvedIntTypeRef),
+    Float(ResolvedFloatTypeRef),
     String(StringTypeRef),
-    Bool(BoolTypeRef),
+    Bool(ResolveBoolTypeRef),
     Unit(UnitTypeRef),
     Array(ResolvedArrayTypeRef),
     Tuple(TupleTypeRef),
-    Struct(StructTypeRef), // The name of the struct
-    Enum(EnumTypeRef), // Combination of the EnumTypeName and the variant name and the type of the data
+    Struct(ResolvedStructTypeRef),
+    Enum(EnumTypeRef),
     EnumVariant(EnumVariantTypeRef),
     Function,
     Void,
@@ -87,14 +96,6 @@ pub struct ResolvedBinaryOperator {
     pub ast_operator_type: BinaryOperator,
 }
 
-pub struct ResolvedStructType {
-    pub defined_in_module: ResolvedModuleRef,
-    pub ast_struct: StructType,
-}
-
-pub struct ResolvedStruct {}
-
-type ResolvedStructRef = Rc<ResolvedStruct>;
 #[derive(Hash, Eq, PartialEq)]
 pub struct ResolvedStructField {}
 
@@ -194,7 +195,7 @@ pub enum ResolvedExpression {
 
     // Constructing
     StructInstantiation(
-        ResolvedStructRef,
+        ResolvedStructTypeRef,
         SeqMap<ResolvedStructFieldRef, ResolvedExpression>,
     ),
 
@@ -234,8 +235,19 @@ pub enum ResolvedStatement {
 #[derive(Debug)]
 pub enum ResolveError {
     DependencyError(DependencyError),
+    CanNotFindModule(ModulePath),
+    UnknownStruct(QualifiedTypeIdentifier),
+    DuplicateFieldName(LocalTypeIdentifier),
+    Unknown(String),
 }
 
+impl From<String> for ResolveError {
+    fn from(value: String) -> Self {
+        Self::Unknown(value)
+    }
+}
+
+#[derive(Debug)]
 pub enum ResolvedDefinition {
     StructType(),
     EnumType(),
@@ -244,14 +256,32 @@ pub enum ResolvedDefinition {
     ImplType(),
 }
 
-pub struct Modules {}
+pub struct Modules {
+    pub modules: SeqMap<ModulePath, ResolvedModuleRef>,
+}
+
+impl Modules {
+    pub fn new() -> Self {
+        Self {
+            modules: SeqMap::new(),
+        }
+    }
+
+    pub fn add_module(&mut self, module_path: ModulePath, module: ResolvedModuleRef) {
+        self.modules.insert(module_path, module).unwrap()
+    }
+
+    pub fn get(&self, module_path: &ModulePath) -> Option<&ResolvedModuleRef> {
+        self.modules.get(module_path)
+    }
+}
 
 pub struct ResolvedProgram {
     pub modules: Modules,
-    int_type: IntTypeRef,
-    float_type: FloatTypeRef,
+    int_type: ResolvedIntTypeRef,
+    float_type: ResolvedFloatTypeRef,
     string_type: StringTypeRef,
-    bool_type: BoolTypeRef,
+    bool_type: ResolveBoolTypeRef,
     unit_type: UnitTypeRef,
     array_types: Vec<ResolvedArrayTypeRef>,
 }
@@ -331,27 +361,44 @@ impl ParseRoot {
 
 pub type ResolvedModuleRef = Rc<ResolvedModule>;
 
+#[derive(Debug)]
 pub struct ResolvedModule {
     pub definitions: Vec<ResolvedDefinition>,
+    pub namespace: ResolvedModuleNamespace,
+    pub module_path: ModulePath,
+}
+
+impl ResolvedModule {
+    pub fn new(module_path: ModulePath) -> Self {
+        Self {
+            module_path,
+            definitions: Vec::new(),
+            namespace: ResolvedModuleNamespace::new(),
+        }
+    }
 }
 
 impl ResolvedProgram {
     pub fn new() -> Self {
         Self {
-            modules: Modules {},
-            int_type: Rc::new(IntType{}),
-            float_type: Rc::new(FloatType),
+            modules: Modules::new(),
+            int_type: Rc::new(ResolvedIntType {}),
+            float_type: Rc::new(ResolvedFloatType),
             string_type: Rc::new(StringType),
-            bool_type: Rc::new(BoolType),
+            bool_type: Rc::new(ResolvedBoolType),
             unit_type: Rc::new(UnitType),
             array_types: Vec::new(),
         }
     }
 
-    pub fn resolve_array_type(&mut self, ast_type: &Type) -> Result<ResolvedArrayTypeRef, ResolveError> {
+    pub fn resolve_array_type(
+        &mut self,
+        current_module: &mut ResolvedModule,
+        ast_type: &Type,
+    ) -> Result<ResolvedArrayTypeRef, ResolveError> {
         // TODO: Check for an existing array type with exact same type
 
-        let resolved_type = self.resolve_type(ast_type)?;
+        let resolved_type = self.resolve_type(current_module, ast_type)?;
 
         let original_array_type = ResolvedArrayType {
             item_type: resolved_type.clone(),
@@ -360,81 +407,151 @@ impl ResolvedProgram {
 
         let rc_array = Rc::new(original_array_type);
 
-        self.array_types.push(rc_array);
+        self.array_types.push(rc_array.clone());
+
+        Ok(rc_array)
     }
 
-    pub fn resolve_type(&mut self, ast_type: &Type) -> Result<ResolvedType, ResolveError> {
+    pub fn resolve_type(
+        &mut self,
+        current_module: &mut ResolvedModule,
+        ast_type: &Type,
+    ) -> Result<ResolvedType, ResolveError> {
         let resolved = match ast_type {
             Type::Int => ResolvedType::Int(self.int_type.clone()),
             Type::Float => ResolvedType::Float(self.float_type.clone()),
             Type::String => ResolvedType::String(self.string_type.clone()),
             Type::Bool => ResolvedType::Bool(self.bool_type.clone()),
             Type::Unit => ResolvedType::Unit(self.unit_type.clone()),
-            Type::Struct(ast_struct) => ResolvedType::Struct(self.resolve_struct_type(ast_struct)?),
-            Type::Array(ast_type) => ResolvedType::Array(self.resolve_array_type(ast_type)?),
-            Type::Map(_, _) => {}
-            Type::Tuple(_) => {}
-            Type::Enum(_) => {}
-            Type::Any => {}
+            Type::Struct(ast_struct) => {
+                ResolvedType::Struct(self.resolve_struct_type(current_module, ast_struct)?)
+            }
+            Type::Array(ast_type) => {
+                ResolvedType::Array(self.resolve_array_type(current_module, ast_type)?)
+            }
+            Type::Map(_, _) => todo!(),
+            Type::Tuple(_) => todo!(),
+            Type::Enum(_) => todo!(),
+            Type::Any => todo!(),
         };
 
         Ok(resolved)
     }
 
-    pub fn resolve_struct_type(
-        &mut self,
-        type_name: &LocalTypeIdentifier,
-        fields: &SeqMap<LocalTypeIdentifier, Type>,
-    ) -> Result<ResolvedStructRef, ResolveError> {
-
-
-
-        let mut resolved_fields = SeqMap::new();
-        for (key, field_type) in fields.iter() {
-            let resolved_type = self.resolve_type(field_type)?;
-            resolved_fields.insert(key, resolved_type)?;
-        }
-        Ok(ResolvedStruct { resolved_fields })
+    pub fn find_module(&self, path: &ModulePath) -> Option<&ResolvedModuleRef> {
+        self.modules.get(path)
     }
 
-    pub fn resolve_struct_type_definition(&mut self) -> Result<ResolvedStructRef, ResolveError> {
+    pub fn resolve_struct_type(
+        &mut self,
+        current_module: &mut ResolvedModule,
+        type_name: &QualifiedTypeIdentifier,
+    ) -> Result<ResolvedStructTypeRef, ResolveError> {
+        let resolve_module = if let Some(path) = &type_name.module_path {
+            &self
+                .find_module(path)
+                .ok_or(ResolveError::CanNotFindModule(path.clone()))?
+                .namespace
+        } else {
+            &current_module.namespace
+        };
 
+        if let Some(found) = resolve_module.get_struct(&type_name.name) {
+            Ok(found.clone())
+        } else {
+            Err(ResolveError::UnknownStruct(type_name.clone()))
+        }
+    }
 
-        self.current_module.add_struct_type();
+    pub fn resolve_struct_type_definition(
+        &mut self,
+        current_module: &mut ResolvedModule,
+        ast_struct: &StructType,
+    ) -> Result<ResolvedStructTypeRef, ResolveError> {
+        let mut resolved_fields = SeqMap::new();
+
+        for (name, field_type) in &ast_struct.fields {
+            let resolved_type = self.resolve_type(current_module, field_type)?;
+            resolved_fields
+                .insert(name.clone(), resolved_type)
+                .map_err(|_| ResolveError::DuplicateFieldName(name.clone()))?;
+        }
+
+        let resolved_struct = ResolvedStructType::new(
+            current_module.module_path.clone(),
+            ast_struct.identifier.clone(),
+            resolved_fields,
+            ast_struct.clone(),
+        );
+
+        // Move ownership to module namespace
+        let resolved_struct_ref = current_module
+            .namespace
+            .add_struct_type(&ast_struct.identifier, resolved_struct)?;
+
+        Ok(resolved_struct_ref)
     }
 
     pub fn resolve_definitions(
         &mut self,
+        current_module: &mut ResolvedModule,
         module: &ParseModule,
-    ) -> Result<Vec<ResolvedDefinition>, ResolveError> {
-        let mut resolved_definitions = vec![];
+    ) -> Result<(), ResolveError> {
         for def in module.ast_program.definitions() {
-            let resolved_definition = match def {
-                Definition::StructDef(ref local_type_identifier, ref fields) => {
-                    self.resolve_struct_type_definition(local_type_identifier, fields)
+            match def {
+                Definition::StructDef(ref ast_struct) => {
+                    self.resolve_struct_type_definition(current_module, ast_struct)?;
                 }
-                Definition::EnumDef(_, _) => ResolvedDefinition::EnumType(),
-                Definition::FunctionDef(_, _) => ResolvedDefinition::Function(),
-                Definition::ImplDef(_, _) => ResolvedDefinition::ImplType(),
-                Definition::ExternalFunctionDef(_, _) => ResolvedDefinition::ExternalFunction(),
+                Definition::EnumDef(_, _) => todo!(),
+                Definition::FunctionDef(_, _) => todo!(),
+                Definition::ImplDef(_, _) => todo!(),
+                Definition::ExternalFunctionDef(_, _) => todo!(),
                 Definition::Comment(_) => continue,
                 Definition::Import(_) => continue,
             };
-            resolved_definitions.push(resolved_definition);
         }
-
-        Ok(resolved_definitions)
+        Ok(())
     }
 
     pub(crate) fn resolve_module(
         &mut self,
+        module_path: ModulePath,
         module: &ParseModule,
-    ) -> Result<ResolvedModule, ResolveError> {
-        let resolved_definitions = self.resolve_definitions(module)?;
-        Ok(ResolvedModule {
-            definitions: resolved_definitions,
-        })
+    ) -> Result<ResolvedModuleRef, ResolveError> {
+        let resolved_module = Module::new(
+            None,
+            LocalIdentifier::new("main"),
+            ResolvedModuleNamespace::new(),
+        );
+
+        let mut resolve_module = ResolvedModule::new(module_path.clone());
+
+        let resolved_definitions = self.resolve_definitions(&mut resolve_module, module)?;
+
+        let module_ref = Rc::new(resolve_module);
+        self.modules.add_module(module_path, module_ref.clone());
+
+        Ok(module_ref)
     }
+
+    /*
+    fn resolve_enum_type_definition(&self, p0: &mut ResolvedModule) -> Result<ResolvedEnumType> {
+        todo!()
+    }
+
+    fn resolve_function_definition(&self, p0: &mut ResolvedModule) -> _ {
+        todo!()
+    }
+
+    fn resolve_impl_definition(&self, p0: &mut ResolvedModule) -> _ {
+        todo!()
+    }
+
+    fn resolve_external_function_definition(&self, p0: &mut ResolvedModule) -> _ {
+        todo!()
+    }
+
+     */
 }
 
 impl From<DependencyError> for ResolveError {
@@ -452,8 +569,15 @@ fn get_current_dir() -> Result<PathBuf, std::io::Error> {
 }
 
 pub fn resolve(base_path: PathBuf) -> Result<ResolvedProgram, ResolveError> {
-    let mut resolved_program = ResolvedProgram::new();
     let mut graph = DependencyGraph::new();
+    resolve_with_graph(base_path, &mut graph)
+}
+
+pub fn resolve_with_graph(
+    base_path: PathBuf,
+    mut graph: &mut DependencyGraph,
+) -> Result<ResolvedProgram, ResolveError> {
+    let mut resolved_program = ResolvedProgram::new();
     info!(
         "{:?}",
         get_current_dir().expect("failed to get current directory")
@@ -468,7 +592,7 @@ pub fn resolve(base_path: PathBuf) -> Result<ResolvedProgram, ResolveError> {
         info!(module_path=?module_path, "ordered module");
 
         if let Some(parse_module) = graph.get_parsed_module(&module_path) {
-            let resolved_module = resolved_program.resolve_module(parse_module);
+            let resolved_module = resolved_program.resolve_module(module_path, parse_module)?;
             resolved_modules.push(resolved_module);
         } else {
             panic!("not found module");

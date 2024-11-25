@@ -4,27 +4,41 @@
  */
 
 use crate::module::Module;
-use crate::{ResolvedFunctionRef, ResolvedType};
+use crate::{ResolvedFunctionRef, ResolvedModuleRef, ResolvedType};
 use seq_map::SeqMap;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use std::rc::Rc;
-use swamp_script_ast::{ImplMember, LocalTypeIdentifier, Parameter, QualifiedTypeIdentifier, Type};
+use swamp_script_ast::{
+    ImplMember, LocalTypeIdentifier, ModulePath, Parameter, QualifiedTypeIdentifier, StructType,
+    Type,
+};
 
-pub type StructTypeRef = Rc<StructType>;
+pub type ResolvedStructTypeRef = Rc<ResolvedStructType>;
 
 #[derive(Debug)]
-pub struct StructType {
+pub struct ResolvedStructType {
+    // TODO:  pub defined_in_module: ResolvedModuleRef,
+    pub module_path: ModulePath,
     pub fields: SeqMap<LocalTypeIdentifier, ResolvedType>,
     pub name: LocalTypeIdentifier,
+    pub ast_struct: StructType,
 }
-
-impl StructType {
+impl ResolvedStructType {
     pub fn new(
+        // TODO: defined_in_module: ResolvedModuleRef,
+        module_path: ModulePath,
         name: LocalTypeIdentifier,
         fields: SeqMap<LocalTypeIdentifier, ResolvedType>,
+        ast_struct: StructType,
     ) -> Self {
-        Self { fields, name }
+        Self {
+            //defined_in_module,
+            module_path,
+            ast_struct,
+            fields,
+            name,
+        }
     }
 
     pub fn field_index(&self, field_name: &LocalTypeIdentifier) -> Option<usize> {
@@ -36,23 +50,23 @@ impl StructType {
     }
 }
 
-#[derive(Debug)]
-pub struct IntType;
-pub type IntTypeRef = Rc<IntType>;
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub struct ResolvedIntType;
+pub type ResolvedIntTypeRef = Rc<ResolvedIntType>;
 
-#[derive(Debug)]
-pub struct FloatType;
-pub type FloatTypeRef = Rc<FloatType>;
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub struct ResolvedFloatType;
+pub type ResolvedFloatTypeRef = Rc<ResolvedFloatType>;
 
-#[derive(Debug)]
-pub struct BoolType;
-pub type BoolTypeRef = Rc<BoolType>;
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub struct ResolvedBoolType;
+pub type ResolveBoolTypeRef = Rc<ResolvedBoolType>;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct StringType;
 pub type StringTypeRef = Rc<StringType>;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct UnitType;
 pub type UnitTypeRef = Rc<UnitType>;
 
@@ -130,9 +144,9 @@ impl Debug for EnumVariantType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum EnumVariantContainerType {
-    Struct(StructTypeRef),
+    Struct(ResolvedStructTypeRef),
     Tuple(TupleTypeRef),
     Nothing,
 }
@@ -140,13 +154,13 @@ pub enum EnumVariantContainerType {
 #[derive(Debug)]
 pub struct ImplType {
     pub members: SeqMap<String, ImplMember>,
-    pub associated_with_struct_type: StructTypeRef,
+    pub associated_with_struct_type: ResolvedStructTypeRef,
 }
 
 impl ImplType {
     pub fn new(
         members: SeqMap<String, ImplMember>,
-        associated_with_struct_type: StructTypeRef,
+        associated_with_struct_type: ResolvedStructTypeRef,
     ) -> Self {
         Self {
             members,
@@ -166,20 +180,35 @@ impl Debug for CanonicalTypeName {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub struct LocalTypeName(pub String);
+
 #[derive(Default, Debug)]
-pub struct ModuleNamespace {
+pub struct ResolvedModuleNamespace {
     all_owned_types: SeqMap<LocalTypeIdentifier, ResolvedType>,
 
-    structs: HashMap<LocalTypeIdentifier, StructTypeRef>, // They are created by the module, so they are owned here
-    enum_types: HashMap<LocalTypeIdentifier, EnumTypeRef>, // They are created by the module, so they are owned here
-    enum_variant_types: HashMap<LocalTypeIdentifier, EnumVariantTypeRef>, // They are created by the module, so they are owned here
+    structs: HashMap<LocalTypeName, ResolvedStructTypeRef>, // They are created by the module, so they are owned here
+    enum_types: HashMap<LocalTypeName, EnumTypeRef>, // They are created by the module, so they are owned here
+    enum_variant_types: HashMap<LocalTypeName, EnumVariantTypeRef>, // They are created by the module, so they are owned here
 
     tuples: Vec<TupleTypeRef>,
     functions: HashMap<String, (Vec<Parameter>, ResolvedType)>,
     impl_members: HashMap<ResolvedType, ImplType>,
 }
 
-impl ModuleNamespace {
+impl Into<LocalTypeName> for &String {
+    fn into(self) -> LocalTypeName {
+        LocalTypeName(self.clone())
+    }
+}
+
+impl Into<LocalTypeName> for &str {
+    fn into(self) -> LocalTypeName {
+        LocalTypeName(self.to_string())
+    }
+}
+
+impl ResolvedModuleNamespace {
     pub fn new() -> Self {
         Self::default()
     }
@@ -191,10 +220,10 @@ impl ModuleNamespace {
     pub fn add_struct_type(
         &mut self,
         name: &LocalTypeIdentifier,
-        struct_type: StructType,
-    ) -> Result<StructTypeRef, String> {
+        struct_type: ResolvedStructType,
+    ) -> Result<ResolvedStructTypeRef, String> {
         let struct_ref = Rc::new(struct_type);
-        self.structs.insert(name.clone(), struct_ref.clone());
+        self.structs.insert((&name.text).into(), struct_ref.clone());
         Ok(struct_ref)
     }
 
@@ -205,16 +234,14 @@ impl ModuleNamespace {
     ) -> Result<(), String> {
         let boxed = Rc::new(EnumType::new(name.clone()));
 
-        self.enum_types.insert(name.clone(), boxed.clone());
+        self.enum_types.insert((&name.text).into(), boxed.clone());
 
         for (ident, variant) in &containers {
             let converted_variant =
                 EnumVariantType::new(boxed.clone(), (*ident).clone(), variant.clone());
             let complete_name = &*(name.to_string() + "::" + &*ident.to_string());
-            self.enum_variant_types.insert(
-                LocalTypeIdentifier::new(complete_name),
-                Rc::new(converted_variant),
-            );
+            self.enum_variant_types
+                .insert(complete_name.into(), Rc::new(converted_variant));
         }
 
         Ok(())
@@ -244,25 +271,25 @@ impl ModuleNamespace {
     pub fn add_impl(
         &mut self,
         _name: &LocalTypeIdentifier,
-        struct_swamp_type: StructTypeRef,
+        struct_swamp_type: ResolvedStructTypeRef,
         methods: ImplType,
     ) -> Result<(), String> {
-        self.impl_members
-            .insert(ResolvedType::Struct(struct_swamp_type), methods);
+        // TODO: self.impl_members
+        //.insert(ResolvedType::Struct(struct_swamp_type), methods);
         Ok(())
     }
 
-    pub fn get_struct(&self, name: &QualifiedTypeIdentifier) -> Option<&StructTypeRef> {
+    pub fn get_struct(&self, name: &LocalTypeIdentifier) -> Option<&ResolvedStructTypeRef> {
         // TODO: Add scope support, for now just ignore it
-        self.structs.get(&LocalTypeIdentifier::new(name.name))
+        self.structs.get(&(&name.text).into())
     }
 
-    pub fn get_local_struct(&self, name: &LocalTypeIdentifier) -> Option<&StructTypeRef> {
-        self.structs.get(&*name)
+    pub fn get_local_struct(&self, name: &LocalTypeIdentifier) -> Option<&ResolvedStructTypeRef> {
+        self.structs.get(&(&name.text).into())
     }
 
-    pub fn get_enum(&self, name: &QualifiedTypeIdentifier) -> Option<&EnumTypeRef> {
-        self.enum_types.get(&LocalTypeIdentifier::new(name.name))
+    pub fn get_enum(&self, name: &LocalTypeIdentifier) -> Option<&EnumTypeRef> {
+        self.enum_types.get(&(&name.text).into())
     }
 
     pub fn get_enum_variant_type(
@@ -273,8 +300,7 @@ impl ModuleNamespace {
         // TODO: add scope/module support, ignore for now
         let full_name = format!("{:?}::{}", name.name, identifier);
 
-        self.enum_variant_types
-            .get(&LocalTypeIdentifier::new(&*full_name))
+        self.enum_variant_types.get(&(&name.name.text).into())
     }
 
     pub fn get_function(&self, name: &str) -> Option<&(Vec<Parameter>, ResolvedType)> {
@@ -282,6 +308,7 @@ impl ModuleNamespace {
     }
 
     pub fn get_impl(&self, type_id: &ResolvedType) -> Option<&ImplType> {
-        self.impl_members.get(type_id)
+        // TODO: self.impl_members.get(type_id)
+        todo!()
     }
 }
