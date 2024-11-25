@@ -8,6 +8,7 @@ use crate::ns::{
     ResolvedStructTypeRef, ResolvedTupleType, ResolvedTupleTypeRef, StringType, StringTypeRef,
     UnitType, UnitTypeRef,
 };
+
 use crate::ResolvedType::Unit;
 use pest::error::Error;
 use seq_map::SeqMap;
@@ -17,10 +18,11 @@ use std::mem::take;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::{env, fs};
+use swamp_script_ast::StructType;
 use swamp_script_ast::{
-    BinaryOperator, Definition, EnumVariant, Expression, FormatSpecifier, LocalIdentifier,
-    LocalTypeIdentifier, MatchArm, ModulePath, Program, QualifiedTypeIdentifier, StructType, Type,
-    UnaryOperator,
+    BinaryOperator, Definition, EnumVariant, Expression, FormatSpecifier, ImplItem, ImplMember,
+    LocalIdentifier, LocalTypeIdentifier, MatchArm, ModulePath, Parameter, Pattern, Program,
+    QualifiedTypeIdentifier, Statement, Type, UnaryOperator,
 };
 use swamp_script_parser::Rule::parameters;
 use swamp_script_parser::{AstParser, Rule};
@@ -34,6 +36,7 @@ pub mod ns;
 pub struct ResolvedParameter {
     pub name: String,
     pub resolved_type: ResolvedType,
+    pub ast_parameter: Parameter,
 }
 
 #[derive(Debug, Clone)]
@@ -123,9 +126,9 @@ pub struct ResolvedBinaryOperator {
 }
 
 #[derive(Hash, Eq, PartialEq)]
-pub struct ResolvedStructField {}
+pub struct ResolvedStructTypeField {}
 
-type ResolvedStructFieldRef = Rc<ResolvedStructField>;
+type ResolvedStructTypeFieldRef = Rc<ResolvedStructTypeField>;
 
 type ResolvedArrayRef = Rc<ResolvedArray>;
 type ResolvedMutArrayRef = Rc<ResolvedMutArray>;
@@ -177,9 +180,11 @@ pub struct ResolvedPattern {}
 
 pub struct ResolvedIterator {}
 
+pub struct ResolvedBoolExpression(ResolvedExpression);
+
 pub enum ResolvedExpression {
     // Access Lookup values
-    FieldAccess(ResolvedStructFieldRef),
+    FieldAccess(ResolvedStructTypeFieldRef),
     VariableAccess(ResolvedVariableRef),
     MutRef(ResolvedMutVariableRef), // Used when passing with mut keyword. mut are implicitly passed by reference
     ArrayAccess(ResolvedArrayRef, ResolvedIndexTypeRef), // Read from an array: arr[3]
@@ -222,7 +227,7 @@ pub enum ResolvedExpression {
     // Constructing
     StructInstantiation(
         ResolvedStructTypeRef,
-        SeqMap<ResolvedStructFieldRef, ResolvedExpression>,
+        SeqMap<ResolvedStructTypeFieldRef, ResolvedExpression>,
     ),
 
     Array(Vec<ResolvedExpression>),
@@ -265,6 +270,7 @@ pub enum ResolveError {
     UnknownStructTypeReference(QualifiedTypeIdentifier),
     DuplicateFieldName(LocalTypeIdentifier),
     Unknown(String),
+    UnknownImplTargetTypeReference(LocalTypeIdentifier),
 }
 
 impl From<String> for ResolveError {
@@ -321,6 +327,11 @@ pub struct ResolvedProgram {
     bool_type: ResolveBoolTypeRef,
     unit_type: UnitTypeRef,
     array_types: Vec<ResolvedArrayTypeRef>,
+}
+
+pub struct Resolver<'a> {
+    pub parent: &'a mut ResolvedProgram,
+    pub current_module: &'a mut ResolvedModule,
 }
 
 impl Display for ResolvedProgram {
@@ -421,6 +432,26 @@ impl ResolvedModule {
     }
 }
 
+struct ResolvedImplMember {
+    parameters: Vec<ResolvedParameter>,
+    return_type: ResolvedType,
+}
+
+struct ResolvedFunctionData {
+    parameters: Vec<ResolvedParameter>,
+    return_type: ResolvedType,
+    statements: Vec<ResolvedStatement>,
+}
+
+pub struct ResolvedImplType {
+    pub items: Vec<ResolvedImplItem>,
+}
+
+pub enum ResolvedImplItem {
+    Member(ResolvedImplMember),
+    Function(ResolvedFunctionData),
+}
+
 impl ResolvedProgram {
     pub fn new() -> Self {
         Self {
@@ -432,197 +463,6 @@ impl ResolvedProgram {
             unit_type: Rc::new(UnitType),
             array_types: Vec::new(),
         }
-    }
-
-    pub fn resolve_array_type(
-        &mut self,
-        current_module: &mut ResolvedModule,
-        ast_type: &Type,
-    ) -> Result<ResolvedArrayTypeRef, ResolveError> {
-        // TODO: Check for an existing array type with exact same type
-
-        let resolved_type = self.resolve_type(current_module, ast_type)?;
-
-        let original_array_type = ResolvedArrayType {
-            item_type: resolved_type.clone(),
-            ast_type: ast_type.clone(),
-        };
-
-        let rc_array = Rc::new(original_array_type);
-
-        self.array_types.push(rc_array.clone());
-
-        Ok(rc_array)
-    }
-
-    pub fn resolve_type(
-        &mut self,
-        current_module: &mut ResolvedModule,
-        ast_type: &Type,
-    ) -> Result<ResolvedType, ResolveError> {
-        let resolved = match ast_type {
-            Type::Int => ResolvedType::Int(self.int_type.clone()),
-            Type::Float => ResolvedType::Float(self.float_type.clone()),
-            Type::String => ResolvedType::String(self.string_type.clone()),
-            Type::Bool => ResolvedType::Bool(self.bool_type.clone()),
-            Type::Unit => ResolvedType::Unit(self.unit_type.clone()),
-            Type::Struct(ast_struct) => {
-                ResolvedType::Struct(self.resolve_struct_type(current_module, ast_struct)?)
-            }
-            Type::Array(ast_type) => {
-                ResolvedType::Array(self.resolve_array_type(current_module, ast_type)?)
-            }
-            Type::Map(_, _) => todo!(),
-            Type::Tuple(types) => todo!(),
-            Type::Enum(_) => todo!(),
-            Type::Any => todo!(),
-        };
-
-        Ok(resolved)
-    }
-
-    pub fn find_module(&self, path: &ModulePath) -> Option<&ResolvedModuleRef> {
-        self.modules.get(path)
-    }
-
-    pub fn resolve_struct_type(
-        &mut self,
-        current_module: &mut ResolvedModule,
-        type_name: &QualifiedTypeIdentifier,
-    ) -> Result<ResolvedStructTypeRef, ResolveError> {
-        let resolve_module = if let Some(path) = &type_name.module_path {
-            &self
-                .find_module(path)
-                .ok_or(ResolveError::CanNotFindModule(path.clone()))?
-                .namespace
-        } else {
-            &current_module.namespace
-        };
-
-        if let Some(found) = resolve_module.get_struct(&type_name.name) {
-            Ok(found.clone())
-        } else {
-            Err(ResolveError::UnknownStructTypeReference(type_name.clone()))
-        }
-    }
-
-    pub fn resolve_struct_type_definition(
-        &mut self,
-        current_module: &mut ResolvedModule,
-        ast_struct: &StructType,
-    ) -> Result<ResolvedStructTypeRef, ResolveError> {
-        let mut resolved_fields = SeqMap::new();
-
-        for (name, field_type) in &ast_struct.fields {
-            let resolved_type = self.resolve_type(current_module, field_type)?;
-            resolved_fields
-                .insert(name.clone(), resolved_type)
-                .map_err(|_| ResolveError::DuplicateFieldName(name.clone()))?;
-        }
-
-        let resolved_struct = ResolvedStructType::new(
-            current_module.module_path.clone(),
-            ast_struct.identifier.clone(),
-            resolved_fields,
-            ast_struct.clone(),
-            current_module.namespace.allocate_number(),
-        );
-
-        // Move ownership to module namespace
-        let resolved_struct_ref = current_module
-            .namespace
-            .add_struct_type(&ast_struct.identifier, resolved_struct)?;
-
-        Ok(resolved_struct_ref)
-    }
-
-    fn resolve_enum_type_definition(
-        &mut self,
-        current_module: &mut ResolvedModule,
-        enum_type_name: &LocalTypeIdentifier,
-        ast_variants: &SeqMap<LocalTypeIdentifier, EnumVariant>,
-    ) -> Result<Vec<ResolvedEnumVariantTypeRef>, ResolveError> {
-        let mut resolved_variants = Vec::new();
-
-        let resolved_parent_type = ResolvedEnumType::new(
-            enum_type_name.clone(),
-            current_module.namespace.allocate_number(),
-        );
-
-        let parent_ref = Rc::new(resolved_parent_type);
-
-        for (name, ast_enum_variant) in ast_variants {
-            //let resolved_type = self.resolve_type(current_module, ast_variant)?;
-            //resolved_fields
-            //  .insert(name.clone(), resolved_type)
-            //.map_err(|_| ResolveError::DuplicateFieldName(name.clone()))?;
-
-            let container = match ast_enum_variant {
-                EnumVariant::Simple => ResolvedEnumVariantContainerType::Nothing,
-                EnumVariant::Tuple(types) => {
-                    let mut vec = Vec::new();
-                    for tuple_type in types {
-                        let resolved_type = self.resolve_type(current_module, tuple_type)?;
-                        vec.push(resolved_type)
-                    }
-
-                    let resolved_tuple_type = ResolvedTupleType::new(vec);
-                    let resolved_tuple_type_ref = Rc::new(resolved_tuple_type);
-
-                    ResolvedEnumVariantContainerType::Tuple(resolved_tuple_type_ref)
-                }
-                EnumVariant::Struct(ast_struct_fields) => {
-                    let mut fields = SeqMap::new();
-                    for (field, field_type) in &ast_struct_fields.fields {
-                        let resolved_type = self.resolve_type(current_module, field_type)?;
-                        fields
-                            .insert(field.clone(), resolved_type)
-                            .map_err(|_| ResolveError::DuplicateFieldName(name.clone()))?;
-                    }
-                    let anonym = ResolvedAnonymousStructType::new(
-                        current_module.module_path.clone(),
-                        fields,
-                        ast_struct_fields.clone(),
-                    );
-                    ResolvedEnumVariantContainerType::Struct(anonym)
-                }
-            };
-
-            let variant = ResolvedEnumVariantType::new(
-                parent_ref.clone(),
-                name.clone(),
-                container,
-                current_module.namespace.allocate_number(),
-            );
-            let variant_ref = current_module.namespace.add_enum_variant(variant)?;
-
-            resolved_variants.push(variant_ref);
-        }
-
-        Ok(resolved_variants)
-    }
-
-    pub fn resolve_definitions(
-        &mut self,
-        current_module: &mut ResolvedModule,
-        module: &ParseModule,
-    ) -> Result<(), ResolveError> {
-        for def in module.ast_program.definitions() {
-            match def {
-                Definition::StructDef(ref ast_struct) => {
-                    self.resolve_struct_type_definition(current_module, ast_struct)?;
-                }
-                Definition::EnumDef(identifier, variants) => {
-                    self.resolve_enum_type_definition(current_module, identifier, variants)?;
-                }
-                Definition::ImplDef(_, _) => todo!(),
-                Definition::FunctionDef(_, _) => todo!(),
-                Definition::ExternalFunctionDef(_, _) => todo!(),
-                Definition::Comment(_) => continue,
-                Definition::Import(_) => continue,
-            };
-        }
-        Ok(())
     }
 
     pub fn resolve_module(
@@ -638,12 +478,300 @@ impl ResolvedProgram {
 
         let mut resolve_module = ResolvedModule::new(module_path.clone());
 
-        let resolved_definitions = self.resolve_definitions(&mut resolve_module, module)?;
+        let mut resolver = Resolver::new(self, &mut resolve_module);
+
+        resolver.resolve_definitions(module)?;
 
         let module_ref = Rc::new(resolve_module);
         self.modules.add_module(module_path, module_ref.clone());
 
         Ok(module_ref)
+    }
+}
+
+impl<'a> Resolver<'a> {
+    pub fn new(parent: &'a mut ResolvedProgram, current_module: &'a mut ResolvedModule) -> Self {
+        Self {
+            parent,
+            current_module,
+        }
+    }
+
+    pub fn resolve_array_type(
+        &mut self,
+        ast_type: &Type,
+    ) -> Result<ResolvedArrayTypeRef, ResolveError> {
+        // TODO: Check for an existing array type with exact same type
+
+        let resolved_type = self.resolve_type(ast_type)?;
+
+        let original_array_type = ResolvedArrayType {
+            item_type: resolved_type.clone(),
+            ast_type: ast_type.clone(),
+        };
+
+        let rc_array = Rc::new(original_array_type);
+
+        self.parent.array_types.push(rc_array.clone());
+
+        Ok(rc_array)
+    }
+
+    pub fn resolve_type(&mut self, ast_type: &Type) -> Result<ResolvedType, ResolveError> {
+        let resolved = match ast_type {
+            Type::Int => ResolvedType::Int(self.parent.int_type.clone()),
+            Type::Float => ResolvedType::Float(self.parent.float_type.clone()),
+            Type::String => ResolvedType::String(self.parent.string_type.clone()),
+            Type::Bool => ResolvedType::Bool(self.parent.bool_type.clone()),
+            Type::Unit => ResolvedType::Unit(self.parent.unit_type.clone()),
+            Type::Struct(ast_struct) => ResolvedType::Struct(self.resolve_struct_type(ast_struct)?),
+            Type::Array(ast_type) => ResolvedType::Array(self.resolve_array_type(ast_type)?),
+            Type::Map(_, _) => todo!(),
+            Type::Tuple(types) => todo!(),
+            Type::Enum(_) => todo!(),
+            Type::Any => todo!(),
+        };
+
+        Ok(resolved)
+    }
+
+    pub fn find_module(&self, path: &ModulePath) -> Option<&ResolvedModuleRef> {
+        self.parent.modules.get(path)
+    }
+
+    pub fn resolve_struct_type(
+        &mut self,
+        type_name: &QualifiedTypeIdentifier,
+    ) -> Result<ResolvedStructTypeRef, ResolveError> {
+        let resolve_module = if let Some(path) = &type_name.module_path {
+            &self
+                .find_module(path)
+                .ok_or(ResolveError::CanNotFindModule(path.clone()))?
+                .namespace
+        } else {
+            &self.current_module.namespace
+        };
+
+        if let Some(found) = resolve_module.get_struct(&type_name.name) {
+            Ok(found.clone())
+        } else {
+            Err(ResolveError::UnknownStructTypeReference(type_name.clone()))
+        }
+    }
+
+    fn resolve_impl_definition(
+        &mut self,
+        attached_to_type: &LocalTypeIdentifier,
+        functions: &SeqMap<LocalTypeIdentifier, ImplItem>,
+    ) -> Result<ResolvedImplType, ResolveError> {
+        // Can only attach to earlier type in same module
+        if let Some(found_struct) = self
+            .current_module
+            .namespace
+            .get_struct(&attached_to_type.text)
+        {
+            let mut items = Vec::new();
+
+            for (local_ident, member_item) in functions {
+                let item = match member_item {
+                    ImplItem::Member(impl_member) => {
+                        let resolved_parameters = self.resolve_parameters(&impl_member.params)?;
+                        let resolved_return = self.resolve_type(&impl_member.return_type)?;
+
+                        let resolved_impl_member = ResolvedImplMember {
+                            parameters: resolved_parameters,
+                            return_type: resolved_return.clone(),
+                        };
+
+                        ResolvedImplItem::Member(resolved_impl_member)
+                    }
+                    ImplItem::Function(function_data) => {
+                        let resolved_parameters = self.resolve_parameters(&function_data.params)?;
+                        let resolved_return = self.resolve_type(&function_data.return_type)?;
+                        let resolved_statements = self.resolve_statements(&function_data.body)?;
+
+                        ResolvedImplItem::Function(ResolvedFunctionData {
+                            parameters: resolved_parameters,
+                            return_type: resolved_return.clone(),
+                            statements: resolved_statements,
+                        })
+                    }
+                };
+
+                items.push(item);
+            }
+            Ok(ResolvedImplType { items })
+        } else {
+            Err(ResolveError::UnknownImplTargetTypeReference(
+                attached_to_type.clone(),
+            ))
+        }
+    }
+
+    pub fn resolve_struct_type_definition(
+        &mut self,
+        ast_struct: &StructType,
+    ) -> Result<ResolvedStructTypeRef, ResolveError> {
+        let mut resolved_fields = SeqMap::new();
+
+        for (name, field_type) in &ast_struct.fields {
+            let resolved_type = self.resolve_type(field_type)?;
+            resolved_fields
+                .insert(name.clone(), resolved_type)
+                .map_err(|_| ResolveError::DuplicateFieldName(name.clone()))?;
+        }
+
+        let resolved_struct = ResolvedStructType::new(
+            self.current_module.module_path.clone(),
+            ast_struct.identifier.clone(),
+            resolved_fields,
+            ast_struct.clone(),
+            self.parent.allocate_number(),
+        );
+
+        // Move ownership to module namespace
+        let resolved_struct_ref = self
+            .current_module
+            .namespace
+            .add_struct_type(&ast_struct.identifier, resolved_struct)?;
+
+        Ok(resolved_struct_ref)
+    }
+
+    fn resolve_enum_type_definition(
+        &mut self,
+        enum_type_name: &LocalTypeIdentifier,
+        ast_variants: &SeqMap<LocalTypeIdentifier, EnumVariant>,
+    ) -> Result<Vec<ResolvedEnumVariantTypeRef>, ResolveError> {
+        let mut resolved_variants = Vec::new();
+
+        let resolved_parent_type = ResolvedEnumType::new(
+            enum_type_name.clone(),
+            self.current_module.namespace.allocate_number(),
+        );
+
+        let parent_ref = Rc::new(resolved_parent_type);
+
+        for (name, ast_enum_variant) in ast_variants {
+            //let resolved_type = self.resolve_type(current_module, ast_variant)?;
+            //resolved_fields
+            //  .insert(name.clone(), resolved_type)
+            //.map_err(|_| ResolveError::DuplicateFieldName(name.clone()))?;
+
+            let container = match ast_enum_variant {
+                EnumVariant::Simple => ResolvedEnumVariantContainerType::Nothing,
+                EnumVariant::Tuple(types) => {
+                    let mut vec = Vec::new();
+                    for tuple_type in types {
+                        let resolved_type = self.resolve_type(tuple_type)?;
+                        vec.push(resolved_type)
+                    }
+
+                    let resolved_tuple_type = ResolvedTupleType::new(vec);
+                    let resolved_tuple_type_ref = Rc::new(resolved_tuple_type);
+
+                    ResolvedEnumVariantContainerType::Tuple(resolved_tuple_type_ref)
+                }
+                EnumVariant::Struct(ast_struct_fields) => {
+                    let mut fields = SeqMap::new();
+                    for (field, field_type) in &ast_struct_fields.fields {
+                        let resolved_type = self.resolve_type(field_type)?;
+                        fields
+                            .insert(field.clone(), resolved_type)
+                            .map_err(|_| ResolveError::DuplicateFieldName(name.clone()))?;
+                    }
+                    let anonym = ResolvedAnonymousStructType::new(
+                        self.current_module.module_path.clone(),
+                        fields,
+                        ast_struct_fields.clone(),
+                    );
+                    ResolvedEnumVariantContainerType::Struct(anonym)
+                }
+            };
+
+            let variant = ResolvedEnumVariantType::new(
+                parent_ref.clone(),
+                name.clone(),
+                container,
+                self.current_module.namespace.allocate_number(),
+            );
+            let variant_ref = self.current_module.namespace.add_enum_variant(variant)?;
+
+            resolved_variants.push(variant_ref);
+        }
+
+        Ok(resolved_variants)
+    }
+
+    pub fn resolve_definitions(&mut self, module: &ParseModule) -> Result<(), ResolveError> {
+        for def in module.ast_program.definitions() {
+            match def {
+                Definition::StructDef(ref ast_struct) => {
+                    self.resolve_struct_type_definition(ast_struct)?;
+                }
+                Definition::EnumDef(identifier, variants) => {
+                    self.resolve_enum_type_definition(identifier, variants)?;
+                }
+                Definition::ImplDef(identifier, impl_items) => {
+                    self.resolve_impl_definition(identifier, impl_items)?;
+                }
+                Definition::FunctionDef(_, _) => todo!(),
+                Definition::ExternalFunctionDef(_, _) => todo!(),
+                Definition::Comment(_) => continue,
+                Definition::Import(_) => continue,
+            };
+        }
+        Ok(())
+    }
+
+    fn resolve_statement(&mut self, statement: &Statement) -> Result<ResolvedStatement, ResolveError> {
+       let converted = match statement {
+            Statement::Let(pattern, expr) => ResolvedStatement::Let(
+                self.resolve_pattern(pattern)?,
+                self.resolve_expression(expr)?,
+            ),
+            Statement::ForLoop(pattern, expression, statements) => ResolvedStatement::ForLoop(
+                self.resolve_pattern(pattern)?,
+                self.resolve_expression(expression)?,
+                self.resolve_statements(statements)?,
+            ),
+            Statement::WhileLoop(expression, statements) => ResolvedStatement::WhileLoop(
+                self.resolve_expression(expression)?,
+                self.resolve_statements(statements)?,
+            ),
+            Statement::Return(expression) => {
+                ResolvedStatement::Return(self.resolve_expression(expression)?)
+            }
+            Statement::Break => ResolvedStatement::Break,
+            Statement::Continue => ResolvedStatement::Break,
+            Statement::Expression(expression) => {
+                ResolvedStatement::Expression(self.resolve_expression(expression)?)
+            }
+            Statement::Block(statements) => {
+                ResolvedStatement::Block(self.resolve_statements(statements)?)
+            }
+            Statement::If(expression, statements, maybe_else_statements) => ResolvedStatement::If(
+                self.resolve_bool_expression(expression)?,
+                self.resolve_statements(statements)?,
+                &maybe_else_statements
+                    .as_ref()
+                    .map(|else_statements| self.resolve_statements(else_statements)),
+            ),
+        };
+        Ok(converted)
+    }
+
+    fn resolve_statements(
+        &mut self,
+        statements: &Vec<Statement>,
+    ) -> Result<Vec<ResolvedStatement>, ResolveError> {
+        let mut resolved_statements = Vec::new();
+        for statement in statements {
+            let resolved_statement = self.resolve_statement(statement)?;
+            resolved_statements.push(resolved_statement);
+        }
+
+        Ok(resolved_statements)
     }
 
     /*
@@ -664,6 +792,68 @@ impl ResolvedProgram {
     }
 
      */
+    fn resolve_parameters(
+        &mut self,
+        parameters: &Vec<Parameter>,
+    ) -> Result<Vec<ResolvedParameter>, ResolveError> {
+        let mut resolved_parameters = Vec::new();
+        for parameter in parameters {
+            let param_type = self.resolve_type(parameter.param_type)?;
+            resolved_parameters.push(ResolvedParameter {
+                name: parameter.name,
+                resolved_type: param_type,
+                ast_parameter: parameter,
+            })
+        }
+        Ok(resolved_parameters)
+    }
+
+    fn resolve_expression(
+        &self,
+        ast_expression: &Expression,
+    ) -> Result<ResolvedExpression, ResolveError> {
+        match ast_expression {
+            Expression::FieldAccess(expression, field_name) => ResolvedExpression::FieldAccess(
+                self.resolve_into_struct_ref(expression.as_ref())?,
+                field_name,
+            ),
+            Expression::VariableAccess(variable) => {}
+            Expression::MutRef(_) => {}
+            Expression::ArrayAccess(_, _) => {}
+            Expression::VariableAssignment(_, _) => {}
+            Expression::ArrayAssignment(_, _, _) => {}
+            Expression::FieldAssignment(_, _, _) => {}
+            Expression::BinaryOp(_, _, _) => {}
+            Expression::UnaryOp(_, _) => {}
+            Expression::FunctionCall(_, _) => {}
+            Expression::MemberCall(_, _, _) => {}
+            Expression::Block(_) => {}
+            Expression::InterpolatedString(_) => {}
+            Expression::StructInstantiation(_, _) => {}
+            Expression::Array(_) => {}
+            Expression::Tuple(_) => {}
+            Expression::Map(_) => {}
+            Expression::ExclusiveRange(_, _) => {}
+            Expression::Literal(_) => {}
+            Expression::IfElse(_, _, _) => {}
+            Expression::Match(_, _) => {}
+        }
+    }
+
+    fn resolve_into_struct_ref(
+        &self,
+        struct_expression: &Expression,
+    ) -> Result<ResolvedStructTypeFieldRef, ResolveError> {
+        let expr = self.resolve_expression(struct_expression)?;
+        if let ResolvedExpression::StructTypeLookup(data) = expr {
+        } else {
+            Err(ResolveError::UnknownStructTypeReference(expr))
+        }
+    }
+
+    fn resolve_bool_expression(&mut self, p0: &Expression) -> Result<BoolExpression, ResolveError> {
+        todo!()
+    }
 }
 
 impl From<DependencyError> for ResolveError {
