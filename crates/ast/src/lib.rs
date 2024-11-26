@@ -194,11 +194,11 @@ pub enum ImportItems {
 #[derive(Clone, Debug)]
 pub struct StructType {
     pub identifier: LocalTypeIdentifier,
-    pub fields: SeqMap<LocalIdentifier, Type>,
+    pub fields: SeqMap<IdentifierName, Type>,
 }
 
 impl StructType {
-    pub fn new(identifier: LocalTypeIdentifier, fields: SeqMap<LocalIdentifier, Type>) -> Self {
+    pub fn new(identifier: LocalTypeIdentifier, fields: SeqMap<IdentifierName, Type>) -> Self {
         Self { identifier, fields }
     }
 }
@@ -211,7 +211,7 @@ pub enum Definition {
         SeqMap<LocalTypeIdentifier, EnumVariant>,
     ),
     FunctionDef(LocalIdentifier, FunctionData),
-    ImplDef(LocalTypeIdentifier, SeqMap<LocalIdentifier, ImplItem>),
+    ImplDef(LocalTypeIdentifier, SeqMap<IdentifierName, ImplItem>),
     ExternalFunctionDef(QualifiedTypeIdentifier, FunctionData),
     Import(Import),
     // Other
@@ -320,6 +320,15 @@ impl Debug for Parameter {
     }
 }
 
+#[derive(Debug, Eq, Hash, PartialEq, Clone)]
+pub struct IdentifierName(pub String);
+
+impl Display for IdentifierName {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 /// Expressions are things that "converts" to a value when being evaluated.
 #[derive(Debug, Clone)]
 pub enum Expression {
@@ -348,7 +357,7 @@ pub enum Expression {
     InterpolatedString(Vec<StringPart>),
 
     // Constructing
-    StructInstantiation(QualifiedTypeIdentifier, SeqMap<LocalIdentifier, Expression>),
+    StructInstantiation(QualifiedTypeIdentifier, SeqMap<IdentifierName, Expression>),
     //Array(Vec<Expression>),
     //Tuple(Vec<Expression>),
     //Map(HashMap<Expression, Expression>), // Not implemented yet. Maybe call this a dictionary or similar, to avoid confusion with map()
@@ -381,7 +390,7 @@ pub enum Literal {
     ), // EnumTypeName::Identifier tuple|struct
     Tuple(Vec<Expression>),
     Array(Vec<Expression>),
-    Map(SeqMap<LocalIdentifier, Expression>),
+    Map(SeqMap<IdentifierName, Expression>),
     Unit, // ()
 }
 
@@ -451,11 +460,11 @@ impl Debug for EnumLiteralData {
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct AnonymousStruct {
-    pub fields: SeqMap<LocalIdentifier, Type>,
+    pub fields: SeqMap<IdentifierName, Type>,
 }
 
 impl AnonymousStruct {
-    pub fn new(fields: SeqMap<LocalIdentifier, Type>) -> Self {
+    pub fn new(fields: SeqMap<IdentifierName, Type>) -> Self {
         Self { fields }
     }
 }

@@ -24,8 +24,8 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::{env, fs};
 use swamp_script_ast::{
-    BinaryOperator, Definition, EnumVariant, Expression, FunctionData, ImplItem, Literal,
-    LocalIdentifier, LocalTypeIdentifier, ModulePath, Parameter, Pattern, Program,
+    BinaryOperator, Definition, EnumVariant, Expression, FunctionData, IdentifierName, ImplItem,
+    Literal, LocalIdentifier, LocalTypeIdentifier, ModulePath, Parameter, Pattern, Program,
     QualifiedTypeIdentifier, Statement, StringPart, Type, Variable,
 };
 use swamp_script_ast::{Node, Position, Span, StructType};
@@ -93,15 +93,12 @@ pub enum ResolveError {
     CanNotFindModule(ModulePath),
     UnknownStructTypeReference(QualifiedTypeIdentifier),
     UnknownLocalStructTypeReference(LocalTypeIdentifier),
-    DuplicateFieldName(LocalIdentifier),
+    DuplicateFieldName(IdentifierName),
     Unknown(String),
     Pest(Error<Rule>),
     UnknownImplTargetTypeReference(LocalTypeIdentifier),
-    WrongFieldCountInStructInstantiation(
-        ResolvedStructTypeRef,
-        SeqMap<LocalIdentifier, Expression>,
-    ),
-    MissingFieldInStructInstantiation(LocalIdentifier, ResolvedStructTypeRef),
+    WrongFieldCountInStructInstantiation(ResolvedStructTypeRef, SeqMap<IdentifierName, Expression>),
+    MissingFieldInStructInstantiation(IdentifierName, ResolvedStructTypeRef),
     ExpectedFunctionExpression(Expression),
     CouldNotFindMember(LocalIdentifier, Expression),
     UnknownVariable(Variable),
@@ -482,7 +479,7 @@ impl<'a> Resolver<'a> {
     fn resolve_impl_definition(
         &mut self,
         attached_to_type: &LocalTypeIdentifier,
-        functions: &SeqMap<LocalIdentifier, ImplItem>,
+        functions: &SeqMap<IdentifierName, ImplItem>,
     ) -> Result<ResolvedImplType, ResolveError> {
         // Can only attach to earlier type in same module
         let _found_struct = self.find_struct_type_local(&attached_to_type)?;
@@ -926,7 +923,7 @@ impl<'a> Resolver<'a> {
     fn resolve_struct_instantiation(
         &mut self,
         qualified_type_identifier: &QualifiedTypeIdentifier,
-        ast_fields: &SeqMap<LocalIdentifier, Expression>,
+        ast_fields: &SeqMap<IdentifierName, Expression>,
     ) -> Result<ResolvedStructInstantiation, ResolveError> {
         let struct_to_instantiate = self.find_struct_type(qualified_type_identifier)?;
 
@@ -1044,7 +1041,7 @@ impl<'a> Resolver<'a> {
 
         if let Some(impl_member) = resolved_struct_type_ref
             .impl_members
-            .get(ast_member_function_name)
+            .get(&IdentifierName(ast_member_function_name.text.clone()))
         {
             Ok(ResolvedMemberCall {
                 impl_member: impl_member.clone(),

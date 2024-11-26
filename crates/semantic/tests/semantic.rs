@@ -58,8 +58,8 @@ modules:
 ::test
 namespace:
 statements:
-Variable(a, [Float]) [[FloatLiteral(23.0, ResolvedFloatType), FloatLiteral(42.9, ResolvedFloatType)]]
-Variable(b, Float) [Float]
+let a: [Float] = [[FloatLiteral(23.0, ResolvedFloatType), FloatLiteral(42.9, ResolvedFloatType)]]
+let b: Float = [Float]
         "#,
     )
 }
@@ -176,5 +176,41 @@ SomeEnum::Simple
 SomeEnum::WithTupleResolvedTupleType([Int(ResolvedIntType), String(StringType), Struct(ResolvedStructType { number: 0, module_path: ModulePath([LocalIdentifier { node: Node { span: Span { start: Position { offset: 0, line: 0, column: 0 }, end: Position { offset: 0, line: 0, column: 0 } } }, text: "test" }]), fields: SeqMap(LocalIdentifier { node: Node { span: Span { start: Position { offset: 9, line: 2, column: 9 }, end: Position { offset: 40, line: 3, column: 17 } } }, text: "x" }: Int(ResolvedIntType)), name: LocalTypeIdentifier { node: Node { span: Span { start: Position { offset: 9, line: 2, column: 9 }, end: Position { offset: 40, line: 3, column: 17 } } }, text: "Hello" }, ast_struct: StructType { identifier: LocalTypeIdentifier { node: Node { span: Span { start: Position { offset: 9, line: 2, column: 9 }, end: Position { offset: 40, line: 3, column: 17 } } }, text: "Hello" }, fields: SeqMap(LocalIdentifier { node: Node { span: Span { start: Position { offset: 9, line: 2, column: 9 }, end: Position { offset: 40, line: 3, column: 17 } } }, text: "x" }: Int) }, impl_members: SeqMap() })])
 
         "#,
+    )
+}
+
+#[test_log::test]
+fn impl_vector() {
+    check(
+        r#"
+    // Struct definition
+struct Vector2 {
+    x: Float,
+    y: Float,
+}
+
+// Implementation block
+impl Vector2 {
+    fn sqr_len(self) -> Float {
+        self.x * self.x + self.y * self.y
+    }
+
+    fn scale(mut self, factor: Float) -> Vector2 {
+        self.x = self.x * factor
+        self.y = self.y * factor
+        self
+    }
+}
+
+mut pos = Vector2 { x: 10.0, y: 20.0 }
+pos.scale(2.5)
+
+    "#,
+        r#"
+
+
+
+
+    "#,
     )
 }

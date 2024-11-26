@@ -12,10 +12,10 @@ use pest_derive::Parser;
 use seq_map::SeqMap;
 use swamp_script_ast::{
     AnonymousStruct, BinaryOperator, Definition, EnumLiteralData, EnumVariant, Expression,
-    FormatSpecifier, FunctionData, ImplItem, ImplMember, Import, ImportItems, Literal,
-    LocalIdentifier, LocalTypeIdentifier, MatchArm, ModulePath, MutVariableRef, Node, Parameter,
-    Pattern, Position, PrecisionType, Program, QualifiedTypeIdentifier, SelfParameter, Span,
-    Statement, StringConst, StringPart, StructType, Type, UnaryOperator, Variable,
+    FormatSpecifier, FunctionData, IdentifierName, ImplItem, ImplMember, Import, ImportItems,
+    Literal, LocalIdentifier, LocalTypeIdentifier, MatchArm, ModulePath, MutVariableRef, Node,
+    Parameter, Pattern, Position, PrecisionType, Program, QualifiedTypeIdentifier, SelfParameter,
+    Span, Statement, StringConst, StringPart, StructType, Type, UnaryOperator, Variable,
 };
 use tracing::{debug, info};
 
@@ -368,12 +368,14 @@ impl AstParser {
         for field_def in Self::get_inner_pairs(&field_defs) {
             let mut field_parts = Self::get_inner_pairs(&field_def);
 
-            let field_name = self.expect_identifier(&mut field_parts)?;
+            let field_name = self.expect_identifier(&mut field_parts)?; // TODO: Store this
             let field_type = self.parse_type(self.next_pair(&mut field_parts)?)?;
 
             fields
                 .insert(
-                    LocalIdentifier::new(convert_from_pair(&pair), &field_name),
+                    IdentifierName(
+                        LocalIdentifier::new(convert_from_pair(&pair), &field_name).text,
+                    ),
                     field_type,
                 )
                 .expect("duplicate field name"); // TODO: should be error
@@ -663,13 +665,16 @@ impl AstParser {
                     Rule::member_def => {
                         let (local_name, member) = self.parse_member_def(inner_item)?;
                         items
-                            .insert(local_name, ImplItem::Member(member))
+                            .insert(IdentifierName(local_name.text), ImplItem::Member(member))
                             .expect("duplicate impl"); // TODO: should handle Err()
                     }
                     Rule::function_def => {
                         let (local_name, function) = self.parse_function_data(inner_item)?;
                         items
-                            .insert(local_name, ImplItem::Function(function))
+                            .insert(
+                                IdentifierName(local_name.text),
+                                ImplItem::Function(function),
+                            )
                             .expect("duplicate impl"); // TODO: should handle Err()
                     }
                     _ => {
@@ -1127,10 +1132,10 @@ impl AstParser {
                     let field_name = LocalIdentifier::new(
                         convert_from_pair(&pair),
                         &self.expect_identifier(&mut field_inner)?,
-                    );
+                    ); // TODO: Save the field name
                     let field_value = self.parse_expression(self.next_pair(&mut field_inner)?)?;
                     fields
-                        .insert(field_name, field_value)
+                        .insert(IdentifierName(field_name.text), field_value)
                         .expect("should not be duplicates"); // TODO: Should return an error in result instead
                 }
             }
@@ -1608,7 +1613,7 @@ impl AstParser {
                     );
                     let field_type = self.parse_type(self.next_pair(&mut field_inner)?)?;
                     fields
-                        .insert(field_name, field_type)
+                        .insert(IdentifierName(field_name.text), field_type)
                         .expect("duplicate field field"); // TODO: Handle as Err()
                 }
 

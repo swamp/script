@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use std::rc::Rc;
 use swamp_script_ast::{
-    AnonymousStruct, ImplMember, LocalIdentifier, LocalTypeIdentifier, ModulePath,
+    AnonymousStruct, IdentifierName, ImplMember, LocalIdentifier, LocalTypeIdentifier, ModulePath,
     QualifiedTypeIdentifier, StructType,
 };
 
@@ -26,10 +26,10 @@ pub struct ResolvedStructType {
     // TODO:  pub defined_in_module: ResolvedModuleRef,
     pub number: TypeNumber,
     pub module_path: ModulePath,
-    pub fields: SeqMap<LocalIdentifier, ResolvedType>,
+    pub fields: SeqMap<IdentifierName, ResolvedType>,
     pub name: LocalTypeIdentifier,
     pub ast_struct: StructType,
-    pub impl_members: SeqMap<LocalIdentifier, ResolvedImplMemberRef>,
+    pub impl_members: SeqMap<IdentifierName, ResolvedImplMemberRef>,
 }
 
 impl Display for ResolvedStructType {
@@ -46,7 +46,7 @@ impl Display for ResolvedStructType {
 pub struct ResolvedAnonymousStructType {
     // TODO:  pub defined_in_module: ResolvedModuleRef,
     pub module_path: ModulePath,
-    pub fields: SeqMap<LocalIdentifier, ResolvedType>,
+    pub fields: SeqMap<IdentifierName, ResolvedType>,
     pub ast_anon_struct: AnonymousStruct,
 }
 
@@ -54,7 +54,7 @@ impl ResolvedAnonymousStructType {
     pub fn new(
         // TODO: defined_in_module: ResolvedModuleRef,
         module_path: ModulePath,
-        fields: SeqMap<LocalIdentifier, ResolvedType>,
+        fields: SeqMap<IdentifierName, ResolvedType>,
         ast_anon_struct: AnonymousStruct,
     ) -> Self {
         Self {
@@ -80,7 +80,7 @@ impl ResolvedStructType {
         // TODO: defined_in_module: ResolvedModuleRef,
         module_path: ModulePath,
         name: LocalTypeIdentifier,
-        fields: SeqMap<LocalIdentifier, ResolvedType>,
+        fields: SeqMap<IdentifierName, ResolvedType>,
         ast_struct: StructType,
         number: TypeNumber,
     ) -> Self {
@@ -96,7 +96,8 @@ impl ResolvedStructType {
     }
 
     pub fn field_index(&self, field_name: &LocalIdentifier) -> Option<usize> {
-        self.fields.get_index(field_name)
+        self.fields
+            .get_index(&IdentifierName(field_name.text.to_string()))
     }
 
     pub fn name(&self) -> &LocalTypeIdentifier {
