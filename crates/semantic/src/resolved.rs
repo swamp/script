@@ -4,12 +4,14 @@ use crate::ns::{
     ResolvedTupleTypeRef, UnitTypeRef,
 };
 use crate::ResolvedImplMemberRef;
+use seq_map::SeqMap;
 use std::env::var;
 use std::fmt::{Debug, Display, Formatter};
+use std::hash::Hash;
 use std::rc::Rc;
 use swamp_script_ast::{
-    BinaryOperator, Expression, FormatSpecifier, LocalIdentifier, MatchArm, Parameter, StringConst,
-    UnaryOperator, Variable,
+    BinaryOperator, Expression, FormatSpecifier, IdentifierName, LocalIdentifier, MatchArm,
+    Parameter, StringConst, UnaryOperator, Variable,
 };
 
 #[derive(Debug, Clone)]
@@ -114,7 +116,7 @@ impl Display for ResolvedType {
             ResolvedType::Array(array_type_ref) => write!(f, "{array_type_ref}"),
             ResolvedType::Tuple(_) => todo!(),
             ResolvedType::Struct(struct_type) => {
-                write!(f, "{}", struct_type)
+                write!(f, "{}", struct_type.borrow())
             }
             ResolvedType::Enum(_) => todo!(),
             ResolvedType::EnumVariant(_) => todo!(),
@@ -232,6 +234,50 @@ pub fn comma<T: Display>(values: &[T]) -> String {
     }
 }
 
+pub fn comma_seq<K: Clone + Hash + Eq + Display, V: Display>(values: &SeqMap<K, V>) -> String {
+    let mut result = String::new();
+    for (i, (key, value)) in values.iter().enumerate() {
+        if i > 0 {
+            result.push_str(", ");
+        }
+        result.push_str(format!("{}: {}", key, value).as_str());
+    }
+    result
+}
+
+pub fn comma_seq_nl<K: Clone + Hash + Eq + Display, V: Display>(
+    values: &SeqMap<K, V>,
+    prefix: &str,
+) -> String {
+    let mut result = String::new();
+    for (key, value) in values.iter() {
+        result.push_str(format!("{}{}: {}\n", prefix, key, value).as_str());
+    }
+    result
+}
+
+pub fn comma_tuple<K: Display, V: Display>(values: &[(K, V)]) -> String {
+    let mut result = String::new();
+    for (i, (key, value)) in values.iter().enumerate() {
+        if i > 0 {
+            result.push_str(", ");
+        }
+        result.push_str(format!("{}: {}", key, value).as_str());
+    }
+    result
+}
+
+pub fn comma_tuple_ref<K: Display, V: Display>(values: &[(&K, &V)]) -> String {
+    let mut result = String::new();
+    for (i, (key, value)) in values.iter().enumerate() {
+        if i > 0 {
+            result.push_str(", ");
+        }
+        result.push_str(format!("{}: {}", key, value).as_str());
+    }
+    result
+}
+
 impl Display for ResolvedInternalFunctionCall {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "({}({}))", self.resolved_type, comma(&self.arguments))
@@ -246,6 +292,12 @@ pub struct ResolvedMemberCall {
     /*
     MemberRef, LocalTypeIdentifier, Vec<ResolvedExpression>
      */
+}
+
+impl Display for ResolvedMemberCall {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({} <- {})", self.impl_member, comma(&self.arguments))
+    }
 }
 
 #[derive(Debug)]
@@ -462,10 +514,20 @@ impl Display for ResolvedExpression {
                 write!(f, "{resolved_call}")
             }
             ResolvedExpression::MutMemberCall(_, _) => todo!(),
-            ResolvedExpression::MemberCall(_) => todo!(),
+            ResolvedExpression::MemberCall(member_call) => write!(f, "{member_call}"),
             ResolvedExpression::Block(_) => todo!(),
             ResolvedExpression::InterpolatedString(_) => todo!(),
-            ResolvedExpression::StructInstantiation(_) => todo!(),
+            ResolvedExpression::StructInstantiation(struct_instantiation) => {
+                let borrowed = struct_instantiation.struct_type_ref.borrow();
+                let zipped: Vec<_> = borrowed
+                    .fields
+                    .keys()
+                    .zip(struct_instantiation.expressions_in_order.iter())
+                    .collect();
+
+                write!(f, "{{ {} }}", comma_tuple(&zipped))?;
+                Ok(())
+            }
             ResolvedExpression::Array(array_instantiation) => {
                 write!(f, "[{:?}]", array_instantiation.expressions)
             }
@@ -474,7 +536,9 @@ impl Display for ResolvedExpression {
             ResolvedExpression::IfElse(_, _, _) => todo!(),
             ResolvedExpression::Match(_, _) => todo!(),
             ResolvedExpression::LetVar(_, _) => todo!(),
-            ResolvedExpression::FloatLiteral(_, _) => todo!(),
+            ResolvedExpression::FloatLiteral(value, _float_type) => {
+                write!(f, "FloatLit({value:?})")
+            }
             ResolvedExpression::IntLiteral(value, _int_type) => write!(f, "IntLit({value:?})"),
             ResolvedExpression::StringLiteral(value, _string_type) => {
                 write!(f, "StringLit({value:?})")
@@ -520,7 +584,7 @@ impl Display for ResolvedStatement {
             ResolvedStatement::Return(_) => todo!(),
             ResolvedStatement::Break => todo!(),
             ResolvedStatement::Continue => todo!(),
-            ResolvedStatement::Expression(_) => todo!(),
+            ResolvedStatement::Expression(expression) => write!(f, "{}", expression),
             ResolvedStatement::Block(_) => todo!(),
             ResolvedStatement::If(_, _, _) => todo!(),
             ResolvedStatement::LetVar(variable_ref, expr) => {

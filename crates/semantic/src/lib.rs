@@ -8,7 +8,7 @@ use crate::ns::{
     ResolvedStructType, ResolvedStructTypeRef, ResolvedTupleType, TypeNumber, UnitType,
     UnitTypeRef,
 };
-use crate::resolved::same_type;
+use crate::resolved::{comma, same_type};
 use crate::resolved::{
     ResolvedArrayInstantiation, ResolvedArrayItem, ResolvedArrayItemRef, ResolvedBinaryOperator,
     ResolvedBooleanExpression, ResolvedExpression, ResolvedInternalFunctionCall,
@@ -25,8 +25,8 @@ use std::rc::Rc;
 use std::{env, fs};
 use swamp_script_ast::{
     BinaryOperator, Definition, EnumVariant, Expression, FunctionData, IdentifierName, ImplItem,
-    Literal, LocalIdentifier, LocalTypeIdentifier, ModulePath, Parameter, Pattern, Program,
-    QualifiedTypeIdentifier, Statement, StringPart, Type, Variable,
+    ImplMember, Literal, LocalIdentifier, LocalTypeIdentifier, ModulePath, Parameter, Pattern,
+    Program, QualifiedTypeIdentifier, Statement, StringPart, Type, Variable,
 };
 use swamp_script_ast::{Node, Position, Span, StructType};
 use swamp_script_parser::{AstParser, Rule};
@@ -109,6 +109,7 @@ pub enum ResolveError {
     IncompatibleArguments(ResolvedType, ResolvedType),
     CanOnlyOverwriteVariableWithMut(Variable),
     OverwriteVariableNotAllowedHere(Variable),
+    NotNamedStruct(Expression),
 }
 
 impl From<String> for ResolveError {
@@ -309,17 +310,35 @@ impl ResolvedModule {
 
 #[derive(Debug)]
 pub struct ResolvedImplMember {
+    pub ast_member: ImplMember,
     pub parameters: Vec<ResolvedParameter>,
     pub return_type: ResolvedType,
+    pub struct_ref: ResolvedStructTypeRef,
+}
+
+impl Display for ResolvedImplMember {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "impl({}({}) -> {})",
+            //self.struct_ref.borrow().name,
+            self.ast_member.name,
+            comma(&self.parameters),
+            self.return_type
+        )
+    }
 }
 
 pub type ResolvedImplMemberRef = Rc<ResolvedImplMember>;
 
+#[derive(Debug)]
 pub struct ResolvedFunctionData {
     pub parameters: Vec<ResolvedParameter>,
     pub return_type: ResolvedType,
     pub statements: Vec<ResolvedStatement>,
 }
+
+pub type ResolvedFunctionDataRef = Rc<ResolvedFunctionData>;
 
 pub struct ResolvedImplType {
     pub items: Vec<ResolvedImplItem>,
@@ -463,12 +482,12 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    pub fn find_struct_type_local(
+    pub fn find_struct_type_local_mut(
         &mut self,
         type_name: &LocalTypeIdentifier,
-    ) -> Result<ResolvedStructTypeRef, ResolveError> {
+    ) -> Result<&ResolvedStructTypeRef, ResolveError> {
         if let Some(found) = self.current_module.namespace.get_struct(&type_name) {
-            Ok(found.clone())
+            Ok(found)
         } else {
             Err(ResolveError::UnknownLocalStructTypeReference(
                 type_name.clone(),
@@ -480,40 +499,64 @@ impl<'a> Resolver<'a> {
         &mut self,
         attached_to_type: &LocalTypeIdentifier,
         functions: &SeqMap<IdentifierName, ImplItem>,
-    ) -> Result<ResolvedImplType, ResolveError> {
+    ) -> Result<(), ResolveError> {
         // Can only attach to earlier type in same module
-        let _found_struct = self.find_struct_type_local(&attached_to_type)?;
-        let mut items = Vec::new();
 
-        for (_local_ident, member_item) in functions {
-            let item = match member_item {
+        for (local_ident, member_item) in functions {
+            match member_item {
                 ImplItem::Member(impl_member) => {
                     let resolved_parameters = self.resolve_parameters(&impl_member.params)?;
                     let resolved_return = self.resolve_type(&impl_member.return_type)?;
 
+                    let mut found_struct = self.find_struct_type_local_mut(&attached_to_type)?;
+
                     let resolved_impl_member = ResolvedImplMember {
                         parameters: resolved_parameters,
                         return_type: resolved_return.clone(),
+                        ast_member: impl_member.clone(),
+                        struct_ref: found_struct.clone(),
                     };
 
-                    ResolvedImplItem::Member(resolved_impl_member)
+                    let resolved_impl_member_ref = Rc::new(resolved_impl_member);
+                    {
+                        found_struct
+                            .borrow_mut()
+                            .impl_members
+                            .insert(
+                                IdentifierName(local_ident.0.clone()),
+                                resolved_impl_member_ref,
+                            )
+                            .expect("should insert impl_member");
+                    }
                 }
+
                 ImplItem::Function(function_data) => {
                     let resolved_parameters = self.resolve_parameters(&function_data.params)?;
                     let resolved_return = self.resolve_type(&function_data.return_type)?;
                     let resolved_statements = self.resolve_statements(&function_data.body)?;
 
-                    ResolvedImplItem::Function(ResolvedFunctionData {
+                    let member_function = ResolvedFunctionData {
                         parameters: resolved_parameters,
                         return_type: resolved_return.clone(),
                         statements: resolved_statements,
-                    })
+                    };
+
+                    let member_function_ref = Rc::new(member_function);
+                    {
+                        let mut found_struct =
+                            self.find_struct_type_local_mut(&attached_to_type)?;
+                        found_struct
+                            .borrow_mut()
+                            .impl_functions
+                            .insert(IdentifierName(local_ident.0.clone()), member_function_ref)
+                            .expect("should insert impl_member");
+                    }
                 }
             };
 
-            items.push(item);
+            //            items.push(item);
         }
-        Ok(ResolvedImplType { items })
+        Ok(())
     }
 
     pub fn resolve_struct_type_definition(
@@ -913,11 +956,17 @@ impl<'a> Resolver<'a> {
     }
 
     #[allow(unused)]
-    fn resolve_into_struct_ref(
-        &self,
-        _struct_expression: &Expression,
+    fn resolve_into_named_struct_ref(
+        &mut self,
+        struct_expression: &Expression,
     ) -> Result<ResolvedStructTypeRef, ResolveError> {
-        todo!()
+        let resolved = self.resolve_expression(struct_expression)?;
+
+        let resolved_type = resolution(&resolved);
+        match resolved_type {
+            ResolvedType::Struct(named_struct) => Ok(named_struct),
+            _ => Err(ResolveError::NotNamedStruct(struct_expression.clone())),
+        }
     }
 
     fn resolve_struct_instantiation(
@@ -927,7 +976,7 @@ impl<'a> Resolver<'a> {
     ) -> Result<ResolvedStructInstantiation, ResolveError> {
         let struct_to_instantiate = self.find_struct_type(qualified_type_identifier)?;
 
-        if ast_fields.len() != struct_to_instantiate.fields.len() {
+        if ast_fields.len() != struct_to_instantiate.borrow().fields.len() {
             return Err(ResolveError::WrongFieldCountInStructInstantiation(
                 struct_to_instantiate,
                 ast_fields.clone(),
@@ -936,7 +985,7 @@ impl<'a> Resolver<'a> {
 
         let mut expressions_in_order = Vec::new();
 
-        for (field_name, _field) in &struct_to_instantiate.fields {
+        for (field_name, _field) in &struct_to_instantiate.borrow().fields {
             if let Some(found) = ast_fields.get(&field_name) {
                 let resolved_expression = self.resolve_expression(found)?;
                 expressions_in_order.push(resolved_expression);
@@ -1036,10 +1085,12 @@ impl<'a> Resolver<'a> {
         ast_member_function_name: &LocalIdentifier,
         ast_arguments: &Vec<Expression>,
     ) -> Result<ResolvedMemberCall, ResolveError> {
-        let resolved_struct_type_ref = self.resolve_into_struct_ref(ast_member_expression)?;
+        let resolved_struct_type_ref = self.resolve_into_named_struct_ref(ast_member_expression)?;
         let resolved_arguments = self.resolve_expressions(ast_arguments)?;
 
-        if let Some(impl_member) = resolved_struct_type_ref
+        let x = if let Some(impl_member) = resolved_struct_type_ref
+            .clone()
+            .borrow()
             .impl_members
             .get(&IdentifierName(ast_member_function_name.text.clone()))
         {
@@ -1053,7 +1104,8 @@ impl<'a> Resolver<'a> {
                 ast_member_function_name.clone(),
                 ast_member_expression.clone(),
             ))
-        }
+        };
+        x
     }
 
     fn resolve_binary_op(

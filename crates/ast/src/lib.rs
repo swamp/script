@@ -244,6 +244,7 @@ pub struct ImplMember {
     pub params: Vec<Parameter>,
     pub return_type: Type,
     pub body: Vec<Statement>,
+    pub name: LocalIdentifier,
 }
 
 pub type ImplMemberRef = Rc<ImplMember>;

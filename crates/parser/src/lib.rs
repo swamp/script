@@ -529,8 +529,9 @@ impl AstParser {
         let self_param = self_param.unwrap_or(SelfParameter { is_mutable: false });
 
         Ok((
-            name,
+            name.clone(),
             ImplMember {
+                name,
                 self_param,
                 params,
                 return_type,

@@ -208,8 +208,17 @@ pos.scale(2.5)
     "#,
         r#"
 
-
-
+modules:
+::test
+namespace:
+structs:
+Vector2 { x: Float, y: Float }
+impl:
+..sqr_len: impl(sqr_len() -> Float)
+..scale: impl(scale(factor: Float) -> Vector2 { x: Float, y: Float })
+statements:
+let mut pos: Vector2 { x: Float, y: Float } = { x: FloatLit(10.0), y: FloatLit(20.0) }
+(impl(scale(factor: Float) -> Vector2 { x: Float, y: Float }) <- FloatLit(2.5))
 
     "#,
     )

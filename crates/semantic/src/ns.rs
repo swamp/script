@@ -2,13 +2,16 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-
 use crate::module::Module;
 use crate::resolved::{
-    ResolvedInternalFunctionDefinition, ResolvedInternalFunctionDefinitionRef, ResolvedType,
+    comma_seq, comma_seq_nl, comma_tuple, comma_tuple_ref, ResolvedInternalFunctionDefinition,
+    ResolvedInternalFunctionDefinitionRef, ResolvedType,
 };
-use crate::ResolvedImplMemberRef;
+use crate::{
+    ResolvedFunctionData, ResolvedFunctionDataRef, ResolvedImplMember, ResolvedImplMemberRef,
+};
 use seq_map::SeqMap;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use std::rc::Rc;
@@ -17,7 +20,7 @@ use swamp_script_ast::{
     QualifiedTypeIdentifier, StructType,
 };
 
-pub type ResolvedStructTypeRef = Rc<ResolvedStructType>;
+pub type ResolvedStructTypeRef = Rc<RefCell<ResolvedStructType>>;
 
 pub type TypeNumber = u32;
 
@@ -30,14 +33,13 @@ pub struct ResolvedStructType {
     pub name: LocalTypeIdentifier,
     pub ast_struct: StructType,
     pub impl_members: SeqMap<IdentifierName, ResolvedImplMemberRef>,
+    pub impl_functions: SeqMap<IdentifierName, ResolvedFunctionDataRef>,
 }
 
 impl Display for ResolvedStructType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} {{", self.name)?;
-        for (name, value) in self.fields.iter() {
-            write!(f, "{}: {}", name, value)?;
-        }
+        write!(f, " {} ", comma_seq(&self.fields))?;
         write!(f, "}}")
     }
 }
@@ -68,10 +70,7 @@ impl ResolvedAnonymousStructType {
 
 impl Display for ResolvedAnonymousStructType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for (name, value) in self.fields.iter() {
-            write!(f, "{:?}: {}", name, value)?;
-        }
-        write!(f, "}}")
+        write!(f, "{{ {} }}", comma_seq(&self.fields))
     }
 }
 
@@ -92,6 +91,7 @@ impl ResolvedStructType {
             fields,
             name,
             impl_members: SeqMap::default(),
+            impl_functions: SeqMap::default(),
         }
     }
 
@@ -281,7 +281,6 @@ pub struct ResolvedModuleNamespace {
 
     tuples: Vec<ResolvedTupleTypeRef>,
     internal_functions: SeqMap<String, ResolvedInternalFunctionDefinitionRef>,
-    pub impl_members: HashMap<ResolvedType, ImplType>,
 
     type_number: TypeNumber,
 }
@@ -298,7 +297,9 @@ impl Display for ResolvedModuleNamespace {
         if !self.structs.is_empty() {
             writeln!(f, "structs:")?;
             for (_struct_name, struct_type_ref) in &self.structs {
-                writeln!(f, "{}", struct_type_ref)?;
+                let struct_ref = struct_type_ref.borrow();
+                writeln!(f, "{}", struct_ref)?;
+                writeln!(f, "impl:\n{}", comma_seq_nl(&struct_ref.impl_members, ".."))?;
             }
         }
 
@@ -339,7 +340,7 @@ impl ResolvedModuleNamespace {
         name: &LocalTypeIdentifier,
         struct_type: ResolvedStructType,
     ) -> Result<ResolvedStructTypeRef, String> {
-        let struct_ref = Rc::new(struct_type);
+        let struct_ref = Rc::new(RefCell::new(struct_type));
         self.structs
             .insert((&name.text).into(), struct_ref.clone())
             .expect("should be able to add struct field");
@@ -438,7 +439,7 @@ impl ResolvedModuleNamespace {
         identifier: LocalTypeIdentifier,
     ) -> Option<&ResolvedEnumVariantTypeRef> {
         // TODO: add scope/module support, ignore for now
-        let _full_name = format!("{:?}::{}", name.name, identifier);
+        let _full_name = format!("{:?}::{:?}", name.name, identifier);
 
         self.enum_variant_types.get(&(&name.name.text).into())
     }
