@@ -131,6 +131,12 @@ pub struct ResolvedArrayType {
     //pub ast_type: Type,
 }
 
+impl Display for ResolvedArrayType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{}]", self.item_type)
+    }
+}
+
 pub type ResolvedTupleTypeRef = Rc<ResolvedTupleType>;
 
 #[derive(Debug)]
@@ -260,12 +266,12 @@ pub struct LocalTypeName(pub String);
 pub struct ResolvedModuleNamespace {
     pub all_owned_types: SeqMap<LocalTypeIdentifier, ResolvedType>,
 
-    structs: HashMap<LocalTypeName, ResolvedStructTypeRef>, // They are created by the module, so they are owned here
-    enum_types: HashMap<LocalTypeName, ResolvedEnumTypeRef>, // They are created by the module, so they are owned here
-    enum_variant_types: HashMap<LocalTypeName, ResolvedEnumVariantTypeRef>, // They are created by the module, so they are owned here
+    structs: SeqMap<LocalTypeName, ResolvedStructTypeRef>, // They are created by the module, so they are owned here
+    enum_types: SeqMap<LocalTypeName, ResolvedEnumTypeRef>, // They are created by the module, so they are owned here
+    enum_variant_types: SeqMap<LocalTypeName, ResolvedEnumVariantTypeRef>, // They are created by the module, so they are owned here
 
     tuples: Vec<ResolvedTupleTypeRef>,
-    functions: HashMap<String, (Vec<Parameter>, ResolvedType)>,
+    functions: SeqMap<String, (Vec<Parameter>, ResolvedType)>,
     pub impl_members: HashMap<ResolvedType, ImplType>,
 
     type_number: TypeNumber,
@@ -423,7 +429,7 @@ impl ResolvedModuleNamespace {
     }
 
     pub fn get_function(&self, name: &str) -> Option<&(Vec<Parameter>, ResolvedType)> {
-        self.functions.get(name)
+        self.functions.get(&name.to_string())
     }
 
     pub fn get_impl(&self, _type_id: &ResolvedType) -> Option<&ImplType> {

@@ -44,7 +44,7 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
         ResolvedExpression::FieldAccess(struct_field_ref) => struct_field_ref.resolved_type.clone(),
         ResolvedExpression::VariableAccess(variable_ref) => variable_ref.resolved_type.clone(),
         ResolvedExpression::MutRef(_) => todo!(),
-        ResolvedExpression::ArrayAccess(_) => todo!(),
+        ResolvedExpression::ArrayAccess(array_item_ref) => array_item_ref.item_type.clone(),
         ResolvedExpression::VariableAssignment(_) => todo!(),
         ResolvedExpression::ArrayAssignment(_, _, _) => todo!(),
         ResolvedExpression::StructFieldAssignment(_, _) => todo!(),
@@ -144,7 +144,7 @@ impl Modules {
 impl Display for Modules {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (module_path, module) in &self.modules {
-            writeln!(f, "{}\n  {}", module_path, module.namespace)?
+            writeln!(f, "{}\n  {}", module_path, module)?
         }
         Ok(())
     }
@@ -264,13 +264,23 @@ pub type ResolvedModuleRef = Rc<ResolvedModule>;
 #[derive(Debug)]
 pub struct ResolvedModule {
     pub definitions: Vec<ResolvedDefinition>,
+    pub statements: Vec<ResolvedStatement>,
     pub namespace: ResolvedModuleNamespace,
     pub module_path: ModulePath,
 }
 
 impl Display for ResolvedModule {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "namespace: {}", self.namespace)
+        writeln!(f, "namespace:\n{}", self.namespace)?;
+        if !self.statements.is_empty() {
+            writeln!(f, "statements:")?;
+
+            for statement in &self.statements {
+                writeln!(f, "{}", statement)?;
+            }
+        };
+
+        Ok(())
     }
 }
 
@@ -280,6 +290,7 @@ impl ResolvedModule {
             module_path,
             definitions: Vec::new(),
             namespace: ResolvedModuleNamespace::new(),
+            statements: Vec::new(),
         }
     }
 }
@@ -353,7 +364,7 @@ impl ResolvedProgram {
 
         resolver.resolve_definitions(module)?;
 
-        resolver.resolve_statements(module.ast_program.statements())?;
+        resolve_module.statements = resolver.resolve_statements(module.ast_program.statements())?;
 
         let module_ref = Rc::new(resolve_module);
         self.modules.add_module(module_path, module_ref.clone());
@@ -1042,7 +1053,7 @@ impl<'a> Resolver<'a> {
         debug!(resolved_array_expression=?resolved_array_expression, "resolve_array_access");
         let array_resolution = resolution(&resolved_array_expression);
         debug!(array_resolution=?array_resolution, "array_resolution");
-        let item_type = match array_resolution {
+        let item_type = match &array_resolution {
             ResolvedType::Array(item_type) => item_type,
             _ => return Err(ResolveError::NotAnArray(array_expression.clone())),
         };
@@ -1058,7 +1069,8 @@ impl<'a> Resolver<'a> {
         }
 
         let array_item = ResolvedArrayItem {
-            item_type,
+            array_type: array_resolution.clone(),
+            item_type: item_type.item_type.clone(),
             int_expression: lookup_expression,
         };
 
@@ -1124,6 +1136,7 @@ impl<'a> Resolver<'a> {
 
         let resolved_variable = ResolvedVariable {
             resolved_type: variable_type_ref,
+            ast_variable: variable.clone(),
         };
 
         let variable_ref = Rc::new(resolved_variable);

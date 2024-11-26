@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 swamp-script-ast = { path = "../ast", version = "0.0.1" }
 swamp-script-parser = { path = "../parser", version = "0.0.1" }
-seq-map = "0.0.10"
+seq-map = "0.0.11"
 tracing = "0.1.40"
 pest = "2.7.14" # TODO: Should be removed in the future
 

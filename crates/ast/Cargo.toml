@@ -4,4 +4,4 @@ version = "0.0.1"
 edition = "2021"
 
 [dependencies]
-seq-map = "0.0.10"
+seq-map = "0.0.11"

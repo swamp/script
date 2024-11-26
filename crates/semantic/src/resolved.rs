@@ -4,12 +4,13 @@ use crate::ns::{
     StringTypeRef, UnitTypeRef,
 };
 use crate::ResolvedImplMemberRef;
-use std::fmt::{Debug, Display};
+use std::fmt::{write, Debug, Display};
 use std::rc::Rc;
 use swamp_script_ast::{
     BinaryOperator, Expression, FormatSpecifier, LocalIdentifier, LocalTypeIdentifier, MatchArm,
-    Parameter, UnaryOperator,
+    Parameter, UnaryOperator, Variable,
 };
+use swamp_script_parser::Rule::expression;
 
 #[derive(Debug, Clone)]
 pub struct ResolvedParameter {
@@ -42,11 +43,11 @@ impl Display for ResolvedType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ResolvedType::Int(_int_type) => write!(f, "Int"),
-            ResolvedType::Float(_) => todo!(),
+            ResolvedType::Float(_) => write!(f, "Float"),
             ResolvedType::String(_) => todo!(),
             ResolvedType::Bool(_) => todo!(),
             ResolvedType::Unit(_) => todo!(),
-            ResolvedType::Array(_) => todo!(),
+            ResolvedType::Array(array_type_ref) => write!(f, "{array_type_ref}"),
             ResolvedType::Tuple(_) => todo!(),
             ResolvedType::Struct(struct_type) => {
                 write!(f, "{}", struct_type)
@@ -112,6 +113,17 @@ impl ResolvedFunctionReference {
 
 pub struct ResolvedVariable {
     pub resolved_type: ResolvedType,
+    pub ast_variable: Variable,
+}
+
+impl Display for ResolvedVariable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Variable({}, {})",
+            self.ast_variable.name, self.resolved_type
+        )
+    }
 }
 
 pub type ResolvedVariableRef = Rc<ResolvedVariable>;
@@ -168,8 +180,19 @@ pub struct ResolvedMutArray {}
 
 #[derive(Debug)]
 pub struct ResolvedArrayItem {
-    pub item_type: ResolvedArrayTypeRef,
+    pub item_type: ResolvedType,
     pub int_expression: ResolvedExpression,
+    pub array_type: ResolvedType,
+}
+
+impl Display for ResolvedArrayItem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "ArrayItem( {} [{}] = {})",
+            self.array_type, self.int_expression, self.item_type
+        )
+    }
 }
 
 pub type ResolvedArrayItemRef = Rc<ResolvedArrayItem>;
@@ -323,6 +346,41 @@ pub enum ResolvedExpression {
 
 pub type ResolvedExpressionRef = Rc<ResolvedExpression>;
 
+impl Display for ResolvedExpression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ResolvedExpression::FieldAccess(_) => todo!(),
+            ResolvedExpression::VariableAccess(_) => todo!(),
+            ResolvedExpression::MutRef(_) => todo!(),
+            ResolvedExpression::ArrayAccess(array_item_ref) => {
+                write!(f, "[{}]", array_item_ref.item_type)
+            }
+            ResolvedExpression::VariableAssignment(_) => todo!(),
+            ResolvedExpression::ArrayAssignment(_, _, _) => todo!(),
+            ResolvedExpression::StructFieldAssignment(_, _) => todo!(),
+            ResolvedExpression::TupleFieldAssignment(_, _) => todo!(),
+            ResolvedExpression::BinaryOp(_) => todo!(),
+            ResolvedExpression::UnaryOp(_, _) => todo!(),
+            ResolvedExpression::FunctionCall(_) => todo!(),
+            ResolvedExpression::MutMemberCall(_, _) => todo!(),
+            ResolvedExpression::MemberCall(_) => todo!(),
+            ResolvedExpression::Block(_) => todo!(),
+            ResolvedExpression::InterpolatedString(_) => todo!(),
+            ResolvedExpression::StructInstantiation(_) => todo!(),
+            ResolvedExpression::Array(array_instantiation) => {
+                write!(f, "[{:?}]", array_instantiation.expressions)
+            }
+            ResolvedExpression::Tuple(_) => todo!(),
+            ResolvedExpression::ExclusiveRange(_, _) => todo!(),
+            ResolvedExpression::IfElse(_, _, _) => todo!(),
+            ResolvedExpression::Match(_, _) => todo!(),
+            ResolvedExpression::LetVar(_, _) => todo!(),
+            ResolvedExpression::FloatLiteral(_, _) => todo!(),
+            ResolvedExpression::IntLiteral(_, _) => todo!(),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct ResolvedArrayInstantiation {
     pub expressions: Vec<ResolvedExpression>,
@@ -348,4 +406,21 @@ pub enum ResolvedStatement {
         Option<Vec<ResolvedStatement>>,
     ),
     LetVar(ResolvedVariableRef, ResolvedExpression),
+}
+
+impl Display for ResolvedStatement {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ResolvedStatement::Let(_, _) => todo!(),
+            ResolvedStatement::ForLoop(_, _, _) => todo!(),
+            ResolvedStatement::WhileLoop(_, _) => todo!(),
+            ResolvedStatement::Return(_) => todo!(),
+            ResolvedStatement::Break => todo!(),
+            ResolvedStatement::Continue => todo!(),
+            ResolvedStatement::Expression(_) => todo!(),
+            ResolvedStatement::Block(_) => todo!(),
+            ResolvedStatement::If(_, _, _) => todo!(),
+            ResolvedStatement::LetVar(variable_ref, expr) => write!(f, "{variable_ref} {expr}"),
+        }
+    }
 }

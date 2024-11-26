@@ -13,6 +13,7 @@ fn basic() {
         r#"
 modules:
 ::test
+namespace:
 structs:
 Hello {x: Inty: Int}
         "#,
@@ -46,6 +47,24 @@ fn wrong_array_index() {
 }
 
 #[test_log::test]
+fn correct_array_index() {
+    check(
+        r#"
+        a = [23.0, 42.9]
+        b = a[1]
+        "#,
+        r#"
+modules:
+::test
+namespace:
+statements:
+Variable(a, [Float]) [[FloatLiteral(23.0, ResolvedFloatType), FloatLiteral(42.9, ResolvedFloatType)]]
+Variable(b, Float) [Float]
+        "#,
+    )
+}
+
+#[test_log::test]
 fn wrong_array_index_float() {
     check_fail(
         r#"
@@ -73,11 +92,12 @@ fn enum_basic() {
         r#"
 modules:
 ::test
+namespace:
 structs:
 Hello {x: Int}
 enum_variants:
 SomeEnum::Simple
-SomeEnum::WithTupleResolvedTupleType([Int(ResolvedIntType), String(StringType), Struct(ResolvedStructType { number: 1, module_path: ModulePath([LocalIdentifier("test")]), fields: SeqMap(LocalTypeIdentifier { node: Node { span: Span { start: Position { offset: 9, line: 2, column: 9 }, end: Position { offset: 40, line: 3, column: 17 } } }, text: "x" }: Int(ResolvedIntType)), name: LocalTypeIdentifier { node: Node { span: Span { start: Position { offset: 9, line: 2, column: 9 }, end: Position { offset: 40, line: 3, column: 17 } } }, text: "Hello" }, ast_struct: StructType { identifier: LocalTypeIdentifier { node: Node { span: Span { start: Position { offset: 9, line: 2, column: 9 }, end: Position { offset: 40, line: 3, column: 17 } } }, text: "Hello" }, fields: SeqMap(LocalTypeIdentifier { node: Node { span: Span { start: Position { offset: 9, line: 2, column: 9 }, end: Position { offset: 40, line: 3, column: 17 } } }, text: "x" }: Int) } })])
+SomeEnum::WithTupleResolvedTupleType([Int(ResolvedIntType), String(StringType), Struct(ResolvedStructType { number: 0, module_path: ModulePath([LocalIdentifier { node: Node { span: Span { start: Position { offset: 0, line: 0, column: 0 }, end: Position { offset: 0, line: 0, column: 0 } } }, text: "test" }]), fields: SeqMap(LocalIdentifier { node: Node { span: Span { start: Position { offset: 9, line: 2, column: 9 }, end: Position { offset: 40, line: 3, column: 17 } } }, text: "x" }: Int(ResolvedIntType)), name: LocalTypeIdentifier { node: Node { span: Span { start: Position { offset: 9, line: 2, column: 9 }, end: Position { offset: 40, line: 3, column: 17 } } }, text: "Hello" }, ast_struct: StructType { identifier: LocalTypeIdentifier { node: Node { span: Span { start: Position { offset: 9, line: 2, column: 9 }, end: Position { offset: 40, line: 3, column: 17 } } }, text: "Hello" }, fields: SeqMap(LocalIdentifier { node: Node { span: Span { start: Position { offset: 9, line: 2, column: 9 }, end: Position { offset: 40, line: 3, column: 17 } } }, text: "x" }: Int) }, impl_members: SeqMap() })])
 
         "#,
     )
