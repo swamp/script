@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
+use std::rc::Rc;
 
 #[derive(Clone)]
 pub struct Variable {
@@ -240,6 +241,8 @@ pub struct ImplMember {
     pub body: Vec<Statement>,
 }
 
+pub type ImplMemberRef = Rc<ImplMember>;
+
 impl Debug for SelfParameter {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         if self.is_mutable {
@@ -334,7 +337,7 @@ pub enum Expression {
 
     // Calls
     FunctionCall(Box<Expression>, Vec<Expression>),
-    MemberCall(Box<Expression>, LocalTypeIdentifier, Vec<Expression>),
+    MemberCall(Box<Expression>, LocalIdentifier, Vec<Expression>),
     Block(Vec<Statement>),
 
     InterpolatedString(Vec<StringPart>),

@@ -4,15 +4,16 @@
  */
 
 use crate::module::Module;
-use crate::{ResolvedFunctionRef, ResolvedType};
+use crate::resolved::{ResolvedFunctionRef, ResolvedType};
 use seq_map::SeqMap;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use std::rc::Rc;
 use swamp_script_ast::{
-    AnonymousStruct, ImplMember, LocalIdentifier, LocalTypeIdentifier, ModulePath, Parameter,
-    QualifiedTypeIdentifier, StructType, Type,
+    AnonymousStruct, ImplMember, LocalIdentifier, LocalTypeIdentifier, ModulePath,
+    Parameter, QualifiedTypeIdentifier, StructType, Type,
 };
+use crate::ResolvedImplMemberRef;
 
 pub type ResolvedStructTypeRef = Rc<ResolvedStructType>;
 
@@ -26,6 +27,7 @@ pub struct ResolvedStructType {
     pub fields: SeqMap<LocalIdentifier, ResolvedType>,
     pub name: LocalTypeIdentifier,
     pub ast_struct: StructType,
+    pub impl_members: SeqMap<LocalIdentifier, ResolvedImplMemberRef>,
 }
 
 impl Display for ResolvedStructType {
@@ -87,6 +89,7 @@ impl ResolvedStructType {
             ast_struct,
             fields,
             name,
+            impl_members: SeqMap::default(),
         }
     }
 

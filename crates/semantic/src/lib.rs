@@ -9,7 +9,12 @@ use crate::ns::{
     TypeNumber, UnitType, UnitTypeRef,
 };
 
-use crate::ResolvedType::Unit;
+use crate::resolved::{
+    ResolvedBinaryOperator, ResolvedBooleanExpression, ResolvedExpression,
+    ResolvedInternalFunctionCall, ResolvedIterator, ResolvedMemberCall, ResolvedParameter,
+    ResolvedPattern, ResolvedStatement, ResolvedStructInstantiation, ResolvedStructTypeFieldRef,
+    ResolvedType, ResolvedTypeRef,
+};
 use pest::error::Error;
 use seq_map::SeqMap;
 use std::fmt::{Debug, Display};
@@ -28,245 +33,34 @@ use tracing::info;
 pub mod dep;
 pub mod module;
 pub mod ns;
+mod resolved;
 
-#[derive(Debug, Clone)]
-pub struct ResolvedParameter {
-    pub name: String,
-    pub resolved_type: ResolvedType,
-    pub ast_parameter: Parameter,
-}
-
-#[derive(Debug, Clone)]
-pub enum ResolvedType {
-    Int(ResolvedIntTypeRef),
-    Float(ResolvedFloatTypeRef),
-    String(StringTypeRef),
-    Bool(ResolveBoolTypeRef),
-    Unit(UnitTypeRef),
-    Array(ResolvedArrayTypeRef),
-    Tuple(ResolvedTupleTypeRef),
-    Struct(ResolvedStructTypeRef),
-    Enum(ResolvedEnumTypeRef),
-    EnumVariant(ResolvedEnumVariantTypeRef),
-    Function,
-    Void,
-    Range,
-    Any,
-}
-
-impl Display for ResolvedType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ResolvedType::Int(_int_type) => write!(f, "Int"),
-            ResolvedType::Float(_) => todo!(),
-            ResolvedType::String(_) => todo!(),
-            ResolvedType::Bool(_) => todo!(),
-            Unit(_) => todo!(),
-            ResolvedType::Array(_) => todo!(),
-            ResolvedType::Tuple(_) => todo!(),
-            ResolvedType::Struct(struct_type) => {
-                write!(f, "{}", struct_type)
-            }
-            ResolvedType::Enum(_) => todo!(),
-            ResolvedType::EnumVariant(_) => todo!(),
-            ResolvedType::Function => todo!(),
-            ResolvedType::Void => todo!(),
-            ResolvedType::Range => todo!(),
-            ResolvedType::Any => todo!(),
+pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
+    match expression {
+        ResolvedExpression::FieldAccess(struct_field_ref) => struct_field_ref.resolved_type.clone(),
+        ResolvedExpression::VariableAccess(variable_ref) => variable_ref.resolved_type.clone(),
+        ResolvedExpression::MutRef(_) => todo!(),
+        ResolvedExpression::ArrayAccess(_, _) => todo!(),
+        ResolvedExpression::VariableAssignment(_, _) => todo!(),
+        ResolvedExpression::ArrayAssignment(_, _, _) => todo!(),
+        ResolvedExpression::StructFieldAssignment(_, _) => todo!(),
+        ResolvedExpression::TupleFieldAssignment(_, _) => todo!(),
+        ResolvedExpression::BinaryOp(_) => todo!(),
+        ResolvedExpression::UnaryOp(_, _) => todo!(),
+        ResolvedExpression::FunctionCall(_) => todo!(),
+        ResolvedExpression::MutMemberCall(_, _) => todo!(),
+        ResolvedExpression::MemberCall(_) => todo!(),
+        ResolvedExpression::Block(_) => todo!(),
+        ResolvedExpression::InterpolatedString(_) => todo!(),
+        ResolvedExpression::StructInstantiation(struct_instantiation) => {
+            ResolvedType::Struct(struct_instantiation.struct_type_ref.clone())
         }
+        ResolvedExpression::Array(_) => todo!(),
+        ResolvedExpression::Tuple(_) => todo!(),
+        ResolvedExpression::ExclusiveRange(_, _) => todo!(),
+        ResolvedExpression::IfElse(_, _, _) => todo!(),
+        ResolvedExpression::Match(_, _) => todo!(),
     }
-}
-
-type FunctionDef = (Vec<ResolvedParameter>, ResolvedType);
-
-pub enum ResolvedFunctionReference {
-    External(LocalTypeIdentifier, FunctionDef),
-    Internal(LocalTypeIdentifier, FunctionDef, Vec<ResolvedStatement>),
-}
-
-impl Debug for ResolvedFunctionReference {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "FunctionRef {}({:?})",
-            self.identifier(),
-            self.parameters(),
-        )
-    }
-}
-
-impl ResolvedFunctionReference {
-    pub fn parameters(&self) -> &Vec<ResolvedParameter> {
-        match self {
-            ResolvedFunctionReference::External(_, (params, _)) => params,
-            ResolvedFunctionReference::Internal(_, (params, _), _) => params,
-        }
-    }
-
-    pub fn identifier(&self) -> &LocalTypeIdentifier {
-        match self {
-            ResolvedFunctionReference::External(debug_name, _) => debug_name,
-            ResolvedFunctionReference::Internal(debug_name, _, _) => debug_name,
-        }
-    }
-}
-
-pub struct ResolvedVariable {}
-type ResolvedVariableRef = Rc<ResolvedVariable>;
-pub struct ResolvedMutVariable {}
-type ResolvedMutVariableRef = Rc<ResolvedMutVariable>;
-
-pub struct ResolvedBinaryOperator {
-    pub left: ResolvedExpression,
-    pub right: ResolvedExpression,
-    pub ast_operator_type: BinaryOperator,
-}
-
-#[derive(Hash, Eq, PartialEq)]
-pub struct ResolvedStructTypeField {}
-
-type ResolvedStructTypeFieldRef = Rc<ResolvedStructTypeField>;
-
-type ResolvedArrayRef = Rc<ResolvedArray>;
-type ResolvedMutArrayRef = Rc<ResolvedMutArray>;
-pub struct ResolvedArray {}
-pub struct ResolvedMutArray {}
-pub struct ResolvedIndexType {}
-type ResolvedIndexTypeRef = Rc<ResolvedIndexType>;
-
-pub enum ResolvedStringPart {
-    Literal(String),
-    Interpolation(Box<ResolvedExpression>, Option<FormatSpecifier>),
-}
-
-type ResolvedMutStructFieldRef = Rc<ResolvedMutStructField>;
-pub struct ResolvedMutStructField {
-    #[allow(unused)]
-    ast: Expression,
-}
-
-type ResolvedMutTupleFieldRef = Rc<ResolvedMutTupleField>;
-
-pub struct ResolvedMutTupleField {
-    #[allow(unused)]
-    ast: Expression,
-}
-
-type ResolvedFunctionRef = Rc<ResolvedFunction>;
-pub struct ResolvedFunction {
-    #[allow(unused)]
-    ast: Expression,
-}
-
-type MutMemberRef = Rc<MutMember>;
-pub struct MutMember {
-    #[allow(unused)]
-    ast: Expression,
-}
-
-type MemberRef = Rc<Member>;
-pub struct Member {
-    #[allow(unused)]
-    ast: Expression,
-}
-
-pub struct ResolvedBooleanExpression {
-    #[allow(unused)]
-    ast: Expression,
-}
-
-pub struct ResolvedMatchArm {
-    #[allow(unused)]
-    ast_match_arm: MatchArm,
-}
-
-pub struct ResolvedPattern {}
-
-pub struct ResolvedIterator {}
-
-pub struct ResolvedBoolExpression(pub ResolvedExpression);
-
-pub struct ResolvedStructInstantiation {
-    pub expressions_in_order: Vec<ResolvedExpression>,
-    pub struct_type_ref: ResolvedStructTypeRef,
-}
-
-pub enum ResolvedExpression {
-    // Access Lookup values
-    FieldAccess(ResolvedStructTypeFieldRef),
-    VariableAccess(ResolvedVariableRef),
-    MutRef(ResolvedMutVariableRef), // Used when passing with mut keyword. mut are implicitly passed by reference
-    ArrayAccess(ResolvedArrayRef, ResolvedIndexTypeRef), // Read from an array: arr[3]
-
-    // Assignment
-
-    // Since it is a cool language, we can "chain" assignments together. like a = b = c = 1. Even for field assignments, like a.b = c.d = e.f = 1
-    VariableAssignment(ResolvedMutVariableRef, ResolvedIndexTypeRef),
-
-    ArrayAssignment(
-        ResolvedMutArrayRef,
-        ResolvedIndexTypeRef,
-        Box<ResolvedExpression>,
-    ), // target, index, source. Write to an index in an array: arr[3] = 42
-
-    StructFieldAssignment(ResolvedMutStructFieldRef, Box<ResolvedExpression>),
-
-    TupleFieldAssignment(ResolvedMutTupleFieldRef, Box<ResolvedExpression>),
-
-    // Operators
-    BinaryOp(
-        Box<ResolvedExpression>,
-        BinaryOperator,
-        Box<ResolvedExpression>,
-    ),
-
-    UnaryOp(UnaryOperator, Box<ResolvedExpression>),
-
-    // Calls
-    FunctionCall(ResolvedFunctionReference, Vec<ResolvedExpression>),
-
-    MutMemberCall(MutMemberRef, Vec<ResolvedExpression>),
-
-    MemberCall(MemberRef, LocalTypeIdentifier, Vec<ResolvedExpression>),
-
-    Block(Vec<ResolvedStatement>),
-
-    InterpolatedString(Vec<ResolvedStringPart>),
-
-    // Constructing
-    StructInstantiation(ResolvedStructInstantiation),
-
-    Array(Vec<ResolvedExpression>),
-    Tuple(Vec<ResolvedExpression>),
-
-    //Map(HashMap<ResolvedExpression, ResolvedExpression>), // Not implemented yet. Maybe call this a dictionary or similar, to avoid confusion with map()
-    ExclusiveRange(Box<ResolvedExpression>, Box<ResolvedExpression>),
-    //Literal(Literal),
-
-    // Comparing
-    IfElse(
-        Box<ResolvedBooleanExpression>,
-        Box<ResolvedExpression>,
-        Box<ResolvedExpression>,
-    ),
-    Match(Box<ResolvedExpression>, Vec<ResolvedMatchArm>),
-}
-
-pub enum ResolvedStatement {
-    // Standard
-    Let(ResolvedPattern, ResolvedExpression),
-    ForLoop(ResolvedPattern, ResolvedIterator, Vec<ResolvedStatement>),
-    WhileLoop(ResolvedBooleanExpression, Vec<ResolvedStatement>),
-    Return(ResolvedExpression),
-    Break,                          // Return with void
-    Continue,                       //
-    Expression(ResolvedExpression), // Used for expressions with side effects (mutation, i/o)
-    Block(Vec<ResolvedStatement>),
-    If(
-        ResolvedBooleanExpression,
-        Vec<ResolvedStatement>,
-        Option<Vec<ResolvedStatement>>,
-    ),
 }
 
 #[derive(Debug)]
@@ -283,6 +77,8 @@ pub enum ResolveError {
         SeqMap<LocalIdentifier, Expression>,
     ),
     MissingFieldInStructInstantiation(LocalIdentifier, ResolvedStructTypeRef),
+    ExpectedFunctionExpression(Expression),
+    CouldNotFindMember(LocalIdentifier, Expression),
 }
 
 impl From<String> for ResolveError {
@@ -450,10 +246,13 @@ impl ResolvedModule {
     }
 }
 
+#[derive(Debug)]
 pub struct ResolvedImplMember {
     pub parameters: Vec<ResolvedParameter>,
     pub return_type: ResolvedType,
 }
+
+pub type ResolvedImplMemberRef = Rc<ResolvedImplMember>;
 
 pub struct ResolvedFunctionData {
     pub parameters: Vec<ResolvedParameter>,
@@ -860,9 +659,9 @@ impl<'a> Resolver<'a> {
     ) -> Result<ResolvedExpression, ResolveError> {
         let expression = match ast_expression {
             Expression::FieldAccess(expression, field_name) => {
-                let _struct_ref =
+                let struct_field_ref =
                     self.resolve_into_struct_field_ref(expression.as_ref(), field_name.clone())?;
-                todo!()
+                ResolvedExpression::FieldAccess(struct_field_ref)
             }
             Expression::VariableAccess(_variable) => todo!(),
             Expression::MutRef(_) => todo!(),
@@ -870,10 +669,25 @@ impl<'a> Resolver<'a> {
             Expression::VariableAssignment(_, _) => todo!(),
             Expression::ArrayAssignment(_, _, _) => todo!(),
             Expression::FieldAssignment(_, _, _) => todo!(),
-            Expression::BinaryOp(_, _, _) => todo!(),
-            Expression::UnaryOp(_, _) => todo!(),
-            Expression::FunctionCall(_, _) => todo!(),
-            Expression::MemberCall(_, _, _) => todo!(),
+            Expression::BinaryOp(resolved_a, operator, resolved_b) => ResolvedExpression::BinaryOp(
+                self.resolve_binary_op(resolved_a, operator, resolved_b)?,
+            ),
+            Expression::UnaryOp(operator, expression) => ResolvedExpression::UnaryOp(
+                operator.clone(),
+                Box::from(self.resolve_expression(expression)?),
+            ),
+            Expression::FunctionCall(function_expression, parameter_expressions) => {
+                ResolvedExpression::FunctionCall(
+                    self.resolve_function_call(function_expression, parameter_expressions)?,
+                )
+            }
+            Expression::MemberCall(ast_member_expression, ast_identifier, ast_arguments) => {
+                ResolvedExpression::MemberCall(self.resolve_member_call(
+                    ast_member_expression,
+                    ast_identifier,
+                    ast_arguments,
+                )?)
+            }
             Expression::Block(_) => todo!(),
             Expression::InterpolatedString(_) => todo!(),
             Expression::StructInstantiation(struct_identifier, fields) => {
@@ -961,6 +775,78 @@ impl<'a> Resolver<'a> {
 
     fn resolve_iterator(&self, _p0: &Expression) -> Result<ResolvedIterator, ResolveError> {
         todo!()
+    }
+
+    fn resolve_function_call(
+        &self,
+        function_expression: &Expression,
+        arguments: &Vec<Expression>,
+    ) -> Result<ResolvedInternalFunctionCall, ResolveError> {
+        let function_expr = self.resolve_expression(function_expression)?;
+        let resolution_type = resolution(&function_expr);
+
+        let fn_ref = match resolution_type {
+            ResolvedType::Function(ref function_call) => function_call,
+            _ => {
+                return Err(ResolveError::ExpectedFunctionExpression(
+                    function_expression.clone(),
+                ))
+            }
+        };
+
+        let resolved_arguments = self.resolve_expressions(arguments)?;
+
+        Ok(ResolvedInternalFunctionCall {
+            resolved_type: resolution_type.clone(),
+            arguments: resolved_arguments,
+            function_definition: fn_ref.function.clone(),
+        })
+    }
+
+    fn resolve_member_call(
+        &self,
+        ast_member_expression: &Expression,
+        ast_member_function_name: &LocalIdentifier,
+        ast_arguments: &Vec<Expression>,
+    ) -> Result<ResolvedMemberCall, ResolveError> {
+        let resolved_struct_type_ref = self.resolve_into_struct_ref(ast_member_expression)?;
+        let resolved_arguments = self.resolve_expressions(ast_arguments)?;
+
+        if let Some(impl_member) = resolved_struct_type_ref
+            .impl_members
+            .get(ast_member_function_name)
+        {
+            Ok(ResolvedMemberCall {
+                impl_member: impl_member.clone(),
+                arguments: resolved_arguments,
+                struct_type_ref: resolved_struct_type_ref,
+            })
+        } else {
+            Err(ResolveError::CouldNotFindMember(
+                ast_member_function_name.clone(),
+                ast_member_expression.clone(),
+            ))
+        }
+    }
+
+    fn resolve_binary_op(
+        &self,
+        p0: &Box<Expression>,
+        p1: &BinaryOperator,
+        p2: &Box<Expression>,
+    ) -> Result<ResolvedBinaryOperator, ResolveError> {
+        todo!()
+    }
+
+    fn resolve_expressions(
+        &self,
+        ast_expressions: &Vec<Expression>,
+    ) -> Result<Vec<ResolvedExpression>, ResolveError> {
+        let mut resolved_expressions = Vec::new();
+        for expression in ast_expressions {
+            resolved_expressions.push(self.resolve_expression(expression)?);
+        }
+        Ok(resolved_expressions)
     }
 }
 

@@ -1013,7 +1013,7 @@ impl AstParser {
 
                             expr = Expression::MemberCall(
                                 Box::new(expr),
-                                LocalTypeIdentifier::new(convert_from_pair(&pair), &member_name),
+                                LocalIdentifier::new(convert_from_pair(&pair), &member_name),
                                 args,
                             );
                         }
