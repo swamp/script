@@ -1399,12 +1399,12 @@ impl AstParser {
         for element in Self::get_inner_pairs(&pair) {
             elements.push(self.parse_expression(element)?);
         }
-        Ok(Expression::Array(elements))
+        Ok(Expression::Literal(Literal::Array(elements)))
     }
 
     // TODO: Not supported yet
     fn parse_map_literal(&self, _pair: Pair<Rule>) -> Result<Expression, pest::error::Error<Rule>> {
-        Ok(Expression::Map(HashMap::new()))
+        Ok(Expression::Literal(Literal::Map(SeqMap::new())))
     }
 
     fn parse_function_call(&self, pair: Pair<Rule>) -> Result<Expression, Error<Rule>> {

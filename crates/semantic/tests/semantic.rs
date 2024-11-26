@@ -1,4 +1,4 @@
-use crate::util::check;
+use crate::util::{check, check_fail};
 
 mod util;
 #[test_log::test]
@@ -31,6 +31,20 @@ modules:
 ::test
 structs:
 Hello {x: Inty: Int}
+        "#,
+    )
+}
+
+
+#[test_log::test]
+fn wrong_array_index() {
+    check_fail(
+        r#"
+        a = [23.0, 42.9]
+        b = a[c]
+        "#,
+        r#"
+            UnknownVariable(c)
         "#,
     )
 }

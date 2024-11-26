@@ -240,7 +240,9 @@ pub struct ResolvedMatchArm {
 }
 
 #[derive(Debug)]
-pub struct ResolvedPattern {}
+pub enum ResolvedPattern {
+    VariableAssignment(ResolvedVariableRef),
+}
 
 #[derive(Debug)]
 pub struct ResolvedIterator {}
@@ -314,6 +316,8 @@ pub enum ResolvedExpression {
         Box<ResolvedExpression>,
     ),
     Match(Box<ResolvedExpression>, Vec<ResolvedMatchArm>),
+    LetVar(ResolvedVariableRef, Box<ResolvedExpression>),
+    FloatLiteral(f32, ResolvedIntTypeRef),
 }
 
 pub type ResolvedExpressionRef = Rc<ResolvedExpression>;
@@ -334,4 +338,5 @@ pub enum ResolvedStatement {
         Vec<ResolvedStatement>,
         Option<Vec<ResolvedStatement>>,
     ),
+    LetVar(ResolvedVariableRef, ResolvedExpression),
 }

@@ -147,7 +147,6 @@ impl LocalIdentifier {
     }
 }
 
-
 impl Display for LocalIdentifier {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{}", self.text)
@@ -351,9 +350,9 @@ pub enum Expression {
 
     // Constructing
     StructInstantiation(QualifiedTypeIdentifier, SeqMap<LocalIdentifier, Expression>),
-    Array(Vec<Expression>),
-    Tuple(Vec<Expression>),
-    Map(HashMap<Expression, Expression>), // Not implemented yet. Maybe call this a dictionary or similar, to avoid confusion with map()
+    //Array(Vec<Expression>),
+    //Tuple(Vec<Expression>),
+    //Map(HashMap<Expression, Expression>), // Not implemented yet. Maybe call this a dictionary or similar, to avoid confusion with map()
     ExclusiveRange(Box<Expression>, Box<Expression>),
     Literal(Literal),
 
@@ -382,6 +381,8 @@ pub enum Literal {
         EnumLiteralData,
     ), // EnumTypeName::Identifier tuple|struct
     Tuple(Vec<Expression>),
+    Array(Vec<Expression>),
+    Map(SeqMap<LocalIdentifier, Expression>),
     Unit, // ()
 }
 
@@ -426,6 +427,8 @@ impl Debug for Literal {
             Literal::Bool(v) => write!(f, "Bool({})", v),
             Literal::Tuple(v) => write!(f, "Tuple({v:?})"),
             Literal::Unit => write!(f, "()"),
+            Literal::Array(v) => write!(f, "Array({v:?})"),
+            Literal::Map(v) => write!(f, "Map({v:?})"),
         }
     }
 }

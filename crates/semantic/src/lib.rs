@@ -25,13 +25,13 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::{env, fs};
 use swamp_script_ast::{
-    BinaryOperator, Definition, EnumVariant, Expression, FormatSpecifier, ImplItem,
+    BinaryOperator, Definition, EnumVariant, Expression, FormatSpecifier, ImplItem, Literal,
     LocalIdentifier, LocalTypeIdentifier, MatchArm, ModulePath, Parameter, Pattern, Program,
     QualifiedTypeIdentifier, Statement, StringPart, Type, UnaryOperator, Variable,
 };
 use swamp_script_ast::{Node, Position, Span, StructType};
 use swamp_script_parser::{AstParser, Rule};
-use tracing::{info, trace};
+use tracing::{debug, info, trace};
 
 pub mod dep;
 pub mod module;
@@ -63,6 +63,8 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
         ResolvedExpression::ExclusiveRange(_, _) => todo!(),
         ResolvedExpression::IfElse(_, _, _) => todo!(),
         ResolvedExpression::Match(_, _) => todo!(),
+        ResolvedExpression::LetVar(_, _) => todo!(),
+        ResolvedExpression::FloatLiteral(_, _) => todo!(),
     }
 }
 
@@ -74,6 +76,7 @@ pub enum ResolveError {
     UnknownLocalStructTypeReference(LocalTypeIdentifier),
     DuplicateFieldName(LocalIdentifier),
     Unknown(String),
+    Pest(Error<Rule>),
     UnknownImplTargetTypeReference(LocalTypeIdentifier),
     WrongFieldCountInStructInstantiation(
         ResolvedStructTypeRef,
@@ -85,11 +88,18 @@ pub enum ResolveError {
     UnknownVariable(Variable),
     NotAnArray(Expression),
     ArrayIndexMustBeInt(Expression),
+    OverwriteExistingVariable(Variable),
 }
 
 impl From<String> for ResolveError {
     fn from(value: String) -> Self {
         Self::Unknown(value)
+    }
+}
+
+impl From<pest::error::Error<Rule>> for ResolveError {
+    fn from(value: pest::error::Error<Rule>) -> Self {
+        Self::Pest(value)
     }
 }
 
@@ -326,6 +336,8 @@ impl ResolvedProgram {
         let mut resolver = Resolver::new(self, &mut resolve_module);
 
         resolver.resolve_definitions(module)?;
+
+        resolver.resolve_statements(module.ast_program.statements())?;
 
         let module_ref = Rc::new(resolve_module);
         self.modules.add_module(module_path, module_ref.clone());
@@ -574,15 +586,60 @@ impl<'a> Resolver<'a> {
         Ok(())
     }
 
+    fn resolve_let_statement(
+        &mut self,
+        ast_pattern: &Pattern,
+        ast_expression: &Expression,
+    ) -> Result<ResolvedStatement, ResolveError> {
+        let expr = self.resolve_expression(ast_expression)?;
+
+        let resolved_let = match ast_pattern {
+            Pattern::VariableAssignment(variable) => {
+                let resolved_variable_ref = self.set_variable(&variable, &expr)?;
+                ResolvedStatement::LetVar(resolved_variable_ref, expr)
+            }
+            Pattern::Tuple(_) => todo!(),
+            Pattern::Struct(_) => todo!(),
+            Pattern::Literal(_) => todo!(),
+            Pattern::EnumTuple(_, _) => todo!(),
+            Pattern::EnumStruct(_, _) => todo!(),
+            Pattern::EnumSimple(_) => todo!(),
+            Pattern::Wildcard => todo!(),
+        };
+
+        Ok(resolved_let)
+    }
+
+    fn resolve_let(
+        &mut self,
+        ast_pattern: &Pattern,
+        ast_expression: &Expression,
+    ) -> Result<ResolvedExpression, ResolveError> {
+        let expr = self.resolve_expression(ast_expression)?;
+
+        let resolved_let = match ast_pattern {
+            Pattern::VariableAssignment(variable) => {
+                let variable_ref = self.find_variable(variable)?;
+                ResolvedExpression::LetVar(variable_ref, Box::from(expr))
+            }
+            Pattern::Tuple(_) => todo!(),
+            Pattern::Struct(_) => todo!(),
+            Pattern::Literal(_) => todo!(),
+            Pattern::EnumTuple(_, _) => todo!(),
+            Pattern::EnumStruct(_, _) => todo!(),
+            Pattern::EnumSimple(_) => todo!(),
+            Pattern::Wildcard => todo!(),
+        };
+
+        Ok(resolved_let)
+    }
+
     fn resolve_statement(
         &mut self,
         statement: &Statement,
     ) -> Result<ResolvedStatement, ResolveError> {
         let converted = match statement {
-            Statement::Let(pattern, expr) => ResolvedStatement::Let(
-                self.resolve_pattern(pattern)?,
-                self.resolve_expression(expr)?,
-            ),
+            Statement::Let(pattern, expr) => self.resolve_let_statement(pattern, expr)?,
             Statement::ForLoop(pattern, expression, statements) => ResolvedStatement::ForLoop(
                 self.resolve_pattern(pattern)?,
                 self.resolve_iterator(expression)?,
@@ -730,11 +787,21 @@ impl<'a> Resolver<'a> {
                     self.resolve_struct_instantiation(struct_identifier, fields)?,
                 )
             }
-            Expression::Array(_) => todo!(),
-            Expression::Tuple(_) => todo!(),
-            Expression::Map(_) => todo!(),
             Expression::ExclusiveRange(_, _) => todo!(),
-            Expression::Literal(_) => todo!(),
+
+            Expression::Literal(literal) => match literal {
+                Literal::Int(_) => todo!(),
+                Literal::Float(value) => {
+                    ResolvedExpression::FloatLiteral(*value, self.parent.int_type.clone())
+                }
+                Literal::String(_) => todo!(),
+                Literal::Bool(_) => todo!(),
+                Literal::EnumVariant(_, _, _) => todo!(),
+                Literal::Tuple(_) => todo!(),
+                Literal::Array(items) => self.resolve_array_literal(items)?,
+                Literal::Map(_) => todo!(),
+                Literal::Unit => todo!(),
+            },
 
             // Comparison
             Expression::IfElse(_, _, _) => todo!(),
@@ -806,8 +873,25 @@ impl<'a> Resolver<'a> {
         todo!()
     }
 
-    fn resolve_pattern(&self, _pattern: &Pattern) -> Result<ResolvedPattern, ResolveError> {
-        todo!()
+    fn resolve_pattern_variable(
+        &mut self,
+        variable: &Variable,
+    ) -> Result<ResolvedPattern, ResolveError> {
+        let variable_ref = self.find_variable(variable)?;
+        Ok(ResolvedPattern::VariableAssignment(variable_ref))
+    }
+
+    fn resolve_pattern(&mut self, ast_pattern: &Pattern) -> Result<ResolvedPattern, ResolveError> {
+        match ast_pattern {
+            Pattern::VariableAssignment(variable) => self.resolve_pattern_variable(variable),
+            Pattern::Tuple(_) => todo!(),
+            Pattern::Struct(_) => todo!(),
+            Pattern::Literal(_) => todo!(),
+            Pattern::EnumTuple(_, _) => todo!(),
+            Pattern::EnumStruct(_, _) => todo!(),
+            Pattern::EnumSimple(_) => todo!(),
+            Pattern::Wildcard => todo!(),
+        }
     }
 
     fn resolve_iterator(&self, _p0: &Expression) -> Result<ResolvedIterator, ResolveError> {
@@ -933,15 +1017,19 @@ impl<'a> Resolver<'a> {
         usize_expression: &Expression,
     ) -> Result<ResolvedArrayItemRef, ResolveError> {
         let resolved_array_expression = self.resolve_expression(&array_expression)?;
+        debug!(resolved_array_expression=?resolved_array_expression, "resolve_array_access");
         let array_resolution = resolution(&resolved_array_expression);
-
+        debug!(array_resolution=?array_resolution, "array_resolution");
         let item_type = match array_resolution {
             ResolvedType::Array(item_type) => item_type,
             _ => return Err(ResolveError::NotAnArray(array_expression.clone())),
         };
 
         let lookup_expression = self.resolve_expression(usize_expression)?;
+        debug!(lookup_expression=?lookup_expression, "lookup_expression");
         let lookup_resolution = resolution(&lookup_expression);
+        debug!(lookup_resolution=?lookup_resolution, "lookup_resolution");
+
         match &lookup_resolution {
             ResolvedType::Int(_) => {}
             _ => Err(ResolveError::ArrayIndexMustBeInt(usize_expression.clone()))?,
@@ -967,6 +1055,50 @@ impl<'a> Resolver<'a> {
             variable_ref,
             expression: Box::from(converted_expression),
         })
+    }
+
+    fn resolve_array_literal(
+        &mut self,
+        items: &Vec<Expression>,
+    ) -> Result<ResolvedExpression, ResolveError> {
+        let expressions = self.resolve_expressions(items)?;
+
+        Ok(ResolvedExpression::Array(expressions))
+    }
+
+    fn push_scope(&mut self) {
+        self.block_scope_stack.push(BlockScope {
+            variables: Default::default(),
+        })
+    }
+
+    fn set_variable(
+        &mut self,
+        variable: &Variable,
+        expression: &ResolvedExpression,
+    ) -> Result<ResolvedVariableRef, ResolveError> {
+        if self.find_variable(&variable).is_ok() {
+            return Err(ResolveError::OverwriteExistingVariable(variable.clone()));
+        }
+
+        let variable_type_ref = resolution(expression);
+
+        let resolved_variable = ResolvedVariable {
+            resolved_type: variable_type_ref,
+        };
+
+        let variable_ref = Rc::new(resolved_variable);
+        self.block_scope_stack
+            .last_mut()
+            .unwrap()
+            .variables
+            .insert(variable.name.clone(), variable_ref.clone());
+
+        Ok(variable_ref)
+    }
+
+    fn pop_scope(&mut self) {
+        self.block_scope_stack.pop();
     }
 }
 

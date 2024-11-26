@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use swamp_script_ast::{LocalIdentifier, ModulePath, Node, Position, Span};
 use swamp_script_parser::AstParser;
 use swamp_script_semantic::dep::DependencyGraph;
-use swamp_script_semantic::{resolve_with_graph, ParseModule, ResolvedProgram};
+use swamp_script_semantic::{resolve, resolve_with_graph, ParseModule, ResolveError, ResolvedProgram};
 use tracing::{info, warn};
 
 fn get_test_fixtures_directory(suffix: &str) -> PathBuf {
@@ -22,10 +22,11 @@ fn get_test_fixtures_directory(suffix: &str) -> PathBuf {
         .to_path_buf()
 }
 
-pub fn check(script: &str, expected_output: &str) {
+fn create_program(script: &str) -> Result<ResolvedProgram, ResolveError> {
     let parser = AstParser::new();
-
-    let ast_program = parser.parse_script(script).expect("failed to parse script");
+    info!("before parsing");
+    let ast_program = parser.parse_script(script)?;
+    info!("Parsed the following AST program:\n{:#?}", ast_program);
 
     let parse_module = ParseModule { ast_program };
 
@@ -55,8 +56,20 @@ pub fn check(script: &str, expected_output: &str) {
     info!("root path is {root_path:?}");
     let mut resolved_program = ResolvedProgram::new();
 
-    let _resolved = resolve_with_graph(root_path, root, &mut graph, &mut resolved_program)
-        .expect("Failed to resolve program");
+    resolve_with_graph(root_path, root, &mut graph, &mut resolved_program)?;
+
+    Ok(resolved_program)
+}
+
+// Parse should work, but resolve should fail
+pub fn check_fail(script: &str, expected_error: &str) {
+    let resolved_program_err = create_program(script).err().expect("Expected error");
+
+    assert_eq!(format!("{resolved_program_err:?}"), expected_error.trim());
+}
+
+pub fn check(script: &str, expected_output: &str) {
+    let resolved_program = create_program(script).expect("Failed to create program");
 
     let formatted_output = resolved_program.to_string();
 
