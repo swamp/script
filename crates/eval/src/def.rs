@@ -3,13 +3,16 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use swamp_script_semantic::ns::{ResolvedEnumVariantContainerType, ImplType, ResolvedModuleNamespace, ResolvedStructType, SwampTypeId};
-use crate::value::{Value};
+use crate::value::Value;
 use seq_map::SeqMap;
 use swamp_script_ast::SelfParameter;
 use swamp_script_ast::{Definition, EnumVariant, ImplItem, ImplMember, LocalTypeIdentifier, Type};
-use tracing::debug;
+use swamp_script_semantic::ns::{
+    ImplType, ResolvedEnumVariantContainerType, ResolvedModuleNamespace, ResolvedStructType,
+    SwampTypeId,
+};
 use swamp_script_semantic::ResolvedFunctionReference;
+use tracing::debug;
 
 pub struct DefinitionRunner;
 

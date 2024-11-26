@@ -19,7 +19,6 @@ use pest::Parser;
 use pest_derive::Parser;
 use seq_map::SeqMap;
 use std::collections::HashMap;
-use swamp_script_ast::Definition::StructDef;
 use tracing::{debug, info};
 
 #[derive(Parser)]
@@ -286,7 +285,7 @@ impl AstParser {
         let mut inner = Self::get_inner_pairs(&pair);
 
         let base = Variable::new(&self.expect_identifier(&mut inner)?, false);
-        let field = LocalTypeIdentifier::new(
+        let field = LocalIdentifier::new(
             convert_from_pair(&pair),
             &self.expect_identifier(&mut inner)?,
         );
@@ -376,7 +375,7 @@ impl AstParser {
 
             fields
                 .insert(
-                    LocalTypeIdentifier::new(convert_from_pair(&pair), &field_name),
+                    LocalIdentifier::new(convert_from_pair(&pair), &field_name),
                     field_type,
                 )
                 .expect("duplicate field name"); // TODO: should be error
@@ -756,7 +755,7 @@ impl AstParser {
                 let path: Vec<LocalIdentifier> = module_path
                     .as_str()
                     .split('.')
-                    .map(|s| LocalIdentifier::new(s))
+                    .map(|s| LocalIdentifier::new(convert_from_pair(&module_path), s))
                     .collect();
 
                 Ok(Definition::Import(Import {
@@ -769,7 +768,7 @@ impl AstParser {
                 let path: Vec<LocalIdentifier> = import_type
                     .as_str()
                     .split('.')
-                    .map(|s| LocalIdentifier::new(s))
+                    .map(|s| LocalIdentifier::new(convert_from_pair(&import_type), s))
                     .collect();
 
                 Ok(Definition::Import(Import {
@@ -1022,7 +1021,7 @@ impl AstParser {
                             let field_name = access_part.as_str().to_string();
                             expr = Expression::FieldAccess(
                                 Box::new(expr),
-                                LocalTypeIdentifier::new(convert_from_pair(&pair), &field_name),
+                                LocalIdentifier::new(convert_from_pair(&pair), &field_name),
                             );
                         }
                         _ => {
@@ -1080,7 +1079,10 @@ impl AstParser {
                     // Handle prefix
                     for part in Self::get_inner_pairs(&first) {
                         if part.as_rule() == Rule::identifier {
-                            path.push(LocalIdentifier::new(&*part.as_str().to_string()));
+                            path.push(LocalIdentifier::new(
+                                convert_from_pair(&part),
+                                &*part.as_str().to_string(),
+                            ));
                         }
                     }
                     // Get the type identifier after the prefix
@@ -1127,7 +1129,7 @@ impl AstParser {
             for field in Self::get_inner_pairs(&fields_pair) {
                 if field.as_rule() == Rule::struct_field {
                     let mut field_inner = Self::get_inner_pairs(&field);
-                    let field_name = LocalTypeIdentifier::new(
+                    let field_name = LocalIdentifier::new(
                         convert_from_pair(&pair),
                         &self.expect_identifier(&mut field_inner)?,
                     );
@@ -1509,6 +1511,7 @@ impl AstParser {
         }
     }
 
+    #[allow(unused)]
     fn parse_local_type_identifier(
         &self,
         pair: Pair<Rule>,
@@ -1604,7 +1607,7 @@ impl AstParser {
                 let mut fields = SeqMap::new();
                 while let Some(field_pair) = inner.next() {
                     let mut field_inner = Self::get_inner_pairs(&field_pair);
-                    let field_name = LocalTypeIdentifier::new(
+                    let field_name = LocalIdentifier::new(
                         convert_from_pair(&pair),
                         &self.expect_identifier(&mut field_inner)?,
                     );

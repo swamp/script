@@ -1,4 +1,4 @@
-use crate::dep::{DependencyError, DependencyGraph, ModuleInfo};
+use crate::dep::{DependencyError, DependencyGraph};
 use crate::module::Module;
 use crate::ns::{
     ResolveBoolTypeRef, ResolvedAnonymousStructType, ResolvedArrayType, ResolvedArrayTypeRef,
@@ -6,25 +6,22 @@ use crate::ns::{
     ResolvedEnumVariantType, ResolvedEnumVariantTypeRef, ResolvedFloatType, ResolvedFloatTypeRef,
     ResolvedIntType, ResolvedIntTypeRef, ResolvedModuleNamespace, ResolvedStructType,
     ResolvedStructTypeRef, ResolvedTupleType, ResolvedTupleTypeRef, StringType, StringTypeRef,
-    UnitType, UnitTypeRef,
+    TypeNumber, UnitType, UnitTypeRef,
 };
 
 use crate::ResolvedType::Unit;
 use pest::error::Error;
 use seq_map::SeqMap;
-use std::cell::RefCell;
 use std::fmt::{Debug, Display};
-use std::mem::take;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::{env, fs};
-use swamp_script_ast::StructType;
 use swamp_script_ast::{
-    BinaryOperator, Definition, EnumVariant, Expression, FormatSpecifier, ImplItem, ImplMember,
+    BinaryOperator, Definition, EnumVariant, Expression, FormatSpecifier, ImplItem,
     LocalIdentifier, LocalTypeIdentifier, MatchArm, ModulePath, Parameter, Pattern, Program,
     QualifiedTypeIdentifier, Statement, Type, UnaryOperator,
 };
-use swamp_script_parser::Rule::parameters;
+use swamp_script_ast::{Node, Position, Span, StructType};
 use swamp_script_parser::{AstParser, Rule};
 use tracing::info;
 
@@ -60,7 +57,7 @@ pub enum ResolvedType {
 impl Display for ResolvedType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ResolvedType::Int(int_type) => write!(f, "Int"),
+            ResolvedType::Int(_int_type) => write!(f, "Int"),
             ResolvedType::Float(_) => todo!(),
             ResolvedType::String(_) => todo!(),
             ResolvedType::Bool(_) => todo!(),
@@ -137,42 +134,49 @@ pub struct ResolvedMutArray {}
 pub struct ResolvedIndexType {}
 type ResolvedIndexTypeRef = Rc<ResolvedIndexType>;
 
-enum ResolvedStringPart {
+pub enum ResolvedStringPart {
     Literal(String),
     Interpolation(Box<ResolvedExpression>, Option<FormatSpecifier>),
 }
 
 type ResolvedMutStructFieldRef = Rc<ResolvedMutStructField>;
 pub struct ResolvedMutStructField {
+    #[allow(unused)]
     ast: Expression,
 }
 
 type ResolvedMutTupleFieldRef = Rc<ResolvedMutTupleField>;
 
 pub struct ResolvedMutTupleField {
+    #[allow(unused)]
     ast: Expression,
 }
 
 type ResolvedFunctionRef = Rc<ResolvedFunction>;
 pub struct ResolvedFunction {
+    #[allow(unused)]
     ast: Expression,
 }
 
 type MutMemberRef = Rc<MutMember>;
 pub struct MutMember {
+    #[allow(unused)]
     ast: Expression,
 }
 
 type MemberRef = Rc<Member>;
 pub struct Member {
+    #[allow(unused)]
     ast: Expression,
 }
 
 pub struct ResolvedBooleanExpression {
+    #[allow(unused)]
     ast: Expression,
 }
 
 pub struct ResolvedMatchArm {
+    #[allow(unused)]
     ast_match_arm: MatchArm,
 }
 
@@ -180,7 +184,12 @@ pub struct ResolvedPattern {}
 
 pub struct ResolvedIterator {}
 
-pub struct ResolvedBoolExpression(ResolvedExpression);
+pub struct ResolvedBoolExpression(pub ResolvedExpression);
+
+pub struct ResolvedStructInstantiation {
+    pub expressions_in_order: Vec<ResolvedExpression>,
+    pub struct_type_ref: ResolvedStructTypeRef,
+}
 
 pub enum ResolvedExpression {
     // Access Lookup values
@@ -225,10 +234,7 @@ pub enum ResolvedExpression {
     InterpolatedString(Vec<ResolvedStringPart>),
 
     // Constructing
-    StructInstantiation(
-        ResolvedStructTypeRef,
-        SeqMap<ResolvedStructTypeFieldRef, ResolvedExpression>,
-    ),
+    StructInstantiation(ResolvedStructInstantiation),
 
     Array(Vec<ResolvedExpression>),
     Tuple(Vec<ResolvedExpression>),
@@ -252,12 +258,12 @@ pub enum ResolvedStatement {
     ForLoop(ResolvedPattern, ResolvedIterator, Vec<ResolvedStatement>),
     WhileLoop(ResolvedBooleanExpression, Vec<ResolvedStatement>),
     Return(ResolvedExpression),
-    Break,                  // Return with void
-    Continue,               //
-    Expression(Expression), // Used for expressions with side effects (mutation, i/o)
+    Break,                          // Return with void
+    Continue,                       //
+    Expression(ResolvedExpression), // Used for expressions with side effects (mutation, i/o)
     Block(Vec<ResolvedStatement>),
     If(
-        Expression,
+        ResolvedBooleanExpression,
         Vec<ResolvedStatement>,
         Option<Vec<ResolvedStatement>>,
     ),
@@ -268,9 +274,15 @@ pub enum ResolveError {
     DependencyError(DependencyError),
     CanNotFindModule(ModulePath),
     UnknownStructTypeReference(QualifiedTypeIdentifier),
-    DuplicateFieldName(LocalTypeIdentifier),
+    UnknownLocalStructTypeReference(LocalTypeIdentifier),
+    DuplicateFieldName(LocalIdentifier),
     Unknown(String),
     UnknownImplTargetTypeReference(LocalTypeIdentifier),
+    WrongFieldCountInStructInstantiation(
+        ResolvedStructTypeRef,
+        SeqMap<LocalIdentifier, Expression>,
+    ),
+    MissingFieldInStructInstantiation(LocalIdentifier, ResolvedStructTypeRef),
 }
 
 impl From<String> for ResolveError {
@@ -329,6 +341,12 @@ pub struct ResolvedProgram {
     array_types: Vec<ResolvedArrayTypeRef>,
 }
 
+impl ResolvedProgram {
+    pub(crate) fn allocate_number(&self) -> TypeNumber {
+        0
+    }
+}
+
 pub struct Resolver<'a> {
     pub parent: &'a mut ResolvedProgram,
     pub current_module: &'a mut ResolvedModule,
@@ -374,7 +392,7 @@ fn to_relative_path(path: &ModulePath) -> RelativePath {
     RelativePath(
         path.0
             .iter()
-            .map(|local_type_identifier| local_type_identifier.0.as_str())
+            .map(|local_type_identifier| local_type_identifier.text.as_str())
             .collect::<Vec<_>>()
             .join("/"),
     )
@@ -432,15 +450,15 @@ impl ResolvedModule {
     }
 }
 
-struct ResolvedImplMember {
-    parameters: Vec<ResolvedParameter>,
-    return_type: ResolvedType,
+pub struct ResolvedImplMember {
+    pub parameters: Vec<ResolvedParameter>,
+    pub return_type: ResolvedType,
 }
 
-struct ResolvedFunctionData {
-    parameters: Vec<ResolvedParameter>,
-    return_type: ResolvedType,
-    statements: Vec<ResolvedStatement>,
+pub struct ResolvedFunctionData {
+    pub parameters: Vec<ResolvedParameter>,
+    pub return_type: ResolvedType,
+    pub statements: Vec<ResolvedStatement>,
 }
 
 pub struct ResolvedImplType {
@@ -470,9 +488,25 @@ impl ResolvedProgram {
         module_path: ModulePath,
         module: &ParseModule,
     ) -> Result<ResolvedModuleRef, ResolveError> {
-        let resolved_module = Module::new(
+        let _resolved_module = Module::new(
             None,
-            LocalIdentifier::new("main"),
+            LocalIdentifier::new(
+                Node {
+                    span: Span {
+                        start: Position {
+                            offset: 0,
+                            line: 0,
+                            column: 0,
+                        },
+                        end: Position {
+                            offset: 0,
+                            line: 0,
+                            column: 0,
+                        },
+                    },
+                },
+                "main",
+            ),
             ResolvedModuleNamespace::new(),
         );
 
@@ -524,10 +558,10 @@ impl<'a> Resolver<'a> {
             Type::String => ResolvedType::String(self.parent.string_type.clone()),
             Type::Bool => ResolvedType::Bool(self.parent.bool_type.clone()),
             Type::Unit => ResolvedType::Unit(self.parent.unit_type.clone()),
-            Type::Struct(ast_struct) => ResolvedType::Struct(self.resolve_struct_type(ast_struct)?),
+            Type::Struct(ast_struct) => ResolvedType::Struct(self.find_struct_type(ast_struct)?),
             Type::Array(ast_type) => ResolvedType::Array(self.resolve_array_type(ast_type)?),
             Type::Map(_, _) => todo!(),
-            Type::Tuple(types) => todo!(),
+            Type::Tuple(_types) => todo!(),
             Type::Enum(_) => todo!(),
             Type::Any => todo!(),
         };
@@ -539,8 +573,8 @@ impl<'a> Resolver<'a> {
         self.parent.modules.get(path)
     }
 
-    pub fn resolve_struct_type(
-        &mut self,
+    pub fn find_struct_type(
+        &self,
         type_name: &QualifiedTypeIdentifier,
     ) -> Result<ResolvedStructTypeRef, ResolveError> {
         let resolve_module = if let Some(path) = &type_name.module_path {
@@ -559,53 +593,57 @@ impl<'a> Resolver<'a> {
         }
     }
 
+    pub fn find_struct_type_local(
+        &mut self,
+        type_name: &LocalTypeIdentifier,
+    ) -> Result<ResolvedStructTypeRef, ResolveError> {
+        if let Some(found) = self.current_module.namespace.get_struct(&type_name) {
+            Ok(found.clone())
+        } else {
+            Err(ResolveError::UnknownLocalStructTypeReference(
+                type_name.clone(),
+            ))
+        }
+    }
+
     fn resolve_impl_definition(
         &mut self,
         attached_to_type: &LocalTypeIdentifier,
         functions: &SeqMap<LocalTypeIdentifier, ImplItem>,
     ) -> Result<ResolvedImplType, ResolveError> {
         // Can only attach to earlier type in same module
-        if let Some(found_struct) = self
-            .current_module
-            .namespace
-            .get_struct(&attached_to_type.text)
-        {
-            let mut items = Vec::new();
+        let _found_struct = self.find_struct_type_local(&attached_to_type)?;
+        let mut items = Vec::new();
 
-            for (local_ident, member_item) in functions {
-                let item = match member_item {
-                    ImplItem::Member(impl_member) => {
-                        let resolved_parameters = self.resolve_parameters(&impl_member.params)?;
-                        let resolved_return = self.resolve_type(&impl_member.return_type)?;
+        for (_local_ident, member_item) in functions {
+            let item = match member_item {
+                ImplItem::Member(impl_member) => {
+                    let resolved_parameters = self.resolve_parameters(&impl_member.params)?;
+                    let resolved_return = self.resolve_type(&impl_member.return_type)?;
 
-                        let resolved_impl_member = ResolvedImplMember {
-                            parameters: resolved_parameters,
-                            return_type: resolved_return.clone(),
-                        };
+                    let resolved_impl_member = ResolvedImplMember {
+                        parameters: resolved_parameters,
+                        return_type: resolved_return.clone(),
+                    };
 
-                        ResolvedImplItem::Member(resolved_impl_member)
-                    }
-                    ImplItem::Function(function_data) => {
-                        let resolved_parameters = self.resolve_parameters(&function_data.params)?;
-                        let resolved_return = self.resolve_type(&function_data.return_type)?;
-                        let resolved_statements = self.resolve_statements(&function_data.body)?;
+                    ResolvedImplItem::Member(resolved_impl_member)
+                }
+                ImplItem::Function(function_data) => {
+                    let resolved_parameters = self.resolve_parameters(&function_data.params)?;
+                    let resolved_return = self.resolve_type(&function_data.return_type)?;
+                    let resolved_statements = self.resolve_statements(&function_data.body)?;
 
-                        ResolvedImplItem::Function(ResolvedFunctionData {
-                            parameters: resolved_parameters,
-                            return_type: resolved_return.clone(),
-                            statements: resolved_statements,
-                        })
-                    }
-                };
+                    ResolvedImplItem::Function(ResolvedFunctionData {
+                        parameters: resolved_parameters,
+                        return_type: resolved_return.clone(),
+                        statements: resolved_statements,
+                    })
+                }
+            };
 
-                items.push(item);
-            }
-            Ok(ResolvedImplType { items })
-        } else {
-            Err(ResolveError::UnknownImplTargetTypeReference(
-                attached_to_type.clone(),
-            ))
+            items.push(item);
         }
+        Ok(ResolvedImplType { items })
     }
 
     pub fn resolve_struct_type_definition(
@@ -614,7 +652,7 @@ impl<'a> Resolver<'a> {
     ) -> Result<ResolvedStructTypeRef, ResolveError> {
         let mut resolved_fields = SeqMap::new();
 
-        for (name, field_type) in &ast_struct.fields {
+        for (name, field_type) in ast_struct.fields.iter() {
             let resolved_type = self.resolve_type(field_type)?;
             resolved_fields
                 .insert(name.clone(), resolved_type)
@@ -674,11 +712,11 @@ impl<'a> Resolver<'a> {
                 }
                 EnumVariant::Struct(ast_struct_fields) => {
                     let mut fields = SeqMap::new();
-                    for (field, field_type) in &ast_struct_fields.fields {
+                    for (field, field_type) in ast_struct_fields.fields.iter() {
                         let resolved_type = self.resolve_type(field_type)?;
                         fields
                             .insert(field.clone(), resolved_type)
-                            .map_err(|_| ResolveError::DuplicateFieldName(name.clone()))?;
+                            .map_err(|_| ResolveError::DuplicateFieldName(field.clone()))?;
                     }
                     let anonym = ResolvedAnonymousStructType::new(
                         self.current_module.module_path.clone(),
@@ -724,19 +762,22 @@ impl<'a> Resolver<'a> {
         Ok(())
     }
 
-    fn resolve_statement(&mut self, statement: &Statement) -> Result<ResolvedStatement, ResolveError> {
-       let converted = match statement {
+    fn resolve_statement(
+        &mut self,
+        statement: &Statement,
+    ) -> Result<ResolvedStatement, ResolveError> {
+        let converted = match statement {
             Statement::Let(pattern, expr) => ResolvedStatement::Let(
                 self.resolve_pattern(pattern)?,
                 self.resolve_expression(expr)?,
             ),
             Statement::ForLoop(pattern, expression, statements) => ResolvedStatement::ForLoop(
                 self.resolve_pattern(pattern)?,
-                self.resolve_expression(expression)?,
+                self.resolve_iterator(expression)?,
                 self.resolve_statements(statements)?,
             ),
             Statement::WhileLoop(expression, statements) => ResolvedStatement::WhileLoop(
-                self.resolve_expression(expression)?,
+                self.resolve_bool_expression(expression)?,
                 self.resolve_statements(statements)?,
             ),
             Statement::Return(expression) => {
@@ -750,13 +791,18 @@ impl<'a> Resolver<'a> {
             Statement::Block(statements) => {
                 ResolvedStatement::Block(self.resolve_statements(statements)?)
             }
-            Statement::If(expression, statements, maybe_else_statements) => ResolvedStatement::If(
-                self.resolve_bool_expression(expression)?,
-                self.resolve_statements(statements)?,
-                &maybe_else_statements
+            Statement::If(expression, statements, maybe_else_statements) => {
+                let else_statements_vector: Option<Vec<ResolvedStatement>> = maybe_else_statements
                     .as_ref()
-                    .map(|else_statements| self.resolve_statements(else_statements)),
-            ),
+                    .map(|else_statements| self.resolve_statements(else_statements))
+                    .transpose()?;
+
+                ResolvedStatement::If(
+                    self.resolve_bool_expression(expression)?,
+                    self.resolve_statements(statements)?,
+                    else_statements_vector,
+                )
+            }
         };
         Ok(converted)
     }
@@ -798,11 +844,11 @@ impl<'a> Resolver<'a> {
     ) -> Result<Vec<ResolvedParameter>, ResolveError> {
         let mut resolved_parameters = Vec::new();
         for parameter in parameters {
-            let param_type = self.resolve_type(parameter.param_type)?;
+            let param_type = self.resolve_type(&parameter.param_type)?;
             resolved_parameters.push(ResolvedParameter {
-                name: parameter.name,
+                name: parameter.variable.name.clone(),
                 resolved_type: param_type,
-                ast_parameter: parameter,
+                ast_parameter: parameter.clone(),
             })
         }
         Ok(resolved_parameters)
@@ -812,46 +858,108 @@ impl<'a> Resolver<'a> {
         &self,
         ast_expression: &Expression,
     ) -> Result<ResolvedExpression, ResolveError> {
-        match ast_expression {
-            Expression::FieldAccess(expression, field_name) => ResolvedExpression::FieldAccess(
-                self.resolve_into_struct_ref(expression.as_ref())?,
-                field_name,
-            ),
-            Expression::VariableAccess(variable) => {}
-            Expression::MutRef(_) => {}
-            Expression::ArrayAccess(_, _) => {}
-            Expression::VariableAssignment(_, _) => {}
-            Expression::ArrayAssignment(_, _, _) => {}
-            Expression::FieldAssignment(_, _, _) => {}
-            Expression::BinaryOp(_, _, _) => {}
-            Expression::UnaryOp(_, _) => {}
-            Expression::FunctionCall(_, _) => {}
-            Expression::MemberCall(_, _, _) => {}
-            Expression::Block(_) => {}
-            Expression::InterpolatedString(_) => {}
-            Expression::StructInstantiation(_, _) => {}
-            Expression::Array(_) => {}
-            Expression::Tuple(_) => {}
-            Expression::Map(_) => {}
-            Expression::ExclusiveRange(_, _) => {}
-            Expression::Literal(_) => {}
-            Expression::IfElse(_, _, _) => {}
-            Expression::Match(_, _) => {}
-        }
+        let expression = match ast_expression {
+            Expression::FieldAccess(expression, field_name) => {
+                let _struct_ref =
+                    self.resolve_into_struct_field_ref(expression.as_ref(), field_name.clone())?;
+                todo!()
+            }
+            Expression::VariableAccess(_variable) => todo!(),
+            Expression::MutRef(_) => todo!(),
+            Expression::ArrayAccess(_, _) => todo!(),
+            Expression::VariableAssignment(_, _) => todo!(),
+            Expression::ArrayAssignment(_, _, _) => todo!(),
+            Expression::FieldAssignment(_, _, _) => todo!(),
+            Expression::BinaryOp(_, _, _) => todo!(),
+            Expression::UnaryOp(_, _) => todo!(),
+            Expression::FunctionCall(_, _) => todo!(),
+            Expression::MemberCall(_, _, _) => todo!(),
+            Expression::Block(_) => todo!(),
+            Expression::InterpolatedString(_) => todo!(),
+            Expression::StructInstantiation(struct_identifier, fields) => {
+                ResolvedExpression::StructInstantiation(
+                    self.resolve_struct_instantiation(struct_identifier, fields)?,
+                )
+            }
+            Expression::Array(_) => todo!(),
+            Expression::Tuple(_) => todo!(),
+            Expression::Map(_) => todo!(),
+            Expression::ExclusiveRange(_, _) => todo!(),
+            Expression::Literal(_) => todo!(),
+            Expression::IfElse(_, _, _) => todo!(),
+            Expression::Match(_, _) => todo!(),
+        };
+
+        Ok(expression)
     }
 
-    fn resolve_into_struct_ref(
+    fn resolve_into_struct_field_ref(
         &self,
         struct_expression: &Expression,
+        _name: LocalIdentifier,
     ) -> Result<ResolvedStructTypeFieldRef, ResolveError> {
-        let expr = self.resolve_expression(struct_expression)?;
-        if let ResolvedExpression::StructTypeLookup(data) = expr {
-        } else {
-            Err(ResolveError::UnknownStructTypeReference(expr))
-        }
+        let _expr = self.resolve_expression(struct_expression)?;
+        //if let ResolvedExpression::StructInstantiation(data) = expr {
+        //} else {
+        //            Err(ResolveError::UnknownStructTypeReference(expr))
+        //      }
+        todo!()
     }
 
-    fn resolve_bool_expression(&mut self, p0: &Expression) -> Result<BoolExpression, ResolveError> {
+    #[allow(unused)]
+    fn resolve_into_struct_ref(
+        &self,
+        _struct_expression: &Expression,
+    ) -> Result<ResolvedStructTypeRef, ResolveError> {
+        todo!()
+    }
+
+    fn resolve_struct_instantiation(
+        &self,
+        qualified_type_identifier: &QualifiedTypeIdentifier,
+        ast_fields: &SeqMap<LocalIdentifier, Expression>,
+    ) -> Result<ResolvedStructInstantiation, ResolveError> {
+        let struct_to_instantiate = self.find_struct_type(qualified_type_identifier)?;
+
+        if ast_fields.len() != struct_to_instantiate.fields.len() {
+            return Err(ResolveError::WrongFieldCountInStructInstantiation(
+                struct_to_instantiate,
+                ast_fields.clone(),
+            ));
+        }
+
+        let mut expressions_in_order = Vec::new();
+
+        for (field_name, _field) in &struct_to_instantiate.fields {
+            if let Some(found) = ast_fields.get(&field_name) {
+                let resolved_expression = self.resolve_expression(found)?;
+                expressions_in_order.push(resolved_expression);
+            } else {
+                return Err(ResolveError::MissingFieldInStructInstantiation(
+                    field_name.clone(),
+                    struct_to_instantiate.clone(),
+                ));
+            }
+        }
+
+        Ok(ResolvedStructInstantiation {
+            expressions_in_order,
+            struct_type_ref: struct_to_instantiate.clone(),
+        })
+    }
+
+    fn resolve_bool_expression(
+        &mut self,
+        _p0: &Expression,
+    ) -> Result<ResolvedBooleanExpression, ResolveError> {
+        todo!()
+    }
+
+    fn resolve_pattern(&self, _pattern: &Pattern) -> Result<ResolvedPattern, ResolveError> {
+        todo!()
+    }
+
+    fn resolve_iterator(&self, _p0: &Expression) -> Result<ResolvedIterator, ResolveError> {
         todo!()
     }
 }
@@ -872,7 +980,23 @@ fn get_current_dir() -> Result<PathBuf, std::io::Error> {
 
 pub fn resolve(base_path: PathBuf) -> Result<ResolvedProgram, ResolveError> {
     let mut graph = DependencyGraph::new();
-    let module_path = ModulePath(vec![LocalIdentifier::new("main")]);
+    let module_path = ModulePath(vec![LocalIdentifier::new(
+        Node {
+            span: Span {
+                start: Position {
+                    offset: 0,
+                    line: 0,
+                    column: 0,
+                },
+                end: Position {
+                    offset: 0,
+                    line: 0,
+                    column: 0,
+                },
+            },
+        },
+        "main",
+    )]);
     let mut resolved_program = ResolvedProgram::new();
     resolve_with_graph(base_path, module_path, &mut graph, &mut resolved_program)?;
     Ok(resolved_program)
@@ -881,8 +1005,8 @@ pub fn resolve(base_path: PathBuf) -> Result<ResolvedProgram, ResolveError> {
 pub fn resolve_with_graph(
     base_path: PathBuf,
     module_path: ModulePath,
-    mut graph: &mut DependencyGraph,
-    mut resolved_program: &mut ResolvedProgram,
+    graph: &mut DependencyGraph,
+    resolved_program: &mut ResolvedProgram,
 ) -> Result<(), ResolveError> {
     info!(
         "{:?}",
@@ -898,7 +1022,7 @@ pub fn resolve_with_graph(
         info!(module_path=?module_path, "ordered module");
 
         if let Some(parse_module) = graph.get_parsed_module(&module_path) {
-            let resolved_module = resolved_program.resolve_module(module_path, parse_module)?;
+            let _resolved_module = resolved_program.resolve_module(module_path, parse_module)?;
         } else {
             panic!("not found module");
         }

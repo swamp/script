@@ -16,7 +16,6 @@ fn basic() {
     )
 }
 
-
 #[test_log::test]
 fn enum_basic() {
     check(

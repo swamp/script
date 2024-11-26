@@ -59,15 +59,6 @@ impl Variable {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Default)]
-pub struct LocalIdentifier(pub String); // pub is probably better for performance
-
-impl LocalIdentifier {
-    pub fn new(s: &str) -> Self {
-        Self(s.to_string())
-    }
-}
-
 // Common metadata that can be shared across all AST nodes
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Node {
@@ -88,7 +79,7 @@ pub struct Position {
     pub column: usize, // 0-based column number
 }
 
-#[derive(Clone,Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct QualifiedTypeIdentifier {
     pub name: LocalTypeIdentifier,
     pub module_path: Option<ModulePath>,
@@ -110,7 +101,6 @@ impl QualifiedTypeIdentifier {
     }
 }
 
-
 impl Display for QualifiedTypeIdentifier {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         if let Some(module_path) = &self.module_path {
@@ -128,7 +118,7 @@ pub struct LocalTypeIdentifier {
 
 impl LocalTypeIdentifier {
     pub fn new(node: Node, str: &str) -> Self {
-        LocalTypeIdentifier {
+        Self {
             node,
             text: str.to_string(),
         }
@@ -138,6 +128,21 @@ impl LocalTypeIdentifier {
 impl Display for LocalTypeIdentifier {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{}", self.text)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct LocalIdentifier {
+    pub node: Node,
+    pub text: String,
+} // pub is probably better for performance
+
+impl LocalIdentifier {
+    pub fn new(node: Node, str: &str) -> Self {
+        Self {
+            node,
+            text: str.to_string(),
+        }
     }
 }
 
@@ -162,7 +167,7 @@ pub struct ModulePath(pub Vec<LocalIdentifier>);
 impl Display for ModulePath {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         for x in &self.0 {
-            write!(f, "::{}", x.0)?;
+            write!(f, "::{}", x.text)?;
         }
         Ok(())
     }
@@ -183,11 +188,11 @@ pub enum ImportItems {
 #[derive(Clone, Debug)]
 pub struct StructType {
     pub identifier: LocalTypeIdentifier,
-    pub fields: SeqMap<LocalTypeIdentifier, Type>,
+    pub fields: SeqMap<LocalIdentifier, Type>,
 }
 
 impl StructType {
-    pub fn new(identifier: LocalTypeIdentifier, fields: SeqMap<LocalTypeIdentifier, Type>) -> Self {
+    pub fn new(identifier: LocalTypeIdentifier, fields: SeqMap<LocalIdentifier, Type>) -> Self {
         Self { identifier, fields }
     }
 }
@@ -311,7 +316,7 @@ impl Debug for Parameter {
 #[derive(Debug, Clone)]
 pub enum Expression {
     // Access Lookup values
-    FieldAccess(Box<Expression>, LocalTypeIdentifier),
+    FieldAccess(Box<Expression>, LocalIdentifier),
     VariableAccess(Variable),
     MutRef(MutVariableRef), // Used when passing with mut keyword. mut are implicitly passed by reference
     ArrayAccess(Box<Expression>, Box<Expression>), // Read from an array: arr[3]
@@ -321,7 +326,7 @@ pub enum Expression {
     // Since it is a cool language, we can "chain" assignments together. like a = b = c = 1. Even for field assignments, like a.b = c.d = e.f = 1
     VariableAssignment(Box<Expression>, Box<Expression>),
     ArrayAssignment(Box<Expression>, Box<Expression>, Box<Expression>), // target, index, source. Write to an index in an array: arr[3] = 42
-    FieldAssignment(Box<Expression>, LocalTypeIdentifier, Box<Expression>),
+    FieldAssignment(Box<Expression>, LocalIdentifier, Box<Expression>),
 
     // Operators
     BinaryOp(Box<Expression>, BinaryOperator, Box<Expression>),
@@ -335,10 +340,7 @@ pub enum Expression {
     InterpolatedString(Vec<StringPart>),
 
     // Constructing
-    StructInstantiation(
-        QualifiedTypeIdentifier,
-        SeqMap<LocalTypeIdentifier, Expression>,
-    ),
+    StructInstantiation(QualifiedTypeIdentifier, SeqMap<LocalIdentifier, Expression>),
     Array(Vec<Expression>),
     Tuple(Vec<Expression>),
     Map(HashMap<Expression, Expression>), // Not implemented yet. Maybe call this a dictionary or similar, to avoid confusion with map()
@@ -435,14 +437,13 @@ impl Debug for EnumLiteralData {
     }
 }
 
-#[derive(Clone, Eq, PartialEq)]
-#[derive(Debug)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub struct AnonymousStruct {
-    pub fields: SeqMap<LocalTypeIdentifier, Type>,
+    pub fields: SeqMap<LocalIdentifier, Type>,
 }
 
 impl AnonymousStruct {
-    pub fn new(fields: SeqMap<LocalTypeIdentifier, Type>) -> Self {
+    pub fn new(fields: SeqMap<LocalIdentifier, Type>) -> Self {
         Self { fields }
     }
 }

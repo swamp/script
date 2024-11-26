@@ -778,7 +778,10 @@ FunctionDef(increment, [mut x: Int], Int, [Let(VariableAssignment(x), BinaryOp(V
 
 #[test_log::test]
 fn mut_let() {
-    check("mut x = 3", "Let(VariableAssignment(mut x), Literal(Int(3)))");
+    check(
+        "mut x = 3",
+        "Let(VariableAssignment(mut x), Literal(Int(3)))",
+    );
 }
 
 #[test_log::test]

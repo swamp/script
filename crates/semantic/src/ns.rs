@@ -4,13 +4,13 @@
  */
 
 use crate::module::Module;
-use crate::{ResolvedFunctionRef, ResolvedModuleRef, ResolvedType};
+use crate::{ResolvedFunctionRef, ResolvedType};
 use seq_map::SeqMap;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use std::rc::Rc;
 use swamp_script_ast::{
-    AnonymousStruct, ImplMember, LocalTypeIdentifier, ModulePath, Parameter,
+    AnonymousStruct, ImplMember, LocalIdentifier, LocalTypeIdentifier, ModulePath, Parameter,
     QualifiedTypeIdentifier, StructType, Type,
 };
 
@@ -23,7 +23,7 @@ pub struct ResolvedStructType {
     // TODO:  pub defined_in_module: ResolvedModuleRef,
     pub number: TypeNumber,
     pub module_path: ModulePath,
-    pub fields: SeqMap<LocalTypeIdentifier, ResolvedType>,
+    pub fields: SeqMap<LocalIdentifier, ResolvedType>,
     pub name: LocalTypeIdentifier,
     pub ast_struct: StructType,
 }
@@ -31,8 +31,8 @@ pub struct ResolvedStructType {
 impl Display for ResolvedStructType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} {{", self.name)?;
-        for (name, value) in &self.fields {
-            write!(f, "{}: {}", name, value)?;
+        for (name, value) in self.fields.iter() {
+            write!(f, "{:?}: {}", name, value)?;
         }
         write!(f, "}}")
     }
@@ -42,7 +42,7 @@ impl Display for ResolvedStructType {
 pub struct ResolvedAnonymousStructType {
     // TODO:  pub defined_in_module: ResolvedModuleRef,
     pub module_path: ModulePath,
-    pub fields: SeqMap<LocalTypeIdentifier, ResolvedType>,
+    pub fields: SeqMap<LocalIdentifier, ResolvedType>,
     pub ast_anon_struct: AnonymousStruct,
 }
 
@@ -50,7 +50,7 @@ impl ResolvedAnonymousStructType {
     pub fn new(
         // TODO: defined_in_module: ResolvedModuleRef,
         module_path: ModulePath,
-        fields: SeqMap<LocalTypeIdentifier, ResolvedType>,
+        fields: SeqMap<LocalIdentifier, ResolvedType>,
         ast_anon_struct: AnonymousStruct,
     ) -> Self {
         Self {
@@ -64,8 +64,8 @@ impl ResolvedAnonymousStructType {
 
 impl Display for ResolvedAnonymousStructType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for (name, value) in &self.fields {
-            write!(f, "{}: {}", name, value)?;
+        for (name, value) in self.fields.iter() {
+            write!(f, "{:?}: {}", name, value)?;
         }
         write!(f, "}}")
     }
@@ -76,7 +76,7 @@ impl ResolvedStructType {
         // TODO: defined_in_module: ResolvedModuleRef,
         module_path: ModulePath,
         name: LocalTypeIdentifier,
-        fields: SeqMap<LocalTypeIdentifier, ResolvedType>,
+        fields: SeqMap<LocalIdentifier, ResolvedType>,
         ast_struct: StructType,
         number: TypeNumber,
     ) -> Self {
@@ -90,7 +90,7 @@ impl ResolvedStructType {
         }
     }
 
-    pub fn field_index(&self, field_name: &LocalTypeIdentifier) -> Option<usize> {
+    pub fn field_index(&self, field_name: &LocalIdentifier) -> Option<usize> {
         self.fields.get_index(field_name)
     }
 
@@ -123,14 +123,14 @@ pub type ResolvedArrayTypeRef = Rc<ResolvedArrayType>;
 
 #[derive(Debug)]
 pub struct ResolvedArrayType {
-    pub(crate) item_type: ResolvedType,
-    pub(crate) ast_type: Type,
+    pub item_type: ResolvedType,
+    pub ast_type: Type,
 }
 
 pub type ResolvedTupleTypeRef = Rc<ResolvedTupleType>;
 
 #[derive(Debug)]
-pub struct ResolvedTupleType(Vec<ResolvedType>);
+pub struct ResolvedTupleType(pub Vec<ResolvedType>);
 
 impl ResolvedTupleType {
     pub fn new(types: Vec<ResolvedType>) -> Self {
@@ -195,17 +195,15 @@ impl ResolvedEnumVariantType {
 
 impl Display for ResolvedEnumVariantType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}::{}", self.owner.name(), self.name);
+        write!(f, "{}::{}", self.owner.name(), self.name)?;
 
         match &self.data {
             ResolvedEnumVariantContainerType::Struct(_) => {
-                write!(f, "{}::{}", self.name, self.complete_name());
+                write!(f, "{}::{}", self.name, self.complete_name())
             }
-            ResolvedEnumVariantContainerType::Tuple(tuple_ref) => write!(f, "{:?}", tuple_ref)?,
-            ResolvedEnumVariantContainerType::Nothing => write!(f, "")?,
+            ResolvedEnumVariantContainerType::Tuple(tuple_ref) => write!(f, "{:?}", tuple_ref),
+            ResolvedEnumVariantContainerType::Nothing => write!(f, ""),
         }
-
-        Ok(())
     }
 }
 
@@ -256,7 +254,7 @@ pub struct LocalTypeName(pub String);
 
 #[derive(Default, Debug)]
 pub struct ResolvedModuleNamespace {
-    all_owned_types: SeqMap<LocalTypeIdentifier, ResolvedType>,
+    pub all_owned_types: SeqMap<LocalTypeIdentifier, ResolvedType>,
 
     structs: HashMap<LocalTypeName, ResolvedStructTypeRef>, // They are created by the module, so they are owned here
     enum_types: HashMap<LocalTypeName, ResolvedEnumTypeRef>, // They are created by the module, so they are owned here
@@ -264,7 +262,7 @@ pub struct ResolvedModuleNamespace {
 
     tuples: Vec<ResolvedTupleTypeRef>,
     functions: HashMap<String, (Vec<Parameter>, ResolvedType)>,
-    impl_members: HashMap<ResolvedType, ImplType>,
+    pub impl_members: HashMap<ResolvedType, ImplType>,
 
     type_number: TypeNumber,
 }
@@ -388,8 +386,8 @@ impl ResolvedModuleNamespace {
     pub fn add_impl(
         &mut self,
         _name: &LocalTypeIdentifier,
-        struct_swamp_type: ResolvedStructTypeRef,
-        methods: ImplType,
+        _struct_swamp_type: ResolvedStructTypeRef,
+        _methods: ImplType,
     ) -> Result<(), String> {
         // TODO: self.impl_members
         //.insert(ResolvedType::Struct(struct_swamp_type), methods);
@@ -415,7 +413,7 @@ impl ResolvedModuleNamespace {
         identifier: LocalTypeIdentifier,
     ) -> Option<&ResolvedEnumVariantTypeRef> {
         // TODO: add scope/module support, ignore for now
-        let full_name = format!("{:?}::{}", name.name, identifier);
+        let _full_name = format!("{:?}::{}", name.name, identifier);
 
         self.enum_variant_types.get(&(&name.name.text).into())
     }
@@ -424,7 +422,7 @@ impl ResolvedModuleNamespace {
         self.functions.get(name)
     }
 
-    pub fn get_impl(&self, type_id: &ResolvedType) -> Option<&ImplType> {
+    pub fn get_impl(&self, _type_id: &ResolvedType) -> Option<&ImplType> {
         // TODO: self.impl_members.get(type_id)
         todo!()
     }
