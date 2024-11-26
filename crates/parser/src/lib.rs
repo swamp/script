@@ -392,7 +392,7 @@ impl AstParser {
     fn parse_function_def(&self, pair: Pair<Rule>) -> Result<Definition, Error<Rule>> {
         let (scoped_name, function_data) = self.parse_function_data(pair.clone())?;
         Ok(Definition::FunctionDef(
-            LocalTypeIdentifier::new(convert_from_pair(&pair), &*scoped_name.text),
+            LocalIdentifier::new(convert_from_pair(&pair), &*scoped_name.text),
             function_data,
         ))
     }
@@ -400,9 +400,9 @@ impl AstParser {
     fn parse_function_data(
         &self,
         pair: Pair<Rule>,
-    ) -> Result<(LocalTypeIdentifier, FunctionData), Error<Rule>> {
+    ) -> Result<(LocalIdentifier, FunctionData), Error<Rule>> {
         let mut inner = Self::get_inner_pairs(&pair);
-        let name = LocalTypeIdentifier::new(
+        let name = LocalIdentifier::new(
             convert_from_pair(&pair),
             &self.expect_identifier(&mut inner)?,
         );
@@ -484,11 +484,11 @@ impl AstParser {
     fn parse_member_def(
         &self,
         pair: Pair<Rule>,
-    ) -> Result<(LocalTypeIdentifier, ImplMember), Error<Rule>> {
+    ) -> Result<(LocalIdentifier, ImplMember), Error<Rule>> {
         let mut inner = Self::get_inner_pairs(&pair);
 
         // Parse method name
-        let name = LocalTypeIdentifier::new(
+        let name = LocalIdentifier::new(
             convert_from_pair(&pair),
             &self.expect_identifier(&mut inner)?,
         );

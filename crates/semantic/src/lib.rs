@@ -8,16 +8,21 @@ use crate::ns::{
     ResolvedStructTypeRef, ResolvedTupleType, ResolvedTupleTypeRef, StringType, StringTypeRef,
     TypeNumber, UnitType, UnitTypeRef,
 };
+use crate::resolved::same_type;
 
+use crate::resolved::ResolvedType::Int;
 use crate::resolved::{
     ResolvedArrayInstantiation, ResolvedArrayItem, ResolvedArrayItemRef, ResolvedBinaryOperator,
-    ResolvedBooleanExpression, ResolvedExpression, ResolvedInternalFunctionCall, ResolvedIterator,
-    ResolvedMemberCall, ResolvedParameter, ResolvedPattern, ResolvedStatement, ResolvedStringPart,
-    ResolvedStructInstantiation, ResolvedStructTypeFieldRef, ResolvedType, ResolvedTypeRef,
-    ResolvedVariable, ResolvedVariableAccess, ResolvedVariableAssignment, ResolvedVariableRef,
+    ResolvedBooleanExpression, ResolvedExpression, ResolvedFunctionRef,
+    ResolvedInternalFunctionCall, ResolvedInternalFunctionDefinition,
+    ResolvedInternalFunctionDefinitionRef, ResolvedIterator, ResolvedMemberCall, ResolvedParameter,
+    ResolvedPattern, ResolvedStatement, ResolvedStringPart, ResolvedStructInstantiation,
+    ResolvedStructTypeFieldRef, ResolvedType, ResolvedTypeRef, ResolvedVariable,
+    ResolvedVariableAccess, ResolvedVariableAssignment, ResolvedVariableRef,
 };
 use pest::error::Error;
 use seq_map::SeqMap;
+use std::cmp::PartialEq;
 use std::collections::HashMap;
 use std::env::var;
 use std::fmt::{Debug, Display};
@@ -26,9 +31,9 @@ use std::rc::Rc;
 use std::{env, fs};
 use swamp_script_ast::Expression::Block;
 use swamp_script_ast::{
-    BinaryOperator, Definition, EnumVariant, Expression, FormatSpecifier, ImplItem, Literal,
-    LocalIdentifier, LocalTypeIdentifier, MatchArm, ModulePath, Parameter, Pattern, Program,
-    QualifiedTypeIdentifier, Statement, StringPart, Type, UnaryOperator, Variable,
+    BinaryOperator, Definition, EnumVariant, Expression, FormatSpecifier, FunctionData, ImplItem,
+    Literal, LocalIdentifier, LocalTypeIdentifier, MatchArm, ModulePath, Parameter, Pattern,
+    Program, QualifiedTypeIdentifier, Statement, StringPart, Type, UnaryOperator, Variable,
 };
 use swamp_script_ast::{Node, Position, Span, StructType};
 use swamp_script_parser::{AstParser, Rule};
@@ -40,9 +45,14 @@ pub mod ns;
 mod resolved;
 
 pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
+    info!("Resolving expression {:?}", expression);
     let resolution_expression = match expression {
         ResolvedExpression::FieldAccess(struct_field_ref) => struct_field_ref.resolved_type.clone(),
         ResolvedExpression::VariableAccess(variable_ref) => variable_ref.resolved_type.clone(),
+        ResolvedExpression::InternalFunctionAccess(internal_function_def) => {
+            ResolvedType::FunctionInternal(internal_function_def.clone())
+        }
+
         ResolvedExpression::MutRef(_) => todo!(),
         ResolvedExpression::ArrayAccess(array_item_ref) => array_item_ref.item_type.clone(),
         ResolvedExpression::VariableAssignment(_) => todo!(),
@@ -51,7 +61,10 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
         ResolvedExpression::TupleFieldAssignment(_, _) => todo!(),
         ResolvedExpression::BinaryOp(_) => todo!(),
         ResolvedExpression::UnaryOp(_, _) => todo!(),
-        ResolvedExpression::FunctionCall(_) => todo!(),
+        ResolvedExpression::FunctionInternalCall(internal_fn_call) => internal_fn_call
+            .function_definition
+            .resolved_return_type
+            .clone(),
         ResolvedExpression::MutMemberCall(_, _) => todo!(),
         ResolvedExpression::MemberCall(member_call) => member_call.impl_member.return_type.clone(),
         ResolvedExpression::Block(_) => todo!(),
@@ -97,6 +110,8 @@ pub enum ResolveError {
     NotAnArray(Expression),
     ArrayIndexMustBeInt(Expression),
     OverwriteExistingVariable(Variable),
+    WrongNumberOfArguments(usize, usize),
+    IncompatibleArguments(ResolvedType, ResolvedType),
 }
 
 impl From<String> for ResolveError {
@@ -360,11 +375,17 @@ impl ResolvedProgram {
 
         let mut resolve_module = ResolvedModule::new(module_path.clone());
 
-        let mut resolver = Resolver::new(self, &mut resolve_module);
+        for ast_def in module.ast_program.definitions() {
+            info!("handling: {:?}", ast_def);
+            let mut resolver = Resolver::new(self, &mut resolve_module);
+            resolver.resolve_and_set_definition(&ast_def)?;
+        }
 
-        resolver.resolve_definitions(module)?;
-
-        resolve_module.statements = resolver.resolve_statements(module.ast_program.statements())?;
+        {
+            let mut resolver = Resolver::new(self, &mut resolve_module);
+            resolve_module.statements =
+                resolver.resolve_statements(module.ast_program.statements())?;
+        }
 
         let module_ref = Rc::new(resolve_module);
         self.modules.add_module(module_path, module_ref.clone());
@@ -462,7 +483,7 @@ impl<'a> Resolver<'a> {
     fn resolve_impl_definition(
         &mut self,
         attached_to_type: &LocalTypeIdentifier,
-        functions: &SeqMap<LocalTypeIdentifier, ImplItem>,
+        functions: &SeqMap<LocalIdentifier, ImplItem>,
     ) -> Result<ResolvedImplType, ResolveError> {
         // Can only attach to earlier type in same module
         let _found_struct = self.find_struct_type_local(&attached_to_type)?;
@@ -594,24 +615,59 @@ impl<'a> Resolver<'a> {
         Ok(resolved_variants)
     }
 
-    pub fn resolve_definitions(&mut self, module: &ParseModule) -> Result<(), ResolveError> {
-        for def in module.ast_program.definitions() {
-            match def {
-                Definition::StructDef(ref ast_struct) => {
-                    self.resolve_struct_type_definition(ast_struct)?;
-                }
-                Definition::EnumDef(identifier, variants) => {
-                    self.resolve_enum_type_definition(identifier, variants)?;
-                }
-                Definition::ImplDef(identifier, impl_items) => {
-                    self.resolve_impl_definition(identifier, impl_items)?;
-                }
-                Definition::FunctionDef(_, _) => todo!(),
-                Definition::ExternalFunctionDef(_, _) => todo!(),
-                Definition::Comment(_) => continue,
-                Definition::Import(_) => continue,
-            };
+    fn resolve_function_definition(
+        &mut self,
+        identifier: &LocalIdentifier,
+        function_data: &FunctionData,
+    ) -> Result<ResolvedInternalFunctionDefinitionRef, ResolveError> {
+        let parameters = self.resolve_parameters(&function_data.params)?;
+        let resolved_return_type = self.resolve_type(&function_data.return_type)?;
+
+        for param in &parameters {
+            info!("setting variable {:?}", param);
+            self.set_variable_with_type(
+                &Variable::new(&param.name.clone(), param.is_mutable),
+                &param.resolved_type.clone(),
+            )?;
         }
+
+        let statements = self.resolve_statements(&function_data.body)?;
+
+        let function_def = ResolvedInternalFunctionDefinition {
+            parameters,
+            resolved_return_type,
+            statements,
+            name: identifier.clone(),
+        };
+
+        // Move ownership to module namespace
+        let resolved_struct_ref = self
+            .current_module
+            .namespace
+            .add_internal_function(identifier.text.clone(), function_def)?;
+
+        Ok(resolved_struct_ref)
+    }
+
+    pub fn resolve_and_set_definition(&mut self, ast_def: &Definition) -> Result<(), ResolveError> {
+        match ast_def {
+            Definition::StructDef(ref ast_struct) => {
+                self.resolve_struct_type_definition(ast_struct)?;
+            }
+            Definition::EnumDef(identifier, variants) => {
+                self.resolve_enum_type_definition(identifier, variants)?;
+            }
+            Definition::ImplDef(identifier, impl_items) => {
+                self.resolve_impl_definition(identifier, impl_items)?;
+            }
+            Definition::FunctionDef(identifier, function_info) => {
+                self.resolve_function_definition(identifier, function_info)?;
+            }
+            Definition::ExternalFunctionDef(_, _) => todo!(),
+            Definition::Comment(_) => todo!(),
+            Definition::Import(_) => todo!(),
+        };
+
         Ok(())
     }
 
@@ -747,6 +803,7 @@ impl<'a> Resolver<'a> {
                 name: parameter.variable.name.clone(),
                 resolved_type: param_type,
                 ast_parameter: parameter.clone(),
+                is_mutable: parameter.is_mutable,
             })
         }
         Ok(resolved_parameters)
@@ -764,7 +821,7 @@ impl<'a> Resolver<'a> {
                 ResolvedExpression::FieldAccess(struct_field_ref)
             }
             Expression::VariableAccess(variable) => {
-                ResolvedExpression::VariableAccess(self.resolve_variable_access(variable)?)
+                self.resolve_variable_or_function_access(variable)?
             }
             Expression::MutRef(_) => todo!(),
             Expression::ArrayAccess(array_expression, lookup) => ResolvedExpression::ArrayAccess(
@@ -791,7 +848,7 @@ impl<'a> Resolver<'a> {
 
             // Calls
             Expression::FunctionCall(function_expression, parameter_expressions) => {
-                ResolvedExpression::FunctionCall(
+                ResolvedExpression::FunctionInternalCall(
                     self.resolve_function_call(function_expression, parameter_expressions)?,
                 )
             }
@@ -940,7 +997,7 @@ impl<'a> Resolver<'a> {
         let resolution_type = resolution(&function_expr);
 
         let fn_ref = match resolution_type {
-            ResolvedType::Function(ref function_call) => function_call,
+            ResolvedType::FunctionInternal(ref function_call) => function_call,
             _ => {
                 return Err(ResolveError::ExpectedFunctionExpression(
                     function_expression.clone(),
@@ -949,11 +1006,29 @@ impl<'a> Resolver<'a> {
         };
 
         let resolved_arguments = self.resolve_expressions(arguments)?;
+        if resolved_arguments.len() != fn_ref.parameters.len() {
+            return Err(ResolveError::WrongNumberOfArguments(
+                resolved_arguments.len(),
+                fn_ref.parameters.len(),
+            ));
+        }
+
+        for (parameter_index, resolved_argument_expression) in resolved_arguments.iter().enumerate()
+        {
+            let parameter_type = &fn_ref.parameters[parameter_index].resolved_type;
+            let argument_type = resolution(resolved_argument_expression);
+            if !same_type(&argument_type, parameter_type) {
+                return Err(ResolveError::IncompatibleArguments(
+                    argument_type.clone(),
+                    parameter_type.clone(),
+                ));
+            }
+        }
 
         Ok(ResolvedInternalFunctionCall {
             resolved_type: resolution_type.clone(),
             arguments: resolved_arguments,
-            function_definition: fn_ref.function.clone(),
+            function_definition: fn_ref.clone(),
         })
     }
 
@@ -984,12 +1059,19 @@ impl<'a> Resolver<'a> {
     }
 
     fn resolve_binary_op(
-        &self,
-        p0: &Box<Expression>,
-        p1: &BinaryOperator,
-        p2: &Box<Expression>,
+        &mut self,
+        ast_left: &Box<Expression>,
+        ast_op: &BinaryOperator,
+        ast_right: &Box<Expression>,
     ) -> Result<ResolvedBinaryOperator, ResolveError> {
-        todo!()
+        let left = self.resolve_expression(ast_left)?;
+        let right = self.resolve_expression(ast_right)?;
+
+        Ok(ResolvedBinaryOperator {
+            left: Box::new(left),
+            right: Box::new(right),
+            ast_operator_type: ast_op.clone(),
+        })
     }
 
     fn resolve_expressions(
@@ -1023,25 +1105,42 @@ impl<'a> Resolver<'a> {
         Ok(resolved_parts)
     }
 
-    fn resolve_variable_access(
+    fn resolve_variable_or_function_access(
         &self,
         variable: &Variable,
-    ) -> Result<ResolvedVariableRef, ResolveError> {
-        let variable_ref = self.find_variable(variable)?;
-        Ok(variable_ref)
+    ) -> Result<ResolvedExpression, ResolveError> {
+        if let Some(variable_ref) = self.try_find_variable(variable) {
+            Ok(ResolvedExpression::VariableAccess(variable_ref))
+        } else {
+            if let Some(function_ref) = self.current_module.namespace.get_function(&variable.name) {
+                Ok(ResolvedExpression::InternalFunctionAccess(
+                    function_ref.clone(),
+                ))
+            } else {
+                Err(ResolveError::UnknownVariable(variable.clone()))
+            }
+        }
     }
 
     fn find_variable(&self, variable: &Variable) -> Result<ResolvedVariableRef, ResolveError> {
+        if let Some(variable_ref) = self.try_find_variable(variable) {
+            Ok(variable_ref)
+        } else {
+            Err(ResolveError::UnknownVariable(variable.clone()))
+        }
+    }
+
+    fn try_find_variable(&self, variable: &Variable) -> Option<ResolvedVariableRef> {
         trace!("lookup_in_scope -> Block for {variable:?}");
         // Look through scopes until we hit a Function scope
         for scope in self.block_scope_stack.iter().rev() {
             trace!("...checking in scope {scope:?}");
             if let Some(value) = scope.variables.get(&variable.name) {
-                return Ok(value.clone());
+                return Some(value.clone());
             }
         }
 
-        Err(ResolveError::UnknownVariable(variable.clone()))
+        None
     }
 
     fn resolve_array_access(
@@ -1128,14 +1227,21 @@ impl<'a> Resolver<'a> {
         variable: &Variable,
         expression: &ResolvedExpression,
     ) -> Result<ResolvedVariableRef, ResolveError> {
+        let variable_type_ref = resolution(expression);
+        self.set_variable_with_type(variable, &variable_type_ref)
+    }
+
+    fn set_variable_with_type(
+        &mut self,
+        variable: &Variable,
+        variable_type_ref: &ResolvedType,
+    ) -> Result<ResolvedVariableRef, ResolveError> {
         if self.find_variable(&variable).is_ok() {
             return Err(ResolveError::OverwriteExistingVariable(variable.clone()));
         }
 
-        let variable_type_ref = resolution(expression);
-
         let resolved_variable = ResolvedVariable {
-            resolved_type: variable_type_ref,
+            resolved_type: variable_type_ref.clone(),
             ast_variable: variable.clone(),
         };
 

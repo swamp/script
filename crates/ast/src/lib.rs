@@ -211,8 +211,8 @@ pub enum Definition {
         LocalTypeIdentifier,
         SeqMap<LocalTypeIdentifier, EnumVariant>,
     ),
-    FunctionDef(LocalTypeIdentifier, FunctionData),
-    ImplDef(LocalTypeIdentifier, SeqMap<LocalTypeIdentifier, ImplItem>),
+    FunctionDef(LocalIdentifier, FunctionData),
+    ImplDef(LocalTypeIdentifier, SeqMap<LocalIdentifier, ImplItem>),
     ExternalFunctionDef(QualifiedTypeIdentifier, FunctionData),
     Import(Import),
     // Other

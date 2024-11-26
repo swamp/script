@@ -4,7 +4,10 @@
  */
 
 use crate::module::Module;
-use crate::resolved::{ResolvedFunctionRef, ResolvedType};
+use crate::resolved::{
+    ResolvedFunctionRef, ResolvedInternalFunctionCall, ResolvedInternalFunctionDefinition,
+    ResolvedInternalFunctionDefinitionRef, ResolvedType,
+};
 use crate::ResolvedImplMemberRef;
 use seq_map::SeqMap;
 use std::collections::HashMap;
@@ -129,6 +132,12 @@ pub type ResolvedArrayTypeRef = Rc<ResolvedArrayType>;
 pub struct ResolvedArrayType {
     pub item_type: ResolvedType,
     //pub ast_type: Type,
+}
+
+impl PartialEq for ResolvedArrayType {
+    fn eq(&self, other: &Self) -> bool {
+        self.item_type == other.item_type
+    }
 }
 
 impl Display for ResolvedArrayType {
@@ -271,7 +280,7 @@ pub struct ResolvedModuleNamespace {
     enum_variant_types: SeqMap<LocalTypeName, ResolvedEnumVariantTypeRef>, // They are created by the module, so they are owned here
 
     tuples: Vec<ResolvedTupleTypeRef>,
-    functions: SeqMap<String, (Vec<Parameter>, ResolvedType)>,
+    internal_functions: SeqMap<String, ResolvedInternalFunctionDefinitionRef>,
     pub impl_members: HashMap<ResolvedType, ImplType>,
 
     type_number: TypeNumber,
@@ -335,6 +344,18 @@ impl ResolvedModuleNamespace {
         Ok(struct_ref)
     }
 
+    pub fn add_internal_function(
+        &mut self,
+        name: String,
+        function_definition: ResolvedInternalFunctionDefinition,
+    ) -> Result<ResolvedInternalFunctionDefinitionRef, String> {
+        let function_ref = Rc::new(function_definition);
+        self.internal_functions
+            .insert(name.clone(), function_ref.clone())
+            .expect("insert internal function");
+        Ok(function_ref)
+    }
+
     pub(crate) fn add_enum_variant(
         &mut self,
         enum_variant: ResolvedEnumVariantType,
@@ -380,19 +401,6 @@ impl ResolvedModuleNamespace {
         tuple_type
     }
 
-    pub fn add_function(
-        &mut self,
-        name: String,
-        signature: (Vec<Parameter>, ResolvedType),
-        _func_ref: ResolvedFunctionRef,
-    ) -> Result<(), String> {
-        // Register the name only once
-
-        // Add both signature and value
-        self.functions.insert(name.clone(), signature);
-        Ok(())
-    }
-
     pub fn add_impl(
         &mut self,
         _name: &LocalTypeIdentifier,
@@ -428,8 +436,8 @@ impl ResolvedModuleNamespace {
         self.enum_variant_types.get(&(&name.name.text).into())
     }
 
-    pub fn get_function(&self, name: &str) -> Option<&(Vec<Parameter>, ResolvedType)> {
-        self.functions.get(&name.to_string())
+    pub fn get_function(&self, name: &str) -> Option<&ResolvedInternalFunctionDefinitionRef> {
+        self.internal_functions.get(&name.to_string())
     }
 
     pub fn get_impl(&self, _type_id: &ResolvedType) -> Option<&ImplType> {

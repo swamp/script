@@ -78,6 +78,36 @@ fn wrong_array_index_float() {
 }
 
 #[test_log::test]
+fn wrong_call() {
+    check_fail(
+        r#"
+        fn add(a: Int, b: Int) -> Int {
+            a + b
+        }
+        b = add(2, 3.14)
+        "#,
+        r#"
+IncompatibleArguments(Float(ResolvedFloatType), Int(ResolvedIntType))
+        "#,
+    )
+}
+
+#[test_log::test]
+fn wrong_call_arg_count() {
+    check_fail(
+        r#"
+        fn add(a: Int, b: Int) -> Int {
+            a + b
+        }
+        b = add(2, 34, 44)
+        "#,
+        r#"
+WrongNumberOfArguments(3, 2)
+        "#,
+    )
+}
+
+#[test_log::test]
 fn enum_basic() {
     check(
         r#"

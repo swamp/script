@@ -10,13 +10,13 @@ use swamp_script_ast::{
     BinaryOperator, Expression, FormatSpecifier, LocalIdentifier, LocalTypeIdentifier, MatchArm,
     Parameter, UnaryOperator, Variable,
 };
-use swamp_script_parser::Rule::expression;
 
 #[derive(Debug, Clone)]
 pub struct ResolvedParameter {
     pub name: String,
     pub resolved_type: ResolvedType,
     pub ast_parameter: Parameter,
+    pub is_mutable: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -32,10 +32,55 @@ pub enum ResolvedType {
     Enum(ResolvedEnumTypeRef),
     EnumVariant(ResolvedEnumVariantTypeRef),
     Function(ResolvedFunctionRef),
+    FunctionInternal(ResolvedInternalFunctionDefinitionRef),
     Void,
     Range,
     Any,
 }
+
+impl PartialEq for ResolvedType {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (ResolvedType::Int(_), ResolvedType::Int(_)) => true,
+            (ResolvedType::Float(_), ResolvedType::Float(_)) => true,
+            (ResolvedType::String(_), ResolvedType::String(_)) => true,
+            (ResolvedType::Bool(_), ResolvedType::Bool(_)) => true,
+            (ResolvedType::Unit(_), ResolvedType::Unit(_)) => true,
+            (ResolvedType::Array(array_ref), ResolvedType::Array(array_ref2)) => {
+                array_ref == array_ref2
+            }
+            /*
+            Array(ResolvedArrayTypeRef),
+            Tuple(ResolvedTupleTypeRef),
+            Struct(ResolvedStructTypeRef),
+            Enum(ResolvedEnumTypeRef),
+            EnumVariant(ResolvedEnumVariantTypeRef),
+            Function(ResolvedFunctionRef),
+            FunctionInternal(ResolvedInternalFunctionDefinitionRef),
+            Void,
+            Range,
+            Any,
+
+             */
+            _ => false,
+        }
+    }
+}
+
+pub fn same_type(p0: &ResolvedType, p1: &ResolvedType) -> bool {
+    p0 == p1
+}
+
+#[derive(Debug)]
+pub struct ResolvedInternalFunctionDefinition {
+    //pub signature: ResolvedFunctionSignature,
+    pub statements: Vec<ResolvedStatement>,
+    pub name: LocalIdentifier,
+    pub parameters: Vec<ResolvedParameter>,
+    pub resolved_return_type: ResolvedType,
+}
+
+pub type ResolvedInternalFunctionDefinitionRef = Rc<ResolvedInternalFunctionDefinition>;
 
 pub type ResolvedTypeRef = Rc<ResolvedType>;
 
@@ -58,18 +103,12 @@ impl Display for ResolvedType {
             ResolvedType::Void => todo!(),
             ResolvedType::Range => todo!(),
             ResolvedType::Any => todo!(),
+            ResolvedType::FunctionInternal(function_def_ref) => {
+                write!(f, "internal function {function_def_ref:?}")
+            }
         }
     }
 }
-
-#[derive(Debug)]
-pub struct InternalFunctionDefinition {
-    pub signature: ResolvedFunctionSignature,
-    pub statements: Vec<ResolvedStatement>,
-    pub name: LocalIdentifier,
-}
-
-pub type InternalFunctionDefinitionRef = Rc<InternalFunctionDefinition>;
 
 pub type ResolvedFunctionSignature = (Vec<ResolvedParameter>, ResolvedType);
 
@@ -139,8 +178,8 @@ type ResolvedMutVariableRef = Rc<ResolvedMutVariable>;
 #[derive(Debug)]
 
 pub struct ResolvedBinaryOperator {
-    pub left: ResolvedExpressionRef,
-    pub right: ResolvedExpressionRef,
+    pub left: Box<ResolvedExpression>,
+    pub right: Box<ResolvedExpression>,
     pub ast_operator_type: BinaryOperator,
 }
 
@@ -148,7 +187,7 @@ pub struct ResolvedBinaryOperator {
 pub struct ResolvedInternalFunctionCall {
     pub resolved_type: ResolvedType,
     pub arguments: Vec<ResolvedExpression>,
-    pub function_definition: InternalFunctionDefinitionRef,
+    pub function_definition: ResolvedInternalFunctionDefinitionRef,
 }
 
 #[derive(Debug)]
@@ -229,7 +268,7 @@ pub struct ResolvedFunction {
     #[allow(unused)]
     pub ast: Expression,
 
-    pub function: InternalFunctionDefinitionRef,
+    pub function: ResolvedInternalFunctionDefinitionRef,
 }
 
 pub type MutMemberRef = Rc<MutMember>;
@@ -290,6 +329,8 @@ pub enum ResolvedExpression {
     // Access Lookup values
     FieldAccess(ResolvedStructTypeFieldRef),
     VariableAccess(ResolvedVariableRef),
+    InternalFunctionAccess(ResolvedInternalFunctionDefinitionRef),
+
     MutRef(ResolvedMutVariableRef), // Used when passing with mut keyword. mut are implicitly passed by reference
     ArrayAccess(ResolvedArrayItemRef), // Read from an array: arr[3]
 
@@ -314,7 +355,7 @@ pub enum ResolvedExpression {
     UnaryOp(UnaryOperator, Box<ResolvedExpression>),
 
     // Calls
-    FunctionCall(ResolvedInternalFunctionCall), // ResolvedFunctionReference, Vec<ResolvedExpression>
+    FunctionInternalCall(ResolvedInternalFunctionCall), // ResolvedFunctionReference, Vec<ResolvedExpression>
     MutMemberCall(MutMemberRef, Vec<ResolvedExpression>),
     MemberCall(ResolvedMemberCall),
 
@@ -351,6 +392,9 @@ impl Display for ResolvedExpression {
         match self {
             ResolvedExpression::FieldAccess(_) => todo!(),
             ResolvedExpression::VariableAccess(_) => todo!(),
+            ResolvedExpression::InternalFunctionAccess(internal_function_ref) => {
+                write!(f, "{:?}", internal_function_ref)
+            }
             ResolvedExpression::MutRef(_) => todo!(),
             ResolvedExpression::ArrayAccess(array_item_ref) => {
                 write!(f, "[{}]", array_item_ref.item_type)
@@ -361,7 +405,9 @@ impl Display for ResolvedExpression {
             ResolvedExpression::TupleFieldAssignment(_, _) => todo!(),
             ResolvedExpression::BinaryOp(_) => todo!(),
             ResolvedExpression::UnaryOp(_, _) => todo!(),
-            ResolvedExpression::FunctionCall(_) => todo!(),
+            ResolvedExpression::FunctionInternalCall(resolved_call) => {
+                write!(f, "internal_call({resolved_call:?})")
+            }
             ResolvedExpression::MutMemberCall(_, _) => todo!(),
             ResolvedExpression::MemberCall(_) => todo!(),
             ResolvedExpression::Block(_) => todo!(),
