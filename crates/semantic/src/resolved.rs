@@ -302,7 +302,7 @@ pub enum ResolvedExpression {
     // Constructing
     StructInstantiation(ResolvedStructInstantiation),
 
-    Array(Vec<ResolvedExpression>),
+    Array(ResolvedArrayInstantiation),
     Tuple(Vec<ResolvedExpression>),
 
     //Map(HashMap<ResolvedExpression, ResolvedExpression>), // Not implemented yet. Maybe call this a dictionary or similar, to avoid confusion with map()
@@ -317,10 +317,19 @@ pub enum ResolvedExpression {
     ),
     Match(Box<ResolvedExpression>, Vec<ResolvedMatchArm>),
     LetVar(ResolvedVariableRef, Box<ResolvedExpression>),
-    FloatLiteral(f32, ResolvedIntTypeRef),
+    FloatLiteral(f32, ResolvedFloatTypeRef),
+    IntLiteral(i32, ResolvedIntTypeRef),
 }
 
 pub type ResolvedExpressionRef = Rc<ResolvedExpression>;
+
+#[derive(Debug)]
+pub struct ResolvedArrayInstantiation {
+    pub expressions: Vec<ResolvedExpression>,
+    pub item_type: ResolvedType,
+    pub array_type: ResolvedType,
+    pub array_type_ref: ResolvedArrayTypeRef,
+}
 
 #[derive(Debug)]
 pub enum ResolvedStatement {

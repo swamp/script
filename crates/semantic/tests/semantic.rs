@@ -21,20 +21,16 @@ Hello {x: Inty: Int}
 
 #[test_log::test]
 fn unknown_variable() {
-    check(
+    check_fail(
         r#"
         a = 3
         b = c
         "#,
         r#"
-modules:
-::test
-structs:
-Hello {x: Inty: Int}
+UnknownVariable(c)
         "#,
     )
 }
-
 
 #[test_log::test]
 fn wrong_array_index() {
@@ -45,6 +41,19 @@ fn wrong_array_index() {
         "#,
         r#"
             UnknownVariable(c)
+        "#,
+    )
+}
+
+#[test_log::test]
+fn wrong_array_index_float() {
+    check_fail(
+        r#"
+        a = [23.0, 42.9]
+        b = a[3.14]
+        "#,
+        r#"
+ ArrayIndexMustBeInt(Literal(Float(3.14)))
         "#,
     )
 }

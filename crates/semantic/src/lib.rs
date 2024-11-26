@@ -10,9 +10,9 @@ use crate::ns::{
 };
 
 use crate::resolved::{
-    ResolvedArrayItem, ResolvedArrayItemRef, ResolvedBinaryOperator, ResolvedBooleanExpression,
-    ResolvedExpression, ResolvedInternalFunctionCall, ResolvedIterator, ResolvedMemberCall,
-    ResolvedParameter, ResolvedPattern, ResolvedStatement, ResolvedStringPart,
+    ResolvedArrayInstantiation, ResolvedArrayItem, ResolvedArrayItemRef, ResolvedBinaryOperator,
+    ResolvedBooleanExpression, ResolvedExpression, ResolvedInternalFunctionCall, ResolvedIterator,
+    ResolvedMemberCall, ResolvedParameter, ResolvedPattern, ResolvedStatement, ResolvedStringPart,
     ResolvedStructInstantiation, ResolvedStructTypeFieldRef, ResolvedType, ResolvedTypeRef,
     ResolvedVariable, ResolvedVariableAccess, ResolvedVariableAssignment, ResolvedVariableRef,
 };
@@ -24,6 +24,7 @@ use std::fmt::{Debug, Display};
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::{env, fs};
+use swamp_script_ast::Expression::Block;
 use swamp_script_ast::{
     BinaryOperator, Definition, EnumVariant, Expression, FormatSpecifier, ImplItem, Literal,
     LocalIdentifier, LocalTypeIdentifier, MatchArm, ModulePath, Parameter, Pattern, Program,
@@ -39,7 +40,7 @@ pub mod ns;
 mod resolved;
 
 pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
-    match expression {
+    let resolution_expression = match expression {
         ResolvedExpression::FieldAccess(struct_field_ref) => struct_field_ref.resolved_type.clone(),
         ResolvedExpression::VariableAccess(variable_ref) => variable_ref.resolved_type.clone(),
         ResolvedExpression::MutRef(_) => todo!(),
@@ -58,14 +59,21 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
         ResolvedExpression::StructInstantiation(struct_instantiation) => {
             ResolvedType::Struct(struct_instantiation.struct_type_ref.clone())
         }
-        ResolvedExpression::Array(_) => todo!(),
+        ResolvedExpression::Array(array_instantiation) => array_instantiation.array_type.clone(),
         ResolvedExpression::Tuple(_) => todo!(),
         ResolvedExpression::ExclusiveRange(_, _) => todo!(),
         ResolvedExpression::IfElse(_, _, _) => todo!(),
         ResolvedExpression::Match(_, _) => todo!(),
         ResolvedExpression::LetVar(_, _) => todo!(),
-        ResolvedExpression::FloatLiteral(_, _) => todo!(),
-    }
+        ResolvedExpression::FloatLiteral(_float_value, float_type) => {
+            ResolvedType::Float(float_type.clone())
+        }
+        ResolvedExpression::IntLiteral(_int_value, int_type) => ResolvedType::Int(int_type.clone()),
+    };
+
+    info!(resolution_expression=?resolution_expression, "resolution");
+
+    resolution_expression
 }
 
 #[derive(Debug)]
@@ -161,7 +169,15 @@ impl ResolvedProgram {
 
 #[derive(Debug)]
 struct BlockScope {
-    variables: HashMap<String, ResolvedVariableRef>,
+    variables: SeqMap<String, ResolvedVariableRef>,
+}
+
+impl BlockScope {
+    pub fn new() -> Self {
+        Self {
+            variables: SeqMap::new(),
+        }
+    }
 }
 
 pub struct Resolver<'a> {
@@ -348,10 +364,12 @@ impl ResolvedProgram {
 
 impl<'a> Resolver<'a> {
     pub fn new(parent: &'a mut ResolvedProgram, current_module: &'a mut ResolvedModule) -> Self {
+        let mut scope_stack = Vec::new();
+        scope_stack.push(BlockScope::new());
         Self {
             parent,
             current_module,
-            block_scope_stack: Vec::new(),
+            block_scope_stack: scope_stack,
         }
     }
 
@@ -365,7 +383,7 @@ impl<'a> Resolver<'a> {
 
         let original_array_type = ResolvedArrayType {
             item_type: resolved_type.clone(),
-            ast_type: ast_type.clone(),
+            //TODO: ast_type: ast_type.clone(),
         };
 
         let rc_array = Rc::new(original_array_type);
@@ -790,15 +808,19 @@ impl<'a> Resolver<'a> {
             Expression::ExclusiveRange(_, _) => todo!(),
 
             Expression::Literal(literal) => match literal {
-                Literal::Int(_) => todo!(),
+                Literal::Int(value) => {
+                    ResolvedExpression::IntLiteral(*value, self.parent.int_type.clone())
+                }
                 Literal::Float(value) => {
-                    ResolvedExpression::FloatLiteral(*value, self.parent.int_type.clone())
+                    ResolvedExpression::FloatLiteral(*value, self.parent.float_type.clone())
                 }
                 Literal::String(_) => todo!(),
                 Literal::Bool(_) => todo!(),
                 Literal::EnumVariant(_, _, _) => todo!(),
                 Literal::Tuple(_) => todo!(),
-                Literal::Array(items) => self.resolve_array_literal(items)?,
+                Literal::Array(items) => {
+                    ResolvedExpression::Array(self.resolve_array_literal(items)?)
+                }
                 Literal::Map(_) => todo!(),
                 Literal::Unit => todo!(),
             },
@@ -1060,10 +1082,27 @@ impl<'a> Resolver<'a> {
     fn resolve_array_literal(
         &mut self,
         items: &Vec<Expression>,
-    ) -> Result<ResolvedExpression, ResolveError> {
+    ) -> Result<ResolvedArrayInstantiation, ResolveError> {
         let expressions = self.resolve_expressions(items)?;
+        let item_type = if expressions.is_empty() {
+            ResolvedType::Any
+        } else {
+            resolution(&expressions[0])
+        };
 
-        Ok(ResolvedExpression::Array(expressions))
+        let array_type = ResolvedArrayType {
+            item_type: item_type.clone(),
+        };
+
+        let array_type_ref = Rc::new(array_type);
+
+        let arr = ResolvedArrayInstantiation {
+            expressions,
+            item_type,
+            array_type_ref: array_type_ref.clone(),
+            array_type: ResolvedType::Array(array_type_ref),
+        };
+        Ok(arr)
     }
 
     fn push_scope(&mut self) {
@@ -1090,7 +1129,7 @@ impl<'a> Resolver<'a> {
         let variable_ref = Rc::new(resolved_variable);
         self.block_scope_stack
             .last_mut()
-            .unwrap()
+            .expect("block scope should have at least one scope")
             .variables
             .insert(variable.name.clone(), variable_ref.clone());
 

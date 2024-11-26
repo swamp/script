@@ -5,15 +5,15 @@
 
 use crate::module::Module;
 use crate::resolved::{ResolvedFunctionRef, ResolvedType};
+use crate::ResolvedImplMemberRef;
 use seq_map::SeqMap;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use std::rc::Rc;
 use swamp_script_ast::{
-    AnonymousStruct, ImplMember, LocalIdentifier, LocalTypeIdentifier, ModulePath,
-    Parameter, QualifiedTypeIdentifier, StructType, Type,
+    AnonymousStruct, ImplMember, LocalIdentifier, LocalTypeIdentifier, ModulePath, Parameter,
+    QualifiedTypeIdentifier, StructType, Type,
 };
-use crate::ResolvedImplMemberRef;
 
 pub type ResolvedStructTypeRef = Rc<ResolvedStructType>;
 
@@ -108,6 +108,7 @@ pub type ResolvedIntTypeRef = Rc<ResolvedIntType>;
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct ResolvedFloatType;
+
 pub type ResolvedFloatTypeRef = Rc<ResolvedFloatType>;
 
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -127,7 +128,7 @@ pub type ResolvedArrayTypeRef = Rc<ResolvedArrayType>;
 #[derive(Debug)]
 pub struct ResolvedArrayType {
     pub item_type: ResolvedType,
-    pub ast_type: Type,
+    //pub ast_type: Type,
 }
 
 pub type ResolvedTupleTypeRef = Rc<ResolvedTupleType>;
