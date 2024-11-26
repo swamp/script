@@ -4,6 +4,7 @@ use crate::ns::{
     ResolvedTupleTypeRef, UnitTypeRef,
 };
 use crate::ResolvedImplMemberRef;
+use std::env::var;
 use std::fmt::{Debug, Display, Formatter};
 use std::rc::Rc;
 use swamp_script_ast::{
@@ -447,7 +448,11 @@ impl Display for ResolvedExpression {
             ResolvedExpression::ArrayAccess(array_item_ref) => {
                 write!(f, "[{}]", array_item_ref.item_type)
             }
-            ResolvedExpression::VariableAssignment(_) => todo!(),
+            ResolvedExpression::VariableAssignment(var_assignment) => write!(
+                f,
+                "< {}={} >",
+                var_assignment.variable_ref, var_assignment.expression
+            ),
             ResolvedExpression::ArrayAssignment(_, _, _) => todo!(),
             ResolvedExpression::StructFieldAssignment(_, _) => todo!(),
             ResolvedExpression::TupleFieldAssignment(_, _) => todo!(),

@@ -48,7 +48,9 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
 
         ResolvedExpression::MutRef(_) => todo!(),
         ResolvedExpression::ArrayAccess(array_item_ref) => array_item_ref.item_type.clone(),
-        ResolvedExpression::VariableAssignment(_) => todo!(),
+        ResolvedExpression::VariableAssignment(variable_assignment) => {
+            variable_assignment.variable_ref.resolved_type.clone()
+        }
         ResolvedExpression::ArrayAssignment(_, _, _) => todo!(),
         ResolvedExpression::StructFieldAssignment(_, _) => todo!(),
         ResolvedExpression::TupleFieldAssignment(_, _) => todo!(),
@@ -1180,8 +1182,10 @@ impl<'a> Resolver<'a> {
         ast_variable: &Variable,
         ast_expression: &Box<Expression>,
     ) -> Result<ResolvedVariableAssignment, ResolveError> {
-        let variable_ref = self.find_variable(ast_variable)?;
         let converted_expression = self.resolve_expression(ast_expression)?;
+        let expression_type = resolution(&converted_expression);
+        let (variable_ref, overwritten) =
+            self.set_or_overwrite_variable_with_type(ast_variable, &expression_type)?;
 
         Ok(ResolvedVariableAssignment {
             variable_ref,

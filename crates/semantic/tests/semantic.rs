@@ -116,6 +116,29 @@ set mut c: String = StringLit(another)
 }
 
 #[test_log::test]
+fn call_2() {
+    check(
+        r#"
+        fn add(a: Int, b: Int) -> Int {
+            a + b
+        }
+        a = b = add(2, 22)
+        mut c = "hello"
+        c = "another"
+        "#,
+        r#"
+modules:
+::test
+namespace:
+statements:
+let a: Int = < b: Int=((fn_def add(a: Int, b: Int) -> Int)(IntLit(2), IntLit(22))) >
+let mut c: String = StringLit(hello)
+set mut c: String = StringLit(another)
+        "#,
+    )
+}
+
+#[test_log::test]
 fn wrong_call_arg_count() {
     check_fail(
         r#"
