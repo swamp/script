@@ -7,10 +7,8 @@ use std::path::PathBuf;
 use swamp_script_ast::{LocalIdentifier, ModulePath, Node, Position, Span};
 use swamp_script_parser::AstParser;
 use swamp_script_semantic::dep::DependencyGraph;
-use swamp_script_semantic::{
-    resolve, resolve_with_graph, ParseModule, ResolveError, ResolvedProgram,
-};
-use tracing::{info, warn};
+use swamp_script_semantic::{resolve_with_graph, ParseModule, ResolveError, ResolvedProgram};
+use tracing::{debug, info, warn};
 
 fn get_test_fixtures_directory(suffix: &str) -> PathBuf {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -26,9 +24,8 @@ fn get_test_fixtures_directory(suffix: &str) -> PathBuf {
 
 fn create_program(script: &str) -> Result<ResolvedProgram, ResolveError> {
     let parser = AstParser::new();
-    info!("before parsing");
     let ast_program = parser.parse_script(script)?;
-    info!("Parsed the following AST program:\n{:#?}", ast_program);
+    //info!("Parsed the following AST program:\n{:#?}", ast_program);
 
     let parse_module = ParseModule { ast_program };
 
@@ -55,7 +52,7 @@ fn create_program(script: &str) -> Result<ResolvedProgram, ResolveError> {
     graph.add_ast_module(root.clone(), parse_module);
 
     let root_path = get_test_fixtures_directory("first");
-    info!("root path is {root_path:?}");
+    debug!("root path is {root_path:?}");
     let mut resolved_program = ResolvedProgram::new();
 
     resolve_with_graph(root_path, root, &mut graph, &mut resolved_program)?;

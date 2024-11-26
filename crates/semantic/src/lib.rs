@@ -2,38 +2,31 @@ use crate::dep::{DependencyError, DependencyGraph};
 use crate::module::Module;
 use crate::ns::{
     ResolveBoolTypeRef, ResolvedAnonymousStructType, ResolvedArrayType, ResolvedArrayTypeRef,
-    ResolvedBoolType, ResolvedEnumType, ResolvedEnumTypeRef, ResolvedEnumVariantContainerType,
-    ResolvedEnumVariantType, ResolvedEnumVariantTypeRef, ResolvedFloatType, ResolvedFloatTypeRef,
-    ResolvedIntType, ResolvedIntTypeRef, ResolvedModuleNamespace, ResolvedStructType,
-    ResolvedStructTypeRef, ResolvedTupleType, ResolvedTupleTypeRef, StringType, StringTypeRef,
-    TypeNumber, UnitType, UnitTypeRef,
+    ResolvedBoolType, ResolvedEnumType, ResolvedEnumVariantContainerType, ResolvedEnumVariantType,
+    ResolvedEnumVariantTypeRef, ResolvedFloatType, ResolvedFloatTypeRef, ResolvedIntType,
+    ResolvedIntTypeRef, ResolvedModuleNamespace, ResolvedStringType, ResolvedStringTypeRef,
+    ResolvedStructType, ResolvedStructTypeRef, ResolvedTupleType, TypeNumber, UnitType,
+    UnitTypeRef,
 };
 use crate::resolved::same_type;
-
-use crate::resolved::ResolvedType::Int;
 use crate::resolved::{
     ResolvedArrayInstantiation, ResolvedArrayItem, ResolvedArrayItemRef, ResolvedBinaryOperator,
-    ResolvedBooleanExpression, ResolvedExpression, ResolvedFunctionRef,
-    ResolvedInternalFunctionCall, ResolvedInternalFunctionDefinition,
-    ResolvedInternalFunctionDefinitionRef, ResolvedIterator, ResolvedMemberCall, ResolvedParameter,
-    ResolvedPattern, ResolvedStatement, ResolvedStringPart, ResolvedStructInstantiation,
-    ResolvedStructTypeFieldRef, ResolvedType, ResolvedTypeRef, ResolvedVariable,
-    ResolvedVariableAccess, ResolvedVariableAssignment, ResolvedVariableRef,
+    ResolvedBooleanExpression, ResolvedExpression, ResolvedInternalFunctionCall,
+    ResolvedInternalFunctionDefinition, ResolvedInternalFunctionDefinitionRef, ResolvedIterator,
+    ResolvedMemberCall, ResolvedParameter, ResolvedPattern, ResolvedStatement, ResolvedStringPart,
+    ResolvedStructInstantiation, ResolvedStructTypeFieldRef, ResolvedType, ResolvedVariable,
+    ResolvedVariableAssignment, ResolvedVariableRef,
 };
 use pest::error::Error;
 use seq_map::SeqMap;
-use std::cmp::PartialEq;
-use std::collections::HashMap;
-use std::env::var;
 use std::fmt::{Debug, Display};
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::{env, fs};
-use swamp_script_ast::Expression::Block;
 use swamp_script_ast::{
-    BinaryOperator, Definition, EnumVariant, Expression, FormatSpecifier, FunctionData, ImplItem,
-    Literal, LocalIdentifier, LocalTypeIdentifier, MatchArm, ModulePath, Parameter, Pattern,
-    Program, QualifiedTypeIdentifier, Statement, StringPart, Type, UnaryOperator, Variable,
+    BinaryOperator, Definition, EnumVariant, Expression, FunctionData, ImplItem, Literal,
+    LocalIdentifier, LocalTypeIdentifier, ModulePath, Parameter, Pattern, Program,
+    QualifiedTypeIdentifier, Statement, StringPart, Type, Variable,
 };
 use swamp_script_ast::{Node, Position, Span, StructType};
 use swamp_script_parser::{AstParser, Rule};
@@ -45,7 +38,7 @@ pub mod ns;
 mod resolved;
 
 pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
-    info!("Resolving expression {:?}", expression);
+    trace!("resolution expression {:?}", expression);
     let resolution_expression = match expression {
         ResolvedExpression::FieldAccess(struct_field_ref) => struct_field_ref.resolved_type.clone(),
         ResolvedExpression::VariableAccess(variable_ref) => variable_ref.resolved_type.clone(),
@@ -82,9 +75,12 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
             ResolvedType::Float(float_type.clone())
         }
         ResolvedExpression::IntLiteral(_int_value, int_type) => ResolvedType::Int(int_type.clone()),
+        ResolvedExpression::StringLiteral(_string_value, string_type) => {
+            ResolvedType::String(string_type.clone())
+        }
     };
 
-    info!(resolution_expression=?resolution_expression, "resolution");
+    trace!(resolution_expression=?resolution_expression, "resolution");
 
     resolution_expression
 }
@@ -109,9 +105,11 @@ pub enum ResolveError {
     UnknownVariable(Variable),
     NotAnArray(Expression),
     ArrayIndexMustBeInt(Expression),
-    OverwriteExistingVariable(Variable),
+    OverwriteVariableWithAnotherType(Variable),
     WrongNumberOfArguments(usize, usize),
     IncompatibleArguments(ResolvedType, ResolvedType),
+    CanOnlyOverwriteVariableWithMut(Variable),
+    OverwriteVariableNotAllowedHere(Variable),
 }
 
 impl From<String> for ResolveError {
@@ -170,7 +168,7 @@ pub struct ResolvedProgram {
     pub modules: Modules,
     int_type: ResolvedIntTypeRef,
     float_type: ResolvedFloatTypeRef,
-    string_type: StringTypeRef,
+    string_type: ResolvedStringTypeRef,
     bool_type: ResolveBoolTypeRef,
     unit_type: UnitTypeRef,
     array_types: Vec<ResolvedArrayTypeRef>,
@@ -183,7 +181,7 @@ impl ResolvedProgram {
 }
 
 #[derive(Debug)]
-struct BlockScope {
+pub struct BlockScope {
     variables: SeqMap<String, ResolvedVariableRef>,
 }
 
@@ -339,7 +337,7 @@ impl ResolvedProgram {
             modules: Modules::new(),
             int_type: Rc::new(ResolvedIntType {}),
             float_type: Rc::new(ResolvedFloatType),
-            string_type: Rc::new(StringType),
+            string_type: Rc::new(ResolvedStringType),
             bool_type: Rc::new(ResolvedBoolType),
             unit_type: Rc::new(UnitType),
             array_types: Vec::new(),
@@ -376,7 +374,6 @@ impl ResolvedProgram {
         let mut resolve_module = ResolvedModule::new(module_path.clone());
 
         for ast_def in module.ast_program.definitions() {
-            info!("handling: {:?}", ast_def);
             let mut resolver = Resolver::new(self, &mut resolve_module);
             resolver.resolve_and_set_definition(&ast_def)?;
         }
@@ -624,7 +621,7 @@ impl<'a> Resolver<'a> {
         let resolved_return_type = self.resolve_type(&function_data.return_type)?;
 
         for param in &parameters {
-            info!("setting variable {:?}", param);
+            debug!("setting variable {:?}", param);
             self.set_variable_with_type(
                 &Variable::new(&param.name.clone(), param.is_mutable),
                 &param.resolved_type.clone(),
@@ -679,10 +676,7 @@ impl<'a> Resolver<'a> {
         let expr = self.resolve_expression(ast_expression)?;
 
         let resolved_let = match ast_pattern {
-            Pattern::VariableAssignment(variable) => {
-                let resolved_variable_ref = self.set_variable(&variable, &expr)?;
-                ResolvedStatement::LetVar(resolved_variable_ref, expr)
-            }
+            Pattern::VariableAssignment(variable) => self.assign_variable(&variable, expr)?,
             Pattern::Tuple(_) => todo!(),
             Pattern::Struct(_) => todo!(),
             Pattern::Literal(_) => todo!(),
@@ -694,30 +688,32 @@ impl<'a> Resolver<'a> {
 
         Ok(resolved_let)
     }
+    /*
+       fn resolve_let(
+           &mut self,
+           ast_pattern: &Pattern,
+           ast_expression: &Expression,
+       ) -> Result<ResolvedExpression, ResolveError> {
+           let expr = self.resolve_expression(ast_expression)?;
 
-    fn resolve_let(
-        &mut self,
-        ast_pattern: &Pattern,
-        ast_expression: &Expression,
-    ) -> Result<ResolvedExpression, ResolveError> {
-        let expr = self.resolve_expression(ast_expression)?;
+           let resolved_let = match ast_pattern {
+               Pattern::VariableAssignment(variable) => {
+                   let variable_ref = self.find_variable(variable)?;
+                   ResolvedExpression::LetVar(variable_ref, Box::from(expr))
+               }
+               Pattern::Tuple(_) => todo!(),
+               Pattern::Struct(_) => todo!(),
+               Pattern::Literal(_) => todo!(),
+               Pattern::EnumTuple(_, _) => todo!(),
+               Pattern::EnumStruct(_, _) => todo!(),
+               Pattern::EnumSimple(_) => todo!(),
+               Pattern::Wildcard => todo!(),
+           };
 
-        let resolved_let = match ast_pattern {
-            Pattern::VariableAssignment(variable) => {
-                let variable_ref = self.find_variable(variable)?;
-                ResolvedExpression::LetVar(variable_ref, Box::from(expr))
-            }
-            Pattern::Tuple(_) => todo!(),
-            Pattern::Struct(_) => todo!(),
-            Pattern::Literal(_) => todo!(),
-            Pattern::EnumTuple(_, _) => todo!(),
-            Pattern::EnumStruct(_, _) => todo!(),
-            Pattern::EnumSimple(_) => todo!(),
-            Pattern::Wildcard => todo!(),
-        };
+           Ok(resolved_let)
+       }
 
-        Ok(resolved_let)
-    }
+    */
 
     fn resolve_statement(
         &mut self,
@@ -882,7 +878,10 @@ impl<'a> Resolver<'a> {
                 Literal::Float(value) => {
                     ResolvedExpression::FloatLiteral(*value, self.parent.float_type.clone())
                 }
-                Literal::String(_) => todo!(),
+                Literal::String(value) => ResolvedExpression::StringLiteral(
+                    value.clone(),
+                    self.parent.string_type.clone(),
+                ),
                 Literal::Bool(_) => todo!(),
                 Literal::EnumVariant(_, _, _) => todo!(),
                 Literal::Tuple(_) => todo!(),
@@ -1131,7 +1130,7 @@ impl<'a> Resolver<'a> {
     }
 
     fn try_find_variable(&self, variable: &Variable) -> Option<ResolvedVariableRef> {
-        trace!("lookup_in_scope -> Block for {variable:?}");
+        trace!("trying to find variable {variable:?}");
         // Look through scopes until we hit a Function scope
         for scope in self.block_scope_stack.iter().rev() {
             trace!("...checking in scope {scope:?}");
@@ -1222,27 +1221,46 @@ impl<'a> Resolver<'a> {
         })
     }
 
-    fn set_variable(
+    fn assign_variable(
         &mut self,
         variable: &Variable,
-        expression: &ResolvedExpression,
-    ) -> Result<ResolvedVariableRef, ResolveError> {
-        let variable_type_ref = resolution(expression);
-        self.set_variable_with_type(variable, &variable_type_ref)
+        expression: ResolvedExpression,
+    ) -> Result<ResolvedStatement, ResolveError> {
+        let variable_type_ref = resolution(&expression);
+        let (variable_ref, was_overwrite) =
+            self.set_or_overwrite_variable_with_type(variable, &variable_type_ref)?;
+        let statement = if was_overwrite {
+            ResolvedStatement::SetVar(variable_ref, expression)
+        } else {
+            ResolvedStatement::LetVar(variable_ref, expression)
+        };
+        Ok(statement)
     }
 
-    fn set_variable_with_type(
+    fn set_or_overwrite_variable_with_type(
         &mut self,
         variable: &Variable,
         variable_type_ref: &ResolvedType,
-    ) -> Result<ResolvedVariableRef, ResolveError> {
-        if self.find_variable(&variable).is_ok() {
-            return Err(ResolveError::OverwriteExistingVariable(variable.clone()));
+    ) -> Result<(ResolvedVariableRef, bool), ResolveError> {
+        if let Some(existing_variable) = self.try_find_variable(&variable) {
+            if existing_variable.resolved_type != *variable_type_ref {
+                return Err(ResolveError::OverwriteVariableWithAnotherType(
+                    variable.clone(),
+                ));
+            }
+            if !existing_variable.ast_variable.is_mutable {
+                return Err(ResolveError::CanOnlyOverwriteVariableWithMut(
+                    variable.clone(),
+                ));
+            }
+
+            return Ok((existing_variable.clone(), true));
         }
 
         let resolved_variable = ResolvedVariable {
             resolved_type: variable_type_ref.clone(),
             ast_variable: variable.clone(),
+            scope_index: self.block_scope_stack.len() - 1,
         };
 
         let variable_ref = Rc::new(resolved_variable);
@@ -1250,7 +1268,36 @@ impl<'a> Resolver<'a> {
             .last_mut()
             .expect("block scope should have at least one scope")
             .variables
-            .insert(variable.name.clone(), variable_ref.clone());
+            .insert(variable.name.clone(), variable_ref.clone())
+            .expect("should have checked earlier for variable");
+
+        Ok((variable_ref, false))
+    }
+
+    fn set_variable_with_type(
+        &mut self,
+        variable: &Variable,
+        variable_type_ref: &ResolvedType,
+    ) -> Result<ResolvedVariableRef, ResolveError> {
+        if let Some(_existing_variable) = self.try_find_variable(&variable) {
+            return Err(ResolveError::OverwriteVariableNotAllowedHere(
+                variable.clone(),
+            ));
+        }
+
+        let resolved_variable = ResolvedVariable {
+            resolved_type: variable_type_ref.clone(),
+            ast_variable: variable.clone(),
+            scope_index: self.block_scope_stack.len() - 1,
+        };
+
+        let variable_ref = Rc::new(resolved_variable);
+        self.block_scope_stack
+            .last_mut()
+            .expect("block scope should have at least one scope")
+            .variables
+            .insert(variable.name.clone(), variable_ref.clone())
+            .expect("should have checked earlier for variable");
 
         Ok(variable_ref)
     }
@@ -1304,18 +1351,15 @@ pub fn resolve_with_graph(
     graph: &mut DependencyGraph,
     resolved_program: &mut ResolvedProgram,
 ) -> Result<(), ResolveError> {
-    info!(
-        "{:?}",
-        get_current_dir().expect("failed to get current directory")
-    );
+    debug!(current_directory=?get_current_dir().expect("failed to get current directory"), "current directory");
     let parse_root = ParseRoot::new(base_path);
     graph.build_graph(parse_root, module_path)?;
     let module_paths = graph.get_analysis_order()?;
-    info!(module_paths=?module_paths, "analysis module");
+    //info!(module_paths=?module_paths, "analysis module");
     //let mut resolved_modules = Vec::new();
 
     for module_path in module_paths {
-        info!(module_path=?module_path, "ordered module");
+        //trace!(module_path=?module_path, "ordered module");
 
         if let Some(parse_module) = graph.get_parsed_module(&module_path) {
             let _resolved_module = resolved_program.resolve_module(module_path, parse_module)?;

@@ -5,8 +5,7 @@
 
 use crate::module::Module;
 use crate::resolved::{
-    ResolvedFunctionRef, ResolvedInternalFunctionCall, ResolvedInternalFunctionDefinition,
-    ResolvedInternalFunctionDefinitionRef, ResolvedType,
+    ResolvedInternalFunctionDefinition, ResolvedInternalFunctionDefinitionRef, ResolvedType,
 };
 use crate::ResolvedImplMemberRef;
 use seq_map::SeqMap;
@@ -14,8 +13,8 @@ use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use std::rc::Rc;
 use swamp_script_ast::{
-    AnonymousStruct, ImplMember, LocalIdentifier, LocalTypeIdentifier, ModulePath, Parameter,
-    QualifiedTypeIdentifier, StructType, Type,
+    AnonymousStruct, ImplMember, LocalIdentifier, LocalTypeIdentifier, ModulePath,
+    QualifiedTypeIdentifier, StructType,
 };
 
 pub type ResolvedStructTypeRef = Rc<ResolvedStructType>;
@@ -119,8 +118,8 @@ pub struct ResolvedBoolType;
 pub type ResolveBoolTypeRef = Rc<ResolvedBoolType>;
 
 #[derive(Debug, PartialEq, Eq, Hash)]
-pub struct StringType;
-pub type StringTypeRef = Rc<StringType>;
+pub struct ResolvedStringType;
+pub type ResolvedStringTypeRef = Rc<ResolvedStringType>;
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct UnitType;
@@ -340,7 +339,9 @@ impl ResolvedModuleNamespace {
         struct_type: ResolvedStructType,
     ) -> Result<ResolvedStructTypeRef, String> {
         let struct_ref = Rc::new(struct_type);
-        self.structs.insert((&name.text).into(), struct_ref.clone());
+        self.structs
+            .insert((&name.text).into(), struct_ref.clone())
+            .expect("should be able to add struct field");
         Ok(struct_ref)
     }
 
@@ -361,10 +362,12 @@ impl ResolvedModuleNamespace {
         enum_variant: ResolvedEnumVariantType,
     ) -> Result<ResolvedEnumVariantTypeRef, String> {
         let enum_variant_ref = Rc::new(enum_variant);
-        self.enum_variant_types.insert(
-            (&enum_variant_ref.complete_name()).into(),
-            enum_variant_ref.clone(),
-        );
+        self.enum_variant_types
+            .insert(
+                (&enum_variant_ref.complete_name()).into(),
+                enum_variant_ref.clone(),
+            )
+            .expect("should be able to add enum variant");
         Ok(enum_variant_ref)
     }
 
@@ -376,7 +379,9 @@ impl ResolvedModuleNamespace {
     ) -> Result<(), String> {
         let boxed = Rc::new(ResolvedEnumType::new(name.clone(), type_number));
 
-        self.enum_types.insert((&name.text).into(), boxed.clone());
+        self.enum_types
+            .insert((&name.text).into(), boxed.clone())
+            .expect("should be able to add enum type");
 
         for (ident, variant) in &containers {
             let converted_variant = ResolvedEnumVariantType::new(
@@ -386,7 +391,8 @@ impl ResolvedModuleNamespace {
                 type_number,
             );
             let complete_name = &*(name.to_string() + "::" + &*ident.to_string());
-            self.enum_variant_types
+            let _ = self
+                .enum_variant_types
                 .insert(complete_name.into(), Rc::new(converted_variant));
         }
 

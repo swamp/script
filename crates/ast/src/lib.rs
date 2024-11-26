@@ -4,7 +4,6 @@
  */
 
 use seq_map::SeqMap;
-use std::collections::HashMap;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
@@ -596,7 +595,7 @@ impl Display for Program {
         }
 
         for statement in &self.statements {
-            write!(f, "{:?}\n", statement)?;
+            write!(f, "{statement:?}\n")?;
         }
         Ok(())
     }

@@ -4,6 +4,12 @@
  */
 pub mod prelude;
 
+use pest::error::{Error, ErrorVariant};
+use pest::iterators::Pair;
+use pest::pratt_parser::{Assoc, Op, PrattParser};
+use pest::Parser;
+use pest_derive::Parser;
+use seq_map::SeqMap;
 use swamp_script_ast::{
     AnonymousStruct, BinaryOperator, Definition, EnumLiteralData, EnumVariant, Expression,
     FormatSpecifier, FunctionData, ImplItem, ImplMember, Import, ImportItems, Literal,
@@ -11,14 +17,6 @@ use swamp_script_ast::{
     Pattern, Position, PrecisionType, Program, QualifiedTypeIdentifier, SelfParameter, Span,
     Statement, StringConst, StringPart, StructType, Type, UnaryOperator, Variable,
 };
-
-use pest::error::{Error, ErrorVariant};
-use pest::iterators::Pair;
-use pest::pratt_parser::{Assoc, Op, PrattParser};
-use pest::Parser;
-use pest_derive::Parser;
-use seq_map::SeqMap;
-use std::collections::HashMap;
 use tracing::{debug, info};
 
 #[derive(Parser)]
@@ -80,7 +78,7 @@ impl AstParser {
     }
 
     fn get_inner_pairs<'a>(pair: &'a Pair<'a, Rule>) -> impl Iterator<Item = Pair<'a, Rule>> {
-        info!("get_inner_pairs: {:?}", pair.as_rule());
+        //info!("get_inner_pairs: {:?}", pair.as_rule());
         pair.clone().into_inner()
     }
 

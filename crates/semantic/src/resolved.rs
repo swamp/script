@@ -1,14 +1,14 @@
 use crate::ns::{
     ResolveBoolTypeRef, ResolvedArrayTypeRef, ResolvedEnumTypeRef, ResolvedEnumVariantTypeRef,
-    ResolvedFloatTypeRef, ResolvedIntTypeRef, ResolvedStructTypeRef, ResolvedTupleTypeRef,
-    StringTypeRef, UnitTypeRef,
+    ResolvedFloatTypeRef, ResolvedIntTypeRef, ResolvedStringTypeRef, ResolvedStructTypeRef,
+    ResolvedTupleTypeRef, UnitTypeRef,
 };
 use crate::ResolvedImplMemberRef;
-use std::fmt::{write, Debug, Display};
+use std::fmt::{Debug, Display, Formatter};
 use std::rc::Rc;
 use swamp_script_ast::{
-    BinaryOperator, Expression, FormatSpecifier, LocalIdentifier, LocalTypeIdentifier, MatchArm,
-    Parameter, UnaryOperator, Variable,
+    BinaryOperator, Expression, FormatSpecifier, LocalIdentifier, MatchArm, Parameter, StringConst,
+    UnaryOperator, Variable,
 };
 
 #[derive(Debug, Clone)]
@@ -19,11 +19,17 @@ pub struct ResolvedParameter {
     pub is_mutable: bool,
 }
 
+impl Display for ResolvedParameter {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {}", self.name, self.resolved_type)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum ResolvedType {
     Int(ResolvedIntTypeRef),
     Float(ResolvedFloatTypeRef),
-    String(StringTypeRef),
+    String(ResolvedStringTypeRef),
     Bool(ResolveBoolTypeRef),
     Unit(UnitTypeRef),
     Array(ResolvedArrayTypeRef),
@@ -80,16 +86,28 @@ pub struct ResolvedInternalFunctionDefinition {
     pub resolved_return_type: ResolvedType,
 }
 
+impl Display for ResolvedInternalFunctionDefinition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "(fn_def {}({}) -> {})",
+            self.name,
+            comma(&self.parameters),
+            self.resolved_return_type
+        )
+    }
+}
+
 pub type ResolvedInternalFunctionDefinitionRef = Rc<ResolvedInternalFunctionDefinition>;
 
-pub type ResolvedTypeRef = Rc<ResolvedType>;
+//pub type ResolvedTypeRef = Rc<ResolvedType>;
 
 impl Display for ResolvedType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ResolvedType::Int(_int_type) => write!(f, "Int"),
             ResolvedType::Float(_) => write!(f, "Float"),
-            ResolvedType::String(_) => todo!(),
+            ResolvedType::String(_string_type_ref) => write!(f, "String"),
             ResolvedType::Bool(_) => todo!(),
             ResolvedType::Unit(_) => todo!(),
             ResolvedType::Array(array_type_ref) => write!(f, "{array_type_ref}"),
@@ -104,14 +122,14 @@ impl Display for ResolvedType {
             ResolvedType::Range => todo!(),
             ResolvedType::Any => todo!(),
             ResolvedType::FunctionInternal(function_def_ref) => {
-                write!(f, "internal function {function_def_ref:?}")
+                write!(f, "{function_def_ref}")
             }
         }
     }
 }
 
+/*
 pub type ResolvedFunctionSignature = (Vec<ResolvedParameter>, ResolvedType);
-
 pub enum ResolvedFunctionReference {
     External(LocalTypeIdentifier, ResolvedFunctionSignature),
     Internal(
@@ -147,20 +165,26 @@ impl ResolvedFunctionReference {
         }
     }
 }
+*/
 
 #[derive(Debug)]
-
 pub struct ResolvedVariable {
     pub resolved_type: ResolvedType,
     pub ast_variable: Variable,
+    pub scope_index: usize,
 }
 
 impl Display for ResolvedVariable {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let prefix = if self.ast_variable.is_mutable {
+            "mut "
+        } else {
+            ""
+        };
         write!(
             f,
-            "Variable({}, {})",
-            self.ast_variable.name, self.resolved_type
+            "{}{}: {}",
+            prefix, self.ast_variable.name, self.resolved_type
         )
     }
 }
@@ -188,6 +212,29 @@ pub struct ResolvedInternalFunctionCall {
     pub resolved_type: ResolvedType,
     pub arguments: Vec<ResolvedExpression>,
     pub function_definition: ResolvedInternalFunctionDefinitionRef,
+}
+
+pub fn comma<T: Display>(values: &[T]) -> String {
+    match values.len() {
+        0 => String::new(),
+        1 => values[0].to_string(),
+        _ => {
+            let mut result = String::new();
+            for (i, value) in values.iter().enumerate() {
+                if i > 0 {
+                    result.push_str(", ");
+                }
+                result.push_str(&value.to_string());
+            }
+            result
+        }
+    }
+}
+
+impl Display for ResolvedInternalFunctionCall {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({}({}))", self.resolved_type, comma(&self.arguments))
+    }
 }
 
 #[derive(Debug)]
@@ -309,8 +356,8 @@ pub enum ResolvedPattern {
 #[derive(Debug)]
 pub struct ResolvedIterator {}
 
-#[derive(Debug)]
-pub struct ResolvedBoolExpression(pub ResolvedExpression);
+//#[derive(Debug)]
+//pub struct ResolvedBoolExpression(pub ResolvedExpression);
 
 #[derive(Debug)]
 pub struct ResolvedStructInstantiation {
@@ -383,9 +430,10 @@ pub enum ResolvedExpression {
     LetVar(ResolvedVariableRef, Box<ResolvedExpression>),
     FloatLiteral(f32, ResolvedFloatTypeRef),
     IntLiteral(i32, ResolvedIntTypeRef),
+    StringLiteral(StringConst, ResolvedStringTypeRef),
 }
 
-pub type ResolvedExpressionRef = Rc<ResolvedExpression>;
+//pub type ResolvedExpressionRef = Rc<ResolvedExpression>;
 
 impl Display for ResolvedExpression {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -406,7 +454,7 @@ impl Display for ResolvedExpression {
             ResolvedExpression::BinaryOp(_) => todo!(),
             ResolvedExpression::UnaryOp(_, _) => todo!(),
             ResolvedExpression::FunctionInternalCall(resolved_call) => {
-                write!(f, "internal_call({resolved_call:?})")
+                write!(f, "{resolved_call}")
             }
             ResolvedExpression::MutMemberCall(_, _) => todo!(),
             ResolvedExpression::MemberCall(_) => todo!(),
@@ -422,7 +470,10 @@ impl Display for ResolvedExpression {
             ResolvedExpression::Match(_, _) => todo!(),
             ResolvedExpression::LetVar(_, _) => todo!(),
             ResolvedExpression::FloatLiteral(_, _) => todo!(),
-            ResolvedExpression::IntLiteral(_, _) => todo!(),
+            ResolvedExpression::IntLiteral(value, _int_type) => write!(f, "IntLit({value:?})"),
+            ResolvedExpression::StringLiteral(value, _string_type) => {
+                write!(f, "StringLit({value:?})")
+            }
         }
     }
 }
@@ -452,6 +503,7 @@ pub enum ResolvedStatement {
         Option<Vec<ResolvedStatement>>,
     ),
     LetVar(ResolvedVariableRef, ResolvedExpression),
+    SetVar(ResolvedVariableRef, ResolvedExpression),
 }
 
 impl Display for ResolvedStatement {
@@ -466,7 +518,12 @@ impl Display for ResolvedStatement {
             ResolvedStatement::Expression(_) => todo!(),
             ResolvedStatement::Block(_) => todo!(),
             ResolvedStatement::If(_, _, _) => todo!(),
-            ResolvedStatement::LetVar(variable_ref, expr) => write!(f, "{variable_ref} {expr}"),
+            ResolvedStatement::LetVar(variable_ref, expr) => {
+                write!(f, "let {variable_ref} = {expr}")
+            }
+            ResolvedStatement::SetVar(variable_ref, expr) => {
+                write!(f, "set {variable_ref} = {expr}")
+            }
         }
     }
 }

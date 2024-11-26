@@ -2,7 +2,7 @@ use crate::{ParseModule, ParseRoot, ParseRootError};
 use seq_map::SeqMap;
 use std::collections::HashSet;
 use swamp_script_ast::{Definition, ModulePath};
-use tracing::info;
+use tracing::{debug, info};
 
 #[derive(Eq, PartialEq, Hash, Clone)]
 pub struct ModuleInfo {
@@ -26,7 +26,7 @@ impl DependencyGraph {
     }
 
     pub fn add_ast_module(&mut self, module_path: ModulePath, parsed_module: ParseModule) {
-        info!("Adding ast module {:?}", module_path);
+        debug!("Adding ast module {:?}", module_path);
         self.parsed_modules
             .insert(module_path, parsed_module)
             .expect("can not add parsed module")
