@@ -1,12 +1,12 @@
 use crate::dep::{DependencyError, DependencyGraph};
 use crate::module::Module;
 use crate::ns::{
-    ResolveBoolTypeRef, ResolvedAnonymousStructType, ResolvedArrayType, ResolvedArrayTypeRef,
-    ResolvedBoolType, ResolvedEnumType, ResolvedEnumVariantContainerType, ResolvedEnumVariantType,
-    ResolvedEnumVariantTypeRef, ResolvedFloatType, ResolvedFloatTypeRef, ResolvedIntType,
-    ResolvedIntTypeRef, ResolvedModuleNamespace, ResolvedStringType, ResolvedStringTypeRef,
-    ResolvedStructType, ResolvedStructTypeRef, ResolvedTupleType, TypeNumber, UnitType,
-    UnitTypeRef,
+    ResolvedAnonymousStructType, ResolvedArrayType, ResolvedArrayTypeRef, ResolvedBoolType,
+    ResolvedBoolTypeRef, ResolvedEnumType, ResolvedEnumVariantContainerType,
+    ResolvedEnumVariantType, ResolvedEnumVariantTypeRef, ResolvedFloatType, ResolvedFloatTypeRef,
+    ResolvedIntType, ResolvedIntTypeRef, ResolvedModuleNamespace, ResolvedStringType,
+    ResolvedStringTypeRef, ResolvedStructType, ResolvedStructTypeRef, ResolvedTupleType,
+    ResolvedUnitType, ResolvedUnitTypeRef, TypeNumber,
 };
 use crate::resolved::{comma, same_type};
 use crate::resolved::{
@@ -29,6 +29,7 @@ use swamp_script_ast::{
     Program, QualifiedTypeIdentifier, Statement, StringPart, Type, Variable,
 };
 use swamp_script_ast::{Node, Position, Span, StructType};
+use swamp_script_parser::Rule::bool_lit;
 use swamp_script_parser::{AstParser, Rule};
 use tracing::{debug, info, trace};
 
@@ -73,6 +74,9 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
         ResolvedExpression::IfElse(_, _, _) => todo!(),
         ResolvedExpression::Match(_, _) => todo!(),
         ResolvedExpression::LetVar(_, _) => todo!(),
+        ResolvedExpression::BoolLiteral(_value, bool_type_ref) => {
+            ResolvedType::Bool(bool_type_ref.clone())
+        }
         ResolvedExpression::FloatLiteral(_float_value, float_type) => {
             ResolvedType::Float(float_type.clone())
         }
@@ -80,6 +84,7 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
         ResolvedExpression::StringLiteral(_string_value, string_type) => {
             ResolvedType::String(string_type.clone())
         }
+        ResolvedExpression::UnitLiteral(unit_literal) => ResolvedType::Unit(unit_literal.clone()),
     };
 
     trace!(resolution_expression=?resolution_expression, "resolution");
@@ -169,8 +174,8 @@ pub struct ResolvedProgram {
     int_type: ResolvedIntTypeRef,
     float_type: ResolvedFloatTypeRef,
     string_type: ResolvedStringTypeRef,
-    bool_type: ResolveBoolTypeRef,
-    unit_type: UnitTypeRef,
+    bool_type: ResolvedBoolTypeRef,
+    unit_type: ResolvedUnitTypeRef,
     array_types: Vec<ResolvedArrayTypeRef>,
 }
 
@@ -357,7 +362,7 @@ impl ResolvedProgram {
             float_type: Rc::new(ResolvedFloatType),
             string_type: Rc::new(ResolvedStringType),
             bool_type: Rc::new(ResolvedBoolType),
-            unit_type: Rc::new(UnitType),
+            unit_type: Rc::new(ResolvedUnitType),
             array_types: Vec::new(),
         }
     }
@@ -442,6 +447,7 @@ impl<'a> Resolver<'a> {
 
     pub fn resolve_type(&mut self, ast_type: &Type) -> Result<ResolvedType, ResolveError> {
         let resolved = match ast_type {
+            Type::Any => ResolvedType::Any,
             Type::Int => ResolvedType::Int(self.parent.int_type.clone()),
             Type::Float => ResolvedType::Float(self.parent.float_type.clone()),
             Type::String => ResolvedType::String(self.parent.string_type.clone()),
@@ -449,13 +455,22 @@ impl<'a> Resolver<'a> {
             Type::Unit => ResolvedType::Unit(self.parent.unit_type.clone()),
             Type::Struct(ast_struct) => ResolvedType::Struct(self.find_struct_type(ast_struct)?),
             Type::Array(ast_type) => ResolvedType::Array(self.resolve_array_type(ast_type)?),
-            Type::Map(_, _) => todo!(),
-            Type::Tuple(_types) => todo!(),
+            Type::Tuple(types) => {
+                ResolvedType::Tuple(ResolvedTupleType(self.resolve_types(&types)?).into())
+            }
             Type::Enum(_) => todo!(),
-            Type::Any => todo!(),
+            Type::Map(_, _) => todo!(),
         };
 
         Ok(resolved)
+    }
+
+    fn resolve_types(&mut self, types: &Vec<Type>) -> Result<Vec<ResolvedType>, ResolveError> {
+        let mut resolved_types = Vec::new();
+        for some_type in types.iter() {
+            resolved_types.push(self.resolve_type(some_type)?);
+        }
+        Ok(resolved_types)
     }
 
     pub fn find_module(&self, path: &ModulePath) -> Option<&ResolvedModuleRef> {
@@ -501,7 +516,6 @@ impl<'a> Resolver<'a> {
         functions: &SeqMap<IdentifierName, ImplItem>,
     ) -> Result<(), ResolveError> {
         // Can only attach to earlier type in same module
-
         for (local_ident, member_item) in functions {
             match member_item {
                 ImplItem::Member(impl_member) => {
@@ -553,9 +567,8 @@ impl<'a> Resolver<'a> {
                     }
                 }
             };
-
-            //            items.push(item);
         }
+
         Ok(())
     }
 
@@ -702,7 +715,7 @@ impl<'a> Resolver<'a> {
             Definition::FunctionDef(identifier, function_info) => {
                 self.resolve_function_definition(identifier, function_info)?;
             }
-            Definition::ExternalFunctionDef(_, _) => todo!(),
+            Definition::ExternalFunctionDef(_, _) => todo!(), // TODO: PBJ
             Definition::Comment(_) => todo!(),
             Definition::Import(_) => todo!(),
         };
@@ -719,13 +732,13 @@ impl<'a> Resolver<'a> {
 
         let resolved_let = match ast_pattern {
             Pattern::VariableAssignment(variable) => self.assign_variable(&variable, expr)?,
-            Pattern::Tuple(_) => todo!(),
-            Pattern::Struct(_) => todo!(),
-            Pattern::Literal(_) => todo!(),
-            Pattern::EnumTuple(_, _) => todo!(),
-            Pattern::EnumStruct(_, _) => todo!(),
-            Pattern::EnumSimple(_) => todo!(),
-            Pattern::Wildcard => todo!(),
+            Pattern::Tuple(_) => todo!(),         // TODO: PBJ
+            Pattern::Struct(_) => todo!(),        // TODO: PBJ
+            Pattern::Literal(_) => todo!(),       // TODO: PBJ
+            Pattern::EnumTuple(_, _) => todo!(),  // TODO: PBJ
+            Pattern::EnumStruct(_, _) => todo!(), // TODO: PBJ
+            Pattern::EnumSimple(_) => todo!(),    // TODO: PBJ
+            Pattern::Wildcard => todo!(),         // TODO: PBJ
         };
 
         Ok(resolved_let)
@@ -872,8 +885,8 @@ impl<'a> Resolver<'a> {
                     self.resolve_variable_assignment(variable_expression, source_expression)?,
                 )
             }
-            Expression::ArrayAssignment(_, _, _) => todo!(),
-            Expression::FieldAssignment(_, _, _) => todo!(),
+            Expression::ArrayAssignment(_, _, _) => todo!(), // TODO: PBJ
+            Expression::FieldAssignment(_, _, _) => todo!(), // TODO: PBJ
 
             // Operator
             Expression::BinaryOp(resolved_a, operator, resolved_b) => ResolvedExpression::BinaryOp(
@@ -911,7 +924,7 @@ impl<'a> Resolver<'a> {
                     self.resolve_struct_instantiation(struct_identifier, fields)?,
                 )
             }
-            Expression::ExclusiveRange(_, _) => todo!(),
+            Expression::ExclusiveRange(_, _) => todo!(), // TODO: PBJ
 
             Expression::Literal(literal) => match literal {
                 Literal::Int(value) => {
@@ -924,19 +937,21 @@ impl<'a> Resolver<'a> {
                     value.clone(),
                     self.parent.string_type.clone(),
                 ),
-                Literal::Bool(_) => todo!(),
-                Literal::EnumVariant(_, _, _) => todo!(),
-                Literal::Tuple(_) => todo!(),
+                Literal::Unit => ResolvedExpression::UnitLiteral(self.parent.unit_type.clone()),
+                Literal::Bool(value) => {
+                    ResolvedExpression::BoolLiteral(*value, self.parent.bool_type.clone())
+                }
+                Literal::EnumVariant(_, _, _) => todo!(), //TODO: PBJ //ResolvedExpression::EnumVariantLiteral(),
+                Literal::Tuple(_) => todo!(),             // TODO: PBJ
                 Literal::Array(items) => {
                     ResolvedExpression::Array(self.resolve_array_literal(items)?)
                 }
                 Literal::Map(_) => todo!(),
-                Literal::Unit => todo!(),
             },
 
             // Comparison
-            Expression::IfElse(_, _, _) => todo!(),
-            Expression::Match(_, _) => todo!(),
+            Expression::IfElse(_, _, _) => todo!(), // TODO: PBJ
+            Expression::Match(_, _) => todo!(),     // TODO: PBJ
         };
 
         Ok(expression)

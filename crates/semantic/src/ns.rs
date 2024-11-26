@@ -4,8 +4,8 @@
  */
 use crate::module::Module;
 use crate::resolved::{
-    comma_seq, comma_seq_nl, comma_tuple, comma_tuple_ref, ResolvedInternalFunctionDefinition,
-    ResolvedInternalFunctionDefinitionRef, ResolvedType,
+    comma, comma_seq, comma_seq_nl, comma_tuple, comma_tuple_ref,
+    ResolvedInternalFunctionDefinition, ResolvedInternalFunctionDefinitionRef, ResolvedType,
 };
 use crate::{
     ResolvedFunctionData, ResolvedFunctionDataRef, ResolvedImplMember, ResolvedImplMemberRef,
@@ -106,6 +106,10 @@ impl ResolvedStructType {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
+pub struct ResolvedUnitType;
+pub type ResolvedUnitTypeRef = Rc<ResolvedUnitType>;
+
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct ResolvedIntType;
 pub type ResolvedIntTypeRef = Rc<ResolvedIntType>;
 
@@ -116,15 +120,11 @@ pub type ResolvedFloatTypeRef = Rc<ResolvedFloatType>;
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct ResolvedBoolType;
-pub type ResolveBoolTypeRef = Rc<ResolvedBoolType>;
+pub type ResolvedBoolTypeRef = Rc<ResolvedBoolType>;
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct ResolvedStringType;
 pub type ResolvedStringTypeRef = Rc<ResolvedStringType>;
-
-#[derive(Debug, PartialEq, Eq, Hash)]
-pub struct UnitType;
-pub type UnitTypeRef = Rc<UnitType>;
 
 pub type ResolvedArrayTypeRef = Rc<ResolvedArrayType>;
 
@@ -151,6 +151,12 @@ pub type ResolvedTupleTypeRef = Rc<ResolvedTupleType>;
 #[derive(Debug)]
 pub struct ResolvedTupleType(pub Vec<ResolvedType>);
 
+impl Display for ResolvedTupleType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({})", comma(&self.0))
+    }
+}
+
 impl ResolvedTupleType {
     pub fn new(types: Vec<ResolvedType>) -> Self {
         Self(types)
@@ -163,6 +169,12 @@ pub type ResolvedEnumTypeRef = Rc<ResolvedEnumType>;
 pub struct ResolvedEnumType {
     pub name: LocalTypeIdentifier,
     pub number: TypeNumber,
+}
+
+impl Display for ResolvedEnumType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name)
+    }
 }
 
 impl ResolvedEnumType {
@@ -183,6 +195,29 @@ pub struct ResolvedEnumVariantType {
     pub name: LocalTypeIdentifier,
     pub number: TypeNumber,
 }
+
+impl Display for ResolvedEnumVariantType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}::{}{}", self.owner, self.name, self.data)
+    }
+}
+
+/*
+impl Display for ResolvedEnumVariantType {
+
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}::{}", self.owner.name(), self.name)?;
+
+        match &self.data {
+            ResolvedEnumVariantContainerType::Struct(_) => {
+                write!(f, "{}::{}", self.name, self.complete_name())
+            }
+            ResolvedEnumVariantContainerType::Tuple(tuple_ref) => write!(f, "{:?}", tuple_ref),
+            ResolvedEnumVariantContainerType::Nothing => write!(f, ""),
+        }
+    }
+}
+*/
 
 impl ResolvedEnumVariantType {
     pub fn new(
@@ -212,20 +247,6 @@ impl ResolvedEnumVariantType {
     }
 }
 
-impl Display for ResolvedEnumVariantType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}::{}", self.owner.name(), self.name)?;
-
-        match &self.data {
-            ResolvedEnumVariantContainerType::Struct(_) => {
-                write!(f, "{}::{}", self.name, self.complete_name())
-            }
-            ResolvedEnumVariantContainerType::Tuple(tuple_ref) => write!(f, "{:?}", tuple_ref),
-            ResolvedEnumVariantContainerType::Nothing => write!(f, ""),
-        }
-    }
-}
-
 impl Debug for ResolvedEnumVariantType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}::{}", self.owner.name(), self.name)
@@ -237,6 +258,16 @@ pub enum ResolvedEnumVariantContainerType {
     Struct(ResolvedAnonymousStructType),
     Tuple(ResolvedTupleTypeRef),
     Nothing,
+}
+
+impl Display for ResolvedEnumVariantContainerType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ResolvedEnumVariantContainerType::Struct(struct_ref) => write!(f, " {} ", struct_ref),
+            ResolvedEnumVariantContainerType::Tuple(tuple_ref) => write!(f, "{}", tuple_ref),
+            ResolvedEnumVariantContainerType::Nothing => Ok(()),
+        }
+    }
 }
 
 #[derive(Debug)]

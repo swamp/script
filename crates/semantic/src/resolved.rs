@@ -1,7 +1,7 @@
 use crate::ns::{
-    ResolveBoolTypeRef, ResolvedArrayTypeRef, ResolvedEnumTypeRef, ResolvedEnumVariantTypeRef,
+    ResolvedArrayTypeRef, ResolvedBoolTypeRef, ResolvedEnumTypeRef, ResolvedEnumVariantTypeRef,
     ResolvedFloatTypeRef, ResolvedIntTypeRef, ResolvedStringTypeRef, ResolvedStructTypeRef,
-    ResolvedTupleTypeRef, UnitTypeRef,
+    ResolvedTupleTypeRef, ResolvedUnitTypeRef,
 };
 use crate::ResolvedImplMemberRef;
 use seq_map::SeqMap;
@@ -33,8 +33,8 @@ pub enum ResolvedType {
     Int(ResolvedIntTypeRef),
     Float(ResolvedFloatTypeRef),
     String(ResolvedStringTypeRef),
-    Bool(ResolveBoolTypeRef),
-    Unit(UnitTypeRef),
+    Bool(ResolvedBoolTypeRef),
+    Unit(ResolvedUnitTypeRef),
     Array(ResolvedArrayTypeRef),
     Tuple(ResolvedTupleTypeRef),
     Struct(ResolvedStructTypeRef),
@@ -482,8 +482,10 @@ pub enum ResolvedExpression {
     Match(Box<ResolvedExpression>, Vec<ResolvedMatchArm>),
     LetVar(ResolvedVariableRef, Box<ResolvedExpression>),
     FloatLiteral(f32, ResolvedFloatTypeRef),
+    UnitLiteral(ResolvedUnitTypeRef),
     IntLiteral(i32, ResolvedIntTypeRef),
     StringLiteral(StringConst, ResolvedStringTypeRef),
+    BoolLiteral(bool, ResolvedBoolTypeRef),
 }
 
 //pub type ResolvedExpressionRef = Rc<ResolvedExpression>;
@@ -543,6 +545,10 @@ impl Display for ResolvedExpression {
             ResolvedExpression::StringLiteral(value, _string_type) => {
                 write!(f, "StringLit({value:?})")
             }
+            ResolvedExpression::UnitLiteral(_unit_lit) => write!(f, "UnitLit"),
+            ResolvedExpression::BoolLiteral(value, _bool_type_ref) => {
+                write!(f, "BoolLit({value:?})")
+            }
         }
     }
 }
@@ -558,7 +564,7 @@ pub struct ResolvedArrayInstantiation {
 #[derive(Debug)]
 pub enum ResolvedStatement {
     // Standard
-    Let(ResolvedPattern, ResolvedExpression),
+    Let(ResolvedPattern, ResolvedExpression), // Should be expression only? and put in Expression()
     ForLoop(ResolvedPattern, ResolvedIterator, Vec<ResolvedStatement>),
     WhileLoop(ResolvedBooleanExpression, Vec<ResolvedStatement>),
     Return(ResolvedExpression),
@@ -571,8 +577,8 @@ pub enum ResolvedStatement {
         Vec<ResolvedStatement>,
         Option<Vec<ResolvedStatement>>,
     ),
-    LetVar(ResolvedVariableRef, ResolvedExpression),
-    SetVar(ResolvedVariableRef, ResolvedExpression),
+    LetVar(ResolvedVariableRef, ResolvedExpression), // Should be expression only? and put in Expression()
+    SetVar(ResolvedVariableRef, ResolvedExpression), // Should be expression only? and put in Expression()
 }
 
 impl Display for ResolvedStatement {

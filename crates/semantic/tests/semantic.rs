@@ -170,11 +170,11 @@ modules:
 ::test
 namespace:
 structs:
-Hello {x: Int}
+Hello { x: Int }
+impl:
 enum_variants:
 SomeEnum::Simple
-SomeEnum::WithTupleResolvedTupleType([Int(ResolvedIntType), String(StringType), Struct(ResolvedStructType { number: 0, module_path: ModulePath([LocalIdentifier { node: Node { span: Span { start: Position { offset: 0, line: 0, column: 0 }, end: Position { offset: 0, line: 0, column: 0 } } }, text: "test" }]), fields: SeqMap(LocalIdentifier { node: Node { span: Span { start: Position { offset: 9, line: 2, column: 9 }, end: Position { offset: 40, line: 3, column: 17 } } }, text: "x" }: Int(ResolvedIntType)), name: LocalTypeIdentifier { node: Node { span: Span { start: Position { offset: 9, line: 2, column: 9 }, end: Position { offset: 40, line: 3, column: 17 } } }, text: "Hello" }, ast_struct: StructType { identifier: LocalTypeIdentifier { node: Node { span: Span { start: Position { offset: 9, line: 2, column: 9 }, end: Position { offset: 40, line: 3, column: 17 } } }, text: "Hello" }, fields: SeqMap(LocalIdentifier { node: Node { span: Span { start: Position { offset: 9, line: 2, column: 9 }, end: Position { offset: 40, line: 3, column: 17 } } }, text: "x" }: Int) }, impl_members: SeqMap() })])
-
+SomeEnum::WithTuple(Int, String, Hello { x: Int })
         "#,
     )
 }
@@ -219,6 +219,82 @@ impl:
 statements:
 let mut pos: Vector2 { x: Float, y: Float } = { x: FloatLit(10.0), y: FloatLit(20.0) }
 (impl(scale(factor: Float) -> Vector2 { x: Float, y: Float }) <- FloatLit(2.5))
+
+    "#,
+    )
+}
+
+#[test_log::test]
+fn enum_variants() {
+    check(
+        r#"
+// Enum
+enum Shape {
+    Circle(Float),
+    Rectangle { width: Float, height: Float },
+    Point,
+}
+
+"#,
+        r#"
+
+modules:
+::test
+namespace:
+enum_variants:
+Shape::Circle(Float)
+Shape::Rectangle { width: Float, height: Float }
+Shape::Point
+
+    "#,
+    )
+}
+
+#[test_log::test]
+fn enum_variants_array() {
+    check(
+        r#"
+// Enum
+enum Shape {
+    Circle(Float),
+    Rectangle { width: Float, height: Float },
+    Point,
+}
+
+shapes = [
+Shape::Circle(5.0),
+Shape::Rectangle { width: 10.0, height: 20.0 },
+Shape::Point
+]
+
+
+"#,
+        r#"
+
+modules:
+::test
+namespace:
+enum_variants:
+Shape::Circle(Float)
+Shape::Rectangle { width: Float, height: Float }
+Shape::Point
+
+    "#,
+    )
+}
+
+#[test_log::test]
+fn math_literals() {
+    check(
+        r#"
+status = match player.health {
+    100 => "Full health",
+    health => 'Critical: {health}'
+}
+"#,
+        r#"
+
+
 
     "#,
     )
