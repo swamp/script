@@ -843,10 +843,7 @@ impl AstParser {
             }
             Rule::identifier => {
                 let var = Variable::new(left.as_str(), false);
-                Ok(Expression::VariableAssignment(
-                    Box::new(Expression::VariableAccess(var)),
-                    Box::new(expr),
-                ))
+                Ok(Expression::VariableAssignment(var, Box::new(expr)))
             }
             Rule::field_access => {
                 if let Expression::FieldAccess(obj, field) = self.parse_field_access(left)? {

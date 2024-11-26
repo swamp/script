@@ -116,6 +116,10 @@ pub struct ResolvedVariable {
 
 pub type ResolvedVariableRef = Rc<ResolvedVariable>;
 
+pub struct ResolvedVariableAccess {
+    pub variable_ref: ResolvedVariableRef,
+}
+
 #[derive(Debug)]
 pub struct ResolvedMutVariable {}
 type ResolvedMutVariableRef = Rc<ResolvedMutVariable>;
@@ -161,6 +165,15 @@ pub type ResolvedMutArrayRef = Rc<ResolvedMutArray>;
 pub struct ResolvedArray {}
 #[derive(Debug)]
 pub struct ResolvedMutArray {}
+
+#[derive(Debug)]
+pub struct ResolvedArrayItem {
+    pub item_type: ResolvedArrayTypeRef,
+    pub int_expression: ResolvedExpression,
+}
+
+pub type ResolvedArrayItemRef = Rc<ResolvedArrayItem>;
+
 #[derive(Debug)]
 pub struct ResolvedIndexType {}
 pub type ResolvedIndexTypeRef = Rc<ResolvedIndexType>;
@@ -168,7 +181,7 @@ pub type ResolvedIndexTypeRef = Rc<ResolvedIndexType>;
 #[derive(Debug)]
 pub enum ResolvedStringPart {
     Literal(String),
-    Interpolation(Box<ResolvedExpression>, Option<FormatSpecifier>),
+    Interpolation(ResolvedExpression, Option<FormatSpecifier>),
 }
 
 type ResolvedMutStructFieldRef = Rc<ResolvedMutStructField>;
@@ -236,10 +249,15 @@ pub struct ResolvedIterator {}
 pub struct ResolvedBoolExpression(pub ResolvedExpression);
 
 #[derive(Debug)]
-
 pub struct ResolvedStructInstantiation {
     pub expressions_in_order: Vec<ResolvedExpression>,
     pub struct_type_ref: ResolvedStructTypeRef,
+}
+
+#[derive(Debug)]
+pub struct ResolvedVariableAssignment {
+    pub variable_ref: ResolvedVariableRef,
+    pub expression: Box<ResolvedExpression>,
 }
 
 #[derive(Debug)]
@@ -248,12 +266,12 @@ pub enum ResolvedExpression {
     FieldAccess(ResolvedStructTypeFieldRef),
     VariableAccess(ResolvedVariableRef),
     MutRef(ResolvedMutVariableRef), // Used when passing with mut keyword. mut are implicitly passed by reference
-    ArrayAccess(ResolvedArrayRef, ResolvedIndexTypeRef), // Read from an array: arr[3]
+    ArrayAccess(ResolvedArrayItemRef), // Read from an array: arr[3]
 
     // Assignment
 
     // Since it is a cool language, we can "chain" assignments together. like a = b = c = 1. Even for field assignments, like a.b = c.d = e.f = 1
-    VariableAssignment(ResolvedMutVariableRef, ResolvedIndexTypeRef),
+    VariableAssignment(ResolvedVariableAssignment),
 
     ArrayAssignment(
         ResolvedMutArrayRef,

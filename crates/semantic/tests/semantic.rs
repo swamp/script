@@ -11,7 +11,26 @@ fn basic() {
         }
         "#,
         r#"
+modules:
+::test
+structs:
+Hello {x: Inty: Int}
+        "#,
+    )
+}
 
+#[test_log::test]
+fn unknown_variable() {
+    check(
+        r#"
+        a = 3
+        b = c
+        "#,
+        r#"
+modules:
+::test
+structs:
+Hello {x: Inty: Int}
         "#,
     )
 }

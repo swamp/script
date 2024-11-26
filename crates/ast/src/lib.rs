@@ -147,6 +147,13 @@ impl LocalIdentifier {
     }
 }
 
+
+impl Display for LocalIdentifier {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{}", self.text)
+    }
+}
+
 #[derive(Clone)]
 pub struct StringConst(pub String); // pub is probably better for performance
 
@@ -327,7 +334,7 @@ pub enum Expression {
     // Assignment
 
     // Since it is a cool language, we can "chain" assignments together. like a = b = c = 1. Even for field assignments, like a.b = c.d = e.f = 1
-    VariableAssignment(Box<Expression>, Box<Expression>),
+    VariableAssignment(Variable, Box<Expression>),
     ArrayAssignment(Box<Expression>, Box<Expression>, Box<Expression>), // target, index, source. Write to an index in an array: arr[3] = 42
     FieldAssignment(Box<Expression>, LocalIdentifier, Box<Expression>),
 

@@ -10,13 +10,16 @@ use crate::ns::{
 };
 
 use crate::resolved::{
-    ResolvedBinaryOperator, ResolvedBooleanExpression, ResolvedExpression,
-    ResolvedInternalFunctionCall, ResolvedIterator, ResolvedMemberCall, ResolvedParameter,
-    ResolvedPattern, ResolvedStatement, ResolvedStructInstantiation, ResolvedStructTypeFieldRef,
-    ResolvedType, ResolvedTypeRef,
+    ResolvedArrayItem, ResolvedArrayItemRef, ResolvedBinaryOperator, ResolvedBooleanExpression,
+    ResolvedExpression, ResolvedInternalFunctionCall, ResolvedIterator, ResolvedMemberCall,
+    ResolvedParameter, ResolvedPattern, ResolvedStatement, ResolvedStringPart,
+    ResolvedStructInstantiation, ResolvedStructTypeFieldRef, ResolvedType, ResolvedTypeRef,
+    ResolvedVariable, ResolvedVariableAccess, ResolvedVariableAssignment, ResolvedVariableRef,
 };
 use pest::error::Error;
 use seq_map::SeqMap;
+use std::collections::HashMap;
+use std::env::var;
 use std::fmt::{Debug, Display};
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -24,11 +27,11 @@ use std::{env, fs};
 use swamp_script_ast::{
     BinaryOperator, Definition, EnumVariant, Expression, FormatSpecifier, ImplItem,
     LocalIdentifier, LocalTypeIdentifier, MatchArm, ModulePath, Parameter, Pattern, Program,
-    QualifiedTypeIdentifier, Statement, Type, UnaryOperator,
+    QualifiedTypeIdentifier, Statement, StringPart, Type, UnaryOperator, Variable,
 };
 use swamp_script_ast::{Node, Position, Span, StructType};
 use swamp_script_parser::{AstParser, Rule};
-use tracing::info;
+use tracing::{info, trace};
 
 pub mod dep;
 pub mod module;
@@ -40,8 +43,8 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
         ResolvedExpression::FieldAccess(struct_field_ref) => struct_field_ref.resolved_type.clone(),
         ResolvedExpression::VariableAccess(variable_ref) => variable_ref.resolved_type.clone(),
         ResolvedExpression::MutRef(_) => todo!(),
-        ResolvedExpression::ArrayAccess(_, _) => todo!(),
-        ResolvedExpression::VariableAssignment(_, _) => todo!(),
+        ResolvedExpression::ArrayAccess(_) => todo!(),
+        ResolvedExpression::VariableAssignment(_) => todo!(),
         ResolvedExpression::ArrayAssignment(_, _, _) => todo!(),
         ResolvedExpression::StructFieldAssignment(_, _) => todo!(),
         ResolvedExpression::TupleFieldAssignment(_, _) => todo!(),
@@ -49,7 +52,7 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
         ResolvedExpression::UnaryOp(_, _) => todo!(),
         ResolvedExpression::FunctionCall(_) => todo!(),
         ResolvedExpression::MutMemberCall(_, _) => todo!(),
-        ResolvedExpression::MemberCall(_) => todo!(),
+        ResolvedExpression::MemberCall(member_call) => member_call.impl_member.return_type.clone(),
         ResolvedExpression::Block(_) => todo!(),
         ResolvedExpression::InterpolatedString(_) => todo!(),
         ResolvedExpression::StructInstantiation(struct_instantiation) => {
@@ -79,6 +82,9 @@ pub enum ResolveError {
     MissingFieldInStructInstantiation(LocalIdentifier, ResolvedStructTypeRef),
     ExpectedFunctionExpression(Expression),
     CouldNotFindMember(LocalIdentifier, Expression),
+    UnknownVariable(Variable),
+    NotAnArray(Expression),
+    ArrayIndexMustBeInt(Expression),
 }
 
 impl From<String> for ResolveError {
@@ -143,9 +149,15 @@ impl ResolvedProgram {
     }
 }
 
+#[derive(Debug)]
+struct BlockScope {
+    variables: HashMap<String, ResolvedVariableRef>,
+}
+
 pub struct Resolver<'a> {
     pub parent: &'a mut ResolvedProgram,
     pub current_module: &'a mut ResolvedModule,
+    pub block_scope_stack: Vec<BlockScope>,
 }
 
 impl Display for ResolvedProgram {
@@ -327,6 +339,7 @@ impl<'a> Resolver<'a> {
         Self {
             parent,
             current_module,
+            block_scope_stack: Vec::new(),
         }
     }
 
@@ -654,21 +667,34 @@ impl<'a> Resolver<'a> {
     }
 
     fn resolve_expression(
-        &self,
+        &mut self,
         ast_expression: &Expression,
     ) -> Result<ResolvedExpression, ResolveError> {
         let expression = match ast_expression {
+            // Lookups
             Expression::FieldAccess(expression, field_name) => {
                 let struct_field_ref =
                     self.resolve_into_struct_field_ref(expression.as_ref(), field_name.clone())?;
                 ResolvedExpression::FieldAccess(struct_field_ref)
             }
-            Expression::VariableAccess(_variable) => todo!(),
+            Expression::VariableAccess(variable) => {
+                ResolvedExpression::VariableAccess(self.resolve_variable_access(variable)?)
+            }
             Expression::MutRef(_) => todo!(),
-            Expression::ArrayAccess(_, _) => todo!(),
-            Expression::VariableAssignment(_, _) => todo!(),
+            Expression::ArrayAccess(array_expression, lookup) => ResolvedExpression::ArrayAccess(
+                self.resolve_array_access(array_expression, lookup)?,
+            ),
+
+            // Assignments
+            Expression::VariableAssignment(variable_expression, source_expression) => {
+                ResolvedExpression::VariableAssignment(
+                    self.resolve_variable_assignment(variable_expression, source_expression)?,
+                )
+            }
             Expression::ArrayAssignment(_, _, _) => todo!(),
             Expression::FieldAssignment(_, _, _) => todo!(),
+
+            // Operator
             Expression::BinaryOp(resolved_a, operator, resolved_b) => ResolvedExpression::BinaryOp(
                 self.resolve_binary_op(resolved_a, operator, resolved_b)?,
             ),
@@ -676,6 +702,8 @@ impl<'a> Resolver<'a> {
                 operator.clone(),
                 Box::from(self.resolve_expression(expression)?),
             ),
+
+            // Calls
             Expression::FunctionCall(function_expression, parameter_expressions) => {
                 ResolvedExpression::FunctionCall(
                     self.resolve_function_call(function_expression, parameter_expressions)?,
@@ -688,8 +716,15 @@ impl<'a> Resolver<'a> {
                     ast_arguments,
                 )?)
             }
-            Expression::Block(_) => todo!(),
-            Expression::InterpolatedString(_) => todo!(),
+            Expression::Block(statements) => {
+                let statements = self.resolve_statements(statements)?;
+                ResolvedExpression::Block(statements)
+            }
+            Expression::InterpolatedString(string_parts) => ResolvedExpression::InterpolatedString(
+                self.resolve_interpolated_string(string_parts)?,
+            ),
+
+            // Creation
             Expression::StructInstantiation(struct_identifier, fields) => {
                 ResolvedExpression::StructInstantiation(
                     self.resolve_struct_instantiation(struct_identifier, fields)?,
@@ -700,6 +735,8 @@ impl<'a> Resolver<'a> {
             Expression::Map(_) => todo!(),
             Expression::ExclusiveRange(_, _) => todo!(),
             Expression::Literal(_) => todo!(),
+
+            // Comparison
             Expression::IfElse(_, _, _) => todo!(),
             Expression::Match(_, _) => todo!(),
         };
@@ -708,7 +745,7 @@ impl<'a> Resolver<'a> {
     }
 
     fn resolve_into_struct_field_ref(
-        &self,
+        &mut self,
         struct_expression: &Expression,
         _name: LocalIdentifier,
     ) -> Result<ResolvedStructTypeFieldRef, ResolveError> {
@@ -729,7 +766,7 @@ impl<'a> Resolver<'a> {
     }
 
     fn resolve_struct_instantiation(
-        &self,
+        &mut self,
         qualified_type_identifier: &QualifiedTypeIdentifier,
         ast_fields: &SeqMap<LocalIdentifier, Expression>,
     ) -> Result<ResolvedStructInstantiation, ResolveError> {
@@ -778,7 +815,7 @@ impl<'a> Resolver<'a> {
     }
 
     fn resolve_function_call(
-        &self,
+        &mut self,
         function_expression: &Expression,
         arguments: &Vec<Expression>,
     ) -> Result<ResolvedInternalFunctionCall, ResolveError> {
@@ -804,7 +841,7 @@ impl<'a> Resolver<'a> {
     }
 
     fn resolve_member_call(
-        &self,
+        &mut self,
         ast_member_expression: &Expression,
         ast_member_function_name: &LocalIdentifier,
         ast_arguments: &Vec<Expression>,
@@ -839,7 +876,7 @@ impl<'a> Resolver<'a> {
     }
 
     fn resolve_expressions(
-        &self,
+        &mut self,
         ast_expressions: &Vec<Expression>,
     ) -> Result<Vec<ResolvedExpression>, ResolveError> {
         let mut resolved_expressions = Vec::new();
@@ -847,6 +884,89 @@ impl<'a> Resolver<'a> {
             resolved_expressions.push(self.resolve_expression(expression)?);
         }
         Ok(resolved_expressions)
+    }
+
+    fn resolve_interpolated_string(
+        &mut self,
+        p0: &Vec<StringPart>,
+    ) -> Result<Vec<ResolvedStringPart>, ResolveError> {
+        let mut resolved_parts = Vec::new();
+        for part in p0.iter() {
+            let resolved_string_part = match part {
+                StringPart::Literal(string) => ResolvedStringPart::Literal(string.to_string()),
+                StringPart::Interpolation(expression, format_specifier) => {
+                    let expr = self.resolve_expression(expression)?;
+                    ResolvedStringPart::Interpolation(expr, format_specifier.clone())
+                }
+            };
+
+            resolved_parts.push(resolved_string_part);
+        }
+
+        Ok(resolved_parts)
+    }
+
+    fn resolve_variable_access(
+        &self,
+        variable: &Variable,
+    ) -> Result<ResolvedVariableRef, ResolveError> {
+        let variable_ref = self.find_variable(variable)?;
+        Ok(variable_ref)
+    }
+
+    fn find_variable(&self, variable: &Variable) -> Result<ResolvedVariableRef, ResolveError> {
+        trace!("lookup_in_scope -> Block for {variable:?}");
+        // Look through scopes until we hit a Function scope
+        for scope in self.block_scope_stack.iter().rev() {
+            trace!("...checking in scope {scope:?}");
+            if let Some(value) = scope.variables.get(&variable.name) {
+                return Ok(value.clone());
+            }
+        }
+
+        Err(ResolveError::UnknownVariable(variable.clone()))
+    }
+
+    fn resolve_array_access(
+        &mut self,
+        array_expression: &Expression,
+        usize_expression: &Expression,
+    ) -> Result<ResolvedArrayItemRef, ResolveError> {
+        let resolved_array_expression = self.resolve_expression(&array_expression)?;
+        let array_resolution = resolution(&resolved_array_expression);
+
+        let item_type = match array_resolution {
+            ResolvedType::Array(item_type) => item_type,
+            _ => return Err(ResolveError::NotAnArray(array_expression.clone())),
+        };
+
+        let lookup_expression = self.resolve_expression(usize_expression)?;
+        let lookup_resolution = resolution(&lookup_expression);
+        match &lookup_resolution {
+            ResolvedType::Int(_) => {}
+            _ => Err(ResolveError::ArrayIndexMustBeInt(usize_expression.clone()))?,
+        }
+
+        let array_item = ResolvedArrayItem {
+            item_type,
+            int_expression: lookup_expression,
+        };
+
+        Ok(Rc::new(array_item))
+    }
+
+    fn resolve_variable_assignment(
+        &mut self,
+        ast_variable: &Variable,
+        ast_expression: &Box<Expression>,
+    ) -> Result<ResolvedVariableAssignment, ResolveError> {
+        let variable_ref = self.find_variable(ast_variable)?;
+        let converted_expression = self.resolve_expression(ast_expression)?;
+
+        Ok(ResolvedVariableAssignment {
+            variable_ref,
+            expression: Box::from(converted_expression),
+        })
     }
 }
 
