@@ -276,7 +276,7 @@ modules:
 namespace:
 enum_variants:
 Shape::Circle(Float)
-Shape::Rectangle (width: Float, height: Float)
+Shape::Rectangle { width: Float, height: Float }
 Shape::Point
 statements:
 let shapes: [Shape] = [[EnumVariantLiteral(Shape::Circle, Tuple([FloatLiteral(5.0, ResolvedFloatType)])), EnumVariantLiteral(Shape::Rectangle, Struct([FloatLiteral(10.0, ResolvedFloatType), FloatLiteral(20.0, ResolvedFloatType)])), EnumVariantLiteral(Shape::Point, Nothing)]]

@@ -717,7 +717,7 @@ pub struct ResolvedEnumVariantContainerStructType {
 
 impl Display for ResolvedEnumVariantContainerStructType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "({})", comma_seq(&self.fields))
+        write!(f, "{{ {} }}", comma_seq(&self.fields))
     }
 }
 pub type ResolvedTupleTypeRef = Rc<ResolvedTupleType>;
