@@ -10,8 +10,8 @@ use std::{env, fs};
 use swamp_script_ast::{
     AnonymousStruct, BinaryOperator, Definition, EnumLiteralData, EnumVariant, Expression,
     FunctionData, IdentifierName, ImplItem, Literal, LocalIdentifier, LocalTypeIdentifier,
-    ModulePath, Parameter, Pattern, Program, QualifiedTypeIdentifier, Statement, StringPart, Type,
-    Variable,
+    MatchArm, ModulePath, Parameter, Pattern, Program, QualifiedTypeIdentifier, Statement,
+    StringPart, Type, Variable,
 };
 use swamp_script_ast::{Node, Position, Span, StructType};
 use swamp_script_parser::{AstParser, Rule};
@@ -47,7 +47,9 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
         ResolvedExpression::MutMemberCall(_, _) => todo!(),
         ResolvedExpression::MemberCall(member_call) => member_call.impl_member.return_type.clone(),
         ResolvedExpression::Block(_) => todo!(),
-        ResolvedExpression::InterpolatedString(_) => todo!(),
+        ResolvedExpression::InterpolatedString(string_type, _parts) => {
+            ResolvedType::String(string_type.clone())
+        }
         ResolvedExpression::StructInstantiation(struct_instantiation) => {
             ResolvedType::Struct(struct_instantiation.struct_type_ref.clone())
         }
@@ -55,22 +57,32 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
         ResolvedExpression::Tuple(_) => todo!(),
         ResolvedExpression::ExclusiveRange(_, _) => todo!(),
         ResolvedExpression::IfElse(_, _, _) => todo!(),
-        ResolvedExpression::Match(_, _) => todo!(),
+        ResolvedExpression::Match(resolved_match) => resolved_match.arms[0].expression_type.clone(),
         ResolvedExpression::LetVar(_, _) => todo!(),
-        ResolvedExpression::BoolLiteral(_value, bool_type_ref) => {
-            ResolvedType::Bool(bool_type_ref.clone())
-        }
-        ResolvedExpression::FloatLiteral(_float_value, float_type) => {
-            ResolvedType::Float(float_type.clone())
-        }
-        ResolvedExpression::IntLiteral(_int_value, int_type) => ResolvedType::Int(int_type.clone()),
-        ResolvedExpression::StringLiteral(_string_value, string_type) => {
-            ResolvedType::String(string_type.clone())
-        }
-        ResolvedExpression::UnitLiteral(unit_literal) => ResolvedType::Unit(unit_literal.clone()),
-        ResolvedExpression::EnumVariantLiteral(variant_ref, _data) => {
-            ResolvedType::Enum(variant_ref.owner.clone())
-        }
+        ResolvedExpression::Literal(literal) => match literal {
+            ResolvedLiteral::BoolLiteral(_value, bool_type_ref) => {
+                ResolvedType::Bool(bool_type_ref.clone())
+            }
+            ResolvedLiteral::FloatLiteral(_float_value, float_type) => {
+                ResolvedType::Float(float_type.clone())
+            }
+            ResolvedLiteral::IntLiteral(_int_value, int_type) => {
+                ResolvedType::Int(int_type.clone())
+            }
+            ResolvedLiteral::StringLiteral(_string_value, string_type) => {
+                ResolvedType::String(string_type.clone())
+            }
+            ResolvedLiteral::UnitLiteral(unit_literal) => ResolvedType::Unit(unit_literal.clone()),
+            ResolvedLiteral::EnumVariantLiteral(variant_ref, _data) => {
+                ResolvedType::Enum(variant_ref.owner.clone())
+            }
+            ResolvedLiteral::TupleLiteral(tuple_type_ref, _data) => {
+                ResolvedType::Tuple(tuple_type_ref.clone())
+            }
+            ResolvedLiteral::Array(array_type_ref, _data) => {
+                ResolvedType::Array(array_type_ref.clone())
+            }
+        },
     };
 
     trace!(resolution_expression=?resolution_expression, "resolution");
@@ -703,6 +715,7 @@ impl<'a> Resolver<'a> {
                 ResolvedExpression::Block(statements)
             }
             Expression::InterpolatedString(string_parts) => ResolvedExpression::InterpolatedString(
+                self.parent.string_type.clone(),
                 self.resolve_interpolated_string(string_parts)?,
             ),
 
@@ -714,36 +727,78 @@ impl<'a> Resolver<'a> {
             }
             Expression::ExclusiveRange(_, _) => todo!(), // TODO: PBJ
 
-            Expression::Literal(literal) => match literal {
-                Literal::Int(value) => {
-                    ResolvedExpression::IntLiteral(*value, self.parent.int_type.clone())
-                }
-                Literal::Float(value) => {
-                    ResolvedExpression::FloatLiteral(*value, self.parent.float_type.clone())
-                }
-                Literal::String(value) => ResolvedExpression::StringLiteral(
-                    value.clone(),
-                    self.parent.string_type.clone(),
-                ),
-                Literal::Unit => ResolvedExpression::UnitLiteral(self.parent.unit_type.clone()),
-                Literal::Bool(value) => {
-                    ResolvedExpression::BoolLiteral(*value, self.parent.bool_type.clone())
-                }
+            Expression::Literal(literal) => {
+                swamp_script_semantic::ResolvedExpression::Literal(match literal {
+                    Literal::Int(value) => {
+                        ResolvedLiteral::IntLiteral(*value, self.parent.int_type.clone())
+                    }
+                    Literal::Float(value) => {
+                        ResolvedLiteral::FloatLiteral(*value, self.parent.float_type.clone())
+                    }
+                    Literal::String(value) => ResolvedLiteral::StringLiteral(
+                        value.clone(),
+                        self.parent.string_type.clone(),
+                    ),
+                    Literal::Unit => ResolvedLiteral::UnitLiteral(self.parent.unit_type.clone()),
+                    Literal::Bool(value) => {
+                        ResolvedLiteral::BoolLiteral(*value, self.parent.bool_type.clone())
+                    }
 
-                Literal::EnumVariant(qualified_type_identifier, variant_name, data) => self
-                    .resolve_enum_variant_literal(qualified_type_identifier, variant_name, data)?,
-                Literal::Tuple(expressions) => {
-                    ResolvedExpression::Tuple(self.resolve_expressions(expressions)?)
-                }
-                Literal::Array(items) => {
-                    ResolvedExpression::Array(self.resolve_array_literal(items)?)
-                }
-                Literal::Map(_) => todo!(),
-            },
+                    Literal::EnumVariant(qualified_type_identifier, variant_name, data) => self
+                        .resolve_enum_variant_literal(
+                            qualified_type_identifier,
+                            variant_name,
+                            data,
+                        )?,
+
+                    Literal::Tuple(expressions) => {
+                        let mut resolved_expressions = Vec::new();
+                        for expression in expressions {
+                            resolved_expressions.push(self.resolve_expression(expression)?);
+                        }
+                        let mut resolved_types = Vec::new();
+                        for resolved_expression in &resolved_expressions {
+                            resolved_types.push(resolution(&resolved_expression));
+                        }
+
+                        let tuple_type = ResolvedTupleType::new(resolved_types);
+                        let tuple_type_ref = Rc::new(tuple_type);
+
+                        ResolvedLiteral::TupleLiteral(tuple_type_ref, resolved_expressions)
+                    }
+
+                    Literal::Array(items) => {
+                        // let mut resolved_expressions = Vec::new();
+                        // for expression in items {
+                        //     resolved_expressions.push(self.resolve_expression(expression)?);
+                        // }
+                        //
+                        // let item_type = if resolved_expressions.is_empty() {
+                        //     ResolvedType::Any
+                        // } else {
+                        //     resolution(&resolved_expressions[0])
+                        // };
+                        //
+                        // let array_type = ResolvedArrayType {
+                        //     item_type: item_type.clone(),
+                        // };
+                        //
+                        // let array_type_ref = Rc::new(array_type);
+                        let (array_type_ref, expressions) =
+                            self.resolve_array_type_helper(items)?;
+
+                        ResolvedLiteral::Array(array_type_ref, expressions)
+                    }
+
+                    Literal::Map(_) => todo!(),
+                })
+            }
 
             // Comparison
             Expression::IfElse(_, _, _) => todo!(), // TODO: PBJ
-            Expression::Match(_, _) => todo!(),     // TODO: PBJ
+            Expression::Match(expression, arms) => {
+                ResolvedExpression::Match(self.resolve_match(expression, arms)?)
+            }
         };
 
         Ok(expression)
@@ -830,7 +885,7 @@ impl<'a> Resolver<'a> {
             Pattern::VariableAssignment(variable) => self.resolve_pattern_variable(variable),
             Pattern::Tuple(_) => todo!(),
             Pattern::Struct(_) => todo!(),
-            Pattern::Literal(_) => todo!(),
+            Pattern::Literal(ast_literal) => self.resolve_pattern_literal(ast_literal),
             Pattern::EnumTuple(_, _) => todo!(),
             Pattern::EnumStruct(_, _) => todo!(),
             Pattern::EnumSimple(_) => todo!(),
@@ -1049,10 +1104,10 @@ impl<'a> Resolver<'a> {
         })
     }
 
-    fn resolve_array_literal(
+    fn resolve_array_type_helper(
         &mut self,
         items: &Vec<Expression>,
-    ) -> Result<ResolvedArrayInstantiation, ResolveError> {
+    ) -> Result<(ResolvedArrayTypeRef, Vec<ResolvedExpression>), ResolveError> {
         let expressions = self.resolve_expressions(items)?;
         let item_type = if expressions.is_empty() {
             ResolvedType::Any
@@ -1066,9 +1121,17 @@ impl<'a> Resolver<'a> {
 
         let array_type_ref = Rc::new(array_type);
 
+        Ok((array_type_ref, expressions))
+    }
+
+    fn resolve_array_instantiation(
+        &mut self,
+        items: &Vec<Expression>,
+    ) -> Result<ResolvedArrayInstantiation, ResolveError> {
+        let (array_type_ref, expressions) = self.resolve_array_type_helper(items)?;
         let arr = ResolvedArrayInstantiation {
             expressions,
-            item_type,
+            item_type: array_type_ref.item_type.clone(),
             array_type_ref: array_type_ref.clone(),
             array_type: ResolvedType::Array(array_type_ref),
         };
@@ -1190,7 +1253,7 @@ impl<'a> Resolver<'a> {
         qualified_type_identifier: &QualifiedTypeIdentifier,
         variant_name: &LocalTypeIdentifier,
         variant_data: &EnumLiteralData,
-    ) -> Result<ResolvedExpression, ResolveError> {
+    ) -> Result<ResolvedLiteral, ResolveError> {
         let variant_ref = self.resolve_enum_variant_ref(qualified_type_identifier, variant_name)?;
 
         let resolved_data = match variant_data {
@@ -1205,7 +1268,7 @@ impl<'a> Resolver<'a> {
             }
         };
 
-        Ok(ResolvedExpression::EnumVariantLiteral(
+        Ok(ResolvedLiteral::EnumVariantLiteral(
             variant_ref,
             resolved_data,
         ))
@@ -1223,6 +1286,63 @@ impl<'a> Resolver<'a> {
         } else {
             Ok(&self.current_module.namespace)
         }
+    }
+
+    fn resolve_match(
+        &mut self,
+        expression: &Expression,
+        arms: &Vec<MatchArm>,
+    ) -> Result<ResolvedMatch, ResolveError> {
+        let resolved_expression = self.resolve_expression(expression)?;
+        let mut resolved_arms = Vec::new();
+        for arm in arms {
+            let resolved_arm = self.resolve_arm(arm)?;
+            resolved_arms.push(resolved_arm);
+        }
+
+        Ok(ResolvedMatch {
+            expression: Box::new(resolved_expression),
+            arms: resolved_arms,
+        })
+    }
+
+    fn resolve_arm(&mut self, arm: &MatchArm) -> Result<ResolvedMatchArm, ResolveError> {
+        let resolved_expression = self.resolve_expression(&arm.expression)?;
+        let resolved_type = resolution(&resolved_expression);
+        let resolved_pattern = self.resolve_pattern(&arm.pattern)?;
+        Ok(ResolvedMatchArm {
+            ast_match_arm: arm.clone(),
+            pattern: resolved_pattern,
+            expression: Box::from(resolved_expression),
+            expression_type: resolved_type,
+        })
+    }
+
+    fn resolve_pattern_literal(
+        &self,
+        ast_literal: &Literal,
+    ) -> Result<ResolvedPattern, ResolveError> {
+        let resolved_literal = match ast_literal {
+            Literal::Int(value) => {
+                ResolvedLiteral::IntLiteral(*value, self.parent.int_type.clone())
+            }
+            Literal::Float(value) => {
+                ResolvedLiteral::FloatLiteral(*value, self.parent.float_type.clone())
+            }
+            Literal::String(value) => {
+                ResolvedLiteral::StringLiteral(value.clone(), self.parent.string_type.clone())
+            }
+            Literal::Bool(value) => {
+                ResolvedLiteral::BoolLiteral(*value, self.parent.bool_type.clone())
+            }
+            Literal::EnumVariant(_, _, _) => todo!(),
+            Literal::Tuple(_) => todo!(),
+            Literal::Array(_) => todo!(),
+            Literal::Map(_) => todo!(),
+            Literal::Unit => todo!(),
+        };
+
+        Ok(ResolvedPattern::Literal(resolved_literal))
     }
 }
 

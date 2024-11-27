@@ -395,15 +395,49 @@ pub struct ResolvedBooleanExpression {
 }
 
 #[derive(Debug)]
+pub struct ResolvedMatch {
+    pub arms: Vec<ResolvedMatchArm>,
+    pub expression: Box<ResolvedExpression>,
+}
 
+impl Display for ResolvedMatch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Match( {} ", self.arms.len())?;
+        for arm in self.arms.iter() {
+            writeln!(f, "..{} ", arm)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
 pub struct ResolvedMatchArm {
     #[allow(unused)]
-    ast_match_arm: MatchArm,
+    pub ast_match_arm: MatchArm,
+    pub pattern: ResolvedPattern,
+    pub expression: Box<ResolvedExpression>,
+    pub expression_type: ResolvedType,
+}
+
+impl Display for ResolvedMatchArm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} => {}", self.pattern, self.expression)
+    }
 }
 
 #[derive(Debug)]
 pub enum ResolvedPattern {
     VariableAssignment(ResolvedVariableRef),
+    Literal(ResolvedLiteral),
+}
+
+impl Display for ResolvedPattern {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ResolvedPattern::VariableAssignment(variable_ref) => write!(f, "{}", variable_ref),
+            ResolvedPattern::Literal(literal) => write!(f, "{literal}"),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -461,7 +495,7 @@ pub enum ResolvedExpression {
 
     Block(Vec<ResolvedStatement>),
 
-    InterpolatedString(Vec<ResolvedStringPart>),
+    InterpolatedString(ResolvedStringTypeRef, Vec<ResolvedStringPart>),
 
     // Constructing
     StructInstantiation(ResolvedStructInstantiation),
@@ -479,14 +513,37 @@ pub enum ResolvedExpression {
         Box<ResolvedExpression>,
         Box<ResolvedExpression>,
     ),
-    Match(Box<ResolvedExpression>, Vec<ResolvedMatchArm>),
+    Match(ResolvedMatch),
     LetVar(ResolvedVariableRef, Box<ResolvedExpression>),
+
+    Literal(ResolvedLiteral),
+}
+
+#[derive(Debug)]
+pub enum ResolvedLiteral {
     FloatLiteral(f32, ResolvedFloatTypeRef),
     UnitLiteral(ResolvedUnitTypeRef),
     IntLiteral(i32, ResolvedIntTypeRef),
     StringLiteral(StringConst, ResolvedStringTypeRef),
     BoolLiteral(bool, ResolvedBoolTypeRef),
     EnumVariantLiteral(ResolvedEnumVariantTypeRef, ResolvedEnumLiteralData),
+    TupleLiteral(ResolvedTupleTypeRef, Vec<ResolvedExpression>),
+    Array(ResolvedArrayTypeRef, Vec<ResolvedExpression>),
+}
+
+impl Display for ResolvedLiteral {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ResolvedLiteral::FloatLiteral(_, _) => write!(f, "FloatLiteral"),
+            ResolvedLiteral::UnitLiteral(_) => write!(f, "UnitLiteral"),
+            ResolvedLiteral::IntLiteral(_, _) => write!(f, "IntLiteral"),
+            ResolvedLiteral::StringLiteral(_, _) => write!(f, "StringLiteral"),
+            ResolvedLiteral::BoolLiteral(_, _) => write!(f, "BoolLiteral"),
+            ResolvedLiteral::EnumVariantLiteral(_, _) => write!(f, "EnumVariantLiteral"),
+            ResolvedLiteral::TupleLiteral(_, _) => write!(f, "TupleLiteral"),
+            ResolvedLiteral::Array(_, _) => write!(f, "ArrayLiteral"),
+        }
+    }
 }
 
 //pub type ResolvedExpressionRef = Rc<ResolvedExpression>;
@@ -519,7 +576,9 @@ impl Display for ResolvedExpression {
             ResolvedExpression::MutMemberCall(_, _) => todo!(),
             ResolvedExpression::MemberCall(member_call) => write!(f, "{member_call}"),
             ResolvedExpression::Block(_) => todo!(),
-            ResolvedExpression::InterpolatedString(_) => todo!(),
+            ResolvedExpression::InterpolatedString(_string_type, _) => {
+                write!(f, "InterpolatedString")
+            }
             ResolvedExpression::StructInstantiation(struct_instantiation) => {
                 let borrowed = struct_instantiation.struct_type_ref.borrow();
                 let zipped: Vec<_> = borrowed
@@ -537,22 +596,29 @@ impl Display for ResolvedExpression {
             ResolvedExpression::Tuple(_) => todo!(),
             ResolvedExpression::ExclusiveRange(_, _) => todo!(),
             ResolvedExpression::IfElse(_, _, _) => todo!(),
-            ResolvedExpression::Match(_, _) => todo!(),
+            ResolvedExpression::Match(resolved_match) => write!(f, "{resolved_match}"),
             ResolvedExpression::LetVar(_, _) => todo!(),
-            ResolvedExpression::FloatLiteral(value, _float_type) => {
-                write!(f, "FloatLit({value:?})")
-            }
-            ResolvedExpression::IntLiteral(value, _int_type) => write!(f, "IntLit({value:?})"),
-            ResolvedExpression::StringLiteral(value, _string_type) => {
-                write!(f, "StringLit({value:?})")
-            }
-            ResolvedExpression::UnitLiteral(_unit_lit) => write!(f, "UnitLit"),
-            ResolvedExpression::BoolLiteral(value, _bool_type_ref) => {
-                write!(f, "BoolLit({value:?})")
-            }
-            ResolvedExpression::EnumVariantLiteral(variant_ref, data) => {
-                write!(f, "EnumVariantLit({variant_ref:?}, {data})")
-            }
+            ResolvedExpression::Literal(resolved_literal) => match resolved_literal {
+                ResolvedLiteral::FloatLiteral(value, _float_type) => {
+                    write!(f, "FloatLit({value:?})")
+                }
+                ResolvedLiteral::IntLiteral(value, _int_type) => write!(f, "IntLit({value:?})"),
+                ResolvedLiteral::StringLiteral(value, _string_type) => {
+                    write!(f, "StringLit({value:?})")
+                }
+                ResolvedLiteral::UnitLiteral(_unit_lit) => write!(f, "UnitLit"),
+                ResolvedLiteral::BoolLiteral(value, _bool_type_ref) => {
+                    write!(f, "BoolLit({value:?})")
+                }
+                ResolvedLiteral::EnumVariantLiteral(variant_ref, data) => {
+                    write!(f, "EnumVariantLit({variant_ref:?}, {data})")
+                }
+
+                ResolvedLiteral::TupleLiteral(_tuple_type, data) => {
+                    write!(f, "TupleLiteral({data:?})")
+                }
+                ResolvedLiteral::Array(_array_type, data) => write!(f, "Array({data:?})"),
+            },
         }
     }
 }

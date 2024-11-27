@@ -290,7 +290,10 @@ let shapes: [Shape] = [[EnumVariantLiteral(Shape::Circle, Tuple([FloatLiteral(5.
 fn math_literals() {
     check(
         r#"
-status = match player.health {
+
+health = 99
+
+status = match health {
     100 => "Full health",
     health => 'Critical: {health}'
 }
