@@ -10,6 +10,7 @@ use std::cell::RefCell;
 use std::fmt::{Debug, Display};
 use std::rc::Rc;
 use swamp_script_ast::{LocalTypeIdentifier, QualifiedTypeIdentifier};
+use tracing::info;
 
 pub struct CanonicalTypeName {
     pub module: Rc<Module>,
@@ -24,6 +25,12 @@ impl Debug for CanonicalTypeName {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct LocalTypeName(pub String);
+
+impl Display for LocalTypeName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 #[derive(Default, Debug)]
 pub struct ResolvedModuleNamespace {
@@ -118,9 +125,11 @@ impl ResolvedModuleNamespace {
         enum_variant: ResolvedEnumVariantType,
     ) -> Result<ResolvedEnumVariantTypeRef, String> {
         let enum_variant_ref = Rc::new(enum_variant);
+        let complete_name = &enum_variant_ref.complete_name();
+        info!("complete_name: {}", complete_name);
         self.enum_variant_types
             .insert(
-                (&enum_variant_ref.complete_name()).into(),
+                LocalTypeName(complete_name.clone()),
                 enum_variant_ref.clone(),
             )
             .expect("should be able to add enum variant");
@@ -194,6 +203,7 @@ impl ResolvedModuleNamespace {
     ) -> Option<&ResolvedEnumVariantTypeRef> {
         let complete_name =
             LocalTypeName(format!("{}::{}", enum_name.text, enum_variant_name.text));
+        info!("looking up: '{}'", complete_name);
         self.enum_variant_types.get(&complete_name)
     }
 

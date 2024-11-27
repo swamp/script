@@ -15,7 +15,7 @@ modules:
 ::test
 namespace:
 structs:
-Hello { x: Int, y: Int }
+Hello <2:9-5:10> { x: Int, y: Int }
 impl:
         "#,
     )
@@ -109,7 +109,7 @@ modules:
 ::test
 namespace:
 statements:
-let b<0:0>: Int = ((fn_def add(a: Int, b: Int) -> Int)(IntLit(2), IntLit(22)))
+let b<0:0>: Int = ((fn_def add <2:9-4:10>(a: Int, b: Int) -> Int)(IntLit(2), IntLit(22)))
 let mut c<0:1>: String = StringLit(hello)
 set mut c<0:1>: String = StringLit(another)
         "#,
@@ -132,7 +132,7 @@ modules:
 ::test
 namespace:
 statements:
-let a<0:1>: Int = < b<0:0>: Int=((fn_def add(a: Int, b: Int) -> Int)(IntLit(2), IntLit(22))) >
+let a<0:1>: Int = < b<0:0>: Int=((fn_def add <2:9-4:10>(a: Int, b: Int) -> Int)(IntLit(2), IntLit(22))) >
 let mut c<0:2>: String = StringLit(hello)
 set mut c<0:2>: String = StringLit(another)
         "#,
@@ -171,11 +171,11 @@ modules:
 ::test
 namespace:
 structs:
-Hello { x: Int }
+Hello <2:9-3:17> { x: Int }
 impl:
 enum_variants:
-SomeEnum::Simple
-SomeEnum::WithTuple(Int, String, Hello { x: Int })
+SomeEnum <5:14-5:22>::Simple <6:13-6:19>
+SomeEnum <5:14-5:22>::WithTuple <7:13-7:42>(Int, String, Hello <2:9-3:17> { x: Int })
         "#,
     )
 }
@@ -243,9 +243,9 @@ modules:
 ::test
 namespace:
 enum_variants:
-Shape::Circle(Float)
-Shape::Rectangle { width: Float, height: Float }
-Shape::Point
+Shape <3:6-3:11>::Circle <4:5-4:18>(Float)
+Shape <3:6-3:11>::Rectangle <5:5-5:46> { width: Float, height: Float }
+Shape <3:6-3:11>::Point <6:5-6:10>
 
     "#,
     )
@@ -263,10 +263,11 @@ enum Shape {
 }
 
 shapes = [
-Shape::Circle(5.0),
-Shape::Rectangle { width: 10.0, height: 20.0 },
-Shape::Point
+    Shape::Circle(5.0),
+    Shape::Rectangle { width: 10.0, height: 20.0 },
+    Shape::Point
 ]
+
 
 
 "#,
@@ -276,11 +277,11 @@ modules:
 ::test
 namespace:
 enum_variants:
-Shape::Circle(Float)
-Shape::Rectangle { width: Float, height: Float }
-Shape::Point
+Shape <3:6-3:11>::Circle <4:5-4:18>(Float)
+Shape <3:6-3:11>::Rectangle <5:5-5:46> { width: Float, height: Float }
+Shape <3:6-3:11>::Point <6:5-6:10>
 statements:
-let shapes<0:0>: [Shape] = Array([Literal(EnumVariantLiteral(Shape::Circle, Tuple([Literal(FloatLiteral(5.0, ResolvedFloatType))]))), Literal(EnumVariantLiteral(Shape::Rectangle, Struct([Literal(FloatLiteral(10.0, ResolvedFloatType)), Literal(FloatLiteral(20.0, ResolvedFloatType))]))), Literal(EnumVariantLiteral(Shape::Point, Nothing))])
+let shapes<0:0>: [Shape <3:6-3:11>] = Array([Literal(EnumVariantLiteral(Shape <3:6-3:11>::Circle <4:5-4:18>, Tuple([Literal(FloatLiteral(5.0, ResolvedFloatType))]))), Literal(EnumVariantLiteral(Shape <3:6-3:11>::Rectangle <5:5-5:46>, Struct([Literal(FloatLiteral(10.0, ResolvedFloatType)), Literal(FloatLiteral(20.0, ResolvedFloatType))]))), Literal(EnumVariantLiteral(Shape <3:6-3:11>::Point <6:5-6:10>, Nothing))])
 
 
     "#,
@@ -310,13 +311,14 @@ modules:
 ::test
 namespace:
 structs:
-Player { something_else: Float, health: Int }
+Player <3:1-6:2> { something_else: Float, health: Int }
 impl:
 statements:
-let player<0:0>: Player { something_else: Float, health: Int } = { something_else: Negate(FloatLit(1919.99)), health: IntLit(23) }
-let status<0:1>: String = Match Player { something_else: Float, health: Int }.health<1>
+let player<0:0>: Player <3:1-6:2> { something_else: Float, health: Int } = { something_else: Negate(FloatLit(1919.99)), health: IntLit(23) }
+let status<0:1>: String = Match Player <3:1-6:2> { something_else: Float, health: Int }.health <10:16-10:30><1>
 ..pattern(IntLit(100)) => StringLit(Full health)
 ..pattern(health<1:0>: Int) => '"Critical: ", VarRead(health<1:0>: Int)'
+
 
     "#,
     )

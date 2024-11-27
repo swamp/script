@@ -66,6 +66,12 @@ pub struct Node {
     // TODO: Add comments and attributes
 }
 
+impl Display for Node {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{}-{}", self.span.start, self.span.end)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Span {
     pub start: Position,
@@ -77,6 +83,12 @@ pub struct Position {
     pub offset: usize, // Octet offset into file
     pub line: usize,   // 0-based line number
     pub column: usize, // 0-based column number
+}
+
+impl Display for Position {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{}:{}", self.line, self.column)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -125,12 +137,6 @@ impl LocalTypeIdentifier {
     }
 }
 
-impl Display for LocalTypeIdentifier {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}", self.text)
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct LocalIdentifier {
     pub node: Node,
@@ -148,7 +154,13 @@ impl LocalIdentifier {
 
 impl Display for LocalIdentifier {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}", self.text)
+        write!(f, "{} <{}>", self.text, self.node)
+    }
+}
+
+impl Display for LocalTypeIdentifier {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{} <{}>", self.text, self.node)
     }
 }
 
@@ -234,7 +246,7 @@ pub enum Statement {
     Break,                  // Return with void
     Continue,               //
     Expression(Expression), // Used for expressions with side effects (mutation, i/o)
-    Block(Vec<Statement>),  // TODO: Feels a bit sketchy
+    Block(Vec<Statement>),
     If(Expression, Vec<Statement>, Option<Vec<Statement>>),
 }
 

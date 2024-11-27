@@ -103,12 +103,15 @@ impl Display for ResolvedInternalFunctionDefinition {
 
 pub type ResolvedInternalFunctionDefinitionRef = Rc<ResolvedInternalFunctionDefinition>;
 
+pub type ExternalFunctionId = u32;
+
 #[derive(Debug)]
 pub struct ResolvedExternalFunctionDefinition {
     //pub signature: ResolvedFunctionSignature,
     pub name: LocalIdentifier,
     pub parameters: Vec<ResolvedParameter>,
     pub resolved_return_type: ResolvedType,
+    pub id: ExternalFunctionId,
 }
 
 impl Display for crate::ResolvedExternalFunctionDefinition {
@@ -249,6 +252,20 @@ pub struct ResolvedInternalFunctionCall {
     pub arguments: Vec<ResolvedExpression>,
     pub function_definition: ResolvedInternalFunctionDefinitionRef,
     pub function_expression: Box<ResolvedExpression>,
+}
+
+#[derive(Debug)]
+pub struct ResolvedExternalFunctionCall {
+    pub resolved_type: ResolvedType,
+    pub arguments: Vec<ResolvedExpression>,
+    pub function_definition: ResolvedExternalFunctionDefinitionRef,
+    pub function_expression: Box<ResolvedExpression>,
+}
+
+impl Display for ResolvedExternalFunctionCall {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "external function {}", self.resolved_type)
+    }
 }
 
 pub fn comma<T: Display>(values: &[T]) -> String {
@@ -582,6 +599,8 @@ pub enum ResolvedExpression {
 
     // Calls
     FunctionInternalCall(ResolvedInternalFunctionCall), // ResolvedFunctionReference, Vec<ResolvedExpression>
+    FunctionExternalCall(ResolvedExternalFunctionCall),
+
     MutMemberCall(MutMemberRef, Vec<ResolvedExpression>),
     MemberCall(ResolvedMemberCall),
 
@@ -667,6 +686,7 @@ impl Display for ResolvedExpression {
             ResolvedExpression::FunctionInternalCall(resolved_call) => {
                 write!(f, "{resolved_call}")
             }
+            ResolvedExpression::FunctionExternalCall(resolved_call) => write!(f, "{resolved_call}"),
             ResolvedExpression::MutMemberCall(_, _) => todo!(),
             ResolvedExpression::MemberCall(member_call) => write!(f, "{member_call}"),
             ResolvedExpression::Block(_) => todo!(),
@@ -977,7 +997,7 @@ impl ResolvedEnumVariantType {
     }
 
     pub fn complete_name(&self) -> String {
-        self.owner.name.to_string() + "::" + &*self.name.to_string()
+        self.owner.name.text.to_string() + "::" + &*self.name.text.to_string()
     }
 }
 

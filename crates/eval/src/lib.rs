@@ -2,28 +2,42 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
+use crate::value::Value::ExternalFunction;
 use crate::value::{SwampExport, Value};
+use sparse_slot::SparseSlot;
+use std::fmt::Debug;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use swamp_script_semantic::module::Module;
-pub use swamp_script_semantic::ns::{ResolvedEnumVariantContainerType, ResolvedModuleNamespace};
+pub use swamp_script_semantic::ns::ResolvedModuleNamespace;
 use swamp_script_semantic::{
-    BinaryOperator, LocalTypeIdentifier, ModulePath, Parameter, ResolvedEnumLiteralData,
-    ResolvedExpression, ResolvedInternalFunctionCall, ResolvedInternalFunctionDefinitionRef,
-    ResolvedLiteral, ResolvedMatch, ResolvedMatchArm, ResolvedParameter, ResolvedPattern,
-    ResolvedProgram, ResolvedStatement, ResolvedStringPart, ResolvedType, ResolvedVariable,
-    UnaryOperator, Variable,
+    BinaryOperator, ExternalFunctionId, LocalTypeIdentifier, ModulePath, Parameter,
+    ResolvedEnumLiteralData, ResolvedEnumVariantContainerType, ResolvedExpression,
+    ResolvedExternalFunctionCall, ResolvedInternalFunctionCall,
+    ResolvedInternalFunctionDefinitionRef, ResolvedLiteral, ResolvedMatch, ResolvedMatchArm,
+    ResolvedParameter, ResolvedPattern, ResolvedProgram, ResolvedStatement, ResolvedStringPart,
+    ResolvedType, ResolvedVariable, UnaryOperator, Variable,
 };
-use tracing::{debug, error, trace};
+use tracing::{debug, error, info, trace};
 use value::format_value;
 
 mod def;
-mod func;
 pub mod value;
 
-pub struct SwampFunction {
-    pub name: &'static str,
-    pub handler: Box<dyn Fn(&[Value]) -> Result<Value, String> + Send + Sync>,
+type FunctionFn = Box<dyn Fn(&[Value]) -> Result<Value, ExecuteError>>;
+
+pub struct EvalExternalFunction {
+    pub name: String,
+    pub func: FunctionFn,
+    pub id: ExternalFunctionId,
 }
+
+impl Debug for EvalExternalFunction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "external_fn {} {}", self.id, self.name)
+    }
+}
+
+pub type EvalExternalFunctionRef = Rc<RefCell<EvalExternalFunction>>;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ExecuteError {
@@ -51,14 +65,29 @@ enum ScopeType {
     Block, // Can look up to parent (for loops, while loops, etc)
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 struct Scope {
-    variables: HashMap<String, Value>,
+    variables: Vec<Value>,
     scope_type: ScopeType,
+}
+fn create_fixed_vec(capacity: usize) -> Vec<Value> {
+    let mut items = Vec::with_capacity(capacity);
+    items.extend((0..capacity).map(|_| Value::Unit));
+    items
+}
+impl Default for Scope {
+    fn default() -> Self {
+        Self {
+            variables: create_fixed_vec(64),
+            scope_type: ScopeType::Function,
+        }
+    }
 }
 
 pub struct Interpreter {
     scope_stack: Vec<Scope>,
+    external_functions: HashMap<String, EvalExternalFunctionRef>,
+    external_functions_by_id: HashMap<ExternalFunctionId, EvalExternalFunctionRef>,
     output: Rc<RefCell<Vec<String>>>,
 }
 
@@ -68,32 +97,26 @@ impl Interpreter {
         let mut interpreter = Self {
             scope_stack: vec![Scope::default()],
             output: output.clone(),
+            external_functions: HashMap::new(),
+            external_functions_by_id: HashMap::new(),
         };
-
-        interpreter.register_builtins();
 
         interpreter
     }
 
+    /*
     pub fn register_rust_type<T: SwampExport + 'static>(&mut self) {
         let def = T::generate_swamp_definition();
         self.load_external_definitions(&def)
             .expect("Failed to load generated type definition");
     }
 
-    fn load_external_definitions(&mut self, definitions: &str) -> Result<(), String> {
-        let _ast = self // TODO: FIX ME
-            .parser
-            .parse_script(definitions)
-            .map_err(|e| format!("Failed to parse external definitions: {}", e))?;
 
-        Ok(())
-    }
-
+     */
     fn push_scope(&mut self, scope_type: ScopeType) {
         trace!("push scope: {:?}", scope_type);
         self.scope_stack.push(Scope {
-            variables: HashMap::new(),
+            variables: create_fixed_vec(64),
             scope_type,
         });
     }
@@ -107,6 +130,7 @@ impl Interpreter {
         self.scope_stack.pop();
     }
 
+    /*
     fn lookup_in_scope(&self, name: &str) -> Option<&Value> {
         let current_scope = self.scope_stack.last().unwrap();
         match current_scope.scope_type {
@@ -132,66 +156,38 @@ impl Interpreter {
         }
     }
 
-    fn set_existing_var_or_create_new_one(&mut self, name: String, value: Value, is_mutable: bool) {
-        // First check if we need to look in outer scopes
-        let scope_index = if matches!(
-            self.scope_stack.last().unwrap().scope_type,
-            ScopeType::Block
-        ) {
-            // Find the scope that contains the variable
-            let mut found_index = None;
-            for (i, scope) in self.scope_stack.iter().rev().enumerate() {
-                if scope.variables.contains_key(&name) {
-                    found_index = Some(self.scope_stack.len() - 1 - i);
-                    break;
-                }
-                if matches!(scope.scope_type, ScopeType::Function) {
-                    break;
-                }
-            }
-            found_index
-        } else {
-            // In function scope, only look at current scope
-            if self
-                .scope_stack
-                .last()
-                .unwrap()
-                .variables
-                .contains_key(&name)
-            {
-                Some(self.scope_stack.len() - 1)
-            } else {
-                None
-            }
-        };
+     */
 
-        // Now modify the found scope or create new variable
-        if let Some(index) = scope_index {
-            let scope = &mut self.scope_stack[index];
-            let existing = scope.variables.get_mut(&name).unwrap();
-            match existing {
-                Value::Reference(r) => {
-                    *r.borrow_mut() = match value {
-                        Value::Reference(new_r) => new_r.borrow().clone(),
-                        _ => value,
-                    };
-                }
-                _ => *existing = value,
+    #[inline]
+    fn lookup_var(&self, scope_offset: u32, variable_offset: u32) -> &Value {
+        self.scope_stack
+            .get(scope_offset as usize)
+            .unwrap()
+            .variables
+            .get(variable_offset as usize)
+            .expect("variable not found")
+    }
+
+    fn set_existing_var_or_create_new_one(
+        &mut self,
+        scope_offset: u32,
+        variable_offset: u32,
+        value: Value,
+    ) {
+        // First check if we need to look in outer scopes
+        let scope = &mut self.scope_stack[scope_offset as usize];
+        let existing = &mut scope.variables[variable_offset as usize];
+        match existing {
+            Value::Reference(r) => {
+                *r.borrow_mut() = match value {
+                    Value::Reference(new_r) => new_r.borrow().clone(),
+                    _ => value,
+                };
             }
-        } else {
-            // Create new variable in current scope
-            let bound_value = if is_mutable && !matches!(value, Value::Reference(_)) {
-                Value::Reference(Rc::new(RefCell::new(value)))
-            } else {
-                value
-            };
-            self.scope_stack
-                .last_mut()
-                .unwrap()
-                .variables
-                .insert(name, bound_value);
+            _ => *existing = value,
         }
     }
+
     fn bind_parameters(
         &mut self,
         params: &[ResolvedParameter],
@@ -217,62 +213,43 @@ impl Interpreter {
                 .last_mut()
                 .unwrap()
                 .variables
-                .insert(param.variable.name().to_string(), value);
+                .insert(param.name.to_string(), value);
         }
 
         Ok(())
     }
-    fn register_builtins(&mut self) {
-        let output = self.output.clone();
-        let print_fn = FunctionRef::External(
-            LocalTypeIdentifier::new("print"),
-            (
-                vec![ResolvedParameter {
-                    variable: ResolvedVariable::new("value", false),
-                    param_type: ResolvedType::Any,
-                    is_mutable: false,
-                }],
-                ResolvedType::Unit,
-            ),
-            Rc::new(Box::new(move |args: &[Value]| {
-                if let Some(value) = args.first() {
-                    let display_value = value.to_string();
-                    output.borrow_mut().push(display_value.clone());
-                    println!("{}", display_value);
-                    Ok(Value::Unit)
-                } else {
-                    Err("print requires at least one argument".to_string())?
-                }
-            })),
-        );
 
-        // Add directly to the current module's namespace values
-        self.current_module
-            .borrow_mut()
-            .namespace
-            .values
-            .insert("print".to_string(), Value::InternalFunction(print_fn));
-    }
+    // Box<dyn Fn(&[Value]) -> Result<Value, ExecuteError> + Send + Sync>
 
     pub fn register_external_function(
         &mut self,
-        name: &QualifiedTypeIdentifier,
-        params: Vec<ResolvedParameter>,
-        return_type: ResolvedType,
-        handler: Box<dyn Fn(&[Value]) -> Result<Value, ExecuteError> + Send + Sync>,
+        name: String,
+        function_id: ExternalFunctionId,
+        handler: FunctionFn,
     ) -> Result<(), String> {
-        let func_ref = FunctionRef::External(
-            LocalTypeIdentifier::new(&*name.0),
-            (params.clone(), return_type.clone()),
-            Rc::new(handler),
-        );
+        let external_func = EvalExternalFunction {
+            name: name.clone(),
+            func: handler,
+            id: function_id,
+        };
 
-        // Add to current module's namespace
-        self.current_module.borrow_mut().namespace.add_function(
-            name.to_string(),
-            (params, return_type),
-            func_ref,
-        )
+        let external_func_ref = Rc::new(RefCell::new(external_func));
+
+        self.external_functions_by_id
+            .insert(function_id, external_func_ref.clone());
+        self.external_functions.insert(name, external_func_ref);
+
+        Ok(())
+    }
+
+    fn evaluate_external_function_call(&mut self, call: &ResolvedExternalFunctionCall) {
+        let evaluated_args = self.evaluate_args(&call.arguments)?;
+        let func = self
+            .external_functions_by_id
+            .get(&call.function_definition.id)
+            .expect("external function missing");
+        let v = func.func(&evaluated_args)?;
+        Ok(v)
     }
 
     // Signals can not travel out of a function call, so only return Value
@@ -281,58 +258,37 @@ impl Interpreter {
         call: &ResolvedInternalFunctionCall,
     ) -> Result<Value, ExecuteError> {
         let func_val = self.evaluate_expression(&call.function_expression)?;
-
-        let func_ref = match func_val {
-            Value::InternalFunction(f) => f,
-            _ => return Err("Expected a function".to_string())?,
-        };
-
-        // Check mutability requirements
-        for (param, arg) in call.arguments.iter().zip(args) {
-            if param.is_mutable() {
-                match arg {
-                    ResolvedExpression::MutRef(_) => (), // This is fine
-                    ResolvedExpression::VariableAccess(var) => {
-                        return Err(format!("Parameter '{}' is marked as mut but variable '{}' is passed without mut keyword",
-                                           param.variable.name(), var.name()))?;
-                    }
-                    _ => {
-                        return Err(format!(
-                            "Parameter '{}' is marked as mut but called without mut keyword",
-                            param.variable.name()
-                        ))?
-                    }
-                }
+        match &func_val {
+            Value::InternalFunction(internal_func_ref) => {
+                info!("internal func: {internal_func_ref}")
+            }
+            _ => {
+                return Err(ExecuteError::Error(
+                    "internal error, can only execute internal function".to_owned(),
+                ))
             }
         }
 
-        let evaluated_args = self.evaluate_args(args)?;
-        debug!("call {:?}", func_ref);
-        func_ref.execute(self, evaluated_args)
-    }
+        let evaluated_args = self.evaluate_args(&call.arguments)?;
+        debug!("call {:?}", func_val);
 
-    fn definitions(&mut self, definitions: &Vec<Definition>) -> Result<(), String> {
-        let mut namespace = ResolvedModuleNamespace::new();
+        self.push_scope(ScopeType::Function);
 
-        debug!("starting creating definitions");
+        // Bind parameters before executing body
+        self.bind_parameters(&call.function_definition.parameters, evaluated_args)?;
+        let result = self.execute_statements(&call.function_definition.statements)?;
 
-        for def in definitions {
-            DefinitionRunner::execute_definition(&mut namespace, def)?;
-        }
+        self.pop_scope();
 
-        let new_module = Module::new(
-            None,
-            LocalTypeIdentifier::new(&*"main".to_string()),
-            namespace,
-        );
+        // Since signals can not propagate from the function call, we just return a normal Value
+        let v = match result {
+            ValueWithSignal::Value(v) => v,
+            ValueWithSignal::Return(v) => v,
+            ValueWithSignal::Break => Value::Unit,
+            ValueWithSignal::Continue => Value::Unit,
+        };
 
-        let main_module = Rc::new(RefCell::new(new_module));
-
-        self.current_module = main_module.clone();
-
-        debug!("definitions done");
-
-        Ok(())
+        Ok(v)
     }
 
     pub fn eval_program(
@@ -515,9 +471,9 @@ impl Interpreter {
                 ResolvedStatement::Let(ResolvedPattern::VariableAssignment(var), expr) => {
                     let value = self.evaluate_expression(expr)?;
                     self.set_existing_var_or_create_new_one(
-                        var.name().to_string(),
+                        var.scope_index,
+                        var.variable_index,
                         value,
-                        var.is_mutable,
                     );
                     Value::Unit
                 }
@@ -564,7 +520,7 @@ impl Interpreter {
 
         for arg in args {
             match arg {
-                Expression::MutRef(var_ref) => {
+                ResolvedExpression::MutRef(var_ref) => {
                     // When we get a mut ref, return the reference directly
                     match self
                         .lookup_in_scope(&var_ref.0.name())
@@ -598,6 +554,21 @@ impl Interpreter {
         }
 
         Ok(values)
+    }
+
+    fn get_mut_var(&mut self, variable_index: u32) -> &mut Value {
+        let x = &mut self.scope_stack.last().as_mut().unwrap().variables;
+        x.get_mut(variable_index as usize)
+            .expect("Variable not found")
+    }
+
+    fn get_var(&mut self, variable_index: u32) -> &Value {
+        self.scope_stack
+            .last()
+            .unwrap()
+            .variables
+            .get(variable_index)
+            .expect("variable index out of bounds")
     }
 
     fn evaluate_expression(&mut self, expr: &ResolvedExpression) -> Result<Value, ExecuteError> {
@@ -685,23 +656,19 @@ impl Interpreter {
             }
 
             // ==================== ASSIGNMENT ====================
-            ResolvedExpression::VariableAssignment(resolved_var_assingment) => {
-                let new_value = self.evaluate_expression(value_expr)?;
-
-                if let ResolvedExpression::VariableAccess(name) = &**target {
-                    match self.scope_stack.last().unwrap().variables.get(name.name()) {
-                        Some(Value::Reference(r)) => {
-                            *r.borrow_mut() = new_value.clone();
-                            Ok(new_value)
-                        }
-                        Some(_) => Err(format!(
-                            "Cannot assign to immutable variable: {}",
-                            name.name()
-                        ))?,
-                        None => Err(format!("Variable not found: {}", name.name()))?,
+            ResolvedExpression::VariableAssignment(resolved_var_assignment) => {
+                let new_value = self.evaluate_expression(&resolved_var_assignment.expression)?;
+                let var = self.get_mut_var(resolved_var_assignment.variable_ref.variable_index);
+                match var {
+                    Some(Value::Reference(r)) => {
+                        *r.borrow_mut() = new_value.clone();
+                        Ok(new_value)
                     }
-                } else {
-                    Err("Invalid assignment target".to_string())?
+                    Some(_) => Err(format!(
+                        "Cannot assign to immutable variable: {}",
+                        resolved_var_assignment
+                    ))?,
+                    None => Err(format!("Variable not found: {:?}", resolved_var_assignment))?,
                 }
             }
 
@@ -729,8 +696,12 @@ impl Interpreter {
                 }
             }
 
-            ResolvedExpression::StructFieldAssignment(resolved_struct_field_ref, source_expression) => {
-                let target = self.evaluate_expression(&resolved_struct_field_ref.target_expression)?;
+            ResolvedExpression::StructFieldAssignment(
+                resolved_struct_field_ref,
+                source_expression,
+            ) => {
+                let target =
+                    self.evaluate_expression(&resolved_struct_field_ref.target_expression)?;
                 let value = self.evaluate_expression(source_expression)?;
 
                 match target {
@@ -739,8 +710,8 @@ impl Interpreter {
                         // We know it must be a struct because references can only point to structs
                         match &mut *borrowed {
                             Value::Struct(struct_type, fields) => {
-
-                                if let Some(field) = fields.get_mut(resolved_struct_field_ref.index) {
+                                if let Some(field) = fields.get_mut(resolved_struct_field_ref.index)
+                                {
                                     *field = value.clone();
                                     Ok(value)
                                 } else {
@@ -769,22 +740,10 @@ impl Interpreter {
             // ------------- LOOKUP ---------------------
             ResolvedExpression::VariableAccess(var) => {
                 // First check local scope
-                if let Some(value) = self.lookup_in_scope(&var.name) {
-                    trace!("found lookup: {var:?} {value:?}");
+                let value = self.lookup_var(&var.scope_index, var.variable_index);
+                trace!("found lookup: {var:?} {value:?}");
 
-                    return Ok(value.clone());
-                }
-
-                // Then check module namespace
-                /* TODO:
-                let module = self.current_module.borrow();
-                if let Some(value) = module.namespace.get_value(&var.name) {
-                    return Ok(value.clone());
-                }
-
-                 */
-
-                Err(format!("Variable '{}' not found in module", var.name,))?
+                Ok(value.clone())
             }
 
             ResolvedExpression::ArrayAccess(array_item_ref) => {
@@ -887,32 +846,17 @@ impl Interpreter {
                 self.evaluate_internal_function_call(resolved_internal_call)
             }
 
+            ResolvedExpression::FunctionExternalCall(resolved_external_call) => {
+                // Directly use evaluate_function_call instead of the current implementation
+                self.evaluate_external_function_call(resolved_external_call)
+            }
+
             ResolvedExpression::MemberCall(resolved_member_call) => {
                 let member_value =
                     self.evaluate_expression(&resolved_member_call.resolved_expression)?;
 
                 trace!("{} > member call {:?}", self.tabs(), member_value);
-                /*
-                                // Look up the method
-                                let method = {
-                                    let module = self.current_module.borrow();
-                                    let impl_methods = module
-                                        .namespace
-                                        .get_impl(&type_id)
-                                        .ok_or_else(|| format!("No impl found for type {:?}", type_id))?;
 
-                                    impl_methods
-                                        .members
-                                        .get(&method_name.0)
-                                        .ok_or_else(|| {
-                                            format!(
-                                                "Method '{}' not found for type {:?}",
-                                                method_name.0, type_id
-                                            )
-                                        })?
-                                        .clone()
-                                };
-                */
                 self.push_scope(ScopeType::Function); // TODO: maybe have automatic pop on Drop
 
                 let mut member_call_arguments = Vec::new();
@@ -943,11 +887,7 @@ impl Interpreter {
                 self.bind_parameters(&all_params, member_call_arguments)?;
 
                 let result = self.execute_statements(
-                    &resolved_member_call
-                        .impl_member
-                        .body
-                        .function
-                        .statements,
+                    &resolved_member_call.impl_member.body.function.statements,
                 )?;
 
                 self.pop_scope();
@@ -1067,6 +1007,7 @@ impl Interpreter {
                 }
 
                 ResolvedPattern::Struct(fields) => {
+                    /* TODO:
                     if let Value::Struct(_struct_type_ref, values) = &actual_value {
                         if fields.len() == values.len() {
                             self.push_scope(ScopeType::Block);
@@ -1082,6 +1023,8 @@ impl Interpreter {
                             return result;
                         }
                     }
+
+                     */
                 }
 
                 ResolvedPattern::Literal(lit) => match (lit, &actual_value) {
@@ -1101,12 +1044,15 @@ impl Interpreter {
                 },
 
                 ResolvedPattern::EnumTuple(resolved_enum_type) => {
+                    /* TODO: //
                     if let Value::EnumVariant(enum_variant_type_ref, container) = &actual_value {
                         if enum_variant_type_ref.name() == ast_variant_name {
                             if let Value::Tuple(_, values) = &**container {
                                 if fields.len() == values.len() {
                                     self.push_scope(ScopeType::Block);
-                                    for (field, value) in enum_variant_type_ref.data.iter().zip(values.iter()) {
+                                    for (field, value) in
+                                        enum_variant_type_ref.data.iter().zip(values.iter())
+                                    {
                                         self.set_existing_var_or_create_new_one(
                                             field.0.clone(),
                                             value.clone(),
@@ -1119,10 +1065,11 @@ impl Interpreter {
                                 }
                             }
                         }
-                    }
+                    }*/
                 }
 
                 ResolvedPattern::EnumStruct(enum_struct_ref) => {
+                    /* TODO:
                     if let Value::EnumVariant(enum_variant_type_ref, container) = &actual_value {
                         if enum_variant_type_ref.name() == ast_variant_name {
                             if let Value::Struct(_, values) = &**container {
@@ -1140,6 +1087,8 @@ impl Interpreter {
                             }
                         }
                     }
+
+                     */
                 }
 
                 ResolvedPattern::EnumSimple(local_identifier) => match &actual_value {

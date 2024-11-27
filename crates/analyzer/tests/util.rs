@@ -10,6 +10,7 @@ use swamp_script_ast::{LocalIdentifier, ModulePath, Node, Position, Span};
 use swamp_script_parser::AstParser;
 use swamp_script_semantic::ResolvedProgram;
 use tracing::{debug, info, warn};
+use tracing::{error, trace};
 
 fn get_test_fixtures_directory(suffix: &str) -> PathBuf {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -23,10 +24,10 @@ fn get_test_fixtures_directory(suffix: &str) -> PathBuf {
         .to_path_buf()
 }
 
-fn create_program(script: &str) -> Result<ResolvedProgram, ResolveError> {
+pub fn create_program(script: &str) -> Result<ResolvedProgram, ResolveError> {
     let parser = AstParser::new();
     let ast_program = parser.parse_script(script)?;
-    info!("ast_program:\n{:#?}", ast_program);
+    trace!("ast_program:\n{:#?}", ast_program);
 
     let parse_module = ParseModule { ast_program };
 
@@ -65,13 +66,20 @@ fn create_program(script: &str) -> Result<ResolvedProgram, ResolveError> {
 pub fn check_fail(script: &str, expected_error: &str) {
     let resolved_program_err = create_program(script).err().expect("Expected error");
     let output = format!("{resolved_program_err:?}");
-    info!("semantic output: '{}'", output);
+    warn!("semantic output: '{}'", output);
     assert_eq!(output, expected_error.trim());
 }
 
 pub fn check(script: &str, expected_output: &str) {
-    let resolved_program = create_program(script).expect("Failed to create program");
-
+    let resolved_program_result = create_program(script);
+    if resolved_program_result.is_err() {
+        error!("{:?}", resolved_program_result.as_ref().unwrap_err());
+        panic!(
+            "Failed to create program {:?}",
+            resolved_program_result.unwrap_err()
+        );
+    }
+    let resolved_program = resolved_program_result.unwrap();
     let formatted_output = resolved_program.to_string();
 
     let actual = formatted_output

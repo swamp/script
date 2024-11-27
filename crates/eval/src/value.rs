@@ -2,12 +2,17 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use crate::{ExecuteError, Interpreter, ScopeType, ValueWithSignal};
+use crate::{EvalExternalFunctionRef, ExecuteError, Interpreter, ScopeType, ValueWithSignal};
 use std::cell::RefCell;
 use std::fmt::Debug;
 use std::rc::Rc;
 
-use swamp_script_semantic::{FormatSpecifier, PrecisionType, ResolvedArrayTypeRef, ResolvedEnumVariantContainerStructTypeRef, ResolvedEnumVariantTypeRef, ResolvedExternalFunctionDefinitionRef, ResolvedInternalFunctionDefinitionRef, ResolvedStructTypeRef, ResolvedTupleTypeRef, ResolvedType};
+use swamp_script_semantic::{
+    FormatSpecifier, PrecisionType, ResolvedArrayTypeRef,
+    ResolvedEnumVariantContainerStructTypeRef, ResolvedEnumVariantTypeRef,
+    ResolvedExternalFunctionDefinitionRef, ResolvedInternalFunctionDefinitionRef,
+    ResolvedStructTypeRef, ResolvedTupleTypeRef, ResolvedType,
+};
 
 pub trait SwampExport {
     fn generate_swamp_definition() -> String;
@@ -73,7 +78,7 @@ pub enum Value {
 
     // Higher order
     InternalFunction(ResolvedInternalFunctionDefinitionRef),
-    ExternalFunction(ExternalFunctionRef),
+    ExternalFunction(EvalExternalFunctionRef),
     EnumVariantStruct(ResolvedEnumVariantContainerStructTypeRef, Vec<Value>),
 }
 
@@ -163,6 +168,8 @@ impl std::fmt::Display for Value {
                 write!(f, "{}", s)
             }
             Value::Reference(reference) => write!(f, "{}", reference.borrow()),
+            Value::ExternalFunction(_) => todo!(),
+            Value::EnumVariantStruct(_, _) => todo!(),
         }
     }
 }

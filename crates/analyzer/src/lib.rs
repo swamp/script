@@ -84,6 +84,7 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
                 ResolvedType::Array(array_type_ref.clone())
             }
         },
+        ResolvedExpression::FunctionExternalCall(_) => todo!(),
     };
 
     trace!(resolution_expression=%resolution_expression, "resolution first");
@@ -1553,4 +1554,41 @@ pub fn resolve_module(
         .add_module(module_path, module_ref.clone());
 
     Ok(module_ref)
+}
+
+pub fn create_program(script: &str, root_path: PathBuf) -> Result<ResolvedProgram, ResolveError> {
+    let parser = AstParser::new();
+    let ast_program = parser.parse_script(script)?;
+    trace!("ast_program:\n{:#?}", ast_program);
+
+    let parse_module = ParseModule { ast_program };
+
+    let mut graph = DependencyGraph::new();
+    let mut vec = Vec::new();
+    vec.push(LocalIdentifier::new(
+        Node {
+            span: Span {
+                start: Position {
+                    offset: 0,
+                    line: 0,
+                    column: 0,
+                },
+                end: Position {
+                    offset: 0,
+                    line: 0,
+                    column: 0,
+                },
+            },
+        },
+        "test",
+    ));
+    let root = ModulePath(vec);
+    graph.add_ast_module(root.clone(), parse_module);
+
+    debug!("root path is {root_path:?}");
+    let mut resolved_program = ResolvedProgram::new();
+
+    resolve_with_graph(root_path, root, &mut graph, &mut resolved_program)?;
+
+    Ok(resolved_program)
 }

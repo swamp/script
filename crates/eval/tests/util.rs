@@ -4,6 +4,7 @@
  */
 use swamp_script_eval::{ExecuteError, Interpreter, ValueWithSignal};
 use swamp_script_parser::AstParser;
+use swamp_script_semantic::ns::ResolvedModuleNamespace;
 
 fn compile(script: &str) -> Result<(ValueWithSignal, Vec<String>), ExecuteError> {
     let parser = AstParser::new();
@@ -11,12 +12,45 @@ fn compile(script: &str) -> Result<(ValueWithSignal, Vec<String>), ExecuteError>
 
     let program = parser.parse_script(script).unwrap();
 
+    let resolved_program = swamp_script_analyzer::create_program("");
+
     let value = interpreter.eval_program(program)?;
 
     let output = interpreter.get_output();
 
     Ok((value, output))
 }
+
+/*
+fn register_builtins(namespace: &mut ResolvedModuleNamespace) {
+    let output = self.output.clone();
+    let print_fn = FunctionRef::External(
+        LocalTypeIdentifier::new("print"),
+        (
+            vec![ResolvedParameter {
+                variable: ResolvedVariable::new("value", false),
+                param_type: ResolvedType::Any,
+                is_mutable: false,
+            }],
+            ResolvedType::Unit,
+        ),
+        Rc::new(Box::new(move |args: &[Value]| {
+            if let Some(value) = args.first() {
+                let display_value = value.to_string();
+                output.borrow_mut().push(display_value.clone());
+                println!("{}", display_value);
+                Ok(Value::Unit)
+            } else {
+                Err("print requires at least one argument".to_string())?
+            }
+        })),
+    );
+
+    // Add directly to the current module's namespace values
+   namespace.add_external_function
+        .values
+        .insert("print".to_string(), Value::InternalFunction(print_fn));
+}*/
 
 pub fn check(script: &str, expected_result: &str) {
     let (_v, output) = compile(script).expect("eval script failed");
