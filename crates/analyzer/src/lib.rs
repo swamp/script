@@ -3,14 +3,13 @@ use crate::module::Module;
 
 use pest::error::Error;
 use seq_map::SeqMap;
-use std::fmt::{Debug, Display};
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::{env, fmt, fs};
+use std::{env, fs};
 use swamp_script_ast::{
     BinaryOperator, Definition, EnumVariant, Expression, FunctionData, IdentifierName, ImplItem,
-    ImplMember, Literal, LocalIdentifier, LocalTypeIdentifier, ModulePath, Parameter, Pattern,
-    Program, QualifiedTypeIdentifier, Statement, StringPart, Type, Variable,
+    Literal, LocalIdentifier, LocalTypeIdentifier, ModulePath, Parameter, Pattern, Program,
+    QualifiedTypeIdentifier, Statement, StringPart, Type, Variable,
 };
 use swamp_script_ast::{Node, Position, Span, StructType};
 use swamp_script_parser::{AstParser, Rule};
@@ -305,7 +304,7 @@ impl<'a> Resolver<'a> {
                     let resolved_parameters = self.resolve_parameters(&impl_member.params)?;
                     let resolved_return = self.resolve_type(&impl_member.return_type)?;
 
-                    let mut found_struct = self.find_struct_type_local_mut(&attached_to_type)?;
+                    let found_struct = self.find_struct_type_local_mut(&attached_to_type)?;
 
                     let resolved_impl_member = ResolvedImplMember {
                         parameters: resolved_parameters,
@@ -340,8 +339,7 @@ impl<'a> Resolver<'a> {
 
                     let member_function_ref = Rc::new(member_function);
                     {
-                        let mut found_struct =
-                            self.find_struct_type_local_mut(&attached_to_type)?;
+                        let found_struct = self.find_struct_type_local_mut(&attached_to_type)?;
                         found_struct
                             .borrow_mut()
                             .impl_functions

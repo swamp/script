@@ -17,7 +17,7 @@ use swamp_script_ast::{
     Parameter, Pattern, Position, PrecisionType, Program, QualifiedTypeIdentifier, SelfParameter,
     Span, Statement, StringConst, StringPart, StructType, Type, UnaryOperator, Variable,
 };
-use tracing::{debug, info};
+use tracing::debug;
 
 #[derive(Parser)]
 #[grammar = "grammar.pest"]

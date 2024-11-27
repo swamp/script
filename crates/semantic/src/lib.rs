@@ -1,7 +1,6 @@
 pub mod module;
 pub mod ns;
 
-use crate::module::Module;
 use crate::ns::ResolvedModuleNamespace;
 use seq_map::SeqMap;
 use std::cell::RefCell;
@@ -11,8 +10,8 @@ use std::hash::Hash;
 use std::rc::Rc;
 use swamp_script_ast::{
     AnonymousStruct, BinaryOperator, Expression, FormatSpecifier, IdentifierName, ImplMember,
-    LocalIdentifier, LocalTypeIdentifier, MatchArm, ModulePath, Node, Parameter, Position, Span,
-    StringConst, StructType, UnaryOperator, Variable,
+    LocalIdentifier, LocalTypeIdentifier, MatchArm, ModulePath, Parameter, StringConst, StructType,
+    UnaryOperator, Variable,
 };
 
 #[derive(Debug, Clone)]
