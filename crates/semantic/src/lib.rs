@@ -8,10 +8,10 @@ use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
 use std::rc::Rc;
-use swamp_script_ast::{
+pub use swamp_script_ast::{
     AnonymousStruct, BinaryOperator, Expression, FormatSpecifier, IdentifierName, ImplMember,
-    LocalIdentifier, LocalTypeIdentifier, MatchArm, ModulePath, Parameter, StringConst, StructType,
-    UnaryOperator, Variable,
+    LocalIdentifier, LocalTypeIdentifier, MatchArm, ModulePath, Parameter, PrecisionType,
+    StringConst, StructType, UnaryOperator, Variable,
 };
 
 #[derive(Debug, Clone)]
@@ -103,6 +103,28 @@ impl Display for ResolvedInternalFunctionDefinition {
 
 pub type ResolvedInternalFunctionDefinitionRef = Rc<ResolvedInternalFunctionDefinition>;
 
+#[derive(Debug)]
+pub struct ResolvedExternalFunctionDefinition {
+    //pub signature: ResolvedFunctionSignature,
+    pub name: LocalIdentifier,
+    pub parameters: Vec<ResolvedParameter>,
+    pub resolved_return_type: ResolvedType,
+}
+
+impl Display for crate::ResolvedExternalFunctionDefinition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "(ext_fn_def {}({}) -> {})",
+            self.name,
+            comma(&self.parameters),
+            self.resolved_return_type
+        )
+    }
+}
+
+pub type ResolvedExternalFunctionDefinitionRef = Rc<crate::ResolvedExternalFunctionDefinition>;
+
 //pub type ResolvedTypeRef = Rc<ResolvedType>;
 
 impl Display for ResolvedType {
@@ -178,6 +200,12 @@ pub struct ResolvedVariable {
     pub variable_index: usize,
 }
 
+impl ResolvedVariable {
+    pub fn is_mutable(&self) -> bool {
+        self.ast_variable.is_mutable
+    }
+}
+
 impl Display for ResolvedVariable {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let prefix = if self.ast_variable.is_mutable {
@@ -220,6 +248,7 @@ pub struct ResolvedInternalFunctionCall {
     pub resolved_type: ResolvedType,
     pub arguments: Vec<ResolvedExpression>,
     pub function_definition: ResolvedInternalFunctionDefinitionRef,
+    pub function_expression: Box<ResolvedExpression>,
 }
 
 pub fn comma<T: Display>(values: &[T]) -> String {
@@ -294,6 +323,7 @@ pub struct ResolvedMemberCall {
     pub arguments: Vec<ResolvedExpression>,
     pub struct_type_ref: ResolvedStructTypeRef,
     pub impl_member: ResolvedImplMemberRef,
+
     /*
     MemberRef, LocalTypeIdentifier, Vec<ResolvedExpression>
      */
@@ -312,12 +342,25 @@ impl Display for ResolvedMemberCall {
     }
 }
 
+type ResolvedMutStructFieldRef = Rc<ResolvedMutStructField>;
+#[derive(Debug)]
+pub struct ResolvedMutStructField {
+    #[allow(unused)]
+    ast: Expression,
+
+    pub target_expression: ResolvedExpression,
+    pub index: usize,
+}
+
+pub type ResolvedMutTupleFieldRef = Rc<ResolvedMutTupleField>;
+
 #[derive(Debug)]
 pub struct ResolvedStructTypeField {
     pub struct_type_ref: ResolvedStructTypeRef,
     pub index: usize,
     pub field_name: LocalIdentifier,
     pub resolved_type: ResolvedType,
+    pub struct_expression: Box<ResolvedExpression>,
 }
 
 impl Display for ResolvedStructTypeField {
@@ -346,6 +389,7 @@ pub struct ResolvedMutArray {}
 pub struct ResolvedArrayItem {
     pub item_type: ResolvedType,
     pub int_expression: ResolvedExpression,
+    pub array_expression: ResolvedExpression,
     pub array_type: ResolvedType,
 }
 
@@ -387,15 +431,6 @@ impl Display for ResolvedStringPart {
         }
     }
 }
-
-type ResolvedMutStructFieldRef = Rc<ResolvedMutStructField>;
-#[derive(Debug)]
-pub struct ResolvedMutStructField {
-    #[allow(unused)]
-    ast: Expression,
-}
-
-pub type ResolvedMutTupleFieldRef = Rc<ResolvedMutTupleField>;
 
 #[derive(Debug)]
 pub struct ResolvedMutTupleField {
@@ -471,6 +506,12 @@ impl Display for ResolvedMatchArm {
 pub enum ResolvedPattern {
     VariableAssignment(ResolvedVariableRef),
     Literal(ResolvedLiteral),
+    Tuple(ResolvedTupleTypeRef),
+    EnumTuple(ResolvedEnumTypeRef),
+    EnumStruct(ResolvedEnumTypeRef),
+    Wildcard,
+    Struct(ResolvedStructTypeRef),
+    EnumSimple(ResolvedEnumVariantTypeRef),
 }
 
 impl Display for ResolvedPattern {
@@ -478,6 +519,12 @@ impl Display for ResolvedPattern {
         match self {
             ResolvedPattern::VariableAssignment(variable_ref) => write!(f, "{}", variable_ref),
             ResolvedPattern::Literal(literal) => write!(f, "{literal}"),
+            ResolvedPattern::Wildcard => write!(f, "_"),
+            ResolvedPattern::Tuple(_) => write!(f, "_"),
+            ResolvedPattern::EnumTuple(_) => write!(f, "_"),
+            ResolvedPattern::EnumStruct(_) => write!(f, "_"),
+            ResolvedPattern::Struct(_) => write!(f, "_"),
+            ResolvedPattern::EnumSimple(_) => write!(f, "_"),
         }
     }
 }
@@ -1017,6 +1064,7 @@ pub struct ResolvedImplMember {
     pub parameters: Vec<ResolvedParameter>,
     pub return_type: ResolvedType,
     pub struct_ref: ResolvedStructTypeRef,
+    pub function_ref: ResolvedFunctionRef,
 }
 
 impl Display for ResolvedImplMember {

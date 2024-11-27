@@ -6,13 +6,8 @@ use crate::{ExecuteError, Interpreter, ScopeType, ValueWithSignal};
 use std::cell::RefCell;
 use std::fmt::Debug;
 use std::rc::Rc;
-use swamp_script_ast::{
-    FormatSpecifier, LocalTypeIdentifier, Parameter, PrecisionType, Statement, Type,
-};
-use swamp_script_semantic::ns::{
-    ResolvedEnumVariantTypeRef, ResolvedStructTypeRef, ResolvedTupleTypeRef, ResolvedType,
-};
-use swamp_script_semantic::ResolvedFunctionReference;
+
+use swamp_script_semantic::{FormatSpecifier, PrecisionType, ResolvedArrayTypeRef, ResolvedEnumVariantContainerStructTypeRef, ResolvedEnumVariantTypeRef, ResolvedExternalFunctionDefinitionRef, ResolvedInternalFunctionDefinitionRef, ResolvedStructTypeRef, ResolvedTupleTypeRef, ResolvedType};
 
 pub trait SwampExport {
     fn generate_swamp_definition() -> String;
@@ -58,42 +53,6 @@ impl SwampExport for i32 {
     }
 }
 
-type FunctionFn = Box<dyn Fn(&[Value]) -> Result<Value, ExecuteError>>;
-
-impl FunctionRef {
-    pub fn execute(
-        &self,
-        interpreter: &mut Interpreter,
-        args: Vec<Value>,
-    ) -> Result<Value, ExecuteError> {
-        match self {
-            ResolvedFunctionReference::External(_, (_, _), f) => {
-                let v = f(&args)?;
-                Ok(v)
-            }
-            ResolvedFunctionReference::Internal(_, (params, _), body) => {
-                interpreter.push_scope(ScopeType::Function);
-
-                // Bind parameters before executing body
-                interpreter.bind_parameters(params, args)?;
-                let result = interpreter.execute_statements(body)?;
-
-                interpreter.pop_scope();
-
-                // Since signals can not propagate from the function call, we just return a normal Value
-                let v = match result {
-                    ValueWithSignal::Value(v) => v,
-                    ValueWithSignal::Return(v) => v,
-                    ValueWithSignal::Break => Value::Unit,
-                    ValueWithSignal::Continue => Value::Unit,
-                };
-
-                Ok(v)
-            }
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub enum Value {
     Int(i32),
@@ -104,7 +63,7 @@ pub enum Value {
     Reference(Rc<RefCell<Value>>),
 
     // Containers
-    Array(SwampTypeId, Vec<Value>),
+    Array(ResolvedArrayTypeRef, Vec<Value>),
     Tuple(ResolvedTupleTypeRef, Vec<Value>),
     Struct(ResolvedStructTypeRef, Vec<Value>), // type of the struct, and the fields themselves in strict order
     EnumVariant(ResolvedEnumVariantTypeRef, Box<Value>), // (enum_type_name, variant_name, value). value is either tuple or struct
@@ -113,7 +72,9 @@ pub enum Value {
     ExclusiveRange(Box<i32>, Box<i32>),
 
     // Higher order
-    Function(FunctionRef),
+    InternalFunction(ResolvedInternalFunctionDefinitionRef),
+    ExternalFunction(ExternalFunctionRef),
+    EnumVariantStruct(ResolvedEnumVariantContainerStructTypeRef, Vec<Value>),
 }
 
 impl Value {
@@ -124,9 +85,10 @@ impl Value {
         }
     }
 
+    /*
     pub fn swamp_type_id(&self) -> ResolvedType {
         match self {
-            Value::Int(_) => ResolvedType::Int,
+            Value::Int(_) => ResolvedType::Int(),
             Value::Float(_) => ResolvedType::Float,
             Value::String(_) => ResolvedType::String,
             Value::Bool(_) => ResolvedType::Bool,
@@ -142,6 +104,8 @@ impl Value {
             }
         }
     }
+
+     */
 }
 
 impl std::fmt::Display for Value {
@@ -172,22 +136,22 @@ impl std::fmt::Display for Value {
                 write!(f, ")")
             }
             Value::Struct(struct_type_ref, fields_in_strict_order) => {
-                let prefix = if struct_type_ref.name().0.is_empty() {
+                let prefix = if struct_type_ref.borrow().name().text.is_empty() {
                     "".to_string()
                 } else {
-                    struct_type_ref.name().0.to_string() + &*" ".to_string()
+                    struct_type_ref.borrow().name().text.to_string() + &*" ".to_string()
                 };
                 write!(f, "{}{{ ", prefix)?;
                 for (i, val) in fields_in_strict_order.iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    let field_name = struct_type_ref.fields.keys().nth(i).unwrap();
+                    let field_name = struct_type_ref.borrow().fields.keys().nth(i).unwrap();
                     write!(f, "{}: {}", field_name, val)?;
                 }
                 write!(f, " }}")
             }
-            Value::Function(_reference) => write!(f, "<function>"), // TODO:
+            Value::InternalFunction(_reference) => write!(f, "<function>"), // TODO:
             Value::Unit => write!(f, "()"),
             Value::ExclusiveRange(start, end) => write!(f, "{}..{}", start, end),
             Value::EnumVariant(enum_name, data) => {
@@ -257,8 +221,7 @@ pub fn format_value(value: &Value, spec: &FormatSpecifier) -> Result<String, Str
 
         _ => Err(format!(
             "Unsupported format specifier {:?} for value type {:?}",
-            spec,
-            value.swamp_type_id()
+            spec, value
         )),
     }
 }

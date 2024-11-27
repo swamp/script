@@ -2,16 +2,12 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-
+/*
 use crate::value::Value;
 use seq_map::SeqMap;
-use swamp_script_ast::SelfParameter;
-use swamp_script_ast::{Definition, EnumVariant, ImplItem, ImplMember, LocalTypeIdentifier, Type};
 use swamp_script_semantic::ns::{
     ImplType, ResolvedEnumVariantContainerType, ResolvedModuleNamespace, ResolvedStructType,
-    SwampTypeId,
 };
-use swamp_script_semantic::ResolvedFunctionReference;
 use tracing::debug;
 
 pub struct DefinitionRunner;
@@ -19,7 +15,7 @@ pub struct DefinitionRunner;
 impl DefinitionRunner {
     pub fn evaluate_types(
         namespace: &mut ResolvedModuleNamespace,
-        ast_type_types: &[Type],
+        ast_type_types: &[ResolvedType],
     ) -> Result<Vec<SwampTypeId>, String> {
         let mut items = vec![];
 
@@ -32,7 +28,7 @@ impl DefinitionRunner {
 
     pub fn evaluate_type(
         namespace: &mut ResolvedModuleNamespace,
-        ast_type: &Type,
+        ast_type: &ResolvedType,
     ) -> Result<SwampTypeId, String> {
         let t = match ast_type {
             Type::Int => SwampTypeId::Int,
@@ -283,3 +279,4 @@ impl DefinitionRunner {
         Ok(value)
     }
 }
+*/

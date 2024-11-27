@@ -327,6 +327,8 @@ impl<'a> Resolver<'a> {
 
                     let found_struct = self.find_struct_type_local_mut(&attached_to_type)?;
 
+                    let body = self.resolve_statements(&impl_member.body)?;
+
                     let resolved_impl_member = ResolvedImplMember {
                         parameters: resolved_parameters,
                         return_type: resolved_return.clone(),
@@ -847,6 +849,7 @@ impl<'a> Resolver<'a> {
                 index: field_index,
                 resolved_type: field_resolved_type.clone(),
                 field_name: name.clone(),
+                struct_expression: Box::from(resolved_expr),
             };
 
             let field_ref = Rc::new(field);
