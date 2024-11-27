@@ -1064,7 +1064,7 @@ pub struct ResolvedImplMember {
     pub parameters: Vec<ResolvedParameter>,
     pub return_type: ResolvedType,
     pub struct_ref: ResolvedStructTypeRef,
-    pub function_ref: ResolvedFunctionRef,
+    pub body: Vec<ResolvedStatement>,
 }
 
 impl Display for ResolvedImplMember {

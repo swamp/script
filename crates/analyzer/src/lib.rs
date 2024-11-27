@@ -325,27 +325,28 @@ impl<'a> Resolver<'a> {
                     let resolved_parameters = self.resolve_parameters(&impl_member.params)?;
                     let resolved_return = self.resolve_type(&impl_member.return_type)?;
 
-                    let found_struct = self.find_struct_type_local_mut(&attached_to_type)?;
-
-                    let body = self.resolve_statements(&impl_member.body)?;
-
-                    let resolved_impl_member = ResolvedImplMember {
-                        parameters: resolved_parameters,
-                        return_type: resolved_return.clone(),
-                        ast_member: impl_member.clone(),
-                        struct_ref: found_struct.clone(),
-                    };
-
-                    let resolved_impl_member_ref = Rc::new(resolved_impl_member);
+                    let found_struct = self.find_struct_type_local_mut(&attached_to_type)?.clone();
                     {
-                        found_struct
-                            .borrow_mut()
-                            .impl_members
-                            .insert(
-                                IdentifierName(local_ident.0.clone()),
-                                resolved_impl_member_ref,
-                            )
-                            .expect("should insert impl_member");
+                        let body = self.resolve_statements(&impl_member.body)?;
+
+                        let resolved_impl_member = ResolvedImplMember {
+                            parameters: resolved_parameters,
+                            return_type: resolved_return.clone(),
+                            ast_member: impl_member.clone(),
+                            struct_ref: found_struct.clone(),
+                            body,
+                        };
+                        let resolved_impl_member_ref = Rc::new(resolved_impl_member);
+                        {
+                            found_struct
+                                .borrow_mut()
+                                .impl_members
+                                .insert(
+                                    IdentifierName(local_ident.0.clone()),
+                                    resolved_impl_member_ref,
+                                )
+                                .expect("should insert impl_member");
+                        }
                     }
                 }
 
@@ -1003,6 +1004,7 @@ impl<'a> Resolver<'a> {
             resolved_type: resolution_type.clone(),
             arguments: resolved_arguments,
             function_definition: fn_ref.clone(),
+            function_expression: Box::from(function_expr),
         })
     }
 
@@ -1150,6 +1152,7 @@ impl<'a> Resolver<'a> {
             array_type: array_resolution.clone(),
             item_type: item_type.item_type.clone(),
             int_expression: lookup_expression,
+            array_expression: resolved_array_expression,
         };
 
         Ok(Rc::new(array_item))

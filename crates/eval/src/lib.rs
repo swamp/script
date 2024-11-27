@@ -945,7 +945,7 @@ impl Interpreter {
                 let result = self.execute_statements(
                     &resolved_member_call
                         .impl_member
-                        .function_ref
+                        .body
                         .function
                         .statements,
                 )?;
