@@ -118,7 +118,7 @@ impl Display for ResolvedType {
             ResolvedType::Struct(struct_type) => {
                 write!(f, "{}", struct_type.borrow())
             }
-            ResolvedType::Enum(_) => todo!(),
+            ResolvedType::Enum(enum_ref) => write!(f, "{enum_ref}"),
             ResolvedType::EnumVariant(_) => todo!(),
             ResolvedType::Function(_) => todo!(),
             ResolvedType::Void => todo!(),
@@ -486,6 +486,7 @@ pub enum ResolvedExpression {
     IntLiteral(i32, ResolvedIntTypeRef),
     StringLiteral(StringConst, ResolvedStringTypeRef),
     BoolLiteral(bool, ResolvedBoolTypeRef),
+    EnumVariantLiteral(ResolvedEnumVariantTypeRef, ResolvedEnumLiteralData),
 }
 
 //pub type ResolvedExpressionRef = Rc<ResolvedExpression>;
@@ -548,6 +549,9 @@ impl Display for ResolvedExpression {
             ResolvedExpression::UnitLiteral(_unit_lit) => write!(f, "UnitLit"),
             ResolvedExpression::BoolLiteral(value, _bool_type_ref) => {
                 write!(f, "BoolLit({value:?})")
+            }
+            ResolvedExpression::EnumVariantLiteral(variant_ref, data) => {
+                write!(f, "EnumVariantLit({variant_ref:?}, {data})")
             }
         }
     }
@@ -627,36 +631,6 @@ impl Display for ResolvedStructType {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct ResolvedAnonymousStructType {
-    // TODO:  pub defined_in_module: ResolvedModuleRef,
-    pub module_path: ModulePath,
-    pub fields: SeqMap<IdentifierName, ResolvedType>,
-    pub ast_anon_struct: AnonymousStruct,
-}
-
-impl ResolvedAnonymousStructType {
-    pub fn new(
-        // TODO: defined_in_module: ResolvedModuleRef,
-        module_path: ModulePath,
-        fields: SeqMap<IdentifierName, ResolvedType>,
-        ast_anon_struct: AnonymousStruct,
-    ) -> Self {
-        Self {
-            //defined_in_module,
-            module_path,
-            ast_anon_struct,
-            fields,
-        }
-    }
-}
-
-impl Display for ResolvedAnonymousStructType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{{ {} }}", comma_seq(&self.fields))
-    }
-}
-
 impl ResolvedStructType {
     pub fn new(
         // TODO: defined_in_module: ResolvedModuleRef,
@@ -729,6 +703,23 @@ impl Display for ResolvedArrayType {
     }
 }
 
+pub type ResolvedEnumVariantContainerStructTypeRef = Rc<ResolvedEnumVariantContainerStructType>;
+
+#[derive(Debug)]
+pub struct ResolvedEnumVariantContainerStructType {
+    // TODO:  pub defined_in_module: ResolvedModuleRef,
+    pub number: TypeNumber,
+    pub module_path: ModulePath,
+    pub fields: SeqMap<IdentifierName, ResolvedType>,
+    pub variant_name: LocalTypeIdentifier,
+    pub ast_struct: AnonymousStruct,
+}
+
+impl Display for ResolvedEnumVariantContainerStructType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({})", comma_seq(&self.fields))
+    }
+}
 pub type ResolvedTupleTypeRef = Rc<ResolvedTupleType>;
 
 #[derive(Debug)]
@@ -838,7 +829,7 @@ impl Debug for ResolvedEnumVariantType {
 
 #[derive(Debug, Clone)]
 pub enum ResolvedEnumVariantContainerType {
-    Struct(ResolvedAnonymousStructType),
+    Struct(ResolvedEnumVariantContainerStructTypeRef),
     Tuple(ResolvedTupleTypeRef),
     Nothing,
 }
@@ -1024,5 +1015,22 @@ impl ResolvedProgram {
 impl fmt::Display for ResolvedProgram {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "modules:\n{}", self.modules)
+    }
+}
+
+#[derive(Debug)]
+pub enum ResolvedEnumLiteralData {
+    Nothing,
+    Tuple(Vec<ResolvedExpression>),
+    Struct(Vec<ResolvedExpression>),
+}
+
+impl Display for ResolvedEnumLiteralData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ResolvedEnumLiteralData::Nothing => Ok(()),
+            ResolvedEnumLiteralData::Tuple(tuple_data) => write!(f, "{:?}", tuple_data),
+            ResolvedEnumLiteralData::Struct(struct_data) => write!(f, "{:?}", struct_data),
+        }
     }
 }

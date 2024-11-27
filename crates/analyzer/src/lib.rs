@@ -3,13 +3,15 @@ use crate::module::Module;
 
 use pest::error::Error;
 use seq_map::SeqMap;
+use std::env::var;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::{env, fs};
 use swamp_script_ast::{
-    BinaryOperator, Definition, EnumVariant, Expression, FunctionData, IdentifierName, ImplItem,
-    Literal, LocalIdentifier, LocalTypeIdentifier, ModulePath, Parameter, Pattern, Program,
-    QualifiedTypeIdentifier, Statement, StringPart, Type, Variable,
+    AnonymousStruct, BinaryOperator, Definition, EnumLiteralData, EnumVariant, Expression,
+    FunctionData, IdentifierName, ImplItem, Literal, LocalIdentifier, LocalTypeIdentifier,
+    ModulePath, Parameter, Pattern, Program, QualifiedTypeIdentifier, Statement, StringPart, Type,
+    Variable,
 };
 use swamp_script_ast::{Node, Position, Span, StructType};
 use swamp_script_parser::{AstParser, Rule};
@@ -66,6 +68,9 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
             ResolvedType::String(string_type.clone())
         }
         ResolvedExpression::UnitLiteral(unit_literal) => ResolvedType::Unit(unit_literal.clone()),
+        ResolvedExpression::EnumVariantLiteral(variant_ref, _data) => {
+            ResolvedType::Enum(variant_ref.owner.clone())
+        }
     };
 
     trace!(resolution_expression=?resolution_expression, "resolution");
@@ -96,6 +101,7 @@ pub enum ResolveError {
     CanOnlyOverwriteVariableWithMut(Variable),
     OverwriteVariableNotAllowedHere(Variable),
     NotNamedStruct(Expression),
+    UnknownEnumVariantType(QualifiedTypeIdentifier, LocalTypeIdentifier),
 }
 
 impl From<String> for ResolveError {
@@ -263,16 +269,9 @@ impl<'a> Resolver<'a> {
         &self,
         type_name: &QualifiedTypeIdentifier,
     ) -> Result<ResolvedStructTypeRef, ResolveError> {
-        let resolve_module = if let Some(path) = &type_name.module_path {
-            &self
-                .find_module(path)
-                .ok_or(ResolveError::CanNotFindModule(path.clone()))?
-                .namespace
-        } else {
-            &self.current_module.namespace
-        };
+        let namespace = self.get_namespace(type_name)?;
 
-        if let Some(found) = resolve_module.get_struct(&type_name.name) {
+        if let Some(found) = namespace.get_struct(&type_name.name) {
             Ok(found.clone())
         } else {
             Err(ResolveError::UnknownStructTypeReference(type_name.clone()))
@@ -425,12 +424,20 @@ impl<'a> Resolver<'a> {
                             .insert(field.clone(), resolved_type)
                             .map_err(|_| ResolveError::DuplicateFieldName(field.clone()))?;
                     }
-                    let anonym = ResolvedAnonymousStructType::new(
-                        self.current_module.module_path.clone(),
+                    // self.current_module.module_path.clone(),
+                    // fields,
+                    // ast_struct_fields.clone(),
+
+                    let anonym = ResolvedEnumVariantContainerStructType {
+                        number: 0,
+                        module_path: ModulePath(vec![]),
                         fields,
-                        ast_struct_fields.clone(),
-                    );
-                    ResolvedEnumVariantContainerType::Struct(anonym)
+                        variant_name: name.clone(),
+                        ast_struct: ast_struct_fields.clone(),
+                    };
+                    let anonym_ref = Rc::new(anonym);
+
+                    ResolvedEnumVariantContainerType::Struct(anonym_ref)
                 }
             };
 
@@ -722,8 +729,12 @@ impl<'a> Resolver<'a> {
                 Literal::Bool(value) => {
                     ResolvedExpression::BoolLiteral(*value, self.parent.bool_type.clone())
                 }
-                Literal::EnumVariant(_, _, _) => todo!(), //TODO: PBJ //ResolvedExpression::EnumVariantLiteral(),
-                Literal::Tuple(_) => todo!(),             // TODO: PBJ
+
+                Literal::EnumVariant(qualified_type_identifier, variant_name, data) => self
+                    .resolve_enum_variant_literal(qualified_type_identifier, variant_name, data)?,
+                Literal::Tuple(expressions) => {
+                    ResolvedExpression::Tuple(self.resolve_expressions(expressions)?)
+                }
                 Literal::Array(items) => {
                     ResolvedExpression::Array(self.resolve_array_literal(items)?)
                 }
@@ -1153,6 +1164,65 @@ impl<'a> Resolver<'a> {
 
     fn pop_scope(&mut self) {
         self.block_scope_stack.pop();
+    }
+
+    fn resolve_enum_variant_ref(
+        &self,
+        qualified_type_identifier: &QualifiedTypeIdentifier,
+        variant_name: &LocalTypeIdentifier,
+    ) -> Result<ResolvedEnumVariantTypeRef, ResolveError> {
+        let namespace = self.get_namespace(qualified_type_identifier)?;
+
+        if let Some(found) =
+            namespace.get_enum_variant_type(&qualified_type_identifier.name, variant_name)
+        {
+            Ok(found.clone())
+        } else {
+            Err(ResolveError::UnknownEnumVariantType(
+                qualified_type_identifier.clone(),
+                variant_name.clone(),
+            ))
+        }
+    }
+
+    fn resolve_enum_variant_literal(
+        &mut self,
+        qualified_type_identifier: &QualifiedTypeIdentifier,
+        variant_name: &LocalTypeIdentifier,
+        variant_data: &EnumLiteralData,
+    ) -> Result<ResolvedExpression, ResolveError> {
+        let variant_ref = self.resolve_enum_variant_ref(qualified_type_identifier, variant_name)?;
+
+        let resolved_data = match variant_data {
+            EnumLiteralData::Nothing => ResolvedEnumLiteralData::Nothing,
+            EnumLiteralData::Tuple(expressions) => {
+                ResolvedEnumLiteralData::Tuple(self.resolve_expressions(expressions)?)
+            }
+            EnumLiteralData::Struct(anonym_struct) => {
+                let values = &anonym_struct.values().cloned().collect::<Vec<_>>();
+                let resolved_expressions = self.resolve_expressions(values)?;
+                ResolvedEnumLiteralData::Struct(resolved_expressions)
+            }
+        };
+
+        Ok(ResolvedExpression::EnumVariantLiteral(
+            variant_ref,
+            resolved_data,
+        ))
+    }
+
+    fn get_namespace(
+        &self,
+        qualified_type_identifier: &QualifiedTypeIdentifier,
+    ) -> Result<&ResolvedModuleNamespace, ResolveError> {
+        if let Some(path) = &qualified_type_identifier.module_path {
+            Ok(&self
+                .find_module(path)
+                .ok_or(ResolveError::CanNotFindModule(path.clone()))?
+                .namespace)
+        } else {
+            Ok(&self.current_module.namespace)
+        }
     }
 }
 

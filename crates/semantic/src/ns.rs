@@ -139,7 +139,7 @@ impl ResolvedModuleNamespace {
             .insert((&name.text).into(), boxed.clone())
             .expect("should be able to add enum type");
 
-        for (ident, variant) in &containers {
+        for (ident, variant) in containers.iter() {
             let converted_variant = ResolvedEnumVariantType::new(
                 boxed.clone(),
                 (*ident).clone(),
@@ -189,13 +189,12 @@ impl ResolvedModuleNamespace {
 
     pub fn get_enum_variant_type(
         &self,
-        name: &QualifiedTypeIdentifier,
-        identifier: LocalTypeIdentifier,
+        enum_name: &LocalTypeIdentifier,
+        enum_variant_name: &LocalTypeIdentifier,
     ) -> Option<&ResolvedEnumVariantTypeRef> {
-        // TODO: add scope/module support, ignore for now
-        let _full_name = format!("{:?}::{:?}", name.name, identifier);
-
-        self.enum_variant_types.get(&(&name.name.text).into())
+        let complete_name =
+            LocalTypeName(format!("{}::{}", enum_name.text, enum_variant_name.text));
+        self.enum_variant_types.get(&complete_name)
     }
 
     pub fn get_function(&self, name: &str) -> Option<&ResolvedInternalFunctionDefinitionRef> {

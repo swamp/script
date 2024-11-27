@@ -78,7 +78,7 @@ impl DefinitionRunner {
         Ok(t)
     }
 
-    pub(crate) fn execute_definition(
+    pub fn execute_definition(
         namespace: &mut ResolvedModuleNamespace,
         definition: &Definition,
     ) -> Result<Value, String> {
