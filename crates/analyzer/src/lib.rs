@@ -114,6 +114,8 @@ pub enum ResolveError {
     OverwriteVariableNotAllowedHere(Variable),
     NotNamedStruct(Expression),
     UnknownEnumVariantType(QualifiedTypeIdentifier, LocalTypeIdentifier),
+    WasNotStructType(Expression),
+    UnknownStructField(LocalIdentifier),
 }
 
 impl From<String> for ResolveError {
@@ -576,11 +578,16 @@ impl<'a> Resolver<'a> {
     ) -> Result<ResolvedStatement, ResolveError> {
         let converted = match statement {
             Statement::Let(pattern, expr) => self.resolve_let_statement(pattern, expr)?,
-            Statement::ForLoop(pattern, expression, statements) => ResolvedStatement::ForLoop(
-                self.resolve_pattern(pattern)?,
-                self.resolve_iterator(expression)?,
-                self.resolve_statements(statements)?,
-            ),
+            Statement::ForLoop(pattern, expression, statements) => {
+                let resolved_iterator = self.resolve_iterator(expression)?;
+                let pattern = self.resolve_pattern(pattern, &resolved_iterator.item_type)?;
+
+                ResolvedStatement::ForLoop(
+                    pattern,
+                    resolved_iterator,
+                    self.resolve_statements(statements)?,
+                )
+            }
             Statement::WhileLoop(expression, statements) => ResolvedStatement::WhileLoop(
                 self.resolve_bool_expression(expression)?,
                 self.resolve_statements(statements)?,
@@ -807,14 +814,39 @@ impl<'a> Resolver<'a> {
     fn resolve_into_struct_field_ref(
         &mut self,
         struct_expression: &Expression,
-        _name: LocalIdentifier,
+        name: LocalIdentifier,
     ) -> Result<ResolvedStructTypeFieldRef, ResolveError> {
-        let _expr = self.resolve_expression(struct_expression)?;
-        //if let ResolvedExpression::StructInstantiation(data) = expr {
-        //} else {
-        //            Err(ResolveError::UnknownStructTypeReference(expr))
-        //      }
-        todo!()
+        let resolved_expr = self.resolve_expression(struct_expression)?;
+        let resolved_type = resolution(&resolved_expr);
+        let struct_ref = match &resolved_type {
+            ResolvedType::Struct(struct_ref) => struct_ref,
+            _ => return Err(ResolveError::WasNotStructType(struct_expression.clone())),
+        };
+
+        let borrowed_struct = struct_ref.borrow();
+
+        if let Some(field_index) = borrowed_struct
+            .fields
+            .get_index(&IdentifierName(name.text.clone()))
+        {
+            let field_resolved_type = borrowed_struct
+                .fields
+                .get(&IdentifierName(name.text.clone()))
+                .expect("checked earlier");
+
+            let field = ResolvedStructTypeField {
+                struct_type_ref: struct_ref.clone(),
+                index: field_index,
+                resolved_type: field_resolved_type.clone(),
+                field_name: name.clone(),
+            };
+
+            let field_ref = Rc::new(field);
+
+            Ok(field_ref)
+        } else {
+            Err(ResolveError::UnknownStructField(name.clone()))
+        }
     }
 
     #[allow(unused)]
@@ -875,14 +907,22 @@ impl<'a> Resolver<'a> {
     fn resolve_pattern_variable(
         &mut self,
         variable: &Variable,
+        expression_type: &ResolvedType,
     ) -> Result<ResolvedPattern, ResolveError> {
+        self.set_variable_with_type(variable, expression_type);
         let variable_ref = self.find_variable(variable)?;
         Ok(ResolvedPattern::VariableAssignment(variable_ref))
     }
 
-    fn resolve_pattern(&mut self, ast_pattern: &Pattern) -> Result<ResolvedPattern, ResolveError> {
+    fn resolve_pattern(
+        &mut self,
+        ast_pattern: &Pattern,
+        expression_type: &ResolvedType,
+    ) -> Result<ResolvedPattern, ResolveError> {
         match ast_pattern {
-            Pattern::VariableAssignment(variable) => self.resolve_pattern_variable(variable),
+            Pattern::VariableAssignment(variable) => {
+                self.resolve_pattern_variable(variable, expression_type)
+            }
             Pattern::Tuple(_) => todo!(),
             Pattern::Struct(_) => todo!(),
             Pattern::Literal(ast_literal) => self.resolve_pattern_literal(ast_literal),
@@ -893,8 +933,22 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn resolve_iterator(&self, _p0: &Expression) -> Result<ResolvedIterator, ResolveError> {
-        todo!()
+    fn resolve_iterator(
+        &mut self,
+        expression: &Expression,
+    ) -> Result<ResolvedIterator, ResolveError> {
+        let resolved_expression = self.resolve_expression(expression)?;
+        let resolved_type = resolution(&resolved_expression);
+        let item_type = match resolved_type {
+            ResolvedType::Array(array_type) => array_type.item_type.clone(),
+            ResolvedType::ExclusiveRange => resolved_type.clone(),
+            _ => todo!(),
+        };
+
+        Ok(ResolvedIterator {
+            item_type,
+            resolved_expression,
+        })
     }
 
     fn resolve_function_call(
@@ -1179,20 +1233,28 @@ impl<'a> Resolver<'a> {
 
             return Ok((existing_variable.clone(), true));
         }
+        let scope_index = self.block_scope_stack.len() - 1;
+
+        let mut variables = &mut self
+            .block_scope_stack
+            .last_mut()
+            .expect("block scope should have at least one scope")
+            .variables;
 
         let resolved_variable = ResolvedVariable {
             resolved_type: variable_type_ref.clone(),
             ast_variable: variable.clone(),
-            scope_index: self.block_scope_stack.len() - 1,
+            scope_index,
+            variable_index: variables.len(),
         };
 
         let variable_ref = Rc::new(resolved_variable);
-        self.block_scope_stack
-            .last_mut()
-            .expect("block scope should have at least one scope")
-            .variables
-            .insert(variable.name.clone(), variable_ref.clone())
-            .expect("should have checked earlier for variable");
+
+        {
+            variables
+                .insert(variable.name.clone(), variable_ref.clone())
+                .expect("should have checked earlier for variable");
+        }
 
         Ok((variable_ref, false))
     }
@@ -1208,17 +1270,24 @@ impl<'a> Resolver<'a> {
             ));
         }
 
+        let scope_index = self.block_scope_stack.len() - 1;
+
+        let mut variables = &mut self
+            .block_scope_stack
+            .last_mut()
+            .expect("block scope should have at least one scope")
+            .variables;
+
         let resolved_variable = ResolvedVariable {
             resolved_type: variable_type_ref.clone(),
             ast_variable: variable.clone(),
-            scope_index: self.block_scope_stack.len() - 1,
+            scope_index,
+            variable_index: variables.len(),
         };
 
         let variable_ref = Rc::new(resolved_variable);
-        self.block_scope_stack
-            .last_mut()
-            .expect("block scope should have at least one scope")
-            .variables
+
+        variables
             .insert(variable.name.clone(), variable_ref.clone())
             .expect("should have checked earlier for variable");
 
@@ -1294,9 +1363,11 @@ impl<'a> Resolver<'a> {
         arms: &Vec<MatchArm>,
     ) -> Result<ResolvedMatch, ResolveError> {
         let resolved_expression = self.resolve_expression(expression)?;
+        let resolved_type = resolution(&resolved_expression);
+
         let mut resolved_arms = Vec::new();
         for arm in arms {
-            let resolved_arm = self.resolve_arm(arm)?;
+            let resolved_arm = self.resolve_arm(arm, &resolved_expression, &resolved_type)?;
             resolved_arms.push(resolved_arm);
         }
 
@@ -1306,10 +1377,21 @@ impl<'a> Resolver<'a> {
         })
     }
 
-    fn resolve_arm(&mut self, arm: &MatchArm) -> Result<ResolvedMatchArm, ResolveError> {
+    fn resolve_arm(
+        &mut self,
+        arm: &MatchArm,
+        expression: &ResolvedExpression,
+        expression_type: &ResolvedType,
+    ) -> Result<ResolvedMatchArm, ResolveError> {
+        self.push_scope();
+
+        let resolved_pattern = self.resolve_pattern(&arm.pattern, expression_type)?;
+
         let resolved_expression = self.resolve_expression(&arm.expression)?;
         let resolved_type = resolution(&resolved_expression);
-        let resolved_pattern = self.resolve_pattern(&arm.pattern)?;
+
+        self.pop_scope();
+
         Ok(ResolvedMatchArm {
             ast_match_arm: arm.clone(),
             pattern: resolved_pattern,

@@ -43,7 +43,7 @@ pub enum ResolvedType {
     Function(ResolvedFunctionRef),
     FunctionInternal(ResolvedInternalFunctionDefinitionRef),
     Void,
-    Range,
+    ExclusiveRange,
     Any,
 }
 
@@ -122,7 +122,7 @@ impl Display for ResolvedType {
             ResolvedType::EnumVariant(_) => todo!(),
             ResolvedType::Function(_) => todo!(),
             ResolvedType::Void => todo!(),
-            ResolvedType::Range => todo!(),
+            ResolvedType::ExclusiveRange => todo!(),
             ResolvedType::Any => todo!(),
             ResolvedType::FunctionInternal(function_def_ref) => {
                 write!(f, "{function_def_ref}")
@@ -175,6 +175,7 @@ pub struct ResolvedVariable {
     pub resolved_type: ResolvedType,
     pub ast_variable: Variable,
     pub scope_index: usize,
+    pub variable_index: usize,
 }
 
 impl Display for ResolvedVariable {
@@ -186,8 +187,12 @@ impl Display for ResolvedVariable {
         };
         write!(
             f,
-            "{}{}: {}",
-            prefix, self.ast_variable.name, self.resolved_type
+            "{}{}<{}:{}>: {}",
+            prefix,
+            self.ast_variable.name,
+            self.scope_index,
+            self.variable_index,
+            self.resolved_type
         )
     }
 }
@@ -304,7 +309,20 @@ impl Display for ResolvedMemberCall {
 pub struct ResolvedStructTypeField {
     pub struct_type_ref: ResolvedStructTypeRef,
     pub index: usize,
+    pub field_name: LocalIdentifier,
     pub resolved_type: ResolvedType,
+}
+
+impl Display for ResolvedStructTypeField {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}.{}<{}>",
+            self.struct_type_ref.borrow(),
+            self.field_name,
+            self.index
+        )
+    }
 }
 
 pub type ResolvedStructTypeFieldRef = Rc<ResolvedStructTypeField>;
@@ -344,6 +362,23 @@ pub type ResolvedIndexTypeRef = Rc<ResolvedIndexType>;
 pub enum ResolvedStringPart {
     Literal(String),
     Interpolation(ResolvedExpression, Option<FormatSpecifier>),
+}
+
+impl Display for ResolvedStringPart {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ResolvedStringPart::Literal(literal_string) => write!(f, "\"{literal_string}\""),
+            ResolvedStringPart::Interpolation(expression, optional_format) => {
+                write!(f, "{expression}")?;
+
+                if let Some(format) = optional_format {
+                    write!(f, ":{}", format)?;
+                }
+
+                Ok(())
+            }
+        }
+    }
 }
 
 type ResolvedMutStructFieldRef = Rc<ResolvedMutStructField>;
@@ -402,7 +437,7 @@ pub struct ResolvedMatch {
 
 impl Display for ResolvedMatch {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Match( {} ", self.arms.len())?;
+        writeln!(f, "Match {} ", self.expression)?;
         for arm in self.arms.iter() {
             writeln!(f, "..{} ", arm)?;
         }
@@ -421,7 +456,7 @@ pub struct ResolvedMatchArm {
 
 impl Display for ResolvedMatchArm {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} => {}", self.pattern, self.expression)
+        write!(f, "pattern({}) => {}", self.pattern, self.expression)
     }
 }
 
@@ -441,7 +476,10 @@ impl Display for ResolvedPattern {
 }
 
 #[derive(Debug)]
-pub struct ResolvedIterator {}
+pub struct ResolvedIterator {
+    pub item_type: ResolvedType,
+    pub resolved_expression: ResolvedExpression,
+}
 
 //#[derive(Debug)]
 //pub struct ResolvedBoolExpression(pub ResolvedExpression);
@@ -534,11 +572,11 @@ pub enum ResolvedLiteral {
 impl Display for ResolvedLiteral {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ResolvedLiteral::FloatLiteral(_, _) => write!(f, "FloatLiteral"),
-            ResolvedLiteral::UnitLiteral(_) => write!(f, "UnitLiteral"),
-            ResolvedLiteral::IntLiteral(_, _) => write!(f, "IntLiteral"),
-            ResolvedLiteral::StringLiteral(_, _) => write!(f, "StringLiteral"),
-            ResolvedLiteral::BoolLiteral(_, _) => write!(f, "BoolLiteral"),
+            ResolvedLiteral::FloatLiteral(value, _) => write!(f, "FloatLit({value})"),
+            ResolvedLiteral::UnitLiteral(_) => write!(f, "UnitLit"),
+            ResolvedLiteral::IntLiteral(value, _) => write!(f, "IntLit({value})"),
+            ResolvedLiteral::StringLiteral(value, _) => write!(f, "StringLit({value})"),
+            ResolvedLiteral::BoolLiteral(value, _) => write!(f, "BoolLit({value})"),
             ResolvedLiteral::EnumVariantLiteral(_, _) => write!(f, "EnumVariantLiteral"),
             ResolvedLiteral::TupleLiteral(_, _) => write!(f, "TupleLiteral"),
             ResolvedLiteral::Array(_, _) => write!(f, "ArrayLiteral"),
@@ -551,8 +589,8 @@ impl Display for ResolvedLiteral {
 impl Display for ResolvedExpression {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ResolvedExpression::FieldAccess(_) => todo!(),
-            ResolvedExpression::VariableAccess(_) => todo!(),
+            ResolvedExpression::FieldAccess(field_lookup) => write!(f, "{}", field_lookup),
+            ResolvedExpression::VariableAccess(variable) => write!(f, "VarRead({})", variable),
             ResolvedExpression::InternalFunctionAccess(internal_function_ref) => {
                 write!(f, "{:?}", internal_function_ref)
             }
@@ -569,15 +607,17 @@ impl Display for ResolvedExpression {
             ResolvedExpression::StructFieldAssignment(_, _) => todo!(),
             ResolvedExpression::TupleFieldAssignment(_, _) => todo!(),
             ResolvedExpression::BinaryOp(_) => todo!(),
-            ResolvedExpression::UnaryOp(_, _) => todo!(),
+            ResolvedExpression::UnaryOp(unary_op, expression) => {
+                write!(f, "{:?}({})", unary_op, expression)
+            }
             ResolvedExpression::FunctionInternalCall(resolved_call) => {
                 write!(f, "{resolved_call}")
             }
             ResolvedExpression::MutMemberCall(_, _) => todo!(),
             ResolvedExpression::MemberCall(member_call) => write!(f, "{member_call}"),
             ResolvedExpression::Block(_) => todo!(),
-            ResolvedExpression::InterpolatedString(_string_type, _) => {
-                write!(f, "InterpolatedString")
+            ResolvedExpression::InterpolatedString(_string_type, parts) => {
+                write!(f, "'{}'", comma(parts))
             }
             ResolvedExpression::StructInstantiation(struct_instantiation) => {
                 let borrowed = struct_instantiation.struct_type_ref.borrow();

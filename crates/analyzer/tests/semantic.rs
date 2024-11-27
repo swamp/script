@@ -15,7 +15,8 @@ modules:
 ::test
 namespace:
 structs:
-Hello {x: Inty: Int}
+Hello { x: Int, y: Int }
+impl:
         "#,
     )
 }
@@ -58,8 +59,8 @@ modules:
 ::test
 namespace:
 statements:
-let a: [Float] = [[FloatLiteral(23.0, ResolvedFloatType), FloatLiteral(42.9, ResolvedFloatType)]]
-let b: Float = [Float]
+let a<0:0>: [Float] = Array([Literal(FloatLiteral(23.0, ResolvedFloatType)), Literal(FloatLiteral(42.9, ResolvedFloatType))])
+let b<0:1>: Float = [Float]
         "#,
     )
 }
@@ -108,9 +109,9 @@ modules:
 ::test
 namespace:
 statements:
-let b: Int = ((fn_def add(a: Int, b: Int) -> Int)(IntLit(2), IntLit(22)))
-let mut c: String = StringLit(hello)
-set mut c: String = StringLit(another)
+let b<0:0>: Int = ((fn_def add(a: Int, b: Int) -> Int)(IntLit(2), IntLit(22)))
+let mut c<0:1>: String = StringLit(hello)
+set mut c<0:1>: String = StringLit(another)
         "#,
     )
 }
@@ -131,9 +132,9 @@ modules:
 ::test
 namespace:
 statements:
-let a: Int = < b: Int=((fn_def add(a: Int, b: Int) -> Int)(IntLit(2), IntLit(22))) >
-let mut c: String = StringLit(hello)
-set mut c: String = StringLit(another)
+let a<0:1>: Int = < b<0:0>: Int=((fn_def add(a: Int, b: Int) -> Int)(IntLit(2), IntLit(22))) >
+let mut c<0:2>: String = StringLit(hello)
+set mut c<0:2>: String = StringLit(another)
         "#,
     )
 }
@@ -217,7 +218,7 @@ impl:
 ..sqr_len: impl(sqr_len() -> Float)
 ..scale: impl(scale(factor: Float) -> Vector2 { x: Float, y: Float })
 statements:
-let mut pos: Vector2 { x: Float, y: Float } = { x: FloatLit(10.0), y: FloatLit(20.0) }
+let mut pos<0:0>: Vector2 { x: Float, y: Float } = { x: FloatLit(10.0), y: FloatLit(20.0) }
 (impl(scale(factor: Float) -> Vector2 { x: Float, y: Float }) <- FloatLit(2.5))
 
     "#,
@@ -279,7 +280,7 @@ Shape::Circle(Float)
 Shape::Rectangle { width: Float, height: Float }
 Shape::Point
 statements:
-let shapes: [Shape] = [[EnumVariantLiteral(Shape::Circle, Tuple([FloatLiteral(5.0, ResolvedFloatType)])), EnumVariantLiteral(Shape::Rectangle, Struct([FloatLiteral(10.0, ResolvedFloatType), FloatLiteral(20.0, ResolvedFloatType)])), EnumVariantLiteral(Shape::Point, Nothing)]]
+let shapes<0:0>: [Shape] = Array([Literal(EnumVariantLiteral(Shape::Circle, Tuple([Literal(FloatLiteral(5.0, ResolvedFloatType))]))), Literal(EnumVariantLiteral(Shape::Rectangle, Struct([Literal(FloatLiteral(10.0, ResolvedFloatType)), Literal(FloatLiteral(20.0, ResolvedFloatType))]))), Literal(EnumVariantLiteral(Shape::Point, Nothing))])
 
 
     "#,
@@ -291,16 +292,31 @@ fn math_literals() {
     check(
         r#"
 
-health = 99
+struct Player {
+    something_else: Float,
+    health: Int,
+}
 
-status = match health {
+player = Player { health: 23, something_else: -1919.99 }
+
+status = match player.health {
     100 => "Full health",
     health => 'Critical: {health}'
 }
 "#,
         r#"
 
-
+modules:
+::test
+namespace:
+structs:
+Player { something_else: Float, health: Int }
+impl:
+statements:
+let player<0:0>: Player { something_else: Float, health: Int } = { something_else: Negate(FloatLit(1919.99)), health: IntLit(23) }
+let status<0:1>: String = Match Player { something_else: Float, health: Int }.health<1>
+..pattern(IntLit(100)) => StringLit(Full health)
+..pattern(health<1:0>: Int) => '"Critical: ", VarRead(health<1:0>: Int)'
 
     "#,
     )

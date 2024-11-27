@@ -5,7 +5,7 @@
 
 use seq_map::SeqMap;
 use std::fmt;
-use std::fmt::{Debug, Display, Formatter};
+use std::fmt::{write, Debug, Display, Formatter};
 use std::hash::Hash;
 use std::rc::Rc;
 
@@ -154,6 +154,12 @@ impl Display for LocalIdentifier {
 
 #[derive(Clone)]
 pub struct StringConst(pub String); // pub is probably better for performance
+
+impl Display for StringConst {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{:?}", self.0)
+    }
+}
 
 impl StringConst {
     pub fn new(s: &str) -> Self {
@@ -565,10 +571,31 @@ pub enum FormatSpecifier {
     Precision(u32, PrecisionType), // :..2f or :..5s
 }
 
+impl Display for FormatSpecifier {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            FormatSpecifier::Debug => write!(f, "?"),
+            FormatSpecifier::LowerHex => write!(f, "x"),
+            FormatSpecifier::UpperHex => write!(f, "X"),
+            FormatSpecifier::Binary => write!(f, "b"),
+            FormatSpecifier::Float => write!(f, "f"),
+            FormatSpecifier::Precision(number, precision_type) => {
+                write!(f, "{number}{precision_type}")
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum PrecisionType {
     Float,
     String,
+}
+
+impl Display for PrecisionType {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 #[derive(Debug)]

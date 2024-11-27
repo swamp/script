@@ -133,7 +133,7 @@ impl Value {
             Value::Array(item_type, _) => ResolvedType::Array(Box::new(item_type.clone())),
             Value::Function(_) => ResolvedType::Function,
             Value::Unit => ResolvedType::Void,
-            Value::ExclusiveRange(_, _) => ResolvedType::Range,
+            Value::ExclusiveRange(_, _) => ResolvedType::ExclusiveRange,
             Value::Reference(r) => r.borrow().swamp_type_id(),
             Value::Struct(struct_type, _) => ResolvedType::Struct(struct_type.clone()),
             Value::Tuple(tuple_type, _values) => ResolvedType::Tuple(tuple_type.clone()),
