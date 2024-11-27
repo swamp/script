@@ -4,10 +4,11 @@
  */
 use std::env;
 use std::path::PathBuf;
+use swamp_script_analyzer::dep::DependencyGraph;
+use swamp_script_analyzer::{resolve_with_graph, ParseModule, ResolveError};
 use swamp_script_ast::{LocalIdentifier, ModulePath, Node, Position, Span};
 use swamp_script_parser::AstParser;
-use swamp_script_semantic::dep::DependencyGraph;
-use swamp_script_semantic::{resolve_with_graph, ParseModule, ResolveError, ResolvedProgram};
+use swamp_script_semantic::ResolvedProgram;
 use tracing::{debug, info, warn};
 
 fn get_test_fixtures_directory(suffix: &str) -> PathBuf {
