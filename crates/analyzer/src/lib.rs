@@ -4,6 +4,7 @@ use crate::module::Module;
 use pest::error::Error;
 use seq_map::SeqMap;
 use std::env::var;
+use std::fmt::Display;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::{env, fs};
@@ -22,7 +23,7 @@ use tracing::{debug, info, trace};
 pub mod dep;
 
 pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
-    trace!("resolution expression {:?}", expression);
+    trace!("resolution expression {}", expression);
     let resolution_expression = match expression {
         ResolvedExpression::FieldAccess(struct_field_ref) => struct_field_ref.resolved_type.clone(),
         ResolvedExpression::VariableAccess(variable_ref) => variable_ref.resolved_type.clone(),
@@ -85,7 +86,8 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
         },
     };
 
-    trace!(resolution_expression=?resolution_expression, "resolution");
+    trace!(resolution_expression=%resolution_expression, "resolution first");
+    //    trace!(resolution_expression=?resolution_expression, "resolution");
 
     resolution_expression
 }
@@ -133,6 +135,12 @@ impl From<pest::error::Error<Rule>> for ResolveError {
 #[derive(Debug)]
 pub struct BlockScope {
     variables: SeqMap<String, ResolvedVariableRef>,
+}
+
+impl Display for BlockScope {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", comma_seq(&self.variables))
+    }
 }
 
 impl BlockScope {
@@ -853,12 +861,12 @@ impl<'a> Resolver<'a> {
     fn resolve_into_named_struct_ref(
         &mut self,
         struct_expression: &Expression,
-    ) -> Result<ResolvedStructTypeRef, ResolveError> {
+    ) -> Result<(ResolvedStructTypeRef, ResolvedExpression), ResolveError> {
         let resolved = self.resolve_expression(struct_expression)?;
 
         let resolved_type = resolution(&resolved);
         match resolved_type {
-            ResolvedType::Struct(named_struct) => Ok(named_struct),
+            ResolvedType::Struct(named_struct) => Ok((named_struct, resolved)),
             _ => Err(ResolveError::NotNamedStruct(struct_expression.clone())),
         }
     }
@@ -1001,7 +1009,8 @@ impl<'a> Resolver<'a> {
         ast_member_function_name: &LocalIdentifier,
         ast_arguments: &Vec<Expression>,
     ) -> Result<ResolvedMemberCall, ResolveError> {
-        let resolved_struct_type_ref = self.resolve_into_named_struct_ref(ast_member_expression)?;
+        let (resolved_struct_type_ref, resolved_expression) =
+            self.resolve_into_named_struct_ref(ast_member_expression)?;
         let resolved_arguments = self.resolve_expressions(ast_arguments)?;
 
         let x = if let Some(impl_member) = resolved_struct_type_ref
@@ -1013,6 +1022,7 @@ impl<'a> Resolver<'a> {
             Ok(ResolvedMemberCall {
                 impl_member: impl_member.clone(),
                 arguments: resolved_arguments,
+                resolved_expression: Box::new(resolved_expression),
                 struct_type_ref: resolved_struct_type_ref,
             })
         } else {
@@ -1100,7 +1110,7 @@ impl<'a> Resolver<'a> {
         trace!("trying to find variable {variable:?}");
         // Look through scopes until we hit a Function scope
         for scope in self.block_scope_stack.iter().rev() {
-            trace!("...checking in scope {scope:?}");
+            trace!("...checking in scope {scope}");
             if let Some(value) = scope.variables.get(&variable.name) {
                 return Some(value.clone());
             }

@@ -26,7 +26,7 @@ fn get_test_fixtures_directory(suffix: &str) -> PathBuf {
 fn create_program(script: &str) -> Result<ResolvedProgram, ResolveError> {
     let parser = AstParser::new();
     let ast_program = parser.parse_script(script)?;
-    //info!("Parsed the following AST program:\n{:#?}", ast_program);
+    info!("ast_program:\n{:#?}", ast_program);
 
     let parse_module = ParseModule { ast_program };
 

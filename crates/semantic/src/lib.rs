@@ -297,11 +297,18 @@ pub struct ResolvedMemberCall {
     /*
     MemberRef, LocalTypeIdentifier, Vec<ResolvedExpression>
      */
+    pub resolved_expression: Box<ResolvedExpression>,
 }
 
 impl Display for ResolvedMemberCall {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "({} <- {})", self.impl_member, comma(&self.arguments))
+        write!(f, "(< {} >.{}", self.resolved_expression, self.impl_member)?;
+
+        if !self.arguments.is_empty() {
+            write!(f, " <- {}", comma(&self.arguments))?;
+        }
+
+        write!(f, ")")
     }
 }
 
@@ -1016,7 +1023,7 @@ impl Display for ResolvedImplMember {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "impl({}({}) -> {})",
+            "({}({}) -> {})",
             //self.struct_ref.borrow().name,
             self.ast_member.name,
             comma(&self.parameters),

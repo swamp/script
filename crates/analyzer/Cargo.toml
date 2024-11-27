@@ -13,4 +13,4 @@ swamp-script-ast = { path = "../ast", version = "0.0.1" }
 swamp-script-parser = { path = "../parser", version = "0.0.1" }
 
 [dev-dependencies]
-test-log = "0.2.16"
+test-log = { version = "0.2.16", features = ["trace", "log", "color"] }

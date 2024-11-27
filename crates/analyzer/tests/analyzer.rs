@@ -204,7 +204,7 @@ impl Vector2 {
 }
 
 mut pos = Vector2 { x: 10.0, y: 20.0 }
-pos.scale(2.5)
+pos.scale(2.5).sqr_len()
 
     "#,
         r#"
@@ -215,11 +215,11 @@ namespace:
 structs:
 Vector2 { x: Float, y: Float }
 impl:
-..sqr_len: impl(sqr_len() -> Float)
-..scale: impl(scale(factor: Float) -> Vector2 { x: Float, y: Float })
+..sqr_len: (sqr_len() -> Float)
+..scale: (scale(factor: Float) -> Vector2 { x: Float, y: Float })
 statements:
 let mut pos<0:0>: Vector2 { x: Float, y: Float } = { x: FloatLit(10.0), y: FloatLit(20.0) }
-(impl(scale(factor: Float) -> Vector2 { x: Float, y: Float }) <- FloatLit(2.5))
+(< (< VarRead(mut pos<0:0>: Vector2 { x: Float, y: Float }) >.(scale(factor: Float) -> Vector2 { x: Float, y: Float }) <- FloatLit(2.5)) >.(sqr_len() -> Float))
 
     "#,
     )
