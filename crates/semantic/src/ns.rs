@@ -17,17 +17,6 @@ use std::rc::Rc;
 use swamp_script_ast::LocalTypeIdentifier;
 use tracing::info;
 
-pub struct CanonicalTypeName {
-    pub module: Rc<ResolvedModule>,
-    pub name: LocalTypeIdentifier,
-}
-
-impl Debug for CanonicalTypeName {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}::{}", self.module, self.name)
-    }
-}
-
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct LocalTypeName(pub String);
 
