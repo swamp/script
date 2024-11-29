@@ -39,14 +39,14 @@ fn match_value_expressions() {
 
 #[test_log::test]
 fn assignment() {
-    check("a = 3", "Let(Variable(a), Literal(Int(3)))");
+    check("a = 3", "Let(VariableAssignment(a), Literal(Int(3)))");
 }
 
 #[test_log::test]
 fn assignment_add() {
     check(
         "a = n + 6",
-        "Let(Variable(a), BinaryOp(Variable(n), Add, Literal(Int(6))))",
+        "Let(VariableAssignment(a), BinaryOp(VariableAccess(n), Add, Literal(Int(6))))",
     );
 }
 
@@ -61,9 +61,9 @@ fn function_call() {
     check(
         &script,
         r#"
-FunctionDef(add, [x: Int, y: Int], Int, [Expression(BinaryOp(Variable(x), Add, Variable(y)))])
+FunctionDef(add, [x: Int, y: Int], Int, [Expression(BinaryOp(VariableAccess(x), Add, VariableAccess(y)))])
 ---
-Let(Variable(result), FunctionCall(Variable(add), [Literal(Int(10)), Literal(Int(20))]))
+Let(VariableAssignment(result), FunctionCall(VariableAccess(add), [Literal(Int(10)), Literal(Int(20))]))
     "#,
     );
 }
@@ -75,7 +75,7 @@ fn struct_def() {
         ";
     check(
         script,
-        "StructDef(Person, SeqMap(first_field: Int, second_field: String))",
+        "StructDef(StructType { identifier: Person, fields: SeqMap(first_field: Int, second_field: String) })",
     )
 }
 
@@ -86,7 +86,7 @@ fn struct_init() {
         ";
     check(
         script,
-        "Let(Variable(person), StructInstantiation(Person, SeqMap(first_field: Literal(Int(1)), second_field: Literal(String(Bob)))))",
+        "Let(VariableAssignment(person), StructInstantiation(Person, SeqMap(first_field: Literal(Int(1)), second_field: Literal(String(Bob)))))",
     );
 }
 
@@ -102,8 +102,8 @@ fn while_loop() {
     check(
         script,
         r#"
-        Let(Variable(a), Literal(Int(0)))
-        WhileLoop(BinaryOp(Variable(a), LessThan, Literal(Int(3))), [Expression(FunctionCall(Variable(print), [Variable(a)])), Let(Variable(a), BinaryOp(Variable(a), Add, Literal(Int(1))))])
+        Let(VariableAssignment(a), Literal(Int(0)))
+        WhileLoop(BinaryOp(VariableAccess(a), LessThan, Literal(Int(3))), [Expression(FunctionCall(VariableAccess(print), [VariableAccess(a)])), Let(VariableAssignment(a), BinaryOp(VariableAccess(a), Add, Literal(Int(1))))])
         "#,
     );
 }
@@ -120,7 +120,7 @@ fn if_expression() {
 
     check(
         script,
-        "Let(Variable(c), IfElse(Literal(Bool(true)), Variable(a), Variable(b)))\n",
+        "Let(VariableAssignment(c), IfElse(Literal(Bool(true)), VariableAccess(a), VariableAccess(b)))\n",
     );
 }
 
@@ -132,9 +132,9 @@ fn struct_def_and_instantiation() {
             person = Person { first_field: 1, second_field: "Bob" }
         "#,
         r#"
-StructDef(Person, SeqMap(first_field: Int, second_field: String))
+StructDef(StructType { identifier: Person, fields: SeqMap(first_field: Int, second_field: String) })
 ---
-Let(Variable(person), StructInstantiation(Person, SeqMap(first_field: Literal(Int(1)), second_field: Literal(String(Bob)))))
+Let(VariableAssignment(person), StructInstantiation(Person, SeqMap(first_field: Literal(Int(1)), second_field: Literal(String(Bob)))))
     "#,
     );
 }
@@ -143,7 +143,7 @@ Let(Variable(person), StructInstantiation(Person, SeqMap(first_field: Literal(In
 fn nested_function_calls() {
     check(
         "result = add(mul(2, 3), div(10, 2))",
-        "Let(Variable(result), FunctionCall(Variable(add), [FunctionCall(Variable(mul), [Literal(Int(2)), Literal(Int(3))]), FunctionCall(Variable(div), [Literal(Int(10)), Literal(Int(2))])]))",
+        "Let(VariableAssignment(result), FunctionCall(VariableAccess(add), [FunctionCall(VariableAccess(mul), [Literal(Int(2)), Literal(Int(3))]), FunctionCall(VariableAccess(div), [Literal(Int(10)), Literal(Int(2))])]))",
     );
 }
 
@@ -157,8 +157,8 @@ fn complex_expressions() {
         &script,
         r#"
 
-        Let(Variable(result), BinaryOp(BinaryOp(BinaryOp(Literal(Int(2)), Add, Literal(Int(3))), Multiply, Literal(Int(4))), Subtract, BinaryOp(Literal(Int(10)), Divide, Literal(Int(2)))))
-Let(Variable(flag), BinaryOp(BinaryOp(Literal(Bool(true)), LogicalAnd, UnaryOp(Not, Literal(Bool(false)))), LogicalOr, BinaryOp(Literal(Int(5)), GreaterThan, Literal(Int(3)))))
+        Let(VariableAssignment(result), BinaryOp(BinaryOp(BinaryOp(Literal(Int(2)), Add, Literal(Int(3))), Multiply, Literal(Int(4))), Subtract, BinaryOp(Literal(Int(10)), Divide, Literal(Int(2)))))
+Let(VariableAssignment(flag), BinaryOp(BinaryOp(Literal(Bool(true)), LogicalAnd, UnaryOp(Not, Literal(Bool(false)))), LogicalOr, BinaryOp(Literal(Int(5)), GreaterThan, Literal(Int(3)))))
         "#,
     );
 }
@@ -172,8 +172,8 @@ fn struct_field_access_with_struct_init() {
     check(
         script,
         r#"
-        Let(Variable(person), StructInstantiation(Person, SeqMap(first_field: Literal(Int(1)), second_field: Literal(String(Bob)))))
-        Let(Variable(name), FieldAccess(Variable(person), second_field))
+        Let(VariableAssignment(person), StructInstantiation(Person, SeqMap(first_field: Literal(Int(1)), second_field: Literal(String(Bob)))))
+        Let(VariableAssignment(name), FieldAccess(VariableAccess(person), second_field))
     "#,
     );
 }
@@ -185,7 +185,7 @@ fn struct_field_access() {
     ";
     check(
         script,
-        "Let(Variable(name), FieldAccess(Variable(person), second_field))",
+        "Let(VariableAssignment(name), FieldAccess(VariableAccess(person), second_field))",
     );
 }
 
@@ -200,7 +200,7 @@ fn compound_conditions() {
     check(
         script,
         r#"
-WhileLoop(BinaryOp(BinaryOp(Variable(x), GreaterThan, Literal(Int(0))), LogicalAnd, BinaryOp(Variable(y), LessThan, Literal(Int(10)))), [Let(Variable(x), BinaryOp(Variable(x), Subtract, Literal(Int(1)))), Let(Variable(y), BinaryOp(Variable(y), Add, Literal(Int(1))))])
+WhileLoop(BinaryOp(BinaryOp(VariableAccess(x), GreaterThan, Literal(Int(0))), LogicalAnd, BinaryOp(VariableAccess(y), LessThan, Literal(Int(10)))), [Let(VariableAssignment(x), BinaryOp(VariableAccess(x), Subtract, Literal(Int(1)))), Let(VariableAssignment(y), BinaryOp(VariableAccess(y), Add, Literal(Int(1))))])
 "#,
     );
 }
@@ -221,8 +221,8 @@ fn nested_loops() {
     check(
         script,
         r#"
-  Let(Variable(x), Literal(Int(0)))
-WhileLoop(BinaryOp(Variable(x), LessThan, Literal(Int(3))), [Let(Variable(y), Literal(Int(0))), WhileLoop(BinaryOp(Variable(y), LessThan, Literal(Int(2))), [Expression(FunctionCall(Variable(print), [BinaryOp(Variable(x), Add, Variable(y))])), Let(Variable(y), BinaryOp(Variable(y), Add, Literal(Int(1))))]), Let(Variable(x), BinaryOp(Variable(x), Add, Literal(Int(1))))])
+  Let(VariableAssignment(x), Literal(Int(0)))
+WhileLoop(BinaryOp(VariableAccess(x), LessThan, Literal(Int(3))), [Let(VariableAssignment(y), Literal(Int(0))), WhileLoop(BinaryOp(VariableAccess(y), LessThan, Literal(Int(2))), [Expression(FunctionCall(VariableAccess(print), [BinaryOp(VariableAccess(x), Add, VariableAccess(y))])), Let(VariableAssignment(y), BinaryOp(VariableAccess(y), Add, Literal(Int(1))))]), Let(VariableAssignment(x), BinaryOp(VariableAccess(x), Add, Literal(Int(1))))])
   "#,
     );
 }
@@ -237,10 +237,10 @@ fn mixed_expressions_with_chain() {
     check(
         script,
         r#"
-StructDef(Point, SeqMap(x: Int, y: Int))
+StructDef(StructType { identifier: Point, fields: SeqMap(x: Int, y: Int) })
 ---
-Let(Variable(p1), StructInstantiation(Point, SeqMap(x: Literal(Int(5)), y: Literal(Int(10)))))
-Let(Variable(dist), FunctionCall(Variable(add), [FunctionCall(Variable(mul), [FieldAccess(Variable(p1), x), FieldAccess(Variable(p1), x)]), FunctionCall(Variable(mul), [FieldAccess(Variable(p1), y), FieldAccess(Variable(p1), y)])]))
+Let(VariableAssignment(p1), StructInstantiation(Point, SeqMap(x: Literal(Int(5)), y: Literal(Int(10)))))
+Let(VariableAssignment(dist), FunctionCall(VariableAccess(add), [FunctionCall(VariableAccess(mul), [FieldAccess(VariableAccess(p1), x), FieldAccess(VariableAccess(p1), x)]), FunctionCall(VariableAccess(mul), [FieldAccess(VariableAccess(p1), y), FieldAccess(VariableAccess(p1), y)])]))
 
     "#,
     );
@@ -253,7 +253,7 @@ fn small_call() {
     ";
     check(
         script,
-        "Expression(FunctionCall(Variable(mul), [Literal(Int(2))]))",
+        "Expression(FunctionCall(VariableAccess(mul), [Literal(Int(2))]))",
     );
 }
 
@@ -264,7 +264,7 @@ fn small_chain() {
     ";
     check(
         &script,
-        "Expression(MemberCall(FieldAccess(Variable(p1), x), mul, [Literal(Int(2))]))",
+        "Expression(MemberCall(FieldAccess(VariableAccess(p1), x), mul, [Literal(Int(2))]))",
     );
 }
 
@@ -276,7 +276,7 @@ fn only_chain() {
     check(
         script,
         r#"
-    Expression(MemberCall(MemberCall(FieldAccess(Variable(p1), x), mul, [FieldAccess(Variable(p1), x)]), add, [MemberCall(FieldAccess(Variable(p1), y), mul, [FieldAccess(Variable(p1), y)])]))
+    Expression(MemberCall(MemberCall(FieldAccess(VariableAccess(p1), x), mul, [FieldAccess(VariableAccess(p1), x)]), add, [MemberCall(FieldAccess(VariableAccess(p1), y), mul, [FieldAccess(VariableAccess(p1), y)])]))
     "#,
     );
 }
@@ -292,10 +292,10 @@ fn method_chaining() {
     check(
         &script,
         r#"
-StructDef(Point, SeqMap(x: Int, y: Int))
+StructDef(StructType { identifier: Point, fields: SeqMap(x: Int, y: Int) })
 ---
-Let(Variable(p1), StructInstantiation(Point, SeqMap(x: Literal(Int(5)), y: Literal(Int(10)))))
-Let(Variable(dist), MemberCall(MemberCall(FieldAccess(Variable(p1), x), mul, [FieldAccess(Variable(p1), x)]), add, [MemberCall(FieldAccess(Variable(p1), y), mul, [FieldAccess(Variable(p1), y)])]))
+Let(VariableAssignment(p1), StructInstantiation(Point, SeqMap(x: Literal(Int(5)), y: Literal(Int(10)))))
+Let(VariableAssignment(dist), MemberCall(MemberCall(FieldAccess(VariableAccess(p1), x), mul, [FieldAccess(VariableAccess(p1), x)]), add, [MemberCall(FieldAccess(VariableAccess(p1), y), mul, [FieldAccess(VariableAccess(p1), y)])]))
 
     "#,
     );
@@ -312,7 +312,7 @@ fn function_definition() {
     check(
         &script,
         r#"
-FunctionDef(add, [x: Int, y: Int], Int, [Expression(BinaryOp(Variable(x), Add, Variable(y)))])
+FunctionDef(add, [x: Int, y: Int], Int, [Expression(BinaryOp(VariableAccess(x), Add, VariableAccess(y)))])
     "#,
     );
 }
@@ -363,7 +363,7 @@ fn function_call_with_no_parameters() {
         r#"
 FunctionDef(single, [], Int, [Expression(Literal(Int(42)))])
 ---
-Let(Variable(result), FunctionCall(Variable(single), []))
+Let(VariableAssignment(result), FunctionCall(VariableAccess(single), []))
     "#,
     );
 }
@@ -377,7 +377,7 @@ fn array() {
     check(
         &script,
         r#"
-Let(Variable(x), Array([Literal(Int(1)), Literal(Int(2)), Literal(Int(3))]))
+Let(VariableAssignment(x), Array([Literal(Int(1)), Literal(Int(2)), Literal(Int(3))]))
     "#,
     );
 }
@@ -391,7 +391,7 @@ fn empty_array() {
     check(
         &script,
         r#"
-Let(Variable(x), Array([]))
+Let(VariableAssignment(x), Array([]))
     "#,
     );
 }
@@ -594,7 +594,7 @@ fn match_expression() {
 
 EnumDef(Custom, SeqMap(Idle: , Running: [Int, Float], Sleeping: SeqMap(hours: Int)))
 ---
-Let(Variable(v), Match(Variable(state), [MatchArm { pattern: EnumTuple(Running, [speed, _]), expression: Variable(speed) }, MatchArm { pattern: EnumStruct(Sleeping, [hours]), expression: BinaryOp(Variable(hours), Add, Literal(Int(10))) }, MatchArm { pattern: Wildcard, expression: Literal(Int(0)) }]))
+Let(VariableAssignment(v), Match(VariableAccess(state), [MatchArm { pattern: EnumTuple(Running, [speed, _]), expression: VariableAccess(speed) }, MatchArm { pattern: EnumStruct(Sleeping, [hours]), expression: BinaryOp(VariableAccess(hours), Add, Literal(Int(10))) }, MatchArm { pattern: Wildcard, expression: Literal(Int(0)) }]))
 
 "#,
     );
@@ -611,7 +611,7 @@ fn match_expression_minimal() {
     check(
         &script,
         r#"
-Expression(Match(Variable(state), [MatchArm { pattern: Wildcard, expression: Literal(Int(0)) }]))
+Expression(Match(VariableAccess(state), [MatchArm { pattern: Wildcard, expression: Literal(Int(0)) }]))
 "#,
     );
 }
@@ -628,7 +628,7 @@ fn match_expression_minimal_two_arms() {
     check(
         &script,
         r#"
-Expression(Match(Variable(state), [MatchArm { pattern: EnumTuple(EnumType, [ident, _]), expression: Variable(ident) }, MatchArm { pattern: Wildcard, expression: Literal(Int(0)) }]))
+Expression(Match(VariableAccess(state), [MatchArm { pattern: EnumTuple(EnumType, [ident, _]), expression: VariableAccess(ident) }, MatchArm { pattern: Wildcard, expression: Literal(Int(0)) }]))
 "#,
     );
 }
@@ -645,7 +645,7 @@ fn match_expression_minimal_two_arms_enum_struct() {
     check(
         &script,
         r#"
-Expression(Match(Variable(state), [MatchArm { pattern: EnumStruct(EnumType, [something, another]), expression: Variable(another) }, MatchArm { pattern: Wildcard, expression: Literal(Int(0)) }]))
+Expression(Match(VariableAccess(state), [MatchArm { pattern: EnumStruct(EnumType, [something, another]), expression: VariableAccess(another) }, MatchArm { pattern: Wildcard, expression: Literal(Int(0)) }]))
 "#,
     );
 }
@@ -653,19 +653,19 @@ Expression(Match(Variable(state), [MatchArm { pattern: EnumStruct(EnumType, [som
 #[test_log::test]
 fn deconstructing_struct() {
     let script = "{  x, y } = pos"; // No raw string literal
-    check(&script, "Let(Struct([x, y]), Variable(pos))");
+    check(&script, "Let(Struct([x, y]), VariableAccess(pos))");
 }
 
 #[test_log::test]
 fn deconstructing_tuple() {
     let script = "(x, y) = pos"; // No raw string literal
-    check(&script, "Let(Tuple([x, y]), Variable(pos))");
+    check(&script, "Let(Tuple([x, y]), VariableAccess(pos))");
 }
 
 #[test_log::test]
 fn operator_precedence() {
     let script = "z = y * 2 - x";
-    check(&script, "Let(Variable(z), BinaryOp(BinaryOp(Variable(y), Multiply, Literal(Int(2))), Subtract, Variable(x)))");
+    check(&script, "Let(VariableAssignment(z), BinaryOp(BinaryOp(VariableAccess(y), Multiply, Literal(Int(2))), Subtract, VariableAccess(x)))");
 }
 
 #[test_log::test]
@@ -674,7 +674,7 @@ fn operator_precedence_expression() {
     check(
         &script,
         "
-Expression(BinaryOp(BinaryOp(Variable(y), Multiply, Literal(Int(2))), Subtract, Variable(x)))",
+Expression(BinaryOp(BinaryOp(VariableAccess(y), Multiply, Literal(Int(2))), Subtract, VariableAccess(x)))",
     );
 }
 
@@ -688,7 +688,7 @@ for x in 1..10 {
     check(
         &script,
         "
-ForLoop(Variable(x), ExclusiveRange(Literal(Int(1)), Literal(Int(10))), [])",
+ForLoop(VariableAssignment(x), ExclusiveRange(Literal(Int(1)), Literal(Int(10))), [])",
     );
 }
 
@@ -717,7 +717,7 @@ for x in [1, 2, 3] {
     check(
         &script,
         "
-ForLoop(Variable(x), Array([Literal(Int(1)), Literal(Int(2)), Literal(Int(3))]), [])",
+ForLoop(VariableAssignment(x), Array([Literal(Int(1)), Literal(Int(2)), Literal(Int(3))]), [])",
     );
 }
 
@@ -726,10 +726,11 @@ fn enum_literal_basic() {
     check(
         r#"
         state = State::Running
+
     "#,
         r#"
 
-Let(Variable(state), Literal(EnumVariant(State::Running)))
+Let(VariableAssignment(state), Literal(EnumVariant(State::Running)))
 
         "#,
     );
@@ -751,8 +752,8 @@ fn enum_literal() {
 
 EnumDef(State, SeqMap(Running: , Stopped: ))
 ---
-Let(Variable(state), Literal(EnumVariant(State::Running)))
-Expression(FunctionCall(Variable(print), [Variable(state)]))
+Let(VariableAssignment(state), Literal(EnumVariant(State::Running)))
+Expression(FunctionCall(VariableAccess(print), [VariableAccess(state)]))
 
         "#,
     );
@@ -771,20 +772,23 @@ fn increment(mut x: Int) -> Int {
     check(
         &script,
         "
-FunctionDef(increment, [mut x: Int], Int, [Let(Variable(x), BinaryOp(Variable(x), Add, Literal(Int(1)))), Expression(Variable(x))])",
+FunctionDef(increment, [mut x: Int], Int, [Let(VariableAssignment(x), BinaryOp(VariableAccess(x), Add, Literal(Int(1)))), Expression(VariableAccess(x))])",
     );
 }
 
 #[test_log::test]
 fn mut_let() {
-    check("mut x = 3", "Let(Variable(mut x), Literal(Int(3)))");
+    check(
+        "mut x = 3",
+        "Let(VariableAssignment(mut x), Literal(Int(3)))",
+    );
 }
 
 #[test_log::test]
 fn import() {
     check(
         "import math",
-        "Import(Import { module_path: [math], items: Module })",
+        r#"Import(Import { module_path: ModulePath([LocalIdentifier("math")]), items: Module })"#,
     );
 }
 
@@ -808,7 +812,7 @@ fn impl_def() {
         "#,
         r#"
 
-ImplDef(SomeTypeName, SeqMap(something: Member(self, [], Int, [Expression(FieldAccess(Variable(self), x))]), another: Member(mut self, [v: Int], Int, [Expression(FieldAssignment(Variable(self), x, Literal(Int(3))))]), no_self_here: Member(self, [], Float, [Expression(Literal(Float(3.2)))])))
+ImplDef(SomeTypeName, SeqMap(something: Member(self, [], Int, [Expression(FieldAccess(VariableAccess(self), x))]), another: Member(mut self, [v: Int], Int, [Expression(FieldAssignment(VariableAccess(self), x, Literal(Int(3))))]), no_self_here: Member(self, [], Float, [Expression(Literal(Float(3.2)))])))
 
         "#,
     );
@@ -826,7 +830,7 @@ fn match_pattern_literal() {
         }"#,
         r#"
 
-Expression(Match(Variable(x), [MatchArm { pattern: Literal(Int(5)), expression: Literal(String(five)) }, MatchArm { pattern: Literal(String(hello)), expression: Literal(String(greeting)) }, MatchArm { pattern: EnumSimple(true), expression: Literal(String(yes)) }, MatchArm { pattern: Wildcard, expression: Literal(String(something else)) }]))
+Expression(Match(VariableAccess(x), [MatchArm { pattern: Literal(Int(5)), expression: Literal(String(five)) }, MatchArm { pattern: Literal(String(hello)), expression: Literal(String(greeting)) }, MatchArm { pattern: Literal(Bool(true)), expression: Literal(String(yes)) }, MatchArm { pattern: Wildcard, expression: Literal(String(something else)) }]))
 
         "#,
     );
@@ -842,8 +846,8 @@ fn match_comment() {
        "#,
         r#"
 
-Expression(FunctionCall(Variable(print), [Literal(String(hello))]))
-Expression(FunctionCall(Variable(print), [Literal(String(world))]))
+Expression(FunctionCall(VariableAccess(print), [Literal(String(hello))]))
+Expression(FunctionCall(VariableAccess(print), [Literal(String(world))]))
 
         "#,
     );
@@ -856,7 +860,7 @@ fn multiple_assignments() {
         x = y = z = 10
         "#,
         r#"
-Let(Variable(x), Assignment(Variable(y), Assignment(Variable(z), Literal(Int(10)))))
+Let(VariableAssignment(x), VariableAssignment(VariableAccess(y), VariableAssignment(VariableAccess(z), Literal(Int(10)))))
         "#,
     );
 }
@@ -869,7 +873,7 @@ fn enum_variant_construction() {
         shape = Shape::Rectangle { width: 10, height: 20 }
 
         "#,
-        "Let(Variable(shape), Literal(EnumVariant(Shape::Rectangle{ width: Literal(Int(10)), height: Literal(Int(20)) })))",
+        "Let(VariableAssignment(shape), Literal(EnumVariant(Shape::Rectangle{ width: Literal(Int(10)), height: Literal(Int(20)) })))",
     );
 }
 
@@ -880,7 +884,7 @@ fn enum_variant_tuple_construction() {
         shape = Shape::Something(2, 4.4)
         "#,
         r#"
-Let(Variable(shape), Literal(EnumVariant(Shape::Something([Literal(Int(2)), Literal(Float(4.4))]))))
+Let(VariableAssignment(shape), Literal(EnumVariant(Shape::Something([Literal(Int(2)), Literal(Float(4.4))]))))
         "#,
     );
 }
@@ -891,7 +895,7 @@ fn array_access() {
         r#"
         arr[3]
         "#,
-        "Expression(ArrayAccess(Variable(arr), Literal(Int(3))))",
+        "Expression(ArrayAccess(VariableAccess(arr), Literal(Int(3))))",
     );
 }
 
@@ -901,7 +905,7 @@ fn array_set() {
         r#"
         arr[3] = 42
         "#,
-        "Expression(ArrayAssignment(Variable(arr), Literal(Int(3)), Literal(Int(42))))",
+        "Expression(ArrayAssignment(VariableAccess(arr), Literal(Int(3)), Literal(Int(42))))",
     );
 }
 
@@ -910,7 +914,7 @@ fn string_interpolation_basic_spaces() {
     check(
         "'   this is interpolated {x}   with hex  {y}  '",
         r#"
-Expression(InterpolatedString([Literal("   this is interpolated "), Interpolation(Variable(x), None), Literal("   with hex  "), Interpolation(Variable(y), None), Literal("  ")]))
+Expression(InterpolatedString([Literal("   this is interpolated "), Interpolation(VariableAccess(x), None), Literal("   with hex  "), Interpolation(VariableAccess(y), None), Literal("  ")]))
     "#,
     );
 }
@@ -920,7 +924,7 @@ fn string_interpolation() {
     check(
         "'this is interpolated {x} with hex {y:x}'",
         r#"
-    Expression(InterpolatedString([Literal("this is interpolated "), Interpolation(Variable(x), None), Literal(" with hex "), Interpolation(Variable(y), Some(LowerHex))]))
+    Expression(InterpolatedString([Literal("this is interpolated "), Interpolation(VariableAccess(x), None), Literal(" with hex "), Interpolation(VariableAccess(y), Some(LowerHex))]))
     "#,
     );
 }
@@ -930,7 +934,7 @@ fn string_interpolation_call() {
     check(
         "'this is interpolated {x:x}    with hex  {mul(a, 2)}'",
         r#"
-Expression(InterpolatedString([Literal("this is interpolated "), Interpolation(Variable(x), Some(LowerHex)), Literal("    with hex  "), Interpolation(FunctionCall(Variable(mul), [Variable(a), Literal(Int(2))]), None)]))
+Expression(InterpolatedString([Literal("this is interpolated "), Interpolation(VariableAccess(x), Some(LowerHex)), Literal("    with hex  "), Interpolation(FunctionCall(VariableAccess(mul), [VariableAccess(a), Literal(Int(2))]), None)]))
     "#,
     );
 }
@@ -940,7 +944,7 @@ fn string_interpolation_call_simple() {
     check(
         "'result: {mul(a,2)}'",
         r#"
-Expression(InterpolatedString([Literal("result: "), Interpolation(FunctionCall(Variable(mul), [Variable(a), Literal(Int(2))]), None)]))
+Expression(InterpolatedString([Literal("result: "), Interpolation(FunctionCall(VariableAccess(mul), [VariableAccess(a), Literal(Int(2))]), None)]))
     "#,
     );
 }
@@ -950,7 +954,7 @@ fn string_interpolation_simple() {
     check(
         "'this is interpolated {x}'",
         r#"
-Expression(InterpolatedString([Literal("this is interpolated "), Interpolation(Variable(x), None)]))
+Expression(InterpolatedString([Literal("this is interpolated "), Interpolation(VariableAccess(x), None)]))
     "#,
     );
 }
@@ -960,7 +964,7 @@ fn string_interpolation_simple_no_space() {
     check(
         "'this is interpolated{x}'",
         r#"
-Expression(InterpolatedString([Literal("this is interpolated"), Interpolation(Variable(x), None)]))
+Expression(InterpolatedString([Literal("this is interpolated"), Interpolation(VariableAccess(x), None)]))
     "#,
     );
 }
@@ -970,7 +974,7 @@ fn function_call_mul() {
     check(
         "mul(a, 2)",
         r#"
-Expression(FunctionCall(Variable(mul), [Variable(a), Literal(Int(2))]))
+Expression(FunctionCall(VariableAccess(mul), [VariableAccess(a), Literal(Int(2))]))
     "#,
     );
 }
@@ -984,7 +988,7 @@ fn enum_match() {
             Err(err) => err
         }
         "#,
-        "Let(Variable(msg), Match(Variable(result), [MatchArm { pattern: EnumTuple(Ok, [value]), expression: Variable(value) }, MatchArm { pattern: EnumTuple(Err, [err]), expression: Variable(err) }]))",
+        "Let(VariableAssignment(msg), Match(VariableAccess(result), [MatchArm { pattern: EnumTuple(Ok, [value]), expression: VariableAccess(value) }, MatchArm { pattern: EnumTuple(Err, [err]), expression: VariableAccess(err) }]))",
     );
 }
 
@@ -998,7 +1002,7 @@ fn enum_match_simple() {
             Simple => 2
         }
         "#,
-        "Let(Variable(msg), Match(Variable(result), [MatchArm { pattern: EnumTuple(Ok, [value]), expression: Variable(value) }, MatchArm { pattern: EnumTuple(Err, [err]), expression: Variable(err) }, MatchArm { pattern: EnumSimple(Simple), expression: Literal(Int(2)) }]))",
+        "Let(VariableAssignment(msg), Match(VariableAccess(result), [MatchArm { pattern: EnumTuple(Ok, [value]), expression: VariableAccess(value) }, MatchArm { pattern: EnumTuple(Err, [err]), expression: VariableAccess(err) }, MatchArm { pattern: EnumSimple(Simple), expression: Literal(Int(2)) }]))",
     );
 }
 
@@ -1013,7 +1017,7 @@ fn enum_match_wildcard() {
             _ => 99
         }
         "#,
-        "Let(Variable(msg), Match(Variable(result), [MatchArm { pattern: EnumTuple(Ok, [value]), expression: Variable(value) }, MatchArm { pattern: EnumTuple(Err, [err]), expression: Variable(err) }, MatchArm { pattern: EnumSimple(Simple), expression: Literal(Int(2)) }, MatchArm { pattern: Wildcard, expression: Literal(Int(99)) }]))",
+        "Let(VariableAssignment(msg), Match(VariableAccess(result), [MatchArm { pattern: EnumTuple(Ok, [value]), expression: VariableAccess(value) }, MatchArm { pattern: EnumTuple(Err, [err]), expression: VariableAccess(err) }, MatchArm { pattern: EnumSimple(Simple), expression: Literal(Int(2)) }, MatchArm { pattern: Wildcard, expression: Literal(Int(99)) }]))",
     );
 }
 
@@ -1026,7 +1030,7 @@ fn enum_match_with_wildcard() {
             _ => 99
         }
         "#,
-        "Let(Variable(msg), Match(Variable(result), [MatchArm { pattern: EnumTuple(Ok, [value]), expression: Variable(value) }, MatchArm { pattern: Wildcard, expression: Literal(Int(99)) }]))",
+        "Let(VariableAssignment(msg), Match(VariableAccess(result), [MatchArm { pattern: EnumTuple(Ok, [value]), expression: VariableAccess(value) }, MatchArm { pattern: Wildcard, expression: Literal(Int(99)) }]))",
     );
 }
 
@@ -1045,7 +1049,7 @@ fn enum_match_tuple_basic() {
     "#,
         r#"
 
-    Expression(Match(Variable(v), [MatchArm { pattern: EnumTuple(Tuple, [i, s, b]), expression: Block([Expression(FunctionCall(Variable(print), [Literal(String(Tuple:))])), Expression(FunctionCall(Variable(print), [Variable(i)])), Expression(FunctionCall(Variable(print), [Variable(s)])), Expression(FunctionCall(Variable(print), [Variable(b)]))]) }]))
+    Expression(Match(VariableAccess(v), [MatchArm { pattern: EnumTuple(Tuple, [i, s, b]), expression: Block([Expression(FunctionCall(VariableAccess(print), [Literal(String(Tuple:))])), Expression(FunctionCall(VariableAccess(print), [VariableAccess(i)])), Expression(FunctionCall(VariableAccess(print), [VariableAccess(s)])), Expression(FunctionCall(VariableAccess(print), [VariableAccess(b)]))]) }]))
 
     "#,
     );
@@ -1059,7 +1063,7 @@ fn print_if() {
             "x is greater than 41"
         }
     "#,
-        "If(BinaryOp(Variable(x), GreaterThan, Literal(Int(41))), [Expression(Literal(String(x is greater than 41)))], None)",
+        "If(BinaryOp(VariableAccess(x), GreaterThan, Literal(Int(41))), [Expression(Literal(String(x is greater than 41)))], None)",
     );
 }
 
@@ -1078,7 +1082,7 @@ fn for_continue() {
         "#,
         r#"
 
-ForLoop(Variable(i), ExclusiveRange(Literal(Int(1)), Literal(Int(5))), [If(BinaryOp(BinaryOp(Variable(i), Modulo, Literal(Int(2))), Equal, Literal(Int(0))), [Continue], None), Expression(FunctionCall(Variable(print), [Literal(String(no continue))]))])
+ForLoop(VariableAssignment(i), ExclusiveRange(Literal(Int(1)), Literal(Int(5))), [If(BinaryOp(BinaryOp(VariableAccess(i), Modulo, Literal(Int(2))), Equal, Literal(Int(0))), [Continue], None), Expression(FunctionCall(VariableAccess(print), [Literal(String(no continue))]))])
 
     "#,
     )
@@ -1096,7 +1100,7 @@ fn else_problem() {
             "#,
         r#"
 
-            If(BinaryOp(Variable(x), LessThan, Literal(Int(0))), [Return(Literal(String(negative)))], Some([If(BinaryOp(Variable(x), Equal, Literal(Int(0))), [Return(Literal(String(positive)))], None)]))
+            If(BinaryOp(VariableAccess(x), LessThan, Literal(Int(0))), [Return(Literal(String(negative)))], Some([If(BinaryOp(VariableAccess(x), Equal, Literal(Int(0))), [Return(Literal(String(positive)))], None)]))
 
             "#,
     )

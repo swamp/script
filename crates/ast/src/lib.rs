@@ -2,12 +2,14 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
+pub mod prelude;
 
+use fixed32::Fp;
 use seq_map::SeqMap;
-use std::collections::HashMap;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
+use std::rc::Rc;
 
 #[derive(Clone)]
 pub struct Variable {
@@ -45,97 +47,116 @@ impl Variable {
             is_mutable,
         }
     }
-
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
-    pub fn immutable(name: &str) -> Self {
-        Self::new(name, false)
-    }
-
-    pub fn mutable(name: &str) -> Self {
-        Self::new(name, true)
-    }
 }
 
-#[derive(Clone)]
-pub struct ScopedIdentifier(pub String);
-impl ScopedIdentifier {
-    pub fn new(s: &str) -> Self {
-        Self(s.to_string())
-    }
+// Common metadata that can be shared across all AST nodes
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Node {
+    pub span: Span,
+    // TODO: Add comments and attributes
 }
 
-impl Debug for ScopedIdentifier {
+impl Display for Node {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "{}-{}", self.span.start, self.span.end)
     }
 }
 
-impl Display for ScopedIdentifier {
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Span {
+    pub start: Position,
+    pub end: Position,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Position {
+    pub offset: usize, // Octet offset into file
+    pub line: usize,   // 0-based line number
+    pub column: usize, // 0-based column number
+}
+
+impl Display for Position {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "{}:{}", self.line, self.column)
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Default)]
-pub struct LocalIdentifier(pub String); // pub is probably better for performance
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct QualifiedTypeIdentifier {
+    pub name: LocalTypeIdentifier,
+    pub module_path: Option<ModulePath>,
+}
 
-impl LocalIdentifier {
-    pub fn new(s: &str) -> Self {
-        Self(s.to_string())
+impl QualifiedTypeIdentifier {
+    pub fn new(name: LocalTypeIdentifier, module_path: Vec<String>) -> Self {
+        let module_path = if module_path.is_empty() {
+            None
+        } else {
+            Some(ModulePath(module_path))
+        };
+
+        Self { name, module_path }
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Default)]
-pub struct ScopedTypeIdentifier(pub String); // pub is probably better for performance
-
-impl ScopedTypeIdentifier {
-    pub fn new(s: &str) -> Self {
-        Self(s.to_string())
-    }
-}
-
-impl Debug for ScopedTypeIdentifier {
+impl Display for QualifiedTypeIdentifier {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
+        if let Some(module_path) = &self.module_path {
+            write!(f, "{module_path}::",)?;
+        }
+        write!(f, "{}", self.name.text)
     }
 }
 
-impl Display for ScopedTypeIdentifier {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct LocalTypeIdentifier {
+    pub node: Node,
+    pub text: String,
 }
-
-#[derive(Clone, PartialEq, Eq, Hash, Default)]
-pub struct LocalTypeIdentifier(pub String); // pub is probably better for performance
 
 impl LocalTypeIdentifier {
-    pub fn new(s: &str) -> Self {
-        LocalTypeIdentifier(s.to_string())
-    }
-}
-
-impl Debug for LocalTypeIdentifier {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
+    pub fn new(node: Node, str: &str) -> Self {
+        Self {
+            node,
+            text: str.to_string(),
+        }
     }
 }
 
 impl Display for LocalTypeIdentifier {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "{}", self.text)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct LocalIdentifier {
+    pub node: Node,
+    pub text: String,
+}
+
+impl LocalIdentifier {
+    #[must_use]
+    pub fn new(node: Node, str: &str) -> Self {
+        Self {
+            node,
+            text: str.to_string(),
+        }
+    }
+}
+
+impl Display for LocalIdentifier {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{} <{}>", self.text, self.node)
     }
 }
 
 #[derive(Clone)]
-pub struct StringConst(pub String); // pub is probably better for performance
+pub struct StringConst(pub String);
 
-impl StringConst {
-    pub fn new(s: &str) -> Self {
-        Self(s.to_string())
+impl Display for StringConst {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{:?}", self.0)
     }
 }
 
@@ -145,9 +166,21 @@ impl Debug for StringConst {
     }
 }
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct ModulePath(pub Vec<String>);
+
+impl Display for ModulePath {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        for x in &self.0 {
+            write!(f, "::{x}")?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Import {
-    pub module_path: Vec<LocalTypeIdentifier>, // For handling paths like "geometry.shapes"
+    pub module_path: ModulePath,
     pub items: ImportItems,
 }
 
@@ -157,16 +190,34 @@ pub enum ImportItems {
     Specific(Vec<LocalTypeIdentifier>), // import { sin, cos } from math
 }
 
+#[derive(Clone, Debug)]
+pub struct StructType {
+    pub identifier: LocalTypeIdentifier,
+    pub fields: SeqMap<IdentifierName, Type>,
+}
+
+impl StructType {
+    #[must_use]
+    pub const fn new(
+        identifier: LocalTypeIdentifier,
+        fields: SeqMap<IdentifierName, Type>,
+    ) -> Self {
+        Self { identifier, fields }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Definition {
-    StructDef(LocalTypeIdentifier, SeqMap<LocalTypeIdentifier, Type>),
+    StructDef(StructType),
     EnumDef(
         LocalTypeIdentifier,
         SeqMap<LocalTypeIdentifier, EnumVariant>,
     ),
-    FunctionDef(LocalTypeIdentifier, FunctionData),
-    ImplDef(LocalTypeIdentifier, SeqMap<LocalTypeIdentifier, ImplItem>),
-    ExternalFunctionDef(ScopedIdentifier, FunctionData),
+
+    InternalFunctionDef(LocalIdentifier, FunctionData),
+    ExternalFunctionDef(LocalIdentifier, FunctionSignature),
+
+    ImplDef(LocalTypeIdentifier, SeqMap<IdentifierName, ImplItem>),
     Import(Import),
     // Other
     Comment(String),
@@ -174,15 +225,14 @@ pub enum Definition {
 
 #[derive(Debug, Clone)]
 pub enum Statement {
-    // Standard
     Let(Pattern, Expression),
     ForLoop(Pattern, Expression, Vec<Statement>),
     WhileLoop(Expression, Vec<Statement>),
     Return(Expression),
     Break,                  // Return with void
-    Continue,               //
+    Continue,               // Continue iterating in the closest loop
     Expression(Expression), // Used for expressions with side effects (mutation, i/o)
-    Block(Vec<Statement>),  // TODO: Feels a bit sketchy
+    Block(Vec<Statement>),
     If(Expression, Vec<Statement>, Option<Vec<Statement>>),
 }
 
@@ -198,7 +248,10 @@ pub struct ImplMember {
     pub params: Vec<Parameter>,
     pub return_type: Type,
     pub body: Vec<Statement>,
+    pub name: LocalIdentifier,
 }
+
+pub type ImplMemberRef = Rc<ImplMember>;
 
 impl Debug for SelfParameter {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
@@ -225,34 +278,30 @@ pub struct SelfParameter {
     pub is_mutable: bool,
 }
 
-#[derive(Clone)]
-pub struct FunctionData {
+#[derive(Clone, Debug)]
+pub struct FunctionSignature {
     pub params: Vec<Parameter>,
     pub return_type: Type,
+}
+
+#[derive(Clone)]
+pub struct FunctionData {
+    pub signature: FunctionSignature,
     pub body: Vec<Statement>,
 }
 
 impl Debug for FunctionData {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{:?}, {:?}, {:?}",
-            self.params, self.return_type, self.body
-        )
+        write!(f, "{:?}, {:?}", self.signature, self.body)
     }
 }
 
 impl Display for FunctionData {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{:?}, {:?}, {:?}",
-            self.params, self.return_type, self.body
-        )
+        write!(f, "{:?}, {:?}", self.signature, self.body)
     }
 }
 
-// Used for function definitions
 #[derive(Clone)]
 pub struct Parameter {
     pub variable: Variable,
@@ -272,41 +321,44 @@ impl Debug for Parameter {
     }
 }
 
-/// Expressions are things that "converts" to a value when being evaluated.
+#[derive(Debug, Eq, Hash, PartialEq, Clone)]
+pub struct IdentifierName(pub String);
+
+impl Display for IdentifierName {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+/// Expressions are things that "converts" to a value when evaluated.
 #[derive(Debug, Clone)]
 pub enum Expression {
-    // Access Lookup values
-    FieldAccess(Box<Expression>, LocalTypeIdentifier),
+    // Access / Lookup values
+    FieldAccess(Box<Expression>, LocalIdentifier),
     VariableAccess(Variable),
     MutRef(MutVariableRef), // Used when passing with mut keyword. mut are implicitly passed by reference
     ArrayAccess(Box<Expression>, Box<Expression>), // Read from an array: arr[3]
 
-    // Assignment
+    // Assignment ----
 
     // Since it is a cool language, we can "chain" assignments together. like a = b = c = 1. Even for field assignments, like a.b = c.d = e.f = 1
-    VariableAssignment(Box<Expression>, Box<Expression>),
+    VariableAssignment(Variable, Box<Expression>),
     ArrayAssignment(Box<Expression>, Box<Expression>, Box<Expression>), // target, index, source. Write to an index in an array: arr[3] = 42
-    FieldAssignment(Box<Expression>, LocalTypeIdentifier, Box<Expression>),
+    FieldAssignment(Box<Expression>, LocalIdentifier, Box<Expression>),
 
-    // Operators
+    // Operators ----
     BinaryOp(Box<Expression>, BinaryOperator, Box<Expression>),
     UnaryOp(UnaryOperator, Box<Expression>),
 
-    // Calls
+    // Calls ----
     FunctionCall(Box<Expression>, Vec<Expression>),
-    MemberCall(Box<Expression>, LocalTypeIdentifier, Vec<Expression>),
+    MemberCall(Box<Expression>, LocalIdentifier, Vec<Expression>),
     Block(Vec<Statement>),
 
     InterpolatedString(Vec<StringPart>),
 
     // Constructing
-    StructInstantiation(
-        ScopedTypeIdentifier,
-        SeqMap<LocalTypeIdentifier, Expression>,
-    ),
-    Array(Vec<Expression>),
-    Tuple(Vec<Expression>),
-    Map(HashMap<Expression, Expression>), // Not implemented yet. Maybe call this a dictionary or similar, to avoid confusion with map()
+    StructInstantiation(QualifiedTypeIdentifier, SeqMap<IdentifierName, Expression>),
     ExclusiveRange(Box<Expression>, Box<Expression>),
     Literal(Literal),
 
@@ -315,7 +367,6 @@ pub enum Expression {
     Match(Box<Expression>, Vec<MatchArm>),
 }
 
-// Used for match expression
 #[derive(Debug, Clone)]
 pub struct MatchArm {
     pub pattern: Pattern,
@@ -326,13 +377,57 @@ pub struct MatchArm {
 #[derive(Clone)]
 pub enum Literal {
     Int(i32),
-    Float(f32), // TODO: Change to fixed point 32 bit
+    Float(Fp),
     String(StringConst),
     Bool(bool),
-    EnumVariant(ScopedTypeIdentifier, LocalTypeIdentifier, EnumLiteralData), // EnumTypeName::Identifier tuple|struct
+    EnumVariant(
+        QualifiedTypeIdentifier,
+        LocalTypeIdentifier,
+        EnumLiteralData,
+    ), // EnumTypeName::Identifier tuple|struct
     Tuple(Vec<Expression>),
+    Array(Vec<Expression>),
+    Map(SeqMap<IdentifierName, Expression>),
     Unit, // ()
 }
+
+/*
+
+impl Display for Literal {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            Literal::Int(value) => write!(f, "{}", value),
+            Literal::Float(value) => write!(f, "{}", value),
+            Literal::String(value) => write!(f, "{}", value),
+            Literal::Bool(value) => write!(f, "{}", value),
+            Literal::EnumVariant(a, b, c) => write!(f, "{} {} {}", a, b, c),
+            Literal::Tuple(value) => write!(f, "{}", value),
+            Literal::Array(value) => write!(f, "{}", value),
+            Literal::Map(value) => write!(f, "{}", value),
+            Literal::Unit => write!(f, "()"),
+        }
+    }
+}
+
+ */
+
+/*
+impl Debug for Literal {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            Literal::Int(value) => write!(f, "{}", value),
+            Literal::Float(value) => write!(f, "{}", value),
+            Literal::String(value) => write!(f, "{}", value),
+            Literal::Bool(value) => write!(f, "{}", value),
+            Literal::EnumVariant(a, b, c) => write!(f, "{} {} {:?}", a, b, c),
+            Literal::Tuple(value) => write!(f, "{}", value),
+            Literal::Array(value) => write!(f, "{}", value),
+            Literal::Map(value) => write!(f, "{}", value),
+            Literal::Unit => write!(f, "()"),
+        }
+    }
+}
+*/
 
 pub fn seq_map_to_string<K, V>(map: &SeqMap<K, V>) -> String
 where
@@ -353,12 +448,11 @@ impl Debug for Literal {
         match self {
             Self::EnumVariant(enum_type, variant_name, data) => match data {
                 EnumLiteralData::Nothing => {
-                    write!(f, "EnumVariant({}::{})", enum_type, variant_name)
+                    write!(f, "EnumVariant({enum_type}::{variant_name})")
                 }
                 EnumLiteralData::Tuple(expressions) => write!(
                     f,
-                    "EnumVariant({}::{}({:?}))",
-                    enum_type, variant_name, expressions
+                    "EnumVariant({enum_type}::{variant_name}({expressions:?}))"
                 ),
                 EnumLiteralData::Struct(expressions) => write!(
                     f,
@@ -369,12 +463,14 @@ impl Debug for Literal {
                 ),
             },
 
-            Literal::Int(v) => write!(f, "Int({})", v),
-            Literal::Float(v) => write!(f, "Float({})", v),
-            Literal::String(v) => write!(f, "String({})", v.0),
-            Literal::Bool(v) => write!(f, "Bool({})", v),
-            Literal::Tuple(v) => write!(f, "Tuple({v:?})"),
-            Literal::Unit => write!(f, "()"),
+            Self::Int(v) => write!(f, "Int({v})"),
+            Self::Float(v) => write!(f, "Float({v})"),
+            Self::String(v) => write!(f, "String({})", v.0),
+            Self::Bool(v) => write!(f, "Bool({v})"),
+            Self::Tuple(v) => write!(f, "Tuple({v:?})"),
+            Self::Unit => write!(f, "()"),
+            Self::Array(v) => write!(f, "Array({v:?})"),
+            Self::Map(v) => write!(f, "Map({v:?})"),
         }
     }
 }
@@ -390,9 +486,21 @@ impl Debug for EnumLiteralData {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
             Self::Nothing => write!(f, ""),
-            Self::Tuple(types) => write!(f, "{:?}", types),
-            Self::Struct(types) => write!(f, "{:?}", types),
+            Self::Tuple(types) => write!(f, "{types:?}"),
+            Self::Struct(types) => write!(f, "{types:?}"),
         }
+    }
+}
+
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub struct AnonymousStruct {
+    pub fields: SeqMap<IdentifierName, Type>,
+}
+
+impl AnonymousStruct {
+    #[must_use]
+    pub const fn new(fields: SeqMap<IdentifierName, Type>) -> Self {
+        Self { fields }
     }
 }
 
@@ -400,32 +508,38 @@ impl Debug for EnumLiteralData {
 pub enum EnumVariant {
     Simple,
     Tuple(Vec<Type>),
-    Struct(SeqMap<LocalTypeIdentifier, Type>),
+    Struct(AnonymousStruct),
 }
 
 impl Debug for EnumVariant {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
             Self::Simple => write!(f, ""),
-            Self::Tuple(types) => write!(f, "{:?}", types),
-            Self::Struct(types) => write!(f, "{:?}", types),
+            Self::Tuple(types) => write!(f, "{types:?}"),
+            Self::Struct(anon_struct) => write!(f, "{anon_struct:?}"),
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Type {
+    // Primitives
     Int,
     Float,
     String,
     Bool,
-    Struct(ScopedTypeIdentifier), // TODO: Module support for name
+    Unit,
+    Any,
+
+    //
+    Struct(QualifiedTypeIdentifier), // TODO: Module support for name
     Array(Box<Type>),
     Map(Box<Type>, Box<Type>), // TODO: not implemented yet
-    Unit,
     Tuple(Vec<Type>),
-    Enum(ScopedTypeIdentifier), // TODO: Module support
-    Any,
+    Enum(QualifiedTypeIdentifier), // TODO: Module support
+
+    //
+    TypeReference(QualifiedTypeIdentifier), // Some Unknown Type Reference  // TODO: Module support
 }
 
 // Takes a left and right side expression
@@ -460,17 +574,19 @@ pub enum UnaryOperator {
 #[derive(Debug, Clone)]
 pub enum Pattern {
     // Just the normal identifier
-    Variable(Variable),
+    VariableAssignment(Variable),
 
+    // Containers
     Tuple(Vec<LocalTypeIdentifier>),  // Change to SetVec
     Struct(Vec<LocalTypeIdentifier>), // Change to SetVec
 
     Literal(Literal),
 
     // Enum variants
-    EnumTuple(LocalTypeIdentifier, Vec<LocalTypeIdentifier>), // Change to SetVec
-    EnumStruct(LocalTypeIdentifier, Vec<LocalTypeIdentifier>), // Change to SetVec
+    EnumTuple(LocalTypeIdentifier, Vec<LocalIdentifier>), // Change to SetVec
+    EnumStruct(LocalTypeIdentifier, Vec<LocalIdentifier>), // Change to SetVec
     EnumSimple(LocalTypeIdentifier),
+
     // Other
     Wildcard, // underscore _
 }
@@ -491,19 +607,41 @@ pub enum FormatSpecifier {
     Precision(u32, PrecisionType), // :..2f or :..5s
 }
 
+impl Display for FormatSpecifier {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            Self::Debug => write!(f, "?"),
+            Self::LowerHex => write!(f, "x"),
+            Self::UpperHex => write!(f, "X"),
+            Self::Binary => write!(f, "b"),
+            Self::Float => write!(f, "f"),
+            Self::Precision(number, precision_type) => {
+                write!(f, "{number}{precision_type}")
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum PrecisionType {
     Float,
     String,
 }
 
-#[derive(Debug)]
-pub struct Program {
-    statements: Vec<Statement>,
-    definitions: Vec<Definition>,
+impl Display for PrecisionType {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{self:?}")
+    }
 }
 
-impl Program {
+#[derive(Debug)]
+pub struct Module {
+    statements: Vec<Statement>,
+    pub definitions: Vec<Definition>,
+}
+
+impl Module {
+    #[must_use]
     pub fn new(definitions: Vec<Definition>, statements: Vec<Statement>) -> Self {
         Self {
             statements,
@@ -511,19 +649,21 @@ impl Program {
         }
     }
 
-    pub fn statements(&self) -> &Vec<Statement> {
+    #[must_use]
+    pub const fn statements(&self) -> &Vec<Statement> {
         &self.statements
     }
 
-    pub fn definitions(&self) -> &Vec<Definition> {
+    #[must_use]
+    pub const fn definitions(&self) -> &Vec<Definition> {
         &self.definitions
     }
 }
 
-impl Display for Program {
+impl Display for Module {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         for definition in &self.definitions {
-            write!(f, "{:?}\n", definition)?;
+            writeln!(f, "{definition:?}")?;
         }
 
         if !self.definitions.is_empty() && !self.statements().is_empty() {
@@ -531,7 +671,7 @@ impl Display for Program {
         }
 
         for statement in &self.statements {
-            write!(f, "{:?}\n", statement)?;
+            writeln!(f, "{statement:?}")?;
         }
         Ok(())
     }

@@ -1,9 +1,18 @@
 [workspace]
 resolver = "2"
 members = [
+    # Parser
     "crates/ast",
-    "crates/derive",
-    "crates/eval",
     "crates/parser",
-    "crates/examples", "crates/cli",
+    # Analyzer
+    "crates/semantic",
+    "crates/analyzer",
+    # Evaluator
+    "crates/eval",
+    # "crates/examples",
+
+    # tools
+    "crates/cli",
+    # API tools
+    "crates/derive",
 ]

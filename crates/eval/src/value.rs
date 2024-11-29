@@ -2,13 +2,17 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use crate::ns::{EnumVariantTypeRef, StructTypeRef, SwampTypeId, TupleTypeRef};
-use crate::{ExecuteError, Interpreter, ScopeType, ValueWithSignal};
+use crate::{EvalExternalFunctionRef, ValueWithSignal};
+use fixed32::Fp;
+use seq_fmt::comma_tuple;
 use std::cell::RefCell;
 use std::fmt::Debug;
 use std::rc::Rc;
-use swamp_script_ast::{
-    FormatSpecifier, LocalTypeIdentifier, Parameter, PrecisionType, Statement, Type,
+use swamp_script_semantic::IdentifierName;
+use swamp_script_semantic::{
+    FormatSpecifier, PrecisionType, ResolvedArrayTypeRef, ResolvedEnumVariantStructTypeRef,
+    ResolvedEnumVariantTupleTypeRef, ResolvedEnumVariantTypeRef,
+    ResolvedInternalFunctionDefinitionRef, ResolvedStructTypeRef, ResolvedTupleTypeRef,
 };
 
 pub trait SwampExport {
@@ -19,7 +23,7 @@ pub trait SwampExport {
         Self: Sized;
 }
 
-impl SwampExport for f32 {
+impl SwampExport for Fp {
     // Todo: change to fixed point 32 bit
     fn to_swamp_value(&self) -> Value {
         Value::Float(*self)
@@ -55,106 +59,43 @@ impl SwampExport for i32 {
     }
 }
 
-type FunctionDef = (Vec<Parameter>, Type);
-type FunctionFn = Box<dyn Fn(&[Value]) -> Result<Value, ExecuteError>>;
-
-pub enum FunctionRef {
-    External(LocalTypeIdentifier, FunctionDef, Rc<FunctionFn>),
-    Internal(LocalTypeIdentifier, FunctionDef, Vec<Statement>),
-}
-
-impl Debug for FunctionRef {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "FunctionRef {}({:?})",
-            self.identifier(),
-            self.parameters(),
-        )
-    }
-}
-
-impl Clone for FunctionRef {
-    fn clone(&self) -> Self {
-        match self {
-            FunctionRef::External(debug_name, def, f) => {
-                FunctionRef::External(debug_name.clone(), def.clone(), f.clone())
-            }
-            FunctionRef::Internal(debug_name, def, body) => {
-                FunctionRef::Internal(debug_name.clone(), def.clone(), body.clone())
-            }
-        }
-    }
-}
-
-impl FunctionRef {
-    pub fn parameters(&self) -> &Vec<Parameter> {
-        match self {
-            FunctionRef::External(_, (params, _), _) => params,
-            FunctionRef::Internal(_, (params, _), _) => params,
-        }
-    }
-
-    pub fn identifier(&self) -> &LocalTypeIdentifier {
-        match self {
-            FunctionRef::External(debug_name, _, _) => debug_name,
-            FunctionRef::Internal(debug_name, _, _) => debug_name,
-        }
-    }
-
-    pub fn execute(
-        &self,
-        interpreter: &mut Interpreter,
-        args: Vec<Value>,
-    ) -> Result<Value, ExecuteError> {
-        match self {
-            FunctionRef::External(_, (_, _), f) => {
-                let v = f(&args)?;
-                Ok(v)
-            }
-            FunctionRef::Internal(_, (params, _), body) => {
-                interpreter.push_scope(ScopeType::Function);
-
-                // Bind parameters before executing body
-                interpreter.bind_parameters(params, args)?;
-                let result = interpreter.execute_statements(body)?;
-
-                interpreter.pop_scope();
-
-                // Since signals can not propagate from the function call, we just return a normal Value
-                let v = match result {
-                    ValueWithSignal::Value(v) => v,
-                    ValueWithSignal::Return(v) => v,
-                    ValueWithSignal::Break => Value::Unit,
-                    ValueWithSignal::Continue => Value::Unit,
-                };
-
-                Ok(v)
-            }
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub enum Value {
     Int(i32),
-    Float(f32), // TODO: Replace with fixed
+    Float(Fp),
     String(String),
     Bool(bool),
     Unit, // Means 'no value' ()
     Reference(Rc<RefCell<Value>>),
 
     // Containers
-    Array(SwampTypeId, Vec<Value>),
-    Tuple(TupleTypeRef, Vec<Value>),
-    Struct(StructTypeRef, Vec<Value>), // type of the struct, and the fields themselves in strict order
-    EnumVariant(EnumVariantTypeRef, Box<Value>), // (enum_type_name, variant_name, value). value is either tuple or struct
+    Array(ResolvedArrayTypeRef, Vec<Value>),
+    Tuple(ResolvedTupleTypeRef, Vec<Value>),
+    Struct(ResolvedStructTypeRef, Vec<Value>), // type of the struct, and the fields themselves in strict order
+
+    EnumVariantSimple(ResolvedEnumVariantTypeRef),
+    EnumVariantTuple(ResolvedEnumVariantTupleTypeRef, Vec<Value>),
+    EnumVariantStruct(ResolvedEnumVariantStructTypeRef, Vec<Value>),
 
     // Number generators
     ExclusiveRange(Box<i32>, Box<i32>),
 
     // Higher order
-    Function(FunctionRef),
+    InternalFunction(ResolvedInternalFunctionDefinitionRef),
+    ExternalFunction(EvalExternalFunctionRef),
+}
+
+impl TryFrom<ValueWithSignal> for Value {
+    type Error = String;
+
+    fn try_from(value: ValueWithSignal) -> Result<Self, Self::Error> {
+        match value {
+            ValueWithSignal::Value(v) => Ok(v),
+            ValueWithSignal::Return(v) => Ok(v),
+            ValueWithSignal::Break => Err("break can not be converted".to_string()),
+            ValueWithSignal::Continue => Err("continue can not be converted".to_string()),
+        }
+    }
 }
 
 impl Value {
@@ -165,24 +106,27 @@ impl Value {
         }
     }
 
-    pub fn swamp_type_id(&self) -> SwampTypeId {
+    /*
+    pub fn swamp_type_id(&self) -> ResolvedType {
         match self {
-            Value::Int(_) => SwampTypeId::Int,
-            Value::Float(_) => SwampTypeId::Float,
-            Value::String(_) => SwampTypeId::String,
-            Value::Bool(_) => SwampTypeId::Bool,
-            Value::Array(item_type, _) => SwampTypeId::Array(Box::new(item_type.clone())),
-            Value::Function(_) => SwampTypeId::Function,
-            Value::Unit => SwampTypeId::Void,
-            Value::ExclusiveRange(_, _) => SwampTypeId::Range,
+            Value::Int(_) => ResolvedType::Int(),
+            Value::Float(_) => ResolvedType::Float,
+            Value::String(_) => ResolvedType::String,
+            Value::Bool(_) => ResolvedType::Bool,
+            Value::Array(item_type, _) => ResolvedType::Array(Box::new(item_type.clone())),
+            Value::Function(_) => ResolvedType::Function,
+            Value::Unit => ResolvedType::Void,
+            Value::ExclusiveRange(_, _) => ResolvedType::ExclusiveRange,
             Value::Reference(r) => r.borrow().swamp_type_id(),
-            Value::Struct(struct_type, _) => SwampTypeId::Struct(struct_type.clone()),
-            Value::Tuple(tuple_type, _values) => SwampTypeId::Tuple(tuple_type.clone()),
+            Value::Struct(struct_type, _) => ResolvedType::Struct(struct_type.clone()),
+            Value::Tuple(tuple_type, _values) => ResolvedType::Tuple(tuple_type.clone()),
             Value::EnumVariant(enum_variant_type_ref, _data) => {
-                SwampTypeId::EnumVariant(enum_variant_type_ref.clone())
+                ResolvedType::EnumVariant(enum_variant_type_ref.clone())
             }
         }
     }
+
+     */
 }
 
 impl std::fmt::Display for Value {
@@ -213,33 +157,53 @@ impl std::fmt::Display for Value {
                 write!(f, ")")
             }
             Value::Struct(struct_type_ref, fields_in_strict_order) => {
-                let prefix = if struct_type_ref.name().0.is_empty() {
+                let prefix = if struct_type_ref.borrow().name().text.is_empty() {
                     "".to_string()
                 } else {
-                    struct_type_ref.name().0.to_string() + &*" ".to_string()
+                    struct_type_ref.borrow().name().text.to_string() + &*" ".to_string()
                 };
                 write!(f, "{}{{ ", prefix)?;
+
+                let fields = struct_type_ref
+                    .borrow()
+                    .fields
+                    .keys()
+                    .cloned()
+                    .collect::<Vec<_>>();
                 for (i, val) in fields_in_strict_order.iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    let field_name = struct_type_ref.fields.keys().nth(i).unwrap();
+                    let field_name = &fields[i];
                     write!(f, "{}: {}", field_name, val)?;
                 }
                 write!(f, " }}")
             }
-            Value::Function(_reference) => write!(f, "<function>"), // TODO:
+            Value::InternalFunction(_reference) => write!(f, "<function>"), // TODO:
             Value::Unit => write!(f, "()"),
             Value::ExclusiveRange(start, end) => write!(f, "{}..{}", start, end),
-            Value::EnumVariant(enum_name, data) => {
-                let mut s = enum_name.to_string();
-                match data.as_ref() {
-                    Value::Unit => {} // skip the unit output
-                    _ => s += &data.to_string(),
-                }
-                write!(f, "{}", s)
+            Value::EnumVariantTuple(_enum_name, _data) => {
+                write!(f, "tuple variant")
             }
             Value::Reference(reference) => write!(f, "{}", reference.borrow()),
+            Value::ExternalFunction(_) => todo!(),
+            Value::EnumVariantStruct(struct_variant, values) => {
+                let decorated_values: Vec<(IdentifierName, Value)> = struct_variant
+                    .fields
+                    .keys()
+                    .cloned()
+                    .zip(values.clone())
+                    .collect();
+
+                write!(
+                    f,
+                    "{}::{} {{ {} }}",
+                    struct_variant.common.enum_ref.name,
+                    struct_variant.common.variant_name,
+                    comma_tuple(&decorated_values)
+                )
+            }
+            Value::EnumVariantSimple(enum_type_ref) => write!(f, "{enum_type_ref}"),
         }
     }
 }
@@ -289,7 +253,7 @@ pub fn format_value(value: &Value, spec: &FormatSpecifier) -> Result<String, Str
         // Debug format for complex types
         (Value::Struct(_type_id, fields), FormatSpecifier::Debug) => Ok(format!("{:?}", fields)),
         (Value::Array(_type_id, elements), FormatSpecifier::Debug) => Ok(format!("{:?}", elements)),
-        (Value::EnumVariant(_type_id, variant), FormatSpecifier::Debug) => {
+        (Value::EnumVariantTuple(_type_id, variant), FormatSpecifier::Debug) => {
             Ok(format!("{:?}", variant))
         }
 
@@ -298,8 +262,7 @@ pub fn format_value(value: &Value, spec: &FormatSpecifier) -> Result<String, Str
 
         _ => Err(format!(
             "Unsupported format specifier {:?} for value type {:?}",
-            spec,
-            value.swamp_type_id()
+            spec, value
         )),
     }
 }

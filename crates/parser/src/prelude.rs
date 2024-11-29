@@ -3,4 +3,4 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-pub use {crate::Rule, swamp_script_ast::Program};
+pub use {crate::Rule, swamp_script_ast::Module};

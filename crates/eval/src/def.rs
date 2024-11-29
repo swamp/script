@@ -2,20 +2,20 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-
-use crate::ns::{EnumVariantContainerType, ImplType, ModuleNamespace, StructType, SwampTypeId};
-use crate::value::{FunctionRef, Value};
+/*
+use crate::value::Value;
 use seq_map::SeqMap;
-use swamp_script_ast::SelfParameter;
-use swamp_script_ast::{Definition, EnumVariant, ImplItem, ImplMember, LocalTypeIdentifier, Type};
+use swamp_script_semantic::ns::{
+    ImplType, ResolvedEnumVariantContainerType, ResolvedModuleNamespace, ResolvedStructType,
+};
 use tracing::debug;
 
 pub struct DefinitionRunner;
 
 impl DefinitionRunner {
     pub fn evaluate_types(
-        namespace: &mut ModuleNamespace,
-        ast_type_types: &[Type],
+        namespace: &mut ResolvedModuleNamespace,
+        ast_type_types: &[ResolvedType],
     ) -> Result<Vec<SwampTypeId>, String> {
         let mut items = vec![];
 
@@ -27,8 +27,8 @@ impl DefinitionRunner {
     }
 
     pub fn evaluate_type(
-        namespace: &mut ModuleNamespace,
-        ast_type: &Type,
+        namespace: &mut ResolvedModuleNamespace,
+        ast_type: &ResolvedType,
     ) -> Result<SwampTypeId, String> {
         let t = match ast_type {
             Type::Int => SwampTypeId::Int,
@@ -74,8 +74,8 @@ impl DefinitionRunner {
         Ok(t)
     }
 
-    pub(crate) fn execute_definition(
-        namespace: &mut ModuleNamespace,
+    pub fn execute_definition(
+        namespace: &mut ResolvedModuleNamespace,
         definition: &Definition,
     ) -> Result<Value, String> {
         debug!("defining {:?}", definition);
@@ -88,7 +88,7 @@ impl DefinitionRunner {
                         .unwrap(); // TODO: Error handling
                 }
 
-                let struct_type = StructType::new(name.clone(), fields_in_order);
+                let struct_type = ResolvedStructType::new(name.clone(), fields_in_order);
 
                 namespace.add_struct_type(&name, struct_type).map_err(|e| {
                     format!(
@@ -104,12 +104,12 @@ impl DefinitionRunner {
 
                 for (ident, variant) in variants {
                     let container_type = match variant {
-                        EnumVariant::Simple => EnumVariantContainerType::Nothing,
+                        EnumVariant::Simple => ResolvedEnumVariantContainerType::Nothing,
 
                         EnumVariant::Tuple(ast_types) => {
                             let converted_types = Self::evaluate_types(namespace, ast_types)?;
                             let tuple_type = namespace.get_or_create_tuple(converted_types);
-                            EnumVariantContainerType::Tuple(tuple_type)
+                            ResolvedEnumVariantContainerType::Tuple(tuple_type)
                         }
 
                         EnumVariant::Struct(ast_fields) => {
@@ -125,11 +125,11 @@ impl DefinitionRunner {
                             let internal_struct_type_name =
                                 LocalTypeIdentifier::new(&*("_".to_string() + &ident.0));
                             let internal_struct_type =
-                                StructType::new(LocalTypeIdentifier::new(""), fields);
+                                ResolvedStructType::new(LocalTypeIdentifier::new(""), fields);
                             let created_struct_type_ref = namespace
                                 .add_struct_type(&internal_struct_type_name, internal_struct_type)
                                 .expect("should work with internal struct type");
-                            EnumVariantContainerType::Struct(created_struct_type_ref)
+                            ResolvedEnumVariantContainerType::Struct(created_struct_type_ref)
                         }
                     };
 
@@ -150,7 +150,7 @@ impl DefinitionRunner {
                 Value::Unit
             }
             Definition::FunctionDef(name, data) => {
-                let func_ref = FunctionRef::Internal(
+                let func_ref = ResolvedFunctionReference::Internal(
                     LocalTypeIdentifier::new(&*name.0),
                     (data.params.clone(), data.return_type.clone()),
                     data.body.clone(),
@@ -279,3 +279,4 @@ impl DefinitionRunner {
         Ok(value)
     }
 }
+*/

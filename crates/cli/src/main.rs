@@ -4,13 +4,21 @@
  */
 
 use clap::{Parser, Subcommand};
+use std::cell::RefCell;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use std::{fs, io};
-use swamp_script_eval::{ExecuteError, Interpreter, ValueWithSignal};
+use swamp_script_analyzer::dep::DependencyParser;
+use swamp_script_analyzer::{parse_dependant_modules_and_resolve, ParseModule, ResolveError};
+use swamp_script_ast::{ModulePath, Parameter, Type, Variable};
+use swamp_script_eval::value::Value;
+use swamp_script_eval::{ExecuteError, Interpreter};
 use swamp_script_parser::prelude::*;
-use tracing::{debug, info};
+use swamp_script_parser::AstParser;
+use swamp_script_semantic::{ResolvedModule, ResolvedProgram};
+use tracing::{debug, info, trace};
 use tracing_subscriber::EnvFilter;
 
 #[derive(Parser)]
@@ -62,6 +70,7 @@ fn command(command: &Commands) -> Result<(), CliError> {
 pub enum CliError {
     IoError(std::io::Error),
     ParseError(pest::error::Error<Rule>), // TODO: pest should not leak through here
+    ResolveError(ResolveError),
     ExecuteError(ExecuteError),
     Other(String),
 }
@@ -83,6 +92,12 @@ impl From<io::Error> for CliError {
 impl From<ExecuteError> for CliError {
     fn from(value: ExecuteError) -> Self {
         Self::ExecuteError(value)
+    }
+}
+
+impl From<ResolveError> for CliError {
+    fn from(value: ResolveError) -> Self {
+        Self::ResolveError(value)
     }
 }
 
@@ -121,39 +136,127 @@ fn resolve_swamp_file(path: &Path) -> Result<PathBuf, String> {
     }
 }
 
-fn compile(path: &Path) -> Result<Program, CliError> {
+fn register_print(interpreter: &mut Interpreter, output: Rc<RefCell<Vec<String>>>) {
+    interpreter
+        .register_external_function(
+            "print".to_string(),
+            1, /* TODO: HARD CODED */
+            move |args: &[Value]| {
+                if let Some(value) = args.first() {
+                    let display_value = value.to_string();
+                    output.borrow_mut().push(display_value.clone());
+                    println!("{}", display_value);
+                    Ok(Value::Unit)
+                } else {
+                    Err("print requires at least one argument".to_string())?
+                }
+            },
+        )
+        .expect("should work to register");
+}
+
+pub fn eval(resolved_main_module: &ResolvedModule) -> Result<Value, CliError> {
+    let mut interpreter = Interpreter::new();
+    let output = Rc::new(RefCell::new(Vec::new()));
+    register_print(&mut interpreter, output.clone());
+    let value = interpreter.eval_module(resolved_main_module)?;
+    Ok(value)
+}
+
+pub fn create_parsed_modules(
+    script: &str,
+    root_path: PathBuf,
+) -> Result<DependencyParser, ResolveError> {
+    let parser = AstParser::new();
+    let ast_program = parser.parse_script(script)?;
+    trace!("ast_program:\n{:#?}", ast_program);
+
+    let parse_module = ParseModule { ast_program };
+
+    let mut graph = DependencyParser::new();
+    let root = module_path();
+    graph.add_ast_module(root.clone(), parse_module);
+
+    debug!("root path is {root_path:?}");
+
+    Ok(graph)
+}
+
+fn compile_to_resolved_program(script: &str) -> Result<ResolvedProgram, CliError> {
+    // Analyze
+    let mut parsed_modules = create_parsed_modules(script, PathBuf::new())?;
+    let root_path = &ModulePath(vec!["main".to_string()]);
+
+    let main_module = parsed_modules
+        .get_parsed_module_mut(root_path)
+        .unwrap_or_else(|| panic!("should exist {root_path:?}"));
+
+    main_module.declare_external_function(
+        "print".to_string(),
+        vec![Parameter {
+            variable: Variable {
+                name: "data".to_string(),
+                is_mutable: false,
+            },
+            param_type: Type::Any,
+            is_mutable: false,
+        }],
+        Type::Unit,
+    );
+
+    let mut resolved_program = ResolvedProgram::new();
+
+    parse_dependant_modules_and_resolve(
+        PathBuf::new(),
+        root_path.clone(),
+        &mut parsed_modules,
+        &mut resolved_program,
+    )?;
+
+    Ok(resolved_program)
+}
+
+fn compile_and_eval(script: &str) -> Result<Value, CliError> {
+    let resolved_program = compile_to_resolved_program(script)?;
+
+    let resolved_main_module = resolved_program
+        .modules
+        .get(&ModulePath(vec!["main".to_string()]))
+        .expect("can not find main module");
+
+    eval(resolved_main_module)
+}
+
+fn read_root_source_file(path: &Path) -> Result<String, CliError> {
     debug!("compile {path:?}");
     let swamp_file = resolve_swamp_file(path)?;
     let absolute_path = fs::canonicalize(&swamp_file)?;
     debug!("found_file {absolute_path:?}");
 
-    let parser = swamp_script_parser::AstParser::new();
     debug!("reading {}", swamp_file.display());
     let file = fs::read_to_string(&swamp_file)?;
-    Ok(parser.parse_script(&*file)?)
+    Ok(file)
 }
 
 fn build(path: &PathBuf) -> Result<(), CliError> {
-    let program = compile(path)?;
+    let source_file_contents = read_root_source_file(path)?;
+
+    let program = compile_to_resolved_program(&source_file_contents)?;
     eprintln!("{}", program);
     Ok(())
 }
 
+fn module_path() -> ModulePath {
+    ModulePath(vec!["main".to_string()])
+}
+
 fn run(path: &PathBuf) -> Result<(), CliError> {
-    let program = compile(path)?;
-    let mut eval = Interpreter::new();
+    let source_file_contents = read_root_source_file(path)?;
 
-    let value_with_signal = eval.eval_program(program)?;
+    let value = compile_and_eval(&source_file_contents)?;
 
-    info!("returned: {:?}", value_with_signal);
-    match value_with_signal {
-        ValueWithSignal::Value(v) => {
-            eprintln!("{}", v);
-        }
+    info!("returned: {:?}", value);
+    eprintln!("{}", value);
 
-        ValueWithSignal::Return(_) => panic!("return() should not happen"),
-        ValueWithSignal::Break => panic!("break should not happen"),
-        ValueWithSignal::Continue => panic!("continue should not be a value"),
-    }
     Ok(())
 }

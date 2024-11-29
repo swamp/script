@@ -4,4 +4,5 @@ version = "0.0.1"
 edition = "2021"
 
 [dependencies]
-seq-map = "0.0.8"
+seq-map = "0.0.11"
+fixed32 = "0.0.17"

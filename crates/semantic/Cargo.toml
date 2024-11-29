@@ -1,16 +1,14 @@
 [package]
-name = "swamp-script-parser"
+name = "swamp-script-semantic"
 version = "0.0.1"
 edition = "2021"
 
 [dependencies]
-pest = "2.7.14"
-pest_derive = "2.7.14"
-seq-map = "0.0.11"
-
 swamp-script-ast = { path = "../ast", version = "0.0.1" }
+seq-map = "0.0.11"
 tracing = "0.1.40"
 fixed32 = "0.0.17"
+seq-fmt = "0.0.1"
 
 [dev-dependencies]
 test-log = { version = "0.2.16", features = ["trace", "log", "color"] }

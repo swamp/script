@@ -201,7 +201,7 @@ fn iterate_over_array() {
 fn while_loop() {
     check(
         r#"
-        x = 0
+        mut x = 0
         while x < 5 {
             print(x)
             x = x + 1
@@ -227,7 +227,7 @@ fn call_function_in_loop() {
             print(another * 2)
         }
 
-        x = 0
+        mut x = 0
         while x < 3 {
             add(x)
             x = x + 1
@@ -252,12 +252,12 @@ fn increment(mut x: Int) -> Int {
     x = x + 1
     x
 }
-x = 10
+mut x = 10
 increment(x)
 print(x)
 
     "#,
-        "Parameter 'x' is marked as mut but variable 'x' is passed without mut keyword",
+        "ResolveError(ArgumentIsNotMutable)",
     );
 }
 
@@ -270,11 +270,11 @@ fn call_mut_2() {
         x
     }
     x = 10
-    increment(x)
+    increment(mut x)
     print(x)
 
     "#,
-        "Parameter 'x' is marked as mut but variable 'x' is passed without mut keyword",
+        "ResolveError(VariableIsNotMutable(x))",
     );
 }
 
@@ -578,7 +578,7 @@ fn boolean_operations() {
 fn arithmetic_precedence() {
     check(
         r#"
-        result = 2 + 3 * 4
+        mut result = 2 + 3 * 4
         print(result)
         result = (2 + 3) * 4
         print(result)
@@ -905,7 +905,7 @@ fn array_bounds_error() {
         arr = [1, 2, 3]
         print(arr[3])  // Out of bounds
         "#,
-        "Array index out of bounds: 3",
+        r#"ExecuteError(Error("Array index out of bounds: 3"))"#,
     );
 }
 
@@ -929,7 +929,7 @@ fn undefined_variable() {
         r#"
         print(undefined_variable)
         "#,
-        "Variable 'undefined_variable' not found in module 'main'",
+        "ResolveError(UnknownVariable(undefined_variable))",
     );
 }
 
@@ -1160,7 +1160,7 @@ fn test_match_with_refs() {
         fn increment_if_running(mut s: State) {
             match s {
                 Running { count } => {
-                    s = State::Running { count: count + 1 }
+                    s = State::Running { count: count + 2 }
                 },
                 Stopped => {}
             }
@@ -1169,6 +1169,6 @@ fn test_match_with_refs() {
         increment_if_running(mut state)
         print(state)
         "#,
-        "State::Running { count: 1 }",
+        "State::Running { count: 2 }",
     );
 }
