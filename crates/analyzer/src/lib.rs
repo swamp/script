@@ -1,18 +1,10 @@
-use crate::dep::{DependencyError, DependencyParser};
-
-use pest::error::Error;
 use seq_map::{SeqMap, SeqMapError};
 use std::fmt::Display;
-use std::path::PathBuf;
 use std::rc::Rc;
-use std::{env, fs};
 use swamp_script_ast::prelude::*;
-use swamp_script_parser::{AstParser, Rule};
 use swamp_script_semantic::ns::{ResolvedModuleNamespace, SemanticError};
 use swamp_script_semantic::prelude::*;
 use tracing::{debug, error, info, trace};
-
-pub mod dep;
 
 pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
     trace!("resolution expression {}", expression);
@@ -93,13 +85,12 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
 
 #[derive(Debug)]
 pub enum ResolveError {
-    DependencyError(DependencyError),
     CanNotFindModule(ModulePath),
     UnknownStructTypeReference(QualifiedTypeIdentifier),
     UnknownLocalStructTypeReference(LocalTypeIdentifier),
     DuplicateFieldName(IdentifierName),
     Unknown(String),
-    Pest(pest::error::Error<Rule>), // Should not have dependency towards `pest` and Parser.
+    //Pest(pest::error::Error<Rule>), // Should not have dependency towards `pest` and Parser.
     UnknownImplTargetTypeReference(LocalTypeIdentifier),
     WrongFieldCountInStructInstantiation(ResolvedStructTypeRef, SeqMap<IdentifierName, Expression>),
     MissingFieldInStructInstantiation(IdentifierName, ResolvedStructTypeRef),
@@ -141,12 +132,6 @@ impl From<SeqMapError> for ResolveError {
     }
 }
 
-impl From<pest::error::Error<Rule>> for ResolveError {
-    fn from(value: pest::error::Error<Rule>) -> Self {
-        Self::Pest(value)
-    }
-}
-
 #[derive(Debug)]
 pub struct BlockScope {
     variables: SeqMap<String, ResolvedVariableRef>,
@@ -177,109 +162,6 @@ pub struct Resolver<'a> {
     pub parent: &'a mut ResolvedProgram,
     pub current_module: &'a mut ResolvedModule,
     pub block_scope_stack: Vec<BlockScope>,
-}
-
-#[derive(Debug)]
-pub struct ParseModule {
-    pub ast_program: swamp_script_ast::Module,
-}
-
-impl ParseModule {
-    pub fn declare_external_function(
-        &mut self,
-        name: String,
-        parameters: Vec<Parameter>,
-        return_type: Type,
-    ) {
-        self.ast_program.definitions.insert(
-            0,
-            Definition::ExternalFunctionDef(
-                // TODO: Workaround to push external declarations so they come before internal functions
-                LocalIdentifier {
-                    node: Node {
-                        span: Span {
-                            start: Position {
-                                offset: 0,
-                                line: 0,
-                                column: 0,
-                            },
-                            end: Position {
-                                offset: 0,
-                                line: 0,
-                                column: 0,
-                            },
-                        },
-                    },
-                    text: name,
-                },
-                FunctionSignature {
-                    params: parameters,
-                    return_type,
-                },
-            ),
-        );
-    }
-}
-pub struct ParseRoot {
-    pub base_path: PathBuf,
-}
-
-#[derive(Debug)]
-pub enum ParseRootError {
-    IoError(std::io::Error),
-    ParseRule(Error<Rule>),
-}
-
-impl From<std::io::Error> for ParseRootError {
-    fn from(err: std::io::Error) -> Self {
-        Self::IoError(err)
-    }
-}
-
-impl From<pest::error::Error<Rule>> for ParseRootError {
-    fn from(value: Error<Rule>) -> Self {
-        Self::ParseRule(value)
-    }
-}
-
-#[derive(Debug)]
-pub struct RelativePath(pub String);
-
-fn to_relative_path(path: &ModulePath) -> RelativePath {
-    RelativePath(
-        path.0
-            .iter()
-            .map(|local_type_identifier| local_type_identifier.as_str())
-            .collect::<Vec<_>>()
-            .join("/"),
-    )
-}
-
-impl ParseRoot {
-    pub fn new(base_path: PathBuf) -> Self {
-        Self { base_path }
-    }
-
-    fn to_file_system_path(&self, path: RelativePath) -> PathBuf {
-        info!("converting from {path:?}");
-        let mut path_buf = self.base_path.to_path_buf();
-
-        path_buf.push(path.0);
-        path_buf.set_extension("swamp");
-
-        info!("converted to {path_buf:?}");
-        path_buf
-    }
-    pub fn parse(&self, module_path: &ModulePath) -> Result<ParseModule, ParseRootError> {
-        let path_buf = self.to_file_system_path(to_relative_path(module_path));
-        let contents = fs::read_to_string(path_buf)?;
-
-        let parser = AstParser::new();
-
-        let ast_program = parser.parse_script(&*contents)?;
-
-        Ok(ParseModule { ast_program })
-    }
 }
 
 impl<'a> Resolver<'a> {
@@ -767,7 +649,7 @@ impl<'a> Resolver<'a> {
         Ok(converted)
     }
 
-    fn resolve_statements(
+    pub fn resolve_statements(
         &mut self,
         statements: &Vec<Statement>,
     ) -> Result<Vec<ResolvedStatement>, ResolveError> {
@@ -1849,67 +1731,4 @@ impl<'a> Resolver<'a> {
 
         ResolvedPattern::Literal(resolved_literal)
     }
-}
-
-impl From<DependencyError> for ResolveError {
-    fn from(value: DependencyError) -> Self {
-        Self::DependencyError(value)
-    }
-}
-
-fn get_current_dir() -> Result<PathBuf, std::io::Error> {
-    let path = env::current_dir()?;
-
-    //let cargo_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-
-    Ok(path)
-}
-
-pub fn parse_dependant_modules_and_resolve(
-    base_path: PathBuf,
-    module_path: ModulePath,
-    dependency_parser: &mut DependencyParser,
-    resolved_program: &mut ResolvedProgram,
-) -> Result<(), ResolveError> {
-    debug!(current_directory=?get_current_dir().expect("failed to get current directory"), "current directory");
-    let parse_root = ParseRoot::new(base_path);
-
-    dependency_parser.parse_all_dependant_modules(parse_root, module_path)?;
-
-    let module_paths_in_order = dependency_parser.get_analysis_order()?;
-
-    for module_path in module_paths_in_order {
-        if let Some(parse_module) = dependency_parser.get_parsed_module(&module_path) {
-            let _resolved_module = resolve_module(resolved_program, module_path, parse_module)?;
-        } else {
-            panic!("not found module");
-        }
-    }
-
-    Ok(())
-}
-
-pub fn resolve_module(
-    resolved_program: &mut ResolvedProgram,
-    module_path: ModulePath,
-    module: &ParseModule,
-) -> Result<ResolvedModuleRef, ResolveError> {
-    let mut resolve_module = ResolvedModule::new(module_path.clone());
-
-    for ast_def in module.ast_program.definitions() {
-        let mut resolver = Resolver::new(resolved_program, &mut resolve_module);
-        resolver.resolve_and_set_definition(ast_def)?;
-    }
-
-    {
-        let mut resolver = Resolver::new(resolved_program, &mut resolve_module);
-        resolve_module.statements = resolver.resolve_statements(module.ast_program.statements())?;
-    }
-
-    let module_ref = Rc::new(resolve_module);
-    resolved_program
-        .modules
-        .add_module(module_path, module_ref.clone())?;
-
-    Ok(module_ref)
 }

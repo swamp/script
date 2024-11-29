@@ -1,19 +1,13 @@
 [package]
-name = "swamp-script-eval"
+name = "swamp-script-dep-loader"
 version = "0.0.1"
 edition = "2021"
 
 [dependencies]
+pest = "2.7.14"
 tracing = "0.1.40"
+seq-map = "0.0.11"
 swamp-script-semantic = { path = "../semantic", version = "0.0.1" }
-fixed32 = "0.0.17"
-seq-fmt = "0.0.1"
-
-[dev-dependencies]
-test-log = { version = "0.2.16", features = ["trace", "log", "color"] }
-pest = "2.7.14" # TODO: remove pest
-
 swamp-script-ast = { path = "../ast", version = "0.0.1" }
 swamp-script-parser = { path = "../parser", version = "0.0.1" }
-swamp-script-dep-loader = { path = "../dep-loader", version = "0.0.1" }
 swamp-script-analyzer = { path = "../analyzer", version = "0.0.1" }

@@ -257,7 +257,7 @@ increment(x)
 print(x)
 
     "#,
-        "ResolveError(ArgumentIsNotMutable)",
+        "DepLoaderError(ResolveError(ArgumentIsNotMutable))",
     );
 }
 
@@ -274,7 +274,7 @@ fn call_mut_2() {
     print(x)
 
     "#,
-        "ResolveError(VariableIsNotMutable(x))",
+        "DepLoaderError(ResolveError(VariableIsNotMutable(x)))",
     );
 }
 
@@ -929,7 +929,7 @@ fn undefined_variable() {
         r#"
         print(undefined_variable)
         "#,
-        "ResolveError(UnknownVariable(undefined_variable))",
+        "DepLoaderError(ResolveError(UnknownVariable(undefined_variable)))",
     );
 }
 

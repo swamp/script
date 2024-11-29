@@ -3,14 +3,18 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use std::cell::RefCell;
+use std::error::Error;
 use std::path::PathBuf;
 use std::rc::Rc;
-use swamp_script_analyzer::dep::DependencyParser;
-use swamp_script_analyzer::{parse_dependant_modules_and_resolve, ParseModule, ResolveError};
+
+use swamp_script_analyzer::ResolveError;
 use swamp_script_ast::{Parameter, Type, Variable};
+use swamp_script_dep_loader::{
+    parse_dependant_modules_and_resolve, DepLoaderError, DependencyParser, ParseModule,
+};
 use swamp_script_eval::value::Value;
 use swamp_script_eval::{ExecuteError, Interpreter};
-use swamp_script_parser::AstParser;
+use swamp_script_parser::{AstParser, Rule};
 use swamp_script_semantic::{ModulePath, ResolvedProgram};
 use tracing::{debug, trace};
 
@@ -19,6 +23,8 @@ use tracing::{debug, trace};
 pub enum EvalTestError {
     ExecuteError(ExecuteError),
     ResolveError(ResolveError),
+    DepLoaderError(DepLoaderError),
+    String(String),
 }
 
 impl From<ResolveError> for EvalTestError {
@@ -33,10 +39,22 @@ impl From<ExecuteError> for EvalTestError {
     }
 }
 
+impl From<pest::error::Error<Rule>> for EvalTestError {
+    fn from(e: pest::error::Error<Rule>) -> Self {
+        Self::String(e.to_string())
+    }
+}
+
+impl From<DepLoaderError> for EvalTestError {
+    fn from(e: DepLoaderError) -> Self {
+        Self::DepLoaderError(e)
+    }
+}
+
 pub fn create_parsed_modules(
     script: &str,
     root_path: PathBuf,
-) -> Result<DependencyParser, ResolveError> {
+) -> Result<DependencyParser, EvalTestError> {
     let parser = AstParser::new();
     let ast_program = parser.parse_script(script)?;
     trace!("ast_program:\n{:#?}", ast_program);

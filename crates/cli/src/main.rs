@@ -10,9 +10,11 @@ use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::{fs, io};
-use swamp_script_analyzer::dep::DependencyParser;
-use swamp_script_analyzer::{parse_dependant_modules_and_resolve, ParseModule, ResolveError};
+use swamp_script_analyzer::ResolveError;
 use swamp_script_ast::{ModulePath, Parameter, Type, Variable};
+use swamp_script_dep_loader::{
+    parse_dependant_modules_and_resolve, DepLoaderError, DependencyParser, ParseModule,
+};
 use swamp_script_eval::value::Value;
 use swamp_script_eval::{ExecuteError, Interpreter};
 use swamp_script_parser::prelude::*;
@@ -72,6 +74,7 @@ pub enum CliError {
     ParseError(pest::error::Error<Rule>), // TODO: pest should not leak through here
     ResolveError(ResolveError),
     ExecuteError(ExecuteError),
+    DepLoaderError(DepLoaderError),
     Other(String),
 }
 
@@ -98,6 +101,12 @@ impl From<ExecuteError> for CliError {
 impl From<ResolveError> for CliError {
     fn from(value: ResolveError) -> Self {
         Self::ResolveError(value)
+    }
+}
+
+impl From<DepLoaderError> for CliError {
+    fn from(value: DepLoaderError) -> Self {
+        Self::DepLoaderError(value)
     }
 }
 
@@ -166,7 +175,7 @@ pub fn eval(resolved_main_module: &ResolvedModule) -> Result<Value, CliError> {
 pub fn create_parsed_modules(
     script: &str,
     root_path: PathBuf,
-) -> Result<DependencyParser, ResolveError> {
+) -> Result<DependencyParser, CliError> {
     let parser = AstParser::new();
     let ast_program = parser.parse_script(script)?;
     trace!("ast_program:\n{:#?}", ast_program);

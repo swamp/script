@@ -4,10 +4,12 @@
  */
 use std::env;
 use std::path::PathBuf;
-use swamp_script_analyzer::dep::DependencyParser;
-use swamp_script_analyzer::{parse_dependant_modules_and_resolve, ParseModule, ResolveError};
+use swamp_script_analyzer::ResolveError;
 use swamp_script_ast::{ModulePath, Node, Position, Span};
-use swamp_script_parser::AstParser;
+use swamp_script_dep_loader::{
+    parse_dependant_modules_and_resolve, DepLoaderError, DependencyParser, ParseModule,
+};
+use swamp_script_parser::{AstParser, Rule};
 use swamp_script_semantic::ResolvedProgram;
 use tracing::{debug, warn};
 use tracing::{error, trace};
@@ -24,7 +26,32 @@ fn get_test_fixtures_directory(suffix: &str) -> PathBuf {
         .to_path_buf()
 }
 
-pub fn create_program(script: &str) -> Result<ResolvedProgram, ResolveError> {
+#[derive(Debug)]
+pub enum TestError {
+    ResolveError(ResolveError),
+    DepLoaderError(DepLoaderError),
+    String(String),
+}
+
+impl From<ResolveError> for TestError {
+    fn from(error: ResolveError) -> Self {
+        Self::ResolveError(error)
+    }
+}
+
+impl From<DepLoaderError> for TestError {
+    fn from(error: DepLoaderError) -> Self {
+        Self::DepLoaderError(error)
+    }
+}
+
+impl From<pest::error::Error<Rule>> for TestError {
+    fn from(value: pest::error::Error<Rule>) -> Self {
+        Self::String(value.to_string())
+    }
+}
+
+pub fn create_program(script: &str) -> Result<ResolvedProgram, TestError> {
     let parser = AstParser::new();
     let ast_program = parser.parse_script(script)?;
     trace!("ast_program:\n{:#?}", ast_program);
