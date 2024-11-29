@@ -2,7 +2,6 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-
 use swamp_script_derive::{swamp_fn, SwampExport};
 use swamp_script_eval::{
     value::{SwampExport, Value},
