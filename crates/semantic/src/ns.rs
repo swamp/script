@@ -6,8 +6,8 @@ use crate::{
     comma_seq_nl, Hash, ResolvedEnumType, ResolvedEnumTypeRef, ResolvedEnumVariantType,
     ResolvedEnumVariantTypeRef, ResolvedExternalFunctionDefinition,
     ResolvedExternalFunctionDefinitionRef, ResolvedInternalFunctionDefinition,
-    ResolvedInternalFunctionDefinitionRef, ResolvedStructType,
-    ResolvedStructTypeRef, ResolvedTupleType, ResolvedTupleTypeRef, ResolvedType, TypeNumber,
+    ResolvedInternalFunctionDefinitionRef, ResolvedStructType, ResolvedStructTypeRef,
+    ResolvedTupleType, ResolvedTupleTypeRef, ResolvedType, TypeNumber,
 };
 use seq_map::{SeqMap, SeqMapError};
 use std::cell::RefCell;
