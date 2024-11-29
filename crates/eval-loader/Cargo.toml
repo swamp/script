@@ -4,6 +4,7 @@ version = "0.0.2-a03"
 edition = "2021"
 license = "MIT"
 description = "load swamp-scripts"
+repository = "https://github.com/swamp/script"
 
 [dependencies]
 swamp-script-ast = { path = "../ast", version = "0.0.2-a03" }
