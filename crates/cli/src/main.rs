@@ -16,6 +16,7 @@ use swamp_script_dep_loader::{
 };
 use swamp_script_eval::value::Value;
 use swamp_script_eval::{ExecuteError, Interpreter};
+use swamp_script_eval_loader::resolve_program;
 use swamp_script_parser::prelude::*;
 use swamp_script_parser::AstParser;
 use swamp_script_semantic::{ResolvedModule, ResolvedProgram};
@@ -212,13 +213,17 @@ fn compile_to_resolved_program(script: &str) -> Result<ResolvedProgram, CliError
         Type::Unit,
     );
 
-    let mut resolved_program = ResolvedProgram::new();
-
-    parse_dependant_modules_and_resolve(
+    let module_paths_in_order = parse_dependant_modules_and_resolve(
         PathBuf::new(),
         root_path.clone(),
         &mut parsed_modules,
+    )?;
+
+    let mut resolved_program = ResolvedProgram::new();
+    resolve_program(
         &mut resolved_program,
+        &module_paths_in_order,
+        &parsed_modules,
     )?;
 
     Ok(resolved_program)

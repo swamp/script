@@ -20,3 +20,4 @@ swamp-script-ast = { path = "../ast", version = "0.0.2-a03" }
 swamp-script-parser = { path = "../parser", version = "0.0.2-a03" }
 swamp-script-dep-loader = { path = "../dep-loader", version = "0.0.2-a03" }
 swamp-script-analyzer = { path = "../analyzer", version = "0.0.2-a03" }
+swamp-script-eval-loader = { path = "../eval-loader", version = "0.0.2-a03" }

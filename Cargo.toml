@@ -18,4 +18,5 @@ members = [
 
     "crates/dep-loader",
     "crates/swamp-script",
+    "crates/eval-loader",
 ]

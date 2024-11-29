@@ -6,16 +6,12 @@ pub mod prelude;
 
 use pest::error::Error;
 use seq_map::SeqMap;
+use std::collections::HashSet;
 use std::path::PathBuf;
-use std::rc::Rc;
 use std::{env, fs};
 use swamp_script_ast::prelude::*;
-
-use std::collections::HashSet;
-use swamp_script_analyzer::{ResolveError, Resolver};
 use swamp_script_parser::{AstParser, Rule};
-use swamp_script_semantic::prelude::*;
-use tracing::{debug, info};
+use tracing::{debug, info, trace};
 
 pub struct ParseRoot {
     pub base_path: PathBuf,
@@ -298,41 +294,9 @@ fn get_current_dir() -> Result<PathBuf, std::io::Error> {
     Ok(path)
 }
 
-pub fn resolve_module(
-    resolved_program: &mut ResolvedProgram,
-    module_path: ModulePath,
-    module: &ParseModule,
-) -> Result<ResolvedModuleRef, ResolveError> {
-    let mut resolve_module = ResolvedModule::new(module_path.clone());
-
-    for ast_def in module.ast_program.definitions() {
-        let mut resolver = Resolver::new(resolved_program, &mut resolve_module);
-        resolver.resolve_and_set_definition(ast_def)?;
-    }
-
-    {
-        let mut resolver = Resolver::new(resolved_program, &mut resolve_module);
-        resolve_module.statements = resolver.resolve_statements(module.ast_program.statements())?;
-    }
-
-    let module_ref = Rc::new(resolve_module);
-    resolved_program
-        .modules
-        .add_module(module_path, module_ref.clone())?;
-
-    Ok(module_ref)
-}
-
 #[derive(Debug)]
 pub enum DepLoaderError {
-    ResolveError(ResolveError),
     DependencyError(DependencyError),
-}
-
-impl From<ResolveError> for DepLoaderError {
-    fn from(e: ResolveError) -> Self {
-        Self::ResolveError(e)
-    }
 }
 
 impl From<DependencyError> for DepLoaderError {
@@ -345,8 +309,7 @@ pub fn parse_dependant_modules_and_resolve(
     base_path: PathBuf,
     module_path: ModulePath,
     dependency_parser: &mut DependencyParser,
-    resolved_program: &mut ResolvedProgram,
-) -> Result<(), DepLoaderError> {
+) -> Result<Vec<ModulePath>, DepLoaderError> {
     debug!(current_directory=?get_current_dir().expect("failed to get current directory"), "current directory");
     let parse_root = ParseRoot::new(base_path);
 
@@ -354,13 +317,24 @@ pub fn parse_dependant_modules_and_resolve(
 
     let module_paths_in_order = dependency_parser.get_analysis_order()?;
 
-    for module_path in module_paths_in_order {
-        if let Some(parse_module) = dependency_parser.get_parsed_module(&module_path) {
-            let _resolved_module = resolve_module(resolved_program, module_path, parse_module)?;
-        } else {
-            panic!("not found module");
-        }
-    }
+    Ok(module_paths_in_order)
+}
 
-    Ok(())
+pub fn create_parsed_modules(
+    script: &str,
+    root_path: PathBuf,
+) -> Result<DependencyParser, pest::error::Error<Rule>> {
+    let parser = AstParser::new();
+    let ast_program = parser.parse_script(script)?;
+    trace!("ast_program:\n{:#?}", ast_program);
+
+    let parse_module = ParseModule { ast_program };
+
+    let mut graph = DependencyParser::new();
+    let root = ModulePath(vec!["test".to_string()]);
+    graph.add_ast_module(root.clone(), parse_module);
+
+    debug!("root path is {root_path:?}");
+
+    Ok(graph)
 }

@@ -9,6 +9,7 @@ use swamp_script_ast::{ModulePath, Node, Position, Span};
 use swamp_script_dep_loader::{
     parse_dependant_modules_and_resolve, DepLoaderError, DependencyParser, ParseModule,
 };
+use swamp_script_eval_loader::resolve_program;
 use swamp_script_parser::{AstParser, Rule};
 use swamp_script_semantic::ResolvedProgram;
 use tracing::{debug, warn};
@@ -58,16 +59,23 @@ pub fn create_program(script: &str) -> Result<ResolvedProgram, TestError> {
 
     let parse_module = ParseModule { ast_program };
 
-    let mut graph = DependencyParser::new();
+    let mut dependency_parser = DependencyParser::new();
 
     let root = ModulePath(vec!["test".to_string()]);
-    graph.add_ast_module(root.clone(), parse_module);
+    dependency_parser.add_ast_module(root.clone(), parse_module);
 
     let root_path = get_test_fixtures_directory("first");
     debug!("root path is {root_path:?}");
-    let mut resolved_program = ResolvedProgram::new();
 
-    parse_dependant_modules_and_resolve(root_path, root, &mut graph, &mut resolved_program)?;
+    let module_paths_in_order =
+        parse_dependant_modules_and_resolve(root_path, root, &mut dependency_parser)?;
+
+    let mut resolved_program = ResolvedProgram::new();
+    resolve_program(
+        &mut resolved_program,
+        &module_paths_in_order,
+        &dependency_parser,
+    )?;
 
     Ok(resolved_program)
 }
