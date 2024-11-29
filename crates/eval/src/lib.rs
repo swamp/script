@@ -10,7 +10,6 @@ use swamp_script_semantic::prelude::*;
 use tracing::{debug, error, info, trace};
 use value::format_value;
 
-mod def;
 pub mod value;
 
 type RawFunctionFn = dyn FnMut(&[Value]) -> Result<Value, ExecuteError>;
@@ -79,7 +78,6 @@ pub struct Interpreter {
     current_block_scopes: Vec<BlockScope>,
     external_functions: HashMap<String, EvalExternalFunctionRef>,
     external_functions_by_id: HashMap<ExternalFunctionId, EvalExternalFunctionRef>,
-    output: Rc<RefCell<Vec<String>>>,
 }
 
 impl Interpreter {
@@ -97,25 +95,14 @@ impl Default for Interpreter {
 
 impl Interpreter {
     pub fn new() -> Self {
-        let output = Rc::new(RefCell::new(Vec::new()));
         Self {
             function_scope_stack: vec![FunctionScope::default()],
             current_block_scopes: vec![BlockScope::default()],
-            output: output.clone(),
             external_functions: HashMap::new(),
             external_functions_by_id: HashMap::new(),
         }
     }
 
-    /*
-    pub fn register_rust_type<T: SwampExport + 'static>(&mut self) {
-        let def = T::generate_swamp_definition();
-        self.load_external_definitions(&def)
-            .expect("Failed to load generated type definition");
-    }
-
-
-     */
     fn push_function_scope(&mut self, debug_str: String) {
         trace!(debug_str=%debug_str, "push function scope");
         self.function_scope_stack.push(FunctionScope {
@@ -152,34 +139,6 @@ impl Interpreter {
         );
     }
 
-    /*
-    fn lookup_in_scope(&self, name: &str) -> Option<&Value> {
-        let current_scope = self.scope_stack.last().unwrap();
-        match current_scope.scope_type {
-            ScopeType::Function => {
-                trace!("lookup_in_scope -> Function for {name:?}");
-                // Only look in current scope
-                current_scope.variables.get(name)
-            }
-            ScopeType::Block => {
-                trace!("lookup_in_scope -> Block for {name:?}");
-                // Look through scopes until we hit a Function scope
-                for scope in self.scope_stack.iter().rev() {
-                    trace!("...checking in scope {scope:?}");
-                    if let Some(value) = scope.variables.get(name) {
-                        return Some(value);
-                    }
-                    if matches!(scope.scope_type, ScopeType::Function) {
-                        break;
-                    }
-                }
-                None
-            }
-        }
-    }
-
-     */
-
     fn bind_parameters(
         &mut self,
         params: &[ResolvedParameter],
@@ -206,8 +165,6 @@ impl Interpreter {
 
         Ok(())
     }
-
-    // Box<dyn Fn(&[Value]) -> Result<Value, ExecuteError> + Send + Sync>
 
     pub fn register_external_function(
         &mut self,
@@ -244,7 +201,6 @@ impl Interpreter {
         Ok(v)
     }
 
-    // Signals can not travel out of a function call, so only return Value
     fn evaluate_internal_function_call(
         &mut self,
         call: &ResolvedInternalFunctionCall,
@@ -285,237 +241,6 @@ impl Interpreter {
 
     fn tabs(&self) -> String {
         "..".repeat(self.function_scope_stack.len() - 1)
-    }
-
-    #[inline]
-    fn execute_statements(
-        &mut self,
-        statements: &Vec<ResolvedStatement>,
-    ) -> Result<ValueWithSignal, ExecuteError> {
-        let mut value = Value::Unit;
-
-        for statement in statements {
-            trace!("{} exec {statement:?}", self.tabs());
-
-            // First handle signal aware statements
-            match statement {
-                ResolvedStatement::Continue => {
-                    info!("exec continue");
-                    return Ok(ValueWithSignal::Continue);
-                }
-                ResolvedStatement::Break => return Ok(ValueWithSignal::Break),
-                ResolvedStatement::Return(expr) => {
-                    return Ok(ValueWithSignal::Return(self.evaluate_expression(expr)?));
-                }
-
-                ResolvedStatement::WhileLoop(condition, body) => {
-                    while self.evaluate_expression(&condition.expression)?.as_bool()? {
-                        match self.execute_statements(body) {
-                            Err(e) => return Err(e),
-                            Ok(signal) => match signal {
-                                ValueWithSignal::Value(_v) => {} // Just discard normal values
-                                ValueWithSignal::Break => {
-                                    break;
-                                }
-                                ValueWithSignal::Return(v) => {
-                                    return Ok(ValueWithSignal::Return(v))
-                                }
-                                ValueWithSignal::Continue => {}
-                            },
-                        }
-                    }
-                    continue;
-                }
-
-                ResolvedStatement::If(condition, consequences, optional_alternative) => {
-                    let cond_value = self.evaluate_expression(&condition.expression)?;
-                    match cond_value {
-                        Value::Bool(true) => {
-                            match self.execute_statements(consequences)? {
-                                ValueWithSignal::Value(_v) => {} // Just discard normal values
-                                ValueWithSignal::Break => return Ok(ValueWithSignal::Break),
-                                ValueWithSignal::Return(v) => {
-                                    return Ok(ValueWithSignal::Return(v))
-                                }
-                                ValueWithSignal::Continue => return Ok(ValueWithSignal::Continue),
-                            }
-                        }
-                        Value::Bool(false) => {
-                            if let Some(alternative) = optional_alternative {
-                                match self.execute_statements(alternative)? {
-                                    ValueWithSignal::Value(_v) => {} // Just discard normal values
-                                    ValueWithSignal::Break => return Ok(ValueWithSignal::Break),
-                                    ValueWithSignal::Return(v) => {
-                                        return Ok(ValueWithSignal::Return(v))
-                                    }
-                                    ValueWithSignal::Continue => {
-                                        return Ok(ValueWithSignal::Continue)
-                                    }
-                                }
-                            }
-                        }
-                        _ => return Err("If statement must evaluate to a boolean".to_string())?,
-                    };
-                    continue; // no need for the switch
-                }
-
-                ResolvedStatement::ForLoop(var_pattern, iterator_expr, body) => {
-                    let iterator = self.evaluate_expression(&iterator_expr.resolved_expression)?;
-                    match iterator {
-                        Value::ExclusiveRange(start, end) => {
-                            self.push_block_scope(format!(
-                                "for_loop {:?} {:?}",
-                                var_pattern, iterator_expr
-                            ));
-
-                            for i in *start..*end {
-                                match var_pattern {
-                                    ResolvedPattern::VariableAssignment(ident) => self
-                                        .set_local_var(
-                                            ident.variable_index,
-                                            Value::Int(i),
-                                            false,
-                                        )?,
-                                    _ => return Err("Expected identifier in for loop".to_string())?,
-                                }
-
-                                let signal = self.execute_statements(body)?;
-                                debug!(signal=?signal, "signal in loop");
-
-                                match signal {
-                                    ValueWithSignal::Value(_v) => {} // ignore normal values
-                                    ValueWithSignal::Return(v) => {
-                                        return Ok(ValueWithSignal::Return(v))
-                                    } //  Value::Void?
-                                    ValueWithSignal::Break => {
-                                        break;
-                                    }
-                                    ValueWithSignal::Continue => {}
-                                }
-                            }
-
-                            // Pop the loop scope
-                            self.pop_block_scope("for loop".to_string());
-                        }
-
-                        Value::Array(_item_swamp_type, elements) => {
-                            // Push a new scope for the loop
-                            self.push_block_scope("array".to_string());
-
-                            for element in elements {
-                                match var_pattern {
-                                    ResolvedPattern::VariableAssignment(ident) => {
-                                        self.set_var(
-                                            ident.scope_index,
-                                            ident.variable_index,
-                                            element,
-                                            false,
-                                        )
-                                        .expect("can not set array element");
-                                    }
-                                    _ => return Err("Expected identifier in for loop".to_string())?,
-                                }
-
-                                self.execute_statements(body)?;
-                            }
-
-                            self.pop_block_scope("array".to_string());
-                        }
-                        Value::Int(_) => todo!(),
-                        Value::Float(_) => todo!(),
-                        Value::String(_) => todo!(),
-                        Value::Bool(_) => todo!(),
-                        Value::Tuple(_, _) => todo!(),
-                        Value::Struct(_, _) => todo!(),
-                        Value::Unit => todo!(),
-                        Value::Reference(_) => todo!(),
-                        Value::InternalFunction(_) => todo!(),
-                        Value::ExternalFunction(_) => {}
-                        Value::EnumVariantTuple(_, _) => todo!(),
-                        Value::EnumVariantStruct(_, _) => todo!(),
-                        Value::EnumVariantSimple(_) => todo!(),
-                    }
-
-                    continue;
-                }
-                ResolvedStatement::Block(body) => {
-                    match self.execute_statements(body)? {
-                        ValueWithSignal::Value(_v) => {} // ignore normal values
-                        ValueWithSignal::Return(v) => return Ok(ValueWithSignal::Return(v)), //  Value::Void?
-                        ValueWithSignal::Break => return Ok(ValueWithSignal::Break),
-                        ValueWithSignal::Continue => return Ok(ValueWithSignal::Continue),
-                    }
-                }
-                _ => {}
-            }
-
-            value = match statement {
-                ResolvedStatement::Let(ResolvedPattern::VariableAssignment(var), expr) => {
-                    let value = self.evaluate_expression(expr)?;
-                    self.set_var(var.scope_index, var.variable_index, value, var.is_mutable())
-                        .expect("could not set variable");
-                    Value::Unit
-                }
-
-                ResolvedStatement::Expression(expr) => {
-                    let result = self.evaluate_expression(expr); // since it is statement_expression, the value is intentionally discarded
-                    if result.is_err() {
-                        return Err(result.unwrap_err());
-                    }
-                    result?
-                }
-
-                // destructuring
-                //TODO: ResolvedStatement::Let(ResolvedPattern::Tuple(_), _) => Value::Unit,
-                //TODO: ResolvedStatement::Let(ResolvedPattern::Struct(_), _) => Value::Unit,
-                ResolvedStatement::Let(ResolvedPattern::Literal(_), _) => Value::Unit,
-                //TODO: ResolvedStatement::Let(ResolvedPattern::EnumTuple(_, _), _) => Value::Unit,
-                //TODO: ResolvedStatement::Let(ResolvedPattern::EnumStruct(_, _), _) => Value::Unit,
-
-                // ignore the let
-                ResolvedStatement::Let(ResolvedPattern::Wildcard, _) => Value::Unit,
-                //TODO: ResolvedStatement::Let(ResolvedPattern::EnumSimple(_), _) => Value::Unit,
-                ResolvedStatement::LetVar(variable_ref, expression) => {
-                    let value = self.evaluate_expression(expression)?;
-                    self.set_var(
-                        variable_ref.scope_index,
-                        variable_ref.variable_index,
-                        value.clone(),
-                        variable_ref.is_mutable(),
-                    )?;
-                    value
-                }
-                ResolvedStatement::SetVar(variable_ref, expression) => {
-                    let value = self.evaluate_expression(expression)?;
-                    self.overwrite_existing_var(
-                        variable_ref.scope_index,
-                        variable_ref.variable_index,
-                        value.clone(),
-                    )?;
-                    value
-                }
-
-                // Ignore signal aware statements, they have been handled earlier
-                ResolvedStatement::Return(_) => panic!("return should have been handled earlier"),
-                ResolvedStatement::ForLoop(_, _, _) => {
-                    panic!("for_loop should have been handled earlier")
-                }
-                ResolvedStatement::WhileLoop(_, _) => {
-                    panic!("while_loop should have been handled earlier")
-                }
-                ResolvedStatement::Break => panic!("break should have been handled earlier"),
-                ResolvedStatement::Continue => panic!("continue should have been handled earlier"),
-                ResolvedStatement::Block(_) => panic!("block should have been handled earlier"),
-                ResolvedStatement::If(_, _, _) => panic!("if should have been handled earlier"),
-                ResolvedStatement::Let(ResolvedPattern::Tuple(_), _) => todo!(),
-                ResolvedStatement::Let(ResolvedPattern::EnumTuple(_, _), _) => todo!(),
-                ResolvedStatement::Let(ResolvedPattern::EnumStruct(_, _), _) => todo!(),
-                ResolvedStatement::Let(ResolvedPattern::Struct(_), _) => todo!(),
-                ResolvedStatement::Let(ResolvedPattern::EnumSimple(_), _) => todo!(),
-            }
-        }
-
-        Ok(ValueWithSignal::Value(value))
     }
 
     fn evaluate_args(&mut self, args: &[ResolvedExpression]) -> Result<Vec<Value>, ExecuteError> {
@@ -580,18 +305,6 @@ impl Interpreter {
             }
             _ => Err(format!("Cannot assign to immutable variable: {:?}", variable_index).into()),
         }
-
-        /*
-                match existing {
-            Value::Reference(r) => {
-                *r.borrow_mut() = match value {
-                    Value::Reference(new_r) => new_r.borrow().clone(),
-                    _ => value,
-                };
-            }
-            _ => *existing = value,
-        }
-         */
     }
 
     #[inline]
@@ -1013,6 +726,236 @@ impl Interpreter {
         Ok(value)
     }
 
+    #[inline]
+    fn execute_statements(
+        &mut self,
+        statements: &Vec<ResolvedStatement>,
+    ) -> Result<ValueWithSignal, ExecuteError> {
+        let mut value = Value::Unit;
+
+        for statement in statements {
+            trace!("{} exec {statement:?}", self.tabs());
+
+            // First handle signal aware statements
+            match statement {
+                ResolvedStatement::Continue => {
+                    return Ok(ValueWithSignal::Continue);
+                }
+                ResolvedStatement::Break => return Ok(ValueWithSignal::Break),
+                ResolvedStatement::Return(expr) => {
+                    return Ok(ValueWithSignal::Return(self.evaluate_expression(expr)?));
+                }
+
+                ResolvedStatement::WhileLoop(condition, body) => {
+                    while self.evaluate_expression(&condition.expression)?.as_bool()? {
+                        match self.execute_statements(body) {
+                            Err(e) => return Err(e),
+                            Ok(signal) => match signal {
+                                ValueWithSignal::Value(_v) => {} // Just discard normal values
+                                ValueWithSignal::Break => {
+                                    break;
+                                }
+                                ValueWithSignal::Return(v) => {
+                                    return Ok(ValueWithSignal::Return(v))
+                                }
+                                ValueWithSignal::Continue => {}
+                            },
+                        }
+                    }
+                    continue;
+                }
+
+                ResolvedStatement::If(condition, consequences, optional_alternative) => {
+                    let cond_value = self.evaluate_expression(&condition.expression)?;
+                    match cond_value {
+                        Value::Bool(true) => {
+                            match self.execute_statements(consequences)? {
+                                ValueWithSignal::Value(_v) => {} // Just discard normal values
+                                ValueWithSignal::Break => return Ok(ValueWithSignal::Break),
+                                ValueWithSignal::Return(v) => {
+                                    return Ok(ValueWithSignal::Return(v))
+                                }
+                                ValueWithSignal::Continue => return Ok(ValueWithSignal::Continue),
+                            }
+                        }
+                        Value::Bool(false) => {
+                            if let Some(alternative) = optional_alternative {
+                                match self.execute_statements(alternative)? {
+                                    ValueWithSignal::Value(_v) => {} // Just discard normal values
+                                    ValueWithSignal::Break => return Ok(ValueWithSignal::Break),
+                                    ValueWithSignal::Return(v) => {
+                                        return Ok(ValueWithSignal::Return(v))
+                                    }
+                                    ValueWithSignal::Continue => {
+                                        return Ok(ValueWithSignal::Continue)
+                                    }
+                                }
+                            }
+                        }
+                        _ => return Err("If statement must evaluate to a boolean".to_string())?,
+                    };
+                    continue; // no need for the switch
+                }
+
+                ResolvedStatement::ForLoop(var_pattern, iterator_expr, body) => {
+                    let iterator = self.evaluate_expression(&iterator_expr.resolved_expression)?;
+                    match iterator {
+                        Value::ExclusiveRange(start, end) => {
+                            self.push_block_scope(format!(
+                                "for_loop {:?} {:?}",
+                                var_pattern, iterator_expr
+                            ));
+
+                            for i in *start..*end {
+                                match var_pattern {
+                                    ResolvedPattern::VariableAssignment(ident) => self
+                                        .set_local_var(
+                                            ident.variable_index,
+                                            Value::Int(i),
+                                            false,
+                                        )?,
+                                    _ => return Err("Expected identifier in for loop".to_string())?,
+                                }
+
+                                let signal = self.execute_statements(body)?;
+                                debug!(signal=?signal, "signal in loop");
+
+                                match signal {
+                                    ValueWithSignal::Value(_v) => {} // ignore normal values
+                                    ValueWithSignal::Return(v) => {
+                                        return Ok(ValueWithSignal::Return(v))
+                                    }
+                                    ValueWithSignal::Break => {
+                                        break;
+                                    }
+                                    ValueWithSignal::Continue => {}
+                                }
+                            }
+
+                            // Pop the loop scope
+                            self.pop_block_scope("for loop".to_string());
+                        }
+
+                        Value::Array(_item_swamp_type, elements) => {
+                            // Push a new scope for the loop
+                            self.push_block_scope("array".to_string());
+
+                            for element in elements {
+                                match var_pattern {
+                                    ResolvedPattern::VariableAssignment(ident) => {
+                                        self.set_var(
+                                            ident.scope_index,
+                                            ident.variable_index,
+                                            element,
+                                            false,
+                                        )
+                                        .expect("can not set array element");
+                                    }
+                                    _ => return Err("Expected identifier in for loop".to_string())?,
+                                }
+
+                                self.execute_statements(body)?;
+                            }
+
+                            self.pop_block_scope("array".to_string());
+                        }
+                        Value::Int(_) => todo!(),
+                        Value::Float(_) => todo!(),
+                        Value::String(_) => todo!(),
+                        Value::Bool(_) => todo!(),
+                        Value::Tuple(_, _) => todo!(),
+                        Value::Struct(_, _) => todo!(),
+                        Value::Unit => todo!(),
+                        Value::Reference(_) => todo!(),
+                        Value::InternalFunction(_) => todo!(),
+                        Value::ExternalFunction(_) => {}
+                        Value::EnumVariantTuple(_, _) => todo!(),
+                        Value::EnumVariantStruct(_, _) => todo!(),
+                        Value::EnumVariantSimple(_) => todo!(),
+                    }
+
+                    continue;
+                }
+                ResolvedStatement::Block(body) => {
+                    match self.execute_statements(body)? {
+                        ValueWithSignal::Value(_v) => {} // ignore normal values
+                        ValueWithSignal::Return(v) => return Ok(ValueWithSignal::Return(v)), //  Value::Void?
+                        ValueWithSignal::Break => return Ok(ValueWithSignal::Break),
+                        ValueWithSignal::Continue => return Ok(ValueWithSignal::Continue),
+                    }
+                }
+                _ => {}
+            }
+
+            value = match statement {
+                ResolvedStatement::Let(ResolvedPattern::VariableAssignment(var), expr) => {
+                    let value = self.evaluate_expression(expr)?;
+                    self.set_var(var.scope_index, var.variable_index, value, var.is_mutable())
+                        .expect("could not set variable");
+                    Value::Unit
+                }
+
+                ResolvedStatement::Expression(expr) => {
+                    let result = self.evaluate_expression(expr); // since it is statement_expression, the value is intentionally discarded
+                    if result.is_err() {
+                        return Err(result.unwrap_err());
+                    }
+                    result?
+                }
+
+                // destructuring
+                //TODO: ResolvedStatement::Let(ResolvedPattern::Tuple(_), _) => Value::Unit,
+                //TODO: ResolvedStatement::Let(ResolvedPattern::Struct(_), _) => Value::Unit,
+                ResolvedStatement::Let(ResolvedPattern::Literal(_), _) => Value::Unit,
+                //TODO: ResolvedStatement::Let(ResolvedPattern::EnumTuple(_, _), _) => Value::Unit,
+                //TODO: ResolvedStatement::Let(ResolvedPattern::EnumStruct(_, _), _) => Value::Unit,
+
+                // ignore the let
+                ResolvedStatement::Let(ResolvedPattern::Wildcard, _) => Value::Unit,
+                //TODO: ResolvedStatement::Let(ResolvedPattern::EnumSimple(_), _) => Value::Unit,
+                ResolvedStatement::LetVar(variable_ref, expression) => {
+                    let value = self.evaluate_expression(expression)?;
+                    self.set_var(
+                        variable_ref.scope_index,
+                        variable_ref.variable_index,
+                        value.clone(),
+                        variable_ref.is_mutable(),
+                    )?;
+                    value
+                }
+                ResolvedStatement::SetVar(variable_ref, expression) => {
+                    let value = self.evaluate_expression(expression)?;
+                    self.overwrite_existing_var(
+                        variable_ref.scope_index,
+                        variable_ref.variable_index,
+                        value.clone(),
+                    )?;
+                    value
+                }
+
+                // Ignore signal aware statements, they have been handled earlier
+                ResolvedStatement::Return(_) => panic!("return should have been handled earlier"),
+                ResolvedStatement::ForLoop(_, _, _) => {
+                    panic!("for_loop should have been handled earlier")
+                }
+                ResolvedStatement::WhileLoop(_, _) => {
+                    panic!("while_loop should have been handled earlier")
+                }
+                ResolvedStatement::Break => panic!("break should have been handled earlier"),
+                ResolvedStatement::Continue => panic!("continue should have been handled earlier"),
+                ResolvedStatement::Block(_) => panic!("block should have been handled earlier"),
+                ResolvedStatement::If(_, _, _) => panic!("if should have been handled earlier"),
+                ResolvedStatement::Let(ResolvedPattern::Tuple(_), _) => todo!(),
+                ResolvedStatement::Let(ResolvedPattern::EnumTuple(_, _), _) => todo!(),
+                ResolvedStatement::Let(ResolvedPattern::EnumStruct(_, _), _) => todo!(),
+                ResolvedStatement::Let(ResolvedPattern::Struct(_), _) => todo!(),
+                ResolvedStatement::Let(ResolvedPattern::EnumSimple(_), _) => todo!(),
+            }
+        }
+
+        Ok(ValueWithSignal::Value(value))
+    }
+
     #[inline(always)]
     fn eval_match(&mut self, resolved_match: &ResolvedMatch) -> Result<Value, ExecuteError> {
         let cond_value = self.evaluate_expression(&resolved_match.expression)?;
@@ -1054,25 +997,25 @@ impl Interpreter {
                     }
                 }
 
-                ResolvedPattern::Struct(_fields) => {
-                    /* TODO:
-                    if let Value::Struct(_struct_type_ref, values) = &actual_value {
-                        if fields.len() == values.len() {
-                            self.push_scope(ScopeType::Block);
-                            for (field, value) in fields.iter().zip(values.iter()) {
-                                self.set_existing_var_or_create_new_one(
-                                    field.0.clone(),
-                                    value.clone(),
-                                    false,
-                                );
-                            }
-                            let result = self.evaluate_expression(&arm.expression);
-                            self.pop_scope();
-                            return result;
-                        }
-                    }
+                ResolvedPattern::Struct(_fields) => { // TODO: PBJ
+                     /* TODO:
+                     if let Value::Struct(_struct_type_ref, values) = &actual_value {
+                         if fields.len() == values.len() {
+                             self.push_scope(ScopeType::Block);
+                             for (field, value) in fields.iter().zip(values.iter()) {
+                                 self.set_existing_var_or_create_new_one(
+                                     field.0.clone(),
+                                     value.clone(),
+                                     false,
+                                 );
+                             }
+                             let result = self.evaluate_expression(&arm.expression);
+                             self.pop_scope();
+                             return result;
+                         }
+                     }
 
-                     */
+                      */
                 }
 
                 ResolvedPattern::Literal(lit) => match (lit, &actual_value) {
@@ -1145,8 +1088,6 @@ impl Interpreter {
                         if value_enum_variant_ref.number == enum_variant_type_ref.number {
                             return self.evaluate_expression(&arm.expression);
                         }
-                    } else {
-                        trace!("no match!");
                     }
                 }
 
@@ -1246,15 +1187,6 @@ impl Interpreter {
             (UnaryOperator::Not, Value::Bool(b)) => Ok(Value::Bool(!b)),
             _ => Err(format!("Invalid unary operation"))?,
         }
-    }
-
-    // Hardcoded print function for now
-    pub fn print(&mut self, val: Value) {
-        self.output.borrow_mut().push(val.to_string());
-    }
-
-    pub fn get_output(&self) -> Vec<String> {
-        self.output.borrow().clone()
     }
 }
 

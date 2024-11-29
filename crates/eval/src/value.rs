@@ -105,28 +105,6 @@ impl Value {
             _ => Err("Expected boolean value".to_string()),
         }
     }
-
-    /*
-    pub fn swamp_type_id(&self) -> ResolvedType {
-        match self {
-            Value::Int(_) => ResolvedType::Int(),
-            Value::Float(_) => ResolvedType::Float,
-            Value::String(_) => ResolvedType::String,
-            Value::Bool(_) => ResolvedType::Bool,
-            Value::Array(item_type, _) => ResolvedType::Array(Box::new(item_type.clone())),
-            Value::Function(_) => ResolvedType::Function,
-            Value::Unit => ResolvedType::Void,
-            Value::ExclusiveRange(_, _) => ResolvedType::ExclusiveRange,
-            Value::Reference(r) => r.borrow().swamp_type_id(),
-            Value::Struct(struct_type, _) => ResolvedType::Struct(struct_type.clone()),
-            Value::Tuple(tuple_type, _values) => ResolvedType::Tuple(tuple_type.clone()),
-            Value::EnumVariant(enum_variant_type_ref, _data) => {
-                ResolvedType::EnumVariant(enum_variant_type_ref.clone())
-            }
-        }
-    }
-
-     */
 }
 
 impl std::fmt::Display for Value {
