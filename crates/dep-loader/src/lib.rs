@@ -2,10 +2,10 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
+pub mod prelude;
 
 use pest::error::Error;
-use seq_map::{SeqMap, SeqMapError};
-use std::fmt::Display;
+use seq_map::SeqMap;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::{env, fs};
@@ -14,9 +14,8 @@ use swamp_script_ast::prelude::*;
 use std::collections::HashSet;
 use swamp_script_analyzer::{ResolveError, Resolver};
 use swamp_script_parser::{AstParser, Rule};
-use swamp_script_semantic::ns::{ResolvedModuleNamespace, SemanticError};
 use swamp_script_semantic::prelude::*;
-use tracing::{debug, error, info, trace};
+use tracing::{debug, info};
 
 pub struct ParseRoot {
     pub base_path: PathBuf,
@@ -123,6 +122,7 @@ impl ParseRoot {
 }
 
 #[derive(Clone)]
+#[allow(unused)]
 pub struct ModuleInfo {
     path: ModulePath,
     imports: Vec<ModulePath>,

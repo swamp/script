@@ -10,6 +10,7 @@ use swamp_script_semantic::prelude::*;
 use tracing::{debug, error, info, trace};
 use value::format_value;
 
+pub mod prelude;
 pub mod value;
 
 type RawFunctionFn = dyn FnMut(&[Value]) -> Result<Value, ExecuteError>;

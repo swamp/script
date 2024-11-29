@@ -6,7 +6,7 @@ use crate::{
     comma_seq_nl, Hash, ResolvedEnumType, ResolvedEnumTypeRef, ResolvedEnumVariantType,
     ResolvedEnumVariantTypeRef, ResolvedExternalFunctionDefinition,
     ResolvedExternalFunctionDefinitionRef, ResolvedInternalFunctionDefinition,
-    ResolvedInternalFunctionDefinitionRef, ResolvedModule, ResolvedStructType,
+    ResolvedInternalFunctionDefinitionRef, ResolvedStructType,
     ResolvedStructTypeRef, ResolvedTupleType, ResolvedTupleTypeRef, ResolvedType, TypeNumber,
 };
 use seq_map::{SeqMap, SeqMapError};

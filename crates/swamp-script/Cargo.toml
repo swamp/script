@@ -1,25 +1,12 @@
 [package]
-name = "swamp-script-cli"
+name = "swamp-script"
 version = "0.0.2-a03"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/swamp/script"
-description = "cli for swamp script"
+description = "script language for embedding"
 
 [dependencies]
-clap = { version = "4.4", features = ["derive"] }
-pest = "2.7.14" # TODO: remove pest
-tracing = "0.1.40"
-
-
-tracing-log = "0.2.0"
-tracing-subscriber = { version = "0.3.18", features = [
-    "registry",
-    "env-filter",
-] }
-
-
-
 
 # Ast and Parser
 swamp-script-parser = { path = "../parser", version = "0.0.2-a03" }
@@ -33,7 +20,3 @@ swamp-script-analyzer = { path = "../analyzer", version = "0.0.2-a03" }
 swamp-script-eval = { path = "../eval", version = "0.0.2-a03" }
 
 swamp-script-dep-loader = { path = "../dep-loader", version = "0.0.2-a03" }
-
-[[bin]]
-name = "swamp"
-path = "src/main.rs"
