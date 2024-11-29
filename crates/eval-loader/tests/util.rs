@@ -5,7 +5,7 @@
 use std::env;
 use std::path::PathBuf;
 use swamp_script_analyzer::ResolveError;
-use swamp_script_ast::{ModulePath, Node, Position, Span};
+use swamp_script_ast::ModulePath;
 use swamp_script_dep_loader::{
     parse_dependant_modules_and_resolve, DepLoaderError, DependencyParser, ParseModule,
 };
