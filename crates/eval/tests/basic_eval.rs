@@ -12,7 +12,7 @@ fn basic_eval() {
 
     "#,
         Value::Int(3),
-    )
+    );
 }
 
 #[test_log::test]
@@ -23,7 +23,7 @@ fn basic_eval_2() {
         a = a + 1
     "#,
         Value::Int(4),
-    )
+    );
 }
 
 #[test_log::test]
@@ -34,7 +34,7 @@ fn basic_eval_3() {
         b = if a == true { 4 } else { -13 }
     "#,
         Value::Int(-13),
-    )
+    );
 }
 
 #[test_log::test]
@@ -45,7 +45,7 @@ fn basic_eval_4() {
         c = if is_attacking { 3.5 } else { -13.3 }
     "#,
         Value::Float(Fp::from(-13.3)),
-    )
+    );
 }
 
 #[test_log::test]
@@ -62,7 +62,7 @@ fn basic_eval_5() {
 
     "#,
         Value::Int(1 + 1 + 1 + 2),
-    )
+    );
 }
 
 #[test_log::test]
@@ -77,7 +77,7 @@ fn basic_eval_6() {
         add(4, 8)
     "#,
         Value::Int(12),
-    )
+    );
 }
 
 #[test_log::test]
@@ -97,11 +97,10 @@ fn basic_eval_7() {
     "#,
     );
 
-    match result {
-        Value::Tuple(_, values) => {
-            assert_eq!(values, vec![Value::Int(10), Value::Int(5)]);
-        }
-        _ => panic!(),
+    if let Value::Tuple(_, values) = result {
+        assert_eq!(values, vec![Value::Int(10), Value::Int(5)]);
+    } else {
+        panic!()
     }
 }
 
