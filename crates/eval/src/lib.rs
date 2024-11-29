@@ -1173,6 +1173,7 @@ impl Interpreter {
             }
 
             (Value::Bool(a), BinaryOperator::Equal, Value::Bool(b)) => Value::Bool(a == b),
+            (Value::Bool(a), BinaryOperator::NotEqual, Value::Bool(b)) => Value::Bool(a != b),
 
             _ => return Err(format!("Invalid binary operation {op:?} ").into()),
         };
