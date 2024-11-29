@@ -1,7 +1,7 @@
 use crate::dep::{DependencyError, DependencyParser};
 
 use pest::error::Error;
-use seq_map::SeqMap;
+use seq_map::{SeqMap, SeqMapError};
 use std::fmt::Display;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -87,7 +87,6 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
     };
 
     trace!(resolution_expression=%resolution_expression, "resolution first");
-    //    trace!(resolution_expression=?resolution_expression, "resolution");
 
     resolution_expression
 }
@@ -127,11 +126,18 @@ pub enum ResolveError {
     WrongNumberOfTupleDeconstructVariables,
     UnknownTypeReference(LocalTypeIdentifier),
     SemanticError(SemanticError),
+    SeqMapError(SeqMapError),
 }
 
 impl From<SemanticError> for ResolveError {
     fn from(value: SemanticError) -> Self {
         Self::SemanticError(value)
+    }
+}
+
+impl From<SeqMapError> for ResolveError {
+    fn from(value: SeqMapError) -> Self {
+        Self::SeqMapError(value)
     }
 }
 
@@ -296,8 +302,7 @@ impl<'a> Resolver<'a> {
         let resolved_type = self.resolve_type(ast_type)?;
 
         let original_array_type = ResolvedArrayType {
-            item_type: resolved_type.clone(),
-            //TODO: ast_type: ast_type.clone(),
+            item_type: resolved_type,
         };
 
         let rc_array = Rc::new(original_array_type);
@@ -318,7 +323,7 @@ impl<'a> Resolver<'a> {
             Type::Struct(ast_struct) => ResolvedType::Struct(self.find_struct_type(ast_struct)?),
             Type::Array(ast_type) => ResolvedType::Array(self.resolve_array_type(ast_type)?),
             Type::Tuple(types) => {
-                ResolvedType::Tuple(ResolvedTupleType(self.resolve_types(&types)?).into())
+                ResolvedType::Tuple(ResolvedTupleType(self.resolve_types(types)?).into())
             }
             Type::Enum(_) => todo!(),
             Type::Map(_, _) => todo!(),
@@ -330,9 +335,9 @@ impl<'a> Resolver<'a> {
         Ok(resolved)
     }
 
-    fn resolve_types(&mut self, types: &Vec<Type>) -> Result<Vec<ResolvedType>, ResolveError> {
+    fn resolve_types(&mut self, types: &[Type]) -> Result<Vec<ResolvedType>, ResolveError> {
         let mut resolved_types = Vec::new();
-        for some_type in types.iter() {
+        for some_type in types {
             resolved_types.push(self.resolve_type(some_type)?);
         }
         Ok(resolved_types)
@@ -444,14 +449,10 @@ impl<'a> Resolver<'a> {
                     };
                     let resolved_impl_member_ref = Rc::new(resolved_impl_member);
                     {
-                        found_struct
-                            .borrow_mut()
-                            .impl_members
-                            .insert(
-                                IdentifierName(local_ident.0.clone()),
-                                resolved_impl_member_ref,
-                            )
-                            .expect("should insert impl_member");
+                        found_struct.borrow_mut().impl_members.insert(
+                            IdentifierName(local_ident.0.clone()),
+                            resolved_impl_member_ref,
+                        )?;
                     }
                 }
             }
@@ -474,8 +475,7 @@ impl<'a> Resolver<'a> {
                     found_struct
                         .borrow_mut()
                         .impl_functions
-                        .insert(IdentifierName(local_ident.0.clone()), member_function_ref)
-                        .expect("should insert impl_member");
+                        .insert(IdentifierName(local_ident.0.clone()), member_function_ref)?;
                 }
             }
         }
@@ -1108,8 +1108,7 @@ impl<'a> Resolver<'a> {
         variable: &Variable,
         expression_type: &ResolvedType,
     ) -> Result<ResolvedPattern, ResolveError> {
-        self.set_variable_with_type(variable, expression_type)
-            .expect("could not set variable_with_type in pattern");
+        self.set_variable_with_type(variable, expression_type)?;
         let variable_ref = self.find_variable(variable)?;
         Ok(ResolvedPattern::VariableAssignment(variable_ref))
     }
@@ -1221,7 +1220,7 @@ impl<'a> Resolver<'a> {
             Pattern::EnumSimple(ast_name) => {
                 let enum_variant_type_ref =
                     self.find_variant_in_pattern(expression_type, ast_name)?;
-                ResolvedPattern::EnumSimple(enum_variant_type_ref.clone())
+                ResolvedPattern::EnumSimple(enum_variant_type_ref)
             }
             Pattern::Wildcard => ResolvedPattern::Wildcard,
         };
@@ -1268,7 +1267,7 @@ impl<'a> Resolver<'a> {
             if !same_type(&argument_type, parameter_type) {
                 error!("{argument_type}: {resolved_argument_expression}");
                 return Err(ResolveError::IncompatibleArguments(
-                    argument_type.clone(),
+                    argument_type,
                     parameter_type.clone(),
                 ));
             }
@@ -1329,10 +1328,10 @@ impl<'a> Resolver<'a> {
 
         match resolution_type {
             ResolvedType::FunctionInternal(ref function_call) => {
-                self.resolve_internal_function_call(&function_call, function_expr, arguments)
+                self.resolve_internal_function_call(function_call, function_expr, arguments)
             }
             ResolvedType::FunctionExternal(ref function_call) => {
-                self.resolve_external_function_call(&function_call, function_expr, arguments)
+                self.resolve_external_function_call(function_call, function_expr, arguments)
             }
             _ => Err(ResolveError::ExpectedFunctionExpression(
                 function_expression.clone(),
@@ -1586,7 +1585,7 @@ impl<'a> Resolver<'a> {
         info!("pushing scope stack");
 
         self.block_scope_stack.push(BlockScope {
-            variables: Default::default(),
+            variables: SeqMap::default(),
         });
     }
 
@@ -1616,7 +1615,7 @@ impl<'a> Resolver<'a> {
         variable: &Variable,
         variable_type_ref: &ResolvedType,
     ) -> Result<(ResolvedVariableRef, bool), ResolveError> {
-        if let Some(existing_variable) = self.try_find_variable(&variable) {
+        if let Some(existing_variable) = self.try_find_variable(variable) {
             if !same_type(&existing_variable.resolved_type, variable_type_ref) {
                 return Err(ResolveError::OverwriteVariableWithAnotherType(
                     variable.clone(),
@@ -1628,7 +1627,7 @@ impl<'a> Resolver<'a> {
                 ));
             }
 
-            return Ok((existing_variable.clone(), true));
+            return Ok((existing_variable, true));
         }
         let scope_index = self.block_scope_stack.len() - 1;
 
@@ -1841,11 +1840,11 @@ impl<'a> Resolver<'a> {
             Literal::Bool(value) => {
                 ResolvedLiteral::BoolLiteral(*value, self.parent.bool_type.clone())
             }
-            Literal::EnumVariant(_, _, _) => todo!(),
-            Literal::Tuple(_) => todo!(),
-            Literal::Array(_) => todo!(),
-            Literal::Map(_) => todo!(),
-            Literal::Unit => todo!(),
+            Literal::EnumVariant(_, _, _) => todo!(), // TODO: PBJ
+            Literal::Tuple(_) => todo!(),             // TODO: PBJ
+            Literal::Array(_) => todo!(),             // TODO: PBJ
+            Literal::Map(_) => todo!(),               // TODO: PBJ
+            Literal::Unit => todo!(),                 // TODO: PBJ
         };
 
         ResolvedPattern::Literal(resolved_literal)
