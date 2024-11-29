@@ -1,6 +1,6 @@
 [package]
 name = "swamp-script-cli"
-version = "0.0.1"
+version = "0.0.2-a03"
 edition = "2021"
 
 [dependencies]
@@ -19,17 +19,17 @@ tracing-subscriber = { version = "0.3.18", features = [
 
 
 # Ast and Parser
-swamp-script-parser = { path = "../parser", version = "0.0.1" }
-swamp-script-ast = { path = "../ast", version = "0.0.1" }
+swamp-script-parser = { path = "../parser", version = "0.0.2-a03" }
+swamp-script-ast = { path = "../ast", version = "0.0.2-a03" }
 
 # Semantic and Analyzer
-swamp-script-semantic = { path = "../semantic", version = "0.0.1" }
-swamp-script-analyzer = { path = "../analyzer", version = "0.0.1" }
+swamp-script-semantic = { path = "../semantic", version = "0.0.2-a03" }
+swamp-script-analyzer = { path = "../analyzer", version = "0.0.2-a03" }
 
 # Runner
-swamp-script-eval = { path = "../eval", version = "0.0.1" }
+swamp-script-eval = { path = "../eval", version = "0.0.2-a03" }
 
-swamp-script-dep-loader = { path = "../dep-loader", version = "0.0.1" }
+swamp-script-dep-loader = { path = "../dep-loader", version = "0.0.2-a03" }
 
 [[bin]]
 name = "swamp"
