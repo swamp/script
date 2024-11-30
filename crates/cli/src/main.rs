@@ -167,7 +167,7 @@ fn register_print(interpreter: &mut Interpreter, output: Rc<RefCell<Vec<String>>
 pub fn eval(resolved_main_module: &ResolvedModule) -> Result<Value, CliError> {
     let mut interpreter = Interpreter::new();
     let output = Rc::new(RefCell::new(Vec::new()));
-    register_print(&mut interpreter, output.clone());
+    register_print(&mut interpreter, output);
     let value = interpreter.eval_module(resolved_main_module)?;
     Ok(value)
 }
@@ -180,11 +180,13 @@ pub fn create_parsed_modules(
     let ast_program = parser.parse_script(script)?;
     trace!("ast_program:\n{:#?}", ast_program);
 
-    let parse_module = ParseModule { ast_program };
+    let parse_module = ParseModule {
+        ast_module: ast_program,
+    };
 
     let mut graph = DependencyParser::new();
     let root = module_path();
-    graph.add_ast_module(root.clone(), parse_module);
+    graph.add_ast_module(root, parse_module);
 
     debug!("root path is {root_path:?}");
 

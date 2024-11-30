@@ -1332,7 +1332,7 @@ impl<'a> Resolver<'a> {
             || {
                 self.current_module
                     .namespace
-                    .get_function(&variable.name)
+                    .get_internal_function(&variable.name)
                     .map_or_else(
                         || {
                             self.current_module

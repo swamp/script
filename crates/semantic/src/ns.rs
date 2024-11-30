@@ -197,7 +197,10 @@ impl ResolvedModuleNamespace {
         self.enum_variant_types.get(&complete_name)
     }
 
-    pub fn get_function(&self, name: &str) -> Option<&ResolvedInternalFunctionDefinitionRef> {
+    pub fn get_internal_function(
+        &self,
+        name: &str,
+    ) -> Option<&ResolvedInternalFunctionDefinitionRef> {
         self.internal_functions.get(&name.to_string())
     }
 

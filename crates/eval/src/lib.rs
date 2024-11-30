@@ -7,6 +7,7 @@ use std::fmt::Debug;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 pub use swamp_script_semantic::ns::ResolvedModuleNamespace;
 use swamp_script_semantic::prelude::*;
+use swamp_script_semantic::ResolvedImplMemberRef;
 use tracing::{debug, error, info, trace};
 use value::format_value;
 
@@ -81,13 +82,6 @@ pub struct Interpreter {
     external_functions_by_id: HashMap<ExternalFunctionId, EvalExternalFunctionRef>,
 }
 
-impl Interpreter {
-    pub fn eval_module(&mut self, module: &ResolvedModule) -> Result<Value, ExecuteError> {
-        let signal = self.execute_statements(&module.statements)?;
-        Ok(signal.try_into()?)
-    }
-}
-
 impl Default for Interpreter {
     fn default() -> Self {
         Self::new()
@@ -102,6 +96,31 @@ impl Interpreter {
             external_functions: HashMap::new(),
             external_functions_by_id: HashMap::new(),
         }
+    }
+
+    pub fn eval_module(&mut self, module: &ResolvedModule) -> Result<Value, ExecuteError> {
+        let signal = self.execute_statements(&module.statements)?;
+        Ok(signal.try_into()?)
+    }
+
+    pub fn util_execute_function(
+        &mut self,
+        func: &ResolvedInternalFunctionDefinitionRef,
+        arguments: &[Value],
+    ) -> Result<Value, ExecuteError> {
+        self.bind_parameters(&func.parameters, arguments)?;
+        let with_signal = self.execute_statements(&func.statements)?;
+        Ok(Value::try_from(with_signal)?)
+    }
+
+    pub fn util_execute_member(
+        &mut self,
+        impl_member: &ResolvedImplMemberRef,
+        arguments: &[Value],
+    ) -> Result<Value, ExecuteError> {
+        self.bind_parameters(&impl_member.parameters, arguments)?;
+        let with_signal = self.execute_statements(&impl_member.body)?;
+        Ok(with_signal.try_into()?)
     }
 
     fn push_function_scope(&mut self, debug_str: String) {
@@ -143,21 +162,21 @@ impl Interpreter {
     fn bind_parameters(
         &mut self,
         params: &[ResolvedParameter],
-        args: Vec<Value>,
+        args: &[Value],
     ) -> Result<(), ExecuteError> {
         for (index, (param, arg)) in params.iter().zip(args).enumerate() {
             let value = if param.is_mutable {
                 match arg {
                     Value::Reference(r) => {
                         // For mutable parameters, use the SAME reference
-                        Value::Reference(r)
+                        Value::Reference(r.clone())
                     }
                     _ => return Err(ExecuteError::ArgumentIsNotMutable), //v => Value::Reference(Rc::new(RefCell::new(v))),
                 }
             } else {
                 match arg {
                     Value::Reference(r) => r.borrow().clone(),
-                    v => v,
+                    v => v.clone(),
                 }
             };
 
@@ -224,7 +243,7 @@ impl Interpreter {
         self.push_function_scope(format!("{func_val}"));
 
         // Bind parameters before executing body
-        self.bind_parameters(&call.function_definition.parameters, evaluated_args)?;
+        self.bind_parameters(&call.function_definition.parameters, &evaluated_args)?;
         let result = self.execute_statements(&call.function_definition.statements)?;
 
         self.pop_function_scope(format!("{func_val}"));
@@ -636,7 +655,7 @@ impl Interpreter {
 
                 self.bind_parameters(
                     &resolved_member_call.impl_member.parameters,
-                    member_call_arguments,
+                    &member_call_arguments,
                 )?;
 
                 let result = self.execute_statements(&resolved_member_call.impl_member.body)?;
@@ -728,7 +747,7 @@ impl Interpreter {
     }
 
     #[inline]
-    fn execute_statements(
+    pub fn execute_statements(
         &mut self,
         statements: &Vec<ResolvedStatement>,
     ) -> Result<ValueWithSignal, ExecuteError> {

@@ -16,14 +16,14 @@ pub fn resolve_module(
 ) -> Result<ResolvedModuleRef, ResolveError> {
     let mut resolve_module = ResolvedModule::new(module_path.clone());
 
-    for ast_def in module.ast_program.definitions() {
+    for ast_def in module.ast_module.definitions() {
         let mut resolver = Resolver::new(resolved_program, &mut resolve_module);
         resolver.resolve_and_set_definition(ast_def)?;
     }
 
     {
         let mut resolver = Resolver::new(resolved_program, &mut resolve_module);
-        resolve_module.statements = resolver.resolve_statements(module.ast_program.statements())?;
+        resolve_module.statements = resolver.resolve_statements(module.ast_module.statements())?;
     }
 
     let module_ref = Rc::new(resolve_module);

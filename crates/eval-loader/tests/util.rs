@@ -54,10 +54,10 @@ impl From<pest::error::Error<Rule>> for TestError {
 
 pub fn create_program(script: &str) -> Result<ResolvedProgram, TestError> {
     let parser = AstParser::new();
-    let ast_program = parser.parse_script(script)?;
-    trace!("ast_program:\n{:#?}", ast_program);
+    let ast_module = parser.parse_script(script)?;
+    trace!("ast_program:\n{:#?}", ast_module);
 
-    let parse_module = ParseModule { ast_program };
+    let parse_module = ParseModule { ast_module };
 
     let mut dependency_parser = DependencyParser::new();
 

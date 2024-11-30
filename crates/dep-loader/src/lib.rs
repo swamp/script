@@ -37,7 +37,7 @@ impl From<pest::error::Error<Rule>> for ParseRootError {
 
 #[derive(Debug)]
 pub struct ParseModule {
-    pub ast_program: swamp_script_ast::Module,
+    pub ast_module: swamp_script_ast::Module,
 }
 
 impl ParseModule {
@@ -47,7 +47,7 @@ impl ParseModule {
         parameters: Vec<Parameter>,
         return_type: Type,
     ) {
-        self.ast_program.definitions.insert(
+        self.ast_module.definitions.insert(
             0,
             Definition::ExternalFunctionDef(
                 // TODO: Workaround to push external declarations so they come before internal functions
@@ -113,7 +113,9 @@ impl ParseRoot {
 
         let ast_program = parser.parse_script(&*contents)?;
 
-        Ok(ParseModule { ast_program })
+        Ok(ParseModule {
+            ast_module: ast_program,
+        })
     }
 }
 
@@ -171,7 +173,7 @@ impl From<ParseRootError> for DependencyError {
 fn get_all_import_paths(parsed_module: &ParseModule) -> Vec<ModulePath> {
     let mut imports = vec![];
 
-    for def in parsed_module.ast_program.definitions() {
+    for def in parsed_module.ast_module.definitions() {
         match def {
             Definition::Import(import) => imports.push(import.module_path.clone()),
             _ => continue,
@@ -325,14 +327,16 @@ pub fn create_parsed_modules(
     root_path: PathBuf,
 ) -> Result<DependencyParser, pest::error::Error<Rule>> {
     let parser = AstParser::new();
-    let ast_program = parser.parse_script(script)?;
-    trace!("ast_program:\n{:#?}", ast_program);
+    let ast_module = parser.parse_script(script)?;
+    trace!("ast_module:\n{:#?}", ast_module);
 
-    let parse_module = ParseModule { ast_program };
+    let parse_module = ParseModule {
+        ast_module: ast_module,
+    };
 
     let mut graph = DependencyParser::new();
     let root = ModulePath(vec!["test".to_string()]);
-    graph.add_ast_module(root.clone(), parse_module);
+    graph.add_ast_module(root, parse_module);
 
     debug!("root path is {root_path:?}");
 
