@@ -12,7 +12,8 @@ use pest::Parser;
 use pest_derive::Parser;
 use seq_map::SeqMap;
 use swamp_script_ast::prelude::*;
-use tracing::debug;
+use swamp_script_ast::Function;
+use tracing::{debug, info};
 
 #[derive(Parser)]
 #[grammar = "grammar.pest"]
@@ -101,6 +102,7 @@ impl AstParser {
         let pratt_parser = PrattParser::new().op(Op::infix(Rule::range_op, Assoc::Left));
         Self { pratt_parser }
     }
+
 
     pub fn parse_script(&self, raw_script: &str) -> Result<Module, pest::error::Error<Rule>> {
         let script = &raw_script.replace("\r", ""); // remove all CR, so only LF is left of CRLF
@@ -381,93 +383,111 @@ impl AstParser {
         Ok(Definition::StructDef(struct_def))
     }
 
-    fn parse_function_def(&self, pair: Pair<Rule>) -> Result<Definition, Error<Rule>> {
-        let (scoped_name, function_data) = self.parse_function_data(pair.clone())?;
-        Ok(Definition::InternalFunctionDef(
-            LocalIdentifier::new(convert_from_pair(&pair), &*scoped_name.text),
-            function_data,
-        ))
+    fn parse_stmt_block(&self, pair: Pair<Rule>) -> Result<Vec<Statement>, Error<Rule>> {
+        if pair.as_rule() != Rule::stmt_block {
+            return Err(self.create_error(
+                &format!("Expected statement block, found {:?}", pair.as_rule()),
+                pair.as_span(),
+            ));
+        }
+
+        let mut statements = Vec::new();
+        for stmt in Self::get_inner_pairs(&pair) {
+            if stmt.as_rule() == Rule::statement {
+                statements.push(self.parse_statement_to_control(stmt)?);
+            }
+        }
+        Ok(statements)
     }
 
-    fn parse_function_data(
+    fn parse_function_def(&self, pair: Pair<Rule>) -> Result<Definition, Error<Rule>> {
+        let function_pair = self.next_inner_pair(pair)?;
+
+        match function_pair.as_rule() {
+            Rule::normal_function => {
+                let mut inner = function_pair.clone().into_inner();
+                let signature_pair = inner.next().ok_or_else(|| {
+                    self.create_error("Missing function signature", function_pair.as_span())
+                })?;
+
+                let (name, signature) = self.parse_function_signature(signature_pair)?;
+
+                let body = self.parse_stmt_block(inner.next().ok_or_else(|| {
+                    self.create_error("Missing function body", function_pair.as_span())
+                })?)?;
+
+                Ok(Definition::FunctionDef(
+                    name,
+                    Function::Internal(FunctionData { signature, body }),
+                ))
+            }
+            Rule::external_function => {
+                let signature_pair =
+                    function_pair.clone().into_inner().next().ok_or_else(|| {
+                        self.create_error("Missing function signature", function_pair.as_span())
+                    })?;
+
+                let (name, signature) = self.parse_function_signature(signature_pair)?;
+                Ok(Definition::FunctionDef(name, Function::External(signature)))
+            }
+            _ => Err(self.create_error(
+                &format!(
+                    "Expected function definition, found {:?}",
+                    function_pair.as_rule()
+                ),
+                function_pair.as_span(),
+            )),
+        }
+    }
+    fn parse_function_signature(
         &self,
         pair: Pair<Rule>,
-    ) -> Result<(LocalIdentifier, FunctionData), Error<Rule>> {
-        let mut inner = Self::get_inner_pairs(&pair);
+    ) -> Result<(LocalIdentifier, FunctionSignature), Error<Rule>> {
+        if pair.as_rule() != Rule::function_signature {
+            return Err(self.create_error(
+                &format!("Expected function signature, found {:?}", pair.as_rule()),
+                pair.as_span(),
+            ));
+        }
+
+        let mut inner = pair.clone().into_inner();
+
+        // Parse function name
         let name = LocalIdentifier::new(
             convert_from_pair(&pair),
-            &Self::expect_identifier(&mut inner)?,
+            &AstParser::expect_identifier(&mut inner)?,
         );
 
-        let mut params = Vec::new();
-        let mut return_type = Type::Unit;
-        let mut body = Vec::new();
-
-        while let Some(pair) = inner.next() {
-            match pair.as_rule() {
-                Rule::parameter_list => {
-                    params = self.parse_parameters(pair)?;
-                }
-                Rule::return_type => {
-                    return_type = self.parse_return_type(pair)?;
-                }
-                Rule::stmt_block => {
-                    for stmt in Self::get_inner_pairs(&pair) {
-                        if stmt.as_rule() == Rule::statement {
-                            body.push(self.parse_statement_to_control(stmt)?);
-                        }
-                    }
-                }
-
-                _ => {
-                    return Err(self.create_error(
-                        &format!("function data skipping {:?}", pair.as_rule()),
-                        pair.as_span(),
-                    ))
-                }
+        // Parse parameters
+        let parameters = if let Some(param_list) = inner.next() {
+            if param_list.as_rule() == Rule::parameter_list {
+                self.parse_parameters(param_list)?
+            } else {
+                Vec::new()
             }
-        }
+        } else {
+            Vec::new()
+        };
+
+        // Parse return type if it exists, otherwise use Unit
+        let return_type = if let Some(return_type_pair) = inner.next() {
+            if return_type_pair.as_rule() == Rule::return_type {
+                self.parse_return_type(return_type_pair)?
+            } else {
+                Type::Unit
+            }
+        } else {
+            Type::Unit
+        };
 
         Ok((
-            name,
-            FunctionData {
-                signature: FunctionSignature {
-                    params,
-                    return_type,
-                },
-                body,
+            name.clone(),
+            FunctionSignature {
+                name,
+                params: parameters,
+                return_type,
             },
         ))
-    }
-
-    fn parse_parameters(&self, pair: Pair<Rule>) -> Result<Vec<Parameter>, Error<Rule>> {
-        let mut params = Vec::new();
-
-        for param_pair in Self::get_inner_pairs(&pair) {
-            if param_pair.as_rule() == Rule::parameter {
-                let mut param_inner = Self::get_inner_pairs(&param_pair).peekable();
-
-                let is_mutable = param_inner
-                    .peek()
-                    .map(|p| p.as_rule() == Rule::mut_keyword)
-                    .unwrap_or(false);
-
-                if is_mutable {
-                    param_inner.next(); // consume mut
-                }
-
-                let name = Variable::new(&Self::expect_identifier(&mut param_inner)?, is_mutable);
-                let param_type = self.parse_type(Self::next_pair(&mut param_inner)?)?;
-
-                params.push(Parameter {
-                    variable: name,
-                    param_type,
-                    is_mutable,
-                });
-            }
-        }
-
-        Ok(params)
     }
 
     fn parse_return_type(&self, pair: Pair<Rule>) -> Result<Type, Error<Rule>> {
@@ -475,63 +495,67 @@ impl AstParser {
         self.parse_type(inner_pair)
     }
 
-    fn parse_member_def(
+    fn parse_function_data(
         &self,
         pair: Pair<Rule>,
-    ) -> Result<(LocalIdentifier, ImplMember), Error<Rule>> {
-        let mut inner = Self::get_inner_pairs(&pair);
+    ) -> Result<(LocalIdentifier, FunctionData), Error<Rule>> {
+        let mut inner = pair.clone().into_inner();
+        let signature_pair = inner
+            .next()
+            .ok_or_else(|| self.create_error("Missing function signature", pair.as_span()))?;
 
-        // Parse method name
-        let name = LocalIdentifier::new(
-            convert_from_pair(&pair),
-            &Self::expect_identifier(&mut inner)?,
-        );
-        let mut params = Vec::new();
-        let mut self_param = None;
-        let mut return_type = Type::Unit;
-        let mut body = Vec::new();
+        let (name, signature) = self.parse_function_signature(signature_pair)?;
 
-        // Parse the rest of the method definition
-        while let Some(pair) = inner.next() {
-            match pair.as_rule() {
+        let body = self.parse_stmt_block(
+            inner
+                .next()
+                .ok_or_else(|| self.create_error("Missing function body", pair.as_span()))?,
+        )?;
+
+        Ok((name, FunctionData { signature, body }))
+    }
+
+    fn parse_parameters(&self, pair: Pair<Rule>) -> Result<Vec<Parameter>, Error<Rule>> {
+        let mut parameters = Vec::new();
+
+        for param_pair in Self::get_inner_pairs(&pair) {
+            match param_pair.as_rule() {
+                Rule::parameter => {
+                    let pairs: Vec<_> = param_pair.into_inner().collect();
+
+                    let name = &pairs[0];
+                    let type_pair = &pairs[1];
+
+                    let param_type = self.parse_type(type_pair.clone())?;
+
+                    parameters.push(Parameter {
+                        variable: Variable::new(name.as_str(), false),
+                        param_type,
+                        is_mutable: false,
+                        is_self: false,
+                    });
+                }
                 Rule::self_parameter => {
-                    let mut self_inner = Self::get_inner_pairs(&pair);
-                    let is_mut = self_inner
-                        .next()
-                        .map(|p| p.as_rule() == Rule::mut_keyword)
-                        .unwrap_or(false);
-                    self_param = Some(SelfParameter { is_mutable: is_mut });
-                }
-                Rule::parameter_list => {
-                    params = self.parse_parameters(pair)?;
-                }
-                Rule::return_type => {
-                    return_type = self.parse_return_type(pair)?;
-                }
-                Rule::statement => {
-                    body.push(self.parse_statement_to_control(pair)?);
+                    let pairs: Vec<_> = param_pair.into_inner().collect();
+                    let is_mutable = pairs.get(0).map_or(false, |p| p.as_rule() == Rule::mut_keyword);
+
+                    parameters.push(Parameter {
+                        variable: Variable::new("self", is_mutable),
+                        param_type: Type::Any,  // self type is handled elsewhere
+                        is_mutable,
+                        is_self: true,
+                    });
                 }
                 _ => {
                     return Err(self.create_error(
-                        &format!("Unexpected member item: {:?}", pair.as_rule()),
-                        pair.as_span(),
+                        &format!("Unexpected parameter type: {:?}", param_pair.as_rule()),
+                        param_pair.as_span(),
                     ))
                 }
             }
         }
 
-        let self_param = self_param.unwrap_or(SelfParameter { is_mutable: false });
-
-        Ok((
-            name.clone(),
-            ImplMember {
-                name,
-                self_param,
-                params,
-                return_type,
-                body,
-            },
-        ))
+        Ok(parameters)
     }
 
     fn parse_impl_def(&self, pair: Pair<Rule>) -> Result<Definition, Error<Rule>> {
@@ -540,26 +564,29 @@ impl AstParser {
             convert_from_pair(&pair),
             &Self::expect_type_identifier(&mut inner)?,
         );
-        let mut items = SeqMap::new();
-
+        let mut functions = SeqMap::new();
+    
         while let Some(item_pair) = inner.next() {
             if item_pair.as_rule() == Rule::impl_item {
                 let inner_item = self.next_inner_pair(item_pair)?;
                 match inner_item.as_rule() {
-                    Rule::member_def => {
-                        let (local_name, member) = self.parse_member_def(inner_item)?;
-                        items
-                            .insert(IdentifierName(local_name.text), ImplItem::Member(member))
-                            .expect("duplicate impl"); // TODO: should handle Err()
-                    }
-                    Rule::function_def => {
-                        let (local_name, function) = self.parse_function_data(inner_item)?;
-                        items
+                    Rule::external_member_function => {
+                        let (name, signature) = self.parse_member_signature(inner_item)?;
+                        functions
                             .insert(
-                                IdentifierName(local_name.text),
-                                ImplItem::Function(function),
+                                IdentifierName(name.text.clone()),
+                                Function::External(signature),
                             )
-                            .expect("duplicate impl"); // TODO: should handle Err()
+                            .expect("duplicate impl function");
+                    }
+                    Rule::normal_member_function => {
+                        let (name, function_data) = self.parse_member_data(inner_item)?;
+                        functions
+                            .insert(
+                                IdentifierName(name.text.clone()),
+                                Function::Internal(function_data),
+                            )
+                            .expect("duplicate impl function");
                     }
                     _ => {
                         return Err(self.create_error(
@@ -570,9 +597,110 @@ impl AstParser {
                 }
             }
         }
-
-        Ok(Definition::ImplDef(type_name, items))
+    
+        Ok(Definition::ImplDef(type_name, functions))
     }
+
+
+
+    fn parse_member_signature(
+        &self,
+        pair: Pair<Rule>,
+    ) -> Result<(LocalIdentifier, FunctionSignature), Error<Rule>> {
+        if pair.as_rule() != Rule::member_signature {
+            return Err(self.create_error(
+                &format!("Expected member signature, found {:?}", pair.as_rule()),
+                pair.as_span(),
+            ));
+        }
+    
+        let mut inner = pair.clone().into_inner();
+    
+        // Parse function name
+        let name = LocalIdentifier::new(
+            convert_from_pair(&pair),
+            &AstParser::expect_identifier(&mut inner)?,
+        );
+    
+        // Parse self parameter and other parameters
+        let mut parameters = Vec::new();
+        
+        if let Some(param_list) = inner.next() {
+            match param_list.as_rule() {
+                Rule::self_parameter => {
+                    let pairs: Vec<_> = param_list.into_inner().collect();
+                    let is_mutable = pairs.get(0).map_or(false, |p| p.as_rule() == Rule::mut_keyword);
+                    
+                    parameters.push(Parameter {
+                        variable: Variable::new("self", is_mutable),
+                        param_type: Type::Any,  // self type is handled elsewhere
+                        is_mutable,
+                        is_self: true,
+                    });
+    
+                    // Check for additional parameters
+                    if let Some(more_params) = inner.next() {
+                        if more_params.as_rule() == Rule::parameter_list {
+                            parameters.extend(self.parse_parameters(more_params)?);
+                        }
+                    }
+                }
+                Rule::parameter_list => {
+                    parameters = self.parse_parameters(param_list)?;
+                }
+                _ => {}
+            }
+        }
+    
+        // Parse return type if it exists
+        let return_type = if let Some(return_type_pair) = inner.next() {
+            if return_type_pair.as_rule() == Rule::return_type {
+                self.parse_return_type(return_type_pair)?
+            } else {
+                Type::Unit
+            }
+        } else {
+            Type::Unit
+        };
+    
+        Ok((
+            name.clone(),
+            FunctionSignature {
+                name,
+                params: parameters,
+                return_type,
+            },
+        ))
+    }
+    
+    fn parse_member_data(
+        &self,
+        pair: Pair<Rule>,
+    ) -> Result<(LocalIdentifier, FunctionData), Error<Rule>> {
+        let mut inner = pair.clone().into_inner();
+        let signature_pair = inner
+            .next()
+            .ok_or_else(|| self.create_error("Missing member signature", pair.as_span()))?;
+    
+        let (name, signature) = self.parse_member_signature(signature_pair)?;
+    
+        let body = self.parse_stmt_block(
+            inner
+                .next()
+                .ok_or_else(|| self.create_error("Missing function body", pair.as_span()))?,
+        )?;
+    
+        Ok((name, FunctionData { signature, body }))
+    }
+
+
+
+
+
+
+
+
+
 
     fn parse_for_loop(&self, pair: Pair<Rule>) -> Result<Statement, Error<Rule>> {
         let mut inner = Self::get_inner_pairs(&pair);

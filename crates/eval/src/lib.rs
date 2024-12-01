@@ -7,7 +7,7 @@ use std::fmt::Debug;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 pub use swamp_script_semantic::ns::ResolvedModuleNamespace;
 use swamp_script_semantic::prelude::*;
-use swamp_script_semantic::ResolvedImplMemberRef;
+use swamp_script_semantic::{ResolvedFunction, ResolvedImplMemberRef};
 use tracing::{debug, error, info, trace};
 use value::format_value;
 
@@ -108,7 +108,7 @@ impl Interpreter {
         func: &ResolvedInternalFunctionDefinitionRef,
         arguments: &[Value],
     ) -> Result<Value, ExecuteError> {
-        self.bind_parameters(&func.parameters, arguments)?;
+        self.bind_parameters(&func.signature.parameters, arguments)?;
         let with_signal = self.execute_statements(&func.statements)?;
         Ok(Value::try_from(with_signal)?)
     }
@@ -243,7 +243,7 @@ impl Interpreter {
         self.push_function_scope(format!("{func_val}"));
 
         // Bind parameters before executing body
-        self.bind_parameters(&call.function_definition.parameters, &evaluated_args)?;
+        self.bind_parameters(&call.function_definition.signature.parameters, &evaluated_args)?;
         let result = self.execute_statements(&call.function_definition.statements)?;
 
         self.pop_function_scope(format!("{func_val}"));
@@ -355,8 +355,16 @@ impl Interpreter {
         relative_scope_index: usize,
         variable_index: usize,
     ) -> Result<&Value, ExecuteError> {
-        let existing_var =
-            &self.current_block_scopes[relative_scope_index].variables[variable_index];
+        if relative_scope_index >= self.current_block_scopes.len() {
+            panic!("illegal scope index");
+        }
+        
+        let variables = &self.current_block_scopes[relative_scope_index].variables;
+        if variable_index >= variables.len() {
+            panic!("illegal index");
+        }
+        let existing_var = &variables[variable_index];
+        
         trace!("VAR: lookup {relative_scope_index}:{variable_index} > {existing_var:?}");
         Ok(existing_var)
     }
@@ -635,44 +643,52 @@ impl Interpreter {
             }
 
             ResolvedExpression::MemberCall(resolved_member_call) => {
-                let member_value =
-                    self.evaluate_expression(&resolved_member_call.self_expression)?;
+                let member_value = self.evaluate_expression(&resolved_member_call.self_expression)?;
 
                 trace!("{} > member call {:?}", self.tabs(), member_value);
 
-                self.push_function_scope(format!("member_call {member_value}")); // TODO: maybe have automatic pop on Drop
+                self.push_function_scope(format!("member_call {member_value}"));
 
                 let mut member_call_arguments = Vec::new();
-                member_call_arguments.push(member_value);
+                member_call_arguments.push(member_value);  // Add self as first argument
                 for arg in &resolved_member_call.arguments {
                     member_call_arguments.push(self.evaluate_expression(arg)?);
                 }
 
-                let expected_parameter_count = resolved_member_call.impl_member.parameters.len();
-                if member_call_arguments.len() != expected_parameter_count {
-                    return Err(ExecuteError::Error("wrong number of arguments".to_string()))?;
+                let (parameters, statements) = match &*resolved_member_call.function {
+                    ResolvedFunction::Internal(function_data) => {
+                        (&function_data.signature.parameters, Some(&function_data.statements))
+                    }
+                    ResolvedFunction::External(signature) => {
+                        (&signature.parameters, None)
+                    }
+                };
+
+                // Check total number of parameters (including self)
+                if member_call_arguments.len() != parameters.len() {
+                    return Err(ExecuteError::Error(format!(
+                        "wrong number of arguments: expected {}, got {}",
+                        parameters.len(),
+                        member_call_arguments.len()
+                    )));
                 }
 
-                self.bind_parameters(
-                    &resolved_member_call.impl_member.parameters,
-                    &member_call_arguments,
-                )?;
+                self.bind_parameters(parameters, &member_call_arguments)?;
 
-                let result = self.execute_statements(&resolved_member_call.impl_member.body)?;
+                let result = if let Some(body) = statements {
+                    self.execute_statements(body)?
+                } else {
+                    // Handle external function call
+                    todo!("External member functions not yet implemented")
+                };
 
                 self.pop_function_scope(format!("member_call {resolved_member_call}"));
 
                 match result {
                     ValueWithSignal::Value(v) => v,
-                    ValueWithSignal::Return(_) => {
-                        Err("not allowed with return in member calls".to_string())?
-                    }
-                    ValueWithSignal::Break => {
-                        Err("not allowed with break in member calls".to_string())?
-                    }
-                    ValueWithSignal::Continue => {
-                        Err("not allowed with continue in member calls".to_string())?
-                    }
+                    ValueWithSignal::Return(v) => v,
+                    ValueWithSignal::Break => Err("break not allowed in member calls".to_string())?,
+                    ValueWithSignal::Continue => Err("continue not allowed in member calls".to_string())?,
                 }
             }
 

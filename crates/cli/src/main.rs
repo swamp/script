@@ -213,6 +213,7 @@ fn compile_to_resolved_program(script: &str) -> Result<ResolvedProgram, CliError
             is_mutable: false,
         }],
         Type::Unit,
+        1
     );
 
     let module_paths_in_order = parse_dependant_modules_and_resolve(

@@ -55,7 +55,7 @@ impl Display for ResolvedModuleNamespace {
             for (_struct_name, struct_type_ref) in &self.structs {
                 let struct_ref = struct_type_ref.borrow();
                 writeln!(f, "{}", struct_ref)?;
-                writeln!(f, "impl:\n{}", comma_seq_nl(&struct_ref.impl_members, ".."))?;
+                writeln!(f, "impl:\n{}", comma_seq_nl(&struct_ref.functions, ".."))?;
             }
         }
 

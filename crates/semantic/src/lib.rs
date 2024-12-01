@@ -28,11 +28,22 @@ pub struct ResolvedParameter {
     pub is_mutable: bool,
 }
 
+
 impl Display for ResolvedParameter {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}: {}", self.name, self.resolved_type)
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct ResolvedFunctionSignature {
+    pub parameters: Vec<ResolvedParameter>,
+    pub return_type: ResolvedType,
+}
+
+
+
+
 
 #[derive(Debug, Clone)]
 pub enum ResolvedType {
@@ -120,8 +131,7 @@ fn compare_struct_types(a: &ResolvedStructTypeRef, b: &ResolvedStructTypeRef) ->
 pub struct ResolvedInternalFunctionDefinition {
     pub statements: Vec<ResolvedStatement>,
     pub name: LocalIdentifier,
-    pub parameters: Vec<ResolvedParameter>,
-    pub resolved_return_type: ResolvedType,
+    pub signature: ResolvedFunctionSignature,
 }
 
 impl Display for ResolvedInternalFunctionDefinition {
@@ -130,8 +140,8 @@ impl Display for ResolvedInternalFunctionDefinition {
             f,
             "(fn_def {}({}) -> {})",
             self.name,
-            comma(&self.parameters),
-            self.resolved_return_type
+            comma(&self.signature.parameters),
+            self.signature.return_type
         )
     }
 }
@@ -322,20 +332,15 @@ impl Display for ResolvedInternalFunctionCall {
 
 #[derive(Debug)]
 pub struct ResolvedMemberCall {
+    pub function: ResolvedFunctionRef,
     pub arguments: Vec<ResolvedExpression>,
-    pub struct_type_ref: ResolvedStructTypeRef,
-    pub impl_member: ResolvedImplMemberRef,
-
-    /*
-    MemberRef, LocalTypeIdentifier, Vec<ResolvedExpression>
-     */
     pub self_expression: Box<ResolvedExpression>,
+    pub struct_type_ref: ResolvedStructTypeRef,
     pub self_is_mutable: bool,
 }
-
 impl Display for ResolvedMemberCall {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "(< {} >.{}", self.self_expression, self.impl_member)?;
+        write!(f, "(< {} >.{:?}", self.self_expression, self.struct_type_ref)?;
 
         if !self.arguments.is_empty() {
             write!(f, " <- {}", comma(&self.arguments))?;
@@ -446,11 +451,16 @@ pub struct ResolvedMutTupleField {
 pub type ResolvedFunctionRef = Rc<ResolvedFunction>;
 
 #[derive(Debug)]
-pub struct ResolvedFunction {
-    #[allow(unused)]
-    pub ast: Expression,
+pub enum ResolvedFunction {
+    Internal(ResolvedInternalFunctionDefinitionRef),
+    External(ResolvedFunctionSignature),
+}
 
-    pub function: ResolvedInternalFunctionDefinitionRef,
+
+impl Display for ResolvedFunction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "resolved func")
+    }
 }
 
 pub type MutMemberRef = Rc<MutMember>;
@@ -797,8 +807,7 @@ pub struct ResolvedStructType {
     pub fields: SeqMap<IdentifierName, ResolvedType>,
     pub name: LocalTypeIdentifier,
     pub ast_struct: StructType,
-    pub impl_members: SeqMap<IdentifierName, ResolvedImplMemberRef>,
-    pub impl_functions: SeqMap<IdentifierName, ResolvedFunctionDataRef>,
+    pub functions: SeqMap<IdentifierName, ResolvedFunctionRef>,
 }
 
 impl Debug for ResolvedStructType {
@@ -831,8 +840,7 @@ impl ResolvedStructType {
             ast_struct,
             fields,
             name,
-            impl_members: SeqMap::default(),
-            impl_functions: SeqMap::default(),
+            functions: SeqMap::default(),
         }
     }
 
@@ -1159,9 +1167,9 @@ impl Display for ResolvedImplMember {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "({}({}) -> {})",
+            "({:?}({}) -> {})",
             //self.struct_ref.borrow().name,
-            self.ast_member.name,
+            self.ast_member,
             comma(&self.parameters),
             self.return_type
         )
@@ -1170,15 +1178,17 @@ impl Display for ResolvedImplMember {
 
 pub type ResolvedImplMemberRef = Rc<ResolvedImplMember>;
 
+/*
 #[derive(Debug)]
 pub struct ResolvedFunctionData {
-    pub parameters: Vec<ResolvedParameter>,
-    pub return_type: ResolvedType,
+    pub signature: ResolvedFunctionSignature,
     pub statements: Vec<ResolvedStatement>,
 }
 
 pub type ResolvedFunctionDataRef = Rc<ResolvedFunctionData>;
 
+ */
+/*
 pub struct ResolvedImplType {
     pub items: Vec<ResolvedImplItem>,
 }
@@ -1187,6 +1197,8 @@ pub enum ResolvedImplItem {
     Member(ResolvedImplMember),
     Function(ResolvedFunctionData),
 }
+
+ */
 
 impl Default for ResolvedProgram {
     fn default() -> Self {
@@ -1218,6 +1230,8 @@ pub enum ResolvedDefinition {
     Function(),
     ExternalFunction(),
     ImplType(),
+    FunctionDef(LocalIdentifier, ResolvedFunction),
+    ImplDef(LocalTypeIdentifier, SeqMap<IdentifierName, ResolvedFunction>),
 }
 
 #[derive(Debug)]

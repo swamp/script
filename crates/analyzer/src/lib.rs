@@ -8,9 +8,18 @@ use seq_map::{SeqMap, SeqMapError};
 use std::fmt::Display;
 use std::rc::Rc;
 use swamp_script_ast::prelude::*;
+use swamp_script_ast::Function;
 use swamp_script_semantic::ns::{ResolvedModuleNamespace, SemanticError};
 use swamp_script_semantic::prelude::*;
+use swamp_script_semantic::{ResolvedDefinition, ResolvedFunction, ResolvedFunctionSignature};
 use tracing::{debug, error, info, trace};
+
+pub fn signature(f: &ResolvedFunction) -> &ResolvedFunctionSignature {
+    match f {
+        ResolvedFunction::Internal(data) => &data.signature,
+        ResolvedFunction::External(signature) => signature,
+    }
+}
 
 pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
     trace!("resolution expression {}", expression);
@@ -35,14 +44,17 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
         ResolvedExpression::UnaryOp(unary_op) => unary_op.resolved_type.clone(),
         ResolvedExpression::FunctionInternalCall(internal_fn_call) => internal_fn_call
             .function_definition
-            .resolved_return_type
+            .signature
+            .return_type
             .clone(),
         ResolvedExpression::FunctionExternalCall(external_fn_call) => external_fn_call
             .function_definition
             .resolved_return_type
             .clone(),
         ResolvedExpression::MutMemberCall(_, _) => todo!(),
-        ResolvedExpression::MemberCall(member_call) => member_call.impl_member.return_type.clone(),
+        ResolvedExpression::MemberCall(member_call) => {
+            signature(&member_call.function).return_type.clone()
+        }
         ResolvedExpression::Block(_statements) => ResolvedType::Unit(Rc::new(ResolvedUnitType)), // TODO: Fix this
         ResolvedExpression::InterpolatedString(string_type, _parts) => {
             ResolvedType::String(string_type.clone())
@@ -124,6 +136,7 @@ pub enum ResolveError {
     UnknownTypeReference(LocalTypeIdentifier),
     SemanticError(SemanticError),
     SeqMapError(SeqMapError),
+    ExpectedMemberCall(Expression),
 }
 
 impl From<SemanticError> for ResolveError {
@@ -286,105 +299,6 @@ impl<'a> Resolver<'a> {
         Resolver::new(self.parent, self.current_module)
     }
 
-    fn resolve_member_item(
-        &mut self,
-        member_item: &ImplItem,
-        attached_to_type: &LocalTypeIdentifier,
-        local_ident: &IdentifierName,
-    ) -> Result<(), ResolveError> {
-        match member_item {
-            ImplItem::Member(impl_member) => {
-                let resolved_return = self.resolve_type(&impl_member.return_type)?;
-
-                let found_struct = self.find_struct_type_local_mut(attached_to_type)?.clone();
-                {
-                    let self_is_mutable = impl_member.self_param.is_mutable;
-
-                    let self_parameter = ResolvedParameter {
-                        name: "self".to_string(),
-                        resolved_type: ResolvedType::Struct(found_struct.clone()),
-                        ast_parameter: Parameter {
-                            variable: Variable {
-                                name: "self".to_string(),
-                                is_mutable: false,
-                            },
-                            param_type: Type::Int,
-                            is_mutable: self_is_mutable,
-                        },
-                        is_mutable: self_is_mutable,
-                    };
-
-                    let mut resolved_parameters = Vec::new();
-                    resolved_parameters.push(self_parameter);
-                    resolved_parameters.extend(self.resolve_parameters(&impl_member.params)?);
-
-                    for param in &resolved_parameters {
-                        let param_var = Variable {
-                            name: param.name.clone(),
-                            is_mutable: param.is_mutable,
-                        };
-                        self.set_variable_with_type(&param_var, &param.resolved_type)?;
-                    }
-
-                    let body = self.resolve_statements(&impl_member.body)?;
-
-                    let resolved_impl_member = ResolvedImplMember {
-                        parameters: resolved_parameters,
-                        return_type: resolved_return.clone(),
-                        ast_member: impl_member.clone(),
-                        struct_ref: found_struct.clone(),
-                        body,
-                    };
-                    let resolved_impl_member_ref = Rc::new(resolved_impl_member);
-                    {
-                        found_struct.borrow_mut().impl_members.insert(
-                            IdentifierName(local_ident.0.clone()),
-                            resolved_impl_member_ref,
-                        )?;
-                    }
-                }
-            }
-
-            ImplItem::Function(function_data) => {
-                let resolved_parameters =
-                    self.resolve_parameters(&function_data.signature.params)?;
-                let resolved_return = self.resolve_type(&function_data.signature.return_type)?;
-                let resolved_statements = self.resolve_statements(&function_data.body)?;
-
-                let member_function = ResolvedFunctionData {
-                    parameters: resolved_parameters,
-                    return_type: resolved_return.clone(),
-                    statements: resolved_statements,
-                };
-
-                let member_function_ref = Rc::new(member_function);
-                {
-                    let found_struct = self.find_struct_type_local_mut(&attached_to_type)?;
-                    found_struct
-                        .borrow_mut()
-                        .impl_functions
-                        .insert(IdentifierName(local_ident.0.clone()), member_function_ref)?;
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    fn resolve_impl_definition(
-        &mut self,
-        attached_to_type: &LocalTypeIdentifier,
-        functions: &SeqMap<IdentifierName, ImplItem>,
-    ) -> Result<(), ResolveError> {
-        // Can only attach to earlier type in same module
-        for (local_ident, member_item) in functions {
-            let mut inner_resolver = self.new_resolver();
-            inner_resolver.resolve_member_item(member_item, attached_to_type, local_ident)?;
-        }
-
-        Ok(())
-    }
-
     pub fn resolve_struct_type_definition(
         &mut self,
         ast_struct: &StructType,
@@ -499,44 +413,11 @@ impl<'a> Resolver<'a> {
         Ok(resolved_variants)
     }
 
-    fn resolve_function_definition(
-        &mut self,
-        identifier: &LocalIdentifier,
-        function_data: &FunctionData,
-    ) -> Result<ResolvedInternalFunctionDefinitionRef, ResolveError> {
-        let parameters = self.resolve_parameters(&function_data.signature.params)?;
-        let resolved_return_type = self.resolve_type(&function_data.signature.return_type)?;
-
-        for param in &parameters {
-            debug!("setting variable {:?}", param);
-            self.set_variable_with_type(
-                &Variable::new(&param.name.clone(), param.is_mutable),
-                &param.resolved_type.clone(),
-            )?;
-        }
-
-        let statements = self.resolve_statements(&function_data.body)?;
-
-        let function_def = ResolvedInternalFunctionDefinition {
-            parameters,
-            resolved_return_type,
-            statements,
-            name: identifier.clone(),
-        };
-
-        // Move ownership to module namespace
-        let resolved_internal_function_def_ref = self
-            .current_module
-            .namespace
-            .add_internal_function(identifier.text.clone(), function_def)?;
-
-        Ok(resolved_internal_function_def_ref)
-    }
-
     fn resolve_external_definition(
         &mut self,
         identifier: &LocalIdentifier,
         signature: &FunctionSignature,
+        external_function_id: usize,
     ) -> Result<ResolvedExternalFunctionDefinitionRef, ResolveError> {
         let parameters = self.resolve_parameters(&signature.params)?;
         let resolved_return_type = self.resolve_type(&signature.return_type)?;
@@ -547,7 +428,7 @@ impl<'a> Resolver<'a> {
             name: identifier.clone(),
             parameters,
             resolved_return_type,
-            id: self.parent.external_function_number,
+            id: external_function_id as ExternalFunctionId,
         };
 
         // Move ownership to module namespace
@@ -567,18 +448,169 @@ impl<'a> Resolver<'a> {
             Definition::EnumDef(identifier, variants) => {
                 self.resolve_enum_type_definition(identifier, variants)?;
             }
-            Definition::ImplDef(identifier, impl_items) => {
-                self.resolve_impl_definition(identifier, impl_items)?;
+            Definition::FunctionDef(identifier, function) => {
+                let resolved = self.resolve_function_definition(identifier, function)?;
+                match &resolved {
+                    ResolvedDefinition::FunctionDef(ref local_identifier, ref function) => {
+                        match &function {
+                            ResolvedFunction::Internal(ref internal_function_data) => {}
+                            ResolvedFunction::External(_) => {}
+                        }
+                    }
+                    _ => {}
+                }
+                self.current_module.definitions.push(resolved);
             }
-            Definition::InternalFunctionDef(identifier, function_info) => {
-                self.resolve_function_definition(identifier, function_info)?;
+            Definition::ImplDef(type_identifier, functions) => {
+                self.resolve_impl_definition(type_identifier, functions)?;
             }
-            Definition::ExternalFunctionDef(identifier, function_info) => {
-                self.resolve_external_definition(identifier, function_info)?;
+            Definition::Comment(_) => {} // Comments are ignored during analysis
+            Definition::Import(_) => todo!(), // TODO: Implement import resolution
+        }
+
+        Ok(())
+    }
+
+    fn resolve_function_definition(
+        &mut self,
+        identifier: &LocalIdentifier,
+        function: &Function,
+    ) -> Result<ResolvedDefinition, ResolveError> {
+        let resolved_function = match function {
+            Function::Internal(function_data) => {
+                let parameters = self.resolve_parameters(&function_data.signature.params)?;
+                let return_type = self.resolve_type(&function_data.signature.return_type)?;
+
+                // Set up scope for function body
+                for param in &parameters {
+                    self.set_variable_with_type(
+                        &Variable::new(&param.name.clone(), param.is_mutable),
+                        &param.resolved_type.clone(),
+                    )?;
+                }
+
+                let statements = self.resolve_statements(&function_data.body)?;
+
+                let internal = ResolvedInternalFunctionDefinition {
+                    signature: ResolvedFunctionSignature {
+                        parameters,
+                        return_type,
+                    },
+                    statements,
+                    name: identifier.clone(),
+                };
+
+                let internal_ref = self
+                    .current_module
+                    .namespace
+                    .add_internal_function(identifier.clone().text, internal)?;
+
+                ResolvedFunction::Internal(internal_ref)
             }
-            Definition::Comment(_) => todo!(),
-            Definition::Import(_) => todo!(),
+            Function::External(signature) => {
+                let parameters = self.resolve_parameters(&signature.params)?;
+                let return_type = self.resolve_type(&signature.return_type)?;
+
+                ResolvedFunction::External(ResolvedFunctionSignature {
+                    parameters,
+                    return_type,
+                })
+            }
         };
+
+        Ok(ResolvedDefinition::FunctionDef(
+            identifier.clone(),
+            resolved_function,
+        ))
+    }
+
+    fn resolve_impl_definition(
+        &mut self,
+        attached_to_type: &LocalTypeIdentifier,
+        functions: &SeqMap<IdentifierName, Function>,
+    ) -> Result<(), ResolveError> {
+        let found_struct = self.find_struct_type_local_mut(attached_to_type)?.clone();
+        let mut resolved_functions = SeqMap::new();
+
+        for (name, function) in functions {
+            let mut inner_resolver = self.new_resolver();
+            let resolved_function = match function {
+                Function::Internal(function_data) => {
+                    let mut parameters = Vec::new();
+
+                    // Handle parameters, including self if present
+                    for param in &function_data.signature.params {
+                        let resolved_type = if param.is_self {
+                            ResolvedType::Struct(found_struct.clone())
+                        } else {
+                            inner_resolver.resolve_type(&param.param_type)?
+                        };
+
+                        parameters.push(ResolvedParameter {
+                            name: param.variable.name.clone(),
+                            resolved_type,
+                            ast_parameter: param.clone(),
+                            is_mutable: param.is_mutable,
+                        });
+                    }
+
+                    let return_type =
+                        inner_resolver.resolve_type(&function_data.signature.return_type)?;
+
+                    for param in &parameters {
+                        inner_resolver.set_variable_with_type(
+                            &Variable::new(&param.name, param.is_mutable),
+                            &param.resolved_type,
+                        )?;
+                    }
+
+                    let statements = inner_resolver.resolve_statements(&function_data.body)?;
+
+                    let internal = ResolvedInternalFunctionDefinition {
+                        signature: ResolvedFunctionSignature {
+                            parameters,
+                            return_type,
+                        },
+                        statements,
+                        name: function_data.signature.name.clone(),
+                    };
+
+                    let internal_ref = Rc::new(internal);
+
+                    ResolvedFunction::Internal(internal_ref)
+                }
+                Function::External(signature) => {
+                    let mut parameters = Vec::new();
+
+                    // Handle parameters, including self if present
+                    for param in &signature.params {
+                        let resolved_type = if param.is_self {
+                            ResolvedType::Struct(found_struct.clone())
+                        } else {
+                            inner_resolver.resolve_type(&param.param_type)?
+                        };
+
+                        parameters.push(ResolvedParameter {
+                            name: param.variable.name.clone(),
+                            resolved_type,
+                            ast_parameter: param.clone(),
+                            is_mutable: param.is_mutable,
+                        });
+                    }
+
+                    let return_type = inner_resolver.resolve_type(&signature.return_type)?;
+
+                    ResolvedFunction::External(ResolvedFunctionSignature {
+                        parameters,
+                        return_type,
+                    })
+                }
+            };
+
+            resolved_functions.insert(name.clone(), Rc::new(resolved_function))?;
+        }
+
+        found_struct.borrow_mut().functions = resolved_functions;
 
         Ok(())
     }
@@ -1177,7 +1209,7 @@ impl<'a> Resolver<'a> {
         arguments: &[Expression],
     ) -> Result<ResolvedExpression, ResolveError> {
         let resolved_arguments =
-            self.resolve_and_verify_parameters(&fn_def.parameters, arguments)?;
+            self.resolve_and_verify_parameters(&fn_def.signature.parameters, arguments)?;
 
         Ok(ResolvedExpression::FunctionInternalCall(
             ResolvedInternalFunctionCall {
@@ -1216,10 +1248,62 @@ impl<'a> Resolver<'a> {
 
         match resolution_type {
             ResolvedType::FunctionInternal(ref function_call) => {
-                self.resolve_internal_function_call(function_call, function_expr, arguments)
+                // Check if this is a member function (has self parameter)
+                if function_call
+                    .signature
+                    .parameters
+                    .first()
+                    .map_or(false, |p| p.ast_parameter.is_self)
+                {
+                    // For member functions, extract the target object from the function expression
+                    match function_expression {
+                        Expression::MemberCall(target, _, _) => {
+                            // Use the target as the first argument (self)
+                            let mut all_args = Vec::new();
+                            all_args.push(*target.clone());
+                            all_args.extend(arguments.iter().cloned());
+
+                            self.resolve_internal_function_call(
+                                function_call,
+                                function_expr,
+                                &all_args,
+                            )
+                        }
+                        _ => Err(ResolveError::ExpectedMemberCall(
+                            function_expression.clone(),
+                        )),
+                    }
+                } else {
+                    // Regular function call
+                    self.resolve_internal_function_call(function_call, function_expr, arguments)
+                }
             }
             ResolvedType::FunctionExternal(ref function_call) => {
-                self.resolve_external_function_call(function_call, function_expr, arguments)
+                // Similar handling for external functions
+                if function_call
+                    .parameters
+                    .first()
+                    .map_or(false, |p| p.ast_parameter.is_self)
+                {
+                    match function_expression {
+                        Expression::MemberCall(target, _, _) => {
+                            let mut all_args = Vec::new();
+                            all_args.push(*target.clone());
+                            all_args.extend(arguments.iter().cloned());
+
+                            self.resolve_external_function_call(
+                                function_call,
+                                function_expr,
+                                &all_args,
+                            )
+                        }
+                        _ => Err(ResolveError::ExpectedMemberCall(
+                            function_expression.clone(),
+                        )),
+                    }
+                } else {
+                    self.resolve_external_function_call(function_call, function_expr, arguments)
+                }
             }
             _ => Err(ResolveError::ExpectedFunctionExpression(
                 function_expression.clone(),
@@ -1236,28 +1320,65 @@ impl<'a> Resolver<'a> {
         let (resolved_struct_type_ref, resolved_expression) =
             self.resolve_into_named_struct_ref(ast_member_expression)?;
 
-        let x = if let Some(impl_member) = resolved_struct_type_ref
-            .clone()
-            .borrow()
-            .impl_members
+        let struct_ref = resolved_struct_type_ref.borrow();
+        if let Some(function_ref) = struct_ref
+            .functions
             .get(&IdentifierName(ast_member_function_name.text.clone()))
         {
+            let (is_self_mutable, signature) = match &**function_ref {
+                ResolvedFunction::Internal(function_data) => {
+                    let first_param = function_data
+                        .signature
+                        .parameters
+                        .first()
+                        .ok_or_else(|| ResolveError::WrongNumberOfArguments(0, 1))?;
+                    (first_param.is_mutable, &function_data.signature)
+                }
+                ResolvedFunction::External(signature) => {
+                    let first_param = signature
+                        .parameters
+                        .first()
+                        .ok_or_else(|| ResolveError::WrongNumberOfArguments(0, 1))?;
+                    (first_param.is_mutable, signature)
+                }
+            };
+
+            // Validate argument count (subtract 1 for self parameter)
+            if ast_arguments.len() != signature.parameters.len() - 1 {
+                return Err(ResolveError::WrongNumberOfArguments(
+                    ast_arguments.len(),
+                    signature.parameters.len() - 1,
+                ));
+            }
+
+            // This should reserve space for self
+            for param in &signature.parameters {
+                info!("reserving: {param}");
+                self.set_or_overwrite_variable_with_type(
+                    &Variable {
+                        name: param.name.clone(),
+                        is_mutable: param.is_mutable,
+                    },
+                    &param.resolved_type,
+                )?;
+            }
+
+            // Now resolve the arguments
             let resolved_arguments = self.resolve_expressions(ast_arguments)?;
 
             Ok(ResolvedMemberCall {
-                impl_member: impl_member.clone(),
+                function: function_ref.clone(),
                 arguments: resolved_arguments,
                 self_expression: Box::new(resolved_expression),
-                struct_type_ref: resolved_struct_type_ref,
-                self_is_mutable: impl_member.ast_member.self_param.is_mutable,
+                struct_type_ref: resolved_struct_type_ref.clone(),
+                self_is_mutable: is_self_mutable,
             })
         } else {
             Err(ResolveError::CouldNotFindMember(
                 ast_member_function_name.clone(),
                 ast_member_expression.clone(),
             ))
-        };
-        x
+        }
     }
 
     fn resolve_binary_op(
@@ -1339,7 +1460,10 @@ impl<'a> Resolver<'a> {
                                 .namespace
                                 .get_external_function_declaration(&variable.name)
                                 .map_or_else(
-                                    || Err(ResolveError::UnknownVariable(variable.clone())),
+                                    || {
+                                        error!("unknown");
+                                        Err(ResolveError::UnknownVariable(variable.clone()))
+                                    },
                                     |external_function_ref| {
                                         Ok(ResolvedExpression::ExternalFunctionAccess(
                                             external_function_ref.clone(),
