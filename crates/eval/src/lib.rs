@@ -180,7 +180,7 @@ impl Interpreter {
                 }
             };
 
-            self.set_local_var(index, value, param.is_mutable)?;
+            self.set_local_var(index, value, param.is_mutable, &param.resolved_type)?;
         }
 
         Ok(())
@@ -405,18 +405,29 @@ impl Interpreter {
         Ok(existing_var)
     }
 
+    fn assign_value(target_type: &ResolvedType, value: Value) -> Value {
+        match value {
+            Value::Struct(struct_ref, fields, _) => {
+                // Use the target's display type instead of the value's type
+                Value::Struct(struct_ref, fields, target_type.clone())
+            }
+            _ => value,
+        }
+    }
+
     #[inline]
     fn set_local_var(
         &mut self,
         variable_index: usize,
         value: Value,
         _is_mutable: bool,
+        var_type: &ResolvedType,
     ) -> Result<(), ExecuteError> {
         let last_scope_index = self.current_block_scopes.len() - 1;
+        let assigned = Self::assign_value(var_type, value);
+        trace!("VAR: set_local_var {last_scope_index}:{variable_index} = {assigned:?}");
 
-        trace!("VAR: set_local_var {last_scope_index}:{variable_index} = {value:?}");
-
-        self.current_block_scopes[last_scope_index].variables[variable_index] = value;
+        self.current_block_scopes[last_scope_index].variables[variable_index] = assigned;
         Ok(())
     }
 
@@ -561,8 +572,17 @@ impl Interpreter {
                                 if let Some(field) =
                                     fields.get_mut(resolved_struct_field_ref.inner.index)
                                 {
-                                    *field = value.clone();
-                                    value
+                                    let struct_ref = struct_type.borrow();
+                                    let field_type = struct_ref
+                                        .fields
+                                        .values()
+                                        .nth(resolved_struct_field_ref.inner.index)
+                                        .ok_or_else(|| "Field index out of bounds".to_string())?
+                                        .clone(); // Clone the type to extend its lifetime
+
+                                    let assign = Self::assign_value(&field_type, value);
+                                    *field = assign.clone();
+                                    assign
                                 } else {
                                     Err(format!(
                                         "Field '{}' not found in struct '{:?}'",
@@ -897,6 +917,7 @@ impl Interpreter {
                                             ident.variable_index,
                                             Value::Int(i),
                                             false,
+                                            &ident.resolved_type,
                                         )?,
                                     _ => return Err("Expected identifier in for loop".to_string())?,
                                 }
@@ -1054,8 +1075,13 @@ impl Interpreter {
                 ResolvedPattern::VariableAssignment(var) => {
                     // Variable pattern matches anything, so it is basically a let expression
                     self.push_block_scope("variable assignment".to_string());
-                    self.set_local_var(var.variable_index, cond_value.clone(), false)
-                        .expect("could not set local variable in arm.pattern");
+                    self.set_local_var(
+                        var.variable_index,
+                        cond_value.clone(),
+                        false,
+                        &var.resolved_type,
+                    )
+                    .expect("could not set local variable in arm.pattern");
                     let result = self.evaluate_expression(&arm.expression);
                     self.pop_block_scope("variable assignment".to_string());
                     return result;
@@ -1065,14 +1091,20 @@ impl Interpreter {
                     if let Value::Tuple(_tuple_type_ref, values) = &actual_value {
                         if resolved_tuple_type_ref.0.len() == values.len() {
                             self.push_block_scope("tuple".to_string());
-                            for (field_index, (_field, value)) in resolved_tuple_type_ref
-                                .0
-                                .iter()
-                                .zip(values.iter())
-                                .enumerate()
+                            for (field_index, (field_resolved_type, value)) in
+                                resolved_tuple_type_ref
+                                    .0
+                                    .iter()
+                                    .zip(values.iter())
+                                    .enumerate()
                             {
-                                self.set_local_var(field_index, value.clone(), false)
-                                    .expect("failed to set tuple local var");
+                                self.set_local_var(
+                                    field_index,
+                                    value.clone(),
+                                    false,
+                                    &field_resolved_type,
+                                )
+                                .expect("failed to set tuple local var");
                             }
                             let result = self.evaluate_expression(&arm.expression);
                             self.pop_block_scope("tuple".to_string());
@@ -1133,6 +1165,7 @@ impl Interpreter {
                                     index,
                                     values_in_order[tuple_type.field_index].clone(),
                                     false,
+                                    &tuple_type.resolved_type,
                                 )?;
                             }
 
@@ -1156,6 +1189,7 @@ impl Interpreter {
                                 index,
                                 values_in_order[struct_field.field_index].clone(),
                                 false,
+                                &struct_field.resolved_type,
                             )?;
                         }
 
