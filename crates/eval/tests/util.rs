@@ -62,8 +62,6 @@ fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError>
         .get_parsed_module_mut(root_path)
         .expect("should exist");
 
-    let external_id = 1;
-
     main_module.declare_external_function(
         "print".to_string(),
         vec![Parameter {
@@ -76,7 +74,6 @@ fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError>
             is_self: false,
         }],
         Type::Unit,
-        external_id,
     );
 
     let module_paths_in_order = parse_dependant_modules_and_resolve(
@@ -100,11 +97,7 @@ fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError>
     // Run
     let mut interpreter = Interpreter::new();
     let output = Rc::new(RefCell::new(Vec::new()));
-    register_print(
-        external_id as ExternalFunctionId,
-        &mut interpreter,
-        output.clone(),
-    );
+    register_print(1, &mut interpreter, output.clone());
     let value = interpreter.eval_module(resolved_main_module)?;
 
     let strings = output.borrow().to_vec();

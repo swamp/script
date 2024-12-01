@@ -4,7 +4,6 @@
  */
 use crate::value::Value;
 use std::fmt::Debug;
-use std::os::macos::raw::stat;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 pub use swamp_script_semantic::ns::ResolvedModuleNamespace;
 use swamp_script_semantic::prelude::*;

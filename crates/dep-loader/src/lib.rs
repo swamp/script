@@ -47,7 +47,6 @@ impl ParseModule {
         name: String,
         parameters: Vec<Parameter>,
         return_type: Type,
-        unique_external_function_id: usize,
     ) {
         let fake_identifier = LocalIdentifier {
             node: Node {

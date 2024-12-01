@@ -13,7 +13,7 @@ use pest_derive::Parser;
 use seq_map::SeqMap;
 use swamp_script_ast::prelude::*;
 use swamp_script_ast::Function;
-use tracing::{debug, info};
+use tracing::debug;
 
 #[derive(Parser)]
 #[grammar = "grammar.pest"]
@@ -494,26 +494,6 @@ impl AstParser {
         self.parse_type(inner_pair)
     }
 
-    fn parse_function_data(
-        &self,
-        pair: Pair<Rule>,
-    ) -> Result<(LocalIdentifier, FunctionData), Error<Rule>> {
-        let mut inner = pair.clone().into_inner();
-        let signature_pair = inner
-            .next()
-            .ok_or_else(|| self.create_error("Missing function signature", pair.as_span()))?;
-
-        let (name, signature) = self.parse_function_signature(signature_pair)?;
-
-        let body = self.parse_stmt_block(
-            inner
-                .next()
-                .ok_or_else(|| self.create_error("Missing function body", pair.as_span()))?,
-        )?;
-
-        Ok((name, FunctionData { signature, body }))
-    }
-
     fn parse_parameters(&self, pair: Pair<Rule>) -> Result<Vec<Parameter>, Error<Rule>> {
         let mut parameters = Vec::new();
 
@@ -521,7 +501,6 @@ impl AstParser {
             match param_pair.as_rule() {
                 Rule::parameter => {
                     let pairs: Vec<_> = param_pair.into_inner().collect();
-                    let mut iter = pairs.iter();
 
                     // Check first pair - is it mut?
                     let (is_mutable, name, type_pair) = if pairs[0].as_rule() == Rule::mut_keyword {

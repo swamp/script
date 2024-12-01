@@ -421,35 +421,6 @@ impl<'a> Resolver<'a> {
         Ok(resolved_variants)
     }
 
-    fn resolve_external_definition(
-        &mut self,
-        identifier: &LocalIdentifier,
-        signature: &FunctionSignature,
-        external_function_id: usize,
-    ) -> Result<ResolvedExternalFunctionDefinitionRef, ResolveError> {
-        let parameters = self.resolve_parameters(&signature.params)?;
-        let resolved_return_type = self.resolve_type(&signature.return_type)?;
-
-        self.parent.external_function_number += 1;
-
-        let function_def = ResolvedExternalFunctionDefinition {
-            name: identifier.clone(),
-            signature: ResolvedFunctionSignature {
-                parameters,
-                return_type: resolved_return_type,
-            },
-            id: external_function_id as ExternalFunctionId,
-        };
-
-        // Move ownership to module namespace
-        let resolved_external_function_def_ref = self
-            .current_module
-            .namespace
-            .add_external_function_declaration(identifier.text.clone(), function_def)?;
-
-        Ok(resolved_external_function_def_ref)
-    }
-
     pub fn resolve_and_set_definition(&mut self, ast_def: &Definition) -> Result<(), ResolveError> {
         match ast_def {
             Definition::StructDef(ref ast_struct) => {
@@ -462,9 +433,9 @@ impl<'a> Resolver<'a> {
                 let mut inner_resolver = self.new_resolver();
                 let resolved = inner_resolver.resolve_function_definition(identifier, function)?;
                 match &resolved {
-                    ResolvedDefinition::FunctionDef(ref local_identifier, ref function) => {
+                    ResolvedDefinition::FunctionDef(ref _local_identifier, ref function) => {
                         match &function {
-                            ResolvedFunction::Internal(ref internal_function_data) => {}
+                            ResolvedFunction::Internal(ref _internal_function_data) => {}
                             ResolvedFunction::External(_) => {}
                         }
                     }
@@ -1567,7 +1538,7 @@ impl<'a> Resolver<'a> {
     }
 
     fn try_find_variable(&self, variable: &Variable) -> Option<ResolvedVariableRef> {
-        for (i, scope) in self.block_scope_stack.iter().rev().enumerate() {
+        for scope in self.block_scope_stack.iter().rev() {
             if let Some(value) = scope.variables.get(&variable.name) {
                 return Some(value.clone());
             }
