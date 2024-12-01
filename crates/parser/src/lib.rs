@@ -103,7 +103,6 @@ impl AstParser {
         Self { pratt_parser }
     }
 
-
     pub fn parse_script(&self, raw_script: &str) -> Result<Module, pest::error::Error<Rule>> {
         let script = &raw_script.replace("\r", ""); // remove all CR, so only LF is left of CRLF
 
@@ -522,29 +521,26 @@ impl AstParser {
             match param_pair.as_rule() {
                 Rule::parameter => {
                     let pairs: Vec<_> = param_pair.into_inner().collect();
+                    let mut iter = pairs.iter();
 
-                    let name = &pairs[0];
-                    let type_pair = &pairs[1];
+                    // Check first pair - is it mut?
+                    let (is_mutable, name, type_pair) = if pairs[0].as_rule() == Rule::mut_keyword {
+                        (true, &pairs[1], &pairs[2])
+                    } else {
+                        (false, &pairs[0], &pairs[1])
+                    };
 
                     let param_type = self.parse_type(type_pair.clone())?;
 
                     parameters.push(Parameter {
-                        variable: Variable::new(name.as_str(), false),
+                        variable: Variable::new(name.as_str(), is_mutable),
                         param_type,
-                        is_mutable: false,
+                        is_mutable,
                         is_self: false,
                     });
                 }
                 Rule::self_parameter => {
-                    let pairs: Vec<_> = param_pair.into_inner().collect();
-                    let is_mutable = pairs.get(0).map_or(false, |p| p.as_rule() == Rule::mut_keyword);
-
-                    parameters.push(Parameter {
-                        variable: Variable::new("self", is_mutable),
-                        param_type: Type::Any,  // self type is handled elsewhere
-                        is_mutable,
-                        is_self: true,
-                    });
+                    // ... rest of the self_parameter handling ...
                 }
                 _ => {
                     return Err(self.create_error(
@@ -565,7 +561,7 @@ impl AstParser {
             &Self::expect_type_identifier(&mut inner)?,
         );
         let mut functions = SeqMap::new();
-    
+
         while let Some(item_pair) = inner.next() {
             if item_pair.as_rule() == Rule::impl_item {
                 let inner_item = self.next_inner_pair(item_pair)?;
@@ -597,11 +593,9 @@ impl AstParser {
                 }
             }
         }
-    
+
         Ok(Definition::ImplDef(type_name, functions))
     }
-
-
 
     fn parse_member_signature(
         &self,
@@ -613,31 +607,33 @@ impl AstParser {
                 pair.as_span(),
             ));
         }
-    
+
         let mut inner = pair.clone().into_inner();
-    
+
         // Parse function name
         let name = LocalIdentifier::new(
             convert_from_pair(&pair),
             &AstParser::expect_identifier(&mut inner)?,
         );
-    
+
         // Parse self parameter and other parameters
         let mut parameters = Vec::new();
-        
+
         if let Some(param_list) = inner.next() {
             match param_list.as_rule() {
                 Rule::self_parameter => {
                     let pairs: Vec<_> = param_list.into_inner().collect();
-                    let is_mutable = pairs.get(0).map_or(false, |p| p.as_rule() == Rule::mut_keyword);
-                    
+                    let is_mutable = pairs
+                        .get(0)
+                        .map_or(false, |p| p.as_rule() == Rule::mut_keyword);
+
                     parameters.push(Parameter {
                         variable: Variable::new("self", is_mutable),
-                        param_type: Type::Any,  // self type is handled elsewhere
+                        param_type: Type::Any, // self type is handled elsewhere
                         is_mutable,
                         is_self: true,
                     });
-    
+
                     // Check for additional parameters
                     if let Some(more_params) = inner.next() {
                         if more_params.as_rule() == Rule::parameter_list {
@@ -651,7 +647,7 @@ impl AstParser {
                 _ => {}
             }
         }
-    
+
         // Parse return type if it exists
         let return_type = if let Some(return_type_pair) = inner.next() {
             if return_type_pair.as_rule() == Rule::return_type {
@@ -662,7 +658,7 @@ impl AstParser {
         } else {
             Type::Unit
         };
-    
+
         Ok((
             name.clone(),
             FunctionSignature {
@@ -672,7 +668,7 @@ impl AstParser {
             },
         ))
     }
-    
+
     fn parse_member_data(
         &self,
         pair: Pair<Rule>,
@@ -681,26 +677,17 @@ impl AstParser {
         let signature_pair = inner
             .next()
             .ok_or_else(|| self.create_error("Missing member signature", pair.as_span()))?;
-    
+
         let (name, signature) = self.parse_member_signature(signature_pair)?;
-    
+
         let body = self.parse_stmt_block(
             inner
                 .next()
                 .ok_or_else(|| self.create_error("Missing function body", pair.as_span()))?,
         )?;
-    
+
         Ok((name, FunctionData { signature, body }))
     }
-
-
-
-
-
-
-
-
-
 
     fn parse_for_loop(&self, pair: Pair<Rule>) -> Result<Statement, Error<Rule>> {
         let mut inner = Self::get_inner_pairs(&pair);

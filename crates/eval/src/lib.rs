@@ -659,8 +659,8 @@ impl Interpreter {
                     ResolvedFunction::Internal(function_data) => {
                         (&function_data.signature.parameters, Some(&function_data.statements))
                     }
-                    ResolvedFunction::External(signature) => {
-                        (&signature.parameters, None)
+                    ResolvedFunction::External(external_data) => {
+                        (&external_data.signature.parameters, None)
                     }
                 };
 

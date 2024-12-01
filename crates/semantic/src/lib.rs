@@ -28,7 +28,6 @@ pub struct ResolvedParameter {
     pub is_mutable: bool,
 }
 
-
 impl Display for ResolvedParameter {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}: {}", self.name, self.resolved_type)
@@ -40,10 +39,6 @@ pub struct ResolvedFunctionSignature {
     pub parameters: Vec<ResolvedParameter>,
     pub return_type: ResolvedType,
 }
-
-
-
-
 
 #[derive(Debug, Clone)]
 pub enum ResolvedType {
@@ -153,8 +148,7 @@ pub type ExternalFunctionId = u32;
 #[derive(Debug)]
 pub struct ResolvedExternalFunctionDefinition {
     pub name: LocalIdentifier,
-    pub parameters: Vec<ResolvedParameter>,
-    pub resolved_return_type: ResolvedType,
+    pub signature: ResolvedFunctionSignature,
     pub id: ExternalFunctionId,
 }
 
@@ -164,8 +158,8 @@ impl Display for crate::ResolvedExternalFunctionDefinition {
             f,
             "(ext_fn_def {}({}) -> {})",
             self.name,
-            comma(&self.parameters),
-            self.resolved_return_type
+            comma(&self.signature.parameters),
+            self.signature.return_type
         )
     }
 }
@@ -340,7 +334,11 @@ pub struct ResolvedMemberCall {
 }
 impl Display for ResolvedMemberCall {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "(< {} >.{:?}", self.self_expression, self.struct_type_ref)?;
+        write!(
+            f,
+            "(< {} >.{:?}",
+            self.self_expression, self.struct_type_ref
+        )?;
 
         if !self.arguments.is_empty() {
             write!(f, " <- {}", comma(&self.arguments))?;
@@ -453,9 +451,8 @@ pub type ResolvedFunctionRef = Rc<ResolvedFunction>;
 #[derive(Debug)]
 pub enum ResolvedFunction {
     Internal(ResolvedInternalFunctionDefinitionRef),
-    External(ResolvedFunctionSignature),
+    External(ResolvedExternalFunctionDefinitionRef),
 }
-
 
 impl Display for ResolvedFunction {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -1231,7 +1228,10 @@ pub enum ResolvedDefinition {
     ExternalFunction(),
     ImplType(),
     FunctionDef(LocalIdentifier, ResolvedFunction),
-    ImplDef(LocalTypeIdentifier, SeqMap<IdentifierName, ResolvedFunction>),
+    ImplDef(
+        LocalTypeIdentifier,
+        SeqMap<IdentifierName, ResolvedFunction>,
+    ),
 }
 
 #[derive(Debug)]

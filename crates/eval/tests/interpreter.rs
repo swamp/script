@@ -541,7 +541,7 @@ fn struct_with_methods_basic() {
         mut m = Money { v: 10 }
         print(m)
         print(m.get())
-        m.set(22) // Here it goes wrong
+        m.set(22)
         print(m.get())
         "#,
         r#"
