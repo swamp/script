@@ -489,7 +489,11 @@ impl Interpreter {
                     field_values.push(value);
                 }
 
-                Value::Struct(struct_instantiation.struct_type_ref.clone(), field_values)
+                Value::Struct(
+                    struct_instantiation.struct_type_ref.clone(),
+                    field_values,
+                    struct_instantiation.display_type_ref.clone(),
+                )
             }
 
             ResolvedExpression::ExclusiveRange(_resolved_type_ref, start, end) => {
@@ -553,7 +557,7 @@ impl Interpreter {
                         let mut borrowed = r.borrow_mut();
                         // We know it must be a struct because references can only point to structs
                         match &mut *borrowed {
-                            Value::Struct(struct_type, fields) => {
+                            Value::Struct(struct_type, fields, _) => {
                                 if let Some(field) =
                                     fields.get_mut(resolved_struct_field_ref.inner.index)
                                 {
@@ -572,7 +576,7 @@ impl Interpreter {
                             }
                         }
                     }
-                    Value::Struct(_, _) => {
+                    Value::Struct(_, _, _) => {
                         Err("Cannot assign to field of non-mutable struct".to_string())?
                     }
                     _ => Err(format!(
@@ -622,14 +626,14 @@ impl Interpreter {
                     self.evaluate_expression(&struct_field_access.struct_expression)?;
 
                 match struct_expression {
-                    Value::Struct(_struct_type, fields) => {
+                    Value::Struct(_struct_type, fields, _) => {
                         fields[struct_field_access.index].clone()
                     }
                     Value::Reference(r) => {
                         // If it's a reference, dereference and try field access
                         let value = r.borrow();
                         match &*value {
-                            Value::Struct(_struct_type, fields) => {
+                            Value::Struct(_struct_type, fields, _) => {
                                 fields[struct_field_access.index].clone()
                             }
                             _ => Err(format!(
@@ -944,7 +948,7 @@ impl Interpreter {
                         Value::String(_) => todo!(),
                         Value::Bool(_) => todo!(),
                         Value::Tuple(_, _) => todo!(),
-                        Value::Struct(_, _) => todo!(),
+                        Value::Struct(_, _, _) => todo!(),
                         Value::Unit => todo!(),
                         Value::Reference(_) => todo!(),
                         Value::InternalFunction(_) => todo!(),

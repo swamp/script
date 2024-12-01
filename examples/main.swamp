@@ -39,6 +39,12 @@ impl Vector2 {
     }
 }
 
+type Position = Vector2
+
+fn new_position(x: Float, y: Float) -> Position {
+    Position { x: x, y: y }  // The return type annotation will preserve the alias
+}
+
 
 // Enum
 enum Shape {
@@ -84,7 +90,7 @@ print('counter after while is: {counter}') // Should be 4
 struct Player {
     name: String,
     health: Int,
-    position: Vector2
+    position: Position
 }
 
 player = Player {
@@ -93,6 +99,9 @@ player = Player {
     position: Vector2::new(10.0, 20.0)
 }
 print('player:{player}')
+
+position = new_position(10.0, 20.0)
+print('test: {position}')
 
 
 // Pattern matching with multiple patterns

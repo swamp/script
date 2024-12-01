@@ -5,7 +5,7 @@
 pub mod ns;
 pub mod prelude;
 
-use crate::ns::{ResolvedModuleNamespace, SemanticError};
+use crate::ns::{LocalTypeName, ResolvedModuleNamespace, SemanticError};
 use fixed32::Fp;
 use seq_fmt::{comma, comma_tuple, fmt_nl};
 use seq_map::SeqMap;
@@ -61,7 +61,37 @@ pub enum ResolvedType {
 
     ExclusiveRange(ResolvedExclusiveRangeTypeRef),
 
+    Alias(LocalTypeName, Rc<ResolvedType>), // The alias name and the actual type
+
     Any,
+}
+
+impl ResolvedType {
+    pub fn display_name(&self) -> String {
+        match self {
+            Self::Alias(name, _) => name.0.clone(),
+            Self::Struct(struct_ref) => struct_ref.borrow().name.text.clone(),
+            Self::Int(_) => "Int".to_string(),
+            Self::Float(_) => "Float".to_string(),
+            Self::String(_) => "String".to_string(),
+            Self::Bool(_) => "Bool".to_string(),
+            Self::Unit(_) => "Unit".to_string(),
+            Self::Array(array_type) => {
+                format!("Array<{}>", array_type.item_type.display_name())
+            }
+            Self::Tuple(tuple_type) => format!(
+                "({})",
+                tuple_type
+                    .0
+                    .iter()
+                    .map(|t| t.display_name())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            Self::Enum(enum_type) => enum_type.name.text.clone(),
+            _ => "unsure".to_string(),
+        }
+    }
 }
 
 impl PartialEq for ResolvedType {
@@ -188,6 +218,9 @@ impl Display for ResolvedType {
             }
             Self::FunctionExternal(function_def_ref) => {
                 write!(f, "{function_def_ref}")
+            }
+            Self::Alias(name, actual_type) => {
+                write!(f, "alias {name} {actual_type}")
             }
         }
     }
@@ -568,6 +601,7 @@ pub struct ResolvedIterator {
 pub struct ResolvedStructInstantiation {
     pub expressions_in_order: Vec<ResolvedExpression>,
     pub struct_type_ref: ResolvedStructTypeRef,
+    pub display_type_ref: ResolvedType,
 }
 
 #[derive(Debug)]

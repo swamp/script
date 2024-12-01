@@ -179,7 +179,7 @@ pub enum Definition {
 
     FunctionDef(LocalIdentifier, Function),
     ImplDef(LocalTypeIdentifier, SeqMap<IdentifierName, Function>),
-
+    TypeAlias(LocalTypeIdentifier, Type),
     Import(Import),
     // Other
     Comment(String),

@@ -153,6 +153,7 @@ impl AstParser {
             Rule::import_stmt => self.parse_import(inner_pair),
             Rule::doc_comment => self.parse_doc_comment(inner_pair),
             Rule::enum_def => self.parse_enum_def(inner_pair),
+            Rule::type_alias => self.parse_type_alias(inner_pair),
             _ => todo!(),
         }
     }
@@ -1580,6 +1581,25 @@ impl AstParser {
             convert_from_pair(&pair),
             pair.as_str(),
         ))
+    }
+
+    fn parse_type_alias(&self, pair: Pair<Rule>) -> Result<Definition, Error<Rule>> {
+        let mut inner = Self::get_inner_pairs(&pair);
+
+        // Parse the alias name
+        let name_pair = Self::next_pair(&mut inner)?;
+        if name_pair.as_rule() != Rule::type_identifier {
+            return Err(self.create_error(
+                &format!("Expected type identifier, found {:?}", name_pair.as_rule()),
+                name_pair.as_span(),
+            ));
+        }
+        let name = LocalTypeIdentifier::new(convert_from_pair(&name_pair), name_pair.as_str());
+
+        // Parse the target type
+        let target_type = self.parse_type(Self::next_pair(&mut inner)?)?;
+
+        Ok(Definition::TypeAlias(name, target_type))
     }
 
     fn parse_enum_def(&self, pair: Pair<Rule>) -> Result<Definition, Error<Rule>> {

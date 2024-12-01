@@ -9,7 +9,7 @@ use std::fmt::Display;
 use std::rc::Rc;
 use swamp_script_ast::prelude::*;
 use swamp_script_ast::Function;
-use swamp_script_semantic::ns::{ResolvedModuleNamespace, SemanticError};
+use swamp_script_semantic::ns::{LocalTypeName, ResolvedModuleNamespace, SemanticError};
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
     ResolvedDefinition, ResolvedFunction, ResolvedFunctionSignature, ResolvedStaticCall,
@@ -20,6 +20,16 @@ pub fn signature(f: &ResolvedFunction) -> &ResolvedFunctionSignature {
     match f {
         ResolvedFunction::Internal(internal) => &internal.signature,
         ResolvedFunction::External(external) => &external.signature,
+    }
+}
+
+pub fn unalias_type(resolved_type: ResolvedType) -> ResolvedType {
+    match resolved_type {
+        ResolvedType::Alias(_identifier, reference_to_type) => {
+            unalias_type((*reference_to_type).clone())
+        }
+
+        _ => resolved_type,
     }
 }
 
@@ -145,6 +155,7 @@ pub enum ResolveError {
     SeqMapError(SeqMapError),
     ExpectedMemberCall(Expression),
     CouldNotFindStaticMember(LocalIdentifier, LocalTypeIdentifier),
+    TypeAliasNotAStruct(QualifiedTypeIdentifier),
 }
 
 impl From<SemanticError> for ResolveError {
@@ -229,7 +240,10 @@ impl<'a> Resolver<'a> {
             Type::String => ResolvedType::String(self.parent.string_type.clone()),
             Type::Bool => ResolvedType::Bool(self.parent.bool_type.clone()),
             Type::Unit => ResolvedType::Unit(self.parent.unit_type.clone()),
-            Type::Struct(ast_struct) => ResolvedType::Struct(self.find_struct_type(ast_struct)?),
+            Type::Struct(ast_struct) => {
+                let (display_type, _struct_ref) = self.get_struct_types(ast_struct)?;
+                display_type
+            }
             Type::Array(ast_type) => ResolvedType::Array(self.resolve_array_type(ast_type)?),
             Type::Tuple(types) => {
                 ResolvedType::Tuple(ResolvedTupleType(self.resolve_types(types)?).into())
@@ -264,7 +278,9 @@ impl<'a> Resolver<'a> {
         let namespace = self.get_namespace(type_name_to_find)?;
         let type_ident = &type_name_to_find.name;
 
-        let resolved_type = if let Some(found) = namespace.get_struct(type_ident) {
+        let resolved_type = if let Some(aliased_type) = namespace.get_type_alias(&type_ident.text) {
+            aliased_type.clone()
+        } else if let Some(found) = namespace.get_struct(type_ident) {
             ResolvedType::Struct(found.clone())
         } else if let Some(found) = namespace.get_enum(type_ident) {
             ResolvedType::Enum(found.clone())
@@ -280,6 +296,14 @@ impl<'a> Resolver<'a> {
     ) -> Result<ResolvedStructTypeRef, ResolveError> {
         let namespace = self.get_namespace(type_name)?;
 
+        if let Some(aliased_type) = namespace.get_type_alias(&type_name.name.text) {
+            let unaliased = unalias_type(aliased_type.clone());
+            match unaliased {
+                ResolvedType::Struct(struct_ref) => return Ok(struct_ref.clone()),
+                _ => return Err(ResolveError::TypeAliasNotAStruct(type_name.clone())),
+            }
+        }
+
         namespace.get_struct(&type_name.name).map_or_else(
             || Err(ResolveError::UnknownStructTypeReference(type_name.clone())),
             |found| Ok(found.clone()),
@@ -289,18 +313,8 @@ impl<'a> Resolver<'a> {
     pub fn find_struct_type_local_mut(
         &mut self,
         type_name: &LocalTypeIdentifier,
-    ) -> Result<&ResolvedStructTypeRef, ResolveError> {
-        self.current_module
-            .namespace
-            .get_struct(type_name)
-            .map_or_else(
-                || {
-                    Err(ResolveError::UnknownLocalStructTypeReference(
-                        type_name.clone(),
-                    ))
-                },
-                |found| Ok(found),
-            )
+    ) -> Result<ResolvedStructTypeRef, ResolveError> {
+        self.find_struct_type(&QualifiedTypeIdentifier::new(type_name.clone(), vec![]))
     }
 
     fn new_resolver(&mut self) -> Resolver {
@@ -445,6 +459,9 @@ impl<'a> Resolver<'a> {
             }
             Definition::ImplDef(type_identifier, functions) => {
                 self.resolve_impl_definition(type_identifier, functions)?;
+            }
+            Definition::TypeAlias(identifier, target_type) => {
+                self.resolve_type_alias_definition(identifier, target_type)?;
             }
             Definition::Comment(_) => {} // Comments are ignored during analysis
             Definition::Import(_) => todo!(), // TODO: Implement import resolution
@@ -604,6 +621,22 @@ impl<'a> Resolver<'a> {
             }
         };
         Ok(resolved_fn)
+    }
+
+    pub fn resolve_type_alias_definition(
+        &mut self,
+        name: &LocalTypeIdentifier,
+        target_type: &Type,
+    ) -> Result<(), ResolveError> {
+        let resolved_type = self.resolve_type(target_type)?;
+        let alias_type =
+            ResolvedType::Alias(LocalTypeName(name.text.clone()), Rc::new(resolved_type));
+
+        self.current_module
+            .namespace
+            .add_type_alias(name.clone(), alias_type)?;
+
+        Ok(())
     }
 
     fn resolve_impl_definition(
@@ -995,12 +1028,39 @@ impl<'a> Resolver<'a> {
         }
     }
 
+    fn get_struct_types(
+        &self,
+        qualified_type_identifier: &QualifiedTypeIdentifier,
+    ) -> Result<(ResolvedType, ResolvedStructTypeRef), ResolveError> {
+        let namespace = self.get_namespace(qualified_type_identifier)?;
+
+        // If it's an alias, return both the alias and the underlying struct
+        if let Some(alias_type) = namespace.get_type_alias(&qualified_type_identifier.name.text) {
+            let unaliased = unalias_type(alias_type.clone());
+            match unaliased {
+                ResolvedType::Struct(struct_ref) => Ok((alias_type.clone(), struct_ref)),
+                _ => Err(ResolveError::TypeAliasNotAStruct(
+                    qualified_type_identifier.clone(),
+                )),
+            }
+        } else {
+            // If direct struct, return the struct type for both
+            let struct_ref = namespace
+                .get_struct(&qualified_type_identifier.name)
+                .ok_or_else(|| {
+                    ResolveError::UnknownStructTypeReference(qualified_type_identifier.clone())
+                })?;
+            Ok((ResolvedType::Struct(struct_ref.clone()), struct_ref.clone()))
+        }
+    }
+
     fn resolve_struct_instantiation(
         &mut self,
         qualified_type_identifier: &QualifiedTypeIdentifier,
         ast_fields: &SeqMap<IdentifierName, Expression>,
     ) -> Result<ResolvedStructInstantiation, ResolveError> {
-        let struct_to_instantiate = self.find_struct_type(qualified_type_identifier)?;
+        let (display_type_ref, struct_to_instantiate) =
+            self.get_struct_types(qualified_type_identifier)?;
 
         if ast_fields.len() != struct_to_instantiate.borrow().fields.len() {
             return Err(ResolveError::WrongFieldCountInStructInstantiation(
@@ -1026,6 +1086,7 @@ impl<'a> Resolver<'a> {
         Ok(ResolvedStructInstantiation {
             expressions_in_order,
             struct_type_ref: struct_to_instantiate.clone(),
+            display_type_ref,
         })
     }
 

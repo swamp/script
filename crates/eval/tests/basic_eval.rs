@@ -291,8 +291,10 @@ fn basic_eval_13() {
                 v + 2.0
             }
         }
+        
+        type CoolPerson = Ossian
 
-        mut ossian = Ossian { happy: 3 }
+        mut ossian = CoolPerson { happy: 3 }
 
         Ossian::unrelated_function(3.5) // TODO: change to Ossian::unrelated_function(3.5) ?
         ossian.coding()
