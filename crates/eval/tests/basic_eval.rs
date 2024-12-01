@@ -110,8 +110,6 @@ fn basic_eval_6() {
     );
 }
 
-
-
 #[test_log::test]
 fn basic_eval_7() {
     let result = eval(
@@ -296,7 +294,7 @@ fn basic_eval_13() {
 
         mut ossian = Ossian { happy: 3 }
 
-        //ossian.unrelated_function(3.5) // TODO: change to Ossian::unrelated_function(3.5) ?
+        Ossian::unrelated_function(3.5) // TODO: change to Ossian::unrelated_function(3.5) ?
         ossian.coding()
         ossian.pixel_art(1)
     "#,

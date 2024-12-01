@@ -11,9 +11,6 @@ use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
 use std::rc::Rc;
 
-
-
-
 // Common metadata that can be shared across all AST nodes
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Node {
@@ -201,7 +198,6 @@ pub enum Statement {
     If(Expression, Vec<Statement>, Option<Vec<Statement>>),
 }
 
-
 #[derive(Clone)]
 pub struct Variable {
     pub name: String,
@@ -240,7 +236,6 @@ impl Variable {
 #[derive(Debug, Clone)]
 pub struct MutVariableRef(pub Variable); // Just wraps a variable when passed with mut keyword
 
-
 #[derive(Clone)]
 pub struct Parameter {
     pub variable: Variable,
@@ -264,7 +259,7 @@ impl Debug for Parameter {
 #[derive(Clone, Debug)]
 pub struct FunctionSignature {
     pub name: LocalIdentifier,
-    pub params: Vec<Parameter>,    // first param can be self (check is_self)
+    pub params: Vec<Parameter>, // first param can be self (check is_self)
     pub return_type: Type,
 }
 
@@ -273,8 +268,6 @@ pub struct FunctionData {
     pub signature: FunctionSignature,
     pub body: Vec<Statement>,
 }
-
-
 
 impl Display for FunctionData {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
@@ -365,8 +358,6 @@ impl Debug for FunctionData {
     }
 }
 
-
-
 #[derive(Debug, Eq, Hash, PartialEq, Clone)]
 pub struct IdentifierName(pub String);
 
@@ -398,6 +389,7 @@ pub enum Expression {
 
     // Calls ----
     FunctionCall(Box<Expression>, Vec<Expression>),
+    StaticCall(LocalTypeIdentifier, LocalIdentifier, Vec<Expression>), // Type::func(args)
     MemberCall(Box<Expression>, LocalIdentifier, Vec<Expression>),
     Block(Vec<Statement>),
 

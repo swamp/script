@@ -70,7 +70,6 @@ fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError>
             variable: Variable {
                 name: "data".to_string(),
                 is_mutable: false,
-                
             },
             param_type: Type::Any,
             is_mutable: false,

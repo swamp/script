@@ -4,10 +4,11 @@
  */
 use crate::value::Value;
 use std::fmt::Debug;
+use std::os::macos::raw::stat;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 pub use swamp_script_semantic::ns::ResolvedModuleNamespace;
 use swamp_script_semantic::prelude::*;
-use swamp_script_semantic::{ResolvedFunction, ResolvedImplMemberRef};
+use swamp_script_semantic::{ResolvedFunction, ResolvedImplMemberRef, ResolvedStaticCall};
 use tracing::{debug, error, info, trace};
 use value::format_value;
 
@@ -207,6 +208,39 @@ impl Interpreter {
         Ok(())
     }
 
+    fn evaluate_static_function_call(
+        &mut self,
+        static_call: &ResolvedStaticCall,
+    ) -> Result<Value, ExecuteError> {
+        // First evaluate the arguments
+        let evaluated_args = self.evaluate_args(&static_call.arguments)?;
+
+        match &*static_call.function {
+            ResolvedFunction::Internal(function_data) => {
+                self.push_function_scope("static function call".to_string());
+                self.bind_parameters(&function_data.signature.parameters, &evaluated_args)?;
+                let result = self.execute_statements(&function_data.statements)?;
+
+                let v = match result {
+                    ValueWithSignal::Value(v) => v,
+                    ValueWithSignal::Return(v) => v,
+                    ValueWithSignal::Break => Value::Unit,
+                    ValueWithSignal::Continue => Value::Unit,
+                };
+                self.pop_function_scope("static function call".to_string());
+                Ok(v)
+            }
+            ResolvedFunction::External(external) => {
+                let mut func = self
+                    .external_functions_by_id
+                    .get_mut(&external.id)
+                    .expect("external function missing")
+                    .borrow_mut();
+                (func.func)(&evaluated_args)
+            }
+        }
+    }
+
     fn evaluate_external_function_call(
         &mut self,
         call: &ResolvedExternalFunctionCall,
@@ -243,7 +277,10 @@ impl Interpreter {
         self.push_function_scope(format!("{func_val}"));
 
         // Bind parameters before executing body
-        self.bind_parameters(&call.function_definition.signature.parameters, &evaluated_args)?;
+        self.bind_parameters(
+            &call.function_definition.signature.parameters,
+            &evaluated_args,
+        )?;
         let result = self.execute_statements(&call.function_definition.statements)?;
 
         self.pop_function_scope(format!("{func_val}"));
@@ -358,13 +395,13 @@ impl Interpreter {
         if relative_scope_index >= self.current_block_scopes.len() {
             panic!("illegal scope index");
         }
-        
+
         let variables = &self.current_block_scopes[relative_scope_index].variables;
         if variable_index >= variables.len() {
             panic!("illegal index");
         }
         let existing_var = &variables[variable_index];
-        
+
         trace!("VAR: lookup {relative_scope_index}:{variable_index} > {existing_var:?}");
         Ok(existing_var)
     }
@@ -642,23 +679,29 @@ impl Interpreter {
                 self.evaluate_external_function_call(resolved_external_call)?
             }
 
+            ResolvedExpression::StaticCall(static_call) => {
+                self.evaluate_static_function_call(static_call)?
+            }
+
             ResolvedExpression::MemberCall(resolved_member_call) => {
-                let member_value = self.evaluate_expression(&resolved_member_call.self_expression)?;
+                let member_value =
+                    self.evaluate_expression(&resolved_member_call.self_expression)?;
 
                 trace!("{} > member call {:?}", self.tabs(), member_value);
 
                 self.push_function_scope(format!("member_call {member_value}"));
 
                 let mut member_call_arguments = Vec::new();
-                member_call_arguments.push(member_value);  // Add self as first argument
+                member_call_arguments.push(member_value); // Add self as first argument
                 for arg in &resolved_member_call.arguments {
                     member_call_arguments.push(self.evaluate_expression(arg)?);
                 }
 
                 let (parameters, statements) = match &*resolved_member_call.function {
-                    ResolvedFunction::Internal(function_data) => {
-                        (&function_data.signature.parameters, Some(&function_data.statements))
-                    }
+                    ResolvedFunction::Internal(function_data) => (
+                        &function_data.signature.parameters,
+                        Some(&function_data.statements),
+                    ),
                     ResolvedFunction::External(external_data) => {
                         (&external_data.signature.parameters, None)
                     }
@@ -688,7 +731,9 @@ impl Interpreter {
                     ValueWithSignal::Value(v) => v,
                     ValueWithSignal::Return(v) => v,
                     ValueWithSignal::Break => Err("break not allowed in member calls".to_string())?,
-                    ValueWithSignal::Continue => Err("continue not allowed in member calls".to_string())?,
+                    ValueWithSignal::Continue => {
+                        Err("continue not allowed in member calls".to_string())?
+                    }
                 }
             }
 

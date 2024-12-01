@@ -1156,6 +1156,7 @@ impl AstParser {
             ))),
             Rule::field_access => self.parse_field_access(pair),
             Rule::function_call => self.parse_function_call(pair),
+            Rule::static_call => self.parse_static_call(pair),
             Rule::match_expr => self.parse_match_expr(pair),
             Rule::map_literal => self.parse_map_literal(pair),
             Rule::array_literal => self.parse_array_literal(pair),
@@ -1465,6 +1466,58 @@ impl AstParser {
 
         Ok(Expression::FunctionCall(
             Box::new(Expression::VariableAccess(Variable::new(&func_name, false))),
+            args,
+        ))
+    }
+
+    fn parse_static_call(&self, pair: Pair<Rule>) -> Result<Expression, Error<Rule>> {
+        let mut inner = Self::get_inner_pairs(&pair);
+
+        // Parse type name and function name
+        let type_name_pair = Self::next_pair(&mut inner)?;
+        let func_name_pair = Self::next_pair(&mut inner)?;
+
+        if type_name_pair.as_rule() != Rule::type_identifier {
+            return Err(self.create_error(
+                &format!(
+                    "Expected type identifier, found {:?}",
+                    type_name_pair.as_rule()
+                ),
+                type_name_pair.as_span(),
+            ));
+        }
+
+        if func_name_pair.as_rule() != Rule::identifier {
+            return Err(self.create_error(
+                &format!("Expected identifier, found {:?}", func_name_pair.as_rule()),
+                func_name_pair.as_span(),
+            ));
+        }
+
+        let mut args = Vec::new();
+        // Parse arguments - same logic as function_call
+        while let Some(arg_pair) = inner.next() {
+            if arg_pair.as_rule() == Rule::function_argument {
+                let mut arg_inner = Self::get_inner_pairs(&arg_pair).peekable();
+
+                // Check for mut keyword
+                let has_mut = arg_inner
+                    .peek()
+                    .map(|p| p.as_rule() == Rule::mut_keyword)
+                    .unwrap_or(false);
+
+                if has_mut {
+                    arg_inner.next(); // consume mut keyword
+                }
+
+                let expr = self.parse_expression(Self::next_pair(&mut arg_inner)?)?;
+                args.push(expr);
+            }
+        }
+
+        Ok(Expression::StaticCall(
+            LocalTypeIdentifier::new(convert_from_pair(&type_name_pair), type_name_pair.as_str()),
+            LocalIdentifier::new(convert_from_pair(&func_name_pair), func_name_pair.as_str()),
             args,
         ))
     }

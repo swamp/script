@@ -333,7 +333,7 @@ pub fn create_parsed_modules(
     let parser = AstParser::new();
     let ast_module_result = parser.parse_script(script);
     if let Err(some) = ast_module_result {
-        return Err(some)
+        return Err(some);
     }
     let ast_module = ast_module_result.unwrap();
     trace!("ast_module:\n{:#?}", ast_module);

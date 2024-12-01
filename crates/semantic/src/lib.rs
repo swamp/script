@@ -267,6 +267,12 @@ pub struct ResolvedInternalFunctionCall {
 }
 
 #[derive(Debug)]
+pub struct ResolvedStaticCall {
+    pub function: Rc<ResolvedFunction>,
+    pub arguments: Vec<ResolvedExpression>,
+}
+
+#[derive(Debug)]
 pub struct ResolvedExternalFunctionCall {
     //pub resolved_type: ResolvedType,
     pub arguments: Vec<ResolvedExpression>,
@@ -599,6 +605,7 @@ pub enum ResolvedExpression {
     // Calls
     FunctionInternalCall(ResolvedInternalFunctionCall), // ResolvedFunctionReference, Vec<ResolvedExpression>
     FunctionExternalCall(ResolvedExternalFunctionCall),
+    StaticCall(ResolvedStaticCall),
     MutMemberCall(MutMemberRef, Vec<ResolvedExpression>),
     MemberCall(ResolvedMemberCall),
 
@@ -660,41 +667,41 @@ impl Display for ResolvedLiteral {
 impl Display for ResolvedExpression {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ResolvedExpression::FieldAccess(field_lookup) => write!(f, "{}", field_lookup),
-            ResolvedExpression::VariableAccess(variable) => write!(f, "VarRead({})", variable),
-            ResolvedExpression::InternalFunctionAccess(internal_function_ref) => {
+            Self::FieldAccess(field_lookup) => write!(f, "{}", field_lookup),
+            Self::VariableAccess(variable) => write!(f, "VarRead({})", variable),
+            Self::InternalFunctionAccess(internal_function_ref) => {
                 write!(f, "{:?}", internal_function_ref)
             }
-            ResolvedExpression::ExternalFunctionAccess(external_function_ref) => {
+            Self::ExternalFunctionAccess(external_function_ref) => {
                 write!(f, "{:?}", external_function_ref)
             }
-            ResolvedExpression::MutRef(mut_var_ref) => write!(f, "MutRef({})", mut_var_ref),
-            ResolvedExpression::ArrayAccess(array_item_ref) => {
+            Self::MutRef(mut_var_ref) => write!(f, "MutRef({})", mut_var_ref),
+            Self::ArrayAccess(array_item_ref) => {
                 write!(f, "[{}]", array_item_ref.item_type)
             }
-            ResolvedExpression::VariableAssignment(var_assignment) => write!(
+            Self::VariableAssignment(var_assignment) => write!(
                 f,
                 "< {}={} >",
                 var_assignment.variable_ref, var_assignment.expression
             ),
-            ResolvedExpression::ArrayAssignment(_, _, _) => todo!(),
-            ResolvedExpression::StructFieldAssignment(_, _) => todo!(),
-            ResolvedExpression::TupleFieldAssignment(_, _) => todo!(),
-            ResolvedExpression::BinaryOp(binary_op) => write!(f, "{binary_op:?}"),
-            ResolvedExpression::UnaryOp(unary_op) => {
+            Self::ArrayAssignment(_, _, _) => todo!(),
+            Self::StructFieldAssignment(_, _) => todo!(),
+            Self::TupleFieldAssignment(_, _) => todo!(),
+            Self::BinaryOp(binary_op) => write!(f, "{binary_op:?}"),
+            Self::UnaryOp(unary_op) => {
                 write!(f, "{:?}", unary_op)
             }
-            ResolvedExpression::FunctionInternalCall(resolved_call) => {
+            Self::FunctionInternalCall(resolved_call) => {
                 write!(f, "{resolved_call}")
             }
-            ResolvedExpression::FunctionExternalCall(resolved_call) => write!(f, "{resolved_call}"),
-            ResolvedExpression::MutMemberCall(_, _) => todo!(),
-            ResolvedExpression::MemberCall(member_call) => write!(f, "{member_call}"),
-            ResolvedExpression::Block(statements) => write!(f, "{}", fmt_nl(statements)),
-            ResolvedExpression::InterpolatedString(_string_type, parts) => {
+            Self::FunctionExternalCall(resolved_call) => write!(f, "{resolved_call}"),
+            Self::MutMemberCall(_, _) => todo!(),
+            Self::MemberCall(member_call) => write!(f, "{member_call}"),
+            Self::Block(statements) => write!(f, "{}", fmt_nl(statements)),
+            Self::InterpolatedString(_string_type, parts) => {
                 write!(f, "'{}'", comma(parts))
             }
-            ResolvedExpression::StructInstantiation(struct_instantiation) => {
+            Self::StructInstantiation(struct_instantiation) => {
                 let borrowed = struct_instantiation.struct_type_ref.borrow();
                 let zipped: Vec<_> = borrowed
                     .fields
@@ -705,17 +712,17 @@ impl Display for ResolvedExpression {
                 write!(f, "{{ {} }}", comma_tuple(&zipped))?;
                 Ok(())
             }
-            ResolvedExpression::Array(array_instantiation) => {
+            Self::Array(array_instantiation) => {
                 write!(f, "[{:?}]", array_instantiation.expressions)
             }
-            ResolvedExpression::Tuple(_) => todo!(),
-            ResolvedExpression::ExclusiveRange(range_type, _, _) => {
+            Self::Tuple(_) => todo!(),
+            Self::ExclusiveRange(range_type, _, _) => {
                 write!(f, "[{range_type:?}]")
             }
-            ResolvedExpression::IfElse(_, _, _) => todo!(),
-            ResolvedExpression::Match(resolved_match) => write!(f, "{resolved_match}"),
-            ResolvedExpression::LetVar(_, _) => todo!(),
-            ResolvedExpression::Literal(resolved_literal) => match resolved_literal {
+            Self::IfElse(_, _, _) => todo!(),
+            Self::Match(resolved_match) => write!(f, "{resolved_match}"),
+            Self::LetVar(_, _) => todo!(),
+            Self::Literal(resolved_literal) => match resolved_literal {
                 ResolvedLiteral::FloatLiteral(value, _float_type) => {
                     write!(f, "FloatLit({value:?})")
                 }
@@ -736,6 +743,7 @@ impl Display for ResolvedExpression {
                 }
                 ResolvedLiteral::Array(_array_type, data) => write!(f, "Array({data:?})"),
             },
+            Self::StaticCall(_) => write!(f, "static call"),
         }
     }
 }

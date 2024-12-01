@@ -11,7 +11,9 @@ use swamp_script_ast::prelude::*;
 use swamp_script_ast::Function;
 use swamp_script_semantic::ns::{ResolvedModuleNamespace, SemanticError};
 use swamp_script_semantic::prelude::*;
-use swamp_script_semantic::{ResolvedDefinition, ResolvedFunction, ResolvedFunctionSignature};
+use swamp_script_semantic::{
+    ResolvedDefinition, ResolvedFunction, ResolvedFunctionSignature, ResolvedStaticCall,
+};
 use tracing::{debug, error, info, trace};
 
 pub fn signature(f: &ResolvedFunction) -> &ResolvedFunctionSignature {
@@ -56,6 +58,10 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
         ResolvedExpression::MemberCall(member_call) => {
             signature(&member_call.function).return_type.clone()
         }
+        ResolvedExpression::StaticCall(static_call) => {
+            signature(&static_call.function).return_type.clone()
+        }
+
         ResolvedExpression::Block(_statements) => ResolvedType::Unit(Rc::new(ResolvedUnitType)), // TODO: Fix this
         ResolvedExpression::InterpolatedString(string_type, _parts) => {
             ResolvedType::String(string_type.clone())
@@ -138,6 +144,7 @@ pub enum ResolveError {
     SemanticError(SemanticError),
     SeqMapError(SeqMapError),
     ExpectedMemberCall(Expression),
+    CouldNotFindStaticMember(LocalIdentifier, LocalTypeIdentifier),
 }
 
 impl From<SemanticError> for ResolveError {
@@ -809,6 +816,14 @@ impl<'a> Resolver<'a> {
             Expression::FunctionCall(function_expression, parameter_expressions) => {
                 self.resolve_function_call(function_expression, parameter_expressions)?
             }
+            Expression::StaticCall(type_name, function_name, arguments) => {
+                ResolvedExpression::StaticCall(self.resolve_static_call(
+                    type_name,
+                    function_name,
+                    arguments,
+                )?)
+            }
+
             Expression::MemberCall(ast_member_expression, ast_identifier, ast_arguments) => {
                 ResolvedExpression::MemberCall(self.resolve_member_call(
                     ast_member_expression,
@@ -1341,6 +1356,36 @@ impl<'a> Resolver<'a> {
             _ => Err(ResolveError::ExpectedFunctionExpression(
                 function_expression.clone(),
             )),
+        }
+    }
+
+    fn resolve_static_call(
+        &mut self,
+        type_name: &LocalTypeIdentifier,
+        function_name: &LocalIdentifier,
+        arguments: &Vec<Expression>,
+    ) -> Result<ResolvedStaticCall, ResolveError> {
+        // Resolve arguments first
+        let resolved_arguments = self.resolve_expressions(arguments)?;
+
+        // Get struct type just to look up the function
+        let struct_type_ref = self.find_struct_type_local_mut(type_name)?;
+        let struct_ref = struct_type_ref.borrow();
+
+        if let Some(function_ref) = struct_ref
+            .functions
+            .get(&IdentifierName(function_name.text.clone()))
+        {
+            Ok(ResolvedStaticCall {
+                function: function_ref.clone(),
+                arguments: resolved_arguments,
+                // Remove struct_type_ref since it's a static call
+            })
+        } else {
+            Err(ResolveError::CouldNotFindStaticMember(
+                function_name.clone(),
+                type_name.clone(),
+            ))
         }
     }
 
