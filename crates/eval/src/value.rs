@@ -4,7 +4,7 @@
  */
 use crate::{EvalExternalFunctionRef, ValueWithSignal};
 use fixed32::Fp;
-use seq_fmt::comma_tuple;
+use seq_fmt::{comma, comma_tuple};
 use std::cell::RefCell;
 use std::fmt::Debug;
 use std::rc::Rc;
@@ -110,11 +110,11 @@ impl Value {
 impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Value::Int(n) => write!(f, "{}", n),
-            Value::Float(n) => write!(f, "{}", n),
-            Value::String(s) => write!(f, "{}", s),
-            Value::Bool(b) => write!(f, "{}", b),
-            Value::Array(_item_type, arr) => {
+            Self::Int(n) => write!(f, "{}", n),
+            Self::Float(n) => write!(f, "{}", n),
+            Self::String(s) => write!(f, "{}", s),
+            Self::Bool(b) => write!(f, "{}", b),
+            Self::Array(_item_type, arr) => {
                 write!(f, "[")?;
                 for (i, val) in arr.iter().enumerate() {
                     if i > 0 {
@@ -124,7 +124,7 @@ impl std::fmt::Display for Value {
                 }
                 write!(f, "]")
             }
-            Value::Tuple(_tuple_type, arr) => {
+            Self::Tuple(_tuple_type, arr) => {
                 write!(f, "(")?;
                 for (i, val) in arr.iter().enumerate() {
                     if i > 0 {
@@ -134,9 +134,9 @@ impl std::fmt::Display for Value {
                 }
                 write!(f, ")")
             }
-            Value::Struct(struct_type_ref, fields_in_strict_order, display_type) => {
+            Self::Struct(struct_type_ref, fields_in_strict_order, display_type) => {
                 let struct_name = display_type.display_name();
-                write!(f, "{}{{ ", struct_name)?;
+                write!(f, "{struct_name} {{ ")?;
 
                 let fields = struct_type_ref
                     .borrow()
@@ -149,19 +149,39 @@ impl std::fmt::Display for Value {
                         write!(f, ", ")?;
                     }
                     let field_name = &fields[i];
-                    write!(f, "{}: {}", field_name, val)?;
+                    write!(f, "{field_name}: {val}")?;
                 }
                 write!(f, " }}")
             }
-            Value::InternalFunction(_reference) => write!(f, "<function>"), // TODO:
-            Value::Unit => write!(f, "()"),
-            Value::ExclusiveRange(start, end) => write!(f, "{}..{}", start, end),
-            Value::EnumVariantTuple(_enum_name, _data) => {
-                write!(f, "tuple variant")
+            Self::InternalFunction(_reference) => write!(f, "<function>"), // TODO:
+            Self::Unit => write!(f, "()"),
+            Self::ExclusiveRange(start, end) => write!(f, "{start}..{end}"),
+
+            Self::Reference(reference) => write!(f, "{}", reference.borrow()),
+            Self::ExternalFunction(_) => write!(f, "<external>"), // TODO:
+
+            // Enums ----
+            Self::EnumVariantTuple(enum_name, fields_in_order) => {
+                if enum_name.common.module_path.0.is_empty() {
+                    write!(
+                        f,
+                        "{}::{}({})",
+                        enum_name.common.enum_ref.name,
+                        enum_name.common.variant_name.text,
+                        comma(fields_in_order),
+                    )
+                } else {
+                    write!(
+                        f,
+                        "{}::{}::{}{}",
+                        enum_name.common.module_path,
+                        enum_name.common.enum_ref.name,
+                        enum_name.common.variant_name.text,
+                        comma(fields_in_order),
+                    )
+                }
             }
-            Value::Reference(reference) => write!(f, "{}", reference.borrow()),
-            Value::ExternalFunction(_) => todo!(),
-            Value::EnumVariantStruct(struct_variant, values) => {
+            Self::EnumVariantStruct(struct_variant, values) => {
                 let decorated_values: Vec<(IdentifierName, Value)> = struct_variant
                     .fields
                     .keys()
@@ -177,7 +197,7 @@ impl std::fmt::Display for Value {
                     comma_tuple(&decorated_values)
                 )
             }
-            Value::EnumVariantSimple(enum_type_ref) => write!(f, "{enum_type_ref}"),
+            Self::EnumVariantSimple(enum_type_ref) => write!(f, "{enum_type_ref}"),
         }
     }
 }
@@ -185,24 +205,24 @@ impl std::fmt::Display for Value {
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Value::Reference(r1), Value::Reference(r2)) => {
+            (Self::Reference(r1), Self::Reference(r2)) => {
                 // Compare the actual values inside the references
                 r1.borrow().eq(&*r2.borrow())
             }
-            (Value::Reference(r1), other) => {
+            (Self::Reference(r1), other) => {
                 // Compare reference value with direct value
                 r1.borrow().eq(other)
             }
-            (other, Value::Reference(r2)) => {
+            (other, Self::Reference(r2)) => {
                 // Compare direct value with reference value
                 other.eq(&*r2.borrow())
             }
             // Regular value comparisons
-            (Value::Int(a), Value::Int(b)) => a == b,
-            (Value::Float(a), Value::Float(b)) => a == b,
-            (Value::String(a), Value::String(b)) => a == b,
-            (Value::Bool(a), Value::Bool(b)) => a == b,
-            (Value::Unit, Value::Unit) => true,
+            (Self::Int(a), Self::Int(b)) => a == b,
+            (Self::Float(a), Self::Float(b)) => a == b,
+            (Self::String(a), Self::String(b)) => a == b,
+            (Self::Bool(a), Self::Bool(b)) => a == b,
+            (Self::Unit, Self::Unit) => true,
             _ => false,
         }
     }
@@ -210,12 +230,12 @@ impl PartialEq for Value {
 
 pub fn format_value(value: &Value, spec: &FormatSpecifier) -> Result<String, String> {
     match (value, spec) {
-        (Value::Int(n), FormatSpecifier::Debug) => Ok(format!("{:?}", n)),
-        (Value::Int(n), FormatSpecifier::LowerHex) => Ok(format!("{:x}", n)),
-        (Value::Int(n), FormatSpecifier::UpperHex) => Ok(format!("{:X}", n)),
-        (Value::Int(n), FormatSpecifier::Binary) => Ok(format!("{:b}", n)),
+        (Value::Int(n), FormatSpecifier::Debug) => Ok(format!("{n:?}")),
+        (Value::Int(n), FormatSpecifier::LowerHex) => Ok(format!("{n:x}")),
+        (Value::Int(n), FormatSpecifier::UpperHex) => Ok(format!("{n:X}")),
+        (Value::Int(n), FormatSpecifier::Binary) => Ok(format!("{n:b}")),
 
-        (Value::Float(f), FormatSpecifier::Float) => Ok(format!("{}", f)),
+        (Value::Float(f), FormatSpecifier::Float) => Ok(format!("{f}")),
         (Value::Float(f), FormatSpecifier::Precision(prec, PrecisionType::Float)) => {
             Ok(format!("{:.*}", *prec as usize, f))
         }
@@ -225,18 +245,17 @@ pub fn format_value(value: &Value, spec: &FormatSpecifier) -> Result<String, Str
         }
 
         // Debug format for complex types
-        (Value::Struct(_type_id, fields, _), FormatSpecifier::Debug) => Ok(format!("{:?}", fields)),
-        (Value::Array(_type_id, elements), FormatSpecifier::Debug) => Ok(format!("{:?}", elements)),
+        (Value::Struct(_type_id, fields, _), FormatSpecifier::Debug) => Ok(format!("{fields:?}")),
+        (Value::Array(_type_id, elements), FormatSpecifier::Debug) => Ok(format!("{elements:?}")),
         (Value::EnumVariantTuple(_type_id, variant), FormatSpecifier::Debug) => {
-            Ok(format!("{:?}", variant))
+            Ok(format!("{variant:?}"))
         }
 
         // Default string conversion for other cases
-        (value, FormatSpecifier::Debug) => Ok(format!("{:?}", value)),
+        (value, FormatSpecifier::Debug) => Ok(format!("{value}")),
 
         _ => Err(format!(
-            "Unsupported format specifier {:?} for value type {:?}",
-            spec, value
+            "Unsupported format specifier {spec:?} for value type {value:?}"
         )),
     }
 }

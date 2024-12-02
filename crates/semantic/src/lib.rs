@@ -84,12 +84,21 @@ impl ResolvedType {
                 tuple_type
                     .0
                     .iter()
-                    .map(|t| t.display_name())
+                    .map(Self::display_name)
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
             Self::Enum(enum_type) => enum_type.name.text.clone(),
-            _ => "unsure".to_string(),
+            Self::EnumVariant(variant_type_ref) => format!("{variant_type_ref}"),
+            Self::FunctionInternal(internal_function) => format!(
+                "fn {} {:?}",
+                internal_function.name, internal_function.signature
+            ),
+            Self::FunctionExternal(external_function) => {
+                format!("ext_fn {} {}", external_function.name, external_function.id)
+            }
+            Self::ExclusiveRange(_exclusive_range) => "exclusive_range".to_string(),
+            Self::Any => "Any".to_string(),
         }
     }
 }
@@ -97,14 +106,12 @@ impl ResolvedType {
 impl PartialEq for ResolvedType {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (ResolvedType::Int(_), ResolvedType::Int(_)) => true,
-            (ResolvedType::Float(_), ResolvedType::Float(_)) => true,
-            (ResolvedType::String(_), ResolvedType::String(_)) => true,
-            (ResolvedType::Bool(_), ResolvedType::Bool(_)) => true,
-            (ResolvedType::Unit(_), ResolvedType::Unit(_)) => true,
-            (ResolvedType::Array(array_ref), ResolvedType::Array(array_ref2)) => {
-                array_ref == array_ref2
-            }
+            (Self::Int(_), Self::Int(_)) => true,
+            (Self::Float(_), Self::Float(_)) => true,
+            (Self::String(_), Self::String(_)) => true,
+            (Self::Bool(_), Self::Bool(_)) => true,
+            (Self::Unit(_), Self::Unit(_)) => true,
+            (Self::Array(array_ref), Self::Array(array_ref2)) => array_ref == array_ref2,
             _ => false,
         }
     }
@@ -220,7 +227,7 @@ impl Display for ResolvedType {
                 write!(f, "{function_def_ref}")
             }
             Self::Alias(name, actual_type) => {
-                write!(f, "alias {name} {actual_type}")
+                write!(f, "type {name} = {actual_type}")
             }
         }
     }
@@ -275,7 +282,6 @@ impl Display for ResolvedMutVariable {
 }
 
 #[derive(Debug)]
-
 pub struct ResolvedBinaryOperator {
     pub left: Box<ResolvedExpression>,
     pub right: Box<ResolvedExpression>,
@@ -284,7 +290,6 @@ pub struct ResolvedBinaryOperator {
 }
 
 #[derive(Debug)]
-
 pub struct ResolvedUnaryOperator {
     pub left: Box<ResolvedExpression>,
     pub ast_operator_type: UnaryOperator,
@@ -319,13 +324,14 @@ impl Display for ResolvedExternalFunctionCall {
     }
 }
 
+#[must_use]
 pub fn comma_seq<K: Clone + Hash + Eq + Display, V: Display>(values: &SeqMap<K, V>) -> String {
     let mut result = String::new();
     for (i, (key, value)) in values.iter().enumerate() {
         if i > 0 {
             result.push_str(", ");
         }
-        result.push_str(format!("{}: {}", key, value).as_str());
+        result.push_str(format!("{key}: {value}").as_str());
     }
     result
 }
@@ -495,7 +501,18 @@ pub enum ResolvedFunction {
 
 impl Display for ResolvedFunction {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "resolved func")
+        match self {
+            Self::Internal(internal_func_def_ref) => write!(
+                f,
+                "fn {} {:?}",
+                internal_func_def_ref.name, internal_func_def_ref.signature
+            ),
+            Self::External(external_func_def_ref) => write!(
+                f,
+                "ext_fn {} {:?}",
+                external_func_def_ref.name, external_func_def_ref.signature
+            ),
+        }
     }
 }
 
@@ -516,7 +533,6 @@ pub struct Member {
 }
 
 #[derive(Debug)]
-
 pub struct ResolvedBooleanExpression {
     #[allow(unused)]
     pub ast: Expression,
@@ -533,8 +549,8 @@ pub struct ResolvedMatch {
 impl Display for ResolvedMatch {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Match {} ", self.expression)?;
-        for arm in self.arms.iter() {
-            writeln!(f, "..{} ", arm)?;
+        for arm in &self.arms {
+            writeln!(f, "..{arm} ")?;
         }
         Ok(())
     }
@@ -777,7 +793,11 @@ impl Display for ResolvedExpression {
                 }
                 ResolvedLiteral::Array(_array_type, data) => write!(f, "Array({data:?})"),
             },
-            Self::StaticCall(_) => write!(f, "static call"),
+            Self::StaticCall(static_call) => write!(
+                f,
+                "static call {}({:?})",
+                static_call.function, static_call.arguments
+            ),
         }
     }
 }
@@ -1144,9 +1164,9 @@ pub enum ResolvedEnumVariantContainerType {
 impl Display for ResolvedEnumVariantContainerType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ResolvedEnumVariantContainerType::Struct(struct_ref) => write!(f, " {} ", struct_ref),
-            ResolvedEnumVariantContainerType::Tuple(tuple_ref) => write!(f, "{}", tuple_ref),
-            ResolvedEnumVariantContainerType::Nothing => Ok(()),
+            Self::Struct(struct_ref) => write!(f, " {} ", struct_ref),
+            Self::Tuple(tuple_ref) => write!(f, "{}", tuple_ref),
+            Self::Nothing => Ok(()),
         }
     }
 }
