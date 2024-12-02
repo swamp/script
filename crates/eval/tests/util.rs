@@ -111,7 +111,7 @@ fn register_print(
     output: Rc<RefCell<Vec<String>>>,
 ) {
     interpreter
-        .register_external_function("print".to_string(), external_id, move |args: &[Value]| {
+        .register_external_function("print", external_id, move |args: &[Value]| {
             if let Some(value) = args.first() {
                 let display_value = value.to_string();
                 output.borrow_mut().push(display_value.clone());
