@@ -1,0 +1,26 @@
+repo: swamp/script
+
+# added
+# changed
+# fixed
+# workaround
+# optimization
+# examples
+# test
+# removed
+# improved
+# breaking
+# deprecated
+# refactor
+# experimental
+# docs
+# known issue
+# style
+# unreleased
+# security
+
+releases:
+  v0.0.3:
+    date: "2024-12-02"
+    notice: |
+      Static calls (`StructType::function(parameters)`), type alias (`type MyAlias = (Int, Float)`) and unification of external, internal and member functions.

@@ -133,6 +133,7 @@ length
 // I continued at 3
 // counter after while is: 4
 // player:Player { name: Hero, health: 100, position: Vector2 { x: 10.00, y: 20.00 } }
+// position type alias: (10.00, 20.00)
 // status:Full health
 // area:200.00
 // Final sqr-length: 20.00
