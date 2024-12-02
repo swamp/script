@@ -12,7 +12,8 @@ use swamp_script_ast::Function;
 use swamp_script_semantic::ns::{LocalTypeName, ResolvedModuleNamespace, SemanticError};
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
-    ResolvedDefinition, ResolvedFunction, ResolvedFunctionSignature, ResolvedStaticCall,
+    ResolvedDefinition, ResolvedEnumTypeRef, ResolvedFunction, ResolvedFunctionRef,
+    ResolvedFunctionSignature, ResolvedStaticCall,
 };
 use tracing::{debug, error, info, trace};
 
@@ -324,7 +325,7 @@ impl<'a> Resolver<'a> {
     pub fn resolve_struct_type_definition(
         &mut self,
         ast_struct: &StructType,
-    ) -> Result<ResolvedStructTypeRef, ResolveError> {
+    ) -> Result<ResolvedStructType, ResolveError> {
         let mut resolved_fields = SeqMap::new();
 
         for (name, field_type) in ast_struct.fields.iter() {
@@ -341,12 +342,15 @@ impl<'a> Resolver<'a> {
             ast_struct.clone(),
             self.parent.allocate_number(),
         );
+        Ok(resolved_struct)
+    }
 
+    pub fn insert_struct_type_definition(
+        &mut self,
+        struct_type: ResolvedStructType,
+    ) -> Result<ResolvedStructTypeRef, ResolveError> {
         // Move ownership to module namespace
-        let resolved_struct_ref = self
-            .current_module
-            .namespace
-            .add_struct_type(&ast_struct.identifier, resolved_struct)?;
+        let resolved_struct_ref = self.current_module.namespace.add_struct_type(struct_type)?;
 
         Ok(resolved_struct_ref)
     }
@@ -355,7 +359,7 @@ impl<'a> Resolver<'a> {
         &mut self,
         enum_type_name: &LocalTypeIdentifier,
         ast_variants: &SeqMap<LocalTypeIdentifier, EnumVariant>,
-    ) -> Result<Vec<ResolvedEnumVariantTypeRef>, ResolveError> {
+    ) -> Result<(ResolvedEnumTypeRef, Vec<ResolvedEnumVariantType>), ResolveError> {
         let mut resolved_variants = Vec::new();
 
         let parent_number = self.parent.allocate_number();
@@ -421,53 +425,96 @@ impl<'a> Resolver<'a> {
                 }
             };
 
-            let variant = ResolvedEnumVariantType::new(
-                parent_ref.clone(),
-                name.clone(),
-                container,
-                self.current_module.namespace.allocate_number(),
-            );
-            let variant_ref = self.current_module.namespace.add_enum_variant(variant)?;
-
-            resolved_variants.push(variant_ref);
+            resolved_variants.push(ResolvedEnumVariantType {
+                owner: parent_ref.clone(),
+                data: container,
+                name: name.clone(),
+                number: 0,
+            })
         }
 
-        Ok(resolved_variants)
+        Ok((parent_ref.clone(), resolved_variants))
     }
 
-    pub fn resolve_and_set_definition(&mut self, ast_def: &Definition) -> Result<(), ResolveError> {
-        match ast_def {
+    pub fn insert_definition(
+        &mut self,
+        resolved_definition: ResolvedDefinition,
+    ) -> Result<(), ResolveError> {
+        match resolved_definition {
+            ResolvedDefinition::EnumType(_parent_enum_ref, variants) => {
+                for variant in variants {
+                    self.current_module.namespace.add_enum_variant(variant)?;
+                }
+            }
+            ResolvedDefinition::StructType(struct_type) => {
+                self.current_module.namespace.add_struct_type(struct_type)?;
+            }
+            ResolvedDefinition::Function() => {}
+            ResolvedDefinition::ExternalFunction() => {}
+            ResolvedDefinition::ImplType(resolved_type, resolved_functions) => {
+                match resolved_type {
+                    ResolvedType::Struct(found_struct) => {
+                        found_struct.borrow_mut().functions = resolved_functions;
+                    }
+                    _ => todo!(),
+                }
+            }
+            ResolvedDefinition::FunctionDef(function_def) => match function_def {
+                ResolvedFunction::Internal(internal_fn) => {
+                    self.current_module
+                        .namespace
+                        .add_internal_function_ref(&internal_fn)?;
+                }
+                ResolvedFunction::External(resolved_external_function_def_ref) => {
+                    self.current_module
+                        .namespace
+                        .add_external_function_declaration_ref(
+                            resolved_external_function_def_ref,
+                        )?;
+                }
+            },
+            ResolvedDefinition::Alias(resolved_type) => match resolved_type {
+                ResolvedType::Alias(name, resolved_type) => {
+                    self.current_module
+                        .namespace
+                        .add_type_alias(&name.0.clone(), *resolved_type.clone())?;
+                }
+                _ => panic!("type should always be alias"),
+            },
+            ResolvedDefinition::Comment(_) => {}
+        }
+        Ok(())
+    }
+
+    pub fn resolve_definition(
+        &mut self,
+        ast_def: &Definition,
+    ) -> Result<ResolvedDefinition, ResolveError> {
+        let resolved_def = match ast_def {
             Definition::StructDef(ref ast_struct) => {
-                self.resolve_struct_type_definition(ast_struct)?;
+                ResolvedDefinition::StructType(self.resolve_struct_type_definition(ast_struct)?)
             }
             Definition::EnumDef(identifier, variants) => {
-                self.resolve_enum_type_definition(identifier, variants)?;
+                let (parent, variants) = self.resolve_enum_type_definition(identifier, variants)?;
+                ResolvedDefinition::EnumType(parent, variants)
             }
             Definition::FunctionDef(identifier, function) => {
                 let mut inner_resolver = self.new_resolver();
-                let resolved = inner_resolver.resolve_function_definition(identifier, function)?;
-                match &resolved {
-                    ResolvedDefinition::FunctionDef(ref _local_identifier, ref function) => {
-                        match &function {
-                            ResolvedFunction::Internal(ref _internal_function_data) => {}
-                            ResolvedFunction::External(_) => {}
-                        }
-                    }
-                    _ => {}
-                }
-                inner_resolver.current_module.definitions.push(resolved);
+                inner_resolver.resolve_function_definition(identifier, function)?
             }
             Definition::ImplDef(type_identifier, functions) => {
-                self.resolve_impl_definition(type_identifier, functions)?;
+                let (attached_type_type, functions) =
+                    self.resolve_impl_definition(type_identifier, functions)?;
+                ResolvedDefinition::ImplType(attached_type_type, functions)
             }
-            Definition::TypeAlias(identifier, target_type) => {
-                self.resolve_type_alias_definition(identifier, target_type)?;
-            }
-            Definition::Comment(_) => {} // Comments are ignored during analysis
+            Definition::TypeAlias(identifier, target_type) => ResolvedDefinition::Alias(
+                self.resolve_type_alias_definition(identifier, target_type)?,
+            ),
+            Definition::Comment(comment_ref) => ResolvedDefinition::Comment(comment_ref.clone()),
             Definition::Import(_) => todo!(), // TODO: Implement import resolution
-        }
+        };
 
-        Ok(())
+        Ok(resolved_def)
     }
 
     fn resolve_function_definition(
@@ -499,12 +546,7 @@ impl<'a> Resolver<'a> {
                     name: identifier.clone(),
                 };
 
-                let internal_ref = self
-                    .current_module
-                    .namespace
-                    .add_internal_function(identifier.clone().text, internal)?;
-
-                ResolvedFunction::Internal(internal_ref)
+                ResolvedFunction::Internal(Rc::new(internal))
             }
             Function::External(signature) => {
                 let parameters = self.resolve_parameters(&signature.params)?;
@@ -520,20 +562,11 @@ impl<'a> Resolver<'a> {
                     id: self.parent.external_function_number,
                 };
 
-                // Move ownership to module namespace
-                let resolved_external_function_def_ref = self
-                    .current_module
-                    .namespace
-                    .add_external_function_declaration(identifier.text.clone(), external)?;
-
-                ResolvedFunction::External(resolved_external_function_def_ref)
+                ResolvedFunction::External(Rc::new(external))
             }
         };
 
-        Ok(ResolvedDefinition::FunctionDef(
-            identifier.clone(),
-            resolved_function,
-        ))
+        Ok(ResolvedDefinition::FunctionDef(resolved_function))
     }
 
     fn resolve_impl_func(
@@ -627,35 +660,30 @@ impl<'a> Resolver<'a> {
         &mut self,
         name: &LocalTypeIdentifier,
         target_type: &Type,
-    ) -> Result<(), ResolveError> {
+    ) -> Result<ResolvedType, ResolveError> {
         let resolved_type = self.resolve_type(target_type)?;
         let alias_type =
-            ResolvedType::Alias(LocalTypeName(name.text.clone()), Rc::new(resolved_type));
+            ResolvedType::Alias(LocalTypeName(name.text.clone()), Box::new(resolved_type));
 
-        self.current_module
-            .namespace
-            .add_type_alias(name.clone(), alias_type)?;
-
-        Ok(())
+        Ok(alias_type)
     }
 
     fn resolve_impl_definition(
         &mut self,
         attached_to_type: &LocalTypeIdentifier,
         functions: &SeqMap<IdentifierName, Function>,
-    ) -> Result<(), ResolveError> {
+    ) -> Result<(ResolvedType, SeqMap<IdentifierName, ResolvedFunctionRef>), ResolveError> {
         let found_struct = self.find_struct_type_local_mut(attached_to_type)?.clone();
         let mut resolved_functions = SeqMap::new();
 
         for (name, function) in functions {
             let mut inner_resolver = self.new_resolver();
             let resolved_function = inner_resolver.resolve_impl_func(&function, &found_struct)?;
-            resolved_functions.insert(name.clone(), Rc::new(resolved_function))?;
+            let resolved_function_ref = Rc::new(resolved_function);
+            resolved_functions.insert(name.clone(), resolved_function_ref)?;
         }
 
-        found_struct.borrow_mut().functions = resolved_functions;
-
-        Ok(())
+        Ok((ResolvedType::Struct(found_struct), resolved_functions))
     }
 
     fn resolve_let_statement(

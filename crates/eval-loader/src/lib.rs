@@ -17,7 +17,8 @@ pub fn resolve_module(
 
     for ast_def in module.ast_module.definitions() {
         let mut resolver = Resolver::new(resolved_program, &mut resolve_module);
-        resolver.resolve_and_set_definition(ast_def)?;
+        let resolved_def = resolver.resolve_definition(ast_def)?;
+        resolver.insert_definition(resolved_def)?;
     }
 
     {

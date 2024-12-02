@@ -19,6 +19,7 @@ pub use swamp_script_ast::{
     LocalIdentifier, LocalTypeIdentifier, MatchArm, ModulePath, Parameter, PrecisionType,
     StringConst, StructType, UnaryOperator, Variable,
 };
+use swamp_script_ast::{Node, Position, Span};
 
 #[derive(Debug, Clone)]
 pub struct ResolvedParameter {
@@ -61,7 +62,7 @@ pub enum ResolvedType {
 
     ExclusiveRange(ResolvedExclusiveRangeTypeRef),
 
-    Alias(LocalTypeName, Rc<ResolvedType>), // The alias name and the actual type
+    Alias(LocalTypeName, Box<ResolvedType>), // The alias name and the actual type
 
     Any,
 }
@@ -1223,29 +1224,64 @@ impl ResolvedModule {
             statements: Vec::new(),
         }
     }
+
+    pub fn util_insert_struct_type(
+        &mut self,
+        name: &str,
+        fields: Vec<(&str, ResolvedType)>,
+    ) -> Result<ResolvedStructTypeRef, SemanticError> {
+        let mut seq_map = SeqMap::new();
+        for (name, resolved_type) in fields {
+            seq_map.insert(IdentifierName(name.to_string()), resolved_type)?;
+        }
+
+        let resolved_definition = ResolvedStructType {
+            number: 0,
+            module_path: self.module_path.clone(),
+            fields: seq_map,
+            name: LocalTypeIdentifier {
+                node: Node {
+                    span: Span {
+                        start: Position {
+                            offset: 0,
+                            line: 0,
+                            column: 0,
+                        },
+                        end: Position {
+                            offset: 0,
+                            line: 0,
+                            column: 0,
+                        },
+                    },
+                },
+                text: name.to_string(),
+            },
+            ast_struct: StructType {
+                identifier: LocalTypeIdentifier {
+                    node: Node {
+                        span: Span {
+                            start: Position {
+                                offset: 0,
+                                line: 0,
+                                column: 0,
+                            },
+                            end: Position {
+                                offset: 0,
+                                line: 0,
+                                column: 0,
+                            },
+                        },
+                    },
+                    text: name.to_string(),
+                },
+                fields: SeqMap::default(),
+            },
+            functions: SeqMap::default(),
+        };
+
+        self.namespace.add_struct_type(resolved_definition)
+    }
 }
-
-/*
-#[derive(Debug)]
-pub struct ResolvedFunctionData {
-    pub signature: ResolvedFunctionSignature,
-    pub statements: Vec<ResolvedStatement>,
-}
-
-pub type ResolvedFunctionDataRef = Rc<ResolvedFunctionData>;
-
- */
-/*
-pub struct ResolvedImplType {
-    pub items: Vec<ResolvedImplItem>,
-}
-
-pub enum ResolvedImplItem {
-    Member(ResolvedImplMember),
-    Function(ResolvedFunctionData),
-}
-
- */
 
 impl Default for ResolvedProgram {
     fn default() -> Self {
@@ -1272,16 +1308,14 @@ impl ResolvedProgram {
 
 #[derive(Debug)]
 pub enum ResolvedDefinition {
-    StructType(),
-    EnumType(),
+    StructType(ResolvedStructType),
+    EnumType(ResolvedEnumTypeRef, Vec<ResolvedEnumVariantType>),
     Function(),
     ExternalFunction(),
-    ImplType(),
-    FunctionDef(LocalIdentifier, ResolvedFunction),
-    ImplDef(
-        LocalTypeIdentifier,
-        SeqMap<IdentifierName, ResolvedFunction>,
-    ),
+    ImplType(ResolvedType, SeqMap<IdentifierName, ResolvedFunctionRef>),
+    FunctionDef(ResolvedFunction),
+    Alias(ResolvedType),
+    Comment(String),
 }
 
 #[derive(Debug)]

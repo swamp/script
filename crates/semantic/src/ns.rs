@@ -87,7 +87,7 @@ impl Into<LocalTypeName> for &str {
 pub enum SemanticError {
     CouldNotInsertStruct,
     SeqMapError(SeqMapError),
-    DuplicateTypeAlias(LocalTypeIdentifier),
+    DuplicateTypeAlias(String),
 }
 
 impl From<SeqMapError> for SemanticError {
@@ -104,24 +104,26 @@ impl ResolvedModuleNamespace {
 
     pub fn add_struct_type(
         &mut self,
-        name: &LocalTypeIdentifier,
         struct_type: ResolvedStructType,
     ) -> Result<ResolvedStructTypeRef, SemanticError> {
         let struct_ref = Rc::new(RefCell::new(struct_type));
-        self.structs
-            .insert((&name.text).into(), struct_ref.clone())?;
+        self.structs.insert(
+            LocalTypeName(struct_ref.borrow().name.text.clone()),
+            struct_ref.clone(),
+        )?;
 
         Ok(struct_ref)
     }
 
     pub fn add_type_alias(
         &mut self,
-        name: LocalTypeIdentifier,
+        name: &str,
         resolved_type: ResolvedType,
     ) -> Result<(), SemanticError> {
+        let name_str = name.to_string();
         self.type_aliases
-            .insert(LocalTypeName(name.text.clone()), resolved_type)
-            .map_err(|_| SemanticError::DuplicateTypeAlias(name))?;
+            .insert(LocalTypeName(name_str.clone()), resolved_type)
+            .map_err(|_| SemanticError::DuplicateTypeAlias(name_str))?;
         Ok(())
     }
 
@@ -131,13 +133,20 @@ impl ResolvedModuleNamespace {
 
     pub fn add_internal_function(
         &mut self,
-        name: String,
         function_definition: ResolvedInternalFunctionDefinition,
     ) -> Result<ResolvedInternalFunctionDefinitionRef, SemanticError> {
         let function_ref = Rc::new(function_definition);
-        self.internal_functions
-            .insert(name.clone(), function_ref.clone())?;
+        self.add_internal_function_ref(&function_ref)?;
         Ok(function_ref)
+    }
+
+    pub fn add_internal_function_ref(
+        &mut self,
+        function_ref: &ResolvedInternalFunctionDefinitionRef,
+    ) -> Result<(), SemanticError> {
+        self.internal_functions
+            .insert(function_ref.name.text.clone(), function_ref.clone())?;
+        Ok(())
     }
 
     pub fn add_external_function_declaration(
@@ -148,6 +157,15 @@ impl ResolvedModuleNamespace {
         let function_ref = Rc::new(function_declaration);
         self.external_function_declarations
             .insert(name.clone(), function_ref.clone())?;
+        Ok(function_ref)
+    }
+
+    pub fn add_external_function_declaration_ref(
+        &mut self,
+        function_ref: ResolvedExternalFunctionDefinitionRef,
+    ) -> Result<ResolvedExternalFunctionDefinitionRef, SemanticError> {
+        self.external_function_declarations
+            .insert(function_ref.name.text.clone(), function_ref.clone())?;
         Ok(function_ref)
     }
 
