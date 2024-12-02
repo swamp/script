@@ -148,7 +148,7 @@ fn resolve_swamp_file(path: &Path) -> Result<PathBuf, String> {
 fn register_print(interpreter: &mut Interpreter, output: Rc<RefCell<Vec<String>>>) {
     interpreter
         .register_external_function(
-            "print".to_string(),
+            "print",
             1, /* TODO: HARD CODED */
             move |args: &[Value]| {
                 if let Some(value) = args.first() {

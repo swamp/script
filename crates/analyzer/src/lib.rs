@@ -151,12 +151,13 @@ pub enum ResolveError {
     VariableIsNotMutable(Variable),
     ArgumentIsNotMutable,
     WrongNumberOfTupleDeconstructVariables,
-    UnknownTypeReference(LocalTypeIdentifier),
+    UnknownTypeReference(QualifiedTypeIdentifier),
     SemanticError(SemanticError),
     SeqMapError(SeqMapError),
     ExpectedMemberCall(Expression),
     CouldNotFindStaticMember(LocalIdentifier, LocalTypeIdentifier),
     TypeAliasNotAStruct(QualifiedTypeIdentifier),
+    ModuleNotUnique,
 }
 
 impl From<SemanticError> for ResolveError {
@@ -286,7 +287,9 @@ impl<'a> Resolver<'a> {
         } else if let Some(found) = namespace.get_enum(type_ident) {
             ResolvedType::Enum(found.clone())
         } else {
-            Err(ResolveError::UnknownTypeReference(type_ident.clone()))?
+            Err(ResolveError::UnknownTypeReference(
+                type_name_to_find.clone(),
+            ))?
         };
 
         Ok(resolved_type)
@@ -551,7 +554,7 @@ impl<'a> Resolver<'a> {
             Function::External(signature) => {
                 let parameters = self.resolve_parameters(&signature.params)?;
                 let return_type = self.resolve_type(&signature.return_type)?;
-                self.parent.external_function_number += 1;
+                let external_function_id = self.parent.allocate_external_function_id();
 
                 let external = ResolvedExternalFunctionDefinition {
                     signature: ResolvedFunctionSignature {
@@ -559,7 +562,7 @@ impl<'a> Resolver<'a> {
                         return_type,
                     },
                     name: identifier.clone(),
-                    id: self.parent.external_function_number,
+                    id: external_function_id,
                 };
 
                 ResolvedFunction::External(Rc::new(external))
@@ -1588,7 +1591,7 @@ impl<'a> Resolver<'a> {
                                 .get_external_function_declaration(&variable.name)
                                 .map_or_else(
                                     || {
-                                        error!("unknown");
+                                        error!("unknown external function {}", variable.name);
                                         Err(ResolveError::UnknownVariable(variable.clone()))
                                     },
                                     |external_function_ref| {

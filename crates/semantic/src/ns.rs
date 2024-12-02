@@ -3,17 +3,21 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use crate::{
-    comma_seq_nl, Hash, ResolvedEnumType, ResolvedEnumTypeRef, ResolvedEnumVariantType,
-    ResolvedEnumVariantTypeRef, ResolvedExternalFunctionDefinition,
-    ResolvedExternalFunctionDefinitionRef, ResolvedInternalFunctionDefinition,
-    ResolvedInternalFunctionDefinitionRef, ResolvedStructType, ResolvedStructTypeRef,
-    ResolvedTupleType, ResolvedTupleTypeRef, ResolvedType, TypeNumber,
+    comma_seq_nl, ExternalFunctionId, Hash, ResolvedEnumType, ResolvedEnumTypeRef,
+    ResolvedEnumVariantType, ResolvedEnumVariantTypeRef, ResolvedExternalFunctionDefinition,
+    ResolvedExternalFunctionDefinitionRef, ResolvedFunction, ResolvedFunctionSignature,
+    ResolvedInternalFunctionDefinition, ResolvedInternalFunctionDefinitionRef, ResolvedParameter,
+    ResolvedStructType, ResolvedStructTypeRef, ResolvedTupleType, ResolvedTupleTypeRef,
+    ResolvedType, TypeNumber,
 };
 use seq_map::{SeqMap, SeqMapError};
 use std::cell::RefCell;
 use std::fmt::{Debug, Display};
 use std::rc::Rc;
-use swamp_script_ast::LocalTypeIdentifier;
+use swamp_script_ast::{
+    IdentifierName, LocalIdentifier, LocalTypeIdentifier, ModulePath, Node, Position, Span,
+    StructType,
+};
 use tracing::info;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -25,7 +29,7 @@ impl Display for LocalTypeName {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct ResolvedModuleNamespace {
     pub all_owned_types: SeqMap<LocalTypeIdentifier, ResolvedType>,
 
@@ -40,12 +44,149 @@ pub struct ResolvedModuleNamespace {
     pub type_aliases: SeqMap<LocalTypeName, ResolvedType>,
 
     type_number: TypeNumber,
+
+    pub path: ModulePath,
 }
 
 impl ResolvedModuleNamespace {
     pub fn allocate_number(&mut self) -> TypeNumber {
         self.type_number += 1;
         self.type_number
+    }
+
+    pub fn util_insert_struct_type(
+        &mut self,
+        name: &str,
+        fields: &[(&str, ResolvedType)],
+    ) -> Result<ResolvedStructTypeRef, SemanticError> {
+        let mut seq_map = SeqMap::new();
+        for (name, resolved_type) in fields {
+            seq_map.insert(IdentifierName(name.to_string()), resolved_type.clone())?;
+        }
+
+        let resolved_definition = ResolvedStructType {
+            number: 0,
+            module_path: self.path.clone(),
+            fields: seq_map.clone(),
+            name: LocalTypeIdentifier {
+                node: Node {
+                    span: Span {
+                        start: Position {
+                            offset: 0,
+                            line: 0,
+                            column: 0,
+                        },
+                        end: Position {
+                            offset: 0,
+                            line: 0,
+                            column: 0,
+                        },
+                    },
+                },
+                text: name.to_string(),
+            },
+            ast_struct: StructType {
+                identifier: LocalTypeIdentifier {
+                    node: Node {
+                        span: Span {
+                            start: Position {
+                                offset: 0,
+                                line: 0,
+                                column: 0,
+                            },
+                            end: Position {
+                                offset: 0,
+                                line: 0,
+                                column: 0,
+                            },
+                        },
+                    },
+                    text: name.to_string(),
+                },
+                fields: SeqMap::default(),
+            },
+            functions: SeqMap::default(),
+        };
+
+        self.add_struct_type(resolved_definition)
+    }
+
+    pub fn util_create_external_function(
+        &mut self,
+        name: &str,
+        unique_id: ExternalFunctionId,
+        parameters: &[ResolvedParameter],
+        return_type: ResolvedType,
+    ) -> Result<ResolvedExternalFunctionDefinitionRef, SemanticError> {
+        let ext = ResolvedExternalFunctionDefinition {
+            name: LocalIdentifier {
+                node: Node {
+                    span: Span {
+                        start: Position {
+                            offset: 0,
+                            line: 0,
+                            column: 0,
+                        },
+                        end: Position {
+                            offset: 0,
+                            line: 0,
+                            column: 0,
+                        },
+                    },
+                },
+                text: name.to_string(),
+            },
+            signature: ResolvedFunctionSignature {
+                parameters: parameters.to_vec(),
+                return_type,
+            },
+            id: unique_id,
+        };
+        let ext_ref = Rc::new(ext);
+
+        Ok(ext_ref)
+    }
+
+    pub fn util_add_external_function(
+        &mut self,
+        name: &str,
+        unique_id: ExternalFunctionId,
+        parameters: &[ResolvedParameter],
+        return_type: ResolvedType,
+    ) -> Result<(), SemanticError> {
+        let fn_ref =
+            self.util_create_external_function(name, unique_id, parameters, return_type)?;
+
+        self.add_external_function_declaration_ref(fn_ref)?;
+
+        Ok(())
+    }
+
+    pub fn util_add_member_external_function(
+        &mut self,
+        resolved_type: &ResolvedType,
+        name: &str,
+        unique_id: ExternalFunctionId,
+        parameters: &[ResolvedParameter],
+        return_type: ResolvedType,
+    ) -> Result<ResolvedExternalFunctionDefinitionRef, SemanticError> {
+        let ext_ref =
+            self.util_create_external_function(name, unique_id, parameters, return_type)?;
+
+        let function = ResolvedFunction::External(ext_ref.clone());
+        let function_ref = Rc::new(function);
+        match resolved_type {
+            ResolvedType::Struct(struct_type_ref) => {
+                struct_type_ref
+                    .borrow_mut()
+                    .functions
+                    .insert(IdentifierName(name.to_string()), function_ref.clone())?;
+            }
+            _ => return Err(SemanticError::CanOnlyUseStructForMemberFunctions),
+        }
+        self.add_external_function_declaration_ref(ext_ref.clone())?;
+
+        Ok(ext_ref)
     }
 }
 
@@ -88,6 +229,7 @@ pub enum SemanticError {
     CouldNotInsertStruct,
     SeqMapError(SeqMapError),
     DuplicateTypeAlias(String),
+    CanOnlyUseStructForMemberFunctions,
 }
 
 impl From<SeqMapError> for SemanticError {
@@ -98,8 +240,19 @@ impl From<SeqMapError> for SemanticError {
 
 impl ResolvedModuleNamespace {
     #[must_use]
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(path: ModulePath) -> Self {
+        Self {
+            all_owned_types: Default::default(),
+            structs: Default::default(),
+            enum_types: Default::default(),
+            enum_variant_types: Default::default(),
+            tuples: vec![],
+            internal_functions: Default::default(),
+            external_function_declarations: Default::default(),
+            type_aliases: Default::default(),
+            type_number: 0,
+            path,
+        }
     }
 
     pub fn add_struct_type(

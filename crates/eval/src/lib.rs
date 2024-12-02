@@ -188,12 +188,12 @@ impl Interpreter {
 
     pub fn register_external_function(
         &mut self,
-        name: String,
+        name: &str,
         function_id: ExternalFunctionId,
         handler: impl FnMut(&[Value]) -> Result<Value, ExecuteError> + 'static,
     ) -> Result<(), String> {
         let external_func = EvalExternalFunction {
-            name: name.clone(),
+            name: name.to_string().clone(),
             func: Box::new(handler),
             id: function_id,
         };
@@ -202,7 +202,8 @@ impl Interpreter {
 
         self.external_functions_by_id
             .insert(function_id, external_func_ref.clone());
-        self.external_functions.insert(name, external_func_ref);
+        self.external_functions
+            .insert(name.to_string(), external_func_ref);
 
         Ok(())
     }
@@ -712,23 +713,20 @@ impl Interpreter {
 
                 trace!("{} > member call {:?}", self.tabs(), member_value);
 
-                self.push_function_scope(format!("member_call {member_value}"));
+                let parameters = match &*resolved_member_call.function {
+                    ResolvedFunction::Internal(function_data) => {
+                        &function_data.signature.parameters
+                    }
+                    ResolvedFunction::External(external_data) => {
+                        &external_data.signature.parameters
+                    }
+                };
 
                 let mut member_call_arguments = Vec::new();
-                member_call_arguments.push(member_value); // Add self as first argument
+                member_call_arguments.push(member_value.clone()); // Add self as first argument
                 for arg in &resolved_member_call.arguments {
                     member_call_arguments.push(self.evaluate_expression(arg)?);
                 }
-
-                let (parameters, statements) = match &*resolved_member_call.function {
-                    ResolvedFunction::Internal(function_data) => (
-                        &function_data.signature.parameters,
-                        Some(&function_data.statements),
-                    ),
-                    ResolvedFunction::External(external_data) => {
-                        (&external_data.signature.parameters, None)
-                    }
-                };
 
                 // Check total number of parameters (including self)
                 if member_call_arguments.len() != parameters.len() {
@@ -739,23 +737,31 @@ impl Interpreter {
                     )));
                 }
 
-                self.bind_parameters(parameters, &member_call_arguments)?;
+                match &*resolved_member_call.function {
+                    ResolvedFunction::Internal(internal_function) => {
+                        self.push_function_scope(format!("member_call {member_value}"));
+                        self.bind_parameters(parameters, &member_call_arguments)?;
+                        let result = self.execute_statements(&internal_function.statements)?;
+                        self.pop_function_scope(format!("member_call {resolved_member_call}"));
 
-                let result = if let Some(body) = statements {
-                    self.execute_statements(body)?
-                } else {
-                    // Handle external function call
-                    todo!("External member functions not yet implemented")
-                };
-
-                self.pop_function_scope(format!("member_call {resolved_member_call}"));
-
-                match result {
-                    ValueWithSignal::Value(v) => v,
-                    ValueWithSignal::Return(v) => v,
-                    ValueWithSignal::Break => Err("break not allowed in member calls".to_string())?,
-                    ValueWithSignal::Continue => {
-                        Err("continue not allowed in member calls".to_string())?
+                        match result {
+                            ValueWithSignal::Value(v) => v,
+                            ValueWithSignal::Return(v) => v,
+                            ValueWithSignal::Break => {
+                                Err("break not allowed in member calls".to_string())?
+                            }
+                            ValueWithSignal::Continue => {
+                                Err("continue not allowed in member calls".to_string())?
+                            }
+                        }
+                    }
+                    ResolvedFunction::External(external_func) => {
+                        let mut func = self
+                            .external_functions_by_id
+                            .get_mut(&external_func.id)
+                            .expect("external function missing")
+                            .borrow_mut();
+                        (func.func)(&member_call_arguments)?
                     }
                 }
             }

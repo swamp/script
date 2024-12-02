@@ -19,7 +19,6 @@ pub use swamp_script_ast::{
     LocalIdentifier, LocalTypeIdentifier, MatchArm, ModulePath, Parameter, PrecisionType,
     StringConst, StructType, UnaryOperator, Variable,
 };
-use swamp_script_ast::{Node, Position, Span};
 
 #[derive(Debug, Clone)]
 pub struct ResolvedParameter {
@@ -1218,68 +1217,11 @@ impl Display for ResolvedModule {
 impl ResolvedModule {
     pub fn new(module_path: ModulePath) -> Self {
         Self {
-            module_path,
+            module_path: module_path.clone(),
             definitions: Vec::new(),
-            namespace: ResolvedModuleNamespace::new(),
+            namespace: ResolvedModuleNamespace::new(module_path),
             statements: Vec::new(),
         }
-    }
-
-    pub fn util_insert_struct_type(
-        &mut self,
-        name: &str,
-        fields: Vec<(&str, ResolvedType)>,
-    ) -> Result<ResolvedStructTypeRef, SemanticError> {
-        let mut seq_map = SeqMap::new();
-        for (name, resolved_type) in fields {
-            seq_map.insert(IdentifierName(name.to_string()), resolved_type)?;
-        }
-
-        let resolved_definition = ResolvedStructType {
-            number: 0,
-            module_path: self.module_path.clone(),
-            fields: seq_map,
-            name: LocalTypeIdentifier {
-                node: Node {
-                    span: Span {
-                        start: Position {
-                            offset: 0,
-                            line: 0,
-                            column: 0,
-                        },
-                        end: Position {
-                            offset: 0,
-                            line: 0,
-                            column: 0,
-                        },
-                    },
-                },
-                text: name.to_string(),
-            },
-            ast_struct: StructType {
-                identifier: LocalTypeIdentifier {
-                    node: Node {
-                        span: Span {
-                            start: Position {
-                                offset: 0,
-                                line: 0,
-                                column: 0,
-                            },
-                            end: Position {
-                                offset: 0,
-                                line: 0,
-                                column: 0,
-                            },
-                        },
-                    },
-                    text: name.to_string(),
-                },
-                fields: SeqMap::default(),
-            },
-            functions: SeqMap::default(),
-        };
-
-        self.namespace.add_struct_type(resolved_definition)
     }
 }
 
@@ -1321,6 +1263,16 @@ pub enum ResolvedDefinition {
 #[derive(Debug)]
 pub struct ResolvedModules {
     pub modules: SeqMap<ModulePath, ResolvedModuleRef>,
+}
+
+impl ResolvedModules {
+    pub fn get_mut(&mut self, module_path: &ModulePath) -> Option<&mut ResolvedModuleRef> {
+        self.modules.get_mut(module_path)
+    }
+
+    pub fn contains_key(&self, module_path: ModulePath) -> bool {
+        self.modules.contains_key(&module_path)
+    }
 }
 
 impl Default for ResolvedModules {
@@ -1372,13 +1324,34 @@ pub struct ResolvedProgram {
     pub array_types: Vec<ResolvedArrayTypeRef>,
 
     pub number: TypeNumber,
-    pub external_function_number: ExternalFunctionId,
+    external_function_number: ExternalFunctionId,
 }
 
 impl ResolvedProgram {
     pub fn allocate_number(&mut self) -> TypeNumber {
         self.number += 1;
         self.number
+    }
+
+    pub fn unit_type(&self) -> ResolvedType {
+        ResolvedType::Unit(self.unit_type.clone())
+    }
+
+    pub fn int_type(&self) -> ResolvedType {
+        ResolvedType::Int(self.int_type.clone())
+    }
+
+    pub fn float_type(&self) -> ResolvedType {
+        ResolvedType::Float(self.float_type.clone())
+    }
+
+    pub fn string_type(&self) -> ResolvedType {
+        ResolvedType::String(self.string_type.clone())
+    }
+
+    pub fn allocate_external_function_id(&mut self) -> ExternalFunctionId {
+        self.external_function_number += 1;
+        self.external_function_number
     }
 }
 

@@ -1043,54 +1043,47 @@ impl AstParser {
         Ok(expr)
     }
 
+    fn parse_module_path(&self, pair: Pair<Rule>) -> Vec<String> {
+        pair.into_inner()
+            .filter_map(|segment| {
+                if segment.as_rule() == Rule::module_segment {
+                    segment
+                        .into_inner()
+                        .next()
+                        .map(|id| id.as_str().to_string())
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
     fn parse_qualified_type_identifier(
         &self,
         pair: Pair<Rule>,
     ) -> Result<QualifiedTypeIdentifier, Error<Rule>> {
-        match pair.as_rule() {
-            Rule::qualified_type_identifier => {
-                let mut inner = Self::get_inner_pairs(&pair);
-                let mut path = Vec::new();
+        let mut inner_pairs = pair.clone().into_inner();
 
-                // First element could be either qualified_prefix or type_identifier
-                let first = inner.next().unwrap();
+        let first = inner_pairs
+            .next()
+            .ok_or_else(|| self.create_error("Expected identifier", pair.as_span()))?;
 
-                if first.as_rule() == Rule::qualified_prefix {
-                    // Handle prefix
-                    for part in Self::get_inner_pairs(&first) {
-                        if part.as_rule() == Rule::identifier {
-                            path.push((&*part.as_str().to_string()).into());
-                        }
-                    }
-                    // Get the type identifier after the prefix
-                    let type_id = Self::expect_next(&mut inner, Rule::type_identifier)?;
-                    Ok(QualifiedTypeIdentifier::new(
-                        LocalTypeIdentifier::new(convert_from_pair(&type_id), type_id.as_str()),
-                        path,
-                    ))
-                } else if first.as_rule() == Rule::type_identifier {
-                    // No prefix, just a type identifier
-                    Ok(QualifiedTypeIdentifier::new(
-                        LocalTypeIdentifier::new(convert_from_pair(&first), first.as_str()),
-                        [].to_vec(),
-                    ))
-                } else {
-                    Err(self.create_error(
-                        &format!(
-                            "Expected qualified prefix or type identifier, got {:?}",
-                            first.as_rule()
-                        ),
-                        first.as_span(),
-                    ))
-                }
+        match first.as_rule() {
+            Rule::module_path => {
+                let module_path = self.parse_module_path(first);
+                let type_id = inner_pairs.next().ok_or_else(|| {
+                    self.create_error("Expected type identifier after module path", pair.as_span())
+                })?;
+                Ok(QualifiedTypeIdentifier::new(
+                    LocalTypeIdentifier::new(convert_from_pair(&type_id), type_id.as_str()),
+                    module_path,
+                ))
             }
-            _ => Err(self.create_error(
-                &format!(
-                    "Expected qualified type identifier, got {:?}",
-                    pair.as_rule()
-                ),
-                pair.as_span(),
+            Rule::type_identifier => Ok(QualifiedTypeIdentifier::new(
+                LocalTypeIdentifier::new(convert_from_pair(&first), first.as_str()),
+                Vec::new(),
             )),
+            _ => Err(self.create_error("Expected type identifier", pair.as_span())),
         }
     }
 
@@ -1502,6 +1495,32 @@ impl AstParser {
         ))
     }
 
+    /*
+    fn parse_qualified_identifier(
+        &self,
+        pair: Pair<Rule>,
+    ) -> Result<QualifiedTypeIdentifier, Error<Rule>> {
+        let mut inner_pairs = pair.clone().into_inner();
+
+        // Get module path if it exists
+        let module_path = inner_pairs
+            .next()
+            .filter(|p| p.as_rule() == Rule::module_path)
+            .map(|p| self.parse_module_path(p))
+            .unwrap_or_default();
+
+        // Get the type identifier
+        if let Some(type_pair) = inner_pairs.next() {
+            let type_identifier =
+                LocalTypeIdentifier::new(convert_from_pair(&type_pair), type_pair.as_str());
+            return Ok(QualifiedTypeIdentifier::new(type_identifier, module_path));
+        }
+
+        Err(self.create_error("Expected type identifier", pair.as_span()))
+    }
+
+     */
+
     fn parse_type(&self, pair: Pair<Rule>) -> Result<Type, pest::error::Error<Rule>> {
         match pair.as_rule() {
             Rule::type_name => {
@@ -1514,10 +1533,8 @@ impl AstParser {
             }
             Rule::built_in_type => self.parse_type_from_str(&pair),
             Rule::qualified_type_identifier => {
-                Ok(Type::TypeReference(QualifiedTypeIdentifier::new(
-                    LocalTypeIdentifier::new(convert_from_pair(&pair), pair.as_str()),
-                    [].to_vec(),
-                )))
+                let qualified_identifier = self.parse_qualified_type_identifier(pair)?;
+                Ok(Type::TypeReference(qualified_identifier))
             }
             Rule::tuple_type => {
                 let mut types = Vec::new();

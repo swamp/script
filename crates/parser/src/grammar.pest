@@ -453,16 +453,12 @@ struct_fields = { (struct_field ~ ("," ~ " "* ~ struct_field)* ~ trailing_comma?
 struct_field = { identifier ~ ":" ~ expression }
 
 qualified_identifier = {
-    qualified_prefix? ~ identifier
+    module_path? ~ identifier
 }
 
-qualified_prefix = {
-    (identifier ~ "::")+
-}
-
-qualified_type_identifier = {
-    qualified_prefix? ~ type_identifier
-}
+qualified_type_identifier = { module_path? ~ type_identifier }
+module_path = { module_segment+ }
+module_segment = { identifier ~ "::" }
 
 struct_instantiation = {
     (qualified_type_identifier ~ "{" ~ struct_fields? ~ "}")
