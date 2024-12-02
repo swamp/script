@@ -42,7 +42,7 @@ impl Vector2 {
 type Position = (Float, Float)
 
 fn new_position(x: Float, y: Float) -> Position {
-    ( x, y )  // The return type annotation will preserve the alias
+    ( x, y )
 }
 
 
@@ -101,7 +101,7 @@ player = Player {
 print('player:{player}')
 
 position = new_position(10.0, 20.0)
-print('this should be a position: {position}')
+print('position type alias: {position}')
 
 
 // Pattern matching with multiple patterns

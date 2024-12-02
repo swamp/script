@@ -667,13 +667,13 @@ impl<'a> Resolver<'a> {
 
         let resolved_let = match ast_pattern {
             Pattern::VariableAssignment(variable) => self.assign_variable(&variable, expr)?,
-            Pattern::Tuple(_) => todo!(),         // TODO: PBJ
-            Pattern::Struct(_) => todo!(),        // TODO: PBJ
-            Pattern::Literal(_) => todo!(),       // TODO: PBJ
-            Pattern::EnumTuple(_, _) => todo!(),  // TODO: PBJ
-            Pattern::EnumStruct(_, _) => todo!(), // TODO: PBJ
-            Pattern::EnumSimple(_) => todo!(),    // TODO: PBJ
-            Pattern::Wildcard => todo!(),         // TODO: PBJ
+            Pattern::Tuple(_variables) => todo!(), // TODO: PBJ
+            Pattern::Struct(_) => todo!(),         // TODO: PBJ
+            Pattern::Literal(_) => todo!(),        // TODO: PBJ
+            Pattern::EnumTuple(_, _) => todo!(),   // TODO: PBJ
+            Pattern::EnumStruct(_, _) => todo!(),  // TODO: PBJ
+            Pattern::EnumSimple(_) => todo!(),     // TODO: PBJ
+            Pattern::Wildcard => todo!(),          // TODO: PBJ
         };
 
         Ok(resolved_let)
