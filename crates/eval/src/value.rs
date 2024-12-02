@@ -3,11 +3,13 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use crate::{EvalExternalFunctionRef, ValueWithSignal};
+use core::any::Any;
 use fixed32::Fp;
 use seq_fmt::{comma, comma_tuple};
 use std::cell::RefCell;
 use std::fmt::Debug;
 use std::rc::Rc;
+use swamp_script_semantic::ns::{ResolvedModuleNamespace, SemanticError};
 use swamp_script_semantic::{
     FormatSpecifier, PrecisionType, ResolvedArrayTypeRef, ResolvedEnumVariantStructTypeRef,
     ResolvedEnumVariantTupleTypeRef, ResolvedEnumVariantTypeRef,
@@ -59,6 +61,21 @@ impl SwampExport for i32 {
     }
 }
 
+pub trait RustType: Any + Debug {
+    fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
+}
+
+impl<T: Any + Debug> RustType for T {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Value {
     Int(i32),
@@ -83,6 +100,9 @@ pub enum Value {
     // Higher order
     InternalFunction(ResolvedInternalFunctionDefinitionRef),
     ExternalFunction(EvalExternalFunctionRef),
+
+    // Other
+    RustValue(Rc<RefCell<Box<dyn RustType>>>),
 }
 
 impl TryFrom<ValueWithSignal> for Value {
@@ -104,6 +124,53 @@ impl Value {
             Value::Bool(b) => Ok(*b),
             _ => Err("Expected boolean value".to_string()),
         }
+    }
+
+    pub fn downcast_rust<T: RustType + 'static>(&self) -> Option<Rc<RefCell<Box<T>>>> {
+        match self {
+            Value::RustValue(rc) => {
+                let type_matches = {
+                    let guard = rc.borrow();
+                    (**guard).as_any().is::<T>()
+                };
+
+                if type_matches {
+                    Some(unsafe { std::mem::transmute(rc.clone()) })
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
+    pub fn new_rust_value<T: RustType + 'static>(value: T) -> Self {
+        let boxed = Box::new(Box::new(value)) as Box<dyn RustType>;
+        Value::RustValue(Rc::new(RefCell::new(boxed)))
+    }
+
+    pub fn new_hidden_rust_struct<T: RustType + 'static>(
+        struct_type: ResolvedStructTypeRef,
+        value: T,
+        resolved_type: ResolvedType,
+    ) -> Self {
+        let rust_value = Self::new_rust_value(value);
+        Value::Struct(struct_type, vec![rust_value], resolved_type)
+    }
+
+    pub fn new_hidden_rust_type<T: RustType + 'static>(
+        name: &str,
+        value: T,
+        namespace: &mut ResolvedModuleNamespace,
+    ) -> Result<(Self, ResolvedStructTypeRef), SemanticError> {
+        let struct_type =
+            namespace.util_insert_struct_type(name, &[("hidden", ResolvedType::Any)])?;
+        let struct_value = Self::new_hidden_rust_struct(
+            struct_type.clone(),
+            value,
+            ResolvedType::Struct(struct_type.clone()),
+        );
+        Ok((struct_value, struct_type))
     }
 }
 
@@ -198,6 +265,7 @@ impl std::fmt::Display for Value {
                 )
             }
             Self::EnumVariantSimple(enum_type_ref) => write!(f, "{enum_type_ref}"),
+            Self::RustValue(rust_type) => write!(f, "engine type {rust_type:?}"),
         }
     }
 }

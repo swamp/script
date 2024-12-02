@@ -10,6 +10,7 @@ use fixed32::Fp;
 use seq_fmt::{comma, comma_tuple, fmt_nl};
 use seq_map::SeqMap;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
@@ -1189,8 +1190,6 @@ impl ImplType {
     }
 }
 
-pub type ResolvedModuleRef = Rc<ResolvedModule>;
-
 #[derive(Debug)]
 pub struct ResolvedModule {
     pub definitions: Vec<ResolvedDefinition>,
@@ -1225,29 +1224,6 @@ impl ResolvedModule {
     }
 }
 
-impl Default for ResolvedProgram {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl ResolvedProgram {
-    pub fn new() -> Self {
-        Self {
-            modules: ResolvedModules::new(),
-            int_type: Rc::new(ResolvedIntType {}),
-            float_type: Rc::new(ResolvedFloatType),
-            string_type: Rc::new(ResolvedStringType),
-            bool_type: Rc::new(ResolvedBoolType),
-            unit_type: Rc::new(ResolvedUnitType),
-            exclusive_range_type: Rc::new(ResolvedExclusiveRangeType),
-            array_types: Vec::new(),
-            number: 0,
-            external_function_number: 0,
-        }
-    }
-}
-
 #[derive(Debug)]
 pub enum ResolvedDefinition {
     StructType(ResolvedStructType),
@@ -1262,17 +1238,7 @@ pub enum ResolvedDefinition {
 
 #[derive(Debug)]
 pub struct ResolvedModules {
-    pub modules: SeqMap<ModulePath, ResolvedModuleRef>,
-}
-
-impl ResolvedModules {
-    pub fn get_mut(&mut self, module_path: &ModulePath) -> Option<&mut ResolvedModuleRef> {
-        self.modules.get_mut(module_path)
-    }
-
-    pub fn contains_key(&self, module_path: ModulePath) -> bool {
-        self.modules.contains_key(&module_path)
-    }
+    pub modules: HashMap<ModulePath, ResolvedModule>,
 }
 
 impl Default for ResolvedModules {
@@ -1284,20 +1250,29 @@ impl Default for ResolvedModules {
 impl ResolvedModules {
     pub fn new() -> Self {
         Self {
-            modules: SeqMap::new(),
+            modules: HashMap::new(),
         }
     }
 
     pub fn add_module(
         &mut self,
         module_path: ModulePath,
-        module: ResolvedModuleRef,
+        module: ResolvedModule,
     ) -> Result<(), SemanticError> {
-        Ok(self.modules.insert(module_path, module)?)
+        self.modules.insert(module_path, module);
+        Ok(())
     }
 
-    pub fn get(&self, module_path: &ModulePath) -> Option<&ResolvedModuleRef> {
+    pub fn get(&self, module_path: &ModulePath) -> Option<&ResolvedModule> {
         self.modules.get(module_path)
+    }
+
+    pub fn get_mut(&mut self, module_path: &ModulePath) -> Option<&mut ResolvedModule> {
+        self.modules.get_mut(module_path)
+    }
+
+    pub fn contains_key(&self, module_path: ModulePath) -> bool {
+        self.modules.contains_key(&module_path)
     }
 }
 
@@ -1310,27 +1285,27 @@ impl Display for ResolvedModules {
     }
 }
 
+// Immutable part
 #[derive(Debug)]
-pub struct ResolvedProgram {
-    pub modules: ResolvedModules,
+pub struct ResolvedProgramTypes {
     pub int_type: ResolvedIntTypeRef,
     pub float_type: ResolvedFloatTypeRef,
     pub string_type: ResolvedStringTypeRef,
     pub bool_type: ResolvedBoolTypeRef,
     pub unit_type: ResolvedUnitTypeRef,
-
     pub exclusive_range_type: ResolvedExclusiveRangeTypeRef,
-
-    pub array_types: Vec<ResolvedArrayTypeRef>,
-
-    pub number: TypeNumber,
-    external_function_number: ExternalFunctionId,
 }
 
-impl ResolvedProgram {
-    pub fn allocate_number(&mut self) -> TypeNumber {
-        self.number += 1;
-        self.number
+impl ResolvedProgramTypes {
+    pub fn new() -> Self {
+        Self {
+            int_type: Rc::new(ResolvedIntType {}),
+            float_type: Rc::new(ResolvedFloatType),
+            string_type: Rc::new(ResolvedStringType),
+            bool_type: Rc::new(ResolvedBoolType),
+            unit_type: Rc::new(ResolvedUnitType),
+            exclusive_range_type: Rc::new(ResolvedExclusiveRangeType),
+        }
     }
 
     pub fn unit_type(&self) -> ResolvedType {
@@ -1348,10 +1323,50 @@ impl ResolvedProgram {
     pub fn string_type(&self) -> ResolvedType {
         ResolvedType::String(self.string_type.clone())
     }
+}
+
+// Mutable part
+#[derive(Debug)]
+pub struct ResolvedProgramState {
+    pub array_types: Vec<ResolvedArrayTypeRef>,
+    pub number: TypeNumber,
+    pub external_function_number: ExternalFunctionId,
+}
+
+impl ResolvedProgramState {
+    pub fn new() -> Self {
+        Self {
+            array_types: Vec::new(),
+            number: 0,
+            external_function_number: 0,
+        }
+    }
+
+    pub fn allocate_number(&mut self) -> TypeNumber {
+        self.number += 1;
+        self.number
+    }
 
     pub fn allocate_external_function_id(&mut self) -> ExternalFunctionId {
         self.external_function_number += 1;
         self.external_function_number
+    }
+}
+
+#[derive(Debug)]
+pub struct ResolvedProgram {
+    pub types: ResolvedProgramTypes,
+    pub state: ResolvedProgramState,
+    pub modules: ResolvedModules,
+}
+
+impl ResolvedProgram {
+    pub fn new() -> Self {
+        Self {
+            types: ResolvedProgramTypes::new(),
+            state: ResolvedProgramState::new(),
+            modules: ResolvedModules::new(),
+        }
     }
 }
 

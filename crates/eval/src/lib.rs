@@ -306,7 +306,6 @@ impl Interpreter {
         for arg in args {
             match arg {
                 ResolvedExpression::MutRef(var_ref) => {
-                    // When we get a mut ref, return the reference directly
                     match self.lookup_var(
                         var_ref.variable_ref.scope_index,
                         var_ref.variable_ref.variable_index,
@@ -317,7 +316,6 @@ impl Interpreter {
                         }
                     }
                 }
-                // For all other expressions, evaluate normally
                 expr => {
                     let value = self.evaluate_expression(expr)?;
                     evaluated.push(value);
@@ -983,6 +981,7 @@ impl Interpreter {
                         Value::EnumVariantTuple(_, _) => todo!(),
                         Value::EnumVariantStruct(_, _) => todo!(),
                         Value::EnumVariantSimple(_) => todo!(),
+                        Value::RustValue(_) => todo!(),
                     }
 
                     continue;

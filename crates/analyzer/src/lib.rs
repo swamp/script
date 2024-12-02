@@ -11,6 +11,9 @@ use swamp_script_ast::prelude::*;
 use swamp_script_ast::Function;
 use swamp_script_semantic::ns::{LocalTypeName, ResolvedModuleNamespace, SemanticError};
 use swamp_script_semantic::prelude::*;
+use swamp_script_semantic::ResolvedModules;
+use swamp_script_semantic::ResolvedProgramState;
+use swamp_script_semantic::ResolvedProgramTypes;
 use swamp_script_semantic::{
     ResolvedDefinition, ResolvedEnumTypeRef, ResolvedFunction, ResolvedFunctionRef,
     ResolvedFunctionSignature, ResolvedStaticCall,
@@ -199,17 +202,26 @@ impl BlockScope {
 }
 
 pub struct Resolver<'a> {
-    pub parent: &'a mut ResolvedProgram,
+    pub types: &'a ResolvedProgramTypes,
+    pub state: &'a mut ResolvedProgramState,
+    pub modules: &'a ResolvedModules,
     pub current_module: &'a mut ResolvedModule,
     pub block_scope_stack: Vec<BlockScope>,
 }
 
 impl<'a> Resolver<'a> {
-    pub fn new(parent: &'a mut ResolvedProgram, current_module: &'a mut ResolvedModule) -> Self {
+    pub fn new(
+        types: &'a ResolvedProgramTypes,
+        state: &'a mut ResolvedProgramState,
+        modules: &'a ResolvedModules,
+        current_module: &'a mut ResolvedModule,
+    ) -> Self {
         let mut scope_stack = Vec::new();
         scope_stack.push(BlockScope::new());
         Self {
-            parent,
+            types,
+            state,
+            modules,
             current_module,
             block_scope_stack: scope_stack,
         }
@@ -229,7 +241,7 @@ impl<'a> Resolver<'a> {
 
         let rc_array = Rc::new(original_array_type);
 
-        self.parent.array_types.push(rc_array.clone());
+        self.state.array_types.push(rc_array.clone());
 
         Ok(rc_array)
     }
@@ -237,11 +249,11 @@ impl<'a> Resolver<'a> {
     pub fn resolve_type(&mut self, ast_type: &Type) -> Result<ResolvedType, ResolveError> {
         let resolved = match ast_type {
             Type::Any => ResolvedType::Any,
-            Type::Int => ResolvedType::Int(self.parent.int_type.clone()),
-            Type::Float => ResolvedType::Float(self.parent.float_type.clone()),
-            Type::String => ResolvedType::String(self.parent.string_type.clone()),
-            Type::Bool => ResolvedType::Bool(self.parent.bool_type.clone()),
-            Type::Unit => ResolvedType::Unit(self.parent.unit_type.clone()),
+            Type::Int => ResolvedType::Int(self.types.int_type.clone()),
+            Type::Float => ResolvedType::Float(self.types.float_type.clone()),
+            Type::String => ResolvedType::String(self.types.string_type.clone()),
+            Type::Bool => ResolvedType::Bool(self.types.bool_type.clone()),
+            Type::Unit => ResolvedType::Unit(self.types.unit_type.clone()),
             Type::Struct(ast_struct) => {
                 let (display_type, _struct_ref) = self.get_struct_types(ast_struct)?;
                 display_type
@@ -269,8 +281,8 @@ impl<'a> Resolver<'a> {
     }
 
     #[must_use]
-    pub fn find_module(&self, path: &ModulePath) -> Option<&ResolvedModuleRef> {
-        self.parent.modules.get(path)
+    pub fn find_module(&self, path: &ModulePath) -> Option<&ResolvedModule> {
+        self.modules.get(path)
     }
 
     fn find_type_reference(
@@ -322,7 +334,12 @@ impl<'a> Resolver<'a> {
     }
 
     fn new_resolver(&mut self) -> Resolver {
-        Resolver::new(self.parent, self.current_module)
+        Resolver::new(
+            &self.types,
+            &mut self.state,
+            &self.modules,
+            self.current_module,
+        )
     }
 
     pub fn resolve_struct_type_definition(
@@ -343,7 +360,7 @@ impl<'a> Resolver<'a> {
             ast_struct.identifier.clone(),
             resolved_fields,
             ast_struct.clone(),
-            self.parent.allocate_number(),
+            self.state.allocate_number(),
         );
         Ok(resolved_struct)
     }
@@ -365,7 +382,7 @@ impl<'a> Resolver<'a> {
     ) -> Result<(ResolvedEnumTypeRef, Vec<ResolvedEnumVariantType>), ResolveError> {
         let mut resolved_variants = Vec::new();
 
-        let parent_number = self.parent.allocate_number();
+        let parent_number = self.state.allocate_number();
 
         let parent_ref = self
             .current_module
@@ -382,7 +399,7 @@ impl<'a> Resolver<'a> {
                         vec.push(resolved_type)
                     }
 
-                    let number = self.parent.allocate_number();
+                    let number = self.state.allocate_number();
 
                     let common = CommonEnumVariantType {
                         number,
@@ -408,7 +425,7 @@ impl<'a> Resolver<'a> {
                             .map_err(|_| ResolveError::DuplicateFieldName(field.clone()))?;
                     }
 
-                    let number = self.parent.allocate_number();
+                    let number = self.state.allocate_number();
 
                     let common = CommonEnumVariantType {
                         number,
@@ -554,7 +571,7 @@ impl<'a> Resolver<'a> {
             Function::External(signature) => {
                 let parameters = self.resolve_parameters(&signature.params)?;
                 let return_type = self.resolve_type(&signature.return_type)?;
-                let external_function_id = self.parent.allocate_external_function_id();
+                let external_function_id = self.state.allocate_external_function_id();
 
                 let external = ResolvedExternalFunctionDefinition {
                     signature: ResolvedFunctionSignature {
@@ -871,7 +888,7 @@ impl<'a> Resolver<'a> {
                 ResolvedExpression::Block(statements)
             }
             Expression::InterpolatedString(string_parts) => ResolvedExpression::InterpolatedString(
-                self.parent.string_type.clone(),
+                self.types.string_type.clone(),
                 self.resolve_interpolated_string(string_parts)?,
             ),
 
@@ -885,7 +902,7 @@ impl<'a> Resolver<'a> {
                 let min_expression = self.resolve_expression(min_value)?;
                 let max_expression = self.resolve_expression(max_value)?;
                 ResolvedExpression::ExclusiveRange(
-                    self.parent.exclusive_range_type.clone(),
+                    self.types.exclusive_range_type.clone(),
                     Box::from(min_expression),
                     Box::from(max_expression),
                 )
@@ -894,18 +911,18 @@ impl<'a> Resolver<'a> {
             Expression::Literal(literal) => {
                 swamp_script_semantic::ResolvedExpression::Literal(match literal {
                     Literal::Int(value) => {
-                        ResolvedLiteral::IntLiteral(*value, self.parent.int_type.clone())
+                        ResolvedLiteral::IntLiteral(*value, self.types.int_type.clone())
                     }
                     Literal::Float(value) => {
-                        ResolvedLiteral::FloatLiteral(*value, self.parent.float_type.clone())
+                        ResolvedLiteral::FloatLiteral(*value, self.types.float_type.clone())
                     }
                     Literal::String(value) => ResolvedLiteral::StringLiteral(
                         value.clone(),
-                        self.parent.string_type.clone(),
+                        self.types.string_type.clone(),
                     ),
-                    Literal::Unit => ResolvedLiteral::UnitLiteral(self.parent.unit_type.clone()),
+                    Literal::Unit => ResolvedLiteral::UnitLiteral(self.types.unit_type.clone()),
                     Literal::Bool(value) => {
-                        ResolvedLiteral::BoolLiteral(*value, self.parent.bool_type.clone())
+                        ResolvedLiteral::BoolLiteral(*value, self.types.bool_type.clone())
                     }
 
                     Literal::EnumVariant(qualified_type_identifier, variant_name, data) => self
@@ -1960,17 +1977,15 @@ impl<'a> Resolver<'a> {
 
     fn resolve_pattern_literal(&self, ast_literal: &Literal) -> ResolvedPattern {
         let resolved_literal = match ast_literal {
-            Literal::Int(value) => {
-                ResolvedLiteral::IntLiteral(*value, self.parent.int_type.clone())
-            }
+            Literal::Int(value) => ResolvedLiteral::IntLiteral(*value, self.types.int_type.clone()),
             Literal::Float(value) => {
-                ResolvedLiteral::FloatLiteral(*value, self.parent.float_type.clone())
+                ResolvedLiteral::FloatLiteral(*value, self.types.float_type.clone())
             }
             Literal::String(value) => {
-                ResolvedLiteral::StringLiteral(value.clone(), self.parent.string_type.clone())
+                ResolvedLiteral::StringLiteral(value.clone(), self.types.string_type.clone())
             }
             Literal::Bool(value) => {
-                ResolvedLiteral::BoolLiteral(*value, self.parent.bool_type.clone())
+                ResolvedLiteral::BoolLiteral(*value, self.types.bool_type.clone())
             }
             Literal::EnumVariant(_, _, _) => todo!(), // TODO: PBJ
             Literal::Tuple(_) => todo!(),             // TODO: PBJ
