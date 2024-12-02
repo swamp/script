@@ -888,6 +888,18 @@ impl ResolvedStructType {
             .get_index(&IdentifierName(field_name.text.to_string()))
     }
 
+    pub fn get_internal_member(
+        &self,
+        name: IdentifierName,
+    ) -> Option<ResolvedInternalFunctionDefinitionRef> {
+        let found = self.functions.get(&name)?;
+
+        match &**found {
+            ResolvedFunction::Internal(ref function_ref) => Some(function_ref.clone()),
+            _ => None,
+        }
+    }
+
     pub fn name(&self) -> &LocalTypeIdentifier {
         &self.name
     }
@@ -1192,30 +1204,6 @@ impl ResolvedModule {
         }
     }
 }
-
-#[derive(Debug)]
-pub struct ResolvedImplMember {
-    pub ast_member: ImplMember,
-    pub parameters: Vec<ResolvedParameter>,
-    pub return_type: ResolvedType,
-    pub struct_ref: ResolvedStructTypeRef,
-    pub body: Vec<ResolvedStatement>,
-}
-
-impl Display for ResolvedImplMember {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "({:?}({}) -> {})",
-            //self.struct_ref.borrow().name,
-            self.ast_member,
-            comma(&self.parameters),
-            self.return_type
-        )
-    }
-}
-
-pub type ResolvedImplMemberRef = Rc<ResolvedImplMember>;
 
 /*
 #[derive(Debug)]

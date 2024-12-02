@@ -7,7 +7,7 @@ use std::fmt::Debug;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 pub use swamp_script_semantic::ns::ResolvedModuleNamespace;
 use swamp_script_semantic::prelude::*;
-use swamp_script_semantic::{ResolvedFunction, ResolvedImplMemberRef, ResolvedStaticCall};
+use swamp_script_semantic::{ResolvedFunction, ResolvedStaticCall};
 use tracing::{debug, error, info, trace};
 use value::format_value;
 
@@ -115,11 +115,11 @@ impl Interpreter {
 
     pub fn util_execute_member(
         &mut self,
-        impl_member: &ResolvedImplMemberRef,
+        impl_member: &ResolvedInternalFunctionDefinitionRef,
         arguments: &[Value],
     ) -> Result<Value, ExecuteError> {
-        self.bind_parameters(&impl_member.parameters, arguments)?;
-        let with_signal = self.execute_statements(&impl_member.body)?;
+        self.bind_parameters(&impl_member.signature.parameters, arguments)?;
+        let with_signal = self.execute_statements(&impl_member.statements)?;
         Ok(with_signal.try_into()?)
     }
 

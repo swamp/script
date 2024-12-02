@@ -10,7 +10,7 @@ pub use crate::{
     ResolvedEnumVariantStructType, ResolvedEnumVariantTupleFieldType, ResolvedEnumVariantTupleType,
     ResolvedEnumVariantType, ResolvedEnumVariantTypeRef, ResolvedExpression,
     ResolvedExternalFunctionCall, ResolvedExternalFunctionDefinition,
-    ResolvedExternalFunctionDefinitionRef, ResolvedImplMember, ResolvedIndexType,
+    ResolvedExternalFunctionDefinitionRef, ResolvedIndexType,
     ResolvedIndexTypeRef, ResolvedInternalFunctionCall, ResolvedInternalFunctionDefinition,
     ResolvedInternalFunctionDefinitionRef, ResolvedIterator, ResolvedLiteral, ResolvedMatch,
     ResolvedMatchArm, ResolvedMemberCall, ResolvedModule, ResolvedModuleRef, ResolvedMutArray,
