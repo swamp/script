@@ -5,7 +5,7 @@
 pub mod ns;
 pub mod prelude;
 
-use crate::ns::{ResolvedModuleNamespace, SemanticError};
+use crate::ns::{LocalTypeName, ResolvedModuleNamespace, SemanticError};
 use fixed32::Fp;
 use seq_fmt::{comma, comma_tuple, fmt_nl};
 use seq_map::SeqMap;
@@ -35,6 +35,12 @@ impl Display for ResolvedParameter {
 }
 
 #[derive(Debug, Clone)]
+pub struct ResolvedFunctionSignature {
+    pub parameters: Vec<ResolvedParameter>,
+    pub return_type: ResolvedType,
+}
+
+#[derive(Debug, Clone)]
 pub enum ResolvedType {
     // Primitives
     Int(ResolvedIntTypeRef),
@@ -55,7 +61,37 @@ pub enum ResolvedType {
 
     ExclusiveRange(ResolvedExclusiveRangeTypeRef),
 
+    Alias(LocalTypeName, Rc<ResolvedType>), // The alias name and the actual type
+
     Any,
+}
+
+impl ResolvedType {
+    pub fn display_name(&self) -> String {
+        match self {
+            Self::Alias(name, _) => name.0.clone(),
+            Self::Struct(struct_ref) => struct_ref.borrow().name.text.clone(),
+            Self::Int(_) => "Int".to_string(),
+            Self::Float(_) => "Float".to_string(),
+            Self::String(_) => "String".to_string(),
+            Self::Bool(_) => "Bool".to_string(),
+            Self::Unit(_) => "Unit".to_string(),
+            Self::Array(array_type) => {
+                format!("Array<{}>", array_type.item_type.display_name())
+            }
+            Self::Tuple(tuple_type) => format!(
+                "({})",
+                tuple_type
+                    .0
+                    .iter()
+                    .map(|t| t.display_name())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            Self::Enum(enum_type) => enum_type.name.text.clone(),
+            _ => "unsure".to_string(),
+        }
+    }
 }
 
 impl PartialEq for ResolvedType {
@@ -120,8 +156,7 @@ fn compare_struct_types(a: &ResolvedStructTypeRef, b: &ResolvedStructTypeRef) ->
 pub struct ResolvedInternalFunctionDefinition {
     pub statements: Vec<ResolvedStatement>,
     pub name: LocalIdentifier,
-    pub parameters: Vec<ResolvedParameter>,
-    pub resolved_return_type: ResolvedType,
+    pub signature: ResolvedFunctionSignature,
 }
 
 impl Display for ResolvedInternalFunctionDefinition {
@@ -130,8 +165,8 @@ impl Display for ResolvedInternalFunctionDefinition {
             f,
             "(fn_def {}({}) -> {})",
             self.name,
-            comma(&self.parameters),
-            self.resolved_return_type
+            comma(&self.signature.parameters),
+            self.signature.return_type
         )
     }
 }
@@ -143,8 +178,7 @@ pub type ExternalFunctionId = u32;
 #[derive(Debug)]
 pub struct ResolvedExternalFunctionDefinition {
     pub name: LocalIdentifier,
-    pub parameters: Vec<ResolvedParameter>,
-    pub resolved_return_type: ResolvedType,
+    pub signature: ResolvedFunctionSignature,
     pub id: ExternalFunctionId,
 }
 
@@ -154,8 +188,8 @@ impl Display for crate::ResolvedExternalFunctionDefinition {
             f,
             "(ext_fn_def {}({}) -> {})",
             self.name,
-            comma(&self.parameters),
-            self.resolved_return_type
+            comma(&self.signature.parameters),
+            self.signature.return_type
         )
     }
 }
@@ -184,6 +218,9 @@ impl Display for ResolvedType {
             }
             Self::FunctionExternal(function_def_ref) => {
                 write!(f, "{function_def_ref}")
+            }
+            Self::Alias(name, actual_type) => {
+                write!(f, "alias {name} {actual_type}")
             }
         }
     }
@@ -263,6 +300,12 @@ pub struct ResolvedInternalFunctionCall {
 }
 
 #[derive(Debug)]
+pub struct ResolvedStaticCall {
+    pub function: Rc<ResolvedFunction>,
+    pub arguments: Vec<ResolvedExpression>,
+}
+
+#[derive(Debug)]
 pub struct ResolvedExternalFunctionCall {
     //pub resolved_type: ResolvedType,
     pub arguments: Vec<ResolvedExpression>,
@@ -322,20 +365,19 @@ impl Display for ResolvedInternalFunctionCall {
 
 #[derive(Debug)]
 pub struct ResolvedMemberCall {
+    pub function: ResolvedFunctionRef,
     pub arguments: Vec<ResolvedExpression>,
-    pub struct_type_ref: ResolvedStructTypeRef,
-    pub impl_member: ResolvedImplMemberRef,
-
-    /*
-    MemberRef, LocalTypeIdentifier, Vec<ResolvedExpression>
-     */
     pub self_expression: Box<ResolvedExpression>,
+    pub struct_type_ref: ResolvedStructTypeRef,
     pub self_is_mutable: bool,
 }
-
 impl Display for ResolvedMemberCall {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "(< {} >.{}", self.self_expression, self.impl_member)?;
+        write!(
+            f,
+            "(< {} >.{:?}",
+            self.self_expression, self.struct_type_ref
+        )?;
 
         if !self.arguments.is_empty() {
             write!(f, " <- {}", comma(&self.arguments))?;
@@ -446,11 +488,15 @@ pub struct ResolvedMutTupleField {
 pub type ResolvedFunctionRef = Rc<ResolvedFunction>;
 
 #[derive(Debug)]
-pub struct ResolvedFunction {
-    #[allow(unused)]
-    pub ast: Expression,
+pub enum ResolvedFunction {
+    Internal(ResolvedInternalFunctionDefinitionRef),
+    External(ResolvedExternalFunctionDefinitionRef),
+}
 
-    pub function: ResolvedInternalFunctionDefinitionRef,
+impl Display for ResolvedFunction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "resolved func")
+    }
 }
 
 pub type MutMemberRef = Rc<MutMember>;
@@ -555,6 +601,7 @@ pub struct ResolvedIterator {
 pub struct ResolvedStructInstantiation {
     pub expressions_in_order: Vec<ResolvedExpression>,
     pub struct_type_ref: ResolvedStructTypeRef,
+    pub display_type_ref: ResolvedType,
 }
 
 #[derive(Debug)]
@@ -592,6 +639,7 @@ pub enum ResolvedExpression {
     // Calls
     FunctionInternalCall(ResolvedInternalFunctionCall), // ResolvedFunctionReference, Vec<ResolvedExpression>
     FunctionExternalCall(ResolvedExternalFunctionCall),
+    StaticCall(ResolvedStaticCall),
     MutMemberCall(MutMemberRef, Vec<ResolvedExpression>),
     MemberCall(ResolvedMemberCall),
 
@@ -653,41 +701,41 @@ impl Display for ResolvedLiteral {
 impl Display for ResolvedExpression {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ResolvedExpression::FieldAccess(field_lookup) => write!(f, "{}", field_lookup),
-            ResolvedExpression::VariableAccess(variable) => write!(f, "VarRead({})", variable),
-            ResolvedExpression::InternalFunctionAccess(internal_function_ref) => {
+            Self::FieldAccess(field_lookup) => write!(f, "{}", field_lookup),
+            Self::VariableAccess(variable) => write!(f, "VarRead({})", variable),
+            Self::InternalFunctionAccess(internal_function_ref) => {
                 write!(f, "{:?}", internal_function_ref)
             }
-            ResolvedExpression::ExternalFunctionAccess(external_function_ref) => {
+            Self::ExternalFunctionAccess(external_function_ref) => {
                 write!(f, "{:?}", external_function_ref)
             }
-            ResolvedExpression::MutRef(mut_var_ref) => write!(f, "MutRef({})", mut_var_ref),
-            ResolvedExpression::ArrayAccess(array_item_ref) => {
+            Self::MutRef(mut_var_ref) => write!(f, "MutRef({})", mut_var_ref),
+            Self::ArrayAccess(array_item_ref) => {
                 write!(f, "[{}]", array_item_ref.item_type)
             }
-            ResolvedExpression::VariableAssignment(var_assignment) => write!(
+            Self::VariableAssignment(var_assignment) => write!(
                 f,
                 "< {}={} >",
                 var_assignment.variable_ref, var_assignment.expression
             ),
-            ResolvedExpression::ArrayAssignment(_, _, _) => todo!(),
-            ResolvedExpression::StructFieldAssignment(_, _) => todo!(),
-            ResolvedExpression::TupleFieldAssignment(_, _) => todo!(),
-            ResolvedExpression::BinaryOp(binary_op) => write!(f, "{binary_op:?}"),
-            ResolvedExpression::UnaryOp(unary_op) => {
+            Self::ArrayAssignment(_, _, _) => todo!(),
+            Self::StructFieldAssignment(_, _) => todo!(),
+            Self::TupleFieldAssignment(_, _) => todo!(),
+            Self::BinaryOp(binary_op) => write!(f, "{binary_op:?}"),
+            Self::UnaryOp(unary_op) => {
                 write!(f, "{:?}", unary_op)
             }
-            ResolvedExpression::FunctionInternalCall(resolved_call) => {
+            Self::FunctionInternalCall(resolved_call) => {
                 write!(f, "{resolved_call}")
             }
-            ResolvedExpression::FunctionExternalCall(resolved_call) => write!(f, "{resolved_call}"),
-            ResolvedExpression::MutMemberCall(_, _) => todo!(),
-            ResolvedExpression::MemberCall(member_call) => write!(f, "{member_call}"),
-            ResolvedExpression::Block(statements) => write!(f, "{}", fmt_nl(statements)),
-            ResolvedExpression::InterpolatedString(_string_type, parts) => {
+            Self::FunctionExternalCall(resolved_call) => write!(f, "{resolved_call}"),
+            Self::MutMemberCall(_, _) => todo!(),
+            Self::MemberCall(member_call) => write!(f, "{member_call}"),
+            Self::Block(statements) => write!(f, "{}", fmt_nl(statements)),
+            Self::InterpolatedString(_string_type, parts) => {
                 write!(f, "'{}'", comma(parts))
             }
-            ResolvedExpression::StructInstantiation(struct_instantiation) => {
+            Self::StructInstantiation(struct_instantiation) => {
                 let borrowed = struct_instantiation.struct_type_ref.borrow();
                 let zipped: Vec<_> = borrowed
                     .fields
@@ -698,17 +746,17 @@ impl Display for ResolvedExpression {
                 write!(f, "{{ {} }}", comma_tuple(&zipped))?;
                 Ok(())
             }
-            ResolvedExpression::Array(array_instantiation) => {
+            Self::Array(array_instantiation) => {
                 write!(f, "[{:?}]", array_instantiation.expressions)
             }
-            ResolvedExpression::Tuple(_) => todo!(),
-            ResolvedExpression::ExclusiveRange(range_type, _, _) => {
+            Self::Tuple(_) => todo!(),
+            Self::ExclusiveRange(range_type, _, _) => {
                 write!(f, "[{range_type:?}]")
             }
-            ResolvedExpression::IfElse(_, _, _) => todo!(),
-            ResolvedExpression::Match(resolved_match) => write!(f, "{resolved_match}"),
-            ResolvedExpression::LetVar(_, _) => todo!(),
-            ResolvedExpression::Literal(resolved_literal) => match resolved_literal {
+            Self::IfElse(_, _, _) => todo!(),
+            Self::Match(resolved_match) => write!(f, "{resolved_match}"),
+            Self::LetVar(_, _) => todo!(),
+            Self::Literal(resolved_literal) => match resolved_literal {
                 ResolvedLiteral::FloatLiteral(value, _float_type) => {
                     write!(f, "FloatLit({value:?})")
                 }
@@ -729,6 +777,7 @@ impl Display for ResolvedExpression {
                 }
                 ResolvedLiteral::Array(_array_type, data) => write!(f, "Array({data:?})"),
             },
+            Self::StaticCall(_) => write!(f, "static call"),
         }
     }
 }
@@ -797,8 +846,7 @@ pub struct ResolvedStructType {
     pub fields: SeqMap<IdentifierName, ResolvedType>,
     pub name: LocalTypeIdentifier,
     pub ast_struct: StructType,
-    pub impl_members: SeqMap<IdentifierName, ResolvedImplMemberRef>,
-    pub impl_functions: SeqMap<IdentifierName, ResolvedFunctionDataRef>,
+    pub functions: SeqMap<IdentifierName, ResolvedFunctionRef>,
 }
 
 impl Debug for ResolvedStructType {
@@ -831,14 +879,25 @@ impl ResolvedStructType {
             ast_struct,
             fields,
             name,
-            impl_members: SeqMap::default(),
-            impl_functions: SeqMap::default(),
+            functions: SeqMap::default(),
         }
     }
 
     pub fn field_index(&self, field_name: &LocalIdentifier) -> Option<usize> {
         self.fields
             .get_index(&IdentifierName(field_name.text.to_string()))
+    }
+
+    pub fn get_internal_member(
+        &self,
+        name: IdentifierName,
+    ) -> Option<ResolvedInternalFunctionDefinitionRef> {
+        let found = self.functions.get(&name)?;
+
+        match &**found {
+            ResolvedFunction::Internal(ref function_ref) => Some(function_ref.clone()),
+            _ => None,
+        }
     }
 
     pub fn name(&self) -> &LocalTypeIdentifier {
@@ -1146,39 +1205,17 @@ impl ResolvedModule {
     }
 }
 
-#[derive(Debug)]
-pub struct ResolvedImplMember {
-    pub ast_member: ImplMember,
-    pub parameters: Vec<ResolvedParameter>,
-    pub return_type: ResolvedType,
-    pub struct_ref: ResolvedStructTypeRef,
-    pub body: Vec<ResolvedStatement>,
-}
-
-impl Display for ResolvedImplMember {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "({}({}) -> {})",
-            //self.struct_ref.borrow().name,
-            self.ast_member.name,
-            comma(&self.parameters),
-            self.return_type
-        )
-    }
-}
-
-pub type ResolvedImplMemberRef = Rc<ResolvedImplMember>;
-
+/*
 #[derive(Debug)]
 pub struct ResolvedFunctionData {
-    pub parameters: Vec<ResolvedParameter>,
-    pub return_type: ResolvedType,
+    pub signature: ResolvedFunctionSignature,
     pub statements: Vec<ResolvedStatement>,
 }
 
 pub type ResolvedFunctionDataRef = Rc<ResolvedFunctionData>;
 
+ */
+/*
 pub struct ResolvedImplType {
     pub items: Vec<ResolvedImplItem>,
 }
@@ -1187,6 +1224,8 @@ pub enum ResolvedImplItem {
     Member(ResolvedImplMember),
     Function(ResolvedFunctionData),
 }
+
+ */
 
 impl Default for ResolvedProgram {
     fn default() -> Self {
@@ -1218,6 +1257,11 @@ pub enum ResolvedDefinition {
     Function(),
     ExternalFunction(),
     ImplType(),
+    FunctionDef(LocalIdentifier, ResolvedFunction),
+    ImplDef(
+        LocalTypeIdentifier,
+        SeqMap<IdentifierName, ResolvedFunction>,
+    ),
 }
 
 #[derive(Debug)]

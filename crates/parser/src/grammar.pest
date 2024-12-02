@@ -1,20 +1,24 @@
-WHITESPACE = _{ " " | "\t" | NEWLINE | "//" ~ (!NEWLINE ~ ANY)* ~ NEWLINE }
+WHITESPACE = _{ space | block_comment | line_comment }
+
+space = _{ " " | "\t" | NEWLINE }
+line_comment = _{ "//" ~  (!NEWLINE ~ ANY)* ~ NEWLINE }
+block_comment = _{ "/*" ~ (!"*/" ~ ANY)* ~ "*/" }
 
 program = { SOI ~ statement* ~ EOI }
 
-// Doc comments must be on their own line. Not working yet, since // is consumed by WHITESPACE
-doc_comment = { "///" ~ (!NEWLINE ~ ANY)* ~ NEWLINE }
-
-
+doc_comment = @{ "///" ~ (!NEWLINE ~ ANY)* ~ NEWLINE }
+type_alias = { "type" ~ type_identifier ~ "=" ~ type_name }
 
 // Separate out definitions
 definition = {
-    import_stmt
+    doc_comment* ~
+    (import_stmt
     | struct_def
     | enum_def
     | function_def
     | impl_def
-    | doc_comment
+    | trait_def
+    | type_alias)
 }
 
 control_statement = {
@@ -34,29 +38,18 @@ statement = {
     | control_statement
 }
 
+trait_def = {
+    "trait" ~ type_identifier ~ "{" ~ impl_item* ~ "}"
+}
+
 
 impl_def = {
     "impl" ~ type_identifier ~ "{" ~ impl_item* ~ "}"
 }
 
 
-impl_item = {
-    member_def
-    | function_def  // Allow both methods and functions in impl blocks
-}
+impl_item = { normal_member_function | external_member_function }
 
-// member_def rule specifically for impl blocks
-member_def = {
-    "fn" ~
-    identifier ~
-    "(" ~
-    (self_parameter ~ ("," ~ parameter_list)? | parameter_list)? ~
-    ")" ~
-    return_type? ~
-    "{" ~
-    statement* ~
-    "}"
-}
 
 // Self parameter can be mut or not
 self_parameter = {
@@ -100,25 +93,52 @@ struct_variant = { type_identifier ~ "{" ~ struct_type_field ~ ("," ~ struct_typ
 field_definitions = { (field_def ~ ("," ~ field_def)*)? }
 
 
-
 // Single field definition
 field_def = { identifier ~ ":" ~ type_name }
 
+// Common function signature
+function_signature = {
+    "fn" ~ identifier ~ "(" ~ (parameter_list ~ ","?)? ~ ")" ~ return_type?
+}
 
-// Testing this way
-function_def = {
-    "fn" ~
-    identifier ~
-    "(" ~
-    (parameter_list ~ ","?)? ~  // Make parameter list more explicit
-    ")" ~
-    return_type? ~
-    stmt_block
+// Common member signature (includes self parameter)
+member_signature = {
+     "fn" ~ identifier ~ "(" ~ (self_parameter ~ ("," ~ parameter_list)? | parameter_list)? ~ ")" ~ return_type?
+}
+
+external_function = {
+    "external" ~ function_signature
+}
+
+normal_function = {
+    function_signature ~ stmt_block
 }
 
 
+// Member definitions in impl blocks
+member_def = {
+    external_member_function |
+    normal_member_function
+}
+
+
+external_member_function = {
+    "external" ~ member_signature
+}
+
+normal_member_function = {
+    member_signature ~ stmt_block
+}
+
+
+
+// Regular function definitions
+function_def = {
+    external_function |
+    normal_function
+}
+
 // Parameters
-parameters = { "(" ~ parameter_list? ~ ")" }
 parameter_list = { parameter ~ ("," ~ " "* ~ parameter)* }  // PEST BUG: need explicit spaces after comma
 
 parameter = { mut_keyword? ~ identifier ~ ":" ~ type_name }
@@ -189,11 +209,6 @@ addition = { multiplication ~ ((op_add | op_sub | range_op) ~ multiplication)* }
 // Multiplication and division (highest precedence for binary ops)
 multiplication = { prefix ~ ((op_mul | op_div | op_mod) ~ prefix)* }
 
-operator = { "+" | "-" | "*" | "/" } // TODO: these should be op_add, op_sub, op_mul, op_div ?
-
-// Unary operators (highest precedence)
-unary = { (op_neg | op_not)* ~ member_chain }
-
 // Prefix operators
 prefix = { prefix_op* ~ primary }
 prefix_op = { op_not | op_neg }
@@ -250,10 +265,14 @@ function_argument = {
     mut_keyword? ~ expression
 }
 
-// Function and method related
+// Function and member related
 function_call = {
     identifier ~ "(" ~ (function_argument ~ ("," ~ " "* ~ function_argument)*)? ~ ")" // PEST BUG: need to be explicit about spaces after ,
 }
+
+static_call = { type_identifier ~ "::" ~ identifier ~ "(" ~ (function_argument ~ ("," ~ " "* ~ function_argument)*)? ~ ")" }
+
+
 
 member_call = { identifier ~ "(" ~ argument_list? ~ ")" }
 member_access_or_call = {
@@ -263,23 +282,20 @@ member_access_or_call = {
 
 array_index = { "[" ~ expression ~ "]" }
 
-
-// Method chains. These are a bit tricky.
+// Member chains. These are a bit tricky.
 member_chain = {
     (array_literal | variable | function_call | struct_instantiation | literal | parenthesized) ~
     ("." ~ (member_access_or_call | array_index))+ ~  ("=" ~ expression)?  // Optional assignment part
 }
 
-
-
-// // Primary expressions with proper float handling
+// Primary expressions with proper float handling
 primary = {
     if_expr
     | match_expr
     | interpolated_string
     | member_chain
     | enum_literal
-    | float_lit ~ ("." ~ member_access_or_call)*  // Add explicit float handling, why is this needed?
+    | static_call
     | function_call
     | struct_instantiation
     | map_literal
@@ -290,13 +306,12 @@ primary = {
     | variable
 }
 
-
 identifier_pattern = { identifier }
-
 
 // If expression
 if_expr = { "if" ~ expression ~ block ~ "else" ~ block } // when used as an expression, the else part is mandatory
 
+// If statement has an optional `else`
 if_stmt = {
     "if" ~ expression ~ stmt_block ~
     ("else" ~ (if_stmt | stmt_block))?
@@ -314,9 +329,6 @@ match_arms = { match_arm ~ ("," ~ match_arm)* ~ ","? }
 match_arm = {
     match_pattern ~ "=>" ~ (match_block | expression)
 }
-
-
-binary_expr = { primary ~ (operator ~ primary)* }
 
 
 // MATCH PATTERNS ------------------------------------------------------------
@@ -383,7 +395,6 @@ type_name = {
 
 literal = { tuple_lit | float_lit | int_lit | string_lit | bool_lit | unit_lit }
 
-
 // Integer literal
 int_lit = @{ "-"? ~ ASCII_DIGIT+ }
 
@@ -429,6 +440,7 @@ enum_literal = { qualified_type_identifier ~ "::" ~ type_identifier ~ (struct_fi
 // Add tuple literal definition
 tuple_lit = { "(" ~ expression ~ ("," ~ " "* ~ expression)* ~ ")" }  // PEST BUG: need explicit spaces after comma
 
+// Similar to struct_fields
 struct_fields_lit = { "{" ~ struct_field ~ ("," ~ " "* ~ struct_field)* ~ ","? ~ "}" }  // PEST BUG: need explicit spaces after comma
 
 // Array and map literals
@@ -436,9 +448,9 @@ array_literal = { "[" ~ (expression ~ ("," ~ " "* ~ expression)*)? ~ "]" }  // P
 map_literal = { "map[" ~ type_name ~ ":" ~ type_name ~ "]" }
 
 // Struct related
+// Similar to struct_fields_lit
 struct_fields = { (struct_field ~ ("," ~ " "* ~ struct_field)* ~ trailing_comma? )? }  // PEST BUG: need explicit spaces after comma
 struct_field = { identifier ~ ":" ~ expression }
-
 
 qualified_identifier = {
     qualified_prefix? ~ identifier
@@ -451,8 +463,6 @@ qualified_prefix = {
 qualified_type_identifier = {
     qualified_prefix? ~ type_identifier
 }
-
-
 
 struct_instantiation = {
     (qualified_type_identifier ~ "{" ~ struct_fields? ~ "}")

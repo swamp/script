@@ -8,12 +8,12 @@ use seq_fmt::comma_tuple;
 use std::cell::RefCell;
 use std::fmt::Debug;
 use std::rc::Rc;
-use swamp_script_semantic::IdentifierName;
 use swamp_script_semantic::{
     FormatSpecifier, PrecisionType, ResolvedArrayTypeRef, ResolvedEnumVariantStructTypeRef,
     ResolvedEnumVariantTupleTypeRef, ResolvedEnumVariantTypeRef,
     ResolvedInternalFunctionDefinitionRef, ResolvedStructTypeRef, ResolvedTupleTypeRef,
 };
+use swamp_script_semantic::{IdentifierName, ResolvedType};
 
 pub trait SwampExport {
     fn generate_swamp_definition() -> String;
@@ -71,7 +71,7 @@ pub enum Value {
     // Containers
     Array(ResolvedArrayTypeRef, Vec<Value>),
     Tuple(ResolvedTupleTypeRef, Vec<Value>),
-    Struct(ResolvedStructTypeRef, Vec<Value>), // type of the struct, and the fields themselves in strict order
+    Struct(ResolvedStructTypeRef, Vec<Value>, ResolvedType), // type of the struct, and the fields themselves in strict order
 
     EnumVariantSimple(ResolvedEnumVariantTypeRef),
     EnumVariantTuple(ResolvedEnumVariantTupleTypeRef, Vec<Value>),
@@ -134,13 +134,9 @@ impl std::fmt::Display for Value {
                 }
                 write!(f, ")")
             }
-            Value::Struct(struct_type_ref, fields_in_strict_order) => {
-                let prefix = if struct_type_ref.borrow().name().text.is_empty() {
-                    "".to_string()
-                } else {
-                    struct_type_ref.borrow().name().text.to_string() + &*" ".to_string()
-                };
-                write!(f, "{}{{ ", prefix)?;
+            Value::Struct(struct_type_ref, fields_in_strict_order, display_type) => {
+                let struct_name = display_type.display_name();
+                write!(f, "{}{{ ", struct_name)?;
 
                 let fields = struct_type_ref
                     .borrow()
@@ -229,7 +225,7 @@ pub fn format_value(value: &Value, spec: &FormatSpecifier) -> Result<String, Str
         }
 
         // Debug format for complex types
-        (Value::Struct(_type_id, fields), FormatSpecifier::Debug) => Ok(format!("{:?}", fields)),
+        (Value::Struct(_type_id, fields, _), FormatSpecifier::Debug) => Ok(format!("{:?}", fields)),
         (Value::Array(_type_id, elements), FormatSpecifier::Debug) => Ok(format!("{:?}", elements)),
         (Value::EnumVariantTuple(_type_id, variant), FormatSpecifier::Debug) => {
             Ok(format!("{:?}", variant))

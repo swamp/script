@@ -211,6 +211,7 @@ fn compile_to_resolved_program(script: &str) -> Result<ResolvedProgram, CliError
             },
             param_type: Type::Any,
             is_mutable: false,
+            is_self: false,
         }],
         Type::Unit,
     );

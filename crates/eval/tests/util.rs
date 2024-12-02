@@ -15,7 +15,7 @@ use swamp_script_eval::value::Value;
 use swamp_script_eval::{ExecuteError, Interpreter};
 use swamp_script_eval_loader::resolve_program;
 use swamp_script_parser::Rule;
-use swamp_script_semantic::{ModulePath, ResolvedProgram};
+use swamp_script_semantic::{ExternalFunctionId, ModulePath, ResolvedProgram};
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -71,6 +71,7 @@ fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError>
             },
             param_type: Type::Any,
             is_mutable: false,
+            is_self: false,
         }],
         Type::Unit,
     );
@@ -96,7 +97,7 @@ fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError>
     // Run
     let mut interpreter = Interpreter::new();
     let output = Rc::new(RefCell::new(Vec::new()));
-    register_print(&mut interpreter, output.clone());
+    register_print(1, &mut interpreter, output.clone());
     let value = interpreter.eval_module(resolved_main_module)?;
 
     let strings = output.borrow().to_vec();
@@ -104,22 +105,22 @@ fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError>
     Ok((value, strings))
 }
 
-fn register_print(interpreter: &mut Interpreter, output: Rc<RefCell<Vec<String>>>) {
+fn register_print(
+    external_id: ExternalFunctionId,
+    interpreter: &mut Interpreter,
+    output: Rc<RefCell<Vec<String>>>,
+) {
     interpreter
-        .register_external_function(
-            "print".to_string(),
-            1, /* TODO: HARD CODED */
-            move |args: &[Value]| {
-                if let Some(value) = args.first() {
-                    let display_value = value.to_string();
-                    output.borrow_mut().push(display_value.clone());
-                    println!("{}", display_value);
-                    Ok(Value::Unit)
-                } else {
-                    Err("print requires at least one argument".to_string())?
-                }
-            },
-        )
+        .register_external_function("print".to_string(), external_id, move |args: &[Value]| {
+            if let Some(value) = args.first() {
+                let display_value = value.to_string();
+                output.borrow_mut().push(display_value.clone());
+                println!("{}", display_value);
+                Ok(Value::Unit)
+            } else {
+                Err("print requires at least one argument".to_string())?
+            }
+        })
         .expect("should work to register");
 }
 

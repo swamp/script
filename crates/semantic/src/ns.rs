@@ -37,6 +37,7 @@ pub struct ResolvedModuleNamespace {
 
     internal_functions: SeqMap<String, ResolvedInternalFunctionDefinitionRef>,
     external_function_declarations: SeqMap<String, ResolvedExternalFunctionDefinitionRef>,
+    pub type_aliases: SeqMap<LocalTypeName, ResolvedType>,
 
     type_number: TypeNumber,
 }
@@ -55,7 +56,7 @@ impl Display for ResolvedModuleNamespace {
             for (_struct_name, struct_type_ref) in &self.structs {
                 let struct_ref = struct_type_ref.borrow();
                 writeln!(f, "{}", struct_ref)?;
-                writeln!(f, "impl:\n{}", comma_seq_nl(&struct_ref.impl_members, ".."))?;
+                writeln!(f, "impl:\n{}", comma_seq_nl(&struct_ref.functions, ".."))?;
             }
         }
 
@@ -86,6 +87,7 @@ impl Into<LocalTypeName> for &str {
 pub enum SemanticError {
     CouldNotInsertStruct,
     SeqMapError(SeqMapError),
+    DuplicateTypeAlias(LocalTypeIdentifier),
 }
 
 impl From<SeqMapError> for SemanticError {
@@ -110,6 +112,21 @@ impl ResolvedModuleNamespace {
             .insert((&name.text).into(), struct_ref.clone())?;
 
         Ok(struct_ref)
+    }
+
+    pub fn add_type_alias(
+        &mut self,
+        name: LocalTypeIdentifier,
+        resolved_type: ResolvedType,
+    ) -> Result<(), SemanticError> {
+        self.type_aliases
+            .insert(LocalTypeName(name.text.clone()), resolved_type)
+            .map_err(|_| SemanticError::DuplicateTypeAlias(name))?;
+        Ok(())
+    }
+
+    pub fn get_type_alias(&self, name: &String) -> Option<&ResolvedType> {
+        self.type_aliases.get(&(name).into())
     }
 
     pub fn add_internal_function(

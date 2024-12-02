@@ -7,7 +7,7 @@ use std::fmt::Debug;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 pub use swamp_script_semantic::ns::ResolvedModuleNamespace;
 use swamp_script_semantic::prelude::*;
-use swamp_script_semantic::ResolvedImplMemberRef;
+use swamp_script_semantic::{ResolvedFunction, ResolvedStaticCall};
 use tracing::{debug, error, info, trace};
 use value::format_value;
 
@@ -108,18 +108,18 @@ impl Interpreter {
         func: &ResolvedInternalFunctionDefinitionRef,
         arguments: &[Value],
     ) -> Result<Value, ExecuteError> {
-        self.bind_parameters(&func.parameters, arguments)?;
+        self.bind_parameters(&func.signature.parameters, arguments)?;
         let with_signal = self.execute_statements(&func.statements)?;
         Ok(Value::try_from(with_signal)?)
     }
 
     pub fn util_execute_member(
         &mut self,
-        impl_member: &ResolvedImplMemberRef,
+        impl_member: &ResolvedInternalFunctionDefinitionRef,
         arguments: &[Value],
     ) -> Result<Value, ExecuteError> {
-        self.bind_parameters(&impl_member.parameters, arguments)?;
-        let with_signal = self.execute_statements(&impl_member.body)?;
+        self.bind_parameters(&impl_member.signature.parameters, arguments)?;
+        let with_signal = self.execute_statements(&impl_member.statements)?;
         Ok(with_signal.try_into()?)
     }
 
@@ -180,7 +180,7 @@ impl Interpreter {
                 }
             };
 
-            self.set_local_var(index, value, param.is_mutable)?;
+            self.set_local_var(index, value, param.is_mutable, &param.resolved_type)?;
         }
 
         Ok(())
@@ -205,6 +205,39 @@ impl Interpreter {
         self.external_functions.insert(name, external_func_ref);
 
         Ok(())
+    }
+
+    fn evaluate_static_function_call(
+        &mut self,
+        static_call: &ResolvedStaticCall,
+    ) -> Result<Value, ExecuteError> {
+        // First evaluate the arguments
+        let evaluated_args = self.evaluate_args(&static_call.arguments)?;
+
+        match &*static_call.function {
+            ResolvedFunction::Internal(function_data) => {
+                self.push_function_scope("static function call".to_string());
+                self.bind_parameters(&function_data.signature.parameters, &evaluated_args)?;
+                let result = self.execute_statements(&function_data.statements)?;
+
+                let v = match result {
+                    ValueWithSignal::Value(v) => v,
+                    ValueWithSignal::Return(v) => v,
+                    ValueWithSignal::Break => Value::Unit,
+                    ValueWithSignal::Continue => Value::Unit,
+                };
+                self.pop_function_scope("static function call".to_string());
+                Ok(v)
+            }
+            ResolvedFunction::External(external) => {
+                let mut func = self
+                    .external_functions_by_id
+                    .get_mut(&external.id)
+                    .expect("external function missing")
+                    .borrow_mut();
+                (func.func)(&evaluated_args)
+            }
+        }
     }
 
     fn evaluate_external_function_call(
@@ -243,7 +276,10 @@ impl Interpreter {
         self.push_function_scope(format!("{func_val}"));
 
         // Bind parameters before executing body
-        self.bind_parameters(&call.function_definition.parameters, &evaluated_args)?;
+        self.bind_parameters(
+            &call.function_definition.signature.parameters,
+            &evaluated_args,
+        )?;
         let result = self.execute_statements(&call.function_definition.statements)?;
 
         self.pop_function_scope(format!("{func_val}"));
@@ -355,10 +391,28 @@ impl Interpreter {
         relative_scope_index: usize,
         variable_index: usize,
     ) -> Result<&Value, ExecuteError> {
-        let existing_var =
-            &self.current_block_scopes[relative_scope_index].variables[variable_index];
+        if relative_scope_index >= self.current_block_scopes.len() {
+            panic!("illegal scope index");
+        }
+
+        let variables = &self.current_block_scopes[relative_scope_index].variables;
+        if variable_index >= variables.len() {
+            panic!("illegal index");
+        }
+        let existing_var = &variables[variable_index];
+
         trace!("VAR: lookup {relative_scope_index}:{variable_index} > {existing_var:?}");
         Ok(existing_var)
+    }
+
+    fn assign_value(target_type: &ResolvedType, value: Value) -> Value {
+        match value {
+            Value::Struct(struct_ref, fields, _) => {
+                // Use the target's display type instead of the value's type
+                Value::Struct(struct_ref, fields, target_type.clone())
+            }
+            _ => value,
+        }
     }
 
     #[inline]
@@ -367,12 +421,13 @@ impl Interpreter {
         variable_index: usize,
         value: Value,
         _is_mutable: bool,
+        var_type: &ResolvedType,
     ) -> Result<(), ExecuteError> {
         let last_scope_index = self.current_block_scopes.len() - 1;
+        let assigned = Self::assign_value(var_type, value);
+        trace!("VAR: set_local_var {last_scope_index}:{variable_index} = {assigned:?}");
 
-        trace!("VAR: set_local_var {last_scope_index}:{variable_index} = {value:?}");
-
-        self.current_block_scopes[last_scope_index].variables[variable_index] = value;
+        self.current_block_scopes[last_scope_index].variables[variable_index] = assigned;
         Ok(())
     }
 
@@ -445,7 +500,11 @@ impl Interpreter {
                     field_values.push(value);
                 }
 
-                Value::Struct(struct_instantiation.struct_type_ref.clone(), field_values)
+                Value::Struct(
+                    struct_instantiation.struct_type_ref.clone(),
+                    field_values,
+                    struct_instantiation.display_type_ref.clone(),
+                )
             }
 
             ResolvedExpression::ExclusiveRange(_resolved_type_ref, start, end) => {
@@ -509,12 +568,21 @@ impl Interpreter {
                         let mut borrowed = r.borrow_mut();
                         // We know it must be a struct because references can only point to structs
                         match &mut *borrowed {
-                            Value::Struct(struct_type, fields) => {
+                            Value::Struct(struct_type, fields, _) => {
                                 if let Some(field) =
                                     fields.get_mut(resolved_struct_field_ref.inner.index)
                                 {
-                                    *field = value.clone();
-                                    value
+                                    let struct_ref = struct_type.borrow();
+                                    let field_type = struct_ref
+                                        .fields
+                                        .values()
+                                        .nth(resolved_struct_field_ref.inner.index)
+                                        .ok_or_else(|| "Field index out of bounds".to_string())?
+                                        .clone(); // Clone the type to extend its lifetime
+
+                                    let assign = Self::assign_value(&field_type, value);
+                                    *field = assign.clone();
+                                    assign
                                 } else {
                                     Err(format!(
                                         "Field '{}' not found in struct '{:?}'",
@@ -528,7 +596,7 @@ impl Interpreter {
                             }
                         }
                     }
-                    Value::Struct(_, _) => {
+                    Value::Struct(_, _, _) => {
                         Err("Cannot assign to field of non-mutable struct".to_string())?
                     }
                     _ => Err(format!(
@@ -578,14 +646,14 @@ impl Interpreter {
                     self.evaluate_expression(&struct_field_access.struct_expression)?;
 
                 match struct_expression {
-                    Value::Struct(_struct_type, fields) => {
+                    Value::Struct(_struct_type, fields, _) => {
                         fields[struct_field_access.index].clone()
                     }
                     Value::Reference(r) => {
                         // If it's a reference, dereference and try field access
                         let value = r.borrow();
                         match &*value {
-                            Value::Struct(_struct_type, fields) => {
+                            Value::Struct(_struct_type, fields, _) => {
                                 fields[struct_field_access.index].clone()
                             }
                             _ => Err(format!(
@@ -634,44 +702,60 @@ impl Interpreter {
                 self.evaluate_external_function_call(resolved_external_call)?
             }
 
+            ResolvedExpression::StaticCall(static_call) => {
+                self.evaluate_static_function_call(static_call)?
+            }
+
             ResolvedExpression::MemberCall(resolved_member_call) => {
                 let member_value =
                     self.evaluate_expression(&resolved_member_call.self_expression)?;
 
                 trace!("{} > member call {:?}", self.tabs(), member_value);
 
-                self.push_function_scope(format!("member_call {member_value}")); // TODO: maybe have automatic pop on Drop
+                self.push_function_scope(format!("member_call {member_value}"));
 
                 let mut member_call_arguments = Vec::new();
-                member_call_arguments.push(member_value);
+                member_call_arguments.push(member_value); // Add self as first argument
                 for arg in &resolved_member_call.arguments {
                     member_call_arguments.push(self.evaluate_expression(arg)?);
                 }
 
-                let expected_parameter_count = resolved_member_call.impl_member.parameters.len();
-                if member_call_arguments.len() != expected_parameter_count {
-                    return Err(ExecuteError::Error("wrong number of arguments".to_string()))?;
+                let (parameters, statements) = match &*resolved_member_call.function {
+                    ResolvedFunction::Internal(function_data) => (
+                        &function_data.signature.parameters,
+                        Some(&function_data.statements),
+                    ),
+                    ResolvedFunction::External(external_data) => {
+                        (&external_data.signature.parameters, None)
+                    }
+                };
+
+                // Check total number of parameters (including self)
+                if member_call_arguments.len() != parameters.len() {
+                    return Err(ExecuteError::Error(format!(
+                        "wrong number of arguments: expected {}, got {}",
+                        parameters.len(),
+                        member_call_arguments.len()
+                    )));
                 }
 
-                self.bind_parameters(
-                    &resolved_member_call.impl_member.parameters,
-                    &member_call_arguments,
-                )?;
+                self.bind_parameters(parameters, &member_call_arguments)?;
 
-                let result = self.execute_statements(&resolved_member_call.impl_member.body)?;
+                let result = if let Some(body) = statements {
+                    self.execute_statements(body)?
+                } else {
+                    // Handle external function call
+                    todo!("External member functions not yet implemented")
+                };
 
                 self.pop_function_scope(format!("member_call {resolved_member_call}"));
 
                 match result {
                     ValueWithSignal::Value(v) => v,
-                    ValueWithSignal::Return(_) => {
-                        Err("not allowed with return in member calls".to_string())?
-                    }
-                    ValueWithSignal::Break => {
-                        Err("not allowed with break in member calls".to_string())?
-                    }
+                    ValueWithSignal::Return(v) => v,
+                    ValueWithSignal::Break => Err("break not allowed in member calls".to_string())?,
                     ValueWithSignal::Continue => {
-                        Err("not allowed with continue in member calls".to_string())?
+                        Err("continue not allowed in member calls".to_string())?
                     }
                 }
             }
@@ -833,6 +917,7 @@ impl Interpreter {
                                             ident.variable_index,
                                             Value::Int(i),
                                             false,
+                                            &ident.resolved_type,
                                         )?,
                                     _ => return Err("Expected identifier in for loop".to_string())?,
                                 }
@@ -884,7 +969,7 @@ impl Interpreter {
                         Value::String(_) => todo!(),
                         Value::Bool(_) => todo!(),
                         Value::Tuple(_, _) => todo!(),
-                        Value::Struct(_, _) => todo!(),
+                        Value::Struct(_, _, _) => todo!(),
                         Value::Unit => todo!(),
                         Value::Reference(_) => todo!(),
                         Value::InternalFunction(_) => todo!(),
@@ -990,8 +1075,13 @@ impl Interpreter {
                 ResolvedPattern::VariableAssignment(var) => {
                     // Variable pattern matches anything, so it is basically a let expression
                     self.push_block_scope("variable assignment".to_string());
-                    self.set_local_var(var.variable_index, cond_value.clone(), false)
-                        .expect("could not set local variable in arm.pattern");
+                    self.set_local_var(
+                        var.variable_index,
+                        cond_value.clone(),
+                        false,
+                        &var.resolved_type,
+                    )
+                    .expect("could not set local variable in arm.pattern");
                     let result = self.evaluate_expression(&arm.expression);
                     self.pop_block_scope("variable assignment".to_string());
                     return result;
@@ -1001,14 +1091,20 @@ impl Interpreter {
                     if let Value::Tuple(_tuple_type_ref, values) = &actual_value {
                         if resolved_tuple_type_ref.0.len() == values.len() {
                             self.push_block_scope("tuple".to_string());
-                            for (field_index, (_field, value)) in resolved_tuple_type_ref
-                                .0
-                                .iter()
-                                .zip(values.iter())
-                                .enumerate()
+                            for (field_index, (field_resolved_type, value)) in
+                                resolved_tuple_type_ref
+                                    .0
+                                    .iter()
+                                    .zip(values.iter())
+                                    .enumerate()
                             {
-                                self.set_local_var(field_index, value.clone(), false)
-                                    .expect("failed to set tuple local var");
+                                self.set_local_var(
+                                    field_index,
+                                    value.clone(),
+                                    false,
+                                    &field_resolved_type,
+                                )
+                                .expect("failed to set tuple local var");
                             }
                             let result = self.evaluate_expression(&arm.expression);
                             self.pop_block_scope("tuple".to_string());
@@ -1069,6 +1165,7 @@ impl Interpreter {
                                     index,
                                     values_in_order[tuple_type.field_index].clone(),
                                     false,
+                                    &tuple_type.resolved_type,
                                 )?;
                             }
 
@@ -1092,6 +1189,7 @@ impl Interpreter {
                                 index,
                                 values_in_order[struct_field.field_index].clone(),
                                 false,
+                                &struct_field.resolved_type,
                             )?;
                         }
 

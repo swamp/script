@@ -33,10 +33,20 @@ impl Vector2 {
         self.y = self.y * factor
         self
     }
+
+    fn new(x: Float, y: Float) -> Vector2 {
+        Vector2 { x: x, y: y }
+    }
+}
+
+type Position = (Float, Float)
+
+fn new_position(x: Float, y: Float) -> Position {
+    ( x, y )  // The return type annotation will preserve the alias
 }
 
 
-// Enum 
+// Enum
 enum Shape {
     Circle(Float),
     Rectangle { width: Float, height: Float },
@@ -86,9 +96,12 @@ struct Player {
 player = Player {
     name: "Hero",
     health: 100,
-    position: Vector2 { x: 10.0, y: 20.0 }
+    position: Vector2::new(10.0, 20.0)
 }
 print('player:{player}')
+
+position = new_position(10.0, 20.0)
+print('this should be a position: {position}')
 
 
 // Pattern matching with multiple patterns

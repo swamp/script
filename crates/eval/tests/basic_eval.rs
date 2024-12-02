@@ -20,6 +20,32 @@ fn basic_eval() {
 }
 
 #[test_log::test]
+fn basic_eval_float() {
+    check_value(
+        r#"
+        a = 3.3
+
+    "#,
+        Value::Float(Fp::from(3.3)),
+    );
+}
+
+#[test_log::test]
+fn basic_eval_with_doc_comment() {
+    check_value(
+        r#"
+        /// This is important documentation
+        fn add() -> Int {
+        }
+        
+        a = 3
+
+    "#,
+        Value::Int(3),
+    );
+}
+
+#[test_log::test]
 fn basic_eval_2() {
     check_value(
         r#"
@@ -167,6 +193,7 @@ fn basic_eval_10() {
     let result = eval(
         r#"
 
+        /// The character actions
         enum Action {
             Jumping,
             Target { x: Int, y: Int },
@@ -221,6 +248,12 @@ fn basic_eval_12() {
 
         action = Action::Target { x:42, y: -999 }
 
+        /*
+        match the actions
+            - Jumping
+            - Target
+        */
+
         match action {
             Jumping => "jumping",
             Target { y } => y,
@@ -258,10 +291,12 @@ fn basic_eval_13() {
                 v + 2.0
             }
         }
+        
+        type CoolPerson = Ossian
 
-        mut ossian = Ossian { happy: 3 }
+        mut ossian = CoolPerson { happy: 3 }
 
-        ossian.unrelated_function(3.5) // TODO: change to Ossian::unrelated_function(3.5) ?
+        Ossian::unrelated_function(3.5) // TODO: change to Ossian::unrelated_function(3.5) ?
         ossian.coding()
         ossian.pixel_art(1)
     "#,

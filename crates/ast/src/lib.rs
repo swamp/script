@@ -11,44 +11,6 @@ use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
 use std::rc::Rc;
 
-#[derive(Clone)]
-pub struct Variable {
-    pub name: String,
-    pub is_mutable: bool,
-}
-
-#[derive(Debug, Clone)]
-pub struct MutVariableRef(pub Variable); // Just wraps a variable when passed with mut keyword
-
-impl Display for Variable {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        if self.is_mutable {
-            write!(f, "mut {}", self.name)
-        } else {
-            write!(f, "{}", self.name)
-        }
-    }
-}
-
-impl Debug for Variable {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        if self.is_mutable {
-            write!(f, "mut {}", self.name)
-        } else {
-            write!(f, "{}", self.name)
-        }
-    }
-}
-
-impl Variable {
-    pub fn new(name: &str, is_mutable: bool) -> Self {
-        Self {
-            name: name.to_string(),
-            is_mutable,
-        }
-    }
-}
-
 // Common metadata that can be shared across all AST nodes
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Node {
@@ -209,15 +171,15 @@ impl StructType {
 #[derive(Debug, Clone)]
 pub enum Definition {
     StructDef(StructType),
+
     EnumDef(
         LocalTypeIdentifier,
         SeqMap<LocalTypeIdentifier, EnumVariant>,
     ),
 
-    InternalFunctionDef(LocalIdentifier, FunctionData),
-    ExternalFunctionDef(LocalIdentifier, FunctionSignature),
-
-    ImplDef(LocalTypeIdentifier, SeqMap<IdentifierName, ImplItem>),
+    FunctionDef(LocalIdentifier, Function),
+    ImplDef(LocalTypeIdentifier, SeqMap<IdentifierName, Function>),
+    TypeAlias(LocalTypeIdentifier, Type),
     Import(Import),
     // Other
     Comment(String),
@@ -236,19 +198,131 @@ pub enum Statement {
     If(Expression, Vec<Statement>, Option<Vec<Statement>>),
 }
 
+#[derive(Clone)]
+pub struct Variable {
+    pub name: String,
+    pub is_mutable: bool,
+}
+
+impl Display for Variable {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        if self.is_mutable {
+            write!(f, "mut {}", self.name)
+        } else {
+            write!(f, "{}", self.name)
+        }
+    }
+}
+
+impl Debug for Variable {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        if self.is_mutable {
+            write!(f, "mut {}", self.name)
+        } else {
+            write!(f, "{}", self.name)
+        }
+    }
+}
+
+impl Variable {
+    pub fn new(name: &str, is_mutable: bool) -> Self {
+        Self {
+            name: name.to_string(),
+            is_mutable,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
-pub enum ImplItem {
-    Member(ImplMember),
-    Function(FunctionData),
+pub struct MutVariableRef(pub Variable); // Just wraps a variable when passed with mut keyword
+
+#[derive(Clone)]
+pub struct Parameter {
+    pub variable: Variable,
+    pub param_type: Type,
+    pub is_mutable: bool,
+    pub is_self: bool,
+}
+
+impl Display for Parameter {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{}: {:?}", self.variable, self.param_type)
+    }
+}
+
+impl Debug for Parameter {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{}: {:?}", self.variable, self.param_type)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct FunctionSignature {
+    pub name: LocalIdentifier,
+    pub params: Vec<Parameter>, // first param can be self (check is_self)
+    pub return_type: Type,
 }
 
 #[derive(Clone)]
-pub struct ImplMember {
+pub struct FunctionData {
+    pub signature: FunctionSignature,
+    pub body: Vec<Statement>,
+}
+
+impl Display for FunctionData {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{:?}, {:?}", self.signature, self.body)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum Function {
+    Internal(FunctionData),
+    External(FunctionSignature),
+}
+
+#[derive(Debug, Clone)]
+pub enum ImplItem {
+    Member(ImplMember),
+    Function(ImplFunction),
+}
+
+#[derive(Clone)]
+pub enum ImplMember {
+    Internal(ImplMemberData),
+    External(ImplMemberSignature),
+}
+
+#[derive(Clone, Debug)]
+pub struct ImplMemberSignature {
+    pub name: LocalIdentifier,
     pub self_param: SelfParameter,
     pub params: Vec<Parameter>,
     pub return_type: Type,
-    pub body: Vec<Statement>,
+}
+
+#[derive(Debug, Clone)]
+pub enum ImplFunction {
+    Internal(FunctionData),
+    External(FunctionSignature),
+}
+
+impl Debug for ImplMember {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Internal(data) => write!(f, "internal: {data:?}"),
+            Self::External(data) => write!(f, "external: {data:?}"),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct ImplMemberData {
     pub name: LocalIdentifier,
+    pub self_param: SelfParameter,
+    pub params: Vec<Parameter>,
+    pub return_type: Type,
+    pub body: Vec<Statement>, // Will be empty for external members
 }
 
 pub type ImplMemberRef = Rc<ImplMember>;
@@ -263,7 +337,7 @@ impl Debug for SelfParameter {
     }
 }
 
-impl Debug for ImplMember {
+impl Debug for ImplMemberData {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
             f,
@@ -278,46 +352,9 @@ pub struct SelfParameter {
     pub is_mutable: bool,
 }
 
-#[derive(Clone, Debug)]
-pub struct FunctionSignature {
-    pub params: Vec<Parameter>,
-    pub return_type: Type,
-}
-
-#[derive(Clone)]
-pub struct FunctionData {
-    pub signature: FunctionSignature,
-    pub body: Vec<Statement>,
-}
-
 impl Debug for FunctionData {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{:?}, {:?}", self.signature, self.body)
-    }
-}
-
-impl Display for FunctionData {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{:?}, {:?}", self.signature, self.body)
-    }
-}
-
-#[derive(Clone)]
-pub struct Parameter {
-    pub variable: Variable,
-    pub param_type: Type,
-    pub is_mutable: bool,
-}
-
-impl Display for Parameter {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}: {:?}", self.variable, self.param_type)
-    }
-}
-
-impl Debug for Parameter {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}: {:?}", self.variable, self.param_type)
     }
 }
 
@@ -352,6 +389,7 @@ pub enum Expression {
 
     // Calls ----
     FunctionCall(Box<Expression>, Vec<Expression>),
+    StaticCall(LocalTypeIdentifier, LocalIdentifier, Vec<Expression>), // Type::func(args)
     MemberCall(Box<Expression>, LocalIdentifier, Vec<Expression>),
     Block(Vec<Statement>),
 

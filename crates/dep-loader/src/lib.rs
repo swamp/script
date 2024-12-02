@@ -10,6 +10,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 use std::{env, fs};
 use swamp_script_ast::prelude::*;
+use swamp_script_ast::Function;
 use swamp_script_parser::{AstParser, Rule};
 use tracing::{debug, info, trace};
 
@@ -47,32 +48,34 @@ impl ParseModule {
         parameters: Vec<Parameter>,
         return_type: Type,
     ) {
-        self.ast_module.definitions.insert(
-            0,
-            Definition::ExternalFunctionDef(
-                // TODO: Workaround to push external declarations so they come before internal functions
-                LocalIdentifier {
-                    node: Node {
-                        span: Span {
-                            start: Position {
-                                offset: 0,
-                                line: 0,
-                                column: 0,
-                            },
-                            end: Position {
-                                offset: 0,
-                                line: 0,
-                                column: 0,
-                            },
-                        },
+        let fake_identifier = LocalIdentifier {
+            node: Node {
+                span: Span {
+                    start: Position {
+                        offset: 0,
+                        line: 0,
+                        column: 0,
                     },
-                    text: name,
+                    end: Position {
+                        offset: 0,
+                        line: 0,
+                        column: 0,
+                    },
                 },
-                FunctionSignature {
-                    params: parameters,
-                    return_type,
-                },
-            ),
+            },
+            text: name,
+        };
+
+        let signature = FunctionSignature {
+            name: fake_identifier.clone(),
+            params: parameters,
+            return_type,
+        };
+        let external_signature = Function::External(signature);
+
+        self.ast_module.definitions.insert(
+            0, // add it first
+            Definition::FunctionDef(fake_identifier, external_signature),
         );
     }
 }
@@ -327,7 +330,11 @@ pub fn create_parsed_modules(
     root_path: PathBuf,
 ) -> Result<DependencyParser, pest::error::Error<Rule>> {
     let parser = AstParser::new();
-    let ast_module = parser.parse_script(script)?;
+    let ast_module_result = parser.parse_script(script);
+    if let Err(some) = ast_module_result {
+        return Err(some);
+    }
+    let ast_module = ast_module_result.unwrap();
     trace!("ast_module:\n{:#?}", ast_module);
 
     let parse_module = ParseModule {
