@@ -122,6 +122,8 @@ impl From<String> for CliError {
     }
 }
 
+pub struct CliContext;
+
 // In the future we want to support directories with a project swamp.toml, but for now
 // just resolve to single .swamp file
 fn resolve_swamp_file(path: &Path) -> Result<PathBuf, String> {
@@ -145,12 +147,12 @@ fn resolve_swamp_file(path: &Path) -> Result<PathBuf, String> {
     }
 }
 
-fn register_print(interpreter: &mut Interpreter, output: Rc<RefCell<Vec<String>>>) {
+fn register_print(interpreter: &mut Interpreter<CliContext>, output: Rc<RefCell<Vec<String>>>) {
     interpreter
         .register_external_function(
             "print",
             1, /* TODO: HARD CODED */
-            move |args: &[Value]| {
+            move |args: &[Value], _context| {
                 if let Some(value) = args.first() {
                     let display_value = value.to_string();
                     output.borrow_mut().push(display_value.clone());
@@ -168,7 +170,8 @@ pub fn eval(resolved_main_module: &ResolvedModule) -> Result<Value, CliError> {
     let mut interpreter = Interpreter::new();
     let output = Rc::new(RefCell::new(Vec::new()));
     register_print(&mut interpreter, output);
-    let value = interpreter.eval_module(resolved_main_module)?;
+    let mut context = CliContext;
+    let value = interpreter.eval_module(resolved_main_module, &mut context)?;
     Ok(value)
 }
 

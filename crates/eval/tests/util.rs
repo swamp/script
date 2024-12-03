@@ -2,9 +2,7 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use std::cell::RefCell;
 use std::path::PathBuf;
-use std::rc::Rc;
 
 use swamp_script_analyzer::ResolveError;
 use swamp_script_ast::{Parameter, Type, Variable};
@@ -96,25 +94,30 @@ fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError>
 
     // Run
     let mut interpreter = Interpreter::new();
-    let output = Rc::new(RefCell::new(Vec::new()));
-    register_print(1, &mut interpreter, output.clone());
-    let value = interpreter.eval_module(resolved_main_module)?;
+    register_print(1, &mut interpreter);
 
-    let strings = output.borrow().to_vec();
+    let mut context = TestContext {
+        secret: 42,
+        output: vec![],
+    };
 
-    Ok((value, strings))
+    let value = interpreter.eval_module(resolved_main_module, &mut context)?;
+
+    Ok((value, context.output))
 }
 
-fn register_print(
-    external_id: ExternalFunctionId,
-    interpreter: &mut Interpreter,
-    output: Rc<RefCell<Vec<String>>>,
-) {
+pub struct TestContext {
+    pub secret: i32,
+    pub output: Vec<String>,
+}
+
+fn register_print(external_id: ExternalFunctionId, interpreter: &mut Interpreter<TestContext>) {
     interpreter
-        .register_external_function("print", external_id, move |args: &[Value]| {
+        .register_external_function("print", external_id, move |args: &[Value], context| {
             if let Some(value) = args.first() {
                 let display_value = value.to_string();
-                output.borrow_mut().push(display_value.clone());
+                assert_eq!(context.secret, 42);
+                context.output.push(display_value.clone());
                 println!("{}", display_value);
                 Ok(Value::Unit)
             } else {

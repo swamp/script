@@ -2,7 +2,7 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use crate::{EvalExternalFunctionRef, ValueWithSignal};
+use crate::ValueWithSignal;
 use core::any::Any;
 use fixed32::Fp;
 use seq_fmt::{comma, comma_tuple};
@@ -11,8 +11,8 @@ use std::fmt::Debug;
 use std::rc::Rc;
 use swamp_script_semantic::ns::{ResolvedModuleNamespace, SemanticError};
 use swamp_script_semantic::{
-    FormatSpecifier, PrecisionType, ResolvedArrayTypeRef, ResolvedEnumVariantStructTypeRef,
-    ResolvedEnumVariantTupleTypeRef, ResolvedEnumVariantTypeRef,
+    ExternalFunctionId, FormatSpecifier, PrecisionType, ResolvedArrayTypeRef,
+    ResolvedEnumVariantStructTypeRef, ResolvedEnumVariantTupleTypeRef, ResolvedEnumVariantTypeRef,
     ResolvedInternalFunctionDefinitionRef, ResolvedStructTypeRef, ResolvedTupleTypeRef,
 };
 use swamp_script_semantic::{IdentifierName, ResolvedType};
@@ -99,7 +99,7 @@ pub enum Value {
 
     // Higher order
     InternalFunction(ResolvedInternalFunctionDefinitionRef),
-    ExternalFunction(EvalExternalFunctionRef),
+    ExternalFunction(ExternalFunctionId),
 
     // Other
     RustValue(Rc<RefCell<Box<dyn RustType>>>),
