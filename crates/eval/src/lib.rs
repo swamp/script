@@ -50,13 +50,13 @@ pub enum ValueWithSignal {
 
 impl From<String> for ExecuteError {
     fn from(err: String) -> Self {
-        ExecuteError::Error(err)
+        Self::Error(err)
     }
 }
 
 impl From<ConversionError> for ExecuteError {
     fn from(err: ConversionError) -> Self {
-        ExecuteError::ConversionError(err)
+        Self::ConversionError(err)
     }
 }
 
@@ -83,6 +83,7 @@ impl Default for BlockScope {
     }
 }
 
+#[derive(Default)]
 pub struct ExternalFunctions<C> {
     external_functions: HashMap<String, EvalExternalFunctionRef<C>>,
     external_functions_by_id: HashMap<ExternalFunctionId, EvalExternalFunctionRef<C>>,
@@ -95,6 +96,7 @@ impl<C> ExternalFunctions<C> {
             external_functions_by_id: HashMap::new(),
         }
     }
+
     pub fn register_external_function(
         &mut self,
         name: &str,
@@ -123,8 +125,8 @@ pub fn eval_module<C>(
     module: &ResolvedModule,
     context: &mut C,
 ) -> Result<Value, ExecuteError> {
-    let mut interpreter = Interpreter::<C>::new(externals);
-    let signal = interpreter.execute_statements(&module.statements, context)?;
+    let mut interpreter = Interpreter::<C>::new(externals, context);
+    let signal = interpreter.execute_statements(&module.statements)?;
     Ok(signal.try_into()?)
 }
 
@@ -135,41 +137,28 @@ pub fn util_execute_function<C>(
     arguments: &[Value],
     context: &mut C,
 ) -> Result<Value, ExecuteError> {
-    let mut interpreter = Interpreter::<C>::new(externals);
+    let mut interpreter = Interpreter::<C>::new(externals, context);
     interpreter.bind_parameters(&func.signature.parameters, arguments)?;
-    let with_signal = interpreter.execute_statements(&func.statements, context)?;
+    let with_signal = interpreter.execute_statements(&func.statements)?;
     interpreter.current_block_scopes.clear();
     interpreter.function_scope_stack.clear();
     Ok(Value::try_from(with_signal)?)
 }
 
-/*
-
-pub fn util_execute_member(
-    &mut self,
-    impl_member: &ResolvedInternalFunctionDefinitionRef,
-    arguments: &[Value],
-    context: &mut C,
-) -> Result<Value, ExecuteError> {
-    self.bind_parameters(&impl_member.signature.parameters, arguments)?;
-    let with_signal = self.execute_statements(&impl_member.statements, context)?;
-    Ok(with_signal.try_into()?)
-}
-
- */
-
 pub struct Interpreter<'a, C> {
     function_scope_stack: Vec<FunctionScope>,
     current_block_scopes: Vec<BlockScope>,
     externals: &'a ExternalFunctions<C>,
+    context: &'a mut C,
 }
 
 impl<'a, C> Interpreter<'a, C> {
-    pub fn new(externals: &'a ExternalFunctions<C>) -> Self {
+    pub fn new(externals: &'a ExternalFunctions<C>, context: &'a mut C) -> Self {
         Self {
             function_scope_stack: vec![FunctionScope::default()],
             current_block_scopes: vec![BlockScope::default()],
             externals,
+            context,
         }
     }
 
@@ -239,16 +228,15 @@ impl<'a, C> Interpreter<'a, C> {
     fn evaluate_static_function_call(
         &mut self,
         static_call: &ResolvedStaticCall,
-        context: &mut C,
     ) -> Result<Value, ExecuteError> {
         // First evaluate the arguments
-        let evaluated_args = self.evaluate_args(&static_call.arguments, context)?;
+        let evaluated_args = self.evaluate_args(&static_call.arguments)?;
 
         match &*static_call.function {
             ResolvedFunction::Internal(function_data) => {
                 self.push_function_scope("static function call".to_string());
                 self.bind_parameters(&function_data.signature.parameters, &evaluated_args)?;
-                let result = self.execute_statements(&function_data.statements, context)?;
+                let result = self.execute_statements(&function_data.statements)?;
 
                 let v = match result {
                     ValueWithSignal::Value(v) => v,
@@ -266,7 +254,7 @@ impl<'a, C> Interpreter<'a, C> {
                     .get(&external.id)
                     .expect("external function missing")
                     .borrow_mut();
-                (func.func)(&evaluated_args, context)
+                (func.func)(&evaluated_args, &mut self.context)
             }
         }
     }
@@ -274,25 +262,23 @@ impl<'a, C> Interpreter<'a, C> {
     fn evaluate_external_function_call(
         &mut self,
         call: &ResolvedExternalFunctionCall,
-        context: &mut C,
     ) -> Result<Value, ExecuteError> {
-        let evaluated_args = self.evaluate_args(&call.arguments, context)?;
+        let evaluated_args = self.evaluate_args(&call.arguments)?;
         let mut func = self
             .externals
             .external_functions_by_id
             .get(&call.function_definition.id)
             .expect("external function missing")
             .borrow_mut();
-        let v = (func.func)(&evaluated_args, context)?;
+        let v = (func.func)(&evaluated_args, &mut self.context)?;
         Ok(v)
     }
 
     fn evaluate_internal_function_call(
         &mut self,
         call: &ResolvedInternalFunctionCall,
-        context: &mut C,
     ) -> Result<Value, ExecuteError> {
-        let func_val = self.evaluate_expression(&call.function_expression, context)?;
+        let func_val = self.evaluate_expression(&call.function_expression)?;
         match &func_val {
             Value::InternalFunction(internal_func_ref) => {
                 info!("internal func: {internal_func_ref}")
@@ -304,7 +290,7 @@ impl<'a, C> Interpreter<'a, C> {
             }
         }
 
-        let evaluated_args = self.evaluate_args(&call.arguments, context)?;
+        let evaluated_args = self.evaluate_args(&call.arguments)?;
         debug!("call {:?}", func_val);
 
         self.push_function_scope(format!("{func_val}"));
@@ -314,7 +300,7 @@ impl<'a, C> Interpreter<'a, C> {
             &call.function_definition.signature.parameters,
             &evaluated_args,
         )?;
-        let result = self.execute_statements(&call.function_definition.statements, context)?;
+        let result = self.execute_statements(&call.function_definition.statements)?;
 
         self.pop_function_scope(format!("{func_val}"));
 
@@ -333,11 +319,7 @@ impl<'a, C> Interpreter<'a, C> {
         "..".repeat(self.function_scope_stack.len() - 1)
     }
 
-    fn evaluate_args(
-        &mut self,
-        args: &[ResolvedExpression],
-        context: &mut C,
-    ) -> Result<Vec<Value>, ExecuteError> {
+    fn evaluate_args(&mut self, args: &[ResolvedExpression]) -> Result<Vec<Value>, ExecuteError> {
         let mut evaluated = Vec::with_capacity(args.len());
 
         for arg in args {
@@ -354,7 +336,7 @@ impl<'a, C> Interpreter<'a, C> {
                     }
                 }
                 expr => {
-                    let value = self.evaluate_expression(expr, context)?;
+                    let value = self.evaluate_expression(expr)?;
                     evaluated.push(value);
                 }
             }
@@ -366,11 +348,10 @@ impl<'a, C> Interpreter<'a, C> {
     fn evaluate_expressions(
         &mut self,
         exprs: &[ResolvedExpression],
-        context: &mut C,
     ) -> Result<Vec<Value>, ExecuteError> {
         let mut values = vec![];
         for expr in exprs {
-            let value = self.evaluate_expression(expr, context)?;
+            let value = self.evaluate_expression(expr)?;
             values.push(value);
         }
 
@@ -469,11 +450,7 @@ impl<'a, C> Interpreter<'a, C> {
     }
 
     // ---------------
-    fn evaluate_expression(
-        &mut self,
-        expr: &ResolvedExpression,
-        context: &mut C,
-    ) -> Result<Value, ExecuteError> {
+    fn evaluate_expression(&mut self, expr: &ResolvedExpression) -> Result<Value, ExecuteError> {
         debug!("evaluate expression {expr:?}");
         let value = match expr {
             // Constructing
@@ -487,7 +464,7 @@ impl<'a, C> Interpreter<'a, C> {
                         ResolvedEnumVariantContainerType::Tuple(tuple_type) => match data {
                             ResolvedEnumLiteralData::Tuple(tuple_expressions) => {
                                 let eval_expressions =
-                                    self.evaluate_expressions(tuple_expressions, context)?;
+                                    self.evaluate_expressions(tuple_expressions)?;
                                 Value::EnumVariantTuple(tuple_type.clone(), eval_expressions)
                             }
                             _ => return Err("wrong container type".to_string())?,
@@ -497,8 +474,7 @@ impl<'a, C> Interpreter<'a, C> {
                             ResolvedEnumLiteralData::Struct(resolved_field_values) => {
                                 let mut values = Vec::with_capacity(resolved_field_values.len());
                                 for resolved_expression in resolved_field_values {
-                                    let value =
-                                        self.evaluate_expression(resolved_expression, context)?;
+                                    let value = self.evaluate_expression(resolved_expression)?;
                                     values.push(value);
                                 }
                                 Value::EnumVariantStruct(struct_type_ref.clone(), values)
@@ -514,13 +490,13 @@ impl<'a, C> Interpreter<'a, C> {
                 }
 
                 ResolvedLiteral::TupleLiteral(tuple_type, resolved_expressions) => {
-                    let values = self.evaluate_expressions(resolved_expressions, context)?;
+                    let values = self.evaluate_expressions(resolved_expressions)?;
                     Value::Tuple(tuple_type.clone(), values)
                 }
 
                 ResolvedLiteral::UnitLiteral(_) => Value::Unit,
                 ResolvedLiteral::Array(array_type, expressions) => {
-                    let values = self.evaluate_expressions(expressions, context)?;
+                    let values = self.evaluate_expressions(expressions)?;
                     Value::Array(array_type.clone(), values)
                 }
             },
@@ -528,7 +504,7 @@ impl<'a, C> Interpreter<'a, C> {
             ResolvedExpression::Array(array_instantiation) => {
                 let mut values = Vec::new();
                 for element in &array_instantiation.expressions {
-                    values.push(self.evaluate_expression(element, context)?);
+                    values.push(self.evaluate_expression(element)?);
                 }
 
                 Value::Array(array_instantiation.array_type_ref.clone(), values)
@@ -538,7 +514,7 @@ impl<'a, C> Interpreter<'a, C> {
                 // Evaluate all field expressions and validate types
                 let mut field_values = Vec::new();
                 for field_expr in &struct_instantiation.expressions_in_order {
-                    let value = self.evaluate_expression(field_expr, context)?;
+                    let value = self.evaluate_expression(field_expr)?;
                     field_values.push(value);
                 }
 
@@ -550,8 +526,8 @@ impl<'a, C> Interpreter<'a, C> {
             }
 
             ResolvedExpression::ExclusiveRange(_resolved_type_ref, start, end) => {
-                let start_val = self.evaluate_expression(start, context)?;
-                let end_val = self.evaluate_expression(end, context)?;
+                let start_val = self.evaluate_expression(start)?;
+                let end_val = self.evaluate_expression(end)?;
                 match (start_val, end_val) {
                     (Value::Int(s), Value::Int(e)) => {
                         Value::ExclusiveRange(Box::new(s), Box::new(e))
@@ -562,8 +538,7 @@ impl<'a, C> Interpreter<'a, C> {
 
             // ==================== ASSIGNMENT ====================
             ResolvedExpression::VariableAssignment(resolved_var_assignment) => {
-                let new_value =
-                    self.evaluate_expression(&resolved_var_assignment.expression, context)?;
+                let new_value = self.evaluate_expression(&resolved_var_assignment.expression)?;
                 self.overwrite_existing_var(
                     resolved_var_assignment.variable_ref.scope_index,
                     resolved_var_assignment.variable_ref.variable_index,
@@ -574,9 +549,9 @@ impl<'a, C> Interpreter<'a, C> {
             }
 
             ResolvedExpression::ArrayAssignment(array, index, value) => {
-                let array_val = self.evaluate_expression(&array.expression, context)?;
-                let index_val = self.evaluate_expression(&index.expression, context)?;
-                let new_val = self.evaluate_expression(value, context)?;
+                let array_val = self.evaluate_expression(&array.expression)?;
+                let index_val = self.evaluate_expression(&index.expression)?;
+                let new_val = self.evaluate_expression(value)?;
 
                 match (array_val, index_val) {
                     (Value::Reference(r), Value::Int(i)) => {
@@ -602,11 +577,9 @@ impl<'a, C> Interpreter<'a, C> {
                 resolved_struct_field_ref,
                 source_expression,
             ) => {
-                let target_struct_value = self.evaluate_expression(
-                    &resolved_struct_field_ref.inner.struct_expression,
-                    context,
-                )?;
-                let value = self.evaluate_expression(source_expression, context)?;
+                let target_struct_value =
+                    self.evaluate_expression(&resolved_struct_field_ref.inner.struct_expression)?;
+                let value = self.evaluate_expression(source_expression)?;
 
                 match target_struct_value {
                     Value::Reference(r) => {
@@ -658,10 +631,8 @@ impl<'a, C> Interpreter<'a, C> {
             }
 
             ResolvedExpression::ArrayAccess(array_item_ref) => {
-                let array_val =
-                    self.evaluate_expression(&array_item_ref.array_expression, context)?;
-                let index_val =
-                    self.evaluate_expression(&array_item_ref.int_expression, context)?;
+                let array_val = self.evaluate_expression(&array_item_ref.array_expression)?;
+                let index_val = self.evaluate_expression(&array_item_ref.int_expression)?;
 
                 match (array_val, index_val) {
                     (Value::Array(_type_id, elements), Value::Int(i)) => {
@@ -690,7 +661,7 @@ impl<'a, C> Interpreter<'a, C> {
 
             ResolvedExpression::FieldAccess(struct_field_access) => {
                 let struct_expression =
-                    self.evaluate_expression(&struct_field_access.struct_expression, context)?;
+                    self.evaluate_expression(&struct_field_access.struct_expression)?;
 
                 match struct_expression {
                     Value::Struct(_struct_type, fields, _) => {
@@ -730,32 +701,32 @@ impl<'a, C> Interpreter<'a, C> {
 
             // Operators
             ResolvedExpression::BinaryOp(binary_operator) => {
-                let left_val = self.evaluate_expression(&binary_operator.left, context)?;
-                let right_val = self.evaluate_expression(&binary_operator.right, context)?;
+                let left_val = self.evaluate_expression(&binary_operator.left)?;
+                let right_val = self.evaluate_expression(&binary_operator.right)?;
                 self.evaluate_binary_op(left_val, &binary_operator.ast_operator_type, right_val)?
             }
 
             ResolvedExpression::UnaryOp(unary_operator) => {
-                let left_val = self.evaluate_expression(&unary_operator.left, context)?;
+                let left_val = self.evaluate_expression(&unary_operator.left)?;
                 self.evaluate_unary_op(&unary_operator.ast_operator_type, left_val)?
             }
 
             // Calling
             ResolvedExpression::FunctionInternalCall(resolved_internal_call) => {
-                self.evaluate_internal_function_call(resolved_internal_call, context)?
+                self.evaluate_internal_function_call(resolved_internal_call)?
             }
 
             ResolvedExpression::FunctionExternalCall(resolved_external_call) => {
-                self.evaluate_external_function_call(resolved_external_call, context)?
+                self.evaluate_external_function_call(resolved_external_call)?
             }
 
             ResolvedExpression::StaticCall(static_call) => {
-                self.evaluate_static_function_call(static_call, context)?
+                self.evaluate_static_function_call(static_call)?
             }
 
             ResolvedExpression::MemberCall(resolved_member_call) => {
                 let member_value =
-                    self.evaluate_expression(&resolved_member_call.self_expression, context)?;
+                    self.evaluate_expression(&resolved_member_call.self_expression)?;
 
                 trace!("{} > member call {:?}", self.tabs(), member_value);
 
@@ -771,7 +742,7 @@ impl<'a, C> Interpreter<'a, C> {
                 let mut member_call_arguments = Vec::new();
                 member_call_arguments.push(member_value.clone()); // Add self as first argument
                 for arg in &resolved_member_call.arguments {
-                    member_call_arguments.push(self.evaluate_expression(arg, context)?);
+                    member_call_arguments.push(self.evaluate_expression(arg)?);
                 }
 
                 // Check total number of parameters (including self)
@@ -787,8 +758,7 @@ impl<'a, C> Interpreter<'a, C> {
                     ResolvedFunction::Internal(internal_function) => {
                         self.push_function_scope(format!("member_call {member_value}"));
                         self.bind_parameters(parameters, &member_call_arguments)?;
-                        let result =
-                            self.execute_statements(&internal_function.statements, context)?;
+                        let result = self.execute_statements(&internal_function.statements)?;
                         self.pop_function_scope(format!("member_call {resolved_member_call}"));
 
                         match result {
@@ -809,14 +779,14 @@ impl<'a, C> Interpreter<'a, C> {
                             .get(&external_func.id)
                             .expect("external function missing")
                             .borrow_mut();
-                        (func.func)(&member_call_arguments, context)?
+                        (func.func)(&member_call_arguments, &mut self.context)?
                     }
                 }
             }
 
             ResolvedExpression::Block(statements) => {
                 self.push_block_scope("block statements".to_string());
-                let result = self.execute_statements(statements, context)?;
+                let result = self.execute_statements(statements)?;
                 self.pop_block_scope("block_statements".to_string());
                 match result {
                     ValueWithSignal::Value(v) => v,
@@ -841,7 +811,7 @@ impl<'a, C> Interpreter<'a, C> {
                             result.push_str(text);
                         }
                         ResolvedStringPart::Interpolation(expr, format_spec) => {
-                            let value = self.evaluate_expression(expr, context)?;
+                            let value = self.evaluate_expression(expr)?;
                             let formatted = match format_spec {
                                 Some(spec) => format_value(&value, spec)?,
                                 None => value.to_string(),
@@ -856,17 +826,15 @@ impl<'a, C> Interpreter<'a, C> {
 
             // Comparing
             ResolvedExpression::IfElse(condition, then_expr, else_expr) => {
-                let cond_value = self.evaluate_expression(&condition.expression, context)?;
+                let cond_value = self.evaluate_expression(&condition.expression)?;
                 match cond_value {
-                    Value::Bool(true) => self.evaluate_expression(then_expr, context)?,
-                    Value::Bool(false) => self.evaluate_expression(else_expr, context)?,
+                    Value::Bool(true) => self.evaluate_expression(then_expr)?,
+                    Value::Bool(false) => self.evaluate_expression(else_expr)?,
                     _ => Err("If condition must evaluate to a boolean".to_string())?,
                 }
             }
 
-            ResolvedExpression::Match(resolved_match) => {
-                self.eval_match(resolved_match, context)?
-            }
+            ResolvedExpression::Match(resolved_match) => self.eval_match(resolved_match)?,
             ResolvedExpression::InternalFunctionAccess(fetch_function) => {
                 Value::InternalFunction(fetch_function.clone())
             }
@@ -891,7 +859,6 @@ impl<'a, C> Interpreter<'a, C> {
     pub fn execute_statements(
         &mut self,
         statements: &Vec<ResolvedStatement>,
-        context: &mut C,
     ) -> Result<ValueWithSignal, ExecuteError> {
         let mut value = Value::Unit;
 
@@ -905,17 +872,12 @@ impl<'a, C> Interpreter<'a, C> {
                 }
                 ResolvedStatement::Break => return Ok(ValueWithSignal::Break),
                 ResolvedStatement::Return(expr) => {
-                    return Ok(ValueWithSignal::Return(
-                        self.evaluate_expression(expr, context)?,
-                    ));
+                    return Ok(ValueWithSignal::Return(self.evaluate_expression(expr)?));
                 }
 
                 ResolvedStatement::WhileLoop(condition, body) => {
-                    while self
-                        .evaluate_expression(&condition.expression, context)?
-                        .as_bool()?
-                    {
-                        match self.execute_statements(body, context) {
+                    while self.evaluate_expression(&condition.expression)?.as_bool()? {
+                        match self.execute_statements(body) {
                             Err(e) => return Err(e),
                             Ok(signal) => match signal {
                                 ValueWithSignal::Value(_v) => {} // Just discard normal values
@@ -933,10 +895,10 @@ impl<'a, C> Interpreter<'a, C> {
                 }
 
                 ResolvedStatement::If(condition, consequences, optional_alternative) => {
-                    let cond_value = self.evaluate_expression(&condition.expression, context)?;
+                    let cond_value = self.evaluate_expression(&condition.expression)?;
                     match cond_value {
                         Value::Bool(true) => {
-                            match self.execute_statements(consequences, context)? {
+                            match self.execute_statements(consequences)? {
                                 ValueWithSignal::Value(_v) => {} // Just discard normal values
                                 ValueWithSignal::Break => return Ok(ValueWithSignal::Break),
                                 ValueWithSignal::Return(v) => {
@@ -947,7 +909,7 @@ impl<'a, C> Interpreter<'a, C> {
                         }
                         Value::Bool(false) => {
                             if let Some(alternative) = optional_alternative {
-                                match self.execute_statements(alternative, context)? {
+                                match self.execute_statements(alternative)? {
                                     ValueWithSignal::Value(_v) => {} // Just discard normal values
                                     ValueWithSignal::Break => return Ok(ValueWithSignal::Break),
                                     ValueWithSignal::Return(v) => {
@@ -965,8 +927,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
 
                 ResolvedStatement::ForLoop(var_pattern, iterator_expr, body) => {
-                    let iterator =
-                        self.evaluate_expression(&iterator_expr.resolved_expression, context)?;
+                    let iterator = self.evaluate_expression(&iterator_expr.resolved_expression)?;
                     match iterator {
                         Value::ExclusiveRange(start, end) => {
                             self.push_block_scope(format!(
@@ -986,7 +947,7 @@ impl<'a, C> Interpreter<'a, C> {
                                     _ => return Err("Expected identifier in for loop".to_string())?,
                                 }
 
-                                let signal = self.execute_statements(body, context)?;
+                                let signal = self.execute_statements(body)?;
                                 debug!(signal=?signal, "signal in loop");
 
                                 match signal {
@@ -1023,7 +984,7 @@ impl<'a, C> Interpreter<'a, C> {
                                     _ => return Err("Expected identifier in for loop".to_string())?,
                                 }
 
-                                self.execute_statements(body, context)?;
+                                self.execute_statements(body)?;
                             }
 
                             self.pop_block_scope("array".to_string());
@@ -1047,7 +1008,7 @@ impl<'a, C> Interpreter<'a, C> {
                     continue;
                 }
                 ResolvedStatement::Block(body) => {
-                    match self.execute_statements(body, context)? {
+                    match self.execute_statements(body)? {
                         ValueWithSignal::Value(_v) => {} // ignore normal values
                         ValueWithSignal::Return(v) => return Ok(ValueWithSignal::Return(v)), //  Value::Void?
                         ValueWithSignal::Break => return Ok(ValueWithSignal::Break),
@@ -1059,14 +1020,14 @@ impl<'a, C> Interpreter<'a, C> {
 
             value = match statement {
                 ResolvedStatement::Let(ResolvedPattern::VariableAssignment(var), expr) => {
-                    let value = self.evaluate_expression(expr, context)?;
+                    let value = self.evaluate_expression(expr)?;
                     self.set_var(var.scope_index, var.variable_index, value, var.is_mutable())
                         .expect("could not set variable");
                     Value::Unit
                 }
 
                 ResolvedStatement::Expression(expr) => {
-                    let result = self.evaluate_expression(expr, context); // since it is statement_expression, the value is intentionally discarded
+                    let result = self.evaluate_expression(expr); // since it is statement_expression, the value is intentionally discarded
                     if result.is_err() {
                         return Err(result.unwrap_err());
                     }
@@ -1084,7 +1045,7 @@ impl<'a, C> Interpreter<'a, C> {
                 ResolvedStatement::Let(ResolvedPattern::Wildcard, _) => Value::Unit,
                 //TODO: ResolvedStatement::Let(ResolvedPattern::EnumSimple(_), _) => Value::Unit,
                 ResolvedStatement::LetVar(variable_ref, expression) => {
-                    let value = self.evaluate_expression(expression, context)?;
+                    let value = self.evaluate_expression(expression)?;
                     self.set_var(
                         variable_ref.scope_index,
                         variable_ref.variable_index,
@@ -1094,7 +1055,7 @@ impl<'a, C> Interpreter<'a, C> {
                     value
                 }
                 ResolvedStatement::SetVar(variable_ref, expression) => {
-                    let value = self.evaluate_expression(expression, context)?;
+                    let value = self.evaluate_expression(expression)?;
                     self.overwrite_existing_var(
                         variable_ref.scope_index,
                         variable_ref.variable_index,
@@ -1127,12 +1088,8 @@ impl<'a, C> Interpreter<'a, C> {
     }
 
     #[inline(always)]
-    fn eval_match(
-        &mut self,
-        resolved_match: &ResolvedMatch,
-        context: &mut C,
-    ) -> Result<Value, ExecuteError> {
-        let cond_value = self.evaluate_expression(&resolved_match.expression, context)?;
+    fn eval_match(&mut self, resolved_match: &ResolvedMatch) -> Result<Value, ExecuteError> {
+        let cond_value = self.evaluate_expression(&resolved_match.expression)?;
         // Dereference if we got a reference
         let actual_value = match &cond_value {
             Value::Reference(r) => r.borrow().clone(),
@@ -1151,7 +1108,7 @@ impl<'a, C> Interpreter<'a, C> {
                         &var.resolved_type,
                     )
                     .expect("could not set local variable in arm.pattern");
-                    let result = self.evaluate_expression(&arm.expression, context);
+                    let result = self.evaluate_expression(&arm.expression);
                     self.pop_block_scope("variable assignment".to_string());
                     return result;
                 }
@@ -1175,7 +1132,7 @@ impl<'a, C> Interpreter<'a, C> {
                                 )
                                 .expect("failed to set tuple local var");
                             }
-                            let result = self.evaluate_expression(&arm.expression, context);
+                            let result = self.evaluate_expression(&arm.expression);
                             self.pop_block_scope("tuple".to_string());
                             return result;
                         }
@@ -1205,16 +1162,16 @@ impl<'a, C> Interpreter<'a, C> {
 
                 ResolvedPattern::Literal(lit) => match (lit, &actual_value) {
                     (ResolvedLiteral::IntLiteral(a, _), Value::Int(b)) if a == b => {
-                        return self.evaluate_expression(&arm.expression, context);
+                        return self.evaluate_expression(&arm.expression);
                     }
                     (ResolvedLiteral::FloatLiteral(a, _), Value::Float(b)) if a == b => {
-                        return self.evaluate_expression(&arm.expression, context);
+                        return self.evaluate_expression(&arm.expression);
                     }
                     (ResolvedLiteral::StringLiteral(a, _), Value::String(b)) if a.0 == *b => {
-                        return self.evaluate_expression(&arm.expression, context);
+                        return self.evaluate_expression(&arm.expression);
                     }
                     (ResolvedLiteral::BoolLiteral(a, _), Value::Bool(b)) if a == b => {
-                        return self.evaluate_expression(&arm.expression, context);
+                        return self.evaluate_expression(&arm.expression);
                     }
                     _ => continue,
                 },
@@ -1238,7 +1195,7 @@ impl<'a, C> Interpreter<'a, C> {
                                 )?;
                             }
 
-                            let result = self.evaluate_expression(&arm.expression, context);
+                            let result = self.evaluate_expression(&arm.expression);
 
                             self.pop_block_scope("enum tuple end".to_string());
 
@@ -1262,7 +1219,7 @@ impl<'a, C> Interpreter<'a, C> {
                             )?;
                         }
 
-                        let result = self.evaluate_expression(&arm.expression, context);
+                        let result = self.evaluate_expression(&arm.expression);
 
                         self.pop_block_scope("enum struct end".to_string());
 
@@ -1273,13 +1230,13 @@ impl<'a, C> Interpreter<'a, C> {
                 ResolvedPattern::EnumSimple(enum_variant_type_ref) => {
                     if let Value::EnumVariantSimple(ref value_enum_variant_ref) = &actual_value {
                         if value_enum_variant_ref.number == enum_variant_type_ref.number {
-                            return self.evaluate_expression(&arm.expression, context);
+                            return self.evaluate_expression(&arm.expression);
                         }
                     }
                 }
 
                 ResolvedPattern::Wildcard => {
-                    return Ok(self.evaluate_expression(&arm.expression, context)?);
+                    return Ok(self.evaluate_expression(&arm.expression)?);
                 }
             }
         }
