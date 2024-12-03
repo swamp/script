@@ -15,7 +15,7 @@ use swamp_script_dep_loader::{
     parse_dependant_modules_and_resolve, DepLoaderError, DependencyParser, ParseModule,
 };
 use swamp_script_eval::value::Value;
-use swamp_script_eval::{ExecuteError, Interpreter};
+use swamp_script_eval::{eval_module, ExecuteError, ExternalFunctions, Interpreter};
 use swamp_script_eval_loader::resolve_program;
 use swamp_script_parser::prelude::*;
 use swamp_script_parser::AstParser;
@@ -147,7 +147,7 @@ fn resolve_swamp_file(path: &Path) -> Result<PathBuf, String> {
     }
 }
 
-fn register_print(interpreter: &mut Interpreter<CliContext>, output: Rc<RefCell<Vec<String>>>) {
+fn register_print(interpreter: &mut ExternalFunctions<CliContext>) {
     interpreter
         .register_external_function(
             "print",
@@ -155,7 +155,6 @@ fn register_print(interpreter: &mut Interpreter<CliContext>, output: Rc<RefCell<
             move |args: &[Value], _context| {
                 if let Some(value) = args.first() {
                     let display_value = value.to_string();
-                    output.borrow_mut().push(display_value.clone());
                     println!("{}", display_value);
                     Ok(Value::Unit)
                 } else {
@@ -167,11 +166,10 @@ fn register_print(interpreter: &mut Interpreter<CliContext>, output: Rc<RefCell<
 }
 
 pub fn eval(resolved_main_module: &ResolvedModule) -> Result<Value, CliError> {
-    let mut interpreter = Interpreter::new();
-    let output = Rc::new(RefCell::new(Vec::new()));
-    register_print(&mut interpreter, output);
+    let mut external_functions = ExternalFunctions::new();
+    register_print(&mut external_functions);
     let mut context = CliContext;
-    let value = interpreter.eval_module(resolved_main_module, &mut context)?;
+    let value = eval_module(&external_functions, resolved_main_module, &mut context)?;
     Ok(value)
 }
 
@@ -227,7 +225,9 @@ fn compile_to_resolved_program(script: &str) -> Result<ResolvedProgram, CliError
 
     let mut resolved_program = ResolvedProgram::new();
     resolve_program(
-        &mut resolved_program,
+        &resolved_program.types,
+        &mut resolved_program.state,
+        &mut resolved_program.modules,
         &module_paths_in_order,
         &parsed_modules,
     )?;

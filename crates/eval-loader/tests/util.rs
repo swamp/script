@@ -72,7 +72,9 @@ pub fn create_program(script: &str) -> Result<ResolvedProgram, TestError> {
 
     let mut resolved_program = ResolvedProgram::new();
     resolve_program(
-        &mut resolved_program,
+        &resolved_program.types,
+        &mut resolved_program.state,
+        &mut resolved_program.modules,
         &module_paths_in_order,
         &dependency_parser,
     )?;

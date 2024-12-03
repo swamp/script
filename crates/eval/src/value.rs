@@ -117,8 +117,20 @@ impl TryFrom<ValueWithSignal> for Value {
         }
     }
 }
+#[derive(Debug, PartialEq, Eq)]
+pub enum ConversionError {
+    TypeError(String),
+    ValueError(String),
+}
 
 impl Value {
+    pub fn expect_string(&self) -> Result<&str, ConversionError> {
+        match self {
+            Value::String(s) => Ok(s),
+            _ => Err(ConversionError::TypeError("Expected string value".into())),
+        }
+    }
+
     pub fn as_bool(&self) -> Result<bool, String> {
         match self {
             Value::Bool(b) => Ok(*b),

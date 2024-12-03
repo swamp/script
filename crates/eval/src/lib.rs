@@ -31,10 +31,12 @@ impl<C> Debug for EvalExternalFunction<C> {
 }
 
 pub type EvalExternalFunctionRef<C> = Rc<RefCell<EvalExternalFunction<C>>>;
+use crate::value::ConversionError;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ExecuteError {
     Error(String),
+    ConversionError(ConversionError),
     ArgumentIsNotMutable,
 }
 
@@ -49,6 +51,12 @@ pub enum ValueWithSignal {
 impl From<String> for ExecuteError {
     fn from(err: String) -> Self {
         ExecuteError::Error(err)
+    }
+}
+
+impl From<ConversionError> for ExecuteError {
+    fn from(err: ConversionError) -> Self {
+        ExecuteError::ConversionError(err)
     }
 }
 
@@ -75,47 +83,79 @@ impl Default for BlockScope {
     }
 }
 
-pub struct Interpreter<C> {
-    function_scope_stack: Vec<FunctionScope>,
-    current_block_scopes: Vec<BlockScope>,
+pub struct ExternalFunctions<C> {
     external_functions: HashMap<String, EvalExternalFunctionRef<C>>,
     external_functions_by_id: HashMap<ExternalFunctionId, EvalExternalFunctionRef<C>>,
 }
 
-impl<C> Default for Interpreter<C> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<C> Interpreter<C> {
+impl<C> ExternalFunctions<C> {
     pub fn new() -> Self {
         Self {
-            function_scope_stack: vec![FunctionScope::default()],
-            current_block_scopes: vec![BlockScope::default()],
             external_functions: HashMap::new(),
             external_functions_by_id: HashMap::new(),
         }
     }
-
-    pub fn eval_module(
+    pub fn register_external_function(
         &mut self,
-        module: &ResolvedModule,
-        context: &mut C,
-    ) -> Result<Value, ExecuteError> {
-        let signal = self.execute_statements(&module.statements, context)?;
-        Ok(signal.try_into()?)
+        name: &str,
+        function_id: ExternalFunctionId,
+        handler: impl FnMut(&[Value], &mut C) -> Result<Value, ExecuteError> + 'static,
+    ) -> Result<(), String> {
+        let external_func = EvalExternalFunction {
+            name: name.to_string().clone(),
+            func: Box::new(handler),
+            id: function_id,
+        };
+
+        let external_func_ref = Rc::new(RefCell::new(external_func));
+
+        self.external_functions_by_id
+            .insert(function_id, external_func_ref.clone());
+        self.external_functions
+            .insert(name.to_string(), external_func_ref);
+
+        Ok(())
     }
+}
 
-    pub fn util_execute_function(
-        &mut self,
-        func: &ResolvedInternalFunctionDefinitionRef,
-        arguments: &[Value],
-        context: &mut C,
-    ) -> Result<Value, ExecuteError> {
-        self.bind_parameters(&func.signature.parameters, arguments)?;
-        let with_signal = self.execute_statements(&func.statements, context)?;
-        Ok(Value::try_from(with_signal)?)
+pub fn eval_module<C>(
+    externals: &ExternalFunctions<C>,
+    module: &ResolvedModule,
+    context: &mut C,
+) -> Result<Value, ExecuteError> {
+    let mut interpreter = Interpreter::<C>::new(externals);
+    let signal = interpreter.execute_statements(&module.statements, context)?;
+    Ok(signal.try_into()?)
+}
+
+pub fn util_execute_function<C>(
+    //&mut self,
+    externals: &ExternalFunctions<C>,
+    func: &ResolvedInternalFunctionDefinitionRef,
+    arguments: &[Value],
+    context: &mut C,
+) -> Result<Value, ExecuteError> {
+    let mut interpreter = Interpreter::<C>::new(externals);
+    interpreter.bind_parameters(&func.signature.parameters, arguments)?;
+    let with_signal = interpreter.execute_statements(&func.statements, context)?;
+    interpreter.current_block_scopes.clear();
+    interpreter.function_scope_stack.clear();
+    Ok(Value::try_from(with_signal)?)
+}
+
+pub struct Interpreter<'a, C> {
+    function_scope_stack: Vec<FunctionScope>,
+    current_block_scopes: Vec<BlockScope>,
+    externals: &'a ExternalFunctions<C>,
+}
+
+impl<'a, C> Interpreter<'a, C> {
+    pub fn new(externals: &'a ExternalFunctions<C>) -> Self {
+        Self {
+            function_scope_stack: vec![FunctionScope::default()],
+            current_block_scopes: vec![BlockScope::default()],
+            externals,
+        }
     }
 
     pub fn util_execute_member(
@@ -192,28 +232,6 @@ impl<C> Interpreter<C> {
         Ok(())
     }
 
-    pub fn register_external_function(
-        &mut self,
-        name: &str,
-        function_id: ExternalFunctionId,
-        handler: impl FnMut(&[Value], &mut C) -> Result<Value, ExecuteError> + 'static,
-    ) -> Result<(), String> {
-        let external_func = EvalExternalFunction {
-            name: name.to_string().clone(),
-            func: Box::new(handler),
-            id: function_id,
-        };
-
-        let external_func_ref = Rc::new(RefCell::new(external_func));
-
-        self.external_functions_by_id
-            .insert(function_id, external_func_ref.clone());
-        self.external_functions
-            .insert(name.to_string(), external_func_ref);
-
-        Ok(())
-    }
-
     fn evaluate_static_function_call(
         &mut self,
         static_call: &ResolvedStaticCall,
@@ -239,8 +257,9 @@ impl<C> Interpreter<C> {
             }
             ResolvedFunction::External(external) => {
                 let mut func = self
+                    .externals
                     .external_functions_by_id
-                    .get_mut(&external.id)
+                    .get(&external.id)
                     .expect("external function missing")
                     .borrow_mut();
                 (func.func)(&evaluated_args, context)
@@ -255,8 +274,9 @@ impl<C> Interpreter<C> {
     ) -> Result<Value, ExecuteError> {
         let evaluated_args = self.evaluate_args(&call.arguments, context)?;
         let mut func = self
+            .externals
             .external_functions_by_id
-            .get_mut(&call.function_definition.id)
+            .get(&call.function_definition.id)
             .expect("external function missing")
             .borrow_mut();
         let v = (func.func)(&evaluated_args, context)?;
@@ -780,8 +800,9 @@ impl<C> Interpreter<C> {
                     }
                     ResolvedFunction::External(external_func) => {
                         let mut func = self
+                            .externals
                             .external_functions_by_id
-                            .get_mut(&external_func.id)
+                            .get(&external_func.id)
                             .expect("external function missing")
                             .borrow_mut();
                         (func.func)(&member_call_arguments, context)?
@@ -847,6 +868,7 @@ impl<C> Interpreter<C> {
             }
             ResolvedExpression::ExternalFunctionAccess(fetch_function) => {
                 let external_ref = self
+                    .externals
                     .external_functions_by_id
                     .get(&fetch_function.id)
                     .expect("should have external function ref");

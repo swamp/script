@@ -10,7 +10,7 @@ use swamp_script_dep_loader::{
     create_parsed_modules, parse_dependant_modules_and_resolve, DepLoaderError,
 };
 use swamp_script_eval::value::Value;
-use swamp_script_eval::{ExecuteError, Interpreter};
+use swamp_script_eval::{eval_module, ExecuteError, ExternalFunctions};
 use swamp_script_eval_loader::resolve_program;
 use swamp_script_parser::Rule;
 use swamp_script_semantic::{ExternalFunctionId, ModulePath, ResolvedProgram};
@@ -82,7 +82,9 @@ fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError>
 
     let mut resolved_program = ResolvedProgram::new();
     resolve_program(
-        &mut resolved_program,
+        &resolved_program.types,
+        &mut resolved_program.state,
+        &mut resolved_program.modules,
         &module_paths_in_order,
         &dependency_parser,
     )?;
@@ -93,15 +95,15 @@ fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError>
         .expect("can not find module");
 
     // Run
-    let mut interpreter = Interpreter::new();
-    register_print(1, &mut interpreter);
+    let mut externals = ExternalFunctions::new();
+    register_print(1, &mut externals);
 
     let mut context = TestContext {
         secret: 42,
         output: vec![],
     };
 
-    let value = interpreter.eval_module(resolved_main_module, &mut context)?;
+    let value = eval_module(&externals, resolved_main_module, &mut context)?;
 
     Ok((value, context.output))
 }
@@ -111,8 +113,11 @@ pub struct TestContext {
     pub output: Vec<String>,
 }
 
-fn register_print(external_id: ExternalFunctionId, interpreter: &mut Interpreter<TestContext>) {
-    interpreter
+fn register_print(
+    external_id: ExternalFunctionId,
+    external_functions: &mut ExternalFunctions<TestContext>,
+) {
+    external_functions
         .register_external_function("print", external_id, move |args: &[Value], context| {
             if let Some(value) = args.first() {
                 let display_value = value.to_string();

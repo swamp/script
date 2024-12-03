@@ -11,29 +11,25 @@ use swamp_script_semantic::ResolvedProgramState;
 use swamp_script_semantic::ResolvedProgramTypes;
 
 pub fn resolve_to_new_module(
-    resolved_program: &mut ResolvedProgram,
+    types: &ResolvedProgramTypes,
+    state: &mut ResolvedProgramState,
+    modules: &mut ResolvedModules,
+
     module_path: &ModulePath,
     ast_module: &ParseModule,
 ) -> Result<(), ResolveError> {
     let mut resolved_module = ResolvedModule::new(module_path.clone());
 
-    // Extract the components before passing them
-    let types = &resolved_program.types;
-    let state = &mut resolved_program.state;
-    let modules = &resolved_program.modules;
-
     resolve_to_existing_module(types, state, modules, &mut resolved_module, ast_module)?;
 
-    resolved_program
-        .modules
-        .add_module(module_path.clone(), resolved_module)?;
+    modules.add_module(module_path.clone(), resolved_module)?;
     Ok(())
 }
 
 pub fn resolve_to_existing_module(
     types: &ResolvedProgramTypes,
     state: &mut ResolvedProgramState,
-    modules: &ResolvedModules,
+    modules: &mut ResolvedModules,
     resolved_module: &mut ResolvedModule,
     ast_module: &ParseModule,
 ) -> Result<(), ResolveError> {
@@ -52,13 +48,30 @@ pub fn resolve_to_existing_module(
 }
 
 pub fn resolve_program(
-    resolved_program: &mut ResolvedProgram,
+    types: &ResolvedProgramTypes,
+    state: &mut ResolvedProgramState,
+    modules: &mut ResolvedModules,
+
     module_paths_in_order: &[ModulePath],
     parsed_modules: &DependencyParser,
 ) -> Result<(), ResolveError> {
     for module_path in module_paths_in_order {
         if let Some(parse_module) = parsed_modules.get_parsed_module(module_path) {
-            resolve_to_new_module(resolved_program, module_path, parse_module)?;
+            if modules.contains_key(module_path.clone()) {
+                let mut existing_resolve_module = modules.modules.remove(module_path).unwrap();
+                resolve_to_existing_module(
+                    types,
+                    state,
+                    modules,
+                    &mut existing_resolve_module,
+                    parse_module,
+                )?;
+                modules
+                    .modules
+                    .insert(module_path.clone(), existing_resolve_module);
+            } else {
+                resolve_to_new_module(types, state, modules, module_path, parse_module)?;
+            }
         } else {
             return Err(ResolveError::CanNotFindModule(module_path.clone()));
         }
