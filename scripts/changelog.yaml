@@ -20,6 +20,13 @@ repo: swamp/script
 # security
 
 releases:
+  v0.0.4:
+    date: "2024-12-03"
+    notice: |
+      - Add context to Interpreter
+      - Separate out external functions
+      - Split up resolve_definition and insert_definition
+
   v0.0.3:
     date: "2024-12-02"
     notice: |
