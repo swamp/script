@@ -68,6 +68,13 @@ pub enum ResolvedType {
 }
 
 impl ResolvedType {
+    pub fn expect_struct_type(&self) -> Result<ResolvedStructTypeRef, SemanticError> {
+        match self {
+            ResolvedType::Struct(struct_type_ref) => Ok(struct_type_ref.clone()),
+            _ => Err(SemanticError::ResolveNotStruct),
+        }
+    }
+
     pub fn display_name(&self) -> String {
         match self {
             Self::Alias(name, _) => name.0.clone(),
@@ -1254,12 +1261,8 @@ impl ResolvedModules {
         }
     }
 
-    pub fn add_module(
-        &mut self,
-        module_path: ModulePath,
-        module: ResolvedModule,
-    ) -> Result<(), SemanticError> {
-        self.modules.insert(module_path, module);
+    pub fn add_module(&mut self, module: ResolvedModule) -> Result<(), SemanticError> {
+        self.modules.insert(module.module_path.clone(), module);
         Ok(())
     }
 

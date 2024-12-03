@@ -230,6 +230,7 @@ pub enum SemanticError {
     SeqMapError(SeqMapError),
     DuplicateTypeAlias(String),
     CanOnlyUseStructForMemberFunctions,
+    ResolveNotStruct,
 }
 
 impl From<SeqMapError> for SemanticError {

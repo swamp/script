@@ -22,7 +22,7 @@ pub fn resolve_to_new_module(
 
     resolve_to_existing_module(types, state, modules, &mut resolved_module, ast_module)?;
 
-    modules.add_module(module_path.clone(), resolved_module)?;
+    modules.add_module(resolved_module)?;
     Ok(())
 }
 
