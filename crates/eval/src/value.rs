@@ -131,6 +131,13 @@ impl Value {
         }
     }
 
+    pub fn expect_int(&self) -> Result<i32, ConversionError> {
+        match self {
+            Value::Int(v) => Ok(*v),
+            _ => Err(ConversionError::TypeError("Expected int value".into())),
+        }
+    }
+
     pub fn as_bool(&self) -> Result<bool, String> {
         match self {
             Value::Bool(b) => Ok(*b),
@@ -152,6 +159,13 @@ impl Value {
                     None
                 }
             }
+            _ => None,
+        }
+    }
+
+    pub fn downcast_hidden_rust<T: RustType + 'static>(&self) -> Option<Rc<RefCell<Box<T>>>> {
+        match self {
+            Value::Struct(_struct_ref, fields, _) => fields[0].downcast_rust(),
             _ => None,
         }
     }

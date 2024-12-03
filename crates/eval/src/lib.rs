@@ -143,6 +143,21 @@ pub fn util_execute_function<C>(
     Ok(Value::try_from(with_signal)?)
 }
 
+/*
+
+pub fn util_execute_member(
+    &mut self,
+    impl_member: &ResolvedInternalFunctionDefinitionRef,
+    arguments: &[Value],
+    context: &mut C,
+) -> Result<Value, ExecuteError> {
+    self.bind_parameters(&impl_member.signature.parameters, arguments)?;
+    let with_signal = self.execute_statements(&impl_member.statements, context)?;
+    Ok(with_signal.try_into()?)
+}
+
+ */
+
 pub struct Interpreter<'a, C> {
     function_scope_stack: Vec<FunctionScope>,
     current_block_scopes: Vec<BlockScope>,
@@ -156,17 +171,6 @@ impl<'a, C> Interpreter<'a, C> {
             current_block_scopes: vec![BlockScope::default()],
             externals,
         }
-    }
-
-    pub fn util_execute_member(
-        &mut self,
-        impl_member: &ResolvedInternalFunctionDefinitionRef,
-        arguments: &[Value],
-        context: &mut C,
-    ) -> Result<Value, ExecuteError> {
-        self.bind_parameters(&impl_member.signature.parameters, arguments)?;
-        let with_signal = self.execute_statements(&impl_member.statements, context)?;
-        Ok(with_signal.try_into()?)
     }
 
     fn push_function_scope(&mut self, debug_str: String) {

@@ -3,11 +3,9 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use clap::{Parser, Subcommand};
-use std::cell::RefCell;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
-use std::rc::Rc;
 use std::{fs, io};
 use swamp_script_analyzer::ResolveError;
 use swamp_script_ast::{ModulePath, Parameter, Type, Variable};
@@ -15,7 +13,7 @@ use swamp_script_dep_loader::{
     parse_dependant_modules_and_resolve, DepLoaderError, DependencyParser, ParseModule,
 };
 use swamp_script_eval::value::Value;
-use swamp_script_eval::{eval_module, ExecuteError, ExternalFunctions, Interpreter};
+use swamp_script_eval::{eval_module, ExecuteError, ExternalFunctions};
 use swamp_script_eval_loader::resolve_program;
 use swamp_script_parser::prelude::*;
 use swamp_script_parser::AstParser;
