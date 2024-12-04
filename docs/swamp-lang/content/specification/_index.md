@@ -183,7 +183,7 @@ print(x)  // Outputs: 10
 ```
 
 
-## Assignments (setting a value)
+## Assignments
 
 ### Variable Assignment
 
@@ -431,3 +431,37 @@ match x {
 - Inclusive Range. `0..=10` (not implemented yet)
 - Arrays (not implemented yet)
 - Maps. Key value pairs. (not implemented yet)
+
+## Mut Modifier
+
+Used on variables and parameters to indicate that the value can be changed.
+
+
+### Variables
+```swamp
+mut x = 10
+x = 20
+``` 
+
+### Parameters
+```swamp
+fn my_function(mut a: Int) -> Int {
+    a = 20
+    a
+}
+```
+
+### Implementation Block
+
+```swamp
+impl MyStruct {
+    fn my_function(mut self, a: Int, mut other: Int) -> Int {
+        self.x = 20
+        other = 30
+        self.x + other + a
+    }
+}
+```
+
+
+
