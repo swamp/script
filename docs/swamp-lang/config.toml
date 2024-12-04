@@ -25,8 +25,8 @@ social = [
 navbar_items = [
   { code = "en", nav_items = [
     { url = "/", name = "Home" },
-    # { url = "/docs/", name = "Docs" },
-    # { url = "/blog/", name = "Blog" }
+    { url = "/specification/", name = "Specification" },
+    { url = "/roadmap/", name = "Roadmap" },
   ]}
 ]
 
@@ -35,7 +35,7 @@ footer_items = [
   { code = "en", nav_items = [
     { url = "/", name = "Home" }
     # { url = "/docs/", name = "Docs" },
-    # { url = "/blog/", name = "Blog" }
+    # { url = "/blog/", name = "Blog" },
   ]}
 ]
 

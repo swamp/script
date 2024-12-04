@@ -161,3 +161,12 @@ contexts:
     - match: '\}'
       pop: true
     - include: main
+
+  block_comment:
+    - match: '\*/'
+      scope: comment.block
+      pop: true
+    - match: .
+      scope: comment.block
+    - match: \n
+      scope: comment.block

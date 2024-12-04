@@ -60,7 +60,7 @@ fn process(result: Result) {
 }
 ```
 
-### Structs and Methods
+### Structs and Member functions
 
 ```swamp
 struct Point {
@@ -83,23 +83,23 @@ print('Distance: {p1.distance(p2)}')
 
 ### Mutable Variables
 
-In Swamp Script, variables are immutable by default, meaning their values cannot be changed once assigned. Arguments are passed by value, meaning they are copied when passed to a function. Swamp encourages you to use immutable variables as long as it is possible.
-This helps prevent accidental modifications and ensures safer code. To declare a mutable variable, use the `mut` keyword:
+In Swamp, variables are immutable by default and arguments are passed by value (copied when passed to functions). 
+This design encourages immutability for safer, more predictable code. To make a variable mutable, use the `mut` keyword:
+
 
 ```swamp
 mut x = 10
 x = 20  // Now you can change the value of x
 ```
 
-If you a function wants to modify a variable, it must declare the parameter as mutable. This makes it explicit that the function can change the variable's value:
+
+ When passing a mutable variable to a function, you must explicitly mark it as mutable at the call site, even if the variable was already declared as mutable:
 
 ```swamp
 fn increment(mut x: Int) {
     x += 1
 }
-```
 
-```swamp
 mut a = 5 // a will be changed in the future
 
 // even though a is already mutable, we want to make 
