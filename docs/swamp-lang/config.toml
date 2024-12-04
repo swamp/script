@@ -17,9 +17,6 @@ extra_syntaxes_and_themes = ["syntax-themes"]
 author = "Swamp Team"
 description = "Official documentation for the Swamp programming language"
 show_social = true
-social = [
-  { name = "GitHub", url = "https://github.com/swamp/script", icon = "fab fa-github" },
-]
 
 # Navigation - DeepThought
 navbar_items = [
@@ -41,5 +38,9 @@ footer_items = [
 
 is_dark = true 
 
+
 [extra.footer]
-info = ''
+info = 'Copyright 2024 Peter Bjorklund. All rights reserved. https://github.com/swamp/script'
+
+[extra.social]
+github = "swamp/script"
