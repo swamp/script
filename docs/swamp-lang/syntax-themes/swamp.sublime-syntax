@@ -1,0 +1,163 @@
+%YAML 1.2
+---
+name: Swamp
+file_extensions: [swamp]
+scope: source.swamp
+
+contexts:
+  main:
+    # Comments
+    - match: '///'
+      scope: comment.line.documentation
+      push: line_comment
+
+    - match: '//'
+      scope: comment.line.double-slash
+      push: line_comment
+
+    - match: '/\*'
+      scope: comment.block
+      push: block_comment
+
+
+
+    # Keywords
+    - match: '\b(if|else|for|in|while|return|break|continue|match|use|from)\b'
+      scope: keyword.control
+
+    - match: '\b(struct|enum|trait|impl|type|external|fn)\b'
+      scope: keyword.declaration
+
+    - match: '\bmut\b'
+      scope: storage.modifier.mut
+
+    - match: '\bself\b'
+      scope: variable.language.self.rust
+      # test with one of these when I have time:
+      # scope: variable.parameter.self
+      # scope: variable.language.this
+      # scope: storage.modifier.self
+      # scope: keyword.other.self
+
+    # Types
+    - match: '\b(Int|Float|String|Bool)\b'
+      scope: support.type.primitive
+
+    # Module paths and type identifiers
+    - match: '([a-z][a-z0-9_]*::)+'
+      scope: entity.name.namespace
+    
+    - match: '\b[A-Z][a-zA-Z0-9_]*\b'
+      scope: entity.name.type
+
+
+
+    # Function and Method Calls
+    - match: '\b([a-z][a-zA-Z0-9_]*)\s*\('
+      captures:
+        1: entity.name.function.call
+
+    # Method Calls
+    - match: '\.([a-z][a-zA-Z0-9_]*)\s*\('
+      captures:
+        1: entity.name.function.method
+
+    # Properties
+    - match: '\.([a-z][a-zA-Z0-9_]*)\b(?!\s*\()'
+      captures:
+        1: variable.other.property      
+
+    # Functions
+    - match: '\b(fn)\s+([a-z][a-zA-Z0-9_]*)\b'
+      captures:
+        1: keyword.declaration
+        2: entity.name.function
+
+    # Static calls
+    - match: '\b([A-Z][a-zA-Z0-9_]*)(::)([a-z][a-zA-Z0-9_]*)\b'
+      captures:
+        1: entity.name.type
+        2: punctuation.separator
+        3: entity.name.function
+
+
+
+    # LITERALS
+
+
+    # Strings
+    - match: '"'
+      scope: string.quoted.double
+      push: double_string
+
+    - match: "'"
+      scope: string.quoted.single
+      push: interpolated_string
+
+    # Numbers
+    - match: '-?\b\d+\.\d+\b'
+      scope: constant.numeric.float
+
+    - match: '-?\b\d+\b'
+      scope: constant.numeric.integer
+
+    # Booleans and Unit
+    - match: '\b(true|false|\(\))\b'
+      scope: constant.language
+
+
+
+
+    # Operators
+    - match: '[+\-*/%]|\+\+'
+      scope: keyword.operator.arithmetic
+
+    - match: '==|!=|<=|>=|<|>'
+      scope: keyword.operator.comparison
+
+    - match: '\|\||&&|!'
+      scope: keyword.operator.logical
+
+    - match: '\.\.'
+      scope: keyword.operator.range
+
+    - match: '='
+      scope: keyword.operator.assignment
+
+    # Punctuation
+    - match: '[{}()\[\],:;]'
+      scope: punctuation.separator
+
+    # Variables and fields
+    - match: '\b[a-z][a-zA-Z0-9_]*\b'
+      scope: variable.other
+
+
+  line_comment:
+    - match: $\n?
+      pop: true
+    - match: .
+      scope: comment.line.double-slash
+
+  double_string:
+    - match: '"'
+      scope: string.quoted.double
+      pop: true
+    - match: '\\\.'
+      scope: constant.character.escape
+    - match: .
+      scope: string.quoted.double
+
+  interpolated_string:
+    - match: "'"
+      scope: string.quoted.single
+      pop: true
+    - match: '\{'
+      push: interpolation
+    - match: .
+      scope: string.quoted.single
+
+  interpolation:
+    - match: '\}'
+      pop: true
+    - include: main
