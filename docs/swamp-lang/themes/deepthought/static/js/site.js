@@ -171,14 +171,10 @@ function search() {
 }
 
 function documentReadyCallback() {
-
-  if (localStorage.getItem("theme") === "dark" || true) {
-    document.body.setAttribute("theme", "dark");
-    document.querySelectorAll("img, picture, video, pre").forEach(img => img.setAttribute("theme", "dark"));
-    document.querySelectorAll(".vimeo, .youtube, .chart").forEach(video => video.setAttribute("theme", "dark"));
-    document.getElementById("dark-mode").setAttribute("title", "Switch to light theme");
-  }
-
+  document.body.setAttribute("theme", "dark");
+  document.querySelectorAll("img, picture, video, pre").forEach(img => img.setAttribute("theme", "dark"));
+  document.querySelectorAll(".vimeo, .youtube, .chart").forEach(video => video.setAttribute("theme", "dark"));
+  
   document.querySelector(".navbar-burger").addEventListener("click", () => {
     document.querySelector(".navbar-burger").classList.toggle("is-active");
     document.querySelector(".navbar-menu").classList.toggle("is-active");
@@ -214,9 +210,7 @@ function documentReadyCallback() {
     search();
   });
 
-  document.getElementById("dark-mode").addEventListener("click", () => {
 
-  });
 
   if (typeof mermaid !== "undefined") {
     mermaid.initialize({ startOnLoad: true });
