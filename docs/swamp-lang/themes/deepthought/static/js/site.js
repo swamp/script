@@ -172,11 +172,13 @@ function search() {
 
 function documentReadyCallback() {
 
+  if (localStorage.getItem("theme") === "dark" || true) {
     document.body.setAttribute("theme", "dark");
     document.querySelectorAll("img, picture, video, pre").forEach(img => img.setAttribute("theme", "dark"));
     document.querySelectorAll(".vimeo, .youtube, .chart").forEach(video => video.setAttribute("theme", "dark"));
+    document.getElementById("dark-mode").setAttribute("title", "Switch to light theme");
+  }
 
-    
   document.querySelector(".navbar-burger").addEventListener("click", () => {
     document.querySelector(".navbar-burger").classList.toggle("is-active");
     document.querySelector(".navbar-menu").classList.toggle("is-active");
@@ -213,24 +215,7 @@ function documentReadyCallback() {
   });
 
   document.getElementById("dark-mode").addEventListener("click", () => {
-    if (
-      localStorage.getItem("theme") == null ||
-      localStorage.getItem("theme") == "light"
-    ) {
-      localStorage.setItem("theme", "dark");
-      document.body.setAttribute("theme", "dark");
-      document.querySelectorAll("img, picture, video, pre").forEach(img => img.setAttribute("theme", "dark"));
-      document.querySelectorAll(".vimeo, .youtube, .chart").forEach(video => video.setAttribute("theme", "dark"));
 
-      document.getElementById("dark-mode").setAttribute("title", "Switch to light theme");
-    } else {
-      localStorage.setItem("theme", "light");
-      document.body.removeAttribute("theme", "dark");
-      document.querySelectorAll("img, picture, video, pre").forEach(img => img.removeAttribute("theme", "dark"))
-      document.querySelectorAll(".vimeo, .youtube, .chart").forEach(video => video.removeAttribute("theme", "dark"));
-
-      document.getElementById("dark-mode").setAttribute("title", "Switch to dark theme");
-    }
   });
 
   if (typeof mermaid !== "undefined") {
