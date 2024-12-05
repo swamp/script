@@ -1258,3 +1258,25 @@ Let(VariableAssignment(a), Literal(none))
             "#,
     )
 }
+
+#[test_log::test]
+fn if_assignment() {
+    check(
+        "
+    a = 3
+    c = if b = a > 3 {
+        b + 1
+    } else {
+        b + 2
+    }
+
+            ",
+        "
+
+Let(VariableAssignment(a), Literal(Int(3)))
+Let(VariableAssignment(c), IfElse(VariableAssignment(b, BinaryOp(VariableAccess(a), GreaterThan, Literal(Int(3)))), BinaryOp(VariableAccess(b), Add, Literal(Int(1))), BinaryOp(VariableAccess(b), Add, Literal(Int(2)))))
+
+
+            ",
+    );
+}

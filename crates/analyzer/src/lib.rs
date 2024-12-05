@@ -969,9 +969,14 @@ impl<'a> Resolver<'a> {
 
             // Comparison
             Expression::IfElse(condition, consequence, alternate) => {
+                // Start a new scope for both branches
+                self.push_block_scope();
+
                 let resolved_condition = self.resolve_bool_expression(condition)?;
                 let resolved_consequence = self.resolve_expression(&consequence)?;
                 let resolved_alternate = self.resolve_expression(&alternate)?;
+
+                self.pop_block_scope();
 
                 ResolvedExpression::IfElse(
                     Box::from(resolved_condition),

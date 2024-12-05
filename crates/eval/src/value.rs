@@ -146,6 +146,16 @@ impl Value {
         }
     }
 
+    pub fn is_truthy(&self) -> Result<bool, String> {
+        let v = match self {
+            Value::Bool(b) => *b,
+            Value::Option(inner_option) => inner_option.is_some(),
+            _ => return Err("Expected boolean value".to_string()),
+        };
+
+        Ok(v)
+    }
+
     pub fn downcast_rust<T: RustType + 'static>(&self) -> Option<Rc<RefCell<Box<T>>>> {
         match self {
             Value::RustValue(rc) => {

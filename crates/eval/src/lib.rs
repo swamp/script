@@ -542,10 +542,11 @@ impl<'a, C> Interpreter<'a, C> {
             // ==================== ASSIGNMENT ====================
             ResolvedExpression::VariableAssignment(resolved_var_assignment) => {
                 let new_value = self.evaluate_expression(&resolved_var_assignment.expression)?;
-                self.overwrite_existing_var(
+                self.set_var(
                     resolved_var_assignment.variable_ref.scope_index,
                     resolved_var_assignment.variable_ref.variable_index,
                     new_value.clone(),
+                    resolved_var_assignment.variable_ref.is_mutable(),
                 )?;
 
                 new_value
@@ -834,12 +835,16 @@ impl<'a, C> Interpreter<'a, C> {
 
             // Comparing
             ResolvedExpression::IfElse(condition, then_expr, else_expr) => {
+                self.push_block_scope("if_else".to_string());
                 let cond_value = self.evaluate_expression(&condition.expression)?;
-                match cond_value {
-                    Value::Bool(true) => self.evaluate_expression(then_expr)?,
-                    Value::Bool(false) => self.evaluate_expression(else_expr)?,
-                    _ => Err("If condition must evaluate to a boolean".to_string())?,
-                }
+                let result = if cond_value.is_truthy()? {
+                    self.evaluate_expression(then_expr)?
+                } else {
+                    self.evaluate_expression(else_expr)?
+                };
+
+                self.pop_block_scope("if_else".to_string());
+                result
             }
 
             ResolvedExpression::Match(resolved_match) => self.eval_match(resolved_match)?,
@@ -883,7 +888,10 @@ impl<'a, C> Interpreter<'a, C> {
                 }
 
                 ResolvedStatement::WhileLoop(condition, body) => {
-                    while self.evaluate_expression(&condition.expression)?.as_bool()? {
+                    while self
+                        .evaluate_expression(&condition.expression)?
+                        .is_truthy()?
+                    {
                         match self.execute_statements(body) {
                             Err(e) => return Err(e),
                             Ok(signal) => match signal {
@@ -903,9 +911,16 @@ impl<'a, C> Interpreter<'a, C> {
 
                 ResolvedStatement::If(condition, consequences, optional_alternative) => {
                     let cond_value = self.evaluate_expression(&condition.expression)?;
-                    match cond_value {
-                        Value::Bool(true) => {
-                            match self.execute_statements(consequences)? {
+                    if cond_value.is_truthy()? {
+                        match self.execute_statements(consequences)? {
+                            ValueWithSignal::Value(_v) => {} // Just discard normal values
+                            ValueWithSignal::Break => return Ok(ValueWithSignal::Break),
+                            ValueWithSignal::Return(v) => return Ok(ValueWithSignal::Return(v)),
+                            ValueWithSignal::Continue => return Ok(ValueWithSignal::Continue),
+                        }
+                    } else {
+                        if let Some(alternative) = optional_alternative {
+                            match self.execute_statements(alternative)? {
                                 ValueWithSignal::Value(_v) => {} // Just discard normal values
                                 ValueWithSignal::Break => return Ok(ValueWithSignal::Break),
                                 ValueWithSignal::Return(v) => {
@@ -914,22 +929,7 @@ impl<'a, C> Interpreter<'a, C> {
                                 ValueWithSignal::Continue => return Ok(ValueWithSignal::Continue),
                             }
                         }
-                        Value::Bool(false) => {
-                            if let Some(alternative) = optional_alternative {
-                                match self.execute_statements(alternative)? {
-                                    ValueWithSignal::Value(_v) => {} // Just discard normal values
-                                    ValueWithSignal::Break => return Ok(ValueWithSignal::Break),
-                                    ValueWithSignal::Return(v) => {
-                                        return Ok(ValueWithSignal::Return(v))
-                                    }
-                                    ValueWithSignal::Continue => {
-                                        return Ok(ValueWithSignal::Continue)
-                                    }
-                                }
-                            }
-                        }
-                        _ => return Err("If statement must evaluate to a boolean".to_string())?,
-                    };
+                    }
                     continue; // no need for the switch
                 }
 

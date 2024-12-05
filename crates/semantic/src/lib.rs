@@ -856,17 +856,17 @@ impl Display for ResolvedStatement {
             ResolvedStatement::ForLoop(target, iterator, statements) => {
                 write!(f, "{target} {iterator:?} {statements:?}")
             }
-            ResolvedStatement::WhileLoop(_, _) => write!(f, "WhileLoop"),
-            ResolvedStatement::Return(_) => write!(f, "Return"),
-            ResolvedStatement::Break => write!(f, "Break"),
-            ResolvedStatement::Continue => write!(f, "Continue"),
-            ResolvedStatement::Expression(expression) => write!(f, "{}", expression),
-            ResolvedStatement::Block(_) => write!(f, "Block"),
-            ResolvedStatement::If(_, _, _) => write!(f, "If"),
-            ResolvedStatement::LetVar(variable_ref, expr) => {
+            Self::WhileLoop(_, _) => write!(f, "WhileLoop"),
+            Self::Return(_) => write!(f, "Return"),
+            Self::Break => write!(f, "Break"),
+            Self::Continue => write!(f, "Continue"),
+            Self::Expression(expression) => write!(f, "{}", expression),
+            Self::Block(_) => write!(f, "Block"),
+            Self::If(_, _, _) => write!(f, "If"),
+            Self::LetVar(variable_ref, expr) => {
                 write!(f, "let {variable_ref} = {expr}")
             }
-            ResolvedStatement::SetVar(variable_ref, expr) => {
+            Self::SetVar(variable_ref, expr) => {
                 write!(f, "set {variable_ref} = {expr}")
             }
         }

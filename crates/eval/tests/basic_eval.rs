@@ -418,3 +418,37 @@ fn basic_eval_19() {
 
     assert_eq!(result, Value::Option(None));
 }
+
+#[test_log::test]
+fn basic_eval_20() {
+    let result = eval(
+        r#"
+
+    a = 4
+    mut c = if b = a > 3 {
+       b
+    } else {
+       b
+    }
+    "#,
+    );
+
+    assert_eq!(result, Value::Bool(true));
+}
+
+#[test_log::test]
+fn basic_eval_21() {
+    let result = eval(
+        r#"
+
+    a = none
+    mut c = if a? {
+       'it was some'
+    } else {
+       'none'
+    }
+    "#,
+    );
+
+    assert_eq!(result, Value::String("none".to_string()));
+}
