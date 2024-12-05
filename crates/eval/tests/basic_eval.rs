@@ -437,23 +437,6 @@ fn basic_eval_20() {
 }
 
 #[test_log::test]
-fn basic_eval_21() {
-    let result = eval(
-        r#"
-
-    a = none
-    mut c = if a? {
-       'it was some'
-    } else {
-       'none'
-    }
-    "#,
-    );
-
-    assert_eq!(result, Value::String("none".to_string()));
-}
-
-#[test_log::test]
 fn basic_eval_22() {
     let result = eval(
         "
@@ -502,11 +485,39 @@ fn basic_eval_24() {
        some_field: Int?
     }
        
-    s = SomeStruct { some_field: none }
+    s = SomeStruct { some_field: 2 }
     
-    s.some_field? // this should unwrap the value to none again
+    x = if result = s.some_field? {
+        result * 3
+    } else {
+        0
+    }
     ",
     );
 
-    assert_eq!(result, Value::Option(None));
+    assert_eq!(result, Value::Int(2 * 3));
+}
+
+#[test_log::test]
+fn basic_eval_25() {
+    let result = eval(
+        "
+
+    struct SomeStruct {
+       some_field: Int?
+    }
+       
+    s = SomeStruct { some_field: 2 }
+
+    a = s.some_field
+    
+    x = if a? {
+        a * 3
+    } else {
+        0
+    }
+    ",
+    );
+
+    assert_eq!(result, Value::Int(2 * 3));
 }

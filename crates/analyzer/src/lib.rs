@@ -89,7 +89,9 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
         ResolvedExpression::ExclusiveRange(range_type, _, _) => {
             ResolvedType::ExclusiveRange(range_type.clone())
         }
-        ResolvedExpression::IfElse(_condition, consequence, _alternate) => resolution(&consequence),
+        ResolvedExpression::IfElse(_condition, consequence, _alternate) => resolution(consequence),
+        ResolvedExpression::IfElseOnlyVariable { true_block, .. } => resolution(true_block),
+        ResolvedExpression::IfElseAssignExpression { true_block, .. } => resolution(true_block),
         ResolvedExpression::Match(resolved_match) => resolved_match.arms[0].expression_type.clone(),
         ResolvedExpression::LetVar(_, _) => todo!(),
         ResolvedExpression::Literal(literal) => match literal {
@@ -173,6 +175,8 @@ pub enum ResolveError {
     TypeAliasNotAStruct(QualifiedTypeIdentifier),
     ModuleNotUnique,
     ExpressionIsOfWrongFieldType,
+    ExpectedOptional,
+    ExpectedVariable,
 }
 
 impl From<SemanticError> for ResolveError {
@@ -983,21 +987,9 @@ impl<'a> Resolver<'a> {
 
             // Comparison
             Expression::IfElse(condition, consequence, alternate) => {
-                // Start a new scope for both branches
-                self.push_block_scope();
-
-                let resolved_condition = self.resolve_bool_expression(condition)?;
-                let resolved_consequence = self.resolve_expression(&consequence)?;
-                let resolved_alternate = self.resolve_expression(&alternate)?;
-
-                self.pop_block_scope();
-
-                ResolvedExpression::IfElse(
-                    Box::from(resolved_condition),
-                    Box::from(resolved_consequence),
-                    Box::from(resolved_alternate),
-                )
+                self.analyze_optional_condition(condition, consequence, alternate)?
             }
+
             Expression::Match(expression, arms) => {
                 ResolvedExpression::Match(self.resolve_match(expression, arms)?)
             }
@@ -2049,6 +2041,126 @@ impl<'a> Resolver<'a> {
         };
 
         ResolvedPattern::Literal(resolved_literal)
+    }
+
+    /// Analyzes an expression that might contain an optional unwrap operator,
+    /// creating a new scope with the unwrapped shadow variable if necessary.
+    /// It is a bit hacky code in the analyzer, but it enables a very ergonomic syntax of
+    /// `if a? { print('a is {a}') }
+    fn analyze_optional_condition(
+        &mut self,
+        condition: &Expression,
+        true_block: &Expression,
+        false_block: &Expression,
+    ) -> Result<ResolvedExpression, ResolveError> {
+        match condition {
+            Expression::PostfixOp(PostfixOperator::Unwrap, expr) => {
+                if let Expression::VariableAccess(var) = &**expr {
+                    self.handle_optional_unwrap(var, expr, true_block, false_block)
+                } else {
+                    Err(ResolveError::ExpectedVariable)
+                }
+            }
+
+            Expression::VariableAssignment(var, expr) => {
+                if let Expression::PostfixOp(PostfixOperator::Unwrap, inner_expr) = &**expr {
+                    self.handle_optional_assign_unwrap(var, inner_expr, true_block, false_block)
+                } else {
+                    self.resolve_normal_if(condition, true_block, false_block)
+                }
+            }
+
+            _ => self.resolve_normal_if(condition, true_block, false_block),
+        }
+    }
+
+    fn handle_optional_unwrap(
+        &mut self,
+        var: &Variable,
+        expr: &Expression,
+        true_block: &Expression,
+        false_block: &Expression,
+    ) -> Result<ResolvedExpression, ResolveError> {
+        let resolved_var_expr = self.resolve_expression(expr)?;
+
+        if let ResolvedType::Optional(inner_type) = resolution(&resolved_var_expr) {
+            let (resolved_var_ref, resolved_true) =
+                self.analyze_in_new_scope(var, &*inner_type, true_block)?;
+
+            Ok(ResolvedExpression::IfElseOnlyVariable {
+                variable: resolved_var_ref,
+                optional_expr: Box::new(resolved_var_expr),
+                true_block: Box::new(resolved_true),
+                false_block: Box::new(self.resolve_expression(false_block)?),
+            })
+        } else {
+            Err(ResolveError::ExpectedOptional)
+        }
+    }
+
+    fn handle_optional_assign_unwrap(
+        &mut self,
+        var: &Variable,
+        inner_expr: &Expression,
+        true_block: &Expression,
+        false_block: &Expression,
+    ) -> Result<ResolvedExpression, ResolveError> {
+        let resolved_expr = self.resolve_expression(inner_expr)?;
+
+        if let ResolvedType::Optional(inner_type) = resolution(&resolved_expr) {
+            let (resolved_var_ref, resolved_true) =
+                self.analyze_in_new_scope(var, &inner_type, true_block)?;
+
+            Ok(ResolvedExpression::IfElseAssignExpression {
+                variable: resolved_var_ref,
+                optional_expr: Box::new(resolved_expr),
+                true_block: Box::new(resolved_true),
+                false_block: Box::new(self.resolve_expression(false_block)?),
+            })
+        } else {
+            Err(ResolveError::ExpectedOptional)
+        }
+    }
+
+    fn analyze_in_new_scope(
+        &mut self,
+        var: &Variable,
+        type_: &ResolvedType,
+        block: &Expression,
+    ) -> Result<(ResolvedVariableRef, ResolvedExpression), ResolveError> {
+        self.push_block_scope();
+        let resolved_var_ref = self.set_variable_with_type(var, type_)?;
+        let resolved_expr = self.resolve_expression(block)?;
+        self.pop_block_scope();
+
+        Ok((resolved_var_ref, resolved_expr))
+    }
+
+    fn analyze_block_with_scope(
+        &mut self,
+        block: &Expression,
+    ) -> Result<ResolvedExpression, ResolveError> {
+        self.push_block_scope();
+        let resolved = self.resolve_expression(block)?;
+        self.pop_block_scope();
+        Ok(resolved)
+    }
+
+    fn resolve_normal_if(
+        &mut self,
+        condition: &Expression,
+        true_block: &Expression,
+        false_block: &Expression,
+    ) -> Result<ResolvedExpression, ResolveError> {
+        let resolved_condition = self.resolve_expression(condition)?;
+        let resolved_true = self.analyze_block_with_scope(true_block)?;
+        let resolved_false = self.analyze_block_with_scope(false_block)?;
+
+        Ok(ResolvedExpression::IfElse(
+            Box::from(resolved_condition),
+            Box::from(resolved_true),
+            Box::from(resolved_false),
+        ))
     }
 }
 

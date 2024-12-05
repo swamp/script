@@ -40,6 +40,7 @@ pub enum ExecuteError {
     ArgumentIsNotMutable,
     CanNotUnwrap,
     IllegalIterator,
+    ExpectedOptional,
 }
 
 #[derive(Debug)]
@@ -836,7 +837,7 @@ impl<'a, C> Interpreter<'a, C> {
             // Comparing
             ResolvedExpression::IfElse(condition, then_expr, else_expr) => {
                 self.push_block_scope("if_else".to_string());
-                let cond_value = self.evaluate_expression(&condition.expression)?;
+                let cond_value = self.evaluate_expression(&condition)?;
                 let result = if cond_value.is_truthy()? {
                     self.evaluate_expression(then_expr)?
                 } else {
@@ -845,6 +846,56 @@ impl<'a, C> Interpreter<'a, C> {
 
                 self.pop_block_scope("if_else".to_string());
                 result
+            }
+
+            ResolvedExpression::IfElseOnlyVariable {
+                variable,
+                optional_expr,
+                true_block,
+                false_block,
+            } => {
+                let value = self.evaluate_expression(optional_expr)?;
+                match value {
+                    Value::Option(Some(inner_value)) => {
+                        self.push_block_scope("if else only variable".to_string());
+                        self.set_var(
+                            variable.scope_index,
+                            variable.variable_index,
+                            *inner_value,
+                            variable.is_mutable(),
+                        )?;
+                        let result = self.evaluate_expression(true_block)?;
+                        self.pop_block_scope("if else only variable".to_string());
+                        result
+                    }
+                    Value::Option(None) => self.evaluate_expression(false_block)?,
+                    _ => return Err(ExecuteError::ExpectedOptional),
+                }
+            }
+
+            ResolvedExpression::IfElseAssignExpression {
+                variable,
+                optional_expr,
+                true_block,
+                false_block,
+            } => {
+                let value = self.evaluate_expression(optional_expr)?;
+                match value {
+                    Value::Option(Some(inner_value)) => {
+                        self.push_block_scope("if else assign expression".to_string());
+                        self.set_var(
+                            variable.scope_index,
+                            variable.variable_index,
+                            *inner_value,
+                            variable.is_mutable(),
+                        )?;
+                        let result = self.evaluate_expression(true_block)?;
+                        self.pop_block_scope("if else assign expression".to_string());
+                        result
+                    }
+                    Value::Option(None) => self.evaluate_expression(false_block)?,
+                    _ => return Err(ExecuteError::ExpectedOptional),
+                }
             }
 
             ResolvedExpression::Match(resolved_match) => self.eval_match(resolved_match)?,

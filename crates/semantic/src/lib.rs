@@ -697,10 +697,26 @@ pub enum ResolvedExpression {
 
     // Comparing
     IfElse(
-        Box<ResolvedBooleanExpression>,
+        Box<ResolvedExpression>,
         Box<ResolvedExpression>,
         Box<ResolvedExpression>,
     ),
+
+    // Special if-else variants for optional unwrapping
+    IfElseOnlyVariable {
+        variable: ResolvedVariableRef,
+        optional_expr: Box<ResolvedExpression>,
+        true_block: Box<ResolvedExpression>,
+        false_block: Box<ResolvedExpression>,
+    },
+
+    IfElseAssignExpression {
+        variable: ResolvedVariableRef,
+        optional_expr: Box<ResolvedExpression>,
+        true_block: Box<ResolvedExpression>,
+        false_block: Box<ResolvedExpression>,
+    },
+
     Match(ResolvedMatch),
     LetVar(ResolvedVariableRef, Box<ResolvedExpression>),
 }
@@ -795,6 +811,16 @@ impl Display for ResolvedExpression {
             Self::IfElse(condition, consequence, alternative) => {
                 write!(f, "if({condition:?}, {consequence}, {alternative})")
             }
+            Self::IfElseOnlyVariable { .. } => todo!(),
+            Self::IfElseAssignExpression {
+                variable,
+                true_block,
+                false_block,
+                ..
+            } => write!(
+                f,
+                "ifelse_assign_expression({variable}, {true_block}, {false_block})"
+            ),
             Self::Match(resolved_match) => write!(f, "{resolved_match}"),
             Self::LetVar(_, _) => todo!(),
             Self::Literal(resolved_literal) => match resolved_literal {
