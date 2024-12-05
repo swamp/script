@@ -399,7 +399,10 @@ type_name = {
 
 // LITERALS ------------------------------------------------------------
 
-literal = { tuple_lit | float_lit | int_lit | string_lit | bool_lit | unit_lit }
+literal = { tuple_lit | float_lit | int_lit | string_lit | bool_lit | unit_lit | none_lit }
+
+
+none_lit = { "none" }
 
 // Integer literal
 int_lit = @{ "-"? ~ ASCII_DIGIT+ }

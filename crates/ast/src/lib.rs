@@ -430,6 +430,7 @@ pub enum Literal {
     Array(Vec<Expression>),
     Map(SeqMap<IdentifierName, Expression>),
     Unit, // ()
+    None, // none
 }
 
 /*
@@ -510,6 +511,7 @@ impl Debug for Literal {
             Self::Bool(v) => write!(f, "Bool({v})"),
             Self::Tuple(v) => write!(f, "Tuple({v:?})"),
             Self::Unit => write!(f, "()"),
+            Self::None => write!(f, "none"),
             Self::Array(v) => write!(f, "Array({v:?})"),
             Self::Map(v) => write!(f, "Map({v:?})"),
         }

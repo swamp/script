@@ -115,6 +115,7 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
             ResolvedLiteral::Array(array_type_ref, _data) => {
                 ResolvedType::Array(array_type_ref.clone())
             }
+            ResolvedLiteral::NoneLiteral => ResolvedType::Any,
         },
     };
 
@@ -927,6 +928,7 @@ impl<'a> Resolver<'a> {
                         self.types.string_type.clone(),
                     ),
                     Literal::Unit => ResolvedLiteral::UnitLiteral(self.types.unit_type.clone()),
+                    Literal::None => ResolvedLiteral::NoneLiteral,
                     Literal::Bool(value) => {
                         ResolvedLiteral::BoolLiteral(*value, self.types.bool_type.clone())
                     }
@@ -2013,6 +2015,7 @@ impl<'a> Resolver<'a> {
             Literal::Array(_) => todo!(),             // TODO: PBJ
             Literal::Map(_) => todo!(),               // TODO: PBJ
             Literal::Unit => todo!(),                 // TODO: PBJ
+            Literal::None => todo!(),                 // TODO: PBJ
         };
 
         ResolvedPattern::Literal(resolved_literal)

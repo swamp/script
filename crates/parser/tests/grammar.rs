@@ -1244,3 +1244,17 @@ If(VariableAssignment(a, OptionOperator(MemberCall(OptionOperator(MemberCall(Var
             "#,
     )
 }
+
+#[test_log::test]
+fn none_assignment() {
+    check(
+        r#"
+        a = none
+            "#,
+        r#"
+
+Let(VariableAssignment(a), Literal(none))
+
+            "#,
+    )
+}

@@ -501,6 +501,7 @@ impl<'a, C> Interpreter<'a, C> {
                     let values = self.evaluate_expressions(expressions)?;
                     Value::Array(array_type.clone(), values)
                 }
+                ResolvedLiteral::NoneLiteral => Value::Option(None),
             },
 
             ResolvedExpression::Array(array_instantiation) => {
@@ -1336,9 +1337,9 @@ impl<'a, C> Interpreter<'a, C> {
     #[inline]
     fn evaluate_unwrap_op(&self, val: Value) -> Result<Value, ExecuteError> {
         match val {
-            Value::Option(boxed_opt) => match *boxed_opt {
-                Some(value) => Ok(value),
-                None => Ok(Value::Unit),
+            Value::Option(ref unwrapped_boxed_opt) => match unwrapped_boxed_opt {
+                Some(value) => Ok(*value.clone()),
+                None => Ok(val),
             },
             _ => Err(ExecuteError::CanNotUnwrap),
         }

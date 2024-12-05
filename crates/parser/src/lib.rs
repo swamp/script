@@ -1413,6 +1413,7 @@ impl AstParser {
                 self.create_error("Invalid boolean literal", inner.as_span())
             })?)),
             Rule::unit_lit => Ok(Literal::Unit),
+            Rule::none_lit => Ok(Literal::None),
             Rule::tuple_lit => {
                 let mut expressions = Vec::new();
                 for expr_pair in Self::get_inner_pairs(&inner) {

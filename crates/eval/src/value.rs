@@ -84,7 +84,7 @@ pub enum Value {
     Bool(bool),
     Unit, // Means 'no value' ()
     Reference(Rc<RefCell<Value>>),
-    Option(Box<Option<Value>>),
+    Option(Option<Box<Value>>),
 
     // Containers
     Array(ResolvedArrayTypeRef, Vec<Value>),
@@ -319,6 +319,7 @@ impl PartialEq for Value {
             (Self::String(a), Self::String(b)) => a == b,
             (Self::Bool(a), Self::Bool(b)) => a == b,
             (Self::Unit, Self::Unit) => true,
+            (Self::Option(r1), Self::Option(r2)) => r1 == r2,
             _ => false,
         }
     }

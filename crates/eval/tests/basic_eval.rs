@@ -393,3 +393,28 @@ fn basic_eval_16() {
         "(0, Button { position: Position { x: -49, y: 101 }, layer: 1 })"
     );
 }
+
+#[test_log::test]
+fn basic_eval_18() {
+    let result = eval(
+        r#"
+
+    a = none
+    "#,
+    );
+
+    assert_eq!(result, Value::Option(None));
+}
+
+#[test_log::test]
+fn basic_eval_19() {
+    let result = eval(
+        r#"
+
+    a = none
+    b = a?
+    "#,
+    );
+
+    assert_eq!(result, Value::Option(None));
+}

@@ -704,6 +704,7 @@ pub enum ResolvedExpression {
 pub enum ResolvedLiteral {
     FloatLiteral(Fp, ResolvedFloatTypeRef),
     UnitLiteral(ResolvedUnitTypeRef),
+    NoneLiteral,
     IntLiteral(i32, ResolvedIntTypeRef),
     StringLiteral(StringConst, ResolvedStringTypeRef),
     BoolLiteral(bool, ResolvedBoolTypeRef),
@@ -715,14 +716,15 @@ pub enum ResolvedLiteral {
 impl Display for ResolvedLiteral {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ResolvedLiteral::FloatLiteral(value, _) => write!(f, "FloatLit({value})"),
-            ResolvedLiteral::UnitLiteral(_) => write!(f, "UnitLit"),
-            ResolvedLiteral::IntLiteral(value, _) => write!(f, "IntLit({value})"),
-            ResolvedLiteral::StringLiteral(value, _) => write!(f, "StringLit({value})"),
-            ResolvedLiteral::BoolLiteral(value, _) => write!(f, "BoolLit({value})"),
-            ResolvedLiteral::EnumVariantLiteral(_, _) => write!(f, "EnumVariantLiteral"),
-            ResolvedLiteral::TupleLiteral(_, _) => write!(f, "TupleLiteral"),
-            ResolvedLiteral::Array(_, _) => write!(f, "ArrayLiteral"),
+            Self::FloatLiteral(value, _) => write!(f, "FloatLit({value})"),
+            Self::UnitLiteral(_) => write!(f, "UnitLit"),
+            Self::IntLiteral(value, _) => write!(f, "IntLit({value})"),
+            Self::StringLiteral(value, _) => write!(f, "StringLit({value})"),
+            Self::BoolLiteral(value, _) => write!(f, "BoolLit({value})"),
+            Self::EnumVariantLiteral(_, _) => write!(f, "EnumVariantLiteral"),
+            Self::TupleLiteral(_, _) => write!(f, "TupleLiteral"),
+            Self::Array(_, _) => write!(f, "ArrayLiteral"),
+            Self::NoneLiteral => write!(f, "NoneLiteral"),
         }
     }
 }
@@ -808,6 +810,7 @@ impl Display for ResolvedExpression {
                     write!(f, "TupleLiteral({data:?})")
                 }
                 ResolvedLiteral::Array(_array_type, data) => write!(f, "Array({data:?})"),
+                ResolvedLiteral::NoneLiteral => write!(f, "NoneLiteral()"),
             },
             Self::StaticCall(static_call) => write!(
                 f,
@@ -965,6 +968,26 @@ pub type ResolvedStringTypeRef = Rc<ResolvedStringType>;
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct ResolvedExclusiveRangeType;
 pub type ResolvedExclusiveRangeTypeRef = Rc<ResolvedExclusiveRangeType>;
+
+pub type ResolvedOptionTypeRef = Rc<crate::ResolvedOptionType>;
+
+#[derive(Debug)]
+pub struct ResolvedOptionType {
+    pub item_type: ResolvedType,
+    //pub ast_type: Type,
+}
+
+impl PartialEq for crate::ResolvedOptionType {
+    fn eq(&self, other: &Self) -> bool {
+        self.item_type == other.item_type
+    }
+}
+
+impl Display for crate::ResolvedOptionType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{}]", self.item_type)
+    }
+}
 
 pub type ResolvedArrayTypeRef = Rc<ResolvedArrayType>;
 
