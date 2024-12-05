@@ -4,9 +4,9 @@
  */
 pub use crate::{
     comma_seq, same_type, BinaryOperator, CommonEnumVariantType, ExternalFunctionId,
-    ResolvedArrayItem, ResolvedArrayItemRef, ResolvedArrayType, ResolvedArrayTypeRef,
-    ResolvedBinaryOperator, ResolvedBooleanExpression, ResolvedEnumLiteralData,
-    ResolvedEnumVariantContainerType, ResolvedEnumVariantStructFieldType,
+    PostfixOperator, ResolvedArrayItem, ResolvedArrayItemRef, ResolvedArrayType,
+    ResolvedArrayTypeRef, ResolvedBinaryOperator, ResolvedBooleanExpression,
+    ResolvedEnumLiteralData, ResolvedEnumVariantContainerType, ResolvedEnumVariantStructFieldType,
     ResolvedEnumVariantStructType, ResolvedEnumVariantTupleFieldType, ResolvedEnumVariantTupleType,
     ResolvedEnumVariantType, ResolvedEnumVariantTypeRef, ResolvedExpression,
     ResolvedExternalFunctionCall, ResolvedExternalFunctionDefinition,

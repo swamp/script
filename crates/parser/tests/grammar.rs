@@ -164,6 +164,19 @@ Let(VariableAssignment(flag), BinaryOp(BinaryOp(Literal(Bool(true)), LogicalAnd,
 }
 
 #[test_log::test]
+fn not_operator() {
+    let script = "
+        !x
+    ";
+    check(
+        &script,
+        r#"
+Expression(UnaryOp(Not, VariableAccess(x)))
+        "#,
+    );
+}
+
+#[test_log::test]
 fn struct_field_access_with_struct_init() {
     let script = "
         person = Person { first_field: 1, second_field: \"Bob\" }
@@ -1101,6 +1114,132 @@ fn else_problem() {
         r#"
 
             If(BinaryOp(VariableAccess(x), LessThan, Literal(Int(0))), [Return(Literal(String(negative)))], Some([If(BinaryOp(VariableAccess(x), Equal, Literal(Int(0))), [Return(Literal(String(positive)))], None)]))
+
+            "#,
+    )
+}
+
+#[test_log::test]
+fn option_operator() {
+    check(
+        r#"
+         a?
+            "#,
+        r#"
+Expression(OptionOperator(VariableAccess(a)))
+
+            "#,
+    )
+}
+
+#[test_log::test]
+fn option_operator_expr() {
+    check(
+        r#"
+         b + a?
+            "#,
+        r#"
+
+Expression(BinaryOp(VariableAccess(b), Add, OptionOperator(VariableAccess(a))))
+
+            "#,
+    )
+}
+
+#[test_log::test]
+fn option_operator_if_variable() {
+    check(
+        r#"
+         if a? {
+         'this is {a}'
+         } else {
+         'not here'
+         }
+            "#,
+        r#"
+
+If(OptionOperator(VariableAccess(a)), [Expression(InterpolatedString([Literal("this is "), Interpolation(VariableAccess(a), None)]))], Some([Expression(InterpolatedString([Literal("not here")]))]))
+
+            "#,
+    )
+}
+
+#[test_log::test]
+fn option_operator_if_expression() {
+    check(
+        r#"
+         if (b*3+99+something.call(42))? {
+         'expression is something'
+         } else {
+         'must be none'
+         }
+            "#,
+        r#"
+
+If(OptionOperator(BinaryOp(BinaryOp(BinaryOp(VariableAccess(b), Multiply, Literal(Int(3))), Add, Literal(Int(99))), Add, MemberCall(VariableAccess(something), LocalIdentifier { node: Node { span: Span { start: Position { offset: 21, line: 2, column: 21 }, end: Position { offset: 39, line: 2, column: 39 } } }, text: "call" }, [Literal(Int(42))]))), [Expression(InterpolatedString([Literal("expression is something")]))], Some([Expression(InterpolatedString([Literal("must be none")]))]))
+
+            "#,
+    )
+}
+
+#[test_log::test]
+fn option_operator_assignment() {
+    check(
+        r#"
+         a = another.get_current()?
+            "#,
+        r#"
+
+Let(VariableAssignment(a), OptionOperator(MemberCall(VariableAccess(another), LocalIdentifier { node: Node { span: Span { start: Position { offset: 14, line: 2, column: 14 }, end: Position { offset: 49, line: 3, column: 13 } } }, text: "get_current" }, [])))
+
+            "#,
+    )
+}
+
+#[test_log::test]
+fn option_operator_assignment_chained() {
+    check(
+        r#"
+         a = another.get_current()?.another_call(b, 42)?
+            "#,
+        r#"
+
+Let(VariableAssignment(a), OptionOperator(MemberCall(OptionOperator(MemberCall(VariableAccess(another), LocalIdentifier { node: Node { span: Span { start: Position { offset: 14, line: 2, column: 14 }, end: Position { offset: 70, line: 3, column: 13 } } }, text: "get_current" }, [])), LocalIdentifier { node: Node { span: Span { start: Position { offset: 14, line: 2, column: 14 }, end: Position { offset: 70, line: 3, column: 13 } } }, text: "another_call" }, [VariableAccess(b), Literal(Int(42))])))
+
+            "#,
+    )
+}
+
+#[test_log::test]
+fn option_operator_if_let_expression() {
+    check(
+        r#"
+         if a = another.get_current()? {
+               'this is {a}'
+         } else {
+            'must be none'
+         }
+            "#,
+        r#"
+
+If(VariableAssignment(a, OptionOperator(MemberCall(VariableAccess(another), LocalIdentifier { node: Node { span: Span { start: Position { offset: 17, line: 2, column: 17 }, end: Position { offset: 40, line: 2, column: 40 } } }, text: "get_current" }, []))), [Expression(InterpolatedString([Literal("this is "), Interpolation(VariableAccess(a), None)]))], Some([Expression(InterpolatedString([Literal("must be none")]))]))
+            "#,
+    )
+}
+
+#[test_log::test]
+fn option_operator_if_let_expression_multiple_calls() {
+    check(
+        r#"
+         if a = another.get_current()?.another_call(b, 42)? {
+               'this is {a}'
+         } else {
+            'must be none'
+         }
+            "#,
+        r#"
+
+If(VariableAssignment(a, OptionOperator(MemberCall(OptionOperator(MemberCall(VariableAccess(another), LocalIdentifier { node: Node { span: Span { start: Position { offset: 17, line: 2, column: 17 }, end: Position { offset: 61, line: 2, column: 61 } } }, text: "get_current" }, [])), LocalIdentifier { node: Node { span: Span { start: Position { offset: 17, line: 2, column: 17 }, end: Position { offset: 61, line: 2, column: 61 } } }, text: "another_call" }, [VariableAccess(b), Literal(Int(42))]))), [Expression(InterpolatedString([Literal("this is "), Interpolation(VariableAccess(a), None)]))], Some([Expression(InterpolatedString([Literal("must be none")]))]))
 
             "#,
     )

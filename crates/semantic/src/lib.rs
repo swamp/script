@@ -17,8 +17,8 @@ use std::hash::Hash;
 use std::rc::Rc;
 pub use swamp_script_ast::{
     AnonymousStruct, BinaryOperator, Expression, FormatSpecifier, IdentifierName, ImplMember,
-    LocalIdentifier, LocalTypeIdentifier, MatchArm, ModulePath, Parameter, PrecisionType,
-    StringConst, StructType, UnaryOperator, Variable,
+    LocalIdentifier, LocalTypeIdentifier, MatchArm, ModulePath, Parameter, PostfixOperator,
+    PrecisionType, StringConst, StructType, UnaryOperator, Variable,
 };
 
 #[derive(Debug, Clone)]
@@ -301,6 +301,13 @@ pub struct ResolvedBinaryOperator {
 pub struct ResolvedUnaryOperator {
     pub left: Box<ResolvedExpression>,
     pub ast_operator_type: UnaryOperator,
+    pub resolved_type: ResolvedType,
+}
+
+#[derive(Debug)]
+pub struct ResolvedPostfixOperator {
+    pub left: Box<ResolvedExpression>,
+    pub ast_operator_type: PostfixOperator,
     pub resolved_type: ResolvedType,
 }
 
@@ -654,11 +661,11 @@ pub enum ResolvedExpression {
         Box<ResolvedExpression>,
     ), // target, index, source. Write to an index in an array: arr[3] = 42
     StructFieldAssignment(ResolvedMutStructTypeFieldRef, Box<ResolvedExpression>),
-    TupleFieldAssignment(ResolvedMutTupleFieldRef, Box<ResolvedExpression>),
 
     // Operators
     BinaryOp(ResolvedBinaryOperator),
     UnaryOp(ResolvedUnaryOperator),
+    PostfixOp(ResolvedPostfixOperator),
 
     // Calls
     FunctionInternalCall(ResolvedInternalFunctionCall), // ResolvedFunctionReference, Vec<ResolvedExpression>
@@ -744,11 +751,12 @@ impl Display for ResolvedExpression {
             ),
             Self::ArrayAssignment(_, _, _) => todo!(),
             Self::StructFieldAssignment(_, _) => todo!(),
-            Self::TupleFieldAssignment(_, _) => todo!(),
             Self::BinaryOp(binary_op) => write!(f, "{binary_op:?}"),
             Self::UnaryOp(unary_op) => {
                 write!(f, "{:?}", unary_op)
             }
+            Self::PostfixOp(postfix_op) => write!(f, "{:?}", postfix_op),
+
             Self::FunctionInternalCall(resolved_call) => {
                 write!(f, "{resolved_call}")
             }

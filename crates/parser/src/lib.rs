@@ -12,7 +12,7 @@ use pest::Parser;
 use pest_derive::Parser;
 use seq_map::SeqMap;
 use swamp_script_ast::prelude::*;
-use swamp_script_ast::Function;
+use swamp_script_ast::{Function, PostfixOperator};
 use tracing::debug;
 
 #[derive(Parser)]
@@ -99,7 +99,10 @@ impl AstParser {
 
     #[must_use]
     pub fn new() -> Self {
-        let pratt_parser = PrattParser::new().op(Op::infix(Rule::range_op, Assoc::Left));
+        let pratt_parser = PrattParser::new()
+            .op(Op::infix(Rule::range_op, Assoc::Left))
+            .op(Op::postfix(Rule::option_operator)); // TODO: this was the only way to avoid an infinite loop ( left-recursive) in the PEST grammar
+
         Self { pratt_parser }
     }
 
@@ -801,6 +804,7 @@ impl AstParser {
                 let expr = self.parse_primary(self.next_inner_pair(pair)?)?;
                 Ok(Expression::UnaryOp(op, Box::new(expr)))
             }
+            Rule::postfix => self.parse_postfix_expression(pair),
             _ => Err(self.create_error(
                 &format!("Unexpected expression type: {:?}", pair.as_rule()),
                 pair.as_span(),
@@ -886,6 +890,38 @@ impl AstParser {
         }
 
         Ok(final_expr)
+    }
+
+    fn parse_postfix_expression(&self, pair: Pair<Rule>) -> Result<Expression, Error<Rule>> {
+        let mut inner = Self::get_inner_pairs(&pair);
+        let mut expr = self.parse_primary(Self::next_pair(&mut inner)?)?;
+
+        while let Some(op) = inner.next() {
+            match op.as_rule() {
+                Rule::postfix_op => {
+                    let inner_op = self.next_inner_pair(op)?;
+                    match inner_op.as_rule() {
+                        Rule::option_operator => {
+                            expr = Expression::PostfixOp(PostfixOperator::Unwrap, Box::new(expr));
+                        }
+                        _ => {
+                            return Err(self.create_error(
+                                &format!("Unexpected operator type: {:?}", inner_op.as_rule()),
+                                inner_op.as_span(),
+                            ))
+                        }
+                    }
+                }
+                _ => {
+                    return Err(self.create_error(
+                        &format!("Unexpected postfix operator: {:?}", op.as_rule()),
+                        op.as_span(),
+                    ))
+                }
+            }
+        }
+
+        Ok(expr)
     }
 
     fn parse_binary_op(&self, pair: Pair<Rule>) -> Result<Expression, Error<Rule>> {
@@ -1020,6 +1056,23 @@ impl AstParser {
                     let index_expr = self.parse_expression(self.next_inner_pair(chain_part)?)?;
                     expr = Expression::ArrayAccess(Box::new(expr), Box::new(index_expr));
                 }
+
+                Rule::postfix_op => {
+                    // Handle postfix operators
+                    let inner_op = self.next_inner_pair(chain_part)?;
+                    match inner_op.as_rule() {
+                        Rule::option_operator => {
+                            expr = Expression::PostfixOp(PostfixOperator::Unwrap, Box::new(expr));
+                        }
+                        _ => {
+                            return Err(self.create_error(
+                                &format!("Unexpected operator type: {:?}", inner_op.as_rule()),
+                                inner_op.as_span(),
+                            ))
+                        }
+                    }
+                }
+
                 Rule::expression => {
                     let value = self.parse_expression(chain_part.clone())?;
                     if let Expression::FieldAccess(obj, field) = expr {

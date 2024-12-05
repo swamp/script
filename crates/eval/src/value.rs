@@ -84,6 +84,7 @@ pub enum Value {
     Bool(bool),
     Unit, // Means 'no value' ()
     Reference(Rc<RefCell<Value>>),
+    Option(Box<Option<Value>>),
 
     // Containers
     Array(ResolvedArrayTypeRef, Vec<Value>),
@@ -292,6 +293,7 @@ impl std::fmt::Display for Value {
             }
             Self::EnumVariantSimple(enum_type_ref) => write!(f, "{enum_type_ref}"),
             Self::RustValue(rust_type) => write!(f, "engine type {rust_type:?}"),
+            Self::Option(maybe_val) => write!(f, "{maybe_val:?}"),
         }
     }
 }

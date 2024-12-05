@@ -8,16 +8,16 @@ use seq_map::{SeqMap, SeqMapError};
 use std::fmt::Display;
 use std::rc::Rc;
 use swamp_script_ast::prelude::*;
-use swamp_script_ast::Function;
+use swamp_script_ast::{Function, PostfixOperator};
 use swamp_script_semantic::ns::{LocalTypeName, ResolvedModuleNamespace, SemanticError};
 use swamp_script_semantic::prelude::*;
-use swamp_script_semantic::ResolvedModules;
 use swamp_script_semantic::ResolvedProgramState;
 use swamp_script_semantic::ResolvedProgramTypes;
 use swamp_script_semantic::{
     ResolvedDefinition, ResolvedEnumTypeRef, ResolvedFunction, ResolvedFunctionRef,
     ResolvedFunctionSignature, ResolvedStaticCall,
 };
+use swamp_script_semantic::{ResolvedModules, ResolvedPostfixOperator};
 use tracing::{debug, error, info, trace};
 
 pub fn signature(f: &ResolvedFunction) -> &ResolvedFunctionSignature {
@@ -55,9 +55,10 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
         }
         ResolvedExpression::ArrayAssignment(_, _, _) => todo!(),
         ResolvedExpression::StructFieldAssignment(_, _) => todo!(),
-        ResolvedExpression::TupleFieldAssignment(_, _) => todo!(),
         ResolvedExpression::BinaryOp(binary_op) => binary_op.resolved_type.clone(),
         ResolvedExpression::UnaryOp(unary_op) => unary_op.resolved_type.clone(),
+        ResolvedExpression::PostfixOp(postfix_op) => postfix_op.resolved_type.clone(),
+
         ResolvedExpression::FunctionInternalCall(internal_fn_call) => internal_fn_call
             .function_definition
             .signature
@@ -864,6 +865,11 @@ impl<'a> Resolver<'a> {
                 ResolvedExpression::UnaryOp(self.resolve_unary_op(operator, expression)?)
             }
 
+            // Postfix operators
+            Expression::PostfixOp(operator, expression) => {
+                ResolvedExpression::PostfixOp(self.resolve_postfix_op(operator, expression)?)
+            }
+
             // Calls
             Expression::FunctionCall(function_expression, parameter_expressions) => {
                 self.resolve_function_call(function_expression, parameter_expressions)?
@@ -1555,6 +1561,21 @@ impl<'a> Resolver<'a> {
         let resolved_type = resolution(&left);
 
         Ok(ResolvedUnaryOperator {
+            left: Box::new(left),
+            ast_operator_type: ast_op.clone(),
+            resolved_type,
+        })
+    }
+
+    fn resolve_postfix_op(
+        &mut self,
+        ast_op: &PostfixOperator,
+        ast_left: &Box<Expression>,
+    ) -> Result<ResolvedPostfixOperator, ResolveError> {
+        let left = self.resolve_expression(ast_left)?;
+        let resolved_type = resolution(&left);
+
+        Ok(ResolvedPostfixOperator {
             left: Box::new(left),
             ast_operator_type: ast_op.clone(),
             resolved_type,

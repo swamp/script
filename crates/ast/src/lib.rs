@@ -387,6 +387,9 @@ pub enum Expression {
     BinaryOp(Box<Expression>, BinaryOperator, Box<Expression>),
     UnaryOp(UnaryOperator, Box<Expression>),
 
+    // Postfix operators
+    PostfixOp(PostfixOperator, Box<Expression>),
+
     // Calls ----
     FunctionCall(Box<Expression>, Vec<Expression>),
     StaticCall(LocalTypeIdentifier, LocalIdentifier, Vec<Expression>), // Type::func(args)
@@ -606,6 +609,12 @@ pub enum BinaryOperator {
 pub enum UnaryOperator {
     Not,
     Negate,
+}
+
+// Only takes one expression argument
+#[derive(Debug, Clone)]
+pub enum PostfixOperator {
+    Unwrap, // option_operator
 }
 
 // Patterns are used in matching and destructuring

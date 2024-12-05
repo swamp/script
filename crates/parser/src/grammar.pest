@@ -179,7 +179,7 @@ break_stmt = { "break" }
 expression_statement = { expression }
 
 // Expression is the entry point
-expression = { assignment | logical }
+expression = { assignment | logical | postfix | prefix }
 
 
 // This is the base rule for array access
@@ -189,7 +189,7 @@ array_subscript = { identifier ~ "[" ~ expression ~ "]" }
 assignment = {
     (array_subscript | identifier | field_access) ~
     "=" ~
-    (assignment | logical)
+    expression
 }
 
 field_access = { identifier ~ "." ~ identifier }
@@ -207,11 +207,15 @@ comparison = { addition ~ ((op_eq | op_neq | op_lt | op_gt | op_lte | op_gte) ~ 
 addition = { multiplication ~ ((op_add | op_sub | range_op) ~ multiplication)* }
 
 // Multiplication and division (highest precedence for binary ops)
-multiplication = { prefix ~ ((op_mul | op_div | op_mod) ~ prefix)* }
+multiplication = { postfix ~ ((op_mul | op_div | op_mod) ~ postfix)* }
 
 // Prefix operators
 prefix = { prefix_op* ~ primary }
 prefix_op = { op_not | op_neg }
+
+postfix = { primary ~ postfix_op* }
+postfix_op = { option_operator }
+option_operator = { "?" }
 
 // Add range_op to infix operators
 infix_op = { range_op | op_or | op_and | op_eq | op_neq | op_lt | op_gt | op_lte | op_gte | op_add | op_sub | op_mul | op_div }
@@ -285,7 +289,7 @@ array_index = { "[" ~ expression ~ "]" }
 // Member chains. These are a bit tricky.
 member_chain = {
     (array_literal | variable | function_call | struct_instantiation | literal | parenthesized) ~
-    ("." ~ (member_access_or_call | array_index))+ ~  ("=" ~ expression)?  // Optional assignment part
+    ("." ~ (member_access_or_call | array_index) ~ postfix_op*)+ ~  ("=" ~ expression)? 
 }
 
 // Primary expressions with proper float handling
@@ -305,6 +309,8 @@ primary = {
     | array_subscript
     | variable
 }
+
+
 
 identifier_pattern = { identifier }
 

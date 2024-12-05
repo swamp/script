@@ -38,6 +38,8 @@ pub enum ExecuteError {
     Error(String),
     ConversionError(ConversionError),
     ArgumentIsNotMutable,
+    CanNotUnwrap,
+    IllegalIterator,
 }
 
 #[derive(Debug)]
@@ -711,6 +713,11 @@ impl<'a, C> Interpreter<'a, C> {
                 self.evaluate_unary_op(&unary_operator.ast_operator_type, left_val)?
             }
 
+            ResolvedExpression::PostfixOp(postfix_operator) => {
+                let left_val = self.evaluate_expression(&postfix_operator.left)?;
+                self.evaluate_postfix_op(&postfix_operator.ast_operator_type, left_val)?
+            }
+
             // Calling
             ResolvedExpression::FunctionInternalCall(resolved_internal_call) => {
                 self.evaluate_internal_function_call(resolved_internal_call)?
@@ -846,7 +853,6 @@ impl<'a, C> Interpreter<'a, C> {
                     .expect("should have external function ref");
                 Value::ExternalFunction(external_ref.borrow().id)
             }
-            ResolvedExpression::TupleFieldAssignment(_, _) => todo!(),
             ResolvedExpression::MutMemberCall(_, _) => todo!(),
             ResolvedExpression::Tuple(_) => todo!(),
             ResolvedExpression::LetVar(_, _) => todo!(),
@@ -989,20 +995,7 @@ impl<'a, C> Interpreter<'a, C> {
 
                             self.pop_block_scope("array".to_string());
                         }
-                        Value::Int(_) => todo!(),
-                        Value::Float(_) => todo!(),
-                        Value::String(_) => todo!(),
-                        Value::Bool(_) => todo!(),
-                        Value::Tuple(_, _) => todo!(),
-                        Value::Struct(_, _, _) => todo!(),
-                        Value::Unit => todo!(),
-                        Value::Reference(_) => todo!(),
-                        Value::InternalFunction(_) => todo!(),
-                        Value::ExternalFunction(_) => {}
-                        Value::EnumVariantTuple(_, _) => todo!(),
-                        Value::EnumVariantStruct(_, _) => todo!(),
-                        Value::EnumVariantSimple(_) => todo!(),
-                        Value::RustValue(_) => todo!(),
+                        _ => return Err(ExecuteError::IllegalIterator),
                     }
 
                     continue;
@@ -1331,6 +1324,23 @@ impl<'a, C> Interpreter<'a, C> {
             (UnaryOperator::Negate, Value::Float(n)) => Ok(Value::Float(-n)),
             (UnaryOperator::Not, Value::Bool(b)) => Ok(Value::Bool(!b)),
             _ => Err(format!("Invalid unary operation"))?,
+        }
+    }
+
+    fn evaluate_postfix_op(&self, op: &PostfixOperator, val: Value) -> Result<Value, ExecuteError> {
+        match op {
+            PostfixOperator::Unwrap => self.evaluate_unwrap_op(val),
+        }
+    }
+
+    #[inline]
+    fn evaluate_unwrap_op(&self, val: Value) -> Result<Value, ExecuteError> {
+        match val {
+            Value::Option(boxed_opt) => match *boxed_opt {
+                Some(value) => Ok(value),
+                None => Ok(Value::Unit),
+            },
+            _ => Err(ExecuteError::CanNotUnwrap),
         }
     }
 }
