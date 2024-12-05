@@ -862,6 +862,12 @@ impl<'a, C> Interpreter<'a, C> {
             ResolvedExpression::MutMemberCall(_, _) => todo!(),
             ResolvedExpression::Tuple(_) => todo!(),
             ResolvedExpression::LetVar(_, _) => todo!(),
+            ResolvedExpression::Option(inner) => match inner {
+                None => Value::Option(None),
+                Some(expression) => {
+                    Value::Option(Some(Box::from(self.evaluate_expression(expression)?)))
+                }
+            },
         };
 
         Ok(value)

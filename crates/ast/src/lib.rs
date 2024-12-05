@@ -583,6 +583,7 @@ pub enum Type {
 
     //
     TypeReference(QualifiedTypeIdentifier), // Some Unknown Type Reference  // TODO: Module support
+    Optional(Box<Type>),
 }
 
 // Takes a left and right side expression

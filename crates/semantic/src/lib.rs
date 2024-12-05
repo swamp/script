@@ -63,6 +63,7 @@ pub enum ResolvedType {
     ExclusiveRange(ResolvedExclusiveRangeTypeRef),
 
     Alias(LocalTypeName, Box<ResolvedType>), // The alias name and the actual type
+    Optional(Box<ResolvedType>),
 
     Any,
 }
@@ -72,6 +73,28 @@ impl ResolvedType {
         match self {
             ResolvedType::Struct(struct_type_ref) => Ok(struct_type_ref.clone()),
             _ => Err(SemanticError::ResolveNotStruct),
+        }
+    }
+
+    pub fn same_type(&self, other: &ResolvedType) -> bool {
+        match (self, other) {
+            (Self::Any, _) => true,
+            (_, Self::Any) => true,
+            (Self::Int(_), Self::Int(_)) => true,
+            (Self::Float(_), Self::Float(_)) => true,
+            (Self::String(_), Self::String(_)) => true,
+            (Self::Bool(_), Self::Bool(_)) => true,
+            (Self::Unit(_), Self::Unit(_)) => true,
+            (Self::Array(_), Self::Array(_)) => true,
+            (Self::Struct(a), Self::Struct(b)) => compare_struct_types(a, b),
+            (Self::Enum(_), Self::Enum(_)) => true,
+            (Self::FunctionInternal(_), Self::FunctionInternal(_)) => true,
+            (Self::ExclusiveRange(_), Self::ExclusiveRange(_)) => true,
+            (Self::EnumVariant(a), Self::EnumVariant(b)) => a.owner.number == b.owner.number,
+            (Self::Optional(inner_type_a), Self::Optional(inner_type_b)) => {
+                inner_type_a.same_type(inner_type_b)
+            }
+            _ => false,
         }
     }
 
@@ -107,6 +130,7 @@ impl ResolvedType {
             }
             Self::ExclusiveRange(_exclusive_range) => "exclusive_range".to_string(),
             Self::Any => "Any".to_string(),
+            Self::Optional(inner_type) => format!("{inner_type}?"),
         }
     }
 }
@@ -125,27 +149,6 @@ impl PartialEq for ResolvedType {
     }
 }
 
-pub fn same_type(p0: &ResolvedType, p1: &ResolvedType) -> bool {
-    match (p0, p1) {
-        (ResolvedType::Any, _) => true,
-        (_, ResolvedType::Any) => true,
-        (ResolvedType::Int(_), ResolvedType::Int(_)) => true,
-        (ResolvedType::Float(_), ResolvedType::Float(_)) => true,
-        (ResolvedType::String(_), ResolvedType::String(_)) => true,
-        (ResolvedType::Bool(_), ResolvedType::Bool(_)) => true,
-        (ResolvedType::Unit(_), ResolvedType::Unit(_)) => true,
-        (ResolvedType::Array(_), ResolvedType::Array(_)) => true,
-        (ResolvedType::Struct(a), ResolvedType::Struct(b)) => compare_struct_types(a, b),
-        (ResolvedType::Enum(_), ResolvedType::Enum(_)) => true,
-        (ResolvedType::FunctionInternal(_), ResolvedType::FunctionInternal(_)) => true,
-        (ResolvedType::ExclusiveRange(_), ResolvedType::ExclusiveRange(_)) => true,
-        (ResolvedType::EnumVariant(a), ResolvedType::EnumVariant(b)) => {
-            a.owner.number == b.owner.number
-        }
-        _ => false,
-    }
-}
-
 fn compare_struct_types(a: &ResolvedStructTypeRef, b: &ResolvedStructTypeRef) -> bool {
     let struct_a = a.borrow();
     let struct_b = b.borrow();
@@ -159,7 +162,7 @@ fn compare_struct_types(a: &ResolvedStructTypeRef, b: &ResolvedStructTypeRef) ->
     }
 
     for (a_field, b_field) in struct_a.fields.values().zip(struct_b.fields.values()) {
-        if !same_type(a_field, b_field) {
+        if !a_field.same_type(b_field) {
             return false;
         }
     }
@@ -237,6 +240,7 @@ impl Display for ResolvedType {
             Self::Alias(name, actual_type) => {
                 write!(f, "type {name} = {actual_type}")
             }
+            Self::Optional(inner_type) => write!(f, "{inner_type}?"),
         }
     }
 }
@@ -650,6 +654,7 @@ pub enum ResolvedExpression {
     ExternalFunctionAccess(ResolvedExternalFunctionDefinitionRef),
 
     MutRef(ResolvedMutVariableRef), // Used when passing with mut keyword. mut are implicitly passed by reference
+    Option(Option<Box<ResolvedExpression>>),
     ArrayAccess(ResolvedArrayItemRef), // Read from an array: arr[3]
 
     // Assignment
@@ -787,7 +792,9 @@ impl Display for ResolvedExpression {
             Self::ExclusiveRange(range_type, _, _) => {
                 write!(f, "[{range_type:?}]")
             }
-            Self::IfElse(_, _, _) => todo!(),
+            Self::IfElse(condition, consequence, alternative) => {
+                write!(f, "if({condition:?}, {consequence}, {alternative})")
+            }
             Self::Match(resolved_match) => write!(f, "{resolved_match}"),
             Self::LetVar(_, _) => todo!(),
             Self::Literal(resolved_literal) => match resolved_literal {
@@ -817,6 +824,7 @@ impl Display for ResolvedExpression {
                 "static call {}({:?})",
                 static_call.function, static_call.arguments
             ),
+            Self::Option(inner) => write!(f, "OptionExpr({inner:?})"),
         }
     }
 }

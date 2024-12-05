@@ -380,13 +380,18 @@ wildcard_pattern = { "_" }
 
 // TYPES ------------------------------------------------------------
 built_in_type = { "Int" | "Float" | "String" | "Bool" }
+optional_type = { type_name ~ "?" }
 array_type = { "[" ~ type_name ~ "]" }
 map_type = { "map[" ~ type_name ~ ":" ~ type_name ~ "]" } // TODO: add support for map[key: value]
 tuple_type = { "(" ~ type_name ~ ("," ~ type_name)* ~ ")" }
 struct_type_field = { identifier ~ ":" ~ type_name }
 
+type_name = { base_type ~ optional_marker? }
+
+optional_marker = { "?" }
+
 // This is used to refer to a specific type, not used in type definitions
-type_name = {
+base_type = {
     built_in_type
     | qualified_type_identifier
     | array_type

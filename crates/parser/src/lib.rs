@@ -1579,11 +1579,28 @@ impl AstParser {
         match pair.as_rule() {
             Rule::type_name => {
                 let mut inner = pair.clone().into_inner();
-                if let Some(inner_pair) = inner.next() {
-                    self.parse_type(inner_pair)
+                let base_type = if let Some(inner_pair) = inner.next() {
+                    self.parse_type(inner_pair)?
                 } else {
-                    self.parse_type_from_str(&pair)
+                    self.parse_type_from_str(&pair)?
+                };
+
+                let is_optional = inner.any(|p| p.as_rule() == Rule::optional_marker);
+                if is_optional {
+                    Ok(Type::Optional(Box::new(base_type)))
+                } else {
+                    Ok(base_type)
                 }
+            }
+
+            Rule::base_type => {
+                let inner = pair.into_inner().next().unwrap();
+                self.parse_type(inner)
+            }
+            Rule::optional_type => {
+                let inner = self.next_inner_pair(pair)?;
+                let base_type = self.parse_type(inner)?;
+                Ok(Type::Optional(Box::new(base_type)))
             }
             Rule::built_in_type => self.parse_type_from_str(&pair),
             Rule::qualified_type_identifier => {

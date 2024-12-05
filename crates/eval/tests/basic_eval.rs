@@ -452,3 +452,61 @@ fn basic_eval_21() {
 
     assert_eq!(result, Value::String("none".to_string()));
 }
+
+#[test_log::test]
+fn basic_eval_22() {
+    let result = eval(
+        "
+
+    struct SomeStruct {
+       some_field: Int?
+    }
+       
+    s = SomeStruct { some_field: 2 } // It should implicitly convert `some_field` to Some(2)
+    
+    mut c = if s.some_field { // this should evaluate to true, since Some is truthy
+       'it was some'
+    } else {
+       'none'
+    }
+    ",
+    );
+
+    assert_eq!(result, Value::String("it was some".to_string()));
+}
+
+#[test_log::test]
+fn basic_eval_23() {
+    let result = eval(
+        "
+
+    struct SomeStruct {
+       some_field: Int?
+    }
+       
+    s = SomeStruct { some_field: 2 } // It should implicitly convert `some_field` to Some(2)
+    
+    s.some_field? // this should unwrap the value
+    ",
+    );
+
+    assert_eq!(result, Value::Int(2));
+}
+
+#[test_log::test]
+fn basic_eval_24() {
+    let result = eval(
+        "
+
+    struct SomeStruct {
+       some_field: Int?
+    }
+       
+    s = SomeStruct { some_field: none }
+    
+    s.some_field? // this should unwrap the value to none again
+    ",
+    );
+
+    assert_eq!(result, Value::Option(None));
+}

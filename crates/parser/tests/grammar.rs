@@ -1280,3 +1280,21 @@ Let(VariableAssignment(c), IfElse(VariableAssignment(b, BinaryOp(VariableAccess(
             ",
     );
 }
+
+#[test_log::test]
+fn struct_field_optional() {
+    check(
+        "
+  struct Struct {
+    some_field: Int?
+   }
+
+            ",
+        r#"
+
+StructDef(StructType { identifier: LocalTypeIdentifier { node: Node { span: Span { start: Position { offset: 3, line: 2, column: 3 }, end: Position { offset: 44, line: 4, column: 5 } } }, text: "Struct" }, fields: SeqMap(IdentifierName("some_field"): Optional(Int)) })
+
+
+            "#,
+    );
+}

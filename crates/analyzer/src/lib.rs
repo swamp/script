@@ -117,6 +117,15 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
             }
             ResolvedLiteral::NoneLiteral => ResolvedType::Any,
         },
+        ResolvedExpression::Option(inner_opt) => match inner_opt {
+            None => {
+                todo!("Handle None type inference")
+            }
+            Some(inner_expr) => {
+                let inner_type = resolution(inner_expr);
+                ResolvedType::Optional(Box::new(inner_type))
+            }
+        },
     };
 
     trace!(resolution_expression=%resolution_expression, "resolution first");
@@ -163,6 +172,7 @@ pub enum ResolveError {
     CouldNotFindStaticMember(LocalIdentifier, LocalTypeIdentifier),
     TypeAliasNotAStruct(QualifiedTypeIdentifier),
     ModuleNotUnique,
+    ExpressionIsOfWrongFieldType,
 }
 
 impl From<SemanticError> for ResolveError {
@@ -268,6 +278,10 @@ impl<'a> Resolver<'a> {
             Type::Map(_, _) => todo!(),
             Type::TypeReference(ast_type_reference) => {
                 self.find_type_reference(ast_type_reference)?
+            }
+            Type::Optional(inner_type_ast) => {
+                let inner_resolved_type = self.resolve_type(inner_type_ast)?;
+                ResolvedType::Optional(Box::from(inner_resolved_type))
             }
         };
 
@@ -1132,10 +1146,21 @@ impl<'a> Resolver<'a> {
 
         let mut expressions_in_order = Vec::new();
 
-        for (field_name, _field) in &struct_to_instantiate.borrow().fields {
-            if let Some(found) = ast_fields.get(&field_name) {
+        for (field_name, field_type) in &struct_to_instantiate.borrow().fields {
+            if let Some(found) = ast_fields.get(field_name) {
                 let resolved_expression = self.resolve_expression(found)?;
-                expressions_in_order.push(resolved_expression);
+
+                let upgraded_resolved_expression =
+                    wrap_in_some_if_optional(field_type, resolved_expression);
+
+                let expression_type = resolution(&upgraded_resolved_expression);
+                info!("expression_type: target:{field_type}  source_type:{expression_type} source_expression:{upgraded_resolved_expression}");
+
+                if !field_type.same_type(&expression_type) {
+                    return Err(ResolveError::ExpressionIsOfWrongFieldType);
+                }
+
+                expressions_in_order.push(upgraded_resolved_expression);
             } else {
                 return Err(ResolveError::MissingFieldInStructInstantiation(
                     field_name.clone(),
@@ -1324,7 +1349,7 @@ impl<'a> Resolver<'a> {
             let parameter = &fn_parameters[parameter_index];
             let parameter_type = &parameter.resolved_type;
             let argument_type = resolution(resolved_argument_expression);
-            if !same_type(&argument_type, parameter_type) {
+            if !argument_type.same_type(parameter_type) {
                 error!("{argument_type}: {resolved_argument_expression}");
                 return Err(ResolveError::IncompatibleArguments(
                     argument_type,
@@ -1800,7 +1825,7 @@ impl<'a> Resolver<'a> {
         variable_type_ref: &ResolvedType,
     ) -> Result<(ResolvedVariableRef, bool), ResolveError> {
         if let Some(existing_variable) = self.try_find_variable(variable) {
-            if !same_type(&existing_variable.resolved_type, variable_type_ref) {
+            if !&existing_variable.resolved_type.same_type(variable_type_ref) {
                 return Err(ResolveError::OverwriteVariableWithAnotherType(
                     variable.clone(),
                 ));
@@ -2024,5 +2049,18 @@ impl<'a> Resolver<'a> {
         };
 
         ResolvedPattern::Literal(resolved_literal)
+    }
+}
+
+fn wrap_in_some_if_optional(
+    target_type: &ResolvedType,
+    resolved_value: ResolvedExpression,
+) -> ResolvedExpression {
+    match target_type {
+        ResolvedType::Optional(_) => match resolved_value {
+            ResolvedExpression::Option(_) => resolved_value,
+            _ => ResolvedExpression::Option(Some(Box::new(resolved_value))),
+        },
+        _ => resolved_value,
     }
 }
