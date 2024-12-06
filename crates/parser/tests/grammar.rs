@@ -1328,3 +1328,37 @@ Let(VariableAssignment(a), Literal(Map([(Literal(Int(2)), InterpolatedString([Li
             "#,
     );
 }
+
+#[test_log::test]
+fn map_fn() {
+    check(
+        "
+fn map_creator() -> [Int: String] {
+[2: 'hello', -1: 'world']
+}
+
+            ",
+        r#"
+FunctionDef(LocalIdentifier { node: Node { span: Span { start: Position { offset: 1, line: 2, column: 1 }, end: Position { offset: 34, line: 2, column: 34 } } }, text: "map_creator" }, Internal(FunctionSignature { name: LocalIdentifier { node: Node { span: Span { start: Position { offset: 1, line: 2, column: 1 }, end: Position { offset: 34, line: 2, column: 34 } } }, text: "map_creator" }, params: [], return_type: Unit }, [Expression(Literal(Map([(Literal(Int(2)), InterpolatedString([Literal("hello")])), (Literal(Int(-1)), InterpolatedString([Literal("world")]))])))]))
+
+
+            "#,
+    );
+}
+
+#[test_log::test]
+fn int_fn() {
+    check(
+        "
+fn map_creator() -> Int {
+    909
+}
+
+            ",
+        r#"
+FunctionDef(LocalIdentifier { node: Node { span: Span { start: Position { offset: 1, line: 2, column: 1 }, end: Position { offset: 34, line: 2, column: 34 } } }, text: "map_creator" }, Internal(FunctionSignature { name: LocalIdentifier { node: Node { span: Span { start: Position { offset: 1, line: 2, column: 1 }, end: Position { offset: 34, line: 2, column: 34 } } }, text: "map_creator" }, params: [], return_type: Unit }, [Expression(Literal(Map([(Literal(Int(2)), InterpolatedString([Literal("hello")])), (Literal(Int(-1)), InterpolatedString([Literal("world")]))])))]))
+
+
+            "#,
+    );
+}

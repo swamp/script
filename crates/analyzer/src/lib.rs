@@ -13,7 +13,7 @@ use swamp_script_semantic::ns::{LocalTypeName, ResolvedModuleNamespace, Semantic
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
     ResolvedDefinition, ResolvedEnumTypeRef, ResolvedFunction, ResolvedFunctionRef,
-    ResolvedFunctionSignature, ResolvedStaticCall,
+    ResolvedFunctionSignature, ResolvedMutMap, ResolvedStaticCall,
 };
 use swamp_script_semantic::{ResolvedMapIndexLookup, ResolvedProgramTypes};
 use swamp_script_semantic::{ResolvedMapType, ResolvedProgramState};
@@ -55,6 +55,7 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
             variable_assignment.variable_ref.resolved_type.clone()
         }
         ResolvedExpression::ArrayAssignment(_, _, _) => todo!(),
+        ResolvedExpression::MapAssignment(_, _, _) => todo!(),
         ResolvedExpression::StructFieldAssignment(_, _) => todo!(),
         ResolvedExpression::BinaryOp(binary_op) => binary_op.resolved_type.clone(),
         ResolvedExpression::UnaryOp(unary_op) => unary_op.resolved_type.clone(),
@@ -191,6 +192,7 @@ pub enum ResolveError {
     TypeIsNotAnIndexCollection(ResolvedType),
     NotSameKeyTypeForMapIndex(ResolvedType, ResolvedType),
     NonUniqueKeyValueInMap(SeqMapError),
+    UnknownIndexAwareCollection,
 }
 
 impl From<SemanticError> for ResolveError {
@@ -909,21 +911,82 @@ impl<'a> Resolver<'a> {
             }
 
             // Assignments
+            Expression::IndexAssignment(collection_expression, index_expression, source_expr) => {
+                let resolved_collection_expression =
+                    self.resolve_expression(&collection_expression)?;
+                debug!(resolved_collection_expression=?resolved_collection_expression, "resolve_collection_access");
+
+                let collection_resolution = resolution(&resolved_collection_expression);
+                debug!(collection_resolution=?collection_resolution, "collection_resolution");
+
+                let resolved_index_expression = self.resolve_expression(&index_expression)?;
+                debug!(resolved_index_expression=?resolved_index_expression, "resolve_index_access");
+
+                let index_resolution = resolution(&resolved_index_expression);
+                debug!(index_resolution=?index_resolution, "index_resolution");
+
+                let resolved_source_expression = self.resolve_expression(source_expr)?;
+                let resolved_source_expression_type = resolution(&resolved_source_expression);
+
+                info!("COLLECTION: {resolved_collection_expression}");
+
+                match collection_resolution {
+                    ResolvedType::Array(array_type_ref) => {
+                        let mut_array = ResolvedMutArray {
+                            expression: Box::from(resolved_collection_expression),
+                            array_type_ref,
+                        };
+
+                        let index_type = ResolvedIndexType {
+                            expression: Box::from(resolved_index_expression),
+                            resolved_type: index_resolution,
+                        };
+                        ResolvedExpression::ArrayAssignment(
+                            mut_array,
+                            index_type,
+                            Box::from(resolved_source_expression),
+                        )
+                    }
+                    ResolvedType::Map(map_type_ref) => {
+                        let mut_map = ResolvedMutMap {
+                            expression: Box::from(resolved_collection_expression),
+                            map_type_ref: map_type_ref.clone(),
+                        };
+
+                        if !index_resolution.same_type(&map_type_ref.key_type) {
+                            return Err(ResolveError::MapKeyTypeMismatch {
+                                expected: map_type_ref.key_type.clone(),
+                                found: index_resolution,
+                            });
+                        }
+
+                        if !resolved_source_expression_type.same_type(&map_type_ref.value_type) {
+                            return Err(ResolveError::MapValueTypeMismatch {
+                                expected: map_type_ref.value_type.clone(),
+                                found: resolved_source_expression_type,
+                            });
+                        }
+
+                        let index_type = ResolvedIndexType {
+                            expression: Box::from(resolved_index_expression),
+                            resolved_type: index_resolution,
+                        };
+                        ResolvedExpression::MapAssignment(
+                            mut_map,
+                            index_type,
+                            Box::from(resolved_source_expression),
+                        )
+                    }
+                    _ => return Err(ResolveError::UnknownIndexAwareCollection),
+                }
+            }
+
             Expression::VariableAssignment(variable_expression, source_expression) => {
                 ResolvedExpression::VariableAssignment(
                     self.resolve_variable_assignment(variable_expression, source_expression)?,
                 )
             }
-            Expression::IndexAssignment(target_expr, index_expr, source_expr) => {
-                let resolved_target_expr = self.resolve_into_mut_array(target_expr)?;
-                let resolved_index_expr = self.resolve_into_index(index_expr)?;
-                let resolved_source_expr = self.resolve_expression(source_expr)?;
-                ResolvedExpression::ArrayAssignment(
-                    resolved_target_expr,
-                    resolved_index_expr,
-                    Box::from(resolved_source_expr),
-                )
-            }
+
             Expression::FieldAssignment(ast_struct_expr, ast_field_name, ast_expression) => {
                 // Box<Expression>, LocalIdentifier, Box<Expression>
                 let source_expression = self.resolve_expression(ast_expression)?;
@@ -1095,41 +1158,6 @@ impl<'a> Resolver<'a> {
         } else {
             Err(ResolveError::UnknownStructField(name.clone()))
         }
-    }
-
-    fn resolve_into_mut_array(
-        &mut self,
-        array_expr: &Expression,
-    ) -> Result<ResolvedMutArrayRef, ResolveError> {
-        let resolved_expr = self.resolve_expression(array_expr)?;
-        let resolved_type = resolution(&resolved_expr);
-        let array_type_ref = match resolved_type {
-            ResolvedType::Array(array_type_ref) => array_type_ref,
-            _ => Err(ResolveError::NotAnArray(array_expr.clone()))?,
-        };
-
-        let mut_array = ResolvedMutArray {
-            expression: resolved_expr,
-            array_type_ref,
-        };
-
-        Ok(Rc::new(mut_array))
-    }
-
-    fn resolve_into_index(
-        &mut self,
-        index_expr: &Expression,
-    ) -> Result<ResolvedIndexTypeRef, ResolveError> {
-        let resolved_expr = self.resolve_expression(index_expr)?;
-
-        let resolved_type = resolution(&resolved_expr);
-
-        let index_type = ResolvedIndexType {
-            expression: resolved_expr,
-            resolved_type: resolved_type.clone(),
-        };
-
-        Ok(Rc::new(index_type))
     }
 
     fn resolve_into_struct_field_mut_ref(

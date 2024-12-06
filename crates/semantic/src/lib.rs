@@ -453,14 +453,19 @@ impl Display for ResolvedStructTypeField {
 pub type ResolvedStructTypeFieldRef = Rc<ResolvedStructTypeField>;
 
 pub type ResolvedArrayRef = Rc<ResolvedArray>;
-pub type ResolvedMutArrayRef = Rc<ResolvedMutArray>;
 
 #[derive(Debug)]
 pub struct ResolvedArray {}
 #[derive(Debug)]
 pub struct ResolvedMutArray {
-    pub expression: ResolvedExpression,
+    pub expression: Box<ResolvedExpression>,
     pub array_type_ref: ResolvedArrayTypeRef,
+}
+
+#[derive(Debug)]
+pub struct ResolvedMutMap {
+    pub expression: Box<ResolvedExpression>,
+    pub map_type_ref: ResolvedMapTypeRef,
 }
 
 #[derive(Debug)]
@@ -494,10 +499,9 @@ pub type ResolvedArrayItemRef = Rc<ResolvedArrayItem>;
 
 #[derive(Debug)]
 pub struct ResolvedIndexType {
-    pub expression: ResolvedExpression,
+    pub expression: Box<ResolvedExpression>,
     pub resolved_type: ResolvedType,
 }
-pub type ResolvedIndexTypeRef = Rc<ResolvedIndexType>;
 
 #[derive(Debug)]
 pub enum ResolvedStringPart {
@@ -679,11 +683,8 @@ pub enum ResolvedExpression {
     // Assignment
     // Since it is a cool language, we can "chain" assignments together. like a = b = c = 1. Even for field assignments, like a.b = c.d = e.f = 1
     VariableAssignment(ResolvedVariableAssignment),
-    ArrayAssignment(
-        ResolvedMutArrayRef,
-        ResolvedIndexTypeRef,
-        Box<ResolvedExpression>,
-    ), // target, index, source. Write to an index in an array: arr[3] = 42
+    ArrayAssignment(ResolvedMutArray, ResolvedIndexType, Box<ResolvedExpression>), // target, index, source. Write to an index in an array: arr[3] = 42
+    MapAssignment(ResolvedMutMap, ResolvedIndexType, Box<ResolvedExpression>),
     StructFieldAssignment(ResolvedMutStructTypeFieldRef, Box<ResolvedExpression>),
 
     // Operators
@@ -804,6 +805,7 @@ impl Display for ResolvedExpression {
                 var_assignment.variable_ref, var_assignment.expression
             ),
             Self::ArrayAssignment(_, _, _) => todo!(),
+            Self::MapAssignment(_, _, _) => todo!(),
             Self::StructFieldAssignment(_, _) => todo!(),
             Self::BinaryOp(binary_op) => write!(f, "{binary_op:?}"),
             Self::UnaryOp(unary_op) => {

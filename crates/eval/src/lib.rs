@@ -591,6 +591,27 @@ impl<'a, C> Interpreter<'a, C> {
                 new_val
             }
 
+            ResolvedExpression::MapAssignment(array, index, value) => {
+                let map_val = self.evaluate_expression(&array.expression)?;
+                let index_val = self.evaluate_expression(&index.expression)?;
+                let new_val = self.evaluate_expression(value)?;
+
+                match map_val {
+                    Value::Reference(r) => {
+                        if let Value::Map(_type_id, ref mut elements) = &mut *r.borrow_mut() {
+                            elements
+                                .insert(index_val, new_val.clone())
+                                .expect("todo: improve error handling");
+                        } else {
+                            Err("Cannot index into non-array reference".to_string())?
+                        }
+                    }
+                    _ => Err(format!("Invalid map assignment: must be mutable"))?,
+                }
+
+                new_val
+            }
+
             ResolvedExpression::StructFieldAssignment(
                 resolved_struct_field_ref,
                 source_expression,

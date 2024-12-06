@@ -2,7 +2,7 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use crate::util::{check_value, eval};
+use crate::util::{check_fail, check_value, eval};
 use fixed32::Fp;
 use swamp_script_eval::value::Value;
 
@@ -609,4 +609,78 @@ fn map_index_if_found_expression() {
     );
 
     assert_eq!(x, Value::String("world was found".to_string()));
+}
+
+#[test_log::test]
+fn map_insert_with_immutable() {
+    check_fail(
+        "
+
+    a = [2:'hello', -1:    'world']
+    a[3] = 'ossian'
+
+    ",
+        "ExecuteError(Error(\"Invalid map assignment: must be mutable\"))",
+    );
+}
+
+#[test_log::test]
+fn map_insert_wrong_type() {
+    check_fail(
+        "
+
+    mut a = [2:'hello', -1:    'world']
+    a[3] = 5.5
+
+    ",
+        "ResolveError(MapValueTypeMismatch { expected: String(ResolvedStringType), found: Float(ResolvedFloatType) })",
+    );
+}
+
+#[test_log::test]
+fn map_insert() {
+    let x = eval(
+        "
+
+    mut a = [2: 'hello', -1: 'world']
+    a[3] = 'ossian'
+    
+    ",
+    );
+
+    assert_eq!(x, Value::String("ossian".to_string()));
+}
+
+//#[test_log::test]
+#[allow(unused)]
+fn map_overwrite() {
+    let x = eval(
+        "
+
+    mut a = [2: 'hello', -1: 'world']
+    a[-1] = 'ossian'
+    
+    ",
+    );
+
+    assert_eq!(x, Value::String("ossian".to_string()));
+}
+
+//#[test_log::test]
+#[allow(unused)]
+fn map_fn_return() {
+    let x = eval(
+        "
+
+    fn map_creator() -> [Int:String] {
+        [2: 'hello', -1: 'world']
+    }
+
+    mut a = map_creator()
+    a[3] = 'ossian'
+    
+    ",
+    );
+
+    assert_eq!(x, Value::String("ossian".to_string()));
 }
