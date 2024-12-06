@@ -11,12 +11,12 @@ use swamp_script_ast::prelude::*;
 use swamp_script_ast::{Function, PostfixOperator};
 use swamp_script_semantic::ns::{LocalTypeName, ResolvedModuleNamespace, SemanticError};
 use swamp_script_semantic::prelude::*;
-use swamp_script_semantic::ResolvedProgramState;
-use swamp_script_semantic::ResolvedProgramTypes;
 use swamp_script_semantic::{
     ResolvedDefinition, ResolvedEnumTypeRef, ResolvedFunction, ResolvedFunctionRef,
     ResolvedFunctionSignature, ResolvedStaticCall,
 };
+use swamp_script_semantic::{ResolvedMapIndexLookup, ResolvedProgramTypes};
+use swamp_script_semantic::{ResolvedMapType, ResolvedProgramState};
 use swamp_script_semantic::{ResolvedModules, ResolvedPostfixOperator};
 use tracing::{debug, error, info, trace};
 
@@ -50,6 +50,7 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
         }
         ResolvedExpression::MutRef(mut_var_ref) => mut_var_ref.variable_ref.resolved_type.clone(),
         ResolvedExpression::ArrayAccess(array_item_ref) => array_item_ref.item_type.clone(),
+        ResolvedExpression::MapIndexAccess(map_item) => map_item.item_type.clone(),
         ResolvedExpression::VariableAssignment(variable_assignment) => {
             variable_assignment.variable_ref.resolved_type.clone()
         }
@@ -117,6 +118,7 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
             ResolvedLiteral::Array(array_type_ref, _data) => {
                 ResolvedType::Array(array_type_ref.clone())
             }
+            ResolvedLiteral::Map(map_type_ref, _data) => ResolvedType::Map(map_type_ref.clone()),
             ResolvedLiteral::NoneLiteral => ResolvedType::Any,
         },
         ResolvedExpression::Option(inner_opt) => match inner_opt {
@@ -177,6 +179,18 @@ pub enum ResolveError {
     ExpressionIsOfWrongFieldType,
     ExpectedOptional,
     ExpectedVariable,
+    EmptyMapLiteral,
+    MapKeyTypeMismatch {
+        expected: ResolvedType,
+        found: ResolvedType,
+    },
+    MapValueTypeMismatch {
+        expected: ResolvedType,
+        found: ResolvedType,
+    },
+    TypeIsNotAnIndexCollection(ResolvedType),
+    NotSameKeyTypeForMapIndex(ResolvedType, ResolvedType),
+    NonUniqueKeyValueInMap(SeqMapError),
 }
 
 impl From<SemanticError> for ResolveError {
@@ -843,9 +857,56 @@ impl<'a> Resolver<'a> {
                 self.resolve_variable_or_function_access(variable)?
             }
             Expression::MutRef(variable) => self.resolve_mut_ref(variable)?,
-            Expression::ArrayAccess(array_expression, lookup) => ResolvedExpression::ArrayAccess(
-                self.resolve_array_access(array_expression, lookup)?,
-            ),
+
+            Expression::IndexAccess(collection_expression, lookup) => {
+                let resolved_collection_expression =
+                    self.resolve_expression(&collection_expression)?;
+                debug!(resolved_collection_expression=?resolved_collection_expression, "resolve_collection_access");
+                let collection_resolution = resolution(&resolved_collection_expression);
+                debug!(collection_resolution=?collection_resolution, "collection_resolution");
+                match &collection_resolution {
+                    ResolvedType::Array(array_type) => {
+                        let int_expression = self.resolve_usize_index(lookup)?;
+                        let array_item = ResolvedArrayItem {
+                            array_type: collection_resolution.clone(),
+                            item_type: array_type.item_type.clone(),
+                            int_expression,
+                            array_expression: resolved_collection_expression,
+                        };
+
+                        let array_item_ref = Rc::new(array_item); // TODO: why do I require ref?
+
+                        ResolvedExpression::ArrayAccess(array_item_ref)
+                    }
+                    ResolvedType::Map(map_type_ref) => {
+                        let resolved_lookup_expr = self.resolve_expression(lookup)?;
+                        let index_type = resolution(&resolved_lookup_expr);
+
+                        if !map_type_ref.key_type.same_type(&index_type) {
+                            return Err(ResolveError::NotSameKeyTypeForMapIndex(
+                                map_type_ref.key_type.clone(),
+                                index_type,
+                            ));
+                        }
+                        let map_lookup = ResolvedMapIndexLookup {
+                            map_type: collection_resolution.clone(),
+                            item_type: ResolvedType::Optional(Box::from(
+                                map_type_ref.key_type.clone(),
+                            )),
+                            map_type_ref: map_type_ref.clone(),
+                            index_expression: Box::from(resolved_lookup_expr),
+                            map_expression: Box::from(resolved_collection_expression),
+                        };
+
+                        ResolvedExpression::MapIndexAccess(map_lookup)
+                    }
+                    _ => {
+                        return Err(ResolveError::TypeIsNotAnIndexCollection(
+                            collection_resolution,
+                        ))
+                    }
+                }
+            }
 
             // Assignments
             Expression::VariableAssignment(variable_expression, source_expression) => {
@@ -853,7 +914,7 @@ impl<'a> Resolver<'a> {
                     self.resolve_variable_assignment(variable_expression, source_expression)?,
                 )
             }
-            Expression::ArrayAssignment(target_expr, index_expr, source_expr) => {
+            Expression::IndexAssignment(target_expr, index_expr, source_expr) => {
                 let resolved_target_expr = self.resolve_into_mut_array(target_expr)?;
                 let resolved_index_expr = self.resolve_into_index(index_expr)?;
                 let resolved_source_expr = self.resolve_expression(source_expr)?;
@@ -981,7 +1042,7 @@ impl<'a> Resolver<'a> {
                         ResolvedLiteral::Array(array_type_ref, expressions)
                     }
 
-                    Literal::Map(_) => todo!(),
+                    Literal::Map(entries) => self.resolve_map_literal(entries)?,
                 })
             }
 
@@ -1713,19 +1774,10 @@ impl<'a> Resolver<'a> {
         current_scope.variables.get(&variable.name)
     }
 
-    fn resolve_array_access(
+    fn resolve_usize_index(
         &mut self,
-        array_expression: &Expression,
         usize_expression: &Expression,
-    ) -> Result<ResolvedArrayItemRef, ResolveError> {
-        let resolved_array_expression = self.resolve_expression(&array_expression)?;
-        debug!(resolved_array_expression=?resolved_array_expression, "resolve_array_access");
-        let array_resolution = resolution(&resolved_array_expression);
-        debug!(array_resolution=?array_resolution, "array_resolution");
-        let ResolvedType::Array(item_type) = &array_resolution else {
-            return Err(ResolveError::NotAnArray(array_expression.clone()));
-        };
-
+    ) -> Result<ResolvedExpression, ResolveError> {
         let lookup_expression = self.resolve_expression(usize_expression)?;
         debug!(lookup_expression=?lookup_expression, "lookup_expression");
         let lookup_resolution = resolution(&lookup_expression);
@@ -1736,15 +1788,13 @@ impl<'a> Resolver<'a> {
             _ => Err(ResolveError::ArrayIndexMustBeInt(usize_expression.clone()))?,
         }
 
-        let array_item = ResolvedArrayItem {
-            array_type: array_resolution.clone(),
-            item_type: item_type.item_type.clone(),
-            int_expression: lookup_expression,
-            array_expression: resolved_array_expression,
-        };
-
-        Ok(Rc::new(array_item))
+        Ok(lookup_expression)
     }
+
+    /*
+
+       Ok(Rc::new(array_item))
+    */
 
     fn resolve_variable_assignment(
         &mut self,
@@ -1780,6 +1830,59 @@ impl<'a> Resolver<'a> {
         let array_type_ref = Rc::new(array_type);
 
         Ok((array_type_ref, expressions))
+    }
+
+    fn resolve_map_literal(
+        &mut self,
+        entries: &[(Expression, Expression)],
+    ) -> Result<ResolvedLiteral, ResolveError> {
+        if entries.is_empty() {
+            return Err(ResolveError::EmptyMapLiteral);
+        }
+
+        // Resolve first entry to determine map types
+        let (first_key, first_value) = &entries[0];
+        let resolved_first_key = self.resolve_expression(first_key)?;
+        let resolved_first_value = self.resolve_expression(first_value)?;
+        let key_type = resolution(&resolved_first_key);
+        let value_type = resolution(&resolved_first_value);
+
+        // Check all entries match the types
+        let mut resolved_entries = Vec::new();
+        resolved_entries.push((resolved_first_key, resolved_first_value));
+
+        for (key, value) in entries.iter().skip(1) {
+            let resolved_key = self.resolve_expression(key)?;
+            let resolved_value = self.resolve_expression(value)?;
+
+            if !resolution(&resolved_key).same_type(&key_type) {
+                return Err(ResolveError::MapKeyTypeMismatch {
+                    expected: key_type.clone(),
+                    found: resolution(&resolved_key),
+                });
+            }
+
+            if !resolution(&resolved_value).same_type(&value_type) {
+                return Err(ResolveError::MapValueTypeMismatch {
+                    expected: value_type.clone(),
+                    found: resolution(&resolved_value),
+                });
+            }
+
+            resolved_entries.push((resolved_key, resolved_value));
+        }
+
+        let resolved_map_type = ResolvedMapType {
+            key_type,
+            value_type,
+        };
+
+        let resolved_map_type_ref = Rc::new(resolved_map_type);
+
+        Ok(ResolvedLiteral::Map(
+            resolved_map_type_ref,
+            resolved_entries,
+        ))
     }
 
     fn push_block_scope(&mut self) {

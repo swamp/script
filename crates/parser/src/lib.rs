@@ -822,7 +822,7 @@ impl AstParser {
                 let mut subscript_inner = Self::get_inner_pairs(&left);
                 let array = Variable::new(&Self::expect_identifier(&mut subscript_inner)?, false);
                 let index = self.parse_expression(Self::next_pair(&mut subscript_inner)?)?;
-                Ok(Expression::ArrayAssignment(
+                Ok(Expression::IndexAssignment(
                     Box::new(Expression::VariableAccess(array)),
                     Box::new(index),
                     Box::new(expr),
@@ -1054,7 +1054,7 @@ impl AstParser {
 
                 Rule::array_index => {
                     let index_expr = self.parse_expression(self.next_inner_pair(chain_part)?)?;
-                    expr = Expression::ArrayAccess(Box::new(expr), Box::new(index_expr));
+                    expr = Expression::IndexAccess(Box::new(expr), Box::new(index_expr));
                 }
 
                 Rule::postfix_op => {
@@ -1295,7 +1295,7 @@ impl AstParser {
         let mut inner = Self::get_inner_pairs(&pair);
         let var = Variable::new(&Self::expect_identifier(&mut inner)?, false);
         let index = self.parse_expression(Self::next_pair(&mut inner)?)?;
-        Ok(Expression::ArrayAccess(
+        Ok(Expression::IndexAccess(
             Box::new(Expression::VariableAccess(var)),
             Box::new(index),
         ))
@@ -1436,9 +1436,19 @@ impl AstParser {
         Ok(Expression::Literal(Literal::Array(elements)))
     }
 
-    // TODO: Not supported yet
-    fn parse_map_literal(&self, _pair: Pair<Rule>) -> Result<Expression, pest::error::Error<Rule>> {
-        Ok(Expression::Literal(Literal::Map(SeqMap::new())))
+    fn parse_map_literal(&self, pair: Pair<Rule>) -> Result<Expression, Error<Rule>> {
+        let mut entries = Vec::new();
+
+        for entry_pair in Self::get_inner_pairs(&pair) {
+            if entry_pair.as_rule() == Rule::map_entry {
+                let mut entry_inner = Self::get_inner_pairs(&entry_pair);
+                let key = self.parse_expression(Self::next_pair(&mut entry_inner)?)?;
+                let value = self.parse_expression(Self::next_pair(&mut entry_inner)?)?;
+                entries.push((key, value));
+            }
+        }
+
+        Ok(Expression::Literal(Literal::Map(entries)))
     }
 
     fn parse_function_call(&self, pair: Pair<Rule>) -> Result<Expression, Error<Rule>> {

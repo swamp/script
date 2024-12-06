@@ -120,7 +120,7 @@ fn register_print(
     external_functions
         .register_external_function("print", external_id, move |args: &[Value], context| {
             if let Some(value) = args.first() {
-                let display_value = value.to_string();
+                let display_value = value.convert_to_string_if_needed();
                 assert_eq!(context.secret, 42);
                 context.output.push(display_value.clone());
                 println!("{}", display_value);

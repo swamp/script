@@ -53,6 +53,7 @@ pub enum ResolvedType {
     Array(ResolvedArrayTypeRef),
     Tuple(ResolvedTupleTypeRef),
     Struct(ResolvedStructTypeRef),
+    Map(ResolvedMapTypeRef),
 
     Enum(ResolvedEnumTypeRef),
     EnumVariant(ResolvedEnumVariantTypeRef),
@@ -110,6 +111,13 @@ impl ResolvedType {
             Self::Array(array_type) => {
                 format!("Array<{}>", array_type.item_type.display_name())
             }
+            Self::Map(map_type_ref) => {
+                format!(
+                    "[{}:{}]",
+                    map_type_ref.key_type.display_name(),
+                    map_type_ref.value_type.display_name()
+                )
+            }
             Self::Tuple(tuple_type) => format!(
                 "({})",
                 tuple_type
@@ -135,19 +143,19 @@ impl ResolvedType {
     }
 }
 
-impl PartialEq for ResolvedType {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Int(_), Self::Int(_)) => true,
-            (Self::Float(_), Self::Float(_)) => true,
-            (Self::String(_), Self::String(_)) => true,
-            (Self::Bool(_), Self::Bool(_)) => true,
-            (Self::Unit(_), Self::Unit(_)) => true,
-            (Self::Array(array_ref), Self::Array(array_ref2)) => array_ref == array_ref2,
-            _ => false,
-        }
-    }
-}
+// impl PartialEq for ResolvedType {
+//     fn eq(&self, other: &Self) -> bool {
+//         match (self, other) {
+//             (Self::Int(_), Self::Int(_)) => true,
+//             (Self::Float(_), Self::Float(_)) => true,
+//             (Self::String(_), Self::String(_)) => true,
+//             (Self::Bool(_), Self::Bool(_)) => true,
+//             (Self::Unit(_), Self::Unit(_)) => true,
+//             (Self::Array(array_ref), Self::Array(array_ref2)) => array_ref == array_ref2,
+//             _ => false,
+//         }
+//     }
+//}
 
 fn compare_struct_types(a: &ResolvedStructTypeRef, b: &ResolvedStructTypeRef) -> bool {
     let struct_a = a.borrow();
@@ -223,6 +231,7 @@ impl Display for ResolvedType {
             Self::Bool(_) => write!(f, "Bool"),
             Self::Unit(_) => write!(f, "Unit"),
             Self::Array(array_type_ref) => write!(f, "{array_type_ref}"),
+            Self::Map(map_type_ref) => write!(f, "{map_type_ref}"),
             Self::Tuple(_) => write!(f, "Tuple"),
             Self::Struct(struct_type) => {
                 write!(f, "{}", struct_type.borrow())
@@ -455,6 +464,15 @@ pub struct ResolvedMutArray {
 }
 
 #[derive(Debug)]
+pub struct ResolvedMapIndexLookup {
+    pub map_type: ResolvedType,
+    pub item_type: ResolvedType,
+    pub map_type_ref: ResolvedMapTypeRef,
+    pub index_expression: Box<ResolvedExpression>,
+    pub map_expression: Box<ResolvedExpression>,
+}
+
+#[derive(Debug)]
 pub struct ResolvedArrayItem {
     pub item_type: ResolvedType,
     pub int_expression: ResolvedExpression,
@@ -656,6 +674,7 @@ pub enum ResolvedExpression {
     MutRef(ResolvedMutVariableRef), // Used when passing with mut keyword. mut are implicitly passed by reference
     Option(Option<Box<ResolvedExpression>>),
     ArrayAccess(ResolvedArrayItemRef), // Read from an array: arr[3]
+    MapIndexAccess(ResolvedMapIndexLookup),
 
     // Assignment
     // Since it is a cool language, we can "chain" assignments together. like a = b = c = 1. Even for field assignments, like a.b = c.d = e.f = 1
@@ -732,6 +751,10 @@ pub enum ResolvedLiteral {
     EnumVariantLiteral(ResolvedEnumVariantTypeRef, ResolvedEnumLiteralData),
     TupleLiteral(ResolvedTupleTypeRef, Vec<ResolvedExpression>),
     Array(ResolvedArrayTypeRef, Vec<ResolvedExpression>),
+    Map(
+        ResolvedMapTypeRef,
+        Vec<(ResolvedExpression, ResolvedExpression)>,
+    ),
 }
 
 impl Display for ResolvedLiteral {
@@ -745,6 +768,7 @@ impl Display for ResolvedLiteral {
             Self::EnumVariantLiteral(_, _) => write!(f, "EnumVariantLiteral"),
             Self::TupleLiteral(_, _) => write!(f, "TupleLiteral"),
             Self::Array(_, _) => write!(f, "ArrayLiteral"),
+            Self::Map(_, _) => write!(f, "MapLiteral"),
             Self::NoneLiteral => write!(f, "NoneLiteral"),
         }
     }
@@ -766,6 +790,13 @@ impl Display for ResolvedExpression {
             Self::MutRef(mut_var_ref) => write!(f, "MutRef({})", mut_var_ref),
             Self::ArrayAccess(array_item_ref) => {
                 write!(f, "[{}]", array_item_ref.item_type)
+            }
+            Self::MapIndexAccess(map_lookup) => {
+                write!(
+                    f,
+                    "[{}[{}]]",
+                    map_lookup.map_expression, map_lookup.index_expression
+                )
             }
             Self::VariableAssignment(var_assignment) => write!(
                 f,
@@ -843,6 +874,7 @@ impl Display for ResolvedExpression {
                     write!(f, "TupleLiteral({data:?})")
                 }
                 ResolvedLiteral::Array(_array_type, data) => write!(f, "Array({data:?})"),
+                ResolvedLiteral::Map(_, data) => write!(f, "Map({data:?})"),
                 ResolvedLiteral::NoneLiteral => write!(f, "NoneLiteral()"),
             },
             Self::StaticCall(static_call) => write!(
@@ -1011,11 +1043,11 @@ pub struct ResolvedOptionType {
     //pub ast_type: Type,
 }
 
-impl PartialEq for crate::ResolvedOptionType {
-    fn eq(&self, other: &Self) -> bool {
-        self.item_type == other.item_type
-    }
-}
+// impl PartialEq for crate::ResolvedOptionType {
+//     fn eq(&self, other: &Self) -> bool {
+//         self.item_type == other.item_type
+//     }
+// }
 
 impl Display for crate::ResolvedOptionType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1031,9 +1063,17 @@ pub struct ResolvedArrayType {
     //pub ast_type: Type,
 }
 
-impl PartialEq for ResolvedArrayType {
-    fn eq(&self, other: &Self) -> bool {
-        self.item_type == other.item_type
+pub type ResolvedMapTypeRef = Rc<ResolvedMapType>;
+
+#[derive(Debug)]
+pub struct ResolvedMapType {
+    pub key_type: ResolvedType,
+    pub value_type: ResolvedType,
+}
+
+impl Display for ResolvedMapType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{}:{}]", self.key_type, self.value_type)
     }
 }
 
@@ -1131,6 +1171,7 @@ impl ResolvedEnumType {
 
 pub type ResolvedEnumVariantTypeRef = Rc<ResolvedEnumVariantType>;
 
+#[derive()]
 pub struct ResolvedEnumVariantType {
     pub owner: ResolvedEnumTypeRef,
     pub data: ResolvedEnumVariantContainerType,

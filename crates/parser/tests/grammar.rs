@@ -1298,3 +1298,33 @@ StructDef(StructType { identifier: LocalTypeIdentifier { node: Node { span: Span
             "#,
     );
 }
+
+#[test_log::test]
+fn map_literal() {
+    check(
+        "
+  a = [2: 'Hello', 3: 'World']
+
+            ",
+        r#"
+
+Let(VariableAssignment(a), Literal(Map([(Literal(Int(2)), InterpolatedString([Literal("Hello")])), (Literal(Int(3)), InterpolatedString([Literal("World")]))])))
+
+            "#,
+    );
+}
+
+#[test_log::test]
+fn map_literal_no_spaces() {
+    check(
+        "
+  a = [2:'Hello',3:'World']
+
+            ",
+        r#"
+
+Let(VariableAssignment(a), Literal(Map([(Literal(Int(2)), InterpolatedString([Literal("Hello")])), (Literal(Int(3)), InterpolatedString([Literal("World")]))])))
+
+            "#,
+    );
+}

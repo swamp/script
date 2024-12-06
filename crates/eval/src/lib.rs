@@ -3,6 +3,7 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use crate::value::Value;
+use seq_map::SeqMap;
 use std::fmt::Debug;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 pub use swamp_script_semantic::ns::ResolvedModuleNamespace;
@@ -41,6 +42,7 @@ pub enum ExecuteError {
     CanNotUnwrap,
     IllegalIterator,
     ExpectedOptional,
+    NonUniqueKeysInMapLiteralDetected,
 }
 
 #[derive(Debug)]
@@ -502,6 +504,17 @@ impl<'a, C> Interpreter<'a, C> {
                     let values = self.evaluate_expressions(expressions)?;
                     Value::Array(array_type.clone(), values)
                 }
+                ResolvedLiteral::Map(map_type_ref, expressions) => {
+                    let mut items = SeqMap::new();
+                    for (key, value) in expressions {
+                        let key_val = self.evaluate_expression(key)?;
+                        let value_val = self.evaluate_expression(value)?;
+                        items
+                            .insert(key_val, value_val)
+                            .map_err(|_err| ExecuteError::NonUniqueKeysInMapLiteralDetected)?;
+                    }
+                    Value::Map(map_type_ref.clone(), items)
+                }
                 ResolvedLiteral::NoneLiteral => Value::Option(None),
             },
 
@@ -647,7 +660,6 @@ impl<'a, C> Interpreter<'a, C> {
                         elements[i as usize].clone()
                     }
                     (Value::Reference(r), Value::Int(i)) => {
-                        // Handle array access through a reference
                         if let Value::Array(_type_id, elements) = &*r.borrow() {
                             if i < 0 || i >= elements.len() as i32 {
                                 return Err(format!("Array index out of bounds: {}", i))?;
@@ -659,6 +671,36 @@ impl<'a, C> Interpreter<'a, C> {
                     }
                     (arr, idx) => Err(format!(
                         "Invalid array access: cannot index {:?} with {:?}",
+                        arr, idx
+                    ))?,
+                }
+            }
+
+            ResolvedExpression::MapIndexAccess(ref map_lookup) => {
+                let map_val = self.evaluate_expression(&map_lookup.map_expression)?;
+                let index_val = self.evaluate_expression(&map_lookup.index_expression)?;
+
+                match (map_val, index_val) {
+                    (Value::Map(_type_id, elements), v) => {
+                        let x = elements.get(&v);
+                        match x {
+                            None => Value::Option(None),
+                            Some(v) => Value::Option(Some(Box::from(v.clone()))),
+                        }
+                    }
+                    (Value::Reference(r), v) => {
+                        if let Value::Map(_type_id, elements) = &*r.borrow() {
+                            let x = elements.get(&v);
+                            match x {
+                                None => Value::Option(None),
+                                Some(v) => Value::Option(Some(Box::from(v.clone()))),
+                            }
+                        } else {
+                            Err("Cannot index into non-map reference".to_string())?
+                        }
+                    }
+                    (arr, idx) => Err(format!(
+                        "Invalid map access: cannot index {:?} with {:?}",
                         arr, idx
                     ))?,
                 }
@@ -1071,10 +1113,16 @@ impl<'a, C> Interpreter<'a, C> {
 
             value = match statement {
                 ResolvedStatement::Let(ResolvedPattern::VariableAssignment(var), expr) => {
+                    // TODO: Remove ResolvedStatement::Let, it should be an expression
                     let value = self.evaluate_expression(expr)?;
-                    self.set_var(var.scope_index, var.variable_index, value, var.is_mutable())
-                        .expect("could not set variable");
-                    Value::Unit
+                    self.set_var(
+                        var.scope_index,
+                        var.variable_index,
+                        value.clone(),
+                        var.is_mutable(),
+                    )
+                    .expect("could not set variable");
+                    value
                 }
 
                 ResolvedStatement::Expression(expr) => {
@@ -1409,7 +1457,7 @@ fn same_tuple(p0: &[ResolvedType], p1: &[ResolvedType]) -> bool {
     }
 
     for (p0_type, p1_type) in p0.iter().zip(p1.iter()) {
-        if p0_type != p1_type {
+        if !p0_type.same_type(p1_type) {
             return false;
         }
     }

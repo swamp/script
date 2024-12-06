@@ -6,14 +6,17 @@ use crate::ValueWithSignal;
 use core::any::Any;
 use fixed32::Fp;
 use seq_fmt::{comma, comma_tuple};
+use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::fmt::Debug;
+use std::hash::Hash;
 use std::rc::Rc;
 use swamp_script_semantic::ns::{ResolvedModuleNamespace, SemanticError};
 use swamp_script_semantic::{
     ExternalFunctionId, FormatSpecifier, PrecisionType, ResolvedArrayTypeRef,
     ResolvedEnumVariantStructTypeRef, ResolvedEnumVariantTupleTypeRef, ResolvedEnumVariantTypeRef,
-    ResolvedInternalFunctionDefinitionRef, ResolvedStructTypeRef, ResolvedTupleTypeRef,
+    ResolvedInternalFunctionDefinitionRef, ResolvedMapTypeRef, ResolvedStructTypeRef,
+    ResolvedTupleTypeRef,
 };
 use swamp_script_semantic::{IdentifierName, ResolvedType};
 
@@ -88,6 +91,7 @@ pub enum Value {
 
     // Containers
     Array(ResolvedArrayTypeRef, Vec<Value>),
+    Map(ResolvedMapTypeRef, SeqMap<Value, Value>), // Do not change to HashMap, the order is important for it to be deterministic
     Tuple(ResolvedTupleTypeRef, Vec<Value>),
     Struct(ResolvedStructTypeRef, Vec<Value>, ResolvedType), // type of the struct, and the fields themselves in strict order
 
@@ -125,6 +129,13 @@ pub enum ConversionError {
 }
 
 impl Value {
+    pub fn convert_to_string_if_needed(&self) -> String {
+        match self {
+            Self::String(string) => string.clone(),
+            Self::Reference(value) => value.borrow().convert_to_string_if_needed(),
+            _ => self.to_string(),
+        }
+    }
     pub fn expect_string(&self) -> Result<&str, ConversionError> {
         match self {
             Value::String(s) => Ok(s),
@@ -216,7 +227,7 @@ impl std::fmt::Display for Value {
         match self {
             Self::Int(n) => write!(f, "{}", n),
             Self::Float(n) => write!(f, "{}", n),
-            Self::String(s) => write!(f, "{}", s),
+            Self::String(s) => write!(f, "\"{}\"", s),
             Self::Bool(b) => write!(f, "{}", b),
             Self::Array(_item_type, arr) => {
                 write!(f, "[")?;
@@ -228,6 +239,17 @@ impl std::fmt::Display for Value {
                 }
                 write!(f, "]")
             }
+            Value::Map(_map_type_ref, items) => {
+                write!(f, "[")?;
+                for (i, (key, val)) in items.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{key}: {val}")?;
+                }
+                write!(f, "]")
+            }
+
             Self::Tuple(_tuple_type, arr) => {
                 write!(f, "(")?;
                 for (i, val) in arr.iter().enumerate() {
@@ -331,6 +353,41 @@ impl PartialEq for Value {
             (Self::Unit, Self::Unit) => true,
             (Self::Option(r1), Self::Option(r2)) => r1 == r2,
             _ => false,
+        }
+    }
+}
+
+impl Eq for Value {}
+
+impl Hash for Value {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            Self::Int(n) => n.hash(state),
+            Self::Float(f) => f.hash(state),
+            Self::String(s) => s.hash(state),
+            Self::Bool(b) => b.hash(state),
+            Self::Unit => (),
+            Self::Reference(r) => r.borrow().hash(state),
+            Self::Option(o) => o.hash(state),
+            Self::Array(_, arr) => arr.hash(state),
+            Self::Struct(type_ref, values, _resolved_type) => {
+                type_ref.borrow().name.hash(state);
+                for v in values {
+                    v.hash(state);
+                }
+            }
+            Self::Map(_, items) => items.hash(state),
+            Self::Tuple(_, arr) => arr.hash(state),
+            Self::EnumVariantSimple(_) => (),
+            Self::EnumVariantTuple(_, fields) => fields.hash(state),
+            Self::EnumVariantStruct(_, fields) => fields.hash(state),
+            Self::ExclusiveRange(start, end) => {
+                start.hash(state);
+                end.hash(state);
+            }
+            Self::RustValue(_rust_type) => (),
+            Self::InternalFunction(_) => (),
+            Self::ExternalFunction(_) => (),
         }
     }
 }

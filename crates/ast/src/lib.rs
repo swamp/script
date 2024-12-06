@@ -152,7 +152,7 @@ pub enum ImportItems {
     Specific(Vec<LocalTypeIdentifier>), // import { sin, cos } from math
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StructType {
     pub identifier: LocalTypeIdentifier,
     pub fields: SeqMap<IdentifierName, Type>,
@@ -198,7 +198,7 @@ pub enum Statement {
     If(Expression, Vec<Statement>, Option<Vec<Statement>>),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct Variable {
     pub name: String,
     pub is_mutable: bool,
@@ -236,7 +236,7 @@ impl Variable {
 #[derive(Debug, Clone)]
 pub struct MutVariableRef(pub Variable); // Just wraps a variable when passed with mut keyword
 
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct Parameter {
     pub variable: Variable,
     pub param_type: Type,
@@ -374,13 +374,13 @@ pub enum Expression {
     FieldAccess(Box<Expression>, LocalIdentifier),
     VariableAccess(Variable),
     MutRef(MutVariableRef), // Used when passing with mut keyword. mut are implicitly passed by reference
-    ArrayAccess(Box<Expression>, Box<Expression>), // Read from an array: arr[3]
+    IndexAccess(Box<Expression>, Box<Expression>), // Read from an array or map: arr[3]
 
     // Assignment ----
 
     // Since it is a cool language, we can "chain" assignments together. like a = b = c = 1. Even for field assignments, like a.b = c.d = e.f = 1
     VariableAssignment(Variable, Box<Expression>),
-    ArrayAssignment(Box<Expression>, Box<Expression>, Box<Expression>), // target, index, source. Write to an index in an array: arr[3] = 42
+    IndexAssignment(Box<Expression>, Box<Expression>, Box<Expression>), // target, index, source. Write to an index in an array or map: arr[3] = 42
     FieldAssignment(Box<Expression>, LocalIdentifier, Box<Expression>),
 
     // Operators ----
@@ -428,7 +428,7 @@ pub enum Literal {
     ), // EnumTypeName::Identifier tuple|struct
     Tuple(Vec<Expression>),
     Array(Vec<Expression>),
-    Map(SeqMap<IdentifierName, Expression>),
+    Map(Vec<(Expression, Expression)>),
     Unit, // ()
     None, // none
 }

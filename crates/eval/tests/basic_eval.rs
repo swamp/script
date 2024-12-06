@@ -37,7 +37,7 @@ fn basic_eval_with_doc_comment() {
         /// This is important documentation
         fn add() -> Int {
         }
-        
+
         a = 3
 
     "#,
@@ -291,7 +291,7 @@ fn basic_eval_13() {
                 v + 2.0
             }
         }
-        
+
         type CoolPerson = Ossian
 
         mut ossian = CoolPerson { happy: 3 }
@@ -444,9 +444,9 @@ fn basic_eval_22() {
     struct SomeStruct {
        some_field: Int?
     }
-       
+
     s = SomeStruct { some_field: 2 } // It should implicitly convert `some_field` to Some(2)
-    
+
     mut c = if s.some_field { // this should evaluate to true, since Some is truthy
        'it was some'
     } else {
@@ -466,9 +466,9 @@ fn basic_eval_23() {
     struct SomeStruct {
        some_field: Int?
     }
-       
+
     s = SomeStruct { some_field: 2 } // It should implicitly convert `some_field` to Some(2)
-    
+
     s.some_field? // this should unwrap the value
     ",
     );
@@ -484,9 +484,9 @@ fn basic_eval_24() {
     struct SomeStruct {
        some_field: Int?
     }
-       
+
     s = SomeStruct { some_field: 2 }
-    
+
     x = if result = s.some_field? {
         result * 3
     } else {
@@ -506,11 +506,11 @@ fn basic_eval_25() {
     struct SomeStruct {
        some_field: Int?
     }
-       
+
     s = SomeStruct { some_field: 2 }
 
     a = s.some_field
-    
+
     x = if a? {
         a * 3
     } else {
@@ -520,4 +520,93 @@ fn basic_eval_25() {
     );
 
     assert_eq!(result, Value::Int(2 * 3));
+}
+
+#[test_log::test]
+fn eval_map() {
+    let x = eval(
+        "
+
+    a = [2: 'hello', -1: 'world']
+
+    ",
+    );
+
+    assert_eq!(x.to_string(), r#"[2: "hello", -1: "world"]"#);
+}
+
+#[test_log::test]
+fn eval2_map() {
+    let x = eval(
+        "
+
+    a = [2: 'hello', -1: 'world']
+    b = a[2]
+    ",
+    );
+
+    assert_eq!(
+        x,
+        Value::Option(Some(Box::new(Value::String("hello".to_string()))))
+    );
+}
+
+#[test_log::test]
+fn map_index_not_found() {
+    let x = eval(
+        "
+
+    a = [2: 'hello', -1: 'world']
+    b = a[42]
+    ",
+    );
+
+    assert_eq!(x, Value::Option(None));
+}
+
+#[test_log::test]
+fn map_index_if() {
+    let x = eval(
+        "
+
+    a = [2: 'hello', -1: 'world']
+    b = a[42]
+    x = if b? {
+       1
+    } else { -19 }
+    ",
+    );
+
+    assert_eq!(x, Value::Int(-19));
+}
+
+#[test_log::test]
+fn map_index_if_found() {
+    let x = eval(
+        "
+
+    a = [2: 'hello', -1: 'world']
+    b = a[-1]
+    x = if b? {
+       b + ' was found'
+    } else { -19 }
+    ",
+    );
+
+    assert_eq!(x, Value::String("world was found".to_string()));
+}
+
+#[test_log::test]
+fn map_index_if_found_expression() {
+    let x = eval(
+        "
+
+    a = [2: 'hello', -1: 'world']
+    x = if found = a[-1]? {
+       found + ' was found'
+    } else { -19 }
+    ",
+    );
+
+    assert_eq!(x, Value::String("world was found".to_string()));
 }

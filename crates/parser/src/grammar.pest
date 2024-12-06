@@ -382,7 +382,7 @@ wildcard_pattern = { "_" }
 built_in_type = { "Int" | "Float" | "String" | "Bool" }
 optional_type = { type_name ~ "?" }
 array_type = { "[" ~ type_name ~ "]" }
-map_type = { "map[" ~ type_name ~ ":" ~ type_name ~ "]" } // TODO: add support for map[key: value]
+map_type = { "[" ~ type_name ~ ":" ~ type_name ~ "]" }
 tuple_type = { "(" ~ type_name ~ ("," ~ type_name)* ~ ")" }
 struct_type_field = { identifier ~ ":" ~ type_name }
 
@@ -459,8 +459,10 @@ struct_fields_lit = { "{" ~ struct_field ~ ("," ~ " "* ~ struct_field)* ~ ","? ~
 
 // Array and map literals
 array_literal = { "[" ~ (expression ~ ("," ~ " "* ~ expression)*)? ~ "]" }  // PEST BUG: need explicit spaces after comma
-map_literal = { "map[" ~ type_name ~ ":" ~ type_name ~ "]" }
-
+map_literal = {"[" ~ (map_entry ~ ("," ~ " "* ~ map_entry)*)? ~ "]"}  // PEST BUG: need explicit spaces after comma
+map_entry = {
+    expression ~ ":" ~ expression
+}
 // Struct related
 // Similar to struct_fields_lit
 struct_fields = { (struct_field ~ ("," ~ " "* ~ struct_field)* ~ trailing_comma? )? }  // PEST BUG: need explicit spaces after comma
