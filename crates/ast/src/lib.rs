@@ -367,6 +367,14 @@ impl Display for IdentifierName {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum CompoundOperator {
+    Add, // +=
+    Sub, // -=
+    Mul, // *=
+    Div, // /=
+}
+
 /// Expressions are things that "converts" to a value when evaluated.
 #[derive(Debug, Clone)]
 pub enum Expression {
@@ -380,6 +388,20 @@ pub enum Expression {
 
     // Since it is a cool language, we can "chain" assignments together. like a = b = c = 1. Even for field assignments, like a.b = c.d = e.f = 1
     VariableAssignment(Variable, Box<Expression>),
+    IndexCompoundAssignment(
+        Box<Expression>,
+        Box<Expression>,
+        CompoundOperator,
+        Box<Expression>,
+    ),
+    VariableCompoundAssignment(Variable, CompoundOperator, Box<Expression>),
+    FieldCompoundAssignment(
+        Box<Expression>,
+        LocalIdentifier,
+        CompoundOperator,
+        Box<Expression>,
+    ),
+
     IndexAssignment(Box<Expression>, Box<Expression>, Box<Expression>), // target, index, source. Write to an index in an array or map: arr[3] = 42
     FieldAssignment(Box<Expression>, LocalIdentifier, Box<Expression>),
 

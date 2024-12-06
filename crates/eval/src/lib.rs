@@ -43,6 +43,7 @@ pub enum ExecuteError {
     IllegalIterator,
     ExpectedOptional,
     NonUniqueKeysInMapLiteralDetected,
+    NotAnArray,
 }
 
 #[derive(Debug)]
@@ -408,6 +409,10 @@ impl<'a, C> Interpreter<'a, C> {
         Ok(())
     }
 
+    fn lookup_variable(&self, variable: &ResolvedVariableRef) -> Result<&Value, ExecuteError> {
+        self.lookup_var(variable.scope_index, variable.variable_index)
+    }
+
     #[inline]
     fn lookup_var(
         &self,
@@ -564,6 +569,43 @@ impl<'a, C> Interpreter<'a, C> {
                 )?;
 
                 new_value
+            }
+
+            ResolvedExpression::ArrayExtend(variable_ref, source_expression) => {
+                let source_val = self.evaluate_expression(source_expression)?;
+
+                let array_val = self.lookup_variable(variable_ref)?;
+                match array_val {
+                    Value::Reference(r) => {
+                        if let Value::Array(_type_id, ref mut vector) = &mut *r.borrow_mut() {
+                            if let Value::Array(_, items) = source_val {
+                                vector.extend(items);
+                            } else {
+                                Err("Cannot extend non-array reference".to_string())?
+                            }
+                        } else {
+                            Err("Cannot extend non-array reference".to_string())?
+                        }
+                    }
+                    _ => Err(ExecuteError::NotAnArray)?,
+                }
+                array_val.clone()
+            }
+
+            ResolvedExpression::ArrayPush(variable_ref, source_expression) => {
+                let source_val = self.evaluate_expression(source_expression)?;
+                let array_val = self.lookup_variable(variable_ref)?;
+                match &array_val {
+                    Value::Reference(r) => {
+                        if let Value::Array(_type_id, ref mut vector) = &mut *r.borrow_mut() {
+                            vector.push(source_val);
+                        } else {
+                            Err("Cannot extend non-array reference".to_string())?
+                        }
+                    }
+                    _ => Err(ExecuteError::NotAnArray)?,
+                }
+                array_val.clone()
             }
 
             ResolvedExpression::ArrayAssignment(array, index, value) => {

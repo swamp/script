@@ -683,7 +683,15 @@ pub enum ResolvedExpression {
     // Assignment
     // Since it is a cool language, we can "chain" assignments together. like a = b = c = 1. Even for field assignments, like a.b = c.d = e.f = 1
     VariableAssignment(ResolvedVariableAssignment),
+
+    ArrayExtend(ResolvedVariableRef, Box<ResolvedExpression>), // Extends an array with another array
+    ArrayPush(ResolvedVariableRef, Box<ResolvedExpression>),   // Adds an item to an array
+
+    //    CompoundAssignmentIndex(ResolvedIndexCompoundAssignment),
+    //    VariableCompoundAssignment(ResolvedVariableCompoundAssignment),
+    //    FieldCompoundAssignment(ResolvedFieldCompoundAssignment),
     ArrayAssignment(ResolvedMutArray, ResolvedIndexType, Box<ResolvedExpression>), // target, index, source. Write to an index in an array: arr[3] = 42
+
     MapAssignment(ResolvedMutMap, ResolvedIndexType, Box<ResolvedExpression>),
     StructFieldAssignment(ResolvedMutStructTypeFieldRef, Box<ResolvedExpression>),
 
@@ -804,6 +812,7 @@ impl Display for ResolvedExpression {
                 "< {}={} >",
                 var_assignment.variable_ref, var_assignment.expression
             ),
+
             Self::ArrayAssignment(_, _, _) => todo!(),
             Self::MapAssignment(_, _, _) => todo!(),
             Self::StructFieldAssignment(_, _) => todo!(),
@@ -885,6 +894,8 @@ impl Display for ResolvedExpression {
                 static_call.function, static_call.arguments
             ),
             Self::Option(inner) => write!(f, "OptionExpr({inner:?})"),
+            ResolvedExpression::ArrayExtend(_, _) => todo!(),
+            ResolvedExpression::ArrayPush(_, _) => todo!(),
         }
     }
 }

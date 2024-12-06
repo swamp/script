@@ -188,9 +188,16 @@ array_subscript = { identifier ~ "[" ~ expression ~ "]" }
 
 assignment = {
     (array_subscript | identifier | field_access) ~
-    "=" ~
+    (assign_op | add_assign_op | sub_assign_op | mul_assign_op | div_assign_op) ~
     expression
 }
+
+assign_op = { "=" }
+add_assign_op = { "+=" }
+sub_assign_op = { "-=" }
+mul_assign_op = { "*=" }
+div_assign_op = { "/=" }
+
 
 field_access = { identifier ~ "." ~ identifier }
 field_assignment = { field_access ~ "=" ~ expression }

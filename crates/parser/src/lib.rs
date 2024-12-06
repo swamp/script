@@ -11,7 +11,7 @@ use pest::pratt_parser::{Assoc, Op, PrattParser};
 use pest::Parser;
 use pest_derive::Parser;
 use seq_map::SeqMap;
-use swamp_script_ast::prelude::*;
+use swamp_script_ast::{prelude::*, CompoundOperator};
 use swamp_script_ast::{Function, PostfixOperator};
 use tracing::debug;
 
@@ -476,9 +476,7 @@ impl AstParser {
             Some(token) if token.as_rule() == Rule::return_type => {
                 (Vec::new(), self.parse_return_type(token)?)
             }
-            _ => {
-                (Vec::new(), Type::Unit)
-            }
+            _ => (Vec::new(), Type::Unit),
         };
 
         Ok((
@@ -809,30 +807,70 @@ impl AstParser {
             )),
         }
     }
-
     fn parse_assignment(&self, pair: Pair<Rule>) -> Result<Expression, Error<Rule>> {
         let mut inner = Self::get_inner_pairs(&pair);
         let left = Self::next_pair(&mut inner)?;
+        let operator = Self::next_pair(&mut inner)?;
         let expr = self.parse_expression(Self::next_pair(&mut inner)?)?;
+
+        let compound_op = match operator.as_rule() {
+            Rule::assign_op => None,
+            Rule::add_assign_op => Some(CompoundOperator::Add),
+            Rule::sub_assign_op => Some(CompoundOperator::Sub),
+            Rule::mul_assign_op => Some(CompoundOperator::Mul),
+            Rule::div_assign_op => Some(CompoundOperator::Div),
+            _ => {
+                return Err(self.create_error(
+                    &format!("Unknown assignment operator: {:?}", operator.as_rule()),
+                    operator.as_span(),
+                ))
+            }
+        };
 
         match left.as_rule() {
             Rule::array_subscript => {
                 let mut subscript_inner = Self::get_inner_pairs(&left);
                 let array = Variable::new(&Self::expect_identifier(&mut subscript_inner)?, false);
                 let index = self.parse_expression(Self::next_pair(&mut subscript_inner)?)?;
-                Ok(Expression::IndexAssignment(
-                    Box::new(Expression::VariableAccess(array)),
-                    Box::new(index),
-                    Box::new(expr),
-                ))
+                let array_expr = Box::new(Expression::VariableAccess(array));
+                let index_expr = Box::new(index);
+
+                match compound_op {
+                    None => Ok(Expression::IndexAssignment(
+                        array_expr,
+                        index_expr,
+                        Box::new(expr),
+                    )),
+                    Some(op) => Ok(Expression::IndexCompoundAssignment(
+                        array_expr,
+                        index_expr,
+                        op,
+                        Box::new(expr),
+                    )),
+                }
             }
             Rule::identifier => {
                 let var = Variable::new(left.as_str(), false);
-                Ok(Expression::VariableAssignment(var, Box::new(expr)))
+                match compound_op {
+                    None => Ok(Expression::VariableAssignment(var, Box::new(expr))),
+                    Some(op) => Ok(Expression::VariableCompoundAssignment(
+                        var,
+                        op,
+                        Box::new(expr),
+                    )),
+                }
             }
             Rule::field_access => {
                 if let Expression::FieldAccess(obj, field) = self.parse_field_access(left)? {
-                    Ok(Expression::FieldAssignment(obj, field, Box::new(expr)))
+                    match compound_op {
+                        None => Ok(Expression::FieldAssignment(obj, field, Box::new(expr))),
+                        Some(op) => Ok(Expression::FieldCompoundAssignment(
+                            obj,
+                            field,
+                            op,
+                            Box::new(expr),
+                        )),
+                    }
                 } else {
                     Err(self.create_error("Expected field access", pair.as_span()))
                 }

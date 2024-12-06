@@ -8,7 +8,7 @@ use seq_map::{SeqMap, SeqMapError};
 use std::fmt::Display;
 use std::rc::Rc;
 use swamp_script_ast::prelude::*;
-use swamp_script_ast::{Function, PostfixOperator};
+use swamp_script_ast::{CompoundOperator, Function, PostfixOperator};
 use swamp_script_semantic::ns::{LocalTypeName, ResolvedModuleNamespace, SemanticError};
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
@@ -54,6 +54,7 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
         ResolvedExpression::VariableAssignment(variable_assignment) => {
             variable_assignment.variable_ref.resolved_type.clone()
         }
+
         ResolvedExpression::ArrayAssignment(_, _, _) => todo!(),
         ResolvedExpression::MapAssignment(_, _, _) => todo!(),
         ResolvedExpression::StructFieldAssignment(_, _) => todo!(),
@@ -131,6 +132,8 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
                 ResolvedType::Optional(Box::new(inner_type))
             }
         },
+        ResolvedExpression::ArrayExtend(variable_ref, _) => variable_ref.resolved_type.clone(),
+        ResolvedExpression::ArrayPush(variable_ref, _) => variable_ref.resolved_type.clone(),
     };
 
     trace!(resolution_expression=%resolution_expression, "resolution first");
@@ -193,6 +196,9 @@ pub enum ResolveError {
     NotSameKeyTypeForMapIndex(ResolvedType, ResolvedType),
     NonUniqueKeyValueInMap(SeqMapError),
     UnknownIndexAwareCollection,
+    InvalidOperatorForArray(CompoundOperator),
+    IncompatibleTypes(ResolvedType, ResolvedType),
+    ExpectedArray(ResolvedType),
 }
 
 impl From<SemanticError> for ResolveError {
@@ -1009,6 +1015,20 @@ impl<'a> Resolver<'a> {
                 ResolvedExpression::VariableAssignment(
                     self.resolve_variable_assignment(variable_expression, source_expression)?,
                 )
+            }
+
+            Expression::IndexCompoundAssignment(_target, _index, _operator, _source) => {
+                // self.resolve_compound_assignment_index(source, index, operator, source)?
+                todo!()
+            }
+
+            Expression::VariableCompoundAssignment(target, operator, source) => {
+                self.resolve_compound_assignment_variable(target, operator, source)?
+            }
+
+            Expression::FieldCompoundAssignment(_target, _field, _operator, _source) => {
+                //self.resolve_compound_assignment_field(target, field, operator, source)?
+                todo!()
             }
 
             Expression::FieldAssignment(ast_struct_expr, ast_field_name, ast_expression) => {
@@ -1862,6 +1882,58 @@ impl<'a> Resolver<'a> {
             variable_ref,
             expression: Box::from(converted_expression),
         })
+    }
+
+    fn resolve_compound_assignment_variable(
+        &mut self,
+        target: &Variable,
+        operator: &CompoundOperator,
+        source: &Expression,
+    ) -> Result<ResolvedExpression, ResolveError> {
+        let resolved_variable = self.find_variable(target)?;
+        let resolved_source = self.resolve_expression(source)?;
+
+        let target_type = &resolved_variable.resolved_type;
+
+        match &target_type {
+            ResolvedType::Array(array_type_ref) => {
+                match operator {
+                    CompoundOperator::Add => {
+                        let source_type = resolution(&resolved_source);
+                        match &source_type {
+                            ResolvedType::Array(_source_array_type) => {
+                                // Concatenating two arrays
+                                if !target_type.same_type(&source_type) {
+                                    return Err(ResolveError::IncompatibleTypes(
+                                        source_type,
+                                        target_type.clone(),
+                                    ));
+                                }
+                                Ok(ResolvedExpression::ArrayExtend(
+                                    resolved_variable,
+                                    Box::new(resolved_source),
+                                ))
+                            }
+                            _ => {
+                                // Appending a single item
+                                if !source_type.same_type(&array_type_ref.item_type) {
+                                    return Err(ResolveError::IncompatibleTypes(
+                                        source_type,
+                                        target_type.clone(),
+                                    ));
+                                }
+                                Ok(ResolvedExpression::ArrayPush(
+                                    resolved_variable,
+                                    Box::new(resolved_source),
+                                ))
+                            }
+                        }
+                    }
+                    _ => Err(ResolveError::InvalidOperatorForArray(operator.clone())),
+                }
+            }
+            _ => Err(ResolveError::ExpectedArray(target_type.clone())),
+        }
     }
 
     fn resolve_array_type_helper(

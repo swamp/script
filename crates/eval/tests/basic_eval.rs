@@ -699,3 +699,30 @@ fn array_fn_return() {
 
     assert_eq!(x.to_string(), "[2.40, 5.60, 8.90]");
 }
+
+#[test_log::test]
+fn array_push() {
+    let x = eval(
+        "
+
+    mut a = [10, 20]
+    a += 30
+    ",
+    );
+
+    assert_eq!(x.to_string(), "[10, 20, 30]");
+}
+
+#[test_log::test]
+fn array_extend() {
+    let x = eval(
+        "
+
+    mut a = [10, 20]
+    
+    a += [30, 40, 50]
+    ",
+    );
+
+    assert_eq!(x.to_string(), "[10, 20, 30, 40, 50]");
+}
