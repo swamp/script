@@ -1,5 +1,13 @@
 # Changelog
 
+## 🔖 [v0.0.5](https://github.com/swamp/script/releases/tag/v0.0.5) (2024-12-06)
+
+- Array extends, push, remove and clear.
+- Fixed bug where empty parameters caused return type to be `Unit`.
+- Map assignment and map type.
+- Optional operator in if statements and if-expressions.
+- `none` keyword
+
 ## 🔖 [v0.0.4](https://github.com/swamp/script/releases/tag/v0.0.4) (2024-12-03)
 
 - Add context to Interpreter

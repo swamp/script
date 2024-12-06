@@ -20,6 +20,15 @@ repo: swamp/script
 # security
 
 releases:
+  v0.0.5:
+    date: "2024-12-06"
+    notice: |
+      - Array extends, push, remove and clear.
+      - Fixed bug where empty parameters caused return type to be `Unit`.
+      - Map assignment and map type.
+      - Optional operator in if statements and if-expressions.
+      - `none` keyword
+      
   v0.0.4:
     date: "2024-12-03"
     notice: |
