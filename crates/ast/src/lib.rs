@@ -596,6 +596,8 @@ pub enum Type {
     Unit,
     Any,
 
+    Generic(Box<Type>, Vec<Type>),
+
     //
     Struct(QualifiedTypeIdentifier), // TODO: Module support for name
     Array(Box<Type>),

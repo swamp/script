@@ -55,6 +55,8 @@ pub enum ResolvedType {
     Struct(ResolvedStructTypeRef),
     Map(ResolvedMapTypeRef),
 
+    Generic(Box<ResolvedType>, Vec<ResolvedType>),
+
     Enum(ResolvedEnumTypeRef),
     EnumVariant(ResolvedEnumVariantTypeRef),
 
@@ -138,7 +140,25 @@ impl ResolvedType {
             }
             Self::ExclusiveRange(_exclusive_range) => "exclusive_range".to_string(),
             Self::Any => "Any".to_string(),
+            Self::Generic(resolved_type, vec) => format!("{resolved_type}<{}>", comma(&vec)),
             Self::Optional(inner_type) => format!("{inner_type}?"),
+            Self::Int(rc) => todo!(),
+            Self::Float(rc) => todo!(),
+            Self::String(rc) => todo!(),
+            Self::Bool(rc) => todo!(),
+            Self::Unit(rc) => todo!(),
+            Self::Array(rc) => todo!(),
+            Self::Tuple(rc) => todo!(),
+            Self::Struct(rc) => todo!(),
+            Self::Map(rc) => todo!(),
+            Self::Enum(rc) => todo!(),
+            Self::EnumVariant(rc) => todo!(),
+            Self::FunctionInternal(rc) => todo!(),
+            Self::FunctionExternal(rc) => todo!(),
+            Self::ExclusiveRange(rc) => todo!(),
+            Self::Alias(local_type_name, resolved_type) => todo!(),
+            Self::Optional(resolved_type) => todo!(),
+            Self::Any => todo!(),
         }
     }
 }
@@ -249,7 +269,25 @@ impl Display for ResolvedType {
             Self::Alias(name, actual_type) => {
                 write!(f, "type {name} = {actual_type}")
             }
+            ResolvedType::Generic(resolved_type, vec) => write!(f, "{resolved_type}<{}>", comma(&vec)),
             Self::Optional(inner_type) => write!(f, "{inner_type}?"),
+            ResolvedType::Int(rc) => todo!(),
+            ResolvedType::Float(rc) => todo!(),
+            ResolvedType::String(rc) => todo!(),
+            ResolvedType::Bool(rc) => todo!(),
+            ResolvedType::Unit(rc) => todo!(),
+            ResolvedType::Array(rc) => todo!(),
+            ResolvedType::Tuple(rc) => todo!(),
+            ResolvedType::Struct(rc) => todo!(),
+            ResolvedType::Map(rc) => todo!(),
+            ResolvedType::Enum(rc) => todo!(),
+            ResolvedType::EnumVariant(rc) => todo!(),
+            ResolvedType::FunctionInternal(rc) => todo!(),
+            ResolvedType::FunctionExternal(rc) => todo!(),
+            ResolvedType::ExclusiveRange(rc) => todo!(),
+            ResolvedType::Alias(local_type_name, resolved_type) => todo!(),
+            ResolvedType::Optional(resolved_type) => todo!(),
+            ResolvedType::Any => todo!(),
         }
     }
 }

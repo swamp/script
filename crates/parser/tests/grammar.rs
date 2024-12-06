@@ -37,6 +37,7 @@ fn match_value_expressions() {
 }
 */
 
+
 #[test_log::test]
 fn assignment() {
     check("a = 3", "Let(VariableAssignment(a), Literal(Int(3)))");
@@ -1357,6 +1358,21 @@ fn test() -> Int { 42 }
 FunctionDef(LocalIdentifier { node: Node { span: Span { start: Position { offset: 1, line: 2, column: 1 }, end: Position { offset: 18, line: 2, column: 18 } } }, text: "test" }, Internal(FunctionSignature { name: LocalIdentifier { node: Node { span: Span { start: Position { offset: 1, line: 2, column: 1 }, end: Position { offset: 18, line: 2, column: 18 } } }, text: "test" }, params: [], return_type: Int }, [Expression(Literal(Int(42)))]))
 
 
+            "#,
+    );
+}
+
+
+#[test_log::test]
+fn generic_type() {
+    check(
+        "
+fn nothing() -> SomeType<Int, Float> {
+}
+
+            ",
+        r#"
+FunctionDef(LocalIdentifier { node: Node { span: Span { start: Position { offset: 1, line: 2, column: 1 }, end: Position { offset: 38, line: 2, column: 38 } } }, text: "nothing" }, Internal(FunctionSignature { name: LocalIdentifier { node: Node { span: Span { start: Position { offset: 1, line: 2, column: 1 }, end: Position { offset: 38, line: 2, column: 38 } } }, text: "nothing" }, params: [], return_type: Generic(TypeReference(QualifiedTypeIdentifier { name: LocalTypeIdentifier { node: Node { span: Span { start: Position { offset: 17, line: 2, column: 17 }, end: Position { offset: 25, line: 2, column: 25 } } }, text: "SomeType" }, module_path: None }), [Int, Float]) }, []))
             "#,
     );
 }

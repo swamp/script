@@ -328,6 +328,10 @@ impl<'a> Resolver<'a> {
             Type::Tuple(types) => {
                 ResolvedType::Tuple(ResolvedTupleType(self.resolve_types(types)?).into())
             }
+            Type::Generic(base_type, generic_types) => {
+                let base_type = self.resolve_type(base_type)?;
+                ResolvedType::Generic(Box::new(base_type), self.resolve_types(generic_types)?)
+            }
             Type::Enum(_) => todo!(),
             Type::TypeReference(ast_type_reference) => {
                 self.find_type_reference(ast_type_reference)?

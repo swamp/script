@@ -400,12 +400,13 @@ optional_marker = { "?" }
 // This is used to refer to a specific type, not used in type definitions
 base_type = {
     built_in_type
-    | qualified_type_identifier
+    | qualified_type_identifier ~ generic_params?
     | array_type
     | map_type
     | tuple_type
 }
 
+generic_params = { "<" ~ type_name ~ ("," ~ " "* ~ type_name)* ~ ">" }  // PEST BUG: need explicit spaces after comma
 
 
 

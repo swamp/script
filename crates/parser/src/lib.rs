@@ -1640,8 +1640,23 @@ impl AstParser {
             }
 
             Rule::base_type => {
-                let inner = pair.into_inner().next().unwrap();
-                self.parse_type(inner)
+                let mut inner = pair.into_inner();
+                let first = inner.next().unwrap();
+                let base_type = self.parse_type(first)?;
+    
+                if let Some(generic_params) = inner.next() {
+                    if generic_params.as_rule() == Rule::generic_params {
+                        let mut generic_types = Vec::new();
+                        for param in Self::get_inner_pairs(&generic_params) {
+                            generic_types.push(self.parse_type(param)?);
+                        }
+                        Ok(Type::Generic(Box::new(base_type), generic_types))
+                    } else {
+                        Ok(base_type)
+                    }
+                } else {
+                    Ok(base_type)
+                }
             }
             Rule::optional_type => {
                 let inner = self.next_inner_pair(pair)?;
