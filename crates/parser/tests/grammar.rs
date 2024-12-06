@@ -1339,7 +1339,7 @@ fn map_creator() -> [Int: String] {
 
             ",
         r#"
-FunctionDef(LocalIdentifier { node: Node { span: Span { start: Position { offset: 1, line: 2, column: 1 }, end: Position { offset: 34, line: 2, column: 34 } } }, text: "map_creator" }, Internal(FunctionSignature { name: LocalIdentifier { node: Node { span: Span { start: Position { offset: 1, line: 2, column: 1 }, end: Position { offset: 34, line: 2, column: 34 } } }, text: "map_creator" }, params: [], return_type: Unit }, [Expression(Literal(Map([(Literal(Int(2)), InterpolatedString([Literal("hello")])), (Literal(Int(-1)), InterpolatedString([Literal("world")]))])))]))
+FunctionDef(LocalIdentifier { node: Node { span: Span { start: Position { offset: 1, line: 2, column: 1 }, end: Position { offset: 35, line: 2, column: 35 } } }, text: "map_creator" }, Internal(FunctionSignature { name: LocalIdentifier { node: Node { span: Span { start: Position { offset: 1, line: 2, column: 1 }, end: Position { offset: 35, line: 2, column: 35 } } }, text: "map_creator" }, params: [], return_type: Map(Int, String) }, [Expression(Literal(Map([(Literal(Int(2)), InterpolatedString([Literal("hello")])), (Literal(Int(-1)), InterpolatedString([Literal("world")]))])))]))
 
 
             "#,
@@ -1350,13 +1350,11 @@ FunctionDef(LocalIdentifier { node: Node { span: Span { start: Position { offset
 fn int_fn() {
     check(
         "
-fn map_creator() -> Int {
-    909
-}
+fn test() -> Int { 42 }
 
             ",
         r#"
-FunctionDef(LocalIdentifier { node: Node { span: Span { start: Position { offset: 1, line: 2, column: 1 }, end: Position { offset: 34, line: 2, column: 34 } } }, text: "map_creator" }, Internal(FunctionSignature { name: LocalIdentifier { node: Node { span: Span { start: Position { offset: 1, line: 2, column: 1 }, end: Position { offset: 34, line: 2, column: 34 } } }, text: "map_creator" }, params: [], return_type: Unit }, [Expression(Literal(Map([(Literal(Int(2)), InterpolatedString([Literal("hello")])), (Literal(Int(-1)), InterpolatedString([Literal("world")]))])))]))
+FunctionDef(LocalIdentifier { node: Node { span: Span { start: Position { offset: 1, line: 2, column: 1 }, end: Position { offset: 18, line: 2, column: 18 } } }, text: "test" }, Internal(FunctionSignature { name: LocalIdentifier { node: Node { span: Span { start: Position { offset: 1, line: 2, column: 1 }, end: Position { offset: 18, line: 2, column: 18 } } }, text: "test" }, params: [], return_type: Int }, [Expression(Literal(Int(42)))]))
 
 
             "#,

@@ -455,32 +455,30 @@ impl AstParser {
 
         let mut inner = pair.clone().into_inner();
 
-        // Parse function name
         let name = LocalIdentifier::new(
             convert_from_pair(&pair),
-            &AstParser::expect_identifier(&mut inner)?,
+            &Self::expect_identifier(&mut inner)?,
         );
 
-        // Parse parameters
-        let parameters = if let Some(param_list) = inner.next() {
-            if param_list.as_rule() == Rule::parameter_list {
-                self.parse_parameters(param_list)?
-            } else {
-                Vec::new()
-            }
-        } else {
-            Vec::new()
-        };
+        let next_token = inner.next();
+        let (parameters, return_type) = match next_token {
+            Some(token) if token.as_rule() == Rule::parameter_list => {
+                let params = self.parse_parameters(token)?;
 
-        // Parse return type if it exists, otherwise use Unit
-        let return_type = if let Some(return_type_pair) = inner.next() {
-            if return_type_pair.as_rule() == Rule::return_type {
-                self.parse_return_type(return_type_pair)?
-            } else {
-                Type::Unit
+                let ret_type = if let Some(return_type_pair) = inner.next() {
+                    self.parse_return_type(return_type_pair)?
+                } else {
+                    Type::Unit
+                };
+
+                (params, ret_type)
             }
-        } else {
-            Type::Unit
+            Some(token) if token.as_rule() == Rule::return_type => {
+                (Vec::new(), self.parse_return_type(token)?)
+            }
+            _ => {
+                (Vec::new(), Type::Unit)
+            }
         };
 
         Ok((
@@ -1625,6 +1623,19 @@ impl AstParser {
                 }
                 Ok(Type::Tuple(types))
             }
+            Rule::map_type => {
+                let mut inner = pair.into_inner();
+                let key_type = self.parse_type(Self::next_pair(&mut inner)?)?;
+                let value_type = self.parse_type(Self::next_pair(&mut inner)?)?;
+                Ok(Type::Map(Box::new(key_type), Box::new(value_type)))
+            }
+
+            Rule::array_type => {
+                let inner = self.next_inner_pair(pair)?;
+                let element_type = self.parse_type(inner)?;
+                Ok(Type::Array(Box::new(element_type)))
+            }
+
             _ => Err(pest::error::Error::new_from_span(
                 pest::error::ErrorVariant::CustomError {
                     message: format!("Unexpected type rule: {:?}", pair.as_rule()),

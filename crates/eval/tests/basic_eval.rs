@@ -644,7 +644,7 @@ fn map_insert() {
 
     mut a = [2: 'hello', -1: 'world']
     a[3] = 'ossian'
-    
+
     ",
     );
 
@@ -659,15 +659,14 @@ fn map_overwrite() {
 
     mut a = [2: 'hello', -1: 'world']
     a[-1] = 'ossian'
-    
+
     ",
     );
 
     assert_eq!(x, Value::String("ossian".to_string()));
 }
 
-//#[test_log::test]
-#[allow(unused)]
+#[test_log::test]
 fn map_fn_return() {
     let x = eval(
         "
@@ -678,9 +677,25 @@ fn map_fn_return() {
 
     mut a = map_creator()
     a[3] = 'ossian'
-    
+
     ",
     );
 
     assert_eq!(x, Value::String("ossian".to_string()));
+}
+
+#[test_log::test]
+fn array_fn_return() {
+    let x = eval(
+        "
+
+    fn float_creator() -> [Float] {
+        [2.4, 5.6, 8.9]
+    }
+
+    a = float_creator()
+    ",
+    );
+
+    assert_eq!(x.to_string(), "[2.40, 5.60, 8.90]");
 }

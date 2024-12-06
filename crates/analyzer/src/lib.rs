@@ -13,7 +13,7 @@ use swamp_script_semantic::ns::{LocalTypeName, ResolvedModuleNamespace, Semantic
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
     ResolvedDefinition, ResolvedEnumTypeRef, ResolvedFunction, ResolvedFunctionRef,
-    ResolvedFunctionSignature, ResolvedMutMap, ResolvedStaticCall,
+    ResolvedFunctionSignature, ResolvedMapTypeRef, ResolvedMutMap, ResolvedStaticCall,
 };
 use swamp_script_semantic::{ResolvedMapIndexLookup, ResolvedProgramTypes};
 use swamp_script_semantic::{ResolvedMapType, ResolvedProgramState};
@@ -278,6 +278,28 @@ impl<'a> Resolver<'a> {
         Ok(rc_array)
     }
 
+    pub fn resolve_map_type(
+        &mut self,
+        ast_key_type: &Type,
+        ast_value_type: &Type,
+    ) -> Result<ResolvedMapTypeRef, ResolveError> {
+        // TODO: Check for an existing map type with exact same type
+
+        let key_type = self.resolve_type(ast_key_type)?;
+        let value_type = self.resolve_type(ast_value_type)?;
+
+        let original_map_type = ResolvedMapType {
+            key_type,
+            value_type,
+        };
+
+        let map_type_ref = Rc::new(original_map_type);
+
+        //self.state.map_types.push(rc_array.clone());
+
+        Ok(map_type_ref)
+    }
+
     pub fn resolve_type(&mut self, ast_type: &Type) -> Result<ResolvedType, ResolveError> {
         let resolved = match ast_type {
             Type::Any => ResolvedType::Any,
@@ -291,11 +313,13 @@ impl<'a> Resolver<'a> {
                 display_type
             }
             Type::Array(ast_type) => ResolvedType::Array(self.resolve_array_type(ast_type)?),
+            Type::Map(key_type, value_type) => {
+                ResolvedType::Map(self.resolve_map_type(key_type, value_type)?)
+            }
             Type::Tuple(types) => {
                 ResolvedType::Tuple(ResolvedTupleType(self.resolve_types(types)?).into())
             }
             Type::Enum(_) => todo!(),
-            Type::Map(_, _) => todo!(),
             Type::TypeReference(ast_type_reference) => {
                 self.find_type_reference(ast_type_reference)?
             }
