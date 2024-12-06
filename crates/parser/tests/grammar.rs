@@ -1376,3 +1376,15 @@ FunctionDef(LocalIdentifier { node: Node { span: Span { start: Position { offset
             "#,
     );
 }
+
+#[test_log::test]
+fn sparse_map_static_call() {
+    check(
+        r#"
+        result = SparseMap<Int>::new()
+        "#,
+        r#"
+
+        Let(VariableAssignment(result), StaticCallGeneric(LocalTypeIdentifier { node: Node { span: Span { start: Position { offset: 18, line: 2, column: 18 }, end: Position { offset: 27, line: 2, column: 27 } } }, text: "SparseMap" }, LocalIdentifier { node: Node { span: Span { start: Position { offset: 34, line: 2, column: 34 }, end: Position { offset: 37, line: 2, column: 37 } } }, text: "new" }, [], [Int]))
+        "#   );
+}

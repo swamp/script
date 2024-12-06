@@ -281,7 +281,10 @@ function_call = {
     identifier ~ "(" ~ (function_argument ~ ("," ~ " "* ~ function_argument)*)? ~ ")" // PEST BUG: need to be explicit about spaces after ,
 }
 
-static_call = { type_identifier ~ "::" ~ identifier ~ "(" ~ (function_argument ~ ("," ~ " "* ~ function_argument)*)? ~ ")" }
+static_call = {
+    type_identifier ~ generic_params? ~ "::" ~ identifier ~ 
+    "(" ~ (function_argument ~ ("," ~ " "* ~ function_argument)*)? ~ ")"
+}
 
 
 

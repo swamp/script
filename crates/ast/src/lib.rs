@@ -415,6 +415,12 @@ pub enum Expression {
     // Calls ----
     FunctionCall(Box<Expression>, Vec<Expression>),
     StaticCall(LocalTypeIdentifier, LocalIdentifier, Vec<Expression>), // Type::func(args)
+    StaticCallGeneric(
+        LocalTypeIdentifier,
+        LocalIdentifier,
+        Vec<Expression>,
+        Vec<Type>, // Generic arguments
+    ),
     MemberCall(Box<Expression>, LocalIdentifier, Vec<Expression>),
     Block(Vec<Statement>),
 

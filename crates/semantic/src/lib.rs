@@ -142,23 +142,6 @@ impl ResolvedType {
             Self::Any => "Any".to_string(),
             Self::Generic(resolved_type, vec) => format!("{resolved_type}<{}>", comma(&vec)),
             Self::Optional(inner_type) => format!("{inner_type}?"),
-            Self::Int(rc) => todo!(),
-            Self::Float(rc) => todo!(),
-            Self::String(rc) => todo!(),
-            Self::Bool(rc) => todo!(),
-            Self::Unit(rc) => todo!(),
-            Self::Array(rc) => todo!(),
-            Self::Tuple(rc) => todo!(),
-            Self::Struct(rc) => todo!(),
-            Self::Map(rc) => todo!(),
-            Self::Enum(rc) => todo!(),
-            Self::EnumVariant(rc) => todo!(),
-            Self::FunctionInternal(rc) => todo!(),
-            Self::FunctionExternal(rc) => todo!(),
-            Self::ExclusiveRange(rc) => todo!(),
-            Self::Alias(local_type_name, resolved_type) => todo!(),
-            Self::Optional(resolved_type) => todo!(),
-            Self::Any => todo!(),
         }
     }
 }
@@ -271,24 +254,7 @@ impl Display for ResolvedType {
             }
             ResolvedType::Generic(resolved_type, vec) => write!(f, "{resolved_type}<{}>", comma(&vec)),
             Self::Optional(inner_type) => write!(f, "{inner_type}?"),
-            ResolvedType::Int(rc) => todo!(),
-            ResolvedType::Float(rc) => todo!(),
-            ResolvedType::String(rc) => todo!(),
-            ResolvedType::Bool(rc) => todo!(),
-            ResolvedType::Unit(rc) => todo!(),
-            ResolvedType::Array(rc) => todo!(),
-            ResolvedType::Tuple(rc) => todo!(),
-            ResolvedType::Struct(rc) => todo!(),
-            ResolvedType::Map(rc) => todo!(),
-            ResolvedType::Enum(rc) => todo!(),
-            ResolvedType::EnumVariant(rc) => todo!(),
-            ResolvedType::FunctionInternal(rc) => todo!(),
-            ResolvedType::FunctionExternal(rc) => todo!(),
-            ResolvedType::ExclusiveRange(rc) => todo!(),
-            ResolvedType::Alias(local_type_name, resolved_type) => todo!(),
-            ResolvedType::Optional(resolved_type) => todo!(),
-            ResolvedType::Any => todo!(),
-        }
+            }
     }
 }
 
@@ -742,6 +708,7 @@ pub enum ResolvedExpression {
     FunctionInternalCall(ResolvedInternalFunctionCall), // ResolvedFunctionReference, Vec<ResolvedExpression>
     FunctionExternalCall(ResolvedExternalFunctionCall),
     StaticCall(ResolvedStaticCall),
+    StaticCallGeneric(ResolvedStaticCallGeneric),
     MutMemberCall(MutMemberRef, Vec<ResolvedExpression>),
     MemberCall(ResolvedMemberCall),
 
@@ -933,6 +900,9 @@ impl Display for ResolvedExpression {
                 "static call {}({:?})",
                 static_call.function, static_call.arguments
             ),
+            Self::StaticCallGeneric(static_call_generic) => {
+                write!(f, "static call generic {}({:?})", static_call_generic.function, static_call_generic.arguments)
+            }
             Self::Option(inner) => write!(f, "OptionExpr({inner:?})"),
             ResolvedExpression::ArrayExtend(_, _) => todo!(),
             ResolvedExpression::ArrayPush(_, _) => todo!(),
@@ -1555,4 +1525,11 @@ impl Display for ResolvedEnumLiteralData {
             Self::Struct(struct_data) => write!(f, "{:?}", struct_data),
         }
     }
+}
+
+#[derive(Debug)]
+pub struct ResolvedStaticCallGeneric {
+    pub function: Rc<ResolvedFunction>,
+    pub arguments: Vec<ResolvedExpression>,
+    pub generic_types: Vec<ResolvedType>,
 }

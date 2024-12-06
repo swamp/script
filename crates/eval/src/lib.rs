@@ -875,6 +875,29 @@ impl<'a, C> Interpreter<'a, C> {
                 self.evaluate_static_function_call(static_call)?
             }
 
+            ResolvedExpression::StaticCallGeneric(static_call_generic) => {
+                let evaluated_args = self.evaluate_args(&static_call_generic.arguments)?;
+                match &*static_call_generic.function {
+                    ResolvedFunction::Internal(function_data) => {
+                        self.push_function_scope("static generic function call".to_string());
+                        self.bind_parameters(&function_data.signature.parameters, &evaluated_args)?;
+                        let result = self.execute_statements(&function_data.statements)?;
+                        self.pop_function_scope("static generic function call".to_string());
+                        match result {
+                            ValueWithSignal::Value(v) | ValueWithSignal::Return(v) => Ok(v),
+                            _ => Ok(Value::Unit),
+                        }
+                    }
+                    ResolvedFunction::External(external) => {
+                        let mut func = self.externals.external_functions_by_id
+                            .get(&external.id)
+                            .expect("external function missing")
+                            .borrow_mut();
+                        (func.func)(&evaluated_args, &mut self.context)
+                    }
+                }?
+            }
+
             ResolvedExpression::MemberCall(resolved_member_call) => {
                 let member_value =
                     self.evaluate_expression(&resolved_member_call.self_expression)?;

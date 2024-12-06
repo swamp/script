@@ -1546,11 +1546,9 @@ impl AstParser {
     fn parse_static_call(&self, pair: Pair<Rule>) -> Result<Expression, Error<Rule>> {
         let mut inner = Self::get_inner_pairs(&pair);
 
-        // Parse type name and function name
+        // Parse type name
         let type_name_pair = Self::next_pair(&mut inner)?;
-        let func_name_pair = Self::next_pair(&mut inner)?;
-
-        if type_name_pair.as_rule() != Rule::type_identifier {
+        let base_type = if type_name_pair.as_rule() != Rule::type_identifier {
             return Err(self.create_error(
                 &format!(
                     "Expected type identifier, found {:?}",
@@ -1558,29 +1556,36 @@ impl AstParser {
                 ),
                 type_name_pair.as_span(),
             ));
-        }
+        } else {
+            LocalTypeIdentifier::new(convert_from_pair(&type_name_pair), type_name_pair.as_str())
+        };
 
-        if func_name_pair.as_rule() != Rule::identifier {
-            return Err(self.create_error(
-                &format!("Expected identifier, found {:?}", func_name_pair.as_rule()),
-                func_name_pair.as_span(),
-            ));
-        }
+        // generic parameters
+        let next_pair = Self::next_pair(&mut inner)?;
+        let (generic_types, func_name_pair) = if next_pair.as_rule() == Rule::generic_params {
+            let mut types = Vec::new();
+            for param in Self::get_inner_pairs(&next_pair) {
+                types.push(self.parse_type(param)?);
+            }
+            
+            let func_name = Self::next_pair(&mut inner)?;
+            (Some(types), func_name)
+        } else {
+            (None, next_pair)
+        };
 
+        // Parse arguments
         let mut args = Vec::new();
-        // Parse arguments - same logic as function_call
         while let Some(arg_pair) = inner.next() {
             if arg_pair.as_rule() == Rule::function_argument {
                 let mut arg_inner = Self::get_inner_pairs(&arg_pair).peekable();
-
-                // Check for mut keyword
                 let has_mut = arg_inner
                     .peek()
                     .map(|p| p.as_rule() == Rule::mut_keyword)
                     .unwrap_or(false);
 
                 if has_mut {
-                    arg_inner.next(); // consume mut keyword
+                    arg_inner.next();
                 }
 
                 let expr = self.parse_expression(Self::next_pair(&mut arg_inner)?)?;
@@ -1588,11 +1593,19 @@ impl AstParser {
             }
         }
 
-        Ok(Expression::StaticCall(
-            LocalTypeIdentifier::new(convert_from_pair(&type_name_pair), type_name_pair.as_str()),
-            LocalIdentifier::new(convert_from_pair(&func_name_pair), func_name_pair.as_str()),
-            args,
-        ))
+        match generic_types {
+            Some(types) => Ok(Expression::StaticCallGeneric(
+                base_type,
+                LocalIdentifier::new(convert_from_pair(&func_name_pair), func_name_pair.as_str()),
+                args,
+                types,
+            )),
+            None => Ok(Expression::StaticCall(
+                base_type,
+                LocalIdentifier::new(convert_from_pair(&func_name_pair), func_name_pair.as_str()),
+                args,
+            )),
+        }
     }
 
     /*

@@ -10,7 +10,7 @@ use std::rc::Rc;
 use swamp_script_ast::prelude::*;
 use swamp_script_ast::{CompoundOperator, Function, PostfixOperator};
 use swamp_script_semantic::ns::{LocalTypeName, ResolvedModuleNamespace, SemanticError};
-use swamp_script_semantic::prelude::*;
+use swamp_script_semantic::{prelude::*, ResolvedStaticCallGeneric};
 use swamp_script_semantic::{
     ResolvedDefinition, ResolvedEnumTypeRef, ResolvedFunction, ResolvedFunctionRef,
     ResolvedFunctionSignature, ResolvedMapTypeRef, ResolvedMutMap, ResolvedStaticCall,
@@ -78,7 +78,10 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
         }
         ResolvedExpression::StaticCall(static_call) => {
             signature(&static_call.function).return_type.clone()
-        }
+        },
+        ResolvedExpression::StaticCallGeneric(static_call_generic) => {
+            signature(&static_call_generic.function).return_type.clone()
+        },
 
         ResolvedExpression::Block(_statements) => ResolvedType::Unit(Rc::new(ResolvedUnitType)), // TODO: Fix this
         ResolvedExpression::InterpolatedString(string_type, _parts) => {
@@ -1075,6 +1078,12 @@ impl<'a> Resolver<'a> {
                     arguments,
                 )?)
             }
+
+            Expression::StaticCallGeneric(type_name, function_name, arguments, generic_types) => {
+                ResolvedExpression::StaticCallGeneric(
+                    self.resolve_static_call_generic(type_name, function_name, generic_types, arguments)?
+                )
+            },
 
             Expression::MemberCall(ast_member_expression, ast_identifier, ast_arguments) => {
                 let result = self.check_for_internal_member_call(
@@ -2461,6 +2470,33 @@ impl<'a> Resolver<'a> {
             }
         }
         Ok(None)
+    }
+
+    fn resolve_static_call_generic(
+        &mut self,
+        type_name: &LocalTypeIdentifier,
+        function_name: &LocalIdentifier,
+        generic_types: &Vec<Type>,
+        arguments: &Vec<Expression>,
+    ) -> Result<ResolvedStaticCallGeneric, ResolveError> {
+        let resolved_arguments = self.resolve_expressions(arguments)?;
+        let resolved_generic_types = self.resolve_types(generic_types)?;
+        
+        let struct_type_ref = self.find_struct_type_local_mut(type_name)?;
+        let struct_ref = struct_type_ref.borrow();
+
+        if let Some(function_ref) = struct_ref.functions.get(&IdentifierName(function_name.text.clone())) {
+            Ok(ResolvedStaticCallGeneric {
+                function: function_ref.clone(),
+                arguments: resolved_arguments,
+                generic_types: resolved_generic_types,
+            })
+        } else {
+            Err(ResolveError::CouldNotFindStaticMember(
+                function_name.clone(),
+                type_name.clone(),
+            ))
+        }
     }
 }
 
