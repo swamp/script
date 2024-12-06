@@ -747,6 +747,8 @@ pub enum ResolvedExpression {
 
     Match(ResolvedMatch),
     LetVar(ResolvedVariableRef, Box<ResolvedExpression>),
+    ArrayRemoveIndex(ResolvedVariableRef, Box<ResolvedExpression>),
+    ArrayClear(ResolvedVariableRef),
 }
 
 #[derive(Debug)]
@@ -896,6 +898,8 @@ impl Display for ResolvedExpression {
             Self::Option(inner) => write!(f, "OptionExpr({inner:?})"),
             ResolvedExpression::ArrayExtend(_, _) => todo!(),
             ResolvedExpression::ArrayPush(_, _) => todo!(),
+            ResolvedExpression::ArrayRemoveIndex(_, _) => todo!(),
+            ResolvedExpression::ArrayClear(_) => todo!(),
         }
     }
 }

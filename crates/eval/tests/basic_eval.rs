@@ -726,3 +726,48 @@ fn array_extend() {
 
     assert_eq!(x.to_string(), "[10, 20, 30, 40, 50]");
 }
+
+#[test_log::test]
+fn array_remove() {
+    let x = eval(
+        "
+
+    mut a = [10, 20]
+    
+    a += [30, 40, 50]
+
+    a.remove(3)
+    ",
+    );
+
+    assert_eq!(x.to_string(), "[10, 20, 30, 50]");
+}
+
+#[test_log::test]
+fn array_remove_fail() {
+    check_fail(
+        "
+
+    a = [10, 20]
+    
+    a.remove(1)
+    ",
+        "ResolveError(VariableIsNotMutable(a))",
+    );
+}
+
+#[test_log::test]
+fn array_clear() {
+    let x = eval(
+        "
+
+    mut a = [10, 20]
+    
+    a += [30, 40, 50]
+
+    a.clear()
+    ",
+    );
+
+    assert_eq!(x.to_string(), "[]");
+}

@@ -608,6 +608,42 @@ impl<'a, C> Interpreter<'a, C> {
                 array_val.clone()
             }
 
+            ResolvedExpression::ArrayRemoveIndex(variable_ref, usize_index_expression) => {
+                let index_val = self.evaluate_expression(usize_index_expression)?;
+                let index = match index_val {
+                    Value::Int(x) => x,
+                    _ => return Err(ExecuteError::ArgumentIsNotMutable),
+                };
+                let array_val = self.lookup_variable(variable_ref)?;
+
+                match &array_val {
+                    Value::Reference(r) => {
+                        if let Value::Array(_type_id, ref mut vector) = &mut *r.borrow_mut() {
+                            vector.remove(index as usize);
+                        } else {
+                            Err("Cannot extend non-array reference".to_string())?
+                        }
+                    }
+                    _ => Err(ExecuteError::NotAnArray)?,
+                }
+                array_val.clone()
+            }
+
+            ResolvedExpression::ArrayClear(variable_ref) => {
+                let array_val = self.lookup_variable(variable_ref)?;
+                match &array_val {
+                    Value::Reference(r) => {
+                        if let Value::Array(_type_id, ref mut vector) = &mut *r.borrow_mut() {
+                            vector.clear();
+                        } else {
+                            Err("Cannot extend non-array reference".to_string())?
+                        }
+                    }
+                    _ => Err(ExecuteError::NotAnArray)?,
+                }
+                array_val.clone()
+            }
+
             ResolvedExpression::ArrayAssignment(array, index, value) => {
                 let array_val = self.evaluate_expression(&array.expression)?;
                 let index_val = self.evaluate_expression(&index.expression)?;

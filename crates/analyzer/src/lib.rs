@@ -134,6 +134,8 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
         },
         ResolvedExpression::ArrayExtend(variable_ref, _) => variable_ref.resolved_type.clone(),
         ResolvedExpression::ArrayPush(variable_ref, _) => variable_ref.resolved_type.clone(),
+        ResolvedExpression::ArrayRemoveIndex(variable_ref, _) => variable_ref.resolved_type.clone(),
+        ResolvedExpression::ArrayClear(variable_ref) => variable_ref.resolved_type.clone(),
     };
 
     trace!(resolution_expression=%resolution_expression, "resolution first");
@@ -199,6 +201,7 @@ pub enum ResolveError {
     InvalidOperatorForArray(CompoundOperator),
     IncompatibleTypes(ResolvedType, ResolvedType),
     ExpectedArray(ResolvedType),
+    UnknownMemberFunction,
 }
 
 impl From<SemanticError> for ResolveError {
@@ -1070,6 +1073,16 @@ impl<'a> Resolver<'a> {
             }
 
             Expression::MemberCall(ast_member_expression, ast_identifier, ast_arguments) => {
+                let result = self.check_for_internal_member_call(
+                    ast_member_expression,
+                    ast_identifier,
+                    ast_arguments,
+                )?;
+
+                if let Some(internal_expression) = result {
+                    return Ok(internal_expression);
+                }
+
                 ResolvedExpression::MemberCall(self.resolve_member_call(
                     ast_member_expression,
                     ast_identifier,
@@ -1863,11 +1876,6 @@ impl<'a> Resolver<'a> {
         Ok(lookup_expression)
     }
 
-    /*
-
-       Ok(Rc::new(array_item))
-    */
-
     fn resolve_variable_assignment(
         &mut self,
         ast_variable: &Variable,
@@ -2388,6 +2396,67 @@ impl<'a> Resolver<'a> {
             Box::from(resolved_true),
             Box::from(resolved_false),
         ))
+    }
+
+    fn resolve_array_member_call(
+        &mut self,
+        var_ref: ResolvedVariableRef,
+        ast_member_function_name: &LocalIdentifier,
+        ast_arguments: &[Expression],
+    ) -> Result<ResolvedExpression, ResolveError> {
+        let expr = match ast_member_function_name.text.as_str() {
+            "remove" => {
+                if !var_ref.is_mutable() {
+                    return Err(ResolveError::VariableIsNotMutable(
+                        var_ref.ast_variable.clone(),
+                    ));
+                }
+
+                if ast_arguments.len() != 1 {
+                    return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 1));
+                }
+                let index_expr = self.resolve_usize_index(&ast_arguments[0])?;
+
+                ResolvedExpression::ArrayRemoveIndex(var_ref, Box::new(index_expr))
+            }
+
+            "clear" => {
+                if !var_ref.is_mutable() {
+                    return Err(ResolveError::VariableIsNotMutable(
+                        var_ref.ast_variable.clone(),
+                    ));
+                }
+
+                if !ast_arguments.is_empty() {
+                    return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 0));
+                }
+
+                ResolvedExpression::ArrayClear(var_ref)
+            }
+            _ => return Err(ResolveError::UnknownMemberFunction),
+        };
+
+        Ok(expr)
+    }
+
+    fn check_for_internal_member_call(
+        &mut self,
+        source: &Expression,
+        ast_member_function_name: &LocalIdentifier,
+        ast_arguments: &[Expression],
+    ) -> Result<Option<ResolvedExpression>, ResolveError> {
+        let resolved_expr = self.resolve_expression(source)?;
+        if let ResolvedType::Array(_) = resolution(&resolved_expr) {
+            if let ResolvedExpression::VariableAccess(var_ref) = resolved_expr {
+                let resolved = self.resolve_array_member_call(
+                    var_ref,
+                    ast_member_function_name,
+                    ast_arguments,
+                )?;
+                return Ok(Some(resolved));
+            }
+        }
+        Ok(None)
     }
 }
 
