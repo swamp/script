@@ -10,7 +10,8 @@ use std::rc::Rc;
 use swamp_script_ast::prelude::*;
 use swamp_script_ast::{CompoundOperator, Function, PostfixOperator};
 use swamp_script_semantic::ns::{LocalTypeName, ResolvedModuleNamespace, SemanticError};
-use swamp_script_semantic::{prelude::*, ResolvedStaticCallGeneric};
+use swamp_script_semantic::ResolvedType::RustType;
+use swamp_script_semantic::{prelude::*, ResolvedRustType, ResolvedStaticCallGeneric};
 use swamp_script_semantic::{
     ResolvedDefinition, ResolvedEnumTypeRef, ResolvedFunction, ResolvedFunctionRef,
     ResolvedFunctionSignature, ResolvedMapTypeRef, ResolvedMutMap, ResolvedStaticCall,
@@ -78,10 +79,10 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
         }
         ResolvedExpression::StaticCall(static_call) => {
             signature(&static_call.function).return_type.clone()
-        },
+        }
         ResolvedExpression::StaticCallGeneric(static_call_generic) => {
             signature(&static_call_generic.function).return_type.clone()
-        },
+        }
 
         ResolvedExpression::Block(_statements) => ResolvedType::Unit(Rc::new(ResolvedUnitType)), // TODO: Fix this
         ResolvedExpression::InterpolatedString(string_type, _parts) => {
@@ -139,6 +140,9 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
         ResolvedExpression::ArrayPush(variable_ref, _) => variable_ref.resolved_type.clone(),
         ResolvedExpression::ArrayRemoveIndex(variable_ref, _) => variable_ref.resolved_type.clone(),
         ResolvedExpression::ArrayClear(variable_ref) => variable_ref.resolved_type.clone(),
+        ResolvedExpression::SparseAdd(_, _) => ResolvedType::Any, // TODO: return correct type
+        ResolvedExpression::SparseRemove(_, _) => ResolvedType::Any, // TODO: return correct type
+        ResolvedExpression::SparseNew(rust_type_ref, _) => RustType(rust_type_ref.clone()),
     };
 
     trace!(resolution_expression=%resolution_expression, "resolution first");
@@ -205,6 +209,7 @@ pub enum ResolveError {
     IncompatibleTypes(ResolvedType, ResolvedType),
     ExpectedArray(ResolvedType),
     UnknownMemberFunction,
+    WrongNumberOfTypeArguments(usize, i32),
 }
 
 impl From<SemanticError> for ResolveError {
@@ -1080,10 +1085,22 @@ impl<'a> Resolver<'a> {
             }
 
             Expression::StaticCallGeneric(type_name, function_name, arguments, generic_types) => {
-                ResolvedExpression::StaticCallGeneric(
-                    self.resolve_static_call_generic(type_name, function_name, generic_types, arguments)?
-                )
-            },
+                if let Some(found) = self.check_for_internal_static_call(
+                    type_name,
+                    function_name,
+                    generic_types,
+                    arguments,
+                )? {
+                    found
+                } else {
+                    ResolvedExpression::StaticCallGeneric(self.resolve_static_call_generic(
+                        type_name,
+                        function_name,
+                        generic_types,
+                        arguments,
+                    )?)
+                }
+            }
 
             Expression::MemberCall(ast_member_expression, ast_identifier, ast_arguments) => {
                 let result = self.check_for_internal_member_call(
@@ -2468,7 +2485,58 @@ impl<'a> Resolver<'a> {
                 )?;
                 return Ok(Some(resolved));
             }
+        } else {
+            return self.check_for_internal_member_call_extra(
+                resolved_expr,
+                ast_member_function_name,
+                ast_arguments,
+            );
         }
+        Ok(None)
+    }
+
+    fn check_for_internal_member_call_extra(
+        &mut self,
+        self_expression: ResolvedExpression,
+        ast_member_function_name: &LocalIdentifier,
+        ast_arguments: &[Expression],
+    ) -> Result<Option<ResolvedExpression>, ResolveError> {
+        // TODO: Early out
+        if let ResolvedType::RustType(rust_type_ref) = resolution(&self_expression) {
+            if rust_type_ref.as_ref().number == 0 {
+                match ast_member_function_name.text.as_str() {
+                    "add" => {
+                        if ast_arguments.len() != 1 {
+                            return Err(ResolveError::WrongNumberOfArguments(
+                                ast_arguments.len(),
+                                1,
+                            ));
+                        }
+                        let value = self.resolve_expression(&ast_arguments[0])?;
+                        return Ok(Some(ResolvedExpression::SparseAdd(
+                            Box::new(self_expression),
+                            Box::new(value),
+                        )));
+                    }
+                    "remove" => {
+                        if ast_arguments.len() != 1 {
+                            return Err(ResolveError::WrongNumberOfArguments(
+                                ast_arguments.len(),
+                                1,
+                            ));
+                        }
+                        let sparse_slot_id_expression =
+                            self.resolve_expression(&ast_arguments[0])?;
+                        return Ok(Some(ResolvedExpression::SparseRemove(
+                            Box::new(self_expression),
+                            Box::new(sparse_slot_id_expression),
+                        )));
+                    }
+                    _ => {}
+                }
+            }
+        }
+
         Ok(None)
     }
 
@@ -2481,11 +2549,14 @@ impl<'a> Resolver<'a> {
     ) -> Result<ResolvedStaticCallGeneric, ResolveError> {
         let resolved_arguments = self.resolve_expressions(arguments)?;
         let resolved_generic_types = self.resolve_types(generic_types)?;
-        
+
         let struct_type_ref = self.find_struct_type_local_mut(type_name)?;
         let struct_ref = struct_type_ref.borrow();
 
-        if let Some(function_ref) = struct_ref.functions.get(&IdentifierName(function_name.text.clone())) {
+        if let Some(function_ref) = struct_ref
+            .functions
+            .get(&IdentifierName(function_name.text.clone()))
+        {
             Ok(ResolvedStaticCallGeneric {
                 function: function_ref.clone(),
                 arguments: resolved_arguments,
@@ -2497,6 +2568,41 @@ impl<'a> Resolver<'a> {
                 type_name.clone(),
             ))
         }
+    }
+
+    fn check_for_internal_static_call(
+        &mut self,
+        type_name: &LocalTypeIdentifier,
+        function_name: &LocalIdentifier,
+        generic_types: &Vec<Type>,
+        arguments: &Vec<Expression>,
+    ) -> Result<Option<ResolvedExpression>, ResolveError> {
+        // Check for Sparse::new()
+        if type_name.text == "Sparse" && function_name.text == "new" {
+            if !arguments.is_empty() {
+                return Err(ResolveError::WrongNumberOfArguments(arguments.len(), 0));
+            }
+            let resolved_generic_types = self.resolve_types(generic_types)?;
+            if resolved_generic_types.len() != 1 {
+                return Err(ResolveError::WrongNumberOfTypeArguments(
+                    resolved_generic_types.len(),
+                    1,
+                ));
+            }
+
+            let rust_type = ResolvedRustType {
+                type_name: format!("Sparse<{}>", resolved_generic_types[0].display_name()),
+                number: 0,
+            };
+            let rust_type_ref = Rc::new(rust_type);
+
+            return Ok(Some(ResolvedExpression::SparseNew(
+                rust_type_ref,
+                resolved_generic_types[0].clone(),
+            )));
+        }
+
+        Ok(None)
     }
 }
 

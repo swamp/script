@@ -8,7 +8,7 @@ use fixed32::Fp;
 use seq_fmt::{comma, comma_tuple};
 use seq_map::SeqMap;
 use std::cell::RefCell;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 use std::hash::Hash;
 use std::rc::Rc;
 use swamp_script_semantic::ns::{ResolvedModuleNamespace, SemanticError};
@@ -64,12 +64,13 @@ impl SwampExport for i32 {
     }
 }
 
-pub trait RustType: Any + Debug {
+pub trait RustType: Any + Debug + Display {
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
-impl<T: Any + Debug> RustType for T {
+// Blanket implementation
+impl<T: Any + Debug + Display> RustType for T {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -108,6 +109,10 @@ pub enum Value {
 
     // Other
     RustValue(Rc<RefCell<Box<dyn RustType>>>),
+}
+
+pub fn to_rust_value<T: RustType + 'static>(value: T) -> Value {
+    Value::RustValue(Rc::new(RefCell::new(Box::new(value) as Box<dyn RustType>)))
 }
 
 impl TryFrom<ValueWithSignal> for Value {
@@ -181,6 +186,28 @@ impl Value {
                     None
                 }
             }
+            _ => None,
+        }
+    }
+
+    pub fn downcast_rust_mut<T: RustType + 'static>(&self) -> Option<Rc<RefCell<Box<T>>>> {
+        match self {
+            Value::Reference(r) => match &*r.borrow() {
+                Value::RustValue(rc) => {
+                    let type_matches = {
+                        let guard = rc.borrow();
+                        (**guard).as_any().is::<T>()
+                    };
+
+                    if type_matches {
+                        Some(unsafe { std::mem::transmute(rc.clone()) })
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            },
+
             _ => None,
         }
     }
@@ -324,7 +351,7 @@ impl std::fmt::Display for Value {
                 )
             }
             Self::EnumVariantSimple(enum_type_ref) => write!(f, "{enum_type_ref}"),
-            Self::RustValue(rust_type) => write!(f, "engine type {rust_type:?}"),
+            Self::RustValue(rust_type) => write!(f, "{}", rust_type.borrow()),
             Self::Option(maybe_val) => write!(f, "{maybe_val:?}"),
         }
     }

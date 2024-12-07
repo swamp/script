@@ -719,7 +719,7 @@ fn array_extend() {
         "
 
     mut a = [10, 20]
-    
+
     a += [30, 40, 50]
     ",
     );
@@ -733,7 +733,7 @@ fn array_remove() {
         "
 
     mut a = [10, 20]
-    
+
     a += [30, 40, 50]
 
     a.remove(3)
@@ -749,7 +749,7 @@ fn array_remove_fail() {
         "
 
     a = [10, 20]
-    
+
     a.remove(1)
     ",
         "ResolveError(VariableIsNotMutable(a))",
@@ -762,7 +762,7 @@ fn array_clear() {
         "
 
     mut a = [10, 20]
-    
+
     a += [30, 40, 50]
 
     a.clear()
@@ -770,4 +770,50 @@ fn array_clear() {
     );
 
     assert_eq!(x.to_string(), "[]");
+}
+
+#[test_log::test]
+fn sparse_map_create() {
+    let x = eval(
+        "
+
+    sparse = Sparse<Int>::new()
+    ",
+    );
+
+    assert_eq!(x.to_string(), "Sparse<Int> len:0");
+}
+
+#[test_log::test]
+fn sparse_map_add() {
+    let x = eval(
+        "
+
+    mut sparse = Sparse<Int>::new()
+    print(sparse)
+    id = sparse.add(2)
+    print(id)
+    id
+    ",
+    );
+
+    assert_eq!(x.to_string(), "id:0:0");
+}
+
+#[test_log::test]
+fn sparse_map_remove() {
+    let x = eval(
+        "
+
+    mut sparse = Sparse<Int>::new()
+    sparse_id = sparse.add(2)
+
+    print(sparse)
+    print(sparse_id)
+
+    sparse.remove(sparse_id)
+    ",
+    );
+
+    assert_eq!(x.to_string(), "Sparse<Int> len:0");
 }

@@ -2,7 +2,8 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use crate::value::Value;
+use crate::extra::{SparseValueId, SparseValueMap};
+use crate::value::{to_rust_value, Value};
 use seq_map::SeqMap;
 use std::fmt::Debug;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
@@ -12,6 +13,8 @@ use swamp_script_semantic::{ResolvedFunction, ResolvedStaticCall};
 use tracing::{debug, error, info, trace};
 use value::format_value;
 
+mod extra;
+mod idx_gen;
 pub mod prelude;
 pub mod value;
 
@@ -44,6 +47,8 @@ pub enum ExecuteError {
     ExpectedOptional,
     NonUniqueKeysInMapLiteralDetected,
     NotAnArray,
+    ValueIsNotMutable,
+    NotSparseValue,
 }
 
 #[derive(Debug)]
@@ -889,7 +894,9 @@ impl<'a, C> Interpreter<'a, C> {
                         }
                     }
                     ResolvedFunction::External(external) => {
-                        let mut func = self.externals.external_functions_by_id
+                        let mut func = self
+                            .externals
+                            .external_functions_by_id
                             .get(&external.id)
                             .expect("external function missing")
                             .borrow_mut();
@@ -1083,6 +1090,42 @@ impl<'a, C> Interpreter<'a, C> {
                     Value::Option(Some(Box::from(self.evaluate_expression(expression)?)))
                 }
             },
+
+            // --------------- SPECIAL FUNCTIONS
+            ResolvedExpression::SparseNew(_rust_type_ref, generic_type) => {
+                let sparse_value_map = SparseValueMap::new(generic_type.clone());
+                to_rust_value(sparse_value_map)
+            }
+
+            ResolvedExpression::SparseAdd(sparse_rust, value_expression) => {
+                let resolved_sparse_value = self.evaluate_expression(sparse_rust)?;
+
+                let sparse_value_map = resolved_sparse_value.downcast_rust_mut::<SparseValueMap>();
+                if let Some(found) = sparse_value_map {
+                    let resolved_value = self.evaluate_expression(value_expression)?;
+                    let id_value = found.borrow_mut().add(resolved_value);
+
+                    id_value
+                } else {
+                    return Err(ExecuteError::NotSparseValue);
+                }
+            }
+            ResolvedExpression::SparseRemove(sparse_rust, id_expression) => {
+                let resolved_sparse_value = self.evaluate_expression(sparse_rust)?;
+                let sparse_value_map = resolved_sparse_value.downcast_rust_mut::<SparseValueMap>();
+                if let Some(found) = sparse_value_map {
+                    let id_value = self.evaluate_expression(id_expression)?;
+                    if let Some(found_id) = id_value.downcast_rust::<SparseValueId>() {
+                        found.borrow_mut().remove(&**found_id.borrow());
+                    } else {
+                        return Err(ExecuteError::Error(
+                            "was not a sparse slot. can not remove".to_string(),
+                        ));
+                    }
+                }
+
+                resolved_sparse_value
+            }
         };
 
         Ok(value)

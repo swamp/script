@@ -42,6 +42,13 @@ pub struct ResolvedFunctionSignature {
 }
 
 #[derive(Debug, Clone)]
+pub struct ResolvedRustType {
+    pub type_name: String, // To identify the specific Rust type
+    pub number: u32,       // For type comparison
+}
+pub type ResolvedRustTypeRef = Rc<ResolvedRustType>;
+
+#[derive(Debug, Clone)]
 pub enum ResolvedType {
     // Primitives
     Int(ResolvedIntTypeRef),
@@ -67,6 +74,8 @@ pub enum ResolvedType {
 
     Alias(LocalTypeName, Box<ResolvedType>), // The alias name and the actual type
     Optional(Box<ResolvedType>),
+
+    RustType(ResolvedRustTypeRef),
 
     Any,
 }
@@ -96,6 +105,9 @@ impl ResolvedType {
             (Self::EnumVariant(a), Self::EnumVariant(b)) => a.owner.number == b.owner.number,
             (Self::Optional(inner_type_a), Self::Optional(inner_type_b)) => {
                 inner_type_a.same_type(inner_type_b)
+            }
+            (Self::RustType(type_ref_a), Self::RustType(type_ref_b)) => {
+                type_ref_a.number == type_ref_b.number
             }
             _ => false,
         }
@@ -142,6 +154,7 @@ impl ResolvedType {
             Self::Any => "Any".to_string(),
             Self::Generic(resolved_type, vec) => format!("{resolved_type}<{}>", comma(&vec)),
             Self::Optional(inner_type) => format!("{inner_type}?"),
+            Self::RustType(rust_type_ref) => rust_type_ref.type_name.clone(),
         }
     }
 }
@@ -252,9 +265,12 @@ impl Display for ResolvedType {
             Self::Alias(name, actual_type) => {
                 write!(f, "type {name} = {actual_type}")
             }
-            ResolvedType::Generic(resolved_type, vec) => write!(f, "{resolved_type}<{}>", comma(&vec)),
-            Self::Optional(inner_type) => write!(f, "{inner_type}?"),
+            Self::Generic(resolved_type, vec) => {
+                write!(f, "{resolved_type}<{}>", comma(&vec))
             }
+            Self::RustType(_) => todo!(),
+            Self::Optional(inner_type) => write!(f, "{inner_type}?"),
+        }
     }
 }
 
@@ -754,6 +770,12 @@ pub enum ResolvedExpression {
     LetVar(ResolvedVariableRef, Box<ResolvedExpression>),
     ArrayRemoveIndex(ResolvedVariableRef, Box<ResolvedExpression>),
     ArrayClear(ResolvedVariableRef),
+
+    // --- Special methods
+    // TODO: Have a better interface for these "engine" member calls
+    SparseAdd(Box<ResolvedExpression>, Box<ResolvedExpression>),
+    SparseRemove(Box<ResolvedExpression>, Box<ResolvedExpression>),
+    SparseNew(ResolvedRustTypeRef, ResolvedType),
 }
 
 #[derive(Debug)]
@@ -901,13 +923,21 @@ impl Display for ResolvedExpression {
                 static_call.function, static_call.arguments
             ),
             Self::StaticCallGeneric(static_call_generic) => {
-                write!(f, "static call generic {}({:?})", static_call_generic.function, static_call_generic.arguments)
+                write!(
+                    f,
+                    "static call generic {}({:?})",
+                    static_call_generic.function, static_call_generic.arguments
+                )
             }
             Self::Option(inner) => write!(f, "OptionExpr({inner:?})"),
             ResolvedExpression::ArrayExtend(_, _) => todo!(),
             ResolvedExpression::ArrayPush(_, _) => todo!(),
             ResolvedExpression::ArrayRemoveIndex(_, _) => todo!(),
             ResolvedExpression::ArrayClear(_) => todo!(),
+
+            ResolvedExpression::SparseAdd(_, _) => todo!(),
+            ResolvedExpression::SparseRemove(_, _) => todo!(),
+            ResolvedExpression::SparseNew(_, _) => todo!(),
         }
     }
 }

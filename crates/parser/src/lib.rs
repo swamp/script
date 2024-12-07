@@ -1567,7 +1567,7 @@ impl AstParser {
             for param in Self::get_inner_pairs(&next_pair) {
                 types.push(self.parse_type(param)?);
             }
-            
+
             let func_name = Self::next_pair(&mut inner)?;
             (Some(types), func_name)
         } else {
@@ -1656,7 +1656,7 @@ impl AstParser {
                 let mut inner = pair.into_inner();
                 let first = inner.next().unwrap();
                 let base_type = self.parse_type(first)?;
-    
+
                 if let Some(generic_params) = inner.next() {
                     if generic_params.as_rule() == Rule::generic_params {
                         let mut generic_types = Vec::new();
