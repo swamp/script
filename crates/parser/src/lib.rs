@@ -11,7 +11,7 @@ use pest::pratt_parser::{Assoc, Op, PrattParser};
 use pest::Parser;
 use pest_derive::Parser;
 use seq_map::SeqMap;
-use swamp_script_ast::{prelude::*, CompoundOperator};
+use swamp_script_ast::{prelude::*, CompoundOperator, ForPattern, PatternElement};
 use swamp_script_ast::{Function, PostfixOperator};
 use tracing::debug;
 
@@ -196,7 +196,6 @@ impl AstParser {
                 }
                 Ok(Statement::Block(statements))
             }
-            Rule::let_statement => self.parse_let_statement(pair),
             Rule::if_stmt => self.parse_if_statement(pair),
             Rule::for_loop => self.parse_for_loop(pair),
             Rule::while_loop => self.parse_while_loop(pair),
@@ -289,66 +288,6 @@ impl AstParser {
             Box::new(Expression::VariableAccess(base)),
             field,
         ))
-    }
-
-    fn parse_let_statement(&self, pair: Pair<Rule>) -> Result<Statement, Error<Rule>> {
-        let mut inner = Self::get_inner_pairs(&pair).peekable();
-
-        // Check for mut keyword first
-        let is_mutable = inner
-            .peek()
-            .map(|p| p.as_rule() == Rule::mut_keyword)
-            .unwrap_or(false);
-
-        if is_mutable {
-            inner.next(); // consume mut keyword
-        }
-
-        let pattern_pair = Self::next_pair(&mut inner)?;
-        let expr_pair = Self::next_pair(&mut inner)?;
-
-        let pattern = match pattern_pair.as_rule() {
-            Rule::identifier => {
-                Pattern::VariableAssignment(Variable::new(pattern_pair.as_str(), is_mutable))
-            }
-            Rule::struct_destructure => self.parse_struct_pattern(&pattern_pair)?,
-            Rule::tuple_destructure => self.parse_tuple_pattern(&pattern_pair)?,
-            _ => {
-                return Err(self.create_error(
-                    &format!("Unexpected pattern type: {:?}", pattern_pair.as_rule()),
-                    pattern_pair.as_span(),
-                ))
-            }
-        };
-
-        let expr = self.parse_expression(expr_pair)?;
-        Ok(Statement::Let(pattern, expr))
-    }
-
-    fn parse_struct_pattern(&self, pair: &Pair<Rule>) -> Result<Pattern, Error<Rule>> {
-        let mut fields = Vec::new();
-        for field in Self::get_inner_pairs(pair) {
-            if field.as_rule() == Rule::identifier {
-                fields.push(LocalTypeIdentifier::new(
-                    convert_from_pair(&pair),
-                    field.as_str(),
-                ));
-            }
-        }
-        Ok(Pattern::Struct(fields))
-    }
-
-    fn parse_tuple_pattern(&self, pair: &Pair<Rule>) -> Result<Pattern, Error<Rule>> {
-        let mut fields = Vec::new();
-        for field in Self::get_inner_pairs(pair) {
-            if field.as_rule() == Rule::identifier {
-                fields.push(LocalTypeIdentifier::new(
-                    convert_from_pair(&pair),
-                    field.as_str(),
-                ));
-            }
-        }
-        Ok(Pattern::Tuple(fields))
     }
 
     fn parse_struct_def(&self, pair: Pair<Rule>) -> Result<Definition, Error<Rule>> {
@@ -671,14 +610,31 @@ impl AstParser {
     fn parse_for_loop(&self, pair: Pair<Rule>) -> Result<Statement, Error<Rule>> {
         let mut inner = Self::get_inner_pairs(&pair);
 
-        // Parse loop variable
-        let var_pair = Self::next_pair(&mut inner)?;
-        let var_pattern = Pattern::VariableAssignment(Variable::new(var_pair.as_str(), false));
+        let pattern_pair = Self::next_pair(&mut inner)?;
+        if pattern_pair.as_rule() != Rule::for_pattern {
+            return Err(self.create_error("Expected for pattern", pattern_pair.as_span()));
+        }
 
-        // Parse iterable expression
+        let inner_pattern = self.next_inner_pair(pattern_pair)?;
+        let pattern = match inner_pattern.as_rule() {
+            Rule::identifier => ForPattern::Single(LocalTypeIdentifier::new(
+                convert_from_pair(&pair),
+                inner_pattern.as_str(),
+            )),
+            Rule::for_pair => {
+                let mut vars = Self::get_inner_pairs(&inner_pattern);
+                let first = Self::expect_identifier(&mut vars)?;
+                let second = Self::expect_identifier(&mut vars)?;
+                ForPattern::Pair(
+                    LocalTypeIdentifier::new(convert_from_pair(&pair), &first),
+                    LocalTypeIdentifier::new(convert_from_pair(&pair), &second),
+                )
+            }
+            _ => return Err(self.create_error("Invalid for loop pattern", inner_pattern.as_span())),
+        };
+
         let iterable = self.parse_expression(Self::next_pair(&mut inner)?)?;
 
-        // Parse block
         let block_pair = Self::next_pair(&mut inner)?;
         if block_pair.as_rule() != Rule::stmt_block {
             return Err(self.create_error("Expected block in for loop", block_pair.as_span()));
@@ -691,7 +647,7 @@ impl AstParser {
             }
         }
 
-        Ok(Statement::ForLoop(var_pattern, iterable, body))
+        Ok(Statement::ForLoop(pattern, iterable, body))
     }
 
     fn parse_while_loop(&self, pair: Pair<Rule>) -> Result<Statement, Error<Rule>> {
@@ -808,7 +764,19 @@ impl AstParser {
         }
     }
     fn parse_assignment(&self, pair: Pair<Rule>) -> Result<Expression, Error<Rule>> {
-        let mut inner = Self::get_inner_pairs(&pair);
+        let mut inner = Self::get_inner_pairs(&pair).peekable();
+
+        let is_mutable = if let Some(p) = inner.peek() {
+            if p.as_rule() == Rule::mut_keyword {
+                inner.next(); // consume mut
+                true
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+
         let left = Self::next_pair(&mut inner)?;
         let operator = Self::next_pair(&mut inner)?;
         let expr = self.parse_expression(Self::next_pair(&mut inner)?)?;
@@ -827,7 +795,46 @@ impl AstParser {
             }
         };
 
+        // Only block compound operators for mut declarations
+        if compound_op.is_some() && is_mutable {
+            return Err(self.create_error(
+                "Compound operators can't be used with 'mut'",
+                operator.as_span(),
+            ));
+        }
+
         match left.as_rule() {
+            Rule::variable_list => {
+                let vars: Vec<_> = Self::get_inner_pairs(&left).collect();
+
+                if vars.len() == 1 {
+                    let var = Variable::new(vars[0].as_str(), is_mutable);
+                    match compound_op {
+                        None => Ok(Expression::VariableAssignment(var, Box::new(expr))),
+                        Some(op) => Ok(Expression::VariableCompoundAssignment(
+                            var,
+                            op,
+                            Box::new(expr),
+                        )),
+                    }
+                } else {
+                    // Multiple variables don't support compound operators
+                    if compound_op.is_some() {
+                        return Err(self.create_error(
+                            "Compound operators can't be used with multiple variables",
+                            operator.as_span(),
+                        ));
+                    }
+                    let variables = vars
+                        .into_iter()
+                        .map(|v| Variable::new(v.as_str(), is_mutable))
+                        .collect();
+                    Ok(Expression::MultiVariableAssignment(
+                        variables,
+                        Box::new(expr),
+                    ))
+                }
+            }
             Rule::array_subscript => {
                 let mut subscript_inner = Self::get_inner_pairs(&left);
                 let array = Variable::new(&Self::expect_identifier(&mut subscript_inner)?, false);
@@ -844,17 +851,6 @@ impl AstParser {
                     Some(op) => Ok(Expression::IndexCompoundAssignment(
                         array_expr,
                         index_expr,
-                        op,
-                        Box::new(expr),
-                    )),
-                }
-            }
-            Rule::identifier => {
-                let var = Variable::new(left.as_str(), false);
-                match compound_op {
-                    None => Ok(Expression::VariableAssignment(var, Box::new(expr))),
-                    Some(op) => Ok(Expression::VariableCompoundAssignment(
-                        var,
                         op,
                         Box::new(expr),
                     )),
@@ -1915,11 +1911,37 @@ impl AstParser {
 
         Ok(Expression::Match(Box::new(value), arms))
     }
+
     fn parse_match_pattern(&self, pair: Pair<Rule>) -> Result<Pattern, Error<Rule>> {
         match pair.as_rule() {
             Rule::match_pattern => {
                 let inner = self.next_inner_pair(pair)?;
                 self.parse_match_pattern(inner)
+            }
+            Rule::pattern_list => {
+                // Single identifier pattern
+                let mut elements = Vec::new();
+                for item in Self::get_inner_pairs(&pair) {
+                    match item.as_rule() {
+                        Rule::pattern_field => {
+                            if item.as_str() == "_" {
+                                elements.push(PatternElement::Wildcard);
+                            } else {
+                                elements.push(PatternElement::Variable(LocalIdentifier::new(
+                                    convert_from_pair(&pair),
+                                    item.as_str(),
+                                )));
+                            }
+                        }
+                        _ => {
+                            return Err(self.create_error(
+                                &format!("Unexpected element in pattern: {:?}", item.as_rule()),
+                                item.as_span(),
+                            ))
+                        }
+                    }
+                }
+                Ok(Pattern::PatternList(elements))
             }
             Rule::enum_pattern => {
                 let mut inner = Self::get_inner_pairs(&pair);
@@ -1928,76 +1950,45 @@ impl AstParser {
                     &Self::expect_type_identifier(&mut inner)?,
                 );
 
-                // Check for optional tuple or struct pattern
-                if let Some(pattern) = inner.next() {
-                    match pattern.as_rule() {
-                        Rule::enum_pattern_tuple => {
-                            let mut fields = Vec::new();
-                            for field in Self::get_inner_pairs(&pattern) {
-                                if field.as_rule() == Rule::pattern_field {
-                                    fields.push(LocalIdentifier::new(
+                if let Some(pattern_list) = inner.next() {
+                    let mut elements = Vec::new();
+                    for item in Self::get_inner_pairs(&pattern_list) {
+                        match item.as_rule() {
+                            Rule::pattern_field => {
+                                if item.as_str() == "_" {
+                                    elements.push(PatternElement::Wildcard);
+                                } else {
+                                    elements.push(PatternElement::Variable(LocalIdentifier::new(
                                         convert_from_pair(&pair),
-                                        field.as_str(),
-                                    ));
+                                        item.as_str(),
+                                    )));
                                 }
                             }
-                            Ok(Pattern::EnumTuple(variant, fields))
-                        }
-                        Rule::enum_pattern_struct => {
-                            let mut fields = Vec::new();
-                            for field in Self::get_inner_pairs(&pattern) {
-                                if field.as_rule() == Rule::struct_pattern_field {
-                                    fields.push(LocalIdentifier::new(
-                                        convert_from_pair(&pair),
-                                        field.as_str(),
-                                    ));
-                                }
+                            Rule::expression => {
+                                elements
+                                    .push(PatternElement::Expression(self.parse_expression(item)?));
                             }
-                            Ok(Pattern::EnumStruct(variant, fields))
+                            _ => {
+                                return Err(self.create_error(
+                                    &format!(
+                                        "Unexpected element in pattern list: {:?}",
+                                        item.as_rule()
+                                    ),
+                                    item.as_span(),
+                                ))
+                            }
                         }
-                        _ => Err(self.create_error(
-                            &format!("Unexpected enum pattern type: {:?}", pattern.as_rule()),
-                            pattern.as_span(),
-                        )),
                     }
+                    Ok(Pattern::EnumPattern(variant, Some(elements)))
                 } else {
-                    // Simple variant with no fields
-                    Ok(Pattern::EnumSimple(variant))
+                    Ok(Pattern::EnumPattern(variant, None))
                 }
             }
             Rule::literal => {
                 let lit = self.parse_literal(pair)?;
                 Ok(Pattern::Literal(lit))
             }
-            Rule::tuple_pattern => {
-                let mut fields = Vec::new();
-                for field in Self::get_inner_pairs(&pair) {
-                    if field.as_rule() == Rule::pattern_field {
-                        fields.push(LocalTypeIdentifier::new(
-                            convert_from_pair(&pair),
-                            field.as_str(),
-                        ));
-                    }
-                }
-                Ok(Pattern::Tuple(fields))
-            }
-            Rule::struct_pattern => {
-                let mut fields = Vec::new();
-                for field in Self::get_inner_pairs(&pair) {
-                    if field.as_rule() == Rule::pattern_field {
-                        fields.push(LocalTypeIdentifier::new(
-                            convert_from_pair(&pair),
-                            field.as_str(),
-                        ));
-                    }
-                }
-                Ok(Pattern::Struct(fields))
-            }
-            Rule::wildcard_pattern => Ok(Pattern::Wildcard),
-            Rule::identifier_pattern => Ok(Pattern::VariableAssignment(Variable::new(
-                pair.as_str(),
-                false,
-            ))),
+            Rule::wildcard_pattern => Ok(Pattern::PatternList(vec![PatternElement::Wildcard])),
             _ => Err(self.create_error(
                 &format!("Unknown match pattern type: {:?}", pair.as_rule()),
                 pair.as_span(),

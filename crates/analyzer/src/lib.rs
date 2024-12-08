@@ -8,10 +8,13 @@ use seq_map::{SeqMap, SeqMapError};
 use std::fmt::Display;
 use std::rc::Rc;
 use swamp_script_ast::prelude::*;
-use swamp_script_ast::{CompoundOperator, Function, PostfixOperator};
+use swamp_script_ast::{CompoundOperator, ForPattern, Function, PatternElement, PostfixOperator};
 use swamp_script_semantic::ns::{LocalTypeName, ResolvedModuleNamespace, SemanticError};
 use swamp_script_semantic::ResolvedType::RustType;
-use swamp_script_semantic::{prelude::*, ResolvedRustType, ResolvedStaticCallGeneric};
+use swamp_script_semantic::{
+    create_rust_type_generic, prelude::*, ResolvedForPattern, ResolvedPatternElement,
+    ResolvedStaticCallGeneric, TypeNumber,
+};
 use swamp_script_semantic::{
     ResolvedDefinition, ResolvedEnumTypeRef, ResolvedFunction, ResolvedFunctionRef,
     ResolvedFunctionSignature, ResolvedMapTypeRef, ResolvedMutMap, ResolvedStaticCall,
@@ -52,8 +55,11 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
         ResolvedExpression::MutRef(mut_var_ref) => mut_var_ref.variable_ref.resolved_type.clone(),
         ResolvedExpression::ArrayAccess(array_item_ref) => array_item_ref.item_type.clone(),
         ResolvedExpression::MapIndexAccess(map_item) => map_item.item_type.clone(),
-        ResolvedExpression::VariableAssignment(variable_assignment) => {
-            variable_assignment.variable_ref.resolved_type.clone()
+        ResolvedExpression::InitializeVariable(variable_assignment) => {
+            variable_assignment.variable_refs[0].resolved_type.clone()
+        }
+        ResolvedExpression::ReassignVariable(variable_assignments) => {
+            variable_assignments.variable_refs[0].resolved_type.clone()
         }
 
         ResolvedExpression::ArrayAssignment(_, _, _) => todo!(),
@@ -210,6 +216,14 @@ pub enum ResolveError {
     ExpectedArray(ResolvedType),
     UnknownMemberFunction,
     WrongNumberOfTypeArguments(usize, i32),
+    OnlyVariablesAllowedInEnumPattern,
+    ExpressionsNotAllowedInLetPattern,
+    UnknownField(String),
+    EnumVariantHasNoFields(LocalTypeIdentifier),
+    TooManyTupleFields {
+        max: usize,
+        got: usize,
+    },
 }
 
 impl From<SemanticError> for ResolveError {
@@ -471,6 +485,8 @@ impl<'a> Resolver<'a> {
             .create_enum_type(enum_type_name, parent_number)?;
 
         for (name, ast_enum_variant) in ast_variants {
+            let mut container_number: Option<TypeNumber> = None;
+
             let container = match ast_enum_variant {
                 EnumVariant::Simple => ResolvedEnumVariantContainerType::Nothing,
                 EnumVariant::Tuple(types) => {
@@ -481,6 +497,7 @@ impl<'a> Resolver<'a> {
                     }
 
                     let number = self.state.allocate_number();
+                    container_number = Some(number);
 
                     let common = CommonEnumVariantType {
                         number,
@@ -507,6 +524,7 @@ impl<'a> Resolver<'a> {
                     }
 
                     let number = self.state.allocate_number();
+                    container_number = Some(number);
 
                     let common = CommonEnumVariantType {
                         number,
@@ -530,7 +548,7 @@ impl<'a> Resolver<'a> {
                 owner: parent_ref.clone(),
                 data: container,
                 name: name.clone(),
-                number: 0,
+                number: container_number.unwrap_or(0),
             })
         }
 
@@ -630,7 +648,7 @@ impl<'a> Resolver<'a> {
 
                 // Set up scope for function body
                 for param in &parameters {
-                    self.set_variable_with_type(
+                    self.create_local_variable(
                         &Variable::new(&param.name.clone(), param.is_mutable),
                         &param.resolved_type.clone(),
                     )?;
@@ -698,7 +716,7 @@ impl<'a> Resolver<'a> {
                 let return_type = self.resolve_type(&function_data.signature.return_type)?;
 
                 for param in &parameters {
-                    self.set_variable_with_type(
+                    self.create_local_variable(
                         &Variable::new(&param.name, param.is_mutable),
                         &param.resolved_type,
                     )?;
@@ -787,25 +805,29 @@ impl<'a> Resolver<'a> {
         Ok((ResolvedType::Struct(found_struct), resolved_functions))
     }
 
-    fn resolve_let_statement(
+    fn resolve_for_pattern(
         &mut self,
-        ast_pattern: &Pattern,
-        ast_expression: &Expression,
-    ) -> Result<ResolvedStatement, ResolveError> {
-        let expr = self.resolve_expression(ast_expression)?;
+        pattern: &ForPattern,
+        item_type: &ResolvedType,
+    ) -> Result<ResolvedForPattern, ResolveError> {
+        match pattern {
+            ForPattern::Single(var) => {
+                let variable = Variable::new(&var.text, false);
+                let variable_ref = self.create_local_variable(&variable, item_type)?;
+                Ok(ResolvedForPattern::Single(variable_ref))
+            }
+            ForPattern::Pair(first, second) => {
+                let first_var = Variable::new(&first.text, false);
+                let second_var = Variable::new(&second.text, false);
 
-        let resolved_let = match ast_pattern {
-            Pattern::VariableAssignment(variable) => self.assign_variable(&variable, expr)?,
-            Pattern::Tuple(_variables) => todo!(), // TODO: PBJ
-            Pattern::Struct(_) => todo!(),         // TODO: PBJ
-            Pattern::Literal(_) => todo!(),        // TODO: PBJ
-            Pattern::EnumTuple(_, _) => todo!(),   // TODO: PBJ
-            Pattern::EnumStruct(_, _) => todo!(),  // TODO: PBJ
-            Pattern::EnumSimple(_) => todo!(),     // TODO: PBJ
-            Pattern::Wildcard => todo!(),          // TODO: PBJ
-        };
+                // TODO: Resolve the iterator completely, so we know what types that are returned
 
-        Ok(resolved_let)
+                let first_ref = self.create_local_variable(&first_var, &ResolvedType::Any)?;
+                let second_ref = self.create_local_variable(&second_var, &ResolvedType::Any)?;
+
+                Ok(ResolvedForPattern::Pair(first_ref, second_ref))
+            }
+        }
     }
 
     fn resolve_statement(
@@ -813,22 +835,21 @@ impl<'a> Resolver<'a> {
         statement: &Statement,
     ) -> Result<ResolvedStatement, ResolveError> {
         let converted = match statement {
-            Statement::Let(pattern, expr) => self.resolve_let_statement(pattern, expr)?,
             Statement::ForLoop(pattern, expression, statements) => {
                 let resolved_iterator = self.resolve_iterator(expression)?;
 
-                self.push_block_scope();
-                let pattern = self.resolve_pattern(pattern, &resolved_iterator.item_type)?;
+                self.push_block_scope("for_loop");
+                let pattern = self.resolve_for_pattern(pattern, &resolved_iterator.item_type)?;
                 let resolved_statements = self.resolve_statements(statements)?;
-                self.pop_block_scope();
+                self.pop_block_scope("for_loop");
 
                 ResolvedStatement::ForLoop(pattern, resolved_iterator, resolved_statements)
             }
             Statement::WhileLoop(expression, statements) => {
                 let condition = self.resolve_bool_expression(expression)?;
-                self.push_block_scope();
+                self.push_block_scope("while_loop");
                 let resolved_statements = self.resolve_statements(statements)?;
-                self.pop_block_scope();
+                self.pop_block_scope("while_loop");
 
                 ResolvedStatement::WhileLoop(condition, resolved_statements)
             }
@@ -1027,9 +1048,11 @@ impl<'a> Resolver<'a> {
             }
 
             Expression::VariableAssignment(variable_expression, source_expression) => {
-                ResolvedExpression::VariableAssignment(
-                    self.resolve_variable_assignment(variable_expression, source_expression)?,
-                )
+                self.resolve_variable_assignment(variable_expression, source_expression)?
+            }
+
+            Expression::MultiVariableAssignment(variables, source_expression) => {
+                self.resolve_multi_variable_assignment(variables, source_expression)?
             }
 
             Expression::IndexCompoundAssignment(_target, _index, _operator, _source) => {
@@ -1356,16 +1379,6 @@ impl<'a> Resolver<'a> {
         })
     }
 
-    fn resolve_pattern_variable(
-        &mut self,
-        variable: &Variable,
-        expression_type: &ResolvedType,
-    ) -> Result<ResolvedPattern, ResolveError> {
-        self.set_variable_with_type(variable, expression_type)?;
-        let variable_ref = self.find_variable(variable)?;
-        Ok(ResolvedPattern::VariableAssignment(variable_ref))
-    }
-
     fn find_variant_in_pattern(
         &mut self,
         expression_type: &ResolvedType,
@@ -1376,7 +1389,8 @@ impl<'a> Resolver<'a> {
             _ => Err(ResolveError::ExpectedEnumInPattern(ast_name.clone()))?,
         };
 
-        self.current_module
+        let result = self
+            .current_module
             .namespace
             .get_enum_variant_type(enum_type_ref.name(), &ast_name)
             .map_or_else(
@@ -1386,99 +1400,164 @@ impl<'a> Resolver<'a> {
                     ))
                 },
                 |found| Ok(found.clone()),
-            )
+            );
+
+        result
     }
 
     fn resolve_pattern(
         &mut self,
         ast_pattern: &Pattern,
         expression_type: &ResolvedType,
-    ) -> Result<ResolvedPattern, ResolveError> {
-        let resolved_pattern = match ast_pattern {
-            Pattern::VariableAssignment(variable) => {
-                self.resolve_pattern_variable(variable, expression_type)?
-            }
-            Pattern::Tuple(_) => todo!(),  // TODO: PBJ
-            Pattern::Struct(_) => todo!(), // TODO: PBJ
-            Pattern::Literal(ast_literal) => self.resolve_pattern_literal(ast_literal),
-            Pattern::EnumTuple(variant_name, variables_in_order) => {
-                let enum_variant_type_ref =
-                    self.find_variant_in_pattern(expression_type, variant_name)?;
-
-                let tuple_container = match &enum_variant_type_ref.data {
-                    ResolvedEnumVariantContainerType::Tuple(tuple_type_ref) => tuple_type_ref,
-
-                    _ => Err(ResolveError::WrongEnumVariantContainer(
-                        enum_variant_type_ref.clone(),
-                    ))?,
-                };
-
-                if variables_in_order.len() != tuple_container.fields_in_order.len() {
-                    return Err(ResolveError::WrongNumberOfTupleDeconstructVariables);
-                }
-
-                let mut field_refs = Vec::new();
-
-                for (index, (expected_type, field_name)) in tuple_container
-                    .fields_in_order
-                    .iter()
-                    .zip(variables_in_order.iter())
-                    .enumerate()
-                {
-                    field_refs.push(ResolvedEnumVariantTupleFieldType {
-                        name: field_name.clone(),
-                        field_index: index,
-                        enum_variant: enum_variant_type_ref.clone(),
-                        resolved_type: expected_type.clone(),
-                    });
-                }
-                ResolvedPattern::EnumTuple(tuple_container.clone(), field_refs)
-            }
-            Pattern::EnumStruct(variant_name, variables) => {
-                let enum_variant_type_ref =
-                    self.find_variant_in_pattern(expression_type, variant_name)?;
-
-                let struct_container = match &enum_variant_type_ref.data {
-                    ResolvedEnumVariantContainerType::Struct(struct_data) => struct_data,
-
-                    _ => Err(ResolveError::WrongEnumVariantContainer(
-                        enum_variant_type_ref.clone(),
-                    ))?,
-                };
-
-                let mut field_refs = Vec::new();
-
-                for field_name in variables {
-                    if let Some(found_index) = struct_container
-                        .fields
-                        .get_index(&IdentifierName(field_name.text.clone()))
-                    {
-                        let resolved_field_type = struct_container
-                            .fields
-                            .get(&IdentifierName(field_name.text.clone()))
-                            .expect("could not get struct enum field");
-                        field_refs.push(ResolvedEnumVariantStructFieldType {
-                            name: field_name.clone(),
-                            field_index: found_index,
-                            enum_variant: enum_variant_type_ref.clone(),
-                            resolved_type: resolved_field_type.clone(),
-                        });
-                    } else {
-                        return Err(ResolveError::UnknownStructField(field_name.clone()));
+    ) -> Result<(ResolvedPattern, bool), ResolveError> {
+        info!("resolving pattern:{ast_pattern:?}");
+        match ast_pattern {
+            Pattern::PatternList(elements) => {
+                let mut resolved_elements = Vec::new();
+                let mut scope_is_pushed = false;
+                for element in elements {
+                    match element {
+                        PatternElement::Variable(var) => {
+                            if !scope_is_pushed {
+                                self.push_block_scope("pattern_list one variable");
+                                scope_is_pushed = true;
+                            }
+                            let variable = Variable::new(&var.text, false);
+                            let variable_ref =
+                                self.create_local_variable(&variable, expression_type)?;
+                            resolved_elements.push(ResolvedPatternElement::Variable(variable_ref));
+                        }
+                        PatternElement::Expression(_expr) => {
+                            return Err(ResolveError::ExpressionsNotAllowedInLetPattern);
+                        }
+                        PatternElement::Wildcard => {
+                            resolved_elements.push(ResolvedPatternElement::Wildcard);
+                        }
                     }
                 }
-
-                ResolvedPattern::EnumStruct(enum_variant_type_ref.clone(), field_refs)
+                Ok((
+                    ResolvedPattern::PatternList(resolved_elements),
+                    scope_is_pushed,
+                ))
             }
-            Pattern::EnumSimple(ast_name) => {
+
+            Pattern::EnumPattern(variant_name, maybe_elements) => {
+                let mut scope_was_pushed = false;
                 let enum_variant_type_ref =
-                    self.find_variant_in_pattern(expression_type, ast_name)?;
-                ResolvedPattern::EnumSimple(enum_variant_type_ref)
-            }
-            Pattern::Wildcard => ResolvedPattern::Wildcard,
-        };
+                    self.find_variant_in_pattern(expression_type, variant_name)?;
 
-        Ok(resolved_pattern)
+                if let Some(elements) = maybe_elements {
+                    let mut resolved_elements = Vec::new();
+                    match &enum_variant_type_ref.data {
+                        ResolvedEnumVariantContainerType::Tuple(tuple_type) => {
+                            // For tuples, elements must be in order but can be partial
+                            if elements.len() > tuple_type.fields_in_order.len() {
+                                return Err(ResolveError::TooManyTupleFields {
+                                    max: tuple_type.fields_in_order.len(),
+                                    got: elements.len(),
+                                });
+                            }
+
+                            if !scope_was_pushed {
+                                self.push_block_scope("enum tuple");
+                                scope_was_pushed = true;
+                            }
+
+                            // Only zip with as many fields as we have elements
+                            for (element, field_type) in
+                                elements.iter().zip(&tuple_type.fields_in_order)
+                            {
+                                match element {
+                                    PatternElement::Variable(var) => {
+                                        info!("ENUM TUPLE found variable to handle {var}");
+                                        let variable = Variable::new(&var.text, false);
+                                        let variable_ref =
+                                            self.create_local_variable(&variable, field_type)?;
+                                        resolved_elements
+                                            .push(ResolvedPatternElement::Variable(variable_ref));
+                                    }
+                                    PatternElement::Wildcard => {
+                                        resolved_elements.push(ResolvedPatternElement::Wildcard);
+                                    }
+                                    PatternElement::Expression(_) => {
+                                        return Err(
+                                            ResolveError::ExpressionsNotAllowedInLetPattern,
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                        ResolvedEnumVariantContainerType::Struct(struct_type) => {
+                            if !scope_was_pushed {
+                                self.push_block_scope("enum struct");
+                                scope_was_pushed = true;
+                            }
+                            // For structs, can match any subset of fields in any order
+                            for element in elements {
+                                match element {
+                                    PatternElement::Variable(var) => {
+                                        // Check if the field exists
+                                        let field_index = struct_type
+                                            .fields
+                                            .get_index(&IdentifierName(var.text.clone()))
+                                            .ok_or_else(|| {
+                                                ResolveError::UnknownField(var.text.clone())
+                                            })?;
+
+                                        let field_type = struct_type
+                                            .fields
+                                            .get(&IdentifierName(var.text.clone()))
+                                            .ok_or_else(|| {
+                                                ResolveError::UnknownField(var.text.clone())
+                                            })?;
+
+                                        let variable = Variable::new(&var.text, false);
+                                        let variable_ref =
+                                            self.create_local_variable(&variable, field_type)?;
+                                        resolved_elements.push(
+                                            ResolvedPatternElement::VariableWithFieldIndex(
+                                                variable_ref,
+                                                field_index,
+                                            ),
+                                        );
+                                    }
+                                    PatternElement::Wildcard => {
+                                        resolved_elements.push(ResolvedPatternElement::Wildcard);
+                                    }
+                                    PatternElement::Expression(_) => {
+                                        return Err(
+                                            ResolveError::ExpressionsNotAllowedInLetPattern,
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                        ResolvedEnumVariantContainerType::Nothing => {
+                            if !elements.is_empty() {
+                                return Err(ResolveError::EnumVariantHasNoFields(
+                                    variant_name.clone(),
+                                ));
+                            }
+                        }
+                    }
+
+                    Ok((
+                        ResolvedPattern::EnumPattern(
+                            enum_variant_type_ref,
+                            Some(resolved_elements),
+                        ),
+                        scope_was_pushed,
+                    ))
+                } else {
+                    Ok((
+                        ResolvedPattern::EnumPattern(enum_variant_type_ref, None),
+                        false,
+                    ))
+                }
+            }
+
+            Pattern::Literal(ast_literal) => Ok((self.resolve_pattern_literal(ast_literal), false)),
+        }
     }
 
     fn resolve_iterator(
@@ -1490,7 +1569,7 @@ impl<'a> Resolver<'a> {
         let item_type = match resolved_type {
             ResolvedType::Array(array_type) => array_type.item_type.clone(),
             ResolvedType::ExclusiveRange(_) => resolved_type.clone(),
-            _ => todo!(),
+            _ => ResolvedType::Any,
         };
 
         Ok(ResolvedIterator {
@@ -1910,16 +1989,54 @@ impl<'a> Resolver<'a> {
         &mut self,
         ast_variable: &Variable,
         ast_expression: &Box<Expression>,
-    ) -> Result<ResolvedVariableAssignment, ResolveError> {
+    ) -> Result<ResolvedExpression, ResolveError> {
         let converted_expression = self.resolve_expression(ast_expression)?;
         let expression_type = resolution(&converted_expression);
-        let (variable_ref, _overwritten) =
+        let (variable_ref, is_reassignment) =
             self.set_or_overwrite_variable_with_type(ast_variable, &expression_type)?;
 
-        Ok(ResolvedVariableAssignment {
-            variable_ref,
+        let assignment = ResolvedVariableAssignment {
+            variable_refs: vec![variable_ref],
             expression: Box::from(converted_expression),
-        })
+        };
+
+        if is_reassignment {
+            Ok(ResolvedExpression::ReassignVariable(assignment))
+        } else {
+            Ok(ResolvedExpression::InitializeVariable(assignment))
+        }
+    }
+
+    fn resolve_multi_variable_assignment(
+        &mut self,
+        ast_variables: &[Variable],
+        ast_expression: &Box<Expression>,
+    ) -> Result<ResolvedExpression, ResolveError> {
+        let converted_expression = self.resolve_expression(ast_expression)?;
+        let expression_type = resolution(&converted_expression);
+
+        let mut variable_refs = Vec::new();
+        let mut all_reassignment = true;
+
+        for ast_variable in ast_variables {
+            let (variable_ref, is_reassignment) =
+                self.set_or_overwrite_variable_with_type(ast_variable, &expression_type)?;
+            variable_refs.push(variable_ref);
+            if !is_reassignment {
+                all_reassignment = false;
+            }
+        }
+
+        let assignment = ResolvedVariableAssignment {
+            variable_refs,
+            expression: Box::from(converted_expression),
+        };
+
+        if all_reassignment {
+            Ok(ResolvedExpression::ReassignVariable(assignment))
+        } else {
+            Ok(ResolvedExpression::InitializeVariable(assignment))
+        }
     }
 
     fn resolve_compound_assignment_variable(
@@ -2047,33 +2164,17 @@ impl<'a> Resolver<'a> {
         ))
     }
 
-    fn push_block_scope(&mut self) {
-        info!("pushing scope stack");
+    fn push_block_scope(&mut self, debug_str: &str) {
+        info!(debug=%debug_str,  stack_len=self.block_scope_stack.len(), "pushing scope stack");
 
         self.block_scope_stack.push(BlockScope {
             variables: SeqMap::default(),
         });
     }
 
-    fn pop_block_scope(&mut self) {
-        info!("popping scope stack");
+    fn pop_block_scope(&mut self, debug_str: &str) {
+        info!(debug=%debug_str, stack_len=self.block_scope_stack.len(), "popping scope stack");
         self.block_scope_stack.pop();
-    }
-
-    fn assign_variable(
-        &mut self,
-        variable: &Variable,
-        expression: ResolvedExpression,
-    ) -> Result<ResolvedStatement, ResolveError> {
-        let variable_type_ref = resolution(&expression);
-        let (variable_ref, was_overwrite) =
-            self.set_or_overwrite_variable_with_type(variable, &variable_type_ref)?;
-        let statement = if was_overwrite {
-            ResolvedStatement::SetVar(variable_ref, expression)
-        } else {
-            ResolvedStatement::LetVar(variable_ref, expression)
-        };
-        Ok(statement)
     }
 
     fn set_or_overwrite_variable_with_type(
@@ -2082,11 +2183,14 @@ impl<'a> Resolver<'a> {
         variable_type_ref: &ResolvedType,
     ) -> Result<(ResolvedVariableRef, bool), ResolveError> {
         if let Some(existing_variable) = self.try_find_variable(variable) {
+            // Check type compatibility
             if !&existing_variable.resolved_type.same_type(variable_type_ref) {
                 return Err(ResolveError::OverwriteVariableWithAnotherType(
                     variable.clone(),
                 ));
             }
+
+            // For reassignment, check if the EXISTING variable is mutable
             if !existing_variable.ast_variable.is_mutable {
                 return Err(ResolveError::CanOnlyOverwriteVariableWithMut(
                     variable.clone(),
@@ -2095,6 +2199,8 @@ impl<'a> Resolver<'a> {
 
             return Ok((existing_variable, true));
         }
+
+        // For first assignment, create new variable with the mutability from the assignment
         let scope_index = self.block_scope_stack.len() - 1;
 
         let variables = &mut self
@@ -2121,7 +2227,7 @@ impl<'a> Resolver<'a> {
         Ok((variable_ref, false))
     }
 
-    fn set_variable_with_type(
+    fn create_local_variable(
         &mut self,
         variable: &Variable,
         variable_type_ref: &ResolvedType,
@@ -2146,6 +2252,8 @@ impl<'a> Resolver<'a> {
             scope_index,
             variable_index: variables.len(),
         };
+
+        info!("creating local variable {resolved_variable:?}");
 
         let variable_ref = Rc::new(resolved_variable);
 
@@ -2225,10 +2333,15 @@ impl<'a> Resolver<'a> {
         let resolved_type = resolution(&resolved_expression);
 
         let mut resolved_arms = Vec::new();
+        info!("resolving match type {resolved_type} expression:{resolved_expression:?}");
+
         for arm in arms {
+            info!("resolving arm {arm:?}");
             let resolved_arm = self.resolve_arm(arm, &resolved_expression, &resolved_type)?;
             resolved_arms.push(resolved_arm);
         }
+
+        info!("resolving match is done!");
 
         Ok(ResolvedMatch {
             expression: Box::new(resolved_expression),
@@ -2242,40 +2355,15 @@ impl<'a> Resolver<'a> {
         _expression: &ResolvedExpression,
         expression_type: &ResolvedType,
     ) -> Result<ResolvedMatchArm, ResolveError> {
-        self.push_block_scope();
-
-        let resolved_pattern = self.resolve_pattern(&arm.pattern, expression_type)?;
-
-        match &resolved_pattern {
-            ResolvedPattern::VariableAssignment(_variable_assignment) => {} // This is handled in self.resolve_pattern
-            ResolvedPattern::Tuple(_) => {}
-            ResolvedPattern::EnumTuple(ref _variant_ref, ref fields) => {
-                for field in fields {
-                    let var = Variable {
-                        name: field.name.text.clone(),
-                        is_mutable: false,
-                    };
-                    self.set_variable_with_type(&var, &field.resolved_type)?;
-                }
-            }
-            ResolvedPattern::EnumStruct(ref _variant_ref, ref fields) => {
-                for field in fields {
-                    let var = Variable {
-                        name: field.name.text.clone(),
-                        is_mutable: false,
-                    };
-                    self.set_variable_with_type(&var, &field.resolved_type)?;
-                }
-            }
-            ResolvedPattern::Wildcard | ResolvedPattern::Literal(_) => {} // Does not need to set any variables
-            ResolvedPattern::Struct(_) => todo!(),
-            ResolvedPattern::EnumSimple(_) => {} // Does not need to set any variables
-        }
+        let (resolved_pattern, scope_was_pushed) =
+            self.resolve_pattern(&arm.pattern, expression_type)?;
 
         let resolved_expression = self.resolve_expression(&arm.expression)?;
-        let resolved_type = resolution(&resolved_expression);
+        if scope_was_pushed {
+            self.pop_block_scope("resolve_arm");
+        }
 
-        self.pop_block_scope();
+        let resolved_type = resolution(&resolved_expression);
 
         Ok(ResolvedMatchArm {
             ast_match_arm: arm.clone(),
@@ -2285,7 +2373,7 @@ impl<'a> Resolver<'a> {
         })
     }
 
-    fn resolve_pattern_literal(&self, ast_literal: &Literal) -> ResolvedPattern {
+    fn resolve_pattern_literal(&mut self, ast_literal: &Literal) -> ResolvedPattern {
         let resolved_literal = match ast_literal {
             Literal::Int(value) => ResolvedLiteral::IntLiteral(*value, self.types.int_type.clone()),
             Literal::Float(value) => {
@@ -2297,12 +2385,53 @@ impl<'a> Resolver<'a> {
             Literal::Bool(value) => {
                 ResolvedLiteral::BoolLiteral(*value, self.types.bool_type.clone())
             }
-            Literal::EnumVariant(_, _, _) => todo!(), // TODO: PBJ
-            Literal::Tuple(_) => todo!(),             // TODO: PBJ
-            Literal::Array(_) => todo!(),             // TODO: PBJ
-            Literal::Map(_) => todo!(),               // TODO: PBJ
-            Literal::Unit => todo!(),                 // TODO: PBJ
-            Literal::None => todo!(),                 // TODO: PBJ
+            Literal::EnumVariant(qualified_type_identifier, variant_name, variant_data) => {
+                // Handle enum variant literals in patterns
+                let variant_ref = self
+                    .resolve_enum_variant_ref(qualified_type_identifier, variant_name)
+                    .expect("enum variant should exist");
+
+                let resolved_data = match variant_data {
+                    EnumLiteralData::Nothing => ResolvedEnumLiteralData::Nothing,
+                    EnumLiteralData::Tuple(expressions) => {
+                        let resolved = self
+                            .resolve_expressions(expressions)
+                            .expect("enum tuple expressions should resolve");
+                        ResolvedEnumLiteralData::Tuple(resolved)
+                    }
+                    EnumLiteralData::Struct(anonym_struct) => {
+                        let values = &anonym_struct.values().cloned().collect::<Vec<_>>();
+                        let resolved = self
+                            .resolve_expressions(values)
+                            .expect("enum struct expressions should resolve");
+                        ResolvedEnumLiteralData::Struct(resolved)
+                    }
+                };
+
+                ResolvedLiteral::EnumVariantLiteral(variant_ref, resolved_data)
+            }
+
+            Literal::Array(items) => {
+                let (array_type_ref, resolved_items) = self
+                    .resolve_array_type_helper(items)
+                    .expect("array items should resolve");
+                ResolvedLiteral::Array(array_type_ref, resolved_items)
+            }
+            Literal::Map(entries) => self
+                .resolve_map_literal(entries)
+                .expect("map entries should resolve"),
+            Literal::Tuple(_expressions) => {
+                todo!();
+                /*
+                let resolved = self
+                    .resolve_expressions(expressions)
+                    .expect("tuple expressions should resolve");
+                ResolvedLiteral::TupleLiteral(resolved)
+
+                 */
+            }
+            Literal::Unit => todo!(),
+            Literal::None => todo!(),
         };
 
         ResolvedPattern::Literal(resolved_literal)
@@ -2393,10 +2522,10 @@ impl<'a> Resolver<'a> {
         type_: &ResolvedType,
         block: &Expression,
     ) -> Result<(ResolvedVariableRef, ResolvedExpression), ResolveError> {
-        self.push_block_scope();
-        let resolved_var_ref = self.set_variable_with_type(var, type_)?;
+        self.push_block_scope("not sure, analyze_in_new_scope");
+        let resolved_var_ref = self.create_local_variable(var, type_)?;
         let resolved_expr = self.resolve_expression(block)?;
-        self.pop_block_scope();
+        self.pop_block_scope("not sure, analyze_in_new_scope");
 
         Ok((resolved_var_ref, resolved_expr))
     }
@@ -2405,9 +2534,9 @@ impl<'a> Resolver<'a> {
         &mut self,
         block: &Expression,
     ) -> Result<ResolvedExpression, ResolveError> {
-        self.push_block_scope();
+        self.push_block_scope("analyze_block_with_scope");
         let resolved = self.resolve_expression(block)?;
-        self.pop_block_scope();
+        self.pop_block_scope("analyze_block_with_scope");
         Ok(resolved)
     }
 
@@ -2590,14 +2719,8 @@ impl<'a> Resolver<'a> {
                 ));
             }
 
-            let rust_type = ResolvedRustType {
-                type_name: format!("Sparse<{}>", resolved_generic_types[0].display_name()),
-                number: 0,
-            };
-            let rust_type_ref = Rc::new(rust_type);
-
             return Ok(Some(ResolvedExpression::SparseNew(
-                rust_type_ref,
+                create_rust_type_generic("Sparse", &resolved_generic_types[0]),
                 resolved_generic_types[0].clone(),
             )));
         }

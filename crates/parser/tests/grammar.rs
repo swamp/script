@@ -1046,6 +1046,42 @@ fn enum_match_with_wildcard() {
         "Let(VariableAssignment(msg), Match(VariableAccess(result), [MatchArm { pattern: EnumTuple(Ok, [value]), expression: VariableAccess(value) }, MatchArm { pattern: Wildcard, expression: Literal(Int(99)) }]))",
     );
 }
+#[test_log::test]
+fn enum_match_struct_y() {
+    check(
+        r#"
+
+        enum Action {
+            Jumping,
+            Target { x: Int, y: Int },
+            Other(String),
+        }
+
+        action = Action::Target { x:42, y: -999 }
+
+        /*
+        match the actions
+            - Jumping
+            - Target
+        */
+
+        match action {
+            Jumping => "jumping",
+            Target y => y,
+            _ => "can not find it!",
+        }
+    "#,
+        r#"
+
+EnumDef(LocalTypeIdentifier { node: Node { span: Span { start: Position { offset: 15, line: 3, column: 14 }, end: Position { offset: 21, line: 3, column: 20 } } }, text: "Action" }, SeqMap(LocalTypeIdentifier { node: Node { span: Span { start: Position { offset: 36, line: 4, column: 13 }, end: Position { offset: 43, line: 4, column: 20 } } }, text: "Jumping" }: , LocalTypeIdentifier { node: Node { span: Span { start: Position { offset: 57, line: 5, column: 13 }, end: Position { offset: 82, line: 5, column: 38 } } }, text: "Target" }: AnonymousStruct { fields: SeqMap(IdentifierName("x"): Int, IdentifierName("y"): Int) }, LocalTypeIdentifier { node: Node { span: Span { start: Position { offset: 96, line: 6, column: 13 }, end: Position { offset: 109, line: 6, column: 26 } } }, text: "Other" }: [String]))
+---
+Expression(VariableAssignment(action, Literal(EnumVariant(Action::Target{ LocalTypeIdentifier { node: Node { span: Span { start: Position { offset: 139, line: 9, column: 18 }, end: Position { offset: 171, line: 9, column: 50 } } }, text: "x" }: Literal(Int(42)), LocalTypeIdentifier { node: Node { span: Span { start: Position { offset: 139, line: 9, column: 18 }, end: Position { offset: 171, line: 9, column: 50 } } }, text: "y" }: Literal(Int(-999)) }))))
+
+Expression(Match(VariableAccess(action), [MatchArm { pattern: EnumPattern(LocalTypeIdentifier { node: Node { span: Span { start: Position { offset: 300, line: 18, column: 13 }, end: Position { offset: 308, line: 18, column: 21 } } }, text: "Jumping" }, None), expression: Literal(String(jumping)) }, MatchArm { pattern: EnumPattern(LocalTypeIdentifier { node: Node { span: Span { start: Position { offset: 334, line: 19, column: 13 }, end: Position { offset: 343, line: 19, column: 22 } } }, text: "Target" }, Some([Variable(LocalIdentifier { node: Node { span: Span { start: Position { offset: 334, line: 19, column: 13 }, end: Position { offset: 343, line: 19, column: 22 } } }, text: "y" })])), expression: VariableAccess(y) }, MatchArm { pattern: PatternList([Wildcard]), expression: Literal(String(can not find it!)) }]))
+        
+        "#,
+    );
+}
 
 #[test_log::test]
 fn enum_match_tuple_basic() {
@@ -1385,5 +1421,13 @@ fn sparse_map_static_call() {
 
         Let(VariableAssignment(result), StaticCallGeneric(LocalTypeIdentifier { node: Node { span: Span { start: Position { offset: 18, line: 2, column: 18 }, end: Position { offset: 27, line: 2, column: 27 } } }, text: "SparseMap" }, LocalIdentifier { node: Node { span: Span { start: Position { offset: 34, line: 2, column: 34 }, end: Position { offset: 37, line: 2, column: 37 } } }, text: "new" }, [], [Int]))
         "#,
+    );
+}
+
+#[test_log::test]
+fn assignment_op_add() {
+    check(
+        "a += 6",
+        "Expression(VariableCompoundAssignment(a, Add, Literal(Int(6))))",
     );
 }

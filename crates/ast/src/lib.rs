@@ -186,9 +186,14 @@ pub enum Definition {
 }
 
 #[derive(Debug, Clone)]
+pub enum ForPattern {
+    Single(LocalTypeIdentifier),
+    Pair(LocalTypeIdentifier, LocalTypeIdentifier),
+}
+
+#[derive(Debug, Clone)]
 pub enum Statement {
-    Let(Pattern, Expression),
-    ForLoop(Pattern, Expression, Vec<Statement>),
+    ForLoop(ForPattern, Expression, Vec<Statement>),
     WhileLoop(Expression, Vec<Statement>),
     Return(Expression),
     Break,                  // Return with void
@@ -388,6 +393,7 @@ pub enum Expression {
 
     // Since it is a cool language, we can "chain" assignments together. like a = b = c = 1. Even for field assignments, like a.b = c.d = e.f = 1
     VariableAssignment(Variable, Box<Expression>),
+    MultiVariableAssignment(Vec<Variable>, Box<Expression>),
     IndexCompoundAssignment(
         Box<Expression>,
         Box<Expression>,
@@ -653,22 +659,16 @@ pub enum PostfixOperator {
 // Patterns are used in matching and destructuring
 #[derive(Debug, Clone)]
 pub enum Pattern {
-    // Just the normal identifier
-    VariableAssignment(Variable),
-
-    // Containers
-    Tuple(Vec<LocalTypeIdentifier>),  // Change to SetVec
-    Struct(Vec<LocalTypeIdentifier>), // Change to SetVec
-
+    PatternList(Vec<PatternElement>), // TODO: Change to SetVec
+    EnumPattern(LocalTypeIdentifier, Option<Vec<PatternElement>>), // TODO: Change to SetVec
     Literal(Literal),
+}
 
-    // Enum variants
-    EnumTuple(LocalTypeIdentifier, Vec<LocalIdentifier>), // Change to SetVec
-    EnumStruct(LocalTypeIdentifier, Vec<LocalIdentifier>), // Change to SetVec
-    EnumSimple(LocalTypeIdentifier),
-
-    // Other
-    Wildcard, // underscore _
+#[derive(Debug, Clone)]
+pub enum PatternElement {
+    Variable(LocalIdentifier),
+    Expression(Expression),
+    Wildcard,
 }
 
 #[derive(Debug, Clone)]

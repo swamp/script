@@ -634,33 +634,43 @@ impl Display for ResolvedMatchArm {
 
 #[derive(Debug)]
 pub enum ResolvedPattern {
-    VariableAssignment(ResolvedVariableRef),
-    Literal(ResolvedLiteral),
-    Tuple(ResolvedTupleTypeRef),
-    EnumTuple(
-        ResolvedEnumVariantTupleTypeRef,
-        Vec<ResolvedEnumVariantTupleFieldType>,
-    ),
-    EnumStruct(
+    PatternList(Vec<ResolvedPatternElement>),
+    EnumPattern(
         ResolvedEnumVariantTypeRef,
-        Vec<ResolvedEnumVariantStructFieldType>,
+        Option<Vec<ResolvedPatternElement>>,
     ),
+    Literal(ResolvedLiteral),
+}
+
+#[derive(Debug)]
+pub enum ResolvedPatternElement {
+    Variable(ResolvedVariableRef),
+    VariableWithFieldIndex(ResolvedVariableRef, usize),
     Wildcard,
-    Struct(ResolvedStructTypeRef),
-    EnumSimple(ResolvedEnumVariantTypeRef),
+}
+
+impl Display for ResolvedPatternElement {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Variable(variable_ref) => write!(f, "{variable_ref}"),
+            Self::Wildcard => write!(f, "_"),
+            Self::VariableWithFieldIndex(_rc, _) => todo!(),
+        }
+    }
 }
 
 impl Display for ResolvedPattern {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ResolvedPattern::VariableAssignment(variable_ref) => write!(f, "{}", variable_ref),
             ResolvedPattern::Literal(literal) => write!(f, "{literal}"),
-            ResolvedPattern::Wildcard => write!(f, "_"),
-            ResolvedPattern::Tuple(_) => write!(f, "_"),
-            ResolvedPattern::EnumTuple(_, _) => write!(f, "_"),
-            ResolvedPattern::EnumStruct(_, _) => write!(f, "_"),
-            ResolvedPattern::Struct(_) => write!(f, "_"),
-            ResolvedPattern::EnumSimple(_) => write!(f, "_"),
+            ResolvedPattern::PatternList(elements) => write!(f, "{}", comma(elements)),
+            ResolvedPattern::EnumPattern(enum_variant_type_ref, elements) => {
+                write!(f, "{}", enum_variant_type_ref.name)?;
+                if let Some(found_elements) = elements {
+                    write!(f, "{}", comma(found_elements))?;
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -683,8 +693,16 @@ pub struct ResolvedStructInstantiation {
 
 #[derive(Debug)]
 pub struct ResolvedVariableAssignment {
-    pub variable_ref: ResolvedVariableRef,
+    pub variable_refs: Vec<ResolvedVariableRef>, // Support single or multiple variables
     pub expression: Box<ResolvedExpression>,
+}
+
+pub fn create_rust_type_generic(name: &str, type_parameter: &ResolvedType) -> ResolvedRustTypeRef {
+    let rust_type = ResolvedRustType {
+        type_name: format!("{}<{}>", name, type_parameter.display_name()),
+        number: 0,
+    };
+    Rc::new(rust_type)
 }
 
 #[derive(Debug)]
@@ -692,6 +710,7 @@ pub enum ResolvedExpression {
     // Access Lookup values
     FieldAccess(ResolvedStructTypeFieldRef),
     VariableAccess(ResolvedVariableRef),
+
     InternalFunctionAccess(ResolvedInternalFunctionDefinitionRef),
     ExternalFunctionAccess(ResolvedExternalFunctionDefinitionRef),
 
@@ -702,7 +721,8 @@ pub enum ResolvedExpression {
 
     // Assignment
     // Since it is a cool language, we can "chain" assignments together. like a = b = c = 1. Even for field assignments, like a.b = c.d = e.f = 1
-    VariableAssignment(ResolvedVariableAssignment),
+    InitializeVariable(ResolvedVariableAssignment), // First time assignment
+    ReassignVariable(ResolvedVariableAssignment),   // Subsequent assignments
 
     ArrayExtend(ResolvedVariableRef, Box<ResolvedExpression>), // Extends an array with another array
     ArrayPush(ResolvedVariableRef, Box<ResolvedExpression>),   // Adds an item to an array
@@ -836,11 +856,6 @@ impl Display for ResolvedExpression {
                     map_lookup.map_expression, map_lookup.index_expression
                 )
             }
-            Self::VariableAssignment(var_assignment) => write!(
-                f,
-                "< {}={} >",
-                var_assignment.variable_ref, var_assignment.expression
-            ),
 
             Self::ArrayAssignment(_, _, _) => todo!(),
             Self::MapAssignment(_, _, _) => todo!(),
@@ -938,6 +953,8 @@ impl Display for ResolvedExpression {
             ResolvedExpression::SparseAdd(_, _) => todo!(),
             ResolvedExpression::SparseRemove(_, _) => todo!(),
             ResolvedExpression::SparseNew(_, _) => todo!(),
+            ResolvedExpression::InitializeVariable(_) => todo!(),
+            ResolvedExpression::ReassignVariable(_) => todo!(),
         }
     }
 }
@@ -951,10 +968,21 @@ pub struct ResolvedArrayInstantiation {
 }
 
 #[derive(Debug)]
+pub enum ResolvedForPattern {
+    Single(ResolvedVariableRef),
+    Pair(ResolvedVariableRef, ResolvedVariableRef),
+}
+
+impl Display for ResolvedForPattern {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "resolved_for_pattern")
+    }
+}
+
+#[derive(Debug)]
 pub enum ResolvedStatement {
     // Standard
-    Let(ResolvedPattern, ResolvedExpression), // Should be expression only? and put in Expression()
-    ForLoop(ResolvedPattern, ResolvedIterator, Vec<ResolvedStatement>),
+    ForLoop(ResolvedForPattern, ResolvedIterator, Vec<ResolvedStatement>),
     WhileLoop(ResolvedBooleanExpression, Vec<ResolvedStatement>),
     Return(ResolvedExpression),
     Break,                          // Return with void
@@ -966,14 +994,11 @@ pub enum ResolvedStatement {
         Vec<ResolvedStatement>,
         Option<Vec<ResolvedStatement>>,
     ),
-    LetVar(ResolvedVariableRef, ResolvedExpression), // Should be expression only? and put in Expression()
-    SetVar(ResolvedVariableRef, ResolvedExpression), // Should be expression only? and put in Expression()
 }
 
 impl Display for ResolvedStatement {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ResolvedStatement::Let(_, _) => todo!(),
             ResolvedStatement::ForLoop(target, iterator, statements) => {
                 write!(f, "{target} {iterator:?} {statements:?}")
             }
@@ -984,12 +1009,6 @@ impl Display for ResolvedStatement {
             Self::Expression(expression) => write!(f, "{}", expression),
             Self::Block(_) => write!(f, "Block"),
             Self::If(_, _, _) => write!(f, "If"),
-            Self::LetVar(variable_ref, expr) => {
-                write!(f, "let {variable_ref} = {expr}")
-            }
-            Self::SetVar(variable_ref, expr) => {
-                write!(f, "set {variable_ref} = {expr}")
-            }
         }
     }
 }

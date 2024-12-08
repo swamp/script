@@ -2,7 +2,7 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use crate::util::{check_fail, check_value, eval};
+use crate::util::{check, check_fail, check_value, eval};
 use fixed32::Fp;
 use swamp_script_eval::value::Value;
 
@@ -53,6 +53,16 @@ fn basic_eval_2() {
         a = a + 1
     "#,
         Value::Int(4),
+    );
+}
+
+#[test_log::test]
+fn basic_eval_244() {
+    check_value(
+        r#"
+        a = 3
+    "#,
+        Value::Int(3),
     );
 }
 
@@ -236,7 +246,7 @@ fn basic_eval_11() {
 }
 
 #[test_log::test]
-fn basic_eval_12() {
+fn match_enum_struct() {
     let result = eval(
         r#"
 
@@ -256,7 +266,7 @@ fn basic_eval_12() {
 
         match action {
             Jumping => "jumping",
-            Target { y } => y,
+            Target y => y,
             _ => "can not find it!",
         }
     "#,
@@ -816,4 +826,57 @@ fn sparse_map_remove() {
     );
 
     assert_eq!(x.to_string(), "Sparse<Int> len:0");
+}
+
+#[test_log::test]
+fn sparse_map_iterate() {
+    check(
+        "
+
+    mut sparse = Sparse<Int>::new()
+    sparse_id = sparse.add(2)
+    sparse.add(3)
+
+    print(sparse)
+    print(sparse_id)
+
+    for x in sparse {
+        print(x)
+    }
+    ",
+        "\
+    Sparse<Int> len:2
+    id:0:0
+    2
+    3
+    ",
+    );
+}
+
+#[test_log::test]
+fn sparse_map_iterate_pairs() {
+    check(
+        "
+
+    mut sparse = Sparse<Int>::new()
+    sparse_id = sparse.add(2)
+    sparse.add(3)
+
+    print(sparse)
+    print(sparse_id)
+
+    for x, y in sparse {
+        print(x)
+        print(y)
+    }
+    ",
+        "\
+    Sparse<Int> len:2
+    id:0:0
+    id:0:0
+    2
+    id:1:0
+    3
+    ",
+    );
 }

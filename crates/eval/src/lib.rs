@@ -2,17 +2,22 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
+use crate::err::ConversionError;
 use crate::extra::{SparseValueId, SparseValueMap};
 use crate::value::{to_rust_value, Value};
+use err::ExecuteError;
 use seq_map::SeqMap;
 use std::fmt::Debug;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 pub use swamp_script_semantic::ns::ResolvedModuleNamespace;
 use swamp_script_semantic::prelude::*;
-use swamp_script_semantic::{ResolvedFunction, ResolvedStaticCall};
+use swamp_script_semantic::{
+    ResolvedForPattern, ResolvedFunction, ResolvedPatternElement, ResolvedStaticCall,
+};
 use tracing::{debug, error, info, trace};
 use value::format_value;
 
+pub mod err;
 mod extra;
 mod idx_gen;
 pub mod prelude;
@@ -35,21 +40,6 @@ impl<C> Debug for EvalExternalFunction<C> {
 }
 
 pub type EvalExternalFunctionRef<C> = Rc<RefCell<EvalExternalFunction<C>>>;
-use crate::value::ConversionError;
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum ExecuteError {
-    Error(String),
-    ConversionError(ConversionError),
-    ArgumentIsNotMutable,
-    CanNotUnwrap,
-    IllegalIterator,
-    ExpectedOptional,
-    NonUniqueKeysInMapLiteralDetected,
-    NotAnArray,
-    ValueIsNotMutable,
-    NotSparseValue,
-}
 
 #[derive(Debug)]
 pub enum ValueWithSignal {
@@ -174,7 +164,7 @@ impl<'a, C> Interpreter<'a, C> {
     }
 
     fn push_function_scope(&mut self, debug_str: String) {
-        trace!(debug_str=%debug_str, "push function scope");
+        debug!(debug_str=%debug_str, "push function scope");
         self.function_scope_stack.push(FunctionScope {
             saved_block_scope: self.current_block_scopes.clone(),
         });
@@ -185,17 +175,28 @@ impl<'a, C> Interpreter<'a, C> {
     }
 
     fn push_block_scope(&mut self, debug_str: String) {
-        trace!(debug_str = %debug_str, "push block scope");
+        debug!(debug_str = %debug_str, "push block scope");
+        info!(
+            "EVAL: pushing scope '{}', current depth: {}",
+            debug_str,
+            self.current_block_scopes.len()
+        );
         self.current_block_scopes.push(BlockScope::default());
     }
 
     fn pop_block_scope(&mut self, debug_str: String) {
-        trace!(debug_str=%debug_str, "pop block scope");
+        debug!(debug_str=%debug_str, "pop block scope");
+        let old_len = self.current_block_scopes.len();
+        info!(
+            "EVAL: popping scope '{}', new depth: {}",
+            debug_str,
+            old_len - 1
+        );
         self.current_block_scopes.pop();
     }
 
     fn pop_function_scope(&mut self, debug_str: String) {
-        trace!(debug_str=%debug_str, "pop function scope");
+        debug!(debug_str=%debug_str, "pop function scope");
         if self.function_scope_stack.len() == 1 {
             error!("you popped too far");
             panic!("you popped too far");
@@ -392,8 +393,9 @@ impl<'a, C> Interpreter<'a, C> {
         }
     }
 
+    /// Initializes a variable for the first time
     #[inline]
-    fn set_var(
+    fn initialize_var(
         &mut self,
         relative_scope_index: usize,
         variable_index: usize,
@@ -425,7 +427,10 @@ impl<'a, C> Interpreter<'a, C> {
         variable_index: usize,
     ) -> Result<&Value, ExecuteError> {
         if relative_scope_index >= self.current_block_scopes.len() {
-            panic!("illegal scope index");
+            panic!(
+                "illegal scope index {relative_scope_index} of {}",
+                self.current_block_scopes.len()
+            );
         }
 
         let variables = &self.current_block_scopes[relative_scope_index].variables;
@@ -564,14 +569,33 @@ impl<'a, C> Interpreter<'a, C> {
             }
 
             // ==================== ASSIGNMENT ====================
-            ResolvedExpression::VariableAssignment(resolved_var_assignment) => {
-                let new_value = self.evaluate_expression(&resolved_var_assignment.expression)?;
-                self.set_var(
-                    resolved_var_assignment.variable_ref.scope_index,
-                    resolved_var_assignment.variable_ref.variable_index,
-                    new_value.clone(),
-                    resolved_var_assignment.variable_ref.is_mutable(),
-                )?;
+            ResolvedExpression::InitializeVariable(var_assignment) => {
+                let new_value = self.evaluate_expression(&var_assignment.expression)?;
+
+                // Initialize all variables (single or multiple)
+                for variable_ref in &var_assignment.variable_refs {
+                    self.initialize_var(
+                        variable_ref.scope_index,
+                        variable_ref.variable_index,
+                        new_value.clone(),
+                        variable_ref.is_mutable(),
+                    )?;
+                }
+
+                new_value
+            }
+
+            ResolvedExpression::ReassignVariable(var_assignment) => {
+                let new_value = self.evaluate_expression(&var_assignment.expression)?;
+
+                // Reassign all variables (single or multiple)
+                for variable_ref in &var_assignment.variable_refs {
+                    self.overwrite_existing_var(
+                        variable_ref.scope_index,
+                        variable_ref.variable_index,
+                        new_value.clone(),
+                    )?;
+                }
 
                 new_value
             }
@@ -1029,7 +1053,7 @@ impl<'a, C> Interpreter<'a, C> {
                 match value {
                     Value::Option(Some(inner_value)) => {
                         self.push_block_scope("if else only variable".to_string());
-                        self.set_var(
+                        self.initialize_var(
                             variable.scope_index,
                             variable.variable_index,
                             *inner_value,
@@ -1054,7 +1078,7 @@ impl<'a, C> Interpreter<'a, C> {
                 match value {
                     Value::Option(Some(inner_value)) => {
                         self.push_block_scope("if else assign expression".to_string());
-                        self.set_var(
+                        self.initialize_var(
                             variable.scope_index,
                             variable.variable_index,
                             *inner_value,
@@ -1092,9 +1116,9 @@ impl<'a, C> Interpreter<'a, C> {
             },
 
             // --------------- SPECIAL FUNCTIONS
-            ResolvedExpression::SparseNew(_rust_type_ref, generic_type) => {
+            ResolvedExpression::SparseNew(rust_type_ref, generic_type) => {
                 let sparse_value_map = SparseValueMap::new(generic_type.clone());
-                to_rust_value(sparse_value_map)
+                to_rust_value(rust_type_ref.clone(), sparse_value_map)
             }
 
             ResolvedExpression::SparseAdd(sparse_rust, value_expression) => {
@@ -1197,74 +1221,71 @@ impl<'a, C> Interpreter<'a, C> {
                     continue; // no need for the switch
                 }
 
-                ResolvedStatement::ForLoop(var_pattern, iterator_expr, body) => {
-                    let iterator = self.evaluate_expression(&iterator_expr.resolved_expression)?;
-                    match iterator {
-                        Value::ExclusiveRange(start, end) => {
-                            self.push_block_scope(format!(
-                                "for_loop {:?} {:?}",
-                                var_pattern, iterator_expr
-                            ));
+                ResolvedStatement::ForLoop(pattern, iterator_expr, body) => {
+                    let iterator_value =
+                        self.evaluate_expression(&iterator_expr.resolved_expression)?;
 
-                            for i in *start..*end {
-                                match var_pattern {
-                                    ResolvedPattern::VariableAssignment(ident) => self
-                                        .set_local_var(
-                                            ident.variable_index,
-                                            Value::Int(i),
-                                            false,
-                                            &ident.resolved_type,
-                                        )?,
-                                    _ => return Err("Expected identifier in for loop".to_string())?,
-                                }
+                    match pattern {
+                        ResolvedForPattern::Single(var_ref) => {
+                            self.push_block_scope(format!("for_loop single {:?}", var_ref));
 
-                                let signal = self.execute_statements(body)?;
-                                debug!(signal=?signal, "signal in loop");
+                            for value in iterator_value.into_iter()? {
+                                self.initialize_var(
+                                    var_ref.scope_index,
+                                    var_ref.variable_index,
+                                    value,
+                                    false,
+                                )?;
 
-                                match signal {
-                                    ValueWithSignal::Value(_v) => {} // ignore normal values
+                                match self.execute_statements(body)? {
+                                    ValueWithSignal::Value(_) => {}
                                     ValueWithSignal::Return(v) => {
                                         return Ok(ValueWithSignal::Return(v))
                                     }
-                                    ValueWithSignal::Break => {
-                                        break;
-                                    }
-                                    ValueWithSignal::Continue => {}
+                                    ValueWithSignal::Break => break,
+                                    ValueWithSignal::Continue => continue,
                                 }
                             }
 
-                            // Pop the loop scope
-                            self.pop_block_scope("for loop".to_string());
+                            self.pop_block_scope("for loop single".to_string());
                         }
 
-                        Value::Array(_item_swamp_type, elements) => {
-                            // Push a new scope for the loop
-                            self.push_block_scope("array".to_string());
+                        ResolvedForPattern::Pair(first_ref, second_ref) => {
+                            self.push_block_scope(format!("for_loop pair"));
 
-                            for element in elements {
-                                match var_pattern {
-                                    ResolvedPattern::VariableAssignment(ident) => {
-                                        self.set_var(
-                                            ident.scope_index,
-                                            ident.variable_index,
-                                            element,
-                                            false,
-                                        )
-                                        .expect("can not set array element");
+                            let pair_iterator = iterator_value.pairs_iterator()?;
+                            for (key, value) in pair_iterator {
+                                // Set both variables
+                                self.initialize_var(
+                                    first_ref.scope_index,
+                                    first_ref.variable_index,
+                                    key,
+                                    false,
+                                )?;
+                                self.initialize_var(
+                                    second_ref.scope_index,
+                                    second_ref.variable_index,
+                                    value,
+                                    false,
+                                )?;
+
+                                match self.execute_statements(body)? {
+                                    ValueWithSignal::Value(_) => {}
+                                    ValueWithSignal::Return(v) => {
+                                        return Ok(ValueWithSignal::Return(v))
                                     }
-                                    _ => return Err("Expected identifier in for loop".to_string())?,
+                                    ValueWithSignal::Break => break,
+                                    ValueWithSignal::Continue => continue,
                                 }
-
-                                self.execute_statements(body)?;
                             }
 
-                            self.pop_block_scope("array".to_string());
+                            self.pop_block_scope("for loop pair".to_string());
                         }
-                        _ => return Err(ExecuteError::IllegalIterator),
                     }
 
                     continue;
                 }
+
                 ResolvedStatement::Block(body) => {
                     match self.execute_statements(body)? {
                         ValueWithSignal::Value(_v) => {} // ignore normal values
@@ -1277,19 +1298,6 @@ impl<'a, C> Interpreter<'a, C> {
             }
 
             value = match statement {
-                ResolvedStatement::Let(ResolvedPattern::VariableAssignment(var), expr) => {
-                    // TODO: Remove ResolvedStatement::Let, it should be an expression
-                    let value = self.evaluate_expression(expr)?;
-                    self.set_var(
-                        var.scope_index,
-                        var.variable_index,
-                        value.clone(),
-                        var.is_mutable(),
-                    )
-                    .expect("could not set variable");
-                    value
-                }
-
                 ResolvedStatement::Expression(expr) => {
                     let result = self.evaluate_expression(expr); // since it is statement_expression, the value is intentionally discarded
                     if result.is_err() {
@@ -1301,32 +1309,11 @@ impl<'a, C> Interpreter<'a, C> {
                 // destructuring
                 //TODO: ResolvedStatement::Let(ResolvedPattern::Tuple(_), _) => Value::Unit,
                 //TODO: ResolvedStatement::Let(ResolvedPattern::Struct(_), _) => Value::Unit,
-                ResolvedStatement::Let(ResolvedPattern::Literal(_), _) => Value::Unit,
                 //TODO: ResolvedStatement::Let(ResolvedPattern::EnumTuple(_, _), _) => Value::Unit,
                 //TODO: ResolvedStatement::Let(ResolvedPattern::EnumStruct(_, _), _) => Value::Unit,
 
                 // ignore the let
-                ResolvedStatement::Let(ResolvedPattern::Wildcard, _) => Value::Unit,
                 //TODO: ResolvedStatement::Let(ResolvedPattern::EnumSimple(_), _) => Value::Unit,
-                ResolvedStatement::LetVar(variable_ref, expression) => {
-                    let value = self.evaluate_expression(expression)?;
-                    self.set_var(
-                        variable_ref.scope_index,
-                        variable_ref.variable_index,
-                        value.clone(),
-                        variable_ref.is_mutable(),
-                    )?;
-                    value
-                }
-                ResolvedStatement::SetVar(variable_ref, expression) => {
-                    let value = self.evaluate_expression(expression)?;
-                    self.overwrite_existing_var(
-                        variable_ref.scope_index,
-                        variable_ref.variable_index,
-                        value.clone(),
-                    )?;
-                    value
-                }
 
                 // Ignore signal aware statements, they have been handled earlier
                 ResolvedStatement::Return(_) => panic!("return should have been handled earlier"),
@@ -1340,11 +1327,6 @@ impl<'a, C> Interpreter<'a, C> {
                 ResolvedStatement::Continue => panic!("continue should have been handled earlier"),
                 ResolvedStatement::Block(_) => panic!("block should have been handled earlier"),
                 ResolvedStatement::If(_, _, _) => panic!("if should have been handled earlier"),
-                ResolvedStatement::Let(ResolvedPattern::Tuple(_), _) => todo!(),
-                ResolvedStatement::Let(ResolvedPattern::EnumTuple(_, _), _) => todo!(),
-                ResolvedStatement::Let(ResolvedPattern::EnumStruct(_, _), _) => todo!(),
-                ResolvedStatement::Let(ResolvedPattern::Struct(_), _) => todo!(),
-                ResolvedStatement::Let(ResolvedPattern::EnumSimple(_), _) => todo!(),
             }
         }
 
@@ -1362,66 +1344,157 @@ impl<'a, C> Interpreter<'a, C> {
 
         for arm in &resolved_match.arms {
             match &arm.pattern {
-                ResolvedPattern::VariableAssignment(var) => {
-                    // Variable pattern matches anything, so it is basically a let expression
-                    self.push_block_scope("variable assignment".to_string());
-                    self.set_local_var(
-                        var.variable_index,
-                        cond_value.clone(),
-                        false,
-                        &var.resolved_type,
-                    )
-                    .expect("could not set local variable in arm.pattern");
-                    let result = self.evaluate_expression(&arm.expression);
-                    self.pop_block_scope("variable assignment".to_string());
-                    return result;
-                }
-
-                ResolvedPattern::Tuple(resolved_tuple_type_ref) => {
-                    if let Value::Tuple(_tuple_type_ref, values) = &actual_value {
-                        if resolved_tuple_type_ref.0.len() == values.len() {
-                            self.push_block_scope("tuple".to_string());
-                            for (field_index, (field_resolved_type, value)) in
-                                resolved_tuple_type_ref
-                                    .0
-                                    .iter()
-                                    .zip(values.iter())
-                                    .enumerate()
-                            {
+                ResolvedPattern::PatternList(elements) => {
+                    // Handle single variable/wildcard patterns that match any value
+                    if elements.len() == 1 {
+                        match &elements[0] {
+                            ResolvedPatternElement::Variable(var_ref)
+                            | ResolvedPatternElement::VariableWithFieldIndex(var_ref, _) => {
+                                self.push_block_scope("pattern variable".to_string());
                                 self.set_local_var(
-                                    field_index,
-                                    value.clone(),
+                                    var_ref.variable_index,
+                                    actual_value.clone(),
                                     false,
-                                    &field_resolved_type,
-                                )
-                                .expect("failed to set tuple local var");
+                                    &var_ref.resolved_type,
+                                )?;
+                                let result = self.evaluate_expression(&arm.expression);
+                                self.pop_block_scope("pattern variable".to_string());
+                                return result;
                             }
-                            let result = self.evaluate_expression(&arm.expression);
-                            self.pop_block_scope("tuple".to_string());
-                            return result;
+                            ResolvedPatternElement::Wildcard => {
+                                // Wildcard matches anything
+                                return self.evaluate_expression(&arm.expression);
+                            }
                         }
+                    }
+
+                    match &actual_value {
+                        Value::Tuple(_tuple_type_ref, values) => {
+                            if elements.len() == values.len() {
+                                self.push_block_scope("pattern list".to_string());
+
+                                for (element, value) in elements.iter().zip(values.iter()) {
+                                    match element {
+                                        ResolvedPatternElement::Variable(var_ref) => {
+                                            self.set_local_var(
+                                                var_ref.variable_index,
+                                                value.clone(),
+                                                false,
+                                                &var_ref.resolved_type,
+                                            )?;
+                                        }
+                                        ResolvedPatternElement::VariableWithFieldIndex(
+                                            var_ref,
+                                            _,
+                                        ) => {
+                                            self.set_local_var(
+                                                var_ref.variable_index,
+                                                value.clone(),
+                                                false,
+                                                &var_ref.resolved_type,
+                                            )?;
+                                        }
+                                        ResolvedPatternElement::Wildcard => {
+                                            // Skip wildcards
+                                            continue;
+                                        }
+                                    }
+                                }
+
+                                let result = self.evaluate_expression(&arm.expression);
+                                self.pop_block_scope("pattern list".to_string());
+                                return result;
+                            }
+                        }
+                        _ => continue,
                     }
                 }
 
-                ResolvedPattern::Struct(_fields) => { // TODO: PBJ
-                     /* TODO:
-                     if let Value::Struct(_struct_type_ref, values) = &actual_value {
-                         if fields.len() == values.len() {
-                             self.push_scope(ScopeType::Block);
-                             for (field, value) in fields.iter().zip(values.iter()) {
-                                 self.set_existing_var_or_create_new_one(
-                                     field.0.clone(),
-                                     value.clone(),
-                                     false,
-                                 );
-                             }
-                             let result = self.evaluate_expression(&arm.expression);
-                             self.pop_scope();
-                             return result;
-                         }
-                     }
+                ResolvedPattern::EnumPattern(variant_ref, maybe_elements) => {
+                    let value_to_match = match &actual_value {
+                        Value::Reference(value_ref) => value_ref.borrow().clone(),
+                        _ => actual_value.clone(),
+                    };
 
-                      */
+                    match &value_to_match {
+                        Value::EnumVariantTuple(value_tuple_type, values) => {
+                            // First check if the variant types match
+                            if variant_ref.number != value_tuple_type.common.number {
+                                continue; // Try next pattern
+                            }
+
+                            if let Some(elements) = maybe_elements {
+                                if elements.len() == values.len() {
+                                    self.push_block_scope("enum tuple pattern".to_string());
+
+                                    for (element, value) in elements.iter().zip(values.iter()) {
+                                        match element {
+                                            ResolvedPatternElement::Variable(var_ref) => {
+                                                self.set_local_var(
+                                                    var_ref.variable_index,
+                                                    value.clone(),
+                                                    false,
+                                                    &var_ref.resolved_type,
+                                                )?;
+                                            }
+                                            ResolvedPatternElement::VariableWithFieldIndex(
+                                                var_ref,
+                                                _,
+                                            ) => {
+                                                self.set_local_var(
+                                                    var_ref.variable_index,
+                                                    value.clone(),
+                                                    false,
+                                                    &var_ref.resolved_type,
+                                                )?;
+                                            }
+                                            ResolvedPatternElement::Wildcard => continue,
+                                        }
+                                    }
+
+                                    let result = self.evaluate_expression(&arm.expression);
+                                    self.pop_block_scope("enum tuple pattern".to_string());
+                                    return result;
+                                }
+                            }
+                        }
+                        Value::EnumVariantStruct(value_struct_type, values) => {
+                            if value_struct_type.common.number == variant_ref.number {
+                                if let Some(elements) = maybe_elements {
+                                    self.push_block_scope("enum struct pattern".to_string());
+
+                                    for element in elements {
+                                        if let ResolvedPatternElement::VariableWithFieldIndex(
+                                            var_ref,
+                                            field_index,
+                                        ) = element
+                                        {
+                                            let value = &values[*field_index];
+                                            self.set_local_var(
+                                                var_ref.variable_index,
+                                                value.clone(),
+                                                false,
+                                                &var_ref.resolved_type,
+                                            )?;
+                                        }
+                                    }
+
+                                    let result = self.evaluate_expression(&arm.expression);
+                                    self.pop_block_scope("enum struct pattern".to_string());
+                                    return result;
+                                }
+                            }
+                        }
+
+                        Value::EnumVariantSimple(value_variant_ref) => {
+                            if value_variant_ref.number == variant_ref.number
+                                && maybe_elements.is_none()
+                            {
+                                return self.evaluate_expression(&arm.expression);
+                            }
+                        }
+                        _ => continue,
+                    }
                 }
 
                 ResolvedPattern::Literal(lit) => match (lit, &actual_value) {
@@ -1439,69 +1512,6 @@ impl<'a, C> Interpreter<'a, C> {
                     }
                     _ => continue,
                 },
-
-                ResolvedPattern::EnumTuple(pattern_enum_variant_tuple_type_ref, variable_names) => {
-                    if let Value::EnumVariantTuple(ref value_tuple_type_ref, values_in_order) =
-                        &actual_value
-                    {
-                        if same_tuple(
-                            &pattern_enum_variant_tuple_type_ref.fields_in_order,
-                            &value_tuple_type_ref.fields_in_order,
-                        ) {
-                            self.push_block_scope("enum tuple".to_string());
-
-                            for (index, tuple_type) in variable_names.iter().enumerate() {
-                                self.set_local_var(
-                                    index,
-                                    values_in_order[tuple_type.field_index].clone(),
-                                    false,
-                                    &tuple_type.resolved_type,
-                                )?;
-                            }
-
-                            let result = self.evaluate_expression(&arm.expression);
-
-                            self.pop_block_scope("enum tuple end".to_string());
-
-                            return result;
-                        }
-                    }
-                }
-
-                ResolvedPattern::EnumStruct(_enum_struct_ref, variable_names) => {
-                    self.push_block_scope("enum struct".to_string());
-
-                    if let Value::EnumVariantStruct(ref _container_struct_ref, values_in_order) =
-                        &actual_value
-                    {
-                        for (index, struct_field) in variable_names.iter().enumerate() {
-                            self.set_local_var(
-                                index,
-                                values_in_order[struct_field.field_index].clone(),
-                                false,
-                                &struct_field.resolved_type,
-                            )?;
-                        }
-
-                        let result = self.evaluate_expression(&arm.expression);
-
-                        self.pop_block_scope("enum struct end".to_string());
-
-                        return result;
-                    }
-                }
-
-                ResolvedPattern::EnumSimple(enum_variant_type_ref) => {
-                    if let Value::EnumVariantSimple(ref value_enum_variant_ref) = &actual_value {
-                        if value_enum_variant_ref.number == enum_variant_type_ref.number {
-                            return self.evaluate_expression(&arm.expression);
-                        }
-                    }
-                }
-
-                ResolvedPattern::Wildcard => {
-                    return Ok(self.evaluate_expression(&arm.expression)?);
-                }
             }
         }
 
@@ -1614,18 +1624,4 @@ impl<'a, C> Interpreter<'a, C> {
             _ => Err(ExecuteError::CanNotUnwrap),
         }
     }
-}
-
-fn same_tuple(p0: &[ResolvedType], p1: &[ResolvedType]) -> bool {
-    if p0.len() != p1.len() {
-        return false;
-    }
-
-    for (p0_type, p1_type) in p0.iter().zip(p1.iter()) {
-        if !p0_type.same_type(p1_type) {
-            return false;
-        }
-    }
-
-    true
 }

@@ -9,8 +9,9 @@ use swamp_script_ast::{Parameter, Type, Variable};
 use swamp_script_dep_loader::{
     create_parsed_modules, parse_dependant_modules_and_resolve, DepLoaderError,
 };
+use swamp_script_eval::prelude::ExecuteError;
 use swamp_script_eval::value::Value;
-use swamp_script_eval::{eval_module, ExecuteError, ExternalFunctions};
+use swamp_script_eval::{eval_module, ExternalFunctions};
 use swamp_script_eval_loader::resolve_program;
 use swamp_script_parser::Rule;
 use swamp_script_semantic::{ExternalFunctionId, ModulePath, ResolvedProgram};
@@ -123,7 +124,6 @@ fn register_print(
                 let display_value = value.convert_to_string_if_needed();
                 assert_eq!(context.secret, 42);
                 context.output.push(display_value.clone());
-                println!("{}", display_value);
                 Ok(Value::Unit)
             } else {
                 Err("print requires at least one argument".to_string())?

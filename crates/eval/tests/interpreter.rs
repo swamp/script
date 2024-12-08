@@ -104,10 +104,10 @@ fn hello() {
     check(
         r#"
        x = 10
-        print("hello")
+        print('hello {x}')
 
     "#,
-        "hello",
+        "hello 10",
     );
 }
 
@@ -348,8 +348,8 @@ fn enum_match() {
 
         result = Result::Ok(42)
         msg = match result {
-            Ok(value) => "Got value: " + value,
-            Err(err) => "Error: " + err
+            Ok value => "Got value: " + value,
+            Err err => "Error: " + err
         }
         print(msg)
         "#,
@@ -640,8 +640,8 @@ fn complex_match_patterns() {
         shape = Shape::Rectangle { width: 10, height: 20 }
 
         result = match shape {
-            Circle(radius) => radius * radius,
-            Rectangle { width, height } => width * height
+            Circle radius => radius * radius,
+            Rectangle width, height => width * height
         }
 
         print(result)
@@ -665,8 +665,8 @@ fn nested_types() {
         container = Container::Pair { first: p1, second: p2 }
 
         match container {
-            Single(p) => print(p.x + p.y),
-            Pair { first, second } => {
+            Single p => print(p.x + p.y),
+            Pair first, second => {
                 print(first.x + second.x)
                 print(first.y + second.y)
             }
@@ -676,6 +676,25 @@ fn nested_types() {
         4
         6
         "#,
+    );
+}
+
+#[test_log::test]
+fn array_literal() {
+    check(
+        r#"
+            enum Value {
+            Int(Int),
+            Str(String),
+            Tuple(Int, String, Bool)
+        }
+            values = [
+            Value::Int(42),
+            Value::Str("hello"),
+            Value::Tuple(1, "test", true)
+        ]
+    "#,
+        "",
     );
 }
 
@@ -698,9 +717,9 @@ fn enum_pattern_matching() {
 
         for v in values {
             match v {
-                Int(i) => print("Int: " + i),
-                Str(s) => print("Str: " + s),
-                Tuple(i, s, b) => {
+                Int i => print("Int: " + i),
+                Str s => print("Str: " + s),
+                Tuple i, s, b => {
                     print("Tuple:")
                     print(i)
                     print(s)
@@ -1159,7 +1178,7 @@ fn test_match_with_refs() {
 
         fn increment_if_running(mut s: State) {
             match s {
-                Running { count } => {
+                Running count => {
                     s = State::Running { count: count + 2 }
                 },
                 Stopped => {}
