@@ -64,7 +64,7 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
 
         ResolvedExpression::ArrayAssignment(_, _, _) => todo!(),
         ResolvedExpression::MapAssignment(_, _, _) => todo!(),
-        ResolvedExpression::StructFieldAssignment(struct_field, dd) => {
+        ResolvedExpression::StructFieldAssignment(struct_field, _resolved_expression) => {
             struct_field.inner.resolved_type.clone()
         }
         ResolvedExpression::BinaryOp(binary_op) => binary_op.resolved_type.clone(),
@@ -995,22 +995,6 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn wrap_value_for_return_type(
-        &self,
-        expr: ResolvedExpression,
-        return_type: &ResolvedType,
-    ) -> Result<ResolvedExpression, ResolveError> {
-        match return_type {
-            ResolvedType::Optional(inner_type) => {
-                match expr {
-                    ResolvedExpression::Option(_) => Ok(expr),
-                    _ if !inner_type.same_type(&resolution(&expr)) => Ok(expr),
-                    _ => Ok(ResolvedExpression::Option(Some(Box::new(expr)))),
-                }
-            }
-            _ => Ok(expr),
-        }
-    }
     fn check_and_wrap_return_value(
         &self,
         expr: ResolvedExpression,
