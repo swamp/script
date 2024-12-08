@@ -112,6 +112,60 @@ status = match player.health {
 print('status:{status}')
 
 
+/// Attempts to find a player by their name
+//. Returns: Some(Player) if found, none otherwise
+fn find_player_by_name(name: String) -> Player? {
+    if name == "Hero" {
+        Player {
+            name: "Hero",
+            health: 100,
+            position: Vector2::new(-13.0, -46.0)
+        }
+    } else {
+        none
+    }
+}
+
+/// Gets a player's health if they exist and are alive
+/// Returns: Some(Int) if player exists and health > 0, none otherwise
+fn get_health_if_alive(player: Player?) -> Int? {
+    if player? {
+        // We can use player directly here since it was unwrapped
+        if player.health > 0 {
+            player.health  // Automatically converts to Some(player.health)
+        } else {
+            none
+        }
+    } else {
+        none
+    }
+}
+
+// Basic optional handling
+hero_player = find_player_by_name("Hero")
+if hero_player? {  
+    // hero_player is automatically unwrapped in this scope
+    print('Found player at position: {hero_player.position}')
+}
+
+// Optional unwrapping with assignment
+if found_player = find_player_by_name("Hero")? {
+    // found_player contains the unwrapped Player instance
+    print('Found player {found_player.name} with health: {found_player.health}')
+}
+
+// Chaining optional operations
+
+/* Not working yet
+
+if health = get_health_if_alive(find_player_by_name("Hero"))? {
+    print('Player is alive with health: {health}')
+} else {
+    print('Player not found or not alive')
+}
+
+*/
+
 shapes = [
     Shape::Circle(5.0),
     Shape::Rectangle { width: 10.0, height: 20.0 },
@@ -135,6 +189,8 @@ length
 // player:Player { name: Hero, health: 100, position: Vector2 { x: 10.00, y: 20.00 } }
 // position type alias: (10.00, 20.00)
 // status:Full health
+// Found player at position: Vector2 { x: -13.00, y: -46.00 }
+// Found player "Hero" with health: 100
 // area:200.00
 // Final sqr-length: 20.00
 // 20.00
