@@ -57,8 +57,8 @@ enum Shape {
 // Function definition
 fn calculate_area(shape: Shape) -> Float {
     match shape {
-        Circle(radius) => 3.14 * radius * radius,
-        Rectangle { width, height } => width * height,
+        Circle radius => 3.14 * radius * radius,
+        Rectangle width, height => width * height,
         Point => 0.0,
     }
 }
