@@ -12,8 +12,8 @@ use swamp_script_ast::{CompoundOperator, ForPattern, Function, PatternElement, P
 use swamp_script_semantic::ns::{LocalTypeName, ResolvedModuleNamespace, SemanticError};
 use swamp_script_semantic::ResolvedType::RustType;
 use swamp_script_semantic::{
-    create_rust_type_generic, prelude::*, ResolvedForPattern, ResolvedPatternElement,
-    ResolvedStaticCallGeneric, TypeNumber,
+    create_rust_type_generic, prelude::*, ResolvedBoolType, ResolvedForPattern,
+    ResolvedPatternElement, ResolvedStaticCallGeneric, TypeNumber,
 };
 use swamp_script_semantic::{
     ResolvedDefinition, ResolvedEnumTypeRef, ResolvedFunction, ResolvedFunctionRef,
@@ -64,7 +64,9 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
 
         ResolvedExpression::ArrayAssignment(_, _, _) => todo!(),
         ResolvedExpression::MapAssignment(_, _, _) => todo!(),
-        ResolvedExpression::StructFieldAssignment(_, _) => todo!(),
+        ResolvedExpression::StructFieldAssignment(struct_field, dd) => {
+            struct_field.inner.resolved_type.clone()
+        }
         ResolvedExpression::BinaryOp(binary_op) => binary_op.resolved_type.clone(),
         ResolvedExpression::UnaryOp(unary_op) => unary_op.resolved_type.clone(),
         ResolvedExpression::PostfixOp(postfix_op) => postfix_op.resolved_type.clone(),
@@ -149,6 +151,7 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
         ResolvedExpression::SparseAdd(_, _) => ResolvedType::Any, // TODO: return correct type
         ResolvedExpression::SparseRemove(_, _) => ResolvedType::Any, // TODO: return correct type
         ResolvedExpression::SparseNew(rust_type_ref, _) => RustType(rust_type_ref.clone()),
+        ResolvedExpression::CoerceOptionToBool(_) => ResolvedType::Bool(Rc::new(ResolvedBoolType)),
     };
 
     trace!(resolution_expression=%resolution_expression, "resolution first");
@@ -224,6 +227,8 @@ pub enum ResolveError {
         max: usize,
         got: usize,
     },
+    NotInFunction,
+    ExpectedBooleanExpression,
 }
 
 impl From<SemanticError> for ResolveError {
@@ -270,6 +275,7 @@ pub struct Resolver<'a> {
     pub modules: &'a ResolvedModules,
     pub current_module: &'a mut ResolvedModule,
     pub block_scope_stack: Vec<BlockScope>,
+    pub return_type: Option<ResolvedType>,
 }
 
 impl<'a> Resolver<'a> {
@@ -287,6 +293,7 @@ impl<'a> Resolver<'a> {
             modules,
             current_module,
             block_scope_stack: scope_stack,
+            return_type: None,
         }
     }
 
@@ -329,6 +336,118 @@ impl<'a> Resolver<'a> {
         //self.state.map_types.push(rc_array.clone());
 
         Ok(map_type_ref)
+    }
+
+    fn handle_optional_unwrap_statement(
+        &mut self,
+        var: &Variable,
+        expr: &Expression,
+        statements: &Vec<Statement>,
+        maybe_else_statements: &Option<Vec<Statement>>,
+    ) -> Result<ResolvedStatement, ResolveError> {
+        let resolved_var_expr = self.resolve_expression(expr)?;
+
+        if let ResolvedType::Optional(inner_type) = resolution(&resolved_var_expr) {
+            self.push_block_scope("if_unwrap");
+            let resolved_var_ref = self.create_local_variable(var, &inner_type)?;
+            let resolved_true = self.resolve_statements(statements)?;
+            self.pop_block_scope("if_unwrap");
+
+            let resolved_false = if let Some(else_statements) = maybe_else_statements {
+                Some(self.resolve_statements(else_statements)?)
+            } else {
+                None
+            };
+
+            Ok(ResolvedStatement::IfOnlyVariable {
+                variable: resolved_var_ref,
+                optional_expr: Box::new(resolved_var_expr),
+                true_block: resolved_true,
+                false_block: resolved_false,
+            })
+        } else {
+            Err(ResolveError::ExpectedOptional)
+        }
+    }
+
+    fn handle_optional_assign_unwrap_statement(
+        &mut self,
+        var: &Variable,
+        inner_expr: &Expression,
+        statements: &Vec<Statement>,
+        maybe_else_statements: &Option<Vec<Statement>>,
+    ) -> Result<ResolvedStatement, ResolveError> {
+        let resolved_expr = self.resolve_expression(inner_expr)?;
+
+        if let ResolvedType::Optional(inner_type) = resolution(&resolved_expr) {
+            self.push_block_scope("if_assign_unwrap");
+            let resolved_var_ref = self.create_local_variable(var, &inner_type)?;
+            let resolved_true = self.resolve_statements(statements)?;
+            self.pop_block_scope("if_assign_unwrap");
+
+            let resolved_false = if let Some(else_statements) = maybe_else_statements {
+                Some(self.resolve_statements(else_statements)?)
+            } else {
+                None
+            };
+
+            Ok(ResolvedStatement::IfAssignExpression {
+                variable: resolved_var_ref,
+                optional_expr: Box::new(resolved_expr),
+                true_block: resolved_true,
+                false_block: resolved_false,
+            })
+        } else {
+            Err(ResolveError::ExpectedOptional)
+        }
+    }
+
+    fn resolve_normal_if_statement(
+        &mut self,
+        condition: &Expression,
+        statements: &Vec<Statement>,
+        maybe_else_statements: &Option<Vec<Statement>>,
+    ) -> Result<ResolvedStatement, ResolveError> {
+        let condition = self.resolve_bool_expression(condition)?;
+
+        // For the true branch
+        let mut resolved_statements = Vec::new();
+        for (i, stmt) in statements.iter().enumerate() {
+            let mut resolved_stmt = self.resolve_statement(stmt)?;
+            if i == statements.len() - 1 {
+                if let ResolvedStatement::Expression(expr) = resolved_stmt {
+                    resolved_stmt = ResolvedStatement::Expression(ResolvedExpression::Option(
+                        Some(Box::new(expr)),
+                    ));
+                }
+            }
+            resolved_statements.push(resolved_stmt);
+        }
+
+        // For the else branch
+        let else_statements = if let Some(else_statements) = maybe_else_statements {
+            let mut resolved = Vec::new();
+            for (i, stmt) in else_statements.iter().enumerate() {
+                let mut resolved_stmt = self.resolve_statement(stmt)?;
+                if i == else_statements.len() - 1 {
+                    if let ResolvedStatement::Expression(expr) = resolved_stmt {
+                        resolved_stmt = ResolvedStatement::Expression(ResolvedExpression::Option(
+                            Some(Box::new(expr)),
+                        ));
+                    }
+                }
+                resolved.push(resolved_stmt);
+            }
+            Some(resolved)
+        } else {
+            None
+        };
+
+        Ok(ResolvedStatement::If(
+            condition,
+            resolved_statements,
+            else_statements,
+        ))
     }
 
     pub fn resolve_type(&mut self, ast_type: &Type) -> Result<ResolvedType, ResolveError> {
@@ -636,6 +755,42 @@ impl<'a> Resolver<'a> {
         Ok(resolved_def)
     }
 
+    fn resolve_statements_in_function(
+        &mut self,
+        statements: &Vec<Statement>,
+        return_type: &ResolvedType,
+    ) -> Result<Vec<ResolvedStatement>, ResolveError> {
+        debug!(
+            ?statements,
+            ?return_type,
+            "resolving statements in function"
+        );
+        debug!(?self.return_type, "current return type context");
+        let mut resolved_statements = Vec::new();
+
+        for (i, statement) in statements.iter().enumerate() {
+            debug!(?statement, "resolving statement {}", i);
+            let mut resolved_statement = self.resolve_statement(statement)?;
+            debug!(
+                ?resolved_statement,
+                "resolved statement before return handling"
+            );
+            // Handle last statement in function
+            if i == statements.len() - 1 {
+                debug!("handling last statement in function");
+                if let ResolvedStatement::Expression(expr) = resolved_statement {
+                    debug!(?expr, "wrapping final expression for return");
+                    let wrapped_expr = self.check_and_wrap_return_value(expr, return_type)?;
+                    resolved_statement = ResolvedStatement::Expression(wrapped_expr);
+                }
+            }
+
+            resolved_statements.push(resolved_statement);
+        }
+
+        Ok(resolved_statements)
+    }
+
     fn resolve_function_definition(
         &mut self,
         identifier: &LocalIdentifier,
@@ -646,6 +801,8 @@ impl<'a> Resolver<'a> {
                 let parameters = self.resolve_parameters(&function_data.signature.params)?;
                 let return_type = self.resolve_type(&function_data.signature.return_type)?;
 
+                self.return_type = Some(return_type.clone());
+
                 // Set up scope for function body
                 for param in &parameters {
                     self.create_local_variable(
@@ -654,7 +811,15 @@ impl<'a> Resolver<'a> {
                     )?;
                 }
 
-                let statements = self.resolve_statements(&function_data.body)?;
+                let statements =
+                    self.resolve_statements_in_function(&function_data.body, &return_type)?;
+
+                self.return_type = None;
+
+                info!(name = identifier.text, "statements for function");
+                for (index, statement) in statements.iter().enumerate() {
+                    info!(index=index,statement=?statement, "analyzer statement")
+                }
 
                 let internal = ResolvedInternalFunctionDefinition {
                     signature: ResolvedFunctionSignature {
@@ -830,10 +995,63 @@ impl<'a> Resolver<'a> {
         }
     }
 
+    fn wrap_value_for_return_type(
+        &self,
+        expr: ResolvedExpression,
+        return_type: &ResolvedType,
+    ) -> Result<ResolvedExpression, ResolveError> {
+        match return_type {
+            ResolvedType::Optional(inner_type) => {
+                match expr {
+                    ResolvedExpression::Option(_) => Ok(expr),
+                    _ if !inner_type.same_type(&resolution(&expr)) => Ok(expr),
+                    _ => Ok(ResolvedExpression::Option(Some(Box::new(expr)))),
+                }
+            }
+            _ => Ok(expr),
+        }
+    }
+    fn check_and_wrap_return_value(
+        &self,
+        expr: ResolvedExpression,
+        return_type: &ResolvedType,
+    ) -> Result<ResolvedExpression, ResolveError> {
+        let expr_type = resolution(&expr);
+
+        if let ResolvedType::Optional(inner_type) = return_type {
+            if return_type.same_type(&expr_type) {
+                return Ok(expr);
+            }
+
+            if inner_type.same_type(&expr_type) {
+                return Ok(ResolvedExpression::Option(Some(Box::new(expr))));
+            }
+
+            return Err(ResolveError::IncompatibleTypes(
+                expr_type,
+                return_type.clone(),
+            ));
+        }
+
+        if !return_type.same_type(&expr_type) {
+            return Err(ResolveError::IncompatibleTypes(
+                expr_type,
+                return_type.clone(),
+            ));
+        }
+        Ok(expr)
+    }
+
+    fn current_function_return_type(&self) -> Result<ResolvedType, ResolveError> {
+        self.return_type.clone().ok_or(ResolveError::NotInFunction)
+    }
+
     fn resolve_statement(
         &mut self,
         statement: &Statement,
     ) -> Result<ResolvedStatement, ResolveError> {
+        debug!(?statement, "resolving statement");
+        debug!(?self.return_type, "current return type context");
         let converted = match statement {
             Statement::ForLoop(pattern, expression, statements) => {
                 let resolved_iterator = self.resolve_iterator(expression)?;
@@ -853,8 +1071,11 @@ impl<'a> Resolver<'a> {
 
                 ResolvedStatement::WhileLoop(condition, resolved_statements)
             }
-            Statement::Return(expression) => {
-                ResolvedStatement::Return(self.resolve_expression(expression)?)
+            Statement::Return(expr) => {
+                let resolved_expr = self.resolve_expression(expr)?;
+                let return_type = self.current_function_return_type()?;
+                let wrapped_expr = self.check_and_wrap_return_value(resolved_expr, &return_type)?;
+                ResolvedStatement::Return(wrapped_expr)
             }
             Statement::Break => ResolvedStatement::Break,
             Statement::Continue => ResolvedStatement::Continue,
@@ -864,19 +1085,42 @@ impl<'a> Resolver<'a> {
             Statement::Block(statements) => {
                 ResolvedStatement::Block(self.resolve_statements(statements)?)
             }
-            Statement::If(expression, statements, maybe_else_statements) => {
-                let else_statements_vector: Option<Vec<ResolvedStatement>> = maybe_else_statements
-                    .as_ref()
-                    .map(|else_statements| self.resolve_statements(else_statements))
-                    .transpose()?;
-
-                ResolvedStatement::If(
-                    self.resolve_bool_expression(expression)?,
-                    self.resolve_statements(statements)?,
-                    else_statements_vector,
-                )
-            }
+            Statement::If(expression, statements, maybe_else_statements) => match expression {
+                Expression::PostfixOp(PostfixOperator::Unwrap, expr) => {
+                    if let Expression::VariableAccess(var) = &**expr {
+                        self.handle_optional_unwrap_statement(
+                            var,
+                            expr,
+                            statements,
+                            maybe_else_statements,
+                        )?
+                    } else {
+                        Err(ResolveError::ExpectedVariable)?
+                    }
+                }
+                Expression::VariableAssignment(var, expr) => {
+                    if let Expression::PostfixOp(PostfixOperator::Unwrap, inner_expr) = &**expr {
+                        self.handle_optional_assign_unwrap_statement(
+                            var,
+                            inner_expr,
+                            statements,
+                            maybe_else_statements,
+                        )?
+                    } else {
+                        self.resolve_normal_if_statement(
+                            expression,
+                            statements,
+                            maybe_else_statements,
+                        )?
+                    }
+                }
+                _ => {
+                    self.resolve_normal_if_statement(expression, statements, maybe_else_statements)?
+                }
+            },
         };
+
+        debug!(?converted, "resolved statement");
         Ok(converted)
     }
 
@@ -884,9 +1128,13 @@ impl<'a> Resolver<'a> {
         &mut self,
         statements: &Vec<Statement>,
     ) -> Result<Vec<ResolvedStatement>, ResolveError> {
+        debug!(?statements, "resolving statements");
+        debug!(?self.return_type, "current return type context for statements");
+
         let mut resolved_statements = Vec::new();
         for statement in statements {
             let resolved_statement = self.resolve_statement(statement)?;
+            debug!(?statement, ?resolved_statement, "resolved statement");
             resolved_statements.push(resolved_statement);
         }
 
@@ -914,6 +1162,9 @@ impl<'a> Resolver<'a> {
         &mut self,
         ast_expression: &Expression,
     ) -> Result<ResolvedExpression, ResolveError> {
+        debug!(?ast_expression, "resolving expression");
+        debug!(?self.return_type, "current return type context");
+
         let expression = match ast_expression {
             // Lookups
             Expression::FieldAccess(expression, field_name) => {
@@ -959,7 +1210,7 @@ impl<'a> Resolver<'a> {
                         let map_lookup = ResolvedMapIndexLookup {
                             map_type: collection_resolution.clone(),
                             item_type: ResolvedType::Optional(Box::from(
-                                map_type_ref.key_type.clone(),
+                                map_type_ref.value_type.clone(),
                             )),
                             map_type_ref: map_type_ref.clone(),
                             index_expression: Box::from(resolved_lookup_expr),
@@ -1168,55 +1419,57 @@ impl<'a> Resolver<'a> {
             }
 
             Expression::Literal(literal) => {
-                swamp_script_semantic::ResolvedExpression::Literal(match literal {
-                    Literal::Int(value) => {
-                        ResolvedLiteral::IntLiteral(*value, self.types.int_type.clone())
-                    }
-                    Literal::Float(value) => {
-                        ResolvedLiteral::FloatLiteral(*value, self.types.float_type.clone())
-                    }
-                    Literal::String(value) => ResolvedLiteral::StringLiteral(
-                        value.clone(),
-                        self.types.string_type.clone(),
-                    ),
-                    Literal::Unit => ResolvedLiteral::UnitLiteral(self.types.unit_type.clone()),
-                    Literal::None => ResolvedLiteral::NoneLiteral,
-                    Literal::Bool(value) => {
-                        ResolvedLiteral::BoolLiteral(*value, self.types.bool_type.clone())
-                    }
-
-                    Literal::EnumVariant(qualified_type_identifier, variant_name, data) => self
-                        .resolve_enum_variant_literal(
-                            qualified_type_identifier,
-                            variant_name,
-                            data,
-                        )?,
-
-                    Literal::Tuple(expressions) => {
-                        let mut resolved_expressions = Vec::new();
-                        for expression in expressions {
-                            resolved_expressions.push(self.resolve_expression(expression)?);
+                let resolved_literal =
+                    swamp_script_semantic::ResolvedExpression::Literal(match literal {
+                        Literal::Int(value) => {
+                            ResolvedLiteral::IntLiteral(*value, self.types.int_type.clone())
                         }
-                        let mut resolved_types = Vec::new();
-                        for resolved_expression in &resolved_expressions {
-                            resolved_types.push(resolution(&resolved_expression));
+                        Literal::Float(value) => {
+                            ResolvedLiteral::FloatLiteral(*value, self.types.float_type.clone())
+                        }
+                        Literal::String(value) => ResolvedLiteral::StringLiteral(
+                            value.clone(),
+                            self.types.string_type.clone(),
+                        ),
+                        Literal::Unit => ResolvedLiteral::UnitLiteral(self.types.unit_type.clone()),
+                        Literal::None => ResolvedLiteral::NoneLiteral,
+                        Literal::Bool(value) => {
+                            ResolvedLiteral::BoolLiteral(*value, self.types.bool_type.clone())
                         }
 
-                        let tuple_type = ResolvedTupleType::new(resolved_types);
-                        let tuple_type_ref = Rc::new(tuple_type);
+                        Literal::EnumVariant(qualified_type_identifier, variant_name, data) => self
+                            .resolve_enum_variant_literal(
+                                qualified_type_identifier,
+                                variant_name,
+                                data,
+                            )?,
 
-                        ResolvedLiteral::TupleLiteral(tuple_type_ref, resolved_expressions)
-                    }
+                        Literal::Tuple(expressions) => {
+                            let mut resolved_expressions = Vec::new();
+                            for expression in expressions {
+                                resolved_expressions.push(self.resolve_expression(expression)?);
+                            }
+                            let mut resolved_types = Vec::new();
+                            for resolved_expression in &resolved_expressions {
+                                resolved_types.push(resolution(&resolved_expression));
+                            }
 
-                    Literal::Array(items) => {
-                        let (array_type_ref, expressions) =
-                            self.resolve_array_type_helper(items)?;
+                            let tuple_type = ResolvedTupleType::new(resolved_types);
+                            let tuple_type_ref = Rc::new(tuple_type);
 
-                        ResolvedLiteral::Array(array_type_ref, expressions)
-                    }
+                            ResolvedLiteral::TupleLiteral(tuple_type_ref, resolved_expressions)
+                        }
 
-                    Literal::Map(entries) => self.resolve_map_literal(entries)?,
-                })
+                        Literal::Array(items) => {
+                            let (array_type_ref, expressions) =
+                                self.resolve_array_type_helper(items)?;
+
+                            ResolvedLiteral::Array(array_type_ref, expressions)
+                        }
+
+                        Literal::Map(entries) => self.resolve_map_literal(entries)?,
+                    });
+                resolved_literal
             }
 
             // Comparison
@@ -1372,10 +1625,19 @@ impl<'a> Resolver<'a> {
         expression: &Expression,
     ) -> Result<ResolvedBooleanExpression, ResolveError> {
         let resolved_expression = self.resolve_expression(expression)?;
+        let expr_type = resolution(&resolved_expression);
+
+        let bool_expression = match expr_type {
+            ResolvedType::Bool(_) => resolved_expression,
+            ResolvedType::Optional(_) => {
+                ResolvedExpression::CoerceOptionToBool(Box::new(resolved_expression))
+            }
+            _ => return Err(ResolveError::ExpectedBooleanExpression),
+        };
 
         Ok(ResolvedBooleanExpression {
             ast: expression.clone(),
-            expression: resolved_expression,
+            expression: bool_expression,
         })
     }
 
@@ -1568,7 +1830,7 @@ impl<'a> Resolver<'a> {
         let resolved_type = resolution(&resolved_expression);
         let item_type = match resolved_type {
             ResolvedType::Array(array_type) => array_type.item_type.clone(),
-            ResolvedType::ExclusiveRange(_) => resolved_type.clone(),
+            ResolvedType::ExclusiveRange(_) => self.types.int_type(),
             _ => ResolvedType::Any,
         };
 
@@ -1819,16 +2081,62 @@ impl<'a> Resolver<'a> {
         ast_op: &BinaryOperator,
         ast_right: &Box<Expression>,
     ) -> Result<ResolvedBinaryOperator, ResolveError> {
-        let left = self.resolve_expression(ast_left)?;
-        let right = self.resolve_expression(ast_right)?;
-        let resolved_type = resolution(&left);
+        debug!(?ast_left, ?ast_op, ?ast_right, "resolving binary op inputs");
 
-        Ok(ResolvedBinaryOperator {
-            left: Box::new(left),
-            right: Box::new(right),
-            ast_operator_type: ast_op.clone(),
-            resolved_type,
-        })
+        let left = self.resolve_expression(ast_left)?;
+        let left_type = resolution(&left);
+        debug!(?left, ?left_type, "resolved left operand and type");
+
+        let right = self.resolve_expression(ast_right)?;
+        let right_type = resolution(&right);
+        debug!(?right, ?right_type, "resolved right operand and type");
+
+        match (ast_op, &left_type, &right_type) {
+            // String concatenation - allow any type on the right
+            (BinaryOperator::Add, ResolvedType::String(_), _) => Ok(ResolvedBinaryOperator {
+                left: Box::new(left),
+                right: Box::new(right),
+                ast_operator_type: ast_op.clone(),
+                resolved_type: self.types.string_type(),
+            }),
+
+            // Comparison operators
+            (
+                BinaryOperator::Equal
+                | BinaryOperator::NotEqual
+                | BinaryOperator::GreaterThan
+                | BinaryOperator::GreaterThanOrEqual
+                | BinaryOperator::LessThan
+                | BinaryOperator::LessThanOrEqual,
+                _,
+                _,
+            ) => {
+                if !left_type.same_type(&right_type) {
+                    debug!(?left_type, ?right_type, "type mismatch in comparison");
+                    return Err(ResolveError::IncompatibleTypes(left_type, right_type));
+                }
+                Ok(ResolvedBinaryOperator {
+                    left: Box::new(left),
+                    right: Box::new(right),
+                    ast_operator_type: ast_op.clone(),
+                    resolved_type: self.types.bool_type(),
+                })
+            }
+
+            // All other operators require exact type matches
+            _ => {
+                if !left_type.same_type(&right_type) {
+                    debug!(?left_type, ?right_type, "type mismatch in operation");
+                    return Err(ResolveError::IncompatibleTypes(left_type, right_type));
+                }
+                Ok(ResolvedBinaryOperator {
+                    left: Box::new(left),
+                    right: Box::new(right),
+                    ast_operator_type: ast_op.clone(),
+                    resolved_type: left_type,
+                })
+            }
+        }
     }
 
     fn resolve_unary_op(
@@ -2546,15 +2854,55 @@ impl<'a> Resolver<'a> {
         true_block: &Expression,
         false_block: &Expression,
     ) -> Result<ResolvedExpression, ResolveError> {
-        let resolved_condition = self.resolve_expression(condition)?;
-        let resolved_true = self.analyze_block_with_scope(true_block)?;
-        let resolved_false = self.analyze_block_with_scope(false_block)?;
+        debug!(
+            ?condition,
+            ?true_block,
+            ?false_block,
+            "resolve_normal_if input"
+        );
 
-        Ok(ResolvedExpression::IfElse(
-            Box::from(resolved_condition),
-            Box::from(resolved_true),
-            Box::from(resolved_false),
-        ))
+        let resolved_condition = self.resolve_bool_expression(condition)?;
+        debug!(?resolved_condition, "resolved condition");
+
+        let resolved_true = self.analyze_block_with_scope(true_block)?;
+        debug!(?resolved_true, "resolved true block");
+        let true_type = resolution(&resolved_true);
+        debug!(?true_type, "true block type");
+
+        let resolved_false = self.analyze_block_with_scope(false_block)?;
+        let false_type = resolution(&resolved_false);
+        debug!(?false_type, "false block type");
+
+        debug!(?self.return_type, "current return type context");
+
+        if let Some(_return_type @ ResolvedType::Optional(_)) = &self.return_type {
+            let true_type = resolution(&resolved_true);
+            let false_type = resolution(&resolved_false);
+
+            let wrapped_true = if !matches!(true_type, ResolvedType::Optional(_)) {
+                ResolvedExpression::Option(Some(Box::new(resolved_true)))
+            } else {
+                resolved_true
+            };
+
+            let wrapped_false = if !matches!(false_type, ResolvedType::Optional(_)) {
+                ResolvedExpression::Option(Some(Box::new(resolved_false)))
+            } else {
+                resolved_false
+            };
+
+            Ok(ResolvedExpression::IfElse(
+                Box::from(resolved_condition),
+                Box::from(wrapped_true),
+                Box::from(wrapped_false),
+            ))
+        } else {
+            Ok(ResolvedExpression::IfElse(
+                Box::from(resolved_condition),
+                Box::from(resolved_true),
+                Box::from(resolved_false),
+            ))
+        }
     }
 
     fn resolve_array_member_call(

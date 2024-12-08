@@ -16,4 +16,5 @@ pub enum ExecuteError {
     NotAnArray,
     ValueIsNotMutable,
     NotSparseValue,
+    CoerceOptionToBoolFailed,
 }

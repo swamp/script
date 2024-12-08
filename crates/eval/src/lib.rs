@@ -163,7 +163,7 @@ impl<'a, C> Interpreter<'a, C> {
         }
     }
 
-    fn push_function_scope(&mut self, debug_str: String) {
+    fn push_function_scope(&mut self, debug_str: &str) {
         debug!(debug_str=%debug_str, "push function scope");
         self.function_scope_stack.push(FunctionScope {
             saved_block_scope: self.current_block_scopes.clone(),
@@ -171,10 +171,10 @@ impl<'a, C> Interpreter<'a, C> {
         trace!(len=%self.current_block_scopes.len(), "saved block len");
 
         self.current_block_scopes.clear();
-        self.push_block_scope("default function scope".to_string());
+        self.push_block_scope("default function scope");
     }
 
-    fn push_block_scope(&mut self, debug_str: String) {
+    fn push_block_scope(&mut self, debug_str: &str) {
         debug!(debug_str = %debug_str, "push block scope");
         info!(
             "EVAL: pushing scope '{}', current depth: {}",
@@ -184,7 +184,7 @@ impl<'a, C> Interpreter<'a, C> {
         self.current_block_scopes.push(BlockScope::default());
     }
 
-    fn pop_block_scope(&mut self, debug_str: String) {
+    fn pop_block_scope(&mut self, debug_str: &str) {
         debug!(debug_str=%debug_str, "pop block scope");
         let old_len = self.current_block_scopes.len();
         info!(
@@ -195,7 +195,7 @@ impl<'a, C> Interpreter<'a, C> {
         self.current_block_scopes.pop();
     }
 
-    fn pop_function_scope(&mut self, debug_str: String) {
+    fn pop_function_scope(&mut self, debug_str: &str) {
         debug!(debug_str=%debug_str, "pop function scope");
         if self.function_scope_stack.len() == 1 {
             error!("you popped too far");
@@ -246,7 +246,7 @@ impl<'a, C> Interpreter<'a, C> {
 
         match &*static_call.function {
             ResolvedFunction::Internal(function_data) => {
-                self.push_function_scope("static function call".to_string());
+                self.push_function_scope("static function call");
                 self.bind_parameters(&function_data.signature.parameters, &evaluated_args)?;
                 let result = self.execute_statements(&function_data.statements)?;
 
@@ -256,7 +256,7 @@ impl<'a, C> Interpreter<'a, C> {
                     ValueWithSignal::Break => Value::Unit,
                     ValueWithSignal::Continue => Value::Unit,
                 };
-                self.pop_function_scope("static function call".to_string());
+                self.pop_function_scope("static function call");
                 Ok(v)
             }
             ResolvedFunction::External(external) => {
@@ -305,7 +305,7 @@ impl<'a, C> Interpreter<'a, C> {
         let evaluated_args = self.evaluate_args(&call.arguments)?;
         debug!("call {:?}", func_val);
 
-        self.push_function_scope(format!("{func_val}"));
+        self.push_function_scope(&format!("{func_val}"));
 
         // Bind parameters before executing body
         self.bind_parameters(
@@ -314,7 +314,7 @@ impl<'a, C> Interpreter<'a, C> {
         )?;
         let result = self.execute_statements(&call.function_definition.statements)?;
 
-        self.pop_function_scope(format!("{func_val}"));
+        self.pop_function_scope(&format!("{func_val}"));
 
         // Since signals can not propagate from the function call, we just return a normal Value
         let v = match result {
@@ -908,10 +908,10 @@ impl<'a, C> Interpreter<'a, C> {
                 let evaluated_args = self.evaluate_args(&static_call_generic.arguments)?;
                 match &*static_call_generic.function {
                     ResolvedFunction::Internal(function_data) => {
-                        self.push_function_scope("static generic function call".to_string());
+                        self.push_function_scope("static generic function call");
                         self.bind_parameters(&function_data.signature.parameters, &evaluated_args)?;
                         let result = self.execute_statements(&function_data.statements)?;
-                        self.pop_function_scope("static generic function call".to_string());
+                        self.pop_function_scope("static generic function call");
                         match result {
                             ValueWithSignal::Value(v) | ValueWithSignal::Return(v) => Ok(v),
                             _ => Ok(Value::Unit),
@@ -961,10 +961,10 @@ impl<'a, C> Interpreter<'a, C> {
 
                 match &*resolved_member_call.function {
                     ResolvedFunction::Internal(internal_function) => {
-                        self.push_function_scope(format!("member_call {member_value}"));
+                        self.push_function_scope(&format!("member_call {member_value}"));
                         self.bind_parameters(parameters, &member_call_arguments)?;
                         let result = self.execute_statements(&internal_function.statements)?;
-                        self.pop_function_scope(format!("member_call {resolved_member_call}"));
+                        self.pop_function_scope(&format!("member_call {resolved_member_call}"));
 
                         match result {
                             ValueWithSignal::Value(v) => v,
@@ -990,9 +990,9 @@ impl<'a, C> Interpreter<'a, C> {
             }
 
             ResolvedExpression::Block(statements) => {
-                self.push_block_scope("block statements".to_string());
+                self.push_block_scope("block statements");
                 let result = self.execute_statements(statements)?;
-                self.pop_block_scope("block_statements".to_string());
+                self.pop_block_scope("block_statements");
                 match result {
                     ValueWithSignal::Value(v) => v,
                     ValueWithSignal::Return(_) => {
@@ -1031,15 +1031,15 @@ impl<'a, C> Interpreter<'a, C> {
 
             // Comparing
             ResolvedExpression::IfElse(condition, then_expr, else_expr) => {
-                self.push_block_scope("if_else".to_string());
-                let cond_value = self.evaluate_expression(&condition)?;
+                self.push_block_scope("if_else");
+                let cond_value = self.evaluate_expression(&condition.expression)?;
                 let result = if cond_value.is_truthy()? {
                     self.evaluate_expression(then_expr)?
                 } else {
                     self.evaluate_expression(else_expr)?
                 };
 
-                self.pop_block_scope("if_else".to_string());
+                self.pop_block_scope("if_else");
                 result
             }
 
@@ -1052,7 +1052,7 @@ impl<'a, C> Interpreter<'a, C> {
                 let value = self.evaluate_expression(optional_expr)?;
                 match value {
                     Value::Option(Some(inner_value)) => {
-                        self.push_block_scope("if else only variable".to_string());
+                        self.push_block_scope("if else only variable");
                         self.initialize_var(
                             variable.scope_index,
                             variable.variable_index,
@@ -1060,7 +1060,7 @@ impl<'a, C> Interpreter<'a, C> {
                             variable.is_mutable(),
                         )?;
                         let result = self.evaluate_expression(true_block)?;
-                        self.pop_block_scope("if else only variable".to_string());
+                        self.pop_block_scope("if else only variable");
                         result
                     }
                     Value::Option(None) => self.evaluate_expression(false_block)?,
@@ -1077,7 +1077,7 @@ impl<'a, C> Interpreter<'a, C> {
                 let value = self.evaluate_expression(optional_expr)?;
                 match value {
                     Value::Option(Some(inner_value)) => {
-                        self.push_block_scope("if else assign expression".to_string());
+                        self.push_block_scope("if else assign expression");
                         self.initialize_var(
                             variable.scope_index,
                             variable.variable_index,
@@ -1085,7 +1085,7 @@ impl<'a, C> Interpreter<'a, C> {
                             variable.is_mutable(),
                         )?;
                         let result = self.evaluate_expression(true_block)?;
-                        self.pop_block_scope("if else assign expression".to_string());
+                        self.pop_block_scope("if else assign expression");
                         result
                     }
                     Value::Option(None) => self.evaluate_expression(false_block)?,
@@ -1150,6 +1150,13 @@ impl<'a, C> Interpreter<'a, C> {
 
                 resolved_sparse_value
             }
+            ResolvedExpression::CoerceOptionToBool(expression) => {
+                let value = self.evaluate_expression(expression)?;
+                match value {
+                    Value::Option(inner) => Value::Bool(inner.is_some()),
+                    _ => return Err(ExecuteError::CoerceOptionToBoolFailed),
+                }
+            }
         };
 
         Ok(value)
@@ -1201,7 +1208,7 @@ impl<'a, C> Interpreter<'a, C> {
                     let cond_value = self.evaluate_expression(&condition.expression)?;
                     if cond_value.is_truthy()? {
                         match self.execute_statements(consequences)? {
-                            ValueWithSignal::Value(_v) => {} // Just discard normal values
+                            ValueWithSignal::Value(v) => value = v, // Store the value
                             ValueWithSignal::Break => return Ok(ValueWithSignal::Break),
                             ValueWithSignal::Return(v) => return Ok(ValueWithSignal::Return(v)),
                             ValueWithSignal::Continue => return Ok(ValueWithSignal::Continue),
@@ -1209,7 +1216,7 @@ impl<'a, C> Interpreter<'a, C> {
                     } else {
                         if let Some(alternative) = optional_alternative {
                             match self.execute_statements(alternative)? {
-                                ValueWithSignal::Value(_v) => {} // Just discard normal values
+                                ValueWithSignal::Value(v) => value = v, // Store the value
                                 ValueWithSignal::Break => return Ok(ValueWithSignal::Break),
                                 ValueWithSignal::Return(v) => {
                                     return Ok(ValueWithSignal::Return(v))
@@ -1218,7 +1225,83 @@ impl<'a, C> Interpreter<'a, C> {
                             }
                         }
                     }
-                    continue; // no need for the switch
+                    continue;
+                }
+
+                ResolvedStatement::IfOnlyVariable {
+                    variable,
+                    optional_expr,
+                    true_block,
+                    false_block,
+                } => {
+                    let value = self.evaluate_expression(optional_expr)?;
+                    match value {
+                        Value::Option(Some(inner_value)) => {
+                            self.push_block_scope("if only variable");
+                            self.initialize_var(
+                                variable.scope_index,
+                                variable.variable_index,
+                                *inner_value,
+                                variable.is_mutable(),
+                            )?;
+
+                            let result = self.execute_statements(&true_block)?;
+                            self.pop_block_scope("if only variable");
+
+                            match result {
+                                ValueWithSignal::Value(_) => {}
+                                signal => return Ok(signal),
+                            }
+                        }
+                        Value::Option(None) => {
+                            if let Some(else_block) = false_block {
+                                match self.execute_statements(&else_block)? {
+                                    ValueWithSignal::Value(_) => {}
+                                    signal => return Ok(signal),
+                                }
+                            }
+                        }
+                        _ => return Err(ExecuteError::ExpectedOptional),
+                    }
+                    continue;
+                }
+
+                ResolvedStatement::IfAssignExpression {
+                    variable,
+                    optional_expr,
+                    true_block,
+                    false_block,
+                } => {
+                    let value = self.evaluate_expression(optional_expr)?;
+                    match value {
+                        Value::Option(Some(inner_value)) => {
+                            self.push_block_scope("if assign expression");
+                            self.initialize_var(
+                                variable.scope_index,
+                                variable.variable_index,
+                                *inner_value,
+                                variable.is_mutable(),
+                            )?;
+
+                            let result = self.execute_statements(&true_block)?;
+                            self.pop_block_scope("if assign expression");
+
+                            match result {
+                                ValueWithSignal::Value(_) => {}
+                                signal => return Ok(signal),
+                            }
+                        }
+                        Value::Option(None) => {
+                            if let Some(else_block) = false_block {
+                                match self.execute_statements(&else_block)? {
+                                    ValueWithSignal::Value(_) => {}
+                                    signal => return Ok(signal),
+                                }
+                            }
+                        }
+                        _ => return Err(ExecuteError::ExpectedOptional),
+                    }
+                    continue;
                 }
 
                 ResolvedStatement::ForLoop(pattern, iterator_expr, body) => {
@@ -1227,7 +1310,7 @@ impl<'a, C> Interpreter<'a, C> {
 
                     match pattern {
                         ResolvedForPattern::Single(var_ref) => {
-                            self.push_block_scope(format!("for_loop single {:?}", var_ref));
+                            self.push_block_scope(&format!("for_loop single {:?}", var_ref));
 
                             for value in iterator_value.into_iter()? {
                                 self.initialize_var(
@@ -1247,11 +1330,11 @@ impl<'a, C> Interpreter<'a, C> {
                                 }
                             }
 
-                            self.pop_block_scope("for loop single".to_string());
+                            self.pop_block_scope("for loop single");
                         }
 
                         ResolvedForPattern::Pair(first_ref, second_ref) => {
-                            self.push_block_scope(format!("for_loop pair"));
+                            self.push_block_scope("for_loop pair");
 
                             let pair_iterator = iterator_value.pairs_iterator()?;
                             for (key, value) in pair_iterator {
@@ -1279,7 +1362,7 @@ impl<'a, C> Interpreter<'a, C> {
                                 }
                             }
 
-                            self.pop_block_scope("for loop pair".to_string());
+                            self.pop_block_scope("for loop pair");
                         }
                     }
 
@@ -1327,6 +1410,12 @@ impl<'a, C> Interpreter<'a, C> {
                 ResolvedStatement::Continue => panic!("continue should have been handled earlier"),
                 ResolvedStatement::Block(_) => panic!("block should have been handled earlier"),
                 ResolvedStatement::If(_, _, _) => panic!("if should have been handled earlier"),
+                ResolvedStatement::IfOnlyVariable { .. } => {
+                    panic!("if should have been handled earlier")
+                }
+                ResolvedStatement::IfAssignExpression { .. } => {
+                    panic!("if should have been handled earlier")
+                }
             }
         }
 
@@ -1350,7 +1439,7 @@ impl<'a, C> Interpreter<'a, C> {
                         match &elements[0] {
                             ResolvedPatternElement::Variable(var_ref)
                             | ResolvedPatternElement::VariableWithFieldIndex(var_ref, _) => {
-                                self.push_block_scope("pattern variable".to_string());
+                                self.push_block_scope("pattern variable");
                                 self.set_local_var(
                                     var_ref.variable_index,
                                     actual_value.clone(),
@@ -1358,7 +1447,7 @@ impl<'a, C> Interpreter<'a, C> {
                                     &var_ref.resolved_type,
                                 )?;
                                 let result = self.evaluate_expression(&arm.expression);
-                                self.pop_block_scope("pattern variable".to_string());
+                                self.pop_block_scope("pattern variable");
                                 return result;
                             }
                             ResolvedPatternElement::Wildcard => {
@@ -1371,7 +1460,7 @@ impl<'a, C> Interpreter<'a, C> {
                     match &actual_value {
                         Value::Tuple(_tuple_type_ref, values) => {
                             if elements.len() == values.len() {
-                                self.push_block_scope("pattern list".to_string());
+                                self.push_block_scope("pattern list");
 
                                 for (element, value) in elements.iter().zip(values.iter()) {
                                     match element {
@@ -1402,7 +1491,7 @@ impl<'a, C> Interpreter<'a, C> {
                                 }
 
                                 let result = self.evaluate_expression(&arm.expression);
-                                self.pop_block_scope("pattern list".to_string());
+                                self.pop_block_scope("pattern list");
                                 return result;
                             }
                         }
@@ -1425,7 +1514,7 @@ impl<'a, C> Interpreter<'a, C> {
 
                             if let Some(elements) = maybe_elements {
                                 if elements.len() == values.len() {
-                                    self.push_block_scope("enum tuple pattern".to_string());
+                                    self.push_block_scope("enum tuple pattern");
 
                                     for (element, value) in elements.iter().zip(values.iter()) {
                                         match element {
@@ -1453,7 +1542,7 @@ impl<'a, C> Interpreter<'a, C> {
                                     }
 
                                     let result = self.evaluate_expression(&arm.expression);
-                                    self.pop_block_scope("enum tuple pattern".to_string());
+                                    self.pop_block_scope("enum tuple pattern");
                                     return result;
                                 }
                             }
@@ -1461,7 +1550,7 @@ impl<'a, C> Interpreter<'a, C> {
                         Value::EnumVariantStruct(value_struct_type, values) => {
                             if value_struct_type.common.number == variant_ref.number {
                                 if let Some(elements) = maybe_elements {
-                                    self.push_block_scope("enum struct pattern".to_string());
+                                    self.push_block_scope("enum struct pattern");
 
                                     for element in elements {
                                         if let ResolvedPatternElement::VariableWithFieldIndex(
@@ -1480,7 +1569,7 @@ impl<'a, C> Interpreter<'a, C> {
                                     }
 
                                     let result = self.evaluate_expression(&arm.expression);
-                                    self.pop_block_scope("enum struct pattern".to_string());
+                                    self.pop_block_scope("enum struct pattern");
                                     return result;
                                 }
                             }
@@ -1583,6 +1672,8 @@ impl<'a, C> Interpreter<'a, C> {
 
             // String operations
             (Value::String(a), BinaryOperator::Add, Value::String(b)) => Value::String(a + &b),
+            (Value::String(a), BinaryOperator::Equal, Value::String(b)) => Value::Bool(a == b),
+
             (Value::String(a), BinaryOperator::Add, Value::Int(b)) => {
                 Value::String(a + &b.to_string())
             }

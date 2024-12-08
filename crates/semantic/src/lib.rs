@@ -98,7 +98,16 @@ impl ResolvedType {
             (Self::Bool(_), Self::Bool(_)) => true,
             (Self::Unit(_), Self::Unit(_)) => true,
             (Self::Array(_), Self::Array(_)) => true,
+            (Self::Map(a), Self::Map(b)) => {
+                a.key_type.same_type(&b.key_type) && a.value_type.same_type(&b.value_type)
+            }
             (Self::Struct(a), Self::Struct(b)) => compare_struct_types(a, b),
+            (Self::Tuple(a), Self::Tuple(b)) => {
+                if a.0.len() != b.0.len() {
+                    return false;
+                }
+                a.0.iter().zip(b.0.iter()).all(|(a, b)| a.same_type(b))
+            }
             (Self::Enum(_), Self::Enum(_)) => true,
             (Self::FunctionInternal(_), Self::FunctionInternal(_)) => true,
             (Self::ExclusiveRange(_), Self::ExclusiveRange(_)) => true,
@@ -268,7 +277,7 @@ impl Display for ResolvedType {
             Self::Generic(resolved_type, vec) => {
                 write!(f, "{resolved_type}<{}>", comma(&vec))
             }
-            Self::RustType(_) => todo!(),
+            Self::RustType(rust_type_ref) => write!(f, "rust_type {rust_type_ref:?}"),
             Self::Optional(inner_type) => write!(f, "{inner_type}?"),
         }
     }
@@ -740,6 +749,8 @@ pub enum ResolvedExpression {
     UnaryOp(ResolvedUnaryOperator),
     PostfixOp(ResolvedPostfixOperator),
 
+    CoerceOptionToBool(Box<ResolvedExpression>),
+
     // Calls
     FunctionInternalCall(ResolvedInternalFunctionCall), // ResolvedFunctionReference, Vec<ResolvedExpression>
     FunctionExternalCall(ResolvedExternalFunctionCall),
@@ -766,7 +777,7 @@ pub enum ResolvedExpression {
 
     // Comparing
     IfElse(
-        Box<ResolvedExpression>,
+        Box<ResolvedBooleanExpression>,
         Box<ResolvedExpression>,
         Box<ResolvedExpression>,
     ),
@@ -859,7 +870,7 @@ impl Display for ResolvedExpression {
 
             Self::ArrayAssignment(_, _, _) => todo!(),
             Self::MapAssignment(_, _, _) => todo!(),
-            Self::StructFieldAssignment(_, _) => todo!(),
+            Self::StructFieldAssignment(_, _) => write!(f, "field assignment"),
             Self::BinaryOp(binary_op) => write!(f, "{binary_op:?}"),
             Self::UnaryOp(unary_op) => {
                 write!(f, "{:?}", unary_op)
@@ -897,7 +908,7 @@ impl Display for ResolvedExpression {
             Self::IfElse(condition, consequence, alternative) => {
                 write!(f, "if({condition:?}, {consequence}, {alternative})")
             }
-            Self::IfElseOnlyVariable { .. } => todo!(),
+            Self::IfElseOnlyVariable { .. } => write!(f, "if_else_only_variable"),
             Self::IfElseAssignExpression {
                 variable,
                 true_block,
@@ -945,16 +956,21 @@ impl Display for ResolvedExpression {
                 )
             }
             Self::Option(inner) => write!(f, "OptionExpr({inner:?})"),
-            ResolvedExpression::ArrayExtend(_, _) => todo!(),
-            ResolvedExpression::ArrayPush(_, _) => todo!(),
-            ResolvedExpression::ArrayRemoveIndex(_, _) => todo!(),
-            ResolvedExpression::ArrayClear(_) => todo!(),
+            ResolvedExpression::ArrayExtend(_, _) => write!(f, "array.extend"),
+            ResolvedExpression::ArrayPush(_, _) => write!(f, "array.push"),
+            ResolvedExpression::ArrayRemoveIndex(_, _) => write!(f, "array.remove"),
+            ResolvedExpression::ArrayClear(_) => write!(f, "array.clear"),
 
-            ResolvedExpression::SparseAdd(_, _) => todo!(),
-            ResolvedExpression::SparseRemove(_, _) => todo!(),
-            ResolvedExpression::SparseNew(_, _) => todo!(),
-            ResolvedExpression::InitializeVariable(_) => todo!(),
-            ResolvedExpression::ReassignVariable(_) => todo!(),
+            ResolvedExpression::SparseAdd(_, _) => write!(f, "sparse.add"),
+            ResolvedExpression::SparseRemove(_, _) => write!(f, "sparse.remove()"),
+            ResolvedExpression::SparseNew(_, _) => write!(f, "Sparse::new()"),
+            ResolvedExpression::InitializeVariable(variable) => {
+                write!(f, "initialize variable {variable:?}")
+            }
+            ResolvedExpression::ReassignVariable(variable) => {
+                write!(f, "reassign variable {variable:?}")
+            }
+            ResolvedExpression::CoerceOptionToBool(_) => write!(f, "coerce option to bool"),
         }
     }
 }
@@ -994,6 +1010,20 @@ pub enum ResolvedStatement {
         Vec<ResolvedStatement>,
         Option<Vec<ResolvedStatement>>,
     ),
+
+    IfOnlyVariable {
+        variable: ResolvedVariableRef,
+        optional_expr: Box<ResolvedExpression>,
+        true_block: Vec<ResolvedStatement>,
+        false_block: Option<Vec<ResolvedStatement>>,
+    },
+
+    IfAssignExpression {
+        variable: ResolvedVariableRef,
+        optional_expr: Box<ResolvedExpression>,
+        true_block: Vec<ResolvedStatement>,
+        false_block: Option<Vec<ResolvedStatement>>,
+    },
 }
 
 impl Display for ResolvedStatement {
@@ -1009,6 +1039,8 @@ impl Display for ResolvedStatement {
             Self::Expression(expression) => write!(f, "{}", expression),
             Self::Block(_) => write!(f, "Block"),
             Self::If(_, _, _) => write!(f, "If"),
+            ResolvedStatement::IfOnlyVariable { .. } => todo!(),
+            ResolvedStatement::IfAssignExpression { .. } => todo!(),
         }
     }
 }
@@ -1505,6 +1537,9 @@ impl ResolvedProgramTypes {
 
     pub fn string_type(&self) -> ResolvedType {
         ResolvedType::String(self.string_type.clone())
+    }
+    pub fn bool_type(&self) -> ResolvedType {
+        ResolvedType::Bool(self.bool_type.clone())
     }
 }
 

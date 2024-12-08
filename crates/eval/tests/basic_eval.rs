@@ -433,7 +433,6 @@ fn basic_eval_19() {
 fn basic_eval_20() {
     let result = eval(
         r#"
-
     a = 4
     mut c = if b = a > 3 {
        b
@@ -509,6 +508,77 @@ fn basic_eval_24() {
 }
 
 #[test_log::test]
+fn if_statement_optional() {
+    let result = eval(
+        "
+
+    struct SomeStruct {
+       some_field: Int?
+    }
+
+    s = SomeStruct { some_field: 2 }
+
+    mut result = 0
+    if shadow = s.some_field? {
+        result = shadow * 3
+    } else {
+        0
+    }
+    result
+    ",
+    );
+
+    assert_eq!(result, Value::Int(2 * 3));
+}
+
+#[test_log::test]
+fn if_statement_optional_3() {
+    check(
+        r#"
+
+fn lookup_age(name: String) -> Int? {
+    if name == "Hero" {
+        43
+    } else {
+        none
+    }
+}
+
+maybe_age = lookup_age("Hero")
+if age = maybe_age? {  // Shortened syntax for optional check
+    print('Found age! {age}')
+}
+    "#,
+        "
+    Found age! 43",
+    );
+}
+
+#[test_log::test]
+fn if_statement_optional_2() {
+    let result = eval(
+        "
+
+    struct SomeStruct {
+       some_field: Int?
+    }
+
+    s = SomeStruct { some_field: 2 }
+    a = s.some_field
+    mut result = 0
+
+    if a? {
+        result = a * 3
+    }
+    result
+
+    ",
+    );
+
+    assert_eq!(result, Value::Int(2 * 3));
+}
+
+#[test_log::test]
 fn basic_eval_25() {
     let result = eval(
         "
@@ -521,11 +591,11 @@ fn basic_eval_25() {
 
     a = s.some_field
 
-    x = if a? {
-        a * 3
-    } else {
-        0
+    mut x = 0
+    if a? {
+        x = a * 3
     }
+    x
     ",
     );
 
@@ -594,7 +664,6 @@ fn map_index_if() {
 fn map_index_if_found() {
     let x = eval(
         "
-
     a = [2: 'hello', -1: 'world']
     b = a[-1]
     x = if b? {
