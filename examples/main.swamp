@@ -185,6 +185,13 @@ if total_power = get_enchanted_power(find_weapon_in_inventory(0))? {
     print('slot 0: No weapon found')
 }
 
+// Chaining optional operations
+if total_power = get_enchanted_power(find_weapon_in_inventory(1))? {
+    print('slot1: Weapon total power with enchantments: {total_power}')
+} else {
+    print('slot 1: No weapon found')
+}
+
 
 shapes = [
     Shape::Circle(5.0),
@@ -209,9 +216,10 @@ length
 // player:Player { name: Hero, health: 100, position: Vector2 { x: 10.00, y: 20.00 } }
 // position type alias: (10.00, 20.00)
 // status:"Full health"
-// Found weapon: "Ancient Sword"
-// Equipped "Ancient Sword" with 50 power
-// Weapon total power with enchantments: 100
+// slot 0: Found weapon: "Ancient Sword"
+// slot 0: Equipped "Ancient Sword" with 50 power
+// slot 0: Weapon total power with enchantments: 100
+// slot 1: No weapon found
 // Found player at position: Vector2 { x: -13.00, y: -46.00 }
 // Found player "Hero" with health: 100
 // area:200.00

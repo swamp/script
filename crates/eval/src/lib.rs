@@ -14,7 +14,7 @@ use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
     ResolvedForPattern, ResolvedFunction, ResolvedPatternElement, ResolvedStaticCall,
 };
-use tracing::{debug, error, info, trace};
+use tracing::{debug, error, info, trace, warn};
 use value::format_value;
 
 pub mod err;
@@ -407,7 +407,7 @@ impl<'a, C> Interpreter<'a, C> {
         value: Value,
         is_mutable: bool,
     ) -> Result<(), ExecuteError> {
-        trace!("VAR: set var mut:{is_mutable} {relative_scope_index}:{variable_index} = {value:?}");
+        debug!(value=%value, "VAR: set var mut:{is_mutable} {relative_scope_index}:{variable_index} = {value:?}");
 
         if is_mutable {
             // TODO: Check that we are not overwriting an existing used variables (debug)
@@ -825,7 +825,7 @@ impl<'a, C> Interpreter<'a, C> {
                         Err("Cannot assign to field of non-mutable struct".to_string())?
                     }
                     _ => Err(format!(
-                        "Cannot access field '{}' on non-struct value",
+                        "Cannot access field assignment '{}' on non-struct value",
                         resolved_struct_field_ref.inner.index
                     ))?,
                 }
@@ -913,7 +913,7 @@ impl<'a, C> Interpreter<'a, C> {
                                 fields[struct_field_access.index].clone()
                             }
                             _ => Err(format!(
-                                "Cannot access field '{}' on non-struct value",
+                                "Cannot access field reference '{}' on non-struct value",
                                 struct_field_access.index
                             ))?,
                         }
@@ -1174,7 +1174,14 @@ impl<'a, C> Interpreter<'a, C> {
             ResolvedExpression::Option(inner) => match inner {
                 None => Value::Option(None),
                 Some(expression) => {
-                    Value::Option(Some(Box::from(self.evaluate_expression(expression)?)))
+                    let v = self.evaluate_expression(expression)?;
+                    match v {
+                        Value::Option(_) => {
+                            warn!("unnecessary wrap!, should be investigated"); // TODO: Is there a case where this is ok?
+                            v
+                        }
+                        _ => Value::Option(Some(Box::from(v))),
+                    }
                 }
             },
 
@@ -1301,6 +1308,7 @@ impl<'a, C> Interpreter<'a, C> {
                     match condition_value {
                         Value::Option(Some(inner_value)) => {
                             self.push_block_scope("if only variable");
+                            info!(value=%inner_value.clone(), "shadow variable");
                             self.initialize_var(
                                 variable.scope_index,
                                 variable.variable_index,
