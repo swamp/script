@@ -1590,6 +1590,7 @@ impl<'a> Resolver<'a> {
                 info!("expression_type: target:{field_type}  source_type:{expression_type} source_expression:{upgraded_resolved_expression}");
 
                 if !field_type.same_type(&expression_type) {
+                    error!("types: {field_type} expr: {expression_type}");
                     return Err(ResolveError::ExpressionIsOfWrongFieldType);
                 }
 

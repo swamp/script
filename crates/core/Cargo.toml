@@ -1,0 +1,11 @@
+[package]
+name = "swamp-script-core"
+version = "0.0.6"
+edition = "2021"
+
+[dependencies]
+swamp-script-semantic = { path = "../semantic", version = "0.0.6" }
+fixed32 = "0.0.17"
+seq-fmt = "0.0.1"
+seq-map = "0.0.13"
+sparse-slot = "0.0.3"

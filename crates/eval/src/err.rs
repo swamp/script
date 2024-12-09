@@ -1,3 +1,5 @@
+use swamp_script_core::value::ValueError;
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum ConversionError {
     TypeError(String),
@@ -8,6 +10,7 @@ pub enum ConversionError {
 pub enum ExecuteError {
     Error(String),
     ConversionError(ConversionError),
+    ValueError(ValueError),
     ArgumentIsNotMutable,
     CanNotUnwrap,
     IllegalIterator,

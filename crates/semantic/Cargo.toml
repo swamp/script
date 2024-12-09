@@ -8,7 +8,7 @@ description = "semantic types for swamp script"
 
 [dependencies]
 swamp-script-ast = { path = "../ast", version = "0.0.6" }
-seq-map = "0.0.12"
+seq-map = "0.0.13"
 tracing = "0.1.40"
 fixed32 = "0.0.17"
 seq-fmt = "0.0.1"

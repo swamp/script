@@ -18,7 +18,7 @@ use std::rc::Rc;
 pub use swamp_script_ast::{
     AnonymousStruct, BinaryOperator, CompoundOperator, Expression, FormatSpecifier, IdentifierName,
     ImplMember, LocalIdentifier, LocalTypeIdentifier, MatchArm, ModulePath, Parameter,
-    PostfixOperator, PrecisionType, StringConst, StructType, UnaryOperator, Variable,
+    PostfixOperator, PrecisionType, StringConst, StructType, UnaryOperator, Variable, Node, Position,
 };
 
 #[derive(Debug, Clone)]

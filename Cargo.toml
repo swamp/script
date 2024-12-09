@@ -4,19 +4,27 @@ members = [
     # Parser
     "crates/ast",
     "crates/parser",
+
     # Analyzer
     "crates/semantic",
     "crates/analyzer",
+
     # Evaluator
     "crates/eval",
     # "crates/examples",
 
     # tools
     "crates/cli",
+
     # API tools
-    #"crates/derive",
+    "crates/derive",
+    "crates/derive-test",
 
     "crates/dep-loader",
     "crates/swamp-script",
     "crates/eval-loader",
+
+    # Core and Std
+    "crates/core",
+    "crates/std",
 ]

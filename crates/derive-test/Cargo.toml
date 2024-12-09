@@ -1,0 +1,14 @@
+[package]
+name = "swamp-script-derive-tests"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+swamp-script-derive = { path = "../derive" }
+swamp-script-eval = { path = "../eval" }
+
+
+[dev-dependencies]
+swamp-script-derive = { path = "../derive" }
+swamp-script-semantic = { path = "../semantic" }
+swamp-script-core = { path = "../core" }

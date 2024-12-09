@@ -2,9 +2,7 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use crate::err::{ConversionError, ExecuteError};
 use crate::extra::{SparseValueId, SparseValueMap};
-use crate::ValueWithSignal;
 use core::any::Any;
 use fixed32::Fp;
 use seq_fmt::{comma, comma_tuple};
@@ -21,50 +19,6 @@ use swamp_script_semantic::{
     ResolvedStructTypeRef, ResolvedTupleTypeRef,
 };
 use swamp_script_semantic::{IdentifierName, ResolvedType};
-
-pub trait SwampExport {
-    fn generate_swamp_definition() -> String;
-    fn to_swamp_value(&self) -> Value;
-    fn from_swamp_value(value: &Value) -> Result<Self, String>
-    where
-        Self: Sized;
-}
-
-impl SwampExport for Fp {
-    // Todo: change to fixed point 32 bit
-    fn to_swamp_value(&self) -> Value {
-        Value::Float(*self)
-    }
-
-    fn from_swamp_value(value: &Value) -> Result<Self, String> {
-        match value {
-            Value::Float(f) => Ok(*f),
-            _ => Err("Expected Float value".to_string()),
-        }
-    }
-
-    fn generate_swamp_definition() -> String {
-        // Primitives don't need struct definitions
-        String::new()
-    }
-}
-
-impl SwampExport for i32 {
-    fn to_swamp_value(&self) -> Value {
-        Value::Int(*self)
-    }
-
-    fn from_swamp_value(value: &Value) -> Result<Self, String> {
-        match value {
-            Value::Int(i) => Ok(*i),
-            _ => Err("Expected Int value".to_string()),
-        }
-    }
-
-    fn generate_swamp_definition() -> String {
-        String::new()
-    }
-}
 
 pub trait RustType: Any + Debug + Display {
     fn as_any(&self) -> &dyn Any;
@@ -120,23 +74,19 @@ pub fn to_rust_value<T: RustType + 'static>(type_ref: ResolvedRustTypeRef, value
     )
 }
 
-impl TryFrom<ValueWithSignal> for Value {
-    type Error = String;
 
-    fn try_from(value: ValueWithSignal) -> Result<Self, Self::Error> {
-        match value {
-            ValueWithSignal::Value(v) => Ok(v),
-            ValueWithSignal::Return(v) => Ok(v),
-            ValueWithSignal::Break => Err("break can not be converted".to_string()),
-            ValueWithSignal::Continue => Err("continue can not be converted".to_string()),
-        }
-    }
+#[derive(Debug, PartialEq, Eq)]
+pub enum ValueError {
+    NotAnIterator,
+    NotSparseMap,
+    CanNotCoerceToIterator,
+    ConversionError(String),
 }
 
 // Iterators
 
 impl Value {
-    pub fn into_iter(self) -> Result<Box<dyn Iterator<Item = Value>>, ExecuteError> {
+    pub fn into_iter(self) -> Result<Box<dyn Iterator<Item = Value>>, ValueError> {
         match self {
             Self::Reference(value_ref) => value_ref.borrow().clone().into_iter(),
             Self::Array(_, values) => Ok(Box::new(values.into_iter())),
@@ -149,20 +99,18 @@ impl Value {
                     let values: Vec<_> = sparse_map.borrow().values().into_iter().collect();
                     Ok(Box::new(values.into_iter()))
                 }
-                _ => Err(ExecuteError::Error(
-                    "not proper rust_value (sparsemap)".to_string(),
-                )),
+                _ => Err(ValueError::NotSparseMap),
             },
             Self::ExclusiveRange(start_val, max_val) => {
                 let start = *start_val;
                 let end = *max_val;
                 Ok(Box::new((start..end).map(Value::Int)))
             }
-            _ => Err(ExecuteError::Error(format!("not a known iterator {self}"))),
+            _ => Err(ValueError::CanNotCoerceToIterator),
         }
     }
 
-    pub fn into_iter_pairs(self) -> Result<Box<dyn Iterator<Item = (Value, Value)>>, ExecuteError> {
+    pub fn into_iter_pairs(self) -> Result<Box<dyn Iterator<Item = (Value, Value)>>, ValueError> {
         let values = match self {
             Value::Reference(value_ref) => value_ref.borrow_mut().to_owned().into_iter_pairs()?,
             Self::Map(_, seq_map) => Box::new(seq_map.into_iter()),
@@ -192,19 +140,10 @@ impl Value {
 
                         Box::new(pairs.into_iter())
                     }
-                    _ => {
-                        return Err(ExecuteError::Error(
-                            "not a rust value iterator (sparsemap)".to_string(),
-                        ))
-                    }
+                    _ => return Err(ValueError::NotSparseMap),
                 })
             }
-            _ => {
-                return Err(ExecuteError::Error(format!(
-                    "not a known iterator {}",
-                    self
-                )))
-            }
+            _ => return Err(ValueError::NotAnIterator),
         };
 
         Ok(values)
@@ -217,17 +156,17 @@ impl Value {
             _ => self.to_string(),
         }
     }
-    pub fn expect_string(&self) -> Result<&str, ConversionError> {
+    pub fn expect_string(&self) -> Result<&str, ValueError> {
         match self {
             Value::String(s) => Ok(s),
-            _ => Err(ConversionError::TypeError("Expected string value".into())),
+            _ => Err(ValueError::ConversionError("Expected string value".into())),
         }
     }
 
-    pub fn expect_int(&self) -> Result<i32, ConversionError> {
+    pub fn expect_int(&self) -> Result<i32, ValueError> {
         match self {
             Value::Int(v) => Ok(*v),
-            _ => Err(ConversionError::TypeError("Expected int value".into())),
+            _ => Err(ValueError::ConversionError("Expected int value".into())),
         }
     }
 

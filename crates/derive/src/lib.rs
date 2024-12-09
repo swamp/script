@@ -6,28 +6,8 @@ use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{parse_macro_input, DeriveInput};
 
-fn type_to_swamp(syn_type: &syn::Type) -> String {
-    match syn_type {
-        syn::Type::Path(type_path) => {
-            let type_str = type_path
-                .path
-                .segments
-                .last()
-                .map(|s| s.ident.to_string())
-                .unwrap_or_default();
 
-            match type_str.as_str() {
-                "f32" => "Float".to_string(),
-                "i32" => "Int".to_string(),
-                "String" => "String".to_string(),
-                "bool" => "Bool".to_string(),
-                other => other.to_string(),
-            }
-        }
-        _ => "Any".to_string(),
-    }
-}
-#[proc_macro_derive(SwampExport)]
+#[proc_macro_derive(SwampExport, attributes(swamp))]
 pub fn derive_swamp_export(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = &input.ident;
@@ -38,69 +18,51 @@ pub fn derive_swamp_export(input: TokenStream) -> TokenStream {
         _ => panic!("SwampExport can only be derived for structs"),
     };
 
-    // Generate field conversions for to_swamp_value
-    let to_field_conversions = fields.iter().map(|f| {
-        let field_name = &f.ident.as_ref().unwrap();
-        quote! {
-            fields.insert(stringify!(#field_name).to_string(), self.#field_name.to_swamp_value());
-        }
-    });
-
     // Generate field extractions for from_swamp_value
-    let from_field_extractions = fields.iter().map(|f| {
+    let from_field_extractions = fields.iter().enumerate().map(|(index, f)| {
         let field_name = &f.ident.as_ref().unwrap();
         let field_type = &f.ty;
         quote! {
-            let #field_name = fields.get(stringify!(#field_name))
-                .ok_or_else(|| format!("Missing {} field", stringify!(#field_name)))?;
-            let #field_name = <#field_type>::from_swamp_value(#field_name)?;
+            let #field_name = <#field_type>::from_swamp_value(&values[#index])?;
         }
     });
 
-    // Collect field names for struct construction
-    let field_names = fields
-        .iter()
-        .map(|f| f.ident.as_ref().unwrap())
-        .collect::<Vec<_>>();
-
-    // Generate field definitions for swamp
-    let field_defs = fields
-        .iter()
-        .map(|f| {
-            let field_name = &f.ident.as_ref().unwrap();
-            let swamp_type = type_to_swamp(&f.ty);
-            format!(
-                "{}: {}",
-                quote!(#field_name).to_string().replace('"', ""),
-                swamp_type
-            )
-        })
-        .collect::<Vec<_>>()
-        .join(",\n    ");
+    // Collect field names and types for struct construction
+    let field_names: Vec<_> = fields.iter().map(|f| f.ident.as_ref().unwrap()).collect();
+    let field_types: Vec<_> = fields.iter().map(|f| &f.ty).collect();
 
     let expanded = quote! {
         impl SwampExport for #name {
-            fn generate_swamp_definition() -> String {
-                format!("struct {} {{\n    {}\n}}\n",
-                    stringify!(#name),
-                    #field_defs
-                )
+
+            fn get_resolved_type(registry: &TypeRegistry) -> ResolvedType {
+                let fields = vec![
+                    #((stringify!(#field_names), <#field_types>::get_resolved_type(registry))),*
+                ];
+                registry.register_derived_struct(stringify!(#name), fields)
             }
 
-            fn to_swamp_value(&self) -> Value {
-                let mut fields = std::collections::HashMap::new();
-                #(#to_field_conversions)*
-                Value::Struct(
-                    stringify!(#name).to_string(),
-                    fields
-                )
+            fn to_swamp_value(&self, registry: &TypeRegistry) -> Value {
+                let mut values = Vec::new();
+                #(values.push(self.#field_names.to_swamp_value(registry));)*
+
+                let resolved_type = Self::get_resolved_type(registry);
+                match &resolved_type {
+                    ResolvedType::Struct(struct_type) => {
+                        Value::Struct(struct_type.clone(), values, resolved_type)
+                    },
+                    _ => unreachable!("get_resolved_type returned non-struct type")
+                }
             }
 
             fn from_swamp_value(value: &Value) -> Result<Self, String> {
                 match value {
-                    Value::Struct(type_name, fields) => {
-                        if type_name != stringify!(#name) {
-                            return Err(format!("Expected {} struct, got {}", stringify!(#name), type_name));
+                    Value::Struct(struct_type_ref, values, _) => {
+                        if struct_type_ref.borrow().name.text != stringify!(#name) {
+                            return Err(format!(
+                                "Expected {} struct, got {}",
+                                stringify!(#name),
+                                struct_type_ref.borrow().name.text
+                            ));
                         }
                         #(#from_field_extractions)*
                         Ok(Self {
@@ -116,90 +78,112 @@ pub fn derive_swamp_export(input: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
+
+
 #[proc_macro_attribute]
 pub fn swamp_fn(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input_fn = parse_macro_input!(item as syn::ItemFn);
     let fn_name = &input_fn.sig.ident;
-    // module must have lowercase snake case name
     let module_name = format_ident!("swamp_{}", fn_name.to_string().to_lowercase());
 
-    // Extract return type and convert to swamp type
-    let return_type = match &input_fn.sig.output {
-        syn::ReturnType::Default => "Unit".to_string(),
-        syn::ReturnType::Type(_, ty) => type_to_swamp(ty),
+    // Get the context type from the first parameter
+    let context_type = match &input_fn.sig.inputs[0] {
+        syn::FnArg::Typed(pat_type) => &*pat_type.ty,
+        _ => panic!("First parameter must be the context type"),
     };
 
-    let args = input_fn
-        .sig
-        .inputs
-        .iter()
+    // Extract the inner type from &mut MyContext
+    let context_inner_type = match context_type {
+        syn::Type::Reference(type_ref) => &*type_ref.elem,
+        _ => panic!("Context parameter must be a mutable reference"),
+    };
+
+    // Extract return type
+    let return_type = match &input_fn.sig.output {
+        syn::ReturnType::Default => quote!(<()>::get_resolved_type(registry)),
+        syn::ReturnType::Type(_, ty) => quote!(<#ty>::get_resolved_type(registry)),
+    };
+
+    // Skip the context parameter
+    let args = input_fn.sig.inputs.iter()
+        .skip(1)
         .map(|arg| {
             if let syn::FnArg::Typed(pat_type) = arg {
                 let pat = &pat_type.pat;
                 let ty = &pat_type.ty;
                 (pat, ty)
             } else {
-                panic!("self parameters not supported yet") // TODO: support this with swamp script impl
+                panic!("self parameters not supported yet")
             }
-        })
-        .collect::<Vec<_>>();
+        }).collect::<Vec<_>>();
 
     let arg_count = args.len();
     let arg_indices = 0..arg_count;
-    let (patterns, types): (Vec<_>, Vec<_>) = args.iter().cloned().unzip();
-
-    // Generate argument definitions for Swamp
-    let arg_defs = args
-        .iter()
-        .map(|(pat, ty)| {
-            format!(
-                "{}: {}",
-                quote!(#pat).to_string().replace('"', ""),
-                type_to_swamp(ty)
-            )
-        })
-        .collect::<Vec<_>>()
-        .join(", ");
+    let (patterns, types): (Vec<_>, Vec<_>) = args.iter().copied().unzip();
 
     let expanded = quote! {
         #input_fn  // Keep the original function
 
         mod #module_name {
             use super::*;
-            use std::sync::LazyLock;
+            use swamp_script_core::prelude::*;
 
-            // TODO: Is there a cleaner way than using LazyLock?
-            pub static FUNCTION: LazyLock<SwampFunction> = LazyLock::new(|| SwampFunction {
-                name: stringify!(#fn_name),
-                handler: Box::new(|args: &[Value]| {
-                    if args.len() != #arg_count {
-                        return Err(format!(
-                            "{} expects {} arguments, got {}",
-                            stringify!(#fn_name),
-                            #arg_count,
-                            args.len()
-                        ));
+            pub struct Function {
+                pub name: &'static str,
+                pub function_id: ExternalFunctionId,
+            }
+
+            impl Function {
+                pub fn new(function_id: ExternalFunctionId) -> Self {
+                    Self {
+                        name: stringify!(#fn_name),
+                        function_id,
                     }
+                }
 
-                    // Convert arguments
-                    #(
-                        let #patterns = <#types>::from_swamp_value(&args[#arg_indices])?;
-                    )*
+                pub fn handler<'a>(
+                    &'a self,
+                    registry: &'a TypeRegistry,
+                ) -> Box<dyn FnMut(&[Value], &mut #context_inner_type) -> Result<Value, ExecuteError> + 'a> {
+                    Box::new(move |args: &[Value], ctx: &mut #context_inner_type| {
+                        if args.len() != #arg_count {
+                            return Err(ExecuteError::WrongNumberOfArguments {
+                                expected: #arg_count,
+                                got: args.len(),
+                            });
+                        }
 
-                    // Call the function
-                    let result = super::#fn_name(#(#patterns),*);
+                        // Convert arguments
+                        #(
+                            let #patterns = <#types>::from_swamp_value(&args[#arg_indices])
+                                .map_err(|e| ExecuteError::TypeError(e))?;
+                        )*
 
-                    // Convert result back to Value and wrap in Ok
-                    Ok(result.to_swamp_value())
-                }),
-            });
+                        // Call the function with context
+                        let result = super::#fn_name(ctx, #(#patterns),*);
 
-            pub fn generate_swamp_definition() -> String {
-                format!("external fn {}({}) -> {}\n",
-                    stringify!(#fn_name),
-                    #arg_defs,
-                    #return_type
-                )
+                        // Convert result back to Value
+                        Ok(result.to_swamp_value(registry))
+                    })
+                }
+
+                pub fn get_definition(&self, registry: &TypeRegistry) -> ResolvedExternalFunctionDefinition {
+                    ResolvedExternalFunctionDefinition {
+                        name: LocalIdentifier::from_str(self.name),
+                        signature: ResolvedFunctionSignature {
+                            parameters: vec![
+                                #(ResolvedParameter {
+                                    name: stringify!(#patterns).to_string(),
+                                    resolved_type: <#types>::get_resolved_type(registry),
+                                    ast_parameter: Parameter::default(),
+                                    is_mutable: false,
+                                },)*
+                            ],
+                            return_type: #return_type,
+                        },
+                        id: self.function_id,
+                    }
+                }
             }
         }
     };

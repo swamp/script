@@ -12,7 +12,7 @@ use std::hash::Hash;
 use std::rc::Rc;
 
 // Common metadata that can be shared across all AST nodes
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct Node {
     pub span: Span,
     // TODO: Add comments and attributes
@@ -24,13 +24,13 @@ impl Display for Node {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct Span {
     pub start: Position,
     pub end: Position,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct Position {
     pub offset: usize, // Octet offset into file
     pub line: usize,   // 0-based line number
@@ -70,7 +70,7 @@ impl Display for QualifiedTypeIdentifier {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Default)]
 pub struct LocalTypeIdentifier {
     pub node: Node,
     pub text: String,
@@ -102,6 +102,13 @@ impl LocalIdentifier {
     pub fn new(node: Node, str: &str) -> Self {
         Self {
             node,
+            text: str.to_string(),
+        }
+    }
+    
+    pub fn from_str(str: &str) -> Self {
+        Self {
+            node: Default::default(),
             text: str.to_string(),
         }
     }
@@ -152,7 +159,7 @@ pub enum ImportItems {
     Specific(Vec<LocalTypeIdentifier>), // import { sin, cos } from math
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Default)]
 pub struct StructType {
     pub identifier: LocalTypeIdentifier,
     pub fields: SeqMap<IdentifierName, Type>,
@@ -203,7 +210,7 @@ pub enum Statement {
     If(Expression, Vec<Statement>, Option<Vec<Statement>>),
 }
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Default)]
 pub struct Variable {
     pub name: String,
     pub is_mutable: bool,
@@ -241,7 +248,7 @@ impl Variable {
 #[derive(Debug, Clone)]
 pub struct MutVariableRef(pub Variable); // Just wraps a variable when passed with mut keyword
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Default)]
 pub struct Parameter {
     pub variable: Variable,
     pub param_type: Type,
@@ -598,13 +605,14 @@ impl Debug for EnumVariant {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub enum Type {
     // Primitives
     Int,
     Float,
     String,
     Bool,
+    #[default]
     Unit,
     Any,
 

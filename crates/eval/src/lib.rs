@@ -3,25 +3,22 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use crate::err::ConversionError;
-use crate::extra::{SparseValueId, SparseValueMap};
-use crate::value::{to_rust_value, Value};
 use err::ExecuteError;
 use seq_map::SeqMap;
 use std::fmt::Debug;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use swamp_script_core::extra::{SparseValueId, SparseValueMap};
+use swamp_script_core::value::{format_value, to_rust_value, Value, ValueError};
 pub use swamp_script_semantic::ns::ResolvedModuleNamespace;
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
     ResolvedForPattern, ResolvedFunction, ResolvedPatternElement, ResolvedStaticCall,
 };
 use tracing::{debug, error, info, trace, warn};
-use value::format_value;
 
 pub mod err;
-mod extra;
-mod idx_gen;
+
 pub mod prelude;
-pub mod value;
 
 type RawFunctionFn<C> = dyn FnMut(&[Value], &mut C) -> Result<Value, ExecuteError>;
 
@@ -49,6 +46,19 @@ pub enum ValueWithSignal {
     Continue, // No value, it is a signal
 }
 
+impl TryFrom<ValueWithSignal> for Value {
+    type Error = String;
+
+    fn try_from(value: ValueWithSignal) -> Result<Self, Self::Error> {
+        match value {
+            ValueWithSignal::Value(v) => Ok(v),
+            ValueWithSignal::Return(v) => Ok(v),
+            ValueWithSignal::Break => Err("break can not be converted".to_string()),
+            ValueWithSignal::Continue => Err("continue can not be converted".to_string()),
+        }
+    }
+}
+
 impl From<String> for ExecuteError {
     fn from(err: String) -> Self {
         Self::Error(err)
@@ -58,6 +68,12 @@ impl From<String> for ExecuteError {
 impl From<ConversionError> for ExecuteError {
     fn from(err: ConversionError) -> Self {
         Self::ConversionError(err)
+    }
+}
+
+impl From<ValueError> for ExecuteError {
+    fn from(value: ValueError) -> Self {
+        Self::ValueError(value)
     }
 }
 

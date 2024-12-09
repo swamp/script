@@ -9,6 +9,6 @@ description = "dependency parser and loader for swamp script"
 [dependencies]
 pest = "2.7.14"
 tracing = "0.1.40"
-seq-map = "0.0.12"
+seq-map = "0.0.13"
 swamp-script-ast = { path = "../ast", version = "0.0.6" }
 swamp-script-parser = { path = "../parser", version = "0.0.6" }
