@@ -113,7 +113,7 @@ print('status:{status}')
 
 
 /// Attempts to find a player by their name
-//. Returns: Some(Player) if found, none otherwise
+/// Returns: Some(Player) if found, none otherwise
 fn find_player_by_name(name: String) -> Player? {
     if name == "Hero" {
         Player {
