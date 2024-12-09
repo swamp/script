@@ -2893,16 +2893,16 @@ impl<'a> Resolver<'a> {
             let true_type = resolution(&resolved_true);
             let false_type = resolution(&resolved_false);
 
-            let wrapped_true = if !matches!(true_type, ResolvedType::Optional(_)) {
-                ResolvedExpression::Option(Some(Box::new(resolved_true)))
-            } else {
+            let wrapped_true = if matches!(true_type, ResolvedType::Optional(_)) {
                 resolved_true
+            } else {
+                ResolvedExpression::Option(Some(Box::new(resolved_true)))
             };
 
-            let wrapped_false = if !matches!(false_type, ResolvedType::Optional(_)) {
-                ResolvedExpression::Option(Some(Box::new(resolved_false)))
-            } else {
+            let wrapped_false = if matches!(false_type, ResolvedType::Optional(_)) {
                 resolved_false
+            } else {
+                ResolvedExpression::Option(Some(Box::new(resolved_false)))
             };
 
             Ok(ResolvedExpression::IfElse(

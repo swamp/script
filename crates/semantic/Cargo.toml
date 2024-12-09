@@ -1,13 +1,13 @@
 [package]
 name = "swamp-script-semantic"
-version = "0.0.5"
+version = "0.0.6"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/swamp/script"
 description = "semantic types for swamp script"
 
 [dependencies]
-swamp-script-ast = { path = "../ast", version = "0.0.5" }
+swamp-script-ast = { path = "../ast", version = "0.0.6" }
 seq-map = "0.0.12"
 tracing = "0.1.40"
 fixed32 = "0.0.17"

@@ -1,19 +1,19 @@
 [package]
 name = "swamp-script-eval-loader"
-version = "0.0.5"
+version = "0.0.6"
 edition = "2021"
 license = "MIT"
 description = "load swamp-scripts"
 repository = "https://github.com/swamp/script"
 
 [dependencies]
-swamp-script-ast = { path = "../ast", version = "0.0.5" }
-swamp-script-dep-loader = { path = "../dep-loader", version = "0.0.5" }
-swamp-script-analyzer = { path = "../analyzer", version = "0.0.5" }
-swamp-script-semantic = { path = "../semantic", version = "0.0.5" }
+swamp-script-ast = { path = "../ast", version = "0.0.6" }
+swamp-script-dep-loader = { path = "../dep-loader", version = "0.0.6" }
+swamp-script-analyzer = { path = "../analyzer", version = "0.0.6" }
+swamp-script-semantic = { path = "../semantic", version = "0.0.6" }
 
 [dev-dependencies]
 test-log = { version = "0.2.16", features = ["trace", "log", "color"] }
-swamp-script-parser = { path = "../parser", version = "0.0.5" }
+swamp-script-parser = { path = "../parser", version = "0.0.6" }
 tracing = "0.1.41"
 pest = "2.7.14"
