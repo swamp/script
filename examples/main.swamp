@@ -126,15 +126,41 @@ fn find_player_by_name(name: String) -> Player? {
     }
 }
 
-/// Gets a player's health if they exist and are alive
-/// Returns: Some(Int) if player exists and health > 0, none otherwise
-fn get_health_if_alive(player: Player?) -> Int? {
-    if player? {
-        // We can use player directly here since it was unwrapped
-        if player.health > 0 {
-            player.health  // Automatically converts to Some(player.health)
+
+// Option example
+struct Stats {
+    power: Int,
+    durability: Int,
+}
+
+struct Weapon {
+    name: String,
+    stats: Stats,
+    enchantment: String?,
+}
+
+fn find_weapon_in_inventory(slot: Int) -> Weapon? {
+    if slot == 0 {
+        Weapon {
+            name: "Ancient Sword",
+            stats: Stats { power: 50, durability: 100 },
+            enchantment: "Fire",
+        }
+    } else {
+        none
+    }
+}
+
+fn get_enchanted_power(weapon: Weapon?) -> Int? {
+    if weapon? {
+        if enchantment = weapon.enchantment? {
+            if enchantment == "Fire" {
+                weapon.stats.power * 2  // Fire enchantment doubles power
+            } else {
+                weapon.stats.power
+            }
         } else {
-            none
+            weapon.stats.power  // No enchantment, return base power
         }
     } else {
         none
@@ -142,29 +168,23 @@ fn get_health_if_alive(player: Player?) -> Int? {
 }
 
 // Basic optional handling
-hero_player = find_player_by_name("Hero")
-if hero_player? {  
-    // hero_player is automatically unwrapped in this scope
-    print('Found player at position: {hero_player.position}')
+weapon = find_weapon_in_inventory(0)
+if weapon? {
+    print('slot 0: Found weapon: {weapon.name}')
 }
 
-// Optional unwrapping with assignment
-if found_player = find_player_by_name("Hero")? {
-    // found_player contains the unwrapped Player instance
-    print('Found player {found_player.name} with health: {found_player.health}')
+// Optional unwrapping with assignment 
+if equipped = find_weapon_in_inventory(0)? {
+    print('slot 0: Equipped {equipped.name} with {equipped.stats.power} power')
 }
 
 // Chaining optional operations
-
-/* Not working yet
-
-if health = get_health_if_alive(find_player_by_name("Hero"))? {
-    print('Player is alive with health: {health}')
+if total_power = get_enchanted_power(find_weapon_in_inventory(0))? {
+    print('slot 0: Weapon total power with enchantments: {total_power}')
 } else {
-    print('Player not found or not alive')
+    print('slot 0: No weapon found')
 }
 
-*/
 
 shapes = [
     Shape::Circle(5.0),
@@ -188,7 +208,10 @@ length
 // counter after while is: 4
 // player:Player { name: Hero, health: 100, position: Vector2 { x: 10.00, y: 20.00 } }
 // position type alias: (10.00, 20.00)
-// status:Full health
+// status:"Full health"
+// Found weapon: "Ancient Sword"
+// Equipped "Ancient Sword" with 50 power
+// Weapon total power with enchantments: 100
 // Found player at position: Vector2 { x: -13.00, y: -46.00 }
 // Found player "Hero" with health: 100
 // area:200.00

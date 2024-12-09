@@ -663,7 +663,7 @@ impl Display for ResolvedPatternElement {
         match self {
             Self::Variable(variable_ref) => write!(f, "{variable_ref}"),
             Self::Wildcard => write!(f, "_"),
-            Self::VariableWithFieldIndex(_rc, _) => todo!(),
+            Self::VariableWithFieldIndex(_rc, _) => write!(f, "variable with field index"),
         }
     }
 }
@@ -895,8 +895,8 @@ impl Display for ResolvedExpression {
                 )
             }
 
-            Self::ArrayAssignment(_, _, _) => todo!(),
-            Self::MapAssignment(_, _, _) => todo!(),
+            Self::ArrayAssignment(_, _, _) => write!(f, "array assignment"),
+            Self::MapAssignment(_, _, _) => write!(f, "map assignment"),
             Self::StructFieldAssignment(_, _) => write!(f, "field assignment"),
             Self::BinaryOp(binary_op) => write!(f, "{binary_op:?}"),
             Self::UnaryOp(unary_op) => {
@@ -998,8 +998,12 @@ impl Display for ResolvedExpression {
                 write!(f, "reassign variable {variable:?}")
             }
             ResolvedExpression::CoerceOptionToBool(_) => write!(f, "coerce option to bool"),
-            ResolvedExpression::VariableCompoundAssignment(_) => todo!(),
-            ResolvedExpression::FieldCompoundAssignment(_) => todo!(),
+            ResolvedExpression::VariableCompoundAssignment(_) => {
+                write!(f, "variable compount assignment")
+            }
+            ResolvedExpression::FieldCompoundAssignment(_) => {
+                write!(f, "field compound assignment")
+            }
         }
     }
 }

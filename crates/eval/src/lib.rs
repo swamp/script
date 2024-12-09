@@ -312,6 +312,9 @@ impl<'a, C> Interpreter<'a, C> {
             &call.function_definition.signature.parameters,
             &evaluated_args,
         )?;
+
+        debug!(args=?evaluated_args, name=%call.function_definition.name, "call function with arguments");
+
         let result = self.execute_statements(&call.function_definition.statements)?;
 
         self.pop_function_scope(&format!("{func_val}"));
@@ -323,6 +326,8 @@ impl<'a, C> Interpreter<'a, C> {
             ValueWithSignal::Break => Value::Unit,
             ValueWithSignal::Continue => Value::Unit,
         };
+
+        debug!(value=%v, name=%call.function_definition.name, "function returned");
 
         Ok(v)
     }
@@ -504,7 +509,7 @@ impl<'a, C> Interpreter<'a, C> {
 
     // ---------------
     fn evaluate_expression(&mut self, expr: &ResolvedExpression) -> Result<Value, ExecuteError> {
-        debug!("evaluate expression {expr:?}");
+        debug!(expr=%expr, "evaluate expression");
         let value = match expr {
             // Constructing
             ResolvedExpression::Literal(lit) => match lit {
@@ -1225,7 +1230,7 @@ impl<'a, C> Interpreter<'a, C> {
         &mut self,
         statements: &Vec<ResolvedStatement>,
     ) -> Result<ValueWithSignal, ExecuteError> {
-        let mut value = Value::Unit;
+        let mut return_value = Value::Unit;
 
         for statement in statements {
             trace!("{} exec {statement:?}", self.tabs());
@@ -1266,7 +1271,7 @@ impl<'a, C> Interpreter<'a, C> {
                     let cond_value = self.evaluate_expression(&condition.expression)?;
                     if cond_value.is_truthy()? {
                         match self.execute_statements(consequences)? {
-                            ValueWithSignal::Value(v) => value = v, // Store the value
+                            ValueWithSignal::Value(v) => return_value = v, // Store the value
                             ValueWithSignal::Break => return Ok(ValueWithSignal::Break),
                             ValueWithSignal::Return(v) => return Ok(ValueWithSignal::Return(v)),
                             ValueWithSignal::Continue => return Ok(ValueWithSignal::Continue),
@@ -1274,7 +1279,7 @@ impl<'a, C> Interpreter<'a, C> {
                     } else {
                         if let Some(alternative) = optional_alternative {
                             match self.execute_statements(alternative)? {
-                                ValueWithSignal::Value(v) => value = v, // Store the value
+                                ValueWithSignal::Value(v) => return_value = v, // Store the value
                                 ValueWithSignal::Break => return Ok(ValueWithSignal::Break),
                                 ValueWithSignal::Return(v) => {
                                     return Ok(ValueWithSignal::Return(v))
@@ -1292,8 +1297,8 @@ impl<'a, C> Interpreter<'a, C> {
                     true_block,
                     false_block,
                 } => {
-                    let value = self.evaluate_expression(optional_expr)?;
-                    match value {
+                    let condition_value = self.evaluate_expression(optional_expr)?;
+                    match condition_value {
                         Value::Option(Some(inner_value)) => {
                             self.push_block_scope("if only variable");
                             self.initialize_var(
@@ -1304,17 +1309,18 @@ impl<'a, C> Interpreter<'a, C> {
                             )?;
 
                             let result = self.execute_statements(&true_block)?;
+
                             self.pop_block_scope("if only variable");
 
                             match result {
-                                ValueWithSignal::Value(_) => {}
+                                ValueWithSignal::Value(v) => return_value = v,
                                 signal => return Ok(signal),
                             }
                         }
                         Value::Option(None) => {
                             if let Some(else_block) = false_block {
                                 match self.execute_statements(&else_block)? {
-                                    ValueWithSignal::Value(_) => {}
+                                    ValueWithSignal::Value(_v) => return_value = condition_value,
                                     signal => return Ok(signal),
                                 }
                             }
@@ -1322,6 +1328,14 @@ impl<'a, C> Interpreter<'a, C> {
                         _ => return Err(ExecuteError::ExpectedOptional),
                     }
                     continue;
+                }
+
+                ResolvedStatement::Expression(expr) => {
+                    let result = self.evaluate_expression(expr);
+                    if result.is_err() {
+                        return Err(result.unwrap_err());
+                    }
+                    return_value = result?
                 }
 
                 ResolvedStatement::IfAssignExpression {
@@ -1345,14 +1359,14 @@ impl<'a, C> Interpreter<'a, C> {
                             self.pop_block_scope("if assign expression");
 
                             match result {
-                                ValueWithSignal::Value(_) => {}
+                                ValueWithSignal::Value(v) => return_value = v,
                                 signal => return Ok(signal),
                             }
                         }
                         Value::Option(None) => {
                             if let Some(else_block) = false_block {
                                 match self.execute_statements(&else_block)? {
-                                    ValueWithSignal::Value(_) => {}
+                                    ValueWithSignal::Value(v) => return_value = v,
                                     signal => return Ok(signal),
                                 }
                             }
@@ -1434,49 +1448,10 @@ impl<'a, C> Interpreter<'a, C> {
                         ValueWithSignal::Continue => return Ok(ValueWithSignal::Continue),
                     }
                 }
-                _ => {}
-            }
-
-            value = match statement {
-                ResolvedStatement::Expression(expr) => {
-                    let result = self.evaluate_expression(expr); // since it is statement_expression, the value is intentionally discarded
-                    if result.is_err() {
-                        return Err(result.unwrap_err());
-                    }
-                    result?
-                }
-
-                // destructuring
-                //TODO: ResolvedStatement::Let(ResolvedPattern::Tuple(_), _) => Value::Unit,
-                //TODO: ResolvedStatement::Let(ResolvedPattern::Struct(_), _) => Value::Unit,
-                //TODO: ResolvedStatement::Let(ResolvedPattern::EnumTuple(_, _), _) => Value::Unit,
-                //TODO: ResolvedStatement::Let(ResolvedPattern::EnumStruct(_, _), _) => Value::Unit,
-
-                // ignore the let
-                //TODO: ResolvedStatement::Let(ResolvedPattern::EnumSimple(_), _) => Value::Unit,
-
-                // Ignore signal aware statements, they have been handled earlier
-                ResolvedStatement::Return(_) => panic!("return should have been handled earlier"),
-                ResolvedStatement::ForLoop(_, _, _) => {
-                    panic!("for_loop should have been handled earlier")
-                }
-                ResolvedStatement::WhileLoop(_, _) => {
-                    panic!("while_loop should have been handled earlier")
-                }
-                ResolvedStatement::Break => panic!("break should have been handled earlier"),
-                ResolvedStatement::Continue => panic!("continue should have been handled earlier"),
-                ResolvedStatement::Block(_) => panic!("block should have been handled earlier"),
-                ResolvedStatement::If(_, _, _) => panic!("if should have been handled earlier"),
-                ResolvedStatement::IfOnlyVariable { .. } => {
-                    panic!("if should have been handled earlier")
-                }
-                ResolvedStatement::IfAssignExpression { .. } => {
-                    panic!("if should have been handled earlier")
-                }
             }
         }
 
-        Ok(ValueWithSignal::Value(value))
+        Ok(ValueWithSignal::Value(return_value))
     }
 
     #[inline(always)]

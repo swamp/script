@@ -1148,3 +1148,50 @@ fn sparse_map_iterate_pairs() {
     ",
     );
 }
+
+#[test_log::test]
+fn chain_optional_functions() {
+    let x = eval(
+        r#"
+
+struct Player {
+    health: Int,
+}
+
+fn find_player_by_name(name: String) -> Player? {
+    if name == "Hero" {
+        Player {
+            health: 100,
+        }
+    } else {
+        none
+    }
+}
+
+fn get_health_if_alive(player: Player?) -> Int? {
+    if player? {
+        // We can use player directly here since it was unwrapped
+        if player.health > 0 {
+            player.health  // Automatically converts to Some(player.health)
+        } else {
+            none
+        }
+    } else {
+        none
+    }
+}
+
+mut result = 0
+if health = get_health_if_alive(find_player_by_name("Hero"))? {
+    result = 1
+    print('Player is alive with health: {health}')
+} else {
+    result = 0
+    print('Player not found or not alive')
+}
+result
+"#,
+    );
+
+    assert_eq!(x, Value::Int(1));
+}
