@@ -6,11 +6,11 @@ use std::path::PathBuf;
 
 use swamp_script_analyzer::ResolveError;
 use swamp_script_ast::{Parameter, Type, Variable};
+use swamp_script_core::prelude::Value;
 use swamp_script_dep_loader::{
     create_parsed_modules, parse_dependant_modules_and_resolve, DepLoaderError,
 };
 use swamp_script_eval::prelude::ExecuteError;
-use swamp_script_eval::value::Value;
 use swamp_script_eval::{eval_module, ExternalFunctions};
 use swamp_script_eval_loader::resolve_program;
 use swamp_script_parser::Rule;

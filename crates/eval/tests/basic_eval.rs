@@ -6,7 +6,7 @@ use crate::util::{check, check_fail, check_value, eval};
 use fixed32::Fp;
 use std::cell::RefCell;
 use std::rc::Rc;
-use swamp_script_eval::value::Value;
+use swamp_script_core::prelude::Value;
 
 mod util;
 

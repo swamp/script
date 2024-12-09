@@ -9,10 +9,10 @@ use std::path::{Path, PathBuf};
 use std::{fs, io};
 use swamp_script_analyzer::ResolveError;
 use swamp_script_ast::{ModulePath, Parameter, Type, Variable};
+use swamp_script_core::prelude::Value;
 use swamp_script_dep_loader::{
     parse_dependant_modules_and_resolve, DepLoaderError, DependencyParser, ParseModule,
 };
-use swamp_script_eval::value::Value;
 use swamp_script_eval::{err::ExecuteError, eval_module, ExternalFunctions};
 use swamp_script_eval_loader::resolve_program;
 use swamp_script_parser::prelude::*;
