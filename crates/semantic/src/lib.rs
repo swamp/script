@@ -16,9 +16,9 @@ use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
 use std::rc::Rc;
 pub use swamp_script_ast::{
-    AnonymousStruct, BinaryOperator, Expression, FormatSpecifier, IdentifierName, ImplMember,
-    LocalIdentifier, LocalTypeIdentifier, MatchArm, ModulePath, Parameter, PostfixOperator,
-    PrecisionType, StringConst, StructType, UnaryOperator, Variable,
+    AnonymousStruct, BinaryOperator, CompoundOperator, Expression, FormatSpecifier, IdentifierName,
+    ImplMember, LocalIdentifier, LocalTypeIdentifier, MatchArm, ModulePath, Parameter,
+    PostfixOperator, PrecisionType, StringConst, StructType, UnaryOperator, Variable,
 };
 
 #[derive(Debug, Clone)]
@@ -706,6 +706,20 @@ pub struct ResolvedVariableAssignment {
     pub expression: Box<ResolvedExpression>,
 }
 
+#[derive(Debug)]
+pub struct ResolvedVariableCompoundAssignment {
+    pub variable_ref: ResolvedVariableRef, // compound only support single variable
+    pub expression: Box<ResolvedExpression>,
+    pub ast_operator: CompoundOperator,
+}
+
+#[derive(Debug)]
+pub struct ResolvedFieldCompoundAssignment {
+    pub struct_field_ref: ResolvedStructTypeFieldRef,
+    pub expression: Box<ResolvedExpression>,
+    pub ast_operator: CompoundOperator,
+}
+
 pub fn create_rust_type_generic(name: &str, type_parameter: &ResolvedType) -> ResolvedRustTypeRef {
     let rust_type = ResolvedRustType {
         type_name: format!("{}<{}>", name, type_parameter.display_name()),
@@ -733,12 +747,13 @@ pub enum ResolvedExpression {
     InitializeVariable(ResolvedVariableAssignment), // First time assignment
     ReassignVariable(ResolvedVariableAssignment),   // Subsequent assignments
 
+    VariableCompoundAssignment(ResolvedVariableCompoundAssignment),
+    FieldCompoundAssignment(ResolvedFieldCompoundAssignment),
+
     ArrayExtend(ResolvedVariableRef, Box<ResolvedExpression>), // Extends an array with another array
     ArrayPush(ResolvedVariableRef, Box<ResolvedExpression>),   // Adds an item to an array
 
     //    CompoundAssignmentIndex(ResolvedIndexCompoundAssignment),
-    //    VariableCompoundAssignment(ResolvedVariableCompoundAssignment),
-    //    FieldCompoundAssignment(ResolvedFieldCompoundAssignment),
     ArrayAssignment(ResolvedMutArray, ResolvedIndexType, Box<ResolvedExpression>), // target, index, source. Write to an index in an array: arr[3] = 42
 
     MapAssignment(ResolvedMutMap, ResolvedIndexType, Box<ResolvedExpression>),
@@ -971,6 +986,8 @@ impl Display for ResolvedExpression {
                 write!(f, "reassign variable {variable:?}")
             }
             ResolvedExpression::CoerceOptionToBool(_) => write!(f, "coerce option to bool"),
+            ResolvedExpression::VariableCompoundAssignment(_) => todo!(),
+            ResolvedExpression::FieldCompoundAssignment(_) => todo!(),
         }
     }
 }

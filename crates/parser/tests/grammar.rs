@@ -775,7 +775,7 @@ Expression(FunctionCall(VariableAccess(print), [VariableAccess(state)]))
 #[test_log::test]
 fn mut_parameter() {
     let script = r#"
-
+/// increments the value
 fn increment(mut x: Int) -> Int {
     x = x + 1
     x
@@ -1078,7 +1078,7 @@ EnumDef(LocalTypeIdentifier { node: Node { span: Span { start: Position { offset
 Expression(VariableAssignment(action, Literal(EnumVariant(Action::Target{ LocalTypeIdentifier { node: Node { span: Span { start: Position { offset: 139, line: 9, column: 18 }, end: Position { offset: 171, line: 9, column: 50 } } }, text: "x" }: Literal(Int(42)), LocalTypeIdentifier { node: Node { span: Span { start: Position { offset: 139, line: 9, column: 18 }, end: Position { offset: 171, line: 9, column: 50 } } }, text: "y" }: Literal(Int(-999)) }))))
 
 Expression(Match(VariableAccess(action), [MatchArm { pattern: EnumPattern(LocalTypeIdentifier { node: Node { span: Span { start: Position { offset: 300, line: 18, column: 13 }, end: Position { offset: 308, line: 18, column: 21 } } }, text: "Jumping" }, None), expression: Literal(String(jumping)) }, MatchArm { pattern: EnumPattern(LocalTypeIdentifier { node: Node { span: Span { start: Position { offset: 334, line: 19, column: 13 }, end: Position { offset: 343, line: 19, column: 22 } } }, text: "Target" }, Some([Variable(LocalIdentifier { node: Node { span: Span { start: Position { offset: 334, line: 19, column: 13 }, end: Position { offset: 343, line: 19, column: 22 } } }, text: "y" })])), expression: VariableAccess(y) }, MatchArm { pattern: PatternList([Wildcard]), expression: Literal(String(can not find it!)) }]))
-        
+
         "#,
     );
 }

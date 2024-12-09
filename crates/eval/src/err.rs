@@ -17,4 +17,5 @@ pub enum ExecuteError {
     ValueIsNotMutable,
     NotSparseValue,
     CoerceOptionToBoolFailed,
+    VariableWasNotMutable,
 }

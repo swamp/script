@@ -13,7 +13,8 @@ use swamp_script_semantic::ns::{LocalTypeName, ResolvedModuleNamespace, Semantic
 use swamp_script_semantic::ResolvedType::RustType;
 use swamp_script_semantic::{
     create_rust_type_generic, prelude::*, ResolvedBoolType, ResolvedForPattern,
-    ResolvedPatternElement, ResolvedStaticCallGeneric, TypeNumber,
+    ResolvedPatternElement, ResolvedStaticCallGeneric, ResolvedTupleTypeRef,
+    ResolvedVariableCompoundAssignment, TypeNumber,
 };
 use swamp_script_semantic::{
     ResolvedDefinition, ResolvedEnumTypeRef, ResolvedFunction, ResolvedFunctionRef,
@@ -152,6 +153,12 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
         ResolvedExpression::SparseRemove(_, _) => ResolvedType::Any, // TODO: return correct type
         ResolvedExpression::SparseNew(rust_type_ref, _) => RustType(rust_type_ref.clone()),
         ResolvedExpression::CoerceOptionToBool(_) => ResolvedType::Bool(Rc::new(ResolvedBoolType)),
+        ResolvedExpression::VariableCompoundAssignment(var_compound_assignment) => {
+            var_compound_assignment.variable_ref.resolved_type.clone()
+        }
+        ResolvedExpression::FieldCompoundAssignment(field_compound) => {
+            field_compound.struct_field_ref.resolved_type.clone()
+        }
     };
 
     trace!(resolution_expression=%resolution_expression, "resolution first");
@@ -579,16 +586,6 @@ impl<'a> Resolver<'a> {
         Ok(resolved_struct)
     }
 
-    pub fn insert_struct_type_definition(
-        &mut self,
-        struct_type: ResolvedStructType,
-    ) -> Result<ResolvedStructTypeRef, ResolveError> {
-        // Move ownership to module namespace
-        let resolved_struct_ref = self.current_module.namespace.add_struct_type(struct_type)?;
-
-        Ok(resolved_struct_ref)
-    }
-
     fn resolve_enum_type_definition(
         &mut self,
         enum_type_name: &LocalTypeIdentifier,
@@ -1002,6 +999,12 @@ impl<'a> Resolver<'a> {
     ) -> Result<ResolvedExpression, ResolveError> {
         let expr_type = resolution(&expr);
 
+        // If return type is Unit, ignore the expression's type and return Unit
+        // TODO: In future versions, always have a return statement
+        if let ResolvedType::Unit(_) = return_type {
+            return Ok(expr);
+        }
+
         if let ResolvedType::Optional(inner_type) = return_type {
             if return_type.same_type(&expr_type) {
                 return Ok(expr);
@@ -1305,15 +1308,17 @@ impl<'a> Resolver<'a> {
             }
 
             Expression::FieldAssignment(ast_struct_expr, ast_field_name, ast_expression) => {
-                // Box<Expression>, LocalIdentifier, Box<Expression>
                 let source_expression = self.resolve_expression(ast_expression)?;
 
                 let mut_struct_field = self
                     .resolve_into_struct_field_mut_ref(ast_struct_expr, ast_field_name.clone())?;
 
+                let target_type = mut_struct_field.inner.resolved_type.clone();
+                let wrapped_expression = wrap_in_some_if_optional(&target_type, source_expression);
+
                 ResolvedExpression::StructFieldAssignment(
                     mut_struct_field.clone(),
-                    Box::from(source_expression),
+                    Box::from(wrapped_expression),
                 )
             }
 
@@ -1802,7 +1807,9 @@ impl<'a> Resolver<'a> {
                 }
             }
 
-            Pattern::Literal(ast_literal) => Ok((self.resolve_pattern_literal(ast_literal), false)),
+            Pattern::Literal(ast_literal) => {
+                Ok((self.resolve_pattern_literal(ast_literal)?, false))
+            }
         }
     }
 
@@ -2343,6 +2350,16 @@ impl<'a> Resolver<'a> {
         let target_type = &resolved_variable.resolved_type;
 
         match &target_type {
+            ResolvedType::Int(_) => {
+                let compound_assignment = ResolvedVariableCompoundAssignment {
+                    variable_ref: resolved_variable,
+                    expression: Box::from(resolved_source),
+                    ast_operator: operator.clone(),
+                };
+                Ok(ResolvedExpression::VariableCompoundAssignment(
+                    compound_assignment,
+                ))
+            }
             ResolvedType::Array(array_type_ref) => {
                 match operator {
                     CompoundOperator::Add => {
@@ -2401,6 +2418,24 @@ impl<'a> Resolver<'a> {
         let array_type_ref = Rc::new(array_type);
 
         Ok((array_type_ref, expressions))
+    }
+
+    fn resolve_tuple_literal(
+        &mut self,
+        items: &Vec<Expression>,
+    ) -> Result<(ResolvedTupleTypeRef, Vec<ResolvedExpression>), ResolveError> {
+        let expressions = self.resolve_expressions(items)?;
+        let mut tuple_types = Vec::new();
+        for expr in &expressions {
+            let item_type = resolution(expr);
+            tuple_types.push(item_type);
+        }
+
+        let tuple_type = ResolvedTupleType(tuple_types);
+
+        let tuple_type_ref = Rc::new(tuple_type);
+
+        Ok((tuple_type_ref, expressions))
     }
 
     fn resolve_map_literal(
@@ -2665,7 +2700,10 @@ impl<'a> Resolver<'a> {
         })
     }
 
-    fn resolve_pattern_literal(&mut self, ast_literal: &Literal) -> ResolvedPattern {
+    fn resolve_pattern_literal(
+        &mut self,
+        ast_literal: &Literal,
+    ) -> Result<ResolvedPattern, ResolveError> {
         let resolved_literal = match ast_literal {
             Literal::Int(value) => ResolvedLiteral::IntLiteral(*value, self.types.int_type.clone()),
             Literal::Float(value) => {
@@ -2704,29 +2742,21 @@ impl<'a> Resolver<'a> {
             }
 
             Literal::Array(items) => {
-                let (array_type_ref, resolved_items) = self
-                    .resolve_array_type_helper(items)
-                    .expect("array items should resolve");
+                let (array_type_ref, resolved_items) = self.resolve_array_type_helper(items)?;
                 ResolvedLiteral::Array(array_type_ref, resolved_items)
             }
-            Literal::Map(entries) => self
-                .resolve_map_literal(entries)
-                .expect("map entries should resolve"),
-            Literal::Tuple(_expressions) => {
-                todo!();
-                /*
-                let resolved = self
-                    .resolve_expressions(expressions)
-                    .expect("tuple expressions should resolve");
-                ResolvedLiteral::TupleLiteral(resolved)
 
-                 */
+            Literal::Map(entries) => self.resolve_map_literal(entries)?,
+
+            Literal::Tuple(expressions) => {
+                let (tuple_type_ref, resolved_items) = self.resolve_tuple_literal(expressions)?;
+                ResolvedLiteral::TupleLiteral(tuple_type_ref, resolved_items)
             }
             Literal::Unit => todo!(),
             Literal::None => todo!(),
         };
 
-        ResolvedPattern::Literal(resolved_literal)
+        Ok(ResolvedPattern::Literal(resolved_literal))
     }
 
     /// Analyzes an expression that might contain an optional unwrap operator,

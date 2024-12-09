@@ -4,9 +4,91 @@
  */
 use crate::util::{check, check_fail, check_value, eval};
 use fixed32::Fp;
+use std::cell::RefCell;
+use std::rc::Rc;
 use swamp_script_eval::value::Value;
 
 mod util;
+
+/*
+#[test_log::test]
+fn block() {
+    let result = eval(
+        "
+
+    x = 4
+    {
+        x = 3
+    }
+    x
+    ",
+    );
+
+    assert_eq!(result, Value::Int(4));
+}
+
+#[test_log::test]
+fn match_array() {
+    let result = eval(
+        r#"
+
+        pos = [1, 4, 11]
+
+        match pos {
+           [1, 0, 11] => 0,
+           [1, 4, 11] => 1,
+        }
+    "#,
+    );
+
+    assert_eq!(result, Value::Int(1));
+}
+
+#[test_log::test]
+fn match_enum_literal() {
+    let result = eval(
+        r#"
+
+        enum Action {
+            Jumping,
+            Target { x: Int, y: Int },
+            Other(String),
+        }
+
+        action = Action::Target { x:42, y: -999 }
+
+        match action {
+            Jumping => "jumping",
+            Target x:42, y:0 => 1,
+            Target x:42, y:-999 => 2,
+            Target x:42, y => y,
+            _ => "can not find it!",
+        }
+    "#,
+    );
+
+    assert_eq!(result, Value::Int(2));
+}
+
+#[test_log::test]
+fn match_map_literal() {
+    let result = eval(
+        r#"
+
+        action = [2: 9, 3: 18]
+
+        match action {
+            [2: 9] => 1,
+            [2: 9, 3: 18] => 2,
+        }
+    "#,
+    );
+
+    assert_eq!(result, Value::Int(2));
+}
+
+
+ */
 
 #[test_log::test]
 fn basic_eval() {
@@ -273,6 +355,25 @@ fn match_enum_struct() {
     );
 
     assert_eq!(result, Value::Int(-999));
+}
+
+#[test_log::test]
+fn match_map_tuple() {
+    let result = eval(
+        r#"
+
+        pos = (-1, 10)
+
+        match pos {
+            (2, 3) => 1,
+            (0, 0) => 2,
+            (-1, 10) => 3,
+            (-1, -1) => 4,
+        }
+    "#,
+    );
+
+    assert_eq!(result, Value::Int(3));
 }
 
 #[test_log::test]
@@ -600,6 +701,104 @@ fn basic_eval_25() {
     );
 
     assert_eq!(result, Value::Int(2 * 3));
+}
+
+#[test_log::test]
+fn optional_field_mut() {
+    let result = eval(
+        "
+
+    struct SomeStruct {
+       some_field: Int?
+    }
+
+    mut s = SomeStruct { some_field: 2 }
+
+    s.some_field = 3
+
+    mut x = 0
+    if a = s.some_field? {
+        x += 3
+    }
+    x
+    ",
+    );
+
+    assert_eq!(
+        result,
+        Value::Reference(Rc::new(RefCell::new(Value::Int(3))))
+    );
+}
+
+#[test_log::test]
+fn compound() {
+    let result = eval(
+        "
+    mut x = 0
+    x += 4
+    x *= 5
+    x /= 3
+    x -= 1
+    ",
+    );
+
+    assert_eq!(result, Value::Int(4 * 5 / 3 - 1));
+}
+
+#[test_log::test]
+fn multi_variables() {
+    let result = eval(
+        "
+
+     mut x = y = mut z = 3
+    z = 8
+    ",
+    );
+
+    assert_eq!(result, Value::Int(8));
+}
+
+/*
+#[test_log::test]
+fn member_chain_call() {
+    let result = eval(
+        "
+
+     struct Something {
+    a: Int,
+}
+
+    impl Something {
+        fn hello(mut self) {
+            self.x += 1
+        }
+
+        fn create() -> Something {
+            Something {
+                a: 99
+            }
+        }
+    }
+
+    s = Something::create().hello()
+
+    ",
+    );
+
+    assert_eq!(result, Value::Int(4));
+}
+*/
+
+#[test_log::test]
+fn format_specifiers() {
+    check(
+        "
+    v = 3
+    print('this is binary {v:b}')
+
+    ",
+        "this is binary 11",
+    );
 }
 
 #[test_log::test]

@@ -443,6 +443,39 @@ impl<'a, C> Interpreter<'a, C> {
         Ok(existing_var)
     }
 
+    #[inline]
+    fn lookup_mut_var(
+        &self,
+        relative_scope_index: usize,
+        variable_index: usize,
+    ) -> Result<&Rc<RefCell<Value>>, ExecuteError> {
+        if relative_scope_index >= self.current_block_scopes.len() {
+            panic!(
+                "illegal scope index {relative_scope_index} of {}",
+                self.current_block_scopes.len()
+            );
+        }
+
+        let variables = &self.current_block_scopes[relative_scope_index].variables;
+        if variable_index >= variables.len() {
+            panic!("illegal index");
+        }
+        let existing_var = &variables[variable_index];
+
+        Ok(match existing_var {
+            Value::Reference(reference) => reference,
+            _ => return Err(ExecuteError::VariableWasNotMutable),
+        })
+    }
+
+    #[inline]
+    fn lookup_mut_variable(
+        &self,
+        variable: &ResolvedVariableRef,
+    ) -> Result<&Rc<RefCell<Value>>, ExecuteError> {
+        self.lookup_mut_var(variable.scope_index, variable.variable_index)
+    }
+
     fn assign_value(target_type: &ResolvedType, value: Value) -> Value {
         match value {
             Value::Struct(struct_ref, fields, _) => {
@@ -597,6 +630,29 @@ impl<'a, C> Interpreter<'a, C> {
                     )?;
                 }
 
+                new_value
+            }
+
+            ResolvedExpression::VariableCompoundAssignment(var_assignment) => {
+                let modifier_value = self.evaluate_expression(&var_assignment.expression)?;
+                let current_value = self.lookup_mut_variable(&var_assignment.variable_ref)?;
+
+                // Only int first
+                let int_mod = modifier_value.expect_int()?;
+                let current_int = current_value.borrow().expect_int()?;
+
+                let new_result = match var_assignment.ast_operator {
+                    CompoundOperator::Add => current_int + int_mod,
+                    CompoundOperator::Sub => current_int - int_mod,
+                    CompoundOperator::Mul => current_int * int_mod,
+                    CompoundOperator::Div => current_int / int_mod,
+                };
+
+                let new_value = Value::Int(new_result);
+                {
+                    let mut mutated = current_value.borrow_mut();
+                    *mutated = new_value.clone();
+                }
                 new_value
             }
 
@@ -769,6 +825,8 @@ impl<'a, C> Interpreter<'a, C> {
                     ))?,
                 }
             }
+
+            ResolvedExpression::FieldCompoundAssignment(_) => todo!(),
 
             // ------------- LOOKUP ---------------------
             ResolvedExpression::VariableAccess(var) => {
@@ -1336,8 +1394,7 @@ impl<'a, C> Interpreter<'a, C> {
                         ResolvedForPattern::Pair(first_ref, second_ref) => {
                             self.push_block_scope("for_loop pair");
 
-                            let pair_iterator = iterator_value.pairs_iterator()?;
-                            for (key, value) in pair_iterator {
+                            for (key, value) in iterator_value.into_iter_pairs()? {
                                 // Set both variables
                                 self.initialize_var(
                                     first_ref.scope_index,
@@ -1599,6 +1656,12 @@ impl<'a, C> Interpreter<'a, C> {
                     (ResolvedLiteral::BoolLiteral(a, _), Value::Bool(b)) if a == b => {
                         return self.evaluate_expression(&arm.expression);
                     }
+                    (
+                        ResolvedLiteral::TupleLiteral(_a_type_ref, a_values),
+                        Value::Tuple(_b_type_ref, b_values),
+                    ) if self.expressions_equal_to_values(a_values, b_values)? => {
+                        return self.evaluate_expression(&arm.expression);
+                    }
                     _ => continue,
                 },
             }
@@ -1714,5 +1777,21 @@ impl<'a, C> Interpreter<'a, C> {
             },
             _ => Err(ExecuteError::CanNotUnwrap),
         }
+    }
+
+    fn expressions_equal_to_values(
+        &mut self,
+        p0: &[ResolvedExpression],
+        p1: &[Value],
+    ) -> Result<bool, ExecuteError> {
+        for (a, b_value) in p0.iter().zip(p1.iter()) {
+            let a_value = self.evaluate_expression(a)?;
+
+            if a_value != *b_value {
+                return Ok(false);
+            }
+        }
+
+        Ok(true)
     }
 }

@@ -162,34 +162,28 @@ impl Value {
         }
     }
 
-    pub fn pairs_iterator(&self) -> Result<Vec<(Value, Value)>, ExecuteError> {
+    pub fn into_iter_pairs(self) -> Result<Box<dyn Iterator<Item = (Value, Value)>>, ExecuteError> {
         let values = match self {
-            Value::Reference(value_ref) => value_ref.borrow_mut().pairs_iterator()?,
-            Value::Map(_, seq_map) => seq_map
-                .iter()
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect(),
+            Value::Reference(value_ref) => value_ref.borrow_mut().to_owned().into_iter_pairs()?,
+            Self::Map(_, seq_map) => Box::new(seq_map.into_iter()),
             Value::Tuple(_, _) => todo!(),
-            Value::RustValue(rust_type_ref, _rust_value) => match rust_type_ref.number {
-                0 => {
-                    let sparse_map = self
-                        .downcast_rust::<SparseValueMap>()
-                        .expect("must be sparsemap");
+            Value::RustValue(ref rust_type_ref, ref _rust_value) => {
+                Box::new(match rust_type_ref.number {
+                    0 => {
+                        let _sparse_map = self
+                            .downcast_rust::<SparseValueMap>()
+                            .expect("must be sparsemap");
 
-                    let x = sparse_map
-                        .borrow()
-                        .sparse_slot
-                        .iter()
-                        .map(|(_k, v)| (v.clone(), v.clone()))
-                        .collect::<Vec<(Value, Value)>>();
-                    x
-                }
-                _ => {
-                    return Err(ExecuteError::Error(
-                        "not a rust value iterator (sparsemap)".to_string(),
-                    ))
-                }
-            },
+                        //sparse_map.borrow().into_iter()
+                        vec![(Value::Unit, Value::Unit)].into_iter()
+                    }
+                    _ => {
+                        return Err(ExecuteError::Error(
+                            "not a rust value iterator (sparsemap)".to_string(),
+                        ))
+                    }
+                })
+            }
             _ => {
                 return Err(ExecuteError::Error(format!(
                     "not a known iterator {}",
@@ -231,7 +225,6 @@ impl Value {
     pub fn is_truthy(&self) -> Result<bool, String> {
         let v = match self {
             Value::Bool(b) => *b,
-            Value::Option(inner_option) => inner_option.is_some(),
             _ => return Err("Expected boolean value".to_string()),
         };
 
