@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use crate::err::{ConversionError, ExecuteError};
-use crate::extra::SparseValueMap;
+use crate::extra::{SparseValueId, SparseValueMap};
 use crate::ValueWithSignal;
 use core::any::Any;
 use fixed32::Fp;
@@ -170,12 +170,27 @@ impl Value {
             Value::RustValue(ref rust_type_ref, ref _rust_value) => {
                 Box::new(match rust_type_ref.number {
                     0 => {
-                        let _sparse_map = self
+                        let sparse_map = self
                             .downcast_rust::<SparseValueMap>()
                             .expect("must be sparsemap");
 
-                        //sparse_map.borrow().into_iter()
-                        vec![(Value::Unit, Value::Unit)].into_iter()
+                        let id_type_ref = sparse_map.borrow().rust_type_ref_for_id.clone();
+
+                        let pairs: Vec<_> = sparse_map
+                            .borrow()
+                            .iter()
+                            .map(|(k, v)| {
+                                (
+                                    Value::RustValue(
+                                        id_type_ref.clone(),
+                                        Rc::new(RefCell::new(Box::new(SparseValueId(k)))),
+                                    ),
+                                    v.clone(),
+                                )
+                            })
+                            .collect();
+
+                        Box::new(pairs.into_iter())
                     }
                     _ => {
                         return Err(ExecuteError::Error(
@@ -191,6 +206,7 @@ impl Value {
                 )))
             }
         };
+
         Ok(values)
     }
 

@@ -3082,7 +3082,7 @@ impl<'a> Resolver<'a> {
             }
 
             return Ok(Some(ResolvedExpression::SparseNew(
-                create_rust_type_generic("Sparse", &resolved_generic_types[0]),
+                create_rust_type_generic("Sparse", &resolved_generic_types[0], 0),
                 resolved_generic_types[0].clone(),
             )));
         }

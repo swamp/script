@@ -720,10 +720,22 @@ pub struct ResolvedFieldCompoundAssignment {
     pub ast_operator: CompoundOperator,
 }
 
-pub fn create_rust_type_generic(name: &str, type_parameter: &ResolvedType) -> ResolvedRustTypeRef {
+pub fn create_rust_type_generic(
+    name: &str,
+    type_parameter: &ResolvedType,
+    type_number: TypeNumber,
+) -> ResolvedRustTypeRef {
     let rust_type = ResolvedRustType {
         type_name: format!("{}<{}>", name, type_parameter.display_name()),
-        number: 0,
+        number: type_number,
+    };
+    Rc::new(rust_type)
+}
+
+pub fn create_rust_type(name: &str, type_number: TypeNumber) -> ResolvedRustTypeRef {
+    let rust_type = ResolvedRustType {
+        type_name: name.to_string(),
+        number: type_number,
     };
     Rc::new(rust_type)
 }
