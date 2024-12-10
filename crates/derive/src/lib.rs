@@ -191,3 +191,179 @@ pub fn swamp_fn(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     TokenStream::from(expanded)
 }
+
+#[proc_macro_derive(SwampExportEnum, attributes(swamp))]
+pub fn derive_swamp_export_enum(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let name = &input.ident;
+
+    let expanded = match input.data {
+        syn::Data::Enum(ref data) => {
+            let variant_matches = data.variants.iter().enumerate().map(|(variant_index, variant)| {
+                let variant_name = &variant.ident;
+
+                match &variant.fields {
+                    syn::Fields::Unit => {
+                        quote! {
+                            #name::#variant_name => {
+                                let variant_type = ResolvedEnumVariantType {
+                                    owner: enum_type.clone(),
+                                    data: ResolvedEnumVariantContainerType::Nothing,
+                                    name: LocalTypeIdentifier::from_str(stringify!(#variant_name)),
+                                    number: #variant_index as TypeNumber,
+                                };
+                                Value::EnumVariantSimple(Rc::new(variant_type))
+                            }
+                        }
+                    }
+                    syn::Fields::Named(fields) => {
+                        let field_names: Vec<_> = fields.named.iter().map(|f| &f.ident).collect();
+                        let field_types: Vec<_> = fields.named.iter().map(|f| &f.ty).collect();
+
+                        let field_type_conversions = field_types.iter().map(|ty| {
+                            match quote!(#ty).to_string().as_str() {
+                                "f32" => quote! { registry.get_float_type() },
+                                "i32" => quote! { registry.get_int_type() },
+                                "bool" => quote! { registry.get_bool_type() },
+                                "String" => quote! { registry.get_string_type() },
+                                ty => quote! { panic!("Unsupported type: {}", #ty) },
+                            }
+                        });
+
+                        let field_value_conversions = field_names.iter().zip(field_types.iter()).map(|(name, ty)| {
+                            match quote!(#ty).to_string().as_str() {
+                                "f32" => quote! { Value::Float(Fp::from(*#name)) },
+                                "i32" => quote! { Value::Int(*#name) },
+                                "bool" => quote! { Value::Bool(*#name) },
+                                "String" => quote! { Value::String(#name.clone()) },
+                                ty => quote! { panic!("Unsupported type: {}", #ty) },
+                            }
+                        });
+
+                        quote! {
+                            #name::#variant_name { #(ref #field_names),* } => {
+                                let mut fields = SeqMap::new();
+                                #(
+                                    fields.insert(
+                                        IdentifierName(stringify!(#field_names).to_string()),
+                                        #field_type_conversions
+                                    );
+                                )*
+
+                                let common = CommonEnumVariantType {
+                                    number: #variant_index as TypeNumber,
+                                    module_path: ModulePath::new(),
+                                    variant_name: LocalTypeIdentifier::from_str(stringify!(#variant_name)),
+                                    enum_ref: enum_type.clone(),
+                                };
+
+                                let variant_struct = Rc::new(ResolvedEnumVariantStructType {
+                                    common,
+                                    fields,
+                                    ast_struct: AnonymousStruct::default(),
+                                });
+
+                                let values = vec![
+                                    #(#field_value_conversions),*
+                                ];
+
+                                Value::EnumVariantStruct(variant_struct, values)
+                            }
+                        }
+                    }
+
+
+                    syn::Fields::Unnamed(fields) => {
+                        let field_types: Vec<_> = fields.unnamed.iter().map(|f| &f.ty).collect();
+                        let field_names: Vec<_> = (0..field_types.len())
+                            .map(|i| format_ident!("field_{}", i))
+                            .collect::<Vec<_>>();
+
+                        let field_type_conversions = field_types.iter().map(|ty| {
+                            match quote!(#ty).to_string().as_str() {
+                                "f32" => quote! { registry.get_float_type() },
+                                "i32" => quote! { registry.get_int_type() },
+                                "bool" => quote! { registry.get_bool_type() },
+                                "String" => quote! { registry.get_string_type() },
+                                ty => quote! { panic!("Unsupported type: {}", #ty) },
+                            }
+                        });
+
+                        let field_value_conversions = field_names.iter().zip(field_types.iter()).map(|(name, ty)| {
+                            match quote!(#ty).to_string().as_str() {
+                                "f32" => quote! { Value::Float(Fp::from(*#name)) },
+                                "i32" => quote! { Value::Int(*#name) },
+                                "bool" => quote! { Value::Bool(*#name) },
+                                "String" => quote! { Value::String(#name.clone()) },
+                                ty => quote! { panic!("Unsupported type: {}", #ty) },
+                            }
+                        });
+
+                        quote! {
+                            #name::#variant_name(#(ref #field_names),*) => {
+                                let fields_in_order = vec![
+                                    #(#field_type_conversions),*
+                                ];
+
+                                let common = CommonEnumVariantType {
+                                    number: #variant_index as TypeNumber,
+                                    module_path: ModulePath::new(),
+                                    variant_name: LocalTypeIdentifier::from_str(stringify!(#variant_name)),
+                                    enum_ref: enum_type.clone(),
+                                };
+
+                                let variant_tuple = Rc::new(ResolvedEnumVariantTupleType {
+                                    common,
+                                    fields_in_order,
+                                });
+
+                                let values = vec![
+                                    #(#field_value_conversions),*
+                                ];
+
+                                Value::EnumVariantTuple(variant_tuple, values)
+                            }
+                        }
+                    }
+                }
+            });
+
+            quote! {
+                impl SwampExport for #name {
+                    fn get_resolved_type(registry: &TypeRegistry) -> ResolvedType {
+                        let enum_type = Rc::new(ResolvedEnumType {
+                            name: LocalTypeIdentifier::from_str(stringify!(#name)),
+                            number: registry.allocate_type_number(),
+                        });
+                        ResolvedType::Enum(enum_type)
+                    }
+
+                    fn to_swamp_value(&self, registry: &TypeRegistry) -> Value {
+                        let enum_type = match Self::get_resolved_type(registry) {
+                            ResolvedType::Enum(t) => t,
+                            _ => unreachable!(),
+                        };
+
+                        match self {
+                            #(#variant_matches),*
+                        }
+                    }
+
+                    fn from_swamp_value(value: &Value) -> Result<Self, String> {
+                        match value {
+                            Value::EnumVariantSimple(_) |
+                            Value::EnumVariantTuple(_, _) |
+                            Value::EnumVariantStruct(_, _) => {
+                                todo!("Implement from_swamp_value for enums") // TODO: PBJ: Fix this when needed
+                            }
+                            _ => Err(format!("Expected enum variant, got {:?}", value))
+                        }
+                    }
+                }
+            }
+        }
+        _ => panic!("SwampExportEnum can only be derived for enums"),
+    };
+
+    TokenStream::from(expanded)
+}

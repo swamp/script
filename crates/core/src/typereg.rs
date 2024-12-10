@@ -37,7 +37,7 @@ impl TypeRegistry {
         registry
     }
 
-    fn allocate_type_number(&self) -> TypeNumber {
+    pub fn allocate_type_number(&self) -> TypeNumber {
         let mut number = self.next_type_number.borrow_mut();
         *number += 1;
         *number

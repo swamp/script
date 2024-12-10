@@ -83,6 +83,13 @@ impl LocalTypeIdentifier {
             text: str.to_string(),
         }
     }
+
+    pub fn from_str(str: &str) -> LocalTypeIdentifier {
+        Self {
+            node: Node::default(),
+            text: str.to_string(),
+        }
+    }
 }
 
 impl Display for LocalTypeIdentifier {
@@ -137,6 +144,12 @@ impl Debug for StringConst {
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct ModulePath(pub Vec<String>);
+
+impl ModulePath {
+    pub fn new() -> Self {
+        Self(vec![])
+    }
+}
 
 impl Display for ModulePath {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
@@ -576,7 +589,7 @@ impl Debug for EnumLiteralData {
     }
 }
 
-#[derive(Clone, Eq, PartialEq, Debug)]
+#[derive(Clone, Eq, PartialEq, Debug, Default)]
 pub struct AnonymousStruct {
     pub fields: SeqMap<IdentifierName, Type>,
 }

@@ -6,7 +6,7 @@ pub mod ns;
 pub mod prelude;
 
 use crate::ns::{LocalTypeName, ResolvedModuleNamespace, SemanticError};
-use fixed32::Fp;
+pub use fixed32::Fp;
 use seq_fmt::{comma, comma_tuple, fmt_nl};
 use seq_map::SeqMap;
 use std::cell::RefCell;

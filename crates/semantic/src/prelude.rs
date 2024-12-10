@@ -4,11 +4,12 @@
  */
 
 pub use crate::{
-    comma_seq, ns::LocalTypeName, ns::ResolvedModuleNamespace, ns::SemanticError, BinaryOperator,
-    CommonEnumVariantType, CompoundOperator, ExternalFunctionId, IdentifierName, LocalIdentifier,
-    LocalTypeIdentifier, ModulePath, Node, Parameter, PostfixOperator, ResolvedArrayItem,
-    ResolvedArrayItemRef, ResolvedArrayType, ResolvedArrayTypeRef, ResolvedBinaryOperator,
-    ResolvedBoolType, ResolvedBoolTypeRef, ResolvedBooleanExpression, ResolvedEnumLiteralData,
+    comma_seq, ns::LocalTypeName, ns::ResolvedModuleNamespace, ns::SemanticError, AnonymousStruct,
+    BinaryOperator, CommonEnumVariantType, CompoundOperator, ExternalFunctionId, Fp,
+    IdentifierName, LocalIdentifier, LocalTypeIdentifier, ModulePath, Node, Parameter,
+    PostfixOperator, ResolvedArrayItem, ResolvedArrayItemRef, ResolvedArrayType,
+    ResolvedArrayTypeRef, ResolvedBinaryOperator, ResolvedBoolType, ResolvedBoolTypeRef,
+    ResolvedBooleanExpression, ResolvedEnumLiteralData, ResolvedEnumType,
     ResolvedEnumVariantContainerType, ResolvedEnumVariantStructFieldType,
     ResolvedEnumVariantStructType, ResolvedEnumVariantTupleFieldType, ResolvedEnumVariantTupleType,
     ResolvedEnumVariantType, ResolvedEnumVariantTypeRef, ResolvedExpression,
