@@ -11,9 +11,9 @@ struct TestStruct {
 
 #[test]
 fn to_resolved_type() {
-    let mut registry = TypeRegistry::new();
+    let registry = TypeRegistry::new();
 
-    let resolved = TestStruct::get_resolved_type(&mut registry);
+    let resolved = TestStruct::get_resolved_type(&registry);
 
     if let ResolvedType::Struct(def) = resolved {
         let d = def.borrow();
@@ -54,12 +54,6 @@ fn convert_back_and_forth() {
     let roundtrip = TestStruct::from_swamp_value(&value).expect("Should deserialize successfully");
 
     assert_eq!(roundtrip, original);
-}
-
-#[derive(Debug)]
-pub enum ExecuteError {
-    WrongNumberOfArguments { expected: usize, got: usize },
-    TypeError(String),
 }
 
 #[swamp_fn]

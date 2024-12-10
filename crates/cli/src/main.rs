@@ -17,7 +17,7 @@ use swamp_script_eval::{err::ExecuteError, eval_module, ExternalFunctions};
 use swamp_script_eval_loader::resolve_program;
 use swamp_script_parser::prelude::*;
 use swamp_script_parser::AstParser;
-use swamp_script_semantic::{ResolvedModule, ResolvedProgram};
+use swamp_script_semantic::{ResolvedModuleRef, ResolvedProgram};
 use tracing::{debug, info, trace};
 use tracing_subscriber::EnvFilter;
 
@@ -163,7 +163,7 @@ fn register_print(interpreter: &mut ExternalFunctions<CliContext>) {
         .expect("should work to register");
 }
 
-pub fn eval(resolved_main_module: &ResolvedModule) -> Result<Value, CliError> {
+pub fn eval(resolved_main_module: &ResolvedModuleRef) -> Result<Value, CliError> {
     let mut external_functions = ExternalFunctions::new();
     register_print(&mut external_functions);
     let mut context = CliContext;

@@ -9,9 +9,10 @@ pub enum ConversionError {
 #[derive(Debug, PartialEq, Eq)]
 pub enum ExecuteError {
     Error(String),
+    TypeError(String),
     ConversionError(ConversionError),
     ValueError(ValueError),
-    ArgumentIsNotMutable,
+    ArgumentIsNotMutable(String),
     CanNotUnwrap,
     IllegalIterator,
     ExpectedOptional,

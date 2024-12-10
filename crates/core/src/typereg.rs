@@ -104,7 +104,9 @@ impl TypeRegistry {
             functions: SeqMap::default(),
         }));
 
-        struct_types.insert(name, struct_type.clone()).expect("could not insert name");
+        struct_types
+            .insert(name, struct_type.clone())
+            .expect("could not insert name");
         ResolvedType::Struct(struct_type)
     }
 

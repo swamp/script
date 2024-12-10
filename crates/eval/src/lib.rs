@@ -100,7 +100,7 @@ impl Default for BlockScope {
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct ExternalFunctions<C> {
     external_functions: HashMap<String, EvalExternalFunctionRef<C>>,
     external_functions_by_id: HashMap<ExternalFunctionId, EvalExternalFunctionRef<C>>,
@@ -139,11 +139,11 @@ impl<C> ExternalFunctions<C> {
 
 pub fn eval_module<C>(
     externals: &ExternalFunctions<C>,
-    module: &ResolvedModule,
+    module: &ResolvedModuleRef,
     context: &mut C,
 ) -> Result<Value, ExecuteError> {
     let mut interpreter = Interpreter::<C>::new(externals, context);
-    let signal = interpreter.execute_statements(&module.statements)?;
+    let signal = interpreter.execute_statements(&module.borrow().statements)?;
     Ok(signal.try_into()?)
 }
 
@@ -238,7 +238,7 @@ impl<'a, C> Interpreter<'a, C> {
                         // For mutable parameters, use the SAME reference
                         Value::Reference(r.clone())
                     }
-                    _ => return Err(ExecuteError::ArgumentIsNotMutable), //v => Value::Reference(Rc::new(RefCell::new(v))),
+                    _ => return Err(ExecuteError::ArgumentIsNotMutable(param.name.clone())), //v => Value::Reference(Rc::new(RefCell::new(v))),
                 }
             } else {
                 match arg {
@@ -718,7 +718,11 @@ impl<'a, C> Interpreter<'a, C> {
                 let index_val = self.evaluate_expression(usize_index_expression)?;
                 let index = match index_val {
                     Value::Int(x) => x,
-                    _ => return Err(ExecuteError::ArgumentIsNotMutable),
+                    _ => {
+                        return Err(ExecuteError::ArgumentIsNotMutable(
+                            variable_ref.ast_variable.name.clone(),
+                        ))
+                    }
                 };
                 let array_val = self.lookup_variable(variable_ref)?;
 
@@ -1241,6 +1245,23 @@ impl<'a, C> Interpreter<'a, C> {
                 match value {
                     Value::Option(inner) => Value::Bool(inner.is_some()),
                     _ => return Err(ExecuteError::CoerceOptionToBoolFailed),
+                }
+            }
+
+            ResolvedExpression::FloatRound(expr) => {
+                let value = self.evaluate_expression(expr)?;
+                if let Value::Float(f) = value {
+                    Value::Int(f.round().into())
+                } else {
+                    return Err(ExecuteError::TypeError("Expected float".to_string()));
+                }
+            }
+            ResolvedExpression::FloatFloor(expr) => {
+                let value = self.evaluate_expression(expr)?;
+                if let Value::Float(f) = value {
+                    Value::Int(f.floor().into())
+                } else {
+                    return Err(ExecuteError::TypeError("Expected float".to_string()));
                 }
             }
         };

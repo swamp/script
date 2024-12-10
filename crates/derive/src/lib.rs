@@ -6,7 +6,6 @@ use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{parse_macro_input, DeriveInput};
 
-
 #[proc_macro_derive(SwampExport, attributes(swamp))]
 pub fn derive_swamp_export(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
@@ -78,8 +77,6 @@ pub fn derive_swamp_export(input: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
-
-
 #[proc_macro_attribute]
 pub fn swamp_fn(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input_fn = parse_macro_input!(item as syn::ItemFn);
@@ -105,7 +102,10 @@ pub fn swamp_fn(_attr: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     // Skip the context parameter
-    let args = input_fn.sig.inputs.iter()
+    let args = input_fn
+        .sig
+        .inputs
+        .iter()
         .skip(1)
         .map(|arg| {
             if let syn::FnArg::Typed(pat_type) = arg {
@@ -115,7 +115,8 @@ pub fn swamp_fn(_attr: TokenStream, item: TokenStream) -> TokenStream {
             } else {
                 panic!("self parameters not supported yet")
             }
-        }).collect::<Vec<_>>();
+        })
+        .collect::<Vec<_>>();
 
     let arg_count = args.len();
     let arg_indices = 0..arg_count;
@@ -144,10 +145,10 @@ pub fn swamp_fn(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 pub fn handler<'a>(
                     &'a self,
                     registry: &'a TypeRegistry,
-                ) -> Box<dyn FnMut(&[Value], &mut #context_inner_type) -> Result<Value, ExecuteError> + 'a> {
+                ) -> Box<dyn FnMut(&[Value], &mut #context_inner_type) -> Result<Value, ValueError> + 'a> {
                     Box::new(move |args: &[Value], ctx: &mut #context_inner_type| {
                         if args.len() != #arg_count {
-                            return Err(ExecuteError::WrongNumberOfArguments {
+                            return Err(ValueError::WrongNumberOfArguments {
                                 expected: #arg_count,
                                 got: args.len(),
                             });
@@ -156,7 +157,7 @@ pub fn swamp_fn(_attr: TokenStream, item: TokenStream) -> TokenStream {
                         // Convert arguments
                         #(
                             let #patterns = <#types>::from_swamp_value(&args[#arg_indices])
-                                .map_err(|e| ExecuteError::TypeError(e))?;
+                                .map_err(|e| ValueError::TypeError(e))?;
                         )*
 
                         // Call the function with context

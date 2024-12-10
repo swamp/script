@@ -74,13 +74,14 @@ pub fn to_rust_value<T: RustType + 'static>(type_ref: ResolvedRustTypeRef, value
     )
 }
 
-
 #[derive(Debug, PartialEq, Eq)]
 pub enum ValueError {
     NotAnIterator,
     NotSparseMap,
     CanNotCoerceToIterator,
     ConversionError(String),
+    WrongNumberOfArguments { expected: usize, got: usize },
+    TypeError(String),
 }
 
 // Iterators

@@ -105,7 +105,7 @@ impl LocalIdentifier {
             text: str.to_string(),
         }
     }
-    
+
     pub fn from_str(str: &str) -> Self {
         Self {
             node: Default::default(),

@@ -5,6 +5,7 @@
 pub mod prelude;
 
 use seq_map::{SeqMap, SeqMapError};
+use std::cell::RefCell;
 use std::fmt::Display;
 use std::rc::Rc;
 use swamp_script_ast::prelude::*;
@@ -12,7 +13,7 @@ use swamp_script_ast::{CompoundOperator, ForPattern, Function, PatternElement, P
 use swamp_script_semantic::ns::{LocalTypeName, ResolvedModuleNamespace, SemanticError};
 use swamp_script_semantic::ResolvedType::RustType;
 use swamp_script_semantic::{
-    create_rust_type_generic, prelude::*, ResolvedBoolType, ResolvedForPattern,
+    create_rust_type_generic, prelude::*, ResolvedBoolType, ResolvedForPattern, ResolvedModuleRef,
     ResolvedPatternElement, ResolvedStaticCallGeneric, ResolvedTupleTypeRef,
     ResolvedVariableCompoundAssignment, TypeNumber,
 };
@@ -153,6 +154,8 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
         ResolvedExpression::SparseRemove(_, _) => ResolvedType::Any, // TODO: return correct type
         ResolvedExpression::SparseNew(rust_type_ref, _) => RustType(rust_type_ref.clone()),
         ResolvedExpression::CoerceOptionToBool(_) => ResolvedType::Bool(Rc::new(ResolvedBoolType)),
+        ResolvedExpression::FloatFloor(_) => ResolvedType::Int(Rc::new(ResolvedIntType {})),
+        ResolvedExpression::FloatRound(_) => ResolvedType::Int(Rc::new(ResolvedIntType {})),
         ResolvedExpression::VariableCompoundAssignment(var_compound_assignment) => {
             var_compound_assignment.variable_ref.resolved_type.clone()
         }
@@ -280,7 +283,7 @@ pub struct Resolver<'a> {
     pub types: &'a ResolvedProgramTypes,
     pub state: &'a mut ResolvedProgramState,
     pub modules: &'a ResolvedModules,
-    pub current_module: &'a mut ResolvedModule,
+    pub current_module: Rc<RefCell<ResolvedModule>>,
     pub block_scope_stack: Vec<BlockScope>,
     pub return_type: Option<ResolvedType>,
 }
@@ -290,7 +293,7 @@ impl<'a> Resolver<'a> {
         types: &'a ResolvedProgramTypes,
         state: &'a mut ResolvedProgramState,
         modules: &'a ResolvedModules,
-        current_module: &'a mut ResolvedModule,
+        current_module: Rc<RefCell<ResolvedModule>>,
     ) -> Self {
         let mut scope_stack = Vec::new();
         scope_stack.push(BlockScope::new());
@@ -502,7 +505,7 @@ impl<'a> Resolver<'a> {
     }
 
     #[must_use]
-    pub fn find_module(&self, path: &ModulePath) -> Option<&ResolvedModule> {
+    pub fn find_module(&self, path: &ModulePath) -> Option<&ResolvedModuleRef> {
         self.modules.get(path)
     }
 
@@ -559,7 +562,7 @@ impl<'a> Resolver<'a> {
             &self.types,
             &mut self.state,
             &self.modules,
-            self.current_module,
+            self.current_module.clone(),
         )
     }
 
@@ -577,7 +580,7 @@ impl<'a> Resolver<'a> {
         }
 
         let resolved_struct = ResolvedStructType::new(
-            self.current_module.module_path.clone(),
+            self.current_module.borrow().module_path.clone(),
             ast_struct.identifier.clone(),
             resolved_fields,
             ast_struct.clone(),
@@ -597,6 +600,7 @@ impl<'a> Resolver<'a> {
 
         let parent_ref = self
             .current_module
+            .borrow_mut()
             .namespace
             .create_enum_type(enum_type_name, parent_number)?;
 
@@ -678,11 +682,17 @@ impl<'a> Resolver<'a> {
         match resolved_definition {
             ResolvedDefinition::EnumType(_parent_enum_ref, variants) => {
                 for variant in variants {
-                    self.current_module.namespace.add_enum_variant(variant)?;
+                    self.current_module
+                        .borrow_mut()
+                        .namespace
+                        .add_enum_variant(variant)?;
                 }
             }
             ResolvedDefinition::StructType(struct_type) => {
-                self.current_module.namespace.add_struct_type(struct_type)?;
+                self.current_module
+                    .borrow_mut()
+                    .namespace
+                    .add_struct_type(struct_type)?;
             }
             ResolvedDefinition::Function() => {}
             ResolvedDefinition::ExternalFunction() => {}
@@ -697,11 +707,13 @@ impl<'a> Resolver<'a> {
             ResolvedDefinition::FunctionDef(function_def) => match function_def {
                 ResolvedFunction::Internal(internal_fn) => {
                     self.current_module
+                        .borrow_mut()
                         .namespace
                         .add_internal_function_ref(&internal_fn)?;
                 }
                 ResolvedFunction::External(resolved_external_function_def_ref) => {
                     self.current_module
+                        .borrow_mut()
                         .namespace
                         .add_external_function_declaration_ref(
                             resolved_external_function_def_ref,
@@ -711,6 +723,7 @@ impl<'a> Resolver<'a> {
             ResolvedDefinition::Alias(resolved_type) => match resolved_type {
                 ResolvedType::Alias(name, resolved_type) => {
                     self.current_module
+                        .borrow_mut()
                         .namespace
                         .add_type_alias(&name.0.clone(), *resolved_type.clone())?;
                 }
@@ -1643,6 +1656,7 @@ impl<'a> Resolver<'a> {
 
         let result = self
             .current_module
+            .borrow_mut()
             .namespace
             .get_enum_variant_type(enum_type_ref.name(), &ast_name)
             .map_or_else(
@@ -2199,11 +2213,13 @@ impl<'a> Resolver<'a> {
         self.try_find_variable(variable).map_or_else(
             || {
                 self.current_module
+                    .borrow()
                     .namespace
                     .get_internal_function(&variable.name)
                     .map_or_else(
                         || {
                             self.current_module
+                                .borrow()
                                 .namespace
                                 .get_external_function_declaration(&variable.name)
                                 .map_or_else(
@@ -2641,14 +2657,18 @@ impl<'a> Resolver<'a> {
     fn get_namespace(
         &self,
         qualified_type_identifier: &QualifiedTypeIdentifier,
-    ) -> Result<&ResolvedModuleNamespace, ResolveError> {
+    ) -> Result<std::cell::Ref<'_, ResolvedModuleNamespace>, ResolveError> {
         if let Some(path) = &qualified_type_identifier.module_path {
-            Ok(&self
+            let module_ref = self
                 .find_module(path)
-                .ok_or(ResolveError::CanNotFindModule(path.clone()))?
-                .namespace)
+                .ok_or(ResolveError::CanNotFindModule(path.clone()))?;
+
+            Ok(std::cell::Ref::map(module_ref.borrow(), |m| &m.namespace))
         } else {
-            Ok(&self.current_module.namespace)
+            // Assuming current_module is also a RefCell
+            Ok(std::cell::Ref::map(self.current_module.borrow(), |m| {
+                &m.namespace
+            }))
         }
     }
 
@@ -2961,6 +2981,29 @@ impl<'a> Resolver<'a> {
         Ok(expr)
     }
 
+    fn resolve_float_member_call(
+        &mut self,
+        expr: ResolvedExpression,
+        ast_member_function_name: &LocalIdentifier,
+        ast_arguments: &[Expression],
+    ) -> Result<ResolvedExpression, ResolveError> {
+        match ast_member_function_name.text.as_str() {
+            "round" => {
+                if !ast_arguments.is_empty() {
+                    return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 0));
+                }
+                Ok(ResolvedExpression::FloatRound(Box::new(expr)))
+            }
+            "floor" => {
+                if !ast_arguments.is_empty() {
+                    return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 0));
+                }
+                Ok(ResolvedExpression::FloatFloor(Box::new(expr)))
+            }
+            _ => Err(ResolveError::UnknownMemberFunction),
+        }
+    }
+
     fn check_for_internal_member_call(
         &mut self,
         source: &Expression,
@@ -2968,21 +3011,33 @@ impl<'a> Resolver<'a> {
         ast_arguments: &[Expression],
     ) -> Result<Option<ResolvedExpression>, ResolveError> {
         let resolved_expr = self.resolve_expression(source)?;
-        if let ResolvedType::Array(_) = resolution(&resolved_expr) {
-            if let ResolvedExpression::VariableAccess(var_ref) = resolved_expr {
-                let resolved = self.resolve_array_member_call(
-                    var_ref,
+
+        match resolution(&resolved_expr) {
+            ResolvedType::Array(_) => {
+                if let ResolvedExpression::VariableAccess(var_ref) = resolved_expr {
+                    let resolved = self.resolve_array_member_call(
+                        var_ref,
+                        ast_member_function_name,
+                        ast_arguments,
+                    )?;
+                    return Ok(Some(resolved));
+                }
+            }
+            ResolvedType::Float(_) => {
+                let resolved = self.resolve_float_member_call(
+                    resolved_expr,
                     ast_member_function_name,
                     ast_arguments,
                 )?;
                 return Ok(Some(resolved));
             }
-        } else {
-            return self.check_for_internal_member_call_extra(
-                resolved_expr,
-                ast_member_function_name,
-                ast_arguments,
-            );
+            _ => {
+                return self.check_for_internal_member_call_extra(
+                    resolved_expr,
+                    ast_member_function_name,
+                    ast_arguments,
+                );
+            }
         }
         Ok(None)
     }

@@ -17,8 +17,8 @@ use std::hash::Hash;
 use std::rc::Rc;
 pub use swamp_script_ast::{
     AnonymousStruct, BinaryOperator, CompoundOperator, Expression, FormatSpecifier, IdentifierName,
-    ImplMember, LocalIdentifier, LocalTypeIdentifier, MatchArm, ModulePath, Parameter,
-    PostfixOperator, PrecisionType, StringConst, StructType, UnaryOperator, Variable, Node, Position,
+    ImplMember, LocalIdentifier, LocalTypeIdentifier, MatchArm, ModulePath, Node, Parameter,
+    Position, PostfixOperator, PrecisionType, StringConst, StructType, UnaryOperator, Variable,
 };
 
 #[derive(Debug, Clone)]
@@ -829,6 +829,9 @@ pub enum ResolvedExpression {
     ArrayRemoveIndex(ResolvedVariableRef, Box<ResolvedExpression>),
     ArrayClear(ResolvedVariableRef),
 
+    FloatRound(Box<ResolvedExpression>),
+    FloatFloor(Box<ResolvedExpression>),
+
     // --- Special methods
     // TODO: Have a better interface for these "engine" member calls
     SparseAdd(Box<ResolvedExpression>, Box<ResolvedExpression>),
@@ -1004,6 +1007,7 @@ impl Display for ResolvedExpression {
             ResolvedExpression::FieldCompoundAssignment(_) => {
                 write!(f, "field compound assignment")
             }
+            &ResolvedExpression::FloatRound(_) | &ResolvedExpression::FloatFloor(_) => todo!(),
         }
     }
 }
@@ -1450,6 +1454,8 @@ pub struct ResolvedModule {
     pub module_path: ModulePath,
 }
 
+pub type ResolvedModuleRef = Rc<RefCell<ResolvedModule>>;
+
 impl Display for ResolvedModule {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "namespace:\n{}", self.namespace)?;
@@ -1490,7 +1496,7 @@ pub enum ResolvedDefinition {
 
 #[derive(Debug)]
 pub struct ResolvedModules {
-    pub modules: HashMap<ModulePath, ResolvedModule>,
+    pub modules: HashMap<ModulePath, ResolvedModuleRef>,
 }
 
 impl Default for ResolvedModules {
@@ -1506,16 +1512,26 @@ impl ResolvedModules {
         }
     }
 
-    pub fn add_module(&mut self, module: ResolvedModule) -> Result<(), SemanticError> {
-        self.modules.insert(module.module_path.clone(), module);
+    pub fn add_module(&mut self, module_ref: ResolvedModuleRef) -> Result<(), SemanticError> {
+        let name = module_ref.borrow().module_path.clone();
+        self.modules.insert(name, module_ref);
         Ok(())
     }
 
-    pub fn get(&self, module_path: &ModulePath) -> Option<&ResolvedModule> {
+    pub fn add_linked_module(
+        &mut self,
+        module_path: ModulePath,
+        module: ResolvedModuleRef,
+    ) -> Result<(), SemanticError> {
+        self.modules.insert(module_path.clone(), module);
+        Ok(())
+    }
+
+    pub fn get(&self, module_path: &ModulePath) -> Option<&ResolvedModuleRef> {
         self.modules.get(module_path)
     }
 
-    pub fn get_mut(&mut self, module_path: &ModulePath) -> Option<&mut ResolvedModule> {
+    pub fn get_mut(&mut self, module_path: &ModulePath) -> Option<&mut ResolvedModuleRef> {
         self.modules.get_mut(module_path)
     }
 
@@ -1527,7 +1543,7 @@ impl ResolvedModules {
 impl Display for ResolvedModules {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (module_path, module) in &self.modules {
-            writeln!(f, "{}\n  {}", module_path, module)?
+            writeln!(f, "{}\n  {}", module_path, module.borrow())?
         }
         Ok(())
     }
