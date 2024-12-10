@@ -831,6 +831,8 @@ pub enum ResolvedExpression {
 
     FloatRound(Box<ResolvedExpression>),
     FloatFloor(Box<ResolvedExpression>),
+    FloatSign(Box<ResolvedExpression>),
+    FloatAbs(Box<ResolvedExpression>),
 
     // --- Special methods
     // TODO: Have a better interface for these "engine" member calls
@@ -1008,6 +1010,7 @@ impl Display for ResolvedExpression {
                 write!(f, "field compound assignment")
             }
             &ResolvedExpression::FloatRound(_) | &ResolvedExpression::FloatFloor(_) => todo!(),
+            &ResolvedExpression::FloatSign(_) | &ResolvedExpression::FloatAbs(_) => todo!(),
         }
     }
 }

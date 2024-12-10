@@ -156,6 +156,8 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
         ResolvedExpression::CoerceOptionToBool(_) => ResolvedType::Bool(Rc::new(ResolvedBoolType)),
         ResolvedExpression::FloatFloor(_) => ResolvedType::Int(Rc::new(ResolvedIntType {})),
         ResolvedExpression::FloatRound(_) => ResolvedType::Int(Rc::new(ResolvedIntType {})),
+        ResolvedExpression::FloatSign(_) => ResolvedType::Float(Rc::new(ResolvedFloatType {})),
+        ResolvedExpression::FloatAbs(_) => ResolvedType::Float(Rc::new(ResolvedFloatType {})),
         ResolvedExpression::VariableCompoundAssignment(var_compound_assignment) => {
             var_compound_assignment.variable_ref.resolved_type.clone()
         }
@@ -3002,6 +3004,18 @@ impl<'a> Resolver<'a> {
                     return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 0));
                 }
                 Ok(ResolvedExpression::FloatFloor(Box::new(expr)))
+            }
+            "sign" => {
+                if !ast_arguments.is_empty() {
+                    return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 0));
+                }
+                Ok(ResolvedExpression::FloatSign(Box::new(expr)))
+            }
+            "abs" => {
+                if !ast_arguments.is_empty() {
+                    return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 0));
+                }
+                Ok(ResolvedExpression::FloatAbs(Box::new(expr)))
             }
             _ => Err(ResolveError::UnknownMemberFunction),
         }

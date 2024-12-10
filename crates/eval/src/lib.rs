@@ -1264,6 +1264,30 @@ impl<'a, C> Interpreter<'a, C> {
                     return Err(ExecuteError::TypeError("Expected float".to_string()));
                 }
             }
+
+            ResolvedExpression::FloatSign(expr) => {
+                let value = self.evaluate_expression(expr)?;
+                if let Value::Float(f) = value {
+                    let signum = if f.inner() < 0 {
+                        -1
+                    } else if f.inner() > 0 {
+                        1
+                    } else {
+                        0
+                    };
+                    Value::Float(Fp::from(signum as i16))
+                } else {
+                    return Err(ExecuteError::TypeError("Expected float".to_string()));
+                }
+            }
+            ResolvedExpression::FloatAbs(expr) => {
+                let value = self.evaluate_expression(expr)?;
+                if let Value::Float(f) = value {
+                    Value::Float(f.abs())
+                } else {
+                    return Err(ExecuteError::TypeError("Expected float".to_string()));
+                }
+            }
         };
 
         Ok(value)
