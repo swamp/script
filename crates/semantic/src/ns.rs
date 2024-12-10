@@ -345,7 +345,8 @@ impl ResolvedModuleNamespace {
         enum_type_name: &LocalTypeIdentifier,
         number: TypeNumber,
     ) -> Result<ResolvedEnumTypeRef, SemanticError> {
-        let resolved_parent_type = ResolvedEnumType::new(enum_type_name.clone(), number);
+        let resolved_parent_type =
+            ResolvedEnumType::new(enum_type_name.clone(), self.path.clone(), number);
 
         let enum_type_ref = Rc::new(resolved_parent_type);
 
@@ -383,8 +384,15 @@ impl ResolvedModuleNamespace {
         enum_name: &LocalTypeIdentifier,
         enum_variant_name: &LocalTypeIdentifier,
     ) -> Option<&ResolvedEnumVariantTypeRef> {
-        let complete_name =
-            LocalTypeName(format!("{}::{}", enum_name.text, enum_variant_name.text));
+        self.get_enum_variant_type_str(&enum_name.text, &enum_variant_name.text)
+    }
+
+    pub fn get_enum_variant_type_str(
+        &self,
+        enum_name: &str,
+        enum_variant_name: &str,
+    ) -> Option<&ResolvedEnumVariantTypeRef> {
+        let complete_name = LocalTypeName(format!("{}::{}", enum_name, enum_variant_name));
         info!("Looking up variant: '{}' in namespace", complete_name);
         let result = self.enum_variant_types.get(&complete_name);
         if let Some(variant) = result {

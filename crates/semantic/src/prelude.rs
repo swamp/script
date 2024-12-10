@@ -9,7 +9,7 @@ pub use crate::{
     IdentifierName, LocalIdentifier, LocalTypeIdentifier, ModulePath, Node, Parameter,
     PostfixOperator, ResolvedArrayItem, ResolvedArrayItemRef, ResolvedArrayType,
     ResolvedArrayTypeRef, ResolvedBinaryOperator, ResolvedBoolType, ResolvedBoolTypeRef,
-    ResolvedBooleanExpression, ResolvedEnumLiteralData, ResolvedEnumType,
+    ResolvedBooleanExpression, ResolvedEnumLiteralData, ResolvedEnumType, ResolvedEnumTypeRef,
     ResolvedEnumVariantContainerType, ResolvedEnumVariantStructFieldType,
     ResolvedEnumVariantStructType, ResolvedEnumVariantTupleFieldType, ResolvedEnumVariantTupleType,
     ResolvedEnumVariantType, ResolvedEnumVariantTypeRef, ResolvedExpression,

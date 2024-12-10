@@ -1293,6 +1293,7 @@ pub type ResolvedEnumTypeRef = Rc<ResolvedEnumType>;
 #[derive(Debug)]
 pub struct ResolvedEnumType {
     pub name: LocalTypeIdentifier,
+    pub module_path: ModulePath,
     pub number: TypeNumber,
 }
 
@@ -1303,8 +1304,12 @@ impl Display for ResolvedEnumType {
 }
 
 impl ResolvedEnumType {
-    pub fn new(name: LocalTypeIdentifier, number: TypeNumber) -> Self {
-        Self { name, number }
+    pub fn new(name: LocalTypeIdentifier, module_path: ModulePath, number: TypeNumber) -> Self {
+        Self {
+            name,
+            module_path,
+            number,
+        }
     }
 
     pub fn name(&self) -> &LocalTypeIdentifier {

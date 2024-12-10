@@ -1654,9 +1654,12 @@ impl<'a> Resolver<'a> {
             _ => Err(ResolveError::ExpectedEnumInPattern(ast_name.clone()))?,
         };
 
-        let result = self
-            .current_module
-            .borrow_mut()
+        let module = self
+            .find_module(&enum_type_ref.module_path)
+            .expect("should find path");
+
+        let result = module
+            .borrow()
             .namespace
             .get_enum_variant_type(enum_type_ref.name(), &ast_name)
             .map_or_else(
