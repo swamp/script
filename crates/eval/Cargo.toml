@@ -23,3 +23,4 @@ swamp-script-parser = { path = "../parser", version = "0.0.6" }
 swamp-script-dep-loader = { path = "../dep-loader", version = "0.0.6" }
 swamp-script-analyzer = { path = "../analyzer", version = "0.0.6" }
 swamp-script-eval-loader = { path = "../eval-loader", version = "0.0.6" }
+swamp-script-std = { path = "../std", version = "0.0.6" }

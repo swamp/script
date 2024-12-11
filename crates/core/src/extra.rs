@@ -2,9 +2,7 @@ use crate::idx_gen::IndexAllocator;
 use crate::value::{to_rust_value, Value};
 use sparse_slot::{Id, SparseSlot};
 use std::fmt::{Display, Formatter};
-use swamp_script_semantic::{
-    create_rust_type, create_rust_type_generic, ResolvedRustTypeRef, ResolvedType,
-};
+use swamp_script_semantic::{create_rust_type, ResolvedRustTypeRef, ResolvedType};
 
 #[derive(Debug)]
 pub struct SparseValueId(pub Id);
@@ -20,7 +18,8 @@ pub struct SparseValueMap {
     pub sparse_slot: SparseSlot<Value>,
     pub id_generator: IndexAllocator,
     pub type_parameter: ResolvedType,
-    pub rust_type_ref: ResolvedRustTypeRef,
+    //pub rust_type_ref: ResolvedRustTypeRef,
+    pub resolved_type: ResolvedType,
     pub rust_type_ref_for_id: ResolvedRustTypeRef,
 }
 
@@ -36,15 +35,17 @@ impl Display for SparseValueMap {
 }
 
 impl SparseValueMap {
-    pub fn new(type_parameter: ResolvedType) -> Self {
-        let rust_type_ref = create_rust_type_generic("Sparse", &type_parameter, 0);
-        let rust_type_ref_for_id = create_rust_type("SparseId", 1);
-
+    pub fn new(resolved_type: ResolvedType) -> Self {
+        let type_parameter = match &resolved_type {
+            ResolvedType::Generic(_, parameters) => parameters[0].clone(),
+            _ => panic!("illegal sparse type. not generic"),
+        };
+        let rust_type_ref_for_id = create_rust_type("SparseId", 998);
         Self {
             sparse_slot: SparseSlot::<Value>::new(1024),
             id_generator: IndexAllocator::new(),
             type_parameter,
-            rust_type_ref,
+            resolved_type,
             rust_type_ref_for_id,
         }
     }
@@ -59,7 +60,7 @@ impl SparseValueMap {
 
         let script_id = SparseValueId(id);
 
-        to_rust_value(self.rust_type_ref.clone(), script_id)
+        to_rust_value(self.rust_type_ref_for_id.clone(), script_id)
     }
 
     pub fn remove(&mut self, id: &SparseValueId) {

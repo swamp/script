@@ -118,6 +118,23 @@ impl ResolvedType {
             (Self::RustType(type_ref_a), Self::RustType(type_ref_b)) => {
                 type_ref_a.number == type_ref_b.number
             }
+
+            (Self::Generic(base_a, params_a), Self::Generic(base_b, params_b)) => {
+                if !base_a.same_type(base_b) {
+                    return false;
+                }
+
+                if params_a.len() != params_b.len() {
+                    return false;
+                }
+
+                for (param_a, param_b) in params_a.iter().zip(params_b) {
+                    if !param_a.same_type(param_b) {
+                        return false;
+                    }
+                }
+                true
+            }
             _ => false,
         }
     }
@@ -431,16 +448,12 @@ pub struct ResolvedMemberCall {
     pub function: ResolvedFunctionRef,
     pub arguments: Vec<ResolvedExpression>,
     pub self_expression: Box<ResolvedExpression>,
-    pub struct_type_ref: ResolvedStructTypeRef,
+    //pub struct_type_ref: ResolvedStructTypeRef,
     pub self_is_mutable: bool,
 }
 impl Display for ResolvedMemberCall {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "(< {} >.{:?}",
-            self.self_expression, self.struct_type_ref
-        )?;
+        write!(f, "(< {} >.{:?}", self.self_expression, self.function)?;
 
         if !self.arguments.is_empty() {
             write!(f, " <- {}", comma(&self.arguments))?;
@@ -720,18 +733,6 @@ pub struct ResolvedFieldCompoundAssignment {
     pub ast_operator: CompoundOperator,
 }
 
-pub fn create_rust_type_generic(
-    name: &str,
-    type_parameter: &ResolvedType,
-    type_number: TypeNumber,
-) -> ResolvedRustTypeRef {
-    let rust_type = ResolvedRustType {
-        type_name: format!("{}<{}>", name, type_parameter.display_name()),
-        number: type_number,
-    };
-    Rc::new(rust_type)
-}
-
 pub fn create_rust_type(name: &str, type_number: TypeNumber) -> ResolvedRustTypeRef {
     let rust_type = ResolvedRustType {
         type_name: name.to_string(),
@@ -1009,8 +1010,12 @@ impl Display for ResolvedExpression {
             ResolvedExpression::FieldCompoundAssignment(_) => {
                 write!(f, "field compound assignment")
             }
-            &ResolvedExpression::FloatRound(_) | &ResolvedExpression::FloatFloor(_) => todo!(),
-            &ResolvedExpression::FloatSign(_) | &ResolvedExpression::FloatAbs(_) => todo!(),
+            &ResolvedExpression::FloatRound(_) | &ResolvedExpression::FloatFloor(_) => {
+                write!(f, "float members")
+            }
+            &ResolvedExpression::FloatSign(_) | &ResolvedExpression::FloatAbs(_) => {
+                write!(f, "float members")
+            }
         }
     }
 }

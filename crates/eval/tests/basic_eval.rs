@@ -1122,6 +1122,58 @@ fn sparse_map_iterate() {
 }
 
 #[test_log::test]
+fn sparse_map_struct_iterate() {
+    check(
+        "
+
+    struct Projectile {
+        x: Float,
+        y: Float,
+    }
+
+    mut sparse = Sparse<Projectile>::new()
+    sparse_id = sparse.add(Projectile {x: 1.0, y: 2.0})
+    sparse.add(Projectile {x: 1.0, y: 3.0})
+
+    print(sparse)
+    print(sparse_id)
+
+    for x in sparse {
+        print(x)
+    }
+    ",
+        "\
+    Sparse<Projectile { x: Float, y: Float }> len:2
+    id:0:0
+    Projectile { x: 1.00, y: 2.00 }
+    Projectile { x: 1.00, y: 3.00 }
+    ",
+    );
+}
+
+#[test_log::test]
+fn sparse_map_struct_empty_iterator() {
+    check(
+        "
+
+    struct Projectile {
+        x: Float,
+        y: Float,
+    }
+
+    mut sparse = Sparse<Projectile>::new()
+    print('before')
+    for x in sparse {
+        print(x)
+    }
+    ",
+        "\
+        before
+    ",
+    );
+}
+
+#[test_log::test]
 fn sparse_map_iterate_pairs() {
     check(
         "
@@ -1145,6 +1197,23 @@ fn sparse_map_iterate_pairs() {
     2
     id:1:0
     3
+    ",
+    );
+}
+
+#[test_log::test]
+fn sparse_map_in_field() {
+    check(
+        "
+    struct Hello {
+        sparse: std::Sparse<Int>,
+    }
+
+    h = Hello {
+        sparse: Sparse<Int>::new()
+    }
+    ",
+        "\
     ",
     );
 }

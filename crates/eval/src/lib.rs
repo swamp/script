@@ -460,7 +460,7 @@ impl<'a, C> Interpreter<'a, C> {
         }
         let existing_var = &variables[variable_index];
 
-        trace!("VAR: lookup {relative_scope_index}:{variable_index} > {existing_var:?}");
+        trace!("VAR: lookup {relative_scope_index}:{variable_index} > {existing_var}");
         Ok(existing_var)
     }
 
@@ -1206,15 +1206,16 @@ impl<'a, C> Interpreter<'a, C> {
             },
 
             // --------------- SPECIAL FUNCTIONS
-            ResolvedExpression::SparseNew(rust_type_ref, generic_type) => {
-                let sparse_value_map = SparseValueMap::new(generic_type.clone());
+            ResolvedExpression::SparseNew(rust_type_ref, resolved_type) => {
+                let sparse_value_map = SparseValueMap::new(resolved_type.clone());
                 to_rust_value(rust_type_ref.clone(), sparse_value_map)
             }
 
             ResolvedExpression::SparseAdd(sparse_rust, value_expression) => {
                 let resolved_sparse_value = self.evaluate_expression(sparse_rust)?;
 
-                let sparse_value_map = resolved_sparse_value.downcast_rust_mut::<SparseValueMap>();
+                let sparse_value_map =
+                    resolved_sparse_value.downcast_rust_mut_or_not::<SparseValueMap>(); // TODO: Make this a bit more intuitive than it should guess if it is a reference or not.
                 if let Some(found) = sparse_value_map {
                     let resolved_value = self.evaluate_expression(value_expression)?;
                     let id_value = found.borrow_mut().add(resolved_value);

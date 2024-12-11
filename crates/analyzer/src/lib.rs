@@ -11,9 +11,8 @@ use std::rc::Rc;
 use swamp_script_ast::prelude::*;
 use swamp_script_ast::{CompoundOperator, ForPattern, Function, PatternElement, PostfixOperator};
 use swamp_script_semantic::ns::{LocalTypeName, ResolvedModuleNamespace, SemanticError};
-use swamp_script_semantic::ResolvedType::RustType;
 use swamp_script_semantic::{
-    create_rust_type_generic, prelude::*, ResolvedBoolType, ResolvedForPattern, ResolvedModuleRef,
+    create_rust_type, prelude::*, ResolvedBoolType, ResolvedForPattern, ResolvedModuleRef,
     ResolvedPatternElement, ResolvedStaticCallGeneric, ResolvedTupleTypeRef,
     ResolvedVariableCompoundAssignment, TypeNumber,
 };
@@ -24,7 +23,9 @@ use swamp_script_semantic::{
 use swamp_script_semantic::{ResolvedMapIndexLookup, ResolvedProgramTypes};
 use swamp_script_semantic::{ResolvedMapType, ResolvedProgramState};
 use swamp_script_semantic::{ResolvedModules, ResolvedPostfixOperator};
-use tracing::{debug, error, info, trace};
+use tracing::{debug, error, info, trace, warn};
+
+pub const SPARSE_TYPE_ID: TypeNumber = 999;
 
 pub fn signature(f: &ResolvedFunction) -> &ResolvedFunctionSignature {
     match f {
@@ -152,7 +153,7 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
         ResolvedExpression::ArrayClear(variable_ref) => variable_ref.resolved_type.clone(),
         ResolvedExpression::SparseAdd(_, _) => ResolvedType::Any, // TODO: return correct type
         ResolvedExpression::SparseRemove(_, _) => ResolvedType::Any, // TODO: return correct type
-        ResolvedExpression::SparseNew(rust_type_ref, _) => RustType(rust_type_ref.clone()),
+        ResolvedExpression::SparseNew(_rust_type_ref, resolved_type) => resolved_type.clone(),
         ResolvedExpression::CoerceOptionToBool(_) => ResolvedType::Bool(Rc::new(ResolvedBoolType)),
         ResolvedExpression::FloatFloor(_) => ResolvedType::Int(Rc::new(ResolvedIntType {})),
         ResolvedExpression::FloatRound(_) => ResolvedType::Int(Rc::new(ResolvedIntType {})),
@@ -241,6 +242,8 @@ pub enum ResolveError {
     },
     NotInFunction,
     ExpectedBooleanExpression,
+    NotAnIterator,
+    UnsupportedIteratorPairs,
 }
 
 impl From<SemanticError> for ResolveError {
@@ -524,6 +527,8 @@ impl<'a> Resolver<'a> {
             ResolvedType::Struct(found.clone())
         } else if let Some(found) = namespace.get_enum(type_ident) {
             ResolvedType::Enum(found.clone())
+        } else if let Some(found) = namespace.get_built_in_rust_type(type_ident) {
+            ResolvedType::RustType(found.clone())
         } else {
             Err(ResolveError::UnknownTypeReference(
                 type_name_to_find.clone(),
@@ -998,11 +1003,18 @@ impl<'a> Resolver<'a> {
                 let second_var = Variable::new(&second.text, false);
 
                 // TODO: Resolve the iterator completely, so we know what types that are returned
-
-                let first_ref = self.create_local_variable(&first_var, &ResolvedType::Any)?;
-                let second_ref = self.create_local_variable(&second_var, &ResolvedType::Any)?;
-
-                Ok(ResolvedForPattern::Pair(first_ref, second_ref))
+                if let ResolvedType::Tuple(tuple_types) = item_type {
+                    if tuple_types.0.len() != 2 {
+                        return Err(ResolveError::UnsupportedIteratorPairs);
+                    }
+                    let first_ref =
+                        self.create_local_variable(&first_var, &tuple_types.0[0].clone())?;
+                    let second_ref =
+                        self.create_local_variable(&second_var, &tuple_types.0[1].clone())?;
+                    Ok(ResolvedForPattern::Pair(first_ref, second_ref))
+                } else {
+                    Err(ResolveError::UnsupportedIteratorPairs)
+                }
             }
         }
     }
@@ -1056,7 +1068,7 @@ impl<'a> Resolver<'a> {
         debug!(?self.return_type, "current return type context");
         let converted = match statement {
             Statement::ForLoop(pattern, expression, statements) => {
-                let resolved_iterator = self.resolve_iterator(expression)?;
+                let resolved_iterator = self.resolve_iterator(&pattern, expression)?;
 
                 self.push_block_scope("for_loop");
                 let pattern = self.resolve_for_pattern(pattern, &resolved_iterator.item_type)?;
@@ -1170,6 +1182,7 @@ impl<'a> Resolver<'a> {
         let expression = match ast_expression {
             // Lookups
             Expression::FieldAccess(expression, field_name) => {
+                warn!(expression=?expression, name=?field_name, "FIELD ACCESS!");
                 let struct_field_ref =
                     self.resolve_into_struct_field_ref(expression.as_ref(), field_name.clone())?;
                 ResolvedExpression::FieldAccess(struct_field_ref)
@@ -1497,6 +1510,7 @@ impl<'a> Resolver<'a> {
         let resolved_expr = self.resolve_expression(struct_expression)?;
         let resolved_type = resolution(&resolved_expr);
         let ResolvedType::Struct(struct_ref) = &resolved_type else {
+            warn!(found_type=?resolved_type, expr=?resolved_expr, "NOT STRUCT TYPE");
             return Err(ResolveError::WasNotStructType(struct_expression.clone()));
         };
 
@@ -1548,6 +1562,30 @@ impl<'a> Resolver<'a> {
         match resolved_type {
             ResolvedType::Struct(named_struct) => Ok((named_struct, resolved)),
             _ => Err(ResolveError::NotNamedStruct(struct_expression.clone())),
+        }
+    }
+
+    fn resolve_into_member_function(
+        &mut self,
+        expression: &Expression,
+        ast_member_function_name: &LocalIdentifier,
+    ) -> Result<(ResolvedFunctionRef, ResolvedExpression), ResolveError> {
+        let resolved = self.resolve_expression(expression)?;
+
+        let resolved_type = resolution(&resolved);
+        match resolved_type {
+            ResolvedType::Struct(resolved_struct_type_ref) => {
+                let struct_ref = resolved_struct_type_ref.borrow();
+                if let Some(function_ref) = struct_ref
+                    .functions
+                    .get(&IdentifierName(ast_member_function_name.text.clone()))
+                {
+                    Ok((function_ref.clone(), resolved))
+                } else {
+                    Err(ResolveError::NotNamedStruct(expression.clone()))
+                }
+            }
+            _ => Err(ResolveError::NotNamedStruct(expression.clone())),
         }
     }
 
@@ -1658,7 +1696,7 @@ impl<'a> Resolver<'a> {
 
         let module = self
             .find_module(&enum_type_ref.module_path)
-            .expect("should find path");
+            .unwrap_or(&self.current_module);
 
         let result = module
             .borrow()
@@ -1835,6 +1873,7 @@ impl<'a> Resolver<'a> {
 
     fn resolve_iterator(
         &mut self,
+        for_pattern: &ForPattern,
         expression: &Expression,
     ) -> Result<ResolvedIterator, ResolveError> {
         let resolved_expression = self.resolve_expression(expression)?;
@@ -1842,7 +1881,23 @@ impl<'a> Resolver<'a> {
         let item_type = match resolved_type {
             ResolvedType::Array(array_type) => array_type.item_type.clone(),
             ResolvedType::ExclusiveRange(_) => self.types.int_type(),
-            _ => ResolvedType::Any,
+            ResolvedType::Generic(_base_type, params) => {
+                // TODO: HACK: We assume it is a container that iterates over the type parameters
+                match for_pattern {
+                    ForPattern::Single(_) => params[0].clone(),
+                    ForPattern::Pair(_, _) => {
+                        // TODO: HACK: We assume that it is a sparse map
+                        // TODO: HACK: Remove hardcoded number
+                        let rust_type_ref_for_id = create_rust_type("SparseId", 998);
+                        let rust_id_type = ResolvedType::RustType(rust_type_ref_for_id);
+                        ResolvedType::Tuple(ResolvedTupleTypeRef::from(ResolvedTupleType(vec![
+                            rust_id_type,
+                            params[0].clone(),
+                        ])))
+                    }
+                }
+            }
+            _ => return Err(ResolveError::NotAnIterator),
         };
 
         Ok(ResolvedIterator {
@@ -2033,57 +2088,46 @@ impl<'a> Resolver<'a> {
         ast_member_function_name: &LocalIdentifier,
         ast_arguments: &Vec<Expression>,
     ) -> Result<ResolvedMemberCall, ResolveError> {
-        let (resolved_struct_type_ref, resolved_expression) =
-            self.resolve_into_named_struct_ref(ast_member_expression)?;
+        let (function_ref, resolved_expression) =
+            self.resolve_into_member_function(ast_member_expression, ast_member_function_name)?;
 
-        let struct_ref = resolved_struct_type_ref.borrow();
-        if let Some(function_ref) = struct_ref
-            .functions
-            .get(&IdentifierName(ast_member_function_name.text.clone()))
-        {
-            let (is_self_mutable, signature) = match &**function_ref {
-                ResolvedFunction::Internal(function_data) => {
-                    let first_param = function_data
-                        .signature
-                        .parameters
-                        .first()
-                        .ok_or_else(|| ResolveError::WrongNumberOfArguments(0, 1))?;
-                    (first_param.is_mutable, &function_data.signature)
-                }
-                ResolvedFunction::External(external) => {
-                    let first_param = external
-                        .signature
-                        .parameters
-                        .first()
-                        .ok_or_else(|| ResolveError::WrongNumberOfArguments(0, 1))?;
-                    (first_param.is_mutable, &external.signature)
-                }
-            };
-
-            // Validate argument count (subtract 1 for self parameter)
-            if ast_arguments.len() != signature.parameters.len() - 1 {
-                return Err(ResolveError::WrongNumberOfArguments(
-                    ast_arguments.len(),
-                    signature.parameters.len() - 1,
-                ));
+        let (is_self_mutable, signature) = match &*function_ref {
+            ResolvedFunction::Internal(function_data) => {
+                let first_param = function_data
+                    .signature
+                    .parameters
+                    .first()
+                    .ok_or_else(|| ResolveError::WrongNumberOfArguments(0, 1))?;
+                (first_param.is_mutable, &function_data.signature)
             }
+            ResolvedFunction::External(external) => {
+                let first_param = external
+                    .signature
+                    .parameters
+                    .first()
+                    .ok_or_else(|| ResolveError::WrongNumberOfArguments(0, 1))?;
+                (first_param.is_mutable, &external.signature)
+            }
+        };
 
-            // Now resolve the arguments
-            let resolved_arguments = self.resolve_expressions(ast_arguments)?;
-
-            Ok(ResolvedMemberCall {
-                function: function_ref.clone(),
-                arguments: resolved_arguments,
-                self_expression: Box::new(resolved_expression),
-                struct_type_ref: resolved_struct_type_ref.clone(),
-                self_is_mutable: is_self_mutable,
-            })
-        } else {
-            Err(ResolveError::CouldNotFindMember(
-                ast_member_function_name.clone(),
-                ast_member_expression.clone(),
-            ))
+        // Validate argument count (subtract 1 for self parameter)
+        if ast_arguments.len() != signature.parameters.len() - 1 {
+            return Err(ResolveError::WrongNumberOfArguments(
+                ast_arguments.len(),
+                signature.parameters.len() - 1,
+            ));
         }
+
+        // Now resolve the arguments
+        let resolved_arguments = self.resolve_expressions(ast_arguments)?;
+
+        Ok(ResolvedMemberCall {
+            function: function_ref.clone(),
+            arguments: resolved_arguments,
+            self_expression: Box::new(resolved_expression),
+            // struct_type_ref: resolved_struct_type_ref.clone(),
+            self_is_mutable: is_self_mutable,
+        })
     }
 
     fn resolve_binary_op(
@@ -3066,37 +3110,40 @@ impl<'a> Resolver<'a> {
         ast_arguments: &[Expression],
     ) -> Result<Option<ResolvedExpression>, ResolveError> {
         // TODO: Early out
-        if let ResolvedType::RustType(rust_type_ref) = resolution(&self_expression) {
-            if rust_type_ref.as_ref().number == 0 {
-                match ast_member_function_name.text.as_str() {
-                    "add" => {
-                        if ast_arguments.len() != 1 {
-                            return Err(ResolveError::WrongNumberOfArguments(
-                                ast_arguments.len(),
-                                1,
-                            ));
+        if let ResolvedType::Generic(generic_type, _parameters) = resolution(&self_expression) {
+            if let ResolvedType::RustType(rust_type_ref) = *generic_type {
+                if rust_type_ref.as_ref().number == SPARSE_TYPE_ID {
+                    // TODO: Remove hack
+                    match ast_member_function_name.text.as_str() {
+                        "add" => {
+                            if ast_arguments.len() != 1 {
+                                return Err(ResolveError::WrongNumberOfArguments(
+                                    ast_arguments.len(),
+                                    1,
+                                ));
+                            }
+                            let value = self.resolve_expression(&ast_arguments[0])?;
+                            return Ok(Some(ResolvedExpression::SparseAdd(
+                                Box::new(self_expression),
+                                Box::new(value),
+                            )));
                         }
-                        let value = self.resolve_expression(&ast_arguments[0])?;
-                        return Ok(Some(ResolvedExpression::SparseAdd(
-                            Box::new(self_expression),
-                            Box::new(value),
-                        )));
-                    }
-                    "remove" => {
-                        if ast_arguments.len() != 1 {
-                            return Err(ResolveError::WrongNumberOfArguments(
-                                ast_arguments.len(),
-                                1,
-                            ));
+                        "remove" => {
+                            if ast_arguments.len() != 1 {
+                                return Err(ResolveError::WrongNumberOfArguments(
+                                    ast_arguments.len(),
+                                    1,
+                                ));
+                            }
+                            let sparse_slot_id_expression =
+                                self.resolve_expression(&ast_arguments[0])?;
+                            return Ok(Some(ResolvedExpression::SparseRemove(
+                                Box::new(self_expression),
+                                Box::new(sparse_slot_id_expression),
+                            )));
                         }
-                        let sparse_slot_id_expression =
-                            self.resolve_expression(&ast_arguments[0])?;
-                        return Ok(Some(ResolvedExpression::SparseRemove(
-                            Box::new(self_expression),
-                            Box::new(sparse_slot_id_expression),
-                        )));
+                        _ => {}
                     }
-                    _ => {}
                 }
             }
         }
@@ -3141,7 +3188,6 @@ impl<'a> Resolver<'a> {
         generic_types: &Vec<Type>,
         arguments: &Vec<Expression>,
     ) -> Result<Option<ResolvedExpression>, ResolveError> {
-        // Check for Sparse::new()
         if type_name.text == "Sparse" && function_name.text == "new" {
             if !arguments.is_empty() {
                 return Err(ResolveError::WrongNumberOfArguments(arguments.len(), 0));
@@ -3154,9 +3200,19 @@ impl<'a> Resolver<'a> {
                 ));
             }
 
+            let rust_type_ref = Rc::new(ResolvedRustType {
+                type_name: "Sparse".to_string(),
+                number: SPARSE_TYPE_ID, // TODO: FIX hardcoded number
+            });
+
+            let rust_type_base = ResolvedType::RustType(rust_type_ref.clone());
+
+            let resolved_type =
+                ResolvedType::Generic(Box::from(rust_type_base), resolved_generic_types);
+
             return Ok(Some(ResolvedExpression::SparseNew(
-                create_rust_type_generic("Sparse", &resolved_generic_types[0], 0),
-                resolved_generic_types[0].clone(),
+                rust_type_ref,
+                resolved_type,
             )));
         }
 

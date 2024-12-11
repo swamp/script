@@ -7,8 +7,8 @@ use crate::{
     ResolvedEnumVariantType, ResolvedEnumVariantTypeRef, ResolvedExternalFunctionDefinition,
     ResolvedExternalFunctionDefinitionRef, ResolvedFunction, ResolvedFunctionSignature,
     ResolvedInternalFunctionDefinition, ResolvedInternalFunctionDefinitionRef, ResolvedParameter,
-    ResolvedStructType, ResolvedStructTypeRef, ResolvedTupleType, ResolvedTupleTypeRef,
-    ResolvedType, TypeNumber,
+    ResolvedRustType, ResolvedRustTypeRef, ResolvedStructType, ResolvedStructTypeRef,
+    ResolvedTupleType, ResolvedTupleTypeRef, ResolvedType, TypeNumber,
 };
 use seq_map::{SeqMap, SeqMapError};
 use std::cell::RefCell;
@@ -33,9 +33,10 @@ impl Display for LocalTypeName {
 pub struct ResolvedModuleNamespace {
     pub all_owned_types: SeqMap<LocalTypeIdentifier, ResolvedType>,
 
-    structs: SeqMap<LocalTypeName, ResolvedStructTypeRef>, // They are created by the module, so they are owned here
-    enum_types: SeqMap<LocalTypeName, ResolvedEnumTypeRef>, // They are created by the module, so they are owned here
-    enum_variant_types: SeqMap<LocalTypeName, ResolvedEnumVariantTypeRef>, // They are created by the module, so they are owned here
+    structs: SeqMap<LocalTypeName, ResolvedStructTypeRef>,
+    build_in_rust_types: SeqMap<LocalTypeName, ResolvedRustTypeRef>,
+    enum_types: SeqMap<LocalTypeName, ResolvedEnumTypeRef>,
+    enum_variant_types: SeqMap<LocalTypeName, ResolvedEnumVariantTypeRef>,
 
     tuples: Vec<ResolvedTupleTypeRef>,
 
@@ -245,6 +246,7 @@ impl ResolvedModuleNamespace {
         Self {
             all_owned_types: Default::default(),
             structs: Default::default(),
+            build_in_rust_types: Default::default(),
             enum_types: Default::default(),
             enum_variant_types: Default::default(),
             tuples: vec![],
@@ -267,6 +269,19 @@ impl ResolvedModuleNamespace {
         )?;
 
         Ok(struct_ref)
+    }
+
+    pub fn add_built_in_rust_type(
+        &mut self,
+        rust_type: ResolvedRustType,
+    ) -> Result<ResolvedRustTypeRef, SemanticError> {
+        let rust_type_ref = Rc::new(rust_type);
+        self.build_in_rust_types.insert(
+            LocalTypeName(rust_type_ref.type_name.clone()),
+            rust_type_ref.clone(),
+        )?;
+
+        Ok(rust_type_ref)
     }
 
     pub fn add_type_alias(
@@ -377,6 +392,13 @@ impl ResolvedModuleNamespace {
 
     pub fn get_enum(&self, name: &LocalTypeIdentifier) -> Option<&ResolvedEnumTypeRef> {
         self.enum_types.get(&(&name.text).into())
+    }
+
+    pub fn get_built_in_rust_type(
+        &self,
+        name: &LocalTypeIdentifier,
+    ) -> Option<&ResolvedRustTypeRef> {
+        self.build_in_rust_types.get(&(&name.text).into())
     }
 
     pub fn get_enum_variant_type(

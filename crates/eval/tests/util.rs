@@ -2,8 +2,9 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
+use std::cell::RefCell;
 use std::path::PathBuf;
-
+use std::rc::Rc;
 use swamp_script_analyzer::ResolveError;
 use swamp_script_ast::{Parameter, Type, Variable};
 use swamp_script_core::prelude::Value;
@@ -15,6 +16,7 @@ use swamp_script_eval::{eval_module, ExternalFunctions};
 use swamp_script_eval_loader::resolve_program;
 use swamp_script_parser::Rule;
 use swamp_script_semantic::{ExternalFunctionId, ModulePath, ResolvedProgram};
+use swamp_script_std::create_std_module;
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -50,9 +52,6 @@ impl From<DepLoaderError> for EvalTestError {
 }
 
 fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError> {
-    //    let parser = AstParser::new();
-    //    let program = parser.parse_script(script).unwrap();
-
     // Analyze
     let mut dependency_parser = create_parsed_modules(script, PathBuf::new())?;
     let root_path = &ModulePath(vec!["test".to_string()]);
@@ -82,6 +81,13 @@ fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError>
     )?;
 
     let mut resolved_program = ResolvedProgram::new();
+
+    let std_module_ref = Rc::new(RefCell::new(create_std_module()));
+    resolved_program
+        .modules
+        .add_module(std_module_ref)
+        .expect("can not find std");
+
     resolve_program(
         &resolved_program.types,
         &mut resolved_program.state,

@@ -16,7 +16,7 @@ use swamp_script_semantic::{
     ExternalFunctionId, FormatSpecifier, PrecisionType, ResolvedArrayTypeRef,
     ResolvedEnumVariantStructTypeRef, ResolvedEnumVariantTupleTypeRef, ResolvedEnumVariantTypeRef,
     ResolvedInternalFunctionDefinitionRef, ResolvedMapTypeRef, ResolvedRustTypeRef,
-    ResolvedStructTypeRef, ResolvedTupleTypeRef,
+    ResolvedStructTypeRef, ResolvedTupleTypeRef, TypeNumber,
 };
 use swamp_script_semantic::{IdentifierName, ResolvedType};
 
@@ -84,6 +84,8 @@ pub enum ValueError {
     TypeError(String),
 }
 
+pub const SPARSE_TYPE_ID: TypeNumber = 999;
+
 // Iterators
 
 impl Value {
@@ -93,7 +95,7 @@ impl Value {
             Self::Array(_, values) => Ok(Box::new(values.into_iter())),
             Self::Map(_, seq_map) => Ok(Box::new(seq_map.into_values())),
             Self::RustValue(ref rust_type_ref, _) => match rust_type_ref.number {
-                0 => {
+                SPARSE_TYPE_ID => {
                     let sparse_map = self
                         .downcast_rust::<SparseValueMap>()
                         .expect("must be sparsemap");
@@ -118,7 +120,7 @@ impl Value {
             Value::Tuple(_, _) => todo!(),
             Value::RustValue(ref rust_type_ref, ref _rust_value) => {
                 Box::new(match rust_type_ref.number {
-                    0 => {
+                    SPARSE_TYPE_ID => {
                         let sparse_map = self
                             .downcast_rust::<SparseValueMap>()
                             .expect("must be sparsemap");
@@ -202,6 +204,14 @@ impl Value {
                 }
             }
             _ => None,
+        }
+    }
+
+    pub fn downcast_rust_mut_or_not<T: RustType + 'static>(&self) -> Option<Rc<RefCell<Box<T>>>> {
+        if let Some(found) = self.downcast_rust_mut() {
+            Some(found)
+        } else {
+            self.downcast_rust()
         }
     }
 

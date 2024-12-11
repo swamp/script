@@ -4,3 +4,4 @@ version = "0.0.6"
 edition = "2021"
 
 [dependencies]
+swamp-script-semantic = { path = "../semantic", version = "0.0.6" }
