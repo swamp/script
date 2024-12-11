@@ -1138,7 +1138,7 @@ fn sparse_map_struct_iterate() {
     print(sparse)
     print(sparse_id)
 
-    for x in sparse {
+    for mut x in sparse {
         print(x)
     }
     ",

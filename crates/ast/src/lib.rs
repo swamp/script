@@ -206,14 +206,20 @@ pub enum Definition {
 }
 
 #[derive(Debug, Clone)]
+pub struct ForVar {
+    pub identifier: LocalTypeIdentifier,
+    pub is_mut: bool,
+}
+
+#[derive(Debug, Clone)]
 pub enum ForPattern {
-    Single(LocalTypeIdentifier),
-    Pair(LocalTypeIdentifier, LocalTypeIdentifier),
+    Single(ForVar),
+    Pair(ForVar, ForVar),
 }
 
 #[derive(Debug, Clone)]
 pub enum Statement {
-    ForLoop(ForPattern, Expression, Vec<Statement>),
+    ForLoop(ForPattern, Expression, bool, Vec<Statement>),
     WhileLoop(Expression, Vec<Statement>),
     Return(Expression),
     Break,                  // Return with void
@@ -659,8 +665,6 @@ pub enum BinaryOperator {
     LessEqual,
     GreaterThan,
     GreaterEqual,
-    LessThanOrEqual,
-    GreaterThanOrEqual,
     RangeExclusive,
 }
 

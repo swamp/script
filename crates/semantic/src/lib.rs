@@ -701,6 +701,7 @@ impl Display for ResolvedPattern {
 pub struct ResolvedIterator {
     pub item_type: ResolvedType,
     pub resolved_expression: ResolvedExpression,
+    pub is_mutable: bool,
 }
 
 //#[derive(Debug)]

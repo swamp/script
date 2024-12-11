@@ -26,7 +26,7 @@ impl IndexAllocator {
     pub fn create(&mut self) -> (usize, u16) {
         if let Some(index) = self.freelist.pop() {
             // Reuse index from freelist, increment generation
-            self.generations[index] = self.generations[index].wrapping_add(1);
+            //self.generations[index] = self.generations[index].wrapping_add(1);
             (index, self.generations[index])
         } else {
             // No free index, create new one

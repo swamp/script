@@ -89,9 +89,12 @@ pub const SPARSE_TYPE_ID: TypeNumber = 999;
 // Iterators
 
 impl Value {
-    pub fn into_iter(self) -> Result<Box<dyn Iterator<Item = Value>>, ValueError> {
+    pub fn into_iter(
+        self,
+        is_mutable: bool,
+    ) -> Result<Box<dyn Iterator<Item = Value>>, ValueError> {
         match self {
-            Self::Reference(value_ref) => value_ref.borrow().clone().into_iter(),
+            Self::Reference(value_ref) => value_ref.borrow().clone().into_iter(is_mutable),
             Self::Array(_, values) => Ok(Box::new(values.into_iter())),
             Self::Map(_, seq_map) => Ok(Box::new(seq_map.into_values())),
             Self::RustValue(ref rust_type_ref, _) => match rust_type_ref.number {
@@ -113,9 +116,15 @@ impl Value {
         }
     }
 
-    pub fn into_iter_pairs(self) -> Result<Box<dyn Iterator<Item = (Value, Value)>>, ValueError> {
+    pub fn into_iter_pairs(
+        self,
+        is_mutable: bool,
+    ) -> Result<Box<dyn Iterator<Item = (Value, Value)>>, ValueError> {
         let values = match self {
-            Value::Reference(value_ref) => value_ref.borrow_mut().to_owned().into_iter_pairs()?,
+            Value::Reference(value_ref) => value_ref
+                .borrow_mut()
+                .to_owned()
+                .into_iter_pairs(is_mutable)?,
             Self::Map(_, seq_map) => Box::new(seq_map.into_iter()),
             Value::Tuple(_, _) => todo!(),
             Value::RustValue(ref rust_type_ref, ref _rust_value) => {
@@ -127,21 +136,39 @@ impl Value {
 
                         let id_type_ref = sparse_map.borrow().rust_type_ref_for_id.clone();
 
-                        let pairs: Vec<_> = sparse_map
-                            .borrow()
-                            .iter()
-                            .map(|(k, v)| {
-                                (
-                                    Value::RustValue(
-                                        id_type_ref.clone(),
-                                        Rc::new(RefCell::new(Box::new(SparseValueId(k)))),
-                                    ),
-                                    v.clone(),
-                                )
-                            })
-                            .collect();
+                        if is_mutable {
+                            let pairs: Vec<_> = sparse_map
+                                .borrow_mut()
+                                .iter_mut()
+                                .map(|(k, v)| {
+                                    (
+                                        Value::RustValue(
+                                            id_type_ref.clone(),
+                                            Rc::new(RefCell::new(Box::new(SparseValueId(k)))),
+                                        ),
+                                        v.clone(),
+                                    )
+                                })
+                                .collect();
 
-                        Box::new(pairs.into_iter())
+                            Box::new(pairs.into_iter())
+                        } else {
+                            let pairs: Vec<_> = sparse_map
+                                .borrow()
+                                .iter()
+                                .map(|(k, v)| {
+                                    (
+                                        Value::RustValue(
+                                            id_type_ref.clone(),
+                                            Rc::new(RefCell::new(Box::new(SparseValueId(k)))),
+                                        ),
+                                        v.clone(),
+                                    )
+                                })
+                                .collect();
+
+                            Box::new(pairs.into_iter())
+                        }
                     }
                     _ => return Err(ValueError::NotSparseMap),
                 })

@@ -994,13 +994,13 @@ impl<'a> Resolver<'a> {
     ) -> Result<ResolvedForPattern, ResolveError> {
         match pattern {
             ForPattern::Single(var) => {
-                let variable = Variable::new(&var.text, false);
+                let variable = Variable::new(&var.identifier.text, var.is_mut);
                 let variable_ref = self.create_local_variable(&variable, item_type)?;
                 Ok(ResolvedForPattern::Single(variable_ref))
             }
             ForPattern::Pair(first, second) => {
-                let first_var = Variable::new(&first.text, false);
-                let second_var = Variable::new(&second.text, false);
+                let first_var = Variable::new(&first.identifier.text, first.is_mut);
+                let second_var = Variable::new(&second.identifier.text, second.is_mut);
 
                 // TODO: Resolve the iterator completely, so we know what types that are returned
                 if let ResolvedType::Tuple(tuple_types) = item_type {
@@ -1067,8 +1067,9 @@ impl<'a> Resolver<'a> {
         debug!(?statement, "resolving statement");
         debug!(?self.return_type, "current return type context");
         let converted = match statement {
-            Statement::ForLoop(pattern, expression, statements) => {
-                let resolved_iterator = self.resolve_iterator(&pattern, expression)?;
+            Statement::ForLoop(pattern, expression, iterator_should_be_mutable, statements) => {
+                let resolved_iterator =
+                    self.resolve_iterator(&pattern, expression, *iterator_should_be_mutable)?;
 
                 self.push_block_scope("for_loop");
                 let pattern = self.resolve_for_pattern(pattern, &resolved_iterator.item_type)?;
@@ -1875,6 +1876,7 @@ impl<'a> Resolver<'a> {
         &mut self,
         for_pattern: &ForPattern,
         expression: &Expression,
+        is_mutable: bool,
     ) -> Result<ResolvedIterator, ResolveError> {
         let resolved_expression = self.resolve_expression(expression)?;
         let resolved_type = resolution(&resolved_expression);
@@ -1903,6 +1905,7 @@ impl<'a> Resolver<'a> {
         Ok(ResolvedIterator {
             item_type,
             resolved_expression,
+            is_mutable,
         })
     }
 
@@ -2160,9 +2163,9 @@ impl<'a> Resolver<'a> {
                 BinaryOperator::Equal
                 | BinaryOperator::NotEqual
                 | BinaryOperator::GreaterThan
-                | BinaryOperator::GreaterThanOrEqual
+                | BinaryOperator::GreaterEqual
                 | BinaryOperator::LessThan
-                | BinaryOperator::LessThanOrEqual,
+                | BinaryOperator::LessEqual,
                 _,
                 _,
             ) => {
@@ -2558,7 +2561,7 @@ impl<'a> Resolver<'a> {
     }
 
     fn push_block_scope(&mut self, debug_str: &str) {
-        info!(debug=%debug_str,  stack_len=self.block_scope_stack.len(), "pushing scope stack");
+        debug!(debug=%debug_str,  stack_len=self.block_scope_stack.len(), "pushing scope stack");
 
         self.block_scope_stack.push(BlockScope {
             variables: SeqMap::default(),
@@ -2566,7 +2569,7 @@ impl<'a> Resolver<'a> {
     }
 
     fn pop_block_scope(&mut self, debug_str: &str) {
-        info!(debug=%debug_str, stack_len=self.block_scope_stack.len(), "popping scope stack");
+        debug!(debug=%debug_str, stack_len=self.block_scope_stack.len(), "popping scope stack");
         self.block_scope_stack.pop();
     }
 

@@ -143,17 +143,12 @@ mut_keyword = { "mut" }
 return_type = { "->" ~ type_name }
 
 
-// Update the for loop rule to use identifier directly instead of loop_vars
-for_loop = { 
-    "for" ~  
-    for_pattern ~ 
-    "in" ~ 
-    expression ~ 
-    stmt_block 
-}
+for_loop = { "for" ~ for_pattern ~ "in" ~ mut_keyword? ~ expression ~ stmt_block }
 
-for_pattern = { for_pair | identifier }
-for_pair = { identifier ~ "," ~ identifier }
+
+mut_identifier = { mut_keyword? ~ identifier }
+for_pattern = { for_pair | mut_identifier }
+for_pair = { mut_identifier ~ "," ~ mut_identifier }
 
 // While-loop
 while_loop = { "while" ~ expression ~ stmt_block }

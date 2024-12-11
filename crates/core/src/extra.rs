@@ -1,7 +1,9 @@
 use crate::idx_gen::IndexAllocator;
 use crate::value::{to_rust_value, Value};
 use sparse_slot::{Id, SparseSlot};
+use std::cell::RefCell;
 use std::fmt::{Display, Formatter};
+use std::rc::Rc;
 use swamp_script_semantic::{create_rust_type, ResolvedRustTypeRef, ResolvedType};
 
 #[derive(Debug)]
@@ -56,7 +58,12 @@ impl SparseValueMap {
 
         let id = Id { index, generation };
 
-        self.sparse_slot.try_set(id, v).expect("sparse should work");
+        // Always store mutable references
+        let mutable_reference = Value::Reference(Rc::new(RefCell::new(v)));
+
+        self.sparse_slot
+            .try_set(id, mutable_reference)
+            .expect("sparse should work");
 
         let script_id = SparseValueId(id);
 
@@ -71,6 +78,9 @@ impl SparseValueMap {
     #[allow(unused)]
     pub fn iter(&self) -> sparse_slot::Iter<'_, Value> {
         self.sparse_slot.iter()
+    }
+    pub fn iter_mut(&mut self) -> sparse_slot::IterMut<'_, Value> {
+        self.sparse_slot.iter_mut()
     }
 
     pub fn values(&self) -> Vec<Value> {

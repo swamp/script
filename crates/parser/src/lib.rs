@@ -11,7 +11,7 @@ use pest::pratt_parser::{Assoc, Op, PrattParser};
 use pest::Parser;
 use pest_derive::Parser;
 use seq_map::SeqMap;
-use swamp_script_ast::{prelude::*, CompoundOperator, ForPattern, PatternElement};
+use swamp_script_ast::{prelude::*, CompoundOperator, ForPattern, ForVar, PatternElement};
 use swamp_script_ast::{Function, PostfixOperator};
 use tracing::debug;
 
@@ -617,23 +617,68 @@ impl AstParser {
 
         let inner_pattern = self.next_inner_pair(pattern_pair)?;
         let pattern = match inner_pattern.as_rule() {
-            Rule::identifier => ForPattern::Single(LocalTypeIdentifier::new(
-                convert_from_pair(&pair),
-                inner_pattern.as_str(),
-            )),
+            Rule::mut_identifier => {
+                let mut inner = inner_pattern.clone().into_inner();
+                let is_mutable = inner
+                    .next()
+                    .map_or(false, |p| p.as_rule() == Rule::mut_keyword);
+
+                let identifier = if is_mutable {
+                    Self::expect_identifier(&mut inner)?
+                } else {
+                    inner_pattern.as_str().to_string()
+                };
+
+                ForPattern::Single(ForVar {
+                    identifier: LocalTypeIdentifier::new(convert_from_pair(&pair), &identifier),
+                    is_mut: is_mutable,
+                })
+            }
             Rule::for_pair => {
                 let mut vars = Self::get_inner_pairs(&inner_pattern);
-                let first = Self::expect_identifier(&mut vars)?;
-                let second = Self::expect_identifier(&mut vars)?;
+
+                let first_mut_id = Self::next_pair(&mut vars)?;
+                let mut first_inner = first_mut_id.clone().into_inner();
+                let first_is_mut = first_inner
+                    .next()
+                    .map_or(false, |p| p.as_rule() == Rule::mut_keyword);
+                let first = if first_is_mut {
+                    Self::expect_identifier(&mut first_inner)?
+                } else {
+                    first_mut_id.as_str().to_string()
+                };
+
+                let second_mut_id = Self::next_pair(&mut vars)?;
+                let mut second_inner = second_mut_id.clone().into_inner();
+                let second_is_mut = second_inner
+                    .next()
+                    .map_or(false, |p| p.as_rule() == Rule::mut_keyword);
+                let second = if second_is_mut {
+                    Self::expect_identifier(&mut second_inner)?
+                } else {
+                    second_mut_id.as_str().to_string()
+                };
+
                 ForPattern::Pair(
-                    LocalTypeIdentifier::new(convert_from_pair(&pair), &first),
-                    LocalTypeIdentifier::new(convert_from_pair(&pair), &second),
+                    ForVar {
+                        identifier: LocalTypeIdentifier::new(convert_from_pair(&pair), &first),
+                        is_mut: first_is_mut,
+                    },
+                    ForVar {
+                        identifier: LocalTypeIdentifier::new(convert_from_pair(&pair), &second),
+                        is_mut: second_is_mut,
+                    },
                 )
             }
             _ => return Err(self.create_error("Invalid for loop pattern", inner_pattern.as_span())),
         };
 
-        let iterable = self.parse_expression(Self::next_pair(&mut inner)?)?;
+        let next = Self::next_pair(&mut inner)?;
+        let (is_mut_iter, iterable) = if next.as_rule() == Rule::mut_keyword {
+            (true, self.parse_expression(Self::next_pair(&mut inner)?)?)
+        } else {
+            (false, self.parse_expression(next)?)
+        };
 
         let block_pair = Self::next_pair(&mut inner)?;
         if block_pair.as_rule() != Rule::stmt_block {
@@ -647,7 +692,7 @@ impl AstParser {
             }
         }
 
-        Ok(Statement::ForLoop(pattern, iterable, body))
+        Ok(Statement::ForLoop(pattern, iterable, is_mut_iter, body))
     }
 
     fn parse_while_loop(&self, pair: Pair<Rule>) -> Result<Statement, Error<Rule>> {

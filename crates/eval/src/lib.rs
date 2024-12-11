@@ -191,8 +191,7 @@ impl<'a, C> Interpreter<'a, C> {
     }
 
     fn push_block_scope(&mut self, debug_str: &str) {
-        debug!(debug_str = %debug_str, "push block scope");
-        info!(
+        debug!(
             "EVAL: pushing scope '{}', current depth: {}",
             debug_str,
             self.current_block_scopes.len()
@@ -201,9 +200,8 @@ impl<'a, C> Interpreter<'a, C> {
     }
 
     fn pop_block_scope(&mut self, debug_str: &str) {
-        debug!(debug_str=%debug_str, "pop block scope");
         let old_len = self.current_block_scopes.len();
-        info!(
+        debug!(
             "EVAL: popping scope '{}', new depth: {}",
             debug_str,
             old_len - 1
@@ -1227,7 +1225,8 @@ impl<'a, C> Interpreter<'a, C> {
             }
             ResolvedExpression::SparseRemove(sparse_rust, id_expression) => {
                 let resolved_sparse_value = self.evaluate_expression(sparse_rust)?;
-                let sparse_value_map = resolved_sparse_value.downcast_rust_mut::<SparseValueMap>();
+                let sparse_value_map =
+                    resolved_sparse_value.downcast_rust_mut_or_not::<SparseValueMap>(); // TODO: scetchy to check bot mut and not
                 if let Some(found) = sparse_value_map {
                     let id_value = self.evaluate_expression(id_expression)?;
                     if let Some(found_id) = id_value.downcast_rust::<SparseValueId>() {
@@ -1454,12 +1453,12 @@ impl<'a, C> Interpreter<'a, C> {
                         ResolvedForPattern::Single(var_ref) => {
                             self.push_block_scope(&format!("for_loop single {:?}", var_ref));
 
-                            for value in iterator_value.into_iter()? {
+                            for value in iterator_value.into_iter(iterator_expr.is_mutable)? {
                                 self.initialize_var(
                                     var_ref.scope_index,
                                     var_ref.variable_index,
                                     value,
-                                    false,
+                                    iterator_expr.is_mutable,
                                 )?;
 
                                 match self.execute_statements(body)? {
@@ -1478,7 +1477,9 @@ impl<'a, C> Interpreter<'a, C> {
                         ResolvedForPattern::Pair(first_ref, second_ref) => {
                             self.push_block_scope("for_loop pair");
 
-                            for (key, value) in iterator_value.into_iter_pairs()? {
+                            for (key, value) in
+                                iterator_value.into_iter_pairs(iterator_expr.is_mutable)?
+                            {
                                 // Set both variables
                                 self.initialize_var(
                                     first_ref.scope_index,
@@ -1764,6 +1765,11 @@ impl<'a, C> Interpreter<'a, C> {
             }
             (Value::Float(a), BinaryOperator::Modulo, Value::Float(b)) => Value::Float(a % b),
 
+            (Value::Float(a), BinaryOperator::GreaterThan, Value::Float(b)) => Value::Bool(a > b),
+            (Value::Float(a), BinaryOperator::GreaterEqual, Value::Float(b)) => Value::Bool(a >= b),
+            (Value::Float(a), BinaryOperator::LessThan, Value::Float(b)) => Value::Bool(a < b),
+            (Value::Float(a), BinaryOperator::LessEqual, Value::Float(b)) => Value::Bool(a <= b),
+
             // Boolean operations
             (Value::Bool(a), BinaryOperator::LogicalAnd, Value::Bool(b)) => Value::Bool(a && b),
             (Value::Bool(a), BinaryOperator::LogicalOr, Value::Bool(b)) => Value::Bool(a || b),
@@ -1773,10 +1779,8 @@ impl<'a, C> Interpreter<'a, C> {
             (Value::Int(a), BinaryOperator::NotEqual, Value::Int(b)) => Value::Bool(a != b),
             (Value::Int(a), BinaryOperator::LessThan, Value::Int(b)) => Value::Bool(a < b),
             (Value::Int(a), BinaryOperator::GreaterThan, Value::Int(b)) => Value::Bool(a > b),
-            (Value::Int(a), BinaryOperator::LessThanOrEqual, Value::Int(b)) => Value::Bool(a <= b),
-            (Value::Int(a), BinaryOperator::GreaterThanOrEqual, Value::Int(b)) => {
-                Value::Bool(a >= b)
-            }
+            (Value::Int(a), BinaryOperator::LessEqual, Value::Int(b)) => Value::Bool(a <= b),
+            (Value::Int(a), BinaryOperator::GreaterEqual, Value::Int(b)) => Value::Bool(a >= b),
 
             // String operations
             (Value::String(a), BinaryOperator::Add, Value::String(b)) => Value::String(a + &b),
