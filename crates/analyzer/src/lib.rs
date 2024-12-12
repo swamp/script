@@ -12,8 +12,8 @@ use swamp_script_ast::prelude::*;
 use swamp_script_ast::{CompoundOperator, ForPattern, Function, PatternElement, PostfixOperator};
 use swamp_script_semantic::ns::{LocalTypeName, ResolvedModuleNamespace, SemanticError};
 use swamp_script_semantic::{
-    create_rust_type, prelude::*, ResolvedBoolType, ResolvedForPattern, ResolvedModuleRef,
-    ResolvedPatternElement, ResolvedStaticCallGeneric, ResolvedTupleTypeRef,
+    create_rust_type, prelude::*, ResolvedAccess, ResolvedBoolType, ResolvedForPattern,
+    ResolvedModuleRef, ResolvedPatternElement, ResolvedStaticCallGeneric, ResolvedTupleTypeRef,
     ResolvedVariableCompoundAssignment, TypeNumber,
 };
 use swamp_script_semantic::{
@@ -47,7 +47,9 @@ pub fn unalias_type(resolved_type: ResolvedType) -> ResolvedType {
 pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
     trace!("resolution expression {}", expression);
     let resolution_expression = match expression {
-        ResolvedExpression::FieldAccess(struct_field_ref) => struct_field_ref.resolved_type.clone(),
+        ResolvedExpression::FieldAccess(_expr, struct_field_ref, _lookups) => {
+            struct_field_ref.resolved_type.clone()
+        }
         ResolvedExpression::VariableAccess(variable_ref) => variable_ref.resolved_type.clone(),
         ResolvedExpression::InternalFunctionAccess(internal_function_def) => {
             ResolvedType::FunctionInternal(internal_function_def.clone())
@@ -244,6 +246,7 @@ pub enum ResolveError {
     ExpectedBooleanExpression,
     NotAnIterator,
     UnsupportedIteratorPairs,
+    NeedStructForFieldLookup,
 }
 
 impl From<SemanticError> for ResolveError {
@@ -1173,6 +1176,74 @@ impl<'a> Resolver<'a> {
         Ok(resolved_parameters)
     }
 
+    fn get_field_index(
+        &mut self,
+        base: &ResolvedExpression,
+        name: &str,
+    ) -> Result<usize, ResolveError> {
+        let base_type = resolution(base);
+        match base_type {
+            ResolvedType::Struct(struct_type) => {
+                if let Some(field_index) = struct_type
+                    .borrow()
+                    .fields
+                    .get_index(&IdentifierName(name.to_string()))
+                {
+                    return Ok(field_index);
+                }
+            }
+            _ => {}
+        }
+
+        Err(ResolveError::NeedStructForFieldLookup)
+    }
+
+    fn collect_field_chain(
+        &mut self,
+        expr: &Expression,
+        field_name: &LocalIdentifier,
+        access_chain: &mut Vec<ResolvedAccess>,
+    ) -> Result<ResolvedExpression, ResolveError> {
+        match expr {
+            Expression::FieldAccess(source, nested_field) => {
+                let resolved_expression =
+                    self.collect_field_chain(source, nested_field, access_chain)?;
+
+                let field_index = self.get_field_index(&resolved_expression, &field_name.text)?;
+                access_chain.push(ResolvedAccess::FieldAccess(field_index));
+
+                Ok(resolved_expression)
+            }
+
+            Expression::IndexAccess(_target, _index_expr) => {
+                // TODO: Handle array/collection index access
+                todo!()
+            }
+
+            _ => {
+                let resolved = self.resolve_expression(expr)?;
+                Ok(resolved)
+            }
+        }
+    }
+
+    fn resolve_field_access(
+        &mut self,
+        base_expression: &Expression,
+        struct_field_ref: &ResolvedStructTypeFieldRef,
+        field_name: &LocalIdentifier,
+    ) -> Result<ResolvedExpression, ResolveError> {
+        let mut access_chain = Vec::new();
+        let resolved_expression =
+            self.collect_field_chain(&base_expression, &field_name, &mut access_chain)?;
+
+        Ok(ResolvedExpression::FieldAccess(
+            Box::from(resolved_expression),
+            struct_field_ref.clone(),
+            access_chain,
+        ))
+    }
+
     fn resolve_expression(
         &mut self,
         ast_expression: &Expression,
@@ -1186,7 +1257,8 @@ impl<'a> Resolver<'a> {
                 warn!(expression=?expression, name=?field_name, "FIELD ACCESS!");
                 let struct_field_ref =
                     self.resolve_into_struct_field_ref(expression.as_ref(), field_name.clone())?;
-                ResolvedExpression::FieldAccess(struct_field_ref)
+
+                self.resolve_field_access(expression, &struct_field_ref, field_name)?
             }
             Expression::VariableAccess(variable) => {
                 self.resolve_variable_or_function_access(variable)?

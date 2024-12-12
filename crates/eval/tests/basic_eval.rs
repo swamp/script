@@ -1264,3 +1264,24 @@ result
 
     assert_eq!(x, Value::Int(1));
 }
+
+#[test_log::test]
+fn field_chain_problem() {
+    let result = eval(
+        "
+    struct Inner {
+        v: Int
+    }
+
+    struct SomeStruct {
+       inner: Inner
+    }
+
+    mut s = SomeStruct { inner: Inner { v : 4 } }
+
+    s.inner.v = 5
+    ",
+    );
+
+    assert_eq!(result, Value::Int(2 * 3));
+}

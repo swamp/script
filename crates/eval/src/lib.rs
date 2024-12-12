@@ -12,7 +12,8 @@ use swamp_script_core::value::{format_value, to_rust_value, Value, ValueError};
 pub use swamp_script_semantic::ns::ResolvedModuleNamespace;
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
-    ResolvedForPattern, ResolvedFunction, ResolvedPatternElement, ResolvedStaticCall,
+    ResolvedAccess, ResolvedForPattern, ResolvedFunction, ResolvedPatternElement,
+    ResolvedStaticCall,
 };
 use tracing::{debug, error, info, trace, warn};
 
@@ -505,6 +506,41 @@ impl<'a, C> Interpreter<'a, C> {
         }
     }
 
+    fn field_access(
+        &mut self,
+        expression: &ResolvedExpression,
+        _struct_field: &ResolvedStructTypeFieldRef,
+        lookups: &Vec<ResolvedAccess>,
+    ) -> Result<Value, ExecuteError> {
+        let mut value = self.evaluate_expression(&expression)?;
+        for lookup in lookups {
+            match lookup {
+                ResolvedAccess::FieldAccess(index) => {
+                    value = match &value {
+                        Value::Struct(_struct_type, fields, _) => fields[*index].clone(),
+                        Value::Reference(r) => {
+                            let value = r.borrow();
+                            match &*value {
+                                Value::Struct(_struct_type, fields, _) => fields[*index].clone(),
+                                _ => Err(format!(
+                                    "Cannot access field reference '{}' on non-struct value",
+                                    index
+                                ))?,
+                            }
+                        }
+                        _ => {
+                            return Err(ExecuteError::Error(
+                                "wanted a struct in lookup".to_string(),
+                            ))
+                        }
+                    }
+                }
+                ResolvedAccess::IndexAccess(_) => {}
+            }
+        }
+        Ok(Value::Unit)
+    }
+
     #[inline]
     fn set_local_var(
         &mut self,
@@ -915,32 +951,8 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            ResolvedExpression::FieldAccess(struct_field_access) => {
-                let struct_expression =
-                    self.evaluate_expression(&struct_field_access.struct_expression)?;
-
-                match struct_expression {
-                    Value::Struct(_struct_type, fields, _) => {
-                        fields[struct_field_access.index].clone()
-                    }
-                    Value::Reference(r) => {
-                        // If it's a reference, dereference and try field access
-                        let value = r.borrow();
-                        match &*value {
-                            Value::Struct(_struct_type, fields, _) => {
-                                fields[struct_field_access.index].clone()
-                            }
-                            _ => Err(format!(
-                                "Cannot access field reference '{}' on non-struct value",
-                                struct_field_access.index
-                            ))?,
-                        }
-                    }
-                    _ => Err(format!(
-                        "Cannot access field '{}' on non-struct value",
-                        struct_field_access.index
-                    ))?,
-                }
+            ResolvedExpression::FieldAccess(struct_field_access, field_ref, access_list) => {
+                self.field_access(struct_field_access, &field_ref, access_list)?
             }
 
             ResolvedExpression::MutRef(var_ref) => {

@@ -463,6 +463,12 @@ impl Display for ResolvedMemberCall {
     }
 }
 
+#[derive(Debug)]
+pub enum ResolvedAccess {
+    FieldAccess(usize),
+    IndexAccess(usize),
+}
+
 pub type ResolvedMutStructTypeFieldRef = Rc<ResolvedMutStructTypeField>;
 #[derive(Debug)]
 pub struct ResolvedMutStructTypeField {
@@ -745,8 +751,12 @@ pub fn create_rust_type(name: &str, type_number: TypeNumber) -> ResolvedRustType
 #[derive(Debug)]
 pub enum ResolvedExpression {
     // Access Lookup values
-    FieldAccess(ResolvedStructTypeFieldRef),
     VariableAccess(ResolvedVariableRef),
+    FieldAccess(
+        Box<ResolvedExpression>,
+        ResolvedStructTypeFieldRef,
+        Vec<ResolvedAccess>,
+    ),
 
     InternalFunctionAccess(ResolvedInternalFunctionDefinitionRef),
     ExternalFunctionAccess(ResolvedExternalFunctionDefinitionRef),
@@ -882,8 +892,10 @@ impl Display for ResolvedLiteral {
 impl Display for ResolvedExpression {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::FieldAccess(field_lookup) => write!(f, "{}", field_lookup),
             Self::VariableAccess(variable) => write!(f, "VarRead({})", variable),
+            Self::FieldAccess(_expr, _struct_type_field, lookups) => {
+                write!(f, "field access {lookups:?}")
+            }
             Self::InternalFunctionAccess(internal_function_ref) => {
                 write!(f, "{:?}", internal_function_ref)
             }
