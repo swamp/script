@@ -335,7 +335,7 @@ pub fn create_parsed_modules(
         return Err(some);
     }
     let ast_module = ast_module_result.unwrap();
-    trace!("ast_module:\n{:#?}", ast_module);
+    trace!("ast_module:\n{}", ast_module);
 
     let parse_module = ParseModule {
         ast_module: ast_module,
