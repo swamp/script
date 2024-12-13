@@ -5,6 +5,7 @@
 pub mod prelude;
 
 use fixed32::Fp;
+use seq_fmt::{comma, fmt_nl};
 use seq_map::SeqMap;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
@@ -98,7 +99,7 @@ impl Display for LocalTypeIdentifier {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct LocalIdentifier {
     pub node: Node,
     pub text: String,
@@ -122,6 +123,12 @@ impl LocalIdentifier {
 }
 
 impl Display for LocalIdentifier {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{}", self.text)
+    }
+}
+
+impl Debug for LocalIdentifier {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{} <{}>", self.text, self.node)
     }
@@ -166,6 +173,12 @@ pub struct Import {
     pub items: ImportItems,
 }
 
+impl Display for Import {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "import")
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum ImportItems {
     Module, // import the whole module (use last path item as namespace)
@@ -188,6 +201,12 @@ impl StructType {
     }
 }
 
+impl Display for StructType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "struct {} {}", self.identifier, self.fields)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Definition {
     StructDef(StructType),
@@ -205,16 +224,45 @@ pub enum Definition {
     Comment(String),
 }
 
+impl Display for Definition {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Definition::StructDef(struct_def) => write!(f, "{struct_def}"),
+            Definition::EnumDef(a, n) => write!(f, "{a} {n}"),
+            Definition::FunctionDef(a, n) => write!(f, "{a} {n}"),
+            Definition::ImplDef(a, n) => write!(f, "{a} {n}"),
+            Definition::TypeAlias(a, n) => write!(f, "{a} {n}"),
+            Definition::Import(a) => write!(f, "{a}"),
+            Definition::Comment(a) => write!(f, "{a}"),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ForVar {
     pub identifier: LocalTypeIdentifier,
     pub is_mut: bool,
 }
 
+impl Display for ForVar {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "mut:{} {}", self.is_mut, self.identifier)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum ForPattern {
     Single(ForVar),
     Pair(ForVar, ForVar),
+}
+
+impl Display for ForPattern {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            ForPattern::Single(v) => write!(f, "{v}"),
+            ForPattern::Pair(a, b) => write!(f, "{a}, {b}"),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -227,6 +275,26 @@ pub enum Statement {
     Expression(Expression), // Used for expressions with side effects (mutation, i/o)
     Block(Vec<Statement>),
     If(Expression, Vec<Statement>, Option<Vec<Statement>>),
+}
+
+impl Display for Statement {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Statement::ForLoop(a, b, c, d) => write!(f, "for {a} {b} {c} {}", fmt_nl(d)),
+            Statement::WhileLoop(a, b) => write!(f, "while {a} {}", fmt_nl(b)),
+            Statement::Return(a) => write!(f, "return {a}"),
+            Statement::Break => write!(f, "break"),
+            Statement::Continue => write!(f, "continue"),
+            Statement::Expression(a) => write!(f, "{a}"),
+            Statement::Block(a) => write!(f, "block {}", fmt_nl(a)),
+            Statement::If(a, b, c) => {
+                let stmts_str = c
+                    .as_ref()
+                    .map_or_else(String::new, |stmts| comma(stmts.as_slice()));
+                write!(f, "if {a} {} {}", comma(b), stmts_str)
+            }
+        }
+    }
 }
 
 #[derive(Clone, Eq, PartialEq, Default)]
@@ -294,6 +362,18 @@ pub struct FunctionSignature {
     pub return_type: Type,
 }
 
+impl Display for FunctionSignature {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{} {} {}",
+            self.name,
+            comma(&*self.params),
+            self.return_type
+        )
+    }
+}
+
 #[derive(Clone)]
 pub struct FunctionData {
     pub signature: FunctionSignature,
@@ -310,6 +390,15 @@ impl Display for FunctionData {
 pub enum Function {
     Internal(FunctionData),
     External(FunctionSignature),
+}
+
+impl Display for Function {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Function::Internal(i) => write!(f, "{i}"),
+            Function::External(e) => write!(f, "{e}"),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -468,6 +557,124 @@ pub enum Expression {
     Match(Box<Expression>, Vec<MatchArm>),
 }
 
+impl fmt::Display for Expression {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Expression::FieldAccess(expr, field) => {
+                write!(f, "[field_access {} {}]", expr, field)
+            }
+            Expression::VariableAccess(var) => {
+                write!(f, "[variable_access {}]", var)
+            }
+            Expression::MutRef(mut_ref) => {
+                write!(f, "[mut ref]")
+            }
+            Expression::IndexAccess(target, idx) => {
+                write!(f, "[index_access {}[{}]]", target, idx)
+            }
+            Expression::VariableAssignment(var, rhs) => {
+                write!(f, "[variable_assignment {} <- {}]", var, rhs)
+            }
+            Expression::MultiVariableAssignment(vars, rhs) => {
+                write!(f, "[multi_variable_assignment {} = {}]", comma(vars), rhs)
+            }
+            Expression::IndexCompoundAssignment(target, idx, op, rhs) => {
+                write!(
+                    f,
+                    "[index_compound_assignment {}[{}] {}= {}]",
+                    target, idx, op, rhs
+                )
+            }
+            Expression::VariableCompoundAssignment(var, op, rhs) => {
+                write!(f, "[variable_compound_assignment {} {}= {}]", var, op, rhs)
+            }
+            Expression::FieldCompoundAssignment(target, field, op, rhs) => {
+                write!(
+                    f,
+                    "[field_compound_assignment {}.{} {}= {}]",
+                    target, field, op, rhs
+                )
+            }
+            Expression::IndexAssignment(target, idx, rhs) => {
+                write!(f, "[index_assignment {}[{}] = {}]", target, idx, rhs)
+            }
+            Expression::FieldAssignment(target, field, rhs) => {
+                write!(f, "[field_assignment {} <- {} = {}]", target, field, rhs)
+            }
+            Expression::BinaryOp(lhs, op, rhs) => {
+                write!(f, "[binary_op {} {} {}]", lhs, op, rhs)
+            }
+            Expression::UnaryOp(op, expr) => {
+                write!(f, "[unary_op {}{}]", op, expr)
+            }
+            Expression::PostfixOp(op, expr) => {
+                write!(f, "[postfix_op {}{}]", expr, op)
+            }
+            Expression::FunctionCall(func, args) => {
+                write!(f, "[function_call {}({})]", func, comma(args))
+            }
+            Expression::StaticCall(ty, method, args) => {
+                write!(f, "[static_call {}::{}({})]", ty, method, comma(args))
+            }
+            Expression::StaticCallGeneric(ty, method, args, generics) => {
+                write!(
+                    f,
+                    "[static_call_generic {}::{}::<{}>({})]",
+                    ty,
+                    method,
+                    comma(generics),
+                    comma(args)
+                )
+            }
+            Expression::MemberCall(expr, method, args) => {
+                write!(f, "[member_call {}.{}({})]", expr, method, comma(args))
+            }
+            Expression::Block(stmts) => {
+                write!(f, "{{\n")?;
+                for stmt in stmts {
+                    writeln!(f, "    {}", stmt)?;
+                }
+                write!(f, "}}")
+            }
+            Expression::InterpolatedString(parts) => {
+                // Assuming `StringPart` implements Display or to_string reasonably.
+                let mut result = String::new();
+                for part in parts {
+                    result.push_str(&part.to_string());
+                }
+                write!(f, "\"{}\"", result)
+            }
+            Expression::StructInstantiation(qty, fields) => {
+                write!(f, "[struct_instantiation {} {{\n", qty)?;
+                for (name, expr) in fields.iter() {
+                    writeln!(f, "    {}: {},", name, expr)?;
+                }
+                write!(f, "}}]")
+            }
+            Expression::ExclusiveRange(start, end) => {
+                write!(f, "[{}..{}]", start, end)
+            }
+            Expression::Literal(lit) => {
+                write!(f, "{}", lit)
+            }
+            Expression::IfElse(cond, then_expr, else_expr) => {
+                write!(
+                    f,
+                    "[if_else {} {{ {} }} else {{ {} }}]",
+                    cond, then_expr, else_expr
+                )
+            }
+            Expression::Match(expr, arms) => {
+                write!(f, "[match {} {{\n", expr)?;
+                for arm in arms {
+                    writeln!(f, "    {}", arm)?;
+                }
+                write!(f, "}}]")
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct MatchArm {
     pub pattern: Pattern,
@@ -493,25 +700,40 @@ pub enum Literal {
     None, // none
 }
 
-/*
-
 impl Display for Literal {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Literal::Int(value) => write!(f, "{}", value),
-            Literal::Float(value) => write!(f, "{}", value),
-            Literal::String(value) => write!(f, "{}", value),
-            Literal::Bool(value) => write!(f, "{}", value),
-            Literal::EnumVariant(a, b, c) => write!(f, "{} {} {}", a, b, c),
-            Literal::Tuple(value) => write!(f, "{}", value),
-            Literal::Array(value) => write!(f, "{}", value),
-            Literal::Map(value) => write!(f, "{}", value),
+            Literal::Int(i) => write!(f, "{}", i),
+            Literal::Float(fp) => write!(f, "{}", fp),
+            Literal::String(s) => write!(f, "{}", s),
+            Literal::Bool(b) => write!(f, "{}", b),
+            Literal::EnumVariant(qty, variant, data) => {
+                write!(f, "{}::{}{}", qty, variant, data)
+            }
+            Literal::Tuple(vals) => {
+                // Tuple: (a, b, c)
+                write!(f, "({})", comma(vals))
+            }
+            Literal::Array(vals) => {
+                // Array: [a, b, c]
+                write!(f, "[{}]", comma(vals))
+            }
+            Literal::Map(pairs) => {
+                // Map: {a: 1, b: 2, c: 3}
+                write!(f, "{{")?;
+                for (i, (k, v)) in pairs.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}: {}", k, v)?;
+                }
+                write!(f, "}}")
+            }
             Literal::Unit => write!(f, "()"),
+            Literal::None => write!(f, "none"),
         }
     }
 }
-
- */
 
 /*
 impl Debug for Literal {
@@ -595,9 +817,41 @@ impl Debug for EnumLiteralData {
     }
 }
 
+impl Display for EnumLiteralData {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            EnumLiteralData::Nothing => {
+                // No additional data is displayed.
+                Ok(())
+            }
+            EnumLiteralData::Tuple(vals) => {
+                // Tuple variant: (val1, val2, ...)
+                write!(f, "({})", comma(vals))
+            }
+            EnumLiteralData::Struct(fields) => {
+                // Struct variant: { field: val, field: val, ... }
+                write!(f, "{{")?;
+                for (i, (name, val)) in fields.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}: {}", name, val)?;
+                }
+                write!(f, "}}")
+            }
+        }
+    }
+}
+
 #[derive(Clone, Eq, PartialEq, Debug, Default)]
 pub struct AnonymousStruct {
     pub fields: SeqMap<IdentifierName, Type>,
+}
+
+impl Display for AnonymousStruct {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{{ {} }}", self.fields)
+    }
 }
 
 impl AnonymousStruct {
@@ -620,6 +874,16 @@ impl Debug for EnumVariant {
             Self::Simple => write!(f, ""),
             Self::Tuple(types) => write!(f, "{types:?}"),
             Self::Struct(anon_struct) => write!(f, "{anon_struct:?}"),
+        }
+    }
+}
+
+impl Display for EnumVariant {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            Self::Simple => write!(f, ""),
+            Self::Tuple(types) => write!(f, "{}", comma(types)),
+            Self::Struct(anon_struct) => write!(f, "{anon_struct}"),
         }
     }
 }
@@ -647,6 +911,27 @@ pub enum Type {
     //
     TypeReference(QualifiedTypeIdentifier), // Some Unknown Type Reference  // TODO: Module support
     Optional(Box<Type>),
+}
+
+impl Display for Type {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Type::Int => write!(f, "Int"),
+            Type::Float => write!(f, "Float"),
+            Type::String => write!(f, "String"),
+            Type::Bool => write!(f, "Bool"),
+            Type::Unit => write!(f, "()"),
+            Type::Any => write!(f, "ANY"),
+            Type::Generic(a, b) => write!(f, "{a} {}", comma(b)),
+            Type::Struct(a) => write!(f, "{a}"),
+            Type::Array(t) => write!(f, "[{t}]"),
+            Type::Map(a, b) => write!(f, "[{a}: {b}]"),
+            Type::Tuple(types) => write!(f, "( {} )", comma(types)),
+            Type::Enum(a) => write!(f, "{a}"),
+            Type::TypeReference(a) => write!(f, "ref {a}"),
+            Type::Optional(a) => write!(f, "{a}?"),
+        }
+    }
 }
 
 // Takes a left and right side expression
@@ -681,6 +966,59 @@ pub enum PostfixOperator {
     Unwrap, // option_operator
 }
 
+impl Display for CompoundOperator {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let symbol = match self {
+            CompoundOperator::Add => "+=",
+            CompoundOperator::Sub => "-=",
+            CompoundOperator::Mul => "*=",
+            CompoundOperator::Div => "/=",
+        };
+        write!(f, "{}", symbol)
+    }
+}
+
+impl Display for BinaryOperator {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let symbol = match self {
+            BinaryOperator::Add => "+",
+            BinaryOperator::Subtract => "-",
+            BinaryOperator::Multiply => "*",
+            BinaryOperator::Divide => "/",
+            BinaryOperator::Modulo => "%",
+            BinaryOperator::LogicalOr => "||",
+            BinaryOperator::LogicalAnd => "&&",
+            BinaryOperator::Equal => "==",
+            BinaryOperator::NotEqual => "!=",
+            BinaryOperator::LessThan => "<",
+            BinaryOperator::LessEqual => "<=",
+            BinaryOperator::GreaterThan => ">",
+            BinaryOperator::GreaterEqual => ">=",
+            BinaryOperator::RangeExclusive => "..",
+        };
+        write!(f, "{}", symbol)
+    }
+}
+
+impl Display for UnaryOperator {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let symbol = match self {
+            UnaryOperator::Not => "!",
+            UnaryOperator::Negate => "-",
+        };
+        write!(f, "{}", symbol)
+    }
+}
+
+impl Display for PostfixOperator {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let symbol = match self {
+            PostfixOperator::Unwrap => "?", // or "!" depending on your language design
+        };
+        write!(f, "{}", symbol)
+    }
+}
+
 // Patterns are used in matching and destructuring
 #[derive(Debug, Clone)]
 pub enum Pattern {
@@ -694,6 +1032,57 @@ pub enum PatternElement {
     Variable(LocalIdentifier),
     Expression(Expression),
     Wildcard,
+}
+
+impl Display for StringPart {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            StringPart::Literal(s) => write!(f, "{}", s),
+            StringPart::Interpolation(expr, Some(format_spec)) => {
+                write!(f, "{{{}:{}}}", expr, format_spec)
+            }
+            StringPart::Interpolation(expr, None) => write!(f, "{{{}}}", expr),
+        }
+    }
+}
+
+impl Display for MatchArm {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Typically match arms are displayed as `pattern => expression`
+        write!(f, "{} => {}", self.pattern, self.expression)
+    }
+}
+
+impl Display for Pattern {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Pattern::PatternList(elements) => {
+                // (a, b, c) style tuple pattern
+                write!(f, "({})", comma(elements))
+            }
+            Pattern::EnumPattern(ty, maybe_elements) => {
+                // EnumName(...) if elements present, else just EnumName
+                if let Some(elements) = maybe_elements {
+                    write!(f, "{}({})", ty, comma(elements))
+                } else {
+                    write!(f, "{}", ty)
+                }
+            }
+            Pattern::Literal(lit) => {
+                write!(f, "{}", lit)
+            }
+        }
+    }
+}
+
+impl Display for PatternElement {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PatternElement::Variable(var) => write!(f, "{}", var),
+            PatternElement::Expression(expr) => write!(f, "{}", expr),
+            PatternElement::Wildcard => write!(f, "_"),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -768,7 +1157,7 @@ impl Module {
 impl Display for Module {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         for definition in &self.definitions {
-            writeln!(f, "{definition:?}")?;
+            writeln!(f, "{definition}")?;
         }
 
         if !self.definitions.is_empty() && !self.statements().is_empty() {
@@ -776,7 +1165,7 @@ impl Display for Module {
         }
 
         for statement in &self.statements {
-            writeln!(f, "{statement:?}")?;
+            writeln!(f, "{statement}")?;
         }
         Ok(())
     }
