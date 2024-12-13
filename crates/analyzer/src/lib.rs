@@ -23,7 +23,7 @@ use swamp_script_semantic::{
 use swamp_script_semantic::{ResolvedMapIndexLookup, ResolvedProgramTypes};
 use swamp_script_semantic::{ResolvedMapType, ResolvedProgramState};
 use swamp_script_semantic::{ResolvedModules, ResolvedPostfixOperator};
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, error, info, warn};
 
 pub const SPARSE_TYPE_ID: TypeNumber = 999;
 
@@ -753,7 +753,7 @@ impl<'a> Resolver<'a> {
                 inner_resolver.resolve_function_definition(identifier, function)?
             }
             Definition::ImplDef(type_identifier, functions) => {
-                let (attached_type_type) =
+                let attached_type_type =
                     self.resolve_impl_definition(type_identifier, functions)?;
                 ResolvedDefinition::ImplType(attached_type_type)
             }
@@ -980,7 +980,6 @@ impl<'a> Resolver<'a> {
                 Ok(ResolvedForPattern::Single(variable_ref))
             }
             ForPattern::Pair(first, second) => {
-                let found_key = key_type.expect("should have a key type since it is a pair");
                 let first_var = Variable::new(&first.identifier.text, first.is_mut);
                 let second_var = Variable::new(&second.identifier.text, second.is_mut);
 
@@ -1040,7 +1039,7 @@ impl<'a> Resolver<'a> {
         let converted = match statement {
             Statement::ForLoop(pattern, expression, iterator_should_be_mutable, statements) => {
                 let resolved_iterator =
-                    self.resolve_iterator(&pattern, expression, *iterator_should_be_mutable)?;
+                    self.resolve_iterator(expression, *iterator_should_be_mutable)?;
 
                 self.push_block_scope("for_loop");
                 let pattern = self.resolve_for_pattern(
@@ -1891,7 +1890,6 @@ impl<'a> Resolver<'a> {
 
     fn resolve_iterator(
         &mut self,
-        for_pattern: &ForPattern,
         expression: &Expression,
         is_mutable: bool,
     ) -> Result<ResolvedIterator, ResolveError> {
@@ -2577,13 +2575,13 @@ impl<'a> Resolver<'a> {
         ))
     }
 
-    fn push_block_scope(&mut self, debug_str: &str) {
+    fn push_block_scope(&mut self, _debug_str: &str) {
         self.block_scope_stack.push(BlockScope {
             variables: SeqMap::default(),
         });
     }
 
-    fn pop_block_scope(&mut self, debug_str: &str) {
+    fn pop_block_scope(&mut self, _debug_str: &str) {
         self.block_scope_stack.pop();
     }
 

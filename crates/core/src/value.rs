@@ -126,14 +126,14 @@ impl Value {
                 .to_owned()
                 .into_iter_pairs(is_mutable)?,
             Self::Map(_, seq_map) => Box::new(seq_map.into_iter()),
-            Self::Tuple(type_ref, elements) => {
+            Self::Tuple(_type_ref, elements) => {
                 let iter = elements
                     .into_iter()
                     .enumerate()
                     .map(move |(i, v)| (Value::Int(i as i32), v));
                 Box::new(iter)
             }
-            Self::Array(type_ref, array) => {
+            Self::Array(_type_ref, array) => {
                 let iter = array
                     .into_iter()
                     .enumerate()

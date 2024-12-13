@@ -18,7 +18,6 @@ use swamp_script_ast::{
     IdentifierName, LocalIdentifier, LocalTypeIdentifier, ModulePath, Node, Position, Span,
     StructType,
 };
-use tracing::info;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct LocalTypeName(pub String);

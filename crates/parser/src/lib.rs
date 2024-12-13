@@ -1388,16 +1388,6 @@ impl AstParser {
         }
     }
 
-    fn parse_array_access(&self, pair: Pair<Rule>) -> Result<Expression, Error<Rule>> {
-        let mut inner = Self::get_inner_pairs(&pair);
-        let var = Variable::new(&Self::expect_identifier(&mut inner)?, false);
-        let index = self.parse_expression(Self::next_pair(&mut inner)?)?;
-        Ok(Expression::IndexAccess(
-            Box::new(Expression::VariableAccess(var)),
-            Box::new(index),
-        ))
-    }
-
     fn parse_enum_literal(
         &self,
         pair: Pair<Rule>,

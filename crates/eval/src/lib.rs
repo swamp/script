@@ -15,7 +15,7 @@ use swamp_script_semantic::{
     ResolvedAccess, ResolvedForPattern, ResolvedFunction, ResolvedPatternElement,
     ResolvedStaticCall,
 };
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, error, info, warn};
 
 pub mod err;
 
@@ -180,7 +180,7 @@ impl<'a, C> Interpreter<'a, C> {
         }
     }
 
-    fn push_function_scope(&mut self, debug_str: &str) {
+    fn push_function_scope(&mut self, _debug_str: &str) {
         self.function_scope_stack.push(FunctionScope {
             saved_block_scope: self.current_block_scopes.clone(),
         });
@@ -189,16 +189,15 @@ impl<'a, C> Interpreter<'a, C> {
         self.push_block_scope("default function scope");
     }
 
-    fn push_block_scope(&mut self, debug_str: &str) {
+    fn push_block_scope(&mut self, _debug_str: &str) {
         self.current_block_scopes.push(BlockScope::default());
     }
 
-    fn pop_block_scope(&mut self, debug_str: &str) {
-        let old_len = self.current_block_scopes.len();
+    fn pop_block_scope(&mut self, _debug_str: &str) {
         self.current_block_scopes.pop();
     }
 
-    fn pop_function_scope(&mut self, debug_str: &str) {
+    fn pop_function_scope(&mut self, _debug_str: &str) {
         if self.function_scope_stack.len() == 1 {
             error!("you popped too far");
             panic!("you popped too far");
@@ -327,10 +326,6 @@ impl<'a, C> Interpreter<'a, C> {
         debug!(value=%v, name=%call.function_definition.name, "function returned");
 
         Ok(v)
-    }
-
-    fn tabs(&self) -> String {
-        "..".repeat(self.function_scope_stack.len() - 1)
     }
 
     fn evaluate_args(&mut self, args: &[ResolvedExpression]) -> Result<Vec<Value>, ExecuteError> {
@@ -1927,8 +1922,6 @@ impl<'a, C> Interpreter<'a, C> {
                         }
                     }
                 }
-
-                _ => return Err(ExecuteError::TypeError("Expected field access".to_string())),
             };
 
             current_ref = next_ref;
