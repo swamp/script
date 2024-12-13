@@ -181,13 +181,14 @@ expression_statement = { expression }
 expression = { assignment | logical | postfix | prefix }
 
 
-// This is the base rule for array access
-array_subscript = { identifier ~ "[" ~ expression ~ "]" }
+chained_access = { identifier ~ (array_access | dot_access)+ }
+array_access = { "[" ~ expression ~ "]" }
+dot_access = { "." ~ identifier }
 
 
 assignment = {
     mut_keyword? ~
- (array_subscript | variable_list | field_access) ~
+    (chained_access | variable_list | field_access) ~
     (assign_op | add_assign_op | sub_assign_op | mul_assign_op | div_assign_op) ~
     expression
 }
@@ -316,7 +317,6 @@ primary = {
     | parenthesized
     | literal ~ ("." ~ member_access_or_call)*
     | array_literal
-    | array_subscript
     | variable
 }
 

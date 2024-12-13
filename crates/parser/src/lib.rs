@@ -791,7 +791,7 @@ impl AstParser {
                 let inner = self.next_inner_pair(pair)?;
                 self.parse_expression(inner)
             }
-            Rule::assignment => self.parse_assignment(pair),
+            Rule::assignment => self.parse_assignment(&pair),
             Rule::addition => self.parse_binary_chain(pair),
             Rule::logical | Rule::comparison | Rule::multiplication => self.parse_binary_op(pair),
             Rule::prefix => self.parse_prefix_expression(pair),
@@ -808,7 +808,41 @@ impl AstParser {
             )),
         }
     }
-    fn parse_assignment(&self, pair: Pair<Rule>) -> Result<Expression, Error<Rule>> {
+
+    fn parse_chained_access(&self, pair: Pair<Rule>) -> Result<Expression, Error<Rule>> {
+        let mut inner = Self::get_inner_pairs(&pair);
+
+        // The first is always a variable?
+        let base = Self::next_pair(&mut inner)?;
+        let mut expr = Expression::VariableAccess(Variable::new(base.as_str(), false));
+
+        // Then check for either array access or dot access
+        for access in inner {
+            expr = match access.as_rule() {
+                Rule::array_access => {
+                    let index_expr = self.parse_expression(self.next_inner_pair(access)?)?;
+                    Expression::IndexAccess(Box::new(expr), Box::new(index_expr))
+                }
+                Rule::dot_access => {
+                    let field_name = self.next_inner_pair(access)?;
+                    Expression::FieldAccess(
+                        Box::new(expr),
+                        LocalIdentifier::new(convert_from_pair(&field_name), field_name.as_str()),
+                    )
+                }
+                _ => {
+                    return Err(self.create_error(
+                        &format!("Unexpected access type: {:?}", access.as_rule()),
+                        access.as_span(),
+                    ))
+                }
+            };
+        }
+
+        Ok(expr)
+    }
+
+    fn parse_assignment(&self, pair: &Pair<Rule>) -> Result<Expression, Error<Rule>> {
         let mut inner = Self::get_inner_pairs(&pair).peekable();
 
         let is_mutable = if let Some(p) = inner.peek() {
@@ -849,6 +883,31 @@ impl AstParser {
         }
 
         match left.as_rule() {
+            Rule::chained_access => {
+                let target = self.parse_chained_access(left.clone())?;
+                match target {
+                    Expression::IndexAccess(array, index) => match compound_op {
+                        None => Ok(Expression::IndexAssignment(array, index, Box::new(expr))),
+                        Some(op) => Ok(Expression::IndexCompoundAssignment(
+                            array,
+                            index,
+                            op,
+                            Box::new(expr),
+                        )),
+                    },
+                    Expression::FieldAccess(obj, field) => match compound_op {
+                        None => Ok(Expression::FieldAssignment(obj, field, Box::new(expr))),
+                        Some(op) => Ok(Expression::FieldCompoundAssignment(
+                            obj,
+                            field,
+                            op,
+                            Box::new(expr),
+                        )),
+                    },
+                    _ => Err(self.create_error("Invalid assignment target", left.as_span())),
+                }
+            }
+
             Rule::variable_list => {
                 let vars: Vec<_> = Self::get_inner_pairs(&left).collect();
 
@@ -880,42 +939,7 @@ impl AstParser {
                     ))
                 }
             }
-            Rule::array_subscript => {
-                let mut subscript_inner = Self::get_inner_pairs(&left);
-                let array = Variable::new(&Self::expect_identifier(&mut subscript_inner)?, false);
-                let index = self.parse_expression(Self::next_pair(&mut subscript_inner)?)?;
-                let array_expr = Box::new(Expression::VariableAccess(array));
-                let index_expr = Box::new(index);
 
-                match compound_op {
-                    None => Ok(Expression::IndexAssignment(
-                        array_expr,
-                        index_expr,
-                        Box::new(expr),
-                    )),
-                    Some(op) => Ok(Expression::IndexCompoundAssignment(
-                        array_expr,
-                        index_expr,
-                        op,
-                        Box::new(expr),
-                    )),
-                }
-            }
-            Rule::field_access => {
-                if let Expression::FieldAccess(obj, field) = self.parse_field_access(left)? {
-                    match compound_op {
-                        None => Ok(Expression::FieldAssignment(obj, field, Box::new(expr))),
-                        Some(op) => Ok(Expression::FieldCompoundAssignment(
-                            obj,
-                            field,
-                            op,
-                            Box::new(expr),
-                        )),
-                    }
-                } else {
-                    Err(self.create_error("Expected field access", pair.as_span()))
-                }
-            }
             _ => Err(self.create_error(
                 &format!("Invalid assignment target: {:?}", left.as_rule()),
                 left.as_span(),
@@ -1251,7 +1275,6 @@ impl AstParser {
                 self.parse_primary(inner)
             }
             Rule::interpolated_string => self.parse_interpolated_string(pair),
-            Rule::array_subscript => self.parse_array_access(pair),
             Rule::literal => Ok(Expression::Literal(self.parse_literal(pair)?)),
             Rule::variable => Ok(Expression::VariableAccess(Variable::new(
                 pair.as_str(),
