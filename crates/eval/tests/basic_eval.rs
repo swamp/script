@@ -1312,3 +1312,33 @@ fn field_chain_problem_output() {
         "#,
     );
 }
+
+#[test_log::test]
+fn field_chain_array_problem_output() {
+    check(
+        "
+    struct Inner {
+        v: Int
+    }
+
+    struct SomeStruct {
+        something: Int,
+       inner: Inner
+    }
+
+    s = SomeStruct { something: 3, inner: Inner { v : 4 } }
+
+    mut arr = [ s ]
+
+    print(arr)
+
+    arr[0].inner.v = 5
+
+    print(arr)
+    ",
+        r#"
+            [SomeStruct { something: 3, inner: Inner { v: 4 } }]
+            [SomeStruct { something: 3, inner: Inner { v: 5 } }]
+        "#,
+    );
+}

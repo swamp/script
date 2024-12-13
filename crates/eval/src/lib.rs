@@ -803,7 +803,11 @@ impl<'a, C> Interpreter<'a, C> {
                 resolved_struct_field_ref,
                 lookups,
                 source_expression,
-            ) => self.field_assignment(resolved_struct_field_ref, lookups, source_expression)?,
+            ) => self.evaluate_field_assignment(
+                resolved_struct_field_ref,
+                lookups,
+                source_expression,
+            )?,
 
             ResolvedExpression::FieldCompoundAssignment(_) => todo!(),
 
@@ -1828,7 +1832,7 @@ impl<'a, C> Interpreter<'a, C> {
         Ok(value)
     }
 
-    fn field_assignment(
+    fn evaluate_field_assignment(
         &mut self,
         start_expression: &ResolvedExpression,
         lookups: &[ResolvedAccess],
@@ -1838,32 +1842,57 @@ impl<'a, C> Interpreter<'a, C> {
         let mut current_ref = self.evaluate_expression_ref(start_expression)?;
 
         for lookup in lookups.iter().take(lookups.len() - 1) {
-            let field_index = match lookup {
-                ResolvedAccess::FieldIndex(i) => *i,
-                _ => return Err(ExecuteError::TypeError("Expected field access".to_string())),
-            };
+            let next_ref = match lookup {
+                ResolvedAccess::FieldIndex(i) => {
+                    let field_index = *i;
 
-            let next_ref = {
-                let mut borrowed = current_ref.borrow_mut();
-                let next_val = match &mut *borrowed {
-                    Value::Struct(_struct_type, fields, _) => {
-                        fields.get_mut(field_index).ok_or_else(|| {
-                            ExecuteError::TypeError("Field index out of range".to_string())
-                        })?
-                    }
-                    _ => {
-                        return Err(ExecuteError::TypeError("Expected struct".to_string()));
-                    }
-                };
+                    let mut borrowed = current_ref.borrow_mut();
+                    let next_val = match &mut *borrowed {
+                        Value::Struct(_struct_type, fields, _) => {
+                            fields.get_mut(field_index).ok_or_else(|| {
+                                ExecuteError::TypeError("Field index out of range".to_string())
+                            })?
+                        }
+                        _ => {
+                            return Err(ExecuteError::TypeError("Expected struct".to_string()));
+                        }
+                    };
 
-                match next_val {
-                    Value::Reference(r) => r.clone(),
-                    other => {
-                        let new_ref = Rc::new(RefCell::new(other.clone()));
-                        *other = Value::Reference(new_ref.clone());
-                        new_ref
+                    match next_val {
+                        Value::Reference(r) => r.clone(),
+                        other => {
+                            let new_ref = Rc::new(RefCell::new(other.clone()));
+                            *other = Value::Reference(new_ref.clone());
+                            new_ref
+                        }
                     }
                 }
+                ResolvedAccess::CollectionIndex(index_expr) => {
+                    let index_value = self.evaluate_expression(index_expr)?;
+                    let index_int = index_value.expect_int()? as usize;
+
+                    let mut borrowed = current_ref.borrow_mut();
+                    let next_val = match &mut *borrowed {
+                        Value::Array(_array_type, fields) => {
+                            fields.get_mut(index_int).ok_or_else(|| {
+                                ExecuteError::TypeError("Field index out of range".to_string())
+                            })?
+                        }
+                        _ => {
+                            return Err(ExecuteError::TypeError("Expected array".to_string()));
+                        }
+                    };
+
+                    match next_val {
+                        Value::Reference(r) => r.clone(),
+                        other => {
+                            let new_ref = Rc::new(RefCell::new(other.clone()));
+                            *other = Value::Reference(new_ref.clone());
+                            new_ref
+                        }
+                    }
+                }
+                _ => return Err(ExecuteError::TypeError("Expected field access".to_string())),
             };
 
             current_ref = next_ref;
