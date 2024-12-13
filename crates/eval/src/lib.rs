@@ -320,7 +320,7 @@ impl<'a, C> Interpreter<'a, C> {
         let evaluated_args = self.evaluate_args(&call.arguments)?;
         debug!("call {:?}", func_val);
 
-        self.push_function_scope(&format!("{func_val}"));
+        self.push_function_scope(&call.function_definition.name.text);
 
         // Bind parameters before executing body
         self.bind_parameters(
@@ -332,7 +332,7 @@ impl<'a, C> Interpreter<'a, C> {
 
         let result = self.execute_statements(&call.function_definition.statements)?;
 
-        self.pop_function_scope(&format!("{func_val}"));
+        self.pop_function_scope(&call.function_definition.name.text);
 
         // Since signals can not propagate from the function call, we just return a normal Value
         let v = match result {
@@ -422,7 +422,7 @@ impl<'a, C> Interpreter<'a, C> {
         value: Value,
         is_mutable: bool,
     ) -> Result<(), ExecuteError> {
-        debug!(value=%value, "VAR: set var mut:{is_mutable} {relative_scope_index}:{variable_index} = {value:?}");
+        debug!("VAR: set var mut:{is_mutable} {relative_scope_index}:{variable_index}"); //  = {value}
 
         if is_mutable {
             // TODO: Check that we are not overwriting an existing used variables (debug)
@@ -524,7 +524,6 @@ impl<'a, C> Interpreter<'a, C> {
 
     // ---------------
     fn evaluate_expression(&mut self, expr: &ResolvedExpression) -> Result<Value, ExecuteError> {
-        debug!(expr=%expr, "evaluate expression");
         let value = match expr {
             // Constructing
             ResolvedExpression::Literal(lit) => match lit {
@@ -978,10 +977,16 @@ impl<'a, C> Interpreter<'a, C> {
 
                 match &*resolved_member_call.function {
                     ResolvedFunction::Internal(internal_function) => {
-                        self.push_function_scope(&format!("member_call {member_value}"));
+                        self.push_function_scope(&format!(
+                            "member_call {}",
+                            internal_function.name.text
+                        ));
                         self.bind_parameters(parameters, &member_call_arguments)?;
                         let result = self.execute_statements(&internal_function.statements)?;
-                        self.pop_function_scope(&format!("member_call {resolved_member_call}"));
+                        self.pop_function_scope(&format!(
+                            "member_call {}",
+                            internal_function.name.text
+                        ));
 
                         match result {
                             ValueWithSignal::Value(v) => v,
