@@ -121,13 +121,26 @@ impl Value {
         is_mutable: bool,
     ) -> Result<Box<dyn Iterator<Item = (Value, Value)>>, ValueError> {
         let values = match self {
-            Value::Reference(value_ref) => value_ref
+            Self::Reference(value_ref) => value_ref
                 .borrow_mut()
                 .to_owned()
                 .into_iter_pairs(is_mutable)?,
             Self::Map(_, seq_map) => Box::new(seq_map.into_iter()),
-            Value::Tuple(_, _) => todo!(),
-            Value::RustValue(ref rust_type_ref, ref _rust_value) => {
+            Self::Tuple(type_ref, elements) => {
+                let iter = elements
+                    .into_iter()
+                    .enumerate()
+                    .map(move |(i, v)| (Value::Int(i as i32), v));
+                Box::new(iter)
+            }
+            Self::Array(type_ref, array) => {
+                let iter = array
+                    .into_iter()
+                    .enumerate()
+                    .map(move |(i, v)| (Value::Int(i as i32), v));
+                Box::new(iter)
+            }
+            Self::RustValue(ref rust_type_ref, ref _rust_value) => {
                 Box::new(match rust_type_ref.number {
                     SPARSE_TYPE_ID => {
                         let sparse_map = self
