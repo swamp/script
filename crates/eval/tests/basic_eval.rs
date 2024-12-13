@@ -1051,6 +1051,20 @@ fn array_clear() {
 }
 
 #[test_log::test]
+fn array_clear2() {
+    let x = eval(
+        "
+
+    mut a = [10, 20]
+
+    a[1]
+    ",
+    );
+
+    assert_eq!(x, Value::Int(20));
+}
+
+#[test_log::test]
 fn sparse_map_create() {
     let x = eval(
         "
