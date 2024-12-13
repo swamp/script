@@ -72,9 +72,9 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
             resolution(source_resolution)
         }
         ResolvedExpression::FieldCompoundAssignment(
-            resolved_expression,
-            _op,
-            op_,
+            _resolved_expression,
+            _access,
+            _op_,
             source_resolution,
         ) => resolution(source_resolution),
         ResolvedExpression::BinaryOp(binary_op) => binary_op.resolved_type.clone(),
@@ -1556,16 +1556,6 @@ impl<'a> Resolver<'a> {
         } else {
             Err(ResolveError::UnknownStructField(name.clone()))
         }
-    }
-
-    fn resolve_into_struct_field_mut_ref(
-        &mut self,
-        expression: &Expression,
-        field_identifier: LocalIdentifier,
-    ) -> Result<ResolvedMutStructTypeFieldRef, ResolveError> {
-        Ok(Rc::new(ResolvedMutStructTypeField {
-            inner: self.resolve_into_struct_field_ref(expression, field_identifier)?,
-        }))
     }
 
     #[allow(unused)]

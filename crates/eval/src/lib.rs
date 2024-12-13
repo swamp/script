@@ -2068,7 +2068,7 @@ impl<'a, C> Interpreter<'a, C> {
                             "Field index out of range".to_string(),
                         ));
                     }
-                    Self::apply_compound_operator(&mut fields[*last_index], operator, &source);
+                    Self::apply_compound_operator(&mut fields[*last_index], operator, &source)?;
                 }
                 Value::Reference(x) => {
                     let mut inner = x.borrow_mut();
@@ -2083,7 +2083,7 @@ impl<'a, C> Interpreter<'a, C> {
                                 &mut fields[*last_index],
                                 operator,
                                 &source,
-                            );
+                            )?;
                         }
                         _ => return Err(ExecuteError::TypeError("Expected struct".to_string())),
                     }

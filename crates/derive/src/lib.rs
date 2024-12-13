@@ -334,6 +334,7 @@ pub fn derive_swamp_export_enum(input: TokenStream) -> TokenStream {
                         let enum_type = Rc::new(ResolvedEnumType {
                             name: LocalTypeIdentifier::from_str(stringify!(#name)),
                             number: registry.allocate_type_number(),
+                            module_path: ModulePath(vec![]),
                         });
                         ResolvedType::Enum(enum_type)
                     }
