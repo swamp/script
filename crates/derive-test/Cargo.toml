@@ -1,14 +1,14 @@
 [package]
 name = "swamp-script-derive-tests"
-version = "0.0.1"
+version = "0.0.7"
 edition = "2021"
 
 [dependencies]
-swamp-script-derive = { path = "../derive" }
-swamp-script-eval = { path = "../eval" }
+swamp-script-derive = { path = "../derive" , version = "0.0.7" }
+swamp-script-eval = { path = "../eval" , version = "0.0.7" }
 
 
 [dev-dependencies]
-swamp-script-derive = { path = "../derive" }
-swamp-script-semantic = { path = "../semantic" }
-swamp-script-core = { path = "../core" }
+swamp-script-derive = { path = "../derive" , version = "0.0.7" }
+swamp-script-semantic = { path = "../semantic" , version = "0.0.7" }
+swamp-script-core = { path = "../core" , version = "0.0.7" }
