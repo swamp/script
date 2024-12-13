@@ -68,11 +68,15 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
 
         ResolvedExpression::ArrayAssignment(_, _, _) => todo!(),
         ResolvedExpression::MapAssignment(_, _, _) => todo!(),
-        ResolvedExpression::StructFieldAssignment(
-            _struct_field,
-            _lookups,
-            _resolved_expression,
-        ) => resolution(_resolved_expression),
+        ResolvedExpression::StructFieldAssignment(_struct_field, _lookups, source_resolution) => {
+            resolution(source_resolution)
+        }
+        ResolvedExpression::FieldCompoundAssignment(
+            resolved_expression,
+            _op,
+            op_,
+            source_resolution,
+        ) => resolution(source_resolution),
         ResolvedExpression::BinaryOp(binary_op) => binary_op.resolved_type.clone(),
         ResolvedExpression::UnaryOp(unary_op) => unary_op.resolved_type.clone(),
         ResolvedExpression::PostfixOp(postfix_op) => postfix_op.resolved_type.clone(),
@@ -164,9 +168,6 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
         ResolvedExpression::FloatAbs(_) => ResolvedType::Float(Rc::new(ResolvedFloatType {})),
         ResolvedExpression::VariableCompoundAssignment(var_compound_assignment) => {
             var_compound_assignment.variable_ref.resolved_type.clone()
-        }
-        ResolvedExpression::FieldCompoundAssignment(field_compound) => {
-            field_compound.struct_field_ref.resolved_type.clone()
         }
     };
 
@@ -1358,9 +1359,8 @@ impl<'a> Resolver<'a> {
                 self.resolve_compound_assignment_variable(target, operator, source)?
             }
 
-            Expression::FieldCompoundAssignment(_target, _field, _operator, _source) => {
-                //self.resolve_compound_assignment_field(target, field, operator, source)?
-                todo!()
+            Expression::FieldCompoundAssignment(target, field, operator, source) => {
+                self.resolve_field_assignment_compound(target, field, operator, source)?
             }
 
             Expression::FieldAssignment(ast_struct_expr, ast_field_name, ast_expression) => {
@@ -3280,6 +3280,36 @@ impl<'a> Resolver<'a> {
         Ok(ResolvedExpression::StructFieldAssignment(
             Box::new(resolved_first_base_expression),
             chain,
+            Box::from(wrapped_expression),
+        ))
+    }
+
+    fn resolve_field_assignment_compound(
+        &mut self,
+        ast_struct_field_expr: &Expression,
+        ast_field_name: &LocalIdentifier,
+        ast_operator: &CompoundOperator,
+        ast_source_expression: &Expression,
+    ) -> Result<ResolvedExpression, ResolveError> {
+        let mut chain = Vec::new();
+        let (resolved_last_type, resolved_first_base_expression) =
+            self.collect_field_chain(ast_struct_field_expr, &mut chain)?;
+
+        // Add the last lookup that is part of the field_assignment itself
+        let (_field_type, field_index) =
+            self.get_field_index(&resolved_last_type, &ast_field_name.text)?;
+
+        chain.push(ResolvedAccess::FieldIndex(field_index));
+
+        let resolved_target_type = resolution(&resolved_first_base_expression);
+
+        let source_expression = self.resolve_expression(ast_source_expression)?;
+        let wrapped_expression = wrap_in_some_if_optional(&resolved_target_type, source_expression);
+
+        Ok(ResolvedExpression::FieldCompoundAssignment(
+            Box::new(resolved_first_base_expression),
+            chain,
+            ast_operator.clone(),
             Box::from(wrapped_expression),
         ))
     }

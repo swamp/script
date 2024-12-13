@@ -735,13 +735,6 @@ pub struct ResolvedVariableCompoundAssignment {
     pub ast_operator: CompoundOperator,
 }
 
-#[derive(Debug)]
-pub struct ResolvedFieldCompoundAssignment {
-    pub struct_field_ref: ResolvedStructTypeFieldRef,
-    pub expression: Box<ResolvedExpression>,
-    pub ast_operator: CompoundOperator,
-}
-
 pub fn create_rust_type(name: &str, type_number: TypeNumber) -> ResolvedRustTypeRef {
     let rust_type = ResolvedRustType {
         type_name: name.to_string(),
@@ -774,7 +767,6 @@ pub enum ResolvedExpression {
     ReassignVariable(ResolvedVariableAssignment),   // Subsequent assignments
 
     VariableCompoundAssignment(ResolvedVariableCompoundAssignment),
-    FieldCompoundAssignment(ResolvedFieldCompoundAssignment),
 
     ArrayExtend(ResolvedVariableRef, Box<ResolvedExpression>), // Extends an array with another array
     ArrayPush(ResolvedVariableRef, Box<ResolvedExpression>),   // Adds an item to an array
@@ -786,6 +778,13 @@ pub enum ResolvedExpression {
     StructFieldAssignment(
         Box<ResolvedExpression>,
         Vec<ResolvedAccess>,
+        Box<ResolvedExpression>,
+    ),
+
+    FieldCompoundAssignment(
+        Box<ResolvedExpression>,
+        Vec<ResolvedAccess>,
+        CompoundOperator,
         Box<ResolvedExpression>,
     ),
 
@@ -1026,7 +1025,7 @@ impl Display for ResolvedExpression {
             ResolvedExpression::VariableCompoundAssignment(_) => {
                 write!(f, "variable compount assignment")
             }
-            ResolvedExpression::FieldCompoundAssignment(_) => {
+            ResolvedExpression::FieldCompoundAssignment(..) => {
                 write!(f, "field compound assignment")
             }
             &ResolvedExpression::FloatRound(_) | &ResolvedExpression::FloatFloor(_) => {
