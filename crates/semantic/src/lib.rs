@@ -465,8 +465,8 @@ impl Display for ResolvedMemberCall {
 
 #[derive(Debug)]
 pub enum ResolvedAccess {
-    FieldAccess(usize),
-    IndexAccess(usize),
+    FieldIndex(usize),
+    CollectionIndex(usize),
 }
 
 pub type ResolvedMutStructTypeFieldRef = Rc<ResolvedMutStructTypeField>;
@@ -781,7 +781,11 @@ pub enum ResolvedExpression {
     ArrayAssignment(ResolvedMutArray, ResolvedIndexType, Box<ResolvedExpression>), // target, index, source. Write to an index in an array: arr[3] = 42
 
     MapAssignment(ResolvedMutMap, ResolvedIndexType, Box<ResolvedExpression>),
-    StructFieldAssignment(ResolvedMutStructTypeFieldRef, Box<ResolvedExpression>),
+    StructFieldAssignment(
+        Box<ResolvedExpression>,
+        Vec<ResolvedAccess>,
+        Box<ResolvedExpression>,
+    ),
 
     // Operators
     BinaryOp(ResolvedBinaryOperator),
@@ -916,7 +920,7 @@ impl Display for ResolvedExpression {
 
             Self::ArrayAssignment(_, _, _) => write!(f, "array assignment"),
             Self::MapAssignment(_, _, _) => write!(f, "map assignment"),
-            Self::StructFieldAssignment(_, _) => write!(f, "field assignment"),
+            Self::StructFieldAssignment(_, _, _) => write!(f, "field assignment"),
             Self::BinaryOp(binary_op) => write!(f, "{binary_op:?}"),
             Self::UnaryOp(unary_op) => {
                 write!(f, "{:?}", unary_op)
@@ -1120,7 +1124,9 @@ pub struct ResolvedStructType {
 
 impl Debug for ResolvedStructType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "struct type {:?}", self.number)
+        write!(f, "{} {{", self.name)?;
+        write!(f, " {} ", comma_seq(&self.fields))?;
+        write!(f, "}}")
     }
 }
 
