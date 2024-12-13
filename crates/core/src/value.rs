@@ -305,6 +305,14 @@ impl Value {
         );
         Ok((struct_value, struct_type))
     }
+
+    #[must_use]
+    pub fn unref(&self) -> Self {
+        match self {
+            Value::Reference(ref inner) => inner.borrow().clone(),
+            _ => self.clone(),
+        }
+    }
 }
 
 impl std::fmt::Display for Value {
