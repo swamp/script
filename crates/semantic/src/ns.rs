@@ -344,10 +344,6 @@ impl ResolvedModuleNamespace {
     ) -> Result<ResolvedEnumVariantTypeRef, SemanticError> {
         let enum_variant_ref = Rc::new(enum_variant);
         let complete_name = &enum_variant_ref.complete_name();
-        info!(
-            "Adding variant: '{}' with number {}",
-            complete_name, enum_variant_ref.number
-        );
         self.enum_variant_types.insert(
             LocalTypeName(complete_name.clone()),
             enum_variant_ref.clone(),
@@ -415,13 +411,7 @@ impl ResolvedModuleNamespace {
         enum_variant_name: &str,
     ) -> Option<&ResolvedEnumVariantTypeRef> {
         let complete_name = LocalTypeName(format!("{}::{}", enum_name, enum_variant_name));
-        info!("Looking up variant: '{}' in namespace", complete_name);
         let result = self.enum_variant_types.get(&complete_name);
-        if let Some(variant) = result {
-            info!("Found variant with number: {}", variant.number);
-        } else {
-            info!("Variant not found!");
-        }
         result
     }
 

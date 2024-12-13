@@ -181,48 +181,30 @@ impl<'a, C> Interpreter<'a, C> {
     }
 
     fn push_function_scope(&mut self, debug_str: &str) {
-        debug!(debug_str=%debug_str, "push function scope");
         self.function_scope_stack.push(FunctionScope {
             saved_block_scope: self.current_block_scopes.clone(),
         });
-        trace!(len=%self.current_block_scopes.len(), "saved block len");
 
         self.current_block_scopes.clear();
         self.push_block_scope("default function scope");
     }
 
     fn push_block_scope(&mut self, debug_str: &str) {
-        debug!(
-            "EVAL: pushing scope '{}', current depth: {}",
-            debug_str,
-            self.current_block_scopes.len()
-        );
         self.current_block_scopes.push(BlockScope::default());
     }
 
     fn pop_block_scope(&mut self, debug_str: &str) {
         let old_len = self.current_block_scopes.len();
-        debug!(
-            "EVAL: popping scope '{}', new depth: {}",
-            debug_str,
-            old_len - 1
-        );
         self.current_block_scopes.pop();
     }
 
     fn pop_function_scope(&mut self, debug_str: &str) {
-        debug!(debug_str=%debug_str, "pop function scope");
         if self.function_scope_stack.len() == 1 {
             error!("you popped too far");
             panic!("you popped too far");
         }
         let last_one = self.function_scope_stack.pop().expect("pop function scope");
         self.current_block_scopes = last_one.saved_block_scope;
-
-        trace!(
-            len = self.current_block_scopes.len(),
-            "restored block scope"
-        );
     }
 
     fn bind_parameters(
@@ -398,9 +380,6 @@ impl<'a, C> Interpreter<'a, C> {
         variable_index: usize,
         new_value: Value,
     ) -> Result<(), ExecuteError> {
-        trace!(
-            "VAR: overwrite_existing_var {relative_scope_index}:{variable_index} = {new_value:?}"
-        );
         let existing_var =
             &mut self.current_block_scopes[relative_scope_index].variables[variable_index];
 
@@ -422,8 +401,6 @@ impl<'a, C> Interpreter<'a, C> {
         value: Value,
         is_mutable: bool,
     ) -> Result<(), ExecuteError> {
-        debug!("VAR: set var mut:{is_mutable} {relative_scope_index}:{variable_index}"); //  = {value}
-
         if is_mutable {
             // TODO: Check that we are not overwriting an existing used variables (debug)
             self.current_block_scopes[relative_scope_index].variables[variable_index] =
@@ -459,7 +436,6 @@ impl<'a, C> Interpreter<'a, C> {
         }
         let existing_var = &variables[variable_index];
 
-        trace!("VAR: lookup {relative_scope_index}:{variable_index} > {existing_var}");
         Ok(existing_var)
     }
 
@@ -516,7 +492,6 @@ impl<'a, C> Interpreter<'a, C> {
     ) -> Result<(), ExecuteError> {
         let last_scope_index = self.current_block_scopes.len() - 1;
         let assigned = Self::assign_value(var_type, value);
-        trace!("VAR: set_local_var {last_scope_index}:{variable_index} = {assigned:?}");
 
         self.current_block_scopes[last_scope_index].variables[variable_index] = assigned;
         Ok(())
@@ -949,8 +924,6 @@ impl<'a, C> Interpreter<'a, C> {
                 let member_value =
                     self.evaluate_expression(&resolved_member_call.self_expression)?;
 
-                trace!("{} > member call {:?}", self.tabs(), member_value);
-
                 let parameters = match &*resolved_member_call.function {
                     ResolvedFunction::Internal(function_data) => {
                         &function_data.signature.parameters
@@ -1242,8 +1215,6 @@ impl<'a, C> Interpreter<'a, C> {
         let mut return_value = Value::Unit;
 
         for statement in statements {
-            trace!("{} exec {statement:?}", self.tabs());
-
             // First handle signal aware statements
             match statement {
                 ResolvedStatement::Continue => {
@@ -1675,11 +1646,6 @@ impl<'a, C> Interpreter<'a, C> {
             Value::Reference(r) => r.borrow().clone(),
             v => v,
         };
-
-        trace!(
-            "{} > binary op {left_val:?} {op:?} {right_val:?}",
-            self.tabs()
-        );
 
         let result: Value = match (left_val, op, right_val) {
             // Integer operations

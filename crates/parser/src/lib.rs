@@ -13,7 +13,6 @@ use pest_derive::Parser;
 use seq_map::SeqMap;
 use swamp_script_ast::{prelude::*, CompoundOperator, ForPattern, ForVar, PatternElement};
 use swamp_script_ast::{Function, PostfixOperator};
-use tracing::debug;
 
 #[derive(Parser)]
 #[grammar = "grammar.pest"]
@@ -121,12 +120,10 @@ impl AstParser {
                     match inner.as_rule() {
                         Rule::definition => {
                             let def = self.parse_definition(&inner)?;
-                            debug!("parsed definition {def:?}");
                             definitions.push(def);
                         }
                         Rule::control_statement => {
                             let stmt = self.parse_control_statement(inner)?;
-                            debug!("parsed statement {stmt:?}");
                             statements.push(stmt);
                         }
                         _ => unreachable!(

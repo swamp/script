@@ -45,7 +45,6 @@ pub fn unalias_type(resolved_type: ResolvedType) -> ResolvedType {
 }
 
 pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
-    trace!("resolution expression {}", expression);
     let resolution_expression = match expression {
         ResolvedExpression::FieldAccess(_expr, struct_field_ref, _lookups) => {
             struct_field_ref.resolved_type.clone()
@@ -170,8 +169,6 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
             field_compound.struct_field_ref.resolved_type.clone()
         }
     };
-
-    trace!(resolution_expression=%resolution_expression, "resolution first");
 
     resolution_expression
 }
@@ -775,26 +772,14 @@ impl<'a> Resolver<'a> {
         statements: &Vec<Statement>,
         return_type: &ResolvedType,
     ) -> Result<Vec<ResolvedStatement>, ResolveError> {
-        debug!(
-            ?statements,
-            ?return_type,
-            "resolving statements in function"
-        );
-        debug!(?self.return_type, "current return type context");
         let mut resolved_statements = Vec::new();
 
         for (i, statement) in statements.iter().enumerate() {
-            debug!(?statement, "resolving statement {}", i);
             let mut resolved_statement = self.resolve_statement(statement)?;
-            debug!(
-                ?resolved_statement,
-                "resolved statement before return handling"
-            );
+
             // Handle last statement in function
             if i == statements.len() - 1 {
-                debug!("handling last statement in function");
                 if let ResolvedStatement::Expression(expr) = resolved_statement {
-                    debug!(?expr, "wrapping final expression for return");
                     let wrapped_expr = self.check_and_wrap_return_value(expr, return_type)?;
                     resolved_statement = ResolvedStatement::Expression(wrapped_expr);
                 }
@@ -830,11 +815,6 @@ impl<'a> Resolver<'a> {
                     self.resolve_statements_in_function(&function_data.body, &return_type)?;
 
                 self.return_type = None;
-
-                info!(name = identifier.text, "statements for function");
-                for (index, statement) in statements.iter().enumerate() {
-                    info!(index=index,statement=?statement, "analyzer statement")
-                }
 
                 let internal = ResolvedInternalFunctionDefinition {
                     signature: ResolvedFunctionSignature {
@@ -1057,8 +1037,6 @@ impl<'a> Resolver<'a> {
         &mut self,
         statement: &Statement,
     ) -> Result<ResolvedStatement, ResolveError> {
-        debug!(?statement, "resolving statement");
-        debug!(?self.return_type, "current return type context");
         let converted = match statement {
             Statement::ForLoop(pattern, expression, iterator_should_be_mutable, statements) => {
                 let resolved_iterator =
@@ -1132,7 +1110,6 @@ impl<'a> Resolver<'a> {
             },
         };
 
-        debug!(?converted, "resolved statement");
         Ok(converted)
     }
 
@@ -1140,13 +1117,9 @@ impl<'a> Resolver<'a> {
         &mut self,
         statements: &Vec<Statement>,
     ) -> Result<Vec<ResolvedStatement>, ResolveError> {
-        debug!(?statements, "resolving statements");
-        debug!(?self.return_type, "current return type context for statements");
-
         let mut resolved_statements = Vec::new();
         for statement in statements {
             let resolved_statement = self.resolve_statement(statement)?;
-            debug!(?statement, ?resolved_statement, "resolved statement");
             resolved_statements.push(resolved_statement);
         }
 
@@ -1199,19 +1172,16 @@ impl<'a> Resolver<'a> {
     ) -> Result<(ResolvedType, ResolvedExpression), ResolveError> {
         match expr {
             Expression::FieldAccess(source, field) => {
-                info!(?source, ?field, "found field access");
                 let (resolved_type, base_expr) = self.collect_field_chain(source, access_chain)?;
 
                 let (field_type, field_index) =
                     self.get_field_index(&resolved_type, &field.text)?;
                 access_chain.push(ResolvedAccess::FieldIndex(field_index));
 
-                info!(%field_index, ?access_chain, "field added to chain");
                 Ok((field_type, base_expr))
             }
 
             Expression::IndexAccess(source, index_expr) => {
-                info!(?source, ?index_expr, "found collection index access");
                 let (resolved_type, base_expr) = self.collect_field_chain(source, access_chain)?;
                 let resolved_index_expr = self.resolve_expression(index_expr)?;
                 match resolved_type {
@@ -1229,7 +1199,6 @@ impl<'a> Resolver<'a> {
             _ => {
                 let resolved_expr = self.resolve_expression(expr)?;
                 let resolved_type = resolution(&resolved_expr);
-                info!(?resolved_expr, "end of chain!");
                 Ok((resolved_type, resolved_expr))
             }
         }
@@ -1239,9 +1208,6 @@ impl<'a> Resolver<'a> {
         &mut self,
         ast_expression: &Expression,
     ) -> Result<ResolvedExpression, ResolveError> {
-        debug!(?ast_expression, "resolving expression");
-        debug!(?self.return_type, "current return type context");
-
         let expression = match ast_expression {
             // Lookups
             Expression::FieldAccess(expression, field_name) => {
@@ -1694,7 +1660,6 @@ impl<'a> Resolver<'a> {
                     wrap_in_some_if_optional(field_type, resolved_expression);
 
                 let expression_type = resolution(&upgraded_resolved_expression);
-                info!("expression_type: target:{field_type}  source_type:{expression_type} source_expression:{upgraded_resolved_expression}");
 
                 if !field_type.same_type(&expression_type) {
                     error!("types: {field_type} expr: {expression_type}");
@@ -1773,7 +1738,6 @@ impl<'a> Resolver<'a> {
         ast_pattern: &Pattern,
         expression_type: &ResolvedType,
     ) -> Result<(ResolvedPattern, bool), ResolveError> {
-        info!("resolving pattern:{ast_pattern:?}");
         match ast_pattern {
             Pattern::PatternList(elements) => {
                 let mut resolved_elements = Vec::new();
@@ -2198,15 +2162,11 @@ impl<'a> Resolver<'a> {
         ast_op: &BinaryOperator,
         ast_right: &Box<Expression>,
     ) -> Result<ResolvedBinaryOperator, ResolveError> {
-        debug!(?ast_left, ?ast_op, ?ast_right, "resolving binary op inputs");
-
         let left = self.resolve_expression(ast_left)?;
         let left_type = resolution(&left);
-        debug!(?left, ?left_type, "resolved left operand and type");
 
         let right = self.resolve_expression(ast_right)?;
         let right_type = resolution(&right);
-        debug!(?right, ?right_type, "resolved right operand and type");
 
         match (ast_op, &left_type, &right_type) {
             // String concatenation - allow any type on the right
@@ -2384,8 +2344,6 @@ impl<'a> Resolver<'a> {
     }
 
     fn try_find_local_variable(&self, variable: &Variable) -> Option<&ResolvedVariableRef> {
-        trace!("trying to find local {variable:?}");
-
         let current_scope = self
             .block_scope_stack
             .iter()
@@ -2620,15 +2578,12 @@ impl<'a> Resolver<'a> {
     }
 
     fn push_block_scope(&mut self, debug_str: &str) {
-        debug!(debug=%debug_str,  stack_len=self.block_scope_stack.len(), "pushing scope stack");
-
         self.block_scope_stack.push(BlockScope {
             variables: SeqMap::default(),
         });
     }
 
     fn pop_block_scope(&mut self, debug_str: &str) {
-        debug!(debug=%debug_str, stack_len=self.block_scope_stack.len(), "popping scope stack");
         self.block_scope_stack.pop();
     }
 
@@ -2707,8 +2662,6 @@ impl<'a> Resolver<'a> {
             scope_index,
             variable_index: variables.len(),
         };
-
-        info!("creating local variable {resolved_variable:?}");
 
         let variable_ref = Rc::new(resolved_variable);
 
@@ -2792,15 +2745,11 @@ impl<'a> Resolver<'a> {
         let resolved_type = resolution(&resolved_expression);
 
         let mut resolved_arms = Vec::new();
-        info!("resolving match type {resolved_type} expression:{resolved_expression:?}");
 
         for arm in arms {
-            info!("resolving arm {arm:?}");
             let resolved_arm = self.resolve_arm(arm, &resolved_expression, &resolved_type)?;
             resolved_arms.push(resolved_arm);
         }
-
-        info!("resolving match is done!");
 
         Ok(ResolvedMatch {
             expression: Box::new(resolved_expression),
@@ -3324,7 +3273,6 @@ impl<'a> Resolver<'a> {
             self.get_field_index(&resolved_last_type, &ast_field_name.text)?;
 
         chain.push(ResolvedAccess::FieldIndex(field_index));
-        info!(?chain, "complete chain");
 
         let resolved_target_type = resolution(&resolved_first_base_expression);
 
