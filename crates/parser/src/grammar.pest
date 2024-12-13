@@ -22,12 +22,12 @@ definition = {
 }
 
 control_statement = {
-    for_loop
+    continue_stmt
+    | break_stmt
+    | for_loop
     | while_loop
     | if_stmt
     | return_stmt
-    | break_stmt
-    | continue_stmt
     | expression_statement
 }
 
@@ -289,7 +289,9 @@ static_call = {
 
 
 
-member_call = { identifier ~ "." ~ identifier ~ "(" ~ (expression ~ ("," ~ expression)*)? ~ ")" }
+member_call = {
+    identifier ~ ("." ~ identifier)+ ~ "(" ~ (expression ~ ("," ~ expression)*)? ~ ")"
+}
 
 array_index = { "[" ~ expression ~ "]" }
 

@@ -1089,24 +1089,32 @@ impl AstParser {
     fn parse_member_call(&self, pair: Pair<Rule>) -> Result<Expression, Error<Rule>> {
         let mut inner = Self::get_inner_pairs(&pair);
 
-        // Parse object identifier
-        let obj_name = Self::expect_identifier(&mut inner)?;
-        let obj = Expression::VariableAccess(Variable::new(&obj_name, false));
+        let base = Self::next_pair(&mut inner)?;
+        let mut expr = Expression::VariableAccess(Variable::new(base.as_str(), false));
 
-        // Parse method name
-        let method_name = Self::expect_identifier(&mut inner)?;
+        while let Some(next) = inner.next() {
+            if next.as_rule() == Rule::identifier {
+                expr = Expression::FieldAccess(
+                    Box::new(expr),
+                    LocalIdentifier::new(convert_from_pair(&pair), next.as_str()),
+                );
+            } else {
+                let mut args = vec![self.parse_expression(next)?];
+                while let Some(arg) = inner.next() {
+                    args.push(self.parse_expression(arg)?);
+                }
 
-        // Parse arguments
-        let mut args = Vec::new();
-        while let Some(arg) = inner.next() {
-            args.push(self.parse_expression(arg)?);
+                if let Expression::FieldAccess(obj, method) = expr {
+                    return Ok(Expression::MemberCall(obj, method, args));
+                }
+            }
         }
 
-        Ok(Expression::MemberCall(
-            Box::new(obj),
-            LocalIdentifier::new(convert_from_pair(&pair), &method_name),
-            args,
-        ))
+        if let Expression::FieldAccess(obj, method) = expr {
+            Ok(Expression::MemberCall(obj, method, vec![]))
+        } else {
+            Err(self.create_error("Invalid member call", pair.as_span()))
+        }
     }
 
     fn parse_module_path(&self, pair: Pair<Rule>) -> Vec<String> {
