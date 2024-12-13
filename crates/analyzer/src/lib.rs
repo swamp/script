@@ -69,9 +69,11 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
 
         ResolvedExpression::ArrayAssignment(_, _, _) => todo!(),
         ResolvedExpression::MapAssignment(_, _, _) => todo!(),
-        ResolvedExpression::StructFieldAssignment(struct_field, _resolved_expression) => {
-            struct_field.inner.resolved_type.clone()
-        }
+        ResolvedExpression::StructFieldAssignment(
+            _struct_field,
+            _lookups,
+            _resolved_expression,
+        ) => resolution(_resolved_expression),
         ResolvedExpression::BinaryOp(binary_op) => binary_op.resolved_type.clone(),
         ResolvedExpression::UnaryOp(unary_op) => unary_op.resolved_type.clone(),
         ResolvedExpression::PostfixOp(postfix_op) => postfix_op.resolved_type.clone(),
@@ -1178,21 +1180,21 @@ impl<'a> Resolver<'a> {
 
     fn get_field_index(
         &mut self,
-        base: &ResolvedExpression,
+        base_type: &ResolvedType,
         name: &str,
-    ) -> Result<usize, ResolveError> {
-        let base_type = resolution(base);
-        match base_type {
-            ResolvedType::Struct(struct_type) => {
-                if let Some(field_index) = struct_type
-                    .borrow()
-                    .fields
-                    .get_index(&IdentifierName(name.to_string()))
-                {
-                    return Ok(field_index);
-                }
+    ) -> Result<(ResolvedType, usize), ResolveError> {
+        if let ResolvedType::Struct(struct_type) = base_type {
+            let fields = &struct_type.borrow().fields;
+            if let Some(field_index) = fields.get_index(&IdentifierName(name.to_string())) {
+                let field = fields
+                    .get(&IdentifierName(name.to_string()))
+                    .expect("should find it again");
+                return Ok((field.clone(), field_index));
+            } else {
+                return Err(ResolveError::UnknownStructField(LocalIdentifier::from_str(
+                    name,
+                )));
             }
-            _ => {}
         }
 
         Err(ResolveError::NeedStructForFieldLookup)
@@ -1201,28 +1203,30 @@ impl<'a> Resolver<'a> {
     fn collect_field_chain(
         &mut self,
         expr: &Expression,
-        field_name: &LocalIdentifier,
         access_chain: &mut Vec<ResolvedAccess>,
-    ) -> Result<ResolvedExpression, ResolveError> {
+    ) -> Result<(ResolvedType, ResolvedExpression), ResolveError> {
         match expr {
-            Expression::FieldAccess(source, nested_field) => {
-                let resolved_expression =
-                    self.collect_field_chain(source, nested_field, access_chain)?;
+            Expression::FieldAccess(source, field) => {
+                info!(?source, ?field, "found field access");
+                let (resolved_type, base_expr) = self.collect_field_chain(source, access_chain)?;
 
-                let field_index = self.get_field_index(&resolved_expression, &field_name.text)?;
-                access_chain.push(ResolvedAccess::FieldAccess(field_index));
+                let (field_type, field_index) =
+                    self.get_field_index(&resolved_type, &field.text)?;
+                access_chain.push(ResolvedAccess::FieldIndex(field_index));
 
-                Ok(resolved_expression)
+                info!(%field_index, ?access_chain, "field added to chain");
+                Ok((field_type, base_expr))
             }
 
-            Expression::IndexAccess(_target, _index_expr) => {
-                // TODO: Handle array/collection index access
-                todo!()
+            /* TODO: Implement index access
+            Expression::IndexAccess(target, index_expr) => {
             }
-
+            */
             _ => {
-                let resolved = self.resolve_expression(expr)?;
-                Ok(resolved)
+                let resolved_expr = self.resolve_expression(expr)?;
+                let resolved_type = resolution(&resolved_expr);
+                info!(?resolved_expr, "end of chain!");
+                Ok((resolved_type, resolved_expr))
             }
         }
     }
@@ -1231,14 +1235,13 @@ impl<'a> Resolver<'a> {
         &mut self,
         base_expression: &Expression,
         struct_field_ref: &ResolvedStructTypeFieldRef,
-        field_name: &LocalIdentifier,
     ) -> Result<ResolvedExpression, ResolveError> {
         let mut access_chain = Vec::new();
-        let resolved_expression =
-            self.collect_field_chain(&base_expression, &field_name, &mut access_chain)?;
+        let (_resolved_type, resolved_base_expression) =
+            self.collect_field_chain(base_expression, &mut access_chain)?;
 
         Ok(ResolvedExpression::FieldAccess(
-            Box::from(resolved_expression),
+            Box::from(resolved_base_expression),
             struct_field_ref.clone(),
             access_chain,
         ))
@@ -1258,7 +1261,7 @@ impl<'a> Resolver<'a> {
                 let struct_field_ref =
                     self.resolve_into_struct_field_ref(expression.as_ref(), field_name.clone())?;
 
-                self.resolve_field_access(expression, &struct_field_ref, field_name)?
+                self.resolve_field_access(expression, &struct_field_ref)?
             }
             Expression::VariableAccess(variable) => {
                 self.resolve_variable_or_function_access(variable)?
@@ -1409,18 +1412,7 @@ impl<'a> Resolver<'a> {
             }
 
             Expression::FieldAssignment(ast_struct_expr, ast_field_name, ast_expression) => {
-                let source_expression = self.resolve_expression(ast_expression)?;
-
-                let mut_struct_field = self
-                    .resolve_into_struct_field_mut_ref(ast_struct_expr, ast_field_name.clone())?;
-
-                let target_type = mut_struct_field.inner.resolved_type.clone();
-                let wrapped_expression = wrap_in_some_if_optional(&target_type, source_expression);
-
-                ResolvedExpression::StructFieldAssignment(
-                    mut_struct_field.clone(),
-                    Box::from(wrapped_expression),
-                )
+                self.field_assignment(ast_struct_expr, ast_field_name, ast_expression)?
             }
 
             // Operator
@@ -3292,6 +3284,34 @@ impl<'a> Resolver<'a> {
         }
 
         Ok(None)
+    }
+
+    fn field_assignment(
+        &mut self,
+        ast_struct_field_expr: &Expression,
+        ast_field_name: &LocalIdentifier,
+        ast_source_expression: &Expression,
+    ) -> Result<ResolvedExpression, ResolveError> {
+        let mut chain = Vec::new();
+        let (resolved_last_type, resolved_first_base_expression) =
+            self.collect_field_chain(ast_struct_field_expr, &mut chain)?;
+
+        // Add the last lookup that is part of the field_assignment itself
+        let (_field_type, field_index) =
+            self.get_field_index(&resolved_last_type, &ast_field_name.text)?;
+        chain.push(ResolvedAccess::FieldIndex(field_index));
+        info!(?chain, "complete chain");
+
+        let resolved_target_type = resolution(&resolved_first_base_expression);
+
+        let source_expression = self.resolve_expression(ast_source_expression)?;
+        let wrapped_expression = wrap_in_some_if_optional(&resolved_target_type, source_expression);
+
+        Ok(ResolvedExpression::StructFieldAssignment(
+            Box::new(resolved_first_base_expression),
+            chain,
+            Box::from(wrapped_expression),
+        ))
     }
 }
 
