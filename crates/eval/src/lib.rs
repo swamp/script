@@ -515,7 +515,7 @@ impl<'a, C> Interpreter<'a, C> {
         let mut value = self.evaluate_expression(&expression)?;
         for lookup in lookups {
             match lookup {
-                ResolvedAccess::FieldAccess(index) => {
+                ResolvedAccess::FieldIndex(index) => {
                     value = match &value {
                         Value::Struct(_struct_type, fields, _) => fields[*index].clone(),
                         Value::Reference(r) => {
@@ -535,7 +535,7 @@ impl<'a, C> Interpreter<'a, C> {
                         }
                     }
                 }
-                ResolvedAccess::IndexAccess(_) => {}
+                ResolvedAccess::CollectionIndex(_) => {}
             }
         }
         Ok(Value::Unit)
@@ -836,54 +836,9 @@ impl<'a, C> Interpreter<'a, C> {
 
             ResolvedExpression::StructFieldAssignment(
                 resolved_struct_field_ref,
+                lookups,
                 source_expression,
-            ) => {
-                let target_struct_value =
-                    self.evaluate_expression(&resolved_struct_field_ref.inner.struct_expression)?;
-                let value = self.evaluate_expression(source_expression)?;
-
-                match target_struct_value {
-                    Value::Reference(r) => {
-                        let mut borrowed = r.borrow_mut();
-                        // We know it must be a struct because references can only point to structs
-                        match &mut *borrowed {
-                            Value::Struct(struct_type, fields, _) => {
-                                if let Some(field) =
-                                    fields.get_mut(resolved_struct_field_ref.inner.index)
-                                {
-                                    let struct_ref = struct_type.borrow();
-                                    let field_type = struct_ref
-                                        .fields
-                                        .values()
-                                        .nth(resolved_struct_field_ref.inner.index)
-                                        .ok_or_else(|| "Field index out of bounds".to_string())?
-                                        .clone(); // Clone the type to extend its lifetime
-
-                                    let assign = Self::assign_value(&field_type, value);
-                                    *field = assign.clone();
-                                    assign
-                                } else {
-                                    Err(format!(
-                                        "Field '{}' not found in struct '{:?}'",
-                                        resolved_struct_field_ref.inner.index, struct_type
-                                    ))?
-                                }
-                            }
-                            _ => {
-                                Err("Internal error: reference contains non-struct value"
-                                    .to_string())?
-                            }
-                        }
-                    }
-                    Value::Struct(_, _, _) => {
-                        Err("Cannot assign to field of non-mutable struct".to_string())?
-                    }
-                    _ => Err(format!(
-                        "Cannot access field assignment '{}' on non-struct value",
-                        resolved_struct_field_ref.inner.index
-                    ))?,
-                }
-            }
+            ) => self.field_assignment(resolved_struct_field_ref, lookups, source_expression)?,
 
             ResolvedExpression::FieldCompoundAssignment(_) => todo!(),
 
@@ -1854,5 +1809,81 @@ impl<'a, C> Interpreter<'a, C> {
         }
 
         Ok(true)
+    }
+
+    /// Get the Rc<RefCell<>> to the inner part of the Value instead of a Value
+    fn evaluate_expression_ref(
+        &mut self,
+        expr: &ResolvedExpression,
+    ) -> Result<Rc<RefCell<Value>>, ExecuteError> {
+        match expr {
+            ResolvedExpression::VariableAccess(var_ref) => {
+                Ok(self.lookup_mut_variable(var_ref)?.clone())
+            }
+            _ => {
+                // TODO: Maybe needed to support other expressions?
+                let value = self.evaluate_expression(expr)?;
+                Ok(Rc::new(RefCell::new(value)))
+            }
+        }
+    }
+
+    fn field_assignment(
+        &mut self,
+        start_expression: &ResolvedExpression,
+        lookups: &[ResolvedAccess],
+        source_expression: &ResolvedExpression,
+    ) -> Result<Value, ExecuteError> {
+        let source = self.evaluate_expression(source_expression)?;
+        let mut current_ref = self.evaluate_expression_ref(start_expression)?;
+
+        for lookup in lookups.iter().take(lookups.len() - 1) {
+            let field_index = match lookup {
+                ResolvedAccess::FieldIndex(i) => *i,
+                _ => return Err(ExecuteError::TypeError("Expected field access".to_string())),
+            };
+
+            let next_ref = {
+                let mut borrowed = current_ref.borrow_mut();
+                let next_val = match &mut *borrowed {
+                    Value::Struct(_struct_type, fields, _) => {
+                        fields.get_mut(field_index).ok_or_else(|| {
+                            ExecuteError::TypeError("Field index out of range".to_string())
+                        })?
+                    }
+                    _ => {
+                        return Err(ExecuteError::TypeError("Expected struct".to_string()));
+                    }
+                };
+
+                match next_val {
+                    Value::Reference(r) => r.clone(),
+                    other => {
+                        let new_ref = Rc::new(RefCell::new(other.clone()));
+                        *other = Value::Reference(new_ref.clone());
+                        new_ref
+                    }
+                }
+            };
+
+            current_ref = next_ref;
+        }
+
+        if let Some(ResolvedAccess::FieldIndex(last_index)) = lookups.last() {
+            let mut borrowed = current_ref.borrow_mut();
+            match &mut *borrowed {
+                Value::Struct(_struct_type, fields, _) => {
+                    if fields.len() <= *last_index {
+                        return Err(ExecuteError::TypeError(
+                            "Field index out of range".to_string(),
+                        ));
+                    }
+                    fields[*last_index] = source.clone();
+                }
+                _ => return Err(ExecuteError::TypeError("Expected struct".to_string())),
+            }
+        }
+
+        Ok(source)
     }
 }

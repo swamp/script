@@ -1283,5 +1283,32 @@ fn field_chain_problem() {
     ",
     );
 
-    assert_eq!(result, Value::Int(2 * 3));
+    assert_eq!(result, Value::Int(5));
+}
+#[test_log::test]
+fn field_chain_problem_output() {
+    check(
+        "
+    struct Inner {
+        v: Int
+    }
+
+    struct SomeStruct {
+        something: Int,
+       inner: Inner
+    }
+
+    mut s = SomeStruct { something: 3, inner: Inner { v : 4 } }
+
+    print(s)
+
+    s.inner.v = 5
+
+    print(s)
+    ",
+        r#"
+            SomeStruct { something: 3, inner: Inner { v: 4 } }
+            SomeStruct { something: 3, inner: Inner { v: 5 } }
+        "#,
+    );
 }
