@@ -778,7 +778,17 @@ impl<'a, C> Interpreter<'a, C> {
                 source_expression,
             )?,
 
-            ResolvedExpression::FieldCompoundAssignment(_) => todo!(),
+            ResolvedExpression::FieldCompoundAssignment(
+                resolved_struct_field_ref,
+                lookups,
+                compound_operator,
+                source_expression,
+            ) => self.evaluate_field_assignment_compound(
+                resolved_struct_field_ref,
+                lookups,
+                compound_operator.clone(),
+                source_expression,
+            )?,
 
             // ------------- LOOKUP ---------------------
             ResolvedExpression::VariableAccess(var) => {
@@ -864,7 +874,7 @@ impl<'a, C> Interpreter<'a, C> {
             ResolvedExpression::BinaryOp(binary_operator) => {
                 let left_val = self.evaluate_expression(&binary_operator.left)?;
                 let right_val = self.evaluate_expression(&binary_operator.right)?;
-                self.evaluate_binary_op(left_val, &binary_operator.ast_operator_type, right_val)?
+                Self::evaluate_binary_op(left_val, &binary_operator.ast_operator_type, right_val)?
             }
 
             ResolvedExpression::UnaryOp(unary_operator) => {
@@ -1626,7 +1636,6 @@ impl<'a, C> Interpreter<'a, C> {
     }
 
     fn evaluate_binary_op(
-        &self,
         left: Value,
         op: &BinaryOperator,
         right: Value,
@@ -1957,5 +1966,168 @@ impl<'a, C> Interpreter<'a, C> {
         }
 
         Ok(source)
+    }
+
+    fn evaluate_field_assignment_compound(
+        &mut self,
+        start_expression: &ResolvedExpression,
+        lookups: &[ResolvedAccess],
+        operator: CompoundOperator,
+        source_expression: &ResolvedExpression,
+    ) -> Result<Value, ExecuteError> {
+        let source = self.evaluate_expression(source_expression)?;
+        let mut current_ref = self.evaluate_expression_ref(start_expression)?;
+
+        for lookup in lookups.iter().take(lookups.len() - 1) {
+            let next_ref = match lookup {
+                ResolvedAccess::FieldIndex(i) => {
+                    let field_index = *i;
+
+                    let mut borrowed = current_ref.borrow_mut();
+                    let next_val = match &mut *borrowed {
+                        Value::Struct(_struct_type, fields, _) => {
+                            fields.get_mut(field_index).ok_or_else(|| {
+                                ExecuteError::TypeError("Field index out of range".to_string())
+                            })?
+                        }
+                        _ => {
+                            return Err(ExecuteError::TypeError("Expected struct".to_string()));
+                        }
+                    };
+
+                    match next_val {
+                        Value::Reference(r) => r.clone(),
+                        other => {
+                            let new_ref = Rc::new(RefCell::new(other.clone()));
+                            *other = Value::Reference(new_ref.clone());
+                            new_ref
+                        }
+                    }
+                }
+                ResolvedAccess::ArrayIndex(index_expr) => {
+                    let index_value = self.evaluate_expression(index_expr)?;
+                    let index_int = index_value.expect_int()? as usize;
+
+                    let mut borrowed = current_ref.borrow_mut();
+                    let next_val = match &mut *borrowed {
+                        Value::Array(_array_type, fields) => {
+                            fields.get_mut(index_int).ok_or_else(|| {
+                                ExecuteError::TypeError("Field index out of range".to_string())
+                            })?
+                        }
+                        _ => {
+                            return Err(ExecuteError::TypeError("Expected array".to_string()));
+                        }
+                    };
+
+                    match next_val {
+                        Value::Reference(r) => r.clone(),
+                        other => {
+                            let new_ref = Rc::new(RefCell::new(other.clone()));
+                            *other = Value::Reference(new_ref.clone());
+                            new_ref
+                        }
+                    }
+                }
+
+                ResolvedAccess::MapIndex(index_expr) => {
+                    let index_value = self.evaluate_expression(index_expr)?;
+
+                    let mut borrowed = current_ref.borrow_mut();
+                    let next_val = match &mut *borrowed {
+                        Value::Map(_map_type, seq_map) => {
+                            seq_map.get_mut(&index_value).ok_or_else(|| {
+                                ExecuteError::TypeError("key value not found in map".to_string())
+                            })?
+                        }
+                        _ => {
+                            return Err(ExecuteError::TypeError("Expected array".to_string()));
+                        }
+                    };
+
+                    match next_val {
+                        Value::Reference(r) => r.clone(),
+                        other => {
+                            let new_ref = Rc::new(RefCell::new(other.clone()));
+                            *other = Value::Reference(new_ref.clone());
+                            new_ref
+                        }
+                    }
+                }
+            };
+
+            current_ref = next_ref;
+        }
+
+        if let Some(ResolvedAccess::FieldIndex(last_index)) = lookups.last() {
+            let mut borrowed = current_ref.borrow_mut();
+            match &mut *borrowed {
+                Value::Struct(_struct_type, fields, _) => {
+                    if fields.len() <= *last_index {
+                        return Err(ExecuteError::TypeError(
+                            "Field index out of range".to_string(),
+                        ));
+                    }
+                    Self::apply_compound_operator(&mut fields[*last_index], operator, &source);
+                }
+                Value::Reference(x) => {
+                    let mut inner = x.borrow_mut();
+                    match &mut *inner {
+                        Value::Struct(_struct_type, fields, _) => {
+                            if fields.len() <= *last_index {
+                                return Err(ExecuteError::TypeError(
+                                    "Field index out of range".to_string(),
+                                ));
+                            }
+                            Self::apply_compound_operator(
+                                &mut fields[*last_index],
+                                operator,
+                                &source,
+                            );
+                        }
+                        _ => return Err(ExecuteError::TypeError("Expected struct".to_string())),
+                    }
+                }
+                _ => return Err(ExecuteError::TypeError("Expected struct".to_string())),
+            }
+        }
+
+        Ok(source)
+    }
+
+    #[inline(always)]
+    fn apply_compound_operator(
+        target: &mut Value,
+        operator: CompoundOperator,
+        source: &Value,
+    ) -> Result<(), ExecuteError> {
+        match operator {
+            CompoundOperator::Mul => {
+                *target = Self::evaluate_binary_op(
+                    target.clone(),
+                    &BinaryOperator::Multiply,
+                    source.clone(),
+                )?
+            }
+            CompoundOperator::Div => {
+                *target = Self::evaluate_binary_op(
+                    target.clone(),
+                    &BinaryOperator::Divide,
+                    source.clone(),
+                )?
+            }
+            CompoundOperator::Add => {
+                *target =
+                    Self::evaluate_binary_op(target.clone(), &BinaryOperator::Add, source.clone())?
+            }
+            CompoundOperator::Sub => {
+                *target = Self::evaluate_binary_op(
+                    target.clone(),
+                    &BinaryOperator::Subtract,
+                    source.clone(),
+                )?
+            }
+        }
+        Ok(())
     }
 }
