@@ -1,4 +1,5 @@
 pub mod collections;
+pub mod prelude;
 
 use swamp_script_semantic::{ModulePath, ResolvedModule, ResolvedRustType, TypeNumber};
 pub const SPARSE_TYPE_ID: TypeNumber = 999;

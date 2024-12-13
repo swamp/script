@@ -16,9 +16,11 @@ swamp-script-ast = { path = "../ast", version = "0.0.6" }
 swamp-script-semantic = { path = "../semantic", version = "0.0.6" }
 swamp-script-analyzer = { path = "../analyzer", version = "0.0.6" }
 
+# Core and Std
+swamp-script-core = { path = "../core", version = "0.0.6" }
+swamp-script-std = { path = "../std", version = "0.0.6" }
+
 # Runner
 swamp-script-eval = { path = "../eval", version = "0.0.6" }
-
 swamp-script-dep-loader = { path = "../dep-loader", version = "0.0.6" }
-
 swamp-script-eval-loader = { path = "../eval-loader", version = "0.0.6" }
