@@ -2,6 +2,9 @@
 name = "swamp-script-derive-tests"
 version = "0.0.7"
 edition = "2021"
+license = "MIT"
+repository = "https://github.com/swamp/script"
+description = "tests for swamp macro"
 
 [dependencies]
 swamp-script-derive = { path = "../derive" , version = "0.0.7" }
