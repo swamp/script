@@ -466,7 +466,7 @@ impl Display for ResolvedMemberCall {
 #[derive(Debug)]
 pub enum ResolvedAccess {
     FieldIndex(usize),
-    CollectionIndex(usize),
+    CollectionIndex(ResolvedExpression),
 }
 
 pub type ResolvedMutStructTypeFieldRef = Rc<ResolvedMutStructTypeField>;
