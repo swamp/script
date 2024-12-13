@@ -466,7 +466,8 @@ impl Display for ResolvedMemberCall {
 #[derive(Debug)]
 pub enum ResolvedAccess {
     FieldIndex(usize),
-    CollectionIndex(ResolvedExpression),
+    ArrayIndex(ResolvedExpression),
+    MapIndex(ResolvedExpression),
 }
 
 pub type ResolvedMutStructTypeFieldRef = Rc<ResolvedMutStructTypeField>;
@@ -705,7 +706,8 @@ impl Display for ResolvedPattern {
 
 #[derive(Debug)]
 pub struct ResolvedIterator {
-    pub item_type: ResolvedType,
+    pub key_type: Option<ResolvedType>, // It does not have to support a key type
+    pub value_type: ResolvedType,
     pub resolved_expression: ResolvedExpression,
     pub is_mutable: bool,
 }

@@ -990,31 +990,24 @@ impl<'a> Resolver<'a> {
     fn resolve_for_pattern(
         &mut self,
         pattern: &ForPattern,
-        item_type: &ResolvedType,
+        key_type: Option<&ResolvedType>,
+        value_type: &ResolvedType,
     ) -> Result<ResolvedForPattern, ResolveError> {
         match pattern {
             ForPattern::Single(var) => {
                 let variable = Variable::new(&var.identifier.text, var.is_mut);
-                let variable_ref = self.create_local_variable(&variable, item_type)?;
+                let variable_ref = self.create_local_variable(&variable, value_type)?;
                 Ok(ResolvedForPattern::Single(variable_ref))
             }
             ForPattern::Pair(first, second) => {
+                let found_key = key_type.expect("should have a key type since it is a pair");
                 let first_var = Variable::new(&first.identifier.text, first.is_mut);
                 let second_var = Variable::new(&second.identifier.text, second.is_mut);
 
-                // TODO: Resolve the iterator completely, so we know what types that are returned
-                if let ResolvedType::Tuple(tuple_types) = item_type {
-                    if tuple_types.0.len() != 2 {
-                        return Err(ResolveError::UnsupportedIteratorPairs);
-                    }
-                    let first_ref =
-                        self.create_local_variable(&first_var, &tuple_types.0[0].clone())?;
-                    let second_ref =
-                        self.create_local_variable(&second_var, &tuple_types.0[1].clone())?;
-                    Ok(ResolvedForPattern::Pair(first_ref, second_ref))
-                } else {
-                    Err(ResolveError::UnsupportedIteratorPairs)
-                }
+                let found_key = key_type.unwrap();
+                let first_var_ref = self.create_local_variable(&first_var, found_key)?;
+                let second_var_ref = self.create_local_variable(&second_var, value_type)?;
+                Ok(ResolvedForPattern::Pair(first_var_ref, second_var_ref))
             }
         }
     }
@@ -1072,7 +1065,11 @@ impl<'a> Resolver<'a> {
                     self.resolve_iterator(&pattern, expression, *iterator_should_be_mutable)?;
 
                 self.push_block_scope("for_loop");
-                let pattern = self.resolve_for_pattern(pattern, &resolved_iterator.item_type)?;
+                let pattern = self.resolve_for_pattern(
+                    pattern,
+                    resolved_iterator.key_type.as_ref(),
+                    &resolved_iterator.value_type,
+                )?;
                 let resolved_statements = self.resolve_statements(statements)?;
                 self.pop_block_scope("for_loop");
 
@@ -1219,8 +1216,12 @@ impl<'a> Resolver<'a> {
                 let resolved_index_expr = self.resolve_expression(index_expr)?;
                 match resolved_type {
                     ResolvedType::Array(array_type_ref) => {
-                        access_chain.push(ResolvedAccess::CollectionIndex(resolved_index_expr));
+                        access_chain.push(ResolvedAccess::ArrayIndex(resolved_index_expr));
                         Ok((array_type_ref.item_type.clone(), base_expr))
+                    }
+                    ResolvedType::Map(map_type_ref) => {
+                        access_chain.push(ResolvedAccess::MapIndex(resolved_index_expr));
+                        Ok((map_type_ref.value_type.clone(), base_expr))
                     }
                     _ => return Err(ResolveError::ExpectedArray(resolved_type)),
                 }
@@ -1932,30 +1933,36 @@ impl<'a> Resolver<'a> {
     ) -> Result<ResolvedIterator, ResolveError> {
         let resolved_expression = self.resolve_expression(expression)?;
         let resolved_type = resolution(&resolved_expression);
-        let item_type = match resolved_type {
-            ResolvedType::Array(array_type) => array_type.item_type.clone(),
-            ResolvedType::ExclusiveRange(_) => self.types.int_type(),
+        let (key_type, value_type): (Option<ResolvedType>, ResolvedType) = match resolved_type {
+            ResolvedType::Array(array_type) => {
+                (Some(self.types.int_type()), array_type.item_type.clone())
+            }
+            ResolvedType::Map(map_type_ref) => (
+                Some(map_type_ref.key_type.clone()),
+                map_type_ref.value_type.clone(),
+            ),
+            ResolvedType::ExclusiveRange(_) => (None, self.types.int_type()),
             ResolvedType::Generic(_base_type, params) => {
                 // TODO: HACK: We assume it is a container that iterates over the type parameters
-                match for_pattern {
-                    ForPattern::Single(_) => params[0].clone(),
-                    ForPattern::Pair(_, _) => {
-                        // TODO: HACK: We assume that it is a sparse map
-                        // TODO: HACK: Remove hardcoded number
-                        let rust_type_ref_for_id = create_rust_type("SparseId", 998);
-                        let rust_id_type = ResolvedType::RustType(rust_type_ref_for_id);
-                        ResolvedType::Tuple(ResolvedTupleTypeRef::from(ResolvedTupleType(vec![
-                            rust_id_type,
-                            params[0].clone(),
-                        ])))
-                    }
-                }
+                // TODO: HACK: We assume that it is a sparse map
+                // TODO: HACK: Remove hardcoded number
+                let rust_type_ref_for_id = create_rust_type("SparseId", 998);
+                let rust_id_type = ResolvedType::RustType(rust_type_ref_for_id);
+                (Some(rust_id_type), params[0].clone())
+                /*
+                               ResolvedType::Tuple(ResolvedTupleTypeRef::from(ResolvedTupleType(vec![
+                                   rust_id_type,
+                                   params[0].clone(),
+                               ])))
+                               *
+                */
             }
             _ => return Err(ResolveError::NotAnIterator),
         };
 
         Ok(ResolvedIterator {
-            item_type,
+            key_type,
+            value_type,
             resolved_expression,
             is_mutable,
         })
