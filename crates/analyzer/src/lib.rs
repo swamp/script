@@ -1231,22 +1231,6 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn resolve_field_access(
-        &mut self,
-        base_expression: &Expression,
-        struct_field_ref: &ResolvedStructTypeFieldRef,
-    ) -> Result<ResolvedExpression, ResolveError> {
-        let mut access_chain = Vec::new();
-        let (_resolved_type, resolved_base_expression) =
-            self.collect_field_chain(base_expression, &mut access_chain)?;
-
-        Ok(ResolvedExpression::FieldAccess(
-            Box::from(resolved_base_expression),
-            struct_field_ref.clone(),
-            access_chain,
-        ))
-    }
-
     fn resolve_expression(
         &mut self,
         ast_expression: &Expression,
@@ -1257,11 +1241,10 @@ impl<'a> Resolver<'a> {
         let expression = match ast_expression {
             // Lookups
             Expression::FieldAccess(expression, field_name) => {
-                warn!(expression=?expression, name=?field_name, "FIELD ACCESS!");
                 let struct_field_ref =
                     self.resolve_into_struct_field_ref(expression.as_ref(), field_name.clone())?;
 
-                self.resolve_field_access(expression, &struct_field_ref)?
+                self.resolve_field_access(expression, &struct_field_ref, field_name)?
             }
             Expression::VariableAccess(variable) => {
                 self.resolve_variable_or_function_access(variable)?
@@ -1412,7 +1395,7 @@ impl<'a> Resolver<'a> {
             }
 
             Expression::FieldAssignment(ast_struct_expr, ast_field_name, ast_expression) => {
-                self.field_assignment(ast_struct_expr, ast_field_name, ast_expression)?
+                self.resolve_field_assignment(ast_struct_expr, ast_field_name, ast_expression)?
             }
 
             // Operator
@@ -3286,7 +3269,29 @@ impl<'a> Resolver<'a> {
         Ok(None)
     }
 
-    fn field_assignment(
+    fn resolve_field_access(
+        &mut self,
+        base_expression: &Expression,
+        struct_field_ref: &ResolvedStructTypeFieldRef,
+        ast_field_name: &LocalIdentifier,
+    ) -> Result<ResolvedExpression, ResolveError> {
+        let mut access_chain = Vec::new();
+        let (resolved_last_type, resolved_base_expression) =
+            self.collect_field_chain(base_expression, &mut access_chain)?;
+
+        // Add the last lookup that is part of the field lookup
+        let (_field_type, field_index) =
+            self.get_field_index(&resolved_last_type, &ast_field_name.text)?;
+        access_chain.push(ResolvedAccess::FieldIndex(field_index));
+
+        Ok(ResolvedExpression::FieldAccess(
+            Box::from(resolved_base_expression),
+            struct_field_ref.clone(),
+            access_chain,
+        ))
+    }
+
+    fn resolve_field_assignment(
         &mut self,
         ast_struct_field_expr: &Expression,
         ast_field_name: &LocalIdentifier,
