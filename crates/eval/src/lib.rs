@@ -1815,13 +1815,31 @@ impl<'a, C> Interpreter<'a, C> {
                     value = match &value {
                         Value::Struct(_struct_type, fields, _) => fields[*index].clone(),
                         Value::Reference(r) => {
-                            let value = r.borrow();
-                            match &*value {
+                            let inner_value = r.borrow();
+                            match &*inner_value {
                                 Value::Struct(_struct_type, fields, _) => fields[*index].clone(),
-                                _ => Err(format!(
-                                    "Cannot access field reference '{}' on non-struct value",
-                                    index
-                                ))?,
+                                Value::Reference(r2) => {
+                                    let inner_value2 = r2.borrow();
+                                    match &*inner_value2 {
+                                        Value::Struct(_struct_type, fields, _) => {
+                                            fields[*index].clone()
+                                        }
+                                        _ => {
+                                            error!(?value, ?inner_value, "expected struct2");
+                                            Err(format!(
+                                                "Cannot access field reference '{}' on non-struct value",
+                                                index
+                                            ))?
+                                        }
+                                    }
+                                }
+                                _ => {
+                                    error!(?value, ?inner_value, "expected struct");
+                                    Err(format!(
+                                        "Cannot access field reference '{}' on non-struct value",
+                                        index
+                                    ))?
+                                }
                             }
                         }
                         _ => {
@@ -1831,7 +1849,28 @@ impl<'a, C> Interpreter<'a, C> {
                         }
                     }
                 }
-                ResolvedAccess::CollectionIndex(_) => {}
+                ResolvedAccess::ArrayIndex(index_expression) => {
+                    let index_value = self.evaluate_expression(index_expression)?;
+                    let usize_index = index_value.expect_int()? as usize;
+
+                    value = match &value {
+                        Value::Array(_struct_type, fields) => fields[usize_index].clone(),
+                        _ => {
+                            return Err(ExecuteError::Error("wanted a array in lookup".to_string()))
+                        }
+                    }
+                }
+                ResolvedAccess::MapIndex(key_expression) => {
+                    let key_value = self.evaluate_expression(key_expression)?;
+                    value = match &value {
+                        Value::Map(_map_type, seq_map) => {
+                            seq_map.get(&key_value).expect("key error").clone()
+                        }
+                        _ => {
+                            return Err(ExecuteError::Error("wanted a array in lookup".to_string()))
+                        }
+                    }
+                }
             }
         }
         Ok(value)
@@ -1872,7 +1911,7 @@ impl<'a, C> Interpreter<'a, C> {
                         }
                     }
                 }
-                ResolvedAccess::CollectionIndex(index_expr) => {
+                ResolvedAccess::ArrayIndex(index_expr) => {
                     let index_value = self.evaluate_expression(index_expr)?;
                     let index_int = index_value.expect_int()? as usize;
 
@@ -1897,6 +1936,32 @@ impl<'a, C> Interpreter<'a, C> {
                         }
                     }
                 }
+
+                ResolvedAccess::MapIndex(index_expr) => {
+                    let index_value = self.evaluate_expression(index_expr)?;
+
+                    let mut borrowed = current_ref.borrow_mut();
+                    let next_val = match &mut *borrowed {
+                        Value::Map(_map_type, seq_map) => {
+                            seq_map.get_mut(&index_value).ok_or_else(|| {
+                                ExecuteError::TypeError("key value not found in map".to_string())
+                            })?
+                        }
+                        _ => {
+                            return Err(ExecuteError::TypeError("Expected array".to_string()));
+                        }
+                    };
+
+                    match next_val {
+                        Value::Reference(r) => r.clone(),
+                        other => {
+                            let new_ref = Rc::new(RefCell::new(other.clone()));
+                            *other = Value::Reference(new_ref.clone());
+                            new_ref
+                        }
+                    }
+                }
+
                 _ => return Err(ExecuteError::TypeError("Expected field access".to_string())),
             };
 
@@ -1913,6 +1978,20 @@ impl<'a, C> Interpreter<'a, C> {
                         ));
                     }
                     fields[*last_index] = source.clone();
+                }
+                Value::Reference(x) => {
+                    let mut inner = x.borrow_mut();
+                    match &mut *inner {
+                        Value::Struct(_struct_type, fields, _) => {
+                            if fields.len() <= *last_index {
+                                return Err(ExecuteError::TypeError(
+                                    "Field index out of range".to_string(),
+                                ));
+                            }
+                            fields[*last_index] = source.clone();
+                        }
+                        _ => return Err(ExecuteError::TypeError("Expected struct".to_string())),
+                    }
                 }
                 _ => return Err(ExecuteError::TypeError("Expected struct".to_string())),
             }
