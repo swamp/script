@@ -186,16 +186,16 @@ impl Value {
             _ => self.to_string(),
         }
     }
-    pub fn expect_string(&self) -> Result<&str, ValueError> {
-        match self {
+    pub fn expect_string(&self) -> Result<String, ValueError> {
+        match self.unref() {
             Value::String(s) => Ok(s),
             _ => Err(ValueError::ConversionError("Expected string value".into())),
         }
     }
 
     pub fn expect_int(&self) -> Result<i32, ValueError> {
-        match self {
-            Value::Int(v) => Ok(*v),
+        match self.unref() {
+            Value::Int(v) => Ok(v),
             _ => Err(ValueError::ConversionError("Expected int value".into())),
         }
     }
