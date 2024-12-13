@@ -214,6 +214,37 @@ fn struct_field_assignment_chain() {
 }
 
 #[test_log::test]
+fn struct_field_assignment_chain2() {
+    let script = "
+        a = [10, 20]
+        a[1]
+    ";
+    check(
+        script,
+        r#"
+[variable_assignment a <- [10, 20]]
+[index_access [variable_access a][1]]"#,
+    );
+}
+
+#[test_log::test]
+fn struct_field_assignment_chain7() {
+    let script = "
+        a = [10, 20]
+        a.remove(99)
+    ";
+    check(
+        script,
+        r#"
+
+[variable_assignment a <- [10, 20]]
+[member_call [variable_access a].remove(99)]
+
+"#,
+    );
+}
+
+#[test_log::test]
 fn compound_conditions() {
     let script = "
         while x > 0 && y < 10 {
