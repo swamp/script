@@ -203,6 +203,17 @@ fn struct_field_access() {
 }
 
 #[test_log::test]
+fn struct_field_assignment_chain() {
+    let script = "
+        a.b.c.d = 3
+    ";
+    check(
+        script,
+        "[field_assignment [field_access [field_access [variable_access a] b] c] <- d = 3]",
+    );
+}
+
+#[test_log::test]
 fn compound_conditions() {
     let script = "
         while x > 0 && y < 10 {
