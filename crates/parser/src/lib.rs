@@ -809,23 +809,23 @@ impl AstParser {
     fn parse_chained_access(&self, pair: Pair<Rule>) -> Result<Expression, Error<Rule>> {
         let mut inner = Self::get_inner_pairs(&pair);
 
-        // The first is always a variable?
-        let base = Self::next_pair(&mut inner)?;
-        let mut expr = Expression::VariableAccess(Variable::new(base.as_str(), false));
+        // Parse base identifier
+        let base = Variable::new(&Self::expect_identifier(&mut inner)?, false);
+        let mut expr = Expression::VariableAccess(base);
 
-        // Then check for either array access or dot access
-        for access in inner {
-            expr = match access.as_rule() {
+        // Handle chain of accesses
+        while let Some(access) = inner.next() {
+            match access.as_rule() {
                 Rule::array_access => {
                     let index_expr = self.parse_expression(self.next_inner_pair(access)?)?;
-                    Expression::IndexAccess(Box::new(expr), Box::new(index_expr))
+                    expr = Expression::IndexAccess(Box::new(expr), Box::new(index_expr));
                 }
                 Rule::dot_access => {
-                    let field_name = self.next_inner_pair(access)?;
-                    Expression::FieldAccess(
+                    let field_name = self.next_inner_pair(access)?.as_str().to_string();
+                    expr = Expression::FieldAccess(
                         Box::new(expr),
-                        LocalIdentifier::new(convert_from_pair(&field_name), field_name.as_str()),
-                    )
+                        LocalIdentifier::new(convert_from_pair(&pair), &field_name),
+                    );
                 }
                 _ => {
                     return Err(self.create_error(
@@ -833,7 +833,7 @@ impl AstParser {
                         access.as_span(),
                     ))
                 }
-            };
+            }
         }
 
         Ok(expr)
@@ -1086,112 +1086,27 @@ impl AstParser {
         }
     }
 
-    fn parse_member_chain(&self, pair: Pair<Rule>) -> Result<Expression, Error<Rule>> {
+    fn parse_member_call(&self, pair: Pair<Rule>) -> Result<Expression, Error<Rule>> {
         let mut inner = Self::get_inner_pairs(&pair);
 
-        // Parse the base expression
-        let base_pair = Self::next_pair(&mut inner)?;
-        let base = match base_pair.as_rule() {
-            Rule::array_literal => self.parse_array_literal(base_pair)?,
-            Rule::variable => Expression::VariableAccess(Variable::new(base_pair.as_str(), false)),
-            Rule::function_call => self.parse_function_call(base_pair)?,
-            Rule::struct_instantiation => self.parse_struct_instantiation(base_pair)?,
-            Rule::literal => Expression::Literal(self.parse_literal(base_pair)?),
-            Rule::parenthesized => self.parse_expression(self.next_inner_pair(base_pair)?)?,
-            _ => {
-                return Err(self.create_error(
-                    &format!("Unexpected base in member chain: {:?}", base_pair.as_rule()),
-                    base_pair.as_span(),
-                ))
-            }
-        };
+        // Parse object identifier
+        let obj_name = Self::expect_identifier(&mut inner)?;
+        let obj = Expression::VariableAccess(Variable::new(&obj_name, false));
 
-        let mut expr = base;
+        // Parse method name
+        let method_name = Self::expect_identifier(&mut inner)?;
 
-        // Handle the chain of member accesses and possible assignment
-        while let Some(chain_part) = inner.next() {
-            match chain_part.as_rule() {
-                Rule::member_access_or_call => {
-                    let access_part = self.next_inner_pair(chain_part)?;
-                    match access_part.as_rule() {
-                        Rule::member_call => {
-                            let mut call_inner = Self::get_inner_pairs(&access_part);
-                            let member_name = call_inner.next().unwrap().as_str().to_string();
-                            let mut args = Vec::new();
-
-                            if let Some(arg_list) = call_inner.next() {
-                                for arg in Self::get_inner_pairs(&arg_list) {
-                                    args.push(self.parse_expression(arg)?);
-                                }
-                            }
-
-                            expr = Expression::MemberCall(
-                                Box::new(expr),
-                                LocalIdentifier::new(convert_from_pair(&pair), &member_name),
-                                args,
-                            );
-                        }
-                        Rule::identifier => {
-                            let field_name = access_part.as_str().to_string();
-                            expr = Expression::FieldAccess(
-                                Box::new(expr),
-                                LocalIdentifier::new(convert_from_pair(&pair), &field_name),
-                            );
-                        }
-                        _ => {
-                            return Err(self.create_error(
-                                &format!(
-                                    "Unexpected member access type: {:?}",
-                                    access_part.as_rule()
-                                ),
-                                access_part.as_span(),
-                            ))
-                        }
-                    }
-                }
-
-                Rule::array_index => {
-                    let index_expr = self.parse_expression(self.next_inner_pair(chain_part)?)?;
-                    expr = Expression::IndexAccess(Box::new(expr), Box::new(index_expr));
-                }
-
-                Rule::postfix_op => {
-                    // Handle postfix operators
-                    let inner_op = self.next_inner_pair(chain_part)?;
-                    match inner_op.as_rule() {
-                        Rule::option_operator => {
-                            expr = Expression::PostfixOp(PostfixOperator::Unwrap, Box::new(expr));
-                        }
-                        _ => {
-                            return Err(self.create_error(
-                                &format!("Unexpected operator type: {:?}", inner_op.as_rule()),
-                                inner_op.as_span(),
-                            ))
-                        }
-                    }
-                }
-
-                Rule::expression => {
-                    let value = self.parse_expression(chain_part.clone())?;
-                    if let Expression::FieldAccess(obj, field) = expr {
-                        expr = Expression::FieldAssignment(obj, field, Box::new(value));
-                    } else {
-                        return Err(self.create_error(
-                            "Expected field access before assignment",
-                            chain_part.as_span(),
-                        ));
-                    }
-                }
-                _ => {
-                    return Err(self.create_error(
-                        &format!("Unexpected chain part: {:?}", chain_part.as_rule()),
-                        chain_part.as_span(),
-                    ))
-                }
-            }
+        // Parse arguments
+        let mut args = Vec::new();
+        while let Some(arg) = inner.next() {
+            args.push(self.parse_expression(arg)?);
         }
 
-        Ok(expr)
+        Ok(Expression::MemberCall(
+            Box::new(obj),
+            LocalIdentifier::new(convert_from_pair(&pair), &method_name),
+            args,
+        ))
     }
 
     fn parse_module_path(&self, pair: Pair<Rule>) -> Vec<String> {
@@ -1283,7 +1198,8 @@ impl AstParser {
             Rule::match_expr => self.parse_match_expr(pair),
             Rule::map_literal => self.parse_map_literal(pair),
             Rule::array_literal => self.parse_array_literal(pair),
-            Rule::member_chain => self.parse_member_chain(pair),
+            Rule::member_call => self.parse_member_call(pair),
+            Rule::chained_access => self.parse_chained_access(pair),
             Rule::float_lit => {
                 let float: f32 = pair
                     .as_str()

@@ -289,33 +289,25 @@ static_call = {
 
 
 
-member_call = { identifier ~ "(" ~ argument_list? ~ ")" }
-member_access_or_call = {
-    member_call
-    | identifier ~ ("(" ~ argument_list? ~ ")")?
-}
+member_call = { identifier ~ "." ~ identifier ~ "(" ~ (expression ~ ("," ~ expression)*)? ~ ")" }
 
 array_index = { "[" ~ expression ~ "]" }
 
-// Member chains. These are a bit tricky.
-member_chain = {
-    (array_literal | variable | function_call | struct_instantiation | literal | parenthesized) ~
-    ("." ~ (member_access_or_call | array_index) ~ postfix_op*)+ ~  ("=" ~ expression)?
-}
 
 // Primary expressions with proper float handling
 primary = {
     if_expr
     | match_expr
     | interpolated_string
-    | member_chain
+    | member_call
+    | chained_access
     | enum_literal
     | static_call
     | function_call
     | struct_instantiation
     | map_literal
     | parenthesized
-    | literal ~ ("." ~ member_access_or_call)*
+    | literal
     | array_literal
     | variable
 }
