@@ -209,7 +209,7 @@ field_assignment = { field_access ~ "=" ~ expression }
 logical = { comparison ~ ((op_and | op_or) ~ comparison)* }
 
 // Comparison operators
-comparison = { addition ~ ((op_eq | op_neq | op_lt | op_gt | op_lte | op_gte) ~ addition)* }
+comparison = { addition ~ ((op_lte | op_gte | op_eq | op_neq | op_lt | op_gt ) ~ addition)* }
 
 // Addition and subtraction
 addition = { multiplication ~ ((op_add | op_sub | range_op) ~ multiplication)* }
@@ -283,7 +283,7 @@ function_call = {
 }
 
 static_call = {
-    type_identifier ~ generic_params? ~ "::" ~ identifier ~ 
+    type_identifier ~ generic_params? ~ "::" ~ identifier ~
     "(" ~ (function_argument ~ ("," ~ " "* ~ function_argument)*)? ~ ")"
 }
 
@@ -300,7 +300,7 @@ array_index = { "[" ~ expression ~ "]" }
 // Member chains. These are a bit tricky.
 member_chain = {
     (array_literal | variable | function_call | struct_instantiation | literal | parenthesized) ~
-    ("." ~ (member_access_or_call | array_index) ~ postfix_op*)+ ~  ("=" ~ expression)? 
+    ("." ~ (member_access_or_call | array_index) ~ postfix_op*)+ ~  ("=" ~ expression)?
 }
 
 // Primary expressions with proper float handling
@@ -367,9 +367,9 @@ variable_list = { identifier ~ ("," ~ " "* ~ identifier)* }   // PEST BUG: need 
 
 
 // For pattern matching with expressions
-pattern_list = { 
-    (pattern_field | expression) ~ 
-    ("," ~ " "* ~ (pattern_field | expression))* 
+pattern_list = {
+    (pattern_field | expression) ~
+    ("," ~ " "* ~ (pattern_field | expression))*
 }  // PEST BUG: need explicit spaces after comma
 
 pattern_field = { identifier | "_" }
