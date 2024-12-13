@@ -981,10 +981,10 @@ impl<'a> Resolver<'a> {
             found_struct
                 .borrow_mut()
                 .functions
-                .insert(name.clone(), resolved_function_ref);
+                .insert(name.clone(), resolved_function_ref)?;
         }
 
-        Ok((ResolvedType::Struct(found_struct)))
+        Ok(ResolvedType::Struct(found_struct))
     }
 
     fn resolve_for_pattern(
@@ -1213,10 +1213,18 @@ impl<'a> Resolver<'a> {
                 Ok((field_type, base_expr))
             }
 
-            /* TODO: Implement index access
-            Expression::IndexAccess(target, index_expr) => {
+            Expression::IndexAccess(source, index_expr) => {
+                info!(?source, ?index_expr, "found collection index access");
+                let (resolved_type, base_expr) = self.collect_field_chain(source, access_chain)?;
+                let resolved_index_expr = self.resolve_expression(index_expr)?;
+                match resolved_type {
+                    ResolvedType::Array(array_type_ref) => {
+                        access_chain.push(ResolvedAccess::CollectionIndex(resolved_index_expr));
+                        Ok((array_type_ref.item_type.clone(), base_expr))
+                    }
+                    _ => return Err(ResolveError::ExpectedArray(resolved_type)),
+                }
             }
-            */
             _ => {
                 let resolved_expr = self.resolve_expression(expr)?;
                 let resolved_type = resolution(&resolved_expr);
@@ -3307,6 +3315,7 @@ impl<'a> Resolver<'a> {
         // Add the last lookup that is part of the field_assignment itself
         let (_field_type, field_index) =
             self.get_field_index(&resolved_last_type, &ast_field_name.text)?;
+
         chain.push(ResolvedAccess::FieldIndex(field_index));
         info!(?chain, "complete chain");
 
