@@ -506,41 +506,6 @@ impl<'a, C> Interpreter<'a, C> {
         }
     }
 
-    fn field_access(
-        &mut self,
-        expression: &ResolvedExpression,
-        _struct_field: &ResolvedStructTypeFieldRef,
-        lookups: &Vec<ResolvedAccess>,
-    ) -> Result<Value, ExecuteError> {
-        let mut value = self.evaluate_expression(&expression)?;
-        for lookup in lookups {
-            match lookup {
-                ResolvedAccess::FieldIndex(index) => {
-                    value = match &value {
-                        Value::Struct(_struct_type, fields, _) => fields[*index].clone(),
-                        Value::Reference(r) => {
-                            let value = r.borrow();
-                            match &*value {
-                                Value::Struct(_struct_type, fields, _) => fields[*index].clone(),
-                                _ => Err(format!(
-                                    "Cannot access field reference '{}' on non-struct value",
-                                    index
-                                ))?,
-                            }
-                        }
-                        _ => {
-                            return Err(ExecuteError::Error(
-                                "wanted a struct in lookup".to_string(),
-                            ))
-                        }
-                    }
-                }
-                ResolvedAccess::CollectionIndex(_) => {}
-            }
-        }
-        Ok(Value::Unit)
-    }
-
     #[inline]
     fn set_local_var(
         &mut self,
@@ -907,7 +872,7 @@ impl<'a, C> Interpreter<'a, C> {
             }
 
             ResolvedExpression::FieldAccess(struct_field_access, field_ref, access_list) => {
-                self.field_access(struct_field_access, &field_ref, access_list)?
+                self.evaluate_field_access(struct_field_access, &field_ref, access_list)?
             }
 
             ResolvedExpression::MutRef(var_ref) => {
@@ -1826,6 +1791,41 @@ impl<'a, C> Interpreter<'a, C> {
                 Ok(Rc::new(RefCell::new(value)))
             }
         }
+    }
+
+    fn evaluate_field_access(
+        &mut self,
+        expression: &ResolvedExpression,
+        _struct_field: &ResolvedStructTypeFieldRef,
+        lookups: &Vec<ResolvedAccess>,
+    ) -> Result<Value, ExecuteError> {
+        let mut value = self.evaluate_expression(expression)?;
+        for lookup in lookups {
+            match lookup {
+                ResolvedAccess::FieldIndex(index) => {
+                    value = match &value {
+                        Value::Struct(_struct_type, fields, _) => fields[*index].clone(),
+                        Value::Reference(r) => {
+                            let value = r.borrow();
+                            match &*value {
+                                Value::Struct(_struct_type, fields, _) => fields[*index].clone(),
+                                _ => Err(format!(
+                                    "Cannot access field reference '{}' on non-struct value",
+                                    index
+                                ))?,
+                            }
+                        }
+                        _ => {
+                            return Err(ExecuteError::Error(
+                                "wanted a struct in lookup".to_string(),
+                            ))
+                        }
+                    }
+                }
+                ResolvedAccess::CollectionIndex(_) => {}
+            }
+        }
+        Ok(value)
     }
 
     fn field_assignment(
