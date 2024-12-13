@@ -1520,7 +1520,7 @@ pub enum ResolvedDefinition {
     EnumType(ResolvedEnumTypeRef, Vec<ResolvedEnumVariantType>),
     Function(),
     ExternalFunction(),
-    ImplType(ResolvedType, SeqMap<IdentifierName, ResolvedFunctionRef>),
+    ImplType(ResolvedType),
     FunctionDef(ResolvedFunction),
     Alias(ResolvedType),
     Comment(String),

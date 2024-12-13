@@ -234,7 +234,7 @@ pub enum ResolveError {
     InvalidOperatorForArray(CompoundOperator),
     IncompatibleTypes(ResolvedType, ResolvedType),
     ExpectedArray(ResolvedType),
-    UnknownMemberFunction,
+    UnknownMemberFunction(LocalIdentifier),
     WrongNumberOfTypeArguments(usize, i32),
     OnlyVariablesAllowedInEnumPattern,
     ExpressionsNotAllowedInLetPattern,
@@ -708,14 +708,7 @@ impl<'a> Resolver<'a> {
             }
             ResolvedDefinition::Function() => {}
             ResolvedDefinition::ExternalFunction() => {}
-            ResolvedDefinition::ImplType(resolved_type, resolved_functions) => {
-                match resolved_type {
-                    ResolvedType::Struct(found_struct) => {
-                        found_struct.borrow_mut().functions = resolved_functions;
-                    }
-                    _ => todo!(),
-                }
-            }
+            ResolvedDefinition::ImplType(_resolved_type) => {}
             ResolvedDefinition::FunctionDef(function_def) => match function_def {
                 ResolvedFunction::Internal(internal_fn) => {
                     self.current_module
@@ -763,9 +756,9 @@ impl<'a> Resolver<'a> {
                 inner_resolver.resolve_function_definition(identifier, function)?
             }
             Definition::ImplDef(type_identifier, functions) => {
-                let (attached_type_type, functions) =
+                let (attached_type_type) =
                     self.resolve_impl_definition(type_identifier, functions)?;
-                ResolvedDefinition::ImplType(attached_type_type, functions)
+                ResolvedDefinition::ImplType(attached_type_type)
             }
             Definition::TypeAlias(identifier, target_type) => ResolvedDefinition::Alias(
                 self.resolve_type_alias_definition(identifier, target_type)?,
@@ -978,18 +971,20 @@ impl<'a> Resolver<'a> {
         &mut self,
         attached_to_type: &LocalTypeIdentifier,
         functions: &SeqMap<IdentifierName, Function>,
-    ) -> Result<(ResolvedType, SeqMap<IdentifierName, ResolvedFunctionRef>), ResolveError> {
+    ) -> Result<ResolvedType, ResolveError> {
         let found_struct = self.find_struct_type_local_mut(attached_to_type)?.clone();
-        let mut resolved_functions = SeqMap::new();
 
         for (name, function) in functions {
             let mut inner_resolver = self.new_resolver();
             let resolved_function = inner_resolver.resolve_impl_func(&function, &found_struct)?;
             let resolved_function_ref = Rc::new(resolved_function);
-            resolved_functions.insert(name.clone(), resolved_function_ref)?;
+            found_struct
+                .borrow_mut()
+                .functions
+                .insert(name.clone(), resolved_function_ref);
         }
 
-        Ok((ResolvedType::Struct(found_struct), resolved_functions))
+        Ok((ResolvedType::Struct(found_struct)))
     }
 
     fn resolve_for_pattern(
@@ -1630,7 +1625,9 @@ impl<'a> Resolver<'a> {
                 {
                     Ok((function_ref.clone(), resolved))
                 } else {
-                    Err(ResolveError::NotNamedStruct(expression.clone()))
+                    Err(ResolveError::UnknownMemberFunction(
+                        ast_member_function_name.clone(),
+                    ))
                 }
             }
             _ => Err(ResolveError::NotNamedStruct(expression.clone())),
@@ -3074,7 +3071,11 @@ impl<'a> Resolver<'a> {
 
                 ResolvedExpression::ArrayClear(var_ref)
             }
-            _ => return Err(ResolveError::UnknownMemberFunction),
+            _ => {
+                return Err(ResolveError::UnknownMemberFunction(
+                    ast_member_function_name.clone(),
+                ))
+            }
         };
 
         Ok(expr)
@@ -3111,7 +3112,9 @@ impl<'a> Resolver<'a> {
                 }
                 Ok(ResolvedExpression::FloatAbs(Box::new(expr)))
             }
-            _ => Err(ResolveError::UnknownMemberFunction),
+            _ => Err(ResolveError::UnknownMemberFunction(
+                ast_member_function_name.clone(),
+            )),
         }
     }
 
