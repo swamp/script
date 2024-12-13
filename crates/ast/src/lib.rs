@@ -566,7 +566,7 @@ impl fmt::Display for Expression {
             Expression::VariableAccess(var) => {
                 write!(f, "[variable_access {}]", var)
             }
-            Expression::MutRef(mut_ref) => {
+            Expression::MutRef(_mut_ref) => {
                 write!(f, "[mut ref]")
             }
             Expression::IndexAccess(target, idx) => {
