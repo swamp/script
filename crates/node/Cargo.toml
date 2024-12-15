@@ -1,0 +1,6 @@
+[package]
+name = "swamp-script-node"
+version = "0.0.7"
+edition = "2021"
+
+[dependencies]

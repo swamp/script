@@ -11,10 +11,7 @@ use swamp_script_core::extra::{SparseValueId, SparseValueMap};
 use swamp_script_core::value::{format_value, to_rust_value, Value, ValueError};
 pub use swamp_script_semantic::ns::ResolvedModuleNamespace;
 use swamp_script_semantic::prelude::*;
-use swamp_script_semantic::{
-    ResolvedAccess, ResolvedForPattern, ResolvedFunction, ResolvedPatternElement,
-    ResolvedStaticCall,
-};
+use swamp_script_semantic::{ResolvedAccess, ResolvedBinaryOperatorKind, ResolvedForPattern, ResolvedFunction, ResolvedPatternElement, ResolvedStaticCall};
 use tracing::{debug, error, info, warn};
 
 pub mod err;
@@ -874,17 +871,17 @@ impl<'a, C> Interpreter<'a, C> {
             ResolvedExpression::BinaryOp(binary_operator) => {
                 let left_val = self.evaluate_expression(&binary_operator.left)?;
                 let right_val = self.evaluate_expression(&binary_operator.right)?;
-                Self::evaluate_binary_op(left_val, &binary_operator.ast_operator_type, right_val)?
+                Self::evaluate_binary_op(left_val, &binary_operator.kind, right_val)?
             }
 
             ResolvedExpression::UnaryOp(unary_operator) => {
                 let left_val = self.evaluate_expression(&unary_operator.left)?;
-                self.evaluate_unary_op(&unary_operator.ast_operator_type, left_val)?
+                self.evaluate_unary_op(&unary_operator.kind, left_val)?
             }
 
             ResolvedExpression::PostfixOp(postfix_operator) => {
                 let left_val = self.evaluate_expression(&postfix_operator.left)?;
-                self.evaluate_postfix_op(&postfix_operator.ast_operator_type, left_val)?
+                self.evaluate_postfix_op(&postfix_operator.kind, left_val)?
             }
 
             // Calling
@@ -956,14 +953,14 @@ impl<'a, C> Interpreter<'a, C> {
                 match &*resolved_member_call.function {
                     ResolvedFunction::Internal(internal_function) => {
                         self.push_function_scope(&format!(
-                            "member_call {}",
-                            internal_function.name.text
+                            "member_call {:?}",
+                            internal_function.name.0
                         ));
                         self.bind_parameters(parameters, &member_call_arguments)?;
                         let result = self.execute_statements(&internal_function.statements)?;
                         self.pop_function_scope(&format!(
-                            "member_call {}",
-                            internal_function.name.text
+                            "member_call {:?}",
+                            internal_function.name.0
                         ));
 
                         match result {
@@ -1470,7 +1467,7 @@ impl<'a, C> Interpreter<'a, C> {
                                 self.pop_block_scope("pattern variable");
                                 return result;
                             }
-                            ResolvedPatternElement::Wildcard => {
+                            ResolvedPatternElement::Wildcard(_) => {
                                 // Wildcard matches anything
                                 return self.evaluate_expression(&arm.expression);
                             }
@@ -1503,7 +1500,7 @@ impl<'a, C> Interpreter<'a, C> {
                                                 &var_ref.resolved_type,
                                             )?;
                                         }
-                                        ResolvedPatternElement::Wildcard => {
+                                        ResolvedPatternElement::Wildcard(_) => {
                                             // Skip wildcards
                                             continue;
                                         }
@@ -1557,7 +1554,7 @@ impl<'a, C> Interpreter<'a, C> {
                                                     &var_ref.resolved_type,
                                                 )?;
                                             }
-                                            ResolvedPatternElement::Wildcard => continue,
+                                            ResolvedPatternElement::Wildcard(_) => continue,
                                         }
                                     }
 
@@ -1637,7 +1634,7 @@ impl<'a, C> Interpreter<'a, C> {
 
     fn evaluate_binary_op(
         left: Value,
-        op: &BinaryOperator,
+        op: &ResolvedBinaryOperatorKind,
         right: Value,
     ) -> Result<Value, ExecuteError> {
         // Get the actual values, but keep track if left was a reference
@@ -1653,59 +1650,59 @@ impl<'a, C> Interpreter<'a, C> {
 
         let result: Value = match (left_val, op, right_val) {
             // Integer operations
-            (Value::Int(a), BinaryOperator::Add, Value::Int(b)) => Value::Int(a + b),
-            (Value::Int(a), BinaryOperator::Subtract, Value::Int(b)) => Value::Int(a - b),
-            (Value::Int(a), BinaryOperator::Multiply, Value::Int(b)) => Value::Int(a * b),
-            (Value::Int(a), BinaryOperator::Divide, Value::Int(b)) => {
+            (Value::Int(a), ResolvedBinaryOperatorKind::Add, Value::Int(b)) => Value::Int(a + b),
+            (Value::Int(a), ResolvedBinaryOperatorKind::Subtract, Value::Int(b)) => Value::Int(a - b),
+            (Value::Int(a), ResolvedBinaryOperatorKind::Multiply, Value::Int(b)) => Value::Int(a * b),
+            (Value::Int(a), ResolvedBinaryOperatorKind::Divide, Value::Int(b)) => {
                 if b == 0 {
                     return Err("Division by zero".to_string())?;
                 }
                 Value::Int(a / b)
             }
-            (Value::Int(a), BinaryOperator::Modulo, Value::Int(b)) => Value::Int(a % b),
+            (Value::Int(a), ResolvedBinaryOperatorKind::Modulo, Value::Int(b)) => Value::Int(a % b),
 
             // Float operations
-            (Value::Float(a), BinaryOperator::Add, Value::Float(b)) => Value::Float(a + b),
-            (Value::Float(a), BinaryOperator::Subtract, Value::Float(b)) => Value::Float(a - b),
-            (Value::Float(a), BinaryOperator::Multiply, Value::Float(b)) => Value::Float(a * b),
-            (Value::Float(a), BinaryOperator::Divide, Value::Float(b)) => {
+            (Value::Float(a), ResolvedBinaryOperatorKind::Add, Value::Float(b)) => Value::Float(a + b),
+            (Value::Float(a), ResolvedBinaryOperatorKind::Subtract, Value::Float(b)) => Value::Float(a - b),
+            (Value::Float(a), ResolvedBinaryOperatorKind::Multiply, Value::Float(b)) => Value::Float(a * b),
+            (Value::Float(a), ResolvedBinaryOperatorKind::Divide, Value::Float(b)) => {
                 if b.abs().inner() <= 400 {
                     return Err("Division by zero".to_string())?;
                 }
                 Value::Float(a / b)
             }
-            (Value::Float(a), BinaryOperator::Modulo, Value::Float(b)) => Value::Float(a % b),
+            (Value::Float(a), ResolvedBinaryOperatorKind::Modulo, Value::Float(b)) => Value::Float(a % b),
 
-            (Value::Float(a), BinaryOperator::GreaterThan, Value::Float(b)) => Value::Bool(a > b),
-            (Value::Float(a), BinaryOperator::GreaterEqual, Value::Float(b)) => Value::Bool(a >= b),
-            (Value::Float(a), BinaryOperator::LessThan, Value::Float(b)) => Value::Bool(a < b),
-            (Value::Float(a), BinaryOperator::LessEqual, Value::Float(b)) => Value::Bool(a <= b),
+            (Value::Float(a), ResolvedBinaryOperatorKind::GreaterThan, Value::Float(b)) => Value::Bool(a > b),
+            (Value::Float(a), ResolvedBinaryOperatorKind::GreaterEqual, Value::Float(b)) => Value::Bool(a >= b),
+            (Value::Float(a), ResolvedBinaryOperatorKind::LessThan, Value::Float(b)) => Value::Bool(a < b),
+            (Value::Float(a), ResolvedBinaryOperatorKind::LessEqual, Value::Float(b)) => Value::Bool(a <= b),
 
             // Boolean operations
-            (Value::Bool(a), BinaryOperator::LogicalAnd, Value::Bool(b)) => Value::Bool(a && b),
-            (Value::Bool(a), BinaryOperator::LogicalOr, Value::Bool(b)) => Value::Bool(a || b),
+            (Value::Bool(a), ResolvedBinaryOperatorKind::LogicalAnd, Value::Bool(b)) => Value::Bool(a && b),
+            (Value::Bool(a), ResolvedBinaryOperatorKind::LogicalOr, Value::Bool(b)) => Value::Bool(a || b),
 
             // Comparison operations
-            (Value::Int(a), BinaryOperator::Equal, Value::Int(b)) => Value::Bool(a == b),
-            (Value::Int(a), BinaryOperator::NotEqual, Value::Int(b)) => Value::Bool(a != b),
-            (Value::Int(a), BinaryOperator::LessThan, Value::Int(b)) => Value::Bool(a < b),
-            (Value::Int(a), BinaryOperator::GreaterThan, Value::Int(b)) => Value::Bool(a > b),
-            (Value::Int(a), BinaryOperator::LessEqual, Value::Int(b)) => Value::Bool(a <= b),
-            (Value::Int(a), BinaryOperator::GreaterEqual, Value::Int(b)) => Value::Bool(a >= b),
+            (Value::Int(a), ResolvedBinaryOperatorKind::Equal, Value::Int(b)) => Value::Bool(a == b),
+            (Value::Int(a), ResolvedBinaryOperatorKind::NotEqual, Value::Int(b)) => Value::Bool(a != b),
+            (Value::Int(a), ResolvedBinaryOperatorKind::LessThan, Value::Int(b)) => Value::Bool(a < b),
+            (Value::Int(a), ResolvedBinaryOperatorKind::GreaterThan, Value::Int(b)) => Value::Bool(a > b),
+            (Value::Int(a), ResolvedBinaryOperatorKind::LessEqual, Value::Int(b)) => Value::Bool(a <= b),
+            (Value::Int(a), ResolvedBinaryOperatorKind::GreaterEqual, Value::Int(b)) => Value::Bool(a >= b),
 
             // String operations
-            (Value::String(a), BinaryOperator::Add, Value::String(b)) => Value::String(a + &b),
-            (Value::String(a), BinaryOperator::Equal, Value::String(b)) => Value::Bool(a == b),
+            (Value::String(a), ResolvedBinaryOperatorKind::Add, Value::String(b)) => Value::String(a + &b),
+            (Value::String(a), ResolvedBinaryOperatorKind::Equal, Value::String(b)) => Value::Bool(a == b),
 
-            (Value::String(a), BinaryOperator::Add, Value::Int(b)) => {
+            (Value::String(a), ResolvedBinaryOperatorKind::Add, Value::Int(b)) => {
                 Value::String(a + &b.to_string())
             }
-            (Value::Int(a), BinaryOperator::Add, Value::String(b)) => {
+            (Value::Int(a), ResolvedBinaryOperatorKind::Add, Value::String(b)) => {
                 Value::String(a.to_string() + &b)
             }
 
-            (Value::Bool(a), BinaryOperator::Equal, Value::Bool(b)) => Value::Bool(a == b),
-            (Value::Bool(a), BinaryOperator::NotEqual, Value::Bool(b)) => Value::Bool(a != b),
+            (Value::Bool(a), ResolvedBinaryOperatorKind::Equal, Value::Bool(b)) => Value::Bool(a == b),
+            (Value::Bool(a), ResolvedBinaryOperatorKind::NotEqual, Value::Bool(b)) => Value::Bool(a != b),
 
             _ => return Err(format!("Invalid binary operation {op:?} ").into()),
         };
@@ -2098,29 +2095,29 @@ impl<'a, C> Interpreter<'a, C> {
     #[inline(always)]
     fn apply_compound_operator(
         target: &mut Value,
-        operator: CompoundOperator,
+        operator: ResolvedCompoundOperator,
         source: &Value,
     ) -> Result<(), ExecuteError> {
         match operator {
-            CompoundOperator::Mul => {
+            ResolvedCompoundOperator::Mul => {
                 *target = Self::evaluate_binary_op(
                     target.clone(),
                     &BinaryOperator::Multiply,
                     source.clone(),
                 )?
             }
-            CompoundOperator::Div => {
+            ResolvedCompoundOperator::Div => {
                 *target = Self::evaluate_binary_op(
                     target.clone(),
                     &BinaryOperator::Divide,
                     source.clone(),
                 )?
             }
-            CompoundOperator::Add => {
+            ResolvedCompoundOperator::Add => {
                 *target =
                     Self::evaluate_binary_op(target.clone(), &BinaryOperator::Add, source.clone())?
             }
-            CompoundOperator::Sub => {
+            ResolvedCompoundOperator::Sub => {
                 *target = Self::evaluate_binary_op(
                     target.clone(),
                     &BinaryOperator::Subtract,

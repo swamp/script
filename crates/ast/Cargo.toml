@@ -10,3 +10,4 @@ description = "ast types for swamp script"
 seq-map = "0.0.13"
 fixed32 = "0.0.17"
 seq-fmt = "0.0.1"
+swamp-script-node = { path = "../node", version = "0.0.7" }

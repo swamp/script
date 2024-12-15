@@ -23,6 +23,7 @@ use swamp_script_semantic::{
 use swamp_script_semantic::{ResolvedMapIndexLookup, ResolvedProgramTypes};
 use swamp_script_semantic::{ResolvedMapType, ResolvedProgramState};
 use swamp_script_semantic::{ResolvedModules, ResolvedPostfixOperator};
+use swamp_script_source_map::SourceMap;
 use tracing::{debug, error, info, warn};
 
 pub const SPARSE_TYPE_ID: TypeNumber = 999;
@@ -266,12 +267,6 @@ pub struct BlockScope {
     variables: SeqMap<String, ResolvedVariableRef>,
 }
 
-impl Display for BlockScope {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", comma_seq(&self.variables))
-    }
-}
-
 impl Default for BlockScope {
     fn default() -> Self {
         Self::new()
@@ -291,6 +286,7 @@ pub struct Resolver<'a> {
     pub types: &'a ResolvedProgramTypes,
     pub state: &'a mut ResolvedProgramState,
     pub modules: &'a ResolvedModules,
+    pub source_map: &'a SourceMap,
     pub current_module: Rc<RefCell<ResolvedModule>>,
     pub block_scope_stack: Vec<BlockScope>,
     pub return_type: Option<ResolvedType>,
@@ -301,6 +297,7 @@ impl<'a> Resolver<'a> {
         types: &'a ResolvedProgramTypes,
         state: &'a mut ResolvedProgramState,
         modules: &'a ResolvedModules,
+        source_map: &'a SourceMap,
         current_module: Rc<RefCell<ResolvedModule>>,
     ) -> Self {
         let mut scope_stack = Vec::new();
@@ -1687,7 +1684,6 @@ impl<'a> Resolver<'a> {
         };
 
         Ok(ResolvedBooleanExpression {
-            ast: expression.clone(),
             expression: bool_expression,
         })
     }
@@ -3184,6 +3180,10 @@ impl<'a> Resolver<'a> {
                 type_name.clone(),
             ))
         }
+    }
+
+    fn look_text(&self, local_type: &LocalTypeIdentifier) -> &str {
+        self.source_map.get_span_source(&local_type.0.span)
     }
 
     fn check_for_internal_static_call(

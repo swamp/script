@@ -11,16 +11,22 @@ use pest::pratt_parser::{Assoc, Op, PrattParser};
 use pest::Parser;
 use pest_derive::Parser;
 use seq_map::SeqMap;
-use swamp_script_ast::{prelude::*, CompoundOperator, ForPattern, ForVar, PatternElement};
+use swamp_script_ast::{
+    prelude::*, CompoundOperator, FieldName, MemberFunctionIdentifier, PatternElement,
+};
 use swamp_script_ast::{Function, PostfixOperator};
+use swamp_script_node::Span;
 
 #[derive(Parser)]
 #[grammar = "grammar.pest"]
 pub struct ScriptParser;
 
+pub const UNKNOWN_FILE_ID: u16 = 0xffff;
+
 pub struct AstParser {
     #[allow(dead_code)]
     pratt_parser: PrattParser<Rule>,
+    current_file_id: u16,
 }
 
 impl AstParser {
@@ -55,18 +61,54 @@ impl AstParser {
     }
 
     fn expect_identifier<'a>(
+        &self,
         pairs: &mut impl Iterator<Item = Pair<'a, Rule>>,
-    ) -> Result<String, Error<Rule>> {
+    ) -> Result<LocalIdentifier, Error<Rule>> {
         let pair = Self::expect_next(pairs, Rule::identifier)?;
-        Ok(pair.as_str().to_string())
+        Ok(LocalIdentifier::new(self.to_node(&pair)))
     }
 
-    fn expect_type_identifier<'a>(
+    fn expect_variable<'a>(
+        &self,
         pairs: &mut impl Iterator<Item = Pair<'a, Rule>>,
-    ) -> Result<String, Error<Rule>> {
-        let pair = Self::expect_next(pairs, Rule::type_identifier)?;
-        Ok(pair.as_str().to_string())
+    ) -> Result<Variable, Error<Rule>> {
+        let identifier = self.expect_identifier(pairs)?;
+        Ok(Variable {
+            name: identifier.0,
+            is_mutable: None,
+        })
     }
+
+    fn expect_field_name<'a>(
+        &self,
+        pairs: &mut impl Iterator<Item = Pair<'a, Rule>>,
+    ) -> Result<FieldName, Error<Rule>> {
+        let pair = Self::expect_next(pairs, Rule::identifier)?;
+        Ok(FieldName(self.to_node(&pair)))
+    }
+
+    fn expect_local_type_identifier<'a>(
+        &self,
+        pairs: &mut impl Iterator<Item = Pair<'a, Rule>>,
+    ) -> Result<LocalTypeIdentifier, Error<Rule>> {
+        let pair = Self::expect_next(pairs, Rule::type_identifier)?;
+        Ok(LocalTypeIdentifier::new(self.to_node(&pair)))
+    }
+
+    /*
+    fn expect_qualified_type_identifier<'a>(
+        &self,
+        inner_pairs: &mut impl Iterator<Item = Pair<'a, Rule>>,
+    ) -> Result<QualifiedTypeIdentifier, Error<Rule>> {
+        let module_path = self.parse_module_path(inner_pairs);
+        let mut type_id = inner_pairs.next().ok_or_else(|| {
+            self.create_error("Expected type identifier after module path", inner_pairs)
+        })?;
+
+        let type_identifier = self.parse_local_type_identifier(&type_id)?;
+        Ok(QualifiedTypeIdentifier::new(type_identifier, module_path))
+    }
+    */
 
     fn get_inner_pairs<'a>(pair: &'a Pair<'a, Rule>) -> impl Iterator<Item = Pair<'a, Rule>> {
         //info!("get_inner_pairs: {:?}", pair.as_rule());
@@ -82,9 +124,9 @@ impl AstParser {
         )
     }
 
-    fn next_inner_pair<'a>(&self, pair: Pair<'a, Rule>) -> Result<Pair<'a, Rule>, Error<Rule>> {
+    fn next_inner_pair<'a>(&self, pair: &Pair<'a, Rule>) -> Result<Pair<'a, Rule>, Error<Rule>> {
         let span = pair.as_span();
-        pair.into_inner().next().ok_or_else(move || {
+        pair.clone().into_inner().next().ok_or_else(move || {
             Error::new_from_span(
                 ErrorVariant::CustomError {
                     message: "Expected inner token".into(),
@@ -97,12 +139,15 @@ impl AstParser {
     // ---------------
 
     #[must_use]
-    pub fn new() -> Self {
+    pub fn new(file_id: u16) -> Self {
         let pratt_parser = PrattParser::new()
             .op(Op::infix(Rule::range_op, Assoc::Left))
             .op(Op::postfix(Rule::option_operator)); // TODO: this was the only way to avoid an infinite loop ( left-recursive) in the PEST grammar
 
-        Self { pratt_parser }
+        Self {
+            pratt_parser,
+            current_file_id: file_id,
+        }
     }
 
     pub fn parse_script(&self, raw_script: &str) -> Result<Module, pest::error::Error<Rule>> {
@@ -116,14 +161,14 @@ impl AstParser {
         for pair in Self::get_inner_pairs(&program_pair) {
             match pair.as_rule() {
                 Rule::statement => {
-                    let inner = self.next_inner_pair(pair)?;
+                    let inner = self.next_inner_pair(&pair)?;
                     match inner.as_rule() {
                         Rule::definition => {
                             let def = self.parse_definition(&inner)?;
                             definitions.push(def);
                         }
                         Rule::control_statement => {
-                            let stmt = self.parse_control_statement(inner)?;
+                            let stmt = self.parse_control_statement(&inner)?;
                             statements.push(stmt);
                         }
                         _ => unreachable!(
@@ -145,30 +190,30 @@ impl AstParser {
     }
 
     fn parse_definition(&self, pair: &Pair<Rule>) -> Result<Definition, Error<Rule>> {
-        let inner_pair = self.next_inner_pair(pair.clone())?;
+        let inner_pair = self.next_inner_pair(&pair)?;
         match inner_pair.as_rule() {
-            Rule::impl_def => self.parse_impl_def(inner_pair),
-            Rule::struct_def => self.parse_struct_def(inner_pair),
-            Rule::function_def => self.parse_function_def(inner_pair),
-            Rule::import_stmt => self.parse_import(inner_pair),
-            Rule::doc_comment => self.parse_doc_comment(inner_pair),
-            Rule::enum_def => self.parse_enum_def(inner_pair),
-            Rule::type_alias => self.parse_type_alias(inner_pair),
+            Rule::impl_def => self.parse_impl_def(&inner_pair),
+            Rule::struct_def => self.parse_struct_def(&inner_pair),
+            Rule::function_def => self.parse_function_def(&inner_pair),
+            Rule::import_stmt => todo!(),
+            Rule::doc_comment => self.parse_doc_comment(&inner_pair),
+            Rule::enum_def => self.parse_enum_def(&inner_pair),
+            Rule::type_alias => self.parse_type_alias(&inner_pair),
             _ => todo!(),
         }
     }
 
-    fn parse_control_statement(&self, pair: Pair<Rule>) -> Result<Statement, Error<Rule>> {
+    fn parse_control_statement(&self, pair: &Pair<Rule>) -> Result<Statement, Error<Rule>> {
         let inner = self.next_inner_pair(pair)?;
-        self.parse_statement(inner)
+        self.parse_statement(&inner)
     }
 
-    fn parse_statement_to_control(&self, pair: Pair<Rule>) -> Result<Statement, Error<Rule>> {
+    fn parse_statement_to_control(&self, pair: &Pair<Rule>) -> Result<Statement, Error<Rule>> {
         match pair.as_rule() {
             Rule::statement => {
                 let inner = self.next_inner_pair(pair)?;
                 match inner.as_rule() {
-                    Rule::control_statement => self.parse_control_statement(inner),
+                    Rule::control_statement => self.parse_control_statement(&inner),
                     _ => Err(self.create_error(
                         &format!("Expected control statement, found: {:?}", inner.as_rule()),
                         inner.as_span(),
@@ -182,25 +227,25 @@ impl AstParser {
         }
     }
 
-    fn parse_statement(&self, pair: Pair<Rule>) -> Result<Statement, Error<Rule>> {
+    fn parse_statement(&self, pair: &Pair<Rule>) -> Result<Statement, Error<Rule>> {
         match pair.as_rule() {
             Rule::stmt_block => {
                 let mut statements = Vec::new();
                 for stmt in Self::get_inner_pairs(&pair) {
                     if stmt.as_rule() == Rule::statement {
-                        statements.push(self.parse_statement_to_control(stmt)?);
+                        statements.push(self.parse_statement_to_control(&stmt)?);
                     }
                 }
                 Ok(Statement::Block(statements))
             }
-            Rule::if_stmt => self.parse_if_statement(pair),
-            Rule::for_loop => self.parse_for_loop(pair),
-            Rule::while_loop => self.parse_while_loop(pair),
-            Rule::return_stmt => self.parse_return(pair),
-            Rule::break_stmt => Ok(Statement::Break),
-            Rule::continue_stmt => Ok(Statement::Continue),
+            Rule::if_stmt => self.parse_if_statement(&pair),
+            // Rule::for_loop => self.parse_for_loop(&pair), // TODO: BRING IT BACK
+            Rule::while_loop => self.parse_while_loop(&pair),
+            Rule::return_stmt => self.parse_return(&pair),
+            Rule::break_stmt => Ok(Statement::Break(self.to_node(pair))),
+            Rule::continue_stmt => Ok(Statement::Continue(self.to_node(pair))),
             Rule::expression_statement => {
-                let expr = self.parse_expression(self.next_inner_pair(pair)?)?;
+                let expr = self.parse_expression(&self.next_inner_pair(pair)?)?;
                 Ok(Statement::Expression(expr))
             }
             Rule::EOI => Ok(Statement::Expression(Expression::Literal(Literal::Unit))), // Handle EOI
@@ -211,18 +256,18 @@ impl AstParser {
         }
     }
 
-    fn parse_if_statement(&self, pair: Pair<Rule>) -> Result<Statement, Error<Rule>> {
+    fn parse_if_statement(&self, pair: &Pair<Rule>) -> Result<Statement, Error<Rule>> {
         let mut inner = Self::get_inner_pairs(&pair);
 
         // Parse condition
-        let condition = self.parse_expression(Self::next_pair(&mut inner)?)?;
+        let condition = self.parse_expression(&Self::next_pair(&mut inner)?)?;
 
         // Parse then block
         let then_block = Self::next_pair(&mut inner)?;
         let mut then_statements = Vec::new();
         for stmt in Self::get_inner_pairs(&then_block) {
             if stmt.as_rule() == Rule::statement {
-                then_statements.push(self.parse_statement_to_control(stmt)?);
+                then_statements.push(self.parse_statement_to_control(&stmt)?);
             }
         }
 
@@ -232,14 +277,14 @@ impl AstParser {
             match else_token.as_rule() {
                 Rule::if_stmt => {
                     // Handle else if by returning the parsed if statement in a Vec
-                    vec![self.parse_if_statement(else_token)?]
+                    vec![self.parse_if_statement(&else_token)?]
                 }
                 Rule::stmt_block => {
                     // Handle regular else block
                     let mut stmts = Vec::new();
                     for stmt in Self::get_inner_pairs(&else_token) {
                         if stmt.as_rule() == Rule::statement {
-                            stmts.push(self.parse_statement_to_control(stmt)?);
+                            stmts.push(self.parse_statement_to_control(&stmt)?);
                         }
                     }
                     stmts
@@ -267,19 +312,15 @@ impl AstParser {
         Ok(Statement::If(condition, then_statements, else_value))
     }
 
-    fn parse_doc_comment(&self, pair: Pair<Rule>) -> Result<Definition, Error<Rule>> {
-        let comment_text = pair.as_str();
-        Ok(Definition::Comment(comment_text.to_string()))
+    fn parse_doc_comment(&self, pair: &Pair<Rule>) -> Result<Definition, Error<Rule>> {
+        Ok(Definition::Comment(self.to_node(pair)))
     }
 
-    fn parse_field_access(&self, pair: Pair<Rule>) -> Result<Expression, Error<Rule>> {
+    fn parse_field_access(&self, pair: &Pair<Rule>) -> Result<Expression, Error<Rule>> {
         let mut inner = Self::get_inner_pairs(&pair);
-
-        let base = Variable::new(&Self::expect_identifier(&mut inner)?, false);
-        let field = LocalIdentifier::new(
-            convert_from_pair(&pair),
-            &Self::expect_identifier(&mut inner)?,
-        );
+        let identifier = self.expect_identifier(&mut inner)?;
+        let base = Variable::new(identifier.0, None);
+        let field = self.expect_field_name(&mut inner)?;
 
         Ok(Expression::FieldAccess(
             Box::new(Expression::VariableAccess(base)),
@@ -287,11 +328,10 @@ impl AstParser {
         ))
     }
 
-    fn parse_struct_def(&self, pair: Pair<Rule>) -> Result<Definition, Error<Rule>> {
+    fn parse_struct_def(&self, pair: &Pair<Rule>) -> Result<Definition, Error<Rule>> {
         let mut inner = Self::get_inner_pairs(&pair);
 
-        // Parse struct name
-        let name = Self::expect_type_identifier(&mut inner)?;
+        let struct_name = self.expect_local_type_identifier(&mut inner)?;
 
         // Get field definitions
         let field_defs = Self::next_pair(&mut inner)?;
@@ -301,23 +341,15 @@ impl AstParser {
         for field_def in Self::get_inner_pairs(&field_defs) {
             let mut field_parts = Self::get_inner_pairs(&field_def);
 
-            let field_name = Self::expect_identifier(&mut field_parts)?; // TODO: Store this
+            let field_name = self.expect_field_name(&mut field_parts)?;
             let field_type = self.parse_type(Self::next_pair(&mut field_parts)?)?;
 
             fields
-                .insert(
-                    IdentifierName(
-                        LocalIdentifier::new(convert_from_pair(&pair), &field_name).text,
-                    ),
-                    field_type,
-                )
+                .insert(field_name, field_type)
                 .expect("duplicate field name"); // TODO: should be error
         }
 
-        let struct_def = StructType::new(
-            LocalTypeIdentifier::new(convert_from_pair(&pair), &name),
-            fields,
-        );
+        let struct_def = StructType::new(struct_name, fields);
 
         Ok(Definition::StructDef(struct_def))
     }
@@ -333,13 +365,13 @@ impl AstParser {
         let mut statements = Vec::new();
         for stmt in Self::get_inner_pairs(&pair) {
             if stmt.as_rule() == Rule::statement {
-                statements.push(self.parse_statement_to_control(stmt)?);
+                statements.push(self.parse_statement_to_control(&stmt)?);
             }
         }
         Ok(statements)
     }
 
-    fn parse_function_def(&self, pair: Pair<Rule>) -> Result<Definition, Error<Rule>> {
+    fn parse_function_def(&self, pair: &Pair<Rule>) -> Result<Definition, Error<Rule>> {
         let function_pair = self.next_inner_pair(pair)?;
 
         match function_pair.as_rule() {
@@ -349,7 +381,7 @@ impl AstParser {
                     self.create_error("Missing function signature", function_pair.as_span())
                 })?;
 
-                let (name, signature) = self.parse_function_signature(signature_pair)?;
+                let (name, signature) = self.parse_function_signature(&signature_pair)?;
 
                 let body = self.parse_stmt_block(inner.next().ok_or_else(|| {
                     self.create_error("Missing function body", function_pair.as_span())
@@ -366,7 +398,7 @@ impl AstParser {
                         self.create_error("Missing function signature", function_pair.as_span())
                     })?;
 
-                let (name, signature) = self.parse_function_signature(signature_pair)?;
+                let (name, signature) = self.parse_function_signature(&signature_pair)?;
                 Ok(Definition::FunctionDef(name, Function::External(signature)))
             }
             _ => Err(self.create_error(
@@ -380,7 +412,7 @@ impl AstParser {
     }
     fn parse_function_signature(
         &self,
-        pair: Pair<Rule>,
+        pair: &Pair<Rule>,
     ) -> Result<(LocalIdentifier, FunctionSignature), Error<Rule>> {
         if pair.as_rule() != Rule::function_signature {
             return Err(self.create_error(
@@ -391,46 +423,45 @@ impl AstParser {
 
         let mut inner = pair.clone().into_inner();
 
-        let name = LocalIdentifier::new(
-            convert_from_pair(&pair),
-            &Self::expect_identifier(&mut inner)?,
-        );
+        let function_name = self.expect_identifier(&mut inner)?;
 
         let next_token = inner.next();
         let (parameters, return_type) = match next_token {
             Some(token) if token.as_rule() == Rule::parameter_list => {
-                let params = self.parse_parameters(token)?;
+                let params = self.parse_parameters(&token)?;
 
                 let ret_type = if let Some(return_type_pair) = inner.next() {
-                    self.parse_return_type(return_type_pair)?
+                    Some(self.parse_return_type(&return_type_pair)?)
                 } else {
-                    Type::Unit
+                    None
                 };
 
                 (params, ret_type)
             }
+
             Some(token) if token.as_rule() == Rule::return_type => {
-                (Vec::new(), self.parse_return_type(token)?)
+                (Vec::new(), Some(self.parse_return_type(&token)?))
             }
-            _ => (Vec::new(), Type::Unit),
+            _ => (Vec::new(), None),
         };
 
         Ok((
-            name.clone(),
+            function_name.clone(),
             FunctionSignature {
-                name,
+                name: function_name,
                 params: parameters,
+                self_parameter: None,
                 return_type,
             },
         ))
     }
 
-    fn parse_return_type(&self, pair: Pair<Rule>) -> Result<Type, Error<Rule>> {
+    fn parse_return_type(&self, pair: &Pair<Rule>) -> Result<Type, Error<Rule>> {
         let inner_pair = self.next_inner_pair(pair)?;
         self.parse_type(inner_pair)
     }
 
-    fn parse_parameters(&self, pair: Pair<Rule>) -> Result<Vec<Parameter>, Error<Rule>> {
+    pub fn parse_parameters(&self, pair: &Pair<Rule>) -> Result<Vec<Parameter>, Error<Rule>> {
         let mut parameters = Vec::new();
 
         for param_pair in Self::get_inner_pairs(&pair) {
@@ -438,24 +469,23 @@ impl AstParser {
                 Rule::parameter => {
                     let pairs: Vec<_> = param_pair.into_inner().collect();
 
-                    // Check first pair - is it mut?
-                    let (is_mutable, name, type_pair) = if pairs[0].as_rule() == Rule::mut_keyword {
-                        (true, &pairs[1], &pairs[2])
-                    } else {
-                        (false, &pairs[0], &pairs[1])
-                    };
+                    let (maybe_mutable_pair, name_pair, type_pair) =
+                        if pairs[0].as_rule() == Rule::mut_keyword {
+                            (Some(&pairs[0]), &pairs[1], &pairs[2])
+                        } else {
+                            (None, &pairs[0], &pairs[1])
+                        };
 
                     let param_type = self.parse_type(type_pair.clone())?;
+                    let maybe_mut_node = maybe_mutable_pair.map(|v| self.to_node(v));
 
                     parameters.push(Parameter {
-                        variable: Variable::new(name.as_str(), is_mutable),
+                        variable: Variable::new(self.to_node(name_pair), maybe_mut_node),
                         param_type,
-                        is_mutable,
-                        is_self: false,
                     });
                 }
                 Rule::self_parameter => {
-                    // ... rest of the self_parameter handling ...
+                    panic!("should have been handled before parsing parameters")
                 }
                 _ => {
                     return Err(self.create_error(
@@ -469,23 +499,20 @@ impl AstParser {
         Ok(parameters)
     }
 
-    fn parse_impl_def(&self, pair: Pair<Rule>) -> Result<Definition, Error<Rule>> {
+    fn parse_impl_def(&self, pair: &Pair<Rule>) -> Result<Definition, Error<Rule>> {
         let mut inner = Self::get_inner_pairs(&pair);
-        let type_name = LocalTypeIdentifier::new(
-            convert_from_pair(&pair),
-            &Self::expect_type_identifier(&mut inner)?,
-        );
+        let type_name = self.expect_local_type_identifier(&mut inner)?;
         let mut functions = SeqMap::new();
 
         while let Some(item_pair) = inner.next() {
             if item_pair.as_rule() == Rule::impl_item {
-                let inner_item = self.next_inner_pair(item_pair)?;
+                let inner_item = self.next_inner_pair(&item_pair)?;
                 match inner_item.as_rule() {
                     Rule::external_member_function => {
-                        let (name, signature) = self.parse_member_signature(inner_item)?;
+                        let (name, signature) = self.parse_member_signature(&inner_item)?;
                         functions
                             .insert(
-                                IdentifierName(name.text.clone()),
+                                IdentifierName(name.0.clone()),
                                 Function::External(signature),
                             )
                             .expect("duplicate impl function");
@@ -494,7 +521,7 @@ impl AstParser {
                         let (name, function_data) = self.parse_member_data(inner_item)?;
                         functions
                             .insert(
-                                IdentifierName(name.text.clone()),
+                                IdentifierName(name.0.clone()),
                                 Function::Internal(function_data),
                             )
                             .expect("duplicate impl function");
@@ -514,7 +541,7 @@ impl AstParser {
 
     fn parse_member_signature(
         &self,
-        pair: Pair<Rule>,
+        pair: &Pair<Rule>,
     ) -> Result<(LocalIdentifier, FunctionSignature), Error<Rule>> {
         if pair.as_rule() != Rule::member_signature {
             return Err(self.create_error(
@@ -526,38 +553,39 @@ impl AstParser {
         let mut inner = pair.clone().into_inner();
 
         // Parse function name
-        let name = LocalIdentifier::new(
-            convert_from_pair(&pair),
-            &AstParser::expect_identifier(&mut inner)?,
-        );
+        let name = self.expect_identifier(&mut inner)?;
 
         // Parse self parameter and other parameters
         let mut parameters = Vec::new();
+
+        let mut self_parameter = None;
 
         if let Some(param_list) = inner.next() {
             match param_list.as_rule() {
                 Rule::self_parameter => {
                     let pairs: Vec<_> = param_list.into_inner().collect();
-                    let is_mutable = pairs
-                        .get(0)
-                        .map_or(false, |p| p.as_rule() == Rule::mut_keyword);
+                    let mut_keyword_pair = pairs.get(0);
 
-                    parameters.push(Parameter {
-                        variable: Variable::new("self", is_mutable),
-                        param_type: Type::Any, // self type is handled elsewhere
-                        is_mutable,
-                        is_self: true,
+                    let mut_keyword_node = if let Some(found_mut) = mut_keyword_pair {
+                        Some(self.to_node(found_mut))
+                    } else {
+                        None
+                    };
+
+                    self_parameter = Some(SelfParameter {
+                        is_mutable: mut_keyword_node,
+                        self_node: Default::default(),
                     });
 
                     // Check for additional parameters
                     if let Some(more_params) = inner.next() {
                         if more_params.as_rule() == Rule::parameter_list {
-                            parameters.extend(self.parse_parameters(more_params)?);
+                            parameters.extend(self.parse_parameters(&more_params)?);
                         }
                     }
                 }
                 Rule::parameter_list => {
-                    parameters = self.parse_parameters(param_list)?;
+                    parameters = self.parse_parameters(&param_list)?;
                 }
                 _ => {}
             }
@@ -566,12 +594,12 @@ impl AstParser {
         // Parse return type if it exists
         let return_type = if let Some(return_type_pair) = inner.next() {
             if return_type_pair.as_rule() == Rule::return_type {
-                self.parse_return_type(return_type_pair)?
+                Some(self.parse_return_type(&return_type_pair)?)
             } else {
-                Type::Unit
+                None
             }
         } else {
-            Type::Unit
+            None
         };
 
         Ok((
@@ -579,6 +607,7 @@ impl AstParser {
             FunctionSignature {
                 name,
                 params: parameters,
+                self_parameter,
                 return_type,
             },
         ))
@@ -593,7 +622,7 @@ impl AstParser {
             .next()
             .ok_or_else(|| self.create_error("Missing member signature", pair.as_span()))?;
 
-        let (name, signature) = self.parse_member_signature(signature_pair)?;
+        let (name, signature) = self.parse_member_signature(&signature_pair)?;
 
         let body = self.parse_stmt_block(
             inner
@@ -604,7 +633,8 @@ impl AstParser {
         Ok((name, FunctionData { signature, body }))
     }
 
-    fn parse_for_loop(&self, pair: Pair<Rule>) -> Result<Statement, Error<Rule>> {
+    /*
+    fn parse_for_loop(&self, pair: &Pair<Rule>) -> Result<Statement, Error<Rule>> {
         let mut inner = Self::get_inner_pairs(&pair);
 
         let pattern_pair = Self::next_pair(&mut inner)?;
@@ -612,7 +642,7 @@ impl AstParser {
             return Err(self.create_error("Expected for pattern", pattern_pair.as_span()));
         }
 
-        let inner_pattern = self.next_inner_pair(pattern_pair)?;
+        let inner_pattern = self.next_inner_pair(&pattern_pair)?;
         let pattern = match inner_pattern.as_rule() {
             Rule::mut_identifier => {
                 let mut inner = inner_pattern.clone().into_inner();
@@ -639,30 +669,29 @@ impl AstParser {
                 let first_is_mut = first_inner
                     .next()
                     .map_or(false, |p| p.as_rule() == Rule::mut_keyword);
-                let first = if first_is_mut {
-                    Self::expect_identifier(&mut first_inner)?
+                let mut first = if first_is_mut {
+                    self.expect_identifier(&mut first_inner)?
                 } else {
                     first_mut_id.as_str().to_string()
                 };
 
                 let second_mut_id = Self::next_pair(&mut vars)?;
                 let mut second_inner = second_mut_id.clone().into_inner();
-                let second_is_mut = second_inner
-                    .next()
-                    .map_or(false, |p| p.as_rule() == Rule::mut_keyword);
+                let second_is_mut = second_inner.next().map_or(None);
+
                 let second = if second_is_mut {
-                    Self::expect_identifier(&mut second_inner)?
+                    self.expect_identifier(&mut second_inner)?
                 } else {
                     second_mut_id.as_str().to_string()
                 };
 
                 ForPattern::Pair(
                     ForVar {
-                        identifier: LocalTypeIdentifier::new(convert_from_pair(&pair), &first),
+                        identifier: first,
                         is_mut: first_is_mut,
                     },
                     ForVar {
-                        identifier: LocalTypeIdentifier::new(convert_from_pair(&pair), &second),
+                        identifier: second,
                         is_mut: second_is_mut,
                     },
                 )
@@ -672,9 +701,9 @@ impl AstParser {
 
         let next = Self::next_pair(&mut inner)?;
         let (is_mut_iter, iterable) = if next.as_rule() == Rule::mut_keyword {
-            (true, self.parse_expression(Self::next_pair(&mut inner)?)?)
+            (true, self.parse_expression(&Self::next_pair(&mut inner)?)?)
         } else {
-            (false, self.parse_expression(next)?)
+            (false, self.parse_expression(&next)?)
         };
 
         let block_pair = Self::next_pair(&mut inner)?;
@@ -685,18 +714,18 @@ impl AstParser {
         let mut body = Vec::new();
         for stmt in Self::get_inner_pairs(&block_pair) {
             if stmt.as_rule() == Rule::statement {
-                body.push(self.parse_statement_to_control(stmt)?);
+                body.push(self.parse_statement_to_control(&stmt)?);
             }
         }
 
         Ok(Statement::ForLoop(pattern, iterable, is_mut_iter, body))
     }
-
-    fn parse_while_loop(&self, pair: Pair<Rule>) -> Result<Statement, Error<Rule>> {
+     */
+    fn parse_while_loop(&self, pair: &Pair<Rule>) -> Result<Statement, Error<Rule>> {
         let mut inner = Self::get_inner_pairs(&pair);
 
         // Parse condition
-        let condition = self.parse_expression(Self::next_pair(&mut inner)?)?;
+        let condition = self.parse_expression(&Self::next_pair(&mut inner)?)?;
 
         // Parse block
         let block_pair = Self::next_pair(&mut inner)?;
@@ -707,97 +736,59 @@ impl AstParser {
         let mut body = Vec::new();
         for stmt in Self::get_inner_pairs(&block_pair) {
             if stmt.as_rule() == Rule::statement {
-                body.push(self.parse_statement_to_control(stmt)?);
+                body.push(self.parse_statement_to_control(&stmt)?);
             }
         }
 
         Ok(Statement::WhileLoop(condition, body))
     }
 
-    fn parse_import(&self, pair: Pair<Rule>) -> Result<Definition, Error<Rule>> {
-        let mut inner = Self::get_inner_pairs(&pair);
-        let import_type = Self::next_pair(&mut inner)?;
-
-        match import_type.as_rule() {
-            Rule::import_list_from => {
-                // Handle: import { sin, cos } from math
-                let mut list_from = Self::get_inner_pairs(&import_type);
-                let import_list = Self::next_pair(&mut list_from)?;
-                let module_path = Self::next_pair(&mut list_from)?;
-
-                // Parse specific items
-                let items: Vec<LocalTypeIdentifier> = Self::get_inner_pairs(&import_list)
-                    .filter(|p| p.as_rule() == Rule::identifier)
-                    .map(|p| LocalTypeIdentifier::new(convert_from_pair(&pair), p.as_str()))
-                    .collect();
-
-                // Parse module path (e.g., "geometry.shapes" -> ["geometry", "shapes"])
-                let path: Vec<String> = module_path
-                    .as_str()
-                    .split('.')
-                    .map(|s| s.to_string())
-                    .collect();
-
-                Ok(Definition::Import(Import {
-                    module_path: ModulePath(path),
-                    items: ImportItems::Specific(items),
-                }))
-            }
-            Rule::import_path => {
-                // Handle: import math or import geometry.shapes
-                let path: Vec<String> = import_type
-                    .as_str()
-                    .split('.')
-                    .map(|s| s.to_string())
-                    .collect();
-
-                Ok(Definition::Import(Import {
-                    module_path: ModulePath(path),
-                    items: ImportItems::Module,
-                }))
-            }
-            _ => Err(self.create_error("Invalid import statement", import_type.as_span())),
-        }
-    }
-
-    fn parse_return(&self, pair: Pair<Rule>) -> Result<Statement, Error<Rule>> {
+    fn parse_return(&self, pair: &Pair<Rule>) -> Result<Statement, Error<Rule>> {
         let mut inner = Self::get_inner_pairs(&pair);
 
         // Return value is optional
         let expr = match inner.next() {
-            Some(expr_pair) => self.parse_expression(expr_pair)?,
+            Some(expr_pair) => self.parse_expression(&expr_pair)?,
             None => Expression::Literal(Literal::Unit),
         };
 
         Ok(Statement::Return(expr))
     }
 
-    fn parse_expression(&self, pair: Pair<Rule>) -> Result<Expression, Error<Rule>> {
+    fn parse_expression(&self, pair: &Pair<Rule>) -> Result<Expression, Error<Rule>> {
         match pair.as_rule() {
             Rule::variable => Ok(Expression::VariableAccess(Variable::new(
-                pair.as_str(),
-                false,
+                self.to_node(pair),
+                None,
             ))),
+
             Rule::block => {
                 // Block in expression context - expect single expression
-                let inner = self.next_inner_pair(pair)?;
-                self.parse_expression(inner)
+                let inner = self.next_inner_pair(&pair)?;
+                self.parse_expression(&inner)
             }
 
             Rule::expression => {
-                let inner = self.next_inner_pair(pair)?;
-                self.parse_expression(inner)
+                let inner = self.next_inner_pair(&pair)?;
+                self.parse_expression(&inner)
             }
+
             Rule::assignment => self.parse_assignment(&pair),
+
             Rule::addition => self.parse_binary_chain(pair),
+
             Rule::logical | Rule::comparison | Rule::multiplication => self.parse_binary_op(pair),
-            Rule::prefix => self.parse_prefix_expression(pair),
+
+            Rule::prefix => self.parse_prefix_expression(&*pair),
+
             Rule::primary | Rule::literal => self.parse_primary(pair),
+
             Rule::prefix_op | Rule::op_neg | Rule::op_not => {
-                let op = self.parse_unary_operator(pair.clone())?;
-                let expr = self.parse_primary(self.next_inner_pair(pair)?)?;
+                let op = self.parse_unary_operator(&pair)?;
+                let expr = self.parse_primary(&self.next_inner_pair(&pair)?)?;
                 Ok(Expression::UnaryOp(op, Box::new(expr)))
             }
+
             Rule::postfix => self.parse_postfix_expression(pair),
             _ => Err(self.create_error(
                 &format!("Unexpected expression type: {:?}", pair.as_rule()),
@@ -806,26 +797,24 @@ impl AstParser {
         }
     }
 
-    fn parse_chained_access(&self, pair: Pair<Rule>) -> Result<Expression, Error<Rule>> {
+    fn parse_chained_access(&self, pair: &Pair<Rule>) -> Result<Expression, Error<Rule>> {
         let mut inner = Self::get_inner_pairs(&pair);
 
+        let identifier = self.expect_identifier(&mut inner)?;
         // Parse base identifier
-        let base = Variable::new(&Self::expect_identifier(&mut inner)?, false);
+        let base = Variable::new(identifier.0, None);
         let mut expr = Expression::VariableAccess(base);
 
         // Handle chain of accesses
         while let Some(access) = inner.next() {
             match access.as_rule() {
                 Rule::array_access => {
-                    let index_expr = self.parse_expression(self.next_inner_pair(access)?)?;
+                    let index_expr = self.parse_expression(&self.next_inner_pair(&access)?)?;
                     expr = Expression::IndexAccess(Box::new(expr), Box::new(index_expr));
                 }
                 Rule::dot_access => {
-                    let field_name = self.next_inner_pair(access)?.as_str().to_string();
-                    expr = Expression::FieldAccess(
-                        Box::new(expr),
-                        LocalIdentifier::new(convert_from_pair(&pair), &field_name),
-                    );
+                    let field_name = self.next_inner_pair(&access)?.as_str().to_string();
+                    expr = Expression::FieldAccess(Box::new(expr), FieldName(self.to_node(&pair)));
                 }
                 _ => {
                     return Err(self.create_error(
@@ -844,25 +833,27 @@ impl AstParser {
 
         let is_mutable = if let Some(p) = inner.peek() {
             if p.as_rule() == Rule::mut_keyword {
-                inner.next(); // consume mut
-                true
+                let mut_modifier = self.to_node(&p);
+                inner.next();
+                Some(mut_modifier)
             } else {
-                false
+                None
             }
         } else {
-            false
+            None
         };
 
         let left = Self::next_pair(&mut inner)?;
         let operator = Self::next_pair(&mut inner)?;
-        let expr = self.parse_expression(Self::next_pair(&mut inner)?)?;
+        let expr = self.parse_expression(&Self::next_pair(&mut inner)?)?;
+        let operator_node = self.to_node(&operator);
 
-        let compound_op = match operator.as_rule() {
+        let compound_op: Option<CompoundOperator> = match operator.as_rule() {
             Rule::assign_op => None,
-            Rule::add_assign_op => Some(CompoundOperator::Add),
-            Rule::sub_assign_op => Some(CompoundOperator::Sub),
-            Rule::mul_assign_op => Some(CompoundOperator::Mul),
-            Rule::div_assign_op => Some(CompoundOperator::Div),
+            Rule::add_assign_op => Some(CompoundOperator::Add(operator_node)),
+            Rule::sub_assign_op => Some(CompoundOperator::Sub(operator_node)),
+            Rule::mul_assign_op => Some(CompoundOperator::Mul(operator_node)),
+            Rule::div_assign_op => Some(CompoundOperator::Div(operator_node)),
             _ => {
                 return Err(self.create_error(
                     &format!("Unknown assignment operator: {:?}", operator.as_rule()),
@@ -872,7 +863,7 @@ impl AstParser {
         };
 
         // Only block compound operators for mut declarations
-        if compound_op.is_some() && is_mutable {
+        if compound_op.is_some() && is_mutable.is_some() {
             return Err(self.create_error(
                 "Compound operators can't be used with 'mut'",
                 operator.as_span(),
@@ -881,7 +872,7 @@ impl AstParser {
 
         match left.as_rule() {
             Rule::chained_access => {
-                let target = self.parse_chained_access(left.clone())?;
+                let target = self.parse_chained_access(&left.clone())?;
                 match target {
                     Expression::IndexAccess(array, index) => match compound_op {
                         None => Ok(Expression::IndexAssignment(array, index, Box::new(expr))),
@@ -909,7 +900,7 @@ impl AstParser {
                 let vars: Vec<_> = Self::get_inner_pairs(&left).collect();
 
                 if vars.len() == 1 {
-                    let var = Variable::new(vars[0].as_str(), is_mutable);
+                    let var = Variable::new(self.to_node(&vars[0]), is_mutable);
                     match compound_op {
                         None => Ok(Expression::VariableAssignment(var, Box::new(expr))),
                         Some(op) => Ok(Expression::VariableCompoundAssignment(
@@ -928,7 +919,7 @@ impl AstParser {
                     }
                     let variables = vars
                         .into_iter()
-                        .map(|v| Variable::new(v.as_str(), is_mutable))
+                        .map(|v| Variable::new(self.to_node(&v), is_mutable))
                         .collect();
                     Ok(Expression::MultiVariableAssignment(
                         variables,
@@ -944,16 +935,16 @@ impl AstParser {
         }
     }
 
-    fn parse_binary_chain(&self, pair: Pair<Rule>) -> Result<Expression, Error<Rule>> {
+    fn parse_binary_chain(&self, pair: &Pair<Rule>) -> Result<Expression, Error<Rule>> {
         let mut inner = Self::get_inner_pairs(&pair);
-        let mut left = self.parse_expression(Self::next_pair(&mut inner)?)?;
+        let mut left = self.parse_expression(&Self::next_pair(&mut inner)?)?;
 
         while let Some(op) = inner.next() {
-            let right = self.parse_expression(Self::next_pair(&mut inner)?)?;
+            let right = self.parse_expression(&Self::next_pair(&mut inner)?)?;
             left = if op.as_rule() == Rule::range_op {
                 Expression::ExclusiveRange(Box::new(left), Box::new(right))
             } else {
-                let operator = self.parse_binary_operator(op)?;
+                let operator = self.parse_binary_operator(&op)?;
                 Expression::BinaryOp(Box::new(left), operator, Box::new(right))
             };
         }
@@ -961,7 +952,7 @@ impl AstParser {
         Ok(left)
     }
 
-    fn parse_prefix_expression(&self, pair: Pair<Rule>) -> Result<Expression, Error<Rule>> {
+    fn parse_prefix_expression(&self, pair: &Pair<Rule>) -> Result<Expression, Error<Rule>> {
         let span = pair.as_span();
         let mut inner = Self::get_inner_pairs(&pair).peekable();
         let mut expr = None;
@@ -970,11 +961,11 @@ impl AstParser {
         while let Some(part) = inner.next() {
             match part.as_rule() {
                 Rule::prefix_op | Rule::op_neg | Rule::op_not => {
-                    let op = self.parse_unary_operator(part)?;
+                    let op = self.parse_unary_operator(&part)?;
                     prefix_ops.push(op);
                 }
                 _ => {
-                    expr = Some(self.parse_expression(part)?);
+                    expr = Some(self.parse_expression(&part)?);
                     break;
                 }
             }
@@ -990,17 +981,20 @@ impl AstParser {
         Ok(final_expr)
     }
 
-    fn parse_postfix_expression(&self, pair: Pair<Rule>) -> Result<Expression, Error<Rule>> {
+    fn parse_postfix_expression(&self, pair: &Pair<Rule>) -> Result<Expression, Error<Rule>> {
         let mut inner = Self::get_inner_pairs(&pair);
-        let mut expr = self.parse_primary(Self::next_pair(&mut inner)?)?;
+        let mut expr = self.parse_primary(&Self::next_pair(&mut inner)?)?;
 
         while let Some(op) = inner.next() {
             match op.as_rule() {
                 Rule::postfix_op => {
-                    let inner_op = self.next_inner_pair(op)?;
+                    let inner_op = self.next_inner_pair(&op)?;
                     match inner_op.as_rule() {
                         Rule::option_operator => {
-                            expr = Expression::PostfixOp(PostfixOperator::Unwrap, Box::new(expr));
+                            expr = Expression::PostfixOp(
+                                PostfixOperator::Unwrap(self.to_node(&inner_op)),
+                                Box::new(expr),
+                            );
                         }
                         _ => {
                             return Err(self.create_error(
@@ -1022,16 +1016,16 @@ impl AstParser {
         Ok(expr)
     }
 
-    fn parse_binary_op(&self, pair: Pair<Rule>) -> Result<Expression, Error<Rule>> {
+    fn parse_binary_op(&self, pair: &Pair<Rule>) -> Result<Expression, Error<Rule>> {
         let mut inner = Self::get_inner_pairs(&pair);
-        let mut left = self.parse_expression(Self::next_pair(&mut inner)?)?;
+        let mut left = self.parse_expression(&Self::next_pair(&mut inner)?)?;
 
         while let Some(op) = inner.next() {
-            let right = self.parse_expression(Self::next_pair(&mut inner)?)?;
+            let right = self.parse_expression(&Self::next_pair(&mut inner)?)?;
             left = match op.as_str() {
                 ".." => Expression::ExclusiveRange(Box::new(left), Box::new(right)),
                 _ => {
-                    let operator = self.parse_binary_operator(op)?;
+                    let operator = self.parse_binary_operator(&op)?;
                     Expression::BinaryOp(Box::new(left), operator, Box::new(right))
                 }
             };
@@ -1040,29 +1034,31 @@ impl AstParser {
         Ok(left)
     }
 
-    fn parse_binary_operator(&self, pair: Pair<Rule>) -> Result<BinaryOperator, Error<Rule>> {
+    fn parse_binary_operator(&self, pair: &Pair<Rule>) -> Result<BinaryOperator, Error<Rule>> {
         let op = match pair.as_rule() {
             Rule::infix_op | Rule::prefix_op => {
-                let inner = self.next_inner_pair(pair.clone())?;
+                let inner = self.next_inner_pair(&pair)?;
                 inner
             }
-            _ => pair,
+            _ => pair.clone(),
         };
 
+        let node = self.to_node(&op);
+
         match op.as_rule() {
-            Rule::op_add => Ok(BinaryOperator::Add),
-            Rule::op_sub => Ok(BinaryOperator::Subtract),
-            Rule::op_mul => Ok(BinaryOperator::Multiply),
-            Rule::op_div => Ok(BinaryOperator::Divide),
-            Rule::op_mod => Ok(BinaryOperator::Modulo),
-            Rule::op_eq => Ok(BinaryOperator::Equal),
-            Rule::op_neq => Ok(BinaryOperator::NotEqual),
-            Rule::op_lt => Ok(BinaryOperator::LessThan),
-            Rule::op_lte => Ok(BinaryOperator::LessEqual),
-            Rule::op_gt => Ok(BinaryOperator::GreaterThan),
-            Rule::op_gte => Ok(BinaryOperator::GreaterEqual),
-            Rule::op_and => Ok(BinaryOperator::LogicalAnd),
-            Rule::op_or => Ok(BinaryOperator::LogicalOr),
+            Rule::op_add => Ok(BinaryOperator::Add(node)),
+            Rule::op_sub => Ok(BinaryOperator::Subtract(node)),
+            Rule::op_mul => Ok(BinaryOperator::Multiply(node)),
+            Rule::op_div => Ok(BinaryOperator::Divide(node)),
+            Rule::op_mod => Ok(BinaryOperator::Modulo(node)),
+            Rule::op_eq => Ok(BinaryOperator::Equal(node)),
+            Rule::op_neq => Ok(BinaryOperator::NotEqual(node)),
+            Rule::op_lt => Ok(BinaryOperator::LessThan(node)),
+            Rule::op_lte => Ok(BinaryOperator::LessEqual(node)),
+            Rule::op_gt => Ok(BinaryOperator::GreaterThan(node)),
+            Rule::op_gte => Ok(BinaryOperator::GreaterEqual(node)),
+            Rule::op_and => Ok(BinaryOperator::LogicalAnd(node)),
+            Rule::op_or => Ok(BinaryOperator::LogicalOr(node)),
             _ => Err(self.create_error(
                 &format!("Unknown binary operator: {:?}", op.as_rule()),
                 op.as_span(),
@@ -1070,15 +1066,16 @@ impl AstParser {
         }
     }
 
-    fn parse_unary_operator(&self, pair: Pair<Rule>) -> Result<UnaryOperator, Error<Rule>> {
+    fn parse_unary_operator(&self, pair: &Pair<Rule>) -> Result<UnaryOperator, Error<Rule>> {
         let op = match pair.as_rule() {
-            Rule::prefix_op => self.next_inner_pair(pair)?,
-            _ => pair,
+            Rule::prefix_op => &self.next_inner_pair(pair)?,
+            _ => &pair,
         };
 
+        let node = self.to_node(op);
         match op.as_rule() {
-            Rule::op_neg => Ok(UnaryOperator::Negate),
-            Rule::op_not => Ok(UnaryOperator::Not),
+            Rule::op_neg => Ok(UnaryOperator::Negate(node)),
+            Rule::op_not => Ok(UnaryOperator::Not(node)),
             _ => Err(self.create_error(
                 &format!("Unknown unary operator: {:?}", op.as_rule()),
                 op.as_span(),
@@ -1086,32 +1083,37 @@ impl AstParser {
         }
     }
 
-    fn parse_member_call(&self, pair: Pair<Rule>) -> Result<Expression, Error<Rule>> {
+    fn parse_member_call(&self, pair: &Pair<Rule>) -> Result<Expression, Error<Rule>> {
         let mut inner = Self::get_inner_pairs(&pair);
 
         let base = Self::next_pair(&mut inner)?;
-        let mut expr = Expression::VariableAccess(Variable::new(base.as_str(), false));
+        let mut expr = Expression::VariableAccess(Variable::new(self.to_node(&base), None));
 
         while let Some(next) = inner.next() {
             if next.as_rule() == Rule::identifier {
-                expr = Expression::FieldAccess(
-                    Box::new(expr),
-                    LocalIdentifier::new(convert_from_pair(&pair), next.as_str()),
-                );
+                expr = Expression::FieldAccess(Box::new(expr), FieldName(self.to_node(&pair)));
             } else {
-                let mut args = vec![self.parse_expression(next)?];
+                let mut args = vec![self.parse_expression(&next)?];
                 while let Some(arg) = inner.next() {
-                    args.push(self.parse_expression(arg)?);
+                    args.push(self.parse_expression(&arg)?);
                 }
 
-                if let Expression::FieldAccess(obj, method) = expr {
-                    return Ok(Expression::MemberCall(obj, method, args));
+                if let Expression::FieldAccess(obj, field_name) = expr {
+                    return Ok(Expression::MemberCall(
+                        obj,
+                        MemberFunctionIdentifier(field_name.0),
+                        args,
+                    ));
                 }
             }
         }
 
         if let Expression::FieldAccess(obj, method) = expr {
-            Ok(Expression::MemberCall(obj, method, vec![]))
+            Ok(Expression::MemberCall(
+                obj,
+                MemberFunctionIdentifier(method.0),
+                vec![],
+            ))
         } else {
             Err(self.create_error("Invalid member call", pair.as_span()))
         }
@@ -1134,7 +1136,7 @@ impl AstParser {
 
     fn parse_qualified_type_identifier(
         &self,
-        pair: Pair<Rule>,
+        pair: &Pair<Rule>,
     ) -> Result<QualifiedTypeIdentifier, Error<Rule>> {
         let mut inner_pairs = pair.clone().into_inner();
 
@@ -1144,28 +1146,22 @@ impl AstParser {
 
         match first.as_rule() {
             Rule::module_path => {
-                let module_path = self.parse_module_path(first);
-                let type_id = inner_pairs.next().ok_or_else(|| {
-                    self.create_error("Expected type identifier after module path", pair.as_span())
-                })?;
-                Ok(QualifiedTypeIdentifier::new(
-                    LocalTypeIdentifier::new(convert_from_pair(&type_id), type_id.as_str()),
-                    module_path,
-                ))
+                let qualified = self.expect_qualified_type_identifier(&mut inner_pairs)?;
+                Ok(qualified)
             }
             Rule::type_identifier => Ok(QualifiedTypeIdentifier::new(
-                LocalTypeIdentifier::new(convert_from_pair(&first), first.as_str()),
+                self.expect_local_type_identifier(&first)?,
                 Vec::new(),
             )),
             _ => Err(self.create_error("Expected type identifier", pair.as_span())),
         }
     }
 
-    fn parse_struct_instantiation(&self, pair: Pair<Rule>) -> Result<Expression, Error<Rule>> {
+    fn parse_struct_instantiation(&self, pair: &Pair<Rule>) -> Result<Expression, Error<Rule>> {
         let mut inner = Self::get_inner_pairs(&pair);
 
         // Get struct name (required)
-        let struct_name = self.parse_qualified_type_identifier(inner.next().unwrap())?;
+        let struct_name = self.parse_qualified_type_identifier(&inner.next().unwrap())?;
         let mut fields = SeqMap::new(); // Use sequence map since hashmaps are literally random in how they are inserted
 
         // Parse fields if they exist
@@ -1173,13 +1169,11 @@ impl AstParser {
             for field in Self::get_inner_pairs(&fields_pair) {
                 if field.as_rule() == Rule::struct_field {
                     let mut field_inner = Self::get_inner_pairs(&field);
-                    let field_name = LocalIdentifier::new(
-                        convert_from_pair(&pair),
-                        &Self::expect_identifier(&mut field_inner)?,
-                    ); // TODO: Save the field name
-                    let field_value = self.parse_expression(Self::next_pair(&mut field_inner)?)?;
+                    let ident = self.expect_identifier(&mut field_inner)?;
+                    let field_name = FieldName(ident.0); // TODO: Save the field name
+                    let field_value = self.parse_expression(&Self::next_pair(&mut field_inner)?)?;
                     fields
-                        .insert(IdentifierName(field_name.text), field_value)
+                        .insert(field_name, field_value)
                         .expect("should not be duplicates"); // TODO: Should return an error in result instead
                 }
             }
@@ -1188,18 +1182,15 @@ impl AstParser {
         Ok(Expression::StructInstantiation(struct_name, fields))
     }
 
-    fn parse_primary(&self, pair: Pair<Rule>) -> Result<Expression, Error<Rule>> {
+    fn parse_primary(&self, pair: &Pair<Rule>) -> Result<Expression, Error<Rule>> {
         match pair.as_rule() {
             Rule::primary => {
                 let inner = self.next_inner_pair(pair)?;
-                self.parse_primary(inner)
+                self.parse_primary(&inner)
             }
             Rule::interpolated_string => self.parse_interpolated_string(pair),
             Rule::literal => Ok(Expression::Literal(self.parse_literal(pair)?)),
-            Rule::variable => Ok(Expression::VariableAccess(Variable::new(
-                pair.as_str(),
-                false,
-            ))),
+            Rule::variable => Ok(Expression::VariableAccess(self.expect_variable(&pair)?)),
             Rule::field_access => self.parse_field_access(pair),
             Rule::function_call => self.parse_function_call(pair),
             Rule::static_call => self.parse_static_call(pair),
@@ -1217,8 +1208,8 @@ impl AstParser {
                 Ok(Expression::Literal(Literal::Float(fp)))
             }
             Rule::parenthesized => {
-                let inner = self.next_inner_pair(pair)?;
-                self.parse_expression(inner)
+                let inner = self.next_inner_pair(&pair)?;
+                self.parse_expression(&inner)
             }
             Rule::if_expr => self.parse_if_expr(pair),
             Rule::struct_instantiation => self.parse_struct_instantiation(pair),
@@ -1230,26 +1221,26 @@ impl AstParser {
         }
     }
 
-    fn parse_interpolated_string(&self, pair: Pair<Rule>) -> Result<Expression, Error<Rule>> {
+    /* TODO: BRING THIS BACK
+    fn parse_interpolated_string(&self, pair: &Pair<Rule>) -> Result<Expression, Error<Rule>> {
         let mut parts = Vec::new();
-        let mut current_literal = String::new();
 
-        for part in Self::get_inner_pairs(&pair) {
-            match part.as_rule() {
+        for part_pair in Self::get_inner_pairs(&pair) {
+            match part_pair.as_rule() {
                 Rule::text => {
-                    let text = part.as_str();
+                    let text = part_pair.as_str();
                     let text = text.replace("{{", "{").replace("}}", "}");
                     current_literal.push_str(&text);
                 }
                 Rule::interpolation => {
-                    if !current_literal.is_empty() {
+                    if !parts.is_empty() {
                         parts.push(StringPart::Literal(current_literal.clone()));
-                        current_literal.clear();
+                        parts.clear();
                     }
 
-                    let inner = self.next_inner_pair(part.clone())?;
+                    let inner = self.next_inner_pair(&part_pair.clone())?;
                     let expr = match inner.as_rule() {
-                        Rule::expression => self.parse_expression(inner)?,
+                        Rule::expression => self.parse_expression(&inner)?,
                         _ => {
                             return Err(self.create_error(
                                 &format!(
@@ -1261,7 +1252,7 @@ impl AstParser {
                         }
                     };
 
-                    let format = if let Some(fmt) = Self::get_inner_pairs(&part).nth(1) {
+                    let format = if let Some(fmt) = Self::get_inner_pairs(&part_pair).nth(1) {
                         if fmt.as_rule() == Rule::format_specifier {
                             Some(self.parse_format_specifier(fmt)?)
                         } else {
@@ -1275,8 +1266,8 @@ impl AstParser {
                 }
                 _ => {
                     return Err(self.create_error(
-                        &format!("Unexpected rule in string: {:?}", part.as_rule()),
-                        part.as_span(),
+                        &format!("Unexpected rule in string: {:?}", part_pair.as_rule()),
+                        part_pair.as_span(),
                     ))
                 }
             }
@@ -1290,13 +1281,16 @@ impl AstParser {
         Ok(Expression::InterpolatedString(parts))
     }
 
+     */
+
     fn parse_format_specifier(&self, pair: Pair<Rule>) -> Result<FormatSpecifier, Error<Rule>> {
+        let node = self.to_node(&pair);
         match pair.as_str() {
-            "?" => Ok(FormatSpecifier::Debug),
-            "x" => Ok(FormatSpecifier::LowerHex),
-            "X" => Ok(FormatSpecifier::UpperHex),
-            "b" => Ok(FormatSpecifier::Binary),
-            "f" => Ok(FormatSpecifier::Float),
+            "?" => Ok(FormatSpecifier::Debug(node)),
+            "x" => Ok(FormatSpecifier::LowerHex(node)),
+            "X" => Ok(FormatSpecifier::UpperHex(node)),
+            "b" => Ok(FormatSpecifier::Binary(node)),
+            "f" => Ok(FormatSpecifier::Float(node)),
             s if s.starts_with("..") => {
                 let precision: u32 = s[2..s.len() - 1]
                     .parse()
@@ -1314,12 +1308,12 @@ impl AstParser {
 
     fn parse_enum_literal(
         &self,
-        pair: Pair<Rule>,
+        pair: &Pair<Rule>,
     ) -> Result<swamp_script_ast::Literal, Error<Rule>> {
         let mut inner = Self::get_inner_pairs(&pair);
 
         // Parse enum type name
-        let enum_type = self.parse_qualified_type_identifier(inner.next().unwrap())?;
+        let enum_type = self.parse_qualified_type_identifier(&inner.next().unwrap())?;
 
         // Parse variant name
         let variant_pair = Self::expect_next(&mut inner, Rule::type_identifier)?;
@@ -1349,7 +1343,7 @@ impl AstParser {
                 Rule::tuple_fields => {
                     let mut expressions = vec![];
                     for field in Self::get_inner_pairs(&fields_pair) {
-                        let field_value = self.parse_expression(field)?;
+                        let field_value = self.parse_expression(&field)?;
                         expressions.push(field_value);
                     }
                     EnumLiteralData::Tuple(expressions)
@@ -1371,19 +1365,19 @@ impl AstParser {
         Ok(Literal::EnumVariant(enum_type, variant, outer_data))
     }
 
-    fn parse_if_expr(&self, pair: Pair<Rule>) -> Result<Expression, pest::error::Error<Rule>> {
+    fn parse_if_expr(&self, pair: &Pair<Rule>) -> Result<Expression, pest::error::Error<Rule>> {
         let mut inner = pair.into_inner();
 
         // Parse condition
-        let condition = self.parse_expression(inner.next().unwrap())?;
+        let condition = self.parse_expression(&inner.next().unwrap())?;
 
         // Parse then block
         let then_block = inner.next().unwrap();
-        let then_expr = self.parse_expression(then_block.into_inner().next().unwrap())?;
+        let then_expr = self.parse_expression(&then_block.into_inner().next().unwrap())?;
 
         // Parse else block if it exists
         let else_expr = if let Some(else_block) = inner.next() {
-            self.parse_expression(else_block.into_inner().next().unwrap())?
+            self.parse_expression(&else_block.into_inner().next().unwrap())?
         } else {
             Expression::Literal(Literal::Bool(false)) // Default else expression
         };
@@ -1395,21 +1389,14 @@ impl AstParser {
         ))
     }
 
-    fn parse_literal(&self, pair: Pair<Rule>) -> Result<Literal, Error<Rule>> {
+    fn parse_literal(&self, pair: &Pair<Rule>) -> Result<Literal, Error<Rule>> {
         let inner = self.next_inner_pair(pair)?;
 
         match inner.as_rule() {
             Rule::int_lit => Ok(Literal::Int(inner.as_str().parse().map_err(|_| {
                 self.create_error("Invalid integer literal", inner.as_span())
             })?)),
-            Rule::float_lit => {
-                let float: f32 = inner
-                    .as_str()
-                    .parse()
-                    .map_err(|_| self.create_error("Invalid float literal", inner.as_span()))?;
-
-                Ok(Literal::Float(Fp::from(float)))
-            }
+            Rule::float_lit => Ok(Literal::Float(self.to_node(&inner))),
             Rule::string_lit => {
                 let content = inner.as_str();
                 // Remove quotes and handle escapes
@@ -1428,7 +1415,7 @@ impl AstParser {
             Rule::tuple_lit => {
                 let mut expressions = Vec::new();
                 for expr_pair in Self::get_inner_pairs(&inner) {
-                    expressions.push(self.parse_expression(expr_pair)?);
+                    expressions.push(self.parse_expression(&expr_pair)?);
                 }
                 Ok(Literal::Tuple(expressions))
             }
@@ -1442,19 +1429,19 @@ impl AstParser {
     fn parse_array_literal(&self, pair: Pair<Rule>) -> Result<Expression, Error<Rule>> {
         let mut elements = Vec::new();
         for element in Self::get_inner_pairs(&pair) {
-            elements.push(self.parse_expression(element)?);
+            elements.push(self.parse_expression(&element)?);
         }
         Ok(Expression::Literal(Literal::Array(elements)))
     }
 
-    fn parse_map_literal(&self, pair: Pair<Rule>) -> Result<Expression, Error<Rule>> {
+    fn parse_map_literal(&self, pair: &Pair<Rule>) -> Result<Expression, Error<Rule>> {
         let mut entries = Vec::new();
 
         for entry_pair in Self::get_inner_pairs(&pair) {
             if entry_pair.as_rule() == Rule::map_entry {
                 let mut entry_inner = Self::get_inner_pairs(&entry_pair);
-                let key = self.parse_expression(Self::next_pair(&mut entry_inner)?)?;
-                let value = self.parse_expression(Self::next_pair(&mut entry_inner)?)?;
+                let key = self.parse_expression(&Self::next_pair(&mut entry_inner)?)?;
+                let value = self.parse_expression(&Self::next_pair(&mut entry_inner)?)?;
                 entries.push((key, value));
             }
         }
@@ -1462,7 +1449,7 @@ impl AstParser {
         Ok(Expression::Literal(Literal::Map(entries)))
     }
 
-    fn parse_function_call(&self, pair: Pair<Rule>) -> Result<Expression, Error<Rule>> {
+    fn parse_function_call(&self, pair: &Pair<Rule>) -> Result<Expression, Error<Rule>> {
         let mut inner = Self::get_inner_pairs(&pair);
 
         // Parse function name
@@ -1484,7 +1471,7 @@ impl AstParser {
                     arg_inner.next(); // consume mut keyword
                 }
 
-                let expr = self.parse_expression(Self::next_pair(&mut arg_inner)?)?;
+                let expr = self.parse_expression(&Self::next_pair(&mut arg_inner)?)?;
 
                 if has_mut {
                     match expr {
@@ -1513,12 +1500,12 @@ impl AstParser {
         }
 
         Ok(Expression::FunctionCall(
-            Box::new(Expression::VariableAccess(Variable::new(&func_name, false))),
+            Box::new(Expression::VariableAccess(Variable::new(func_name, false))),
             args,
         ))
     }
 
-    fn parse_static_call(&self, pair: Pair<Rule>) -> Result<Expression, Error<Rule>> {
+    fn parse_static_call(&self, pair: &Pair<Rule>) -> Result<Expression, Error<Rule>> {
         let mut inner = Self::get_inner_pairs(&pair);
 
         // Parse type name
@@ -1563,7 +1550,7 @@ impl AstParser {
                     arg_inner.next();
                 }
 
-                let expr = self.parse_expression(Self::next_pair(&mut arg_inner)?)?;
+                let expr = self.parse_expression(&Self::next_pair(&mut arg_inner)?)?;
                 args.push(expr);
             }
         }
@@ -1582,32 +1569,6 @@ impl AstParser {
             )),
         }
     }
-
-    /*
-    fn parse_qualified_identifier(
-        &self,
-        pair: Pair<Rule>,
-    ) -> Result<QualifiedTypeIdentifier, Error<Rule>> {
-        let mut inner_pairs = pair.clone().into_inner();
-
-        // Get module path if it exists
-        let module_path = inner_pairs
-            .next()
-            .filter(|p| p.as_rule() == Rule::module_path)
-            .map(|p| self.parse_module_path(p))
-            .unwrap_or_default();
-
-        // Get the type identifier
-        if let Some(type_pair) = inner_pairs.next() {
-            let type_identifier =
-                LocalTypeIdentifier::new(convert_from_pair(&type_pair), type_pair.as_str());
-            return Ok(QualifiedTypeIdentifier::new(type_identifier, module_path));
-        }
-
-        Err(self.create_error("Expected type identifier", pair.as_span()))
-    }
-
-     */
 
     fn parse_type(&self, pair: Pair<Rule>) -> Result<Type, pest::error::Error<Rule>> {
         match pair.as_rule() {
@@ -1647,13 +1608,13 @@ impl AstParser {
                 }
             }
             Rule::optional_type => {
-                let inner = self.next_inner_pair(pair)?;
+                let inner = self.next_inner_pair(&pair)?;
                 let base_type = self.parse_type(inner)?;
                 Ok(Type::Optional(Box::new(base_type)))
             }
             Rule::built_in_type => self.parse_type_from_str(&pair),
             Rule::qualified_type_identifier => {
-                let qualified_identifier = self.parse_qualified_type_identifier(pair)?;
+                let qualified_identifier = self.parse_qualified_type_identifier(&pair)?;
                 Ok(Type::TypeReference(qualified_identifier))
             }
             Rule::tuple_type => {
@@ -1672,7 +1633,7 @@ impl AstParser {
             }
 
             Rule::array_type => {
-                let inner = self.next_inner_pair(pair)?;
+                let inner = self.next_inner_pair(&pair)?;
                 let element_type = self.parse_type(inner)?;
                 Ok(Type::Array(Box::new(element_type)))
             }
@@ -1687,22 +1648,20 @@ impl AstParser {
     }
 
     fn parse_type_from_str(&self, pair: &Pair<Rule>) -> Result<Type, pest::error::Error<Rule>> {
+        let node = self.to_node(pair);
         match pair.as_str() {
-            "Int" => Ok(Type::Int),
-            "Float" => Ok(Type::Float),
-            "String" => Ok(Type::String),
-            "Bool" => Ok(Type::Bool),
-            _ => Ok(Type::Struct(QualifiedTypeIdentifier::new(
-                LocalTypeIdentifier::new(convert_from_pair(&pair), pair.as_str()),
-                [].to_vec(),
-            ))),
+            "Int" => Ok(Type::Int(node)),
+            "Float" => Ok(Type::Float(node)),
+            "String" => Ok(Type::String(node)),
+            "Bool" => Ok(Type::Bool(node)),
+            _ => Ok(Type::Struct(self.expect_qualified_type_identifier(pair)?)),
         }
     }
 
     #[allow(unused)]
     fn parse_local_type_identifier(
         &self,
-        pair: Pair<Rule>,
+        pair: &Pair<Rule>,
     ) -> Result<LocalTypeIdentifier, Error<Rule>> {
         if pair.as_rule() != Rule::type_identifier {
             return Err(self.create_error(
@@ -1710,10 +1669,7 @@ impl AstParser {
                 pair.as_span(),
             ));
         }
-        Ok(LocalTypeIdentifier::new(
-            convert_from_pair(&pair),
-            pair.as_str(),
-        ))
+        Ok(LocalTypeIdentifier::new(self.to_node(&pair), pair.as_str()))
     }
 
     fn parse_local_type_identifier_next<'a>(
@@ -1733,7 +1689,7 @@ impl AstParser {
         ))
     }
 
-    fn parse_type_alias(&self, pair: Pair<Rule>) -> Result<Definition, Error<Rule>> {
+    fn parse_type_alias(&self, pair: &Pair<Rule>) -> Result<Definition, Error<Rule>> {
         let mut inner = Self::get_inner_pairs(&pair);
 
         // Parse the alias name
@@ -1744,7 +1700,7 @@ impl AstParser {
                 name_pair.as_span(),
             ));
         }
-        let name = LocalTypeIdentifier::new(convert_from_pair(&name_pair), name_pair.as_str());
+        let name = self.expect_local_type_identifier(&mut inner)?;
 
         // Parse the target type
         let target_type = self.parse_type(Self::next_pair(&mut inner)?)?;
@@ -1752,7 +1708,7 @@ impl AstParser {
         Ok(Definition::TypeAlias(name, target_type))
     }
 
-    fn parse_enum_def(&self, pair: Pair<Rule>) -> Result<Definition, Error<Rule>> {
+    fn parse_enum_def(&self, pair: &Pair<Rule>) -> Result<Definition, Error<Rule>> {
         let mut inner = Self::get_inner_pairs(&pair);
 
         // Parse enum name
@@ -1765,7 +1721,7 @@ impl AstParser {
                 for variant_pair in Self::get_inner_pairs(&variants_pair) {
                     if variant_pair.as_rule() == Rule::enum_variant {
                         let (ident, variant) =
-                            self.parse_enum_variant(self.next_inner_pair(variant_pair)?)?;
+                            self.parse_enum_variant(&self.next_inner_pair(&variant_pair)?)?;
                         variants
                             .insert(ident, variant)
                             .expect("duplicate enum variant"); // TODO: Should return as Err
@@ -1779,11 +1735,11 @@ impl AstParser {
 
     fn parse_enum_variant(
         &self,
-        pair: Pair<Rule>,
+        pair: &Pair<Rule>,
     ) -> Result<(LocalTypeIdentifier, EnumVariant), Error<Rule>> {
         match pair.as_rule() {
             Rule::simple_variant => {
-                let name = self.next_inner_pair(pair.clone())?;
+                let name = self.next_inner_pair(&pair)?;
                 Ok((
                     LocalTypeIdentifier::new(convert_from_pair(&pair), name.as_str()),
                     EnumVariant::Simple,
@@ -1793,7 +1749,7 @@ impl AstParser {
                 let mut inner = Self::get_inner_pairs(&pair);
                 let name = LocalTypeIdentifier::new(
                     convert_from_pair(&pair),
-                    &Self::expect_type_identifier(&mut inner)?,
+                    &Self::expect_local_type_identifier(&mut inner)?,
                 );
 
                 let mut types = Vec::new();
@@ -1807,7 +1763,7 @@ impl AstParser {
                 let mut inner = Self::get_inner_pairs(&pair);
                 let name = LocalTypeIdentifier::new(
                     convert_from_pair(&pair),
-                    &Self::expect_type_identifier(&mut inner)?,
+                    &Self::expect_local_type_identifier(&mut inner)?,
                 );
 
                 let mut fields = SeqMap::new();
@@ -1833,9 +1789,9 @@ impl AstParser {
         }
     }
 
-    fn parse_match_expr(&self, pair: Pair<Rule>) -> Result<Expression, Error<Rule>> {
+    fn parse_match_expr(&self, pair: &Pair<Rule>) -> Result<Expression, Error<Rule>> {
         let mut inner = Self::get_inner_pairs(&pair);
-        let value = self.parse_expression(Self::next_pair(&mut inner)?)?;
+        let value = self.parse_expression(&Self::next_pair(&mut inner)?)?;
         let arms_pair = Self::next_pair(&mut inner)?;
         let mut arms = Vec::new();
 
@@ -1852,7 +1808,7 @@ impl AstParser {
                         for stmt in Self::get_inner_pairs(&block) {
                             match stmt.as_rule() {
                                 Rule::statement => {
-                                    statements.push(self.parse_statement_to_control(stmt)?);
+                                    statements.push(self.parse_statement_to_control(&stmt)?);
                                 }
                                 Rule::expression => {
                                     //last_expr = Some(self.parse_expression(stmt)?);
@@ -1871,7 +1827,7 @@ impl AstParser {
 
                         Expression::Block(statements)
                     }
-                    expr => self.parse_expression(expr)?,
+                    expr => self.parse_expression(&expr)?,
                 };
 
                 arms.push(MatchArm {
@@ -1891,11 +1847,11 @@ impl AstParser {
         Ok(Expression::Match(Box::new(value), arms))
     }
 
-    fn parse_match_pattern(&self, pair: Pair<Rule>) -> Result<Pattern, Error<Rule>> {
+    fn parse_match_pattern(&self, pair: &Pair<Rule>) -> Result<Pattern, Error<Rule>> {
         match pair.as_rule() {
             Rule::match_pattern => {
-                let inner = self.next_inner_pair(pair)?;
-                self.parse_match_pattern(inner)
+                let inner = self.next_inner_pair(&pair)?;
+                self.parse_match_pattern(&inner)
             }
             Rule::pattern_list => {
                 // Single identifier pattern
@@ -1924,10 +1880,7 @@ impl AstParser {
             }
             Rule::enum_pattern => {
                 let mut inner = Self::get_inner_pairs(&pair);
-                let variant = LocalTypeIdentifier::new(
-                    convert_from_pair(&pair),
-                    &Self::expect_type_identifier(&mut inner)?,
-                );
+                let variant = self.expect_local_type_identifier(&mut inner)?;
 
                 if let Some(pattern_list) = inner.next() {
                     let mut elements = Vec::new();
@@ -1944,8 +1897,9 @@ impl AstParser {
                                 }
                             }
                             Rule::expression => {
-                                elements
-                                    .push(PatternElement::Expression(self.parse_expression(item)?));
+                                elements.push(PatternElement::Expression(
+                                    self.parse_expression(&item)?,
+                                ));
                             }
                             _ => {
                                 return Err(self.create_error(
@@ -1967,29 +1921,24 @@ impl AstParser {
                 let lit = self.parse_literal(pair)?;
                 Ok(Pattern::Literal(lit))
             }
-            Rule::wildcard_pattern => Ok(Pattern::PatternList(vec![PatternElement::Wildcard])),
+            Rule::wildcard_pattern => Ok(Pattern::PatternList(vec![PatternElement::Wildcard(
+                self.to_node(&pair),
+            )])),
             _ => Err(self.create_error(
                 &format!("Unknown match pattern type: {:?}", pair.as_rule()),
                 pair.as_span(),
             )),
         }
     }
-}
 
-fn convert_from_pair(pair: &Pair<Rule>) -> Node {
-    let pair_span = pair.as_span();
-    let span = Span {
-        start: Position {
-            offset: pair_span.start(),
-            line: pair_span.start_pos().line_col().0,
-            column: pair_span.start_pos().line_col().1,
-        },
-        end: Position {
-            offset: pair_span.end(),
-            line: pair_span.end_pos().line_col().0,
-            column: pair_span.end_pos().line_col().1,
-        },
-    };
+    fn to_node(&self, pair: &Pair<Rule>) -> Node {
+        let pair_span = pair.as_span();
+        let span = Span {
+            file_id: self.current_file_id,
+            offset: pair_span.start() as u32,
+            length: (pair_span.end() - pair_span.start() + 1) as u16,
+        };
 
-    Node { span }
+        Node { span }
+    }
 }

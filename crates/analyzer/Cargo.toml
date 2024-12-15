@@ -12,3 +12,4 @@ seq-map = "0.0.13"
 
 swamp-script-semantic = { path = "../semantic", version = "0.0.7" }
 swamp-script-ast = { path = "../ast", version = "0.0.7" }
+swamp-script-source-map = { path = "../source-map", version = "0.0.7" }

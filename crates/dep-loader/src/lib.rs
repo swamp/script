@@ -13,6 +13,7 @@ use swamp_script_ast::prelude::*;
 use swamp_script_ast::Function;
 use swamp_script_parser::{AstParser, Rule};
 use tracing::{debug, info, trace};
+use swamp_script_source_map::SourceMap;
 
 pub struct ParseRoot {
     pub base_path: PathBuf,
@@ -83,36 +84,17 @@ impl ParseModule {
 #[derive(Debug)]
 pub struct RelativePath(pub String);
 
-fn to_relative_path(path: &ModulePath) -> RelativePath {
-    RelativePath(
-        path.0
-            .iter()
-            .map(|local_type_identifier| local_type_identifier.as_str())
-            .collect::<Vec<_>>()
-            .join("/"),
-    )
-}
+
 
 impl ParseRoot {
     pub fn new(base_path: PathBuf) -> Self {
         Self { base_path }
     }
 
-    fn to_file_system_path(&self, path: RelativePath) -> PathBuf {
-        info!("converting from {path:?}");
-        let mut path_buf = self.base_path.to_path_buf();
 
-        path_buf.push(path.0);
-        path_buf.set_extension("swamp");
+    pub fn parse(&self, contents: String, file_id: u16) -> Result<ParseModule, ParseRootError> {
 
-        info!("converted to {path_buf:?}");
-        path_buf
-    }
-    pub fn parse(&self, module_path: &ModulePath) -> Result<ParseModule, ParseRootError> {
-        let path_buf = self.to_file_system_path(to_relative_path(module_path));
-        let contents = fs::read_to_string(path_buf)?;
-
-        let parser = AstParser::new();
+        let parser = AstParser::new(file_id);
 
         let ast_program = parser.parse_script(&*contents)?;
 
@@ -191,6 +173,7 @@ impl DependencyParser {
         &mut self,
         parse_root: ParseRoot,
         module_path: ModulePath,
+        source_map: &mut SourceMap,
     ) -> Result<(), DependencyError> {
         let mut to_parse = vec![module_path];
 
@@ -204,6 +187,7 @@ impl DependencyParser {
                     parsed_module
                 } else {
                     info!("a module we haven't seen before: {path:?}");
+                    source_map.load(path);
                     let parse_module = parse_root.parse(&path)?;
                     info!("module parsed: {parse_module:?}");
 
