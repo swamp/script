@@ -264,7 +264,7 @@ print(x)
 #[test_log::test]
 fn call_mut_2() {
     check_fail(
-        r#"
+        r"
     fn increment(mut x: Int) -> Int {
         x = x + 1
         x
@@ -273,8 +273,8 @@ fn call_mut_2() {
     increment(mut x)
     print(x)
 
-    "#,
-        "ResolveError(VariableIsNotMutable(x))",
+    ",
+        r#"ResolveError(VariableIsNotMutable(<102:1>))"#,
     );
 }
 
@@ -360,7 +360,7 @@ fn enum_match() {
 #[test_log::test]
 fn enum_instantiation_simple() {
     check(
-        r#"
+        r"
         enum Result {
             Ok,
             Err
@@ -368,7 +368,7 @@ fn enum_instantiation_simple() {
 
         result = Result::Ok
         print(result)
-        "#,
+        ",
         "Result::Ok",
     );
 }
@@ -577,19 +577,19 @@ fn boolean_operations() {
 #[test_log::test]
 fn arithmetic_precedence() {
     check(
-        r#"
+        r"
         mut result = 2 + 3 * 4
         print(result)
         result = (2 + 3) * 4
         print(result)
         result = 10 - 2 * 3
         print(result)
-        "#,
-        r#"
+        ",
+        r"
         14
         20
         4
-        "#,
+        ",
     );
 }
 
@@ -948,7 +948,7 @@ fn undefined_variable() {
         r#"
         print(undefined_variable)
         "#,
-        "ResolveError(UnknownVariable(undefined_variable))",
+        "ResolveError(UnknownVariable(<15:18>))",
     );
 }
 

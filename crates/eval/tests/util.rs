@@ -2,28 +2,28 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use std::cell::RefCell;
-use std::path::PathBuf;
+use std::path::Path;
 use std::rc::Rc;
-use swamp_script_analyzer::ResolveError;
-use swamp_script_ast::{Parameter, Type, Variable};
+use swamp_script_analyzer::lookup::NameLookup;
+use swamp_script_analyzer::{ResolveError, Resolver};
 use swamp_script_core::prelude::Value;
-use swamp_script_dep_loader::{
-    create_parsed_modules, parse_dependant_modules_and_resolve, DepLoaderError,
-};
 use swamp_script_eval::prelude::ExecuteError;
-use swamp_script_eval::{eval_module, ExternalFunctions};
-use swamp_script_eval_loader::resolve_program;
-use swamp_script_parser::Rule;
-use swamp_script_semantic::{ExternalFunctionId, ModulePath, ResolvedProgram};
-use swamp_script_std::create_std_module;
+use swamp_script_eval::{eval_module, ExternalFunctions, SourceMapWrapper};
+use swamp_script_parser::AstParser;
+use swamp_script_semantic::modules::ResolvedModules;
+use swamp_script_semantic::prelude::ResolvedModuleNamespaceRef;
+use swamp_script_semantic::{
+    ExternalFunctionId, ResolvedExternalFunctionDefinition, ResolvedFunctionSignature,
+    ResolvedNode, ResolvedParameter, ResolvedProgramState, ResolvedProgramTypes, ResolvedStatement,
+    ResolvedType, Span,
+};
+use swamp_script_source_map::SourceMap;
 
 #[derive(Debug)]
 #[allow(dead_code)]
 pub enum EvalTestError {
     ExecuteError(ExecuteError),
     ResolveError(ResolveError),
-    DepLoaderError(DepLoaderError),
     String(String),
 }
 
@@ -39,67 +39,81 @@ impl From<ExecuteError> for EvalTestError {
     }
 }
 
-impl From<pest::error::Error<Rule>> for EvalTestError {
-    fn from(e: pest::error::Error<Rule>) -> Self {
-        Self::String(e.to_string())
-    }
-}
+fn internal_compile(
+    script: &str,
+    target_namespace: &ResolvedModuleNamespaceRef,
+    modules: &ResolvedModules,
+) -> Result<(Vec<ResolvedStatement>, SourceMap), ResolveError> {
+    let parser = AstParser {};
 
-impl From<DepLoaderError> for EvalTestError {
-    fn from(e: DepLoaderError) -> Self {
-        Self::DepLoaderError(e)
+    let program = parser.parse_module(script).expect("Failed to parse script");
+
+    let types = ResolvedProgramTypes::new();
+    let mut state = ResolvedProgramState::new();
+    // let modules = ResolvedModules::new();
+
+    let mut source_map = SourceMap::new(Path::new("tests/fixtures/"));
+    let file_id = 0xffff;
+
+    source_map.add_manual(file_id, Path::new("some_path/main"), script);
+    // let resolved_path_str = vec!["test".to_string()];
+    // let own_module = modules.add_empty_module(&resolved_path_str);
+
+    let mut name_lookup = NameLookup::new(target_namespace.clone(), &modules);
+
+    let mut resolver = Resolver::new(&types, &mut state, &mut name_lookup, &source_map, file_id);
+
+    //let mut resolved_definitions = Vec::new();
+    for definition in &program.definitions {
+        resolver.resolve_definition(definition)?;
+        //  resolved_definitions.push(resolved_definition);
     }
+
+    let mut resolved_statements = Vec::new();
+    for statement in &program.statements {
+        let resolved_statement = resolver.resolve_statement(statement)?;
+
+        resolved_statements.push(resolved_statement);
+    }
+
+    Ok((resolved_statements, source_map))
 }
 
 fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError> {
-    // Analyze
-    let mut dependency_parser = create_parsed_modules(script, PathBuf::new())?;
-    let root_path = &ModulePath(vec!["test".to_string()]);
+    let mut modules = ResolvedModules::new();
+    let resolved_path_str = vec!["test".to_string()];
+    let main_module = modules.add_empty_module(&resolved_path_str);
 
-    let main_module = dependency_parser
-        .get_parsed_module_mut(root_path)
-        .expect("should exist");
+    let external_print = ResolvedExternalFunctionDefinition {
+        name: ResolvedNode {
+            span: Span::default(),
+        },
+        signature: ResolvedFunctionSignature {
+            first_parameter_is_self: false,
+            parameters: vec![ResolvedParameter {
+                name: ResolvedNode {
+                    span: Span::default(),
+                },
+                resolved_type: ResolvedType::Any,
+                is_mutable: None,
+            }],
+            return_type: ResolvedType::Any,
+        },
+        id: 1,
+    };
 
-    main_module.declare_external_function(
-        "print".to_string(),
-        vec![Parameter {
-            variable: Variable {
-                name: "data".to_string(),
-                is_mutable: false,
-            },
-            param_type: Type::Any,
-            is_mutable: false,
-            is_self: false,
-        }],
-        Type::Unit,
-    );
+    main_module
+        .borrow_mut()
+        .namespace
+        .borrow_mut()
+        .add_external_function_declaration("print", external_print)
+        .expect("TODO: panic message");
 
-    let module_paths_in_order = parse_dependant_modules_and_resolve(
-        PathBuf::new(),
-        root_path.clone(),
-        &mut dependency_parser,
-    )?;
+    let (statements, source_map) =
+        internal_compile(script, &main_module.borrow_mut().namespace, &modules)?;
+    main_module.borrow_mut().statements = statements;
 
-    let mut resolved_program = ResolvedProgram::new();
-
-    let std_module_ref = Rc::new(RefCell::new(create_std_module()));
-    resolved_program
-        .modules
-        .add_module(std_module_ref)
-        .expect("can not find std");
-
-    resolve_program(
-        &resolved_program.types,
-        &mut resolved_program.state,
-        &mut resolved_program.modules,
-        &module_paths_in_order,
-        &dependency_parser,
-    )?;
-
-    let resolved_main_module = resolved_program
-        .modules
-        .get(&ModulePath(vec!["test".to_string()]))
-        .expect("can not find module");
+    let source_map_wrapper = Rc::new(SourceMapWrapper { source_map });
 
     // Run
     let mut externals = ExternalFunctions::new();
@@ -108,9 +122,15 @@ fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError>
     let mut context = TestContext {
         secret: 42,
         output: vec![],
+        source_map_wrapper: source_map_wrapper.clone(),
     };
 
-    let value = eval_module(&externals, resolved_main_module, &mut context)?;
+    let value = eval_module(
+        &externals,
+        &main_module.borrow().statements,
+        source_map_wrapper.as_ref(),
+        &mut context,
+    )?;
 
     Ok((value, context.output))
 }
@@ -118,6 +138,7 @@ fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError>
 pub struct TestContext {
     pub secret: i32,
     pub output: Vec<String>,
+    pub source_map_wrapper: Rc<SourceMapWrapper>,
 }
 
 fn register_print(
@@ -129,7 +150,7 @@ fn register_print(
             if let Some(value) = args.first() {
                 let display_value = value.convert_to_string_if_needed();
                 assert_eq!(context.secret, 42);
-                context.output.push(display_value.clone());
+                context.output.push(display_value);
                 Ok(Value::Unit)
             } else {
                 Err("print requires at least one argument".to_string())?
@@ -145,14 +166,13 @@ pub fn check(script: &str, expected_result: &str) {
     let actual_lines: Vec<&str> = output.iter().map(|s| s.trim()).collect();
     let expected_lines: Vec<&str> = expected_result
         .lines()
-        .map(|s| s.trim())
+        .map(str::trim)
         .filter(|s| !s.is_empty())
         .collect();
 
     assert_eq!(
         actual_lines, expected_lines,
-        "\nExpected:\n{:#?}\n\nGot:\n{:#?}\n",
-        expected_lines, actual_lines
+        "\nExpected:\n{expected_lines:#?}\n\nGot:\n{actual_lines:#?}\n",
     );
 }
 
@@ -170,16 +190,23 @@ pub fn check_fail(script: &str, expected_err: &str) {
 
 #[allow(dead_code)] // TODO: This should not be needed since it is under tests/
 pub fn check_value(script: &str, expected_value: Value) {
-    let (value_with_signal, _output) = compile_and_eval(script).expect("eval script failed");
-    let value: Value = value_with_signal.try_into().unwrap();
+    let (value, _output) = compile_and_eval(script).expect("eval script failed");
 
     assert_eq!(value, expected_value);
 }
 
 #[allow(dead_code)] // TODO: This should not be needed since it is under tests/
 pub fn eval(script: &str) -> Value {
-    let (value_with_signal, _output) = compile_and_eval(script).expect("eval script failed");
-    let value: Value = value_with_signal.try_into().unwrap();
+    let (value, _output) = compile_and_eval(script).expect("eval script failed");
 
     value
+}
+
+#[allow(dead_code)] // TODO: This should not be needed since it is under tests/
+pub fn eval_string(script: &str, expected_string: &str) {
+    let (value, _output) = compile_and_eval(script).expect("eval script failed");
+
+    let value_string = value.to_string();
+
+    assert_eq!(value_string, expected_string);
 }

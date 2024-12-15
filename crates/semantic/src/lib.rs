@@ -2,51 +2,192 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
+pub mod modules;
 pub mod ns;
 pub mod prelude;
 
-use crate::ns::{LocalTypeName, ResolvedModuleNamespace, SemanticError};
 pub use fixed32::Fp;
-use seq_fmt::{comma, comma_tuple, fmt_nl};
-use seq_map::SeqMap;
+use seq_map::{SeqMap, SeqMapError};
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
 use std::rc::Rc;
-pub use swamp_script_ast::{
-    AnonymousStruct, BinaryOperator, CompoundOperator, Expression, FormatSpecifier, IdentifierName,
-    ImplMember, LocalIdentifier, LocalTypeIdentifier, MatchArm, ModulePath, Node, Parameter,
-    Position, PostfixOperator, PrecisionType, StringConst, StructType, UnaryOperator, Variable,
-};
 
-#[derive(Debug, Clone)]
-pub struct ResolvedParameter {
-    pub name: String,
-    pub resolved_type: ResolvedType,
-    pub ast_parameter: Parameter,
-    pub is_mutable: bool,
+#[derive(Clone, Eq, PartialEq, Default)]
+pub struct ResolvedNode {
+    pub span: Span,
 }
 
-impl Display for ResolvedParameter {
+impl Spanned for ResolvedNode {
+    fn span(&self) -> Span {
+        self.span.clone()
+    }
+}
+
+impl Debug for ResolvedNode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        if self.span.file_id == 0xffff {
+            write!(f, "<{}:{}>", self.span.offset, self.span.length)
+        } else {
+            write!(
+                f,
+                "<{}:{} ({})>",
+                self.span.offset, self.span.length, self.span.file_id
+            )
+        }
+    }
+}
+
+pub type FileId = u16;
+
+#[derive(PartialEq, Eq, Hash, Default, Clone)]
+pub struct Span {
+    pub file_id: FileId,
+    pub offset: u32,
+    pub length: u16,
+}
+
+impl Span {
+    pub fn merge(&self, other: &Span) -> Span {
+        if other.file_id == 0xffff {
+            return self.clone();
+        }
+        assert_eq!(
+            self.file_id, other.file_id,
+            "file_id must be the same when merging"
+        );
+        if self.offset <= other.offset {
+            // self starts first (or same position)
+            let end = other.offset + other.length as u32;
+            let my_end = self.offset + self.length as u32;
+            let final_end = end.max(my_end);
+
+            Span {
+                offset: self.offset,
+                length: (final_end - self.offset) as u16,
+                file_id: self.file_id,
+            }
+        } else {
+            // other starts first
+            other.merge(self) // reuse the logic by swap the arguments around
+        }
+    }
+
+    pub fn merge_opt<S: Spanned>(&self, other: Option<&S>) -> Span {
+        match other {
+            Some(spanned) => self.merge(&spanned.span()),
+            None => self.clone(),
+        }
+    }
+
+    pub fn merge_spanned<S: Spanned>(&self, other: &S) -> Span {
+        self.merge(&other.span())
+    }
+
+    pub fn merge_opt_span(&self, other: Option<Span>) -> Span {
+        match other {
+            Some(span) => self.merge(&span),
+            None => self.clone(),
+        }
+    }
+
+    pub fn dummy() -> Self {
+        Span {
+            offset: 0,
+            length: 0,
+            file_id: 0xffff,
+        }
+    }
+
+    // Helper method to get the end position
+    pub fn end(&self) -> u32 {
+        self.offset + self.length as u32
+    }
+
+    // Merge spans from an iterator of Spanned items
+    pub fn merge_all<'a, I, S>(iter: I) -> Option<Span>
+    where
+        I: IntoIterator<Item = &'a S>,
+        S: Spanned + 'a,
+    {
+        iter.into_iter()
+            .map(|s| s.span())
+            .reduce(|acc, span| acc.merge(&span))
+    }
+
+    // Merge spans from an iterator with a base span
+    pub fn merge_iter<'a, I, S>(&self, iter: I) -> Span
+    where
+        I: IntoIterator<Item = &'a S>,
+        S: Spanned + 'a,
+    {
+        iter.into_iter()
+            .fold(self.clone(), |acc, item| acc.merge(&item.span()))
+    }
+
+    // Merge optional spans from an iterator
+    pub fn merge_opt_iter<'a, I, S>(&self, iter: I) -> Span
+    where
+        I: IntoIterator<Item = &'a Option<S>>,
+        S: Spanned + 'a,
+    {
+        iter.into_iter()
+            .filter_map(|opt| opt.as_ref())
+            .fold(self.clone(), |acc, item| acc.merge(&item.span()))
+    }
+}
+
+impl Debug for Span {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}: {}", self.name, self.resolved_type)
+        write!(f, "<{}:{} ({})>", self.offset, self.length, self.file_id)
     }
 }
 
 #[derive(Debug, Clone)]
+pub struct ResolvedParameter {
+    pub name: ResolvedNode,
+    pub resolved_type: ResolvedType,
+    pub is_mutable: Option<ResolvedNode>,
+}
+
+impl ResolvedParameter {
+    #[inline]
+    #[must_use]
+    pub const fn is_mutable(&self) -> bool {
+        self.is_mutable.is_some()
+    }
+}
+
+#[derive(Debug)]
 pub struct ResolvedFunctionSignature {
+    pub first_parameter_is_self: bool,
     pub parameters: Vec<ResolvedParameter>,
     pub return_type: ResolvedType,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ResolvedRustType {
     pub type_name: String, // To identify the specific Rust type
     pub number: u32,       // For type comparison
 }
+
+impl Spanned for ResolvedRustType {
+    fn span(&self) -> Span {
+        Span::dummy()
+    }
+}
+
 pub type ResolvedRustTypeRef = Rc<ResolvedRustType>;
+
+#[derive(Debug, Clone)]
+pub struct LocalTypeName(pub ResolvedNode);
+
+impl Spanned for LocalTypeName {
+    fn span(&self) -> Span {
+        todo!()
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum ResolvedType {
@@ -78,6 +219,65 @@ pub enum ResolvedType {
     RustType(ResolvedRustTypeRef),
 
     Any,
+}
+
+impl Spanned for ResolvedType {
+    fn span(&self) -> Span {
+        match self {
+            // Primitives
+            Self::Int(_type_ref) => Span::dummy(),
+            Self::Float(_type_ref) => Span::dummy(),
+            Self::String(_type_ref) => todo!(),
+            Self::Bool(_type_ref) => todo!(),
+            Self::Unit(_type_ref) => todo!(),
+
+            // Compound Types
+            Self::Array(_type_ref) => todo!(),
+            Self::Tuple(_type_ref) => todo!(),
+            Self::Struct(_type_ref) => todo!(),
+            Self::Map(_type_ref) => todo!(),
+
+            // Generic Types
+            Self::Generic(base_type, type_params) => base_type.span().merge_iter(type_params),
+
+            // Enum Types
+            Self::Enum(_type_ref) => todo!(),
+            Self::EnumVariant(_type_ref) => todo!(),
+
+            // Function Types
+            Self::FunctionInternal(_func_ref) => todo!(),
+            Self::FunctionExternal(_func_ref) => todo!(),
+
+            // Range Type
+            Self::ExclusiveRange(_type_ref) => todo!(),
+
+            // Type Alias
+            Self::Alias(type_name, actual_type) => type_name.span().merge(&actual_type.span()),
+
+            // Optional Type
+            Self::Optional(inner_type) => inner_type.span(),
+
+            // Rust Type
+            Self::RustType(type_ref) => type_ref.span(),
+
+            // Any Type (might want to use a dummy span or specific location)
+            Self::Any => Span::dummy(),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum SemanticError {
+    CouldNotInsertStruct,
+    DuplicateTypeAlias(String),
+    CanOnlyUseStructForMemberFunctions,
+    ResolveNotStruct,
+    DuplicateStructName(String),
+    DuplicateEnumType(String),
+    DuplicateEnumVariantType(String, String),
+    DuplicateFieldName(String),
+    DuplicateExternalFunction(String),
+    DuplicateRustType(String),
 }
 
 impl ResolvedType {
@@ -138,104 +338,50 @@ impl ResolvedType {
             _ => false,
         }
     }
-
-    pub fn display_name(&self) -> String {
-        match self {
-            Self::Alias(name, _) => name.0.clone(),
-            Self::Struct(struct_ref) => struct_ref.borrow().name.text.clone(),
-            Self::Int(_) => "Int".to_string(),
-            Self::Float(_) => "Float".to_string(),
-            Self::String(_) => "String".to_string(),
-            Self::Bool(_) => "Bool".to_string(),
-            Self::Unit(_) => "Unit".to_string(),
-            Self::Array(array_type) => {
-                format!("Array<{}>", array_type.item_type.display_name())
-            }
-            Self::Map(map_type_ref) => {
-                format!(
-                    "[{}:{}]",
-                    map_type_ref.key_type.display_name(),
-                    map_type_ref.value_type.display_name()
-                )
-            }
-            Self::Tuple(tuple_type) => format!(
-                "({})",
-                tuple_type
-                    .0
-                    .iter()
-                    .map(Self::display_name)
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-            Self::Enum(enum_type) => enum_type.name.text.clone(),
-            Self::EnumVariant(variant_type_ref) => format!("{variant_type_ref}"),
-            Self::FunctionInternal(internal_function) => format!(
-                "fn {} {:?}",
-                internal_function.name, internal_function.signature
-            ),
-            Self::FunctionExternal(external_function) => {
-                format!("ext_fn {} {}", external_function.name, external_function.id)
-            }
-            Self::ExclusiveRange(_exclusive_range) => "exclusive_range".to_string(),
-            Self::Any => "Any".to_string(),
-            Self::Generic(resolved_type, vec) => format!("{resolved_type}<{}>", comma(&vec)),
-            Self::Optional(inner_type) => format!("{inner_type}?"),
-            Self::RustType(rust_type_ref) => rust_type_ref.type_name.clone(),
-        }
-    }
 }
-
-// impl PartialEq for ResolvedType {
-//     fn eq(&self, other: &Self) -> bool {
-//         match (self, other) {
-//             (Self::Int(_), Self::Int(_)) => true,
-//             (Self::Float(_), Self::Float(_)) => true,
-//             (Self::String(_), Self::String(_)) => true,
-//             (Self::Bool(_), Self::Bool(_)) => true,
-//             (Self::Unit(_), Self::Unit(_)) => true,
-//             (Self::Array(array_ref), Self::Array(array_ref2)) => array_ref == array_ref2,
-//             _ => false,
-//         }
-//     }
-//}
 
 fn compare_struct_types(a: &ResolvedStructTypeRef, b: &ResolvedStructTypeRef) -> bool {
     let struct_a = a.borrow();
     let struct_b = b.borrow();
 
-    if struct_a.name != struct_b.name {
+    if struct_a.number != struct_b.number {
         return false;
-    }
-
-    if struct_a.fields.len() != struct_b.fields.len() {
-        return false;
-    }
-
-    for (a_field, b_field) in struct_a.fields.values().zip(struct_b.fields.values()) {
-        if !a_field.same_type(b_field) {
-            return false;
-        }
     }
 
     true
 }
 
+impl ResolvedNode {
+    pub fn new_unknown() -> Self {
+        Self {
+            span: Span {
+                file_id: 0xffff,
+                offset: 0,
+                length: 0,
+            },
+        }
+    }
+}
+
 #[derive(Debug)]
+pub struct ResolvedLocalIdentifier(pub ResolvedNode);
+
+#[derive()]
 pub struct ResolvedInternalFunctionDefinition {
     pub statements: Vec<ResolvedStatement>,
-    pub name: LocalIdentifier,
+    pub name: ResolvedLocalIdentifier,
     pub signature: ResolvedFunctionSignature,
 }
 
-impl Display for ResolvedInternalFunctionDefinition {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "(fn_def {}({}) -> {})",
-            self.name,
-            comma(&self.signature.parameters),
-            self.signature.return_type
-        )
+impl Spanned for ResolvedInternalFunctionDefinition {
+    fn span(&self) -> Span {
+        self.name.0.span.clone()
+    }
+}
+
+impl Debug for ResolvedInternalFunctionDefinition {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "InternalFuncDef")
     }
 }
 
@@ -245,92 +391,39 @@ pub type ExternalFunctionId = u32;
 
 #[derive(Debug)]
 pub struct ResolvedExternalFunctionDefinition {
-    pub name: LocalIdentifier,
+    pub name: ResolvedNode,
     pub signature: ResolvedFunctionSignature,
     pub id: ExternalFunctionId,
 }
 
-impl Display for crate::ResolvedExternalFunctionDefinition {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "(ext_fn_def {}({}) -> {})",
-            self.name,
-            comma(&self.signature.parameters),
-            self.signature.return_type
-        )
+impl Spanned for ResolvedExternalFunctionDefinition {
+    fn span(&self) -> Span {
+        self.name.span.clone()
     }
 }
 
 pub type ResolvedExternalFunctionDefinitionRef = Rc<crate::ResolvedExternalFunctionDefinition>;
 
-impl Display for ResolvedType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Int(_int_type) => write!(f, "Int"),
-            Self::Float(_) => write!(f, "Float"),
-            Self::String(_string_type_ref) => write!(f, "String"),
-            Self::Bool(_) => write!(f, "Bool"),
-            Self::Unit(_) => write!(f, "Unit"),
-            Self::Array(array_type_ref) => write!(f, "{array_type_ref}"),
-            Self::Map(map_type_ref) => write!(f, "{map_type_ref}"),
-            Self::Tuple(_) => write!(f, "Tuple"),
-            Self::Struct(struct_type) => {
-                write!(f, "{}", struct_type.borrow())
-            }
-            Self::Enum(enum_ref) => write!(f, "{enum_ref}"),
-            Self::EnumVariant(_) => todo!(),
-            Self::ExclusiveRange(range_type) => write!(f, "{range_type:?}"),
-            Self::Any => write!(f, "Any"),
-            Self::FunctionInternal(function_def_ref) => {
-                write!(f, "{function_def_ref}")
-            }
-            Self::FunctionExternal(function_def_ref) => {
-                write!(f, "{function_def_ref}")
-            }
-            Self::Alias(name, actual_type) => {
-                write!(f, "type {name} = {actual_type}")
-            }
-            Self::Generic(resolved_type, vec) => {
-                write!(f, "{resolved_type}<{}>", comma(&vec))
-            }
-            Self::RustType(rust_type_ref) => write!(f, "rust_type {rust_type_ref:?}"),
-            Self::Optional(inner_type) => write!(f, "{inner_type}?"),
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct ResolvedVariable {
+    pub name: ResolvedNode,
     pub resolved_type: ResolvedType,
-    pub ast_variable: Variable,
+    pub mutable_node: Option<ResolvedNode>,
+
     pub scope_index: usize,
     pub variable_index: usize,
+}
+
+impl Spanned for ResolvedVariable {
+    fn span(&self) -> Span {
+        self.name.span.merge_opt(self.mutable_node.as_ref())
+    }
 }
 
 impl ResolvedVariable {
     #[must_use]
     pub const fn is_mutable(&self) -> bool {
-        self.ast_variable.is_mutable
-    }
-}
-
-impl Display for ResolvedVariable {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let prefix = if self.ast_variable.is_mutable {
-            "mut "
-        } else {
-            ""
-        };
-        write!(
-            f,
-            "{}{}<{}:{}>: {}",
-            prefix,
-            self.ast_variable.name,
-            self.scope_index,
-            self.variable_index,
-            self.resolved_type
-        )
+        self.mutable_node.is_some()
     }
 }
 
@@ -340,42 +433,99 @@ pub type ResolvedVariableRef = Rc<ResolvedVariable>;
 pub struct ResolvedMutVariable {
     pub variable_ref: ResolvedVariableRef,
 }
+impl Spanned for ResolvedMutVariable {
+    fn span(&self) -> Span {
+        self.variable_ref.span()
+    }
+}
+
 type ResolvedMutVariableRef = Rc<ResolvedMutVariable>;
 
-impl Display for ResolvedMutVariable {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "mut {}", self.variable_ref)
-    }
+#[derive(Debug)]
+pub enum ResolvedBinaryOperatorKind {
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
+    Modulo,
+    LogicalOr,
+    LogicalAnd,
+    Equal,
+    NotEqual,
+    LessThan,
+    LessEqual,
+    GreaterThan,
+    GreaterEqual,
+    RangeExclusive,
 }
 
 #[derive(Debug)]
 pub struct ResolvedBinaryOperator {
     pub left: Box<ResolvedExpression>,
     pub right: Box<ResolvedExpression>,
-    pub ast_operator_type: BinaryOperator,
+    pub kind: ResolvedBinaryOperatorKind,
+    pub node: ResolvedNode,
     pub resolved_type: ResolvedType,
 }
 
+impl Spanned for ResolvedBinaryOperator {
+    fn span(&self) -> Span {
+        self.node.span.clone()
+    }
+}
+
+#[derive(Debug)]
+pub enum ResolvedUnaryOperatorKind {
+    Not,
+    Negate,
+}
 #[derive(Debug)]
 pub struct ResolvedUnaryOperator {
     pub left: Box<ResolvedExpression>,
-    pub ast_operator_type: UnaryOperator,
+    pub kind: ResolvedUnaryOperatorKind,
     pub resolved_type: ResolvedType,
+    pub node: ResolvedNode,
 }
 
+impl Spanned for ResolvedUnaryOperator {
+    fn span(&self) -> Span {
+        self.node.span.clone()
+    }
+}
+
+#[derive(Debug)]
+pub enum ResolvedPostfixOperatorKind {
+    Unwrap,
+}
 #[derive(Debug)]
 pub struct ResolvedPostfixOperator {
     pub left: Box<ResolvedExpression>,
-    pub ast_operator_type: PostfixOperator,
+    pub kind: ResolvedPostfixOperatorKind,
     pub resolved_type: ResolvedType,
+    pub node: ResolvedNode,
 }
 
-#[derive(Debug)]
+impl Spanned for ResolvedPostfixOperator {
+    fn span(&self) -> Span {
+        self.node.span.clone()
+    }
+}
+
+#[derive()]
 pub struct ResolvedInternalFunctionCall {
-    //pub resolved_type: ResolvedType,
     pub arguments: Vec<ResolvedExpression>,
     pub function_definition: ResolvedInternalFunctionDefinitionRef,
     pub function_expression: Box<ResolvedExpression>,
+}
+
+impl Debug for ResolvedInternalFunctionCall {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "InFuncCall({:?} {:?})",
+            self.function_expression, self.arguments
+        )
+    }
 }
 
 #[derive(Debug)]
@@ -384,18 +534,17 @@ pub struct ResolvedStaticCall {
     pub arguments: Vec<ResolvedExpression>,
 }
 
+impl Spanned for ResolvedStaticCall {
+    fn span(&self) -> Span {
+        self.function.span()
+    }
+}
+
 #[derive(Debug)]
 pub struct ResolvedExternalFunctionCall {
-    //pub resolved_type: ResolvedType,
     pub arguments: Vec<ResolvedExpression>,
     pub function_definition: ResolvedExternalFunctionDefinitionRef,
     pub function_expression: Box<ResolvedExpression>,
-}
-
-impl Display for ResolvedExternalFunctionCall {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "external function {}", self.function_definition)
-    }
 }
 
 #[must_use]
@@ -432,42 +581,29 @@ pub fn comma_tuple_ref<K: Display, V: Display>(values: &[(&K, &V)]) -> String {
     result
 }
 
-impl Display for ResolvedInternalFunctionCall {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "({}({}))",
-            self.function_definition,
-            comma(&self.arguments)
-        )
-    }
-}
-
 #[derive(Debug)]
 pub struct ResolvedMemberCall {
     pub function: ResolvedFunctionRef,
     pub arguments: Vec<ResolvedExpression>,
     pub self_expression: Box<ResolvedExpression>,
-    //pub struct_type_ref: ResolvedStructTypeRef,
     pub self_is_mutable: bool,
-}
-impl Display for ResolvedMemberCall {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "(< {} >.{:?}", self.self_expression, self.function)?;
-
-        if !self.arguments.is_empty() {
-            write!(f, " <- {}", comma(&self.arguments))?;
-        }
-
-        write!(f, ")")
-    }
 }
 
 #[derive(Debug)]
 pub enum ResolvedAccess {
-    FieldIndex(usize),
+    FieldIndex(ResolvedNode, usize),
     ArrayIndex(ResolvedExpression),
     MapIndex(ResolvedExpression),
+}
+
+impl Spanned for ResolvedAccess {
+    fn span(&self) -> Span {
+        match self {
+            ResolvedAccess::FieldIndex(node, _) => node.span.clone(),
+            ResolvedAccess::ArrayIndex(expr) => expr.span(),
+            ResolvedAccess::MapIndex(expr) => expr.span(),
+        }
+    }
 }
 
 pub type ResolvedMutStructTypeFieldRef = Rc<ResolvedMutStructTypeField>;
@@ -481,22 +617,23 @@ pub type ResolvedMutTupleFieldRef = Rc<ResolvedMutTupleField>;
 #[derive(Debug)]
 pub struct ResolvedStructTypeField {
     pub struct_type_ref: ResolvedStructTypeRef,
-    pub index: usize,
-    pub field_name: LocalIdentifier,
+    pub field_name: ResolvedLocalIdentifier,
     pub resolved_type: ResolvedType,
-    pub struct_expression: Box<ResolvedExpression>,
+    pub index: usize,
 }
 
-impl Display for ResolvedStructTypeField {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}.{}<{}>",
-            self.struct_type_ref.borrow(),
-            self.field_name,
-            self.index
-        )
+impl Spanned for ResolvedStructTypeField {
+    fn span(&self) -> Span {
+        self.field_name.0.span.merge_spanned(&self.resolved_type)
     }
+}
+
+#[derive(Debug)]
+pub struct ResolvedAnonymousStructFieldType {
+    pub identifier: ResolvedFieldName,
+
+    pub field_type: ResolvedType,
+    pub index: usize,
 }
 
 pub type ResolvedStructTypeFieldRef = Rc<ResolvedStructTypeField>;
@@ -526,6 +663,12 @@ pub struct ResolvedMapIndexLookup {
     pub map_expression: Box<ResolvedExpression>,
 }
 
+impl Spanned for ResolvedMapIndexLookup {
+    fn span(&self) -> Span {
+        todo!()
+    }
+}
+
 #[derive(Debug)]
 pub struct ResolvedArrayItem {
     pub item_type: ResolvedType,
@@ -534,13 +677,9 @@ pub struct ResolvedArrayItem {
     pub array_type: ResolvedType,
 }
 
-impl Display for ResolvedArrayItem {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "ArrayItem( {} [{}] = {})",
-            self.array_type, self.int_expression, self.item_type
-        )
+impl Spanned for ResolvedArrayItem {
+    fn span(&self) -> Span {
+        todo!()
     }
 }
 
@@ -553,32 +692,36 @@ pub struct ResolvedIndexType {
 }
 
 #[derive(Debug)]
-pub enum ResolvedStringPart {
-    Literal(String),
-    Interpolation(ResolvedExpression, Option<FormatSpecifier>),
+pub enum ResolvedPrecisionType {
+    Float,
+    String,
 }
 
-impl Display for ResolvedStringPart {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ResolvedStringPart::Literal(literal_string) => write!(f, "\"{literal_string}\""),
-            ResolvedStringPart::Interpolation(expression, optional_format) => {
-                write!(f, "{expression}")?;
+#[derive(Debug)]
+pub enum ResolvedFormatSpecifierKind {
+    LowerHex,                                            // :x
+    UpperHex,                                            // :X
+    Binary,                                              // :b
+    Float,                                               // :f
+    Precision(u32, ResolvedNode, ResolvedPrecisionType), // :..2f or :..5s
+}
 
-                if let Some(format) = optional_format {
-                    write!(f, ":{}", format)?;
-                }
+#[derive(Debug)]
+pub struct ResolvedFormatSpecifier {
+    pub node: ResolvedNode,
+    pub kind: ResolvedFormatSpecifierKind,
+}
 
-                Ok(())
-            }
-        }
-    }
+#[derive(Debug)]
+pub enum ResolvedStringPart {
+    Literal(ResolvedNode, String),
+    Interpolation(ResolvedExpression, Option<ResolvedFormatSpecifier>),
 }
 
 #[derive(Debug)]
 pub struct ResolvedMutTupleField {
     #[allow(unused)]
-    ast: Expression,
+    ast: ResolvedExpression,
 }
 
 pub type ResolvedFunctionRef = Rc<ResolvedFunction>;
@@ -589,20 +732,9 @@ pub enum ResolvedFunction {
     External(ResolvedExternalFunctionDefinitionRef),
 }
 
-impl Display for ResolvedFunction {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Internal(internal_func_def_ref) => write!(
-                f,
-                "fn {} {:?}",
-                internal_func_def_ref.name, internal_func_def_ref.signature
-            ),
-            Self::External(external_func_def_ref) => write!(
-                f,
-                "ext_fn {} {:?}",
-                external_func_def_ref.name, external_func_def_ref.signature
-            ),
-        }
+impl Spanned for ResolvedFunction {
+    fn span(&self) -> Span {
+        todo!()
     }
 }
 
@@ -611,7 +743,7 @@ pub type MutMemberRef = Rc<MutMember>;
 #[derive(Debug)]
 pub struct MutMember {
     #[allow(unused)]
-    ast: Expression,
+    expression: ResolvedExpression,
 }
 
 pub type MemberRef = Rc<Member>;
@@ -619,14 +751,12 @@ pub type MemberRef = Rc<Member>;
 #[derive(Debug)]
 pub struct Member {
     #[allow(unused)]
-    ast: Expression,
+    expression: ResolvedExpression,
 }
 
 #[derive(Debug)]
 pub struct ResolvedBooleanExpression {
     #[allow(unused)]
-    pub ast: Expression,
-
     pub expression: ResolvedExpression,
 }
 
@@ -636,29 +766,12 @@ pub struct ResolvedMatch {
     pub expression: Box<ResolvedExpression>,
 }
 
-impl Display for ResolvedMatch {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "Match {} ", self.expression)?;
-        for arm in &self.arms {
-            writeln!(f, "..{arm} ")?;
-        }
-        Ok(())
-    }
-}
-
 #[derive(Debug)]
 pub struct ResolvedMatchArm {
     #[allow(unused)]
-    pub ast_match_arm: MatchArm,
     pub pattern: ResolvedPattern,
     pub expression: Box<ResolvedExpression>,
     pub expression_type: ResolvedType,
-}
-
-impl Display for ResolvedMatchArm {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "pattern({}) => {}", self.pattern, self.expression)
-    }
 }
 
 #[derive(Debug)]
@@ -675,33 +788,7 @@ pub enum ResolvedPattern {
 pub enum ResolvedPatternElement {
     Variable(ResolvedVariableRef),
     VariableWithFieldIndex(ResolvedVariableRef, usize),
-    Wildcard,
-}
-
-impl Display for ResolvedPatternElement {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Variable(variable_ref) => write!(f, "{variable_ref}"),
-            Self::Wildcard => write!(f, "_"),
-            Self::VariableWithFieldIndex(_rc, _) => write!(f, "variable with field index"),
-        }
-    }
-}
-
-impl Display for ResolvedPattern {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ResolvedPattern::Literal(literal) => write!(f, "{literal}"),
-            ResolvedPattern::PatternList(elements) => write!(f, "{}", comma(elements)),
-            ResolvedPattern::EnumPattern(enum_variant_type_ref, elements) => {
-                write!(f, "{}", enum_variant_type_ref.name)?;
-                if let Some(found_elements) = elements {
-                    write!(f, "{}", comma(found_elements))?;
-                }
-                Ok(())
-            }
-        }
-    }
+    Wildcard(ResolvedNode),
 }
 
 #[derive(Debug)]
@@ -709,15 +796,20 @@ pub struct ResolvedIterator {
     pub key_type: Option<ResolvedType>, // It does not have to support a key type
     pub value_type: ResolvedType,
     pub resolved_expression: ResolvedExpression,
-    pub is_mutable: bool,
+    pub mutable_node: Option<ResolvedNode>,
 }
 
-//#[derive(Debug)]
-//pub struct ResolvedBoolExpression(pub ResolvedExpression);
+impl ResolvedIterator {
+    #[inline]
+    #[must_use]
+    pub const fn is_mutable(&self) -> bool {
+        self.mutable_node.is_some()
+    }
+}
 
 #[derive(Debug)]
 pub struct ResolvedStructInstantiation {
-    pub expressions_in_order: Vec<ResolvedExpression>,
+    pub source_order_expressions: Vec<(usize, ResolvedExpression)>,
     pub struct_type_ref: ResolvedStructTypeRef,
     pub display_type_ref: ResolvedType,
 }
@@ -727,12 +819,43 @@ pub struct ResolvedVariableAssignment {
     pub variable_refs: Vec<ResolvedVariableRef>, // Support single or multiple variables
     pub expression: Box<ResolvedExpression>,
 }
+impl Spanned for ResolvedVariableAssignment {
+    fn span(&self) -> Span {
+        self.variable_refs[0].span()
+    }
+}
+
+#[derive(Debug)]
+pub enum ResolvedCompoundOperatorKind {
+    Add,
+    Sub,
+    Mul,
+    Div,
+}
+
+#[derive(Debug)]
+pub struct ResolvedCompoundOperator {
+    pub node: ResolvedNode,
+    pub kind: ResolvedCompoundOperatorKind,
+}
+
+impl Spanned for ResolvedCompoundOperator {
+    fn span(&self) -> Span {
+        self.node.span.clone()
+    }
+}
 
 #[derive(Debug)]
 pub struct ResolvedVariableCompoundAssignment {
     pub variable_ref: ResolvedVariableRef, // compound only support single variable
     pub expression: Box<ResolvedExpression>,
-    pub ast_operator: CompoundOperator,
+    pub compound_operator: ResolvedCompoundOperator,
+}
+
+impl Spanned for ResolvedVariableCompoundAssignment {
+    fn span(&self) -> Span {
+        todo!()
+    }
 }
 
 pub fn create_rust_type(name: &str, type_number: TypeNumber) -> ResolvedRustTypeRef {
@@ -784,7 +907,7 @@ pub enum ResolvedExpression {
     FieldCompoundAssignment(
         Box<ResolvedExpression>,
         Vec<ResolvedAccess>,
-        CompoundOperator,
+        ResolvedCompoundOperator,
         Box<ResolvedExpression>,
     ),
 
@@ -858,14 +981,161 @@ pub enum ResolvedExpression {
     SparseNew(ResolvedRustTypeRef, ResolvedType),
 }
 
+pub trait Spanned {
+    fn span(&self) -> Span;
+}
+
+impl Spanned for ResolvedExpression {
+    fn span(&self) -> Span {
+        match self {
+            Self::VariableAccess(var_ref) => var_ref.span(),
+            Self::FieldAccess(base, field, accesses) => {
+                let mut span = base.span().merge(&field.span());
+                for access in accesses {
+                    span = span.merge(&access.span());
+                }
+                span
+            }
+            Self::InternalFunctionAccess(func) => func.span(),
+            Self::ExternalFunctionAccess(func) => func.span(),
+            Self::MutRef(var_ref) => var_ref.span(),
+            Self::Option(opt_expr) => opt_expr
+                .as_ref()
+                .map(|expr| expr.span())
+                .unwrap_or_else(Span::dummy),
+            Self::ArrayAccess(arr_ref) => arr_ref.span(),
+            Self::MapIndexAccess(lookup) => lookup.span(),
+
+            // Assignments
+            Self::InitializeVariable(assign) => assign.span(),
+            Self::ReassignVariable(assign) => assign.span(),
+            Self::VariableCompoundAssignment(assign) => assign.span(),
+            Self::ArrayExtend(var_ref, expr) => var_ref.span().merge(&expr.span()),
+            Self::ArrayPush(var_ref, expr) => var_ref.span().merge(&expr.span()),
+            Self::ArrayAssignment(array, index, expr) => {
+                todo!()
+            }
+            Self::MapAssignment(map, key, value) => {
+                todo!()
+            }
+            Self::StructFieldAssignment(base, accesses, value) => {
+                let mut span = base.span();
+                for access in accesses {
+                    span = span.merge(&access.span());
+                }
+                span.merge(&value.span())
+            }
+            Self::FieldCompoundAssignment(base, accesses, op, value) => {
+                let mut span = base.span();
+                for access in accesses {
+                    span = span.merge(&access.span());
+                }
+                span.merge(&op.span()).merge(&value.span())
+            }
+
+            // Operators
+            Self::BinaryOp(op) => op.span(),
+            Self::UnaryOp(op) => op.span(),
+            Self::PostfixOp(op) => op.span(),
+            Self::CoerceOptionToBool(expr) => expr.span(),
+
+            // Calls
+            Self::FunctionInternalCall(call) => todo!(),
+            Self::FunctionExternalCall(call) => todo!(),
+            Self::StaticCall(call) => call.span(),
+            Self::StaticCallGeneric(call) => todo!(),
+            Self::MutMemberCall(member_ref, args) => {
+                todo!()
+            }
+            Self::MemberCall(call) => todo!(),
+
+            // Blocks and Strings
+            Self::Block(statements) => statements
+                .first()
+                .map(|first| {
+                    statements
+                        .last()
+                        .map(|last| first.span().merge(&last.span()))
+                        .unwrap_or_else(|| first.span())
+                })
+                .unwrap_or_else(Span::dummy),
+            Self::InterpolatedString(str_ref, parts) => {
+                todo!()
+            }
+
+            // Constructing
+            Self::StructInstantiation(struct_inst) => todo!(),
+            Self::Array(array_inst) => array_inst.span(),
+            Self::Tuple(exprs) => exprs
+                .first()
+                .map(|first| {
+                    exprs
+                        .last()
+                        .map(|last| first.span().merge(&last.span()))
+                        .unwrap_or_else(|| first.span())
+                })
+                .unwrap_or_else(Span::dummy),
+            Self::Literal(lit) => lit.span(),
+            Self::ExclusiveRange(range_ref, start, end) => {
+                todo!()
+            }
+
+            // Control Flow
+            Self::IfElse(cond, then_expr, else_expr) => todo!(),
+            Self::IfElseOnlyVariable {
+                variable,
+                optional_expr,
+                true_block,
+                false_block,
+            } => variable
+                .span()
+                .merge(&optional_expr.span())
+                .merge(&true_block.span())
+                .merge(&false_block.span()),
+            Self::IfElseAssignExpression {
+                variable,
+                optional_expr,
+                true_block,
+                false_block,
+            } => variable
+                .span()
+                .merge(&optional_expr.span())
+                .merge(&true_block.span())
+                .merge(&false_block.span()),
+            Self::Match(match_expr) => todo!(),
+            Self::LetVar(var_ref, expr) => var_ref.span().merge(&expr.span()),
+
+            // Array Operations
+            Self::ArrayRemoveIndex(var_ref, index) => var_ref.span().merge(&index.span()),
+            Self::ArrayClear(var_ref) => var_ref.span(),
+
+            // Float Operations
+            Self::FloatRound(expr) => expr.span(),
+            Self::FloatFloor(expr) => expr.span(),
+            Self::FloatSign(expr) => expr.span(),
+            Self::FloatAbs(expr) => expr.span(),
+
+            // Special Methods
+            Self::SparseAdd(expr1, expr2) => expr1.span().merge(&expr2.span()),
+            Self::SparseRemove(expr1, expr2) => expr1.span().merge(&expr2.span()),
+            Self::SparseNew(rust_type_ref, resolved_type) => {
+                todo!()
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct ResolvedStringConst(pub ResolvedNode);
+
 #[derive(Debug)]
 pub enum ResolvedLiteral {
-    FloatLiteral(Fp, ResolvedFloatTypeRef),
+    FloatLiteral(Fp, ResolvedNode, ResolvedFloatTypeRef),
     UnitLiteral(ResolvedUnitTypeRef),
-    NoneLiteral,
-    IntLiteral(i32, ResolvedIntTypeRef),
-    StringLiteral(StringConst, ResolvedStringTypeRef),
-    BoolLiteral(bool, ResolvedBoolTypeRef),
+    NoneLiteral(ResolvedNode),
+    IntLiteral(i32, ResolvedNode, ResolvedIntTypeRef),
+    StringLiteral(String, ResolvedNode, ResolvedStringTypeRef),
+    BoolLiteral(bool, ResolvedNode, ResolvedBoolTypeRef),
     EnumVariantLiteral(ResolvedEnumVariantTypeRef, ResolvedEnumLiteralData),
     TupleLiteral(ResolvedTupleTypeRef, Vec<ResolvedExpression>),
     Array(ResolvedArrayTypeRef, Vec<ResolvedExpression>),
@@ -875,166 +1145,9 @@ pub enum ResolvedLiteral {
     ),
 }
 
-impl Display for ResolvedLiteral {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::FloatLiteral(value, _) => write!(f, "FloatLit({value})"),
-            Self::UnitLiteral(_) => write!(f, "UnitLit"),
-            Self::IntLiteral(value, _) => write!(f, "IntLit({value})"),
-            Self::StringLiteral(value, _) => write!(f, "StringLit({value})"),
-            Self::BoolLiteral(value, _) => write!(f, "BoolLit({value})"),
-            Self::EnumVariantLiteral(_, _) => write!(f, "EnumVariantLiteral"),
-            Self::TupleLiteral(_, _) => write!(f, "TupleLiteral"),
-            Self::Array(_, _) => write!(f, "ArrayLiteral"),
-            Self::Map(_, _) => write!(f, "MapLiteral"),
-            Self::NoneLiteral => write!(f, "NoneLiteral"),
-        }
-    }
-}
-
-//pub type ResolvedExpressionRef = Rc<ResolvedExpression>;
-
-impl Display for ResolvedExpression {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::VariableAccess(variable) => write!(f, "VarRead({})", variable),
-            Self::FieldAccess(_expr, _struct_type_field, lookups) => {
-                write!(f, "field access {lookups:?}")
-            }
-            Self::InternalFunctionAccess(internal_function_ref) => {
-                write!(f, "{:?}", internal_function_ref)
-            }
-            Self::ExternalFunctionAccess(external_function_ref) => {
-                write!(f, "{:?}", external_function_ref)
-            }
-            Self::MutRef(mut_var_ref) => write!(f, "MutRef({})", mut_var_ref),
-            Self::ArrayAccess(array_item_ref) => {
-                write!(f, "[{}]", array_item_ref.item_type)
-            }
-            Self::MapIndexAccess(map_lookup) => {
-                write!(
-                    f,
-                    "[{}[{}]]",
-                    map_lookup.map_expression, map_lookup.index_expression
-                )
-            }
-
-            Self::ArrayAssignment(_, _, _) => write!(f, "array assignment"),
-            Self::MapAssignment(_, _, _) => write!(f, "map assignment"),
-            Self::StructFieldAssignment(_, _, _) => write!(f, "field assignment"),
-            Self::BinaryOp(binary_op) => write!(f, "{binary_op:?}"),
-            Self::UnaryOp(unary_op) => {
-                write!(f, "{:?}", unary_op)
-            }
-            Self::PostfixOp(postfix_op) => write!(f, "{:?}", postfix_op),
-
-            Self::FunctionInternalCall(resolved_call) => {
-                write!(f, "{resolved_call}")
-            }
-            Self::FunctionExternalCall(resolved_call) => write!(f, "{resolved_call}"),
-            Self::MutMemberCall(_, _) => todo!(),
-            Self::MemberCall(member_call) => write!(f, "{member_call}"),
-            Self::Block(statements) => write!(f, "{}", fmt_nl(statements)),
-            Self::InterpolatedString(_string_type, parts) => {
-                write!(f, "'{}'", comma(parts))
-            }
-            Self::StructInstantiation(struct_instantiation) => {
-                let borrowed = struct_instantiation.struct_type_ref.borrow();
-                let zipped: Vec<_> = borrowed
-                    .fields
-                    .keys()
-                    .zip(struct_instantiation.expressions_in_order.iter())
-                    .collect();
-
-                write!(f, "{{ {} }}", comma_tuple(&zipped))?;
-                Ok(())
-            }
-            Self::Array(array_instantiation) => {
-                write!(f, "[{:?}]", array_instantiation.expressions)
-            }
-            Self::Tuple(_) => todo!(),
-            Self::ExclusiveRange(range_type, _, _) => {
-                write!(f, "[{range_type:?}]")
-            }
-            Self::IfElse(condition, consequence, alternative) => {
-                write!(f, "if({condition:?}, {consequence}, {alternative})")
-            }
-            Self::IfElseOnlyVariable { .. } => write!(f, "if_else_only_variable"),
-            Self::IfElseAssignExpression {
-                variable,
-                true_block,
-                false_block,
-                ..
-            } => write!(
-                f,
-                "ifelse_assign_expression({variable}, {true_block}, {false_block})"
-            ),
-            Self::Match(resolved_match) => write!(f, "{resolved_match}"),
-            Self::LetVar(_, _) => todo!(),
-            Self::Literal(resolved_literal) => match resolved_literal {
-                ResolvedLiteral::FloatLiteral(value, _float_type) => {
-                    write!(f, "FloatLit({value:?})")
-                }
-                ResolvedLiteral::IntLiteral(value, _int_type) => write!(f, "IntLit({value:?})"),
-                ResolvedLiteral::StringLiteral(value, _string_type) => {
-                    write!(f, "StringLit({value:?})")
-                }
-                ResolvedLiteral::UnitLiteral(_unit_lit) => write!(f, "UnitLit"),
-                ResolvedLiteral::BoolLiteral(value, _bool_type_ref) => {
-                    write!(f, "BoolLit({value:?})")
-                }
-                ResolvedLiteral::EnumVariantLiteral(variant_ref, data) => {
-                    write!(f, "EnumVariantLit({variant_ref:?}, {data})")
-                }
-
-                ResolvedLiteral::TupleLiteral(_tuple_type, data) => {
-                    write!(f, "TupleLiteral({data:?})")
-                }
-                ResolvedLiteral::Array(_array_type, data) => write!(f, "Array({data:?})"),
-                ResolvedLiteral::Map(_, data) => write!(f, "Map({data:?})"),
-                ResolvedLiteral::NoneLiteral => write!(f, "NoneLiteral()"),
-            },
-            Self::StaticCall(static_call) => write!(
-                f,
-                "static call {}({:?})",
-                static_call.function, static_call.arguments
-            ),
-            Self::StaticCallGeneric(static_call_generic) => {
-                write!(
-                    f,
-                    "static call generic {}({:?})",
-                    static_call_generic.function, static_call_generic.arguments
-                )
-            }
-            Self::Option(inner) => write!(f, "OptionExpr({inner:?})"),
-            ResolvedExpression::ArrayExtend(_, _) => write!(f, "array.extend"),
-            ResolvedExpression::ArrayPush(_, _) => write!(f, "array.push"),
-            ResolvedExpression::ArrayRemoveIndex(_, _) => write!(f, "array.remove"),
-            ResolvedExpression::ArrayClear(_) => write!(f, "array.clear"),
-
-            ResolvedExpression::SparseAdd(_, _) => write!(f, "sparse.add"),
-            ResolvedExpression::SparseRemove(_, _) => write!(f, "sparse.remove()"),
-            ResolvedExpression::SparseNew(_, _) => write!(f, "Sparse::new()"),
-            ResolvedExpression::InitializeVariable(variable) => {
-                write!(f, "initialize variable {variable:?}")
-            }
-            ResolvedExpression::ReassignVariable(variable) => {
-                write!(f, "reassign variable {variable:?}")
-            }
-            ResolvedExpression::CoerceOptionToBool(_) => write!(f, "coerce option to bool"),
-            ResolvedExpression::VariableCompoundAssignment(_) => {
-                write!(f, "variable compount assignment")
-            }
-            ResolvedExpression::FieldCompoundAssignment(..) => {
-                write!(f, "field compound assignment")
-            }
-            &ResolvedExpression::FloatRound(_) | &ResolvedExpression::FloatFloor(_) => {
-                write!(f, "float members")
-            }
-            &ResolvedExpression::FloatSign(_) | &ResolvedExpression::FloatAbs(_) => {
-                write!(f, "float members")
-            }
-        }
+impl Spanned for ResolvedLiteral {
+    fn span(&self) -> Span {
+        todo!()
     }
 }
 
@@ -1044,6 +1157,12 @@ pub struct ResolvedArrayInstantiation {
     pub item_type: ResolvedType,
     pub array_type: ResolvedType,
     pub array_type_ref: ResolvedArrayTypeRef,
+}
+
+impl Spanned for ResolvedArrayInstantiation {
+    fn span(&self) -> Span {
+        todo!()
+    }
 }
 
 #[derive(Debug)]
@@ -1064,8 +1183,8 @@ pub enum ResolvedStatement {
     ForLoop(ResolvedForPattern, ResolvedIterator, Vec<ResolvedStatement>),
     WhileLoop(ResolvedBooleanExpression, Vec<ResolvedStatement>),
     Return(ResolvedExpression),
-    Break,                          // Return with void
-    Continue,                       //
+    Break(ResolvedNode),            // Return with void
+    Continue(ResolvedNode),         //
     Expression(ResolvedExpression), // Used for expressions with side effects (mutation, i/o)
     Block(Vec<ResolvedStatement>),
     If(
@@ -1089,101 +1208,125 @@ pub enum ResolvedStatement {
     },
 }
 
-impl Display for ResolvedStatement {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Spanned for ResolvedStatement {
+    fn span(&self) -> Span {
         match self {
-            ResolvedStatement::ForLoop(target, iterator, statements) => {
-                write!(f, "{target} {iterator:?} {statements:?}")
-            }
-            Self::WhileLoop(_, _) => write!(f, "WhileLoop"),
-            Self::Return(_) => write!(f, "Return"),
-            Self::Break => write!(f, "Break"),
-            Self::Continue => write!(f, "Continue"),
-            Self::Expression(expression) => write!(f, "{}", expression),
-            Self::Block(_) => write!(f, "Block"),
-            Self::If(_, _, _) => write!(f, "If"),
-            ResolvedStatement::IfOnlyVariable { .. } => todo!(),
-            ResolvedStatement::IfAssignExpression { .. } => todo!(),
+            Self::ForLoop(pattern, iterator, statements) => todo!(),
+            Self::WhileLoop(condition, statements) => todo!(),
+            Self::Return(expr) => expr.span(),
+            Self::Break(node) => node.span(),
+            Self::Continue(node) => node.span(),
+            Self::Expression(expr) => expr.span(),
+            Self::Block(statements) => Span::merge_all(statements).unwrap_or_else(Span::dummy),
+            Self::If(condition, true_block, else_block) => todo!(),
+            Self::IfOnlyVariable {
+                variable,
+                optional_expr,
+                true_block,
+                false_block,
+            } => todo!(),
+            Self::IfAssignExpression {
+                variable,
+                optional_expr,
+                true_block,
+                false_block,
+            } => todo!(),
         }
     }
 }
+
+#[derive(Debug)]
+pub struct ResolvedModulePathItem(pub ResolvedNode);
+#[derive(Debug)]
+pub struct ResolvedModulePath(pub Vec<ResolvedModulePathItem>);
 
 pub type ResolvedStructTypeRef = Rc<RefCell<ResolvedStructType>>;
 
 pub type TypeNumber = u32;
 
-#[derive()]
+#[derive(Debug)]
+pub struct ResolvedIdentifierName(pub ResolvedNode);
+
+#[derive(Debug)]
+pub struct ResolvedLocalTypeIdentifier(pub ResolvedNode);
+
+#[derive(Debug)]
+pub struct ResolvedFieldName(pub ResolvedNode);
+
+pub type ResolvedModulePathRef = Rc<ResolvedModulePath>;
+
+#[derive(Debug)]
 pub struct ResolvedStructType {
-    // TODO:  pub defined_in_module: ResolvedModuleRef,
+    pub name: ResolvedNode,
+    pub assigned_name: String,
+    pub anon_struct_type: ResolvedAnonymousStructType,
+
+    // Resolved
     pub number: TypeNumber,
-    pub module_path: ModulePath,
-    pub fields: SeqMap<IdentifierName, ResolvedType>,
-    pub name: LocalTypeIdentifier,
-    pub ast_struct: StructType,
-    pub functions: SeqMap<IdentifierName, ResolvedFunctionRef>,
-}
-
-impl Debug for ResolvedStructType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {{", self.name)?;
-        write!(f, " {} ", comma_seq(&self.fields))?;
-        write!(f, "}}")
-    }
-}
-
-impl Display for ResolvedStructType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {{", self.name)?;
-        write!(f, " {} ", comma_seq(&self.fields))?;
-        write!(f, "}}")
-    }
+    pub functions: SeqMap<String, ResolvedFunctionRef>,
 }
 
 impl ResolvedStructType {
     pub fn new(
-        // TODO: defined_in_module: ResolvedModuleRef,
-        module_path: ModulePath,
-        name: LocalTypeIdentifier,
-        fields: SeqMap<IdentifierName, ResolvedType>,
-        ast_struct: StructType,
+        name: ResolvedNode,
+        assigned_name: &str,
+        anon_struct_type: ResolvedAnonymousStructType,
         number: TypeNumber,
     ) -> Self {
         Self {
             number,
             //defined_in_module,
-            module_path,
-            ast_struct,
-            fields,
+            anon_struct_type,
             name,
+            assigned_name: assigned_name.to_string(),
             functions: SeqMap::default(),
         }
     }
 
-    pub fn field_index(&self, field_name: &LocalIdentifier) -> Option<usize> {
-        self.fields
-            .get_index(&IdentifierName(field_name.text.to_string()))
+    pub fn field_index(&self, field_name: &str) -> Option<usize> {
+        self.anon_struct_type
+            .defined_fields
+            .get_index(&field_name.to_string())
     }
 
-    pub fn get_internal_member(
-        &self,
-        name: IdentifierName,
-    ) -> Option<ResolvedInternalFunctionDefinitionRef> {
-        let found = self.functions.get(&name)?;
+    pub fn name(&self) -> &ResolvedNode {
+        &self.name
+    }
 
-        match &**found {
-            ResolvedFunction::Internal(ref function_ref) => Some(function_ref.clone()),
+    pub fn add_external_member_function(
+        &mut self,
+        function_name: &str,
+        external_func: ResolvedExternalFunctionDefinitionRef,
+    ) -> Result<(), SeqMapError> {
+        let func = ResolvedFunction::External(external_func);
+        self.functions
+            .insert(function_name.to_string(), func.into())?;
+        Ok(())
+    }
+
+    pub fn get_member_function(&self, function_name: &str) -> Option<&ResolvedFunctionRef> {
+        self.functions.get(&function_name.to_string())
+    }
+
+    pub fn get_internal_member_function(
+        &self,
+        function_name: &str,
+    ) -> Option<ResolvedInternalFunctionDefinitionRef> {
+        let func = self.functions.get(&function_name.to_string())?;
+        match &**func {
+            ResolvedFunction::Internal(fn_def) => Some(fn_def.clone()),
             _ => None,
         }
-    }
-
-    pub fn name(&self) -> &LocalTypeIdentifier {
-        &self.name
     }
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct ResolvedUnitType;
 pub type ResolvedUnitTypeRef = Rc<ResolvedUnitType>;
+
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub struct ResolvedNoneType;
+pub type ResolvedNoneTypeRef = Rc<ResolvedNoneType>;
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct ResolvedIntType;
@@ -1211,19 +1354,6 @@ pub type ResolvedOptionTypeRef = Rc<crate::ResolvedOptionType>;
 #[derive(Debug)]
 pub struct ResolvedOptionType {
     pub item_type: ResolvedType,
-    //pub ast_type: Type,
-}
-
-// impl PartialEq for crate::ResolvedOptionType {
-//     fn eq(&self, other: &Self) -> bool {
-//         self.item_type == other.item_type
-//     }
-// }
-
-impl Display for crate::ResolvedOptionType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[{}]", self.item_type)
-    }
 }
 
 pub type ResolvedArrayTypeRef = Rc<ResolvedArrayType>;
@@ -1231,7 +1361,6 @@ pub type ResolvedArrayTypeRef = Rc<ResolvedArrayType>;
 #[derive(Debug)]
 pub struct ResolvedArrayType {
     pub item_type: ResolvedType,
-    //pub ast_type: Type,
 }
 
 pub type ResolvedMapTypeRef = Rc<ResolvedMapType>;
@@ -1242,46 +1371,27 @@ pub struct ResolvedMapType {
     pub value_type: ResolvedType,
 }
 
-impl Display for ResolvedMapType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[{}:{}]", self.key_type, self.value_type)
-    }
-}
-
-impl Display for ResolvedArrayType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[{}]", self.item_type)
-    }
-}
-
 pub type ResolvedEnumVariantStructTypeRef = Rc<ResolvedEnumVariantStructType>;
 
 #[derive(Debug)]
 pub struct CommonEnumVariantType {
     pub number: TypeNumber,
-    pub module_path: ModulePath,
-    pub variant_name: LocalTypeIdentifier,
+    pub module_path: ResolvedModulePath,
+    pub variant_name: ResolvedLocalTypeIdentifier,
+    pub assigned_name: String,
     pub enum_ref: ResolvedEnumTypeRef,
 }
 
-impl Display for CommonEnumVariantType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}::{}", self.enum_ref.name, self.variant_name)
-    }
+#[derive(Debug)]
+pub struct ResolvedAnonymousStructType {
+    pub defined_fields: SeqMap<String, ResolvedAnonymousStructFieldType>,
 }
 
 #[derive(Debug)]
 pub struct ResolvedEnumVariantStructType {
     pub common: CommonEnumVariantType,
 
-    pub fields: SeqMap<IdentifierName, ResolvedType>, // Anonymous Struct
-    pub ast_struct: AnonymousStruct,
-}
-
-impl Display for ResolvedEnumVariantStructType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {{ {} }}", self.common, comma_seq(&self.fields))
-    }
+    pub anon_struct: ResolvedAnonymousStructType,
 }
 
 pub type ResolvedEnumVariantTupleTypeRef = Rc<ResolvedEnumVariantTupleType>;
@@ -1293,22 +1403,10 @@ pub struct ResolvedEnumVariantTupleType {
     pub fields_in_order: Vec<ResolvedType>,
 }
 
-impl Display for crate::ResolvedEnumVariantTupleType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{{ {} }}", comma(&self.fields_in_order))
-    }
-}
-
 pub type ResolvedTupleTypeRef = Rc<ResolvedTupleType>;
 
 #[derive(Debug)]
 pub struct ResolvedTupleType(pub Vec<ResolvedType>);
-
-impl Display for ResolvedTupleType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "({})", comma(&self.0))
-    }
-}
 
 impl ResolvedTupleType {
     pub fn new(types: Vec<ResolvedType>) -> Self {
@@ -1320,100 +1418,70 @@ pub type ResolvedEnumTypeRef = Rc<ResolvedEnumType>;
 
 #[derive(Debug)]
 pub struct ResolvedEnumType {
-    pub name: LocalTypeIdentifier,
-    pub module_path: ModulePath,
+    pub name: ResolvedLocalTypeIdentifier,
+    pub assigned_name: String,
+    pub module_path: Vec<String>,
     pub number: TypeNumber,
 }
 
-impl Display for ResolvedEnumType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.name)
-    }
-}
-
 impl ResolvedEnumType {
-    pub fn new(name: LocalTypeIdentifier, module_path: ModulePath, number: TypeNumber) -> Self {
+    pub fn new(
+        name: ResolvedLocalTypeIdentifier,
+        assigned_name: &str,
+        module_path: Vec<String>,
+        number: TypeNumber,
+    ) -> Self {
         Self {
             name,
+            assigned_name: assigned_name.to_string(),
             module_path,
             number,
         }
     }
 
-    pub fn name(&self) -> &LocalTypeIdentifier {
+    pub fn name(&self) -> &ResolvedLocalTypeIdentifier {
         &self.name
     }
 }
 
 pub type ResolvedEnumVariantTypeRef = Rc<ResolvedEnumVariantType>;
 
-#[derive()]
+#[derive(Debug)]
 pub struct ResolvedEnumVariantType {
     pub owner: ResolvedEnumTypeRef,
     pub data: ResolvedEnumVariantContainerType,
-    pub name: LocalTypeIdentifier,
+    pub name: ResolvedLocalTypeIdentifier,
+    pub assigned_name: String,
     pub number: TypeNumber,
-}
-
-impl Display for ResolvedEnumVariantType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}::{}{}", self.owner, self.name, self.data)
-    }
 }
 
 pub type ResolvedEnumVariantStructFieldTypeRef = Rc<ResolvedEnumVariantStructFieldType>;
 
 #[derive(Debug)]
 pub struct ResolvedEnumVariantStructFieldType {
-    pub name: LocalIdentifier,
-    pub field_index: usize,
+    pub name: ResolvedLocalIdentifier,
     pub enum_variant: ResolvedEnumVariantTypeRef,
     pub resolved_type: ResolvedType,
-}
 
-impl Display for crate::ResolvedEnumVariantStructFieldType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} <{}>", self.name, self.field_index)
-    }
+    pub field_index: usize,
 }
 
 pub type ResolvedEnumVariantTupleFieldTypeRef = Rc<ResolvedEnumVariantTupleFieldType>;
 
 #[derive(Debug)]
 pub struct ResolvedEnumVariantTupleFieldType {
-    pub name: LocalIdentifier,
-    pub field_index: usize,
+    pub name: ResolvedLocalIdentifier,
     pub enum_variant: ResolvedEnumVariantTypeRef,
     pub resolved_type: ResolvedType,
+
+    pub field_index: usize,
 }
-
-impl Display for crate::ResolvedEnumVariantTupleFieldType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} <{}>", self.name, self.field_index)
-    }
-}
-
-/*
-impl Display for ResolvedEnumVariantType {
-
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}::{}", self.owner.name(), self.name)?;
-
-        match &self.data {
-            ResolvedEnumVariantContainerType::Struct(_) => {
-                write!(f, "{}::{}", self.name, self.complete_name())
-            }
-            ResolvedEnumVariantContainerType::Tuple(tuple_ref) => write!(f, "{:?}", tuple_ref),
-            ResolvedEnumVariantContainerType::Nothing => write!(f, ""),
-        }
-    }
-}
-*/
 
 impl ResolvedEnumVariantType {
     pub fn new(
         owner: ResolvedEnumTypeRef,
-        name: LocalTypeIdentifier,
+        name: ResolvedLocalTypeIdentifier,
+        assigned_name: &str,
         data: ResolvedEnumVariantContainerType,
         number: TypeNumber,
     ) -> Self {
@@ -1421,6 +1489,7 @@ impl ResolvedEnumVariantType {
             owner,
             data,
             name,
+            assigned_name: assigned_name.to_string(),
             number,
         }
     }
@@ -1429,18 +1498,8 @@ impl ResolvedEnumVariantType {
         &self.data
     }
 
-    pub fn name(&self) -> &LocalTypeIdentifier {
+    pub fn name(&self) -> &ResolvedLocalTypeIdentifier {
         &self.name
-    }
-
-    pub fn complete_name(&self) -> String {
-        self.owner.name.text.to_string() + "::" + &*self.name.text.to_string()
-    }
-}
-
-impl Debug for ResolvedEnumVariantType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}::{}", self.owner.name(), self.name)
     }
 }
 
@@ -1451,25 +1510,18 @@ pub enum ResolvedEnumVariantContainerType {
     Nothing,
 }
 
-impl Display for ResolvedEnumVariantContainerType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Struct(struct_ref) => write!(f, " {} ", struct_ref),
-            Self::Tuple(tuple_ref) => write!(f, "{}", tuple_ref),
-            Self::Nothing => Ok(()),
-        }
-    }
-}
+#[derive(Debug)]
+pub struct ResolvedImplMember {}
 
 #[derive(Debug)]
 pub struct ImplType {
-    pub members: SeqMap<String, ImplMember>,
+    pub members: SeqMap<String, ResolvedImplMember>,
     pub associated_with_struct_type: ResolvedStructTypeRef,
 }
 
 impl ImplType {
     pub fn new(
-        members: SeqMap<String, ImplMember>,
+        members: SeqMap<String, ResolvedImplMember>,
         associated_with_struct_type: ResolvedStructTypeRef,
     ) -> Self {
         Self {
@@ -1480,106 +1532,15 @@ impl ImplType {
 }
 
 #[derive(Debug)]
-pub struct ResolvedModule {
-    pub definitions: Vec<ResolvedDefinition>,
-    pub statements: Vec<ResolvedStatement>,
-    pub namespace: ResolvedModuleNamespace,
-    pub module_path: ModulePath,
-}
-
-pub type ResolvedModuleRef = Rc<RefCell<ResolvedModule>>;
-
-impl Display for ResolvedModule {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "namespace:\n{}", self.namespace)?;
-        if !self.statements.is_empty() {
-            writeln!(f, "statements:")?;
-
-            for statement in &self.statements {
-                writeln!(f, "{}", statement)?;
-            }
-        };
-
-        Ok(())
-    }
-}
-
-impl ResolvedModule {
-    pub fn new(module_path: ModulePath) -> Self {
-        Self {
-            module_path: module_path.clone(),
-            definitions: Vec::new(),
-            namespace: ResolvedModuleNamespace::new(module_path),
-            statements: Vec::new(),
-        }
-    }
-}
-
-#[derive(Debug)]
 pub enum ResolvedDefinition {
-    StructType(ResolvedStructType),
-    EnumType(ResolvedEnumTypeRef, Vec<ResolvedEnumVariantType>),
+    StructType(ResolvedStructTypeRef),
+    EnumType(ResolvedEnumTypeRef, Vec<ResolvedEnumVariantTypeRef>),
     Function(),
     ExternalFunction(),
     ImplType(ResolvedType),
     FunctionDef(ResolvedFunction),
     Alias(ResolvedType),
-    Comment(String),
-}
-
-#[derive(Debug)]
-pub struct ResolvedModules {
-    pub modules: HashMap<ModulePath, ResolvedModuleRef>,
-}
-
-impl Default for ResolvedModules {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl ResolvedModules {
-    pub fn new() -> Self {
-        Self {
-            modules: HashMap::new(),
-        }
-    }
-
-    pub fn add_module(&mut self, module_ref: ResolvedModuleRef) -> Result<(), SemanticError> {
-        let name = module_ref.borrow().module_path.clone();
-        self.modules.insert(name, module_ref);
-        Ok(())
-    }
-
-    pub fn add_linked_module(
-        &mut self,
-        module_path: ModulePath,
-        module: ResolvedModuleRef,
-    ) -> Result<(), SemanticError> {
-        self.modules.insert(module_path.clone(), module);
-        Ok(())
-    }
-
-    pub fn get(&self, module_path: &ModulePath) -> Option<&ResolvedModuleRef> {
-        self.modules.get(module_path)
-    }
-
-    pub fn get_mut(&mut self, module_path: &ModulePath) -> Option<&mut ResolvedModuleRef> {
-        self.modules.get_mut(module_path)
-    }
-
-    pub fn contains_key(&self, module_path: ModulePath) -> bool {
-        self.modules.contains_key(&module_path)
-    }
-}
-
-impl Display for ResolvedModules {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for (module_path, module) in &self.modules {
-            writeln!(f, "{}\n  {}", module_path, module.borrow())?
-        }
-        Ok(())
-    }
+    Comment(ResolvedNode),
 }
 
 // Immutable part
@@ -1590,6 +1551,7 @@ pub struct ResolvedProgramTypes {
     pub string_type: ResolvedStringTypeRef,
     pub bool_type: ResolvedBoolTypeRef,
     pub unit_type: ResolvedUnitTypeRef,
+    pub none_type: ResolvedNoneTypeRef,
     pub exclusive_range_type: ResolvedExclusiveRangeTypeRef,
 }
 
@@ -1601,6 +1563,7 @@ impl ResolvedProgramTypes {
             string_type: Rc::new(ResolvedStringType),
             bool_type: Rc::new(ResolvedBoolType),
             unit_type: Rc::new(ResolvedUnitType),
+            none_type: Rc::new(ResolvedNoneType),
             exclusive_range_type: Rc::new(ResolvedExclusiveRangeType),
         }
     }
@@ -1654,43 +1617,10 @@ impl ResolvedProgramState {
 }
 
 #[derive(Debug)]
-pub struct ResolvedProgram {
-    pub types: ResolvedProgramTypes,
-    pub state: ResolvedProgramState,
-    pub modules: ResolvedModules,
-}
-
-impl ResolvedProgram {
-    pub fn new() -> Self {
-        Self {
-            types: ResolvedProgramTypes::new(),
-            state: ResolvedProgramState::new(),
-            modules: ResolvedModules::new(),
-        }
-    }
-}
-
-impl fmt::Display for ResolvedProgram {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "modules:\n{}", self.modules)
-    }
-}
-
-#[derive(Debug)]
 pub enum ResolvedEnumLiteralData {
     Nothing,
     Tuple(Vec<ResolvedExpression>),
     Struct(Vec<ResolvedExpression>),
-}
-
-impl Display for ResolvedEnumLiteralData {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Nothing => Ok(()),
-            Self::Tuple(tuple_data) => write!(f, "{:?}", tuple_data),
-            Self::Struct(struct_data) => write!(f, "{:?}", struct_data),
-        }
-    }
 }
 
 #[derive(Debug)]

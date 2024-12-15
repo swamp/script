@@ -2,3 +2,4 @@ target/
 .idea
 Cargo.lock
 docs/swamp-lang/public
+.DS_Store

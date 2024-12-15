@@ -8,10 +8,11 @@ use pest::error::Error;
 use seq_map::SeqMap;
 use std::collections::HashSet;
 use std::path::PathBuf;
-use std::{env, fs};
+use std::{env, fs, io};
 use swamp_script_ast::prelude::*;
 use swamp_script_ast::Function;
-use swamp_script_parser::{AstParser, Rule};
+use swamp_script_parser::{AstParser, ParseError, Rule};
+use swamp_script_source_map::{FileId, SourceMap};
 use tracing::{debug, info, trace};
 
 pub struct ParseRoot {
@@ -21,7 +22,7 @@ pub struct ParseRoot {
 #[derive(Debug)]
 pub enum ParseRootError {
     IoError(std::io::Error),
-    ParseRule(Error<Rule>),
+    ParseError(ParseError),
 }
 
 impl From<std::io::Error> for ParseRootError {
@@ -30,52 +31,38 @@ impl From<std::io::Error> for ParseRootError {
     }
 }
 
-impl From<pest::error::Error<Rule>> for ParseRootError {
-    fn from(value: Error<Rule>) -> Self {
-        Self::ParseRule(value)
+impl From<ParseError> for ParseRootError {
+    fn from(value: ParseError) -> Self {
+        Self::ParseError(value)
     }
 }
 
 #[derive(Debug)]
 pub struct ParseModule {
     pub ast_module: swamp_script_ast::Module,
+    pub file_id: FileId,
 }
 
 impl ParseModule {
+    // TODO: HACK: declare_external_function() should be removed
     pub fn declare_external_function(
         &mut self,
-        name: String,
         parameters: Vec<Parameter>,
-        return_type: Type,
+        return_type: Option<Type>,
     ) {
-        let fake_identifier = LocalIdentifier {
-            node: Node {
-                span: Span {
-                    start: Position {
-                        offset: 0,
-                        line: 0,
-                        column: 0,
-                    },
-                    end: Position {
-                        offset: 0,
-                        line: 0,
-                        column: 0,
-                    },
-                },
-            },
-            text: name,
-        };
+        let fake_identifier = Node::default();
 
-        let signature = FunctionSignature {
+        let signature = FunctionDeclaration {
             name: fake_identifier.clone(),
             params: parameters,
+            self_parameter: None,
             return_type,
         };
         let external_signature = Function::External(signature);
 
         self.ast_module.definitions.insert(
             0, // add it first
-            Definition::FunctionDef(fake_identifier, external_signature),
+            Definition::FunctionDef(external_signature),
         );
     }
 }
@@ -83,41 +70,19 @@ impl ParseModule {
 #[derive(Debug)]
 pub struct RelativePath(pub String);
 
-fn to_relative_path(path: &ModulePath) -> RelativePath {
-    RelativePath(
-        path.0
-            .iter()
-            .map(|local_type_identifier| local_type_identifier.as_str())
-            .collect::<Vec<_>>()
-            .join("/"),
-    )
-}
-
 impl ParseRoot {
     pub fn new(base_path: PathBuf) -> Self {
         Self { base_path }
     }
 
-    fn to_file_system_path(&self, path: RelativePath) -> PathBuf {
-        info!("converting from {path:?}");
-        let mut path_buf = self.base_path.to_path_buf();
+    pub fn parse(&self, contents: String, file_id: FileId) -> Result<ParseModule, ParseRootError> {
+        let parser = AstParser {};
 
-        path_buf.push(path.0);
-        path_buf.set_extension("swamp");
-
-        info!("converted to {path_buf:?}");
-        path_buf
-    }
-    pub fn parse(&self, module_path: &ModulePath) -> Result<ParseModule, ParseRootError> {
-        let path_buf = self.to_file_system_path(to_relative_path(module_path));
-        let contents = fs::read_to_string(path_buf)?;
-
-        let parser = AstParser::new();
-
-        let ast_program = parser.parse_script(&*contents)?;
+        let ast_program = parser.parse_module(&*contents)?;
 
         Ok(ParseModule {
             ast_module: ast_program,
+            file_id,
         })
     }
 }
@@ -125,15 +90,15 @@ impl ParseRoot {
 #[derive(Clone)]
 #[allow(unused)]
 pub struct ModuleInfo {
-    path: ModulePath,
-    imports: Vec<ModulePath>,
+    path: Vec<String>,
+    imports: Vec<String>,
     parsed: bool,
     analyzed: bool,
 }
 
 pub struct DependencyParser {
-    pub import_scanned_modules: SeqMap<ModulePath, ModuleInfo>,
-    already_parsed_modules: SeqMap<ModulePath, ParseModule>,
+    pub import_scanned_modules: SeqMap<Vec<String>, ModuleInfo>,
+    already_parsed_modules: SeqMap<Vec<String>, ParseModule>,
 }
 
 impl Default for DependencyParser {
@@ -150,7 +115,7 @@ impl DependencyParser {
         }
     }
 
-    pub fn add_ast_module(&mut self, module_path: ModulePath, parsed_module: ParseModule) {
+    pub fn add_ast_module(&mut self, module_path: Vec<String>, parsed_module: ParseModule) {
         debug!(
             "Adding ast module parsed outside of graph resolver {:?}",
             module_path
@@ -163,13 +128,20 @@ impl DependencyParser {
 
 #[derive(Debug)]
 pub enum DependencyError {
-    CircularDependency(ModulePath),
+    CircularDependency(Vec<String>),
     ParseRootError(ParseRootError),
+    IoError(io::Error),
 }
 
 impl From<ParseRootError> for DependencyError {
     fn from(err: ParseRootError) -> Self {
         Self::ParseRootError(err)
+    }
+}
+
+impl From<io::Error> for DependencyError {
+    fn from(value: io::Error) -> Self {
+        Self::IoError(value)
     }
 }
 
@@ -190,93 +162,103 @@ impl DependencyParser {
     pub fn parse_all_dependant_modules(
         &mut self,
         parse_root: ParseRoot,
-        module_path: ModulePath,
+        module_path: &[String],
+        source_map: &mut SourceMap,
     ) -> Result<(), DependencyError> {
         let mut to_parse = vec![module_path];
 
         while let Some(path) = to_parse.pop() {
-            if self.import_scanned_modules.contains_key(&path) {
+            let module_path_vec = &path.to_vec();
+            if self.import_scanned_modules.contains_key(module_path_vec) {
                 continue;
             }
 
             let parsed_module_to_scan =
-                if let Some(parsed_module) = self.already_parsed_modules.get(&path) {
+                if let Some(parsed_module) = self.already_parsed_modules.get(module_path_vec) {
                     parsed_module
                 } else {
                     info!("a module we haven't seen before: {path:?}");
-                    let parse_module = parse_root.parse(&path)?;
+                    let (file_id, script) =
+                        source_map.read_file_relative(module_path_vec.join("/").as_ref())?;
+                    let parse_module = parse_root.parse(script, file_id)?;
                     info!("module parsed: {parse_module:?}");
 
                     self.already_parsed_modules
-                        .insert(path.clone(), parse_module)
+                        .insert(Vec::from(path.clone()), parse_module)
                         .expect("TODO: panic message");
 
                     self.already_parsed_modules
-                        .get(&path.clone())
+                        .get(&path.to_vec())
                         .expect("we just inserted it")
                 };
 
+            /*
+            TODO: FIX
             let imports = get_all_import_paths(parsed_module_to_scan);
+            imports.iter().map(|path| path.0.iter().map(|x| x.node))
             for import in &imports {
                 info!("..found import: {import:?}");
             }
-
+            */
             self.import_scanned_modules
                 .insert(
-                    path.clone(),
+                    Vec::from(path.clone()),
                     ModuleInfo {
-                        path,
-                        imports: imports.clone(),
+                        path: path.to_vec(),
+                        imports: vec![], // TODO: FIX
                         parsed: false,
                         analyzed: false,
                     },
                 )
                 .expect("TODO: panic message");
 
-            to_parse.extend(imports);
+            // TODO: FIX: to_parse.extend(imports);
         }
         Ok(())
     }
 
-    pub fn get_parsed_module(&self, path: &ModulePath) -> Option<&ParseModule> {
-        self.already_parsed_modules.get(path)
+    pub fn get_parsed_module(&self, path: &[String]) -> Option<&ParseModule> {
+        self.already_parsed_modules.get(&path.to_vec())
     }
 
-    pub fn get_parsed_module_mut(&mut self, path: &ModulePath) -> Option<&mut ParseModule> {
-        self.already_parsed_modules.get_mut(path)
+    pub fn get_parsed_module_mut(&mut self, path: &[String]) -> Option<&mut ParseModule> {
+        self.already_parsed_modules.get_mut(&path.to_vec())
     }
 
-    pub(crate) fn get_analysis_order(&self) -> Result<Vec<ModulePath>, DependencyError> {
+    pub(crate) fn get_analysis_order(&self) -> Result<Vec<Vec<String>>, DependencyError> {
         let mut order = Vec::new();
         let mut visited = HashSet::new();
         let mut temp_visited = HashSet::new();
 
         fn visit(
             graph: &DependencyParser,
-            path: &ModulePath,
-            visited: &mut HashSet<ModulePath>,
-            temp_visited: &mut HashSet<ModulePath>,
-            order: &mut Vec<ModulePath>,
+            path: &[String],
+            visited: &mut HashSet<Vec<String>>,
+            temp_visited: &mut HashSet<Vec<String>>,
+            order: &mut Vec<Vec<String>>,
         ) -> Result<(), DependencyError> {
             if temp_visited.contains(path) {
-                return Err(DependencyError::CircularDependency(path.clone()));
+                return Err(DependencyError::CircularDependency(Vec::from(path.clone())));
             }
 
             if visited.contains(path) {
                 return Ok(());
             }
 
-            temp_visited.insert(path.clone());
+            temp_visited.insert(Vec::from(path.clone()));
 
+            /* TODO: FIX
             if let Some(module) = graph.import_scanned_modules.get(path) {
                 for import in &module.imports {
                     visit(graph, import, visited, temp_visited, order)?;
                 }
             }
 
+             */
+
             temp_visited.remove(path);
-            visited.insert(path.clone());
-            order.push(path.clone());
+            visited.insert(Vec::from(path));
+            order.push(Vec::from(path));
 
             Ok(())
         }
@@ -312,13 +294,14 @@ impl From<DependencyError> for DepLoaderError {
 
 pub fn parse_dependant_modules_and_resolve(
     base_path: PathBuf,
-    module_path: ModulePath,
+    module_path: Vec<String>,
     dependency_parser: &mut DependencyParser,
-) -> Result<Vec<ModulePath>, DepLoaderError> {
+    source_map: &mut SourceMap,
+) -> Result<Vec<Vec<String>>, DepLoaderError> {
     debug!(current_directory=?get_current_dir().expect("failed to get current directory"), "current directory");
     let parse_root = ParseRoot::new(base_path);
 
-    dependency_parser.parse_all_dependant_modules(parse_root, module_path)?;
+    dependency_parser.parse_all_dependant_modules(parse_root, &module_path, source_map)?;
 
     let module_paths_in_order = dependency_parser.get_analysis_order()?;
 
@@ -327,22 +310,26 @@ pub fn parse_dependant_modules_and_resolve(
 
 pub fn create_parsed_modules(
     script: &str,
+    source_map: &mut SourceMap,
     root_path: PathBuf,
-) -> Result<DependencyParser, pest::error::Error<Rule>> {
-    let parser = AstParser::new();
-    let ast_module_result = parser.parse_script(script);
+) -> Result<DependencyParser, ParseError> {
+    let parser = AstParser {};
+
+    let file_id = source_map.add_manual_no_id(&*root_path, script);
+    let ast_module_result = parser.parse_module(script);
     if let Err(some) = ast_module_result {
         return Err(some);
     }
     let ast_module = ast_module_result.unwrap();
-    trace!("ast_module:\n{}", ast_module);
+    trace!("ast_module:\n{:?}", ast_module);
 
     let parse_module = ParseModule {
-        ast_module: ast_module,
+        ast_module,
+        file_id,
     };
 
     let mut graph = DependencyParser::new();
-    let root = ModulePath(vec!["test".to_string()]);
+    let root = vec!["test".to_string()];
     graph.add_ast_module(root, parse_module);
 
     debug!("root path is {root_path:?}");

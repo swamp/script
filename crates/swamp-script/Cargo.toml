@@ -8,6 +8,8 @@ description = "script language for embedding"
 
 [dependencies]
 
+swamp-script-source-map = { path = "../source-map", version = "0.0.7" }
+
 # Ast and Parser
 swamp-script-parser = { path = "../parser", version = "0.0.7" }
 swamp-script-ast = { path = "../ast", version = "0.0.7" }
@@ -15,6 +17,8 @@ swamp-script-ast = { path = "../ast", version = "0.0.7" }
 # Semantic and Analyzer
 swamp-script-semantic = { path = "../semantic", version = "0.0.7" }
 swamp-script-analyzer = { path = "../analyzer", version = "0.0.7" }
+
+swamp-script-error-report = { path = "../err", version = "0.0.7"}
 
 # Core and Std
 swamp-script-core = { path = "../core", version = "0.0.7" }

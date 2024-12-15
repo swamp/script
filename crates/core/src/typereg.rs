@@ -15,6 +15,7 @@ pub struct TypeRegistry {
     // Container type constructors
     #[allow(unused)]
     array_types: RefCell<SeqMap<TypeNumber, ResolvedArrayTypeRef>>,
+    #[allow(unused)]
     struct_types: RefCell<SeqMap<String, ResolvedStructTypeRef>>,
 
     // Type numbering
@@ -79,6 +80,8 @@ impl TypeRegistry {
             ResolvedType::Array(array_type)
         }
     */
+
+    /*
     pub fn register_struct_type(
         &self,
         name: String,
@@ -127,4 +130,6 @@ impl TypeRegistry {
             fields,
         )
     }
+
+     */
 }
