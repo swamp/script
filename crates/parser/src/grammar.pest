@@ -178,7 +178,7 @@ break_stmt = { "break" }
 expression_statement = { expression }
 
 // Expression is the entry point
-expression = { assignment | logical | postfix | prefix }
+expression = { assignment | logical }
 
 
 chained_access = { identifier ~ (array_access | dot_access)+ }
@@ -215,10 +215,11 @@ comparison = { addition ~ ((op_lte | op_gte | op_eq | op_neq | op_lt | op_gt ) ~
 addition = { multiplication ~ ((op_add | op_sub | range_op) ~ multiplication)* }
 
 // Multiplication and division (highest precedence for binary ops)
-multiplication = { postfix ~ ((op_mul | op_div | op_mod) ~ postfix)* }
+multiplication = { prefix ~ ((op_mul | op_div | op_mod) ~ prefix)* }
+
 
 // Prefix operators
-prefix = { prefix_op* ~ primary }
+prefix = { prefix_op* ~ postfix }
 prefix_op = { op_not | op_neg }
 
 postfix = { primary ~ postfix_op* }

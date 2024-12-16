@@ -165,8 +165,9 @@ fn complex_expressions() {
         &script,
         r#"
 
-        Let(VariableAssignment(result), BinaryOp(BinaryOp(BinaryOp(Literal(Int(2)), Add, Literal(Int(3))), Multiply, Literal(Int(4))), Subtract, BinaryOp(Literal(Int(10)), Divide, Literal(Int(2)))))
-Let(VariableAssignment(flag), BinaryOp(BinaryOp(Literal(Bool(true)), LogicalAnd, UnaryOp(Not, Literal(Bool(false)))), LogicalOr, BinaryOp(Literal(Int(5)), GreaterThan, Literal(Int(3)))))
+Expression(VariableAssignment(<9:6>, BinaryOp(BinaryOp(BinaryOp(Literal(Int(<19:1>)), Add(<21:1>), Literal(Int(<23:1>))), Multiply(<26:1>), Literal(Int(<28:1>))), Subtract(<30:1>), BinaryOp(Literal(Int(<33:2>)), Divide(<36:1>), Literal(Int(<38:1>))))))
+Expression(VariableAssignment(<49:4>, BinaryOp(BinaryOp(Literal(Bool(<56:4>)), LogicalAnd(<61:2>), UnaryOp(Not(<64:1>), Literal(Bool(<65:5>)))), LogicalOr(<71:2>), BinaryOp(Literal(Int(<74:1>)), GreaterThan(<76:1>), Literal(Int(<78:1>))))))
+
         "#,
     );
 }
@@ -526,7 +527,7 @@ fn real_negative() {
     check(
         &script,
         r#"
-Expression(Literal(Float(<9:4>)))
+Expression(UnaryOp(Negate(<9:1>), Literal(Float(<10:3>))))
         "#,
     );
 }
@@ -1133,7 +1134,6 @@ fn enum_match_struct_y() {
         }
     "#,
         r#"
-
 EnumDef(LocalTypeIdentifier(<15:6>), [Simple(<36:7>), Struct(<57:6>, AnonymousStructType { fields: [FieldType { field_name: FieldName(<66:1>), field_type: Int(<69:3>) }, FieldType { field_name: FieldName(<74:1>), field_type: Int(<77:3>) }] }), Tuple(<96:5>, [String(<102:6>)])])
 ---
 Expression(VariableAssignment(<130:6>, Literal(EnumVariant(Struct(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<139:6>), module_path: None }, [FieldExpression { field_name: FieldName(<156:1>), expression: Literal(Int(<158:2>)) }, FieldExpression { field_name: FieldName(<162:1>), expression: Literal(Int(<165:4>)) }])))))
@@ -1432,7 +1432,7 @@ fn map_creator() -> [Int: String] {
             ",
         r#"
 
-FunctionDef(Internal(FunctionData { signature: FunctionSignature { name: LocalIdentifier(<4:11>), params: [], self_parameter: None, return_type: Some(Map(Int(<22:3>), String(<27:6>))) }, body: [Expression(Literal(Map([(Literal(Int(<38:1>)), InterpolatedString([Literal(<42:5>)])), (Literal(Int(<50:2>)), InterpolatedString([Literal(<55:5>)]))])))] }))
+FunctionDef(Internal(FunctionData { signature: FunctionSignature { name: LocalIdentifier(<4:11>), params: [], self_parameter: None, return_type: Some(Map(Int(<22:3>), String(<27:6>))) }, body: [Expression(Literal(Map([(Literal(Int(<38:1>)), InterpolatedString([Literal(<42:5>)])), (UnaryOp(Negate(<50:1>), Literal(Int(<51:1>))), InterpolatedString([Literal(<55:5>)]))])))] }))
 
             "#,
     );
