@@ -4,18 +4,18 @@
  */
 pub mod prelude;
 
-use seq_fmt::{comma, fmt_nl};
+use seq_fmt::comma;
 use seq_map::SeqMap;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
 use std::rc::Rc;
-use swamp_script_node::Span;
+use swamp_script_node::SpanWithoutFileId;
 
 // Common metadata that can be shared across all AST nodes
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct Node {
-    pub span: Span,
+    pub span: SpanWithoutFileId,
     // TODO: Add comments and attributes
 }
 
@@ -78,7 +78,6 @@ impl LocalIdentifier {
     }
 }
 
-
 impl Display for LocalIdentifier {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{}", self.0)
@@ -90,7 +89,6 @@ impl Debug for LocalIdentifier {
         write!(f, "{}", self.0)
     }
 }
-
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct MemberFunctionIdentifier(pub Node);
@@ -213,7 +211,6 @@ pub enum Definition {
     Comment(Node),
 }
 
-
 #[derive(Debug, Clone)]
 pub struct ForVar {
     pub identifier: LocalIdentifier,
@@ -258,13 +255,11 @@ pub struct VariableNotMut {
     pub name: LocalIdentifier,
 }
 
-
 #[derive(Clone, Eq, PartialEq)]
 pub struct Variable {
     pub name: Node,
     pub is_mutable: Option<Node>,
 }
-
 
 impl Debug for Variable {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
@@ -289,7 +284,7 @@ pub struct MutVariableRef(pub Variable); // Just wraps a variable when passed wi
 pub struct Parameter {
     pub variable: Variable,
     pub param_type: Type,
-//    pub is_mutable: Option<Node>,
+    //    pub is_mutable: Option<Node>,
 }
 
 #[derive(Debug)]
@@ -311,7 +306,6 @@ pub enum Function {
     Internal(FunctionData),
     External(FunctionSignature),
 }
-
 
 #[derive(Debug)]
 pub enum ImplItem {
@@ -439,7 +433,11 @@ pub enum Expression {
 
     // Calls ----
     FunctionCall(Box<Expression>, Vec<Expression>),
-    StaticCall(LocalTypeIdentifier, MemberFunctionIdentifier, Vec<Expression>), // Type::func(args)
+    StaticCall(
+        LocalTypeIdentifier,
+        MemberFunctionIdentifier,
+        Vec<Expression>,
+    ), // Type::func(args)
     StaticCallGeneric(
         LocalTypeIdentifier,
         LocalIdentifier,
@@ -485,8 +483,6 @@ pub enum Literal {
     Unit, // ()
     None, // none
 }
-
-
 
 pub fn seq_map_to_string<K, V>(map: &SeqMap<K, V>) -> String
 where
@@ -551,7 +547,6 @@ impl Debug for EnumLiteralData {
         }
     }
 }
-
 
 #[derive(Clone, Eq, PartialEq, Debug, Default)]
 pub struct AnonymousStruct {
@@ -733,7 +728,7 @@ pub enum Pattern {
 
 #[derive(Debug)]
 pub enum PatternElement {
-    Variable(LocalIdentifier),
+    Variable(Node),
     Expression(Expression),
     Wildcard(Node),
 }
@@ -751,7 +746,7 @@ pub enum FormatSpecifier {
     UpperHex(Node),                 // :X
     Binary(Node),                   // :b
     Float(Node),                    // :f
-    Precision(Node, PrecisionType), // :..2f or :..5s
+    Precision(u32, Node, PrecisionType), // :..2f or :..5s
 }
 
 impl Display for FormatSpecifier {
@@ -762,7 +757,7 @@ impl Display for FormatSpecifier {
             Self::UpperHex(_) => write!(f, "X"),
             Self::Binary(_) => write!(f, "b"),
             Self::Float(_) => write!(f, "f"),
-            Self::Precision(number, precision_type) => {
+            Self::Precision(number, precision_type, _) => {
                 write!(f, "{number}{precision_type}")
             }
         }
@@ -806,4 +801,3 @@ impl Module {
         &self.definitions
     }
 }
-
