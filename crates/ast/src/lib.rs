@@ -4,29 +4,28 @@
  */
 pub mod prelude;
 
-use seq_fmt::comma;
 use seq_map::SeqMap;
 use std::fmt;
-use std::fmt::{Debug, Display, Formatter};
+use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
 use std::rc::Rc;
 use swamp_script_node::SpanWithoutFileId;
 
 // Common metadata that can be shared across all AST nodes
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[derive(PartialEq, Eq, Hash, Default)]
 pub struct Node {
     pub span: SpanWithoutFileId,
     // TODO: Add comments and attributes
 }
 
-impl Display for Node {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}", self.span)
+impl Debug for Node {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self.span)
     }
 }
 
 /// Identifiers ================
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct QualifiedTypeIdentifier {
     pub name: LocalTypeIdentifier,
     pub module_path: Option<ModulePath>,
@@ -44,16 +43,7 @@ impl QualifiedTypeIdentifier {
     }
 }
 
-impl Display for QualifiedTypeIdentifier {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        if let Some(module_path) = &self.module_path {
-            write!(f, "{module_path}::",)?;
-        }
-        write!(f, "{}", self.name)
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, PartialEq, Eq, Hash, Default)]
 pub struct LocalTypeIdentifier(pub Node);
 
 impl LocalTypeIdentifier {
@@ -62,13 +52,7 @@ impl LocalTypeIdentifier {
     }
 }
 
-impl Display for LocalTypeIdentifier {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(PartialEq, Eq, Hash, Debug)]
 pub struct LocalIdentifier(pub Node);
 
 impl LocalIdentifier {
@@ -78,68 +62,26 @@ impl LocalIdentifier {
     }
 }
 
-impl Display for LocalIdentifier {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl Debug for LocalIdentifier {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct MemberFunctionIdentifier(pub Node);
 
-#[derive(Debug, Eq, Hash, PartialEq, Clone)]
+#[derive(Debug, Eq, Hash, PartialEq)]
 pub struct IdentifierName(pub Node);
 
-impl Display for IdentifierName {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-#[derive(Debug, Eq, Hash, PartialEq, Clone)]
+#[derive(Debug, Eq, Hash, PartialEq)]
 pub struct FieldName(pub Node);
-
-impl Display for FieldName {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
 
 // =========================
 
-#[derive(Clone)]
+#[derive()]
 pub struct StringConst(pub Node);
 
-impl Display for StringConst {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{:?}", self.0)
-    }
-}
-
-impl Debug for StringConst {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Debug, Eq, Hash, PartialEq)]
 pub struct ModulePathItem {
     pub node: Node,
 }
 
-impl Display for ModulePathItem {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.node)
-    }
-}
-
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Debug, Eq, Hash, PartialEq)]
 pub struct ModulePath(pub Vec<ModulePathItem>);
 
 impl ModulePath {
@@ -148,94 +90,64 @@ impl ModulePath {
     }
 }
 
-impl Display for ModulePath {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        for x in &self.0 {
-            write!(f, "::{x}")?;
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Import {
     pub module_path: ModulePath,
     pub items: ImportItems,
 }
 
-impl Display for Import {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "import")
-    }
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum ImportItems {
     Module, // import the whole module (use last path item as namespace)
     Specific(Vec<LocalTypeIdentifier>), // import { sin, cos } from math
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Default)]
+#[derive(Debug, Eq, PartialEq, Default)]
 pub struct StructType {
     pub identifier: LocalTypeIdentifier,
-    pub fields: SeqMap<FieldName, Type>,
+    pub fields: Vec<AnonymousStructTypeField>,
 }
 
 impl StructType {
     #[must_use]
-    pub const fn new(identifier: LocalTypeIdentifier, fields: SeqMap<FieldName, Type>) -> Self {
+    pub const fn new(
+        identifier: LocalTypeIdentifier,
+        fields: Vec<AnonymousStructTypeField>,
+    ) -> Self {
         Self { identifier, fields }
     }
 }
 
-impl Display for StructType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "struct {} {}", self.identifier, self.fields)
-    }
+#[derive(Debug)]
+pub struct EnumVariantWithData {
+    pub identifier: LocalTypeIdentifier,
+    pub variant: EnumVariant,
 }
 
 #[derive(Debug)]
 pub enum Definition {
     StructDef(StructType),
 
-    EnumDef(
-        LocalTypeIdentifier,
-        SeqMap<LocalTypeIdentifier, EnumVariant>,
-    ),
+    EnumDef(LocalTypeIdentifier, Vec<EnumVariantWithData>),
 
-    FunctionDef(LocalIdentifier, Function),
-    ImplDef(LocalTypeIdentifier, SeqMap<IdentifierName, Function>),
+    FunctionDef(Function),
+    ImplDef(LocalTypeIdentifier, Vec<Function>),
     TypeAlias(LocalTypeIdentifier, Type),
     Import(Import),
     // Other
     Comment(Node),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ForVar {
     pub identifier: LocalIdentifier,
     pub is_mut: Option<Node>,
 }
 
-impl Display for ForVar {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "mut:{:?} {}", self.is_mut, self.identifier)
-    }
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum ForPattern {
     Single(ForVar),
     Pair(ForVar, ForVar),
-}
-
-impl Display for ForPattern {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Single(v) => write!(f, "{v}"),
-            Self::Pair(a, b) => write!(f, "{a}, {b}"),
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -250,30 +162,32 @@ pub enum Statement {
     If(Expression, Vec<Statement>, Option<Vec<Statement>>),
 }
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Eq, PartialEq)]
 pub struct VariableNotMut {
     pub name: LocalIdentifier,
 }
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Eq, PartialEq)]
 pub struct Variable {
     pub name: Node,
     pub is_mutable: Option<Node>,
 }
 
-impl Debug for Variable {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        if let Some(x) = &self.is_mutable {
-            write!(f, "{} {}", x, self.name)
-        } else {
-            write!(f, "{}", self.name)
-        }
-    }
-}
-
 impl Variable {
     pub fn new(name: Node, is_mutable: Option<Node>) -> Self {
         Self { name, is_mutable }
+    }
+}
+
+// Since this is a helper struct, we want to implement the debug output for it
+// to have it more concise
+impl Debug for Variable {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        if let Some(found) = &self.is_mutable {
+            write!(f, "mut {found:?} {:?}", self.name)
+        } else {
+            write!(f, "{:?}", self.name)
+        }
     }
 }
 
@@ -295,7 +209,7 @@ pub struct FunctionSignature {
     pub return_type: Option<Type>,
 }
 
-#[derive()]
+#[derive(Debug)]
 pub struct FunctionData {
     pub signature: FunctionSignature,
     pub body: Vec<Statement>,
@@ -313,7 +227,7 @@ pub enum ImplItem {
     Function(ImplFunction),
 }
 
-#[derive()]
+#[derive(Debug)]
 pub enum ImplMember {
     Internal(ImplMemberData),
     External(ImplMemberSignature),
@@ -333,16 +247,7 @@ pub enum ImplFunction {
     External(FunctionSignature),
 }
 
-impl Debug for ImplMember {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Internal(data) => write!(f, "internal: {data:?}"),
-            Self::External(data) => write!(f, "external: {data:?}"),
-        }
-    }
-}
-
-#[derive()]
+#[derive(Debug)]
 pub struct ImplMemberData {
     pub name: LocalIdentifier,
     pub self_param: SelfParameter,
@@ -353,39 +258,13 @@ pub struct ImplMemberData {
 
 pub type ImplMemberRef = Rc<ImplMember>;
 
-impl Debug for SelfParameter {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        if self.is_mutable.is_some() {
-            write!(f, "mut self")
-        } else {
-            write!(f, "self")
-        }
-    }
-}
-
-impl Debug for ImplMemberData {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{:?}, {:?}, {:?}, {:?}",
-            self.self_param, self.params, self.return_type, self.body
-        )
-    }
-}
-
-#[derive(Clone)]
+#[derive(Debug)]
 pub struct SelfParameter {
     pub is_mutable: Option<Node>,
     pub self_node: Node,
 }
 
-impl Debug for FunctionData {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{:?}, {:?}", self.signature, self.body)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum CompoundOperator {
     Add(Node), // +=
     Sub(Node), // -=
@@ -450,7 +329,7 @@ pub enum Expression {
     InterpolatedString(Vec<StringPart>),
 
     // Constructing
-    StructInstantiation(QualifiedTypeIdentifier, SeqMap<FieldName, Expression>),
+    StructInstantiation(QualifiedTypeIdentifier, Vec<AnonymousStructField>),
     ExclusiveRange(Box<Expression>, Box<Expression>),
     Literal(Literal),
 
@@ -466,7 +345,7 @@ pub struct MatchArm {
 }
 
 // Are constructed by themselves
-#[derive()]
+#[derive(Debug)]
 pub enum Literal {
     Int(Node),
     Float(Node),
@@ -498,110 +377,38 @@ where
     entries.trim().to_string()
 }
 
-impl Debug for Literal {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        match self {
-            Self::EnumVariant(enum_type, variant_name, data) => match data {
-                EnumLiteralData::Nothing => {
-                    write!(f, "EnumVariant({enum_type}::{variant_name})")
-                }
-                EnumLiteralData::Tuple(expressions) => write!(
-                    f,
-                    "EnumVariant({enum_type}::{variant_name}({expressions:?}))"
-                ),
-                EnumLiteralData::Struct(expressions) => write!(
-                    f,
-                    "EnumVariant({}::{}{{ {:?} }})",
-                    enum_type,
-                    variant_name,
-                    expressions
-                ),
-            },
-
-            Self::Int(v) => write!(f, "Int({v})"),
-            Self::Float(v) => write!(f, "Float({v})"),
-            Self::String(v) => write!(f, "String({v})"),
-            Self::Bool(v) => write!(f, "Bool({v})"),
-            Self::Tuple(v) => write!(f, "Tuple({v:?})"),
-            Self::Unit => write!(f, "()"),
-            Self::None => write!(f, "none"),
-            Self::Array(v) => write!(f, "Array({v:?})"),
-            Self::Map(v) => write!(f, "Map({v:?})"),
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct AnonymousStructField {
     pub field_name: FieldName,
     pub expression: Expression,
 }
 
-
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct AnonymousStructTypeField {
     pub field_name: FieldName,
     pub field_type: Type,
 }
 
-
-#[derive()]
+#[derive(Debug)]
 pub enum EnumLiteralData {
     Nothing,
     Tuple(Vec<Expression>),
     Struct(Vec<AnonymousStructField>),
 }
 
-impl Debug for EnumLiteralData {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        match self {
-            Self::Nothing => write!(f, ""),
-            Self::Tuple(types) => write!(f, "{types:?}"),
-            Self::Struct(types) => write!(f, "{types:?}"),
-        }
-    }
-}
-
-#[derive( Debug, Default)]
+#[derive(Debug, Default)]
 pub struct AnonymousStructType {
     pub fields: Vec<AnonymousStructTypeField>,
 }
 
-impl Display for AnonymousStructType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{{ {:?} }}", self.fields)
-    }
-}
-
-
-#[derive()]
+#[derive(Debug)]
 pub enum EnumVariant {
     Simple(Node),
     Tuple(Vec<Type>),
     Struct(AnonymousStructType),
 }
 
-impl Debug for EnumVariant {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        match self {
-            Self::Simple(_) => write!(f, ""),
-            Self::Tuple(types) => write!(f, "{types:?}"),
-            Self::Struct(anon_struct) => write!(f, "{anon_struct:?}"),
-        }
-    }
-}
-
-impl Display for EnumVariant {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        match self {
-            Self::Simple(_) => write!(f, ""),
-            Self::Tuple(types) => write!(f, "{}", comma(types)),
-            Self::Struct(anon_struct) => write!(f, "{anon_struct}"),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub enum Type {
     // Primitives
     Int(Node),
@@ -620,29 +427,8 @@ pub enum Type {
     Optional(Box<Type>),
 }
 
-impl Display for Type {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Int(_) => write!(f, "Int"),
-            Self::Float(_) => write!(f, "Float"),
-            Self::String(_) => write!(f, "String"),
-            Self::Bool(_) => write!(f, "Bool"),
-            Self::Unit(_) => write!(f, "()"),
-            Self::Any(_) => write!(f, "ANY"),
-            Self::Generic(a, b) => write!(f, "{a} {}", comma(b)),
-            Self::Struct(a) => write!(f, "{a}"),
-            Self::Array(t) => write!(f, "[{t}]"),
-            Self::Map(a, b) => write!(f, "[{a}: {b}]"),
-            Self::Tuple(types) => write!(f, "( {} )", comma(types)),
-            Self::Enum(a) => write!(f, "{a}"),
-            Self::TypeReference(a) => write!(f, "ref {a}"),
-            Self::Optional(a) => write!(f, "{a}?"),
-        }
-    }
-}
-
 // Takes a left and right side expression
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum BinaryOperator {
     Add(Node),
     Subtract(Node),
@@ -661,69 +447,16 @@ pub enum BinaryOperator {
 }
 
 // Only takes one expression argument
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum UnaryOperator {
     Not(Node),
     Negate(Node),
 }
 
 // Only takes one expression argument
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum PostfixOperator {
     Unwrap(Node), // option_operator
-}
-
-impl Display for CompoundOperator {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let symbol = match self {
-            Self::Add(_) => "+=",
-            Self::Sub(_) => "-=",
-            Self::Mul(_) => "*=",
-            Self::Div(_) => "/=",
-        };
-        write!(f, "{}", symbol)
-    }
-}
-
-impl Display for BinaryOperator {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let symbol = match self {
-            Self::Add(_) => "+",
-            Self::Subtract(_) => "-",
-            Self::Multiply(_) => "*",
-            Self::Divide(_) => "/",
-            Self::Modulo(_) => "%",
-            Self::LogicalOr(_) => "||",
-            Self::LogicalAnd(_) => "&&",
-            Self::Equal(_) => "==",
-            Self::NotEqual(_) => "!=",
-            Self::LessThan(_) => "<",
-            Self::LessEqual(_) => "<=",
-            Self::GreaterThan(_) => ">",
-            Self::GreaterEqual(_) => ">=",
-            Self::RangeExclusive(_) => "..",
-        };
-        write!(f, "{}", symbol)
-    }
-}
-
-impl Display for UnaryOperator {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let symbol = match self {
-            Self::Not(_) => "!",
-            Self::Negate(_) => "-",
-        };
-        write!(f, "{}", symbol)
-    }
-}
-
-impl Display for PostfixOperator {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let symbol = match self {
-            Self::Unwrap(_) => "?", // or "!" depending on your language design
-        };
-        write!(f, "{}", symbol)
-    }
 }
 
 // Patterns are used in matching and destructuring
@@ -747,47 +480,44 @@ pub enum StringPart {
     Interpolation(Box<Expression>, Option<FormatSpecifier>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum FormatSpecifier {
-    Debug(Node),                    // :?
-    LowerHex(Node),                 // :x
-    UpperHex(Node),                 // :X
-    Binary(Node),                   // :b
-    Float(Node),                    // :f
+    Debug(Node),                         // :?
+    LowerHex(Node),                      // :x
+    UpperHex(Node),                      // :X
+    Binary(Node),                        // :b
+    Float(Node),                         // :f
     Precision(u32, Node, PrecisionType), // :..2f or :..5s
 }
 
-impl Display for FormatSpecifier {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        match self {
-            Self::Debug(_) => write!(f, "?"),
-            Self::LowerHex(_) => write!(f, "x"),
-            Self::UpperHex(_) => write!(f, "X"),
-            Self::Binary(_) => write!(f, "b"),
-            Self::Float(_) => write!(f, "f"),
-            Self::Precision(number, precision_type, _) => {
-                write!(f, "{number}{precision_type}")
-            }
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum PrecisionType {
     Float(Node),
     String(Node),
 }
 
-impl Display for PrecisionType {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{self:?}")
-    }
-}
-
-#[derive(Debug)]
+#[derive()]
 pub struct Module {
     statements: Vec<Statement>,
     pub definitions: Vec<Definition>,
+}
+
+impl Debug for Module {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        for definition in &self.definitions {
+            writeln!(f, "{definition:?}")?;
+        }
+
+        if !self.definitions.is_empty() {
+            writeln!(f, "---")?;
+        }
+
+        for statement in &self.statements {
+            writeln!(f, "{statement:?}")?;
+        }
+
+        Ok(())
+    }
 }
 
 impl Module {

@@ -307,10 +307,10 @@ primary = {
     | static_call
     | function_call
     | struct_instantiation
-    | map_literal
     | parenthesized
     | literal
     | array_literal
+    | map_literal
     | variable
 }
 

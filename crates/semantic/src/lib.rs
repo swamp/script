@@ -134,11 +134,7 @@ impl ResolvedType {
             _ => false,
         }
     }
-
-
-
 }
-
 
 fn compare_struct_types(a: &ResolvedStructTypeRef, b: &ResolvedStructTypeRef) -> bool {
     let struct_a = a.borrow();
@@ -261,7 +257,6 @@ pub struct ResolvedExternalFunctionCall {
     pub function_expression: Box<ResolvedExpression>,
 }
 
-
 #[must_use]
 pub fn comma_seq<K: Clone + Hash + Eq + Display, V: Display>(values: &SeqMap<K, V>) -> String {
     let mut result = String::new();
@@ -296,7 +291,6 @@ pub fn comma_tuple_ref<K: Display, V: Display>(values: &[(&K, &V)]) -> String {
     result
 }
 
-
 #[derive(Debug)]
 pub struct ResolvedMemberCall {
     pub function: ResolvedFunctionRef,
@@ -328,7 +322,6 @@ pub struct ResolvedStructTypeField {
     pub resolved_type: ResolvedType,
     pub struct_expression: Box<ResolvedExpression>,
 }
-
 
 pub type ResolvedStructTypeFieldRef = Rc<ResolvedStructTypeField>;
 
@@ -384,7 +377,6 @@ pub enum ResolvedStringPart {
     Interpolation(ResolvedExpression, Option<ResolvedFormatSpecifier>),
 }
 
-
 #[derive(Debug)]
 pub struct ResolvedMutTupleField {
     #[allow(unused)]
@@ -418,7 +410,6 @@ pub struct Member {
 #[derive(Debug)]
 pub struct ResolvedBooleanExpression {
     #[allow(unused)]
-
     pub expression: ResolvedExpression,
 }
 
@@ -428,8 +419,6 @@ pub struct ResolvedMatch {
     pub expression: Box<ResolvedExpression>,
 }
 
-
-
 #[derive(Debug)]
 pub struct ResolvedMatchArm {
     #[allow(unused)]
@@ -437,7 +426,6 @@ pub struct ResolvedMatchArm {
     pub expression: Box<ResolvedExpression>,
     pub expression_type: ResolvedType,
 }
-
 
 #[derive(Debug)]
 pub enum ResolvedPattern {
@@ -456,8 +444,6 @@ pub enum ResolvedPatternElement {
     Wildcard(Node),
 }
 
-
-
 #[derive(Debug)]
 pub struct ResolvedIterator {
     pub key_type: Option<ResolvedType>, // It does not have to support a key type
@@ -465,7 +451,6 @@ pub struct ResolvedIterator {
     pub resolved_expression: ResolvedExpression,
     pub is_mutable: bool,
 }
-
 
 #[derive(Debug)]
 pub struct ResolvedStructInstantiation {
@@ -481,9 +466,7 @@ pub struct ResolvedVariableAssignment {
 }
 
 #[derive(Debug)]
-pub enum ResolvedCompoundOperator {
-
-}
+pub enum ResolvedCompoundOperator {}
 
 #[derive(Debug)]
 pub struct ResolvedVariableCompoundAssignment {
@@ -635,7 +618,6 @@ pub enum ResolvedLiteral {
     ),
 }
 
-
 #[derive(Debug)]
 pub struct ResolvedArrayInstantiation {
     pub expressions: Vec<ResolvedExpression>,
@@ -723,9 +705,6 @@ pub struct ResolvedStructType {
     pub functions: SeqMap<String, ResolvedFunctionRef>,
 }
 
-
-
-
 impl ResolvedStructType {
     pub fn new(
         // TODO: defined_in_module: ResolvedModuleRef,
@@ -746,11 +725,8 @@ impl ResolvedStructType {
     }
 
     pub fn field_index(&self, field_name: &str) -> Option<usize> {
-        self.fields
-            .get_index(&field_name.to_string())
+        self.fields.get_index(&field_name.to_string())
     }
-
-
 
     pub fn name(&self) -> &ResolvedLocalTypeIdentifier {
         &self.name
@@ -806,7 +782,6 @@ pub struct ResolvedMapType {
     pub value_type: ResolvedType,
 }
 
-
 pub type ResolvedEnumVariantStructTypeRef = Rc<ResolvedEnumVariantStructType>;
 
 #[derive(Debug)]
@@ -830,8 +805,6 @@ pub struct ResolvedEnumVariantStructType {
     pub ast_struct: ResolvedAnonymousStruct,
 }
 
-
-
 pub type ResolvedEnumVariantTupleTypeRef = Rc<ResolvedEnumVariantTupleType>;
 
 #[derive(Debug)]
@@ -841,14 +814,10 @@ pub struct ResolvedEnumVariantTupleType {
     pub fields_in_order: Vec<ResolvedType>,
 }
 
-
-
 pub type ResolvedTupleTypeRef = Rc<ResolvedTupleType>;
 
 #[derive(Debug)]
 pub struct ResolvedTupleType(pub Vec<ResolvedType>);
-
-
 
 impl ResolvedTupleType {
     pub fn new(types: Vec<ResolvedType>) -> Self {
@@ -865,9 +834,12 @@ pub struct ResolvedEnumType {
     pub number: TypeNumber,
 }
 
-
 impl ResolvedEnumType {
-    pub fn new(name: ResolvedLocalTypeIdentifier, module_path: ResolvedModulePath, number: TypeNumber) -> Self {
+    pub fn new(
+        name: ResolvedLocalTypeIdentifier,
+        module_path: ResolvedModulePath,
+        number: TypeNumber,
+    ) -> Self {
         Self {
             name,
             module_path,
@@ -890,8 +862,6 @@ pub struct ResolvedEnumVariantType {
     pub number: TypeNumber,
 }
 
-
-
 pub type ResolvedEnumVariantStructFieldTypeRef = Rc<ResolvedEnumVariantStructFieldType>;
 
 #[derive(Debug)]
@@ -902,7 +872,6 @@ pub struct ResolvedEnumVariantStructFieldType {
     pub resolved_type: ResolvedType,
 }
 
-
 pub type ResolvedEnumVariantTupleFieldTypeRef = Rc<ResolvedEnumVariantTupleFieldType>;
 
 #[derive(Debug)]
@@ -912,7 +881,6 @@ pub struct ResolvedEnumVariantTupleFieldType {
     pub enum_variant: ResolvedEnumVariantTypeRef,
     pub resolved_type: ResolvedType,
 }
-
 
 impl ResolvedEnumVariantType {
     pub fn new(
@@ -942,7 +910,6 @@ impl ResolvedEnumVariantType {
     }
 }
 
-
 #[derive(Debug, Clone)]
 pub enum ResolvedEnumVariantContainerType {
     Struct(ResolvedEnumVariantStructTypeRef),
@@ -950,11 +917,8 @@ pub enum ResolvedEnumVariantContainerType {
     Nothing,
 }
 
-
 #[derive(Debug)]
-pub struct ResolvedImplMember {
-
-}
+pub struct ResolvedImplMember {}
 
 #[derive(Debug)]
 pub struct ImplType {
@@ -983,7 +947,6 @@ pub struct ResolvedModule {
 }
 
 pub type ResolvedModuleRef = Rc<RefCell<ResolvedModule>>;
-
 
 impl ResolvedModule {
     pub fn new(module_path: ResolvedModulePath) -> Self {
@@ -1053,7 +1016,6 @@ impl ResolvedModules {
         self.modules.contains_key(&module_path)
     }
 }
-
 
 // Immutable part
 #[derive(Debug)]
@@ -1149,7 +1111,6 @@ pub enum ResolvedEnumLiteralData {
     Tuple(Vec<ResolvedExpression>),
     Struct(Vec<ResolvedExpression>),
 }
-
 
 #[derive(Debug)]
 pub struct ResolvedStaticCallGeneric {

@@ -11,7 +11,10 @@ use swamp_script_core::extra::{SparseValueId, SparseValueMap};
 use swamp_script_core::value::{format_value, to_rust_value, Value, ValueError};
 pub use swamp_script_semantic::ns::ResolvedModuleNamespace;
 use swamp_script_semantic::prelude::*;
-use swamp_script_semantic::{ResolvedAccess, ResolvedBinaryOperatorKind, ResolvedForPattern, ResolvedFunction, ResolvedPatternElement, ResolvedStaticCall};
+use swamp_script_semantic::{
+    ResolvedAccess, ResolvedBinaryOperatorKind, ResolvedForPattern, ResolvedFunction,
+    ResolvedPatternElement, ResolvedStaticCall,
+};
 use tracing::{debug, error, info, warn};
 
 pub mod err;
@@ -1651,8 +1654,12 @@ impl<'a, C> Interpreter<'a, C> {
         let result: Value = match (left_val, op, right_val) {
             // Integer operations
             (Value::Int(a), ResolvedBinaryOperatorKind::Add, Value::Int(b)) => Value::Int(a + b),
-            (Value::Int(a), ResolvedBinaryOperatorKind::Subtract, Value::Int(b)) => Value::Int(a - b),
-            (Value::Int(a), ResolvedBinaryOperatorKind::Multiply, Value::Int(b)) => Value::Int(a * b),
+            (Value::Int(a), ResolvedBinaryOperatorKind::Subtract, Value::Int(b)) => {
+                Value::Int(a - b)
+            }
+            (Value::Int(a), ResolvedBinaryOperatorKind::Multiply, Value::Int(b)) => {
+                Value::Int(a * b)
+            }
             (Value::Int(a), ResolvedBinaryOperatorKind::Divide, Value::Int(b)) => {
                 if b == 0 {
                     return Err("Division by zero".to_string())?;
@@ -1662,37 +1669,73 @@ impl<'a, C> Interpreter<'a, C> {
             (Value::Int(a), ResolvedBinaryOperatorKind::Modulo, Value::Int(b)) => Value::Int(a % b),
 
             // Float operations
-            (Value::Float(a), ResolvedBinaryOperatorKind::Add, Value::Float(b)) => Value::Float(a + b),
-            (Value::Float(a), ResolvedBinaryOperatorKind::Subtract, Value::Float(b)) => Value::Float(a - b),
-            (Value::Float(a), ResolvedBinaryOperatorKind::Multiply, Value::Float(b)) => Value::Float(a * b),
+            (Value::Float(a), ResolvedBinaryOperatorKind::Add, Value::Float(b)) => {
+                Value::Float(a + b)
+            }
+            (Value::Float(a), ResolvedBinaryOperatorKind::Subtract, Value::Float(b)) => {
+                Value::Float(a - b)
+            }
+            (Value::Float(a), ResolvedBinaryOperatorKind::Multiply, Value::Float(b)) => {
+                Value::Float(a * b)
+            }
             (Value::Float(a), ResolvedBinaryOperatorKind::Divide, Value::Float(b)) => {
                 if b.abs().inner() <= 400 {
                     return Err("Division by zero".to_string())?;
                 }
                 Value::Float(a / b)
             }
-            (Value::Float(a), ResolvedBinaryOperatorKind::Modulo, Value::Float(b)) => Value::Float(a % b),
+            (Value::Float(a), ResolvedBinaryOperatorKind::Modulo, Value::Float(b)) => {
+                Value::Float(a % b)
+            }
 
-            (Value::Float(a), ResolvedBinaryOperatorKind::GreaterThan, Value::Float(b)) => Value::Bool(a > b),
-            (Value::Float(a), ResolvedBinaryOperatorKind::GreaterEqual, Value::Float(b)) => Value::Bool(a >= b),
-            (Value::Float(a), ResolvedBinaryOperatorKind::LessThan, Value::Float(b)) => Value::Bool(a < b),
-            (Value::Float(a), ResolvedBinaryOperatorKind::LessEqual, Value::Float(b)) => Value::Bool(a <= b),
+            (Value::Float(a), ResolvedBinaryOperatorKind::GreaterThan, Value::Float(b)) => {
+                Value::Bool(a > b)
+            }
+            (Value::Float(a), ResolvedBinaryOperatorKind::GreaterEqual, Value::Float(b)) => {
+                Value::Bool(a >= b)
+            }
+            (Value::Float(a), ResolvedBinaryOperatorKind::LessThan, Value::Float(b)) => {
+                Value::Bool(a < b)
+            }
+            (Value::Float(a), ResolvedBinaryOperatorKind::LessEqual, Value::Float(b)) => {
+                Value::Bool(a <= b)
+            }
 
             // Boolean operations
-            (Value::Bool(a), ResolvedBinaryOperatorKind::LogicalAnd, Value::Bool(b)) => Value::Bool(a && b),
-            (Value::Bool(a), ResolvedBinaryOperatorKind::LogicalOr, Value::Bool(b)) => Value::Bool(a || b),
+            (Value::Bool(a), ResolvedBinaryOperatorKind::LogicalAnd, Value::Bool(b)) => {
+                Value::Bool(a && b)
+            }
+            (Value::Bool(a), ResolvedBinaryOperatorKind::LogicalOr, Value::Bool(b)) => {
+                Value::Bool(a || b)
+            }
 
             // Comparison operations
-            (Value::Int(a), ResolvedBinaryOperatorKind::Equal, Value::Int(b)) => Value::Bool(a == b),
-            (Value::Int(a), ResolvedBinaryOperatorKind::NotEqual, Value::Int(b)) => Value::Bool(a != b),
-            (Value::Int(a), ResolvedBinaryOperatorKind::LessThan, Value::Int(b)) => Value::Bool(a < b),
-            (Value::Int(a), ResolvedBinaryOperatorKind::GreaterThan, Value::Int(b)) => Value::Bool(a > b),
-            (Value::Int(a), ResolvedBinaryOperatorKind::LessEqual, Value::Int(b)) => Value::Bool(a <= b),
-            (Value::Int(a), ResolvedBinaryOperatorKind::GreaterEqual, Value::Int(b)) => Value::Bool(a >= b),
+            (Value::Int(a), ResolvedBinaryOperatorKind::Equal, Value::Int(b)) => {
+                Value::Bool(a == b)
+            }
+            (Value::Int(a), ResolvedBinaryOperatorKind::NotEqual, Value::Int(b)) => {
+                Value::Bool(a != b)
+            }
+            (Value::Int(a), ResolvedBinaryOperatorKind::LessThan, Value::Int(b)) => {
+                Value::Bool(a < b)
+            }
+            (Value::Int(a), ResolvedBinaryOperatorKind::GreaterThan, Value::Int(b)) => {
+                Value::Bool(a > b)
+            }
+            (Value::Int(a), ResolvedBinaryOperatorKind::LessEqual, Value::Int(b)) => {
+                Value::Bool(a <= b)
+            }
+            (Value::Int(a), ResolvedBinaryOperatorKind::GreaterEqual, Value::Int(b)) => {
+                Value::Bool(a >= b)
+            }
 
             // String operations
-            (Value::String(a), ResolvedBinaryOperatorKind::Add, Value::String(b)) => Value::String(a + &b),
-            (Value::String(a), ResolvedBinaryOperatorKind::Equal, Value::String(b)) => Value::Bool(a == b),
+            (Value::String(a), ResolvedBinaryOperatorKind::Add, Value::String(b)) => {
+                Value::String(a + &b)
+            }
+            (Value::String(a), ResolvedBinaryOperatorKind::Equal, Value::String(b)) => {
+                Value::Bool(a == b)
+            }
 
             (Value::String(a), ResolvedBinaryOperatorKind::Add, Value::Int(b)) => {
                 Value::String(a + &b.to_string())
@@ -1701,8 +1744,12 @@ impl<'a, C> Interpreter<'a, C> {
                 Value::String(a.to_string() + &b)
             }
 
-            (Value::Bool(a), ResolvedBinaryOperatorKind::Equal, Value::Bool(b)) => Value::Bool(a == b),
-            (Value::Bool(a), ResolvedBinaryOperatorKind::NotEqual, Value::Bool(b)) => Value::Bool(a != b),
+            (Value::Bool(a), ResolvedBinaryOperatorKind::Equal, Value::Bool(b)) => {
+                Value::Bool(a == b)
+            }
+            (Value::Bool(a), ResolvedBinaryOperatorKind::NotEqual, Value::Bool(b)) => {
+                Value::Bool(a != b)
+            }
 
             _ => return Err(format!("Invalid binary operation {op:?} ").into()),
         };

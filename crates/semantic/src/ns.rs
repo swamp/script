@@ -2,7 +2,15 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use crate::{ExternalFunctionId, Hash, ResolvedEnumType, ResolvedEnumTypeRef, ResolvedEnumVariantType, ResolvedEnumVariantTypeRef, ResolvedExternalFunctionDefinition, ResolvedExternalFunctionDefinitionRef, ResolvedFunction, ResolvedFunctionSignature, ResolvedIdentifierName, ResolvedInternalFunctionDefinition, ResolvedInternalFunctionDefinitionRef, ResolvedLocalTypeIdentifier, ResolvedModulePath, ResolvedParameter, ResolvedRustType, ResolvedRustTypeRef, ResolvedStructType, ResolvedStructTypeRef, ResolvedTupleType, ResolvedTupleTypeRef, ResolvedType, TypeNumber};
+use crate::{
+    ExternalFunctionId, Hash, ResolvedEnumType, ResolvedEnumTypeRef, ResolvedEnumVariantType,
+    ResolvedEnumVariantTypeRef, ResolvedExternalFunctionDefinition,
+    ResolvedExternalFunctionDefinitionRef, ResolvedFunction, ResolvedFunctionSignature,
+    ResolvedIdentifierName, ResolvedInternalFunctionDefinition,
+    ResolvedInternalFunctionDefinitionRef, ResolvedLocalTypeIdentifier, ResolvedModulePath,
+    ResolvedParameter, ResolvedRustType, ResolvedRustTypeRef, ResolvedStructType,
+    ResolvedStructTypeRef, ResolvedTupleType, ResolvedTupleTypeRef, ResolvedType, TypeNumber,
+};
 use seq_map::{SeqMap, SeqMapError};
 use std::cell::RefCell;
 use std::fmt::{Debug, Display};
@@ -110,10 +118,10 @@ impl ResolvedModuleNamespace {
         let function_ref = Rc::new(function);
         match resolved_type {
             ResolvedType::Struct(struct_type_ref) => {
-                struct_type_ref.borrow_mut().functions.insert(
-                    name.to_string(),
-                    function_ref.clone(),
-                )?;
+                struct_type_ref
+                    .borrow_mut()
+                    .functions
+                    .insert(name.to_string(), function_ref.clone())?;
             }
             _ => return Err(SemanticError::CanOnlyUseStructForMemberFunctions),
         }

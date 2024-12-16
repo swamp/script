@@ -12,8 +12,8 @@ use std::{env, fs};
 use swamp_script_ast::prelude::*;
 use swamp_script_ast::Function;
 use swamp_script_parser::{AstParser, Rule};
-use tracing::{debug, info, trace};
 use swamp_script_source_map::SourceMap;
+use tracing::{debug, info, trace};
 
 pub struct ParseRoot {
     pub base_path: PathBuf,
@@ -84,16 +84,12 @@ impl ParseModule {
 #[derive(Debug)]
 pub struct RelativePath(pub String);
 
-
-
 impl ParseRoot {
     pub fn new(base_path: PathBuf) -> Self {
         Self { base_path }
     }
 
-
     pub fn parse(&self, contents: String, file_id: u16) -> Result<ParseModule, ParseRootError> {
-
         let parser = AstParser::new(file_id);
 
         let ast_program = parser.parse_script(&*contents)?;

@@ -8,7 +8,7 @@ use tracing::warn;
 pub fn check(script: &str, expected_output: &str) {
     let parser = AstParser {};
 
-    let program = parser.parse_script(script).expect("Failed to parse script");
+    let program = parser.parse_module(script).expect("Failed to parse script");
 
     let formatted_output = format!("{program:?}");
 

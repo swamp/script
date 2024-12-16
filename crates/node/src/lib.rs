@@ -1,15 +1,15 @@
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Formatter};
 
 type FileId = u16;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[derive(PartialEq, Eq, Hash, Default)]
 pub struct Span {
     pub file_id: FileId,
     pub offset: u32,
     pub length: u16,
 }
 
-impl Display for Span {
+impl Debug for Span {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "<{}:{} ({})>", self.offset, self.length, self.file_id)
     }
@@ -24,13 +24,13 @@ pub const fn convert_span(without: &SpanWithoutFileId, file_id: FileId) -> Span 
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[derive(PartialEq, Eq, Hash, Default)]
 pub struct SpanWithoutFileId {
     pub offset: u32,
     pub length: u16,
 }
 
-impl Display for SpanWithoutFileId {
+impl Debug for SpanWithoutFileId {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "<{}:{}>", self.offset, self.length)
     }
