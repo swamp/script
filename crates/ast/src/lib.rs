@@ -440,7 +440,7 @@ pub enum Expression {
     ), // Type::func(args)
     StaticCallGeneric(
         LocalTypeIdentifier,
-        LocalIdentifier,
+        MemberFunctionIdentifier,
         Vec<Expression>,
         Vec<Type>, // Generic arguments
     ),
@@ -470,7 +470,7 @@ pub struct MatchArm {
 pub enum Literal {
     Int(Node),
     Float(Node),
-    String(StringConst),
+    String(Node),
     Bool(Node),
     EnumVariant(
         QualifiedTypeIdentifier,
@@ -511,16 +511,16 @@ impl Debug for Literal {
                 ),
                 EnumLiteralData::Struct(expressions) => write!(
                     f,
-                    "EnumVariant({}::{}{{ {} }})",
+                    "EnumVariant({}::{}{{ {:?} }})",
                     enum_type,
                     variant_name,
-                    seq_map_to_string(expressions)
+                    expressions
                 ),
             },
 
             Self::Int(v) => write!(f, "Int({v})"),
             Self::Float(v) => write!(f, "Float({v})"),
-            Self::String(v) => write!(f, "String({})", v.0),
+            Self::String(v) => write!(f, "String({v})"),
             Self::Bool(v) => write!(f, "Bool({v})"),
             Self::Tuple(v) => write!(f, "Tuple({v:?})"),
             Self::Unit => write!(f, "()"),
@@ -531,11 +531,25 @@ impl Debug for Literal {
     }
 }
 
+#[derive(Debug)]
+pub struct AnonymousStructField {
+    pub field_name: FieldName,
+    pub expression: Expression,
+}
+
+
+#[derive(Debug)]
+pub struct AnonymousStructTypeField {
+    pub field_name: FieldName,
+    pub field_type: Type,
+}
+
+
 #[derive()]
 pub enum EnumLiteralData {
     Nothing,
     Tuple(Vec<Expression>),
-    Struct(SeqMap<LocalTypeIdentifier, Expression>),
+    Struct(Vec<AnonymousStructField>),
 }
 
 impl Debug for EnumLiteralData {
@@ -548,29 +562,23 @@ impl Debug for EnumLiteralData {
     }
 }
 
-#[derive(Clone, Eq, PartialEq, Debug, Default)]
-pub struct AnonymousStruct {
-    pub fields: SeqMap<FieldName, Type>,
+#[derive( Debug, Default)]
+pub struct AnonymousStructType {
+    pub fields: Vec<AnonymousStructTypeField>,
 }
 
-impl Display for AnonymousStruct {
+impl Display for AnonymousStructType {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{{ {} }}", self.fields)
+        write!(f, "{{ {:?} }}", self.fields)
     }
 }
 
-impl AnonymousStruct {
-    #[must_use]
-    pub const fn new(fields: SeqMap<FieldName, Type>) -> Self {
-        Self { fields }
-    }
-}
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive()]
 pub enum EnumVariant {
     Simple(Node),
     Tuple(Vec<Type>),
-    Struct(AnonymousStruct),
+    Struct(AnonymousStructType),
 }
 
 impl Debug for EnumVariant {

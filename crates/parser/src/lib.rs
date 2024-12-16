@@ -10,8 +10,8 @@ use pest::Parser;
 use pest_derive::Parser;
 use seq_map::SeqMap;
 use swamp_script_ast::{
-    prelude::*, CompoundOperator, FieldName, MemberFunctionIdentifier, ModulePathItem,
-    PatternElement,
+    prelude::*, AnonymousStructField, AnonymousStructTypeField, CompoundOperator, FieldName,
+    MemberFunctionIdentifier, ModulePathItem, PatternElement,
 };
 use swamp_script_ast::{Function, PostfixOperator};
 use swamp_script_node::SpanWithoutFileId;
@@ -26,6 +26,7 @@ pub struct GeneralError {
     pub description: String,
 }
 
+#[derive(Debug)]
 pub enum SpecificError {
     General(String),
     ExpectingTypeIdentifier,
@@ -65,8 +66,15 @@ pub enum SpecificError {
     MustHaveAtLeastOneArm,
     UnexpectedMatchArmRule(String),
     UnknownEnumVariant(String),
+    UnknownLiteral,
+    UnknownPrimary(String),
+    InvalidFormatSpecifier,
+    UnexpectedVariantField,
+    MutOnlyForVariables,
+    UnexpectedTokenInFunctionCall,
 }
 
+#[derive(Debug)]
 pub struct ParseError {
     pub span: SpanWithoutFileId,
     pub specific: SpecificError,
@@ -176,7 +184,10 @@ impl AstParser {
         })?;
 
         let type_identifier = self.parse_local_type_identifier(&type_id)?;
-        Ok(QualifiedTypeIdentifier::new(type_identifier, module_path_parsed))
+        Ok(QualifiedTypeIdentifier::new(
+            type_identifier,
+            module_path_parsed,
+        ))
     }
 
     fn get_inner_pairs<'a>(pair: &'a Pair<'a, Rule>) -> impl Iterator<Item = Pair<'a, Rule>> {
@@ -1250,7 +1261,10 @@ impl AstParser {
             }
             // TODO: Rule::interpolated_string => self.parse_interpolated_string(pair),
             Rule::literal => Ok(Expression::Literal(self.parse_literal(pair)?)),
-            Rule::variable => Ok(Expression::VariableAccess(self.expect_variable(pair)?)),
+            Rule::variable => Ok(Expression::VariableAccess(Variable::new(
+                self.to_node(&pair),
+                None,
+            ))),
             Rule::field_access => self.parse_field_access(pair),
             Rule::function_call => self.parse_function_call(pair),
             Rule::static_call => self.parse_static_call(pair),
@@ -1267,9 +1281,9 @@ impl AstParser {
             Rule::if_expr => self.parse_if_expr(pair),
             Rule::struct_instantiation => self.parse_struct_instantiation(pair),
             Rule::enum_literal => Ok(Expression::Literal(self.parse_enum_literal(pair)?)),
-            _ => Err(self.create_error(
-                &format!("Unexpected primary expression: {:?}", pair.as_rule()),
-                pair.as_span(),
+            _ => Err(self.create_error_pair(
+                SpecificError::UnknownPrimary(Self::pair_to_rule(&pair)),
+                &pair,
             )),
         }
     }
@@ -1349,17 +1363,21 @@ impl AstParser {
                     self.create_error_pair(SpecificError::InvalidPrecisionValue, &pair)
                 })?;
                 let typ = match s.chars().last().unwrap() {
-                    'f' => PrecisionType::Float,
-                    's' => PrecisionType::String,
+                    'f' => PrecisionType::Float(node),
+                    's' => PrecisionType::String(node),
                     _ => {
                         return Err(
                             self.create_error_pair(SpecificError::InvalidPrecisionType, &pair)
-                        )
+                        )?
                     }
                 };
-                Ok(FormatSpecifier::Precision(precision, typ))
+                Ok(FormatSpecifier::Precision(
+                    precision,
+                    self.to_node(&pair),
+                    typ,
+                ))
             }
-            _ => Err(self.create_error("Invalid format specifier", pair.as_span())),
+            _ => Err(self.create_error_pair(SpecificError::InvalidFormatSpecifier, &pair)),
         }
     }
 
@@ -1374,25 +1392,24 @@ impl AstParser {
 
         // Parse variant name
         let variant_pair = Self::expect_next(&mut inner, Rule::type_identifier)?;
-        let variant = LocalTypeIdentifier::new(convert_from_pair(&pair), variant_pair.as_str());
+        let variant = LocalTypeIdentifier::new(self.to_node(&variant_pair));
 
         // Parse fields if they exist
         let outer_data = if let Some(fields_pair) = inner.next() {
             match fields_pair.as_rule() {
                 Rule::struct_fields_lit => {
-                    let mut fields = SeqMap::new();
+                    let mut fields = Vec::new();
                     for field in Self::get_inner_pairs(&fields_pair) {
                         if field.as_rule() == Rule::struct_field {
                             let mut field_inner = Self::get_inner_pairs(&field);
-                            let field_name = LocalTypeIdentifier::new(
-                                convert_from_pair(&pair),
-                                &Self::expect_identifier(&mut field_inner)?,
-                            );
-                            let field_value =
-                                self.parse_expression(Self::next_pair(&mut field_inner)?)?;
-                            fields
-                                .insert(field_name, field_value)
-                                .expect("should not be duplicates"); // TODO: Error handling
+                            let field_name = self.expect_field_name(&mut field_inner)?;
+                            let field_expression =
+                                self.parse_expression(&Self::next_pair(&mut field_inner)?)?;
+                            let anonym_field = AnonymousStructField {
+                                field_name,
+                                expression: field_expression,
+                            };
+                            fields.push(anonym_field);
                         }
                     }
                     EnumLiteralData::Struct(fields)
@@ -1406,13 +1423,9 @@ impl AstParser {
                     EnumLiteralData::Tuple(expressions)
                 }
                 _ => {
-                    return Err(self.create_error(
-                        &format!(
-                            "Unexpected enum variant fields: {:?}",
-                            fields_pair.as_rule()
-                        ),
-                        fields_pair.as_span(),
-                    ))
+                    return Err(
+                        self.create_error_pair(SpecificError::UnexpectedVariantField, &fields_pair)
+                    );
                 }
             }
         } else {
@@ -1423,7 +1436,7 @@ impl AstParser {
     }
 
     fn parse_if_expr(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
-        let mut inner = pair.into_inner();
+        let mut inner = pair.clone().into_inner();
 
         // Parse condition
         let condition = self.parse_expression(&inner.next().unwrap())?;
@@ -1434,39 +1447,38 @@ impl AstParser {
 
         // Parse else block if it exists
         let else_expr = if let Some(else_block) = inner.next() {
-            self.parse_expression(&else_block.into_inner().next().unwrap())?
+            Some(self.parse_expression(&else_block.into_inner().next().unwrap())?)
         } else {
-            Expression::Literal(Literal::Bool(false)) // Default else expression
+            None
         };
 
         Ok(Expression::IfElse(
             Box::new(condition),
             Box::new(then_expr),
-            Box::new(else_expr),
+            Box::new(else_expr.unwrap()),
         ))
     }
 
     fn parse_literal(&self, pair: &Pair<Rule>) -> Result<Literal, ParseError> {
         let inner = self.next_inner_pair(pair)?;
-
+        let node = self.to_node(&inner);
         match inner.as_rule() {
-            Rule::int_lit => Ok(Literal::Int(inner.as_str().parse().map_err(|_| {
-                self.create_error("Invalid integer literal", inner.as_span())
-            })?)),
-            Rule::float_lit => Ok(Literal::Float(self.to_node(&inner))),
+            Rule::int_lit => Ok(Literal::Int(node)),
+            Rule::float_lit => Ok(Literal::Float(node)),
             Rule::string_lit => {
                 let content = inner.as_str();
                 // Remove quotes and handle escapes
+                /*
                 let processed = content[1..content.len() - 1]
                     .replace("\\\"", "\"")
                     .replace("\\n", "\n")
                     .replace("\\t", "\t")
                     .replace("\\\\", "\\");
-                Ok(Literal::String(StringConst(processed)))
+
+                 */
+                Ok(Literal::String(node))
             }
-            Rule::bool_lit => Ok(Literal::Bool(inner.as_str().parse().map_err(|_| {
-                self.create_error("Invalid boolean literal", inner.as_span())
-            })?)),
+            Rule::bool_lit => Ok(Literal::Bool(node)),
             Rule::unit_lit => Ok(Literal::Unit),
             Rule::none_lit => Ok(Literal::None),
             Rule::tuple_lit => {
@@ -1476,10 +1488,7 @@ impl AstParser {
                 }
                 Ok(Literal::Tuple(expressions))
             }
-            _ => Err(self.create_error(
-                &format!("Unknown literal type: {:?}", inner.as_rule()),
-                inner.as_span(),
-            )),
+            _ => Err(self.create_error_pair(SpecificError::UnknownLiteral, &inner)),
         }
     }
 
@@ -1510,7 +1519,7 @@ impl AstParser {
         let mut inner = Self::get_inner_pairs(&pair);
 
         // Parse function name
-        let func_name = Self::expect_identifier(&mut inner)?;
+        let func_name = self.expect_identifier(&mut inner)?;
         let mut args = Vec::new();
 
         // Parse arguments
@@ -1536,28 +1545,22 @@ impl AstParser {
                             args.push(Expression::MutRef(MutVariableRef(var)));
                         }
                         _ => {
-                            return Err(self.create_error(
-                                "Can only use mut with variables",
-                                arg_pair.as_span(),
-                            ))
+                            return Err(self
+                                .create_error_pair(SpecificError::MutOnlyForVariables, &arg_pair))
                         }
                     }
                 } else {
                     args.push(expr);
                 }
             } else {
-                return Err(self.create_error(
-                    &format!(
-                        "Unexpected token in function call: {:?}",
-                        arg_pair.as_rule()
-                    ),
-                    arg_pair.as_span(),
-                ));
+                return Err(
+                    self.create_error_pair(SpecificError::UnexpectedTokenInFunctionCall, &arg_pair)
+                );
             }
         }
 
         Ok(Expression::FunctionCall(
-            Box::new(Expression::VariableAccess(Variable::new(func_name, false))),
+            Box::new(Expression::VariableAccess(Variable::new(func_name.0, None))),
             args,
         ))
     }
@@ -1568,15 +1571,12 @@ impl AstParser {
         // Parse type name
         let type_name_pair = Self::next_pair(&mut inner)?;
         let base_type = if type_name_pair.as_rule() != Rule::type_identifier {
-            return Err(self.create_error(
-                &format!(
-                    "Expected type identifier, found {:?}",
-                    type_name_pair.as_rule()
-                ),
-                type_name_pair.as_span(),
+            return Err(self.create_error_pair(
+                SpecificError::ExpectedTypeIdentifier(Self::pair_to_rule(&type_name_pair)),
+                &type_name_pair,
             ));
         } else {
-            LocalTypeIdentifier::new(convert_from_pair(&type_name_pair), type_name_pair.as_str())
+            LocalTypeIdentifier::new(self.to_node(&type_name_pair))
         };
 
         // generic parameters
@@ -1615,13 +1615,13 @@ impl AstParser {
         match generic_types {
             Some(types) => Ok(Expression::StaticCallGeneric(
                 base_type,
-                LocalIdentifier::new(convert_from_pair(&func_name_pair), func_name_pair.as_str()),
+                MemberFunctionIdentifier(self.to_node(&func_name_pair)),
                 args,
                 types,
             )),
             None => Ok(Expression::StaticCall(
                 base_type,
-                LocalIdentifier::new(convert_from_pair(&func_name_pair), func_name_pair.as_str()),
+                MemberFunctionIdentifier(self.to_node(&func_name_pair)),
                 args,
             )),
         }
@@ -1634,7 +1634,7 @@ impl AstParser {
                 let base_type = if let Some(inner_pair) = inner.next() {
                     self.parse_type(inner_pair)?
                 } else {
-                    self.parse_type_from_str(&pair)?
+                    self.parse_type_from_str(&mut inner, &pair)?
                 };
 
                 let is_optional = inner.any(|p| p.as_rule() == Rule::optional_marker);
@@ -1669,7 +1669,10 @@ impl AstParser {
                 let base_type = self.parse_type(inner)?;
                 Ok(Type::Optional(Box::new(base_type)))
             }
-            Rule::built_in_type => self.parse_type_from_str(&pair),
+            Rule::built_in_type => {
+                let mut inner = pair.clone().into_inner();
+                self.parse_type_from_str(&mut inner, &pair)
+            }
             Rule::qualified_type_identifier => {
                 let qualified_identifier = self.parse_qualified_type_identifier(&pair)?;
                 Ok(Type::TypeReference(qualified_identifier))
@@ -1699,14 +1702,20 @@ impl AstParser {
         }
     }
 
-    fn parse_type_from_str(&self, pair: &Pair<Rule>) -> Result<Type, ParseError> {
+    fn parse_type_from_str<'a>(
+        &self,
+        mut iterator: &mut impl Iterator<Item = Pair<'a, Rule>>,
+        pair: &Pair<Rule>,
+    ) -> Result<Type, ParseError> {
         let node = self.to_node(pair);
         match pair.as_str() {
             "Int" => Ok(Type::Int(node)),
             "Float" => Ok(Type::Float(node)),
             "String" => Ok(Type::String(node)),
             "Bool" => Ok(Type::Bool(node)),
-            _ => Ok(Type::Struct(self.expect_qualified_type_identifier(pair)?)),
+            _ => Ok(Type::TypeReference(
+                self.expect_qualified_type_identifier(&mut iterator)?,
+            )),
         }
     }
 
@@ -1731,7 +1740,7 @@ impl AstParser {
         let pair = Self::next_pair(pairs)?;
         if pair.as_rule() != Rule::type_identifier {
             return Err(self.create_error(
-                SpecificError::ExpectedLocalTypeIdentifier(&format!("{:?}", pair.as_rule())),
+                SpecificError::ExpectedLocalTypeIdentifier(Self::pair_to_rule(&pair)),
                 pair.as_span(),
             ));
         }
@@ -1809,17 +1818,20 @@ impl AstParser {
                 let mut inner = Self::get_inner_pairs(&pair);
                 let name = self.expect_local_type_identifier(&mut inner)?;
 
-                let mut fields = SeqMap::new();
+                let mut fields = Vec::new();
+
                 while let Some(field_pair) = inner.next() {
                     let mut field_inner = Self::get_inner_pairs(&field_pair);
                     let field_name = self.expect_field_name(&mut field_inner)?;
                     let field_type = self.parse_type(Self::next_pair(&mut field_inner)?)?;
-                    fields
-                        .insert(field_name.0, field_type)
-                        .expect("duplicate field field"); // TODO: Handle as Err()
+                    let anonym_field = AnonymousStructTypeField {
+                        field_name,
+                        field_type,
+                    };
+                    fields.push(anonym_field);
                 }
 
-                let anon = AnonymousStruct::new(fields);
+                let anon = AnonymousStructType { fields };
                 Ok((name, EnumVariant::Struct(anon)))
             }
             _ => Err(self.create_error_pair(

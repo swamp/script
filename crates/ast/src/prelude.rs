@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 pub use crate::{
-    AnonymousStruct, BinaryOperator, Definition, EnumLiteralData, EnumVariant, Expression,
+    AnonymousStructType, BinaryOperator, Definition, EnumLiteralData, EnumVariant, Expression,
     FormatSpecifier, FunctionData, FunctionSignature, IdentifierName, ImplItem, ImplMember, Import,
     ImportItems, Literal, LocalIdentifier, LocalTypeIdentifier, MatchArm, Module, ModulePath,
     MutVariableRef, Node, Parameter, Pattern, PostfixOperator, PrecisionType,
