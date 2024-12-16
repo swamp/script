@@ -3,10 +3,9 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 pub use crate::{
-    AnonymousStructType, BinaryOperator, Definition, EnumLiteralData, EnumVariant, Expression,
-    FormatSpecifier, FunctionData, FunctionSignature, IdentifierName, ImplItem, ImplMember, Import,
-    ImportItems, Literal, LocalIdentifier, LocalTypeIdentifier, MatchArm, Module, ModulePath,
-    MutVariableRef, Node, Parameter, Pattern, PostfixOperator, PrecisionType,
-    QualifiedTypeIdentifier, SelfParameter, Statement, StringConst, StringPart, StructType, Type,
-    UnaryOperator, Variable,
+    AnonymousStructType, BinaryOperator, Definition, EnumVariant, Expression, FormatSpecifier,
+    FunctionData, FunctionSignature, IdentifierName, ImplItem, ImplMember, Import, ImportItems,
+    Literal, LocalIdentifier, LocalTypeIdentifier, MatchArm, Module, ModulePath, MutVariableRef,
+    Node, Parameter, Pattern, PostfixOperator, PrecisionType, QualifiedTypeIdentifier,
+    SelfParameter, Statement, StringConst, StringPart, StructType, Type, UnaryOperator, Variable,
 };

@@ -64,9 +64,9 @@ fn function_call() {
     check(
         &script,
         r#"
-FunctionDef(add, [x: Int, y: Int], Int, [Expression(BinaryOp(VariableAccess(x), Add, VariableAccess(y)))])
+FunctionDef(Internal(FunctionData { signature: FunctionSignature { name: LocalIdentifier(<16:3>), params: [Parameter { variable: <20:1>, param_type: Int(<23:3>) }, Parameter { variable: <28:1>, param_type: Int(<31:3>) }], self_parameter: None, return_type: Some(Int(<39:3>)) }, body: [Expression(BinaryOp(VariableAccess(<61:1>), Add(<63:1>), VariableAccess(<65:1>)))] }))
 ---
-Let(VariableAssignment(result), FunctionCall(VariableAccess(add), [Literal(Int(10)), Literal(Int(20))]))
+Expression(VariableAssignment(<93:6>, FunctionCall(VariableAccess(<102:3>), [Literal(Int(<106:2>)), Literal(Int(<110:2>))])))
     "#,
     );
 }
@@ -78,7 +78,7 @@ fn struct_def() {
         ";
     check(
         script,
-        "StructDef(StructType { identifier: Person, fields: SeqMap(first_field: Int, second_field: String) })",
+        "StructDef(StructType { identifier: LocalTypeIdentifier(<20:6>), fields: [FieldType { field_name: FieldName(<29:11>), field_type: Int(<42:3>) }, FieldType { field_name: FieldName(<47:12>), field_type: String(<61:6>) }] })",
     )
 }
 
@@ -89,7 +89,8 @@ fn struct_init() {
         ";
     check(
         script,
-        "Expression(VariableAssignment(<13:6>, StructInstantiation(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<22:6>), module_path: None }, [AnonymousStructField { field_name: FieldName(<31:11>), expression: Literal(Int(<44:1>)) }, AnonymousStructField { field_name: FieldName(<47:12>), expression: Literal(String(<61:5>)) }])))
+        r"
+        Expression(VariableAssignment(<13:6>, StructInstantiation(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<22:6>), module_path: None }, [FieldExpression { field_name: FieldName(<31:11>), expression: Literal(Int(<44:1>)) }, FieldExpression { field_name: FieldName(<47:12>), expression: Literal(String(<61:5>)) }])))
 ",
     );
 }
@@ -137,9 +138,10 @@ fn struct_def_and_instantiation() {
             person = Person { first_field: 1, second_field: "Bob" }
         "#,
         r#"
-StructDef(StructType { identifier: Person, fields: SeqMap(first_field: Int, second_field: String) })
+StructDef(StructType { identifier: LocalTypeIdentifier(<20:6>), fields: [FieldType { field_name: FieldName(<29:11>), field_type: Int(<42:3>) }, FieldType { field_name: FieldName(<47:12>), field_type: String(<61:6>) }] })
 ---
-Let(VariableAssignment(person), StructInstantiation(Person, SeqMap(first_field: Literal(Int(1)), second_field: Literal(String(Bob)))))
+Expression(VariableAssignment(<82:6>, StructInstantiation(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<91:6>), module_path: None }, [FieldExpression { field_name: FieldName(<100:11>), expression: Literal(Int(<113:1>)) }, FieldExpression { field_name: FieldName(<116:12>), expression: Literal(String(<130:5>)) }])))
+
     "#,
     );
 }
@@ -148,7 +150,8 @@ Let(VariableAssignment(person), StructInstantiation(Person, SeqMap(first_field: 
 fn nested_function_calls() {
     check(
         "result = add(mul(2, 3), div(10, 2))",
-        "Let(VariableAssignment(result), FunctionCall(VariableAccess(add), [FunctionCall(VariableAccess(mul), [Literal(Int(2)), Literal(Int(3))]), FunctionCall(VariableAccess(div), [Literal(Int(10)), Literal(Int(2))])]))",
+        "Expression(VariableAssignment(<0:6>, FunctionCall(VariableAccess(<9:3>), [FunctionCall(VariableAccess(<13:3>), [Literal(Int(<17:1>)), Literal(Int(<20:1>))]), FunctionCall(VariableAccess(<24:3>), [Literal(Int(<28:2>)), Literal(Int(<32:1>))])])))
+",
     );
 }
 
@@ -176,7 +179,7 @@ fn not_operator() {
     check(
         &script,
         r#"
-Expression(UnaryOp(Not, VariableAccess(x)))
+Expression(UnaryOp(Not(<9:1>), VariableAccess(<10:1>)))
         "#,
     );
 }
@@ -190,8 +193,9 @@ fn struct_field_access_with_struct_init() {
     check(
         script,
         r#"
-        Let(VariableAssignment(person), StructInstantiation(Person, SeqMap(first_field: Literal(Int(1)), second_field: Literal(String(Bob)))))
-        Let(VariableAssignment(name), FieldAccess(VariableAccess(person), second_field))
+Expression(VariableAssignment(<9:6>, StructInstantiation(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<18:6>), module_path: None }, [FieldExpression { field_name: FieldName(<27:11>), expression: Literal(Int(<40:1>)) }, FieldExpression { field_name: FieldName(<43:12>), expression: Literal(String(<57:5>)) }])))
+Expression(VariableAssignment(<73:4>, FieldAccess(VariableAccess(<80:6>), FieldName(<87:12>))))
+
     "#,
     );
 }
@@ -203,7 +207,7 @@ fn struct_field_access() {
     ";
     check(
         script,
-        "Expression(VariableAssignment(<9:4>, FieldAccess(VariableAccess(<16:6>), FieldName(<16:24>))))",
+        "Expression(VariableAssignment(<9:4>, FieldAccess(VariableAccess(<16:6>), FieldName(<23:12>))))",
     );
 }
 
@@ -227,8 +231,9 @@ fn struct_field_assignment_chain2() {
     check(
         script,
         r#"
-[variable_assignment a <- [10, 20]]
-[index_access [variable_access a][1]]"#,
+Expression(VariableAssignment(<9:1>, Literal(Array([Literal(Int(<14:2>)), Literal(Int(<18:2>))]))))
+Expression(IndexAccess(VariableAccess(<30:1>), Literal(Int(<32:1>))))
+"#,
     );
 }
 
@@ -242,8 +247,8 @@ fn struct_field_assignment_chain7() {
         script,
         r#"
 
-[variable_assignment a <- [10, 20]]
-[member_call [variable_access a].remove(99)]
+Expression(VariableAssignment(<9:1>, Literal(Array([Literal(Int(<14:2>)), Literal(Int(<18:2>))]))))
+Expression(MemberCall(VariableAccess(<30:1>), MemberFunctionIdentifier(<32:6>), [Literal(Int(<39:2>))]))
 
 "#,
     );
@@ -281,8 +286,8 @@ fn nested_loops() {
     check(
         script,
         r#"
-  Let(VariableAssignment(x), Literal(Int(0)))
-WhileLoop(BinaryOp(VariableAccess(x), LessThan, Literal(Int(3))), [Let(VariableAssignment(y), Literal(Int(0))), WhileLoop(BinaryOp(VariableAccess(y), LessThan, Literal(Int(2))), [Expression(FunctionCall(VariableAccess(print), [BinaryOp(VariableAccess(x), Add, VariableAccess(y))])), Let(VariableAssignment(y), BinaryOp(VariableAccess(y), Add, Literal(Int(1))))]), Let(VariableAssignment(x), BinaryOp(VariableAccess(x), Add, Literal(Int(1))))])
+Expression(VariableAssignment(<9:1>, Literal(Int(<13:1>))))
+WhileLoop(BinaryOp(VariableAccess(<29:1>), LessThan(<31:1>), Literal(Int(<33:1>))), [Expression(VariableAssignment(<49:1>, Literal(Int(<53:1>)))), WhileLoop(BinaryOp(VariableAccess(<73:1>), LessThan(<75:1>), Literal(Int(<77:1>))), [Expression(FunctionCall(VariableAccess(<97:5>), [BinaryOp(VariableAccess(<103:1>), Add(<105:1>), VariableAccess(<107:1>))])), Expression(VariableAssignment(<126:1>, BinaryOp(VariableAccess(<130:1>), Add(<132:1>), Literal(Int(<134:1>)))))]), Expression(VariableAssignment(<162:1>, BinaryOp(VariableAccess(<166:1>), Add(<168:1>), Literal(Int(<170:1>)))))])
   "#,
     );
 }
@@ -297,10 +302,10 @@ fn mixed_expressions_with_chain() {
     check(
         script,
         r#"
-StructDef(StructType { identifier: Point, fields: SeqMap(x: Int, y: Int) })
+StructDef(StructType { identifier: LocalTypeIdentifier(<16:5>), fields: [FieldType { field_name: FieldName(<24:1>), field_type: Int(<27:3>) }, FieldType { field_name: FieldName(<32:1>), field_type: Int(<35:3>) }] })
 ---
-Let(VariableAssignment(p1), StructInstantiation(Point, SeqMap(x: Literal(Int(5)), y: Literal(Int(10)))))
-Let(VariableAssignment(dist), FunctionCall(VariableAccess(add), [FunctionCall(VariableAccess(mul), [FieldAccess(VariableAccess(p1), x), FieldAccess(VariableAccess(p1), x)]), FunctionCall(VariableAccess(mul), [FieldAccess(VariableAccess(p1), y), FieldAccess(VariableAccess(p1), y)])]))
+Expression(VariableAssignment(<49:2>, StructInstantiation(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<54:5>), module_path: None }, [FieldExpression { field_name: FieldName(<62:1>), expression: Literal(Int(<65:1>)) }, FieldExpression { field_name: FieldName(<68:1>), expression: Literal(Int(<71:2>)) }])))
+Expression(VariableAssignment(<84:4>, FunctionCall(VariableAccess(<91:3>), [FunctionCall(VariableAccess(<95:3>), [FieldAccess(VariableAccess(<99:2>), FieldName(<102:1>)), FieldAccess(VariableAccess(<105:2>), FieldName(<108:1>))]), FunctionCall(VariableAccess(<112:3>), [FieldAccess(VariableAccess(<116:2>), FieldName(<119:1>)), FieldAccess(VariableAccess(<122:2>), FieldName(<125:1>))])])))
 
     "#,
     );
@@ -324,7 +329,7 @@ fn small_chain() {
     ";
     check(
         &script,
-        "Expression(MemberCall(FieldAccess(VariableAccess(<9:2>), FieldName(<9:11>)), MemberFunctionIdentifier(<9:11>), [Literal(Int(<18:1>))]))",
+        "Expression(MemberCall(FieldAccess(VariableAccess(<9:2>), FieldName(<12:1>)), MemberFunctionIdentifier(<14:3>), [Literal(Int(<18:1>))]))",
     );
 }
 
@@ -372,7 +377,7 @@ fn function_definition() {
     check(
         &script,
         r#"
-FunctionDef(add, [x: Int, y: Int], Int, [Expression(BinaryOp(VariableAccess(x), Add, VariableAccess(y)))])
+FunctionDef(Internal(FunctionData { signature: FunctionSignature { name: LocalIdentifier(<12:3>), params: [Parameter { variable: <16:1>, param_type: Int(<19:3>) }, Parameter { variable: <24:1>, param_type: Int(<27:3>) }], self_parameter: None, return_type: Some(Int(<35:3>)) }, body: [Expression(BinaryOp(VariableAccess(<53:1>), Add(<55:1>), VariableAccess(<57:1>)))] }))
     "#,
     );
 }
@@ -388,7 +393,7 @@ fn function_with_no_parameters() {
     check(
         &script,
         r#"
-FunctionDef(add, [], Int, [Expression(Literal(Int(42)))])
+FunctionDef(Internal(FunctionData { signature: FunctionSignature { name: LocalIdentifier(<12:3>), params: [], self_parameter: None, return_type: Some(Int(<21:3>)) }, body: [Expression(Literal(Int(<39:2>)))] }))
     "#,
     );
 }
@@ -404,7 +409,7 @@ fn function_with_no_parameters_return() {
     check(
         &script,
         r#"
-FunctionDef(add, [], Int, [Return(Literal(Int(42)))])
+FunctionDef(Internal(FunctionData { signature: FunctionSignature { name: LocalIdentifier(<12:3>), params: [], self_parameter: None, return_type: Some(Int(<21:3>)) }, body: [Return(Literal(Int(<46:2>)))] }))
     "#,
     );
 }
@@ -421,9 +426,9 @@ fn function_call_with_no_parameters() {
     check(
         &script,
         r#"
-FunctionDef(single, [], Int, [Expression(Literal(Int(42)))])
+FunctionDef(Internal(FunctionData { signature: FunctionSignature { name: LocalIdentifier(<12:6>), params: [], self_parameter: None, return_type: Some(Int(<24:3>)) }, body: [Expression(Literal(Int(<42:2>)))] }))
 ---
-Let(VariableAssignment(result), FunctionCall(VariableAccess(single), []))
+Expression(VariableAssignment(<63:6>, FunctionCall(VariableAccess(<72:6>), [])))
     "#,
     );
 }
@@ -521,7 +526,7 @@ fn real_negative() {
     check(
         &script,
         r#"
-Expression(UnaryOp(Negate, Literal(Float(2.2))))
+Expression(Literal(Float(<9:4>)))
         "#,
     );
 }
@@ -549,7 +554,7 @@ fn real_literal() {
     check(
         &script,
         r#"
-Expression(Literal(Float(2.2)))
+Expression(Literal(Float(<9:3>)))
         "#,
     );
 }
@@ -562,7 +567,7 @@ fn string_literal() {
     check(
         &script,
         r#"
-Expression(Literal(String(hello)))
+Expression(Literal(String(<5:7>)))
         "#,
     );
 }
@@ -590,7 +595,8 @@ fn tuple_type() {
     check(
         &script,
         r#"
-FunctionDef(some_tuple, [], Tuple([String, Int, Float]), [Expression(Literal(Tuple([Literal(String(hello)), Literal(Int(1)), Literal(Float(2.2))])))])
+FunctionDef(Internal(FunctionData { signature: FunctionSignature { name: LocalIdentifier(<8:10>), params: [], self_parameter: None, return_type: Some(Tuple([String(<26:6>), Int(<34:3>), Float(<39:5>)])) }, body: [Expression(Literal(Tuple([Literal(String(<59:7>)), Literal(Int(<68:1>)), Literal(Float(<71:3>))])))] }))
+
         "#,
     );
 }
@@ -607,32 +613,33 @@ fn enum_type() {
     check(
         &script,
         r#"
-EnumDef(Custom, SeqMap(Idle: , Running: [Int, Float], Sleeping: SeqMap(hours: Int)))
+EnumDef(LocalTypeIdentifier(<10:6>), [Simple(<27:4>), Tuple(<41:7>, [Int(<49:3>), Float(<54:5>)]), Struct(<70:8>, AnonymousStructType { fields: [FieldType { field_name: FieldName(<81:5>), field_type: Int(<88:3>) }] })])
+
         "#,
     );
 }
 
 #[test_log::test]
 fn enum_type2() {
-    let script = r#"
+    let script = r"
     enum Custom {
         Idle { one: Int, two: (Int, Float) },
         Running(Int, Float, String, Int),
     }
-    "#;
+    ";
     check(
-        &script,
-        r#"
+        script,
+        r"
 
-EnumDef(Custom, SeqMap(Idle: SeqMap(one: Int, two: Tuple([Int, Float])), Running: [Int, Float, String, Int]))
+EnumDef(LocalTypeIdentifier(<10:6>), [Struct(<27:4>, AnonymousStructType { fields: [FieldType { field_name: FieldName(<34:3>), field_type: Int(<39:3>) }, FieldType { field_name: FieldName(<44:3>), field_type: Tuple([Int(<50:3>), Float(<55:5>)]) }] }), Tuple(<73:7>, [Int(<81:3>), Float(<86:5>), String(<93:6>), Int(<101:3>)])])
 
-        "#,
+        ",
     );
 }
 
 #[test_log::test]
 fn match_expression() {
-    let script = r#"
+    let script = r"
         enum Custom {
             Idle,
             Running(Int, Float),
@@ -641,22 +648,22 @@ fn match_expression() {
 
 
         v = match state {
-            Running(speed, _) => speed,
-            Sleeping { hours } => hours + 10,
+            Running speed, _ => speed,
+            Sleeping  hours  => hours + 10,
             _ => 0,
         }
 
-"#;
+";
 
     check(
         &script,
-        r#"
+        r"
 
-EnumDef(Custom, SeqMap(Idle: , Running: [Int, Float], Sleeping: SeqMap(hours: Int)))
+EnumDef(LocalTypeIdentifier(<14:6>), [Simple(<35:4>), Tuple(<53:7>, [Int(<61:3>), Float(<66:5>)]), Struct(<86:8>, AnonymousStructType { fields: [FieldType { field_name: FieldName(<97:5>), field_type: Int(<104:3>) }] })])
 ---
-Let(VariableAssignment(v), Match(VariableAccess(state), [MatchArm { pattern: EnumTuple(Running, [speed, _]), expression: VariableAccess(speed) }, MatchArm { pattern: EnumStruct(Sleeping, [hours]), expression: BinaryOp(VariableAccess(hours), Add, Literal(Int(10))) }, MatchArm { pattern: Wildcard, expression: Literal(Int(0)) }]))
+Expression(VariableAssignment(<131:1>, Match(VariableAccess(<141:5>), [MatchArm { pattern: EnumPattern(LocalTypeIdentifier(<161:7>), Some([Variable(<169:5>), Wildcard(<176:1>)])), expression: VariableAccess(<181:5>) }, MatchArm { pattern: EnumPattern(LocalTypeIdentifier(<200:8>), Some([Variable(<210:5>)])), expression: BinaryOp(VariableAccess(<220:5>), Add(<226:1>), Literal(Int(<228:2>))) }, MatchArm { pattern: PatternList([Wildcard(<244:1>)]), expression: Literal(Int(<249:1>)) }])))
 
-"#,
+",
     );
 }
 
@@ -670,9 +677,9 @@ fn match_expression_minimal() {
 
     check(
         &script,
-        r#"
-Expression(Match(VariableAccess(state), [MatchArm { pattern: Wildcard, expression: Literal(Int(0)) }]))
-"#,
+        r"
+Expression(Match(VariableAccess(<14:5>), [MatchArm { pattern: PatternList([Wildcard(<34:1>)]), expression: Literal(Int(<39:1>)) }]))
+",
     );
 }
 
@@ -680,52 +687,51 @@ Expression(Match(VariableAccess(state), [MatchArm { pattern: Wildcard, expressio
 fn match_expression_minimal_two_arms() {
     let script = r#"
        match state {
-            EnumType(ident, _) => ident,
+            EnumType ident, _ => ident,
             _ => 0,
         }
 "#;
 
     check(
         &script,
-        r#"
-Expression(Match(VariableAccess(state), [MatchArm { pattern: EnumTuple(EnumType, [ident, _]), expression: VariableAccess(ident) }, MatchArm { pattern: Wildcard, expression: Literal(Int(0)) }]))
-"#,
+        r"
+Expression(Match(VariableAccess(<14:5>), [MatchArm { pattern: EnumPattern(LocalTypeIdentifier(<34:8>), Some([Variable(<43:5>), Wildcard(<50:1>)])), expression: VariableAccess(<55:5>) }, MatchArm { pattern: PatternList([Wildcard(<74:1>)]), expression: Literal(Int(<79:1>)) }]))
+
+",
     );
 }
 
 #[test_log::test]
 fn match_expression_minimal_two_arms_enum_struct() {
-    let script = r#"
+    let script = r"
        match state {
-            EnumType { something, another } => another,
+            EnumType something, another => another,
             _ => 0,
         }
-"#;
+";
 
     check(
-        &script,
-        r#"
-Expression(Match(VariableAccess(state), [MatchArm { pattern: EnumStruct(EnumType, [something, another]), expression: VariableAccess(another) }, MatchArm { pattern: Wildcard, expression: Literal(Int(0)) }]))
-"#,
+        script,
+        r"
+Expression(Match(VariableAccess(<14:5>), [MatchArm { pattern: EnumPattern(LocalTypeIdentifier(<34:8>), Some([Variable(<43:9>), Variable(<54:7>)])), expression: VariableAccess(<65:7>) }, MatchArm { pattern: PatternList([Wildcard(<86:1>)]), expression: Literal(Int(<91:1>)) }]))
+
+",
     );
 }
 
 #[test_log::test]
 fn deconstructing_struct() {
     let script = "x, y = pos"; // No raw string literal
-    check(&script, "Let(Struct([x, y]), VariableAccess(pos))");
-}
-
-#[test_log::test]
-fn deconstructing_tuple() {
-    let script = "x, y = pos"; // No raw string literal
-    check(&script, "Let(Tuple([x, y]), VariableAccess(pos))");
+    check(
+        script,
+        "Expression(MultiVariableAssignment([<0:1>, <3:1>], VariableAccess(<7:3>)))",
+    );
 }
 
 #[test_log::test]
 fn operator_precedence() {
     let script = "z = y * 2 - x";
-    check(&script, "Let(VariableAssignment(z), BinaryOp(BinaryOp(VariableAccess(y), Multiply, Literal(Int(2))), Subtract, VariableAccess(x)))");
+    check(script, "Expression(VariableAssignment(<0:1>, BinaryOp(BinaryOp(VariableAccess(<4:1>), Multiply(<6:1>), Literal(Int(<8:1>))), Subtract(<10:1>), VariableAccess(<12:1>))))");
 }
 
 #[test_log::test]
@@ -734,7 +740,7 @@ fn operator_precedence_expression() {
     check(
         &script,
         "
-Expression(BinaryOp(BinaryOp(VariableAccess(y), Multiply, Literal(Int(2))), Subtract, VariableAccess(x)))",
+Expression(BinaryOp(BinaryOp(VariableAccess(<0:1>), Multiply(<2:1>), Literal(Int(<4:1>))), Subtract(<6:1>), VariableAccess(<8:1>)))",
     );
 }
 
@@ -762,7 +768,7 @@ fn range_literal() {
     check(
         &script,
         "
-Expression(ExclusiveRange(Literal(Int(0)), Literal(Int(39))))",
+Expression(ExclusiveRange(Literal(Int(<6:1>)), Literal(Int(<9:2>))))",
     );
 }
 
@@ -790,8 +796,7 @@ fn enum_literal_basic() {
     "#,
         r#"
 
-Expression(VariableAssignment(<9:5>, Literal(EnumVariant(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<17:5>), module_path: None }, LocalTypeIdentifier(<24:7>), Nothing))))
-
+Expression(VariableAssignment(<9:5>, Literal(EnumVariant(Simple(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<17:5>), module_path: None })))))
         "#,
     );
 }
@@ -810,9 +815,9 @@ fn enum_literal() {
     "#,
         r#"
 
-EnumDef(LocalTypeIdentifier(<14:5>), [EnumVariantWithData { identifier: LocalTypeIdentifier(<34:7>), variant: Simple(<34:7>) }, EnumVariantWithData { identifier: LocalTypeIdentifier(<55:7>), variant: Simple(<55:7>) }])
+EnumDef(LocalTypeIdentifier(<14:5>), [Simple(<34:7>), Simple(<55:7>)])
 ---
-Expression(VariableAssignment(<83:5>, Literal(EnumVariant(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<91:5>), module_path: None }, LocalTypeIdentifier(<98:7>), Nothing))))
+Expression(VariableAssignment(<83:5>, Literal(EnumVariant(Simple(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<91:5>), module_path: None })))))
 Expression(FunctionCall(VariableAccess(<114:5>), [VariableAccess(<120:5>)]))
 
         "#,
@@ -832,7 +837,8 @@ fn increment(mut x: Int) -> Int {
     check(
         &script,
         "
-FunctionDef(increment, [mut x: Int], Int, [Let(VariableAssignment(x), BinaryOp(VariableAccess(x), Add, Literal(Int(1)))), Expression(VariableAccess(x))])",
+FunctionDef(Internal(FunctionData { signature: FunctionSignature { name: LocalIdentifier(<29:9>), params: [Parameter { variable: mut <39:3> <43:1>, param_type: Int(<46:3>) }], self_parameter: None, return_type: Some(Int(<54:3>)) }, body: [Expression(VariableAssignment(<64:1>, BinaryOp(VariableAccess(<68:1>), Add(<70:1>), Literal(Int(<72:1>))))), Expression(VariableAccess(<78:1>))] }))
+",
     );
 }
 
@@ -840,7 +846,7 @@ FunctionDef(increment, [mut x: Int], Int, [Let(VariableAssignment(x), BinaryOp(V
 fn mut_let() {
     check(
         "mut x = 3",
-        "Let(VariableAssignment(mut x), Literal(Int(3)))",
+        "Expression(VariableAssignment(mut <0:3> <4:1>, Literal(Int(<8:1>))))",
     );
 }
 
@@ -855,7 +861,7 @@ fn import() {
 #[test_log::test]
 fn impl_def() {
     check(
-        r#"
+        r"
             impl SomeTypeName {
                 fn something(self) -> Int {
                     self.x
@@ -869,12 +875,12 @@ fn impl_def() {
                     3.2
                 }
             }
-        "#,
-        r#"
+        ",
+        r"
 
-ImplDef(SomeTypeName, SeqMap(something: Member(self, [], Int, [Expression(FieldAccess(VariableAccess(self), x))]), another: Member(mut self, [v: Int], Int, [Expression(FieldAssignment(VariableAccess(self), x, Literal(Int(3))))]), no_self_here: Member(self, [], Float, [Expression(Literal(Float(3.2)))])))
+ImplDef(LocalTypeIdentifier(<18:12>), [Internal(FunctionData { signature: FunctionSignature { name: LocalIdentifier(<52:9>), params: [], self_parameter: Some(SelfParameter { is_mutable: None, self_node: <62:4> }), return_type: Some(Int(<71:3>)) }, body: [Expression(FieldAccess(VariableAccess(<97:4>), FieldName(<102:1>)))] }), Internal(FunctionData { signature: FunctionSignature { name: LocalIdentifier(<142:7>), params: [], self_parameter: Some(SelfParameter { is_mutable: Some(<150:8>), self_node: <150:8> }), return_type: None }, body: [Expression(FieldAssignment(VariableAccess(<197:4>), FieldName(<202:1>), Literal(Int(<206:1>))))] }), Internal(FunctionData { signature: FunctionSignature { name: LocalIdentifier(<246:12>), params: [], self_parameter: None, return_type: None }, body: [Expression(Literal(Float(<292:3>)))] })])
 
-        "#,
+        ",
     );
 }
 
@@ -888,11 +894,11 @@ fn match_pattern_literal() {
             true => "yes",
             _ => "something else"
         }"#,
-        r#"
+        r"
 
-Expression(Match(VariableAccess(x), [MatchArm { pattern: Literal(Int(5)), expression: Literal(String(five)) }, MatchArm { pattern: Literal(String(hello)), expression: Literal(String(greeting)) }, MatchArm { pattern: Literal(Bool(true)), expression: Literal(String(yes)) }, MatchArm { pattern: Wildcard, expression: Literal(String(something else)) }]))
+Expression(Match(VariableAccess(<15:1>), [MatchArm { pattern: Literal(Int(<31:1>)), expression: Literal(String(<36:6>)) }, MatchArm { pattern: Literal(String(<56:7>)), expression: Literal(String(<67:10>)) }, MatchArm { pattern: Literal(Bool(<91:4>)), expression: Literal(String(<99:5>)) }, MatchArm { pattern: PatternList([Wildcard(<118:1>)]), expression: Literal(String(<123:16>)) }]))
 
-        "#,
+        ",
     );
 }
 
@@ -906,8 +912,8 @@ fn match_comment() {
        "#,
         r#"
 
-Expression(FunctionCall(VariableAccess(print), [Literal(String(hello))]))
-Expression(FunctionCall(VariableAccess(print), [Literal(String(world))]))
+Expression(FunctionCall(VariableAccess(<9:5>), [Literal(String(<15:7>))]))
+Expression(FunctionCall(VariableAccess(<81:5>), [Literal(String(<87:7>))]))
 
         "#,
     );
@@ -919,21 +925,24 @@ fn multiple_assignments() {
         r#"
         x = y = z = 10
         "#,
-        r#"
-Let(VariableAssignment(x), VariableAssignment(VariableAccess(y), VariableAssignment(VariableAccess(z), Literal(Int(10)))))
-        "#,
+        r"
+Expression(VariableAssignment(<9:1>, VariableAssignment(<13:1>, VariableAssignment(<17:1>, Literal(Int(<21:2>))))))
+        ",
     );
 }
 
 #[test_log::test]
 fn enum_variant_construction() {
     check(
-        r#"
+        r"
 
         shape = Shape::Rectangle { width: 10, height: 20 }
 
-        "#,
-        "Let(VariableAssignment(shape), Literal(EnumVariant(Shape::Rectangle{ width: Literal(Int(10)), height: Literal(Int(20)) })))",
+        ",
+        r"
+Expression(VariableAssignment(<10:5>, Literal(EnumVariant(Struct(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<18:5>), module_path: None }, [FieldExpression { field_name: FieldName(<37:5>), expression: Literal(Int(<44:2>)) }, FieldExpression { field_name: FieldName(<48:6>), expression: Literal(Int(<56:2>)) }])))))
+
+",
     );
 }
 
@@ -944,7 +953,7 @@ fn enum_variant_tuple_construction() {
         shape = Shape::Something(2, 4.4)
         "#,
         r#"
-Let(VariableAssignment(shape), Literal(EnumVariant(Shape::Something([Literal(Int(2)), Literal(Float(4.4))]))))
+Expression(VariableAssignment(<9:5>, Literal(EnumVariant(Tuple(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<17:5>), module_path: None }, [Literal(Int(<34:1>)), Literal(Float(<37:3>))])))))
         "#,
     );
 }
@@ -974,7 +983,7 @@ fn string_interpolation_basic_spaces() {
     check(
         "'   this is interpolated {x}   with hex  {y}  '",
         r#"
-Expression(InterpolatedString([Literal("   this is interpolated "), Interpolation(VariableAccess(x), None), Literal("   with hex  "), Interpolation(VariableAccess(y), None), Literal("  ")]))
+Expression(InterpolatedString([Literal(<1:24>), Interpolation(VariableAccess(<26:1>), None), Literal(<28:13>), Interpolation(VariableAccess(<42:1>), None), Literal(<44:2>)]))
     "#,
     );
 }
@@ -984,7 +993,7 @@ fn string_interpolation() {
     check(
         "'this is interpolated {x} with hex {y:x}'",
         r#"
-    Expression(InterpolatedString([Literal("this is interpolated "), Interpolation(VariableAccess(x), None), Literal(" with hex "), Interpolation(VariableAccess(y), Some(LowerHex))]))
+Expression(InterpolatedString([Literal(<1:21>), Interpolation(VariableAccess(<23:1>), None), Literal(<25:10>), Interpolation(VariableAccess(<36:1>), Some(LowerHex(<38:1>)))]))
     "#,
     );
 }
@@ -994,7 +1003,7 @@ fn string_interpolation_call() {
     check(
         "'this is interpolated {x:x}    with hex  {mul(a, 2)}'",
         r#"
-Expression(InterpolatedString([Literal("this is interpolated "), Interpolation(VariableAccess(x), Some(LowerHex)), Literal("    with hex  "), Interpolation(FunctionCall(VariableAccess(mul), [VariableAccess(a), Literal(Int(2))]), None)]))
+Expression(InterpolatedString([Literal(<1:21>), Interpolation(VariableAccess(<23:1>), Some(LowerHex(<25:1>))), Literal(<27:14>), Interpolation(FunctionCall(VariableAccess(<42:3>), [VariableAccess(<46:1>), Literal(Int(<49:1>))]), None)]))
     "#,
     );
 }
@@ -1004,7 +1013,7 @@ fn string_interpolation_call_simple() {
     check(
         "'result: {mul(a,2)}'",
         r#"
-Expression(InterpolatedString([Literal("result: "), Interpolation(FunctionCall(VariableAccess(mul), [VariableAccess(a), Literal(Int(2))]), None)]))
+Expression(InterpolatedString([Literal(<1:8>), Interpolation(FunctionCall(VariableAccess(<10:3>), [VariableAccess(<14:1>), Literal(Int(<16:1>))]), None)]))
     "#,
     );
 }
@@ -1014,7 +1023,7 @@ fn string_interpolation_simple() {
     check(
         "'this is interpolated {x}'",
         r#"
-Expression(InterpolatedString([Literal("this is interpolated "), Interpolation(VariableAccess(x), None)]))
+Expression(InterpolatedString([Literal(<1:21>), Interpolation(VariableAccess(<23:1>), None)]))
     "#,
     );
 }
@@ -1024,7 +1033,7 @@ fn string_interpolation_simple_no_space() {
     check(
         "'this is interpolated{x}'",
         r#"
-Expression(InterpolatedString([Literal("this is interpolated"), Interpolation(VariableAccess(x), None)]))
+Expression(InterpolatedString([Literal(<1:20>), Interpolation(VariableAccess(<22:1>), None)]))
     "#,
     );
 }
@@ -1034,7 +1043,7 @@ fn function_call_mul() {
     check(
         "mul(a, 2)",
         r#"
-Expression(FunctionCall(VariableAccess(mul), [VariableAccess(a), Literal(Int(2))]))
+Expression(FunctionCall(VariableAccess(<0:3>), [VariableAccess(<4:1>), Literal(Int(<7:1>))]))
     "#,
     );
 }
@@ -1072,28 +1081,30 @@ fn enum_match_simple() {
 #[test_log::test]
 fn enum_match_wildcard() {
     check(
-        r#"
+        r"
         msg = match result {
             Ok(value) => value,
             Err(err) => err,
             Simple => 2,
             _ => 99
         }
-        "#,
-        "Let(VariableAssignment(msg), Match(VariableAccess(result), [MatchArm { pattern: EnumTuple(Ok, [value]), expression: VariableAccess(value) }, MatchArm { pattern: EnumTuple(Err, [err]), expression: VariableAccess(err) }, MatchArm { pattern: EnumSimple(Simple), expression: Literal(Int(2)) }, MatchArm { pattern: Wildcard, expression: Literal(Int(99)) }]))",
+        ",
+        "Expression(VariableAssignment(<9:3>, Match(VariableAccess(<21:6>), [MatchArm { pattern: EnumPattern(LocalTypeIdentifier(<42:2>), Some([Expression(VariableAccess(<45:5>))])), expression: VariableAccess(<55:5>) }, MatchArm { pattern: EnumPattern(LocalTypeIdentifier(<74:3>), Some([Expression(VariableAccess(<78:3>))])), expression: VariableAccess(<86:3>) }, MatchArm { pattern: EnumPattern(LocalTypeIdentifier(<103:6>), None), expression: Literal(Int(<113:1>)) }, MatchArm { pattern: PatternList([Wildcard(<128:1>)]), expression: Literal(Int(<133:2>)) }])))
+        ",
     );
 }
 
 #[test_log::test]
 fn enum_match_with_wildcard() {
     check(
-        r#"
+        r"
         msg = match result {
             Ok(value) => value,
             _ => 99
         }
-        "#,
-        "Let(VariableAssignment(msg), Match(VariableAccess(result), [MatchArm { pattern: EnumTuple(Ok, [value]), expression: VariableAccess(value) }, MatchArm { pattern: Wildcard, expression: Literal(Int(99)) }]))",
+        ",
+        "Expression(VariableAssignment(<9:3>, Match(VariableAccess(<21:6>), [MatchArm { pattern: EnumPattern(LocalTypeIdentifier(<42:2>), Some([Expression(VariableAccess(<45:5>))])), expression: VariableAccess(<55:5>) }, MatchArm { pattern: PatternList([Wildcard(<74:1>)]), expression: Literal(Int(<79:2>)) }])))
+",
     );
 }
 #[test_log::test]
@@ -1123,11 +1134,10 @@ fn enum_match_struct_y() {
     "#,
         r#"
 
-EnumDef(LocalTypeIdentifier { node: Node { span: Span { start: Position { offset: 15, line: 3, column: 14 }, end: Position { offset: 21, line: 3, column: 20 } } }, text: "Action" }, SeqMap(LocalTypeIdentifier { node: Node { span: Span { start: Position { offset: 36, line: 4, column: 13 }, end: Position { offset: 43, line: 4, column: 20 } } }, text: "Jumping" }: , LocalTypeIdentifier { node: Node { span: Span { start: Position { offset: 57, line: 5, column: 13 }, end: Position { offset: 82, line: 5, column: 38 } } }, text: "Target" }: AnonymousStruct { fields: SeqMap(IdentifierName("x"): Int, IdentifierName("y"): Int) }, LocalTypeIdentifier { node: Node { span: Span { start: Position { offset: 96, line: 6, column: 13 }, end: Position { offset: 109, line: 6, column: 26 } } }, text: "Other" }: [String]))
+EnumDef(LocalTypeIdentifier(<15:6>), [Simple(<36:7>), Struct(<57:6>, AnonymousStructType { fields: [FieldType { field_name: FieldName(<66:1>), field_type: Int(<69:3>) }, FieldType { field_name: FieldName(<74:1>), field_type: Int(<77:3>) }] }), Tuple(<96:5>, [String(<102:6>)])])
 ---
-Expression(VariableAssignment(action, Literal(EnumVariant(Action::Target{ LocalTypeIdentifier { node: Node { span: Span { start: Position { offset: 139, line: 9, column: 18 }, end: Position { offset: 171, line: 9, column: 50 } } }, text: "x" }: Literal(Int(42)), LocalTypeIdentifier { node: Node { span: Span { start: Position { offset: 139, line: 9, column: 18 }, end: Position { offset: 171, line: 9, column: 50 } } }, text: "y" }: Literal(Int(-999)) }))))
-
-Expression(Match(VariableAccess(action), [MatchArm { pattern: EnumPattern(LocalTypeIdentifier { node: Node { span: Span { start: Position { offset: 300, line: 18, column: 13 }, end: Position { offset: 308, line: 18, column: 21 } } }, text: "Jumping" }, None), expression: Literal(String(jumping)) }, MatchArm { pattern: EnumPattern(LocalTypeIdentifier { node: Node { span: Span { start: Position { offset: 334, line: 19, column: 13 }, end: Position { offset: 343, line: 19, column: 22 } } }, text: "Target" }, Some([Variable(LocalIdentifier { node: Node { span: Span { start: Position { offset: 334, line: 19, column: 13 }, end: Position { offset: 343, line: 19, column: 22 } } }, text: "y" })])), expression: VariableAccess(y) }, MatchArm { pattern: PatternList([Wildcard]), expression: Literal(String(can not find it!)) }]))
+Expression(VariableAssignment(<130:6>, Literal(EnumVariant(Struct(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<139:6>), module_path: None }, [FieldExpression { field_name: FieldName(<156:1>), expression: Literal(Int(<158:2>)) }, FieldExpression { field_name: FieldName(<162:1>), expression: Literal(Int(<165:4>)) }])))))
+Expression(Match(VariableAccess(<279:6>), [MatchArm { pattern: EnumPattern(LocalTypeIdentifier(<300:7>), None), expression: Literal(String(<311:9>)) }, MatchArm { pattern: EnumPattern(LocalTypeIdentifier(<334:6>), Some([Variable(<341:1>)])), expression: VariableAccess(<346:1>) }, MatchArm { pattern: PatternList([Wildcard(<361:1>)]), expression: Literal(String(<366:18>)) }]))
 
         "#,
     );
@@ -1148,7 +1158,7 @@ fn enum_match_tuple_basic() {
     "#,
         r#"
 
-    Expression(Match(VariableAccess(v), [MatchArm { pattern: EnumTuple(Tuple, [i, s, b]), expression: Block([Expression(FunctionCall(VariableAccess(print), [Literal(String(Tuple:))])), Expression(FunctionCall(VariableAccess(print), [VariableAccess(i)])), Expression(FunctionCall(VariableAccess(print), [VariableAccess(s)])), Expression(FunctionCall(VariableAccess(print), [VariableAccess(b)]))]) }]))
+ Expression(Match(VariableAccess(<18:1>), [MatchArm { pattern: EnumPattern(LocalTypeIdentifier(<38:5>), Some([Expression(Literal(Tuple([VariableAccess(<44:1>), VariableAccess(<47:1>), VariableAccess(<50:1>)])))])), expression: Block([Expression(FunctionCall(VariableAccess(<132:5>), [Literal(String(<138:8>))])), Expression(FunctionCall(VariableAccess(<168:5>), [VariableAccess(<174:1>)])), Expression(FunctionCall(VariableAccess(<197:5>), [VariableAccess(<203:1>)])), Expression(FunctionCall(VariableAccess(<226:5>), [VariableAccess(<232:1>)]))]) }]))
 
     "#,
     );
@@ -1162,7 +1172,7 @@ fn print_if() {
             "x is greater than 41"
         }
     "#,
-        "If(BinaryOp(VariableAccess(x), GreaterThan, Literal(Int(41))), [Expression(Literal(String(x is greater than 41)))], None)",
+        "If(BinaryOp(VariableAccess(<11:1>), GreaterThan(<13:1>), Literal(Int(<15:2>))), [Expression(Literal(String(<32:22>)))], None)",
     );
 }
 
@@ -1212,7 +1222,7 @@ fn option_operator() {
          a?
             "#,
         r#"
-Expression(OptionOperator(VariableAccess(a)))
+Expression(PostfixOp(Unwrap(<11:1>), VariableAccess(<10:1>)))
 
             "#,
     )
@@ -1226,7 +1236,7 @@ fn option_operator_expr() {
             "#,
         r#"
 
-Expression(BinaryOp(VariableAccess(b), Add, OptionOperator(VariableAccess(a))))
+Expression(BinaryOp(VariableAccess(<10:1>), Add(<12:1>), PostfixOp(Unwrap(<15:1>), VariableAccess(<14:1>))))
 
             "#,
     )
@@ -1244,7 +1254,7 @@ fn option_operator_if_variable() {
             "#,
         r#"
 
-If(OptionOperator(VariableAccess(a)), [Expression(InterpolatedString([Literal("this is "), Interpolation(VariableAccess(a), None)]))], Some([Expression(InterpolatedString([Literal("not here")]))]))
+If(PostfixOp(Unwrap(<14:1>), VariableAccess(<13:1>)), [Expression(InterpolatedString([Literal(<28:8>), Interpolation(VariableAccess(<37:1>), None)]))], Some([Expression(InterpolatedString([Literal(<69:8>)]))]))
 
             "#,
     )
@@ -1262,7 +1272,7 @@ fn option_operator_if_expression() {
             "#,
         r#"
 
-If(OptionOperator(BinaryOp(BinaryOp(BinaryOp(VariableAccess(b), Multiply, Literal(Int(3))), Add, Literal(Int(99))), Add, MemberCall(VariableAccess(something), LocalIdentifier { node: Node { span: Span { start: Position { offset: 21, line: 2, column: 21 }, end: Position { offset: 39, line: 2, column: 39 } } }, text: "call" }, [Literal(Int(42))]))), [Expression(InterpolatedString([Literal("expression is something")]))], Some([Expression(InterpolatedString([Literal("must be none")]))]))
+If(PostfixOp(Unwrap(<40:1>), BinaryOp(BinaryOp(BinaryOp(VariableAccess(<14:1>), Multiply(<15:1>), Literal(Int(<16:1>))), Add(<17:1>), Literal(Int(<18:2>))), Add(<20:1>), MemberCall(VariableAccess(<21:9>), MemberFunctionIdentifier(<31:4>), [Literal(Int(<36:2>))]))), [Expression(InterpolatedString([Literal(<54:23>)]))], Some([Expression(InterpolatedString([Literal(<107:12>)]))]))
 
             "#,
     )
@@ -1276,8 +1286,7 @@ fn option_operator_assignment() {
             "#,
         r#"
 
-Let(VariableAssignment(a), OptionOperator(MemberCall(VariableAccess(another), LocalIdentifier { node: Node { span: Span { start: Position { offset: 14, line: 2, column: 14 }, end: Position { offset: 49, line: 3, column: 13 } } }, text: "get_current" }, [])))
-
+Expression(VariableAssignment(<10:1>, PostfixOp(Unwrap(<35:1>), MemberCall(VariableAccess(<14:7>), MemberFunctionIdentifier(<22:11>), []))))
             "#,
     )
 }
@@ -1308,7 +1317,7 @@ fn option_operator_if_let_expression() {
             "#,
         r#"
 
-If(VariableAssignment(a, OptionOperator(MemberCall(VariableAccess(another), LocalIdentifier { node: Node { span: Span { start: Position { offset: 17, line: 2, column: 17 }, end: Position { offset: 40, line: 2, column: 40 } } }, text: "get_current" }, []))), [Expression(InterpolatedString([Literal("this is "), Interpolation(VariableAccess(a), None)]))], Some([Expression(InterpolatedString([Literal("must be none")]))]))
+If(VariableAssignment(<13:1>, PostfixOp(Unwrap(<38:1>), MemberCall(VariableAccess(<17:7>), MemberFunctionIdentifier(<25:11>), []))), [Expression(InterpolatedString([Literal(<58:8>), Interpolation(VariableAccess(<67:1>), None)]))], Some([Expression(InterpolatedString([Literal(<102:12>)]))]))
             "#,
     )
 }
@@ -1338,8 +1347,7 @@ fn none_assignment() {
         a = none
             "#,
         r#"
-
-Let(VariableAssignment(a), Literal(none))
+Expression(VariableAssignment(<9:1>, Literal(None)))
 
             "#,
     )
@@ -1374,14 +1382,12 @@ fn struct_field_optional() {
   struct Struct {
     some_field: Int?
    }
+            ",
+        r"
+
+StructDef(StructType { identifier: LocalTypeIdentifier(<10:6>), fields: [FieldType { field_name: FieldName(<23:10>), field_type: Optional(Int(<35:3>), <38:1>) }] })
 
             ",
-        r#"
-
-StructDef(StructType { identifier: LocalTypeIdentifier { node: Node { span: Span { start: Position { offset: 3, line: 2, column: 3 }, end: Position { offset: 44, line: 4, column: 5 } } }, text: "Struct" }, fields: SeqMap(IdentifierName("some_field"): Optional(Int)) })
-
-
-            "#,
     );
 }
 
@@ -1394,7 +1400,7 @@ fn map_literal() {
             ",
         r#"
 
-Let(VariableAssignment(a), Literal(Map([(Literal(Int(2)), InterpolatedString([Literal("Hello")])), (Literal(Int(3)), InterpolatedString([Literal("World")]))])))
+Expression(VariableAssignment(<3:1>, Literal(Map([(Literal(Int(<8:1>)), InterpolatedString([Literal(<12:5>)])), (Literal(Int(<20:1>)), InterpolatedString([Literal(<24:5>)]))]))))
 
             "#,
     );
@@ -1409,7 +1415,7 @@ fn map_literal_no_spaces() {
             ",
         r#"
 
-Let(VariableAssignment(a), Literal(Map([(Literal(Int(2)), InterpolatedString([Literal("Hello")])), (Literal(Int(3)), InterpolatedString([Literal("World")]))])))
+Expression(VariableAssignment(<3:1>, Literal(Map([(Literal(Int(<8:1>)), InterpolatedString([Literal(<11:5>)])), (Literal(Int(<18:1>)), InterpolatedString([Literal(<21:5>)]))]))))
 
             "#,
     );
@@ -1425,8 +1431,8 @@ fn map_creator() -> [Int: String] {
 
             ",
         r#"
-FunctionDef(LocalIdentifier { node: Node { span: Span { start: Position { offset: 1, line: 2, column: 1 }, end: Position { offset: 35, line: 2, column: 35 } } }, text: "map_creator" }, Internal(FunctionSignature { name: LocalIdentifier { node: Node { span: Span { start: Position { offset: 1, line: 2, column: 1 }, end: Position { offset: 35, line: 2, column: 35 } } }, text: "map_creator" }, params: [], return_type: Map(Int, String) }, [Expression(Literal(Map([(Literal(Int(2)), InterpolatedString([Literal("hello")])), (Literal(Int(-1)), InterpolatedString([Literal("world")]))])))]))
 
+FunctionDef(Internal(FunctionData { signature: FunctionSignature { name: LocalIdentifier(<4:11>), params: [], self_parameter: None, return_type: Some(Map(Int(<22:3>), String(<27:6>))) }, body: [Expression(Literal(Map([(Literal(Int(<38:1>)), InterpolatedString([Literal(<42:5>)])), (Literal(Int(<50:2>)), InterpolatedString([Literal(<55:5>)]))])))] }))
 
             "#,
     );
@@ -1440,8 +1446,8 @@ fn test() -> Int { 42 }
 
             ",
         r#"
-FunctionDef(LocalIdentifier { node: Node { span: Span { start: Position { offset: 1, line: 2, column: 1 }, end: Position { offset: 18, line: 2, column: 18 } } }, text: "test" }, Internal(FunctionSignature { name: LocalIdentifier { node: Node { span: Span { start: Position { offset: 1, line: 2, column: 1 }, end: Position { offset: 18, line: 2, column: 18 } } }, text: "test" }, params: [], return_type: Int }, [Expression(Literal(Int(42)))]))
 
+FunctionDef(Internal(FunctionData { signature: FunctionSignature { name: LocalIdentifier(<4:4>), params: [], self_parameter: None, return_type: Some(Int(<14:3>)) }, body: [Expression(Literal(Int(<20:2>)))] }))
 
             "#,
     );
@@ -1456,7 +1462,7 @@ fn nothing() -> SomeType<Int, Float> {
 
             ",
         r#"
-FunctionDef(LocalIdentifier { node: Node { span: Span { start: Position { offset: 1, line: 2, column: 1 }, end: Position { offset: 38, line: 2, column: 38 } } }, text: "nothing" }, Internal(FunctionSignature { name: LocalIdentifier { node: Node { span: Span { start: Position { offset: 1, line: 2, column: 1 }, end: Position { offset: 38, line: 2, column: 38 } } }, text: "nothing" }, params: [], return_type: Generic(TypeReference(QualifiedTypeIdentifier { name: LocalTypeIdentifier { node: Node { span: Span { start: Position { offset: 17, line: 2, column: 17 }, end: Position { offset: 25, line: 2, column: 25 } } }, text: "SomeType" }, module_path: None }), [Int, Float]) }, []))
+FunctionDef(Internal(FunctionData { signature: FunctionSignature { name: LocalIdentifier(<4:7>), params: [], self_parameter: None, return_type: Some(Generic(TypeReference(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<17:8>), module_path: None }), [Int(<26:3>), Float(<31:5>)])) }, body: [] }))
             "#,
     );
 }
@@ -1469,8 +1475,7 @@ fn sparse_map_static_call() {
         "#,
         r#"
 
-        Let(VariableAssignment(result), StaticCallGeneric(LocalTypeIdentifier { node: Node { span: Span { start: Position { offset: 18, line: 2, column: 18 }, end: Position { offset: 27, line: 2, column: 27 } } }, text: "SparseMap" }, LocalIdentifier { node: Node { span: Span { start: Position { offset: 34, line: 2, column: 34 }, end: Position { offset: 37, line: 2, column: 37 } } }, text: "new" }, [], [Int]))
-        "#,
+  Expression(VariableAssignment(<9:6>, StaticCallGeneric(LocalTypeIdentifier(<18:9>), MemberFunctionIdentifier(<34:3>), [], [Int(<28:3>)])))        "#,
     );
 }
 

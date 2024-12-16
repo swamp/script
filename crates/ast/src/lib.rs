@@ -105,30 +105,21 @@ pub enum ImportItems {
 #[derive(Debug, Eq, PartialEq, Default)]
 pub struct StructType {
     pub identifier: LocalTypeIdentifier,
-    pub fields: Vec<AnonymousStructTypeField>,
+    pub fields: Vec<FieldType>,
 }
 
 impl StructType {
     #[must_use]
-    pub const fn new(
-        identifier: LocalTypeIdentifier,
-        fields: Vec<AnonymousStructTypeField>,
-    ) -> Self {
+    pub const fn new(identifier: LocalTypeIdentifier, fields: Vec<FieldType>) -> Self {
         Self { identifier, fields }
     }
-}
-
-#[derive(Debug)]
-pub struct EnumVariantWithData {
-    pub identifier: LocalTypeIdentifier,
-    pub variant: EnumVariant,
 }
 
 #[derive(Debug)]
 pub enum Definition {
     StructDef(StructType),
 
-    EnumDef(LocalTypeIdentifier, Vec<EnumVariantWithData>),
+    EnumDef(LocalTypeIdentifier, Vec<EnumVariant>),
 
     FunctionDef(Function),
     ImplDef(LocalTypeIdentifier, Vec<Function>),
@@ -329,7 +320,7 @@ pub enum Expression {
     InterpolatedString(Vec<StringPart>),
 
     // Constructing
-    StructInstantiation(QualifiedTypeIdentifier, Vec<AnonymousStructField>),
+    StructInstantiation(QualifiedTypeIdentifier, Vec<FieldExpression>),
     ExclusiveRange(Box<Expression>, Box<Expression>),
     Literal(Literal),
 
@@ -351,11 +342,7 @@ pub enum Literal {
     Float(Node),
     String(Node),
     Bool(Node),
-    EnumVariant(
-        QualifiedTypeIdentifier,
-        LocalTypeIdentifier,
-        EnumLiteralData,
-    ), // EnumTypeName::Identifier tuple|struct
+    EnumVariant(EnumVariantLiteral),
     Tuple(Vec<Expression>),
     Array(Vec<Expression>),
     Map(Vec<(Expression, Expression)>),
@@ -378,34 +365,34 @@ where
 }
 
 #[derive(Debug)]
-pub struct AnonymousStructField {
+pub struct FieldExpression {
     pub field_name: FieldName,
     pub expression: Expression,
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct AnonymousStructTypeField {
+pub struct FieldType {
     pub field_name: FieldName,
     pub field_type: Type,
 }
 
 #[derive(Debug)]
-pub enum EnumLiteralData {
-    Nothing,
-    Tuple(Vec<Expression>),
-    Struct(Vec<AnonymousStructField>),
+pub enum EnumVariantLiteral {
+    Simple(QualifiedTypeIdentifier),
+    Tuple(QualifiedTypeIdentifier, Vec<Expression>),
+    Struct(QualifiedTypeIdentifier, Vec<FieldExpression>),
 }
 
 #[derive(Debug, Default)]
 pub struct AnonymousStructType {
-    pub fields: Vec<AnonymousStructTypeField>,
+    pub fields: Vec<FieldType>,
 }
 
 #[derive(Debug)]
 pub enum EnumVariant {
     Simple(Node),
-    Tuple(Vec<Type>),
-    Struct(AnonymousStructType),
+    Tuple(Node, Vec<Type>),
+    Struct(Node, AnonymousStructType),
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -424,7 +411,7 @@ pub enum Type {
     Tuple(Vec<Type>),
     Enum(QualifiedTypeIdentifier),
     TypeReference(QualifiedTypeIdentifier),
-    Optional(Box<Type>),
+    Optional(Box<Type>, Node),
 }
 
 // Takes a left and right side expression
@@ -508,7 +495,7 @@ impl Debug for Module {
             writeln!(f, "{definition:?}")?;
         }
 
-        if !self.definitions.is_empty() {
+        if !self.definitions.is_empty() && !self.statements.is_empty() {
             writeln!(f, "---")?;
         }
 
