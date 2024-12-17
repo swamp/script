@@ -9,7 +9,7 @@ use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
 use std::rc::Rc;
 
-#[derive(PartialEq, Eq, Hash, Default)]
+#[derive(PartialEq, Eq, Hash, Default, Clone)]
 pub struct SpanWithoutFileId {
     pub offset: u32,
     pub length: u16,
@@ -23,7 +23,7 @@ impl Debug for SpanWithoutFileId {
 
 
 // Common metadata that can be shared across all AST nodes
-#[derive(PartialEq, Eq, Hash, Default)]
+#[derive(PartialEq, Eq, Hash, Default, Clone)]
 pub struct Node {
     pub span: SpanWithoutFileId,
     // TODO: Add comments and attributes
@@ -36,7 +36,7 @@ impl Debug for Node {
 }
 
 /// Identifiers ================
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct QualifiedTypeIdentifier {
     pub name: LocalTypeIdentifier,
     pub module_path: Option<ModulePath>,
@@ -54,7 +54,7 @@ impl QualifiedTypeIdentifier {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, PartialEq, Eq, Hash, Default, Clone)]
 pub struct LocalTypeIdentifier(pub Node);
 
 impl LocalTypeIdentifier {
@@ -87,12 +87,12 @@ pub struct FieldName(pub Node);
 #[derive()]
 pub struct StringConst(pub Node);
 
-#[derive(Debug, Eq, Hash, PartialEq)]
+#[derive(Debug, Eq, Hash, PartialEq, Clone)]
 pub struct ModulePathItem {
     pub node: Node,
 }
 
-#[derive(Debug, Eq, Hash, PartialEq)]
+#[derive(Debug, Eq, Hash, PartialEq, Clone)]
 pub struct ModulePath(pub Vec<ModulePathItem>);
 
 impl ModulePath {
@@ -130,7 +130,7 @@ impl StructType {
 pub enum Definition {
     StructDef(StructType),
 
-    EnumDef(Node, Vec<EnumVariant>),
+    EnumDef(Node, Vec<EnumVariantType>),
 
     FunctionDef(Function),
     ImplDef(Node, Vec<Function>),
@@ -392,7 +392,7 @@ pub struct AnonymousStructType {
 }
 
 #[derive(Debug)]
-pub enum EnumVariant {
+pub enum EnumVariantType {
     Simple(Node),
     Tuple(Node, Vec<Type>),
     Struct(Node, AnonymousStructType),
@@ -453,7 +453,7 @@ pub enum PostfixOperator {
 #[derive(Debug)]
 pub enum Pattern {
     PatternList(Vec<PatternElement>),
-    EnumPattern(Node, Option<Vec<PatternElement>>), 
+    EnumPattern(Node, Option<Vec<PatternElement>>),
     Literal(Literal),
 }
 

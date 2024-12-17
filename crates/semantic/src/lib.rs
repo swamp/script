@@ -2,23 +2,24 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-pub mod ns;
 pub mod prelude;
 
-use crate::ns::{LocalTypeName, ResolvedModuleNamespace, SemanticError};
 pub use fixed32::Fp;
-use seq_fmt::{comma, comma_tuple, fmt_nl};
 use seq_map::SeqMap;
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
 use std::rc::Rc;
 
-type FileId = u16;
+#[derive(Debug, Clone)]
+pub struct ResolvedNode {
+    pub span: Span,
+}
 
-#[derive(PartialEq, Eq, Hash, Default)]
+pub type FileId = u16;
+
+#[derive(PartialEq, Eq, Hash, Default, Clone)]
 pub struct Span {
     pub file_id: FileId,
     pub offset: u32,
@@ -31,20 +32,11 @@ impl Debug for Span {
     }
 }
 
-
-
-
 #[derive(Debug)]
 pub struct ResolvedParameter {
     pub name: ResolvedLocalIdentifier,
     pub resolved_type: ResolvedType,
-    pub is_mutable: bool,
-}
-
-impl Display for ResolvedParameter {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}: {}", self.name, self.resolved_type)
-    }
+    pub is_mutable: Option<ResolvedNode>,
 }
 
 #[derive(Debug)]
@@ -59,6 +51,9 @@ pub struct ResolvedRustType {
     pub number: u32,       // For type comparison
 }
 pub type ResolvedRustTypeRef = Rc<ResolvedRustType>;
+
+#[derive(Debug, Clone)]
+pub struct LocalTypeName(pub ResolvedNode);
 
 #[derive(Debug, Clone)]
 pub enum ResolvedType {
@@ -90,6 +85,14 @@ pub enum ResolvedType {
     RustType(ResolvedRustTypeRef),
 
     Any,
+}
+
+#[derive(Debug)]
+pub enum SemanticError {
+    CouldNotInsertStruct,
+    DuplicateTypeAlias(String),
+    CanOnlyUseStructForMemberFunctions,
+    ResolveNotStruct,
 }
 
 impl ResolvedType {
@@ -165,21 +168,30 @@ fn compare_struct_types(a: &ResolvedStructTypeRef, b: &ResolvedStructTypeRef) ->
     }
 
     for (a_field, b_field) in struct_a.fields.values().zip(struct_b.fields.values()) {
-        if !a_field.same_type(b_field) {
+        /* if !a_field.same_type(b_field) {
             return false;
         }
+
+        */
     }
 
     true
 }
 
-#[derive(Debug)]
-pub struct Node {
-    pub span: Span,
+impl ResolvedNode {
+    pub fn new_unknown() -> Self {
+        Self {
+            span: Span {
+                file_id: 0xffff,
+                offset: 0,
+                length: 0,
+            },
+        }
+    }
 }
 
 #[derive(Debug)]
-pub struct ResolvedLocalIdentifier(pub Node);
+pub struct ResolvedLocalIdentifier(pub ResolvedNode);
 
 #[derive(Debug)]
 pub struct ResolvedInternalFunctionDefinition {
@@ -203,8 +215,10 @@ pub type ResolvedExternalFunctionDefinitionRef = Rc<crate::ResolvedExternalFunct
 
 #[derive(Debug)]
 pub struct ResolvedVariable {
-    pub node: Node,
+    pub name: ResolvedNode,
     pub resolved_type: ResolvedType,
+    pub mutable_node: Option<ResolvedNode>,
+
     pub scope_index: usize,
     pub variable_index: usize,
     pub is_mutable: bool,
@@ -220,7 +234,20 @@ type ResolvedMutVariableRef = Rc<ResolvedMutVariable>;
 
 #[derive(Debug)]
 pub enum ResolvedBinaryOperatorKind {
-    Add(Node),
+    Add(ResolvedNode),
+    Subtract(ResolvedNode),
+    Multiply(ResolvedNode),
+    Divide(ResolvedNode),
+    Modulo(ResolvedNode),
+    LogicalOr(ResolvedNode),
+    LogicalAnd(ResolvedNode),
+    Equal(ResolvedNode),
+    NotEqual(ResolvedNode),
+    LessThan(ResolvedNode),
+    LessEqual(ResolvedNode),
+    GreaterThan(ResolvedNode),
+    GreaterEqual(ResolvedNode),
+    RangeExclusive(ResolvedNode),
 }
 
 #[derive(Debug)]
@@ -233,7 +260,7 @@ pub struct ResolvedBinaryOperator {
 
 #[derive(Debug)]
 pub enum ResolvedUnaryOperatorKind {
-    Add(Node),
+    Not(ResolvedNode),
 }
 #[derive(Debug)]
 pub struct ResolvedUnaryOperator {
@@ -244,7 +271,7 @@ pub struct ResolvedUnaryOperator {
 
 #[derive(Debug)]
 pub enum ResolvedPostfixOperatorKind {
-    Add(Node),
+    Unwrap(ResolvedNode),
 }
 #[derive(Debug)]
 pub struct ResolvedPostfixOperator {
@@ -317,7 +344,7 @@ pub struct ResolvedMemberCall {
 
 #[derive(Debug)]
 pub enum ResolvedAccess {
-    FieldIndex(usize),
+    FieldIndex(ResolvedNode, usize),
     ArrayIndex(ResolvedExpression),
     MapIndex(ResolvedExpression),
 }
@@ -333,10 +360,11 @@ pub type ResolvedMutTupleFieldRef = Rc<ResolvedMutTupleField>;
 #[derive(Debug)]
 pub struct ResolvedStructTypeField {
     pub struct_type_ref: ResolvedStructTypeRef,
-    pub index: usize,
     pub field_name: ResolvedLocalIdentifier,
     pub resolved_type: ResolvedType,
     pub struct_expression: Box<ResolvedExpression>,
+
+    pub index: usize,
 }
 
 pub type ResolvedStructTypeFieldRef = Rc<ResolvedStructTypeField>;
@@ -384,12 +412,12 @@ pub struct ResolvedIndexType {
 
 #[derive(Debug)]
 pub enum ResolvedFormatSpecifier {
-    Hex(Node),
+    Hex(ResolvedNode),
 }
 
 #[derive(Debug)]
 pub enum ResolvedStringPart {
-    Literal(String),
+    Literal(ResolvedNode, String),
     Interpolation(ResolvedExpression, Option<ResolvedFormatSpecifier>),
 }
 
@@ -457,7 +485,7 @@ pub enum ResolvedPattern {
 pub enum ResolvedPatternElement {
     Variable(ResolvedVariableRef),
     VariableWithFieldIndex(ResolvedVariableRef, usize),
-    Wildcard(Node),
+    Wildcard(ResolvedNode),
 }
 
 #[derive(Debug)]
@@ -465,7 +493,7 @@ pub struct ResolvedIterator {
     pub key_type: Option<ResolvedType>, // It does not have to support a key type
     pub value_type: ResolvedType,
     pub resolved_expression: ResolvedExpression,
-    pub is_mutable: bool,
+    pub mutable_node: Option<ResolvedNode>,
 }
 
 #[derive(Debug)]
@@ -615,16 +643,16 @@ pub enum ResolvedExpression {
 }
 
 #[derive(Debug)]
-pub struct ResolvedStringConst(pub Node);
+pub struct ResolvedStringConst(pub ResolvedNode);
 
 #[derive(Debug)]
 pub enum ResolvedLiteral {
-    FloatLiteral(Fp, ResolvedFloatTypeRef),
+    FloatLiteral(Fp, ResolvedNode, ResolvedFloatTypeRef),
     UnitLiteral(ResolvedUnitTypeRef),
-    NoneLiteral,
-    IntLiteral(i32, ResolvedIntTypeRef),
-    StringLiteral(String, ResolvedStringTypeRef),
-    BoolLiteral(bool, ResolvedBoolTypeRef),
+    NoneLiteral(ResolvedNode),
+    IntLiteral(i32, ResolvedNode, ResolvedIntTypeRef),
+    StringLiteral(String, ResolvedNode, ResolvedStringTypeRef),
+    BoolLiteral(bool, ResolvedNode, ResolvedBoolTypeRef),
     EnumVariantLiteral(ResolvedEnumVariantTypeRef, ResolvedEnumLiteralData),
     TupleLiteral(ResolvedTupleTypeRef, Vec<ResolvedExpression>),
     Array(ResolvedArrayTypeRef, Vec<ResolvedExpression>),
@@ -660,8 +688,8 @@ pub enum ResolvedStatement {
     ForLoop(ResolvedForPattern, ResolvedIterator, Vec<ResolvedStatement>),
     WhileLoop(ResolvedBooleanExpression, Vec<ResolvedStatement>),
     Return(ResolvedExpression),
-    Break,                          // Return with void
-    Continue,                       //
+    Break(ResolvedNode),                    // Return with void
+    Continue(ResolvedNode),                 //
     Expression(ResolvedExpression), // Used for expressions with side effects (mutation, i/o)
     Block(Vec<ResolvedStatement>),
     If(
@@ -686,7 +714,7 @@ pub enum ResolvedStatement {
 }
 
 #[derive(Debug)]
-pub struct ResolvedModulePathItem(pub Node);
+pub struct ResolvedModulePathItem(pub ResolvedNode);
 #[derive(Debug)]
 pub struct ResolvedModulePath(pub Vec<ResolvedModulePathItem>);
 
@@ -695,29 +723,30 @@ pub type ResolvedStructTypeRef = Rc<RefCell<ResolvedStructType>>;
 pub type TypeNumber = u32;
 
 #[derive(Debug)]
-pub struct ResolvedIdentifierName(pub Node);
+pub struct ResolvedIdentifierName(pub ResolvedNode);
 
 #[derive(Debug)]
-pub struct ResolvedLocalTypeIdentifier(pub Node);
+pub struct ResolvedLocalTypeIdentifier(pub ResolvedNode);
 
 #[derive(Debug)]
-pub struct ResolvedFieldName(pub Node);
+pub struct ResolvedFieldName(pub ResolvedNode);
 
 #[derive(Debug)]
 pub struct ResolvedStructField {
     pub identifier: ResolvedFieldName,
     pub field_type: ResolvedType,
+
+    pub index: usize,
 }
 
 #[derive(Debug)]
 pub struct ResolvedStructType {
-    // TODO:  pub defined_in_module: ResolvedModuleRef,
-    pub module_path: ResolvedModulePath,
     pub name: ResolvedLocalTypeIdentifier,
-    pub defined_fields: SeqMap<String, ResolvedStructField>,
+    pub fields: SeqMap<String, ResolvedStructField>,
 
+    // Resolved
+    pub module_path: ResolvedModulePath,
     pub number: TypeNumber,
-    pub fields: SeqMap<String, ResolvedType>,
     pub functions: SeqMap<String, ResolvedFunctionRef>,
 }
 
@@ -726,14 +755,13 @@ impl ResolvedStructType {
         // TODO: defined_in_module: ResolvedModuleRef,
         module_path: ResolvedModulePath,
         name: ResolvedLocalTypeIdentifier,
-        fields: SeqMap<ResolvedIdentifierName, ResolvedType>,
+        fields: SeqMap<String, ResolvedStructField>,
         number: TypeNumber,
     ) -> Self {
         Self {
             number,
             //defined_in_module,
             module_path,
-            ast_struct,
             fields,
             name,
             functions: SeqMap::default(),
@@ -779,7 +807,6 @@ pub type ResolvedOptionTypeRef = Rc<crate::ResolvedOptionType>;
 #[derive(Debug)]
 pub struct ResolvedOptionType {
     pub item_type: ResolvedType,
-    //pub ast_type: Type,
 }
 
 pub type ResolvedArrayTypeRef = Rc<ResolvedArrayType>;
@@ -787,7 +814,6 @@ pub type ResolvedArrayTypeRef = Rc<ResolvedArrayType>;
 #[derive(Debug)]
 pub struct ResolvedArrayType {
     pub item_type: ResolvedType,
-    //pub ast_type: Type,
 }
 
 pub type ResolvedMapTypeRef = Rc<ResolvedMapType>;
@@ -817,8 +843,8 @@ pub struct ResolvedAnonymousStruct {
 pub struct ResolvedEnumVariantStructType {
     pub common: CommonEnumVariantType,
 
-    pub fields: SeqMap<ResolvedIdentifierName, ResolvedType>, // Anonymous Struct
-    pub ast_struct: ResolvedAnonymousStruct,
+    pub fields: SeqMap<String, ResolvedStructTypeField>, // Anonymous Struct
+    pub anon_struct: ResolvedAnonymousStruct,
 }
 
 pub type ResolvedEnumVariantTupleTypeRef = Rc<ResolvedEnumVariantTupleType>;
@@ -883,9 +909,10 @@ pub type ResolvedEnumVariantStructFieldTypeRef = Rc<ResolvedEnumVariantStructFie
 #[derive(Debug)]
 pub struct ResolvedEnumVariantStructFieldType {
     pub name: ResolvedLocalIdentifier,
-    pub field_index: usize,
     pub enum_variant: ResolvedEnumVariantTypeRef,
     pub resolved_type: ResolvedType,
+
+    pub field_index: usize,
 }
 
 pub type ResolvedEnumVariantTupleFieldTypeRef = Rc<ResolvedEnumVariantTupleFieldType>;
@@ -893,9 +920,10 @@ pub type ResolvedEnumVariantTupleFieldTypeRef = Rc<ResolvedEnumVariantTupleField
 #[derive(Debug)]
 pub struct ResolvedEnumVariantTupleFieldType {
     pub name: ResolvedLocalIdentifier,
-    pub field_index: usize,
     pub enum_variant: ResolvedEnumVariantTypeRef,
     pub resolved_type: ResolvedType,
+
+    pub field_index: usize,
 }
 
 impl ResolvedEnumVariantType {
@@ -919,10 +947,6 @@ impl ResolvedEnumVariantType {
 
     pub fn name(&self) -> &ResolvedLocalTypeIdentifier {
         &self.name
-    }
-
-    pub fn complete_name(&self) -> String {
-        self.owner.name.text.to_string() + "::" + &*self.name.text.to_string()
     }
 }
 
@@ -955,27 +979,6 @@ impl ImplType {
 }
 
 #[derive(Debug)]
-pub struct ResolvedModule {
-    pub definitions: Vec<ResolvedDefinition>,
-    pub statements: Vec<ResolvedStatement>,
-    pub namespace: ResolvedModuleNamespace,
-    pub module_path: ResolvedModulePath,
-}
-
-pub type ResolvedModuleRef = Rc<RefCell<ResolvedModule>>;
-
-impl ResolvedModule {
-    pub fn new(module_path: ResolvedModulePath) -> Self {
-        Self {
-            module_path,
-            definitions: Vec::new(),
-            namespace: ResolvedModuleNamespace::new(module_path),
-            statements: Vec::new(),
-        }
-    }
-}
-
-#[derive(Debug)]
 pub enum ResolvedDefinition {
     StructType(ResolvedStructType),
     EnumType(ResolvedEnumTypeRef, Vec<ResolvedEnumVariantType>),
@@ -985,52 +988,6 @@ pub enum ResolvedDefinition {
     FunctionDef(ResolvedFunction),
     Alias(ResolvedType),
     Comment(String),
-}
-
-#[derive(Debug)]
-pub struct ResolvedModules {
-    pub modules: HashMap<ResolvedModulePath, ResolvedModuleRef>,
-}
-
-impl Default for ResolvedModules {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl ResolvedModules {
-    pub fn new() -> Self {
-        Self {
-            modules: HashMap::new(),
-        }
-    }
-
-    pub fn add_module(&mut self, module_ref: ResolvedModuleRef) -> Result<(), SemanticError> {
-        let name = module_ref.borrow().module_path.clone();
-        self.modules.insert(name, module_ref);
-        Ok(())
-    }
-
-    pub fn add_linked_module(
-        &mut self,
-        module_path: ResolvedModulePath,
-        module: ResolvedModuleRef,
-    ) -> Result<(), SemanticError> {
-        self.modules.insert(module_path.clone(), module);
-        Ok(())
-    }
-
-    pub fn get(&self, module_path: &ResolvedModulePath) -> Option<&ResolvedModuleRef> {
-        self.modules.get(module_path)
-    }
-
-    pub fn get_mut(&mut self, module_path: &ResolvedModulePath) -> Option<&mut ResolvedModuleRef> {
-        self.modules.get_mut(module_path)
-    }
-
-    pub fn contains_key(&self, module_path: ResolvedModulePath) -> bool {
-        self.modules.contains_key(&module_path)
-    }
 }
 
 // Immutable part
@@ -1101,23 +1058,6 @@ impl ResolvedProgramState {
     pub fn allocate_external_function_id(&mut self) -> ExternalFunctionId {
         self.external_function_number += 1;
         self.external_function_number
-    }
-}
-
-#[derive(Debug)]
-pub struct ResolvedProgram {
-    pub types: ResolvedProgramTypes,
-    pub state: ResolvedProgramState,
-    pub modules: ResolvedModules,
-}
-
-impl ResolvedProgram {
-    pub fn new() -> Self {
-        Self {
-            types: ResolvedProgramTypes::new(),
-            state: ResolvedProgramState::new(),
-            modules: ResolvedModules::new(),
-        }
     }
 }
 

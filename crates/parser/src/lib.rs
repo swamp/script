@@ -1777,9 +1777,9 @@ impl AstParser {
         Ok(Definition::EnumDef(name.0, variants))
     }
 
-    fn parse_enum_variant(&self, pair: &Pair<Rule>) -> Result<EnumVariant, ParseError> {
+    fn parse_enum_variant(&self, pair: &Pair<Rule>) -> Result<EnumVariantType, ParseError> {
         let enum_variant = match pair.as_rule() {
-            Rule::simple_variant => EnumVariant::Simple(self.to_node(&pair)),
+            Rule::simple_variant => EnumVariantType::Simple(self.to_node(&pair)),
             Rule::tuple_variant => {
                 let mut inner = Self::convert_into_iterator(&pair);
                 let name = self.expect_local_type_identifier_next(&mut inner)?;
@@ -1789,7 +1789,7 @@ impl AstParser {
                     types.push(self.parse_type(type_pair)?);
                 }
 
-                EnumVariant::Tuple(name.0, types)
+                EnumVariantType::Tuple(name.0, types)
             }
             Rule::struct_variant => {
                 let mut inner = Self::convert_into_iterator(&pair);
@@ -1809,7 +1809,7 @@ impl AstParser {
                 }
 
                 let anon = AnonymousStructType { fields };
-                EnumVariant::Struct(name.0, anon)
+                EnumVariantType::Struct(name.0, anon)
             }
             _ => Err(self.create_error_pair(
                 SpecificError::UnknownEnumVariant(Self::pair_to_rule(&pair)),

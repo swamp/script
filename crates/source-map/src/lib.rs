@@ -1,49 +1,69 @@
+use pathdiff::diff_paths;
 use seq_map::SeqMap;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
-use swamp_script_node::Span;
 use tracing::info;
 
-type FileId = u16;
+pub type FileId = u16;
 
 pub struct FileInfo {
-    pub path: PathBuf,
+    pub relative_path: PathBuf,
     pub contents: String,
     pub line_offsets: Box<[u16]>,
 }
 
 pub struct SourceMap {
+    pub base_path: PathBuf,
     pub cache: SeqMap<FileId, FileInfo>,
-    pub id: FileId,
+    pub next_file_id: FileId,
 }
 
+#[derive(Debug)]
+pub struct RelativePath(pub String);
+
 impl SourceMap {
+    pub fn new(base_path: &Path) -> Self {
+        let canon_path = base_path.canonicalize().expect("can not canonicalize");
+        Self {
+            base_path: canon_path,
+            cache: SeqMap::new(),
+            next_file_id: 1,
+        }
+    }
+
     pub fn add(&mut self, path: &Path) -> io::Result<FileId> {
+        let relative_path =
+            diff_paths(path, &self.base_path).expect("could not find relative path");
+
+        info!(?relative_path, "add relative");
         let contents = fs::read_to_string(path)?;
 
         let line_offsets = Self::compute_line_offsets(&contents);
-        let id = self.id;
-        self.id += 1;
+        info!(?line_offsets, "scanned");
+        let id = self.next_file_id;
+        self.next_file_id += 1;
 
         self.cache
             .insert(
                 id,
                 FileInfo {
-                    path: path.to_path_buf(),
+                    relative_path,
                     contents,
                     line_offsets,
                 },
             )
             .expect("could not add file info");
 
-        /*
-          let path_buf = self.to_file_system_path(to_relative_path(module_path));
-        let contents = fs::read_to_string(path_buf)?;
-
-         */
-
         Ok(id)
     }
+
+    pub fn add_relative(&mut self, relative_path: &str) -> io::Result<FileId> {
+        let buf = self.to_file_system_path(relative_path);
+        info!(complete_path=?buf, "complete path");
+        self.add(&buf)
+    }
+
+    /*
 
     fn to_relative_path(path: &ModulePath) -> RelativePath {
         RelativePath(
@@ -55,15 +75,19 @@ impl SourceMap {
         )
     }
 
-    fn to_file_system_path(&self, path: RelativePath) -> PathBuf {
-        info!("converting from {path:?}");
-        let mut path_buf = self.base_path.to_path_buf();
+     */
 
-        path_buf.push(path.0);
+    fn to_file_system_path(&self, path: &str) -> PathBuf {
+        info!("converting from {path:?}");
+        let mut path_buf = self.base_path.clone();
+
+        path_buf.push(path);
         path_buf.set_extension("swamp");
 
-        info!("converted to {path_buf:?}");
-        path_buf
+        let canon_path = path_buf.canonicalize().expect("can not canonicalize");
+
+        info!("converted to {canon_path:?}");
+        canon_path
     }
 
     fn compute_line_offsets(contents: &str) -> Box<[u16]> {
@@ -79,45 +103,36 @@ impl SourceMap {
         offsets.into_boxed_slice()
     }
 
-    pub fn get_span_source(&self, span: &Span) -> &str {
-        let file_info = self
-            .cache
-            .get(&span.file_id)
-            .expect("Invalid file_id in span");
+    pub fn get_span_source(&self, file_id: FileId, offset: usize, length: usize) -> &str {
+        let file_info = self.cache.get(&file_id).expect("Invalid file_id in span");
 
-        let start = span.offset as usize;
-        let end = start + span.length as usize;
+        let start = offset as usize;
+        let end = start + length as usize;
         &file_info.contents[start..end]
     }
 
-    pub fn get_span_location_utf8(&self, span: &Span) -> (usize, usize) {
-        let file_info = self
-            .cache
-            .get(&span.file_id)
-            .expect("Invalid file_id in span");
+    pub fn get_span_location_utf8(&self, file_id: FileId, offset: usize) -> (usize, usize) {
+        let file_info = self.cache.get(&file_id).expect("Invalid file_id in span");
 
-        let offset = span.offset as u16;
+        let offset = offset as u16;
 
         // Find the line containing 'offset' via binary search.
-        let line_idx = match file_info.line_offsets.binary_search(&offset) {
-            Ok(line_start_idx) => line_start_idx,
-            Err(insert_point) => insert_point.saturating_sub(1),
-        };
-
-        // Convert zero-based line index to one-based for user reporting
-        let line_number = line_idx + 1;
+        let line_idx = file_info
+            .line_offsets
+            .binary_search(&offset)
+            .unwrap_or_else(|insert_point| insert_point.saturating_sub(1));
 
         // Determine the start of the line in bytes
         let line_start = file_info.line_offsets[line_idx] as usize;
-        let byte_offset = offset as usize;
+        let octet_offset = offset as usize;
 
         // Extract the line slice from line_start to offset
-        // This substring contains all the characters from the start of the line up to the span offset.
-        let line_text = &file_info.contents[line_start..byte_offset];
+        let line_text = &file_info.contents[line_start..octet_offset];
 
-        // Count UTF-8 characters in that range
-        let column_number = line_text.chars().count() + 1;
+        // Count UTF-8 characters in that range, because that is what the end user sees in their editor.
+        let column_character_offset = line_text.chars().count();
 
-        (line_number, column_number)
+        // Add one so it makes more sense to the end user
+        (line_idx + 1, column_character_offset + 1)
     }
 }

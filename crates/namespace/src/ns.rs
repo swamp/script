@@ -2,22 +2,13 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use crate::{
-    ExternalFunctionId, Hash, ResolvedEnumType, ResolvedEnumTypeRef, ResolvedEnumVariantType,
-    ResolvedEnumVariantTypeRef, ResolvedExternalFunctionDefinition,
-    ResolvedExternalFunctionDefinitionRef, ResolvedFunction, ResolvedFunctionSignature,
-    ResolvedIdentifierName, ResolvedInternalFunctionDefinition,
-    ResolvedInternalFunctionDefinitionRef, ResolvedLocalTypeIdentifier, ResolvedModulePath,
-    ResolvedParameter, ResolvedRustType, ResolvedRustTypeRef, ResolvedStructType,
-    ResolvedStructTypeRef, ResolvedTupleType, ResolvedTupleTypeRef, ResolvedType, TypeNumber,
-};
+use crate::{ExternalFunctionId, Hash, Node, ResolvedEnumType, ResolvedEnumTypeRef, ResolvedEnumVariantType, ResolvedEnumVariantTypeRef, ResolvedExternalFunctionDefinition, ResolvedExternalFunctionDefinitionRef, ResolvedFunction, ResolvedFunctionSignature, ResolvedIdentifierName, ResolvedInternalFunctionDefinition, ResolvedInternalFunctionDefinitionRef, ResolvedLocalIdentifier, ResolvedLocalTypeIdentifier, ResolvedModulePath, ResolvedParameter, ResolvedRustType, ResolvedRustTypeRef, ResolvedStructType, ResolvedStructTypeRef, ResolvedTupleType, ResolvedTupleTypeRef, ResolvedType, TypeNumber};
 use seq_map::{SeqMap, SeqMapError};
 use std::cell::RefCell;
 use std::fmt::{Debug, Display};
 use std::rc::Rc;
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub struct LocalTypeName(pub String);
+
 
 impl Display for LocalTypeName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -43,6 +34,7 @@ pub struct ResolvedModuleNamespace {
 }
 
 impl ResolvedModuleNamespace {
+    /*
     pub fn util_insert_struct_type(
         &mut self,
         number: TypeNumber,
@@ -51,22 +43,22 @@ impl ResolvedModuleNamespace {
         let mut seq_map = SeqMap::new();
         for (name, resolved_type) in fields {
             seq_map.insert(
-                ResolvedIdentifierName(name.to_string()),
+                name.to_string(),
                 resolved_type.clone(),
             )?;
         }
 
         let resolved_definition = ResolvedStructType {
-            module_path: ResolvedModulePath(),
+            module_path: ResolvedModulePath(vec![]),
             functions: SeqMap::default(),
-            defined_fields: Default::default(),
-            number: 0,
-            name: ResolvedLocalTypeIdentifier(),
             fields: Default::default(),
+            number: 0,
+            name: ResolvedLocalTypeIdentifier(Node::new_unknown()),
         };
 
         self.add_struct_type(resolved_definition)
     }
+
 
     pub fn util_create_external_function(
         &mut self,
@@ -129,22 +121,12 @@ impl ResolvedModuleNamespace {
 
         Ok(ext_ref)
     }
+
+    */
 }
 
-#[derive(Debug)]
-pub enum SemanticError {
-    CouldNotInsertStruct,
-    SeqMapError(SeqMapError),
-    DuplicateTypeAlias(String),
-    CanOnlyUseStructForMemberFunctions,
-    ResolveNotStruct,
-}
 
-impl From<SeqMapError> for SemanticError {
-    fn from(err: SeqMapError) -> Self {
-        Self::SeqMapError(err)
-    }
-}
+
 
 impl ResolvedModuleNamespace {
     #[must_use]
@@ -161,6 +143,7 @@ impl ResolvedModuleNamespace {
         }
     }
 
+    /*
     pub fn add_struct_type(
         &mut self,
         struct_type: ResolvedStructType,
@@ -174,6 +157,8 @@ impl ResolvedModuleNamespace {
         Ok(struct_ref)
     }
 
+
+     */
     pub fn add_built_in_rust_type(
         &mut self,
         rust_type: ResolvedRustType,
@@ -198,6 +183,8 @@ impl ResolvedModuleNamespace {
             .map_err(|_| SemanticError::DuplicateTypeAlias(name_str))?;
         Ok(())
     }
+
+    /*
 
     pub fn get_type_alias(&self, name: &String) -> Option<&ResolvedType> {
         self.type_aliases.get(&(name).into())
@@ -302,14 +289,7 @@ impl ResolvedModuleNamespace {
     ) -> Option<&ResolvedRustTypeRef> {
         self.build_in_rust_types.get(&(&name.text).into())
     }
-
-    pub fn get_enum_variant_type(
-        &self,
-        enum_name: &ResolvedLocalTypeIdentifier,
-        enum_variant_name: &ResolvedLocalTypeIdentifier,
-    ) -> Option<&ResolvedEnumVariantTypeRef> {
-        self.get_enum_variant_type_str(&enum_name.text, &enum_variant_name.text)
-    }
+*/
 
     pub fn get_enum_variant_type_str(
         &self,

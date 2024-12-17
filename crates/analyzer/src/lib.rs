@@ -5,22 +5,51 @@
 pub mod prelude;
 
 use seq_map::{SeqMap, SeqMapError};
-use std::cell::RefCell;
-use std::fmt::Display;
+use std::num::ParseIntError;
 use std::rc::Rc;
 use swamp_script_ast::prelude::*;
-use swamp_script_ast::{CompoundOperator, ForPattern, Function, PatternElement, PostfixOperator, SpanWithoutFileId};
-use swamp_script_semantic::ns::{LocalTypeName, ResolvedModuleNamespace, SemanticError};
-use swamp_script_semantic::{create_rust_type, prelude::*, ResolvedAccess, ResolvedBoolType, ResolvedForPattern, ResolvedModuleRef, ResolvedPatternElement, ResolvedStaticCallGeneric, ResolvedTupleTypeRef, ResolvedVariableCompoundAssignment, Span, TypeNumber};
+use swamp_script_ast::{
+    CompoundOperator, EnumVariantLiteral, ForPattern, Function, PatternElement, PostfixOperator,
+    SpanWithoutFileId,
+};
+use swamp_script_semantic::{
+    create_rust_type, prelude::*, FileId, LocalTypeName, ResolvedAccess,
+    ResolvedBinaryOperatorKind, ResolvedBoolType, ResolvedForPattern, ResolvedPatternElement,
+    ResolvedStaticCallGeneric, ResolvedTupleTypeRef, ResolvedVariableCompoundAssignment, Span,
+    TypeNumber,
+};
 use swamp_script_semantic::{
     ResolvedDefinition, ResolvedEnumTypeRef, ResolvedFunction, ResolvedFunctionRef,
     ResolvedFunctionSignature, ResolvedMapTypeRef, ResolvedMutMap, ResolvedStaticCall,
 };
 use swamp_script_semantic::{ResolvedMapIndexLookup, ResolvedProgramTypes};
 use swamp_script_semantic::{ResolvedMapType, ResolvedProgramState};
-use swamp_script_semantic::{ResolvedModules, ResolvedPostfixOperator};
+use swamp_script_semantic::{ResolvedModulePath, ResolvedPostfixOperator};
 use swamp_script_source_map::SourceMap;
 use tracing::{debug, error, info, warn};
+
+pub enum NamespaceError {
+
+}
+
+pub trait NamespaceLookup {
+    fn get_struct(&self, path: &Vec<String>, name: &str) -> Option<ResolvedStructTypeRef>;
+    fn get_type_alias(&self, path: &Vec<String>, name: &str) -> Option<ResolvedType>;
+    fn get_enum(&self, path: &Vec<String>, name: &str) -> Option<ResolvedEnumTypeRef>;
+    fn get_enum_variant_type(
+        &self,
+        path: &Vec<String>,
+        name: &str,
+    ) -> Option<ResolvedEnumVariantType>;
+    fn get_rust_type(&self, name: &str) -> Option<ResolvedRustTypeRef>;
+
+
+    fn add_enum_variant(&self, enum_variant: &ResolvedEnumVariantType) -> Result<(), NamespaceError>;
+    fn add_struct_type(&self, struct_type: StructType) -> Result<(), NamespaceError>;
+
+    fn add_internal_function_ref(&self, internal_func: ResolvedInternalFunctionDefinition)  -> Result<(), NamespaceError>;
+
+}
 
 #[must_use]
 pub const fn convert_span(without: &SpanWithoutFileId, file_id: FileId) -> Span {
@@ -126,16 +155,16 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
         ResolvedExpression::Match(resolved_match) => resolved_match.arms[0].expression_type.clone(),
         ResolvedExpression::LetVar(_, _) => todo!(),
         ResolvedExpression::Literal(literal) => match literal {
-            ResolvedLiteral::BoolLiteral(_value, bool_type_ref) => {
+            ResolvedLiteral::BoolLiteral(_value, _node, bool_type_ref) => {
                 ResolvedType::Bool(bool_type_ref.clone())
             }
-            ResolvedLiteral::FloatLiteral(_float_value, float_type) => {
+            ResolvedLiteral::FloatLiteral(_float_value, _node, float_type) => {
                 ResolvedType::Float(float_type.clone())
             }
-            ResolvedLiteral::IntLiteral(_int_value, int_type) => {
+            ResolvedLiteral::IntLiteral(_int_value, _node, int_type) => {
                 ResolvedType::Int(int_type.clone())
             }
-            ResolvedLiteral::StringLiteral(_string_value, string_type) => {
+            ResolvedLiteral::StringLiteral(_string_value, _node, string_type) => {
                 ResolvedType::String(string_type.clone())
             }
             ResolvedLiteral::UnitLiteral(unit_literal) => ResolvedType::Unit(unit_literal.clone()),
@@ -149,7 +178,7 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
                 ResolvedType::Array(array_type_ref.clone())
             }
             ResolvedLiteral::Map(map_type_ref, _data) => ResolvedType::Map(map_type_ref.clone()),
-            ResolvedLiteral::NoneLiteral => ResolvedType::Any,
+            ResolvedLiteral::NoneLiteral(_) => ResolvedType::Any,
         },
         ResolvedExpression::Option(inner_opt) => match inner_opt {
             None => {
@@ -187,7 +216,6 @@ pub enum ResolveError {
     UnknownLocalStructTypeReference(LocalTypeIdentifier),
     DuplicateFieldName(IdentifierName),
     Unknown(String),
-    //Pest(pest::error::Error<Rule>), // Should not have dependency towards `pest` and Parser.
     UnknownImplTargetTypeReference(LocalTypeIdentifier),
     WrongFieldCountInStructInstantiation(ResolvedStructTypeRef, SeqMap<IdentifierName, Expression>),
     MissingFieldInStructInstantiation(IdentifierName, ResolvedStructTypeRef),
@@ -202,7 +230,7 @@ pub enum ResolveError {
     CanOnlyOverwriteVariableWithMut(Variable),
     OverwriteVariableNotAllowedHere(Variable),
     NotNamedStruct(Expression),
-    UnknownEnumVariantType(QualifiedTypeIdentifier, LocalTypeIdentifier),
+    UnknownEnumVariantType(QualifiedTypeIdentifier),
     WasNotStructType(Expression),
     UnknownStructField(LocalIdentifier),
     MustBeEnumType(Pattern),
@@ -212,7 +240,7 @@ pub enum ResolveError {
     VariableIsNotMutable(Variable),
     ArgumentIsNotMutable,
     WrongNumberOfTupleDeconstructVariables,
-    UnknownTypeReference(QualifiedTypeIdentifier),
+    UnknownTypeReference(Node),
     SemanticError(SemanticError),
     SeqMapError(SeqMapError),
     ExpectedMemberCall(Expression),
@@ -253,6 +281,7 @@ pub enum ResolveError {
     NotAnIterator,
     UnsupportedIteratorPairs,
     NeedStructForFieldLookup,
+    IntConversionError(ParseIntError),
 }
 
 impl From<SemanticError> for ResolveError {
@@ -290,30 +319,31 @@ impl BlockScope {
 pub struct Resolver<'a> {
     pub types: &'a ResolvedProgramTypes,
     pub state: &'a mut ResolvedProgramState,
-    pub modules: &'a ResolvedModules,
+    pub lookup: Box<dyn NamespaceLookup>,
     pub source_map: &'a SourceMap,
-    pub current_module: Rc<RefCell<ResolvedModule>>,
     pub block_scope_stack: Vec<BlockScope>,
     pub return_type: Option<ResolvedType>,
+    file_id: FileId,
 }
 
 impl<'a> Resolver<'a> {
     pub fn new(
         types: &'a ResolvedProgramTypes,
         state: &'a mut ResolvedProgramState,
-        modules: &'a ResolvedModules,
+        lookup: Box<dyn NamespaceLookup>,
         source_map: &'a SourceMap,
-        current_module: Rc<RefCell<ResolvedModule>>,
+        file_id: FileId,
     ) -> Self {
         let mut scope_stack = Vec::new();
         scope_stack.push(BlockScope::new());
         Self {
             types,
             state,
-            modules,
-            current_module,
+            lookup,
+            source_map,
             block_scope_stack: scope_stack,
             return_type: None,
+            file_id,
         }
     }
 
@@ -369,7 +399,7 @@ impl<'a> Resolver<'a> {
 
         if let ResolvedType::Optional(inner_type) = resolution(&resolved_var_expr) {
             self.push_block_scope("if_unwrap");
-            let resolved_var_ref = self.create_local_variable(var, &inner_type)?;
+            let resolved_var_ref = self.create_local_variable(&var.name, &inner_type)?;
             let resolved_true = self.resolve_statements(statements)?;
             self.pop_block_scope("if_unwrap");
 
@@ -401,7 +431,7 @@ impl<'a> Resolver<'a> {
 
         if let ResolvedType::Optional(inner_type) = resolution(&resolved_expr) {
             self.push_block_scope("if_assign_unwrap");
-            let resolved_var_ref = self.create_local_variable(var, &inner_type)?;
+            let resolved_var_ref = self.create_local_variable(&var.name, &inner_type)?;
             let resolved_true = self.resolve_statements(statements)?;
             self.pop_block_scope("if_assign_unwrap");
 
@@ -472,12 +502,12 @@ impl<'a> Resolver<'a> {
 
     pub fn resolve_type(&mut self, ast_type: &Type) -> Result<ResolvedType, ResolveError> {
         let resolved = match ast_type {
-            Type::Any => ResolvedType::Any,
-            Type::Int => ResolvedType::Int(self.types.int_type.clone()),
-            Type::Float => ResolvedType::Float(self.types.float_type.clone()),
-            Type::String => ResolvedType::String(self.types.string_type.clone()),
-            Type::Bool => ResolvedType::Bool(self.types.bool_type.clone()),
-            Type::Unit => ResolvedType::Unit(self.types.unit_type.clone()),
+            Type::Any(_) => ResolvedType::Any,
+            Type::Int(_) => ResolvedType::Int(self.types.int_type.clone()),
+            Type::Float(_) => ResolvedType::Float(self.types.float_type.clone()),
+            Type::String(_) => ResolvedType::String(self.types.string_type.clone()),
+            Type::Bool(_) => ResolvedType::Bool(self.types.bool_type.clone()),
+            Type::Unit(_) => ResolvedType::Unit(self.types.unit_type.clone()),
             Type::Struct(ast_struct) => {
                 let (display_type, _struct_ref) = self.get_struct_types(ast_struct)?;
                 display_type
@@ -497,7 +527,7 @@ impl<'a> Resolver<'a> {
             Type::TypeReference(ast_type_reference) => {
                 self.find_type_reference(ast_type_reference)?
             }
-            Type::Optional(inner_type_ast) => {
+            Type::Optional(inner_type_ast, _node) => {
                 let inner_resolved_type = self.resolve_type(inner_type_ast)?;
                 ResolvedType::Optional(Box::from(inner_resolved_type))
             }
@@ -514,41 +544,58 @@ impl<'a> Resolver<'a> {
         Ok(resolved_types)
     }
 
-    #[must_use]
-    pub fn find_module(&self, path: &ModulePath) -> Option<&ResolvedModuleRef> {
-        self.modules.get(path)
+    fn get_text(&self, ast_node: &swamp_script_ast::Node) -> &str {
+        let span = Span {
+            file_id: self.file_id,
+            offset: ast_node.span.offset,
+            length: ast_node.span.length,
+        };
+        self.source_map
+            .get_span_source(self.file_id, span.offset as usize, span.length as usize)
+    }
+
+    fn get_path(&self, ident: &QualifiedTypeIdentifier) -> (Vec<String>, String) {
+        let path = if let Some(found_path) = &ident.module_path {
+            let mut v = Vec::new();
+            for p in &found_path.0 {
+                v.push(self.get_text(&p.node).to_string())
+            }
+            v
+        } else {
+            vec![]
+        };
+        (path, self.get_text(&ident.name.0).to_string())
     }
 
     fn find_type_reference(
         &self,
         type_name_to_find: &QualifiedTypeIdentifier,
     ) -> Result<ResolvedType, ResolveError> {
-        let namespace = self.get_namespace(type_name_to_find)?;
-        let type_ident = &type_name_to_find.name;
+        let (path, text) = self.get_path(&type_name_to_find);
 
-        let resolved_type = if let Some(aliased_type) = namespace.get_type_alias(&type_ident.text) {
+        let resolved_type = if let Some(aliased_type) = self.lookup.get_type_alias(&path, &text) {
             aliased_type.clone()
-        } else if let Some(found) = namespace.get_struct(type_ident) {
+        } else if let Some(found) = self.lookup.get_struct(&path, &text) {
             ResolvedType::Struct(found.clone())
-        } else if let Some(found) = namespace.get_enum(type_ident) {
+        } else if let Some(found) = self.lookup.get_enum(&path, &text) {
             ResolvedType::Enum(found.clone())
-        } else if let Some(found) = namespace.get_built_in_rust_type(type_ident) {
+        } else if let Some(found) = self.lookup.get_rust_type(&text) {
             ResolvedType::RustType(found.clone())
         } else {
             Err(ResolveError::UnknownTypeReference(
-                type_name_to_find.clone(),
+                type_name_to_find.name.0.clone(),
             ))?
         };
 
         Ok(resolved_type)
     }
+
     pub fn find_struct_type(
         &self,
         type_name: &QualifiedTypeIdentifier,
     ) -> Result<ResolvedStructTypeRef, ResolveError> {
-        let namespace = self.get_namespace(type_name)?;
-
-        if let Some(aliased_type) = namespace.get_type_alias(&type_name.name.text) {
+        let (path, name_string) = self.get_path(&type_name);
+        if let Some(aliased_type) = self.lookup.get_type_alias(&path, &name_string) {
             let unaliased = unalias_type(aliased_type.clone());
             match unaliased {
                 ResolvedType::Struct(struct_ref) => return Ok(struct_ref.clone()),
@@ -556,7 +603,7 @@ impl<'a> Resolver<'a> {
             }
         }
 
-        namespace.get_struct(&type_name.name).map_or_else(
+        self.lookup.get_struct(&path, &*name_string).map_or_else(
             || Err(ResolveError::UnknownStructTypeReference(type_name.clone())),
             |found| Ok(found.clone()),
         )
@@ -574,7 +621,6 @@ impl<'a> Resolver<'a> {
             &self.types,
             &mut self.state,
             &self.modules,
-            self.current_module.clone(),
         )
     }
 
@@ -603,8 +649,8 @@ impl<'a> Resolver<'a> {
 
     fn resolve_enum_type_definition(
         &mut self,
-        enum_type_name: &LocalTypeIdentifier,
-        ast_variants: &SeqMap<LocalTypeIdentifier, EnumVariant>,
+        enum_type_name: swamp_script_ast::Node,
+        ast_variants: &SeqMap<LocalTypeIdentifier, EnumVariantType>,
     ) -> Result<(ResolvedEnumTypeRef, Vec<ResolvedEnumVariantType>), ResolveError> {
         let mut resolved_variants = Vec::new();
 
@@ -620,11 +666,11 @@ impl<'a> Resolver<'a> {
             let mut container_number: Option<TypeNumber> = None;
 
             let container = match ast_enum_variant {
-                EnumVariant::Simple => ResolvedEnumVariantContainerType::Nothing,
-                EnumVariant::Tuple(types) => {
+                EnumVariantType::Simple(_) => ResolvedEnumVariantContainerType::Nothing,
+                EnumVariantType::Tuple(_node, types) => {
                     let mut vec = Vec::new();
                     for tuple_type in types {
-                        let resolved_type = self.resolve_type(tuple_type)?;
+                        let resolved_type = self.resolve_type(&tuple_type)?;
                         vec.push(resolved_type)
                     }
 
@@ -633,7 +679,7 @@ impl<'a> Resolver<'a> {
 
                     let common = CommonEnumVariantType {
                         number,
-                        module_path: ModulePath(vec![]), // TODO:
+                        module_path: ResolvedModulePath(vec![]), // TODO:
                         variant_name: name.clone(),
                         enum_ref: parent_ref.clone(),
                     };
@@ -646,10 +692,10 @@ impl<'a> Resolver<'a> {
 
                     ResolvedEnumVariantContainerType::Tuple(resolved_tuple_type_ref)
                 }
-                EnumVariant::Struct(ast_struct_fields) => {
+                EnumVariantType::Struct(_node, ast_struct_fields) => {
                     let mut fields = SeqMap::new();
-                    for (field, field_type) in ast_struct_fields.fields.iter() {
-                        let resolved_type = self.resolve_type(field_type)?;
+                    for field in ast_struct_fields.fields {
+                        let resolved_type = self.resolve_type(field.field_type)?;
                         fields
                             .insert(field.clone(), resolved_type)
                             .map_err(|_| ResolveError::DuplicateFieldName(field.clone()))?;
@@ -660,7 +706,7 @@ impl<'a> Resolver<'a> {
 
                     let common = CommonEnumVariantType {
                         number,
-                        module_path: ModulePath(vec![]), // TODO:
+                        module_path: ResolvedModulePath(vec![]), // TODO:
                         variant_name: name.clone(),
                         enum_ref: parent_ref.clone(),
                     };
@@ -694,43 +740,29 @@ impl<'a> Resolver<'a> {
         match resolved_definition {
             ResolvedDefinition::EnumType(_parent_enum_ref, variants) => {
                 for variant in variants {
-                    self.current_module
-                        .borrow_mut()
-                        .namespace
-                        .add_enum_variant(variant)?;
+                    self.lookup
+                        .add_enum_variant(&variant)?;
                 }
             }
             ResolvedDefinition::StructType(struct_type) => {
-                self.current_module
-                    .borrow_mut()
-                    .namespace
-                    .add_struct_type(struct_type)?;
+                self.lookup.add_struct_type(struct_type)?;
             }
             ResolvedDefinition::Function() => {}
             ResolvedDefinition::ExternalFunction() => {}
             ResolvedDefinition::ImplType(_resolved_type) => {}
             ResolvedDefinition::FunctionDef(function_def) => match function_def {
                 ResolvedFunction::Internal(internal_fn) => {
-                    self.current_module
-                        .borrow_mut()
-                        .namespace
-                        .add_internal_function_ref(&internal_fn)?;
+                    self.lookup.add_internal_function_ref(&internal_fn)?;
                 }
                 ResolvedFunction::External(resolved_external_function_def_ref) => {
-                    self.current_module
-                        .borrow_mut()
-                        .namespace
-                        .add_external_function_declaration_ref(
+                    self.lookup.add_external_function_declaration_ref(
                             resolved_external_function_def_ref,
                         )?;
                 }
             },
             ResolvedDefinition::Alias(resolved_type) => match resolved_type {
                 ResolvedType::Alias(name, resolved_type) => {
-                    self.current_module
-                        .borrow_mut()
-                        .namespace
-                        .add_type_alias(&name.0.clone(), *resolved_type.clone())?;
+                    self.lookup.add_type_alias(&name.0.clone(), *resolved_type.clone())?;
                 }
                 _ => panic!("type should always be alias"),
             },
@@ -809,7 +841,7 @@ impl<'a> Resolver<'a> {
                 // Set up scope for function body
                 for param in &parameters {
                     self.create_local_variable(
-                        &Variable::new(&param.name.clone(), param.is_mutable),
+                        &Variable::new(&param.name, param.is_mutable),
                         &param.resolved_type.clone(),
                     )?;
                 }
@@ -944,8 +976,10 @@ impl<'a> Resolver<'a> {
         target_type: &Type,
     ) -> Result<ResolvedType, ResolveError> {
         let resolved_type = self.resolve_type(target_type)?;
-        let alias_type =
-            ResolvedType::Alias(LocalTypeName(name.text.clone()), Box::new(resolved_type));
+        let alias_type = ResolvedType::Alias(
+            LocalTypeName(self.to_node(&name.0)),
+            Box::new(resolved_type),
+        );
 
         Ok(alias_type)
     }
@@ -978,17 +1012,13 @@ impl<'a> Resolver<'a> {
     ) -> Result<ResolvedForPattern, ResolveError> {
         match pattern {
             ForPattern::Single(var) => {
-                let variable = Variable::new(&var.identifier.text, var.is_mut);
-                let variable_ref = self.create_local_variable(&variable, value_type)?;
+                let variable_ref = self.create_local_variable(&var.identifier, value_type)?;
                 Ok(ResolvedForPattern::Single(variable_ref))
             }
             ForPattern::Pair(first, second) => {
-                let first_var = Variable::new(&first.identifier.text, first.is_mut);
-                let second_var = Variable::new(&second.identifier.text, second.is_mut);
-
                 let found_key = key_type.unwrap();
-                let first_var_ref = self.create_local_variable(&first_var, found_key)?;
-                let second_var_ref = self.create_local_variable(&second_var, value_type)?;
+                let first_var_ref = self.create_local_variable(&first.identifier, found_key)?;
+                let second_var_ref = self.create_local_variable(&second.identifier, value_type)?;
                 Ok(ResolvedForPattern::Pair(first_var_ref, second_var_ref))
             }
         }
@@ -1069,8 +1099,8 @@ impl<'a> Resolver<'a> {
                 let wrapped_expr = self.check_and_wrap_return_value(resolved_expr, &return_type)?;
                 ResolvedStatement::Return(wrapped_expr)
             }
-            Statement::Break => ResolvedStatement::Break,
-            Statement::Continue => ResolvedStatement::Continue,
+            Statement::Break(node) => ResolvedStatement::Break(self.to_node(node)),
+            Statement::Continue(node) => ResolvedStatement::Continue(self.to_node(node)),
             Statement::Expression(expression) => {
                 ResolvedStatement::Expression(self.resolve_expression(expression)?)
             }
@@ -1078,7 +1108,7 @@ impl<'a> Resolver<'a> {
                 ResolvedStatement::Block(self.resolve_statements(statements)?)
             }
             Statement::If(expression, statements, maybe_else_statements) => match expression {
-                Expression::PostfixOp(PostfixOperator::Unwrap, expr) => {
+                Expression::PostfixOp(PostfixOperator::Unwrap(_unwrap_node), expr) => {
                     if let Expression::VariableAccess(var) = &**expr {
                         self.handle_optional_unwrap_statement(
                             var,
@@ -1091,7 +1121,11 @@ impl<'a> Resolver<'a> {
                     }
                 }
                 Expression::VariableAssignment(var, expr) => {
-                    if let Expression::PostfixOp(PostfixOperator::Unwrap, inner_expr) = &**expr {
+                    if let Expression::PostfixOp(
+                        PostfixOperator::Unwrap(_unwrap_node),
+                        inner_expr,
+                    ) = &**expr
+                    {
                         self.handle_optional_assign_unwrap_statement(
                             var,
                             inner_expr,
@@ -1138,8 +1172,8 @@ impl<'a> Resolver<'a> {
             resolved_parameters.push(ResolvedParameter {
                 name: parameter.variable.name.clone(),
                 resolved_type: param_type,
-                ast_parameter: parameter.clone(),
-                is_mutable: parameter.is_mutable,
+                is_mutable: parameter.variable.is_mutable.is_some(),
+                mut_node: parameter.variable.is_mutable,
             });
         }
         Ok(resolved_parameters)
@@ -1739,7 +1773,7 @@ impl<'a> Resolver<'a> {
                                 self.push_block_scope("pattern_list one variable");
                                 scope_is_pushed = true;
                             }
-                            let variable = Variable::new(&var.text, false);
+                            let variable = Variable::new(&var.text, None);
                             let variable_ref =
                                 self.create_local_variable(&variable, expression_type)?;
                             resolved_elements.push(ResolvedPatternElement::Variable(variable_ref));
@@ -1747,8 +1781,9 @@ impl<'a> Resolver<'a> {
                         PatternElement::Expression(_expr) => {
                             return Err(ResolveError::ExpressionsNotAllowedInLetPattern);
                         }
-                        PatternElement::Wildcard => {
-                            resolved_elements.push(ResolvedPatternElement::Wildcard);
+                        PatternElement::Wildcard(node) => {
+                            resolved_elements
+                                .push(ResolvedPatternElement::Wildcard(self.to_node(node)));
                         }
                     }
                 }
@@ -1786,15 +1821,17 @@ impl<'a> Resolver<'a> {
                             {
                                 match element {
                                     PatternElement::Variable(var) => {
-                                        info!("ENUM TUPLE found variable to handle {var}");
-                                        let variable = Variable::new(&var.text, false);
+                                        info!(?var, "ENUM TUPLE found variable to handle");
+                                        let variable = Variable::new(var.clone(), None);
                                         let variable_ref =
                                             self.create_local_variable(&variable, field_type)?;
                                         resolved_elements
                                             .push(ResolvedPatternElement::Variable(variable_ref));
                                     }
-                                    PatternElement::Wildcard => {
-                                        resolved_elements.push(ResolvedPatternElement::Wildcard);
+                                    PatternElement::Wildcard(node) => {
+                                        resolved_elements.push(ResolvedPatternElement::Wildcard(
+                                            self.to_node(node),
+                                        ));
                                     }
                                     PatternElement::Expression(_) => {
                                         return Err(
@@ -1838,8 +1875,10 @@ impl<'a> Resolver<'a> {
                                             ),
                                         );
                                     }
-                                    PatternElement::Wildcard => {
-                                        resolved_elements.push(ResolvedPatternElement::Wildcard);
+                                    PatternElement::Wildcard(node) => {
+                                        resolved_elements.push(ResolvedPatternElement::Wildcard(
+                                            self.to_node(node),
+                                        ));
                                     }
                                     PatternElement::Expression(_) => {
                                         return Err(
@@ -2157,23 +2196,27 @@ impl<'a> Resolver<'a> {
         let right = self.resolve_expression(ast_right)?;
         let right_type = resolution(&right);
 
-        match (ast_op, &left_type, &right_type) {
+        let converted = self.convert_binary_operator_kind(&ast_op);
+
+        match (&converted, &left_type, &right_type) {
             // String concatenation - allow any type on the right
-            (BinaryOperator::Add, ResolvedType::String(_), _) => Ok(ResolvedBinaryOperator {
-                left: Box::new(left),
-                right: Box::new(right),
-                ast_operator_type: ast_op.clone(),
-                resolved_type: self.types.string_type(),
-            }),
+            (&ResolvedBinaryOperatorKind::Add(_), ResolvedType::String(_), _) => {
+                Ok(ResolvedBinaryOperator {
+                    left: Box::new(left),
+                    right: Box::new(right),
+                    kind: converted,
+                    resolved_type: self.types.string_type(),
+                })
+            }
 
             // Comparison operators
             (
-                BinaryOperator::Equal
-                | BinaryOperator::NotEqual
-                | BinaryOperator::GreaterThan
-                | BinaryOperator::GreaterEqual
-                | BinaryOperator::LessThan
-                | BinaryOperator::LessEqual,
+                ResolvedBinaryOperatorKind::Equal(_)
+                | ResolvedBinaryOperatorKind::NotEqual(_)
+                | ResolvedBinaryOperatorKind::GreaterThan(_)
+                | ResolvedBinaryOperatorKind::GreaterEqual(_)
+                | ResolvedBinaryOperatorKind::LessThan(_)
+                | ResolvedBinaryOperatorKind::LessEqual(_),
                 _,
                 _,
             ) => {
@@ -2184,7 +2227,7 @@ impl<'a> Resolver<'a> {
                 Ok(ResolvedBinaryOperator {
                     left: Box::new(left),
                     right: Box::new(right),
-                    ast_operator_type: ast_op.clone(),
+                    kind: converted,
                     resolved_type: self.types.bool_type(),
                 })
             }
@@ -2198,7 +2241,7 @@ impl<'a> Resolver<'a> {
                 Ok(ResolvedBinaryOperator {
                     left: Box::new(left),
                     right: Box::new(right),
-                    ast_operator_type: ast_op.clone(),
+                    kind: converted,
                     resolved_type: left_type,
                 })
             }
@@ -2437,7 +2480,7 @@ impl<'a> Resolver<'a> {
             }
             ResolvedType::Array(array_type_ref) => {
                 match operator {
-                    CompoundOperator::Add => {
+                    CompoundOperator::Add(_node) => {
                         let source_type = resolution(&resolved_source);
                         match &source_type {
                             ResolvedType::Array(_source_array_type) => {
@@ -2628,7 +2671,7 @@ impl<'a> Resolver<'a> {
 
     fn create_local_variable(
         &mut self,
-        variable: &Variable,
+        variable: &swamp_script_ast::Node,
         variable_type_ref: &ResolvedType,
     ) -> Result<ResolvedVariableRef, ResolveError> {
         if let Some(_existing_variable) = self.try_find_local_variable(variable) {
@@ -2664,17 +2707,12 @@ impl<'a> Resolver<'a> {
     fn resolve_enum_variant_ref(
         &self,
         qualified_type_identifier: &QualifiedTypeIdentifier,
-        variant_name: &LocalTypeIdentifier,
     ) -> Result<ResolvedEnumVariantTypeRef, ResolveError> {
-        let namespace = self.get_namespace(qualified_type_identifier)?;
-
-        namespace
-            .get_enum_variant_type(&qualified_type_identifier.name, variant_name)
+        self.get_enum_variant_type(&qualified_type_identifier)
             .map_or_else(
                 || {
                     Err(ResolveError::UnknownEnumVariantType(
-                        qualified_type_identifier.clone(),
-                        variant_name.clone(),
+                        qualified_type_identifier,
                     ))
                 },
                 |found| Ok(found.clone()),
@@ -2683,20 +2721,27 @@ impl<'a> Resolver<'a> {
 
     fn resolve_enum_variant_literal(
         &mut self,
-        qualified_type_identifier: &QualifiedTypeIdentifier,
-        variant_name: &LocalTypeIdentifier,
-        variant_data: &EnumLiteralData,
+        ast_variant: &EnumVariantLiteral,
     ) -> Result<ResolvedLiteral, ResolveError> {
-        let variant_ref = self.resolve_enum_variant_ref(qualified_type_identifier, variant_name)?;
+        let qualified_name = match ast_variant {
+            EnumVariantLiteral::Simple(name) => name,
+            EnumVariantLiteral::Tuple(name, _) => name,
+            EnumVariantLiteral::Struct(name, _) => name,
+        };
 
-        let resolved_data = match variant_data {
-            EnumLiteralData::Nothing => ResolvedEnumLiteralData::Nothing,
-            EnumLiteralData::Tuple(expressions) => {
+        let variant_ref = self.resolve_enum_variant_ref(qualified_name)?;
+
+        let resolved_data = match ast_variant {
+            EnumVariantLiteral::Simple(_qualified_name) => ResolvedEnumLiteralData::Nothing,
+            EnumVariantLiteral::Tuple(_qualified_name, expressions) => {
                 ResolvedEnumLiteralData::Tuple(self.resolve_expressions(expressions)?)
             }
-            EnumLiteralData::Struct(anonym_struct) => {
-                let values = &anonym_struct.values().cloned().collect::<Vec<_>>();
-                let resolved_expressions = self.resolve_expressions(values)?;
+            EnumVariantLiteral::Struct(_qualified_name, field_expressions) => {
+                let expressions = &field_expressions
+                    .into_iter()
+                    .map(|field_expr| field_expr.expression)
+                    .collect::<Vec<_>>();
+                let resolved_expressions = self.resolve_expressions(expressions)?;
                 ResolvedEnumLiteralData::Struct(resolved_expressions)
             }
         };
@@ -2707,6 +2752,7 @@ impl<'a> Resolver<'a> {
         ))
     }
 
+    /*
     fn get_namespace(
         &self,
         qualified_type_identifier: &QualifiedTypeIdentifier,
@@ -2723,7 +2769,7 @@ impl<'a> Resolver<'a> {
                 &m.namespace
             }))
         }
-    }
+    }*/
 
     fn resolve_match(
         &mut self,
@@ -2770,12 +2816,23 @@ impl<'a> Resolver<'a> {
         })
     }
 
+    fn str_to_int(text: &str) -> Result<i32, ParseIntError> {
+        text.parse::<i32>()
+    }
+
     fn resolve_pattern_literal(
         &mut self,
         ast_literal: &Literal,
     ) -> Result<ResolvedPattern, ResolveError> {
         let resolved_literal = match ast_literal {
-            Literal::Int(value) => ResolvedLiteral::IntLiteral(*value, self.types.int_type.clone()),
+            Literal::Int(ast_node) => {
+                let integer_text = self.get_text(ast_node);
+                ResolvedLiteral::IntLiteral(
+                    Self::str_to_int(integer_text).map_err(ResolveError::IntConversionError)?,
+                    self.to_node(ast_node),
+                    self.types.int_type.clone(),
+                )
+            }
             Literal::Float(value) => {
                 ResolvedLiteral::FloatLiteral(*value, self.types.float_type.clone())
             }
@@ -2840,7 +2897,7 @@ impl<'a> Resolver<'a> {
         false_block: &Expression,
     ) -> Result<ResolvedExpression, ResolveError> {
         match condition {
-            Expression::PostfixOp(PostfixOperator::Unwrap, expr) => {
+            Expression::PostfixOp(PostfixOperator::Unwrap(_), expr) => {
                 if let Expression::VariableAccess(var) = &**expr {
                     self.handle_optional_unwrap(var, expr, true_block, false_block)
                 } else {
@@ -2849,7 +2906,7 @@ impl<'a> Resolver<'a> {
             }
 
             Expression::VariableAssignment(var, expr) => {
-                if let Expression::PostfixOp(PostfixOperator::Unwrap, inner_expr) = &**expr {
+                if let Expression::PostfixOp(PostfixOperator::Unwrap(_), inner_expr) = &**expr {
                     self.handle_optional_assign_unwrap(var, inner_expr, true_block, false_block)
                 } else {
                     self.resolve_normal_if(condition, true_block, false_block)
@@ -3307,6 +3364,75 @@ impl<'a> Resolver<'a> {
             ast_operator.clone(),
             Box::from(wrapped_expression),
         ))
+    }
+
+    fn to_node(&self, node: &swamp_script_ast::Node) -> swamp_script_semantic::ResolvedNode {
+        swamp_script_semantic::ResolvedNode {
+            span: Span {
+                file_id: self.file_id,
+                offset: node.span.offset,
+                length: node.span.length,
+            },
+        }
+    }
+
+    fn convert_binary_operator_kind(
+        &self,
+        binary_operator: &BinaryOperator,
+    ) -> ResolvedBinaryOperatorKind {
+        match binary_operator {
+            BinaryOperator::Add(node) => ResolvedBinaryOperatorKind::Add(self.to_node(node)),
+            BinaryOperator::Subtract(node) => {
+                ResolvedBinaryOperatorKind::Subtract(self.to_node(node))
+            }
+            BinaryOperator::Multiply(node) => {
+                ResolvedBinaryOperatorKind::Multiply(self.to_node(node))
+            }
+            BinaryOperator::Divide(node) => ResolvedBinaryOperatorKind::Divide(self.to_node(node)),
+            BinaryOperator::Modulo(node) => ResolvedBinaryOperatorKind::Modulo(self.to_node(node)),
+            BinaryOperator::LogicalOr(node) => {
+                ResolvedBinaryOperatorKind::LogicalOr(self.to_node(node))
+            }
+            BinaryOperator::LogicalAnd(node) => {
+                ResolvedBinaryOperatorKind::LogicalAnd(self.to_node(node))
+            }
+            BinaryOperator::Equal(node) => ResolvedBinaryOperatorKind::Equal(self.to_node(node)),
+            BinaryOperator::NotEqual(node) => {
+                ResolvedBinaryOperatorKind::NotEqual(self.to_node(node))
+            }
+            BinaryOperator::LessThan(node) => {
+                ResolvedBinaryOperatorKind::LessThan(self.to_node(node))
+            }
+            BinaryOperator::LessEqual(node) => {
+                ResolvedBinaryOperatorKind::LessEqual(self.to_node(node))
+            }
+            BinaryOperator::GreaterThan(node) => {
+                ResolvedBinaryOperatorKind::GreaterThan(self.to_node(node))
+            }
+            BinaryOperator::GreaterEqual(node) => {
+                ResolvedBinaryOperatorKind::GreaterEqual(self.to_node(node))
+            }
+            BinaryOperator::RangeExclusive(node) => {
+                ResolvedBinaryOperatorKind::RangeExclusive(self.to_node(node))
+            }
+        }
+    }
+
+    fn get_enum_variant_type(
+        &self,
+        qualified_type_identifier: &QualifiedTypeIdentifier,
+    ) -> Option<ResolvedEnumVariantTypeRef> {
+        let path: Vec<String> = if let Some(found) = &qualified_type_identifier.module_path {
+            &found
+                .0
+                .into_iter()
+                .map(|ref x| self.get_text(&x.node).to_string())
+                .collect()
+        } else {
+            vec![]
+        };
+
+        None
     }
 }
 
