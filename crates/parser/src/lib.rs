@@ -8,9 +8,8 @@ use pest::error::{Error, ErrorVariant, InputLocation};
 use pest::iterators::Pair;
 use pest::Parser;
 use pest_derive::Parser;
-use swamp_script_ast::{prelude::*, CompoundOperator, EnumVariantLiteral, FieldExpression, FieldName, FieldType, ForPattern, ForVar, ModulePathItem, MutExpression, PatternElement};
+use swamp_script_ast::{prelude::*, CompoundOperator, EnumVariantLiteral, FieldExpression, FieldName, FieldType, ForPattern, ForVar, ModulePathItem, MutExpression, PatternElement, SpanWithoutFileId};
 use swamp_script_ast::{Function, PostfixOperator};
-use swamp_script_node::SpanWithoutFileId;
 
 pub struct ParseResult<'a> {
     #[allow(dead_code)]
@@ -766,10 +765,7 @@ impl AstParser {
         let (is_mut_iter, iterable_expression) = if next_pair.as_rule() == Rule::mut_keyword {
             let mut_node = self.to_node(&next_pair);
             let iterable_pair = Self::next_pair(&mut inner)?;
-            (
-                Some(mut_node),
-                self.parse_expression(&iterable_pair)?,
-            )
+            (Some(mut_node), self.parse_expression(&iterable_pair)?)
         } else {
             (None, self.parse_expression(&next_pair)?)
         };

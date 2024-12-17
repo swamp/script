@@ -26,5 +26,8 @@ members = [
 
     # Core and Std
     "crates/core",
-    "crates/std", "crates/node", "crates/source-map",
+    "crates/std",
+
+
+    "crates/source-map",
 ]

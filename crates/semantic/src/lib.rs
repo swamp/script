@@ -16,7 +16,23 @@ use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
 use std::rc::Rc;
 
-use swamp_script_node::Span;
+type FileId = u16;
+
+#[derive(PartialEq, Eq, Hash, Default)]
+pub struct Span {
+    pub file_id: FileId,
+    pub offset: u32,
+    pub length: u16,
+}
+
+impl Debug for Span {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<{}:{} ({})>", self.offset, self.length, self.file_id)
+    }
+}
+
+
+
 
 #[derive(Debug)]
 pub struct ResolvedParameter {

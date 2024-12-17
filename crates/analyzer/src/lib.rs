@@ -9,13 +9,9 @@ use std::cell::RefCell;
 use std::fmt::Display;
 use std::rc::Rc;
 use swamp_script_ast::prelude::*;
-use swamp_script_ast::{CompoundOperator, ForPattern, Function, PatternElement, PostfixOperator};
+use swamp_script_ast::{CompoundOperator, ForPattern, Function, PatternElement, PostfixOperator, SpanWithoutFileId};
 use swamp_script_semantic::ns::{LocalTypeName, ResolvedModuleNamespace, SemanticError};
-use swamp_script_semantic::{
-    create_rust_type, prelude::*, ResolvedAccess, ResolvedBoolType, ResolvedForPattern,
-    ResolvedModuleRef, ResolvedPatternElement, ResolvedStaticCallGeneric, ResolvedTupleTypeRef,
-    ResolvedVariableCompoundAssignment, TypeNumber,
-};
+use swamp_script_semantic::{create_rust_type, prelude::*, ResolvedAccess, ResolvedBoolType, ResolvedForPattern, ResolvedModuleRef, ResolvedPatternElement, ResolvedStaticCallGeneric, ResolvedTupleTypeRef, ResolvedVariableCompoundAssignment, Span, TypeNumber};
 use swamp_script_semantic::{
     ResolvedDefinition, ResolvedEnumTypeRef, ResolvedFunction, ResolvedFunctionRef,
     ResolvedFunctionSignature, ResolvedMapTypeRef, ResolvedMutMap, ResolvedStaticCall,
@@ -25,6 +21,15 @@ use swamp_script_semantic::{ResolvedMapType, ResolvedProgramState};
 use swamp_script_semantic::{ResolvedModules, ResolvedPostfixOperator};
 use swamp_script_source_map::SourceMap;
 use tracing::{debug, error, info, warn};
+
+#[must_use]
+pub const fn convert_span(without: &SpanWithoutFileId, file_id: FileId) -> Span {
+    Span {
+        file_id,
+        offset: without.offset,
+        length: without.length,
+    }
+}
 
 pub const SPARSE_TYPE_ID: TypeNumber = 999;
 

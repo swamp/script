@@ -4,12 +4,23 @@
  */
 pub mod prelude;
 
-use seq_map::SeqMap;
 use std::fmt;
 use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
 use std::rc::Rc;
-use swamp_script_node::SpanWithoutFileId;
+
+#[derive(PartialEq, Eq, Hash, Default)]
+pub struct SpanWithoutFileId {
+    pub offset: u32,
+    pub length: u16,
+}
+
+impl Debug for SpanWithoutFileId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<{}:{}>", self.offset, self.length)
+    }
+}
+
 
 // Common metadata that can be shared across all AST nodes
 #[derive(PartialEq, Eq, Hash, Default)]
@@ -354,20 +365,6 @@ pub enum Literal {
     Map(Vec<(Expression, Expression)>),
     Unit, // ()
     None, // none
-}
-
-pub fn seq_map_to_string<K, V>(map: &SeqMap<K, V>) -> String
-where
-    K: Debug + Eq + Hash + Clone,
-    V: Debug,
-{
-    let entries = map
-        .iter()
-        .map(|(k, v)| format!("{:?}: {:?}", k, v))
-        .collect::<Vec<String>>()
-        .join(", ");
-
-    entries.trim().to_string()
 }
 
 #[derive(Debug)]
