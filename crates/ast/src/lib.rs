@@ -119,11 +119,11 @@ impl StructType {
 pub enum Definition {
     StructDef(StructType),
 
-    EnumDef(LocalTypeIdentifier, Vec<EnumVariant>),
+    EnumDef(Node, Vec<EnumVariant>),
 
     FunctionDef(Function),
-    ImplDef(LocalTypeIdentifier, Vec<Function>),
-    TypeAlias(LocalTypeIdentifier, Type),
+    ImplDef(Node, Vec<Function>),
+    TypeAlias(Node, Type),
     Import(Import),
     // Other
     Comment(Node),
@@ -131,7 +131,7 @@ pub enum Definition {
 
 #[derive(Debug)]
 pub struct ForVar {
-    pub identifier: LocalIdentifier,
+    pub identifier: Node,
     pub is_mut: Option<Node>,
 }
 
@@ -142,8 +142,14 @@ pub enum ForPattern {
 }
 
 #[derive(Debug)]
+pub struct MutExpression {
+    pub is_mut: Option<Node>,
+    pub expression: Expression,
+}
+
+#[derive(Debug)]
 pub enum Statement {
-    ForLoop(ForPattern, Expression, bool, Vec<Statement>),
+    ForLoop(ForPattern, MutExpression, Vec<Statement>),
     WhileLoop(Expression, Vec<Statement>),
     Return(Expression),
     Break(Node),
@@ -193,23 +199,23 @@ pub struct Parameter {
 }
 
 #[derive(Debug)]
-pub struct FunctionSignature {
-    pub name: LocalIdentifier,
+pub struct FunctionDeclaration {
+    pub name: Node,
     pub params: Vec<Parameter>,
     pub self_parameter: Option<SelfParameter>,
     pub return_type: Option<Type>,
 }
 
 #[derive(Debug)]
-pub struct FunctionData {
-    pub signature: FunctionSignature,
+pub struct FunctionWithBody {
+    pub declaration: FunctionDeclaration,
     pub body: Vec<Statement>,
 }
 
 #[derive(Debug)]
 pub enum Function {
-    Internal(FunctionData),
-    External(FunctionSignature),
+    Internal(FunctionWithBody),
+    External(FunctionDeclaration),
 }
 
 #[derive(Debug)]
@@ -234,8 +240,8 @@ pub struct ImplMemberSignature {
 
 #[derive(Debug)]
 pub enum ImplFunction {
-    Internal(FunctionData),
-    External(FunctionSignature),
+    Internal(FunctionWithBody),
+    External(FunctionDeclaration),
 }
 
 #[derive(Debug)]
@@ -267,7 +273,7 @@ pub enum CompoundOperator {
 #[derive(Debug)]
 pub enum Expression {
     // Access / Lookup values
-    FieldAccess(Box<Expression>, FieldName),
+    FieldAccess(Box<Expression>, Node),
     VariableAccess(Variable),
     MutRef(MutVariableRef), // Used when passing with mut keyword. mut are implicitly passed by reference
     IndexAccess(Box<Expression>, Box<Expression>), // Read from an array or map: arr[3]
@@ -283,16 +289,16 @@ pub enum Expression {
         CompoundOperator,
         Box<Expression>,
     ),
-    VariableCompoundAssignment(Variable, CompoundOperator, Box<Expression>),
+    VariableCompoundAssignment(Node, CompoundOperator, Box<Expression>),
     FieldCompoundAssignment(
         Box<Expression>,
-        FieldName,
+        Node,
         CompoundOperator,
         Box<Expression>,
     ),
 
     IndexAssignment(Box<Expression>, Box<Expression>, Box<Expression>), // target, index, source. Write to an index in an array or map: arr[3] = 42
-    FieldAssignment(Box<Expression>, FieldName, Box<Expression>),
+    FieldAssignment(Box<Expression>, Node, Box<Expression>),
 
     // Operators ----
     BinaryOp(Box<Expression>, BinaryOperator, Box<Expression>),
@@ -304,17 +310,17 @@ pub enum Expression {
     // Calls ----
     FunctionCall(Box<Expression>, Vec<Expression>),
     StaticCall(
-        LocalTypeIdentifier,
-        MemberFunctionIdentifier,
+        Node,
+        Node,
         Vec<Expression>,
     ), // Type::func(args)
     StaticCallGeneric(
-        LocalTypeIdentifier,
-        MemberFunctionIdentifier,
+        Node,
+        Node,
         Vec<Expression>,
         Vec<Type>, // Generic arguments
     ),
-    MemberCall(Box<Expression>, MemberFunctionIdentifier, Vec<Expression>),
+    MemberCall(Box<Expression>, Node, Vec<Expression>),
     Block(Vec<Statement>),
 
     InterpolatedString(Vec<StringPart>),
@@ -449,8 +455,8 @@ pub enum PostfixOperator {
 // Patterns are used in matching and destructuring
 #[derive(Debug)]
 pub enum Pattern {
-    PatternList(Vec<PatternElement>), // TODO: Change to SetVec
-    EnumPattern(LocalTypeIdentifier, Option<Vec<PatternElement>>), // TODO: Change to SetVec
+    PatternList(Vec<PatternElement>),
+    EnumPattern(Node, Option<Vec<PatternElement>>), 
     Literal(Literal),
 }
 

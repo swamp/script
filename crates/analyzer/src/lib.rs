@@ -796,8 +796,8 @@ impl<'a> Resolver<'a> {
     ) -> Result<ResolvedDefinition, ResolveError> {
         let resolved_function = match function {
             Function::Internal(function_data) => {
-                let parameters = self.resolve_parameters(&function_data.signature.params)?;
-                let return_type = self.resolve_type(&function_data.signature.return_type)?;
+                let parameters = self.resolve_parameters(&function_data.declaration.params)?;
+                let return_type = self.resolve_type(&function_data.declaration.return_type)?;
 
                 self.return_type = Some(return_type.clone());
 
@@ -856,7 +856,7 @@ impl<'a> Resolver<'a> {
                 let mut parameters = Vec::new();
 
                 // Handle parameters, including self if present
-                for param in &function_data.signature.params {
+                for param in &function_data.declaration.params {
                     let resolved_type = if param.is_self {
                         ResolvedType::Struct(found_struct.clone())
                     } else {
@@ -871,7 +871,7 @@ impl<'a> Resolver<'a> {
                     });
                 }
 
-                let return_type = self.resolve_type(&function_data.signature.return_type)?;
+                let return_type = self.resolve_type(&function_data.declaration.return_type)?;
 
                 for param in &parameters {
                     self.create_local_variable(
@@ -888,7 +888,7 @@ impl<'a> Resolver<'a> {
                         return_type,
                     },
                     statements,
-                    name: function_data.signature.name.clone(),
+                    name: function_data.declaration.name.clone(),
                 };
 
                 let internal_ref = Rc::new(internal);

@@ -67,7 +67,7 @@ impl ParseModule {
             text: name,
         };
 
-        let signature = FunctionSignature {
+        let signature = FunctionDeclaration {
             name: fake_identifier.clone(),
             params: parameters,
             return_type,
