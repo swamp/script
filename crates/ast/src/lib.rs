@@ -21,7 +21,6 @@ impl Debug for SpanWithoutFileId {
     }
 }
 
-
 // Common metadata that can be shared across all AST nodes
 #[derive(PartialEq, Eq, Hash, Default, Clone)]
 pub struct Node {
@@ -286,7 +285,6 @@ pub struct CompoundOperator {
     pub kind: CompoundOperatorKind,
 }
 
-
 /// Expressions are things that "converts" to a value when evaluated.
 #[derive(Debug)]
 pub enum Expression {
@@ -307,13 +305,8 @@ pub enum Expression {
         CompoundOperator,
         Box<Expression>,
     ),
-    VariableCompoundAssignment(Node, CompoundOperatorKind, Box<Expression>),
-    FieldCompoundAssignment(
-        Box<Expression>,
-        Node,
-        CompoundOperator,
-        Box<Expression>,
-    ),
+    VariableCompoundAssignment(Node, CompoundOperator, Box<Expression>),
+    FieldCompoundAssignment(Box<Expression>, Node, CompoundOperator, Box<Expression>),
 
     IndexAssignment(Box<Expression>, Box<Expression>, Box<Expression>), // target, index, source. Write to an index in an array or map: arr[3] = 42
     FieldAssignment(Box<Expression>, Node, Box<Expression>),
@@ -327,11 +320,7 @@ pub enum Expression {
 
     // Calls ----
     FunctionCall(Box<Expression>, Vec<Expression>),
-    StaticCall(
-        Node,
-        Node,
-        Vec<Expression>,
-    ), // Type::func(args)
+    StaticCall(Node, Node, Vec<Expression>), // Type::func(args)
     StaticCallGeneric(
         Node,
         Node,

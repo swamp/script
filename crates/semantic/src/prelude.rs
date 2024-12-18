@@ -4,7 +4,7 @@
  */
 
 pub use crate::{
-    comma_seq, CommonEnumVariantType, ExternalFunctionId, Fp, ResolvedNode, ResolvedArrayItem,
+    comma_seq, CommonEnumVariantType, ExternalFunctionId, Fp, ResolvedArrayItem,
     ResolvedArrayItemRef, ResolvedArrayType, ResolvedArrayTypeRef, ResolvedBinaryOperator,
     ResolvedBoolType, ResolvedBoolTypeRef, ResolvedBooleanExpression, ResolvedEnumLiteralData,
     ResolvedEnumType, ResolvedEnumTypeRef, ResolvedEnumVariantContainerType,
@@ -16,11 +16,11 @@ pub use crate::{
     ResolvedIntTypeRef, ResolvedInternalFunctionCall, ResolvedInternalFunctionDefinition,
     ResolvedInternalFunctionDefinitionRef, ResolvedIterator, ResolvedLiteral, ResolvedMatch,
     ResolvedMatchArm, ResolvedMemberCall, ResolvedMutArray, ResolvedMutStructTypeField,
-    ResolvedMutStructTypeFieldRef, ResolvedMutVariable, ResolvedParameter, ResolvedPattern,
-    ResolvedProgramState, ResolvedProgramTypes, ResolvedRustType, ResolvedRustTypeRef,
-    ResolvedStatement, ResolvedStringPart, ResolvedStringType, ResolvedStringTypeRef,
-    ResolvedStructInstantiation, ResolvedStructType, ResolvedStructTypeField,
-    ResolvedStructTypeFieldRef, ResolvedStructTypeRef, ResolvedTupleType, ResolvedType,
-    ResolvedUnaryOperator, ResolvedUnitType, ResolvedUnitTypeRef, ResolvedVariable,
+    ResolvedMutStructTypeFieldRef, ResolvedMutVariable, ResolvedNode, ResolvedParameter,
+    ResolvedPattern, ResolvedProgramState, ResolvedProgramTypes, ResolvedRustType,
+    ResolvedRustTypeRef, ResolvedStatement, ResolvedStringPart, ResolvedStringType,
+    ResolvedStringTypeRef, ResolvedStructInstantiation, ResolvedStructType,
+    ResolvedStructTypeField, ResolvedStructTypeFieldRef, ResolvedStructTypeRef, ResolvedTupleType,
+    ResolvedType, ResolvedUnaryOperator, ResolvedUnitType, ResolvedUnitTypeRef, ResolvedVariable,
     ResolvedVariableAssignment, ResolvedVariableRef, SemanticError, TypeNumber,
 };

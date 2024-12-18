@@ -1,4 +1,2 @@
 #[test]
-fn analyze() {
-    
-}
+fn analyze() {}

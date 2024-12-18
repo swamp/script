@@ -8,7 +8,10 @@ use pest::error::{Error, ErrorVariant, InputLocation};
 use pest::iterators::Pair;
 use pest::Parser;
 use pest_derive::Parser;
-use swamp_script_ast::{prelude::*, CompoundOperatorKind, EnumVariantLiteral, FieldExpression, FieldName, FieldType, ForPattern, ForVar, ModulePathItem, MutExpression, PatternElement, SpanWithoutFileId};
+use swamp_script_ast::{
+    prelude::*, CompoundOperatorKind, EnumVariantLiteral, FieldExpression, FieldName, FieldType,
+    ForPattern, ForVar, ModulePathItem, MutExpression, PatternElement, SpanWithoutFileId,
+};
 use swamp_script_ast::{Function, PostfixOperator};
 
 pub struct ParseResult<'a> {

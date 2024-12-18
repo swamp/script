@@ -2,13 +2,20 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use crate::{ExternalFunctionId, Hash, Node, ResolvedEnumType, ResolvedEnumTypeRef, ResolvedEnumVariantType, ResolvedEnumVariantTypeRef, ResolvedExternalFunctionDefinition, ResolvedExternalFunctionDefinitionRef, ResolvedFunction, ResolvedFunctionSignature, ResolvedIdentifierName, ResolvedInternalFunctionDefinition, ResolvedInternalFunctionDefinitionRef, ResolvedLocalIdentifier, ResolvedLocalTypeIdentifier, ResolvedModulePath, ResolvedParameter, ResolvedRustType, ResolvedRustTypeRef, ResolvedStructType, ResolvedStructTypeRef, ResolvedTupleType, ResolvedTupleTypeRef, ResolvedType, TypeNumber};
+use crate::{
+    ExternalFunctionId, Hash, Node, ResolvedEnumType, ResolvedEnumTypeRef, ResolvedEnumVariantType,
+    ResolvedEnumVariantTypeRef, ResolvedExternalFunctionDefinition,
+    ResolvedExternalFunctionDefinitionRef, ResolvedFunction, ResolvedFunctionSignature,
+    ResolvedIdentifierName, ResolvedInternalFunctionDefinition,
+    ResolvedInternalFunctionDefinitionRef, ResolvedLocalIdentifier, ResolvedLocalTypeIdentifier,
+    ResolvedModulePath, ResolvedParameter, ResolvedRustType, ResolvedRustTypeRef,
+    ResolvedStructType, ResolvedStructTypeRef, ResolvedTupleType, ResolvedTupleTypeRef,
+    ResolvedType, TypeNumber,
+};
 use seq_map::{SeqMap, SeqMapError};
 use std::cell::RefCell;
 use std::fmt::{Debug, Display};
 use std::rc::Rc;
-
-
 
 impl Display for LocalTypeName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -125,9 +132,6 @@ impl ResolvedModuleNamespace {
     */
 }
 
-
-
-
 impl ResolvedModuleNamespace {
     #[must_use]
     pub fn new(path: ResolvedModulePath) -> Self {
@@ -186,110 +190,110 @@ impl ResolvedModuleNamespace {
 
     /*
 
-    pub fn get_type_alias(&self, name: &String) -> Option<&ResolvedType> {
-        self.type_aliases.get(&(name).into())
-    }
+        pub fn get_type_alias(&self, name: &String) -> Option<&ResolvedType> {
+            self.type_aliases.get(&(name).into())
+        }
 
-    pub fn add_internal_function(
-        &mut self,
-        function_definition: ResolvedInternalFunctionDefinition,
-    ) -> Result<ResolvedInternalFunctionDefinitionRef, SemanticError> {
-        let function_ref = Rc::new(function_definition);
-        self.add_internal_function_ref(&function_ref)?;
-        Ok(function_ref)
-    }
+        pub fn add_internal_function(
+            &mut self,
+            function_definition: ResolvedInternalFunctionDefinition,
+        ) -> Result<ResolvedInternalFunctionDefinitionRef, SemanticError> {
+            let function_ref = Rc::new(function_definition);
+            self.add_internal_function_ref(&function_ref)?;
+            Ok(function_ref)
+        }
 
-    pub fn add_internal_function_ref(
-        &mut self,
-        function_ref: &ResolvedInternalFunctionDefinitionRef,
-    ) -> Result<(), SemanticError> {
-        self.internal_functions
-            .insert(function_ref.name.text.clone(), function_ref.clone())?;
-        Ok(())
-    }
+        pub fn add_internal_function_ref(
+            &mut self,
+            function_ref: &ResolvedInternalFunctionDefinitionRef,
+        ) -> Result<(), SemanticError> {
+            self.internal_functions
+                .insert(function_ref.name.text.clone(), function_ref.clone())?;
+            Ok(())
+        }
 
-    pub fn add_external_function_declaration(
-        &mut self,
-        name: String,
-        function_declaration: ResolvedExternalFunctionDefinition,
-    ) -> Result<ResolvedExternalFunctionDefinitionRef, SemanticError> {
-        let function_ref = Rc::new(function_declaration);
-        self.external_function_declarations
-            .insert(name.clone(), function_ref.clone())?;
-        Ok(function_ref)
-    }
+        pub fn add_external_function_declaration(
+            &mut self,
+            name: String,
+            function_declaration: ResolvedExternalFunctionDefinition,
+        ) -> Result<ResolvedExternalFunctionDefinitionRef, SemanticError> {
+            let function_ref = Rc::new(function_declaration);
+            self.external_function_declarations
+                .insert(name.clone(), function_ref.clone())?;
+            Ok(function_ref)
+        }
 
-    pub fn add_external_function_declaration_ref(
-        &mut self,
-        function_ref: ResolvedExternalFunctionDefinitionRef,
-    ) -> Result<ResolvedExternalFunctionDefinitionRef, SemanticError> {
-        self.external_function_declarations
-            .insert(function_ref.name.text.clone(), function_ref.clone())?;
-        Ok(function_ref)
-    }
+        pub fn add_external_function_declaration_ref(
+            &mut self,
+            function_ref: ResolvedExternalFunctionDefinitionRef,
+        ) -> Result<ResolvedExternalFunctionDefinitionRef, SemanticError> {
+            self.external_function_declarations
+                .insert(function_ref.name.text.clone(), function_ref.clone())?;
+            Ok(function_ref)
+        }
 
-    pub fn add_enum_variant(
-        &mut self,
-        enum_variant: ResolvedEnumVariantType,
-    ) -> Result<ResolvedEnumVariantTypeRef, SemanticError> {
-        let enum_variant_ref = Rc::new(enum_variant);
-        let complete_name = &enum_variant_ref.complete_name();
-        self.enum_variant_types.insert(
-            LocalTypeName(complete_name.clone()),
-            enum_variant_ref.clone(),
-        )?;
-        Ok(enum_variant_ref)
-    }
+        pub fn add_enum_variant(
+            &mut self,
+            enum_variant: ResolvedEnumVariantType,
+        ) -> Result<ResolvedEnumVariantTypeRef, SemanticError> {
+            let enum_variant_ref = Rc::new(enum_variant);
+            let complete_name = &enum_variant_ref.complete_name();
+            self.enum_variant_types.insert(
+                LocalTypeName(complete_name.clone()),
+                enum_variant_ref.clone(),
+            )?;
+            Ok(enum_variant_ref)
+        }
 
-    pub fn create_enum_type(
-        &mut self,
-        enum_type_name: &ResolvedLocalTypeIdentifier,
-        number: TypeNumber,
-    ) -> Result<ResolvedEnumTypeRef, SemanticError> {
-        let resolved_parent_type =
-            ResolvedEnumType::new(enum_type_name.clone(), self.path.clone(), number);
+        pub fn create_enum_type(
+            &mut self,
+            enum_type_name: &ResolvedLocalTypeIdentifier,
+            number: TypeNumber,
+        ) -> Result<ResolvedEnumTypeRef, SemanticError> {
+            let resolved_parent_type =
+                ResolvedEnumType::new(enum_type_name.clone(), self.path.clone(), number);
 
-        let enum_type_ref = Rc::new(resolved_parent_type);
+            let enum_type_ref = Rc::new(resolved_parent_type);
 
-        self.enum_types.insert(
-            LocalTypeName(enum_type_name.text.clone()),
-            enum_type_ref.clone(),
-        )?;
+            self.enum_types.insert(
+                LocalTypeName(enum_type_name.text.clone()),
+                enum_type_ref.clone(),
+            )?;
 
-        Ok(enum_type_ref)
-    }
+            Ok(enum_type_ref)
+        }
 
-    pub fn get_or_create_tuple(&mut self, types: Vec<ResolvedType>) -> ResolvedTupleTypeRef {
-        // TODO: for now, just create new types, in the future we should check if we can reuse a type
-        let tuple_type = Rc::new(ResolvedTupleType::new(types));
-        self.tuples.push(tuple_type.clone());
+        pub fn get_or_create_tuple(&mut self, types: Vec<ResolvedType>) -> ResolvedTupleTypeRef {
+            // TODO: for now, just create new types, in the future we should check if we can reuse a type
+            let tuple_type = Rc::new(ResolvedTupleType::new(types));
+            self.tuples.push(tuple_type.clone());
 
-        tuple_type
-    }
+            tuple_type
+        }
 
-    pub fn get_struct(&self, name: &ResolvedLocalTypeIdentifier) -> Option<&ResolvedStructTypeRef> {
-        // TODO: Add scope support, for now just ignore it
-        self.structs.get(&(&name.text).into())
-    }
+        pub fn get_struct(&self, name: &ResolvedLocalTypeIdentifier) -> Option<&ResolvedStructTypeRef> {
+            // TODO: Add scope support, for now just ignore it
+            self.structs.get(&(&name.text).into())
+        }
 
-    pub fn get_local_struct(
-        &self,
-        name: &ResolvedLocalTypeIdentifier,
-    ) -> Option<&ResolvedStructTypeRef> {
-        self.structs.get(&(&name.text).into())
-    }
+        pub fn get_local_struct(
+            &self,
+            name: &ResolvedLocalTypeIdentifier,
+        ) -> Option<&ResolvedStructTypeRef> {
+            self.structs.get(&(&name.text).into())
+        }
 
-    pub fn get_enum(&self, name: &ResolvedLocalTypeIdentifier) -> Option<&ResolvedEnumTypeRef> {
-        self.enum_types.get(&(&name.text).into())
-    }
+        pub fn get_enum(&self, name: &ResolvedLocalTypeIdentifier) -> Option<&ResolvedEnumTypeRef> {
+            self.enum_types.get(&(&name.text).into())
+        }
 
-    pub fn get_built_in_rust_type(
-        &self,
-        name: &ResolvedLocalTypeIdentifier,
-    ) -> Option<&ResolvedRustTypeRef> {
-        self.build_in_rust_types.get(&(&name.text).into())
-    }
-*/
+        pub fn get_built_in_rust_type(
+            &self,
+            name: &ResolvedLocalTypeIdentifier,
+        ) -> Option<&ResolvedRustTypeRef> {
+            self.build_in_rust_types.get(&(&name.text).into())
+        }
+    */
 
     pub fn get_enum_variant_type_str(
         &self,

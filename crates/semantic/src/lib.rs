@@ -39,7 +39,6 @@ pub struct ResolvedParameter {
     pub is_mutable: Option<ResolvedNode>,
 }
 
-
 #[derive(Debug)]
 pub struct ResolvedFunctionSignature {
     pub parameters: Vec<ResolvedParameter>,
@@ -222,7 +221,13 @@ pub struct ResolvedVariable {
 
     pub scope_index: usize,
     pub variable_index: usize,
-    pub is_mutable: bool,
+}
+
+impl ResolvedVariable {
+    #[must_use]
+    pub const fn is_mutable(&self) -> bool {
+        self.mutable_node.is_some()
+    }
 }
 
 pub type ResolvedVariableRef = Rc<ResolvedVariable>;
@@ -363,8 +368,7 @@ pub struct ResolvedStructTypeField {
     pub struct_type_ref: ResolvedStructTypeRef,
     pub field_name: ResolvedLocalIdentifier,
     pub resolved_type: ResolvedType,
-    pub struct_expression: Box<ResolvedExpression>,
-
+    //    pub struct_expression: Box<ResolvedExpression>,
     pub index: usize,
 }
 
@@ -412,8 +416,25 @@ pub struct ResolvedIndexType {
 }
 
 #[derive(Debug)]
-pub enum ResolvedFormatSpecifier {
-    Hex(ResolvedNode),
+pub enum ResolvedPrecisionType {
+    Float,
+    String,
+}
+
+#[derive(Debug)]
+pub enum ResolvedFormatSpecifierKind {
+    Debug,                                               // :?
+    LowerHex,                                            // :x
+    UpperHex,                                            // :X
+    Binary,                                              // :b
+    Float,                                               // :f
+    Precision(u32, ResolvedNode, ResolvedPrecisionType), // :..2f or :..5s
+}
+
+#[derive(Debug)]
+pub struct ResolvedFormatSpecifier {
+    pub node: ResolvedNode,
+    pub kind: ResolvedFormatSpecifierKind,
 }
 
 #[derive(Debug)]
@@ -700,8 +721,8 @@ pub enum ResolvedStatement {
     ForLoop(ResolvedForPattern, ResolvedIterator, Vec<ResolvedStatement>),
     WhileLoop(ResolvedBooleanExpression, Vec<ResolvedStatement>),
     Return(ResolvedExpression),
-    Break(ResolvedNode),                    // Return with void
-    Continue(ResolvedNode),                 //
+    Break(ResolvedNode),            // Return with void
+    Continue(ResolvedNode),         //
     Expression(ResolvedExpression), // Used for expressions with side effects (mutation, i/o)
     Block(Vec<ResolvedStatement>),
     If(

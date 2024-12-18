@@ -15,7 +15,6 @@ impl Default for ResolvedModules {
     }
 }
 
-
 #[derive(Debug)]
 pub struct ResolvedModule {
     pub definitions: Vec<ResolvedDefinition>,
@@ -34,7 +33,6 @@ impl ResolvedModule {
         }
     }
 }
-
 
 impl ResolvedModules {
     pub fn new() -> Self {
@@ -70,10 +68,9 @@ impl ResolvedModules {
     pub fn contains_key(&self, module_path: ResolvedModulePath) -> bool {
         self.modules.contains_key(&module_path)
     }
-    
+
      */
 }
-
 
 #[derive(Debug)]
 pub struct ResolvedProgram {
