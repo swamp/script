@@ -9,12 +9,13 @@ use std::num::ParseIntError;
 use std::rc::Rc;
 use swamp_script_ast::prelude::*;
 use swamp_script_ast::{
-    CompoundOperator, EnumVariantLiteral, ForPattern, Function, PatternElement, PostfixOperator,
-    SpanWithoutFileId,
+    CompoundOperator, EnumVariantLiteral, FieldExpression, ForPattern, Function, PatternElement,
+    PostfixOperator, SpanWithoutFileId,
 };
 use swamp_script_semantic::{
     create_rust_type, prelude::*, FileId, LocalTypeName, ResolvedAccess,
-    ResolvedBinaryOperatorKind, ResolvedBoolType, ResolvedForPattern, ResolvedPatternElement,
+    ResolvedBinaryOperatorKind, ResolvedBoolType, ResolvedCompoundOperator, ResolvedForPattern,
+    ResolvedLocalIdentifier, ResolvedLocalTypeIdentifier, ResolvedPatternElement,
     ResolvedStaticCallGeneric, ResolvedTupleTypeRef, ResolvedVariableCompoundAssignment, Span,
     TypeNumber,
 };
@@ -26,11 +27,11 @@ use swamp_script_semantic::{ResolvedMapIndexLookup, ResolvedProgramTypes};
 use swamp_script_semantic::{ResolvedMapType, ResolvedProgramState};
 use swamp_script_semantic::{ResolvedModulePath, ResolvedPostfixOperator};
 use swamp_script_source_map::SourceMap;
+use tracing::field::Field;
 use tracing::{debug, error, info, warn};
 
-pub enum NamespaceError {
-
-}
+#[derive(Debug)]
+pub enum NamespaceError {}
 
 pub trait NamespaceLookup {
     fn get_struct(&self, path: &Vec<String>, name: &str) -> Option<ResolvedStructTypeRef>;
@@ -43,12 +44,27 @@ pub trait NamespaceLookup {
     ) -> Option<ResolvedEnumVariantType>;
     fn get_rust_type(&self, name: &str) -> Option<ResolvedRustTypeRef>;
 
+    fn add_enum_type(
+        &self,
+        enum_type: &ResolvedEnumType,
+    ) -> Result<ResolvedEnumTypeRef, NamespaceError>;
 
-    fn add_enum_variant(&self, enum_variant: &ResolvedEnumVariantType) -> Result<(), NamespaceError>;
+    fn add_enum_variant(
+        &self,
+        enum_variant: &ResolvedEnumVariantType,
+    ) -> Result<(), NamespaceError>;
     fn add_struct_type(&self, struct_type: StructType) -> Result<(), NamespaceError>;
 
-    fn add_internal_function_ref(&self, internal_func: ResolvedInternalFunctionDefinition)  -> Result<(), NamespaceError>;
+    fn add_internal_function_ref(
+        &self,
+        internal_func: ResolvedInternalFunctionDefinition,
+    ) -> Result<(), NamespaceError>;
+}
 
+impl From<NamespaceError> for ResolveError {
+    fn from(error: NamespaceError) -> Self {
+        Self::NamespaceError(error)
+    }
 }
 
 #[must_use]
@@ -211,36 +227,37 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
 
 #[derive(Debug)]
 pub enum ResolveError {
+    NamespaceError(NamespaceError),
     CanNotFindModule(ModulePath),
     UnknownStructTypeReference(QualifiedTypeIdentifier),
     UnknownLocalStructTypeReference(LocalTypeIdentifier),
-    DuplicateFieldName(IdentifierName),
+    DuplicateFieldName(ResolvedNode),
     Unknown(String),
     UnknownImplTargetTypeReference(LocalTypeIdentifier),
     WrongFieldCountInStructInstantiation(ResolvedStructTypeRef, SeqMap<IdentifierName, Expression>),
     MissingFieldInStructInstantiation(IdentifierName, ResolvedStructTypeRef),
     ExpectedFunctionExpression(Expression),
     CouldNotFindMember(LocalIdentifier, Expression),
-    UnknownVariable(Variable),
+    UnknownVariable(ResolvedNode),
     NotAnArray(Expression),
     ArrayIndexMustBeInt(Expression),
-    OverwriteVariableWithAnotherType(Variable),
+    OverwriteVariableWithAnotherType(ResolvedNode),
     WrongNumberOfArguments(usize, usize),
     IncompatibleArguments(ResolvedType, ResolvedType),
-    CanOnlyOverwriteVariableWithMut(Variable),
-    OverwriteVariableNotAllowedHere(Variable),
+    CanOnlyOverwriteVariableWithMut(ResolvedNode),
+    OverwriteVariableNotAllowedHere(ResolvedNode),
     NotNamedStruct(Expression),
     UnknownEnumVariantType(QualifiedTypeIdentifier),
-    WasNotStructType(Expression),
-    UnknownStructField(LocalIdentifier),
+    WasNotStructType(ResolvedNode),
+    UnknownStructField(ResolvedNode),
     MustBeEnumType(Pattern),
     UnknownEnumVariantTypeInPattern(LocalTypeIdentifier),
-    ExpectedEnumInPattern(LocalTypeIdentifier),
+    ExpectedEnumInPattern(ResolvedNode),
     WrongEnumVariantContainer(ResolvedEnumVariantTypeRef),
-    VariableIsNotMutable(Variable),
+    VariableIsNotMutable(ResolvedNode),
     ArgumentIsNotMutable,
     WrongNumberOfTupleDeconstructVariables,
-    UnknownTypeReference(Node),
+    UnknownTypeReference(ResolvedNode),
     SemanticError(SemanticError),
     SeqMapError(SeqMapError),
     ExpectedMemberCall(Expression),
@@ -322,7 +339,7 @@ pub struct Resolver<'a> {
     pub lookup: Box<dyn NamespaceLookup>,
     pub source_map: &'a SourceMap,
     pub block_scope_stack: Vec<BlockScope>,
-    pub return_type: Option<ResolvedType>,
+    pub return_type: ResolvedType,
     file_id: FileId,
 }
 
@@ -342,7 +359,7 @@ impl<'a> Resolver<'a> {
             lookup,
             source_map,
             block_scope_stack: scope_stack,
-            return_type: None,
+            return_type: types.unit_type(),
             file_id,
         }
     }
@@ -399,7 +416,8 @@ impl<'a> Resolver<'a> {
 
         if let ResolvedType::Optional(inner_type) = resolution(&resolved_var_expr) {
             self.push_block_scope("if_unwrap");
-            let resolved_var_ref = self.create_local_variable(&var.name, &inner_type)?;
+            let resolved_var_ref =
+                self.create_local_variable(&var.name, &var.is_mutable, &inner_type)?;
             let resolved_true = self.resolve_statements(statements)?;
             self.pop_block_scope("if_unwrap");
 
@@ -431,7 +449,8 @@ impl<'a> Resolver<'a> {
 
         if let ResolvedType::Optional(inner_type) = resolution(&resolved_expr) {
             self.push_block_scope("if_assign_unwrap");
-            let resolved_var_ref = self.create_local_variable(&var.name, &inner_type)?;
+            let resolved_var_ref =
+                self.create_local_variable(&var.name, &var.is_mutable, &inner_type)?;
             let resolved_true = self.resolve_statements(statements)?;
             self.pop_block_scope("if_assign_unwrap");
 
@@ -554,6 +573,16 @@ impl<'a> Resolver<'a> {
             .get_span_source(self.file_id, span.offset as usize, span.length as usize)
     }
 
+    fn get_text_resolved(&self, resolved_node: &ResolvedNode) -> &str {
+        let span = Span {
+            file_id: self.file_id,
+            offset: resolved_node.span.offset,
+            length: resolved_node.span.length,
+        };
+        self.source_map
+            .get_span_source(self.file_id, span.offset as usize, span.length as usize)
+    }
+
     fn get_path(&self, ident: &QualifiedTypeIdentifier) -> (Vec<String>, String) {
         let path = if let Some(found_path) = &ident.module_path {
             let mut v = Vec::new();
@@ -583,7 +612,7 @@ impl<'a> Resolver<'a> {
             ResolvedType::RustType(found.clone())
         } else {
             Err(ResolveError::UnknownTypeReference(
-                type_name_to_find.name.0.clone(),
+                self.to_node(&type_name_to_find.name.0),
             ))?
         };
 
@@ -620,7 +649,9 @@ impl<'a> Resolver<'a> {
         Resolver::new(
             &self.types,
             &mut self.state,
-            &self.modules,
+            self.lookup,
+            self.source_map,
+            self.file_id,
         )
     }
 
@@ -630,13 +661,18 @@ impl<'a> Resolver<'a> {
     ) -> Result<ResolvedStructType, ResolveError> {
         let mut resolved_fields = SeqMap::new();
 
-        for (name, field_type) in ast_struct.fields.iter() {
-            let resolved_type = self.resolve_type(field_type)?;
-            resolved_fields
-                .insert(name.clone(), resolved_type)
-                .map_err(|_| ResolveError::DuplicateFieldName(name.clone()))?;
-        }
+        for field_name_and_type in ast_struct.fields.iter() {
+            let resolved_type = self.resolve_type(&field_name_and_type.field_type)?;
+            let name_string = self.get_text(&field_name_and_type.field_name.0);
 
+            resolved_fields
+                .insert(name_string, resolved_type)
+                .map_err(|_| {
+                    ResolveError::DuplicateFieldName(
+                        self.to_node(&field_name_and_type.field_name.0),
+                    )
+                })?;
+        }
         let resolved_struct = ResolvedStructType::new(
             self.current_module.borrow().module_path.clone(),
             ast_struct.identifier.clone(),
@@ -656,11 +692,12 @@ impl<'a> Resolver<'a> {
 
         let parent_number = self.state.allocate_number();
 
-        let parent_ref = self
-            .current_module
-            .borrow_mut()
-            .namespace
-            .create_enum_type(enum_type_name, parent_number)?;
+        let enum_parent = ResolvedEnumType {
+            name: ResolvedLocalTypeIdentifier(self.to_node(&enum_type_name)),
+            module_path: ResolvedModulePath(vec![]),
+            number: parent_number,
+        };
+        let parent_ref = self.lookup.add_enum_type(&enum_parent)?;
 
         for (name, ast_enum_variant) in ast_variants {
             let mut container_number: Option<TypeNumber> = None;
@@ -680,7 +717,7 @@ impl<'a> Resolver<'a> {
                     let common = CommonEnumVariantType {
                         number,
                         module_path: ResolvedModulePath(vec![]), // TODO:
-                        variant_name: name.clone(),
+                        variant_name: ResolvedLocalTypeIdentifier(self.to_node(&name.0)),
                         enum_ref: parent_ref.clone(),
                     };
 
@@ -740,8 +777,7 @@ impl<'a> Resolver<'a> {
         match resolved_definition {
             ResolvedDefinition::EnumType(_parent_enum_ref, variants) => {
                 for variant in variants {
-                    self.lookup
-                        .add_enum_variant(&variant)?;
+                    self.lookup.add_enum_variant(&variant)?;
                 }
             }
             ResolvedDefinition::StructType(struct_type) => {
@@ -756,13 +792,14 @@ impl<'a> Resolver<'a> {
                 }
                 ResolvedFunction::External(resolved_external_function_def_ref) => {
                     self.lookup.add_external_function_declaration_ref(
-                            resolved_external_function_def_ref,
-                        )?;
+                        resolved_external_function_def_ref,
+                    )?;
                 }
             },
             ResolvedDefinition::Alias(resolved_type) => match resolved_type {
                 ResolvedType::Alias(name, resolved_type) => {
-                    self.lookup.add_type_alias(&name.0.clone(), *resolved_type.clone())?;
+                    self.lookup
+                        .add_type_alias(&name.0.clone(), *resolved_type.clone())?;
                 }
                 _ => panic!("type should always be alias"),
             },
@@ -834,9 +871,13 @@ impl<'a> Resolver<'a> {
         let resolved_function = match function {
             Function::Internal(function_data) => {
                 let parameters = self.resolve_parameters(&function_data.declaration.params)?;
-                let return_type = self.resolve_type(&function_data.declaration.return_type)?;
+                let return_type = if let Some(found) = &function_data.declaration.return_type {
+                    self.resolve_type(&found)?
+                } else {
+                    self.types.unit_type()
+                };
 
-                self.return_type = Some(return_type.clone());
+                self.return_type = return_type.clone();
 
                 // Set up scope for function body
                 for param in &parameters {
@@ -849,7 +890,7 @@ impl<'a> Resolver<'a> {
                 let statements =
                     self.resolve_statements_in_function(&function_data.body, &return_type)?;
 
-                self.return_type = None;
+                self.return_type = self.types.unit_type();
 
                 let internal = ResolvedInternalFunctionDefinition {
                     signature: ResolvedFunctionSignature {
@@ -857,14 +898,20 @@ impl<'a> Resolver<'a> {
                         return_type,
                     },
                     statements,
-                    name: identifier.clone(),
+                    name: ResolvedLocalIdentifier(self.to_node(&identifier.0)),
                 };
 
                 ResolvedFunction::Internal(Rc::new(internal))
             }
             Function::External(signature) => {
                 let parameters = self.resolve_parameters(&signature.params)?;
-                let return_type = self.resolve_type(&signature.return_type)?;
+                let external_return_type = if let Some(found) = &signature.return_type {
+                    self.resolve_type(&found)?
+                } else {
+                    self.types.unit_type()
+                };
+
+                let return_type = external_return_type;
                 let external_function_id = self.state.allocate_external_function_id();
 
                 let external = ResolvedExternalFunctionDefinition {
@@ -872,7 +919,7 @@ impl<'a> Resolver<'a> {
                         parameters,
                         return_type,
                     },
-                    name: identifier.clone(),
+                    name: ResolvedLocalIdentifier(self.to_node(&identifier.0)),
                     id: external_function_id,
                 };
 
@@ -881,6 +928,17 @@ impl<'a> Resolver<'a> {
         };
 
         Ok(ResolvedDefinition::FunctionDef(resolved_function))
+    }
+
+    fn resolve_maybe_type(
+        &mut self,
+        maybe_type: &Option<Type>,
+    ) -> Result<ResolvedType, ResolveError> {
+        let found_type = match maybe_type {
+            None => self.types.unit_type(),
+            Some(ast_type) => self.resolve_type(&ast_type)?,
+        };
+        Ok(found_type)
     }
 
     fn resolve_impl_func(
@@ -892,27 +950,32 @@ impl<'a> Resolver<'a> {
             Function::Internal(function_data) => {
                 let mut parameters = Vec::new();
 
-                // Handle parameters, including self if present
-                for param in &function_data.declaration.params {
-                    let resolved_type = if param.is_self {
-                        ResolvedType::Struct(found_struct.clone())
-                    } else {
-                        self.resolve_type(&param.param_type)?
-                    };
-
+                if let Some(found_self) = &function_data.declaration.self_parameter {
+                    let resolved_type = ResolvedType::Struct(found_struct.clone());
                     parameters.push(ResolvedParameter {
-                        name: param.variable.name.clone(),
+                        name: ResolvedLocalIdentifier(self.to_node(&found_self.self_node)),
                         resolved_type,
-                        ast_parameter: param.clone(),
-                        is_mutable: param.is_mutable,
+                        is_mutable: self.to_node_option(&found_self.is_mutable),
                     });
                 }
 
-                let return_type = self.resolve_type(&function_data.declaration.return_type)?;
+                for param in &function_data.declaration.params {
+                    let resolved_type = self.resolve_type(&param.param_type)?;
+
+                    parameters.push(ResolvedParameter {
+                        name: ResolvedLocalIdentifier(self.to_node(&param.variable.name)),
+                        resolved_type,
+                        is_mutable: self.to_node_option(&param.variable.is_mutable),
+                    });
+                }
+
+                let return_type =
+                    self.resolve_maybe_type(&function_data.declaration.return_type)?;
 
                 for param in &parameters {
-                    self.create_local_variable(
-                        &Variable::new(&param.name, param.is_mutable),
+                    self.create_local_variable_resolved(
+                        &param.name,
+                        param.is_mutable,
                         &param.resolved_type,
                     )?;
                 }
@@ -935,13 +998,18 @@ impl<'a> Resolver<'a> {
             Function::External(signature) => {
                 let mut parameters = Vec::new();
 
+                if let Some(found_self) = &signature.self_parameter {
+                    let resolved_type = ResolvedType::Struct(found_struct.clone());
+                    parameters.push(ResolvedParameter {
+                        name: ResolvedLocalIdentifier(self.to_node(&found_self.self_node)),
+                        resolved_type,
+                        is_mutable: self.to_node_option(&found_self.is_mutable),
+                    });
+                }
+
                 // Handle parameters, including self if present
                 for param in &signature.params {
-                    let resolved_type = if param.is_self {
-                        ResolvedType::Struct(found_struct.clone())
-                    } else {
-                        self.resolve_type(&param.param_type)?
-                    };
+                    let resolved_type = self.resolve_type(&param.param_type)?;
 
                     parameters.push(ResolvedParameter {
                         name: param.variable.name.clone(),
@@ -951,10 +1019,10 @@ impl<'a> Resolver<'a> {
                     });
                 }
 
-                let return_type = self.resolve_type(&signature.return_type)?;
+                let return_type = self.resolve_maybe_type(&signature.return_type)?;
 
                 let external = ResolvedExternalFunctionDefinition {
-                    name: signature.name.clone(),
+                    name: ResolvedLocalIdentifier(self.to_node(&signature.name)),
                     signature: ResolvedFunctionSignature {
                         parameters,
                         return_type,
@@ -1182,19 +1250,16 @@ impl<'a> Resolver<'a> {
     fn get_field_index(
         &mut self,
         base_type: &ResolvedType,
-        name: &str,
+        name: &Node,
     ) -> Result<(ResolvedType, usize), ResolveError> {
         if let ResolvedType::Struct(struct_type) = base_type {
             let fields = &struct_type.borrow().fields;
-            if let Some(field_index) = fields.get_index(&IdentifierName(name.to_string())) {
-                let field = fields
-                    .get(&IdentifierName(name.to_string()))
-                    .expect("should find it again");
-                return Ok((field.clone(), field_index));
+            let field_name = self.get_text(name).to_string();
+            if let Some(field_index) = fields.get_index(&field_name) {
+                let field = fields.get(&field_name).expect("should find it again");
+                return Ok((field.field_type.clone(), field_index));
             } else {
-                return Err(ResolveError::UnknownStructField(LocalIdentifier::from_str(
-                    name,
-                )));
+                return Err(ResolveError::UnknownStructField(self.to_node(name)));
             }
         }
 
@@ -1210,8 +1275,7 @@ impl<'a> Resolver<'a> {
             Expression::FieldAccess(source, field) => {
                 let (resolved_type, base_expr) = self.collect_field_chain(source, access_chain)?;
 
-                let (field_type, field_index) =
-                    self.get_field_index(&resolved_type, &field.text)?;
+                let (field_type, field_index) = self.get_field_index(&resolved_type, field)?;
                 access_chain.push(ResolvedAccess::FieldIndex(field_index));
 
                 Ok((field_type, base_expr))
@@ -1564,25 +1628,24 @@ impl<'a> Resolver<'a> {
         let resolved_type = resolution(&resolved_expr);
         let ResolvedType::Struct(struct_ref) = &resolved_type else {
             warn!(found_type=?resolved_type, expr=?resolved_expr, "NOT STRUCT TYPE");
-            return Err(ResolveError::WasNotStructType(struct_expression.clone()));
+            return Err(ResolveError::WasNotStructType(self.to_node(&name.0)));
         };
 
         let borrowed_struct = struct_ref.borrow();
 
-        if let Some(field_index) = borrowed_struct
-            .fields
-            .get_index(&IdentifierName(name.text.clone()))
-        {
+        let field_name = self.get_text(&name.0).to_string();
+
+        if let Some(field_index) = borrowed_struct.fields.get_index(&field_name) {
             let field_resolved_type = borrowed_struct
                 .fields
-                .get(&IdentifierName(name.text.clone()))
+                .get(&field_name)
                 .expect("checked earlier");
 
             let field = ResolvedStructTypeField {
                 struct_type_ref: struct_ref.clone(),
                 index: field_index,
-                resolved_type: field_resolved_type.clone(),
-                field_name: name.clone(),
+                resolved_type: field_resolved_type.field_type.clone(),
+                field_name: ResolvedLocalIdentifier(self.to_node(&name.0)),
                 struct_expression: Box::from(resolved_expr),
             };
 
@@ -1590,7 +1653,7 @@ impl<'a> Resolver<'a> {
 
             Ok(field_ref)
         } else {
-            Err(ResolveError::UnknownStructField(name.clone()))
+            Err(ResolveError::UnknownStructField(self.to_node(&name.0)))
         }
     }
 
@@ -1663,7 +1726,7 @@ impl<'a> Resolver<'a> {
     fn resolve_struct_instantiation(
         &mut self,
         qualified_type_identifier: &QualifiedTypeIdentifier,
-        ast_fields: &SeqMap<IdentifierName, Expression>,
+        ast_fields: &Vec<FieldExpression>,
     ) -> Result<ResolvedStructInstantiation, ResolveError> {
         let (display_type_ref, struct_to_instantiate) =
             self.get_struct_types(qualified_type_identifier)?;
@@ -1730,11 +1793,11 @@ impl<'a> Resolver<'a> {
     fn find_variant_in_pattern(
         &mut self,
         expression_type: &ResolvedType,
-        ast_name: &LocalTypeIdentifier,
+        ast_name: &Node,
     ) -> Result<ResolvedEnumVariantTypeRef, ResolveError> {
         let enum_type_ref = match expression_type {
             ResolvedType::Enum(enum_type_ref) => enum_type_ref,
-            _ => Err(ResolveError::ExpectedEnumInPattern(ast_name.clone()))?,
+            _ => Err(ResolveError::ExpectedEnumInPattern(self.to_node(&ast_name)))?,
         };
 
         let module = self
@@ -1773,9 +1836,7 @@ impl<'a> Resolver<'a> {
                                 self.push_block_scope("pattern_list one variable");
                                 scope_is_pushed = true;
                             }
-                            let variable = Variable::new(&var.text, None);
-                            let variable_ref =
-                                self.create_local_variable(&variable, expression_type)?;
+                            let variable_ref = self.create_local_variable(&var, expression_type)?;
                             resolved_elements.push(ResolvedPatternElement::Variable(variable_ref));
                         }
                         PatternElement::Expression(_expr) => {
@@ -2361,13 +2422,21 @@ impl<'a> Resolver<'a> {
     }
 
     fn find_variable(&self, variable: &Variable) -> Result<ResolvedVariableRef, ResolveError> {
-        self.try_find_variable(variable)
-            .map_or_else(|| Err(ResolveError::UnknownVariable(variable.clone())), Ok)
+        self.try_find_variable(&variable.name).map_or_else(
+            || Err(ResolveError::UnknownVariable(variable.name.clone())),
+            Ok,
+        )
     }
 
-    fn try_find_variable(&self, variable: &Variable) -> Option<ResolvedVariableRef> {
+    fn find_variable_from_node(&self, node: &Node) -> Result<ResolvedVariableRef, ResolveError> {
+        self.try_find_variable(node)
+            .map_or_else(|| Err(ResolveError::UnknownVariable(node.clone())), Ok)
+    }
+
+    fn try_find_variable(&self, node: &Node) -> Option<ResolvedVariableRef> {
+        let variable_text = self.get_text(&node);
         for scope in self.block_scope_stack.iter().rev() {
-            if let Some(value) = scope.variables.get(&variable.name) {
+            if let Some(value) = scope.variables.get(&variable_text.to_string()) {
                 return Some(value.clone());
             }
         }
@@ -2375,14 +2444,16 @@ impl<'a> Resolver<'a> {
         None
     }
 
-    fn try_find_local_variable(&self, variable: &Variable) -> Option<&ResolvedVariableRef> {
+    fn try_find_local_variable(&self, node: &ResolvedNode) -> Option<&ResolvedVariableRef> {
         let current_scope = self
             .block_scope_stack
             .iter()
             .last()
             .expect("no scope stack available");
 
-        current_scope.variables.get(&variable.name)
+        let variable_text = self.get_text(&node).to_string();
+
+        current_scope.variables.get(&variable_text)
     }
 
     fn resolve_usize_index(
@@ -2458,11 +2529,11 @@ impl<'a> Resolver<'a> {
 
     fn resolve_compound_assignment_variable(
         &mut self,
-        target: &Variable,
+        target: &Node,
         operator: &CompoundOperator,
         source: &Expression,
     ) -> Result<ResolvedExpression, ResolveError> {
-        let resolved_variable = self.find_variable(target)?;
+        let resolved_variable = self.find_variable_from_node(target)?;
         let resolved_source = self.resolve_expression(source)?;
 
         let target_type = &resolved_variable.resolved_type;
@@ -2624,11 +2695,11 @@ impl<'a> Resolver<'a> {
         variable: &Variable,
         variable_type_ref: &ResolvedType,
     ) -> Result<(ResolvedVariableRef, bool), ResolveError> {
-        if let Some(existing_variable) = self.try_find_variable(variable) {
+        if let Some(existing_variable) = self.try_find_variable(&variable.name) {
             // Check type compatibility
             if !&existing_variable.resolved_type.same_type(variable_type_ref) {
                 return Err(ResolveError::OverwriteVariableWithAnotherType(
-                    variable.clone(),
+                    self.to_node(&variable.name),
                 ));
             }
 
@@ -2671,7 +2742,21 @@ impl<'a> Resolver<'a> {
 
     fn create_local_variable(
         &mut self,
-        variable: &swamp_script_ast::Node,
+        variable: &Node,
+        is_mutable: &Option<Node>,
+        variable_type_ref: &ResolvedType,
+    ) -> Result<ResolvedVariableRef, ResolveError> {
+        self.create_local_variable_resolved(
+            &self.to_node(variable),
+            self.to_node_option(&is_mutable),
+            variable_type_ref,
+        )
+    }
+
+    fn create_local_variable_resolved(
+        &mut self,
+        variable: &ResolvedNode,
+        is_mutable: &Option<ResolvedNode>,
         variable_type_ref: &ResolvedType,
     ) -> Result<ResolvedVariableRef, ResolveError> {
         if let Some(_existing_variable) = self.try_find_local_variable(variable) {
@@ -2698,7 +2783,7 @@ impl<'a> Resolver<'a> {
         let variable_ref = Rc::new(resolved_variable);
 
         variables
-            .insert(variable.name.clone(), variable_ref.clone())
+            .insert(variable.clone(), variable_ref.clone())
             .expect("should have checked earlier for variable");
 
         Ok(variable_ref)
@@ -2842,21 +2927,27 @@ impl<'a> Resolver<'a> {
             Literal::Bool(value) => {
                 ResolvedLiteral::BoolLiteral(*value, self.types.bool_type.clone())
             }
-            Literal::EnumVariant(qualified_type_identifier, variant_name, variant_data) => {
+            Literal::EnumVariant(enum_literal) => {
+                let variant_name = match enum_literal {
+                    EnumVariantLiteral::Simple(name) => name,
+                    EnumVariantLiteral::Tuple(name, _) => name,
+                    EnumVariantLiteral::Struct(name, _) => name,
+                };
+
                 // Handle enum variant literals in patterns
                 let variant_ref = self
-                    .resolve_enum_variant_ref(qualified_type_identifier, variant_name)
+                    .resolve_enum_variant_ref(variant_name)
                     .expect("enum variant should exist");
 
-                let resolved_data = match variant_data {
-                    EnumLiteralData::Nothing => ResolvedEnumLiteralData::Nothing,
-                    EnumLiteralData::Tuple(expressions) => {
+                let resolved_data = match enum_literal {
+                    EnumVariantLiteral::Simple(_) => ResolvedEnumLiteralData::Nothing,
+                    EnumVariantLiteral::Tuple(node, expressions) => {
                         let resolved = self
                             .resolve_expressions(expressions)
                             .expect("enum tuple expressions should resolve");
                         ResolvedEnumLiteralData::Tuple(resolved)
                     }
-                    EnumLiteralData::Struct(anonym_struct) => {
+                    EnumVariantLiteral::Struct(node, anonym_struct) => {
                         let values = &anonym_struct.values().cloned().collect::<Vec<_>>();
                         let resolved = self
                             .resolve_expressions(values)
@@ -3255,7 +3346,14 @@ impl<'a> Resolver<'a> {
         generic_types: &Vec<Type>,
         arguments: &Vec<Expression>,
     ) -> Result<Option<ResolvedExpression>, ResolveError> {
-        if type_name.text == "Sparse" && function_name.text == "new" {
+        let (type_name_text, function_name_text) = {
+            (
+                self.get_text(&type_name.0).to_string(),
+                self.get_text(&function_name.0),
+            )
+        };
+
+        if type_name_text == "Sparse" && function_name_text == "new" {
             if !arguments.is_empty() {
                 return Err(ResolveError::WrongNumberOfArguments(arguments.len(), 0));
             }
@@ -3268,7 +3366,7 @@ impl<'a> Resolver<'a> {
             }
 
             let rust_type_ref = Rc::new(ResolvedRustType {
-                type_name: "Sparse".to_string(),
+                type_name: type_name_text.to_string(),
                 number: SPARSE_TYPE_ID, // TODO: FIX hardcoded number
             });
 
@@ -3296,10 +3394,15 @@ impl<'a> Resolver<'a> {
         let (resolved_last_type, resolved_base_expression) =
             self.collect_field_chain(base_expression, &mut access_chain)?;
 
+        let ast_field_name_str = self.get_text(&ast_field_name.0).to_string();
         // Add the last lookup that is part of the field lookup
         let (_field_type, field_index) =
-            self.get_field_index(&resolved_last_type, &ast_field_name.text)?;
-        access_chain.push(ResolvedAccess::FieldIndex(field_index));
+            self.get_field_index(&resolved_last_type, &ast_field_name_str)?;
+
+        access_chain.push(ResolvedAccess::FieldIndex(
+            self.to_node(&ast_field_name.0),
+            field_index,
+        ));
 
         Ok(ResolvedExpression::FieldAccess(
             Box::from(resolved_base_expression),
@@ -3318,11 +3421,15 @@ impl<'a> Resolver<'a> {
         let (resolved_last_type, resolved_first_base_expression) =
             self.collect_field_chain(ast_struct_field_expr, &mut chain)?;
 
+        let ast_field_name_str = self.get_text(&ast_field_name.0).to_string();
         // Add the last lookup that is part of the field_assignment itself
         let (_field_type, field_index) =
-            self.get_field_index(&resolved_last_type, &ast_field_name.text)?;
+            self.get_field_index(&resolved_last_type, &ast_field_name_str)?;
 
-        chain.push(ResolvedAccess::FieldIndex(field_index));
+        chain.push(ResolvedAccess::FieldIndex(
+            self.to_node(&ast_field_name.0),
+            field_index,
+        ));
 
         let resolved_target_type = resolution(&resolved_first_base_expression);
 
@@ -3347,11 +3454,17 @@ impl<'a> Resolver<'a> {
         let (resolved_last_type, resolved_first_base_expression) =
             self.collect_field_chain(ast_struct_field_expr, &mut chain)?;
 
+        let resolved_operator = self.resolve_compound_operator(ast_operator);
+
+        let ast_field_name_str = self.get_text(&ast_field_name.0).to_string();
         // Add the last lookup that is part of the field_assignment itself
         let (_field_type, field_index) =
-            self.get_field_index(&resolved_last_type, &ast_field_name.text)?;
+            self.get_field_index(&resolved_last_type, &ast_field_name_str)?;
 
-        chain.push(ResolvedAccess::FieldIndex(field_index));
+        chain.push(ResolvedAccess::FieldIndex(
+            self.to_node(&ast_field_name.0),
+            field_index,
+        ));
 
         let resolved_target_type = resolution(&resolved_first_base_expression);
 
@@ -3433,6 +3546,33 @@ impl<'a> Resolver<'a> {
         };
 
         None
+    }
+
+    fn resolve_compound_operator(
+        &self,
+        ast_operator: &CompoundOperator,
+    ) -> ResolvedCompoundOperator {
+        match ast_operator {
+            CompoundOperator::Add(ast_node) => {
+                ResolvedCompoundOperator::Add(self.to_node(ast_node))
+            }
+            CompoundOperator::Sub(ast_node) => {
+                ResolvedCompoundOperator::Sub(self.to_node(ast_node))
+            }
+            CompoundOperator::Mul(ast_node) => {
+                ResolvedCompoundOperator::Mul(self.to_node(ast_node))
+            }
+            CompoundOperator::Div(ast_node) => {
+                ResolvedCompoundOperator::Div(self.to_node(ast_node))
+            }
+        }
+    }
+
+    fn to_node_option(&self, maybe_node: &Option<Node>) -> Option<ResolvedNode> {
+        match maybe_node {
+            None => None,
+            Some(node) => Some(self.to_node(node)),
+        }
     }
 }
 

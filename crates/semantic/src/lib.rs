@@ -39,6 +39,7 @@ pub struct ResolvedParameter {
     pub is_mutable: Option<ResolvedNode>,
 }
 
+
 #[derive(Debug)]
 pub struct ResolvedFunctionSignature {
     pub parameters: Vec<ResolvedParameter>,
@@ -510,7 +511,12 @@ pub struct ResolvedVariableAssignment {
 }
 
 #[derive(Debug)]
-pub enum ResolvedCompoundOperator {}
+pub enum ResolvedCompoundOperator {
+    Add(ResolvedNode),
+    Sub(ResolvedNode),
+    Mul(ResolvedNode),
+    Div(ResolvedNode),
+}
 
 #[derive(Debug)]
 pub struct ResolvedVariableCompoundAssignment {
