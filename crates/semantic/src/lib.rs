@@ -511,18 +511,24 @@ pub struct ResolvedVariableAssignment {
 }
 
 #[derive(Debug)]
-pub enum ResolvedCompoundOperator {
-    Add(ResolvedNode),
-    Sub(ResolvedNode),
-    Mul(ResolvedNode),
-    Div(ResolvedNode),
+pub enum ResolvedCompoundOperatorKind {
+    Add,
+    Sub,
+    Mul,
+    Div,
+}
+
+#[derive(Debug)]
+pub struct ResolvedCompoundOperator {
+    pub node: ResolvedNode,
+    pub kind: ResolvedCompoundOperatorKind,
 }
 
 #[derive(Debug)]
 pub struct ResolvedVariableCompoundAssignment {
     pub variable_ref: ResolvedVariableRef, // compound only support single variable
     pub expression: Box<ResolvedExpression>,
-    pub ast_operator: ResolvedCompoundOperator,
+    pub compound_operator: ResolvedCompoundOperator,
 }
 
 pub fn create_rust_type(name: &str, type_number: TypeNumber) -> ResolvedRustTypeRef {

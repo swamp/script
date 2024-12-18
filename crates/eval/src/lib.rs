@@ -630,7 +630,7 @@ impl<'a, C> Interpreter<'a, C> {
                 let int_mod = modifier_value.expect_int()?;
                 let current_int = current_value.borrow().expect_int()?;
 
-                let new_result = match var_assignment.ast_operator {
+                let new_result = match var_assignment.compound_operator {
                     CompoundOperator::Add => current_int + int_mod,
                     CompoundOperator::Sub => current_int - int_mod,
                     CompoundOperator::Mul => current_int * int_mod,

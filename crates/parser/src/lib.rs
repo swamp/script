@@ -8,7 +8,7 @@ use pest::error::{Error, ErrorVariant, InputLocation};
 use pest::iterators::Pair;
 use pest::Parser;
 use pest_derive::Parser;
-use swamp_script_ast::{prelude::*, CompoundOperator, EnumVariantLiteral, FieldExpression, FieldName, FieldType, ForPattern, ForVar, ModulePathItem, MutExpression, PatternElement, SpanWithoutFileId};
+use swamp_script_ast::{prelude::*, CompoundOperatorKind, EnumVariantLiteral, FieldExpression, FieldName, FieldType, ForPattern, ForVar, ModulePathItem, MutExpression, PatternElement, SpanWithoutFileId};
 use swamp_script_ast::{Function, PostfixOperator};
 
 pub struct ParseResult<'a> {
@@ -922,12 +922,12 @@ impl AstParser {
         let expr = self.parse_expression(&Self::next_pair(&mut inner)?)?;
         let operator_node = self.to_node(&operator);
 
-        let compound_op: Option<CompoundOperator> = match operator.as_rule() {
+        let compound_op: Option<CompoundOperatorKind> = match operator.as_rule() {
             Rule::assign_op => None,
-            Rule::add_assign_op => Some(CompoundOperator::Add(operator_node)),
-            Rule::sub_assign_op => Some(CompoundOperator::Sub(operator_node)),
-            Rule::mul_assign_op => Some(CompoundOperator::Mul(operator_node)),
-            Rule::div_assign_op => Some(CompoundOperator::Div(operator_node)),
+            Rule::add_assign_op => Some(CompoundOperatorKind::Add(operator_node)),
+            Rule::sub_assign_op => Some(CompoundOperatorKind::Sub(operator_node)),
+            Rule::mul_assign_op => Some(CompoundOperatorKind::Mul(operator_node)),
+            Rule::div_assign_op => Some(CompoundOperatorKind::Div(operator_node)),
             _ => {
                 return Err(self.create_error_pair(
                     SpecificError::UnknownAssignmentOperator(Self::pair_to_rule(&operator)),

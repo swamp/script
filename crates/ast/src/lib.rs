@@ -273,12 +273,19 @@ pub struct SelfParameter {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum CompoundOperator {
-    Add(Node), // +=
-    Sub(Node), // -=
-    Mul(Node), // *=
-    Div(Node), // /=
+pub enum CompoundOperatorKind {
+    Add, // +=
+    Sub, // -=
+    Mul, // *=
+    Div, // /=
 }
+
+#[derive(Debug)]
+pub struct CompoundOperator {
+    pub node: Node,
+    pub kind: CompoundOperatorKind,
+}
+
 
 /// Expressions are things that "converts" to a value when evaluated.
 #[derive(Debug)]
@@ -300,7 +307,7 @@ pub enum Expression {
         CompoundOperator,
         Box<Expression>,
     ),
-    VariableCompoundAssignment(Node, CompoundOperator, Box<Expression>),
+    VariableCompoundAssignment(Node, CompoundOperatorKind, Box<Expression>),
     FieldCompoundAssignment(
         Box<Expression>,
         Node,
