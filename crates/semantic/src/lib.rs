@@ -41,6 +41,7 @@ pub struct ResolvedParameter {
 
 #[derive(Debug)]
 pub struct ResolvedFunctionSignature {
+    pub first_parameter_is_self: bool,
     pub parameters: Vec<ResolvedParameter>,
     pub return_type: ResolvedType,
 }
@@ -163,18 +164,6 @@ fn compare_struct_types(a: &ResolvedStructTypeRef, b: &ResolvedStructTypeRef) ->
         return false;
     }
 
-    if struct_a.fields.len() != struct_b.fields.len() {
-        return false;
-    }
-
-    for (a_field, b_field) in struct_a.fields.values().zip(struct_b.fields.values()) {
-        /* if !a_field.same_type(b_field) {
-            return false;
-        }
-
-        */
-    }
-
     true
 }
 
@@ -266,13 +255,15 @@ pub struct ResolvedBinaryOperator {
 
 #[derive(Debug)]
 pub enum ResolvedUnaryOperatorKind {
-    Not(ResolvedNode),
+    Not,
+    Negate,
 }
 #[derive(Debug)]
 pub struct ResolvedUnaryOperator {
     pub left: Box<ResolvedExpression>,
     pub kind: ResolvedUnaryOperatorKind,
     pub resolved_type: ResolvedType,
+    pub node: ResolvedNode,
 }
 
 #[derive(Debug)]
@@ -368,7 +359,14 @@ pub struct ResolvedStructTypeField {
     pub struct_type_ref: ResolvedStructTypeRef,
     pub field_name: ResolvedLocalIdentifier,
     pub resolved_type: ResolvedType,
-    //    pub struct_expression: Box<ResolvedExpression>,
+    pub index: usize,
+}
+
+#[derive(Debug)]
+pub struct ResolvedAnonymousStructFieldType {
+    pub identifier: ResolvedFieldName,
+
+    pub field_type: ResolvedType,
     pub index: usize,
 }
 
@@ -765,17 +763,9 @@ pub struct ResolvedLocalTypeIdentifier(pub ResolvedNode);
 pub struct ResolvedFieldName(pub ResolvedNode);
 
 #[derive(Debug)]
-pub struct ResolvedStructField {
-    pub identifier: ResolvedFieldName,
-    pub field_type: ResolvedType,
-
-    pub index: usize,
-}
-
-#[derive(Debug)]
 pub struct ResolvedStructType {
     pub name: ResolvedLocalTypeIdentifier,
-    pub fields: SeqMap<String, ResolvedStructField>,
+    pub anon_struct_type: ResolvedAnonymousStructType,
 
     // Resolved
     pub module_path: ResolvedModulePath,
@@ -788,21 +778,23 @@ impl ResolvedStructType {
         // TODO: defined_in_module: ResolvedModuleRef,
         module_path: ResolvedModulePath,
         name: ResolvedLocalTypeIdentifier,
-        fields: SeqMap<String, ResolvedStructField>,
+        anon_struct_type: ResolvedAnonymousStructType,
         number: TypeNumber,
     ) -> Self {
         Self {
             number,
             //defined_in_module,
             module_path,
-            fields,
+            anon_struct_type,
             name,
             functions: SeqMap::default(),
         }
     }
 
     pub fn field_index(&self, field_name: &str) -> Option<usize> {
-        self.fields.get_index(&field_name.to_string())
+        self.anon_struct_type
+            .defined_fields
+            .get_index(&field_name.to_string())
     }
 
     pub fn name(&self) -> &ResolvedLocalTypeIdentifier {
@@ -868,16 +860,15 @@ pub struct CommonEnumVariantType {
 }
 
 #[derive(Debug)]
-pub struct ResolvedAnonymousStruct {
-    pub defined_fields: SeqMap<String, ResolvedStructField>,
+pub struct ResolvedAnonymousStructType {
+    pub defined_fields: SeqMap<String, ResolvedAnonymousStructFieldType>,
 }
 
 #[derive(Debug)]
 pub struct ResolvedEnumVariantStructType {
     pub common: CommonEnumVariantType,
 
-    pub fields: SeqMap<String, ResolvedStructTypeField>, // Anonymous Struct
-    pub anon_struct: ResolvedAnonymousStruct,
+    pub anon_struct: ResolvedAnonymousStructType,
 }
 
 pub type ResolvedEnumVariantTupleTypeRef = Rc<ResolvedEnumVariantTupleType>;
@@ -1020,7 +1011,7 @@ pub enum ResolvedDefinition {
     ImplType(ResolvedType),
     FunctionDef(ResolvedFunction),
     Alias(ResolvedType),
-    Comment(String),
+    Comment(ResolvedNode),
 }
 
 // Immutable part

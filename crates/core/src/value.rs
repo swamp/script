@@ -415,7 +415,7 @@ impl std::fmt::Display for Value {
             }
             Self::EnumVariantStruct(struct_variant, values) => {
                 let decorated_values: Vec<(IdentifierName, Value)> = struct_variant
-                    .fields
+                    .anonym_struct_ty
                     .keys()
                     .cloned()
                     .zip(values.clone())
