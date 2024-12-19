@@ -2,40 +2,32 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use crate::{
-    ExternalFunctionId, Hash, Node, ResolvedEnumType, ResolvedEnumTypeRef, ResolvedEnumVariantType,
-    ResolvedEnumVariantTypeRef, ResolvedExternalFunctionDefinition,
-    ResolvedExternalFunctionDefinitionRef, ResolvedFunction, ResolvedFunctionSignature,
-    ResolvedIdentifierName, ResolvedInternalFunctionDefinition,
-    ResolvedInternalFunctionDefinitionRef, ResolvedLocalIdentifier, ResolvedLocalTypeIdentifier,
-    ResolvedModulePath, ResolvedParameter, ResolvedRustType, ResolvedRustTypeRef,
-    ResolvedStructType, ResolvedStructTypeRef, ResolvedTupleType, ResolvedTupleTypeRef,
-    ResolvedType, TypeNumber,
-};
-use seq_map::{SeqMap, SeqMapError};
-use std::cell::RefCell;
+
+use seq_map::SeqMap;
 use std::fmt::{Debug, Display};
 use std::rc::Rc;
+use swamp_script_semantic::{
+    ResolvedEnumTypeRef, ResolvedEnumVariantTypeRef, ResolvedExternalFunctionDefinitionRef,
+    ResolvedInternalFunctionDefinitionRef, ResolvedModulePath, ResolvedRustType,
+    ResolvedRustTypeRef, ResolvedStructTypeRef, ResolvedType, SemanticError,
+};
 
-impl Display for LocalTypeName {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
+#[derive(Debug, Clone)]
+pub struct ResolvedModulePathStr(pub Vec<String>);
 
 #[derive(Debug)]
 pub struct ResolvedModuleNamespace {
-    structs: SeqMap<LocalTypeName, ResolvedStructTypeRef>,
+    structs: SeqMap<String, ResolvedStructTypeRef>,
 
-    build_in_rust_types: SeqMap<LocalTypeName, ResolvedRustTypeRef>,
+    build_in_rust_types: SeqMap<String, ResolvedRustTypeRef>,
 
-    enum_types: SeqMap<LocalTypeName, ResolvedEnumTypeRef>,
-    enum_variant_types: SeqMap<LocalTypeName, ResolvedEnumVariantTypeRef>,
+    enum_types: SeqMap<String, ResolvedEnumTypeRef>,
+    enum_variant_types: SeqMap<String, ResolvedEnumVariantTypeRef>,
 
     internal_functions: SeqMap<String, ResolvedInternalFunctionDefinitionRef>,
     external_function_declarations: SeqMap<String, ResolvedExternalFunctionDefinitionRef>,
 
-    type_aliases: SeqMap<LocalTypeName, ResolvedType>,
+    type_aliases: SeqMap<String, ResolvedType>,
 
     pub path: ResolvedModulePath,
 }
@@ -168,10 +160,13 @@ impl ResolvedModuleNamespace {
         rust_type: ResolvedRustType,
     ) -> Result<ResolvedRustTypeRef, SemanticError> {
         let rust_type_ref = Rc::new(rust_type);
+        /* TODO:
         self.build_in_rust_types.insert(
             LocalTypeName(rust_type_ref.type_name.clone()),
             rust_type_ref.clone(),
         )?;
+
+         */
 
         Ok(rust_type_ref)
     }
@@ -182,9 +177,12 @@ impl ResolvedModuleNamespace {
         resolved_type: ResolvedType,
     ) -> Result<(), SemanticError> {
         let name_str = name.to_string();
+        /* TODO:
         self.type_aliases
             .insert(LocalTypeName(name_str.clone()), resolved_type)
             .map_err(|_| SemanticError::DuplicateTypeAlias(name_str))?;
+
+         */
         Ok(())
     }
 
@@ -300,7 +298,7 @@ impl ResolvedModuleNamespace {
         enum_name: &str,
         enum_variant_name: &str,
     ) -> Option<&ResolvedEnumVariantTypeRef> {
-        let complete_name = LocalTypeName(format!("{}::{}", enum_name, enum_variant_name));
+        let complete_name = format!("{}::{}", enum_name, enum_variant_name);
         let result = self.enum_variant_types.get(&complete_name);
         result
     }

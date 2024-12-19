@@ -2,8 +2,12 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
+mod modules;
+pub mod ns;
 pub mod prelude;
 
+use crate::modules::ResolvedModules;
+use crate::ns::ResolvedModulePathStr;
 use seq_map::{SeqMap, SeqMapError};
 use std::cell::RefCell;
 use std::fmt::format;
@@ -19,10 +23,10 @@ use swamp_script_semantic::{
     ResolvedAnonymousStructFieldType, ResolvedAnonymousStructType, ResolvedBinaryOperatorKind,
     ResolvedBoolType, ResolvedCompoundOperator, ResolvedCompoundOperatorKind, ResolvedFieldName,
     ResolvedForPattern, ResolvedFormatSpecifier, ResolvedFormatSpecifierKind,
-    ResolvedLocalIdentifier, ResolvedLocalTypeIdentifier, ResolvedPatternElement,
-    ResolvedPostfixOperatorKind, ResolvedPrecisionType, ResolvedStaticCallGeneric,
-    ResolvedTupleTypeRef, ResolvedUnaryOperatorKind, ResolvedVariableCompoundAssignment, Span,
-    TypeNumber,
+    ResolvedLocalIdentifier, ResolvedLocalTypeIdentifier, ResolvedModulePathRef,
+    ResolvedPatternElement, ResolvedPostfixOperatorKind, ResolvedPrecisionType,
+    ResolvedStaticCallGeneric, ResolvedTupleTypeRef, ResolvedUnaryOperatorKind,
+    ResolvedVariableCompoundAssignment, Span, TypeNumber,
 };
 use swamp_script_semantic::{
     ResolvedDefinition, ResolvedEnumTypeRef, ResolvedFunction, ResolvedFunctionRef,
@@ -37,34 +41,6 @@ use tracing::{debug, error, info, warn};
 
 #[derive(Debug)]
 pub enum NamespaceError {}
-
-pub trait NamespaceLookup {
-    fn get_struct(&self, path: &Vec<String>, name: &str) -> Option<ResolvedStructTypeRef>;
-    fn get_type_alias(&self, path: &Vec<String>, name: &str) -> Option<ResolvedType>;
-    fn get_enum(&self, path: &Vec<String>, name: &str) -> Option<ResolvedEnumTypeRef>;
-    fn get_enum_variant_type(
-        &self,
-        path: &Vec<String>,
-        name: &str,
-    ) -> Option<ResolvedEnumVariantType>;
-    fn get_rust_type(&self, name: &str) -> Option<ResolvedRustTypeRef>;
-
-    fn add_enum_type(
-        &self,
-        enum_type: &ResolvedEnumType,
-    ) -> Result<ResolvedEnumTypeRef, NamespaceError>;
-
-    fn add_enum_variant(
-        &self,
-        enum_variant: &ResolvedEnumVariantType,
-    ) -> Result<(), NamespaceError>;
-    fn add_struct_type(&self, struct_type: StructType) -> Result<(), NamespaceError>;
-
-    fn add_internal_function_ref(
-        &self,
-        internal_func: ResolvedInternalFunctionDefinitionRef,
-    ) -> Result<(), NamespaceError>;
-}
 
 impl From<NamespaceError> for ResolveError {
     fn from(error: NamespaceError) -> Self {
@@ -240,9 +216,9 @@ pub enum ResolveError {
     Unknown(String),
     UnknownImplTargetTypeReference(LocalTypeIdentifier),
     WrongFieldCountInStructInstantiation(ResolvedStructTypeRef, Vec<FieldExpression>),
-    MissingFieldInStructInstantiation(IdentifierName, ResolvedStructTypeRef),
-    ExpectedFunctionExpression(Expression),
-    CouldNotFindMember(LocalIdentifier, Expression),
+    MissingFieldInStructInstantiation(String, ResolvedStructTypeRef),
+    ExpectedFunctionExpression(ResolvedNode),
+    CouldNotFindMember(ResolvedNode, ResolvedNode),
     UnknownVariable(ResolvedNode),
     NotAnArray(Expression),
     ArrayIndexMustBeInt(ResolvedType),
@@ -256,7 +232,7 @@ pub enum ResolveError {
     WasNotStructType(ResolvedNode),
     UnknownStructField(ResolvedNode),
     MustBeEnumType(Pattern),
-    UnknownEnumVariantTypeInPattern(LocalTypeIdentifier),
+    UnknownEnumVariantTypeInPattern(ResolvedNode),
     ExpectedEnumInPattern(ResolvedNode),
     WrongEnumVariantContainer(ResolvedEnumVariantTypeRef),
     VariableIsNotMutable(ResolvedNode),
@@ -265,7 +241,7 @@ pub enum ResolveError {
     UnknownTypeReference(ResolvedNode),
     SemanticError(SemanticError),
     SeqMapError(SeqMapError),
-    ExpectedMemberCall(Expression),
+    ExpectedMemberCall(ResolvedNode),
     CouldNotFindStaticMember(ResolvedNode, ResolvedNode),
     TypeAliasNotAStruct(QualifiedTypeIdentifier),
     ModuleNotUnique,
@@ -293,7 +269,7 @@ pub enum ResolveError {
     OnlyVariablesAllowedInEnumPattern,
     ExpressionsNotAllowedInLetPattern,
     UnknownField(ResolvedNode),
-    EnumVariantHasNoFields(LocalTypeIdentifier),
+    EnumVariantHasNoFields(ResolvedNode),
     TooManyTupleFields {
         max: usize,
         got: usize,
@@ -343,10 +319,11 @@ impl BlockScope {
 pub struct Resolver<'a> {
     pub types: &'a ResolvedProgramTypes,
     pub state: &'a mut ResolvedProgramState,
-    pub lookup: Box<dyn NamespaceLookup>,
+    pub lookup: &'a mut ResolvedModules,
     pub source_map: &'a SourceMap,
     pub block_scope_stack: Vec<BlockScope>,
     pub return_type: ResolvedType,
+    pub path: &'a ResolvedModulePathRef,
     file_id: FileId,
 }
 
@@ -354,8 +331,9 @@ impl<'a> Resolver<'a> {
     pub fn new(
         types: &'a ResolvedProgramTypes,
         state: &'a mut ResolvedProgramState,
-        lookup: Box<dyn NamespaceLookup>,
+        lookup: &'a mut ResolvedModules,
         source_map: &'a SourceMap,
+        path: &'a ResolvedModulePathRef,
         file_id: FileId,
     ) -> Self {
         let mut scope_stack = Vec::new();
@@ -367,6 +345,7 @@ impl<'a> Resolver<'a> {
             source_map,
             block_scope_stack: scope_stack,
             return_type: types.unit_type(),
+            path,
             file_id,
         }
     }
@@ -661,6 +640,7 @@ impl<'a> Resolver<'a> {
             &mut self.state,
             self.lookup,
             self.source_map,
+            self.path,
             self.file_id,
         )
     }
@@ -673,20 +653,30 @@ impl<'a> Resolver<'a> {
 
         for field_name_and_type in ast_struct.fields.iter() {
             let resolved_type = self.resolve_type(&field_name_and_type.field_type)?;
-            let name_string = self.get_text(&field_name_and_type.field_name.0);
+            let name_string = self.get_text(&field_name_and_type.field_name.0).to_string();
+
+            let field_type = ResolvedAnonymousStructFieldType {
+                identifier: ResolvedFieldName(self.to_node(&field_name_and_type.field_name.0)),
+                field_type: resolved_type,
+                index: 0,
+            };
 
             resolved_fields
-                .insert(name_string, resolved_type)
+                .insert(name_string, field_type)
                 .map_err(|_| {
                     ResolveError::DuplicateFieldName(
                         self.to_node(&field_name_and_type.field_name.0),
                     )
                 })?;
         }
+
+        let resolved_anon_struct = ResolvedAnonymousStructType {
+            defined_fields: resolved_fields,
+        };
         let resolved_struct = ResolvedStructType::new(
-            self.current_module.borrow().module_path.clone(),
-            ast_struct.identifier.clone(),
-            resolved_fields,
+            self.path.clone(),
+            ResolvedLocalTypeIdentifier(self.to_node(&ast_struct.identifier.0)),
+            resolved_anon_struct,
             self.state.allocate_number(),
         );
         Ok(resolved_struct)
@@ -1193,7 +1183,7 @@ impl<'a> Resolver<'a> {
         let converted = match statement {
             Statement::ForLoop(pattern, expression, iterator_should_be_mutable, statements) => {
                 let resolved_iterator =
-                    self.resolve_iterator(expression, *iterator_should_be_mutable)?;
+                    self.resolve_iterator(&expression.expression, iterator_should_be_mutable)?;
 
                 self.push_block_scope("for_loop");
                 let pattern = self.resolve_for_pattern(
@@ -1216,7 +1206,7 @@ impl<'a> Resolver<'a> {
             }
             Statement::Return(expr) => {
                 let resolved_expr = self.resolve_expression(expr)?;
-                let return_type = self.current_function_return_type()?;
+                let return_type = self.current_function_return_type();
                 let wrapped_expr = self.check_and_wrap_return_value(resolved_expr, &return_type)?;
                 ResolvedStatement::Return(wrapped_expr)
             }
@@ -1305,7 +1295,7 @@ impl<'a> Resolver<'a> {
         name: &Node,
     ) -> Result<(ResolvedType, usize), ResolveError> {
         if let ResolvedType::Struct(struct_type) = base_type {
-            let fields = &struct_type.borrow().fields;
+            let fields = &struct_type.borrow().anon_struct_type.defined_fields;
             let field_name = self.get_text(name).to_string();
             if let Some(field_index) = fields.get_index(&field_name) {
                 let field = fields.get(&field_name).expect("should find it again");
@@ -1785,9 +1775,14 @@ impl<'a> Resolver<'a> {
 
         let field_name = self.get_text(&name).to_string();
 
-        if let Some(field_index) = borrowed_struct.fields.get_index(&field_name) {
+        if let Some(field_index) = borrowed_struct
+            .anon_struct_type
+            .defined_fields
+            .get_index(&field_name)
+        {
             let field_resolved_type = borrowed_struct
-                .fields
+                .anon_struct_type
+                .defined_fields
                 .get(&field_name)
                 .expect("checked earlier");
 
@@ -1817,7 +1812,7 @@ impl<'a> Resolver<'a> {
         let resolved_type = resolution(&resolved);
         match resolved_type {
             ResolvedType::Struct(named_struct) => Ok((named_struct, resolved)),
-            _ => Err(ResolveError::NotNamedStruct(struct_expression.clone())),
+            _ => Err(ResolveError::NotNamedStruct(resolved_type.clone())),
         }
     }
 
@@ -1856,7 +1851,7 @@ impl<'a> Resolver<'a> {
         let namespace = self.get_namespace(qualified_type_identifier)?;
 
         // If it's an alias, return both the alias and the underlying struct
-        if let Some(alias_type) = namespace.get_type_alias(&qualified_type_identifier.name.text) {
+        if let Some(alias_type) = namespace.get_type_alias(&qualified_type_identifier) {
             let unaliased = unalias_type(alias_type.clone());
             match unaliased {
                 ResolvedType::Struct(struct_ref) => Ok((alias_type.clone(), struct_ref)),
@@ -1883,7 +1878,13 @@ impl<'a> Resolver<'a> {
         let (display_type_ref, struct_to_instantiate) =
             self.get_struct_types(qualified_type_identifier)?;
 
-        if ast_fields.len() != struct_to_instantiate.borrow().fields.len() {
+        if ast_fields.len()
+            != struct_to_instantiate
+                .borrow()
+                .anon_struct_type
+                .defined_fields
+                .len()
+        {
             return Err(ResolveError::WrongFieldCountInStructInstantiation(
                 struct_to_instantiate,
                 ast_fields.clone(),
@@ -1892,16 +1893,20 @@ impl<'a> Resolver<'a> {
 
         let mut expressions_in_order = Vec::new();
 
-        for (field_name, field_type) in &struct_to_instantiate.borrow().fields {
+        for (field_name, field_type) in &struct_to_instantiate
+            .borrow()
+            .anon_struct_type
+            .defined_fields
+        {
             if let Some(found) = ast_fields.get(field_name) {
                 let resolved_expression = self.resolve_expression(found)?;
 
                 let upgraded_resolved_expression =
-                    wrap_in_some_if_optional(field_type, resolved_expression);
+                    wrap_in_some_if_optional(&field_type.field_type, resolved_expression);
 
                 let expression_type = resolution(&upgraded_resolved_expression);
 
-                if !field_type.same_type(&expression_type) {
+                if !field_type.field_type.same_type(&expression_type) {
                     error!("types: {field_type:?} expr: {expression_type:?}");
                     return Err(ResolveError::ExpressionIsOfWrongFieldType);
                 }
@@ -1909,7 +1914,7 @@ impl<'a> Resolver<'a> {
                 expressions_in_order.push(upgraded_resolved_expression);
             } else {
                 return Err(ResolveError::MissingFieldInStructInstantiation(
-                    field_name.clone(),
+                    field_name.to_string(),
                     struct_to_instantiate.clone(),
                 ));
             }
@@ -1958,7 +1963,7 @@ impl<'a> Resolver<'a> {
             .map_or_else(
                 || {
                     Err(ResolveError::UnknownEnumVariantTypeInPattern(
-                        ast_name.clone(),
+                        self.to_node(&ast_name),
                     ))
                 },
                 |found| Ok(found.clone()),
@@ -2061,14 +2066,16 @@ impl<'a> Resolver<'a> {
                                         let var_name_str = self.get_text(&var).to_string();
                                         // Check if the field exists
                                         let field_index = struct_type
-                                            .anonym_struct_ty
+                                            .anon_struct
+                                            .defined_fields
                                             .get_index(&var_name_str)
                                             .ok_or_else(|| {
                                                 ResolveError::UnknownField(self.to_node(&var))
                                             })?;
 
                                         let field_type = struct_type
-                                            .anonym_struct_ty
+                                            .anon_struct
+                                            .defined_fields
                                             .get(&var_name_str)
                                             .ok_or_else(|| {
                                                 ResolveError::UnknownField(self.to_node(&var))
@@ -2077,7 +2084,7 @@ impl<'a> Resolver<'a> {
                                         let variable_ref = self.create_local_variable(
                                             &var,
                                             &None,
-                                            &field_type.resolved_type,
+                                            &field_type.field_type,
                                         )?;
 
                                         resolved_elements.push(
@@ -2103,7 +2110,7 @@ impl<'a> Resolver<'a> {
                         ResolvedEnumVariantContainerType::Nothing => {
                             if !elements.is_empty() {
                                 return Err(ResolveError::EnumVariantHasNoFields(
-                                    variant_name.clone(),
+                                    self.to_node(&variant_name),
                                 ));
                             }
                         }
@@ -2133,7 +2140,7 @@ impl<'a> Resolver<'a> {
     fn resolve_iterator(
         &mut self,
         expression: &Expression,
-        is_mutable: bool,
+        is_mutable: &Option<Node>,
     ) -> Result<ResolvedIterator, ResolveError> {
         let resolved_expression = self.resolve_expression(expression)?;
         let resolved_type = resolution(&resolved_expression);
@@ -2168,7 +2175,7 @@ impl<'a> Resolver<'a> {
             key_type,
             value_type,
             resolved_expression,
-            is_mutable,
+            mutable_node: self.to_node_option(&is_mutable),
         })
     }
 
@@ -2198,7 +2205,7 @@ impl<'a> Resolver<'a> {
                 ));
             }
 
-            if parameter.is_mutable
+            if parameter.is_mutable.is_some()
                 && !matches!(resolved_argument_expression, ResolvedExpression::MutRef(_))
             {
                 return Err(ResolveError::ArgumentIsNotMutable);
@@ -2260,8 +2267,8 @@ impl<'a> Resolver<'a> {
                         Expression::MemberCall(target, _, _) => {
                             // Use the target as the first argument (self)
                             let mut all_args = Vec::new();
-                            all_args.push(*target.clone());
-                            all_args.extend(arguments.iter().cloned());
+                            all_args.push(**target.clone());
+                            all_args.extend(arguments.iter().collect());
 
                             self.resolve_internal_function_call(
                                 function_call,
@@ -2270,7 +2277,7 @@ impl<'a> Resolver<'a> {
                             )
                         }
                         _ => Err(ResolveError::ExpectedMemberCall(
-                            function_expression.clone(),
+                            function_call.name.0.clone(),
                         )),
                     }
                 } else {
@@ -2293,9 +2300,7 @@ impl<'a> Resolver<'a> {
                                 &all_args,
                             )
                         }
-                        _ => Err(ResolveError::ExpectedMemberCall(
-                            function_expression.clone(),
-                        )),
+                        _ => Err(ResolveError::ExpectedMemberCall(function_call.name.0)),
                     }
                 } else {
                     self.resolve_external_function_call(function_call, function_expr, arguments)

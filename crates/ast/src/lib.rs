@@ -159,7 +159,7 @@ pub struct MutExpression {
 
 #[derive(Debug)]
 pub enum Statement {
-    ForLoop(ForPattern, MutExpression, bool, Vec<Statement>),
+    ForLoop(ForPattern, MutExpression, Option<Node>, Vec<Statement>),
     WhileLoop(Expression, Vec<Statement>),
     Return(Expression),
     Break(Node),

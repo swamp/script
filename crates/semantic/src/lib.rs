@@ -762,13 +762,15 @@ pub struct ResolvedLocalTypeIdentifier(pub ResolvedNode);
 #[derive(Debug)]
 pub struct ResolvedFieldName(pub ResolvedNode);
 
+pub type ResolvedModulePathRef = Rc<ResolvedModulePath>;
+
 #[derive(Debug)]
 pub struct ResolvedStructType {
     pub name: ResolvedLocalTypeIdentifier,
     pub anon_struct_type: ResolvedAnonymousStructType,
 
     // Resolved
-    pub module_path: ResolvedModulePath,
+    pub module_path: ResolvedModulePathRef,
     pub number: TypeNumber,
     pub functions: SeqMap<String, ResolvedFunctionRef>,
 }
@@ -776,7 +778,7 @@ pub struct ResolvedStructType {
 impl ResolvedStructType {
     pub fn new(
         // TODO: defined_in_module: ResolvedModuleRef,
-        module_path: ResolvedModulePath,
+        module_path: ResolvedModulePathRef,
         name: ResolvedLocalTypeIdentifier,
         anon_struct_type: ResolvedAnonymousStructType,
         number: TypeNumber,
