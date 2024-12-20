@@ -47,7 +47,7 @@ fn internal_compile(script: &str) -> Result<ResolvedModule, ResolveError> {
         resolved_statements.push(resolved_statement);
     }
 
-    let ns_ref = Rc::new(RefCell::new(ResolvedModuleNamespace::new(&*vec![])));
+    let ns_ref = Rc::new(RefCell::new(ResolvedModuleNamespace::new(&[])));
 
     let resolved_module = ResolvedModule {
         definitions: resolved_definitions,

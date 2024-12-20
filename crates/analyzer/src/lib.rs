@@ -928,7 +928,7 @@ impl<'a> Resolver<'a> {
             Definition::FunctionDef(function) => {
                 let resolved_return_type = self.resolve_return_type(&function)?;
                 self.start_function(resolved_return_type);
-                self.resolve_function_definition(&function)?
+                self.resolve_function_definition(function)?
             }
             Definition::ImplDef(type_identifier, functions) => {
                 let attached_type_type =
@@ -979,7 +979,7 @@ impl<'a> Resolver<'a> {
             Function::Internal(function_data) => {
                 let parameters = self.resolve_parameters(&function_data.declaration.params)?;
                 let return_type = if let Some(found) = &function_data.declaration.return_type {
-                    self.resolve_type(&found)?
+                    self.resolve_type(found)?
                 } else {
                     self.shared.types.unit_type()
                 };
@@ -1176,8 +1176,6 @@ impl<'a> Resolver<'a> {
         for function in functions {
             let new_return_type = self.resolve_return_type(function)?;
             self.start_function(new_return_type);
-            let resolved_function = self.resolve_impl_func(&function, &found_struct)?;
-            let resolved_function_ref = Rc::new(resolved_function);
 
             let function_name = match function {
                 Function::Internal(function_with_body) => &function_with_body.declaration,
@@ -1185,6 +1183,11 @@ impl<'a> Resolver<'a> {
             };
 
             let function_name_str = self.get_text(&function_name.name).to_string();
+            info!(function=%function_name_str, "analyzing function");
+
+            let resolved_function = self.resolve_impl_func(function, &found_struct)?;
+            let resolved_function_ref = Rc::new(resolved_function);
+
             found_struct
                 .borrow_mut()
                 .functions
@@ -1363,6 +1366,8 @@ impl<'a> Resolver<'a> {
     ) -> Result<Vec<ResolvedParameter>, ResolveError> {
         let mut resolved_parameters = Vec::new();
         for parameter in parameters {
+            let debug_text = self.get_text(&parameter.variable.name);
+            info!(parameter=?debug_text, "parameter");
             let param_type = self.resolve_type(&parameter.param_type)?;
             resolved_parameters.push(ResolvedParameter {
                 name: ResolvedLocalIdentifier(self.to_node(&parameter.variable.name)),
@@ -1448,7 +1453,7 @@ impl<'a> Resolver<'a> {
             Expression::VariableAccess(variable) => {
                 self.resolve_variable_or_function_access(&variable.name)?
             }
-            Expression::MutRef(_variable) => todo!(), // self.resolve_mut_ref(variable)?,
+            Expression::MutRef(variable) => self.resolve_mut_ref(variable)?,
             Expression::IndexAccess(collection_expression, lookup) => {
                 let resolved_collection_expression =
                     self.resolve_expression(&collection_expression)?;
@@ -2063,32 +2068,29 @@ impl<'a> Resolver<'a> {
     }
 
     fn find_variant_in_pattern(
-        &mut self,
+        &self,
         expression_type: &ResolvedType,
         ast_name: &Node,
     ) -> Result<ResolvedEnumVariantTypeRef, ResolveError> {
-        let _enum_type_ref = match expression_type {
+        let enum_type_ref = match expression_type {
             ResolvedType::Enum(enum_type_ref) => enum_type_ref,
-            _ => Err(ResolveError::ExpectedEnumInPattern(self.to_node(&ast_name)))?,
+            _ => Err(ResolveError::ExpectedEnumInPattern(self.to_node(ast_name)))?,
         };
 
-        todo!()
-        /*
-        let result = self
+        let enum_name = self.get_text_resolved(&enum_type_ref.name.0).to_string();
+        let variant_name = self.get_text(ast_name).to_string();
+
+        self.shared
             .lookup
-            .get_enum_variant_type(enum_type_ref.name(), &ast_name)
+            .get_enum_variant_type(&vec![], &enum_name, &variant_name)
             .map_or_else(
                 || {
                     Err(ResolveError::UnknownEnumVariantTypeInPattern(
-                        self.to_node(&ast_name),
+                        self.to_node(ast_name),
                     ))
                 },
-                |found| Ok(found.clone()),
-            );
-
-        result
-
-         */
+                Ok,
+            )
     }
 
     fn resolve_pattern(
@@ -2681,36 +2683,31 @@ impl<'a> Resolver<'a> {
         self.try_find_variable(var_or_function_ref_node)
             .map_or_else(
                 || {
-                    let name = self.get_text(&var_or_function_ref_node).to_string();
+                    let name = self.get_text(var_or_function_ref_node).to_string();
                     self.shared
                         .lookup
-                        .get_internal_function(&*vec![], &name)
+                        .get_internal_function(&[], &name)
                         .map_or_else(
                             || {
                                 self.shared
                                     .lookup
-                                    .get_external_function_declaration(&*vec![], &*name)
+                                    .get_external_function_declaration(&[], &name)
                                     .map_or_else(
                                         || {
-                                            error!(
-                                                "unknown external function {:?}",
-                                                var_or_function_ref_node
-                                            );
+                                            error!("unknown external function {:?}", name);
                                             Err(ResolveError::UnknownVariable(
-                                                self.to_node(&var_or_function_ref_node),
+                                                self.to_node(var_or_function_ref_node),
                                             ))
                                         },
                                         |external_function_ref| {
                                             Ok(ResolvedExpression::ExternalFunctionAccess(
-                                                external_function_ref.clone(),
+                                                external_function_ref,
                                             ))
                                         },
                                     )
                             },
                             |function_ref| {
-                                Ok(ResolvedExpression::InternalFunctionAccess(
-                                    function_ref.clone(),
-                                ))
+                                Ok(ResolvedExpression::InternalFunctionAccess(function_ref))
                             },
                         )
                 },
@@ -2734,7 +2731,8 @@ impl<'a> Resolver<'a> {
     }
 
     fn try_find_variable(&self, node: &Node) -> Option<ResolvedVariableRef> {
-        let variable_text = self.get_text(&node);
+        let variable_text = self.get_text(node);
+        info!(%variable_text, "looking for variable");
         for scope in self.scope.block_scope_stack.iter().rev() {
             if let Some(value) = scope.variables.get(&variable_text.to_string()) {
                 return Some(value.clone());
@@ -3882,6 +3880,20 @@ impl<'a> Resolver<'a> {
         };
 
         Some(f)
+    }
+
+    fn resolve_mut_ref(
+        &self,
+        variable: &MutVariableRef,
+    ) -> Result<ResolvedExpression, ResolveError> {
+        let var = self.find_variable(&variable.0)?;
+        if !var.is_mutable() {
+            Err(ResolveError::VariableIsNotMutable(
+                self.to_node(&variable.0.name),
+            ))?;
+        }
+        let mut_var = ResolvedMutVariable { variable_ref: var };
+        Ok(ResolvedExpression::MutRef(Rc::new(mut_var)))
     }
 }
 
