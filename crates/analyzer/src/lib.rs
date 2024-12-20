@@ -2,16 +2,14 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-mod modules;
+pub mod modules;
 pub mod ns;
 pub mod prelude;
 
 use crate::modules::ResolvedModules;
-use crate::ns::ResolvedModulePathStr;
 use seq_map::{SeqMap, SeqMapError};
 use std::cell::RefCell;
 use std::collections::HashSet;
-use std::fmt::format;
 use std::num::{ParseFloatError, ParseIntError};
 use std::rc::Rc;
 use swamp_script_ast::prelude::*;
@@ -24,10 +22,10 @@ use swamp_script_semantic::{
     ResolvedAnonymousStructFieldType, ResolvedAnonymousStructType, ResolvedBinaryOperatorKind,
     ResolvedBoolType, ResolvedCompoundOperator, ResolvedCompoundOperatorKind, ResolvedFieldName,
     ResolvedForPattern, ResolvedFormatSpecifier, ResolvedFormatSpecifierKind,
-    ResolvedLocalIdentifier, ResolvedLocalTypeIdentifier, ResolvedModulePathRef,
-    ResolvedPatternElement, ResolvedPostfixOperatorKind, ResolvedPrecisionType,
-    ResolvedStaticCallGeneric, ResolvedTupleTypeRef, ResolvedUnaryOperatorKind,
-    ResolvedVariableCompoundAssignment, Span, TypeNumber,
+    ResolvedLocalIdentifier, ResolvedLocalTypeIdentifier, ResolvedPatternElement,
+    ResolvedPostfixOperatorKind, ResolvedPrecisionType, ResolvedStaticCallGeneric,
+    ResolvedTupleTypeRef, ResolvedUnaryOperatorKind, ResolvedVariableCompoundAssignment, Span,
+    TypeNumber,
 };
 use swamp_script_semantic::{
     ResolvedDefinition, ResolvedEnumTypeRef, ResolvedFunction, ResolvedFunctionRef,
@@ -37,7 +35,6 @@ use swamp_script_semantic::{ResolvedMapIndexLookup, ResolvedProgramTypes};
 use swamp_script_semantic::{ResolvedMapType, ResolvedProgramState};
 use swamp_script_semantic::{ResolvedModulePath, ResolvedPostfixOperator};
 use swamp_script_source_map::SourceMap;
-use tracing::field::Field;
 use tracing::{debug, error, info, warn};
 
 #[derive(Debug)]
@@ -284,6 +281,7 @@ pub enum ResolveError {
     FloatConversionError(ParseFloatError),
     BoolConversionError,
     DuplicateFieldInStructInstantiation(String, Rc<RefCell<ResolvedStructType>>),
+    InternalError(&'static str),
 }
 
 impl From<SemanticError> for ResolveError {
@@ -325,7 +323,7 @@ pub struct Resolver<'a> {
     pub source_map: &'a SourceMap,
     pub block_scope_stack: Vec<BlockScope>,
     pub return_type: ResolvedType,
-    pub path: &'a ResolvedModulePathRef,
+    //  pub path: &'a ResolvedModulePathRef,
     pub path_str: Vec<String>,
     file_id: FileId,
 }
@@ -336,7 +334,7 @@ impl<'a> Resolver<'a> {
         state: &'a mut ResolvedProgramState,
         lookup: &'a mut ResolvedModules,
         source_map: &'a SourceMap,
-        path: &'a ResolvedModulePathRef,
+        //path: &'a ResolvedModulePathRef,
         path_str: Vec<String>,
         file_id: FileId,
     ) -> Self {
@@ -349,7 +347,7 @@ impl<'a> Resolver<'a> {
             source_map,
             block_scope_stack: scope_stack,
             return_type: types.unit_type(),
-            path,
+            // path,
             path_str,
             file_id,
         }
@@ -645,7 +643,6 @@ impl<'a> Resolver<'a> {
             &mut self.state,
             self.lookup,
             self.source_map,
-            self.path,
             self.path_str.clone(),
             self.file_id,
         )
@@ -679,13 +676,18 @@ impl<'a> Resolver<'a> {
         let resolved_anon_struct = ResolvedAnonymousStructType {
             defined_fields: resolved_fields,
         };
-        let resolved_struct = ResolvedStructType::new(
-            self.path.clone(),
-            ResolvedLocalTypeIdentifier(self.to_node(&ast_struct.identifier.0)),
-            resolved_anon_struct,
-            self.state.allocate_number(),
-        );
-        Ok(resolved_struct)
+
+        if let Some(module_ref) = self.lookup.find_module(&self.path_str) {
+            let resolved_struct = ResolvedStructType::new(
+                module_ref.clone(),
+                ResolvedLocalTypeIdentifier(self.to_node(&ast_struct.identifier.0)),
+                resolved_anon_struct,
+                self.state.allocate_number(),
+            );
+            Ok(resolved_struct)
+        } else {
+            Err(ResolveError::InternalError("can not find own module"))
+        }
     }
 
     fn resolve_enum_type_definition(
@@ -808,17 +810,17 @@ impl<'a> Resolver<'a> {
                     self.lookup.add_enum_variant(&variant)?;
                 }
             }
-            ResolvedDefinition::StructType(struct_type) => {
+            ResolvedDefinition::StructType(_struct_type) => {
                 // TODO:  self.lookup.add_struct_type(struct_type)?;
             }
             ResolvedDefinition::Function() => {}
             ResolvedDefinition::ExternalFunction() => {}
             ResolvedDefinition::ImplType(_resolved_type) => {}
             ResolvedDefinition::FunctionDef(function_def) => match function_def {
-                ResolvedFunction::Internal(internal_fn) => {
+                ResolvedFunction::Internal(_internal_fn) => {
                     // TODO:  self.lookup.add_internal_function_ref(&internal_fn)?;
                 }
-                ResolvedFunction::External(resolved_external_function_def_ref) => {
+                ResolvedFunction::External(_resolved_external_function_def_ref) => {
                     /* TODO:
                        self.lookup.add_external_function_declaration_ref(
 
@@ -829,7 +831,7 @@ impl<'a> Resolver<'a> {
                 }
             },
             ResolvedDefinition::Alias(resolved_type) => match resolved_type {
-                ResolvedType::Alias(name, resolved_type) => {
+                ResolvedType::Alias(_name, _resolved_type) => {
                     /* TODO:
                     self.lookup
                         .add_type_alias(&name.0.clone(), *resolved_type.clone())?;
@@ -1182,14 +1184,16 @@ impl<'a> Resolver<'a> {
         self.return_type.clone()
     }
 
-    fn resolve_statement(
+    pub fn resolve_statement(
         &mut self,
         statement: &Statement,
     ) -> Result<ResolvedStatement, ResolveError> {
         let converted = match statement {
-            Statement::ForLoop(pattern, expression, iterator_should_be_mutable, statements) => {
-                let resolved_iterator =
-                    self.resolve_iterator(&expression.expression, iterator_should_be_mutable)?;
+            Statement::ForLoop(pattern, iteratable_expression, statements) => {
+                let resolved_iterator = self.resolve_iterator(
+                    &iteratable_expression.expression,
+                    &iteratable_expression.is_mut,
+                )?;
 
                 self.push_block_scope("for_loop");
                 let pattern = self.resolve_for_pattern(
@@ -1726,13 +1730,13 @@ impl<'a> Resolver<'a> {
 
                 let resolved_data = match enum_literal {
                     EnumVariantLiteral::Simple(_) => ResolvedEnumLiteralData::Nothing,
-                    EnumVariantLiteral::Tuple(node, expressions) => {
+                    EnumVariantLiteral::Tuple(_node, expressions) => {
                         let resolved = self
                             .resolve_expressions(expressions)
                             .expect("enum tuple expressions should resolve");
                         ResolvedEnumLiteralData::Tuple(resolved)
                     }
-                    EnumVariantLiteral::Struct(node, anonym_struct_field_and_expressions) => {
+                    EnumVariantLiteral::Struct(_node, anonym_struct_field_and_expressions) => {
                         let mut resolved = Vec::new();
                         for field_and_expr in anonym_struct_field_and_expressions {
                             let resolved_expression = self
@@ -1979,7 +1983,7 @@ impl<'a> Resolver<'a> {
         expression_type: &ResolvedType,
         ast_name: &Node,
     ) -> Result<ResolvedEnumVariantTypeRef, ResolveError> {
-        let enum_type_ref = match expression_type {
+        let _enum_type_ref = match expression_type {
             ResolvedType::Enum(enum_type_ref) => enum_type_ref,
             _ => Err(ResolveError::ExpectedEnumInPattern(self.to_node(&ast_name)))?,
         };
@@ -2627,6 +2631,7 @@ impl<'a> Resolver<'a> {
             )
     }
 
+    #[allow(unused)]
     fn find_variable(&self, variable: &Variable) -> Result<ResolvedVariableRef, ResolveError> {
         self.try_find_variable(&variable.name).map_or_else(
             || Err(ResolveError::UnknownVariable(self.to_node(&variable.name))),
@@ -2927,8 +2932,6 @@ impl<'a> Resolver<'a> {
 
         // For first assignment, create new variable with the mutability from the assignment
         let scope_index = self.block_scope_stack.len() - 1;
-
-        let scope_index = self.block_scope_stack.len() - 1;
         let name = self.to_node(&variable.name);
         let mutable_node = self.to_node_option(&variable.is_mutable);
         let variable_name_str = self.get_text_resolved(&name).to_string();
@@ -3024,6 +3027,8 @@ impl<'a> Resolver<'a> {
                 |found| Ok(found.clone()),
             )
     }
+
+    #[allow(unused)]
 
     fn resolve_enum_variant_literal(
         &mut self,
@@ -3577,7 +3582,7 @@ impl<'a> Resolver<'a> {
         let (resolved_last_type, resolved_first_base_expression) =
             self.collect_field_chain(ast_struct_field_expr, &mut chain)?;
 
-        let ast_field_name_str = self.get_text(&ast_field_name).to_string();
+        let _ast_field_name_str = self.get_text(&ast_field_name).to_string();
         // Add the last lookup that is part of the field_assignment itself
         let (_field_type, field_index) =
             self.get_field_index(&resolved_last_type, &ast_field_name)?;

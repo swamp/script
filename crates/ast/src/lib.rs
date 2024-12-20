@@ -152,14 +152,14 @@ pub enum ForPattern {
 }
 
 #[derive(Debug)]
-pub struct MutExpression {
+pub struct IteratableExpression {
     pub is_mut: Option<Node>,
     pub expression: Expression,
 }
 
 #[derive(Debug)]
 pub enum Statement {
-    ForLoop(ForPattern, MutExpression, Option<Node>, Vec<Statement>),
+    ForLoop(ForPattern, IteratableExpression, Vec<Statement>),
     WhileLoop(Expression, Vec<Statement>),
     Return(Expression),
     Break(Node),
@@ -484,7 +484,7 @@ pub enum PrecisionType {
 
 #[derive()]
 pub struct Module {
-    statements: Vec<Statement>,
+    pub statements: Vec<Statement>,
     pub definitions: Vec<Definition>,
 }
 

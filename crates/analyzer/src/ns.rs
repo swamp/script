@@ -4,7 +4,7 @@
  */
 
 use seq_map::SeqMap;
-use std::fmt::{Debug, Display};
+use std::fmt::Debug;
 use std::rc::Rc;
 use swamp_script_semantic::{
     ResolvedEnumTypeRef, ResolvedEnumVariantTypeRef, ResolvedExternalFunctionDefinitionRef,
@@ -17,16 +17,20 @@ pub struct ResolvedModulePathStr(pub Vec<String>);
 
 #[derive(Debug)]
 pub struct ResolvedModuleNamespace {
+    #[allow(unused)]
     structs: SeqMap<String, ResolvedStructTypeRef>,
 
+    #[allow(unused)]
     build_in_rust_types: SeqMap<String, ResolvedRustTypeRef>,
 
+    #[allow(unused)]
     enum_types: SeqMap<String, ResolvedEnumTypeRef>,
     enum_variant_types: SeqMap<String, ResolvedEnumVariantTypeRef>,
 
     internal_functions: SeqMap<String, ResolvedInternalFunctionDefinitionRef>,
     external_function_declarations: SeqMap<String, ResolvedExternalFunctionDefinitionRef>,
 
+    #[allow(unused)]
     type_aliases: SeqMap<String, ResolvedType>,
 
     pub path: ResolvedModulePath,
@@ -174,9 +178,9 @@ impl ResolvedModuleNamespace {
     pub fn add_type_alias(
         &mut self,
         name: &str,
-        resolved_type: ResolvedType,
+        _resolved_type: ResolvedType,
     ) -> Result<(), SemanticError> {
-        let name_str = name.to_string();
+        let _name_str = name.to_string();
         /* TODO:
         self.type_aliases
             .insert(LocalTypeName(name_str.clone()), resolved_type)

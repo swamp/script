@@ -12,9 +12,23 @@ use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
 use std::rc::Rc;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ResolvedNode {
     pub span: Span,
+}
+
+impl Debug for ResolvedNode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        if self.span.file_id == 0xffff {
+            write!(f, "<{}:{}>", self.span.offset, self.span.length)
+        } else {
+            write!(
+                f,
+                "<{}:{} ({})>",
+                self.span.offset, self.span.length, self.span.file_id
+            )
+        }
+    }
 }
 
 pub type FileId = u16;

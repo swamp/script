@@ -38,23 +38,28 @@ impl SourceMap {
         info!(?relative_path, "add relative");
         let contents = fs::read_to_string(path)?;
 
-        let line_offsets = Self::compute_line_offsets(&contents);
-        info!(?line_offsets, "scanned");
         let id = self.next_file_id;
         self.next_file_id += 1;
+
+        self.add_manual(id, &relative_path, &contents);
+
+        Ok(id)
+    }
+
+    pub fn add_manual(&mut self, id: FileId, relative_path: &Path, contents: &str) {
+        let line_offsets = Self::compute_line_offsets(contents);
+        info!(?line_offsets, "scanned");
 
         self.cache
             .insert(
                 id,
                 FileInfo {
-                    relative_path,
-                    contents,
+                    relative_path: relative_path.to_path_buf(),
+                    contents: contents.to_string(),
                     line_offsets,
                 },
             )
             .expect("could not add file info");
-
-        Ok(id)
     }
 
     pub fn add_relative(&mut self, relative_path: &str) -> io::Result<FileId> {

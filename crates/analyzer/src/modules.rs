@@ -7,8 +7,8 @@ use swamp_script_ast::StructType;
 use swamp_script_semantic::{
     ResolvedDefinition, ResolvedEnumType, ResolvedEnumTypeRef, ResolvedEnumVariantType,
     ResolvedEnumVariantTypeRef, ResolvedExternalFunctionDefinitionRef,
-    ResolvedInternalFunctionDefinitionRef, ResolvedModulePath, ResolvedRustTypeRef,
-    ResolvedStatement, ResolvedStructTypeRef, ResolvedType,
+    ResolvedInternalFunctionDefinitionRef, ResolvedModulePath, ResolvedModulePathRef,
+    ResolvedRustTypeRef, ResolvedStatement, ResolvedStructTypeRef, ResolvedType,
 };
 
 #[derive(Debug)]
@@ -77,67 +77,69 @@ impl ResolvedModules {
     }
 
      */
-
-    pub fn get_struct(&self, path: &Vec<String>, name: &str) -> Option<ResolvedStructTypeRef> {
+    pub fn find_module(&self, _module_path: &Vec<String>) -> Option<ResolvedModulePathRef> {
         todo!()
     }
-    pub fn get_type_alias(&self, path: &Vec<String>, name: &str) -> Option<ResolvedType> {
+    pub fn get_struct(&self, _path: &Vec<String>, _name: &str) -> Option<ResolvedStructTypeRef> {
+        todo!()
+    }
+    pub fn get_type_alias(&self, _path: &Vec<String>, _name: &str) -> Option<ResolvedType> {
         todo!()
     }
 
-    pub fn get_enum(&self, path: &Vec<String>, name: &str) -> Option<ResolvedEnumTypeRef> {
+    pub fn get_enum(&self, _path: &Vec<String>, _name: &str) -> Option<ResolvedEnumTypeRef> {
         todo!()
     }
 
     pub fn get_enum_variant_type(
         &self,
-        path: &Vec<String>,
-        name: &str,
+        _path: &Vec<String>,
+        _name: &str,
     ) -> Option<ResolvedEnumVariantTypeRef> {
         todo!()
     }
 
     pub fn get_external_function_declaration(
         &self,
-        path: &[String],
-        name: &str,
+        _path: &[String],
+        _name: &str,
     ) -> Option<ResolvedExternalFunctionDefinitionRef> {
         todo!()
     }
 
     pub fn get_internal_function(
         &self,
-        path: &[String],
-        name: &str,
+        _path: &[String],
+        _name: &str,
     ) -> Option<ResolvedInternalFunctionDefinitionRef> {
         todo!()
     }
 
-    pub fn get_rust_type(&self, name: &str) -> Option<ResolvedRustTypeRef> {
+    pub fn get_rust_type(&self, _name: &str) -> Option<ResolvedRustTypeRef> {
         todo!()
     }
 
     pub fn add_enum_type(
         &self,
-        enum_type: &ResolvedEnumType,
+        _enum_type: &ResolvedEnumType,
     ) -> Result<ResolvedEnumTypeRef, NamespaceError> {
         todo!()
     }
 
     pub fn add_enum_variant(
         &self,
-        enum_variant: &ResolvedEnumVariantType,
+        _enum_variant: &ResolvedEnumVariantType,
     ) -> Result<(), NamespaceError> {
         todo!()
     }
 
-    pub fn add_struct_type(&self, struct_type: StructType) -> Result<(), NamespaceError> {
+    pub fn add_struct_type(&self, _struct_type: StructType) -> Result<(), NamespaceError> {
         todo!()
     }
 
     pub fn add_internal_function_ref(
         &self,
-        internal_func: ResolvedInternalFunctionDefinitionRef,
+        _internal_func: ResolvedInternalFunctionDefinitionRef,
     ) -> Result<(), NamespaceError> {
         todo!()
     }

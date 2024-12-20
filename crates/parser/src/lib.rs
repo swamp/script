@@ -9,8 +9,9 @@ use pest::iterators::Pair;
 use pest::Parser;
 use pest_derive::Parser;
 use swamp_script_ast::{
-    prelude::*, CompoundOperatorKind, EnumVariantLiteral, FieldExpression, FieldName, FieldType,
-    ForPattern, ForVar, ModulePathItem, MutExpression, PatternElement, SpanWithoutFileId,
+    prelude::*, CompoundOperator, CompoundOperatorKind, EnumVariantLiteral, FieldExpression,
+    FieldName, FieldType, ForPattern, ForVar, IteratableExpression, ModulePathItem, PatternElement,
+    SpanWithoutFileId,
 };
 use swamp_script_ast::{Function, PostfixOperator};
 
@@ -149,7 +150,7 @@ impl AstParser {
         Ok(LocalIdentifier::new(self.to_node(&pair)))
     }
 
-    fn expect_variable_next<'a>(
+    fn _expect_variable_next<'a>(
         &self,
         pairs: &mut impl Iterator<Item = Pair<'a, Rule>>,
     ) -> Result<Variable, ParseError> {
@@ -205,7 +206,7 @@ impl AstParser {
     }
 
     fn next_inner_pair<'a>(&self, pair: &Pair<'a, Rule>) -> Result<Pair<'a, Rule>, ParseError> {
-        let span = pair.as_span();
+        let _span = pair.as_span();
         pair.clone()
             .into_inner()
             .next()
@@ -773,8 +774,7 @@ impl AstParser {
             (None, self.parse_expression(&next_pair)?)
         };
 
-        // Construct the MutExpression
-        let mut_expression = MutExpression {
+        let mut_expression = IteratableExpression {
             is_mut: is_mut_iter,
             expression: iterable_expression,
         };
@@ -925,12 +925,12 @@ impl AstParser {
         let expr = self.parse_expression(&Self::next_pair(&mut inner)?)?;
         let operator_node = self.to_node(&operator);
 
-        let compound_op: Option<CompoundOperatorKind> = match operator.as_rule() {
+        let compound_op_kind: Option<CompoundOperatorKind> = match operator.as_rule() {
             Rule::assign_op => None,
-            Rule::add_assign_op => Some(CompoundOperatorKind::Add(operator_node)),
-            Rule::sub_assign_op => Some(CompoundOperatorKind::Sub(operator_node)),
-            Rule::mul_assign_op => Some(CompoundOperatorKind::Mul(operator_node)),
-            Rule::div_assign_op => Some(CompoundOperatorKind::Div(operator_node)),
+            Rule::add_assign_op => Some(CompoundOperatorKind::Add),
+            Rule::sub_assign_op => Some(CompoundOperatorKind::Sub),
+            Rule::mul_assign_op => Some(CompoundOperatorKind::Mul),
+            Rule::div_assign_op => Some(CompoundOperatorKind::Div),
             _ => {
                 return Err(self.create_error_pair(
                     SpecificError::UnknownAssignmentOperator(Self::pair_to_rule(&operator)),
@@ -940,11 +940,20 @@ impl AstParser {
         };
 
         // Only block compound operators for mut declarations
-        if compound_op.is_some() && is_mutable.is_some() {
+        if compound_op_kind.is_some() && is_mutable.is_some() {
             return Err(
                 self.create_error_pair(SpecificError::CompoundOperatorCanNotContainMut, &operator)
             );
         }
+
+        let compound_op = if let Some(op_kind) = compound_op_kind {
+            Some(CompoundOperator {
+                node: operator_node,
+                kind: op_kind,
+            })
+        } else {
+            None
+        };
 
         match left.as_rule() {
             Rule::chained_access => {
@@ -1027,7 +1036,7 @@ impl AstParser {
     }
 
     fn parse_prefix_expression(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
-        let span = pair.as_span();
+        let _span = pair.as_span();
         let mut inner = Self::convert_into_iterator(pair).peekable();
         let mut expr = None;
         let mut prefix_ops = Vec::new();
@@ -1380,7 +1389,7 @@ impl AstParser {
 
         // Parse variant name
         let variant_pair = Self::expect_next(&mut inner, Rule::type_identifier)?;
-        let variant_type_identifier = LocalTypeIdentifier::new(self.to_node(&variant_pair));
+        let _variant_type_identifier = LocalTypeIdentifier::new(self.to_node(&variant_pair));
 
         // Parse fields if they exist
         let enum_variant_literal = if let Some(fields_pair) = inner.next() {
@@ -1454,7 +1463,7 @@ impl AstParser {
             Rule::int_lit => Ok(Literal::Int(node)),
             Rule::float_lit => Ok(Literal::Float(node)),
             Rule::string_lit => {
-                let content = inner.as_str();
+                let _content = inner.as_str();
                 // Remove quotes and handle escapes
                 /*
                 let processed = content[1..content.len() - 1]
