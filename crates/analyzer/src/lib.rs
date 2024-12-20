@@ -38,6 +38,23 @@ use swamp_script_source_map::SourceMap;
 use tracing::{debug, error, info, warn};
 
 #[derive(Debug)]
+pub struct ResolvedProgram {
+    pub types: ResolvedProgramTypes,
+    pub state: ResolvedProgramState,
+    pub modules: ResolvedModules,
+}
+
+impl ResolvedProgram {
+    pub fn new() -> Self {
+        Self {
+            types: ResolvedProgramTypes::new(),
+            state: ResolvedProgramState::new(),
+            modules: ResolvedModules::new(),
+        }
+    }
+}
+
+#[derive(Debug)]
 pub enum NamespaceError {}
 
 impl From<NamespaceError> for ResolveError {

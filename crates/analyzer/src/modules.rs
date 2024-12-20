@@ -2,6 +2,7 @@ use crate::ns::ResolvedModuleNamespace;
 use crate::NamespaceError;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
 use swamp_script_ast::StructType;
 use swamp_script_semantic::{
@@ -22,11 +23,28 @@ impl Default for ResolvedModules {
     }
 }
 
-#[derive(Debug)]
 pub struct ResolvedModule {
     pub definitions: Vec<ResolvedDefinition>,
     pub statements: Vec<ResolvedStatement>,
     pub namespace: ResolvedModuleNamespace,
+}
+
+impl Debug for ResolvedModule {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        for resolved_def in &self.definitions {
+            writeln!(f, "{resolved_def:?}")?;
+        }
+
+        if !self.definitions.is_empty() && !self.statements.is_empty() {
+            writeln!(f, "---\n")?;
+        }
+
+        for resolved_statement in &self.statements {
+            writeln!(f, "{resolved_statement:?}")?;
+        }
+
+        Ok(())
+    }
 }
 
 pub type ResolvedModuleRef = Rc<RefCell<ResolvedModule>>;

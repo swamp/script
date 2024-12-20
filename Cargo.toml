@@ -29,5 +29,5 @@ members = [
     "crates/std",
 
 
-    "crates/source-map", "crates/namespace",
+    "crates/source-map",
 ]

@@ -3,18 +3,15 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use std::path::Path;
-use swamp_script_analyzer::modules::ResolvedModules;
+use swamp_script_analyzer::modules::{ResolvedModule, ResolvedModules};
+use swamp_script_analyzer::ns::ResolvedModuleNamespace;
 use swamp_script_analyzer::{ResolveError, Resolver};
 use swamp_script_parser::AstParser;
-use swamp_script_semantic::{
-    ResolvedDefinition, ResolvedProgramState, ResolvedProgramTypes, ResolvedStatement,
-};
+use swamp_script_semantic::{ResolvedModulePath, ResolvedProgramState, ResolvedProgramTypes};
 use swamp_script_source_map::SourceMap;
 use tracing::warn;
 
-fn internal_compile(
-    script: &str,
-) -> Result<(Vec<ResolvedDefinition>, Vec<ResolvedStatement>), ResolveError> {
+fn internal_compile(script: &str) -> Result<ResolvedModule, ResolveError> {
     let parser = AstParser {};
 
     let program = parser.parse_module(script).expect("Failed to parse script");
@@ -51,7 +48,13 @@ fn internal_compile(
         resolved_statements.push(resolved_statement);
     }
 
-    Ok((resolved_definitions, resolved_statements))
+    let resolved_module = ResolvedModule {
+        definitions: resolved_definitions,
+        statements: resolved_statements,
+        namespace: ResolvedModuleNamespace::new(ResolvedModulePath(vec![])),
+    };
+
+    Ok(resolved_module)
 }
 
 pub fn check_fail(script: &str, expected_error_message: &str) {
@@ -61,40 +64,28 @@ pub fn check_fail(script: &str, expected_error_message: &str) {
 }
 
 pub fn check(script: &str, expected_output: &str) {
-    let (resolved_definitions, resolved_statements) =
-        internal_compile(script).expect("should work to analyze");
+    let resolved_module = internal_compile(script).expect("should work to analyze");
 
-    let mut formatted_output = String::new();
-    for resolved_def in &resolved_definitions {
-        formatted_output += &*format!("{resolved_def:?}\n");
-    }
-    if !resolved_definitions.is_empty() && !resolved_statements.is_empty() {
-        formatted_output += "---\n";
-    }
-    for resolved_statement in &resolved_statements {
-        formatted_output += &*format!("{resolved_statement:?}\n");
-    }
+    let formatted_output = format!("{resolved_module:?}");
 
     let actual = formatted_output
         .lines()
-        .map(|line| line.trim())
+        .map(str::trim)
         .filter(|line| !line.is_empty())
         .collect::<Vec<_>>()
         .join("\n");
 
     let expected = expected_output
         .lines()
-        .map(|line| line.trim())
+        .map(str::trim)
         .filter(|line| !line.is_empty())
         .collect::<Vec<_>>()
         .join("\n");
 
-    if actual != expected {
-        panic!(
-            "\nExpected output:\n\n{}\n\nActual output:\n\n{}\n",
-            expected, actual
-        );
-    }
+    assert_eq!(
+        actual, expected,
+        "\nExpected output:\n\n{expected}\n\nActual output:\n\n{actual}\n"
+    );
 
     let mut differences = Vec::new();
 
