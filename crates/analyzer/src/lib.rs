@@ -10,6 +10,7 @@ use crate::modules::ResolvedModules;
 use crate::ns::ResolvedModulePathStr;
 use seq_map::{SeqMap, SeqMapError};
 use std::cell::RefCell;
+use std::collections::HashSet;
 use std::fmt::format;
 use std::num::{ParseFloatError, ParseIntError};
 use std::rc::Rc;
@@ -215,9 +216,9 @@ pub enum ResolveError {
     DuplicateFieldName(ResolvedNode),
     Unknown(String),
     UnknownImplTargetTypeReference(LocalTypeIdentifier),
-    WrongFieldCountInStructInstantiation(ResolvedStructTypeRef, Vec<FieldExpression>),
+    WrongFieldCountInStructInstantiation(ResolvedStructTypeRef, usize),
     MissingFieldInStructInstantiation(String, ResolvedStructTypeRef),
-    ExpectedFunctionExpression(ResolvedNode),
+    ExpectedFunctionExpression,
     CouldNotFindMember(ResolvedNode, ResolvedNode),
     UnknownVariable(ResolvedNode),
     NotAnArray(Expression),
@@ -282,6 +283,7 @@ pub enum ResolveError {
     IntConversionError(ParseIntError),
     FloatConversionError(ParseFloatError),
     BoolConversionError,
+    DuplicateFieldInStructInstantiation(String, Rc<RefCell<ResolvedStructType>>),
 }
 
 impl From<SemanticError> for ResolveError {
@@ -324,6 +326,7 @@ pub struct Resolver<'a> {
     pub block_scope_stack: Vec<BlockScope>,
     pub return_type: ResolvedType,
     pub path: &'a ResolvedModulePathRef,
+    pub path_str: Vec<String>,
     file_id: FileId,
 }
 
@@ -334,6 +337,7 @@ impl<'a> Resolver<'a> {
         lookup: &'a mut ResolvedModules,
         source_map: &'a SourceMap,
         path: &'a ResolvedModulePathRef,
+        path_str: Vec<String>,
         file_id: FileId,
     ) -> Self {
         let mut scope_stack = Vec::new();
@@ -346,6 +350,7 @@ impl<'a> Resolver<'a> {
             block_scope_stack: scope_stack,
             return_type: types.unit_type(),
             path,
+            path_str,
             file_id,
         }
     }
@@ -641,6 +646,7 @@ impl<'a> Resolver<'a> {
             self.lookup,
             self.source_map,
             self.path,
+            self.path_str.clone(),
             self.file_id,
         )
     }
@@ -1848,10 +1854,11 @@ impl<'a> Resolver<'a> {
         &self,
         qualified_type_identifier: &QualifiedTypeIdentifier,
     ) -> Result<(ResolvedType, ResolvedStructTypeRef), ResolveError> {
-        let namespace = self.get_namespace(qualified_type_identifier)?;
+        //   let namespace = self.get_namespace(qualified_type_identifier)?;
 
+        let (path, name) = self.get_path(qualified_type_identifier);
         // If it's an alias, return both the alias and the underlying struct
-        if let Some(alias_type) = namespace.get_type_alias(&qualified_type_identifier) {
+        if let Some(alias_type) = self.lookup.get_type_alias(&path, &name) {
             let unaliased = unalias_type(alias_type.clone());
             match unaliased {
                 ResolvedType::Struct(struct_ref) => Ok((alias_type.clone(), struct_ref)),
@@ -1861,11 +1868,9 @@ impl<'a> Resolver<'a> {
             }
         } else {
             // If direct struct, return the struct type for both
-            let struct_ref = namespace
-                .get_struct(&qualified_type_identifier.name)
-                .ok_or_else(|| {
-                    ResolveError::UnknownStructTypeReference(qualified_type_identifier.clone())
-                })?;
+            let struct_ref = self.lookup.get_struct(&path, &name).ok_or_else(|| {
+                ResolveError::UnknownStructTypeReference(qualified_type_identifier.clone())
+            })?;
             Ok((ResolvedType::Struct(struct_ref.clone()), struct_ref.clone()))
         }
     }
@@ -1887,41 +1892,63 @@ impl<'a> Resolver<'a> {
         {
             return Err(ResolveError::WrongFieldCountInStructInstantiation(
                 struct_to_instantiate,
-                ast_fields.clone(),
+                ast_fields.len(),
             ));
         }
 
-        let mut expressions_in_order = Vec::new();
+        let mut seen_fields = HashSet::new();
+        let mut source_order_expressions = Vec::new();
 
-        for (field_name, field_type) in &struct_to_instantiate
-            .borrow()
-            .anon_struct_type
-            .defined_fields
-        {
-            if let Some(found) = ast_fields.get(field_name) {
-                let resolved_expression = self.resolve_expression(found)?;
+        for field in ast_fields {
+            let field_name = self.get_text(&field.field_name.0).to_string();
 
-                let upgraded_resolved_expression =
-                    wrap_in_some_if_optional(&field_type.field_type, resolved_expression);
-
-                let expression_type = resolution(&upgraded_resolved_expression);
-
-                if !field_type.field_type.same_type(&expression_type) {
-                    error!("types: {field_type:?} expr: {expression_type:?}");
-                    return Err(ResolveError::ExpressionIsOfWrongFieldType);
-                }
-
-                expressions_in_order.push(upgraded_resolved_expression);
-            } else {
-                return Err(ResolveError::MissingFieldInStructInstantiation(
-                    field_name.to_string(),
+            // If we can not insert it, it is a duplicate
+            if !seen_fields.insert(field_name.clone()) {
+                return Err(ResolveError::DuplicateFieldInStructInstantiation(
+                    field_name,
                     struct_to_instantiate.clone(),
                 ));
             }
+
+            let borrowed_struct = struct_to_instantiate.borrow();
+
+            let maybe_looked_up_field = borrowed_struct
+                .anon_struct_type
+                .defined_fields
+                .get(&field_name);
+
+            if maybe_looked_up_field.is_none() {
+                return Err(ResolveError::UnknownStructField(
+                    self.to_node(&field.field_name.0),
+                ));
+            }
+
+            let looked_up_field = maybe_looked_up_field.expect("checked earlier");
+
+            let field_index_in_definition = struct_to_instantiate
+                .borrow()
+                .anon_struct_type
+                .defined_fields
+                .get_index(&field_name)
+                .expect("field_name is checked earlier");
+
+            let resolved_expression = self.resolve_expression(&field.expression)?;
+            let upgraded_resolved_expression =
+                wrap_in_some_if_optional(&looked_up_field.field_type, resolved_expression);
+
+            let expression_type = resolution(&upgraded_resolved_expression);
+
+            if !looked_up_field.field_type.same_type(&expression_type) {
+                error!("types: {looked_up_field:?} expr: {expression_type:?}");
+                return Err(ResolveError::ExpressionIsOfWrongFieldType);
+            }
+
+            source_order_expressions
+                .push((field_index_in_definition, upgraded_resolved_expression));
         }
 
         Ok(ResolvedStructInstantiation {
-            expressions_in_order,
+            source_order_expressions,
             struct_type_ref: struct_to_instantiate.clone(),
             display_type_ref,
         })
@@ -1957,6 +1984,8 @@ impl<'a> Resolver<'a> {
             _ => Err(ResolveError::ExpectedEnumInPattern(self.to_node(&ast_name)))?,
         };
 
+        todo!()
+        /*
         let result = self
             .lookup
             .get_enum_variant_type(enum_type_ref.name(), &ast_name)
@@ -1970,6 +1999,8 @@ impl<'a> Resolver<'a> {
             );
 
         result
+
+         */
     }
 
     fn resolve_pattern(
@@ -2264,11 +2295,24 @@ impl<'a> Resolver<'a> {
                 if function_call.signature.first_parameter_is_self {
                     // For member functions, extract the target object from the function expression
                     match function_expression {
-                        Expression::MemberCall(target, _, _) => {
-                            // Use the target as the first argument (self)
+                        Expression::MemberCall(ref target, _, _) => {
                             let mut all_args = Vec::new();
-                            all_args.push(**target.clone());
-                            all_args.extend(arguments.iter().collect());
+
+                            // extend_from_slice is using Clone for unknown reason,
+                            // even though we have ownership of the Expression in &[Expression].
+                            unsafe {
+                                // Move target expression into vec
+                                let target_expr = std::ptr::read(&**target);
+                                all_args.push(target_expr);
+
+                                let target_ptr = all_args.as_mut_ptr().add(1);
+                                std::ptr::copy_nonoverlapping(
+                                    arguments.as_ptr(),
+                                    target_ptr,
+                                    arguments.len(),
+                                );
+                                all_args.set_len(1 + arguments.len());
+                            }
 
                             self.resolve_internal_function_call(
                                 function_call,
@@ -2291,24 +2335,37 @@ impl<'a> Resolver<'a> {
                     match function_expression {
                         Expression::MemberCall(target, _, _) => {
                             let mut all_args = Vec::new();
-                            all_args.push(*target.clone());
-                            all_args.extend(arguments.iter().cloned());
 
+                            // extend_from_slice is using Clone for unknown reason,
+                            // even though we have ownership of the Expression in &[Expression].
+                            unsafe {
+                                // Move target expression into vec
+                                let target_expr = std::ptr::read(&**target);
+                                all_args.push(target_expr);
+
+                                let target_ptr = all_args.as_mut_ptr().add(1);
+                                std::ptr::copy_nonoverlapping(
+                                    arguments.as_ptr(),
+                                    target_ptr,
+                                    arguments.len(),
+                                );
+                                all_args.set_len(1 + arguments.len());
+                            }
                             self.resolve_external_function_call(
                                 function_call,
                                 function_expr,
                                 &all_args,
                             )
                         }
-                        _ => Err(ResolveError::ExpectedMemberCall(function_call.name.0)),
+                        _ => Err(ResolveError::ExpectedMemberCall(
+                            function_call.name.0.clone(),
+                        )),
                     }
                 } else {
                     self.resolve_external_function_call(function_call, function_expr, arguments)
                 }
             }
-            _ => Err(ResolveError::ExpectedFunctionExpression(
-                function_expression.clone(),
-            )),
+            _ => Err(ResolveError::ExpectedFunctionExpression),
         }
     }
 
@@ -2530,35 +2587,44 @@ impl<'a> Resolver<'a> {
 
     fn resolve_variable_or_function_access(
         &self,
-        variable: &Node,
+        var_or_function_ref_node: &Node,
     ) -> Result<ResolvedExpression, ResolveError> {
-        self.try_find_variable(variable).map_or_else(
-            || {
-                self.lookup.get_internal_function(&variable).map_or_else(
-                    || {
-                        self.lookup
-                            .get_external_function_declaration(&variable)
-                            .map_or_else(
-                                || {
-                                    error!("unknown external function {:?}", variable);
-                                    Err(ResolveError::UnknownVariable(self.to_node(&variable)))
-                                },
-                                |external_function_ref| {
-                                    Ok(ResolvedExpression::ExternalFunctionAccess(
-                                        external_function_ref.clone(),
-                                    ))
-                                },
-                            )
-                    },
-                    |function_ref| {
-                        Ok(ResolvedExpression::InternalFunctionAccess(
-                            function_ref.clone(),
-                        ))
-                    },
-                )
-            },
-            |variable_ref| Ok(ResolvedExpression::VariableAccess(variable_ref)),
-        )
+        self.try_find_variable(var_or_function_ref_node)
+            .map_or_else(
+                || {
+                    let name = self.get_text(&var_or_function_ref_node).to_string();
+                    self.lookup
+                        .get_internal_function(&self.path_str, &*name)
+                        .map_or_else(
+                            || {
+                                self.lookup
+                                    .get_external_function_declaration(&self.path_str, &*name)
+                                    .map_or_else(
+                                        || {
+                                            error!(
+                                                "unknown external function {:?}",
+                                                var_or_function_ref_node
+                                            );
+                                            Err(ResolveError::UnknownVariable(
+                                                self.to_node(&var_or_function_ref_node),
+                                            ))
+                                        },
+                                        |external_function_ref| {
+                                            Ok(ResolvedExpression::ExternalFunctionAccess(
+                                                external_function_ref.clone(),
+                                            ))
+                                        },
+                                    )
+                            },
+                            |function_ref| {
+                                Ok(ResolvedExpression::InternalFunctionAccess(
+                                    function_ref.clone(),
+                                ))
+                            },
+                        )
+                },
+                |variable_ref| Ok(ResolvedExpression::VariableAccess(variable_ref)),
+            )
     }
 
     fn find_variable(&self, variable: &Variable) -> Result<ResolvedVariableRef, ResolveError> {
@@ -2862,23 +2928,27 @@ impl<'a> Resolver<'a> {
         // For first assignment, create new variable with the mutability from the assignment
         let scope_index = self.block_scope_stack.len() - 1;
 
+        let scope_index = self.block_scope_stack.len() - 1;
+        let name = self.to_node(&variable.name);
+        let mutable_node = self.to_node_option(&variable.is_mutable);
+        let variable_name_str = self.get_text_resolved(&name).to_string();
+
         let variables = &mut self
             .block_scope_stack
             .last_mut()
             .expect("block scope should have at least one scope")
             .variables;
+        let variable_index = variables.len();
 
         let resolved_variable = ResolvedVariable {
-            name: self.to_node(&variable.name),
+            name,
             resolved_type: variable_type_ref.clone(),
-            mutable_node: self.to_node_option(&variable.is_mutable),
+            mutable_node,
             scope_index,
-            variable_index: variables.len(),
+            variable_index,
         };
 
         let variable_ref = Rc::new(resolved_variable);
-
-        let variable_name_str = self.get_text_resolved(&variable_ref.name).to_string();
 
         {
             variables
@@ -2973,11 +3043,12 @@ impl<'a> Resolver<'a> {
                 ResolvedEnumLiteralData::Tuple(self.resolve_expressions(expressions)?)
             }
             EnumVariantLiteral::Struct(_qualified_name, field_expressions) => {
-                let expressions = &field_expressions
-                    .into_iter()
-                    .map(|field_expr| field_expr.expression)
-                    .collect::<Vec<_>>();
-                let resolved_expressions = self.resolve_expressions(expressions)?;
+                let mut resolved_expressions = Vec::new();
+                for field_expression in field_expressions {
+                    let resolved_expression =
+                        self.resolve_expression(&field_expression.expression)?;
+                    resolved_expressions.push(resolved_expression);
+                }
                 ResolvedEnumLiteralData::Struct(resolved_expressions)
             }
         };
@@ -3620,16 +3691,17 @@ impl<'a> Resolver<'a> {
         qualified_type_identifier: &QualifiedTypeIdentifier,
     ) -> Option<ResolvedEnumVariantTypeRef> {
         let path: Vec<String> = if let Some(ref found) = &qualified_type_identifier.module_path {
-            &found
-                .0
-                .into_iter()
-                .map(|ref x| self.get_text(&x.node).to_string())
-                .collect()
+            let mut strings = Vec::new();
+            for path_item in &found.0 {
+                strings.push(self.get_text(&path_item.node).to_string());
+            }
+            strings
         } else {
             vec![]
         };
 
-        None
+        self.lookup
+            .get_enum_variant_type(&path, self.get_text(&qualified_type_identifier.name.0))
     }
 
     fn resolve_compound_operator(

@@ -518,7 +518,7 @@ pub struct ResolvedIterator {
 
 #[derive(Debug)]
 pub struct ResolvedStructInstantiation {
-    pub expressions_in_order: Vec<ResolvedExpression>,
+    pub source_order_expressions: Vec<(usize, ResolvedExpression)>,
     pub struct_type_ref: ResolvedStructTypeRef,
     pub display_type_ref: ResolvedType,
 }

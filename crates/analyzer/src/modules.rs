@@ -6,6 +6,7 @@ use std::rc::Rc;
 use swamp_script_ast::StructType;
 use swamp_script_semantic::{
     ResolvedDefinition, ResolvedEnumType, ResolvedEnumTypeRef, ResolvedEnumVariantType,
+    ResolvedEnumVariantTypeRef, ResolvedExternalFunctionDefinitionRef,
     ResolvedInternalFunctionDefinitionRef, ResolvedModulePath, ResolvedRustTypeRef,
     ResolvedStatement, ResolvedStructTypeRef, ResolvedType,
 };
@@ -92,7 +93,23 @@ impl ResolvedModules {
         &self,
         path: &Vec<String>,
         name: &str,
-    ) -> Option<ResolvedEnumVariantType> {
+    ) -> Option<ResolvedEnumVariantTypeRef> {
+        todo!()
+    }
+
+    pub fn get_external_function_declaration(
+        &self,
+        path: &[String],
+        name: &str,
+    ) -> Option<ResolvedExternalFunctionDefinitionRef> {
+        todo!()
+    }
+
+    pub fn get_internal_function(
+        &self,
+        path: &[String],
+        name: &str,
+    ) -> Option<ResolvedInternalFunctionDefinitionRef> {
         todo!()
     }
 
