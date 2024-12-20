@@ -19,11 +19,13 @@ fn internal_compile(script: &str) -> Result<ResolvedModule, ResolveError> {
     let types = ResolvedProgramTypes::new();
     let mut state = ResolvedProgramState::new();
     let mut modules = ResolvedModules::new();
+
     let mut source_map = SourceMap::new(Path::new("tests/fixtures/"));
     let file_id = 0xffff;
 
     source_map.add_manual(file_id, Path::new("some_path/main"), script);
     let resolved_path_str = vec!["test".to_string()];
+    modules.add_empty_module(&resolved_path_str);
 
     let mut resolver = Resolver::new(
         &types,
@@ -38,6 +40,7 @@ fn internal_compile(script: &str) -> Result<ResolvedModule, ResolveError> {
     for definition in &program.definitions {
         let resolved_definition = resolver.resolve_definition(definition)?;
 
+        //resolver.insert_definition(&resolved_definition)?;
         resolved_definitions.push(resolved_definition);
     }
 

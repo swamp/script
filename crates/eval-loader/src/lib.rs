@@ -47,7 +47,7 @@ pub fn resolve_to_existing_module(
     for ast_def in ast_module.ast_module.definitions() {
         let mut resolver = Resolver::new(&types, state, &modules, resolved_module.clone());
         let resolved_def = resolver.resolve_definition(ast_def)?;
-        resolver.insert_definition(resolved_def)?;
+        resolver.insert_definition(&resolved_def)?;
     }
 
     {

@@ -196,11 +196,17 @@ impl ResolvedNode {
 #[derive(Debug)]
 pub struct ResolvedLocalIdentifier(pub ResolvedNode);
 
-#[derive(Debug)]
+#[derive()]
 pub struct ResolvedInternalFunctionDefinition {
     pub statements: Vec<ResolvedStatement>,
     pub name: ResolvedLocalIdentifier,
     pub signature: ResolvedFunctionSignature,
+}
+
+impl Debug for ResolvedInternalFunctionDefinition {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "InternalFuncDef")
+    }
 }
 
 pub type ResolvedInternalFunctionDefinitionRef = Rc<ResolvedInternalFunctionDefinition>;
@@ -291,11 +297,21 @@ pub struct ResolvedPostfixOperator {
     pub resolved_type: ResolvedType,
 }
 
-#[derive(Debug)]
+#[derive()]
 pub struct ResolvedInternalFunctionCall {
     pub arguments: Vec<ResolvedExpression>,
     pub function_definition: ResolvedInternalFunctionDefinitionRef,
     pub function_expression: Box<ResolvedExpression>,
+}
+
+impl Debug for ResolvedInternalFunctionCall {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "InFuncCall({:?} {:?})",
+            self.function_expression, self.arguments
+        )
+    }
 }
 
 #[derive(Debug)]

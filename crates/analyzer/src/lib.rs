@@ -721,7 +721,11 @@ impl<'a> Resolver<'a> {
             module_path: ResolvedModulePath(vec![]),
             number: parent_number,
         };
-        let parent_ref = self.lookup.add_enum_type(&enum_parent)?;
+
+        let enum_type_str = self.get_text(&enum_type_name).to_string();
+        let parent_ref =
+            self.lookup
+                .add_enum_type(&*self.path_str, &*enum_type_str, enum_parent)?;
 
         for variant_type in ast_variants {
             let mut container_number: Option<TypeNumber> = None;
@@ -819,7 +823,7 @@ impl<'a> Resolver<'a> {
 
     pub fn insert_definition(
         &mut self,
-        resolved_definition: ResolvedDefinition,
+        resolved_definition: &ResolvedDefinition,
     ) -> Result<(), ResolveError> {
         match resolved_definition {
             ResolvedDefinition::EnumType(_parent_enum_ref, variants) => {
@@ -834,8 +838,8 @@ impl<'a> Resolver<'a> {
             ResolvedDefinition::ExternalFunction() => {}
             ResolvedDefinition::ImplType(_resolved_type) => {}
             ResolvedDefinition::FunctionDef(function_def) => match function_def {
-                ResolvedFunction::Internal(_internal_fn) => {
-                    // TODO:  self.lookup.add_internal_function_ref(&internal_fn)?;
+                ResolvedFunction::Internal(internal_fn) => {
+                    //self.lookup.add_internal_function_ref(internal_fn)?;
                 }
                 ResolvedFunction::External(_resolved_external_function_def_ref) => {
                     /* TODO:
@@ -959,7 +963,14 @@ impl<'a> Resolver<'a> {
                     name: ResolvedLocalIdentifier(self.to_node(&function_data.declaration.name)),
                 };
 
-                ResolvedFunction::Internal(Rc::new(internal))
+                let function_ref = Rc::new(internal);
+                let function_name = self.get_text(&function_data.declaration.name).to_string();
+                self.lookup.add_internal_function_ref(
+                    &*self.path_str,
+                    &*function_name,
+                    &function_ref.clone(),
+                )?;
+                ResolvedFunction::Internal(function_ref)
             }
             Function::External(ast_signature) => {
                 let parameters = self.resolve_parameters(&ast_signature.params)?;

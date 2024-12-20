@@ -1,6 +1,6 @@
 use crate::ns::ResolvedModuleNamespace;
-use crate::NamespaceError;
-use std::cell::RefCell;
+use crate::{NamespaceError, ResolveError};
+use std::cell::{Ref, RefCell, RefMut};
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
@@ -9,12 +9,12 @@ use swamp_script_semantic::{
     ResolvedDefinition, ResolvedEnumType, ResolvedEnumTypeRef, ResolvedEnumVariantType,
     ResolvedEnumVariantTypeRef, ResolvedExternalFunctionDefinitionRef,
     ResolvedInternalFunctionDefinitionRef, ResolvedModulePath, ResolvedModulePathRef,
-    ResolvedRustTypeRef, ResolvedStatement, ResolvedStructTypeRef, ResolvedType,
+    ResolvedRustTypeRef, ResolvedStatement, ResolvedStructTypeRef, ResolvedType, SemanticError,
 };
 
 #[derive(Debug)]
 pub struct ResolvedModules {
-    pub modules: HashMap<ResolvedModulePath, ResolvedModuleRef>,
+    pub modules: HashMap<Vec<String>, ResolvedModuleRef>,
 }
 
 impl Default for ResolvedModules {
@@ -64,6 +64,20 @@ impl ResolvedModules {
         Self {
             modules: HashMap::new(),
         }
+    }
+
+    pub fn add_empty_module(&mut self, module_path: &[String]) -> ResolvedModuleRef {
+        let module = ResolvedModule {
+            definitions: vec![],
+            statements: vec![],
+            namespace: ResolvedModuleNamespace::new(ResolvedModulePath(vec![])),
+        };
+        let module_ref = Rc::new(RefCell::new(module));
+
+        self.modules
+            .insert(Vec::from(module_path), module_ref.clone());
+
+        module_ref
     }
     /*
 
@@ -117,20 +131,65 @@ impl ResolvedModules {
         todo!()
     }
 
-    pub fn get_external_function_declaration(
-        &self,
-        _path: &[String],
-        _name: &str,
-    ) -> Option<ResolvedExternalFunctionDefinitionRef> {
-        todo!()
+    fn get_module(&self, path: &[String]) -> Option<ResolvedModuleRef> {
+        self.modules.get(path).cloned()
     }
 
+    fn get_namespace(&self, path: &[String]) -> Option<Ref<ResolvedModuleNamespace>> {
+        self.modules
+            .get(path)
+            .map(|module| Ref::map(module.borrow(), |m| &m.namespace))
+    }
+
+    fn get_module_mut(&self, path: &[String]) -> Option<ResolvedModuleRef> {
+        self.modules.get(path).cloned()
+    }
+
+    fn get_namespace_mut(&mut self, path: &[String]) -> Option<RefMut<ResolvedModuleNamespace>> {
+        self.modules
+            .get(path)
+            .map(|module| RefMut::map(module.borrow_mut(), |m| &mut m.namespace))
+    }
+
+    pub fn add_internal_function_ref(
+        &mut self,
+        path: &[String],
+        name: &str,
+        internal_func: &ResolvedInternalFunctionDefinitionRef,
+    ) -> Result<(), SemanticError> {
+        let mut namespace = self
+            .get_namespace_mut(path)
+            .expect("tried to insert in a wrong module path");
+
+        namespace.add_internal_function_ref(name, internal_func)?;
+
+        Ok(())
+    }
+
+    #[must_use]
     pub fn get_internal_function(
         &self,
-        _path: &[String],
-        _name: &str,
+        path: &[String],
+        name: &str,
     ) -> Option<ResolvedInternalFunctionDefinitionRef> {
-        todo!()
+        let namespace = self.get_namespace(path);
+        namespace.map_or_else(
+            || None,
+            |found_ns| found_ns.get_internal_function(name).cloned(),
+        )
+    }
+
+    #[must_use]
+    pub fn get_external_function_declaration(
+        &self,
+        path: &[String],
+        name: &str,
+    ) -> Option<ResolvedExternalFunctionDefinitionRef> {
+        let namespace = self.get_namespace(path);
+        namespace.map_or_else(
+            || None,
+            |found_ns| found_ns.get_external_function_declaration(name).cloned(),
+        )
     }
 
     pub fn get_rust_type(&self, _name: &str) -> Option<ResolvedRustTypeRef> {
@@ -138,10 +197,18 @@ impl ResolvedModules {
     }
 
     pub fn add_enum_type(
-        &self,
-        _enum_type: &ResolvedEnumType,
-    ) -> Result<ResolvedEnumTypeRef, NamespaceError> {
-        todo!()
+        &mut self,
+        path: &[String],
+        name: &str,
+        enum_type: ResolvedEnumType,
+    ) -> Result<ResolvedEnumTypeRef, ResolveError> {
+        let mut namespace = self
+            .get_namespace_mut(path)
+            .expect("tried to insert in a wrong module path");
+        let enum_type_ref = Rc::new(enum_type);
+        namespace.add_enum_type(name, enum_type_ref.clone())?;
+
+        Ok(enum_type_ref)
     }
 
     pub fn add_enum_variant(
@@ -152,13 +219,6 @@ impl ResolvedModules {
     }
 
     pub fn add_struct_type(&self, _struct_type: StructType) -> Result<(), NamespaceError> {
-        todo!()
-    }
-
-    pub fn add_internal_function_ref(
-        &self,
-        _internal_func: ResolvedInternalFunctionDefinitionRef,
-    ) -> Result<(), NamespaceError> {
         todo!()
     }
 }

@@ -93,3 +93,45 @@ fn struct_def() {
 ",
     );
 }
+
+#[test_log::test]
+fn add_fn() {
+    check(
+        r"
+fn add(a: Int, b: Int) -> Int {
+    a+b
+}
+add(2, 3)
+        ",
+        r"
+FunctionDef(Internal(InternalFuncDef))
+---
+Expression(FunctionInternalCall(InFuncCall(InternalFunctionAccess(InternalFuncDef) [Literal(IntLiteral(2, <47:1>, ResolvedIntType)), Literal(IntLiteral(3, <50:1>, ResolvedIntType))])))
+   
+
+",
+    );
+}
+
+#[test_log::test]
+fn add_enum() {
+    check(
+        r"
+        
+enum Test {
+    Simple,
+    Tuple(Int, Int)
+}
+
+a = Test::Simple
+
+        ",
+        r"
+FunctionDef(Internal(InternalFuncDef))
+---
+Expression(FunctionInternalCall(InFuncCall(InternalFunctionAccess(InternalFuncDef) [Literal(IntLiteral(2, <47:1>, ResolvedIntType)), Literal(IntLiteral(3, <50:1>, ResolvedIntType))])))
+   
+
+",
+    );
+}

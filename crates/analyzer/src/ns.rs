@@ -3,13 +3,15 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
+use crate::ResolveError;
 use seq_map::SeqMap;
 use std::fmt::Debug;
 use std::rc::Rc;
 use swamp_script_semantic::{
-    ResolvedEnumTypeRef, ResolvedEnumVariantTypeRef, ResolvedExternalFunctionDefinitionRef,
-    ResolvedInternalFunctionDefinitionRef, ResolvedModulePath, ResolvedRustType,
-    ResolvedRustTypeRef, ResolvedStructTypeRef, ResolvedType, SemanticError,
+    ResolvedEnumType, ResolvedEnumTypeRef, ResolvedEnumVariantTypeRef,
+    ResolvedExternalFunctionDefinitionRef, ResolvedInternalFunctionDefinitionRef,
+    ResolvedModulePath, ResolvedRustType, ResolvedRustTypeRef, ResolvedStructTypeRef, ResolvedType,
+    SemanticError, TypeNumber,
 };
 
 #[derive(Debug, Clone)]
@@ -205,14 +207,6 @@ impl ResolvedModuleNamespace {
             Ok(function_ref)
         }
 
-        pub fn add_internal_function_ref(
-            &mut self,
-            function_ref: &ResolvedInternalFunctionDefinitionRef,
-        ) -> Result<(), SemanticError> {
-            self.internal_functions
-                .insert(function_ref.name.text.clone(), function_ref.clone())?;
-            Ok(())
-        }
 
         pub fn add_external_function_declaration(
             &mut self,
@@ -247,23 +241,7 @@ impl ResolvedModuleNamespace {
             Ok(enum_variant_ref)
         }
 
-        pub fn create_enum_type(
-            &mut self,
-            enum_type_name: &ResolvedLocalTypeIdentifier,
-            number: TypeNumber,
-        ) -> Result<ResolvedEnumTypeRef, SemanticError> {
-            let resolved_parent_type =
-                ResolvedEnumType::new(enum_type_name.clone(), self.path.clone(), number);
 
-            let enum_type_ref = Rc::new(resolved_parent_type);
-
-            self.enum_types.insert(
-                LocalTypeName(enum_type_name.text.clone()),
-                enum_type_ref.clone(),
-            )?;
-
-            Ok(enum_type_ref)
-        }
 
         pub fn get_or_create_tuple(&mut self, types: Vec<ResolvedType>) -> ResolvedTupleTypeRef {
             // TODO: for now, just create new types, in the future we should check if we can reuse a type
@@ -297,6 +275,29 @@ impl ResolvedModuleNamespace {
         }
     */
 
+    pub fn add_enum_type(
+        &mut self,
+        enum_type_name: &str,
+        enum_type_ref: ResolvedEnumTypeRef,
+    ) -> Result<ResolvedEnumTypeRef, ResolveError> {
+        self.enum_types
+            .insert(enum_type_name.to_string(), enum_type_ref.clone())?;
+
+        Ok(enum_type_ref)
+    }
+
+    pub fn add_internal_function_ref(
+        &mut self,
+        name: &str,
+        function_ref: &ResolvedInternalFunctionDefinitionRef,
+    ) -> Result<(), SemanticError> {
+        self.internal_functions
+            .insert(name.to_string(), function_ref.clone())
+            .expect("todo: add seqmap error handling");
+        Ok(())
+    }
+
+    #[must_use]
     pub fn get_enum_variant_type_str(
         &self,
         enum_name: &str,
@@ -307,6 +308,7 @@ impl ResolvedModuleNamespace {
         result
     }
 
+    #[must_use]
     pub fn get_internal_function(
         &self,
         name: &str,
@@ -314,6 +316,7 @@ impl ResolvedModuleNamespace {
         self.internal_functions.get(&name.to_string())
     }
 
+    #[must_use]
     pub fn get_external_function_declaration(
         &self,
         name: &str,
