@@ -377,9 +377,17 @@ pub struct FieldType {
 
 #[derive(Debug)]
 pub enum EnumVariantLiteral {
-    Simple(QualifiedTypeIdentifier),
-    Tuple(QualifiedTypeIdentifier, Vec<Expression>),
-    Struct(QualifiedTypeIdentifier, Vec<FieldExpression>),
+    Simple(QualifiedTypeIdentifier, LocalTypeIdentifier),
+    Tuple(
+        QualifiedTypeIdentifier,
+        LocalTypeIdentifier,
+        Vec<Expression>,
+    ),
+    Struct(
+        QualifiedTypeIdentifier,
+        LocalTypeIdentifier,
+        Vec<FieldExpression>,
+    ),
 }
 
 #[derive(Debug, Default)]

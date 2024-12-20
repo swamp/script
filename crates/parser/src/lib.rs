@@ -1389,7 +1389,7 @@ impl AstParser {
 
         // Parse variant name
         let variant_pair = Self::expect_next(&mut inner, Rule::type_identifier)?;
-        let _variant_type_identifier = LocalTypeIdentifier::new(self.to_node(&variant_pair));
+        let variant_type_identifier = LocalTypeIdentifier::new(self.to_node(&variant_pair));
 
         // Parse fields if they exist
         let enum_variant_literal = if let Some(fields_pair) = inner.next() {
@@ -1409,7 +1409,7 @@ impl AstParser {
                             fields.push(anonym_field);
                         }
                     }
-                    EnumVariantLiteral::Struct(enum_type, fields)
+                    EnumVariantLiteral::Struct(enum_type, variant_type_identifier, fields)
                 }
                 Rule::tuple_fields => {
                     let mut expressions = vec![];
@@ -1417,7 +1417,7 @@ impl AstParser {
                         let field_value = self.parse_expression(&field)?;
                         expressions.push(field_value);
                     }
-                    EnumVariantLiteral::Tuple(enum_type, expressions)
+                    EnumVariantLiteral::Tuple(enum_type, variant_type_identifier, expressions)
                 }
                 _ => {
                     return Err(
@@ -1426,7 +1426,7 @@ impl AstParser {
                 }
             }
         } else {
-            EnumVariantLiteral::Simple(enum_type)
+            EnumVariantLiteral::Simple(enum_type, variant_type_identifier)
         };
 
         Ok(Literal::EnumVariant(enum_variant_literal))

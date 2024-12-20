@@ -8,10 +8,10 @@ use seq_map::SeqMap;
 use std::fmt::Debug;
 use std::rc::Rc;
 use swamp_script_semantic::{
-    ResolvedEnumType, ResolvedEnumTypeRef, ResolvedEnumVariantTypeRef,
-    ResolvedExternalFunctionDefinitionRef, ResolvedInternalFunctionDefinitionRef,
-    ResolvedModulePath, ResolvedRustType, ResolvedRustTypeRef, ResolvedStructTypeRef, ResolvedType,
-    SemanticError, TypeNumber,
+    ResolvedEnumTypeRef, ResolvedEnumVariantType, ResolvedEnumVariantTypeRef,
+    ResolvedExternalFunctionDefinitionRef, ResolvedInternalFunctionDefinition,
+    ResolvedInternalFunctionDefinitionRef, ResolvedRustType, ResolvedRustTypeRef,
+    ResolvedStructTypeRef, ResolvedType, SemanticError,
 };
 
 #[derive(Debug, Clone)]
@@ -35,7 +35,7 @@ pub struct ResolvedModuleNamespace {
     #[allow(unused)]
     type_aliases: SeqMap<String, ResolvedType>,
 
-    pub path: ResolvedModulePath,
+    pub path: Vec<String>,
 }
 
 impl ResolvedModuleNamespace {
@@ -132,7 +132,7 @@ impl ResolvedModuleNamespace {
 
 impl ResolvedModuleNamespace {
     #[must_use]
-    pub fn new(path: ResolvedModulePath) -> Self {
+    pub fn new(path: &[String]) -> Self {
         Self {
             structs: Default::default(),
             build_in_rust_types: Default::default(),
@@ -141,7 +141,7 @@ impl ResolvedModuleNamespace {
             internal_functions: Default::default(),
             external_function_declarations: Default::default(),
             type_aliases: Default::default(),
-            path,
+            path: path.to_vec(),
         }
     }
 
@@ -228,18 +228,7 @@ impl ResolvedModuleNamespace {
             Ok(function_ref)
         }
 
-        pub fn add_enum_variant(
-            &mut self,
-            enum_variant: ResolvedEnumVariantType,
-        ) -> Result<ResolvedEnumVariantTypeRef, SemanticError> {
-            let enum_variant_ref = Rc::new(enum_variant);
-            let complete_name = &enum_variant_ref.complete_name();
-            self.enum_variant_types.insert(
-                LocalTypeName(complete_name.clone()),
-                enum_variant_ref.clone(),
-            )?;
-            Ok(enum_variant_ref)
-        }
+
 
 
 
@@ -251,10 +240,6 @@ impl ResolvedModuleNamespace {
             tuple_type
         }
 
-        pub fn get_struct(&self, name: &ResolvedLocalTypeIdentifier) -> Option<&ResolvedStructTypeRef> {
-            // TODO: Add scope support, for now just ignore it
-            self.structs.get(&(&name.text).into())
-        }
 
         pub fn get_local_struct(
             &self,
@@ -263,9 +248,7 @@ impl ResolvedModuleNamespace {
             self.structs.get(&(&name.text).into())
         }
 
-        pub fn get_enum(&self, name: &ResolvedLocalTypeIdentifier) -> Option<&ResolvedEnumTypeRef> {
-            self.enum_types.get(&(&name.text).into())
-        }
+
 
         pub fn get_built_in_rust_type(
             &self,
@@ -285,16 +268,41 @@ impl ResolvedModuleNamespace {
 
         Ok(enum_type_ref)
     }
+    pub fn add_enum_variant(
+        &mut self,
+        enum_type_name: &str,
+        enum_variant_name: &str,
+        enum_variant: ResolvedEnumVariantType,
+    ) -> Result<ResolvedEnumVariantTypeRef, ResolveError> {
+        let enum_variant_ref = Rc::new(enum_variant);
+        let full_name = format!("{}::{}", enum_type_name, enum_variant_name);
+        self.enum_variant_types
+            .insert(full_name, enum_variant_ref.clone())?;
+        Ok(enum_variant_ref)
+    }
 
-    pub fn add_internal_function_ref(
+    pub fn add_internal_function(
         &mut self,
         name: &str,
-        function_ref: &ResolvedInternalFunctionDefinitionRef,
-    ) -> Result<(), SemanticError> {
+        function: ResolvedInternalFunctionDefinition,
+    ) -> Result<ResolvedInternalFunctionDefinitionRef, ResolveError> {
+        let function_ref = Rc::new(function);
         self.internal_functions
             .insert(name.to_string(), function_ref.clone())
             .expect("todo: add seqmap error handling");
-        Ok(())
+        Ok(function_ref)
+    }
+
+    pub fn get_struct(&self, name: &str) -> Option<&ResolvedStructTypeRef> {
+        self.structs.get(&name.to_string())
+    }
+
+    pub fn get_enum(&self, name: &str) -> Option<&ResolvedEnumTypeRef> {
+        self.enum_types.get(&name.to_string())
+    }
+
+    pub fn get_rust_type(&self, name: &str) -> Option<&ResolvedRustTypeRef> {
+        self.build_in_rust_types.get(&name.to_string())
     }
 
     #[must_use]

@@ -127,10 +127,10 @@ a = Test::Simple
 
         ",
         r"
-FunctionDef(Internal(InternalFuncDef))
+        
+EnumType(ResolvedEnumType { name: ResolvedLocalTypeIdentifier(<15:4>), module_path: ResolvedModulePath([]), number: 1 }, [ResolvedEnumVariantType { owner: ResolvedEnumType { name: ResolvedLocalTypeIdentifier(<15:4>), module_path: ResolvedModulePath([]), number: 1 }, data: Nothing, name: ResolvedLocalTypeIdentifier(<26:6>), number: 0 }, ResolvedEnumVariantType { owner: ResolvedEnumType { name: ResolvedLocalTypeIdentifier(<15:4>), module_path: ResolvedModulePath([]), number: 1 }, data: Tuple(ResolvedEnumVariantTupleType { common: CommonEnumVariantType { number: 2, module_path: ResolvedModulePath([]), variant_name: ResolvedLocalTypeIdentifier(<38:5>), enum_ref: ResolvedEnumType { name: ResolvedLocalTypeIdentifier(<15:4>), module_path: ResolvedModulePath([]), number: 1 } }, fields_in_order: [Int(ResolvedIntType), Int(ResolvedIntType)] }), name: ResolvedLocalTypeIdentifier(<38:5>), number: 2 }])
 ---
-Expression(FunctionInternalCall(InFuncCall(InternalFunctionAccess(InternalFuncDef) [Literal(IntLiteral(2, <47:1>, ResolvedIntType)), Literal(IntLiteral(3, <50:1>, ResolvedIntType))])))
-   
+Expression(InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <57:1>, resolved_type: Enum(ResolvedEnumType { name: ResolvedLocalTypeIdentifier(<15:4>), module_path: ResolvedModulePath([]), number: 1 }), mutable_node: None, scope_index: 0, variable_index: 0 }], expression: Literal(EnumVariantLiteral(ResolvedEnumVariantType { owner: ResolvedEnumType { name: ResolvedLocalTypeIdentifier(<15:4>), module_path: ResolvedModulePath([]), number: 1 }, data: Nothing, name: ResolvedLocalTypeIdentifier(<26:6>), number: 0 }, Nothing)) }))
 
 ",
     );

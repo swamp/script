@@ -800,15 +800,12 @@ pub struct ResolvedStructType {
     pub anon_struct_type: ResolvedAnonymousStructType,
 
     // Resolved
-    pub module_path: ResolvedModulePathRef,
     pub number: TypeNumber,
     pub functions: SeqMap<String, ResolvedFunctionRef>,
 }
 
 impl ResolvedStructType {
     pub fn new(
-        // TODO: defined_in_module: ResolvedModuleRef,
-        module_path: ResolvedModulePathRef,
         name: ResolvedLocalTypeIdentifier,
         anon_struct_type: ResolvedAnonymousStructType,
         number: TypeNumber,
@@ -816,7 +813,6 @@ impl ResolvedStructType {
         Self {
             number,
             //defined_in_module,
-            module_path,
             anon_struct_type,
             name,
             functions: SeqMap::default(),
@@ -1037,7 +1033,7 @@ impl ImplType {
 #[derive(Debug)]
 pub enum ResolvedDefinition {
     StructType(ResolvedStructType),
-    EnumType(ResolvedEnumTypeRef, Vec<ResolvedEnumVariantType>),
+    EnumType(ResolvedEnumTypeRef, Vec<ResolvedEnumVariantTypeRef>),
     Function(),
     ExternalFunction(),
     ImplType(ResolvedType),

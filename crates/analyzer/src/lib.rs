@@ -2,10 +2,12 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
+pub mod lookup;
 pub mod modules;
 pub mod ns;
 pub mod prelude;
 
+use crate::lookup::NameLookup;
 use crate::modules::ResolvedModules;
 use seq_map::{SeqMap, SeqMapError};
 use std::cell::RefCell;
@@ -333,41 +335,56 @@ impl BlockScope {
     }
 }
 
-pub struct Resolver<'a> {
+pub struct SharedState<'a> {
     pub types: &'a ResolvedProgramTypes,
     pub state: &'a mut ResolvedProgramState,
-    pub lookup: &'a mut ResolvedModules,
+    pub lookup: &'a mut NameLookup<'a>,
     pub source_map: &'a SourceMap,
+    pub file_id: FileId,
+}
+
+pub struct FunctionScopeState {
     pub block_scope_stack: Vec<BlockScope>,
     pub return_type: ResolvedType,
-    //  pub path: &'a ResolvedModulePathRef,
-    pub path_str: Vec<String>,
-    file_id: FileId,
+}
+
+impl FunctionScopeState {
+    pub fn new(return_type: ResolvedType) -> Self {
+        Self {
+            block_scope_stack: vec![BlockScope::new()],
+            return_type,
+        }
+    }
+}
+
+pub struct Resolver<'a> {
+    shared: SharedState<'a>,
+    scope: FunctionScopeState,
 }
 
 impl<'a> Resolver<'a> {
     pub fn new(
         types: &'a ResolvedProgramTypes,
         state: &'a mut ResolvedProgramState,
-        lookup: &'a mut ResolvedModules,
+        lookup: &'a mut NameLookup<'a>,
         source_map: &'a SourceMap,
-        //path: &'a ResolvedModulePathRef,
-        path_str: Vec<String>,
         file_id: FileId,
     ) -> Self {
-        let mut scope_stack = Vec::new();
-        scope_stack.push(BlockScope::new());
-        Self {
+        let shared = SharedState {
             types,
             state,
             lookup,
             source_map,
-            block_scope_stack: scope_stack,
-            return_type: types.unit_type(),
-            // path,
-            path_str,
             file_id,
+        };
+        Self {
+            scope: FunctionScopeState::new(ResolvedType::Any),
+            shared,
         }
+    }
+
+    fn start_function(&mut self, return_type: ResolvedType) {
+        self.scope = FunctionScopeState::new(return_type);
     }
 
     pub fn resolve_array_type(
@@ -384,7 +401,7 @@ impl<'a> Resolver<'a> {
 
         let rc_array = Rc::new(original_array_type);
 
-        self.state.array_types.push(rc_array.clone());
+        self.shared.state.array_types.push(rc_array.clone());
 
         Ok(rc_array)
     }
@@ -528,11 +545,11 @@ impl<'a> Resolver<'a> {
     pub fn resolve_type(&mut self, ast_type: &Type) -> Result<ResolvedType, ResolveError> {
         let resolved = match ast_type {
             Type::Any(_) => ResolvedType::Any,
-            Type::Int(_) => ResolvedType::Int(self.types.int_type.clone()),
-            Type::Float(_) => ResolvedType::Float(self.types.float_type.clone()),
-            Type::String(_) => ResolvedType::String(self.types.string_type.clone()),
-            Type::Bool(_) => ResolvedType::Bool(self.types.bool_type.clone()),
-            Type::Unit(_) => ResolvedType::Unit(self.types.unit_type.clone()),
+            Type::Int(_) => ResolvedType::Int(self.shared.types.int_type.clone()),
+            Type::Float(_) => ResolvedType::Float(self.shared.types.float_type.clone()),
+            Type::String(_) => ResolvedType::String(self.shared.types.string_type.clone()),
+            Type::Bool(_) => ResolvedType::Bool(self.shared.types.bool_type.clone()),
+            Type::Unit(_) => ResolvedType::Unit(self.shared.types.unit_type.clone()),
             Type::Struct(ast_struct) => {
                 let (display_type, _struct_ref) = self.get_struct_types(ast_struct)?;
                 display_type
@@ -571,22 +588,28 @@ impl<'a> Resolver<'a> {
 
     fn get_text(&self, ast_node: &swamp_script_ast::Node) -> &str {
         let span = Span {
-            file_id: self.file_id,
+            file_id: self.shared.file_id,
             offset: ast_node.span.offset,
             length: ast_node.span.length,
         };
-        self.source_map
-            .get_span_source(self.file_id, span.offset as usize, span.length as usize)
+        self.shared.source_map.get_span_source(
+            self.shared.file_id,
+            span.offset as usize,
+            span.length as usize,
+        )
     }
 
     fn get_text_resolved(&self, resolved_node: &ResolvedNode) -> &str {
         let span = Span {
-            file_id: self.file_id,
+            file_id: self.shared.file_id,
             offset: resolved_node.span.offset,
             length: resolved_node.span.length,
         };
-        self.source_map
-            .get_span_source(self.file_id, span.offset as usize, span.length as usize)
+        self.shared.source_map.get_span_source(
+            self.shared.file_id,
+            span.offset as usize,
+            span.length as usize,
+        )
     }
 
     fn get_path(&self, ident: &QualifiedTypeIdentifier) -> (Vec<String>, String) {
@@ -608,19 +631,20 @@ impl<'a> Resolver<'a> {
     ) -> Result<ResolvedType, ResolveError> {
         let (path, text) = self.get_path(&type_name_to_find);
 
-        let resolved_type = if let Some(aliased_type) = self.lookup.get_type_alias(&path, &text) {
-            aliased_type.clone()
-        } else if let Some(found) = self.lookup.get_struct(&path, &text) {
-            ResolvedType::Struct(found.clone())
-        } else if let Some(found) = self.lookup.get_enum(&path, &text) {
-            ResolvedType::Enum(found.clone())
-        } else if let Some(found) = self.lookup.get_rust_type(&text) {
-            ResolvedType::RustType(found.clone())
-        } else {
-            Err(ResolveError::UnknownTypeReference(
-                self.to_node(&type_name_to_find.name.0),
-            ))?
-        };
+        let resolved_type =
+            if let Some(aliased_type) = self.shared.lookup.get_type_alias(&path, &text) {
+                aliased_type.clone()
+            } else if let Some(found) = self.shared.lookup.get_struct(&path, &text) {
+                ResolvedType::Struct(found.clone())
+            } else if let Some(found) = self.shared.lookup.get_enum(&path, &text) {
+                ResolvedType::Enum(found.clone())
+            } else if let Some(found) = self.shared.lookup.get_rust_type(&path, &text) {
+                ResolvedType::RustType(found.clone())
+            } else {
+                Err(ResolveError::UnknownTypeReference(
+                    self.to_node(&type_name_to_find.name.0),
+                ))?
+            };
 
         Ok(resolved_type)
     }
@@ -630,7 +654,7 @@ impl<'a> Resolver<'a> {
         type_name: &QualifiedTypeIdentifier,
     ) -> Result<ResolvedStructTypeRef, ResolveError> {
         let (path, name_string) = self.get_path(&type_name);
-        if let Some(aliased_type) = self.lookup.get_type_alias(&path, &name_string) {
+        if let Some(aliased_type) = self.shared.lookup.get_type_alias(&path, &name_string) {
             let unaliased = unalias_type(aliased_type.clone());
             match unaliased {
                 ResolvedType::Struct(struct_ref) => return Ok(struct_ref.clone()),
@@ -638,10 +662,13 @@ impl<'a> Resolver<'a> {
             }
         }
 
-        self.lookup.get_struct(&path, &*name_string).map_or_else(
-            || Err(ResolveError::UnknownStructTypeReference(type_name.clone())),
-            |found| Ok(found.clone()),
-        )
+        self.shared
+            .lookup
+            .get_struct(&path, &*name_string)
+            .map_or_else(
+                || Err(ResolveError::UnknownStructTypeReference(type_name.clone())),
+                |found| Ok(found.clone()),
+            )
     }
 
     pub fn find_struct_type_local_mut(
@@ -652,17 +679,6 @@ impl<'a> Resolver<'a> {
             LocalTypeIdentifier(type_name.clone()),
             vec![],
         ))
-    }
-
-    fn new_resolver(&mut self) -> Resolver {
-        Resolver::new(
-            &self.types,
-            &mut self.state,
-            self.lookup,
-            self.source_map,
-            self.path_str.clone(),
-            self.file_id,
-        )
     }
 
     pub fn resolve_struct_type_definition(
@@ -694,27 +710,22 @@ impl<'a> Resolver<'a> {
             defined_fields: resolved_fields,
         };
 
-        if let Some(module_ref) = self.lookup.find_module(&self.path_str) {
-            let resolved_struct = ResolvedStructType::new(
-                module_ref.clone(),
-                ResolvedLocalTypeIdentifier(self.to_node(&ast_struct.identifier.0)),
-                resolved_anon_struct,
-                self.state.allocate_number(),
-            );
-            Ok(resolved_struct)
-        } else {
-            Err(ResolveError::InternalError("can not find own module"))
-        }
+        let resolved_struct = ResolvedStructType::new(
+            ResolvedLocalTypeIdentifier(self.to_node(&ast_struct.identifier.0)),
+            resolved_anon_struct,
+            self.shared.state.allocate_number(),
+        );
+        Ok(resolved_struct)
     }
 
     fn resolve_enum_type_definition(
         &mut self,
         enum_type_name: &Node,
         ast_variants: &Vec<EnumVariantType>,
-    ) -> Result<(ResolvedEnumTypeRef, Vec<ResolvedEnumVariantType>), ResolveError> {
+    ) -> Result<(ResolvedEnumTypeRef, Vec<ResolvedEnumVariantTypeRef>), ResolveError> {
         let mut resolved_variants = Vec::new();
 
-        let parent_number = self.state.allocate_number();
+        let parent_number = self.shared.state.allocate_number();
 
         let enum_parent = ResolvedEnumType {
             name: ResolvedLocalTypeIdentifier(self.to_node(&enum_type_name)),
@@ -723,9 +734,10 @@ impl<'a> Resolver<'a> {
         };
 
         let enum_type_str = self.get_text(&enum_type_name).to_string();
-        let parent_ref =
-            self.lookup
-                .add_enum_type(&*self.path_str, &*enum_type_str, enum_parent)?;
+        let parent_ref = self
+            .shared
+            .lookup
+            .add_enum_type(&*enum_type_str.clone(), enum_parent)?;
 
         for variant_type in ast_variants {
             let mut container_number: Option<TypeNumber> = None;
@@ -747,7 +759,7 @@ impl<'a> Resolver<'a> {
                         vec.push(resolved_type)
                     }
 
-                    let number = self.state.allocate_number();
+                    let number = self.shared.state.allocate_number();
                     container_number = Some(number);
 
                     let common = CommonEnumVariantType {
@@ -788,7 +800,7 @@ impl<'a> Resolver<'a> {
                         })?;
                     }
 
-                    let number = self.state.allocate_number();
+                    let number = self.shared.state.allocate_number();
                     container_number = Some(number);
 
                     let common = CommonEnumVariantType {
@@ -804,46 +816,56 @@ impl<'a> Resolver<'a> {
                             defined_fields: fields,
                         },
                     };
+
                     let enum_variant_struct_type_ref = Rc::new(enum_variant_struct_type);
 
                     ResolvedEnumVariantContainerType::Struct(enum_variant_struct_type_ref)
                 }
             };
 
-            resolved_variants.push(ResolvedEnumVariantType {
+            let variant_name_str = self.get_text(&variant_name_node).to_string();
+
+            let variant_type = ResolvedEnumVariantType {
                 owner: parent_ref.clone(),
                 data: container,
                 name: ResolvedLocalTypeIdentifier(self.to_node(&variant_name_node)),
                 number: container_number.unwrap_or(0),
-            })
+            };
+
+            let variant_type_ref = self.shared.lookup.add_enum_variant(
+                &enum_type_str,
+                &variant_name_str,
+                variant_type,
+            )?;
+
+            resolved_variants.push(variant_type_ref);
         }
 
         Ok((parent_ref.clone(), resolved_variants))
     }
 
+    /*
     pub fn insert_definition(
         &mut self,
         resolved_definition: &ResolvedDefinition,
     ) -> Result<(), ResolveError> {
         match resolved_definition {
-            ResolvedDefinition::EnumType(_parent_enum_ref, variants) => {
-                for variant in variants {
-                    self.lookup.add_enum_variant(&variant)?;
-                }
+            ResolvedDefinition::EnumType(parent_enum_ref, variants) => {
+
             }
             ResolvedDefinition::StructType(_struct_type) => {
-                // TODO:  self.lookup.add_struct_type(struct_type)?;
+                // TODO:  self.shared.lookup.add_struct_type(struct_type)?;
             }
             ResolvedDefinition::Function() => {}
             ResolvedDefinition::ExternalFunction() => {}
             ResolvedDefinition::ImplType(_resolved_type) => {}
             ResolvedDefinition::FunctionDef(function_def) => match function_def {
                 ResolvedFunction::Internal(internal_fn) => {
-                    //self.lookup.add_internal_function_ref(internal_fn)?;
+                    //self.shared.lookup.add_internal_function_ref(internal_fn)?;
                 }
                 ResolvedFunction::External(_resolved_external_function_def_ref) => {
                     /* TODO:
-                       self.lookup.add_external_function_declaration_ref(
+                       self.shared.lookup.add_external_function_declaration_ref(
 
                            resolved_external_function_def_ref,
                        )?;
@@ -854,7 +876,7 @@ impl<'a> Resolver<'a> {
             ResolvedDefinition::Alias(resolved_type) => match resolved_type {
                 ResolvedType::Alias(_name, _resolved_type) => {
                     /* TODO:
-                    self.lookup
+                    self.shared.lookup
                         .add_type_alias(&name.0.clone(), *resolved_type.clone())?;
 
                      */
@@ -864,6 +886,22 @@ impl<'a> Resolver<'a> {
             ResolvedDefinition::Comment(_) => {}
         }
         Ok(())
+    }
+
+     */
+
+    fn resolve_return_type(&mut self, function: &Function) -> Result<ResolvedType, ResolveError> {
+        let ast_return_type = match function {
+            Function::Internal(x) => &x.declaration.return_type,
+            Function::External(x) => &x.return_type,
+        };
+
+        let resolved_return_type = match ast_return_type {
+            None => self.shared.types.unit_type(),
+            Some(x) => self.resolve_type(x)?,
+        };
+
+        Ok(resolved_return_type)
     }
 
     pub fn resolve_definition(
@@ -880,8 +918,9 @@ impl<'a> Resolver<'a> {
                 ResolvedDefinition::EnumType(parent, variants)
             }
             Definition::FunctionDef(function) => {
-                let mut inner_resolver = self.new_resolver();
-                inner_resolver.resolve_function_definition(&function)?
+                let resolved_return_type = self.resolve_return_type(&function)?;
+                self.start_function(resolved_return_type);
+                self.resolve_function_definition(&function)?
             }
             Definition::ImplDef(type_identifier, functions) => {
                 let attached_type_type =
@@ -934,10 +973,10 @@ impl<'a> Resolver<'a> {
                 let return_type = if let Some(found) = &function_data.declaration.return_type {
                     self.resolve_type(&found)?
                 } else {
-                    self.types.unit_type()
+                    self.shared.types.unit_type()
                 };
 
-                self.return_type = return_type.clone();
+                self.scope.return_type = return_type.clone();
 
                 // Set up scope for function body
                 for param in &parameters {
@@ -951,7 +990,7 @@ impl<'a> Resolver<'a> {
                 let statements =
                     self.resolve_statements_in_function(&function_data.body, &return_type)?;
 
-                self.return_type = self.types.unit_type();
+                self.scope.return_type = self.shared.types.unit_type();
 
                 let internal = ResolvedInternalFunctionDefinition {
                     signature: ResolvedFunctionSignature {
@@ -963,13 +1002,11 @@ impl<'a> Resolver<'a> {
                     name: ResolvedLocalIdentifier(self.to_node(&function_data.declaration.name)),
                 };
 
-                let function_ref = Rc::new(internal);
                 let function_name = self.get_text(&function_data.declaration.name).to_string();
-                self.lookup.add_internal_function_ref(
-                    &*self.path_str,
-                    &*function_name,
-                    &function_ref.clone(),
-                )?;
+                let function_ref = self
+                    .shared
+                    .lookup
+                    .add_internal_function_ref(&*function_name, internal)?;
                 ResolvedFunction::Internal(function_ref)
             }
             Function::External(ast_signature) => {
@@ -977,11 +1014,11 @@ impl<'a> Resolver<'a> {
                 let external_return_type = if let Some(found) = &ast_signature.return_type {
                     self.resolve_type(&found)?
                 } else {
-                    self.types.unit_type()
+                    self.shared.types.unit_type()
                 };
 
                 let return_type = external_return_type;
-                let external_function_id = self.state.allocate_external_function_id();
+                let external_function_id = self.shared.state.allocate_external_function_id();
 
                 let external = ResolvedExternalFunctionDefinition {
                     signature: ResolvedFunctionSignature {
@@ -1005,7 +1042,7 @@ impl<'a> Resolver<'a> {
         maybe_type: &Option<Type>,
     ) -> Result<ResolvedType, ResolveError> {
         let found_type = match maybe_type {
-            None => self.types.unit_type(),
+            None => self.shared.types.unit_type(),
             Some(ast_type) => self.resolve_type(&ast_type)?,
         };
         Ok(found_type)
@@ -1129,8 +1166,9 @@ impl<'a> Resolver<'a> {
         let found_struct = self.find_struct_type_local_mut(attached_to_type)?.clone();
 
         for function in functions {
-            let mut inner_resolver = self.new_resolver();
-            let resolved_function = inner_resolver.resolve_impl_func(&function, &found_struct)?;
+            let new_return_type = self.resolve_return_type(function)?;
+            self.start_function(new_return_type);
+            let resolved_function = self.resolve_impl_func(&function, &found_struct)?;
             let resolved_function_ref = Rc::new(resolved_function);
 
             let function_name = match function {
@@ -1209,7 +1247,7 @@ impl<'a> Resolver<'a> {
     }
 
     fn current_function_return_type(&self) -> ResolvedType {
-        self.return_type.clone()
+        self.scope.return_type.clone()
     }
 
     pub fn resolve_statement(
@@ -1614,7 +1652,7 @@ impl<'a> Resolver<'a> {
                 ResolvedExpression::Block(statements)
             }
             Expression::InterpolatedString(string_parts) => ResolvedExpression::InterpolatedString(
-                self.types.string_type.clone(),
+                self.shared.types.string_type.clone(),
                 self.resolve_interpolated_string(string_parts)?,
             ),
 
@@ -1628,7 +1666,7 @@ impl<'a> Resolver<'a> {
                 let min_expression = self.resolve_expression(min_value)?;
                 let max_expression = self.resolve_expression(max_value)?;
                 ResolvedExpression::ExclusiveRange(
-                    self.types.exclusive_range_type.clone(),
+                    self.shared.types.exclusive_range_type.clone(),
                     Box::from(min_expression),
                     Box::from(max_expression),
                 )
@@ -1654,19 +1692,19 @@ impl<'a> Resolver<'a> {
     /*
     match literal {
                             Literal::Int(value) => {
-                                ResolvedLiteral::IntLiteral(*value, self.types.int_type.clone())
+                                ResolvedLiteral::IntLiteral(*value, self.shared.types.int_type.clone())
                             }
                             Literal::Float(value) => {
-                                ResolvedLiteral::FloatLiteral(*value, self.types.float_type.clone())
+                                ResolvedLiteral::FloatLiteral(*value, self.shared.types.float_type.clone())
                             }
                             Literal::String(value) => ResolvedLiteral::StringLiteral(
                                 value.clone(),
-                                self.types.string_type.clone(),
+                                self.shared.types.string_type.clone(),
                             ),
-                            Literal::Unit => ResolvedLiteral::UnitLiteral(self.types.unit_type.clone()),
+                            Literal::Unit => ResolvedLiteral::UnitLiteral(self.shared.types.unit_type.clone()),
                             Literal::None => ResolvedLiteral::NoneLiteral,
                             Literal::Bool(value) => {
-                                ResolvedLiteral::BoolLiteral(*value, self.types.bool_type.clone())
+                                ResolvedLiteral::BoolLiteral(*value, self.shared.types.bool_type.clone())
                             }
 
                             Literal::EnumVariant(qualified_type_identifier, variant_name, data) => self
@@ -1708,7 +1746,7 @@ impl<'a> Resolver<'a> {
                 ResolvedLiteral::IntLiteral(
                     Self::str_to_int(integer_text).map_err(ResolveError::IntConversionError)?,
                     self.to_node(&int_node),
-                    self.types.int_type.clone(),
+                    self.shared.types.int_type.clone(),
                 )
             }
             Literal::Float(float_node) => {
@@ -1718,7 +1756,7 @@ impl<'a> Resolver<'a> {
                 ResolvedLiteral::FloatLiteral(
                     Fp::from(float),
                     self.to_node(&float_node),
-                    self.types.float_type.clone(),
+                    self.shared.types.float_type.clone(),
                 )
             }
             Literal::String(string_node) => {
@@ -1726,7 +1764,7 @@ impl<'a> Resolver<'a> {
                 ResolvedLiteral::StringLiteral(
                     string_str.into(),
                     self.to_node(&string_node),
-                    self.types.string_type.clone(),
+                    self.shared.types.string_type.clone(),
                 )
             }
             Literal::Bool(bool_node) => {
@@ -1741,30 +1779,40 @@ impl<'a> Resolver<'a> {
                 ResolvedLiteral::BoolLiteral(
                     bool_val,
                     self.to_node(&bool_node),
-                    self.types.bool_type.clone(),
+                    self.shared.types.bool_type.clone(),
                 )
             }
             Literal::EnumVariant(ref enum_literal) => {
-                let variant_name = match enum_literal {
-                    EnumVariantLiteral::Simple(name) => name,
-                    EnumVariantLiteral::Tuple(name, _) => name,
-                    EnumVariantLiteral::Struct(name, _) => name,
+                let (enum_name, variant_name) = match enum_literal {
+                    EnumVariantLiteral::Simple(enum_name, variant_name) => {
+                        (enum_name, variant_name)
+                    }
+                    EnumVariantLiteral::Tuple(enum_name, variant_name, _) => {
+                        (enum_name, variant_name)
+                    }
+                    EnumVariantLiteral::Struct(enum_name, variant_name, _) => {
+                        (enum_name, variant_name)
+                    }
                 };
 
                 // Handle enum variant literals in patterns
                 let variant_ref = self
-                    .resolve_enum_variant_ref(&variant_name)
+                    .resolve_enum_variant_ref(enum_name, variant_name)
                     .expect("enum variant should exist");
 
                 let resolved_data = match enum_literal {
-                    EnumVariantLiteral::Simple(_) => ResolvedEnumLiteralData::Nothing,
-                    EnumVariantLiteral::Tuple(_node, expressions) => {
+                    EnumVariantLiteral::Simple(_, _) => ResolvedEnumLiteralData::Nothing,
+                    EnumVariantLiteral::Tuple(_node, _variant, expressions) => {
                         let resolved = self
                             .resolve_expressions(expressions)
                             .expect("enum tuple expressions should resolve");
                         ResolvedEnumLiteralData::Tuple(resolved)
                     }
-                    EnumVariantLiteral::Struct(_node, anonym_struct_field_and_expressions) => {
+                    EnumVariantLiteral::Struct(
+                        _node,
+                        _variant,
+                        anonym_struct_field_and_expressions,
+                    ) => {
                         let mut resolved = Vec::new();
                         for field_and_expr in anonym_struct_field_and_expressions {
                             let resolved_expression = self
@@ -1890,7 +1938,7 @@ impl<'a> Resolver<'a> {
 
         let (path, name) = self.get_path(qualified_type_identifier);
         // If it's an alias, return both the alias and the underlying struct
-        if let Some(alias_type) = self.lookup.get_type_alias(&path, &name) {
+        if let Some(alias_type) = self.shared.lookup.get_type_alias(&path, &name) {
             let unaliased = unalias_type(alias_type.clone());
             match unaliased {
                 ResolvedType::Struct(struct_ref) => Ok((alias_type.clone(), struct_ref)),
@@ -1900,7 +1948,7 @@ impl<'a> Resolver<'a> {
             }
         } else {
             // If direct struct, return the struct type for both
-            let struct_ref = self.lookup.get_struct(&path, &name).ok_or_else(|| {
+            let struct_ref = self.shared.lookup.get_struct(&path, &name).ok_or_else(|| {
                 ResolveError::UnknownStructTypeReference(qualified_type_identifier.clone())
             })?;
             Ok((ResolvedType::Struct(struct_ref.clone()), struct_ref.clone()))
@@ -2208,14 +2256,15 @@ impl<'a> Resolver<'a> {
         let resolved_expression = self.resolve_expression(expression)?;
         let resolved_type = resolution(&resolved_expression);
         let (key_type, value_type): (Option<ResolvedType>, ResolvedType) = match resolved_type {
-            ResolvedType::Array(array_type) => {
-                (Some(self.types.int_type()), array_type.item_type.clone())
-            }
+            ResolvedType::Array(array_type) => (
+                Some(self.shared.types.int_type()),
+                array_type.item_type.clone(),
+            ),
             ResolvedType::Map(map_type_ref) => (
                 Some(map_type_ref.key_type.clone()),
                 map_type_ref.value_type.clone(),
             ),
-            ResolvedType::ExclusiveRange(_) => (None, self.types.int_type()),
+            ResolvedType::ExclusiveRange(_) => (None, self.shared.types.int_type()),
             ResolvedType::Generic(_base_type, params) => {
                 // TODO: HACK: We assume it is a container that iterates over the type parameters
                 // TODO: HACK: We assume that it is a sparse map
@@ -2496,7 +2545,7 @@ impl<'a> Resolver<'a> {
                     left: Box::new(left),
                     right: Box::new(right),
                     kind: converted,
-                    resolved_type: self.types.string_type(),
+                    resolved_type: self.shared.types.string_type(),
                 })
             }
 
@@ -2519,7 +2568,7 @@ impl<'a> Resolver<'a> {
                     left: Box::new(left),
                     right: Box::new(right),
                     kind: converted,
-                    resolved_type: self.types.bool_type(),
+                    resolved_type: self.shared.types.bool_type(),
                 })
             }
 
@@ -2625,12 +2674,14 @@ impl<'a> Resolver<'a> {
             .map_or_else(
                 || {
                     let name = self.get_text(&var_or_function_ref_node).to_string();
-                    self.lookup
-                        .get_internal_function(&self.path_str, &*name)
+                    self.shared
+                        .lookup
+                        .get_internal_function(&*vec![], &name)
                         .map_or_else(
                             || {
-                                self.lookup
-                                    .get_external_function_declaration(&self.path_str, &*name)
+                                self.shared
+                                    .lookup
+                                    .get_external_function_declaration(&*vec![], &*name)
                                     .map_or_else(
                                         || {
                                             error!(
@@ -2676,7 +2727,7 @@ impl<'a> Resolver<'a> {
 
     fn try_find_variable(&self, node: &Node) -> Option<ResolvedVariableRef> {
         let variable_text = self.get_text(&node);
-        for scope in self.block_scope_stack.iter().rev() {
+        for scope in self.scope.block_scope_stack.iter().rev() {
             if let Some(value) = scope.variables.get(&variable_text.to_string()) {
                 return Some(value.clone());
             }
@@ -2687,6 +2738,7 @@ impl<'a> Resolver<'a> {
 
     fn try_find_local_variable(&self, node: &ResolvedNode) -> Option<&ResolvedVariableRef> {
         let current_scope = self
+            .scope
             .block_scope_stack
             .iter()
             .last()
@@ -2926,13 +2978,13 @@ impl<'a> Resolver<'a> {
     }
 
     fn push_block_scope(&mut self, _debug_str: &str) {
-        self.block_scope_stack.push(BlockScope {
+        self.scope.block_scope_stack.push(BlockScope {
             variables: SeqMap::default(),
         });
     }
 
     fn pop_block_scope(&mut self, _debug_str: &str) {
-        self.block_scope_stack.pop();
+        self.scope.block_scope_stack.pop();
     }
 
     fn set_or_overwrite_variable_with_type(
@@ -2959,12 +3011,13 @@ impl<'a> Resolver<'a> {
         }
 
         // For first assignment, create new variable with the mutability from the assignment
-        let scope_index = self.block_scope_stack.len() - 1;
+        let scope_index = self.scope.block_scope_stack.len() - 1;
         let name = self.to_node(&variable.name);
         let mutable_node = self.to_node_option(&variable.is_mutable);
         let variable_name_str = self.get_text_resolved(&name).to_string();
 
         let variables = &mut self
+            .scope
             .block_scope_stack
             .last_mut()
             .expect("block scope should have at least one scope")
@@ -3016,9 +3069,10 @@ impl<'a> Resolver<'a> {
         }
         let variable_str = self.get_text_resolved(&variable).to_string();
 
-        let scope_index = self.block_scope_stack.len() - 1;
+        let scope_index = self.scope.block_scope_stack.len() - 1;
 
         let variables = &mut self
+            .scope
             .block_scope_stack
             .last_mut()
             .expect("block scope should have at least one scope")
@@ -3042,10 +3096,12 @@ impl<'a> Resolver<'a> {
     }
 
     fn resolve_enum_variant_ref(
-        &self,
+        &mut self,
         qualified_type_identifier: &QualifiedTypeIdentifier,
+        variant_name: &LocalTypeIdentifier,
     ) -> Result<ResolvedEnumVariantTypeRef, ResolveError> {
-        self.get_enum_variant_type(&qualified_type_identifier)
+        let variant_name_string = self.get_text(&variant_name.0).to_string();
+        self.get_enum_variant_type(&qualified_type_identifier, &variant_name_string)
             .map_or_else(
                 || {
                     Err(ResolveError::UnknownEnumVariantType(
@@ -3062,20 +3118,22 @@ impl<'a> Resolver<'a> {
         &mut self,
         ast_variant: &EnumVariantLiteral,
     ) -> Result<ResolvedLiteral, ResolveError> {
-        let qualified_name = match ast_variant {
-            EnumVariantLiteral::Simple(name) => name,
-            EnumVariantLiteral::Tuple(name, _) => name,
-            EnumVariantLiteral::Struct(name, _) => name,
+        let (qualified_name, variant_name) = match ast_variant {
+            EnumVariantLiteral::Simple(name, variant) => (name, variant),
+            EnumVariantLiteral::Tuple(name, variant, _) => (name, variant),
+            EnumVariantLiteral::Struct(name, variant, _) => (name, variant),
         };
 
-        let variant_ref = self.resolve_enum_variant_ref(qualified_name)?;
+        let variant_ref = self.resolve_enum_variant_ref(qualified_name, variant_name)?;
 
         let resolved_data = match ast_variant {
-            EnumVariantLiteral::Simple(_qualified_name) => ResolvedEnumLiteralData::Nothing,
-            EnumVariantLiteral::Tuple(_qualified_name, expressions) => {
+            EnumVariantLiteral::Simple(_qualified_name, _variant_name) => {
+                ResolvedEnumLiteralData::Nothing
+            }
+            EnumVariantLiteral::Tuple(_qualified_name, _variant_name, expressions) => {
                 ResolvedEnumLiteralData::Tuple(self.resolve_expressions(expressions)?)
             }
-            EnumVariantLiteral::Struct(_qualified_name, field_expressions) => {
+            EnumVariantLiteral::Struct(_qualified_name, _variant_name, field_expressions) => {
                 let mut resolved_expressions = Vec::new();
                 for field_expression in field_expressions {
                     let resolved_expression =
@@ -3301,9 +3359,9 @@ impl<'a> Resolver<'a> {
         let false_type = resolution(&resolved_false);
         debug!(?false_type, "false block type");
 
-        debug!(?self.return_type, "current return type context");
+        debug!(?self.scope.return_type, "current return type context");
 
-        if !matches!(self.return_type, ResolvedType::Unit(_)) {
+        if !matches!(self.scope.return_type, ResolvedType::Unit(_)) {
             let true_type = resolution(&resolved_true);
             let false_type = resolution(&resolved_false);
 
@@ -3670,7 +3728,7 @@ impl<'a> Resolver<'a> {
     fn to_node(&self, node: &swamp_script_ast::Node) -> swamp_script_semantic::ResolvedNode {
         swamp_script_semantic::ResolvedNode {
             span: Span {
-                file_id: self.file_id,
+                file_id: self.shared.file_id,
                 offset: node.span.offset,
                 length: node.span.length,
             },
@@ -3720,21 +3778,26 @@ impl<'a> Resolver<'a> {
     }
 
     fn get_enum_variant_type(
-        &self,
+        &mut self,
         qualified_type_identifier: &QualifiedTypeIdentifier,
+        variant_name: &str,
     ) -> Option<ResolvedEnumVariantTypeRef> {
-        let path: Vec<String> = if let Some(ref found) = &qualified_type_identifier.module_path {
-            let mut strings = Vec::new();
-            for path_item in &found.0 {
-                strings.push(self.get_text(&path_item.node).to_string());
-            }
-            strings
-        } else {
-            vec![]
-        };
+        let path: Vec<String> = qualified_type_identifier.module_path.as_ref().map_or_else(
+            std::vec::Vec::new,
+            |found| {
+                let mut strings = Vec::new();
+                for path_item in &found.0 {
+                    strings.push(self.get_text(&path_item.node).to_string());
+                }
+                strings
+            },
+        );
 
-        self.lookup
-            .get_enum_variant_type(&path, self.get_text(&qualified_type_identifier.name.0))
+        let enum_name = self.get_text(&qualified_type_identifier.name.0).to_string();
+
+        self.shared
+            .lookup
+            .get_enum_variant_type(&path, &enum_name, variant_name)
     }
 
     fn resolve_compound_operator(

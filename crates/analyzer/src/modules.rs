@@ -1,6 +1,7 @@
+use crate::lookup::ResolvedModuleNamespaceRef;
 use crate::ns::ResolvedModuleNamespace;
 use crate::{NamespaceError, ResolveError};
-use std::cell::{Ref, RefCell, RefMut};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
@@ -8,8 +9,7 @@ use swamp_script_ast::StructType;
 use swamp_script_semantic::{
     ResolvedDefinition, ResolvedEnumType, ResolvedEnumTypeRef, ResolvedEnumVariantType,
     ResolvedEnumVariantTypeRef, ResolvedExternalFunctionDefinitionRef,
-    ResolvedInternalFunctionDefinitionRef, ResolvedModulePath, ResolvedModulePathRef,
-    ResolvedRustTypeRef, ResolvedStatement, ResolvedStructTypeRef, ResolvedType, SemanticError,
+    ResolvedInternalFunctionDefinitionRef, ResolvedModulePathRef, ResolvedStatement,
 };
 
 #[derive(Debug)]
@@ -26,7 +26,7 @@ impl Default for ResolvedModules {
 pub struct ResolvedModule {
     pub definitions: Vec<ResolvedDefinition>,
     pub statements: Vec<ResolvedStatement>,
-    pub namespace: ResolvedModuleNamespace,
+    pub namespace: ResolvedModuleNamespaceRef,
 }
 
 impl Debug for ResolvedModule {
@@ -50,10 +50,11 @@ impl Debug for ResolvedModule {
 pub type ResolvedModuleRef = Rc<RefCell<ResolvedModule>>;
 
 impl ResolvedModule {
-    pub fn new(module_path: ResolvedModulePath) -> Self {
+    pub fn new(module_path: &[String]) -> Self {
+        let ns_ref = Rc::new(RefCell::new(ResolvedModuleNamespace::new(module_path)));
         Self {
             definitions: Vec::new(),
-            namespace: ResolvedModuleNamespace::new(module_path),
+            namespace: ns_ref,
             statements: Vec::new(),
         }
     }
@@ -67,10 +68,11 @@ impl ResolvedModules {
     }
 
     pub fn add_empty_module(&mut self, module_path: &[String]) -> ResolvedModuleRef {
+        let ns_ref = Rc::new(RefCell::new(ResolvedModuleNamespace::new(module_path)));
         let module = ResolvedModule {
             definitions: vec![],
             statements: vec![],
-            namespace: ResolvedModuleNamespace::new(ResolvedModulePath(vec![])),
+            namespace: ns_ref,
         };
         let module_ref = Rc::new(RefCell::new(module));
 
@@ -112,16 +114,6 @@ impl ResolvedModules {
     pub fn find_module(&self, _module_path: &Vec<String>) -> Option<ResolvedModulePathRef> {
         todo!()
     }
-    pub fn get_struct(&self, _path: &Vec<String>, _name: &str) -> Option<ResolvedStructTypeRef> {
-        todo!()
-    }
-    pub fn get_type_alias(&self, _path: &Vec<String>, _name: &str) -> Option<ResolvedType> {
-        todo!()
-    }
-
-    pub fn get_enum(&self, _path: &Vec<String>, _name: &str) -> Option<ResolvedEnumTypeRef> {
-        todo!()
-    }
 
     pub fn get_enum_variant_type(
         &self,
@@ -135,35 +127,20 @@ impl ResolvedModules {
         self.modules.get(path).cloned()
     }
 
-    fn get_namespace(&self, path: &[String]) -> Option<Ref<ResolvedModuleNamespace>> {
+    fn get_namespace(&self, path: &[String]) -> Option<ResolvedModuleNamespaceRef> {
         self.modules
             .get(path)
-            .map(|module| Ref::map(module.borrow(), |m| &m.namespace))
+            .map(|module| module.borrow().namespace.clone())
     }
 
     fn get_module_mut(&self, path: &[String]) -> Option<ResolvedModuleRef> {
         self.modules.get(path).cloned()
     }
 
-    fn get_namespace_mut(&mut self, path: &[String]) -> Option<RefMut<ResolvedModuleNamespace>> {
+    fn get_namespace_mut(&mut self, path: &[String]) -> Option<ResolvedModuleNamespaceRef> {
         self.modules
             .get(path)
-            .map(|module| RefMut::map(module.borrow_mut(), |m| &mut m.namespace))
-    }
-
-    pub fn add_internal_function_ref(
-        &mut self,
-        path: &[String],
-        name: &str,
-        internal_func: &ResolvedInternalFunctionDefinitionRef,
-    ) -> Result<(), SemanticError> {
-        let mut namespace = self
-            .get_namespace_mut(path)
-            .expect("tried to insert in a wrong module path");
-
-        namespace.add_internal_function_ref(name, internal_func)?;
-
-        Ok(())
+            .map(|module| module.borrow_mut().namespace.clone())
     }
 
     #[must_use]
@@ -175,7 +152,7 @@ impl ResolvedModules {
         let namespace = self.get_namespace(path);
         namespace.map_or_else(
             || None,
-            |found_ns| found_ns.get_internal_function(name).cloned(),
+            |found_ns| found_ns.borrow().get_internal_function(name).cloned(),
         )
     }
 
@@ -188,12 +165,13 @@ impl ResolvedModules {
         let namespace = self.get_namespace(path);
         namespace.map_or_else(
             || None,
-            |found_ns| found_ns.get_external_function_declaration(name).cloned(),
+            |found_ns| {
+                found_ns
+                    .borrow()
+                    .get_external_function_declaration(name)
+                    .cloned()
+            },
         )
-    }
-
-    pub fn get_rust_type(&self, _name: &str) -> Option<ResolvedRustTypeRef> {
-        todo!()
     }
 
     pub fn add_enum_type(
@@ -206,7 +184,9 @@ impl ResolvedModules {
             .get_namespace_mut(path)
             .expect("tried to insert in a wrong module path");
         let enum_type_ref = Rc::new(enum_type);
-        namespace.add_enum_type(name, enum_type_ref.clone())?;
+        namespace
+            .borrow_mut()
+            .add_enum_type(name, enum_type_ref.clone())?;
 
         Ok(enum_type_ref)
     }

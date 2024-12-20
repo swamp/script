@@ -2,7 +2,10 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
+use std::cell::RefCell;
 use std::path::Path;
+use std::rc::Rc;
+use swamp_script_analyzer::lookup::NameLookup;
 use swamp_script_analyzer::modules::{ResolvedModule, ResolvedModules};
 use swamp_script_analyzer::ns::ResolvedModuleNamespace;
 use swamp_script_analyzer::{ResolveError, Resolver};
@@ -25,16 +28,11 @@ fn internal_compile(script: &str) -> Result<ResolvedModule, ResolveError> {
 
     source_map.add_manual(file_id, Path::new("some_path/main"), script);
     let resolved_path_str = vec!["test".to_string()];
-    modules.add_empty_module(&resolved_path_str);
+    let mut own_module = modules.add_empty_module(&resolved_path_str);
 
-    let mut resolver = Resolver::new(
-        &types,
-        &mut state,
-        &mut modules,
-        &source_map,
-        resolved_path_str,
-        file_id,
-    );
+    let mut name_lookup = NameLookup::new(own_module.borrow_mut().namespace.clone(), &modules);
+
+    let mut resolver = Resolver::new(&types, &mut state, &mut name_lookup, &source_map, file_id);
 
     let mut resolved_definitions = Vec::new();
     for definition in &program.definitions {
@@ -51,10 +49,12 @@ fn internal_compile(script: &str) -> Result<ResolvedModule, ResolveError> {
         resolved_statements.push(resolved_statement);
     }
 
+    let ns_ref = Rc::new(RefCell::new(ResolvedModuleNamespace::new(&*vec![])));
+
     let resolved_module = ResolvedModule {
         definitions: resolved_definitions,
         statements: resolved_statements,
-        namespace: ResolvedModuleNamespace::new(ResolvedModulePath(vec![])),
+        namespace: ns_ref,
     };
 
     Ok(resolved_module)
