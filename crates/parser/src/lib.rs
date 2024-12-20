@@ -614,27 +614,38 @@ impl AstParser {
 
         // Parse self parameter and other parameters
         let mut parameters = Vec::new();
-
         let mut self_parameter = None;
 
-        if let Some(param_list) = inner.next() {
+        while let Some(param_list) = inner.next() {
             match param_list.as_rule() {
                 Rule::self_parameter => {
                     let mut mut_keyword_node = None;
+                    let mut self_node = None;
 
-                    if param_list.as_str().starts_with("mut") {
-                        mut_keyword_node = Some(self.to_node(&param_list));
+                    for pair in param_list.into_inner() {
+                        match pair.as_rule() {
+                            Rule::mut_keyword => {
+                                mut_keyword_node = Some(self.to_node(&pair));
+                            }
+                            Rule::self_identifier => {
+                                self_node = Some(self.to_node(&pair));
+                            }
+                            _ => unreachable!(
+                                "Unexpected rule in self_parameter: {:?}",
+                                pair.as_rule()
+                            ),
+                        }
                     }
 
                     self_parameter = Some(SelfParameter {
                         is_mutable: mut_keyword_node,
-                        self_node: self.to_node(&param_list),
+                        self_node: self_node.expect("self node must exist"),
                     });
                 }
                 Rule::parameter_list => {
                     parameters = self.parse_parameters(&param_list)?;
                 }
-                _ => {}
+                _ => break, // Exit loop when we hit non-parameter rules
             }
         }
 

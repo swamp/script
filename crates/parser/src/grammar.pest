@@ -51,10 +51,11 @@ impl_item = { normal_member_function | external_member_function }
 
 
 // Self parameter can be mut or not
-self_parameter = {
-    mut_keyword? ~ "self"
-}
+self_identifier = { "self" }
 
+self_parameter = {
+    mut_keyword? ~ self_identifier
+}
 
 // Struct destructuring
 struct_destructure = { "{" ~ identifier ~ ("," ~ " "* ~ identifier)* ~ "}" }  // PEST BUG: need explicit spaces after comma
