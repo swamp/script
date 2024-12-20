@@ -1020,7 +1020,7 @@ impl<'a> Resolver<'a> {
             Function::External(ast_signature) => {
                 let parameters = self.resolve_parameters(&ast_signature.params)?;
                 let external_return_type = if let Some(found) = &ast_signature.return_type {
-                    self.resolve_type(&found)?
+                    self.resolve_type(found)?
                 } else {
                     self.shared.types.unit_type()
                 };
@@ -1066,6 +1066,9 @@ impl<'a> Resolver<'a> {
                 let mut parameters = Vec::new();
 
                 if let Some(found_self) = &function_data.declaration.self_parameter {
+                    let debug_param = self.get_text(&found_self.self_node).to_string();
+                    info!(?debug_param, "self");
+
                     let resolved_type = ResolvedType::Struct(found_struct.clone());
                     parameters.push(ResolvedParameter {
                         name: ResolvedLocalIdentifier(self.to_node(&found_self.self_node)),
@@ -1075,6 +1078,8 @@ impl<'a> Resolver<'a> {
                 }
 
                 for param in &function_data.declaration.params {
+                    let debug_param = self.get_text(&param.variable.name).to_string();
+                    info!(?debug_param, "param");
                     let resolved_type = self.resolve_type(&param.param_type)?;
 
                     parameters.push(ResolvedParameter {
