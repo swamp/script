@@ -10,7 +10,7 @@ use swamp_script_analyzer::modules::{ResolvedModule, ResolvedModules};
 use swamp_script_analyzer::ns::ResolvedModuleNamespace;
 use swamp_script_analyzer::{ResolveError, Resolver};
 use swamp_script_parser::AstParser;
-use swamp_script_semantic::{ResolvedModulePath, ResolvedProgramState, ResolvedProgramTypes};
+use swamp_script_semantic::{ResolvedProgramState, ResolvedProgramTypes};
 use swamp_script_source_map::SourceMap;
 use tracing::warn;
 
@@ -28,7 +28,7 @@ fn internal_compile(script: &str) -> Result<ResolvedModule, ResolveError> {
 
     source_map.add_manual(file_id, Path::new("some_path/main"), script);
     let resolved_path_str = vec!["test".to_string()];
-    let mut own_module = modules.add_empty_module(&resolved_path_str);
+    let own_module = modules.add_empty_module(&resolved_path_str);
 
     let mut name_lookup = NameLookup::new(own_module.borrow_mut().namespace.clone(), &modules);
 
@@ -37,8 +37,6 @@ fn internal_compile(script: &str) -> Result<ResolvedModule, ResolveError> {
     let mut resolved_definitions = Vec::new();
     for definition in &program.definitions {
         let resolved_definition = resolver.resolve_definition(definition)?;
-
-        //resolver.insert_definition(&resolved_definition)?;
         resolved_definitions.push(resolved_definition);
     }
 

@@ -1032,7 +1032,7 @@ impl ImplType {
 
 #[derive(Debug)]
 pub enum ResolvedDefinition {
-    StructType(ResolvedStructType),
+    StructType(ResolvedStructTypeRef),
     EnumType(ResolvedEnumTypeRef, Vec<ResolvedEnumVariantTypeRef>),
     Function(),
     ExternalFunction(),

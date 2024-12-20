@@ -684,7 +684,7 @@ impl<'a> Resolver<'a> {
     pub fn resolve_struct_type_definition(
         &mut self,
         ast_struct: &StructType,
-    ) -> Result<ResolvedStructType, ResolveError> {
+    ) -> Result<ResolvedStructTypeRef, ResolveError> {
         let mut resolved_fields = SeqMap::new();
 
         for field_name_and_type in ast_struct.fields.iter() {
@@ -710,12 +710,20 @@ impl<'a> Resolver<'a> {
             defined_fields: resolved_fields,
         };
 
+        let struct_name_str = self.get_text(&ast_struct.identifier.0).to_string();
+
         let resolved_struct = ResolvedStructType::new(
             ResolvedLocalTypeIdentifier(self.to_node(&ast_struct.identifier.0)),
             resolved_anon_struct,
             self.shared.state.allocate_number(),
         );
-        Ok(resolved_struct)
+
+        let resolved_struct_ref = self
+            .shared
+            .lookup
+            .add_struct(&struct_name_str, resolved_struct)?;
+
+        Ok(resolved_struct_ref)
     }
 
     fn resolve_enum_type_definition(

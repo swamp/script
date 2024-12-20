@@ -2,16 +2,16 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-
 use crate::ResolveError;
 use seq_map::SeqMap;
+use std::cell::RefCell;
 use std::fmt::Debug;
 use std::rc::Rc;
 use swamp_script_semantic::{
     ResolvedEnumTypeRef, ResolvedEnumVariantType, ResolvedEnumVariantTypeRef,
     ResolvedExternalFunctionDefinitionRef, ResolvedInternalFunctionDefinition,
     ResolvedInternalFunctionDefinitionRef, ResolvedRustType, ResolvedRustTypeRef,
-    ResolvedStructTypeRef, ResolvedType, SemanticError,
+    ResolvedStructType, ResolvedStructTypeRef, ResolvedType, SemanticError,
 };
 
 #[derive(Debug, Clone)]
@@ -145,22 +145,17 @@ impl ResolvedModuleNamespace {
         }
     }
 
-    /*
-    pub fn add_struct_type(
+    pub fn add_struct(
         &mut self,
+        name: &str,
         struct_type: ResolvedStructType,
-    ) -> Result<ResolvedStructTypeRef, SemanticError> {
+    ) -> Result<ResolvedStructTypeRef, ResolveError> {
         let struct_ref = Rc::new(RefCell::new(struct_type));
-        self.structs.insert(
-            LocalTypeName(struct_ref.borrow().name.text.clone()),
-            struct_ref.clone(),
-        )?;
+        self.structs.insert(name.to_string(), struct_ref.clone())?;
 
         Ok(struct_ref)
     }
 
-
-     */
     pub fn add_built_in_rust_type(
         &mut self,
         rust_type: ResolvedRustType,
@@ -194,9 +189,7 @@ impl ResolvedModuleNamespace {
 
     /*
 
-        pub fn get_type_alias(&self, name: &String) -> Option<&ResolvedType> {
-            self.type_aliases.get(&(name).into())
-        }
+
 
         pub fn add_internal_function(
             &mut self,
@@ -303,6 +296,10 @@ impl ResolvedModuleNamespace {
 
     pub fn get_rust_type(&self, name: &str) -> Option<&ResolvedRustTypeRef> {
         self.build_in_rust_types.get(&name.to_string())
+    }
+
+    pub fn get_type_alias(&self, name: &str) -> Option<&ResolvedType> {
+        self.type_aliases.get(&name.to_string())
     }
 
     #[must_use]

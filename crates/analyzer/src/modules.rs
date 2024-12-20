@@ -123,18 +123,10 @@ impl ResolvedModules {
         todo!()
     }
 
-    fn get_module(&self, path: &[String]) -> Option<ResolvedModuleRef> {
-        self.modules.get(path).cloned()
-    }
-
     fn get_namespace(&self, path: &[String]) -> Option<ResolvedModuleNamespaceRef> {
         self.modules
             .get(path)
             .map(|module| module.borrow().namespace.clone())
-    }
-
-    fn get_module_mut(&self, path: &[String]) -> Option<ResolvedModuleRef> {
-        self.modules.get(path).cloned()
     }
 
     fn get_namespace_mut(&mut self, path: &[String]) -> Option<ResolvedModuleNamespaceRef> {
@@ -180,7 +172,7 @@ impl ResolvedModules {
         name: &str,
         enum_type: ResolvedEnumType,
     ) -> Result<ResolvedEnumTypeRef, ResolveError> {
-        let mut namespace = self
+        let namespace = self
             .get_namespace_mut(path)
             .expect("tried to insert in a wrong module path");
         let enum_type_ref = Rc::new(enum_type);

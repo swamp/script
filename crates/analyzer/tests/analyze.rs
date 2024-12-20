@@ -85,12 +85,16 @@ fn struct_def() {
             b: Int,
         }
         
-        Something { a: 3, b: 4 }
+        Something { b: 3, a: 4 }
         ",
-        r"
+        r#"
         
+StructType(RefCell { value: ResolvedStructType { name: ResolvedLocalTypeIdentifier(<16:9>), anon_struct_type: ResolvedAnonymousStructType { defined_fields: SeqMap("a": ResolvedAnonymousStructFieldType { identifier: ResolvedFieldName(<40:1>), field_type: Int(ResolvedIntType), index: 0 }, "b": ResolvedAnonymousStructFieldType { identifier: ResolvedFieldName(<60:1>), field_type: Int(ResolvedIntType), index: 0 }) }, number: 1, functions: SeqMap() } })
+---
+Expression(StructInstantiation(ResolvedStructInstantiation { source_order_expressions: [(1, Literal(IntLiteral(3, <110:1>, ResolvedIntType))), (0, Literal(IntLiteral(4, <116:1>, ResolvedIntType)))], struct_type_ref: RefCell { value: ResolvedStructType { name: ResolvedLocalTypeIdentifier(<16:9>), anon_struct_type: ResolvedAnonymousStructType { defined_fields: SeqMap("a": ResolvedAnonymousStructFieldType { identifier: ResolvedFieldName(<40:1>), field_type: Int(ResolvedIntType), index: 0 }, "b": ResolvedAnonymousStructFieldType { identifier: ResolvedFieldName(<60:1>), field_type: Int(ResolvedIntType), index: 0 }) }, number: 1, functions: SeqMap() } }, display_type_ref: Struct(RefCell { value: ResolvedStructType { name: ResolvedLocalTypeIdentifier(<16:9>), anon_struct_type: ResolvedAnonymousStructType { defined_fields: SeqMap("a": ResolvedAnonymousStructFieldType { identifier: ResolvedFieldName(<40:1>), field_type: Int(ResolvedIntType), index: 0 }, "b": ResolvedAnonymousStructFieldType { identifier: ResolvedFieldName(<60:1>), field_type: Int(ResolvedIntType), index: 0 }) }, number: 1, functions: SeqMap() } }) }))
 
-",
+
+"#,
     );
 }
 

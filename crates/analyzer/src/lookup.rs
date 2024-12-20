@@ -6,8 +6,8 @@ use std::rc::Rc;
 use swamp_script_semantic::{
     ResolvedEnumType, ResolvedEnumTypeRef, ResolvedEnumVariantType, ResolvedEnumVariantTypeRef,
     ResolvedExternalFunctionDefinitionRef, ResolvedInternalFunctionDefinition,
-    ResolvedInternalFunctionDefinitionRef, ResolvedRustTypeRef, ResolvedStructTypeRef,
-    ResolvedType,
+    ResolvedInternalFunctionDefinitionRef, ResolvedRustTypeRef, ResolvedStructType,
+    ResolvedStructTypeRef, ResolvedType,
 };
 
 pub type ResolvedModuleNamespaceRef = Rc<RefCell<ResolvedModuleNamespace>>;
@@ -108,8 +108,23 @@ impl<'a> NameLookup<'a> {
         )
     }
 
-    pub fn get_type_alias(&self, _path: &Vec<String>, _name: &str) -> Option<ResolvedType> {
-        todo!()
+    pub fn get_type_alias(&self, path: &Vec<String>, name: &str) -> Option<ResolvedType> {
+        let namespace = self.get_namespace(path);
+        namespace.map_or_else(
+            || None,
+            |found_ns| found_ns.borrow().get_type_alias(name).cloned(),
+        )
+    }
+
+    pub fn add_struct(
+        &self,
+        struct_type_name: &str,
+        struct_type: ResolvedStructType,
+    ) -> Result<ResolvedStructTypeRef, ResolveError> {
+        //let struct_type_ref = Rc::new(struct_type);
+        self.namespace
+            .borrow_mut()
+            .add_struct(struct_type_name, struct_type)
     }
 
     pub fn add_enum_type(
