@@ -12,7 +12,7 @@ use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
 use std::rc::Rc;
 
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct ResolvedNode {
     pub span: Span,
 }
@@ -51,6 +51,14 @@ pub struct ResolvedParameter {
     pub name: ResolvedLocalIdentifier,
     pub resolved_type: ResolvedType,
     pub is_mutable: Option<ResolvedNode>,
+}
+
+impl ResolvedParameter {
+    #[inline]
+    #[must_use]
+    pub const fn is_mutable(&self) -> bool {
+        self.is_mutable.is_some()
+    }
 }
 
 #[derive(Debug)]
@@ -289,7 +297,7 @@ pub struct ResolvedUnaryOperator {
 
 #[derive(Debug)]
 pub enum ResolvedPostfixOperatorKind {
-    Unwrap(ResolvedNode),
+    Unwrap,
 }
 #[derive(Debug)]
 pub struct ResolvedPostfixOperator {
@@ -545,6 +553,14 @@ pub struct ResolvedIterator {
     pub value_type: ResolvedType,
     pub resolved_expression: ResolvedExpression,
     pub mutable_node: Option<ResolvedNode>,
+}
+
+impl ResolvedIterator {
+    #[inline]
+    #[must_use]
+    pub const fn is_mutable(&self) -> bool {
+        self.mutable_node.is_some()
+    }
 }
 
 #[derive(Debug)]

@@ -35,12 +35,13 @@ impl<T: Any + Debug + Display> RustType for T {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub enum Value {
     Int(i32),
     Float(Fp),
     String(String),
     Bool(bool),
+    #[default]
     Unit, // Means 'no value' ()
     Reference(Rc<RefCell<Value>>),
     Option(Option<Box<Value>>),

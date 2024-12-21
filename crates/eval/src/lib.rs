@@ -11,8 +11,9 @@ use swamp_script_core::extra::{SparseValueId, SparseValueMap};
 use swamp_script_core::value::{format_value, to_rust_value, Value, ValueError};
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
-    ResolvedAccess, ResolvedBinaryOperatorKind, ResolvedForPattern, ResolvedFunction,
-    ResolvedPatternElement, ResolvedStaticCall,
+    ResolvedAccess, ResolvedBinaryOperatorKind, ResolvedCompoundOperatorKind, ResolvedForPattern,
+    ResolvedFunction, ResolvedPatternElement, ResolvedPostfixOperatorKind, ResolvedStaticCall,
+    ResolvedUnaryOperatorKind,
 };
 use tracing::{debug, error, info, warn};
 
@@ -107,6 +108,7 @@ pub struct ExternalFunctions<C> {
 }
 
 impl<C> ExternalFunctions<C> {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             external_functions: HashMap::new(),
@@ -121,7 +123,7 @@ impl<C> ExternalFunctions<C> {
         handler: impl FnMut(&[Value], &mut C) -> Result<Value, ExecuteError> + 'static,
     ) -> Result<(), String> {
         let external_func = EvalExternalFunction {
-            name: name.to_string().clone(),
+            name: name.to_string(),
             func: Box::new(handler),
             id: function_id,
         };
@@ -139,11 +141,11 @@ impl<C> ExternalFunctions<C> {
 
 pub fn eval_module<C>(
     externals: &ExternalFunctions<C>,
-    module: &ResolvedModuleRef,
+    statements: &Vec<ResolvedStatement>,
     context: &mut C,
 ) -> Result<Value, ExecuteError> {
     let mut interpreter = Interpreter::<C>::new(externals, context);
-    let signal = interpreter.execute_statements(&module.borrow().statements)?;
+    let signal = interpreter.execute_statements(statements)?;
     Ok(signal.try_into()?)
 }
 
@@ -179,24 +181,28 @@ impl<'a, C> Interpreter<'a, C> {
         }
     }
 
-    fn push_function_scope(&mut self, _debug_str: &ResolvedNode) {
+    #[inline]
+    fn push_function_scope(&mut self) {
         self.function_scope_stack.push(FunctionScope {
             saved_block_scope: self.current_block_scopes.clone(),
         });
 
         self.current_block_scopes.clear();
-        self.push_block_scope(_debug_str);
+        self.push_block_scope();
     }
 
-    fn push_block_scope(&mut self, _debug_str: &ResolvedNode) {
+    #[inline]
+    fn push_block_scope(&mut self) {
         self.current_block_scopes.push(BlockScope::default());
     }
 
-    fn pop_block_scope(&mut self, _debug_str: &ResolvedNode) {
+    #[inline]
+    fn pop_block_scope(&mut self) {
         self.current_block_scopes.pop();
     }
 
-    fn pop_function_scope(&mut self, _debug_str: &str) {
+    #[inline]
+    fn pop_function_scope(&mut self) {
         if self.function_scope_stack.len() == 1 {
             error!("you popped too far");
             panic!("you popped too far");
@@ -211,13 +217,13 @@ impl<'a, C> Interpreter<'a, C> {
         args: &[Value],
     ) -> Result<(), ExecuteError> {
         for (index, (param, arg)) in params.iter().zip(args).enumerate() {
-            let value = if param.is_mutable {
+            let value = if param.is_mutable() {
                 match arg {
                     Value::Reference(r) => {
                         // For mutable parameters, use the SAME reference
                         Value::Reference(r.clone())
                     }
-                    _ => return Err(ExecuteError::ArgumentIsNotMutable(param.name.clone())), //v => Value::Reference(Rc::new(RefCell::new(v))),
+                    _ => return Err(ExecuteError::ArgumentIsNotMutable(param.name.0.clone())), //v => Value::Reference(Rc::new(RefCell::new(v))),
                 }
             } else {
                 match arg {
@@ -226,7 +232,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             };
 
-            self.set_local_var(index, value, param.is_mutable, &param.resolved_type)?;
+            self.set_local_var(index, value, param.is_mutable(), &param.resolved_type)?;
         }
 
         Ok(())
@@ -241,7 +247,7 @@ impl<'a, C> Interpreter<'a, C> {
 
         match &*static_call.function {
             ResolvedFunction::Internal(function_data) => {
-                self.push_function_scope("static function call");
+                self.push_function_scope();
                 self.bind_parameters(&function_data.signature.parameters, &evaluated_args)?;
                 let result = self.execute_statements(&function_data.statements)?;
 
@@ -251,7 +257,7 @@ impl<'a, C> Interpreter<'a, C> {
                     ValueWithSignal::Break => Value::Unit,
                     ValueWithSignal::Continue => Value::Unit,
                 };
-                self.pop_function_scope("static function call");
+                self.pop_function_scope();
                 Ok(v)
             }
             ResolvedFunction::External(external) => {
@@ -261,7 +267,7 @@ impl<'a, C> Interpreter<'a, C> {
                     .get(&external.id)
                     .expect("external function missing")
                     .borrow_mut();
-                (func.func)(&evaluated_args, &mut self.context)
+                (func.func)(&evaluated_args, self.context)
             }
         }
     }
@@ -277,7 +283,7 @@ impl<'a, C> Interpreter<'a, C> {
             .get(&call.function_definition.id)
             .expect("external function missing")
             .borrow_mut();
-        let v = (func.func)(&evaluated_args, &mut self.context)?;
+        let v = (func.func)(&evaluated_args, self.context)?;
         Ok(v)
     }
 
@@ -288,7 +294,7 @@ impl<'a, C> Interpreter<'a, C> {
         let func_val = self.evaluate_expression(&call.function_expression)?;
         match &func_val {
             Value::InternalFunction(internal_func_ref) => {
-                info!("internal func: {internal_func_ref}")
+                info!("internal func: {internal_func_ref:?}");
             }
             _ => {
                 return Err(ExecuteError::Error(
@@ -300,7 +306,7 @@ impl<'a, C> Interpreter<'a, C> {
         let evaluated_args = self.evaluate_args(&call.arguments)?;
         debug!("call {:?}", func_val);
 
-        self.push_function_scope(&call.function_definition.name.0);
+        self.push_function_scope();
 
         // Bind parameters before executing body
         self.bind_parameters(
@@ -308,11 +314,11 @@ impl<'a, C> Interpreter<'a, C> {
             &evaluated_args,
         )?;
 
-        debug!(args=?evaluated_args, name=%call.function_definition.name, "call function with arguments");
+        debug!(args=?evaluated_args, name=?call.function_definition.name, "call function with arguments");
 
         let result = self.execute_statements(&call.function_definition.statements)?;
 
-        self.pop_function_scope(&call.function_definition.name.0);
+        self.pop_function_scope();
 
         // Since signals can not propagate from the function call, we just return a normal Value
         let v = match result {
@@ -322,7 +328,7 @@ impl<'a, C> Interpreter<'a, C> {
             ValueWithSignal::Continue => Value::Unit,
         };
 
-        debug!(value=%v, name=%call.function_definition.name, "function returned");
+        debug!(value=%v, name=?call.function_definition.name, "function returned");
 
         Ok(v)
     }
@@ -339,7 +345,7 @@ impl<'a, C> Interpreter<'a, C> {
                     )? {
                         Value::Reference(r) => evaluated.push(Value::Reference(r.clone())),
                         _ => {
-                            Err("Can only take mutable reference of mutable variable".to_string())?
+                            Err("Can only take mutable reference of mutable variable".to_string())?;
                         }
                     }
                 }
@@ -379,10 +385,10 @@ impl<'a, C> Interpreter<'a, C> {
 
         match existing_var {
             Value::Reference(r) => {
-                *r.borrow_mut() = new_value.clone();
+                *r.borrow_mut() = new_value;
                 Ok(())
             }
-            _ => Err(format!("Cannot assign to immutable variable: {:?}", variable_index).into()),
+            _ => Err(format!("Cannot assign to immutable variable: {variable_index:?}",).into()),
         }
     }
 
@@ -401,7 +407,7 @@ impl<'a, C> Interpreter<'a, C> {
                 Value::Reference(Rc::new(RefCell::new(value)));
         } else {
             // If it is immutable, just store normal values
-            self.current_block_scopes[relative_scope_index].variables[variable_index] = value
+            self.current_block_scopes[relative_scope_index].variables[variable_index] = value;
         }
 
         Ok(())
@@ -496,10 +502,10 @@ impl<'a, C> Interpreter<'a, C> {
         let value = match expr {
             // Constructing
             ResolvedExpression::Literal(lit) => match lit {
-                ResolvedLiteral::IntLiteral(n, _) => Value::Int(*n),
-                ResolvedLiteral::FloatLiteral(f, _) => Value::Float(*f),
-                ResolvedLiteral::StringLiteral(s, _) => Value::String(s.0.clone()),
-                ResolvedLiteral::BoolLiteral(b, _) => Value::Bool(*b),
+                ResolvedLiteral::IntLiteral(n, _resolved_node, _) => Value::Int(*n),
+                ResolvedLiteral::FloatLiteral(f, _resolved_node, _) => Value::Float(*f),
+                ResolvedLiteral::StringLiteral(s, _resolved_node, _) => Value::String(s.clone()),
+                ResolvedLiteral::BoolLiteral(b, _resolved_node, _) => Value::Bool(*b),
                 ResolvedLiteral::EnumVariantLiteral(enum_variant_type, data) => {
                     let variant_container_value: Value = match &enum_variant_type.data {
                         ResolvedEnumVariantContainerType::Tuple(tuple_type) => match data {
@@ -565,10 +571,17 @@ impl<'a, C> Interpreter<'a, C> {
 
             ResolvedExpression::StructInstantiation(struct_instantiation) => {
                 // Evaluate all field expressions and validate types
-                let mut field_values = Vec::new();
-                for field_expr in &struct_instantiation.expressions_in_order {
+                let mut field_values =
+                    Vec::with_capacity(struct_instantiation.source_order_expressions.len());
+                field_values.resize_with(
+                    struct_instantiation.source_order_expressions.len(),
+                    Default::default,
+                );
+
+                // They are evaluated in source order, but an array_index is provided for the definition order
+                for (array_index, field_expr) in &struct_instantiation.source_order_expressions {
                     let value = self.evaluate_expression(field_expr)?;
-                    field_values.push(value);
+                    field_values[*array_index] = value;
                 }
 
                 Value::Struct(
@@ -629,11 +642,11 @@ impl<'a, C> Interpreter<'a, C> {
                 let int_mod = modifier_value.expect_int()?;
                 let current_int = current_value.borrow().expect_int()?;
 
-                let new_result = match var_assignment.compound_operator {
-                    CompoundOperator::Add => current_int + int_mod,
-                    CompoundOperator::Sub => current_int - int_mod,
-                    CompoundOperator::Mul => current_int * int_mod,
-                    CompoundOperator::Div => current_int / int_mod,
+                let new_result = match var_assignment.compound_operator.kind {
+                    ResolvedCompoundOperatorKind::Add => current_int + int_mod,
+                    ResolvedCompoundOperatorKind::Sub => current_int - int_mod,
+                    ResolvedCompoundOperatorKind::Mul => current_int * int_mod,
+                    ResolvedCompoundOperatorKind::Div => current_int / int_mod,
                 };
 
                 let new_value = Value::Int(new_result);
@@ -654,10 +667,10 @@ impl<'a, C> Interpreter<'a, C> {
                             if let Value::Array(_, items) = source_val {
                                 vector.extend(items);
                             } else {
-                                Err("Cannot extend non-array reference".to_string())?
+                                Err("Cannot extend non-array reference".to_string())?;
                             }
                         } else {
-                            Err("Cannot extend non-array reference".to_string())?
+                            Err("Cannot extend non-array reference".to_string())?;
                         }
                     }
                     _ => Err(ExecuteError::NotAnArray)?,
@@ -673,7 +686,7 @@ impl<'a, C> Interpreter<'a, C> {
                         if let Value::Array(_type_id, ref mut vector) = &mut *r.borrow_mut() {
                             vector.push(source_val);
                         } else {
-                            Err("Cannot extend non-array reference".to_string())?
+                            Err("Cannot extend non-array reference".to_string())?;
                         }
                     }
                     _ => Err(ExecuteError::NotAnArray)?,
@@ -683,13 +696,10 @@ impl<'a, C> Interpreter<'a, C> {
 
             ResolvedExpression::ArrayRemoveIndex(variable_ref, usize_index_expression) => {
                 let index_val = self.evaluate_expression(usize_index_expression)?;
-                let index = match index_val {
-                    Value::Int(x) => x,
-                    _ => {
-                        return Err(ExecuteError::ArgumentIsNotMutable(
-                            variable_ref.ast_variable.name.clone(),
-                        ))
-                    }
+                let Value::Int(index) = index_val else {
+                    return Err(ExecuteError::ArgumentIsNotMutable(
+                        variable_ref.name.clone(),
+                    ));
                 };
                 let array_val = self.lookup_variable(variable_ref)?;
 
@@ -698,7 +708,7 @@ impl<'a, C> Interpreter<'a, C> {
                         if let Value::Array(_type_id, ref mut vector) = &mut *r.borrow_mut() {
                             vector.remove(index as usize);
                         } else {
-                            Err("Cannot extend non-array reference".to_string())?
+                            Err("Cannot extend non-array reference".to_string())?;
                         }
                     }
                     _ => Err(ExecuteError::NotAnArray)?,
@@ -713,7 +723,7 @@ impl<'a, C> Interpreter<'a, C> {
                         if let Value::Array(_type_id, ref mut vector) = &mut *r.borrow_mut() {
                             vector.clear();
                         } else {
-                            Err("Cannot extend non-array reference".to_string())?
+                            Err("Cannot extend non-array reference".to_string())?;
                         }
                     }
                     _ => Err(ExecuteError::NotAnArray)?,
@@ -730,16 +740,15 @@ impl<'a, C> Interpreter<'a, C> {
                     (Value::Reference(r), Value::Int(i)) => {
                         if let Value::Array(_type_id, ref mut elements) = &mut *r.borrow_mut() {
                             if i < 0 || i >= elements.len() as i32 {
-                                return Err(format!("Array index out of bounds: {}", i))?;
+                                return Err(format!("Array index out of bounds: {i}"))?;
                             }
                             elements[i as usize] = new_val.clone();
                         } else {
-                            Err("Cannot index into non-array reference".to_string())?
+                            Err("Cannot index into non-array reference".to_string())?;
                         }
                     }
                     (arr, idx) => Err(format!(
-                        "Invalid array assignment: cannot index {:?} with {:?}",
-                        arr, idx
+                        "Invalid array assignment: cannot index {arr:?} with {idx:?}"
                     ))?,
                 }
 
@@ -758,10 +767,10 @@ impl<'a, C> Interpreter<'a, C> {
                                 .insert(index_val, new_val.clone())
                                 .expect("todo: improve error handling");
                         } else {
-                            Err("Cannot index into non-array reference".to_string())?
+                            Err("Cannot index into non-array reference".to_string())?;
                         }
                     }
-                    _ => Err(format!("Invalid map assignment: must be mutable"))?,
+                    _ => Err("Invalid map assignment: must be mutable".to_string())?,
                 }
 
                 new_val
@@ -785,7 +794,7 @@ impl<'a, C> Interpreter<'a, C> {
             ) => self.evaluate_field_assignment_compound(
                 resolved_struct_field_ref,
                 lookups,
-                compound_operator.clone(),
+                &compound_operator.kind,
                 source_expression,
             )?,
 
@@ -802,14 +811,14 @@ impl<'a, C> Interpreter<'a, C> {
                 match (array_val, index_val) {
                     (Value::Array(_type_id, elements), Value::Int(i)) => {
                         if i < 0 || i >= elements.len() as i32 {
-                            return Err(format!("Array index out of bounds: {}", i))?;
+                            return Err(format!("Array index out of bounds: {i}"))?;
                         }
                         elements[i as usize].clone()
                     }
                     (Value::Reference(r), Value::Int(i)) => {
                         if let Value::Array(_type_id, elements) = &*r.borrow() {
                             if i < 0 || i >= elements.len() as i32 {
-                                return Err(format!("Array index out of bounds: {}", i))?;
+                                return Err(format!("Array index out of bounds: {i}"))?;
                             }
                             elements[i as usize].clone()
                         } else {
@@ -817,8 +826,7 @@ impl<'a, C> Interpreter<'a, C> {
                         }
                     }
                     (arr, idx) => Err(format!(
-                        "Invalid array access: cannot index {:?} with {:?}",
-                        arr, idx
+                        "Invalid array access: cannot index {arr:?} with {idx:?}"
                     ))?,
                 }
             }
@@ -830,31 +838,30 @@ impl<'a, C> Interpreter<'a, C> {
                 match (map_val, index_val) {
                     (Value::Map(_type_id, elements), v) => {
                         let x = elements.get(&v);
-                        match x {
-                            None => Value::Option(None),
-                            Some(v) => Value::Option(Some(Box::from(v.clone()))),
-                        }
+                        x.map_or_else(
+                            || Value::Option(None),
+                            |v| Value::Option(Some(Box::from(v.clone()))),
+                        )
                     }
                     (Value::Reference(r), v) => {
                         if let Value::Map(_type_id, elements) = &*r.borrow() {
                             let x = elements.get(&v);
-                            match x {
-                                None => Value::Option(None),
-                                Some(v) => Value::Option(Some(Box::from(v.clone()))),
-                            }
+                            x.map_or_else(
+                                || Value::Option(None),
+                                |v| Value::Option(Some(Box::from(v.clone()))),
+                            )
                         } else {
                             Err("Cannot index into non-map reference".to_string())?
                         }
                     }
                     (arr, idx) => Err(format!(
-                        "Invalid map access: cannot index {:?} with {:?}",
-                        arr, idx
+                        "Invalid map access: cannot index {arr:?} with {idx:?}"
                     ))?,
                 }
             }
 
             ResolvedExpression::FieldAccess(struct_field_access, field_ref, access_list) => {
-                self.evaluate_field_access(struct_field_access, &field_ref, access_list)?
+                self.evaluate_field_access(struct_field_access, field_ref, access_list)?
             }
 
             ResolvedExpression::MutRef(var_ref) => {
@@ -878,12 +885,12 @@ impl<'a, C> Interpreter<'a, C> {
 
             ResolvedExpression::UnaryOp(unary_operator) => {
                 let left_val = self.evaluate_expression(&unary_operator.left)?;
-                self.evaluate_unary_op(&unary_operator.kind, left_val)?
+                Self::evaluate_unary_op(&unary_operator.kind, left_val)?
             }
 
             ResolvedExpression::PostfixOp(postfix_operator) => {
                 let left_val = self.evaluate_expression(&postfix_operator.left)?;
-                self.evaluate_postfix_op(&postfix_operator.kind, left_val)?
+                Self::evaluate_postfix_op(&postfix_operator.kind, left_val)?
             }
 
             // Calling
@@ -903,10 +910,10 @@ impl<'a, C> Interpreter<'a, C> {
                 let evaluated_args = self.evaluate_args(&static_call_generic.arguments)?;
                 match &*static_call_generic.function {
                     ResolvedFunction::Internal(function_data) => {
-                        self.push_function_scope("static generic function call");
+                        self.push_function_scope();
                         self.bind_parameters(&function_data.signature.parameters, &evaluated_args)?;
                         let result = self.execute_statements(&function_data.statements)?;
-                        self.pop_function_scope("static generic function call");
+                        self.pop_function_scope();
                         match result {
                             ValueWithSignal::Value(v) | ValueWithSignal::Return(v) => Ok(v),
                             _ => Ok(Value::Unit),
@@ -919,7 +926,7 @@ impl<'a, C> Interpreter<'a, C> {
                             .get(&external.id)
                             .expect("external function missing")
                             .borrow_mut();
-                        (func.func)(&evaluated_args, &mut self.context)
+                        (func.func)(&evaluated_args, self.context)
                     }
                 }?
             }
@@ -938,7 +945,7 @@ impl<'a, C> Interpreter<'a, C> {
                 };
 
                 let mut member_call_arguments = Vec::new();
-                member_call_arguments.push(member_value.clone()); // Add self as first argument
+                member_call_arguments.push(member_value); // Add self as first argument
                 for arg in &resolved_member_call.arguments {
                     member_call_arguments.push(self.evaluate_expression(arg)?);
                 }
@@ -954,16 +961,10 @@ impl<'a, C> Interpreter<'a, C> {
 
                 match &*resolved_member_call.function {
                     ResolvedFunction::Internal(internal_function) => {
-                        self.push_function_scope(&format!(
-                            "member_call {:?}",
-                            internal_function.name.0
-                        ));
+                        self.push_function_scope();
                         self.bind_parameters(parameters, &member_call_arguments)?;
                         let result = self.execute_statements(&internal_function.statements)?;
-                        self.pop_function_scope(&format!(
-                            "member_call {:?}",
-                            internal_function.name.0
-                        ));
+                        self.pop_function_scope();
 
                         match result {
                             ValueWithSignal::Value(v) => v,
@@ -983,15 +984,15 @@ impl<'a, C> Interpreter<'a, C> {
                             .get(&external_func.id)
                             .expect("external function missing")
                             .borrow_mut();
-                        (func.func)(&member_call_arguments, &mut self.context)?
+                        (func.func)(&member_call_arguments, self.context)?
                     }
                 }
             }
 
             ResolvedExpression::Block(statements) => {
-                self.push_block_scope("block statements");
+                self.push_block_scope();
                 let result = self.execute_statements(statements)?;
-                self.pop_block_scope("block_statements");
+                self.pop_block_scope();
                 match result {
                     ValueWithSignal::Value(v) => v,
                     ValueWithSignal::Return(_) => {
@@ -1011,13 +1012,13 @@ impl<'a, C> Interpreter<'a, C> {
 
                 for part in parts {
                     match part {
-                        ResolvedStringPart::Literal(text) => {
+                        ResolvedStringPart::Literal(_resolved_node, text) => {
                             result.push_str(text);
                         }
                         ResolvedStringPart::Interpolation(expr, format_spec) => {
                             let value = self.evaluate_expression(expr)?;
                             let formatted = match format_spec {
-                                Some(spec) => format_value(&value, spec)?,
+                                Some(spec) => format_value(&value, &spec.kind)?,
                                 None => value.to_string(),
                             };
                             result.push_str(&formatted);
@@ -1030,7 +1031,7 @@ impl<'a, C> Interpreter<'a, C> {
 
             // Comparing
             ResolvedExpression::IfElse(condition, then_expr, else_expr) => {
-                self.push_block_scope("if_else");
+                self.push_block_scope();
                 let cond_value = self.evaluate_expression(&condition.expression)?;
                 let result = if cond_value.is_truthy()? {
                     self.evaluate_expression(then_expr)?
@@ -1038,7 +1039,7 @@ impl<'a, C> Interpreter<'a, C> {
                     self.evaluate_expression(else_expr)?
                 };
 
-                self.pop_block_scope("if_else");
+                self.pop_block_scope();
                 result
             }
 
@@ -1051,7 +1052,7 @@ impl<'a, C> Interpreter<'a, C> {
                 let value = self.evaluate_expression(optional_expr)?;
                 match value {
                     Value::Option(Some(inner_value)) => {
-                        self.push_block_scope("if else only variable");
+                        self.push_block_scope();
                         self.initialize_var(
                             variable.scope_index,
                             variable.variable_index,
@@ -1059,7 +1060,7 @@ impl<'a, C> Interpreter<'a, C> {
                             variable.is_mutable(),
                         )?;
                         let result = self.evaluate_expression(true_block)?;
-                        self.pop_block_scope("if else only variable");
+                        self.pop_block_scope();
                         result
                     }
                     Value::Option(None) => self.evaluate_expression(false_block)?,
@@ -1076,7 +1077,7 @@ impl<'a, C> Interpreter<'a, C> {
                 let value = self.evaluate_expression(optional_expr)?;
                 match value {
                     Value::Option(Some(inner_value)) => {
-                        self.push_block_scope("if else assign expression");
+                        self.push_block_scope();
                         self.initialize_var(
                             variable.scope_index,
                             variable.variable_index,
@@ -1084,7 +1085,7 @@ impl<'a, C> Interpreter<'a, C> {
                             variable.is_mutable(),
                         )?;
                         let result = self.evaluate_expression(true_block)?;
-                        self.pop_block_scope("if else assign expression");
+                        self.pop_block_scope();
                         result
                     }
                     Value::Option(None) => self.evaluate_expression(false_block)?,
@@ -1148,7 +1149,7 @@ impl<'a, C> Interpreter<'a, C> {
                 if let Some(found) = sparse_value_map {
                     let id_value = self.evaluate_expression(id_expression)?;
                     if let Some(found_id) = id_value.downcast_rust::<SparseValueId>() {
-                        found.borrow_mut().remove(&**found_id.borrow());
+                        found.borrow_mut().remove(&found_id.borrow());
                     } else {
                         return Err(ExecuteError::Error(
                             "was not a sparse slot. can not remove".to_string(),
@@ -1260,16 +1261,12 @@ impl<'a, C> Interpreter<'a, C> {
                             ValueWithSignal::Return(v) => return Ok(ValueWithSignal::Return(v)),
                             ValueWithSignal::Continue => return Ok(ValueWithSignal::Continue),
                         }
-                    } else {
-                        if let Some(alternative) = optional_alternative {
-                            match self.execute_statements(alternative)? {
-                                ValueWithSignal::Value(v) => return_value = v, // Store the value
-                                ValueWithSignal::Break => return Ok(ValueWithSignal::Break),
-                                ValueWithSignal::Return(v) => {
-                                    return Ok(ValueWithSignal::Return(v))
-                                }
-                                ValueWithSignal::Continue => return Ok(ValueWithSignal::Continue),
-                            }
+                    } else if let Some(alternative) = optional_alternative {
+                        match self.execute_statements(alternative)? {
+                            ValueWithSignal::Value(v) => return_value = v, // Store the value
+                            ValueWithSignal::Break => return Ok(ValueWithSignal::Break),
+                            ValueWithSignal::Return(v) => return Ok(ValueWithSignal::Return(v)),
+                            ValueWithSignal::Continue => return Ok(ValueWithSignal::Continue),
                         }
                     }
                     continue;
@@ -1284,7 +1281,7 @@ impl<'a, C> Interpreter<'a, C> {
                     let condition_value = self.evaluate_expression(optional_expr)?;
                     match condition_value {
                         Value::Option(Some(inner_value)) => {
-                            self.push_block_scope("if only variable");
+                            self.push_block_scope();
                             info!(value=%inner_value.clone(), "shadow variable");
                             self.initialize_var(
                                 variable.scope_index,
@@ -1293,9 +1290,9 @@ impl<'a, C> Interpreter<'a, C> {
                                 variable.is_mutable(),
                             )?;
 
-                            let result = self.execute_statements(&true_block)?;
+                            let result = self.execute_statements(true_block)?;
 
-                            self.pop_block_scope("if only variable");
+                            self.pop_block_scope();
 
                             match result {
                                 ValueWithSignal::Value(v) => return_value = v,
@@ -1304,7 +1301,7 @@ impl<'a, C> Interpreter<'a, C> {
                         }
                         Value::Option(None) => {
                             if let Some(else_block) = false_block {
-                                match self.execute_statements(&else_block)? {
+                                match self.execute_statements(else_block)? {
                                     ValueWithSignal::Value(_v) => return_value = condition_value,
                                     signal => return Ok(signal),
                                 }
@@ -1320,7 +1317,7 @@ impl<'a, C> Interpreter<'a, C> {
                     if result.is_err() {
                         return Err(result.unwrap_err());
                     }
-                    return_value = result?
+                    return_value = result?;
                 }
 
                 ResolvedStatement::IfAssignExpression {
@@ -1332,7 +1329,7 @@ impl<'a, C> Interpreter<'a, C> {
                     let value = self.evaluate_expression(optional_expr)?;
                     match value {
                         Value::Option(Some(inner_value)) => {
-                            self.push_block_scope("if assign expression");
+                            self.push_block_scope();
                             self.initialize_var(
                                 variable.scope_index,
                                 variable.variable_index,
@@ -1340,8 +1337,8 @@ impl<'a, C> Interpreter<'a, C> {
                                 variable.is_mutable(),
                             )?;
 
-                            let result = self.execute_statements(&true_block)?;
-                            self.pop_block_scope("if assign expression");
+                            let result = self.execute_statements(true_block)?;
+                            self.pop_block_scope();
 
                             match result {
                                 ValueWithSignal::Value(v) => return_value = v,
@@ -1350,7 +1347,7 @@ impl<'a, C> Interpreter<'a, C> {
                         }
                         Value::Option(None) => {
                             if let Some(else_block) = false_block {
-                                match self.execute_statements(&else_block)? {
+                                match self.execute_statements(else_block)? {
                                     ValueWithSignal::Value(v) => return_value = v,
                                     signal => return Ok(signal),
                                 }
@@ -1367,14 +1364,14 @@ impl<'a, C> Interpreter<'a, C> {
 
                     match pattern {
                         ResolvedForPattern::Single(var_ref) => {
-                            self.push_block_scope(&format!("for_loop single {:?}", var_ref));
+                            self.push_block_scope();
 
-                            for value in iterator_value.into_iter(iterator_expr.is_mutable)? {
+                            for value in iterator_value.into_iter(iterator_expr.is_mutable())? {
                                 self.initialize_var(
                                     var_ref.scope_index,
                                     var_ref.variable_index,
                                     value,
-                                    iterator_expr.is_mutable,
+                                    iterator_expr.is_mutable(),
                                 )?;
 
                                 match self.execute_statements(body)? {
@@ -1387,14 +1384,14 @@ impl<'a, C> Interpreter<'a, C> {
                                 }
                             }
 
-                            self.pop_block_scope("for loop single");
+                            self.pop_block_scope();
                         }
 
                         ResolvedForPattern::Pair(first_ref, second_ref) => {
-                            self.push_block_scope("for_loop pair");
+                            self.push_block_scope();
 
                             for (key, value) in
-                                iterator_value.into_iter_pairs(iterator_expr.is_mutable)?
+                                iterator_value.into_iter_pairs(iterator_expr.is_mutable())?
                             {
                                 // Set both variables
                                 self.initialize_var(
@@ -1420,7 +1417,7 @@ impl<'a, C> Interpreter<'a, C> {
                                 }
                             }
 
-                            self.pop_block_scope("for loop pair");
+                            self.pop_block_scope();
                         }
                     }
 
@@ -1455,10 +1452,10 @@ impl<'a, C> Interpreter<'a, C> {
                 ResolvedPattern::PatternList(elements) => {
                     // Handle single variable/wildcard patterns that match any value
                     if elements.len() == 1 {
-                        match &elements[0] {
+                        return match &elements[0] {
                             ResolvedPatternElement::Variable(var_ref)
                             | ResolvedPatternElement::VariableWithFieldIndex(var_ref, _) => {
-                                self.push_block_scope("pattern variable");
+                                self.push_block_scope();
                                 self.set_local_var(
                                     var_ref.variable_index,
                                     actual_value.clone(),
@@ -1466,20 +1463,20 @@ impl<'a, C> Interpreter<'a, C> {
                                     &var_ref.resolved_type,
                                 )?;
                                 let result = self.evaluate_expression(&arm.expression);
-                                self.pop_block_scope("pattern variable");
-                                return result;
+                                self.pop_block_scope();
+                                result
                             }
                             ResolvedPatternElement::Wildcard(_) => {
                                 // Wildcard matches anything
-                                return self.evaluate_expression(&arm.expression);
+                                self.evaluate_expression(&arm.expression)
                             }
-                        }
+                        };
                     }
 
                     match &actual_value {
                         Value::Tuple(_tuple_type_ref, values) => {
                             if elements.len() == values.len() {
-                                self.push_block_scope("pattern list");
+                                self.push_block_scope();
 
                                 for (element, value) in elements.iter().zip(values.iter()) {
                                     match element {
@@ -1510,7 +1507,7 @@ impl<'a, C> Interpreter<'a, C> {
                                 }
 
                                 let result = self.evaluate_expression(&arm.expression);
-                                self.pop_block_scope("pattern list");
+                                self.pop_block_scope();
                                 return result;
                             }
                         }
@@ -1533,7 +1530,7 @@ impl<'a, C> Interpreter<'a, C> {
 
                             if let Some(elements) = maybe_elements {
                                 if elements.len() == values.len() {
-                                    self.push_block_scope("enum tuple pattern");
+                                    self.push_block_scope();
 
                                     for (element, value) in elements.iter().zip(values.iter()) {
                                         match element {
@@ -1561,7 +1558,7 @@ impl<'a, C> Interpreter<'a, C> {
                                     }
 
                                     let result = self.evaluate_expression(&arm.expression);
-                                    self.pop_block_scope("enum tuple pattern");
+                                    self.pop_block_scope();
                                     return result;
                                 }
                             }
@@ -1569,7 +1566,7 @@ impl<'a, C> Interpreter<'a, C> {
                         Value::EnumVariantStruct(value_struct_type, values) => {
                             if value_struct_type.common.number == variant_ref.number {
                                 if let Some(elements) = maybe_elements {
-                                    self.push_block_scope("enum struct pattern");
+                                    self.push_block_scope();
 
                                     for element in elements {
                                         if let ResolvedPatternElement::VariableWithFieldIndex(
@@ -1588,7 +1585,7 @@ impl<'a, C> Interpreter<'a, C> {
                                     }
 
                                     let result = self.evaluate_expression(&arm.expression);
-                                    self.pop_block_scope("enum struct pattern");
+                                    self.pop_block_scope();
                                     return result;
                                 }
                             }
@@ -1606,16 +1603,24 @@ impl<'a, C> Interpreter<'a, C> {
                 }
 
                 ResolvedPattern::Literal(lit) => match (lit, &actual_value) {
-                    (ResolvedLiteral::IntLiteral(a, _), Value::Int(b)) if a == b => {
+                    (ResolvedLiteral::IntLiteral(a, _resolved_node, _), Value::Int(b))
+                        if a == b =>
+                    {
                         return self.evaluate_expression(&arm.expression);
                     }
-                    (ResolvedLiteral::FloatLiteral(a, _), Value::Float(b)) if a == b => {
+                    (ResolvedLiteral::FloatLiteral(a, _resolved_node, _), Value::Float(b))
+                        if a == b =>
+                    {
                         return self.evaluate_expression(&arm.expression);
                     }
-                    (ResolvedLiteral::StringLiteral(a, _), Value::String(b)) if a.0 == *b => {
+                    (ResolvedLiteral::StringLiteral(a, _resolved_node, _), Value::String(b))
+                        if *a == *b =>
+                    {
                         return self.evaluate_expression(&arm.expression);
                     }
-                    (ResolvedLiteral::BoolLiteral(a, _), Value::Bool(b)) if a == b => {
+                    (ResolvedLiteral::BoolLiteral(a, _resolved_node, _), Value::Bool(b))
+                        if a == b =>
+                    {
                         return self.evaluate_expression(&arm.expression);
                     }
                     (
@@ -1652,22 +1657,20 @@ impl<'a, C> Interpreter<'a, C> {
 
         let result: Value = match (left_val, op, right_val) {
             // Integer operations
-            (Value::Int(a), ResolvedBinaryOperatorKind::Add(_), Value::Int(b)) => Value::Int(a + b),
-            (Value::Int(a), ResolvedBinaryOperatorKind::Subtract(_), Value::Int(b)) => {
+            (Value::Int(a), ResolvedBinaryOperatorKind::Add, Value::Int(b)) => Value::Int(a + b),
+            (Value::Int(a), ResolvedBinaryOperatorKind::Subtract, Value::Int(b)) => {
                 Value::Int(a - b)
             }
-            (Value::Int(a), ResolvedBinaryOperatorKind::Multiply(_), Value::Int(b)) => {
+            (Value::Int(a), ResolvedBinaryOperatorKind::Multiply, Value::Int(b)) => {
                 Value::Int(a * b)
             }
-            (Value::Int(a), ResolvedBinaryOperatorKind::Divide(_), Value::Int(b)) => {
+            (Value::Int(a), ResolvedBinaryOperatorKind::Divide, Value::Int(b)) => {
                 if b == 0 {
                     return Err("Division by zero".to_string())?;
                 }
                 Value::Int(a / b)
             }
-            (Value::Int(a), ResolvedBinaryOperatorKind::Modulo(_), Value::Int(b)) => {
-                Value::Int(a % b)
-            }
+            (Value::Int(a), ResolvedBinaryOperatorKind::Modulo, Value::Int(b)) => Value::Int(a % b),
 
             // Float operations
             (Value::Float(a), ResolvedBinaryOperatorKind::Add, Value::Float(b)) => {
@@ -1758,23 +1761,29 @@ impl<'a, C> Interpreter<'a, C> {
         Ok(result)
     }
 
-    fn evaluate_unary_op(&self, op: &UnaryOperator, val: Value) -> Result<Value, ExecuteError> {
+    fn evaluate_unary_op(
+        op: &ResolvedUnaryOperatorKind,
+        val: Value,
+    ) -> Result<Value, ExecuteError> {
         match (op, val) {
-            (UnaryOperator::Negate, Value::Int(n)) => Ok(Value::Int(-n)),
-            (UnaryOperator::Negate, Value::Float(n)) => Ok(Value::Float(-n)),
-            (UnaryOperator::Not, Value::Bool(b)) => Ok(Value::Bool(!b)),
-            _ => Err(format!("Invalid unary operation"))?,
+            (ResolvedUnaryOperatorKind::Negate, Value::Int(n)) => Ok(Value::Int(-n)),
+            (ResolvedUnaryOperatorKind::Negate, Value::Float(n)) => Ok(Value::Float(-n)),
+            (ResolvedUnaryOperatorKind::Not, Value::Bool(b)) => Ok(Value::Bool(!b)),
+            _ => Err("Invalid unary operation".to_string())?,
         }
     }
 
-    fn evaluate_postfix_op(&self, op: &PostfixOperator, val: Value) -> Result<Value, ExecuteError> {
+    fn evaluate_postfix_op(
+        op: &ResolvedPostfixOperatorKind,
+        val: Value,
+    ) -> Result<Value, ExecuteError> {
         match op {
-            PostfixOperator::Unwrap => self.evaluate_unwrap_op(val),
+            ResolvedPostfixOperatorKind::Unwrap => Self::evaluate_unwrap_op(val),
         }
     }
 
     #[inline]
-    fn evaluate_unwrap_op(&self, val: Value) -> Result<Value, ExecuteError> {
+    fn evaluate_unwrap_op(val: Value) -> Result<Value, ExecuteError> {
         match val {
             Value::Option(ref unwrapped_boxed_opt) => match unwrapped_boxed_opt {
                 Some(value) => Ok(*value.clone()),
@@ -1800,7 +1809,7 @@ impl<'a, C> Interpreter<'a, C> {
         Ok(true)
     }
 
-    /// Get the Rc<RefCell<>> to the inner part of the Value instead of a Value
+    /// Get the `Rc<RefCell<>>` to the inner part of the Value instead of a Value
     fn evaluate_expression_ref(
         &mut self,
         expr: &ResolvedExpression,
@@ -1826,7 +1835,7 @@ impl<'a, C> Interpreter<'a, C> {
         let mut value = self.evaluate_expression(expression)?;
         for lookup in lookups {
             match lookup {
-                ResolvedAccess::FieldIndex(index) => {
+                ResolvedAccess::FieldIndex(_resolved_node, index) => {
                     value = match &value {
                         Value::Struct(_struct_type, fields, _) => fields[*index].clone(),
                         Value::Reference(r) => {
@@ -1842,18 +1851,14 @@ impl<'a, C> Interpreter<'a, C> {
                                         _ => {
                                             error!(?value, ?inner_value, "expected struct2");
                                             Err(format!(
-                                                "Cannot access field reference '{}' on non-struct value",
-                                                index
-                                            ))?
+                                                "Cannot access field reference '{index}' on non-struct value"))?
                                         }
                                     }
                                 }
                                 _ => {
                                     error!(?value, ?inner_value, "expected struct");
                                     Err(format!(
-                                        "Cannot access field reference '{}' on non-struct value",
-                                        index
-                                    ))?
+                                        "Cannot access field reference '{index}' on non-struct value"))?
                                 }
                             }
                         }
@@ -1902,7 +1907,7 @@ impl<'a, C> Interpreter<'a, C> {
 
         for lookup in lookups.iter().take(lookups.len() - 1) {
             let next_ref = match lookup {
-                ResolvedAccess::FieldIndex(i) => {
+                ResolvedAccess::FieldIndex(_resolved_node, i) => {
                     let field_index = *i;
 
                     let mut borrowed = current_ref.borrow_mut();
@@ -1981,7 +1986,7 @@ impl<'a, C> Interpreter<'a, C> {
             current_ref = next_ref;
         }
 
-        if let Some(ResolvedAccess::FieldIndex(last_index)) = lookups.last() {
+        if let Some(ResolvedAccess::FieldIndex(_resolved_node, last_index)) = lookups.last() {
             let mut borrowed = current_ref.borrow_mut();
             match &mut *borrowed {
                 Value::Struct(_struct_type, fields, _) => {
@@ -2017,7 +2022,7 @@ impl<'a, C> Interpreter<'a, C> {
         &mut self,
         start_expression: &ResolvedExpression,
         lookups: &[ResolvedAccess],
-        operator: CompoundOperator,
+        operator: &ResolvedCompoundOperatorKind,
         source_expression: &ResolvedExpression,
     ) -> Result<Value, ExecuteError> {
         let source = self.evaluate_expression(source_expression)?;
@@ -2025,7 +2030,7 @@ impl<'a, C> Interpreter<'a, C> {
 
         for lookup in lookups.iter().take(lookups.len() - 1) {
             let next_ref = match lookup {
-                ResolvedAccess::FieldIndex(i) => {
+                ResolvedAccess::FieldIndex(_resolved_node, i) => {
                     let field_index = *i;
 
                     let mut borrowed = current_ref.borrow_mut();
@@ -2104,7 +2109,7 @@ impl<'a, C> Interpreter<'a, C> {
             current_ref = next_ref;
         }
 
-        if let Some(ResolvedAccess::FieldIndex(last_index)) = lookups.last() {
+        if let Some(ResolvedAccess::FieldIndex(_resolved_node, last_index)) = lookups.last() {
             let mut borrowed = current_ref.borrow_mut();
             match &mut *borrowed {
                 Value::Struct(_struct_type, fields, _) => {
@@ -2143,34 +2148,37 @@ impl<'a, C> Interpreter<'a, C> {
     #[inline(always)]
     fn apply_compound_operator(
         target: &mut Value,
-        operator: ResolvedCompoundOperator,
+        operator: &ResolvedCompoundOperatorKind,
         source: &Value,
     ) -> Result<(), ExecuteError> {
         match operator {
-            ResolvedCompoundOperator::Mul => {
+            ResolvedCompoundOperatorKind::Mul => {
                 *target = Self::evaluate_binary_op(
                     target.clone(),
-                    &BinaryOperator::Multiply,
+                    &ResolvedBinaryOperatorKind::Multiply,
                     source.clone(),
-                )?
+                )?;
             }
-            ResolvedCompoundOperator::Div => {
+            ResolvedCompoundOperatorKind::Div => {
                 *target = Self::evaluate_binary_op(
                     target.clone(),
-                    &BinaryOperator::Divide,
+                    &ResolvedBinaryOperatorKind::Divide,
                     source.clone(),
-                )?
+                )?;
             }
-            ResolvedCompoundOperator::Add => {
-                *target =
-                    Self::evaluate_binary_op(target.clone(), &BinaryOperator::Add, source.clone())?
-            }
-            ResolvedCompoundOperator::Sub => {
+            ResolvedCompoundOperatorKind::Add => {
                 *target = Self::evaluate_binary_op(
                     target.clone(),
-                    &BinaryOperator::Subtract,
+                    &ResolvedBinaryOperatorKind::Add,
                     source.clone(),
-                )?
+                )?;
+            }
+            ResolvedCompoundOperatorKind::Sub => {
+                *target = Self::evaluate_binary_op(
+                    target.clone(),
+                    &ResolvedBinaryOperatorKind::Subtract,
+                    source.clone(),
+                )?;
             }
         }
         Ok(())
