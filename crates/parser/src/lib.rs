@@ -1361,7 +1361,6 @@ impl AstParser {
     fn parse_format_specifier(&self, pair: Pair<Rule>) -> Result<FormatSpecifier, ParseError> {
         let node = self.to_node(&pair);
         match pair.as_str() {
-            "?" => Ok(FormatSpecifier::Debug(node)),
             "x" => Ok(FormatSpecifier::LowerHex(node)),
             "X" => Ok(FormatSpecifier::UpperHex(node)),
             "b" => Ok(FormatSpecifier::Binary(node)),
@@ -1488,7 +1487,7 @@ impl AstParser {
             }
             Rule::bool_lit => Ok(Literal::Bool(node)),
             Rule::unit_lit => Ok(Literal::Unit),
-            Rule::none_lit => Ok(Literal::None),
+            Rule::none_lit => Ok(Literal::None(node)),
             Rule::tuple_lit => {
                 let mut expressions = Vec::new();
                 for expr_pair in Self::convert_into_iterator(&inner) {

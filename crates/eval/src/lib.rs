@@ -8,13 +8,14 @@ use seq_map::SeqMap;
 use std::fmt::Debug;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use swamp_script_core::extra::{SparseValueId, SparseValueMap};
-use swamp_script_core::value::{format_value, to_rust_value, Value, ValueError};
+use swamp_script_core::value::{format_value, to_rust_value, SourceMapLookup, Value, ValueError};
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
     ResolvedAccess, ResolvedBinaryOperatorKind, ResolvedCompoundOperatorKind, ResolvedForPattern,
     ResolvedFunction, ResolvedPatternElement, ResolvedPostfixOperatorKind, ResolvedStaticCall,
     ResolvedUnaryOperatorKind,
 };
+use swamp_script_source_map::SourceMap;
 use tracing::{debug, error, info, warn};
 
 pub mod err;
@@ -142,9 +143,10 @@ impl<C> ExternalFunctions<C> {
 pub fn eval_module<C>(
     externals: &ExternalFunctions<C>,
     statements: &Vec<ResolvedStatement>,
+    source_map: &dyn SourceMapLookup,
     context: &mut C,
 ) -> Result<Value, ExecuteError> {
-    let mut interpreter = Interpreter::<C>::new(externals, context);
+    let mut interpreter = Interpreter::<C>::new(externals, source_map, context);
     let signal = interpreter.execute_statements(statements)?;
     Ok(signal.try_into()?)
 }
@@ -154,9 +156,10 @@ pub fn util_execute_function<C>(
     externals: &ExternalFunctions<C>,
     func: &ResolvedInternalFunctionDefinitionRef,
     arguments: &[Value],
+    source_map: &dyn SourceMapLookup,
     context: &mut C,
 ) -> Result<Value, ExecuteError> {
-    let mut interpreter = Interpreter::<C>::new(externals, context);
+    let mut interpreter = Interpreter::<C>::new(externals, source_map, context);
     interpreter.bind_parameters(&func.signature.parameters, arguments)?;
     let with_signal = interpreter.execute_statements(&func.statements)?;
     interpreter.current_block_scopes.clear();
@@ -169,11 +172,17 @@ pub struct Interpreter<'a, C> {
     current_block_scopes: Vec<BlockScope>,
     externals: &'a ExternalFunctions<C>,
     context: &'a mut C,
+    source_map: &'a dyn SourceMapLookup,
 }
 
 impl<'a, C> Interpreter<'a, C> {
-    pub fn new(externals: &'a ExternalFunctions<C>, context: &'a mut C) -> Self {
+    pub fn new(
+        externals: &'a ExternalFunctions<C>,
+        source_map: &'a dyn SourceMapLookup,
+        context: &'a mut C,
+    ) -> Self {
         Self {
+            source_map,
             function_scope_stack: vec![FunctionScope::default()],
             current_block_scopes: vec![BlockScope::default()],
             externals,
@@ -328,7 +337,7 @@ impl<'a, C> Interpreter<'a, C> {
             ValueWithSignal::Continue => Value::Unit,
         };
 
-        debug!(value=%v, name=?call.function_definition.name, "function returned");
+        debug!(value=?v, name=?call.function_definition.name, "function returned");
 
         Ok(v)
     }
@@ -1019,7 +1028,7 @@ impl<'a, C> Interpreter<'a, C> {
                             let value = self.evaluate_expression(expr)?;
                             let formatted = match format_spec {
                                 Some(spec) => format_value(&value, &spec.kind)?,
-                                None => value.to_string(),
+                                None => value.display(self.source_map).to_string(),
                             };
                             result.push_str(&formatted);
                         }
@@ -1282,7 +1291,7 @@ impl<'a, C> Interpreter<'a, C> {
                     match condition_value {
                         Value::Option(Some(inner_value)) => {
                             self.push_block_scope();
-                            info!(value=%inner_value.clone(), "shadow variable");
+                            info!(value=?inner_value.clone(), "shadow variable");
                             self.initialize_var(
                                 variable.scope_index,
                                 variable.variable_index,

@@ -792,7 +792,8 @@ for x in [1, 2, 3] {
     check(
         &script,
         "
-ForLoop(Single(ForVar { identifier: <6:1>, is_mut: None }), IteratableExpression { is_mut: None, expression: Literal(Array([Literal(Int(<12:1>)), Literal(Int(<15:1>)), Literal(Int(<18:1>))])) }, []),
+ForLoop(Single(ForVar { identifier: <6:1>, is_mut: None }), IteratableExpression { is_mut: None, expression: Literal(Array([Literal(Int(<12:1>)), Literal(Int(<15:1>)), Literal(Int(<18:1>))])) }, [])
+
 "
     );
 }
@@ -913,7 +914,7 @@ fn impl_def() {
         ",
         r"
 
-ImplDef(<18:12>, [Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <52:9>, params: [], self_parameter: Some(SelfParameter { is_mutable: None, self_node: <62:4> }), return_type: Some(Int(<71:3>)) }, body: [Expression(FieldAccess(VariableAccess(<97:4>), <102:1>))] }), Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <142:7>, params: [], self_parameter: Some(SelfParameter { is_mutable: Some(<150:8>), self_node: <150:8> }), return_type: None }, body: [Expression(FieldAssignment(VariableAccess(<197:4>), <202:1>, Literal(Int(<206:1>))))] }), Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <246:12>, params: [], self_parameter: None, return_type: None }, body: [Expression(Literal(Float(<292:3>)))] })])
+ImplDef(<18:12>, [Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <52:9>, params: [], self_parameter: Some(SelfParameter { is_mutable: None, self_node: <62:4> }), return_type: None }, body: [Expression(FieldAccess(VariableAccess(<97:4>), <102:1>))] }), Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <142:7>, params: [Parameter { variable: <160:1>, param_type: Int(<163:3>) }], self_parameter: Some(SelfParameter { is_mutable: Some(<150:3>), self_node: <154:4> }), return_type: None }, body: [Expression(FieldAssignment(VariableAccess(<197:4>), <202:1>, Literal(Int(<206:1>))))] }), Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <246:12>, params: [], self_parameter: None, return_type: None }, body: [Expression(Literal(Float(<292:3>)))] })])
 
         ",
     );
@@ -1231,7 +1232,7 @@ fn for_continue() {
         "#,
         r"
 
-ForLoop(Single(ForVar { identifier: <12:1>, is_mut: None }), MutExpression { is_mut: None, expression: ExclusiveRange(Literal(Int(<17:1>)), Literal(Int(<20:1>))) }, [If(BinaryOp(BinaryOp(VariableAccess(<40:1>), Modulo(<42:1>), Literal(Int(<44:1>))), Equal(<46:2>), Literal(Int(<49:1>))), [Continue(<69:8>)], None), Expression(FunctionCall(VariableAccess(<105:5>), [Literal(String(<111:13>))]))])
+ForLoop(Single(ForVar { identifier: <12:1>, is_mut: None }), IteratableExpression { is_mut: None, expression: ExclusiveRange(Literal(Int(<17:1>)), Literal(Int(<20:1>))) }, [If(BinaryOp(BinaryOp(VariableAccess(<40:1>), Modulo(<42:1>), Literal(Int(<44:1>))), Equal(<46:2>), Literal(Int(<49:1>))), [Continue(<69:8>)], None), Expression(FunctionCall(VariableAccess(<105:5>), [Literal(String(<111:13>))]))])
 
     ",
     );
@@ -1387,7 +1388,7 @@ fn none_assignment() {
         a = none
             "#,
         r#"
-Expression(VariableAssignment(<9:1>, Literal(None)))
+Expression(VariableAssignment(<9:1>, Literal(None(<13:4>))))
 
             "#,
     )
@@ -1524,5 +1525,31 @@ fn assignment_op_add() {
     check(
         "a += 6",
         "Expression(VariableCompoundAssignment(<0:1>, CompoundOperator { node: <2:2>, kind: Add }, Literal(Int(<5:1>))))",
+    );
+}
+
+#[test_log::test]
+fn check_some_bug() {
+    check(
+        r#"
+        is_attacking = false
+        c = if is_attacking { 3.5 } else { -13.3 }
+    "#,
+        "",
+    );
+}
+
+#[test_log::test]
+fn check_return_type() {
+    check(
+        r#"
+        fn x(a: Int) -> (Int, Float) {
+        }
+    "#,
+        r"
+    FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <12:1>, params: [Parameter { variable: <14:1>, param_type: Int(<17:3>) }], self_parameter: None, return_type: Some(Tuple([Int(<26:3>), Float(<31:5>)])) }, body: [] }))
+
+    
+    ",
     );
 }

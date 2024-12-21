@@ -1030,7 +1030,7 @@ fn array_remove_fail() {
 
     a.remove(1)
     ",
-        "ResolveError(VariableIsNotMutable(a))",
+        "ResolveError(VariableIsNotMutable(<6:1>))",
     );
 }
 

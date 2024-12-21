@@ -505,6 +505,7 @@ impl<'a> Resolver<'a> {
         let mut resolved_statements = Vec::new();
         for (i, stmt) in statements.iter().enumerate() {
             let mut resolved_stmt = self.resolve_statement(stmt)?;
+            /*
             if i == statements.len() - 1 {
                 if let ResolvedStatement::Expression(expr) = resolved_stmt {
                     resolved_stmt = ResolvedStatement::Expression(ResolvedExpression::Option(
@@ -512,6 +513,8 @@ impl<'a> Resolver<'a> {
                     ));
                 }
             }
+
+             */
             resolved_statements.push(resolved_stmt);
         }
 
@@ -520,13 +523,14 @@ impl<'a> Resolver<'a> {
             let mut resolved = Vec::new();
             for (i, stmt) in else_statements.iter().enumerate() {
                 let mut resolved_stmt = self.resolve_statement(stmt)?;
+                /*
                 if i == else_statements.len() - 1 {
                     if let ResolvedStatement::Expression(expr) = resolved_stmt {
                         resolved_stmt = ResolvedStatement::Expression(ResolvedExpression::Option(
                             Some(Box::new(expr)),
                         ));
                     }
-                }
+                }*/
                 resolved.push(resolved_stmt);
             }
             Some(resolved)
@@ -1019,9 +1023,6 @@ impl<'a> Resolver<'a> {
                 let mut parameters = Vec::new();
 
                 if let Some(found_self) = &function_data.declaration.self_parameter {
-                    let debug_param = self.get_text(&found_self.self_node).to_string();
-                    info!(?debug_param, "self");
-
                     let resolved_type = ResolvedType::Struct(found_struct.clone());
                     parameters.push(ResolvedParameter {
                         name: ResolvedLocalIdentifier(self.to_node(&found_self.self_node)),
@@ -1031,8 +1032,6 @@ impl<'a> Resolver<'a> {
                 }
 
                 for param in &function_data.declaration.params {
-                    let debug_param = self.get_text(&param.variable.name).to_string();
-                    info!(?debug_param, "param");
                     let resolved_type = self.resolve_type(&param.param_type)?;
 
                     parameters.push(ResolvedParameter {
@@ -1680,7 +1679,7 @@ impl<'a> Resolver<'a> {
             Literal::String(string_node) => {
                 let string_str = self.get_text(string_node);
                 ResolvedLiteral::StringLiteral(
-                    string_str.into(),
+                    string_str[1..string_str.len() - 1].to_string(), // remove prefix and suffix quotes
                     self.to_node(string_node),
                     self.shared.types.string_type.clone(),
                 )
@@ -1756,8 +1755,8 @@ impl<'a> Resolver<'a> {
                 let (tuple_type_ref, resolved_items) = self.resolve_tuple_literal(expressions)?;
                 ResolvedLiteral::TupleLiteral(tuple_type_ref, resolved_items)
             }
-            Literal::Unit => todo!(),
-            Literal::None => todo!(),
+            Literal::Unit => ResolvedLiteral::UnitLiteral(self.shared.types.unit_type.clone()),
+            Literal::None(none_node) => ResolvedLiteral::NoneLiteral(self.to_node(none_node)),
         };
 
         Ok(resolved_literal)
@@ -2646,7 +2645,6 @@ impl<'a> Resolver<'a> {
 
     fn try_find_variable(&self, node: &Node) -> Option<ResolvedVariableRef> {
         let variable_text = self.get_text(node);
-        info!(%variable_text, "looking for variable");
         for scope in self.scope.block_scope_stack.iter().rev() {
             if let Some(value) = scope.variables.get(&variable_text.to_string()) {
                 return Some(value.clone());
@@ -3261,6 +3259,7 @@ impl<'a> Resolver<'a> {
             let true_type = resolution(&resolved_true);
             let false_type = resolution(&resolved_false);
 
+            /*
             let wrapped_true = if matches!(true_type, ResolvedType::Optional(_)) {
                 resolved_true
             } else {
@@ -3271,12 +3270,12 @@ impl<'a> Resolver<'a> {
                 resolved_false
             } else {
                 ResolvedExpression::Option(Some(Box::new(resolved_false)))
-            };
+            };*/
 
             Ok(ResolvedExpression::IfElse(
                 Box::from(resolved_condition),
-                Box::from(wrapped_true),
-                Box::from(wrapped_false),
+                Box::from(resolved_true),
+                Box::from(resolved_false),
             ))
         } else {
             Ok(ResolvedExpression::IfElse(
@@ -3737,10 +3736,6 @@ impl<'a> Resolver<'a> {
         let f = match ast_format_specifier {
             None => return None,
             Some(ast_format) => match ast_format {
-                FormatSpecifier::Debug(node) => ResolvedFormatSpecifier {
-                    node: self.to_node(node),
-                    kind: ResolvedFormatSpecifierKind::Debug,
-                },
                 FormatSpecifier::LowerHex(node) => ResolvedFormatSpecifier {
                     node: self.to_node(node),
                     kind: ResolvedFormatSpecifierKind::LowerHex,

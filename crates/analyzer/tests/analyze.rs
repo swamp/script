@@ -633,3 +633,14 @@ ImplType(Struct(RefCell { value: ResolvedStructType { name: ResolvedLocalTypeIde
 "#,
     );
 }
+
+#[test_log::test]
+fn check_some_bug() {
+    check(
+        r#"
+        is_attacking = false
+        c = if is_attacking { 3.5 } else { -13.3 }
+    "#,
+        "",
+    );
+}

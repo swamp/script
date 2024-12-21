@@ -461,7 +461,6 @@ pub enum ResolvedPrecisionType {
 
 #[derive(Debug)]
 pub enum ResolvedFormatSpecifierKind {
-    Debug,                                               // :?
     LowerHex,                                            // :x
     UpperHex,                                            // :X
     Binary,                                              // :b
@@ -853,6 +852,10 @@ pub struct ResolvedUnitType;
 pub type ResolvedUnitTypeRef = Rc<ResolvedUnitType>;
 
 #[derive(Debug, PartialEq, Eq, Hash)]
+pub struct ResolvedNoneType;
+pub type ResolvedNoneTypeRef = Rc<ResolvedNoneType>;
+
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct ResolvedIntType;
 pub type ResolvedIntTypeRef = Rc<ResolvedIntType>;
 
@@ -1068,6 +1071,7 @@ pub struct ResolvedProgramTypes {
     pub string_type: ResolvedStringTypeRef,
     pub bool_type: ResolvedBoolTypeRef,
     pub unit_type: ResolvedUnitTypeRef,
+    pub none_type: ResolvedNoneTypeRef,
     pub exclusive_range_type: ResolvedExclusiveRangeTypeRef,
 }
 
@@ -1079,6 +1083,7 @@ impl ResolvedProgramTypes {
             string_type: Rc::new(ResolvedStringType),
             bool_type: Rc::new(ResolvedBoolType),
             unit_type: Rc::new(ResolvedUnitType),
+            none_type: Rc::new(ResolvedNoneType),
             exclusive_range_type: Rc::new(ResolvedExclusiveRangeType),
         }
     }

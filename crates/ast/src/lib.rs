@@ -359,8 +359,8 @@ pub enum Literal {
     Tuple(Vec<Expression>),
     Array(Vec<Expression>),
     Map(Vec<(Expression, Expression)>),
-    Unit, // ()
-    None, // none
+    Unit,       // ()
+    None(Node), // none
 }
 
 #[derive(Debug)]
@@ -476,7 +476,6 @@ pub enum StringPart {
 
 #[derive(Debug)]
 pub enum FormatSpecifier {
-    Debug(Node),                         // :?
     LowerHex(Node),                      // :x
     UpperHex(Node),                      // :X
     Binary(Node),                        // :b

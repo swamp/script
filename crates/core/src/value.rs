@@ -5,19 +5,18 @@
 use crate::extra::{SparseValueId, SparseValueMap};
 use core::any::Any;
 use fixed32::Fp;
-use seq_fmt::{comma, comma_tuple};
 use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
 use std::rc::Rc;
-use swamp_script_semantic::ResolvedType;
 use swamp_script_semantic::{
     ExternalFunctionId, ResolvedArrayTypeRef, ResolvedEnumVariantStructTypeRef,
     ResolvedEnumVariantTupleTypeRef, ResolvedEnumVariantTypeRef, ResolvedFormatSpecifierKind,
     ResolvedInternalFunctionDefinitionRef, ResolvedMapTypeRef, ResolvedPrecisionType,
-    ResolvedRustTypeRef, ResolvedStructTypeRef, ResolvedTupleTypeRef, SemanticError, TypeNumber,
+    ResolvedRustTypeRef, ResolvedStructTypeRef, ResolvedTupleTypeRef, TypeNumber,
 };
+use swamp_script_semantic::{ResolvedNode, ResolvedType};
 
 pub trait RustType: Any + Debug + Display {
     fn as_any(&self) -> &dyn Any;
@@ -192,11 +191,11 @@ impl Value {
         Ok(values)
     }
 
-    pub fn convert_to_string_if_needed(&self) -> String {
+    pub fn convert_to_string_if_needed(&self, source_map: &impl SourceMapLookup) -> String {
         match self {
             Self::String(string) => string.clone(),
-            Self::Reference(value) => value.borrow().convert_to_string_if_needed(),
-            _ => self.to_string(),
+            Self::Reference(value) => value.borrow().convert_to_string_if_needed(source_map),
+            _ => self.display(source_map).to_string(),
         }
     }
     pub fn expect_string(&self) -> Result<String, ValueError> {
@@ -311,8 +310,35 @@ impl Value {
     }
 }
 
-impl std::fmt::Display for Value {
+pub trait SourceMapLookup {
+    fn get_text(&self, resolved_node: &ResolvedNode) -> &str;
+}
+
+pub struct DisplayValue<'a> {
+    value: &'a Value,
+    source_map: &'a dyn SourceMapLookup,
+}
+
+impl std::fmt::Display for DisplayValue<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.value.fmt(self.source_map, f)
+    }
+}
+
+impl Value {
+    // Helper method to create the display wrapper
+    pub fn display<'a>(&'a self, source_map: &'a dyn SourceMapLookup) -> DisplayValue<'a> {
+        DisplayValue {
+            value: self,
+            source_map,
+        }
+    }
+
+    pub fn fmt(
+        &self,
+        source_map: &dyn SourceMapLookup,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
         match self {
             Self::Int(n) => write!(f, "{}", n),
             Self::Float(n) => write!(f, "{}", n),
@@ -324,7 +350,7 @@ impl std::fmt::Display for Value {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{}", val)?;
+                    val.fmt(source_map, f)?;
                 }
                 write!(f, "]")
             }
@@ -334,7 +360,9 @@ impl std::fmt::Display for Value {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{key}: {val}")?;
+                    key.fmt(source_map, f)?;
+                    write!(f, ": ")?;
+                    val.fmt(source_map, f)?;
                 }
                 write!(f, "]")
             }
@@ -345,7 +373,7 @@ impl std::fmt::Display for Value {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{}", val)?;
+                    val.fmt(source_map, f)?;
                 }
                 write!(f, ")")
             }
@@ -365,7 +393,8 @@ impl std::fmt::Display for Value {
                         write!(f, ", ")?;
                     }
                     let field_name = &fields[i];
-                    write!(f, "{field_name}: {val}")?;
+                    write!(f, "{field_name}: ")?;
+                    val.fmt(source_map, f)?;
                 }
                 write!(f, " }}")
             }
@@ -373,7 +402,7 @@ impl std::fmt::Display for Value {
             Self::Unit => write!(f, "()"),
             Self::ExclusiveRange(start, end) => write!(f, "{start}..{end}"),
 
-            Self::Reference(reference) => write!(f, "{}", reference.borrow()),
+            Self::Reference(reference) => reference.borrow().display(source_map).fmt(f),
             Self::ExternalFunction(_) => write!(f, "<external>"), // TODO:
 
             // Enums ----
@@ -381,21 +410,24 @@ impl std::fmt::Display for Value {
                 if enum_name.common.module_path.0.is_empty() {
                     write!(
                         f,
-                        "{:?}::{:?}({})",
-                        enum_name.common.enum_ref.name,
-                        enum_name.common.variant_name,
-                        comma(fields_in_order),
-                    )
+                        "{:?}::{:?}",
+                        enum_name.common.enum_ref.name, enum_name.common.variant_name,
+                    )?;
                 } else {
                     write!(
                         f,
-                        "{:?}::{:?}::{:?}{}",
+                        "{:?}::{:?}::{:?}",
                         enum_name.common.module_path,
                         enum_name.common.enum_ref.name,
                         enum_name.common.variant_name,
-                        comma(fields_in_order),
-                    )
+                    )?;
                 }
+
+                for field in fields_in_order {
+                    field.fmt(source_map, f)?;
+                }
+
+                Ok(())
             }
             Self::EnumVariantStruct(struct_variant, values) => {
                 let decorated_values: Vec<(String, Value)> = struct_variant
@@ -408,13 +440,16 @@ impl std::fmt::Display for Value {
 
                 write!(
                     f,
-                    "{:?}::{:?} {{ {} }}",
-                    struct_variant.common.enum_ref.name,
-                    struct_variant.common.variant_name,
-                    comma_tuple(&decorated_values)
+                    "{:?}::{:?}",
+                    struct_variant.common.enum_ref.name, struct_variant.common.variant_name
                 )
             }
-            Self::EnumVariantSimple(enum_type_ref) => write!(f, "{enum_type_ref:?}"),
+            Self::EnumVariantSimple(enum_variant_type_ref) => write!(
+                f,
+                "{}::{}",
+                source_map.get_text(&enum_variant_type_ref.owner.name.0),
+                source_map.get_text(&enum_variant_type_ref.name.0)
+            ),
             Self::RustValue(_rust_type, rust_type_pointer) => {
                 write!(f, "{}", rust_type_pointer.borrow())
             }
@@ -487,7 +522,6 @@ impl Hash for Value {
 
 pub fn format_value(value: &Value, spec: &ResolvedFormatSpecifierKind) -> Result<String, String> {
     match (value, spec) {
-        (Value::Int(n), ResolvedFormatSpecifierKind::Debug) => Ok(format!("{n:?}")),
         (Value::Int(n), ResolvedFormatSpecifierKind::LowerHex) => Ok(format!("{n:x}")),
         (Value::Int(n), ResolvedFormatSpecifierKind::UpperHex) => Ok(format!("{n:X}")),
         (Value::Int(n), ResolvedFormatSpecifierKind::Binary) => Ok(format!("{n:b}")),
@@ -502,20 +536,6 @@ pub fn format_value(value: &Value, spec: &ResolvedFormatSpecifierKind) -> Result
             Value::String(s),
             ResolvedFormatSpecifierKind::Precision(prec, _node, ResolvedPrecisionType::String, ..),
         ) => Ok(format!("{:.*}", *prec as usize, s)),
-
-        // Debug format for complex types
-        (Value::Struct(_type_id, fields, _), ResolvedFormatSpecifierKind::Debug) => {
-            Ok(format!("{fields:?}"))
-        }
-        (Value::Array(_type_id, elements), ResolvedFormatSpecifierKind::Debug) => {
-            Ok(format!("{elements:?}"))
-        }
-        (Value::EnumVariantTuple(_type_id, variant), ResolvedFormatSpecifierKind::Debug) => {
-            Ok(format!("{variant:?}"))
-        }
-
-        // Default string conversion for other cases
-        (value, ResolvedFormatSpecifierKind::Debug) => Ok(format!("{value}")),
 
         _ => Err(format!(
             "Unsupported format specifier {spec:?} for value type {value:?}"

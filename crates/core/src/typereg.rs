@@ -15,6 +15,7 @@ pub struct TypeRegistry {
     // Container type constructors
     #[allow(unused)]
     array_types: RefCell<SeqMap<TypeNumber, ResolvedArrayTypeRef>>,
+    #[allow(unused)]
     struct_types: RefCell<SeqMap<String, ResolvedStructTypeRef>>,
 
     // Type numbering

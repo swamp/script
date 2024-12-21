@@ -2,21 +2,20 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use std::cell::RefCell;
 use std::path::Path;
 use std::rc::Rc;
-use swamp_script_analyzer::lookup::NameLookup;
-use swamp_script_analyzer::modules::{ResolvedModule, ResolvedModuleRef, ResolvedModules};
-use swamp_script_analyzer::ns::ResolvedModuleNamespace;
+use swamp_script_analyzer::lookup::{NameLookup, ResolvedModuleNamespaceRef};
+use swamp_script_analyzer::modules::ResolvedModules;
 use swamp_script_analyzer::{ResolveError, Resolver};
 use swamp_script_core::prelude::Value;
+use swamp_script_core::value::SourceMapLookup;
 use swamp_script_eval::prelude::ExecuteError;
 use swamp_script_eval::{eval_module, ExternalFunctions};
 use swamp_script_parser::AstParser;
 use swamp_script_semantic::{
     ExternalFunctionId, ResolvedExternalFunctionDefinition, ResolvedFunctionSignature,
     ResolvedLocalIdentifier, ResolvedNode, ResolvedParameter, ResolvedProgramState,
-    ResolvedProgramTypes, ResolvedType,
+    ResolvedProgramTypes, ResolvedStatement, ResolvedType, Span,
 };
 use swamp_script_source_map::SourceMap;
 
@@ -42,9 +41,9 @@ impl From<ExecuteError> for EvalTestError {
 
 fn internal_compile(
     script: &str,
-    target_module: &ResolvedModuleRef,
+    target_namespace: &ResolvedModuleNamespaceRef,
     modules: &ResolvedModules,
-) -> Result<ResolvedModule, ResolveError> {
+) -> Result<(Vec<ResolvedStatement>, SourceMap), ResolveError> {
     let parser = AstParser {};
 
     let program = parser.parse_module(script).expect("Failed to parse script");
@@ -60,14 +59,14 @@ fn internal_compile(
     // let resolved_path_str = vec!["test".to_string()];
     // let own_module = modules.add_empty_module(&resolved_path_str);
 
-    let mut name_lookup = NameLookup::new(target_module.borrow_mut().namespace.clone(), &modules);
+    let mut name_lookup = NameLookup::new(target_namespace.clone(), &modules);
 
     let mut resolver = Resolver::new(&types, &mut state, &mut name_lookup, &source_map, file_id);
 
-    let mut resolved_definitions = Vec::new();
+    //let mut resolved_definitions = Vec::new();
     for definition in &program.definitions {
-        let resolved_definition = resolver.resolve_definition(definition)?;
-        resolved_definitions.push(resolved_definition);
+        resolver.resolve_definition(definition)?;
+        //  resolved_definitions.push(resolved_definition);
     }
 
     let mut resolved_statements = Vec::new();
@@ -77,15 +76,21 @@ fn internal_compile(
         resolved_statements.push(resolved_statement);
     }
 
-    let ns_ref = Rc::new(RefCell::new(ResolvedModuleNamespace::new(&[])));
+    Ok((resolved_statements, source_map))
+}
 
-    let resolved_module = ResolvedModule {
-        definitions: resolved_definitions,
-        statements: resolved_statements,
-        namespace: ns_ref,
-    };
+pub struct SourceMapWrapper {
+    pub source_map: SourceMap,
+}
 
-    Ok(resolved_module)
+impl SourceMapLookup for SourceMapWrapper {
+    fn get_text(&self, resolved_node: &ResolvedNode) -> &str {
+        self.source_map.get_span_source(
+            resolved_node.span.file_id,
+            resolved_node.span.offset as usize,
+            resolved_node.span.length as usize,
+        )
+    }
 }
 
 fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError> {
@@ -95,20 +100,20 @@ fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError>
 
     let external_print = ResolvedExternalFunctionDefinition {
         name: ResolvedLocalIdentifier(ResolvedNode {
-            span: Default::default(),
+            span: Span::default(),
         }),
         signature: ResolvedFunctionSignature {
             first_parameter_is_self: false,
             parameters: vec![ResolvedParameter {
                 name: ResolvedLocalIdentifier(ResolvedNode {
-                    span: Default::default(),
+                    span: Span::default(),
                 }),
                 resolved_type: ResolvedType::Any,
                 is_mutable: None,
             }],
             return_type: ResolvedType::Any,
         },
-        id: 0,
+        id: 1,
     };
 
     main_module
@@ -118,6 +123,12 @@ fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError>
         .add_external_function_declaration("print", external_print)
         .expect("TODO: panic message");
 
+    let (statements, source_map) =
+        internal_compile(script, &main_module.borrow_mut().namespace, &modules)?;
+    main_module.borrow_mut().statements = statements;
+
+    let source_map_wrapper = Rc::new(SourceMapWrapper { source_map });
+
     // Run
     let mut externals = ExternalFunctions::new();
     register_print(1, &mut externals);
@@ -125,9 +136,15 @@ fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError>
     let mut context = TestContext {
         secret: 42,
         output: vec![],
+        source_map_wrapper: source_map_wrapper.clone(),
     };
 
-    let value = eval_module(&externals, &main_module.borrow().statements, &mut context)?;
+    let value = eval_module(
+        &externals,
+        &main_module.borrow().statements,
+        source_map_wrapper.as_ref(),
+        &mut context,
+    )?;
 
     Ok((value, context.output))
 }
@@ -135,6 +152,7 @@ fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError>
 pub struct TestContext {
     pub secret: i32,
     pub output: Vec<String>,
+    pub source_map_wrapper: Rc<SourceMapWrapper>,
 }
 
 fn register_print(
@@ -144,9 +162,10 @@ fn register_print(
     external_functions
         .register_external_function("print", external_id, move |args: &[Value], context| {
             if let Some(value) = args.first() {
-                let display_value = value.convert_to_string_if_needed();
+                let display_value =
+                    value.convert_to_string_if_needed(context.source_map_wrapper.as_ref());
                 assert_eq!(context.secret, 42);
-                context.output.push(display_value.clone());
+                context.output.push(display_value);
                 Ok(Value::Unit)
             } else {
                 Err("print requires at least one argument".to_string())?
