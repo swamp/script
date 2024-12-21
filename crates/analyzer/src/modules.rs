@@ -1,16 +1,10 @@
 use crate::lookup::ResolvedModuleNamespaceRef;
 use crate::ns::ResolvedModuleNamespace;
-use crate::{NamespaceError, ResolveError};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
-use swamp_script_ast::StructType;
-use swamp_script_semantic::{
-    ResolvedDefinition, ResolvedEnumType, ResolvedEnumTypeRef, ResolvedEnumVariantType,
-    ResolvedEnumVariantTypeRef, ResolvedExternalFunctionDefinitionRef,
-    ResolvedInternalFunctionDefinitionRef, ResolvedModulePathRef, ResolvedStatement,
-};
+use swamp_script_semantic::{ResolvedDefinition, ResolvedStatement};
 
 #[derive(Debug)]
 pub struct ResolvedModules {

@@ -304,6 +304,7 @@ pub struct ResolvedPostfixOperator {
     pub left: Box<ResolvedExpression>,
     pub kind: ResolvedPostfixOperatorKind,
     pub resolved_type: ResolvedType,
+    pub node: ResolvedNode,
 }
 
 #[derive()]
