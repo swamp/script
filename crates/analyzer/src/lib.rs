@@ -12,6 +12,7 @@ use crate::modules::ResolvedModules;
 use seq_map::{SeqMap, SeqMapError};
 use std::cell::RefCell;
 use std::collections::HashSet;
+use std::mem::take;
 use std::num::{ParseFloatError, ParseIntError};
 use std::rc::Rc;
 use swamp_script_ast::prelude::*;
@@ -359,6 +360,7 @@ impl FunctionScopeState {
 pub struct Resolver<'a> {
     shared: SharedState<'a>,
     scope: FunctionScopeState,
+    global: FunctionScopeState,
 }
 
 impl<'a> Resolver<'a> {
@@ -378,12 +380,22 @@ impl<'a> Resolver<'a> {
         };
         Self {
             scope: FunctionScopeState::new(ResolvedType::Any),
+            global: FunctionScopeState::new(ResolvedType::Any),
             shared,
         }
     }
 
     fn start_function(&mut self, return_type: ResolvedType) {
+        self.global.block_scope_stack = take(&mut self.scope.block_scope_stack);
         self.scope = FunctionScopeState::new(return_type);
+        info!(
+            len = self.scope.block_scope_stack.len(),
+            "start function scope"
+        );
+    }
+
+    fn stop_function(&mut self) {
+        self.scope.block_scope_stack = take(&mut self.global.block_scope_stack);
     }
 
     pub fn resolve_array_type(
@@ -885,7 +897,9 @@ impl<'a> Resolver<'a> {
             Definition::FunctionDef(function) => {
                 let resolved_return_type = self.resolve_return_type(function)?;
                 self.start_function(resolved_return_type);
-                self.resolve_function_definition(function)?
+                let resolved_def = self.resolve_function_definition(function)?;
+                self.stop_function();
+                resolved_def
             }
             Definition::ImplDef(type_identifier, functions) => {
                 let attached_type_type =
@@ -1149,6 +1163,7 @@ impl<'a> Resolver<'a> {
                 .borrow_mut()
                 .functions
                 .insert(function_name_str, resolved_function_ref)?;
+            self.stop_function();
         }
 
         Ok(ResolvedType::Struct(found_struct))
@@ -2699,6 +2714,9 @@ impl<'a> Resolver<'a> {
             expression: Box::from(converted_expression),
         };
 
+        let debug_name = self.get_text_resolved(&assignment.variable_refs[0].name);
+        info!(var=%debug_name, "set variable");
+
         if is_reassignment {
             Ok(ResolvedExpression::ReassignVariable(assignment))
         } else {
@@ -2912,6 +2930,12 @@ impl<'a> Resolver<'a> {
                     self.to_node(&variable.name),
                 ));
             }
+
+            let var_name = self.get_text_resolved(&existing_variable.name);
+            info!(
+                "set or overwrite {var_name} {}",
+                self.scope.block_scope_stack.len()
+            );
 
             // For reassignment, check if the EXISTING variable is mutable
             if !existing_variable.is_mutable() {

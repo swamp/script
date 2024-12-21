@@ -274,7 +274,7 @@ fn call_mut_2() {
     print(x)
 
     ",
-        r#"ExecuteError(Error("Cannot assign to immutable variable: 0"))"#,
+        r#"ResolveError(VariableIsNotMutable(<102:1>))"#,
     );
 }
 

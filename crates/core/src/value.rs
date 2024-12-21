@@ -443,9 +443,18 @@ impl Value {
 
                 write!(
                     f,
-                    "{:?}::{:?}",
-                    struct_variant.common.enum_ref.name, struct_variant.common.variant_name
-                )
+                    "{}::{} {{ ",
+                    source_map.get_text(&struct_variant.common.enum_ref.name.0),
+                    source_map.get_text(&struct_variant.common.variant_name.0)
+                );
+
+                for (field_name, value) in &decorated_values {
+                    write!(f, "{field_name}: ")?;
+                    value.fmt(source_map, f)?;
+                }
+
+                write!(f, " }}")?;
+                Ok(())
             }
             Self::EnumVariantSimple(enum_variant_type_ref) => write!(
                 f,

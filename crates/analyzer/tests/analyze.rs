@@ -243,7 +243,7 @@ b[3]
         "#,
         r#"
 
-Expression(InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <1:1>, resolved_type: Map(ResolvedMapType { key_type: Int(ResolvedIntType), value_type: String(ResolvedStringType) }), mutable_node: None, scope_index: 0, variable_index: 0 }], expression: Literal(Map(ResolvedMapType { key_type: Int(ResolvedIntType), value_type: String(ResolvedStringType) }, [(Literal(IntLiteral(2, <6:1>, ResolvedIntType)), Literal(StringLiteral("\"something\"", <9:11>, ResolvedStringType))), (Literal(IntLiteral(3, <22:1>, ResolvedIntType)), Literal(StringLiteral("\"other\"", <25:7>, ResolvedStringType)))])) }))
+Expression(InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <1:1>, resolved_type: Map(ResolvedMapType { key_type: Int(ResolvedIntType), value_type: String(ResolvedStringType) }), mutable_node: None, scope_index: 0, variable_index: 0 }], expression: Literal(Map(ResolvedMapType { key_type: Int(ResolvedIntType), value_type: String(ResolvedStringType) }, [(Literal(IntLiteral(2, <6:1>, ResolvedIntType)), Literal(StringLiteral("something", <9:11>, ResolvedStringType))), (Literal(IntLiteral(3, <22:1>, ResolvedIntType)), Literal(StringLiteral("other", <25:7>, ResolvedStringType)))])) }))
 Expression(MapIndexAccess(ResolvedMapIndexLookup { map_type: Map(ResolvedMapType { key_type: Int(ResolvedIntType), value_type: String(ResolvedStringType) }), item_type: Optional(String(ResolvedStringType)), map_type_ref: ResolvedMapType { key_type: Int(ResolvedIntType), value_type: String(ResolvedStringType) }, index_expression: Literal(IntLiteral(3, <36:1>, ResolvedIntType)), map_expression: VariableAccess(ResolvedVariable { name: <1:1>, resolved_type: Map(ResolvedMapType { key_type: Int(ResolvedIntType), value_type: String(ResolvedStringType) }), mutable_node: None, scope_index: 0, variable_index: 0 }) }))
 
 "#,
@@ -259,8 +259,8 @@ b[3] = "hello"
         "#,
         r#"
 
-Expression(InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <5:1>, resolved_type: Map(ResolvedMapType { key_type: Int(ResolvedIntType), value_type: String(ResolvedStringType) }), mutable_node: Some(<1:3>), scope_index: 0, variable_index: 0 }], expression: Literal(Map(ResolvedMapType { key_type: Int(ResolvedIntType), value_type: String(ResolvedStringType) }, [(Literal(IntLiteral(2, <10:1>, ResolvedIntType)), Literal(StringLiteral("\"something\"", <13:11>, ResolvedStringType))), (Literal(IntLiteral(3, <26:1>, ResolvedIntType)), Literal(StringLiteral("\"other\"", <29:7>, ResolvedStringType)))])) }))
-Expression(MapAssignment(ResolvedMutMap { expression: VariableAccess(ResolvedVariable { name: <5:1>, resolved_type: Map(ResolvedMapType { key_type: Int(ResolvedIntType), value_type: String(ResolvedStringType) }), mutable_node: Some(<1:3>), scope_index: 0, variable_index: 0 }), map_type_ref: ResolvedMapType { key_type: Int(ResolvedIntType), value_type: String(ResolvedStringType) } }, ResolvedIndexType { expression: Literal(IntLiteral(3, <40:1>, ResolvedIntType)), resolved_type: Int(ResolvedIntType) }, Literal(StringLiteral("\"hello\"", <45:7>, ResolvedStringType))))
+Expression(InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <5:1>, resolved_type: Map(ResolvedMapType { key_type: Int(ResolvedIntType), value_type: String(ResolvedStringType) }), mutable_node: Some(<1:3>), scope_index: 0, variable_index: 0 }], expression: Literal(Map(ResolvedMapType { key_type: Int(ResolvedIntType), value_type: String(ResolvedStringType) }, [(Literal(IntLiteral(2, <10:1>, ResolvedIntType)), Literal(StringLiteral("something", <13:11>, ResolvedStringType))), (Literal(IntLiteral(3, <26:1>, ResolvedIntType)), Literal(StringLiteral("other", <29:7>, ResolvedStringType)))])) }))
+Expression(MapAssignment(ResolvedMutMap { expression: VariableAccess(ResolvedVariable { name: <5:1>, resolved_type: Map(ResolvedMapType { key_type: Int(ResolvedIntType), value_type: String(ResolvedStringType) }), mutable_node: Some(<1:3>), scope_index: 0, variable_index: 0 }), map_type_ref: ResolvedMapType { key_type: Int(ResolvedIntType), value_type: String(ResolvedStringType) } }, ResolvedIndexType { expression: Literal(IntLiteral(3, <40:1>, ResolvedIntType)), resolved_type: Int(ResolvedIntType) }, Literal(StringLiteral("hello", <45:7>, ResolvedStringType))))
 
 "#,
     );
@@ -274,7 +274,7 @@ mut b = (2.4, "hello", 4)
         "#,
         r#"
 
-Expression(InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <5:1>, resolved_type: Tuple(ResolvedTupleType([Float(ResolvedFloatType), String(ResolvedStringType), Int(ResolvedIntType)])), mutable_node: Some(<1:3>), scope_index: 0, variable_index: 0 }], expression: Literal(TupleLiteral(ResolvedTupleType([Float(ResolvedFloatType), String(ResolvedStringType), Int(ResolvedIntType)]), [Literal(FloatLiteral(fp:2.400 (157286), <10:3>, ResolvedFloatType)), Literal(StringLiteral("\"hello\"", <15:7>, ResolvedStringType)), Literal(IntLiteral(4, <24:1>, ResolvedIntType))])) }))
+Expression(InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <5:1>, resolved_type: Tuple(ResolvedTupleType([Float(ResolvedFloatType), String(ResolvedStringType), Int(ResolvedIntType)])), mutable_node: Some(<1:3>), scope_index: 0, variable_index: 0 }], expression: Literal(TupleLiteral(ResolvedTupleType([Float(ResolvedFloatType), String(ResolvedStringType), Int(ResolvedIntType)]), [Literal(FloatLiteral(fp:2.400 (157286), <10:3>, ResolvedFloatType)), Literal(StringLiteral("hello", <15:7>, ResolvedStringType)), Literal(IntLiteral(4, <24:1>, ResolvedIntType))])) }))
 
 "#,
     );
@@ -307,7 +307,7 @@ if true {
 }
         ",
         r"
-If(ResolvedBooleanExpression { expression: Literal(BoolLiteral(true, <4:4>, ResolvedBoolType)) }, [Expression(Option(Some(Literal(IntLiteral(5, <12:1>, ResolvedIntType)))))], Some([Expression(Option(Some(Literal(IntLiteral(6, <24:1>, ResolvedIntType)))))]))
+If(ResolvedBooleanExpression { expression: Literal(BoolLiteral(true, <4:4>, ResolvedBoolType)) }, [Expression(Literal(IntLiteral(5, <12:1>, ResolvedIntType)))], Some([Expression(Literal(IntLiteral(6, <24:1>, ResolvedIntType)))]))
 
 ",
     );
@@ -584,6 +584,7 @@ fn fn_mut_param() {
     check(
         r"
 fn changing(mut x: Int) {
+    x = 909
 }
 
 mut a = 43
@@ -594,8 +595,8 @@ changing(mut a)
         
 FunctionDef(Internal(InternalFuncDef))
 ---
-Expression(InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <34:1>, resolved_type: Int(ResolvedIntType), mutable_node: Some(<30:3>), scope_index: 0, variable_index: 1 }], expression: Literal(IntLiteral(43, <38:2>, ResolvedIntType)) }))
-Expression(FunctionInternalCall(InFuncCall(InternalFunctionAccess(InternalFuncDef) [MutRef(ResolvedMutVariable { variable_ref: ResolvedVariable { name: <34:1>, resolved_type: Int(ResolvedIntType), mutable_node: Some(<30:3>), scope_index: 0, variable_index: 1 } })])))
+Expression(InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <46:1>, resolved_type: Int(ResolvedIntType), mutable_node: Some(<42:3>), scope_index: 0, variable_index: 0 }], expression: Literal(IntLiteral(43, <50:2>, ResolvedIntType)) }))
+Expression(FunctionInternalCall(InFuncCall(InternalFunctionAccess(InternalFuncDef) [MutRef(ResolvedMutVariable { variable_ref: ResolvedVariable { name: <46:1>, resolved_type: Int(ResolvedIntType), mutable_node: Some(<42:3>), scope_index: 0, variable_index: 0 } })])))
 
 ",
     );
@@ -641,6 +642,9 @@ fn check_some_bug() {
         is_attacking = false
         c = if is_attacking { 3.5 } else { -13.3 }
     "#,
-        "",
+        r"
+Expression(InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <9:12>, resolved_type: Bool(ResolvedBoolType), mutable_node: None, scope_index: 0, variable_index: 0 }], expression: Literal(BoolLiteral(false, <24:5>, ResolvedBoolType)) }))
+Expression(InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <38:1>, resolved_type: Float(ResolvedFloatType), mutable_node: None, scope_index: 0, variable_index: 1 }], expression: IfElse(ResolvedBooleanExpression { expression: VariableAccess(ResolvedVariable { name: <9:12>, resolved_type: Bool(ResolvedBoolType), mutable_node: None, scope_index: 0, variable_index: 0 }) }, Literal(FloatLiteral(fp:3.500 (229376), <60:3>, ResolvedFloatType)), UnaryOp(ResolvedUnaryOperator { left: Literal(FloatLiteral(fp:13.300 (871628), <74:4>, ResolvedFloatType)), kind: Negate, resolved_type: Float(ResolvedFloatType), node: <73:1> })) }))
+",
     );
 }
