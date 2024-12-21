@@ -31,7 +31,7 @@ impl SourceMap {
         }
     }
 
-    pub fn add(&mut self, path: &Path) -> io::Result<FileId> {
+    pub fn read_file(&mut self, path: &Path) -> io::Result<(FileId, String)> {
         let relative_path =
             diff_paths(path, &self.base_path).expect("could not find relative path");
 
@@ -43,7 +43,7 @@ impl SourceMap {
 
         self.add_manual(id, &relative_path, &contents);
 
-        Ok(id)
+        Ok((id, contents))
     }
 
     pub fn add_manual(&mut self, id: FileId, relative_path: &Path, contents: &str) {
@@ -62,10 +62,29 @@ impl SourceMap {
             .expect("could not add file info");
     }
 
-    pub fn add_relative(&mut self, relative_path: &str) -> io::Result<FileId> {
+    pub fn add_manual_no_id(&mut self, relative_path: &Path, contents: &str) -> FileId {
+        let line_offsets = Self::compute_line_offsets(contents);
+        info!(?line_offsets, "scanned");
+        let id = self.next_file_id;
+        self.next_file_id += 1;
+
+        self.cache
+            .insert(
+                id,
+                FileInfo {
+                    relative_path: relative_path.to_path_buf(),
+                    contents: contents.to_string(),
+                    line_offsets,
+                },
+            )
+            .expect("could not add file info");
+        id
+    }
+
+    pub fn read_file_relative(&mut self, relative_path: &str) -> io::Result<(FileId, String)> {
         let buf = self.to_file_system_path(relative_path);
         info!(complete_path=?buf, "complete path");
-        self.add(&buf)
+        self.read_file(&buf)
     }
 
     /*

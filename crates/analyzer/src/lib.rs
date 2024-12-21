@@ -226,7 +226,7 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
 #[derive(Debug)]
 pub enum ResolveError {
     NamespaceError(NamespaceError),
-    CanNotFindModule(ModulePath),
+    CanNotFindModule(Vec<String>),
     UnknownStructTypeReference(QualifiedTypeIdentifier),
     UnknownLocalStructTypeReference(LocalTypeIdentifier),
     DuplicateFieldName(ResolvedNode),

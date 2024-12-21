@@ -76,6 +76,11 @@ impl ResolvedModules {
         module_ref
     }
 
+    #[must_use]
+    pub fn contains_key(&self, module_path: &[String]) -> bool {
+        self.modules.contains_key(module_path)
+    }
+
     /*
     pub fn find_module(&self, _module_path: &Vec<String>) -> Option<ResolvedModulePathRef> {
         todo!()

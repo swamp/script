@@ -6,7 +6,7 @@ use swamp_script_source_map::SourceMap;
 fn test() -> io::Result<()> {
     let mut sources = SourceMap::new(Path::new("tests/fixtures"));
 
-    let x = sources.add_relative("first/world.swamp")?;
+    let (x, _script) = sources.read_file_relative("first/world.swamp")?;
     assert_eq!(x, 1);
 
     let rocket_offset = 83;

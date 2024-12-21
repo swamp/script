@@ -8,6 +8,8 @@ description = "script language for embedding"
 
 [dependencies]
 
+swamp-script-source-map = { path = "../source-map", version = "0.0.7" }
+
 # Ast and Parser
 swamp-script-parser = { path = "../parser", version = "0.0.7" }
 swamp-script-ast = { path = "../ast", version = "0.0.7" }
