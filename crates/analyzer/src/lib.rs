@@ -852,52 +852,6 @@ impl<'a> Resolver<'a> {
         Ok((parent_ref.clone(), resolved_variants))
     }
 
-    /*
-    pub fn insert_definition(
-        &mut self,
-        resolved_definition: &ResolvedDefinition,
-    ) -> Result<(), ResolveError> {
-        match resolved_definition {
-            ResolvedDefinition::EnumType(parent_enum_ref, variants) => {
-
-            }
-            ResolvedDefinition::StructType(_struct_type) => {
-                // TODO:  self.shared.lookup.add_struct_type(struct_type)?;
-            }
-            ResolvedDefinition::Function() => {}
-            ResolvedDefinition::ExternalFunction() => {}
-            ResolvedDefinition::ImplType(_resolved_type) => {}
-            ResolvedDefinition::FunctionDef(function_def) => match function_def {
-                ResolvedFunction::Internal(internal_fn) => {
-                    //self.shared.lookup.add_internal_function_ref(internal_fn)?;
-                }
-                ResolvedFunction::External(_resolved_external_function_def_ref) => {
-                    /* TODO:
-                       self.shared.lookup.add_external_function_declaration_ref(
-
-                           resolved_external_function_def_ref,
-                       )?;
-
-                    */
-                }
-            },
-            ResolvedDefinition::Alias(resolved_type) => match resolved_type {
-                ResolvedType::Alias(_name, _resolved_type) => {
-                    /* TODO:
-                    self.shared.lookup
-                        .add_type_alias(&name.0.clone(), *resolved_type.clone())?;
-
-                     */
-                }
-                _ => panic!("type should always be alias"),
-            },
-            ResolvedDefinition::Comment(_) => {}
-        }
-        Ok(())
-    }
-
-     */
-
     fn resolve_return_type(&mut self, function: &Function) -> Result<ResolvedType, ResolveError> {
         let ast_return_type = match function {
             Function::Internal(x) => &x.declaration.return_type,
@@ -1707,56 +1661,6 @@ impl<'a> Resolver<'a> {
         Ok(expression)
     }
 
-    /*
-    match literal {
-                            Literal::Int(value) => {
-                                ResolvedLiteral::IntLiteral(*value, self.shared.types.int_type.clone())
-                            }
-                            Literal::Float(value) => {
-                                ResolvedLiteral::FloatLiteral(*value, self.shared.types.float_type.clone())
-                            }
-                            Literal::String(value) => ResolvedLiteral::StringLiteral(
-                                value.clone(),
-                                self.shared.types.string_type.clone(),
-                            ),
-                            Literal::Unit => ResolvedLiteral::UnitLiteral(self.shared.types.unit_type.clone()),
-                            Literal::None => ResolvedLiteral::NoneLiteral,
-                            Literal::Bool(value) => {
-                                ResolvedLiteral::BoolLiteral(*value, self.shared.types.bool_type.clone())
-                            }
-
-                            Literal::EnumVariant(qualified_type_identifier, variant_name, data) => self
-                                .resolve_enum_variant_literal(
-                                    qualified_type_identifier,
-                                    variant_name,
-                                    data,
-                                )?,
-
-                            Literal::Tuple(expressions) => {
-                                let mut resolved_expressions = Vec::new();
-                                for expression in expressions {
-                                    resolved_expressions.push(self.resolve_expression(expression)?);
-                                }
-                                let mut resolved_types = Vec::new();
-                                for resolved_expression in &resolved_expressions {
-                                    resolved_types.push(resolution(&resolved_expression));
-                                }
-
-                                let tuple_type = ResolvedTupleType::new(resolved_types);
-                                let tuple_type_ref = Rc::new(tuple_type);
-
-                                ResolvedLiteral::TupleLiteral(tuple_type_ref, resolved_expressions)
-                            }
-
-                            Literal::Array(items) => {
-                                let (array_type_ref, expressions) =
-                                    self.resolve_array_type_helper(items)?;
-
-                                ResolvedLiteral::Array(array_type_ref, expressions)
-                            }
-
-                            Literal::Map(entries) => self.resolve_map_literal(entries)?,
-     */
     fn resolve_literal(&mut self, ast_literal: &Literal) -> Result<ResolvedLiteral, ResolveError> {
         let resolved_literal = match ast_literal {
             Literal::Int(int_node) => {
@@ -2551,27 +2455,28 @@ impl<'a> Resolver<'a> {
         let right = self.resolve_expression(ast_right)?;
         let right_type = resolution(&right);
 
-        let converted = self.convert_binary_operator_kind(&ast_op);
+        let (resolved_node, kind) = self.convert_binary_operator_kind(&ast_op);
 
-        match (&converted, &left_type, &right_type) {
+        match (&kind, &left_type, &right_type) {
             // String concatenation - allow any type on the right
-            (&ResolvedBinaryOperatorKind::Add(_), ResolvedType::String(_), _) => {
+            (&ResolvedBinaryOperatorKind::Add, ResolvedType::String(_), _) => {
                 Ok(ResolvedBinaryOperator {
                     left: Box::new(left),
                     right: Box::new(right),
-                    kind: converted,
+                    kind,
+                    node: resolved_node,
                     resolved_type: self.shared.types.string_type(),
                 })
             }
 
             // Comparison operators
             (
-                ResolvedBinaryOperatorKind::Equal(_)
-                | ResolvedBinaryOperatorKind::NotEqual(_)
-                | ResolvedBinaryOperatorKind::GreaterThan(_)
-                | ResolvedBinaryOperatorKind::GreaterEqual(_)
-                | ResolvedBinaryOperatorKind::LessThan(_)
-                | ResolvedBinaryOperatorKind::LessEqual(_),
+                ResolvedBinaryOperatorKind::Equal
+                | ResolvedBinaryOperatorKind::NotEqual
+                | ResolvedBinaryOperatorKind::GreaterThan
+                | ResolvedBinaryOperatorKind::GreaterEqual
+                | ResolvedBinaryOperatorKind::LessThan
+                | ResolvedBinaryOperatorKind::LessEqual,
                 _,
                 _,
             ) => {
@@ -2582,7 +2487,8 @@ impl<'a> Resolver<'a> {
                 Ok(ResolvedBinaryOperator {
                     left: Box::new(left),
                     right: Box::new(right),
-                    kind: converted,
+                    kind,
+                    node: resolved_node,
                     resolved_type: self.shared.types.bool_type(),
                 })
             }
@@ -2596,7 +2502,8 @@ impl<'a> Resolver<'a> {
                 Ok(ResolvedBinaryOperator {
                     left: Box::new(left),
                     right: Box::new(right),
-                    kind: converted,
+                    kind,
+                    node: resolved_node,
                     resolved_type: left_type,
                 })
             }
@@ -3161,25 +3068,6 @@ impl<'a> Resolver<'a> {
         ))
     }
 
-    /*
-    fn get_namespace(
-        &self,
-        qualified_type_identifier: &QualifiedTypeIdentifier,
-    ) -> Result<std::cell::Ref<'_, ResolvedModuleNamespace>, ResolveError> {
-        if let Some(path) = &qualified_type_identifier.module_path {
-            let module_ref = self
-                .find_module(path)
-                .ok_or(ResolveError::CanNotFindModule(path.clone()))?;
-
-            Ok(std::cell::Ref::map(module_ref.borrow(), |m| &m.namespace))
-        } else {
-            // Assuming current_module is also a RefCell
-            Ok(std::cell::Ref::map(self.current_module.borrow(), |m| {
-                &m.namespace
-            }))
-        }
-    }*/
-
     fn resolve_match(
         &mut self,
         expression: &Expression,
@@ -3244,7 +3132,7 @@ impl<'a> Resolver<'a> {
     /// Analyzes an expression that might contain an optional unwrap operator,
     /// creating a new scope with the unwrapped shadow variable if necessary.
     /// It is a bit hacky code in the analyzer, but it enables a very ergonomic syntax of
-    /// `if a? { print('a is {a}') }
+    /// `if a? { print('a is {a}') }`
     fn analyze_optional_condition(
         &mut self,
         condition: &Expression,
@@ -3749,42 +3637,47 @@ impl<'a> Resolver<'a> {
     fn convert_binary_operator_kind(
         &self,
         binary_operator: &BinaryOperator,
-    ) -> ResolvedBinaryOperatorKind {
+    ) -> (ResolvedNode, ResolvedBinaryOperatorKind) {
         match binary_operator {
-            BinaryOperator::Add(node) => ResolvedBinaryOperatorKind::Add(self.to_node(node)),
+            BinaryOperator::Add(node) => (self.to_node(node), ResolvedBinaryOperatorKind::Add),
             BinaryOperator::Subtract(node) => {
-                ResolvedBinaryOperatorKind::Subtract(self.to_node(node))
+                (self.to_node(node), ResolvedBinaryOperatorKind::Subtract)
             }
             BinaryOperator::Multiply(node) => {
-                ResolvedBinaryOperatorKind::Multiply(self.to_node(node))
+                (self.to_node(node), ResolvedBinaryOperatorKind::Multiply)
             }
-            BinaryOperator::Divide(node) => ResolvedBinaryOperatorKind::Divide(self.to_node(node)),
-            BinaryOperator::Modulo(node) => ResolvedBinaryOperatorKind::Modulo(self.to_node(node)),
+            BinaryOperator::Divide(node) => {
+                (self.to_node(node), ResolvedBinaryOperatorKind::Divide)
+            }
+            BinaryOperator::Modulo(node) => {
+                (self.to_node(node), ResolvedBinaryOperatorKind::Modulo)
+            }
             BinaryOperator::LogicalOr(node) => {
-                ResolvedBinaryOperatorKind::LogicalOr(self.to_node(node))
+                (self.to_node(node), ResolvedBinaryOperatorKind::LogicalOr)
             }
             BinaryOperator::LogicalAnd(node) => {
-                ResolvedBinaryOperatorKind::LogicalAnd(self.to_node(node))
+                (self.to_node(node), ResolvedBinaryOperatorKind::LogicalAnd)
             }
-            BinaryOperator::Equal(node) => ResolvedBinaryOperatorKind::Equal(self.to_node(node)),
+            BinaryOperator::Equal(node) => (self.to_node(node), ResolvedBinaryOperatorKind::Equal),
             BinaryOperator::NotEqual(node) => {
-                ResolvedBinaryOperatorKind::NotEqual(self.to_node(node))
+                (self.to_node(node), ResolvedBinaryOperatorKind::NotEqual)
             }
             BinaryOperator::LessThan(node) => {
-                ResolvedBinaryOperatorKind::LessThan(self.to_node(node))
+                (self.to_node(node), ResolvedBinaryOperatorKind::LessThan)
             }
             BinaryOperator::LessEqual(node) => {
-                ResolvedBinaryOperatorKind::LessEqual(self.to_node(node))
+                (self.to_node(node), ResolvedBinaryOperatorKind::LessEqual)
             }
             BinaryOperator::GreaterThan(node) => {
-                ResolvedBinaryOperatorKind::GreaterThan(self.to_node(node))
+                (self.to_node(node), ResolvedBinaryOperatorKind::GreaterThan)
             }
             BinaryOperator::GreaterEqual(node) => {
-                ResolvedBinaryOperatorKind::GreaterEqual(self.to_node(node))
+                (self.to_node(node), ResolvedBinaryOperatorKind::GreaterEqual)
             }
-            BinaryOperator::RangeExclusive(node) => {
-                ResolvedBinaryOperatorKind::RangeExclusive(self.to_node(node))
-            }
+            BinaryOperator::RangeExclusive(node) => (
+                self.to_node(node),
+                ResolvedBinaryOperatorKind::RangeExclusive,
+            ),
         }
     }
 

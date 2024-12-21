@@ -249,20 +249,20 @@ type ResolvedMutVariableRef = Rc<ResolvedMutVariable>;
 
 #[derive(Debug)]
 pub enum ResolvedBinaryOperatorKind {
-    Add(ResolvedNode),
-    Subtract(ResolvedNode),
-    Multiply(ResolvedNode),
-    Divide(ResolvedNode),
-    Modulo(ResolvedNode),
-    LogicalOr(ResolvedNode),
-    LogicalAnd(ResolvedNode),
-    Equal(ResolvedNode),
-    NotEqual(ResolvedNode),
-    LessThan(ResolvedNode),
-    LessEqual(ResolvedNode),
-    GreaterThan(ResolvedNode),
-    GreaterEqual(ResolvedNode),
-    RangeExclusive(ResolvedNode),
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
+    Modulo,
+    LogicalOr,
+    LogicalAnd,
+    Equal,
+    NotEqual,
+    LessThan,
+    LessEqual,
+    GreaterThan,
+    GreaterEqual,
+    RangeExclusive,
 }
 
 #[derive(Debug)]
@@ -270,6 +270,7 @@ pub struct ResolvedBinaryOperator {
     pub left: Box<ResolvedExpression>,
     pub right: Box<ResolvedExpression>,
     pub kind: ResolvedBinaryOperatorKind,
+    pub node: ResolvedNode,
     pub resolved_type: ResolvedType,
 }
 

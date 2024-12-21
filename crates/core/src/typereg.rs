@@ -79,6 +79,8 @@ impl TypeRegistry {
             ResolvedType::Array(array_type)
         }
     */
+
+    /*
     pub fn register_struct_type(
         &self,
         name: String,
@@ -127,4 +129,6 @@ impl TypeRegistry {
             fields,
         )
     }
+
+     */
 }

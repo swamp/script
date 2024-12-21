@@ -81,39 +81,12 @@ impl ResolvedModules {
 
         module_ref
     }
+
     /*
-
-    pub fn add_module(&mut self, module_ref: ResolvedModuleRef) -> Result<(), SemanticError> {
-        let name = module_ref.borrow().namespace.path.0.clone();
-        self.modules.insert(name, module_ref);
-        Ok(())
-    }
-
-    pub fn add_linked_module(
-        &mut self,
-        module_path: ResolvedModulePath,
-        module: ResolvedModuleRef,
-    ) -> Result<(), SemanticError> {
-        self.modules.insert(module_path.clone(), module);
-        Ok(())
-    }
-
-    pub fn get(&self, module_path: &ResolvedModulePath) -> Option<&ResolvedModuleRef> {
-        self.modules.get(module_path)
-    }
-
-    pub fn get_mut(&mut self, module_path: &ResolvedModulePath) -> Option<&mut ResolvedModuleRef> {
-        self.modules.get_mut(module_path)
-    }
-
-    pub fn contains_key(&self, module_path: ResolvedModulePath) -> bool {
-        self.modules.contains_key(&module_path)
-    }
-
-     */
     pub fn find_module(&self, _module_path: &Vec<String>) -> Option<ResolvedModulePathRef> {
         todo!()
     }
+
 
     pub fn get_enum_variant_type(
         &self,
@@ -193,4 +166,6 @@ impl ResolvedModules {
     pub fn add_struct_type(&self, _struct_type: StructType) -> Result<(), NamespaceError> {
         todo!()
     }
+
+     */
 }

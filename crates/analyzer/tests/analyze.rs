@@ -557,7 +557,7 @@ b = a > 43 && false
         r"
         
 Expression(InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <1:1>, resolved_type: Int(ResolvedIntType), mutable_node: None, scope_index: 0, variable_index: 0 }], expression: Literal(IntLiteral(44, <5:2>, ResolvedIntType)) }))
-Expression(InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <8:1>, resolved_type: Bool(ResolvedBoolType), mutable_node: None, scope_index: 0, variable_index: 1 }], expression: BinaryOp(ResolvedBinaryOperator { left: BinaryOp(ResolvedBinaryOperator { left: VariableAccess(ResolvedVariable { name: <1:1>, resolved_type: Int(ResolvedIntType), mutable_node: None, scope_index: 0, variable_index: 0 }), right: Literal(IntLiteral(43, <16:2>, ResolvedIntType)), kind: GreaterThan(<14:1>), resolved_type: Bool(ResolvedBoolType) }), right: Literal(BoolLiteral(false, <22:5>, ResolvedBoolType)), kind: LogicalAnd(<19:2>), resolved_type: Bool(ResolvedBoolType) }) }))
+Expression(InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <8:1>, resolved_type: Bool(ResolvedBoolType), mutable_node: None, scope_index: 0, variable_index: 1 }], expression: BinaryOp(ResolvedBinaryOperator { left: BinaryOp(ResolvedBinaryOperator { left: VariableAccess(ResolvedVariable { name: <1:1>, resolved_type: Int(ResolvedIntType), mutable_node: None, scope_index: 0, variable_index: 0 }), right: Literal(IntLiteral(43, <16:2>, ResolvedIntType)), kind: GreaterThan, node: <14:1>, resolved_type: Bool(ResolvedBoolType) }), right: Literal(BoolLiteral(false, <22:5>, ResolvedBoolType)), kind: LogicalAnd, node: <19:2>, resolved_type: Bool(ResolvedBoolType) }) }))
 
 ",
     );
@@ -573,7 +573,7 @@ b = !(a > 43)
         r"
         
 Expression(InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <1:1>, resolved_type: Int(ResolvedIntType), mutable_node: None, scope_index: 0, variable_index: 0 }], expression: Literal(IntLiteral(44, <5:2>, ResolvedIntType)) }))
-Expression(InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <8:1>, resolved_type: Bool(ResolvedBoolType), mutable_node: None, scope_index: 0, variable_index: 1 }], expression: UnaryOp(ResolvedUnaryOperator { left: BinaryOp(ResolvedBinaryOperator { left: VariableAccess(ResolvedVariable { name: <1:1>, resolved_type: Int(ResolvedIntType), mutable_node: None, scope_index: 0, variable_index: 0 }), right: Literal(IntLiteral(43, <18:2>, ResolvedIntType)), kind: GreaterThan(<16:1>), resolved_type: Bool(ResolvedBoolType) }), kind: Not, resolved_type: Bool(ResolvedBoolType), node: <12:1> }) }))
+Expression(InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <8:1>, resolved_type: Bool(ResolvedBoolType), mutable_node: None, scope_index: 0, variable_index: 1 }], expression: UnaryOp(ResolvedUnaryOperator { left: BinaryOp(ResolvedBinaryOperator { left: VariableAccess(ResolvedVariable { name: <1:1>, resolved_type: Int(ResolvedIntType), mutable_node: None, scope_index: 0, variable_index: 0 }), right: Literal(IntLiteral(43, <18:2>, ResolvedIntType)), kind: GreaterThan, node: <16:1>, resolved_type: Bool(ResolvedBoolType) }), kind: Not, resolved_type: Bool(ResolvedBoolType), node: <12:1> }) }))
 
 ",
     );

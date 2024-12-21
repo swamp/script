@@ -1,7 +1,10 @@
 pub mod collections;
 pub mod prelude;
 
-use swamp_script_semantic::{ModulePath, ResolvedModule, ResolvedRustType, TypeNumber};
+/*
+
+
+use swamp_script_semantic::{modules::ModulePath, modules::ResolvedModule, ResolvedRustType, TypeNumber};
 pub const SPARSE_TYPE_ID: TypeNumber = 999;
 
 pub fn create_std_module() -> ResolvedModule {
@@ -18,3 +21,4 @@ pub fn create_std_module() -> ResolvedModule {
 
     std_module
 }
+*/

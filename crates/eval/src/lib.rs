@@ -9,7 +9,6 @@ use std::fmt::Debug;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use swamp_script_core::extra::{SparseValueId, SparseValueMap};
 use swamp_script_core::value::{format_value, to_rust_value, Value, ValueError};
-pub use swamp_script_semantic::ns::ResolvedModuleNamespace;
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
     ResolvedAccess, ResolvedBinaryOperatorKind, ResolvedForPattern, ResolvedFunction,
@@ -180,20 +179,20 @@ impl<'a, C> Interpreter<'a, C> {
         }
     }
 
-    fn push_function_scope(&mut self, _debug_str: &str) {
+    fn push_function_scope(&mut self, _debug_str: &ResolvedNode) {
         self.function_scope_stack.push(FunctionScope {
             saved_block_scope: self.current_block_scopes.clone(),
         });
 
         self.current_block_scopes.clear();
-        self.push_block_scope("default function scope");
+        self.push_block_scope(_debug_str);
     }
 
-    fn push_block_scope(&mut self, _debug_str: &str) {
+    fn push_block_scope(&mut self, _debug_str: &ResolvedNode) {
         self.current_block_scopes.push(BlockScope::default());
     }
 
-    fn pop_block_scope(&mut self, _debug_str: &str) {
+    fn pop_block_scope(&mut self, _debug_str: &ResolvedNode) {
         self.current_block_scopes.pop();
     }
 
@@ -301,7 +300,7 @@ impl<'a, C> Interpreter<'a, C> {
         let evaluated_args = self.evaluate_args(&call.arguments)?;
         debug!("call {:?}", func_val);
 
-        self.push_function_scope(&call.function_definition.name.text);
+        self.push_function_scope(&call.function_definition.name.0);
 
         // Bind parameters before executing body
         self.bind_parameters(
@@ -313,7 +312,7 @@ impl<'a, C> Interpreter<'a, C> {
 
         let result = self.execute_statements(&call.function_definition.statements)?;
 
-        self.pop_function_scope(&call.function_definition.name.text);
+        self.pop_function_scope(&call.function_definition.name.0);
 
         // Since signals can not propagate from the function call, we just return a normal Value
         let v = match result {
@@ -552,7 +551,7 @@ impl<'a, C> Interpreter<'a, C> {
                     }
                     Value::Map(map_type_ref.clone(), items)
                 }
-                ResolvedLiteral::NoneLiteral => Value::Option(None),
+                ResolvedLiteral::NoneLiteral(_) => Value::Option(None),
             },
 
             ResolvedExpression::Array(array_instantiation) => {
@@ -1222,10 +1221,10 @@ impl<'a, C> Interpreter<'a, C> {
         for statement in statements {
             // First handle signal aware statements
             match statement {
-                ResolvedStatement::Continue => {
+                ResolvedStatement::Continue(_) => {
                     return Ok(ValueWithSignal::Continue);
                 }
-                ResolvedStatement::Break => return Ok(ValueWithSignal::Break),
+                ResolvedStatement::Break(_) => return Ok(ValueWithSignal::Break),
                 ResolvedStatement::Return(expr) => {
                     return Ok(ValueWithSignal::Return(self.evaluate_expression(expr)?));
                 }
@@ -1653,20 +1652,22 @@ impl<'a, C> Interpreter<'a, C> {
 
         let result: Value = match (left_val, op, right_val) {
             // Integer operations
-            (Value::Int(a), ResolvedBinaryOperatorKind::Add, Value::Int(b)) => Value::Int(a + b),
-            (Value::Int(a), ResolvedBinaryOperatorKind::Subtract, Value::Int(b)) => {
+            (Value::Int(a), ResolvedBinaryOperatorKind::Add(_), Value::Int(b)) => Value::Int(a + b),
+            (Value::Int(a), ResolvedBinaryOperatorKind::Subtract(_), Value::Int(b)) => {
                 Value::Int(a - b)
             }
-            (Value::Int(a), ResolvedBinaryOperatorKind::Multiply, Value::Int(b)) => {
+            (Value::Int(a), ResolvedBinaryOperatorKind::Multiply(_), Value::Int(b)) => {
                 Value::Int(a * b)
             }
-            (Value::Int(a), ResolvedBinaryOperatorKind::Divide, Value::Int(b)) => {
+            (Value::Int(a), ResolvedBinaryOperatorKind::Divide(_), Value::Int(b)) => {
                 if b == 0 {
                     return Err("Division by zero".to_string())?;
                 }
                 Value::Int(a / b)
             }
-            (Value::Int(a), ResolvedBinaryOperatorKind::Modulo, Value::Int(b)) => Value::Int(a % b),
+            (Value::Int(a), ResolvedBinaryOperatorKind::Modulo(_), Value::Int(b)) => {
+                Value::Int(a % b)
+            }
 
             // Float operations
             (Value::Float(a), ResolvedBinaryOperatorKind::Add, Value::Float(b)) => {

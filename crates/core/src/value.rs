@@ -11,14 +11,13 @@ use std::cell::RefCell;
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
 use std::rc::Rc;
-use swamp_script_semantic::ns::{ResolvedModuleNamespace, SemanticError};
+use swamp_script_semantic::ResolvedType;
 use swamp_script_semantic::{
-    ExternalFunctionId, FormatSpecifier, PrecisionType, ResolvedArrayTypeRef,
-    ResolvedEnumVariantStructTypeRef, ResolvedEnumVariantTupleTypeRef, ResolvedEnumVariantTypeRef,
-    ResolvedInternalFunctionDefinitionRef, ResolvedMapTypeRef, ResolvedRustTypeRef,
-    ResolvedStructTypeRef, ResolvedTupleTypeRef, TypeNumber,
+    ExternalFunctionId, ResolvedArrayTypeRef, ResolvedEnumVariantStructTypeRef,
+    ResolvedEnumVariantTupleTypeRef, ResolvedEnumVariantTypeRef, ResolvedFormatSpecifierKind,
+    ResolvedInternalFunctionDefinitionRef, ResolvedMapTypeRef, ResolvedPrecisionType,
+    ResolvedRustTypeRef, ResolvedStructTypeRef, ResolvedTupleTypeRef, SemanticError, TypeNumber,
 };
-use swamp_script_semantic::{IdentifierName, ResolvedType};
 
 pub trait RustType: Any + Debug + Display {
     fn as_any(&self) -> &dyn Any;
@@ -302,23 +301,6 @@ impl Value {
         Value::Struct(struct_type, vec![rust_value], resolved_type)
     }
 
-    pub fn new_hidden_rust_type<T: RustType + 'static>(
-        name: &str,
-        rust_description: ResolvedRustTypeRef,
-        value: T,
-        namespace: &mut ResolvedModuleNamespace,
-    ) -> Result<(Self, ResolvedStructTypeRef), SemanticError> {
-        let struct_type =
-            namespace.util_insert_struct_type(name, &[("hidden", ResolvedType::Any)])?;
-        let struct_value = Self::new_hidden_rust_struct(
-            struct_type.clone(),
-            rust_description,
-            value,
-            ResolvedType::Struct(struct_type.clone()),
-        );
-        Ok((struct_value, struct_type))
-    }
-
     #[must_use]
     pub fn unref(&self) -> Self {
         match self {
@@ -367,12 +349,13 @@ impl std::fmt::Display for Value {
                 write!(f, ")")
             }
             Self::Struct(struct_type_ref, fields_in_strict_order, display_type) => {
-                let struct_name = display_type.display_name();
-                write!(f, "{struct_name} {{ ")?;
+                let struct_name = display_type;
+                write!(f, "{struct_name:?} {{ ")?;
 
                 let fields = struct_type_ref
                     .borrow()
-                    .fields
+                    .anon_struct_type
+                    .defined_fields
                     .keys()
                     .cloned()
                     .collect::<Vec<_>>();
@@ -397,25 +380,26 @@ impl std::fmt::Display for Value {
                 if enum_name.common.module_path.0.is_empty() {
                     write!(
                         f,
-                        "{}::{}({})",
+                        "{:?}::{:?}({})",
                         enum_name.common.enum_ref.name,
-                        enum_name.common.variant_name.text,
+                        enum_name.common.variant_name,
                         comma(fields_in_order),
                     )
                 } else {
                     write!(
                         f,
-                        "{}::{}::{}{}",
+                        "{:?}::{:?}::{:?}{}",
                         enum_name.common.module_path,
                         enum_name.common.enum_ref.name,
-                        enum_name.common.variant_name.text,
+                        enum_name.common.variant_name,
                         comma(fields_in_order),
                     )
                 }
             }
             Self::EnumVariantStruct(struct_variant, values) => {
-                let decorated_values: Vec<(IdentifierName, Value)> = struct_variant
-                    .anonym_struct_ty
+                let decorated_values: Vec<(String, Value)> = struct_variant
+                    .anon_struct
+                    .defined_fields
                     .keys()
                     .cloned()
                     .zip(values.clone())
@@ -423,13 +407,13 @@ impl std::fmt::Display for Value {
 
                 write!(
                     f,
-                    "{}::{} {{ {} }}",
+                    "{:?}::{:?} {{ {} }}",
                     struct_variant.common.enum_ref.name,
                     struct_variant.common.variant_name,
                     comma_tuple(&decorated_values)
                 )
             }
-            Self::EnumVariantSimple(enum_type_ref) => write!(f, "{enum_type_ref}"),
+            Self::EnumVariantSimple(enum_type_ref) => write!(f, "{enum_type_ref:?}"),
             Self::RustValue(_rust_type, rust_type_pointer) => {
                 write!(f, "{}", rust_type_pointer.borrow())
             }
@@ -479,7 +463,7 @@ impl Hash for Value {
             Self::Option(o) => o.hash(state),
             Self::Array(_, arr) => arr.hash(state),
             Self::Struct(type_ref, values, _resolved_type) => {
-                type_ref.borrow().name.hash(state);
+                type_ref.borrow().number.hash(state);
                 for v in values {
                     v.hash(state);
                 }
@@ -500,31 +484,37 @@ impl Hash for Value {
     }
 }
 
-pub fn format_value(value: &Value, spec: &FormatSpecifier) -> Result<String, String> {
+pub fn format_value(value: &Value, spec: &ResolvedFormatSpecifierKind) -> Result<String, String> {
     match (value, spec) {
-        (Value::Int(n), FormatSpecifier::Debug) => Ok(format!("{n:?}")),
-        (Value::Int(n), FormatSpecifier::LowerHex) => Ok(format!("{n:x}")),
-        (Value::Int(n), FormatSpecifier::UpperHex) => Ok(format!("{n:X}")),
-        (Value::Int(n), FormatSpecifier::Binary) => Ok(format!("{n:b}")),
+        (Value::Int(n), ResolvedFormatSpecifierKind::Debug) => Ok(format!("{n:?}")),
+        (Value::Int(n), ResolvedFormatSpecifierKind::LowerHex) => Ok(format!("{n:x}")),
+        (Value::Int(n), ResolvedFormatSpecifierKind::UpperHex) => Ok(format!("{n:X}")),
+        (Value::Int(n), ResolvedFormatSpecifierKind::Binary) => Ok(format!("{n:b}")),
 
-        (Value::Float(f), FormatSpecifier::Float) => Ok(format!("{f}")),
-        (Value::Float(f), FormatSpecifier::Precision(prec, PrecisionType::Float)) => {
-            Ok(format!("{:.*}", *prec as usize, f))
-        }
+        (Value::Float(f), ResolvedFormatSpecifierKind::Float) => Ok(format!("{f}")),
+        (
+            Value::Float(f),
+            ResolvedFormatSpecifierKind::Precision(prec, _node, ResolvedPrecisionType::Float),
+        ) => Ok(format!("{:.*}", *prec as usize, f)),
 
-        (Value::String(s), FormatSpecifier::Precision(prec, PrecisionType::String)) => {
-            Ok(format!("{:.*}", *prec as usize, s))
-        }
+        (
+            Value::String(s),
+            ResolvedFormatSpecifierKind::Precision(prec, _node, ResolvedPrecisionType::String, ..),
+        ) => Ok(format!("{:.*}", *prec as usize, s)),
 
         // Debug format for complex types
-        (Value::Struct(_type_id, fields, _), FormatSpecifier::Debug) => Ok(format!("{fields:?}")),
-        (Value::Array(_type_id, elements), FormatSpecifier::Debug) => Ok(format!("{elements:?}")),
-        (Value::EnumVariantTuple(_type_id, variant), FormatSpecifier::Debug) => {
+        (Value::Struct(_type_id, fields, _), ResolvedFormatSpecifierKind::Debug) => {
+            Ok(format!("{fields:?}"))
+        }
+        (Value::Array(_type_id, elements), ResolvedFormatSpecifierKind::Debug) => {
+            Ok(format!("{elements:?}"))
+        }
+        (Value::EnumVariantTuple(_type_id, variant), ResolvedFormatSpecifierKind::Debug) => {
             Ok(format!("{variant:?}"))
         }
 
         // Default string conversion for other cases
-        (value, FormatSpecifier::Debug) => Ok(format!("{value}")),
+        (value, ResolvedFormatSpecifierKind::Debug) => Ok(format!("{value}")),
 
         _ => Err(format!(
             "Unsupported format specifier {spec:?} for value type {value:?}"

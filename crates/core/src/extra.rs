@@ -29,7 +29,7 @@ impl Display for SparseValueMap {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Sparse<{}> len:{}",
+            "Sparse<{:?}> len:{}",
             self.type_parameter,
             self.sparse_slot.len()
         )
