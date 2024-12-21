@@ -93,7 +93,9 @@ impl SourceMapLookup for SourceMapWrapper {
     }
 }
 
-fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError> {
+fn compile_and_eval(
+    script: &str,
+) -> Result<(Value, Vec<String>, Rc<SourceMapWrapper>), EvalTestError> {
     let mut modules = ResolvedModules::new();
     let resolved_path_str = vec!["test".to_string()];
     let main_module = modules.add_empty_module(&resolved_path_str);
@@ -146,7 +148,7 @@ fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError>
         &mut context,
     )?;
 
-    Ok((value, context.output))
+    Ok((value, context.output, source_map_wrapper))
 }
 
 pub struct TestContext {
@@ -176,7 +178,7 @@ fn register_print(
 
 #[allow(dead_code)] // TODO: this should not be needed since it is under tests/
 pub fn check(script: &str, expected_result: &str) {
-    let (_v, output) = compile_and_eval(script).expect("eval script failed");
+    let (_v, output, _) = compile_and_eval(script).expect("eval script failed");
 
     let actual_lines: Vec<&str> = output.iter().map(|s| s.trim()).collect();
     let expected_lines: Vec<&str> = expected_result
@@ -206,7 +208,7 @@ pub fn check_fail(script: &str, expected_err: &str) {
 
 #[allow(dead_code)] // TODO: This should not be needed since it is under tests/
 pub fn check_value(script: &str, expected_value: Value) {
-    let (value_with_signal, _output) = compile_and_eval(script).expect("eval script failed");
+    let (value_with_signal, _output, _) = compile_and_eval(script).expect("eval script failed");
     let value: Value = value_with_signal.try_into().unwrap();
 
     assert_eq!(value, expected_value);
@@ -214,8 +216,19 @@ pub fn check_value(script: &str, expected_value: Value) {
 
 #[allow(dead_code)] // TODO: This should not be needed since it is under tests/
 pub fn eval(script: &str) -> Value {
-    let (value_with_signal, _output) = compile_and_eval(script).expect("eval script failed");
+    let (value_with_signal, _output, _) = compile_and_eval(script).expect("eval script failed");
     let value: Value = value_with_signal.try_into().unwrap();
 
     value
+}
+
+#[allow(dead_code)] // TODO: This should not be needed since it is under tests/
+pub fn eval_string(script: &str, expected_string: &str) {
+    let (value_with_signal, _output, source_map_wrapper) =
+        compile_and_eval(script).expect("eval script failed");
+    let value: Value = value_with_signal.try_into().unwrap();
+
+    let value_string = value.display(source_map_wrapper.as_ref()).to_string();
+
+    assert_eq!(value_string, expected_string);
 }

@@ -379,7 +379,11 @@ impl Value {
             }
             Self::Struct(struct_type_ref, fields_in_strict_order, display_type) => {
                 let struct_name = display_type;
-                write!(f, "{struct_name:?} {{ ")?;
+                write!(
+                    f,
+                    "{} {{ ",
+                    source_map.get_text(&struct_type_ref.borrow().name.0)
+                )?;
 
                 let fields = struct_type_ref
                     .borrow()
@@ -401,7 +405,6 @@ impl Value {
             Self::InternalFunction(_reference) => write!(f, "<function>"), // TODO:
             Self::Unit => write!(f, "()"),
             Self::ExclusiveRange(start, end) => write!(f, "{start}..{end}"),
-
             Self::Reference(reference) => reference.borrow().display(source_map).fmt(f),
             Self::ExternalFunction(_) => write!(f, "<external>"), // TODO:
 
