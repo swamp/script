@@ -9,9 +9,9 @@ use std::fmt::Debug;
 use std::rc::Rc;
 use swamp_script_semantic::{
     ResolvedEnumTypeRef, ResolvedEnumVariantType, ResolvedEnumVariantTypeRef,
-    ResolvedExternalFunctionDefinitionRef, ResolvedInternalFunctionDefinition,
-    ResolvedInternalFunctionDefinitionRef, ResolvedRustType, ResolvedRustTypeRef,
-    ResolvedStructType, ResolvedStructTypeRef, ResolvedType, SemanticError,
+    ResolvedExternalFunctionDefinition, ResolvedExternalFunctionDefinitionRef,
+    ResolvedInternalFunctionDefinition, ResolvedInternalFunctionDefinitionRef, ResolvedRustType,
+    ResolvedRustTypeRef, ResolvedStructType, ResolvedStructTypeRef, ResolvedType, SemanticError,
 };
 
 #[derive(Debug, Clone)]
@@ -170,5 +170,16 @@ impl ResolvedModuleNamespace {
         name: &str,
     ) -> Option<&ResolvedExternalFunctionDefinitionRef> {
         self.external_function_declarations.get(&name.to_string())
+    }
+
+    pub fn add_external_function_declaration(
+        &mut self,
+        name: &str,
+        declaration: ResolvedExternalFunctionDefinition,
+    ) -> Result<ResolvedExternalFunctionDefinitionRef, ResolveError> {
+        let decl_ref = Rc::new(declaration);
+        self.external_function_declarations
+            .insert(name.to_string(), decl_ref.clone())?;
+        Ok(decl_ref)
     }
 }
