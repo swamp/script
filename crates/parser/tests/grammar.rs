@@ -762,7 +762,7 @@ for x in 1..10 {
     check(
         script,
         "
-ForLoop(Single(ForVar { identifier: <5:1>, is_mut: None }), MutExpression { is_mut: None, expression: ExclusiveRange(Literal(Int(<10:1>)), Literal(Int(<13:2>))) }, [])
+ForLoop(Single(ForVar { identifier: <5:1>, is_mut: None }), IteratableExpression { is_mut: None, expression: ExclusiveRange(Literal(Int(<10:1>)), Literal(Int(<13:2>))) }, [])
 ",
     );
 }
@@ -792,7 +792,8 @@ for x in [1, 2, 3] {
     check(
         &script,
         "
-ForLoop(Single(ForVar { identifier: <6:1>, is_mut: None }), MutExpression { is_mut: None, expression: Literal(Array([Literal(Int(<12:1>)), Literal(Int(<15:1>)), Literal(Int(<18:1>))])) }, [])",
+ForLoop(Single(ForVar { identifier: <6:1>, is_mut: None }), IteratableExpression { is_mut: None, expression: Literal(Array([Literal(Int(<12:1>)), Literal(Int(<15:1>)), Literal(Int(<18:1>))])) }, []),
+"
     );
 }
 
@@ -805,7 +806,7 @@ fn enum_literal_basic() {
     "#,
         r#"
 
-Expression(VariableAssignment(<9:5>, Literal(EnumVariant(Simple(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<17:5>), module_path: None })))))
+Expression(VariableAssignment(<9:5>, Literal(EnumVariant(Simple(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<17:5>), module_path: None }, LocalTypeIdentifier(<24:7>))))))
         "#,
     );
 }
@@ -826,7 +827,7 @@ fn enum_literal() {
 
 EnumDef(<14:5>, [Simple(<34:7>), Simple(<55:7>)])
 ---
-Expression(VariableAssignment(<83:5>, Literal(EnumVariant(Simple(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<91:5>), module_path: None })))))
+Expression(VariableAssignment(<83:5>, Literal(EnumVariant(Simple(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<91:5>), module_path: None }, LocalTypeIdentifier(<98:7>))))))
 Expression(FunctionCall(VariableAccess(<114:5>), [VariableAccess(<120:5>)]))
 
         "#,
@@ -974,7 +975,7 @@ fn enum_variant_construction() {
 
         ",
         r"
-Expression(VariableAssignment(<10:5>, Literal(EnumVariant(Struct(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<18:5>), module_path: None }, [FieldExpression { field_name: FieldName(<37:5>), expression: Literal(Int(<44:2>)) }, FieldExpression { field_name: FieldName(<48:6>), expression: Literal(Int(<56:2>)) }])))))
+Expression(VariableAssignment(<10:5>, Literal(EnumVariant(Struct(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<18:5>), module_path: None }, LocalTypeIdentifier(<25:9>), [FieldExpression { field_name: FieldName(<37:5>), expression: Literal(Int(<44:2>)) }, FieldExpression { field_name: FieldName(<48:6>), expression: Literal(Int(<56:2>)) }])))))
 
 ",
     );
@@ -987,7 +988,8 @@ fn enum_variant_tuple_construction() {
         shape = Shape::Something(2, 4.4)
         "#,
         r#"
-Expression(VariableAssignment(<9:5>, Literal(EnumVariant(Tuple(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<17:5>), module_path: None }, [Literal(Int(<34:1>)), Literal(Float(<37:3>))])))))
+Expression(VariableAssignment(<9:5>, Literal(EnumVariant(Tuple(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<17:5>), module_path: None }, LocalTypeIdentifier(<24:9>), [Literal(Int(<34:1>)), Literal(Float(<37:3>))])))))
+
         "#,
     );
 }
@@ -1174,7 +1176,7 @@ fn enum_match_struct_y() {
 
 EnumDef(<15:6>, [Simple(<36:7>), Struct(<57:6>, AnonymousStructType { fields: [FieldType { field_name: FieldName(<66:1>), field_type: Int(<69:3>) }, FieldType { field_name: FieldName(<74:1>), field_type: Int(<77:3>) }] }), Tuple(<96:5>, [String(<102:6>)])])
 ---
-Expression(VariableAssignment(<130:6>, Literal(EnumVariant(Struct(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<139:6>), module_path: None }, [FieldExpression { field_name: FieldName(<156:1>), expression: Literal(Int(<158:2>)) }, FieldExpression { field_name: FieldName(<162:1>), expression: UnaryOp(Negate(<165:1>), Literal(Int(<166:3>))) }])))))
+Expression(VariableAssignment(<130:6>, Literal(EnumVariant(Struct(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<139:6>), module_path: None }, LocalTypeIdentifier(<147:6>), [FieldExpression { field_name: FieldName(<156:1>), expression: Literal(Int(<158:2>)) }, FieldExpression { field_name: FieldName(<162:1>), expression: UnaryOp(Negate(<165:1>), Literal(Int(<166:3>))) }])))))
 Expression(Match(VariableAccess(<279:6>), [MatchArm { pattern: EnumPattern(<300:7>, None), expression: Literal(String(<311:9>)) }, MatchArm { pattern: EnumPattern(<334:6>, Some([Variable(<341:1>)])), expression: VariableAccess(<346:1>) }, MatchArm { pattern: PatternList([Wildcard(<361:1>)]), expression: Literal(String(<366:18>)) }]))
 
         ",
@@ -1521,6 +1523,6 @@ fn sparse_map_static_call() {
 fn assignment_op_add() {
     check(
         "a += 6",
-        "Expression(VariableCompoundAssignment(<0:1>, Add(<2:2>), Literal(Int(<5:1>))))",
+        "Expression(VariableCompoundAssignment(<0:1>, CompoundOperator { node: <2:2>, kind: Add }, Literal(Int(<5:1>))))",
     );
 }
