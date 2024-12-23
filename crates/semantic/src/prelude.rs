@@ -23,5 +23,5 @@ pub use crate::{
     ResolvedStringTypeRef, ResolvedStructInstantiation, ResolvedStructType,
     ResolvedStructTypeField, ResolvedStructTypeFieldRef, ResolvedStructTypeRef, ResolvedTupleType,
     ResolvedType, ResolvedUnaryOperator, ResolvedUnitType, ResolvedUnitTypeRef, ResolvedVariable,
-    ResolvedVariableAssignment, ResolvedVariableRef, SemanticError, TypeNumber,
+    ResolvedVariableAssignment, ResolvedVariableRef, SemanticError, Span, TypeNumber,
 };

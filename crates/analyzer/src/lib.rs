@@ -516,7 +516,7 @@ impl<'a> Resolver<'a> {
         // For the true branch
         let mut resolved_statements = Vec::new();
         for (i, stmt) in statements.iter().enumerate() {
-            let mut resolved_stmt = self.resolve_statement(stmt)?;
+            let resolved_stmt = self.resolve_statement(stmt)?;
             /*
             if i == statements.len() - 1 {
                 if let ResolvedStatement::Expression(expr) = resolved_stmt {
@@ -533,8 +533,8 @@ impl<'a> Resolver<'a> {
         // For the else branch
         let else_statements = if let Some(else_statements) = maybe_else_statements {
             let mut resolved = Vec::new();
-            for (i, stmt) in else_statements.iter().enumerate() {
-                let mut resolved_stmt = self.resolve_statement(stmt)?;
+            for (_i, stmt) in else_statements.iter().enumerate() {
+                let resolved_stmt = self.resolve_statement(stmt)?;
                 /*
                 if i == else_statements.len() - 1 {
                     if let ResolvedStatement::Expression(expr) = resolved_stmt {
@@ -3278,8 +3278,8 @@ impl<'a> Resolver<'a> {
         debug!(?self.scope.return_type, "current return type context");
 
         if !matches!(self.scope.return_type, ResolvedType::Unit(_)) {
-            let true_type = resolution(&resolved_true);
-            let false_type = resolution(&resolved_false);
+            //let true_type = resolution(&resolved_true);
+            //let false_type = resolution(&resolved_false);
 
             /*
             let wrapped_true = if matches!(true_type, ResolvedType::Optional(_)) {

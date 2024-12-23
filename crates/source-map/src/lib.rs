@@ -35,9 +35,15 @@ impl SourceMap {
         }
     }
 
+    pub fn base_path(&self) -> &Path {
+        &self.base_path
+    }
+
     pub fn read_file(&mut self, path: &Path) -> io::Result<(FileId, String)> {
-        let relative_path =
-            diff_paths(path, &self.base_path).expect("could not find relative path");
+        let relative_path = diff_paths(path, &self.base_path).expect(&format!(
+            "could not find relative path {:?} {:?}",
+            path, self.base_path
+        ));
 
         info!(?relative_path, "add relative");
         let contents = fs::read_to_string(path)?;
@@ -162,5 +168,14 @@ impl SourceMap {
 
         // Add one so it makes more sense to the end user
         (line_idx + 1, column_character_offset + 1)
+    }
+
+    pub fn fetch_relative_filename(&self, file_id: FileId) -> &str {
+        self.cache
+            .get(&file_id)
+            .unwrap()
+            .relative_path
+            .to_str()
+            .unwrap()
     }
 }

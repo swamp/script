@@ -446,7 +446,7 @@ impl Value {
                     "{}::{} {{ ",
                     source_map.get_text(&struct_variant.common.enum_ref.name.0),
                     source_map.get_text(&struct_variant.common.variant_name.0)
-                );
+                )?;
 
                 for (field_name, value) in &decorated_values {
                     write!(f, "{field_name}: ")?;
