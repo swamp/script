@@ -4,14 +4,18 @@ use std::path::{Path, PathBuf};
 use std::{fs, io};
 use tracing::info;
 
+pub mod prelude;
+
 pub type FileId = u16;
 
+#[derive(Debug)]
 pub struct FileInfo {
     pub relative_path: PathBuf,
     pub contents: String,
     pub line_offsets: Box<[u16]>,
 }
 
+#[derive(Debug)]
 pub struct SourceMap {
     pub base_path: PathBuf,
     pub cache: SeqMap<FileId, FileInfo>,

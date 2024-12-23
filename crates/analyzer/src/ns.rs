@@ -8,10 +8,11 @@ use std::cell::RefCell;
 use std::fmt::Debug;
 use std::rc::Rc;
 use swamp_script_semantic::{
-    ResolvedEnumTypeRef, ResolvedEnumVariantType, ResolvedEnumVariantTypeRef,
-    ResolvedExternalFunctionDefinition, ResolvedExternalFunctionDefinitionRef,
-    ResolvedInternalFunctionDefinition, ResolvedInternalFunctionDefinitionRef, ResolvedRustType,
-    ResolvedRustTypeRef, ResolvedStructType, ResolvedStructTypeRef, ResolvedType, SemanticError,
+    ResolvedAnonymousStructFieldType, ResolvedAnonymousStructType, ResolvedEnumTypeRef,
+    ResolvedEnumVariantType, ResolvedEnumVariantTypeRef, ResolvedExternalFunctionDefinition,
+    ResolvedExternalFunctionDefinitionRef, ResolvedFieldName, ResolvedInternalFunctionDefinition,
+    ResolvedInternalFunctionDefinitionRef, ResolvedRustType, ResolvedRustTypeRef,
+    ResolvedStructType, ResolvedStructTypeRef, ResolvedType, SemanticError, TypeNumber,
 };
 
 #[derive(Debug, Clone)]
@@ -37,6 +38,13 @@ pub struct ResolvedModuleNamespace {
 
     pub path: Vec<String>,
 }
+
+pub struct UtilResolvedParameter {
+    pub name: String, // Not used,
+    pub is_mutable: bool,
+    pub resolved_type: ResolvedType,
+}
+
 impl ResolvedModuleNamespace {
     #[must_use]
     pub fn new(path: &[String]) -> Self {
@@ -61,6 +69,38 @@ impl ResolvedModuleNamespace {
         self.structs.insert(name.to_string(), struct_ref.clone())?;
 
         Ok(struct_ref)
+    }
+
+    pub fn add_generated_struct(
+        &mut self,
+        name: &str,
+        fields: &[(&str, ResolvedType)],
+        type_number: TypeNumber,
+    ) -> Result<ResolvedStructTypeRef, ResolveError> {
+        let mut resolved_fields = SeqMap::new();
+
+        for (index, (field_name, field_type)) in fields.iter().enumerate() {
+            let af = ResolvedAnonymousStructFieldType {
+                identifier: ResolvedFieldName(Default::default()),
+                field_type: field_type.clone(),
+                index,
+            };
+
+            resolved_fields.insert(field_name.to_string(), af)?;
+        }
+
+        let anon_struct_type = ResolvedAnonymousStructType {
+            defined_fields: resolved_fields,
+        };
+
+        let resolved_struct_type = ResolvedStructType {
+            name: Default::default(),
+            anon_struct_type,
+            number: type_number,
+            functions: Default::default(),
+        };
+
+        self.add_struct(name, resolved_struct_type)
     }
 
     pub fn add_built_in_rust_type(

@@ -310,7 +310,7 @@ impl Value {
     }
 }
 
-pub trait SourceMapLookup {
+pub trait SourceMapLookup: Debug {
     fn get_text(&self, resolved_node: &ResolvedNode) -> &str;
 }
 
@@ -382,7 +382,7 @@ impl Value {
                 write!(
                     f,
                     "{} {{ ",
-                    source_map.get_text(&struct_type_ref.borrow().name.0)
+                    source_map.get_text(&struct_type_ref.borrow().name)
                 )?;
 
                 let fields = struct_type_ref

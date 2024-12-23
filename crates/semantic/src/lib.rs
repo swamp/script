@@ -5,14 +5,14 @@
 pub mod prelude;
 
 pub use fixed32::Fp;
-use seq_map::SeqMap;
+use seq_map::{SeqMap, SeqMapError};
 use std::cell::RefCell;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
 use std::rc::Rc;
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Default)]
 pub struct ResolvedNode {
     pub span: Span,
 }
@@ -46,9 +46,9 @@ impl Debug for Span {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ResolvedParameter {
-    pub name: ResolvedLocalIdentifier,
+    pub name: ResolvedNode,
     pub resolved_type: ResolvedType,
     pub is_mutable: Option<ResolvedNode>,
 }
@@ -223,7 +223,7 @@ pub type ExternalFunctionId = u32;
 
 #[derive(Debug)]
 pub struct ResolvedExternalFunctionDefinition {
-    pub name: ResolvedLocalIdentifier,
+    pub name: ResolvedNode,
     pub signature: ResolvedFunctionSignature,
     pub id: ExternalFunctionId,
 }
@@ -813,7 +813,7 @@ pub type ResolvedModulePathRef = Rc<ResolvedModulePath>;
 
 #[derive(Debug)]
 pub struct ResolvedStructType {
-    pub name: ResolvedLocalTypeIdentifier,
+    pub name: ResolvedNode,
     pub anon_struct_type: ResolvedAnonymousStructType,
 
     // Resolved
@@ -823,7 +823,7 @@ pub struct ResolvedStructType {
 
 impl ResolvedStructType {
     pub fn new(
-        name: ResolvedLocalTypeIdentifier,
+        name: ResolvedNode,
         anon_struct_type: ResolvedAnonymousStructType,
         number: TypeNumber,
     ) -> Self {
@@ -842,8 +842,34 @@ impl ResolvedStructType {
             .get_index(&field_name.to_string())
     }
 
-    pub fn name(&self) -> &ResolvedLocalTypeIdentifier {
+    pub fn name(&self) -> &ResolvedNode {
         &self.name
+    }
+
+    pub fn add_external_member_function(
+        &mut self,
+        function_name: &str,
+        external_func: ResolvedExternalFunctionDefinitionRef,
+    ) -> Result<(), SeqMapError> {
+        let func = ResolvedFunction::External(external_func);
+        self.functions
+            .insert(function_name.to_string(), func.into())?;
+        Ok(())
+    }
+
+    pub fn get_member_function(&self, function_name: &str) -> Option<&ResolvedFunctionRef> {
+        self.functions.get(&function_name.to_string())
+    }
+
+    pub fn get_internal_member_function(
+        &self,
+        function_name: &str,
+    ) -> Option<ResolvedInternalFunctionDefinitionRef> {
+        let func = self.functions.get(&function_name.to_string())?;
+        match &**func {
+            ResolvedFunction::Internal(fn_def) => Some(fn_def.clone()),
+            _ => None,
+        }
     }
 }
 

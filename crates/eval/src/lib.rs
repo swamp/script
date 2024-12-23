@@ -102,6 +102,21 @@ impl Default for BlockScope {
     }
 }
 
+#[derive(Debug)]
+pub struct SourceMapWrapper {
+    pub source_map: SourceMap,
+}
+
+impl SourceMapLookup for SourceMapWrapper {
+    fn get_text(&self, resolved_node: &ResolvedNode) -> &str {
+        self.source_map.get_span_source(
+            resolved_node.span.file_id,
+            resolved_node.span.offset as usize,
+            resolved_node.span.length as usize,
+        )
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct ExternalFunctions<C> {
     external_functions: HashMap<String, EvalExternalFunctionRef<C>>,
@@ -232,7 +247,7 @@ impl<'a, C> Interpreter<'a, C> {
                         // For mutable parameters, use the SAME reference
                         Value::Reference(r.clone())
                     }
-                    _ => return Err(ExecuteError::ArgumentIsNotMutable(param.name.0.clone())), //v => Value::Reference(Rc::new(RefCell::new(v))),
+                    _ => return Err(ExecuteError::ArgumentIsNotMutable(param.name.clone())), //v => Value::Reference(Rc::new(RefCell::new(v))),
                 }
             } else {
                 match arg {

@@ -729,7 +729,7 @@ impl<'a> Resolver<'a> {
         let struct_name_str = self.get_text(&ast_struct.identifier.0).to_string();
 
         let resolved_struct = ResolvedStructType::new(
-            ResolvedLocalTypeIdentifier(self.to_node(&ast_struct.identifier.0)),
+            self.to_node(&ast_struct.identifier.0),
             resolved_anon_struct,
             self.shared.state.allocate_number(),
         );
@@ -960,7 +960,7 @@ impl<'a> Resolver<'a> {
                 // Set up scope for function body
                 for param in &parameters {
                     self.create_local_variable_resolved(
-                        &param.name.0,
+                        &param.name,
                         &param.is_mutable,
                         &param.resolved_type.clone(),
                     )?;
@@ -1005,7 +1005,7 @@ impl<'a> Resolver<'a> {
                         parameters,
                         return_type,
                     },
-                    name: ResolvedLocalIdentifier(self.to_node(&ast_signature.name)),
+                    name: self.to_node(&ast_signature.name),
                     id: external_function_id,
                 };
 
@@ -1039,7 +1039,7 @@ impl<'a> Resolver<'a> {
                 if let Some(found_self) = &function_data.declaration.self_parameter {
                     let resolved_type = ResolvedType::Struct(found_struct.clone());
                     parameters.push(ResolvedParameter {
-                        name: ResolvedLocalIdentifier(self.to_node(&found_self.self_node)),
+                        name: self.to_node(&found_self.self_node),
                         resolved_type,
                         is_mutable: self.to_node_option(&found_self.is_mutable),
                     });
@@ -1049,7 +1049,7 @@ impl<'a> Resolver<'a> {
                     let resolved_type = self.resolve_type(&param.param_type)?;
 
                     parameters.push(ResolvedParameter {
-                        name: ResolvedLocalIdentifier(self.to_node(&param.variable.name)),
+                        name: self.to_node(&param.variable.name),
                         resolved_type,
                         is_mutable: self.to_node_option(&param.variable.is_mutable),
                     });
@@ -1060,7 +1060,7 @@ impl<'a> Resolver<'a> {
 
                 for param in &parameters {
                     self.create_local_variable_resolved(
-                        &param.name.0,
+                        &param.name,
                         &param.is_mutable,
                         &param.resolved_type,
                     )?;
@@ -1088,7 +1088,7 @@ impl<'a> Resolver<'a> {
                 if let Some(found_self) = &signature.self_parameter {
                     let resolved_type = ResolvedType::Struct(found_struct.clone());
                     parameters.push(ResolvedParameter {
-                        name: ResolvedLocalIdentifier(self.to_node(&found_self.self_node)),
+                        name: self.to_node(&found_self.self_node),
                         resolved_type,
                         is_mutable: self.to_node_option(&found_self.is_mutable),
                     });
@@ -1099,7 +1099,7 @@ impl<'a> Resolver<'a> {
                     let resolved_type = self.resolve_type(&param.param_type)?;
 
                     parameters.push(ResolvedParameter {
-                        name: ResolvedLocalIdentifier(self.to_node(&param.variable.name)),
+                        name: self.to_node(&param.variable.name),
                         resolved_type,
                         is_mutable: self.to_node_option(&param.variable.is_mutable),
                     });
@@ -1108,7 +1108,7 @@ impl<'a> Resolver<'a> {
                 let return_type = self.resolve_maybe_type(&signature.return_type)?;
 
                 let external = ResolvedExternalFunctionDefinition {
-                    name: ResolvedLocalIdentifier(self.to_node(&signature.name)),
+                    name: self.to_node(&signature.name),
                     signature: ResolvedFunctionSignature {
                         first_parameter_is_self: signature.self_parameter.is_some(),
                         parameters,
@@ -1341,7 +1341,7 @@ impl<'a> Resolver<'a> {
             info!(parameter=?debug_text, "parameter");
             let param_type = self.resolve_type(&parameter.param_type)?;
             resolved_parameters.push(ResolvedParameter {
-                name: ResolvedLocalIdentifier(self.to_node(&parameter.variable.name)),
+                name: self.to_node(&parameter.variable.name),
                 resolved_type: param_type,
                 is_mutable: self.to_node_option(&parameter.variable.is_mutable),
             });
@@ -2370,9 +2370,7 @@ impl<'a> Resolver<'a> {
                                 &all_args,
                             )
                         }
-                        _ => Err(ResolveError::ExpectedMemberCall(
-                            function_call.name.0.clone(),
-                        )),
+                        _ => Err(ResolveError::ExpectedMemberCall(function_call.name.clone())),
                     }
                 } else {
                     self.resolve_external_function_call(function_call, function_expr, arguments)

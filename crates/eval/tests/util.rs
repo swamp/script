@@ -79,20 +79,6 @@ fn internal_compile(
     Ok((resolved_statements, source_map))
 }
 
-pub struct SourceMapWrapper {
-    pub source_map: SourceMap,
-}
-
-impl SourceMapLookup for SourceMapWrapper {
-    fn get_text(&self, resolved_node: &ResolvedNode) -> &str {
-        self.source_map.get_span_source(
-            resolved_node.span.file_id,
-            resolved_node.span.offset as usize,
-            resolved_node.span.length as usize,
-        )
-    }
-}
-
 fn compile_and_eval(
     script: &str,
 ) -> Result<(Value, Vec<String>, Rc<SourceMapWrapper>), EvalTestError> {

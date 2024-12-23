@@ -60,6 +60,9 @@ impl ResolvedModules {
             modules: HashMap::new(),
         }
     }
+    pub fn add(&mut self, module_path: &[String], module: ResolvedModuleRef) {
+        self.modules.insert(module_path.to_vec(), module);
+    }
 
     pub fn add_empty_module(&mut self, module_path: &[String]) -> ResolvedModuleRef {
         let ns_ref = Rc::new(RefCell::new(ResolvedModuleNamespace::new(module_path)));
@@ -79,6 +82,10 @@ impl ResolvedModules {
     #[must_use]
     pub fn contains_key(&self, module_path: &[String]) -> bool {
         self.modules.contains_key(module_path)
+    }
+
+    pub fn get(&self, module_path: &[String]) -> Option<ResolvedModuleRef> {
+        self.modules.get(module_path).clone().cloned()
     }
 
     /*
