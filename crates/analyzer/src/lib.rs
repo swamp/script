@@ -3,12 +3,10 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 pub mod lookup;
-pub mod modules;
-pub mod ns;
 pub mod prelude;
 
 use crate::lookup::NameLookup;
-use crate::modules::ResolvedModules;
+use swamp_script_semantic::modules::ResolvedModules;
 use seq_map::{SeqMap, SeqMapError};
 use std::cell::RefCell;
 use std::collections::HashSet;
@@ -293,7 +291,7 @@ pub enum ResolveError {
     },
     NotInFunction,
     ExpectedBooleanExpression,
-    NotAnIterator,
+    NotAnIterator(ResolvedType),
     UnsupportedIteratorPairs,
     NeedStructForFieldLookup,
     IntConversionError(ParseIntError),
@@ -2212,7 +2210,7 @@ impl<'a> Resolver<'a> {
                                *
                 */
             }
-            _ => return Err(ResolveError::NotAnIterator),
+            _ => return Err(ResolveError::NotAnIterator(resolved_type)),
         };
 
         Ok(ResolvedIterator {

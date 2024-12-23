@@ -138,7 +138,7 @@ impl SourceMap {
     }
 
     pub fn get_span_source(&self, file_id: FileId, offset: usize, length: usize) -> &str {
-        let file_info = self.cache.get(&file_id).expect("Invalid file_id in span");
+        let file_info = self.cache.get(&file_id).expect(&format!("Invalid file_id {file_id} in span"));
 
         let start = offset as usize;
         let end = start + length as usize;

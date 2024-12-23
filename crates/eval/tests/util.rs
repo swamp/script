@@ -5,7 +5,7 @@
 use std::path::Path;
 use std::rc::Rc;
 use swamp_script_analyzer::lookup::{NameLookup, ResolvedModuleNamespaceRef};
-use swamp_script_analyzer::modules::ResolvedModules;
+use swamp_script_semantic::modules::ResolvedModules;
 use swamp_script_analyzer::{ResolveError, Resolver};
 use swamp_script_core::prelude::Value;
 use swamp_script_core::value::SourceMapLookup;

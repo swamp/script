@@ -1,5 +1,5 @@
-use crate::modules::ResolvedModules;
-use crate::ns::ResolvedModuleNamespace;
+use swamp_script_semantic::modules::ResolvedModules;
+use swamp_script_semantic::ns::{ResolvedModuleNamespace, ResolvedModuleNamespaceRef};
 use crate::ResolveError;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -10,7 +10,6 @@ use swamp_script_semantic::{
     ResolvedStructTypeRef, ResolvedType,
 };
 
-pub type ResolvedModuleNamespaceRef = Rc<RefCell<ResolvedModuleNamespace>>;
 
 #[derive()]
 pub struct NameLookup<'a> {
@@ -122,9 +121,9 @@ impl<'a> NameLookup<'a> {
         struct_type: ResolvedStructType,
     ) -> Result<ResolvedStructTypeRef, ResolveError> {
         //let struct_type_ref = Rc::new(struct_type);
-        self.namespace
+        Ok(self.namespace
             .borrow_mut()
-            .add_struct(struct_type_name, struct_type)
+            .add_struct(struct_type_name, struct_type)?)
     }
 
     pub fn add_enum_type(
@@ -133,9 +132,9 @@ impl<'a> NameLookup<'a> {
         enum_type: ResolvedEnumType,
     ) -> Result<ResolvedEnumTypeRef, ResolveError> {
         let enum_type_ref = Rc::new(enum_type);
-        self.namespace
+        Ok(self.namespace
             .borrow_mut()
-            .add_enum_type(name, enum_type_ref)
+            .add_enum_type(name, enum_type_ref)?)
     }
 
     pub fn add_enum_variant(
@@ -144,9 +143,9 @@ impl<'a> NameLookup<'a> {
         variant_name: &str,
         variant_type: ResolvedEnumVariantType,
     ) -> Result<ResolvedEnumVariantTypeRef, ResolveError> {
-        self.namespace
+        Ok(self.namespace
             .borrow_mut()
-            .add_enum_variant(enum_name, variant_name, variant_type)
+            .add_enum_variant(enum_name, variant_name, variant_type)?)
     }
 
     pub fn add_internal_function_ref(
@@ -154,8 +153,8 @@ impl<'a> NameLookup<'a> {
         function_name: &str,
         function: ResolvedInternalFunctionDefinition,
     ) -> Result<ResolvedInternalFunctionDefinitionRef, ResolveError> {
-        self.namespace
+        Ok(self.namespace
             .borrow_mut()
-            .add_internal_function(function_name, function)
+            .add_internal_function(function_name, function)?)
     }
 }

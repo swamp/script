@@ -2,18 +2,17 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use crate::ResolveError;
-use seq_map::SeqMap;
-use std::cell::RefCell;
-use std::fmt::Debug;
-use std::rc::Rc;
-use swamp_script_semantic::{
+use crate::{
     ResolvedAnonymousStructFieldType, ResolvedAnonymousStructType, ResolvedEnumTypeRef,
     ResolvedEnumVariantType, ResolvedEnumVariantTypeRef, ResolvedExternalFunctionDefinition,
     ResolvedExternalFunctionDefinitionRef, ResolvedFieldName, ResolvedInternalFunctionDefinition,
     ResolvedInternalFunctionDefinitionRef, ResolvedRustType, ResolvedRustTypeRef,
     ResolvedStructType, ResolvedStructTypeRef, ResolvedType, SemanticError, TypeNumber,
 };
+use seq_map::SeqMap;
+use std::cell::RefCell;
+use std::fmt::Debug;
+use std::rc::Rc;
 
 #[derive(Debug, Clone)]
 pub struct ResolvedModulePathStr(pub Vec<String>);
@@ -38,6 +37,8 @@ pub struct ResolvedModuleNamespace {
 
     pub path: Vec<String>,
 }
+
+pub type ResolvedModuleNamespaceRef = Rc<RefCell<ResolvedModuleNamespace>>;
 
 pub struct UtilResolvedParameter {
     pub name: String, // Not used,
@@ -64,9 +65,11 @@ impl ResolvedModuleNamespace {
         &mut self,
         name: &str,
         struct_type: ResolvedStructType,
-    ) -> Result<ResolvedStructTypeRef, ResolveError> {
+    ) -> Result<ResolvedStructTypeRef, SemanticError> {
         let struct_ref = Rc::new(RefCell::new(struct_type));
-        self.structs.insert(name.to_string(), struct_ref.clone())?;
+        self.structs
+            .insert(name.to_string(), struct_ref.clone())
+            .map_err(|_| SemanticError::DuplicateStructName(name.to_string()))?;
 
         Ok(struct_ref)
     }
@@ -76,7 +79,7 @@ impl ResolvedModuleNamespace {
         name: &str,
         fields: &[(&str, ResolvedType)],
         type_number: TypeNumber,
-    ) -> Result<ResolvedStructTypeRef, ResolveError> {
+    ) -> Result<ResolvedStructTypeRef, SemanticError> {
         let mut resolved_fields = SeqMap::new();
 
         for (index, (field_name, field_type)) in fields.iter().enumerate() {
@@ -86,7 +89,9 @@ impl ResolvedModuleNamespace {
                 index,
             };
 
-            resolved_fields.insert(field_name.to_string(), af)?;
+            resolved_fields
+                .insert(field_name.to_string(), af)
+                .map_err(|_| SemanticError::DuplicateFieldName(field_name.to_string()))?;
         }
 
         let anon_struct_type = ResolvedAnonymousStructType {
@@ -108,13 +113,9 @@ impl ResolvedModuleNamespace {
         rust_type: ResolvedRustType,
     ) -> Result<ResolvedRustTypeRef, SemanticError> {
         let rust_type_ref = Rc::new(rust_type);
-        /* TODO:
-        self.build_in_rust_types.insert(
-            LocalTypeName(rust_type_ref.type_name.clone()),
-            rust_type_ref.clone(),
-        )?;
-
-         */
+        self.build_in_rust_types
+            .insert(rust_type_ref.type_name.clone(), rust_type_ref.clone())
+            .map_err(|_| SemanticError::DuplicateRustType(rust_type_ref.clone().type_name.clone()))?;
 
         Ok(rust_type_ref)
     }
@@ -138,9 +139,10 @@ impl ResolvedModuleNamespace {
         &mut self,
         enum_type_name: &str,
         enum_type_ref: ResolvedEnumTypeRef,
-    ) -> Result<ResolvedEnumTypeRef, ResolveError> {
+    ) -> Result<ResolvedEnumTypeRef, SemanticError> {
         self.enum_types
-            .insert(enum_type_name.to_string(), enum_type_ref.clone())?;
+            .insert(enum_type_name.to_string(), enum_type_ref.clone())
+            .map_err(|_| SemanticError::DuplicateEnumType(enum_type_name.to_string()))?;
 
         Ok(enum_type_ref)
     }
@@ -149,11 +151,18 @@ impl ResolvedModuleNamespace {
         enum_type_name: &str,
         enum_variant_name: &str,
         enum_variant: ResolvedEnumVariantType,
-    ) -> Result<ResolvedEnumVariantTypeRef, ResolveError> {
+    ) -> Result<ResolvedEnumVariantTypeRef, SemanticError> {
         let enum_variant_ref = Rc::new(enum_variant);
         let full_name = format!("{}::{}", enum_type_name, enum_variant_name);
         self.enum_variant_types
-            .insert(full_name, enum_variant_ref.clone())?;
+            .insert(full_name, enum_variant_ref.clone())
+            .map_err(|_| {
+                SemanticError::DuplicateEnumVariantType(
+                    enum_variant_name.to_string(),
+                    enum_variant_name.to_string(),
+                )
+            })?;
+
         Ok(enum_variant_ref)
     }
 
@@ -161,7 +170,7 @@ impl ResolvedModuleNamespace {
         &mut self,
         name: &str,
         function: ResolvedInternalFunctionDefinition,
-    ) -> Result<ResolvedInternalFunctionDefinitionRef, ResolveError> {
+    ) -> Result<ResolvedInternalFunctionDefinitionRef, SemanticError> {
         let function_ref = Rc::new(function);
         self.internal_functions
             .insert(name.to_string(), function_ref.clone())
@@ -216,10 +225,11 @@ impl ResolvedModuleNamespace {
         &mut self,
         name: &str,
         declaration: ResolvedExternalFunctionDefinition,
-    ) -> Result<ResolvedExternalFunctionDefinitionRef, ResolveError> {
+    ) -> Result<ResolvedExternalFunctionDefinitionRef, SemanticError> {
         let decl_ref = Rc::new(declaration);
         self.external_function_declarations
-            .insert(name.to_string(), decl_ref.clone())?;
+            .insert(name.to_string(), decl_ref.clone())
+            .map_err(|_| SemanticError::DuplicateExternalFunction(name.to_string()))?;
         Ok(decl_ref)
     }
 }

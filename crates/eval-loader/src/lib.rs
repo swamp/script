@@ -6,8 +6,8 @@ pub mod prelude;
 
 use std::cell::RefCell;
 use std::rc::Rc;
-use swamp_script_analyzer::lookup::{NameLookup, ResolvedModuleNamespaceRef};
-use swamp_script_analyzer::modules::ResolvedModules;
+use swamp_script_analyzer::lookup::{NameLookup};
+use swamp_script_semantic::modules::ResolvedModules;
 use swamp_script_analyzer::prelude::*;
 use swamp_script_dep_loader::prelude::*;
 use swamp_script_semantic::prelude::*;

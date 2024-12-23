@@ -2,6 +2,8 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
+pub mod modules;
+pub mod ns;
 pub mod prelude;
 
 pub use fixed32::Fp;
@@ -15,6 +17,12 @@ use std::rc::Rc;
 #[derive(Clone, Eq, PartialEq, Default)]
 pub struct ResolvedNode {
     pub span: Span,
+}
+
+impl Spanned for ResolvedNode {
+    fn span(&self) -> Span {
+        self.span.clone()
+    }
 }
 
 impl Debug for ResolvedNode {
@@ -38,6 +46,93 @@ pub struct Span {
     pub file_id: FileId,
     pub offset: u32,
     pub length: u16,
+}
+
+impl Span {
+    pub fn merge(&self, other: &Span) -> Span {
+        assert_eq!(
+            self.file_id, other.file_id,
+            "file_id must be the same when merging"
+        );
+        if self.offset <= other.offset {
+            // self starts first (or same position)
+            let end = other.offset + other.length as u32;
+            let my_end = self.offset + self.length as u32;
+            let final_end = end.max(my_end);
+
+            Span {
+                offset: self.offset,
+                length: (final_end - self.offset) as u16,
+                file_id: self.file_id,
+            }
+        } else {
+            // other starts first
+            other.merge(self) // reuse the logic by swap the arguments around
+        }
+    }
+
+    pub fn merge_opt<S: Spanned>(&self, other: Option<&S>) -> Span {
+        match other {
+            Some(spanned) => self.merge(&spanned.span()),
+            None => self.clone(),
+        }
+    }
+
+    pub fn merge_spanned<S: Spanned>(&self, other: &S) -> Span {
+        self.merge(&other.span())
+    }
+
+    pub fn merge_opt_span(&self, other: Option<Span>) -> Span {
+        match other {
+            Some(span) => self.merge(&span),
+            None => self.clone(),
+        }
+    }
+
+    pub fn dummy() -> Self {
+        Span {
+            offset: 0,
+            length: 0,
+            file_id: 0xffff,
+        }
+    }
+
+    // Helper method to get the end position
+    pub fn end(&self) -> u32 {
+        self.offset + self.length as u32
+    }
+
+    // Merge spans from an iterator of Spanned items
+    pub fn merge_all<'a, I, S>(iter: I) -> Option<Span>
+    where
+        I: IntoIterator<Item = &'a S>,
+        S: Spanned + 'a,
+    {
+        iter.into_iter()
+            .map(|s| s.span())
+            .reduce(|acc, span| acc.merge(&span))
+    }
+
+    // Merge spans from an iterator with a base span
+    pub fn merge_iter<'a, I, S>(&self, iter: I) -> Span
+    where
+        I: IntoIterator<Item = &'a S>,
+        S: Spanned + 'a,
+    {
+        iter.into_iter()
+            .fold(self.clone(), |acc, item| acc.merge(&item.span()))
+    }
+
+    // Merge optional spans from an iterator
+    pub fn merge_opt_iter<'a, I, S>(&self, iter: I) -> Span
+    where
+        I: IntoIterator<Item = &'a Option<S>>,
+        S: Spanned + 'a,
+    {
+        iter.into_iter()
+            .filter_map(|opt| opt.as_ref())
+            .fold(self.clone(), |acc, item| acc.merge(&item.span()))
+    }
 }
 
 impl Debug for Span {
@@ -73,10 +168,23 @@ pub struct ResolvedRustType {
     pub type_name: String, // To identify the specific Rust type
     pub number: u32,       // For type comparison
 }
+
+impl Spanned for ResolvedRustType {
+    fn span(&self) -> Span {
+        Span::dummy()
+    }
+}
+
 pub type ResolvedRustTypeRef = Rc<ResolvedRustType>;
 
 #[derive(Debug, Clone)]
 pub struct LocalTypeName(pub ResolvedNode);
+
+impl Spanned for LocalTypeName {
+    fn span(&self) -> Span {
+        todo!()
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum ResolvedType {
@@ -110,12 +218,63 @@ pub enum ResolvedType {
     Any,
 }
 
+impl Spanned for ResolvedType {
+    fn span(&self) -> Span {
+        match self {
+            // Primitives
+            Self::Int(type_ref) => todo!(),
+            Self::Float(type_ref) => todo!(),
+            Self::String(type_ref) => todo!(),
+            Self::Bool(type_ref) => todo!(),
+            Self::Unit(type_ref) => todo!(),
+
+            // Compound Types
+            Self::Array(type_ref) => todo!(),
+            Self::Tuple(type_ref) => todo!(),
+            Self::Struct(type_ref) => todo!(),
+            Self::Map(type_ref) => todo!(),
+
+            // Generic Types
+            Self::Generic(base_type, type_params) => base_type.span().merge_iter(type_params),
+
+            // Enum Types
+            Self::Enum(type_ref) => todo!(),
+            Self::EnumVariant(type_ref) => todo!(),
+
+            // Function Types
+            Self::FunctionInternal(func_ref) => todo!(),
+            Self::FunctionExternal(func_ref) => todo!(),
+
+            // Range Type
+            Self::ExclusiveRange(type_ref) => todo!(),
+
+            // Type Alias
+            Self::Alias(type_name, actual_type) => type_name.span().merge(&actual_type.span()),
+
+            // Optional Type
+            Self::Optional(inner_type) => inner_type.span(),
+
+            // Rust Type
+            Self::RustType(type_ref) => type_ref.span(),
+
+            // Any Type (might want to use a dummy span or specific location)
+            Self::Any => Span::dummy(),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum SemanticError {
     CouldNotInsertStruct,
     DuplicateTypeAlias(String),
     CanOnlyUseStructForMemberFunctions,
     ResolveNotStruct,
+    DuplicateStructName(String),
+    DuplicateEnumType(String),
+    DuplicateEnumVariantType(String, String),
+    DuplicateFieldName(String),
+    DuplicateExternalFunction(String),
+    DuplicateRustType(String),
 }
 
 impl ResolvedType {
@@ -211,6 +370,12 @@ pub struct ResolvedInternalFunctionDefinition {
     pub signature: ResolvedFunctionSignature,
 }
 
+impl Spanned for ResolvedInternalFunctionDefinition {
+    fn span(&self) -> Span {
+        self.name.0.span.clone()
+    }
+}
+
 impl Debug for ResolvedInternalFunctionDefinition {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "InternalFuncDef")
@@ -228,6 +393,12 @@ pub struct ResolvedExternalFunctionDefinition {
     pub id: ExternalFunctionId,
 }
 
+impl Spanned for ResolvedExternalFunctionDefinition {
+    fn span(&self) -> Span {
+        self.name.span.clone()
+    }
+}
+
 pub type ResolvedExternalFunctionDefinitionRef = Rc<crate::ResolvedExternalFunctionDefinition>;
 
 #[derive(Debug)]
@@ -238,6 +409,12 @@ pub struct ResolvedVariable {
 
     pub scope_index: usize,
     pub variable_index: usize,
+}
+
+impl Spanned for ResolvedVariable {
+    fn span(&self) -> Span {
+        self.name.span.merge_opt(self.mutable_node.as_ref())
+    }
 }
 
 impl ResolvedVariable {
@@ -253,6 +430,12 @@ pub type ResolvedVariableRef = Rc<ResolvedVariable>;
 pub struct ResolvedMutVariable {
     pub variable_ref: ResolvedVariableRef,
 }
+impl Spanned for ResolvedMutVariable {
+    fn span(&self) -> Span {
+        self.variable_ref.span()
+    }
+}
+
 type ResolvedMutVariableRef = Rc<ResolvedMutVariable>;
 
 #[derive(Debug)]
@@ -295,6 +478,12 @@ pub struct ResolvedUnaryOperator {
     pub node: ResolvedNode,
 }
 
+impl Spanned for ResolvedUnaryOperator {
+    fn span(&self) -> Span {
+        self.node.span.clone()
+    }
+}
+
 #[derive(Debug)]
 pub enum ResolvedPostfixOperatorKind {
     Unwrap,
@@ -305,6 +494,12 @@ pub struct ResolvedPostfixOperator {
     pub kind: ResolvedPostfixOperatorKind,
     pub resolved_type: ResolvedType,
     pub node: ResolvedNode,
+}
+
+impl Spanned for ResolvedPostfixOperator {
+    fn span(&self) -> Span {
+        self.node.span.clone()
+    }
 }
 
 #[derive()]
@@ -328,6 +523,12 @@ impl Debug for ResolvedInternalFunctionCall {
 pub struct ResolvedStaticCall {
     pub function: Rc<ResolvedFunction>,
     pub arguments: Vec<ResolvedExpression>,
+}
+
+impl Spanned for ResolvedStaticCall {
+    fn span(&self) -> Span {
+        self.function.span()
+    }
 }
 
 #[derive(Debug)]
@@ -386,6 +587,16 @@ pub enum ResolvedAccess {
     MapIndex(ResolvedExpression),
 }
 
+impl Spanned for ResolvedAccess {
+    fn span(&self) -> Span {
+        match self {
+            ResolvedAccess::FieldIndex(node, _) => node.span.clone(),
+            ResolvedAccess::ArrayIndex(expr) => expr.span(),
+            ResolvedAccess::MapIndex(expr) => expr.span(),
+        }
+    }
+}
+
 pub type ResolvedMutStructTypeFieldRef = Rc<ResolvedMutStructTypeField>;
 #[derive(Debug)]
 pub struct ResolvedMutStructTypeField {
@@ -400,6 +611,12 @@ pub struct ResolvedStructTypeField {
     pub field_name: ResolvedLocalIdentifier,
     pub resolved_type: ResolvedType,
     pub index: usize,
+}
+
+impl Spanned for ResolvedStructTypeField {
+    fn span(&self) -> Span {
+        self.field_name.0.span.merge_spanned(&self.resolved_type)
+    }
 }
 
 #[derive(Debug)]
@@ -437,12 +654,24 @@ pub struct ResolvedMapIndexLookup {
     pub map_expression: Box<ResolvedExpression>,
 }
 
+impl Spanned for ResolvedMapIndexLookup {
+    fn span(&self) -> Span {
+        todo!()
+    }
+}
+
 #[derive(Debug)]
 pub struct ResolvedArrayItem {
     pub item_type: ResolvedType,
     pub int_expression: ResolvedExpression,
     pub array_expression: ResolvedExpression,
     pub array_type: ResolvedType,
+}
+
+impl Spanned for ResolvedArrayItem {
+    fn span(&self) -> Span {
+        todo!()
+    }
 }
 
 pub type ResolvedArrayItemRef = Rc<ResolvedArrayItem>;
@@ -492,6 +721,12 @@ pub type ResolvedFunctionRef = Rc<ResolvedFunction>;
 pub enum ResolvedFunction {
     Internal(ResolvedInternalFunctionDefinitionRef),
     External(ResolvedExternalFunctionDefinitionRef),
+}
+
+impl Spanned for ResolvedFunction {
+    fn span(&self) -> Span {
+        todo!()
+    }
 }
 
 pub type MutMemberRef = Rc<MutMember>;
@@ -575,6 +810,11 @@ pub struct ResolvedVariableAssignment {
     pub variable_refs: Vec<ResolvedVariableRef>, // Support single or multiple variables
     pub expression: Box<ResolvedExpression>,
 }
+impl Spanned for ResolvedVariableAssignment {
+    fn span(&self) -> Span {
+        self.variable_refs[0].span()
+    }
+}
 
 #[derive(Debug)]
 pub enum ResolvedCompoundOperatorKind {
@@ -590,11 +830,23 @@ pub struct ResolvedCompoundOperator {
     pub kind: ResolvedCompoundOperatorKind,
 }
 
+impl Spanned for ResolvedCompoundOperator {
+    fn span(&self) -> Span {
+        self.node.span.clone()
+    }
+}
+
 #[derive(Debug)]
 pub struct ResolvedVariableCompoundAssignment {
     pub variable_ref: ResolvedVariableRef, // compound only support single variable
     pub expression: Box<ResolvedExpression>,
     pub compound_operator: ResolvedCompoundOperator,
+}
+
+impl Spanned for ResolvedVariableCompoundAssignment {
+    fn span(&self) -> Span {
+        todo!()
+    }
 }
 
 pub fn create_rust_type(name: &str, type_number: TypeNumber) -> ResolvedRustTypeRef {
@@ -720,6 +972,150 @@ pub enum ResolvedExpression {
     SparseNew(ResolvedRustTypeRef, ResolvedType),
 }
 
+pub trait Spanned {
+    fn span(&self) -> Span;
+}
+
+impl Spanned for ResolvedExpression {
+    fn span(&self) -> Span {
+        match self {
+            Self::VariableAccess(var_ref) => var_ref.span(),
+            Self::FieldAccess(base, field, accesses) => {
+                let mut span = base.span().merge(&field.span());
+                for access in accesses {
+                    span = span.merge(&access.span());
+                }
+                span
+            }
+            Self::InternalFunctionAccess(func) => func.span(),
+            Self::ExternalFunctionAccess(func) => func.span(),
+            Self::MutRef(var_ref) => var_ref.span(),
+            Self::Option(opt_expr) => opt_expr
+                .as_ref()
+                .map(|expr| expr.span())
+                .unwrap_or_else(Span::dummy),
+            Self::ArrayAccess(arr_ref) => arr_ref.span(),
+            Self::MapIndexAccess(lookup) => lookup.span(),
+
+            // Assignments
+            Self::InitializeVariable(assign) => assign.span(),
+            Self::ReassignVariable(assign) => assign.span(),
+            Self::VariableCompoundAssignment(assign) => assign.span(),
+            Self::ArrayExtend(var_ref, expr) => var_ref.span().merge(&expr.span()),
+            Self::ArrayPush(var_ref, expr) => var_ref.span().merge(&expr.span()),
+            Self::ArrayAssignment(array, index, expr) => {
+                todo!()
+            }
+            Self::MapAssignment(map, key, value) => {
+                todo!()
+            }
+            Self::StructFieldAssignment(base, accesses, value) => {
+                let mut span = base.span();
+                for access in accesses {
+                    span = span.merge(&access.span());
+                }
+                span.merge(&value.span())
+            }
+            Self::FieldCompoundAssignment(base, accesses, op, value) => {
+                let mut span = base.span();
+                for access in accesses {
+                    span = span.merge(&access.span());
+                }
+                span.merge(&op.span()).merge(&value.span())
+            }
+
+            // Operators
+            Self::BinaryOp(op) => todo!(),
+            Self::UnaryOp(op) => op.span(),
+            Self::PostfixOp(op) => op.span(),
+            Self::CoerceOptionToBool(expr) => expr.span(),
+
+            // Calls
+            Self::FunctionInternalCall(call) => todo!(),
+            Self::FunctionExternalCall(call) => todo!(),
+            Self::StaticCall(call) => call.span(),
+            Self::StaticCallGeneric(call) => todo!(),
+            Self::MutMemberCall(member_ref, args) => {
+                todo!()
+            }
+            Self::MemberCall(call) => todo!(),
+
+            // Blocks and Strings
+            Self::Block(statements) => statements
+                .first()
+                .map(|first| {
+                    statements
+                        .last()
+                        .map(|last| first.span().merge(&last.span()))
+                        .unwrap_or_else(|| first.span())
+                })
+                .unwrap_or_else(Span::dummy),
+            Self::InterpolatedString(str_ref, parts) => {
+                todo!()
+            }
+
+            // Constructing
+            Self::StructInstantiation(struct_inst) => todo!(),
+            Self::Array(array_inst) => array_inst.span(),
+            Self::Tuple(exprs) => exprs
+                .first()
+                .map(|first| {
+                    exprs
+                        .last()
+                        .map(|last| first.span().merge(&last.span()))
+                        .unwrap_or_else(|| first.span())
+                })
+                .unwrap_or_else(Span::dummy),
+            Self::Literal(lit) => lit.span(),
+            Self::ExclusiveRange(range_ref, start, end) => {
+                todo!()
+            }
+
+            // Control Flow
+            Self::IfElse(cond, then_expr, else_expr) => todo!(),
+            Self::IfElseOnlyVariable {
+                variable,
+                optional_expr,
+                true_block,
+                false_block,
+            } => variable
+                .span()
+                .merge(&optional_expr.span())
+                .merge(&true_block.span())
+                .merge(&false_block.span()),
+            Self::IfElseAssignExpression {
+                variable,
+                optional_expr,
+                true_block,
+                false_block,
+            } => variable
+                .span()
+                .merge(&optional_expr.span())
+                .merge(&true_block.span())
+                .merge(&false_block.span()),
+            Self::Match(match_expr) => todo!(),
+            Self::LetVar(var_ref, expr) => var_ref.span().merge(&expr.span()),
+
+            // Array Operations
+            Self::ArrayRemoveIndex(var_ref, index) => var_ref.span().merge(&index.span()),
+            Self::ArrayClear(var_ref) => var_ref.span(),
+
+            // Float Operations
+            Self::FloatRound(expr) => expr.span(),
+            Self::FloatFloor(expr) => expr.span(),
+            Self::FloatSign(expr) => expr.span(),
+            Self::FloatAbs(expr) => expr.span(),
+
+            // Special Methods
+            Self::SparseAdd(expr1, expr2) => expr1.span().merge(&expr2.span()),
+            Self::SparseRemove(expr1, expr2) => expr1.span().merge(&expr2.span()),
+            Self::SparseNew(rust_type_ref, resolved_type) => {
+                todo!()
+            }
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct ResolvedStringConst(pub ResolvedNode);
 
@@ -740,12 +1136,24 @@ pub enum ResolvedLiteral {
     ),
 }
 
+impl Spanned for ResolvedLiteral {
+    fn span(&self) -> Span {
+        todo!()
+    }
+}
+
 #[derive(Debug)]
 pub struct ResolvedArrayInstantiation {
     pub expressions: Vec<ResolvedExpression>,
     pub item_type: ResolvedType,
     pub array_type: ResolvedType,
     pub array_type_ref: ResolvedArrayTypeRef,
+}
+
+impl Spanned for ResolvedArrayInstantiation {
+    fn span(&self) -> Span {
+        todo!()
+    }
 }
 
 #[derive(Debug)]
@@ -789,6 +1197,33 @@ pub enum ResolvedStatement {
         true_block: Vec<ResolvedStatement>,
         false_block: Option<Vec<ResolvedStatement>>,
     },
+}
+
+impl Spanned for ResolvedStatement {
+    fn span(&self) -> Span {
+        match self {
+            Self::ForLoop(pattern, iterator, statements) => todo!(),
+            Self::WhileLoop(condition, statements) => todo!(),
+            Self::Return(expr) => expr.span(),
+            Self::Break(node) => node.span(),
+            Self::Continue(node) => node.span(),
+            Self::Expression(expr) => expr.span(),
+            Self::Block(statements) => Span::merge_all(statements).unwrap_or_else(Span::dummy),
+            Self::If(condition, true_block, else_block) => todo!(),
+            Self::IfOnlyVariable {
+                variable,
+                optional_expr,
+                true_block,
+                false_block,
+            } => todo!(),
+            Self::IfAssignExpression {
+                variable,
+                optional_expr,
+                true_block,
+                false_block,
+            } => todo!(),
+        }
+    }
 }
 
 #[derive(Debug)]

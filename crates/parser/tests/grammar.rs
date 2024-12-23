@@ -1502,8 +1502,8 @@ fn nothing() -> SomeType<Int, Float> {
 
             ",
         "
-FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <4:7>, params: [], self_parameter: None, return_type: Some(Generic(TypeReference(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<17:8>), module_path: None }), [Int(<26:3>), Float(<31:5>)])) }, body: [] }))
-            ",
+FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <4:7>, params: [], self_parameter: None, return_type: Some(TypeReference(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<17:8>), module_path: None })) }, body: [] }))
+           ",
     );
 }
 
@@ -1535,7 +1535,11 @@ fn check_some_bug() {
         is_attacking = false
         c = if is_attacking { 3.5 } else { -13.3 }
     "#,
-        "",
+        r"
+Expression(VariableAssignment(<9:12>, Literal(Bool(<24:5>))))
+Expression(VariableAssignment(<38:1>, IfElse(VariableAccess(<45:12>), Literal(Float(<60:3>)), UnaryOp(Negate(<73:1>), Literal(Float(<74:4>))))))
+        
+        ",
     );
 }
 
@@ -1551,5 +1555,21 @@ fn check_return_type() {
 
     
     ",
+    );
+}
+
+#[test_log::test]
+fn check_prefix() {
+    check(
+        r"
+        struct Logic {
+            tick_count: Int, /// how many ticks have passed
+            explosions: std::Sparse<Explosion>,
+         }
+",
+        r"
+StructDef(StructType { identifier: LocalTypeIdentifier(<16:5>), fields: [FieldType { field_name: FieldName(<36:10>), field_type: Int(<48:3>) }, FieldType { field_name: FieldName(<96:10>), field_type: TypeReference(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<113:6>), module_path: Some(ModulePath([ModulePathItem { node: <108:3> }])) }) }] })
+        
+",
     );
 }
