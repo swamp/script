@@ -1,7 +1,8 @@
 use std::io;
 use std::io::Write;
-use yansi::Paint;
+use yansi::{Color, Paint};
 
+#[derive(PartialEq)]
 pub struct Pos {
     pub x: usize,
     pub y: usize,
@@ -14,15 +15,16 @@ pub struct PosSpan {
 pub struct ScopeItem {
     pub start_y: usize,
     pub end_y: usize,
-    pub width: usize,
     pub text: String,
+    pub color: Color,
 }
 
+#[derive(PartialEq)]
 pub struct LabelItem {
     pub start: Pos,
     pub character_count: usize,
-    pub height: usize,
     pub text: String,
+    pub color: Color,
 }
 
 pub trait SourceLines {
@@ -65,26 +67,26 @@ impl Layout {
         let mut current_pos = 0;
 
         while current_pos < chars.len() {
-            let should_highlight = line_labels.iter().any(|label| {
+            let matching_label = line_labels.iter().find(|label| {
                 (current_pos + 1) >= label.start.x
                     && (current_pos + 1) < label.start.x + label.character_count
             });
 
             let mut region_end = current_pos;
             while region_end < chars.len() {
-                let next_highlighted = line_labels.iter().any(|label| {
+                let next_label = line_labels.iter().find(|label| {
                     (region_end + 1) >= label.start.x
                         && (region_end + 1) < label.start.x + label.character_count
                 });
-                if next_highlighted != should_highlight {
+                if next_label != matching_label {
                     break;
                 }
                 region_end += 1;
             }
 
             let text: String = chars[current_pos..region_end].iter().collect();
-            if should_highlight {
-                write!(writer, "{}", Paint::blue(&text))?;
+            if let Some(label) = matching_label {
+                write!(writer, "{}", text.fg(label.color))?;
             } else {
                 write!(writer, "{text}")?;
             }
@@ -92,31 +94,6 @@ impl Layout {
             current_pos = region_end;
         }
 
-        writeln!(writer)?;
-        Ok(())
-    }
-
-    fn write_scope_lines<W: Write>(
-        current_line: usize,
-        active_scopes: &[&ScopeItem],
-        mut writer: W,
-    ) -> io::Result<()> {
-        let mut last_pos = 0;
-
-        for scope in active_scopes {
-            Self::pad(scope.width - last_pos, &mut writer)?;
-
-            let char = if current_line == scope.end_y {
-                '└'
-            } else if current_line == scope.start_y {
-                '┌'
-            } else {
-                '│'
-            };
-
-            write!(writer, "{}", Paint::blue(&char))?;
-            last_pos = scope.width + 1;
-        }
         writeln!(writer)?;
         Ok(())
     }
@@ -152,11 +129,48 @@ impl Layout {
         });
     }
 
+    fn write_scope_continuation<W: Write>(
+        active_scopes: &[&ScopeItem],
+        max_scopes: usize,
+        mut writer: W,
+    ) -> io::Result<()> {
+        for i in 0..max_scopes {
+            if let Some(scope) = active_scopes.get(i) {
+                write!(writer, "{}   ", "│".fg(scope.color))?;
+            } else {
+                write!(writer, "    ")?;
+            }
+        }
+        Ok(())
+    }
+
+    fn write_line_prefix<W: Write>(
+        max_line_num_width: usize,
+        line_number: Option<usize>,
+        mut writer: W,
+    ) -> io::Result<()> {
+        match line_number {
+            Some(num) => write!(writer, "{num:>max_line_num_width$} │ ")?,
+            None => write!(writer, "{:>max_line_num_width$} . ", "")?,
+        }
+        Ok(())
+    }
+
     /// Draws the lines
     /// # Errors
     ///
     pub fn draw<W: Write, S: SourceLines>(&self, source: &S, mut writer: W) -> io::Result<()> {
         let lines_to_show = self.calculate_lines_that_must_be_shown();
+
+        // Calculate the maximum number of simultaneous scopes
+        let max_scopes = self.scopes.iter().fold(0, |max_count, scope| {
+            let overlapping = self
+                .scopes
+                .iter()
+                .filter(|other| scope.start_y <= other.end_y && other.start_y <= scope.end_y)
+                .count();
+            max_count.max(overlapping)
+        });
 
         let max_line_num_width = lines_to_show
             .iter()
@@ -168,8 +182,7 @@ impl Layout {
                 .get_line(current_line)
                 .expect("Source code lines with the requested line number should exist");
 
-            let line_number = current_line.to_string();
-
+            // Get active scopes for source line (includes end line)
             let active_scopes: Vec<_> = self
                 .scopes
                 .iter()
@@ -184,11 +197,25 @@ impl Layout {
                 .collect();
             line_labels.sort_by_key(|label| std::cmp::Reverse(label.start.x));
 
-            // Write source line with line number
-            write!(writer, "{line_number:>max_line_num_width$} │ ")?;
+            Self::write_line_prefix(max_line_num_width, Some(current_line), &mut writer)?;
+            for i in 0..max_scopes {
+                let prefix = active_scopes.get(i).map_or("   ".to_string(), |scope| {
+                    let scope_line_prefix = if current_line == scope.start_y {
+                        "╭─▶"
+                    } else if current_line == scope.end_y {
+                        "├─▶"
+                    } else {
+                        "│  "
+                    };
+                    scope_line_prefix.fg(scope.color).to_string()
+                });
+                write!(writer, "{prefix} ")?;
+            }
             Self::write_source_line(source_line, &line_labels, &mut writer)?;
 
-            write!(writer, "{:>max_line_num_width$} . ", "")?;
+            // Underlines
+            Self::write_line_prefix(max_line_num_width, None, &mut writer)?;
+            Self::write_scope_continuation(&active_scopes, max_scopes, &mut writer)?;
 
             let mut current_pos = 0;
 
@@ -199,21 +226,20 @@ impl Layout {
                 }
 
                 let middle = (label.character_count - 1) / 2;
-                for i in 0..label.character_count {
-                    write!(writer, "{}", if i == middle { '┬' } else { '─' })?;
-                }
+                let underline: String = (0..label.character_count)
+                    .map(|i| if i == middle { '┬' } else { '─' })
+                    .collect();
+
+                write!(writer, "{}", underline.fg(label.color))?;
 
                 current_pos = label.start.x - 1 + label.character_count;
             }
             writeln!(writer)?;
 
-            if !active_scopes.is_empty() {
-                write!(writer, "{:>width$} . ", "", width = max_line_num_width)?;
-                Self::write_scope_lines(current_line, &active_scopes, &mut writer)?;
-            }
-
+            // Write labels with scope continuation
             for (idx, label) in line_labels.iter().enumerate() {
-                write!(writer, "{:>max_line_num_width$} . ", "")?;
+                Self::write_line_prefix(max_line_num_width, None, &mut writer)?;
+                Self::write_scope_continuation(&active_scopes, max_scopes, &mut writer)?;
 
                 let mut current_pos = 0;
 
@@ -222,7 +248,7 @@ impl Layout {
                     let middle =
                         (future_label.start.x - 1) + (future_label.character_count - 1) / 2;
                     Self::pad(middle - current_pos, &mut writer)?;
-                    write!(writer, "│")?;
+                    write!(writer, "{}", "│".fg(future_label.color))?;
                     current_pos = middle + 1;
                 }
 
@@ -232,8 +258,25 @@ impl Layout {
                     Self::pad(middle - current_pos, &mut writer)?;
                 }
 
-                write!(writer, "╰─ {}", Paint::blue(&label.text))?;
+                // line length somewhat proportional to the span so it looks nicer
+                let dash_count = (label.character_count / 4).clamp(2, 8);
+                let connector = format!("╰{}", "─".repeat(dash_count));
+                let label_line = format!("{} {}", connector.fg(label.color), label.text);
+                write!(writer, "{label_line}")?;
                 writeln!(writer)?;
+            }
+
+            // Write scope text for any scopes that have ended
+            for scope in &active_scopes {
+                if scope.end_y == current_line {
+                    Self::write_line_prefix(max_line_num_width, None, &mut writer)?;
+                    Self::write_scope_continuation(&active_scopes, max_scopes, &mut writer)?;
+                    writeln!(writer)?;
+
+                    Self::write_line_prefix(max_line_num_width, None, &mut writer)?;
+                    write!(writer, "{} {}", "╰───".fg(scope.color), scope.text,)?;
+                    writeln!(writer)?;
+                }
             }
         }
 
