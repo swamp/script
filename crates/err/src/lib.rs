@@ -1,8 +1,71 @@
-use ariadne::Color;
+pub mod layout;
+
 use std::fmt::Display;
 use swamp_script_analyzer::ResolveError;
-use swamp_script_semantic::{Span, Spanned};
+use swamp_script_semantic::Span;
 use swamp_script_source_map::SourceMap;
+use yansi::Color;
+
+pub struct Characters {
+    pub up_arrow: char,
+    pub right_arrow: char,
+
+    pub underline_and_vertical: char,
+    pub underline: char,
+
+    pub horizontal: char,
+    pub vertical: char,
+
+    pub vertical_gap: char,
+    pub vertical_break: char,
+
+    pub box_upper_left: char,
+    pub box_upper_right: char,
+    pub box_lower_left: char,
+    pub box_lower_right: char,
+
+    pub left_bracket: char,
+    pub right_bracket: char,
+
+    pub crossing: char,
+    pub left_crossing: char,
+    pub right_crossing: char,
+    pub upper_crossing: char,
+    pub lower_crossing: char,
+}
+
+impl Default for Characters {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Characters {
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            underline_and_vertical: '┬',
+            underline: '─',
+            horizontal: '─',
+            vertical: '│',
+            left_bracket: '[',
+            right_bracket: ']',
+            up_arrow: '▲',
+            right_arrow: '▶',
+            box_upper_right: '╮',
+            box_lower_left: '╰',
+            box_upper_left: '╭',
+            upper_crossing: '┬',
+            lower_crossing: '┴',
+            box_lower_right: '╯',
+            crossing: '┼',
+            left_crossing: '├',
+            right_crossing: '┤',
+            vertical_break: '┆',
+            vertical_gap: '┆',
+        }
+    }
+}
 
 #[derive(Debug)]
 pub enum Kind {
@@ -37,7 +100,7 @@ impl<C: Display> Report<C> {
             &self.config.primary_span,
             &self.config.kind,
             &self.config.error_code,
-            &*self.config.error_name,
+            &self.config.error_name,
             source_map,
         );
     }
