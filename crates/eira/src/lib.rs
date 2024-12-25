@@ -188,30 +188,51 @@ impl Layout {
             write!(writer, "{line_number:>max_line_num_width$} │ ")?;
             Self::write_source_line(source_line, &line_labels, &mut writer)?;
 
-            // Write scope and label lines with dot separator
+            write!(writer, "{:>max_line_num_width$} . ", "")?;
+
+            let mut current_pos = 0;
+
+            for label in line_labels.iter().rev() {
+                // Pad exactly to the label's x position
+                if label.start.x > current_pos {
+                    Self::pad(label.start.x - 1 - current_pos, &mut writer)?;
+                }
+
+                let middle = (label.character_count - 1) / 2;
+                for i in 0..label.character_count {
+                    write!(writer, "{}", if i == middle { '┬' } else { '─' })?;
+                }
+
+                current_pos = label.start.x - 1 + label.character_count;
+            }
+            writeln!(writer)?;
+
             if !active_scopes.is_empty() {
                 write!(writer, "{:>width$} . ", "", width = max_line_num_width)?;
                 Self::write_scope_lines(current_line, &active_scopes, &mut writer)?;
             }
 
-            // Write labels from right to left (to make it look nicer with no bars "cutting" through labels.
             for (idx, label) in line_labels.iter().enumerate() {
-                write!(writer, "{:>width$} . ", "", width = max_line_num_width)?;
+                write!(writer, "{:>max_line_num_width$} . ", "")?;
 
                 let mut current_pos = 0;
 
                 // Draw vertical bars for all labels that will come after this one
                 for future_label in line_labels.iter().skip(idx + 1) {
-                    Self::pad(future_label.start.x - 1 - current_pos, &mut writer)?;
+                    let middle =
+                        (future_label.start.x - 1) + (future_label.character_count - 1) / 2;
+                    Self::pad(middle - current_pos, &mut writer)?;
                     write!(writer, "│")?;
-                    current_pos = future_label.start.x;
+                    current_pos = middle + 1;
                 }
 
-                if label.start.x > current_pos {
-                    Self::pad(label.start.x - 1 - current_pos, &mut writer)?;
+                // TODO: Save the aligned position so it doesn't have to be calculated again.
+                let middle = (label.start.x - 1) + (label.character_count - 1) / 2;
+                if middle > current_pos {
+                    Self::pad(middle - current_pos, &mut writer)?;
                 }
 
-                write!(writer, "└{}", Paint::blue(&label.text))?;
+                write!(writer, "╰─ {}", Paint::blue(&label.text))?;
                 writeln!(writer)?;
             }
         }

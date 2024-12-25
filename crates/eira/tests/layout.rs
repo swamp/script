@@ -58,7 +58,7 @@ fn main() {
     });
     l.labels.push(LabelItem {
         start: Pos { x: 5, y: 4 },
-        character_count: 7,
+        character_count: 8,
         height: 0,
         text: "function println! is unknown".to_string(),
     });
@@ -93,7 +93,7 @@ fn main() {
     });
     l.labels.push(LabelItem {
         start: Pos { x: 5, y: 4 },
-        character_count: 7,
+        character_count: 8,
         height: 0,
         text: "function println! is unknown".to_string(),
     });
