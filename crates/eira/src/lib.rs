@@ -149,10 +149,11 @@ impl Layout {
         line_number: Option<usize>,
         mut writer: W,
     ) -> io::Result<()> {
-        match line_number {
-            Some(num) => write!(writer, "{num:>max_line_num_width$} │ ")?,
-            None => write!(writer, "{:>max_line_num_width$} . ", "")?,
-        }
+        let prefix = match line_number {
+            Some(num) => format!("{num:>max_line_num_width$} │ "),
+            None => format!("{:>max_line_num_width$} . ", ""),
+        };
+        write!(writer, "{}", prefix.fg(Color::BrightBlack))?;
         Ok(())
     }
 

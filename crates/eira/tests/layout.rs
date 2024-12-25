@@ -126,14 +126,19 @@ fn main() {
     });
 
     let label_color = Color::Rgb(154, 128, 255);
+
+    let variable_message = format!(
+        "{}{}{}",
+        "Variable '".bold(),
+        "undefined_value".fg(label_color),
+        "' defined".bold()
+    );
+
     l.labels.push(LabelItem {
         start: Pos { x: 13, y: 3 },
         character_count: 15,
         color: label_color,
-        text: format!(
-            "Variable '{}' is not defined",
-            "undefined_value".fg(label_color)
-        ),
+        text: variable_message,
     });
 
     l.labels.push(LabelItem {
