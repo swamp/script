@@ -6,5 +6,5 @@ edition = "2021"
 [dependencies]
 swamp-script-semantic = { path = "../semantic", version = "0.0.7" }
 swamp-script-source-map = { path = "../source-map", version = "0.0.7" }
-swamp-script-analyzer = { path = "../analyzer", version = "0.0.7"}
-yansi = "1.0.1"
+swamp-script-analyzer = { path = "../analyzer", version = "0.0.7" }
+eira = { path = "../eira", version = "0.0.1" }

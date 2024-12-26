@@ -138,11 +138,23 @@ impl SourceMap {
     }
 
     pub fn get_span_source(&self, file_id: FileId, offset: usize, length: usize) -> &str {
-        let file_info = self.cache.get(&file_id).expect(&format!("Invalid file_id {file_id} in span"));
+        let file_info = self
+            .cache
+            .get(&file_id)
+            .expect(&format!("Invalid file_id {file_id} in span"));
 
         let start = offset as usize;
         let end = start + length as usize;
         &file_info.contents[start..end]
+    }
+
+    #[must_use]
+    pub fn get_source_line(&self, file_id: FileId, line_number: usize) -> Option<&str> {
+        let file_info = self.cache.get(&file_id)?;
+
+        let start_offset = file_info.line_offsets[line_number - 1] as usize;
+        let end_offset = file_info.line_offsets[line_number] as usize;
+        Some(&file_info.contents[start_offset..end_offset - 1])
     }
 
     pub fn get_span_location_utf8(&self, file_id: FileId, offset: usize) -> (usize, usize) {

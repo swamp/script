@@ -1,81 +1,31 @@
-pub mod layout;
-
+use eira::Kind::Error;
+use eira::{Kind, Pos, PosSpan, SourceLines};
 use std::fmt::Display;
+use std::io;
+use std::io::{stderr, Write};
 use swamp_script_analyzer::ResolveError;
-use swamp_script_semantic::Span;
-use swamp_script_source_map::SourceMap;
-use yansi::Color;
+use swamp_script_semantic::{Span, Spanned};
+use swamp_script_source_map::{FileId, SourceMap};
 
-pub struct Characters {
-    pub up_arrow: char,
-    pub right_arrow: char,
-
-    pub underline_and_vertical: char,
-    pub underline: char,
-
-    pub horizontal: char,
-    pub vertical: char,
-
-    pub vertical_gap: char,
-    pub vertical_break: char,
-
-    pub box_upper_left: char,
-    pub box_upper_right: char,
-    pub box_lower_left: char,
-    pub box_lower_right: char,
-
-    pub left_bracket: char,
-    pub right_bracket: char,
-
-    pub crossing: char,
-    pub left_crossing: char,
-    pub right_crossing: char,
-    pub upper_crossing: char,
-    pub lower_crossing: char,
+pub struct SourceLinesWrap<'a> {
+    pub file_id: FileId,
+    pub source_map: &'a SourceMap,
 }
 
-impl Default for Characters {
-    fn default() -> Self {
-        Self::new()
+impl<'a> SourceLines for SourceLinesWrap<'a> {
+    fn get_line(&self, line_number: usize) -> Option<&str> {
+        self.source_map.get_source_line(self.file_id, line_number)
     }
 }
-
-impl Characters {
-    #[must_use]
-    pub const fn new() -> Self {
-        Self {
-            underline_and_vertical: '┬',
-            underline: '─',
-            horizontal: '─',
-            vertical: '│',
-            left_bracket: '[',
-            right_bracket: ']',
-            up_arrow: '▲',
-            right_arrow: '▶',
-            box_upper_right: '╮',
-            box_lower_left: '╰',
-            box_upper_left: '╭',
-            upper_crossing: '┬',
-            lower_crossing: '┴',
-            box_lower_right: '╯',
-            crossing: '┼',
-            left_crossing: '├',
-            right_crossing: '┤',
-            vertical_break: '┆',
-            vertical_gap: '┆',
-        }
-    }
-}
-
 
 pub struct Report<C> {
     config: Builder<C>,
 }
 
-impl<C: Display> Report<C> {
-    pub fn build(kind: Kind, code: C, error_name: &str, primary_span: Span) -> Builder<C> {
+impl<C: Display + Clone> Report<C> {
+    pub fn build(kind: Kind, code: C, error_name: &str, primary_span: &Span) -> Builder<C> {
         Builder {
-            primary_span,
+            primary_span: primary_span.clone(),
             kind,
             error_code: code,
             error_name: error_name.to_string(),
@@ -88,14 +38,58 @@ impl<C: Display> Report<C> {
         Self { config }
     }
 
-    pub fn print(&self, source_map: &SourceMap) {
-        show_error(
-            &self.config.primary_span,
-            &self.config.kind,
-            &self.config.error_code,
-            &self.config.error_name,
+    pub fn print(&self, source_map: &SourceMap, mut writer: impl Write) -> io::Result<()> {
+        let header = eira::Header {
+            header_kind: self.config.kind.clone(),
+            code: self.config.error_code.clone(),
+            message: self.config.error_name.clone(),
+        };
+        header.write(&mut writer)?;
+        let primary_span = &self.config.primary_span;
+        let (row, col) =
+            source_map.get_span_location_utf8(primary_span.file_id, primary_span.offset as usize);
+        let filename = source_map.fetch_relative_filename(primary_span.file_id);
+
+        eira::FileSpanMessage::write(
+            filename,
+            &PosSpan {
+                pos: Pos { x: row, y: col },
+                length: primary_span.length as usize,
+            },
+            &mut writer,
+        )?;
+
+        let mut source_file_section = eira::SourceFileSection::new();
+        for label in &self.config.labels {
+            let (row, col) =
+                source_map.get_span_location_utf8(label.span.file_id, label.span.offset as usize);
+
+            source_file_section.labels.push(eira::Label {
+                start: Pos { x: row, y: col },
+                character_count: label.span.length as usize,
+                text: label.description.clone(),
+                color: Default::default(),
+            });
+        }
+
+        if self.config.labels.is_empty() {
+            source_file_section.labels.push(eira::Label {
+                start: Pos { x: row, y: col },
+                character_count: primary_span.length as usize,
+                text: self.config.error_name.clone(),
+                color: Default::default(),
+            });
+        }
+
+        source_file_section.layout();
+
+        let source_line_wrap = SourceLinesWrap {
+            file_id: primary_span.file_id,
             source_map,
-        );
+        };
+        source_file_section.draw(&source_line_wrap, &mut writer)?;
+
+        Ok(())
     }
 }
 
@@ -113,8 +107,8 @@ pub struct Builder<C> {
     pub note: Option<String>,
 }
 
-impl<C: Display> Builder<C> {
-    pub fn with_label(mut self, label: &str, span: Span, color: Color) -> Self {
+impl<C: Display + std::clone::Clone> Builder<C> {
+    pub fn with_label(mut self, label: &str, span: Span) -> Self {
         let l = crate::Label {
             span,
             description: label.to_string(),
@@ -134,22 +128,14 @@ impl<C: Display> Builder<C> {
     }
 }
 
-pub fn show_error<C: Display>(
-    span: &Span,
-    kind: &Kind,
-    code: &C,
-    error_text: &str,
-    source_map: &SourceMap,
-) {
-    let source =
-        source_map.get_span_source(span.file_id, span.offset as usize, span.length as usize);
-    let (row, col) = source_map.get_span_location_utf8(span.file_id, span.offset as usize);
-    let file_info = source_map.fetch_relative_filename(span.file_id);
-
-    eprintln!("{kind:?}[{code}]:  {error_text}:\n  --> {file_info}:{row}:{col}:\n{source}");
+pub fn show_error(err: &ResolveError, source_map: &SourceMap) {
+    let builder = build_resolve_error(err);
+    let report = builder.build();
+    report.print(&source_map, stderr()).unwrap();
 }
 
-pub fn show_resolve_error(err: ResolveError, source_map: &SourceMap) {
+#[must_use]
+pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
     match err {
         ResolveError::NamespaceError(_) => todo!(),
         ResolveError::CanNotFindModule(_) => todo!(),
@@ -182,8 +168,7 @@ pub fn show_resolve_error(err: ResolveError, source_map: &SourceMap) {
         ResolveError::ArgumentIsNotMutable => todo!(),
         ResolveError::WrongNumberOfTupleDeconstructVariables => todo!(),
         ResolveError::UnknownTypeReference(x) => {
-            //show_error(&x.span, "Unknown type reference", &source_map)
-            todo!()
+            Report::build(Error, 101, "Unknown type reference", &x.span)
         }
         ResolveError::SemanticError(_) => todo!(),
         ResolveError::SeqMapError(_) => todo!(),
@@ -214,9 +199,7 @@ pub fn show_resolve_error(err: ResolveError, source_map: &SourceMap) {
         ResolveError::NotInFunction => todo!(),
         ResolveError::ExpectedBooleanExpression => todo!(),
         ResolveError::NotAnIterator(resolved_type) => {
-            //
-            // show_error(&resolved_type.span(), "Not an iterator", &source_map)
-            todo!()
+            Report::build(Error, 101, "Not an iterator", &resolved_type.span())
         }
         ResolveError::UnsupportedIteratorPairs => todo!(),
         ResolveError::NeedStructForFieldLookup => todo!(),

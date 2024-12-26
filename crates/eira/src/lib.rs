@@ -499,7 +499,7 @@ impl SourceFileSection {
     }
 }
 
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug)]
 pub enum Kind {
     Help, // Give extra information about an error. Maybe should be included in each warning and error?
     Note, // Extra context. Maybe should be included in each warning and error?
