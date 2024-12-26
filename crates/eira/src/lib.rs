@@ -69,11 +69,18 @@ impl Layout {
     }
 
     /// Writes the number of specified spaces
-    fn pad<W: Write>(count: usize, mut writer: W) -> io::Result<()> {
-        for _ in 0..count {
-            write!(writer, " ")?;
-        }
-        Ok(())
+    fn source_code_pad<W: Write>(count: usize, mut writer: W) -> io::Result<()> {
+        write!(writer, "{}", " ".repeat(count))
+    }
+
+    /// Writes the number of specified spaces
+    fn scope_margin_pad<W: Write>(count: usize, mut writer: W) -> io::Result<()> {
+        write!(writer, "{}", " ".repeat(count))
+    }
+
+    /// Writes the number of specified spaces
+    fn line_number_margin_pad<W: Write>(count: usize, mut writer: W) -> io::Result<()> {
+        write!(writer, "{}", " ".repeat(count))
     }
 
     /// Calculates which spans that are active for the specified source line.
@@ -206,9 +213,10 @@ impl Layout {
 
         for i in 0..max_scopes {
             if let Some(scope) = sorted_scopes.get(i) {
-                write!(writer, "{}   ", "│".fg(scope.color))?;
+                write!(writer, "{}", "│".fg(scope.color))?;
+                Self::scope_margin_pad(3, &mut writer)?;
             } else {
-                write!(writer, "    ")?;
+                Self::scope_margin_pad(4, &mut writer)?;
             }
         }
         Ok(())
@@ -220,11 +228,19 @@ impl Layout {
         line_number: Option<usize>,
         mut writer: W,
     ) -> io::Result<()> {
-        let prefix = line_number.map_or_else(
-            || format!("{:>max_line_num_width$} . ", ""),
-            |num| format!("{num:>max_line_num_width$} │ "),
-        );
-        write!(writer, "{}", prefix.fg(Color::BrightBlack))?;
+        let number_string =
+            line_number.map_or_else(String::new, |found_number| found_number.to_string());
+
+        let padding = max_line_num_width - number_string.len();
+
+        Self::line_number_margin_pad(padding, &mut writer)?;
+        write!(writer, "{}", number_string.fg(Color::BrightBlack))?;
+        Self::line_number_margin_pad(1, &mut writer)?;
+        let separator = if line_number.is_some() { "|" } else { "·" };
+
+        write!(writer, "{}", separator.fg(Color::BrightBlack))?;
+        Self::line_number_margin_pad(1, &mut writer)?;
+
         Ok(())
     }
 
@@ -262,20 +278,24 @@ impl Layout {
             &mut writer,
         )?;
         for i in 0..prefix_info.maximum_overlapping_scope_count {
-            let prefix = prefix_info
-                .active_scopes
-                .get(i)
-                .map_or("   ".to_string(), |scope| {
-                    let scope_line_prefix = if current_line_number == scope.start.pos.y {
-                        "╭─▶"
-                    } else if current_line_number == scope.end.pos.y {
-                        "├─▶"
-                    } else {
-                        "│  "
-                    };
-                    scope_line_prefix.fg(scope.color).to_string()
-                });
-            write!(writer, "{prefix} ")?;
+            if let Some(scope) = prefix_info.active_scopes.get(i) {
+                let is_start = current_line_number == scope.start.pos.y;
+                let is_end = current_line_number == scope.end.pos.y;
+                let scope_line_prefix = if is_start {
+                    "╭─▶"
+                } else if is_end {
+                    "├─▶"
+                } else {
+                    "│"
+                };
+                let prefix = scope_line_prefix.fg(scope.color).to_string();
+                write!(writer, "{prefix}")?;
+                let padding = if is_start || is_end { 1 } else { 3 };
+
+                Self::scope_margin_pad(padding, &mut writer)?;
+            } else {
+                Self::scope_margin_pad(4, &mut writer)?;
+            }
         }
         let colored_spans = Self::get_colored_spans_for_line(
             labels,
@@ -319,7 +339,7 @@ impl Layout {
 
         for label in line_labels.iter().rev() {
             if label.start.x > current_pos {
-                Self::pad(label.start.x - 1 - current_pos, &mut writer)?;
+                Self::source_code_pad(label.start.x - 1 - current_pos, &mut writer)?;
             }
 
             let middle = (label.character_count - 1) / 2;
@@ -351,7 +371,7 @@ impl Layout {
             // Draw vertical bars for all labels that will come after this one
             for future_label in line_labels.iter().skip(idx + 1) {
                 let middle = (future_label.start.x - 1) + (future_label.character_count - 1) / 2;
-                Self::pad(middle - current_pos, &mut writer)?;
+                Self::source_code_pad(middle - current_pos, &mut writer)?;
                 write!(writer, "{}", "│".fg(future_label.color))?;
                 current_pos = middle + 1;
             }
@@ -359,7 +379,7 @@ impl Layout {
             // TODO: Store the aligned position so it doesn't have to be calculated again.
             let middle = (label.start.x - 1) + (label.character_count - 1) / 2;
             if middle > current_pos {
-                Self::pad(middle - current_pos, &mut writer)?;
+                Self::source_code_pad(middle - current_pos, &mut writer)?;
             }
 
             // line length somewhat proportional to the span so it looks nicer
@@ -395,7 +415,8 @@ impl Layout {
                             write!(writer, "{}", "╰─── ".fg(s.color))?;
                             break; // stop writing since we are on the scope text we should print
                         } else {
-                            write!(writer, "{}   ", "│".fg(s.color))?;
+                            write!(writer, "{}", "│".fg(s.color))?;
+                            Self::scope_margin_pad(3, &mut writer)?;
                         }
                     } else {
                         write!(writer, "    ")?;

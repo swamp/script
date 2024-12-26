@@ -115,6 +115,7 @@ fn main() {
        println!("{}", x);
     }
     another line
+    and_another
 }
 "#,
     );
@@ -140,7 +141,7 @@ fn main() {
             length: 8,
         },
         end: PosSpan {
-            pos: Pos { x: 1, y: 9 },
+            pos: Pos { x: 1, y: 10 },
             length: 1,
         },
         color: Color::Green,
