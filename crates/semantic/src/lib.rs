@@ -50,6 +50,9 @@ pub struct Span {
 
 impl Span {
     pub fn merge(&self, other: &Span) -> Span {
+        if other.file_id == 0xffff {
+            return self.clone();
+        }
         assert_eq!(
             self.file_id, other.file_id,
             "file_id must be the same when merging"
@@ -222,31 +225,31 @@ impl Spanned for ResolvedType {
     fn span(&self) -> Span {
         match self {
             // Primitives
-            Self::Int(type_ref) => todo!(),
-            Self::Float(type_ref) => todo!(),
-            Self::String(type_ref) => todo!(),
-            Self::Bool(type_ref) => todo!(),
-            Self::Unit(type_ref) => todo!(),
+            Self::Int(_type_ref) => todo!(),
+            Self::Float(_type_ref) => todo!(),
+            Self::String(_type_ref) => todo!(),
+            Self::Bool(_type_ref) => todo!(),
+            Self::Unit(_type_ref) => todo!(),
 
             // Compound Types
-            Self::Array(type_ref) => todo!(),
-            Self::Tuple(type_ref) => todo!(),
-            Self::Struct(type_ref) => todo!(),
-            Self::Map(type_ref) => todo!(),
+            Self::Array(_type_ref) => todo!(),
+            Self::Tuple(_type_ref) => todo!(),
+            Self::Struct(_type_ref) => todo!(),
+            Self::Map(_type_ref) => todo!(),
 
             // Generic Types
             Self::Generic(base_type, type_params) => base_type.span().merge_iter(type_params),
 
             // Enum Types
-            Self::Enum(type_ref) => todo!(),
-            Self::EnumVariant(type_ref) => todo!(),
+            Self::Enum(_type_ref) => todo!(),
+            Self::EnumVariant(_type_ref) => todo!(),
 
             // Function Types
-            Self::FunctionInternal(func_ref) => todo!(),
-            Self::FunctionExternal(func_ref) => todo!(),
+            Self::FunctionInternal(_func_ref) => todo!(),
+            Self::FunctionExternal(_func_ref) => todo!(),
 
             // Range Type
-            Self::ExclusiveRange(type_ref) => todo!(),
+            Self::ExclusiveRange(_type_ref) => todo!(),
 
             // Type Alias
             Self::Alias(type_name, actual_type) => type_name.span().merge(&actual_type.span()),

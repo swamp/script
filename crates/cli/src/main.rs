@@ -17,9 +17,9 @@ use swamp_script_eval::{err::ExecuteError, eval_module, ExternalFunctions};
 use swamp_script_eval_loader::resolve_program;
 use swamp_script_parser::prelude::*;
 use swamp_script_parser::AstParser;
+use swamp_script_semantic::modules::ResolvedModuleRef;
 use tracing::{debug, info, trace};
 use tracing_subscriber::EnvFilter;
-use swamp_script_semantic::modules::ResolvedModuleRef;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]

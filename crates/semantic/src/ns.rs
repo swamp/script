@@ -115,7 +115,9 @@ impl ResolvedModuleNamespace {
         let rust_type_ref = Rc::new(rust_type);
         self.build_in_rust_types
             .insert(rust_type_ref.type_name.clone(), rust_type_ref.clone())
-            .map_err(|_| SemanticError::DuplicateRustType(rust_type_ref.clone().type_name.clone()))?;
+            .map_err(|_| {
+                SemanticError::DuplicateRustType(rust_type_ref.clone().type_name.clone())
+            })?;
 
         Ok(rust_type_ref)
     }

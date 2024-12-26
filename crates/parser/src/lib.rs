@@ -1213,9 +1213,6 @@ impl AstParser {
         }
     }
 
-
-
-
     fn parse_module_segments(&self, pair: Pair<Rule>) -> Vec<ModulePathItem> {
         pair.into_inner()
             .filter_map(|segment| {
@@ -1229,7 +1226,6 @@ impl AstParser {
             })
             .collect()
     }
-
 
     fn parse_generic_params(&self, pair: &Pair<Rule>) -> Result<Vec<Type>, ParseError> {
         let mut types = Vec::new();
@@ -1273,8 +1269,10 @@ impl AstParser {
         }
     }
 
-
-    fn parse_qualified_identifier(&self, pair: &Pair<Rule>) -> Result<(Vec<ModulePathItem>, Node), ParseError> {
+    fn parse_qualified_identifier(
+        &self,
+        pair: &Pair<Rule>,
+    ) -> Result<(Vec<ModulePathItem>, Node), ParseError> {
         let mut inner_pairs = pair.clone().into_inner();
 
         let first = inner_pairs.next().ok_or_else(|| {

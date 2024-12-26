@@ -4,20 +4,20 @@
  */
 use std::path::Path;
 use std::rc::Rc;
-use swamp_script_analyzer::lookup::{NameLookup};
-use swamp_script_semantic::modules::ResolvedModules;
+use swamp_script_analyzer::lookup::NameLookup;
 use swamp_script_analyzer::{ResolveError, Resolver};
 use swamp_script_core::prelude::Value;
 use swamp_script_core::value::SourceMapLookup;
 use swamp_script_eval::prelude::ExecuteError;
 use swamp_script_eval::{eval_module, ExternalFunctions, SourceMapWrapper};
 use swamp_script_parser::AstParser;
+use swamp_script_semantic::modules::ResolvedModules;
+use swamp_script_semantic::prelude::ResolvedModuleNamespaceRef;
 use swamp_script_semantic::{
     ExternalFunctionId, ResolvedExternalFunctionDefinition, ResolvedFunctionSignature,
     ResolvedLocalIdentifier, ResolvedNode, ResolvedParameter, ResolvedProgramState,
     ResolvedProgramTypes, ResolvedStatement, ResolvedType, Span,
 };
-use swamp_script_semantic::prelude::ResolvedModuleNamespaceRef;
 use swamp_script_source_map::SourceMap;
 
 #[derive(Debug)]

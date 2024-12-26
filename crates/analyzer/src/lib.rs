@@ -6,7 +6,6 @@ pub mod lookup;
 pub mod prelude;
 
 use crate::lookup::NameLookup;
-use swamp_script_semantic::modules::ResolvedModules;
 use seq_map::{SeqMap, SeqMapError};
 use std::cell::RefCell;
 use std::collections::HashSet;
@@ -18,6 +17,7 @@ use swamp_script_ast::{
     CompoundOperator, CompoundOperatorKind, EnumVariantLiteral, FieldExpression, ForPattern,
     Function, PatternElement, PostfixOperator, SpanWithoutFileId,
 };
+use swamp_script_semantic::modules::ResolvedModules;
 use swamp_script_semantic::{
     create_rust_type, prelude::*, FileId, LocalTypeName, ResolvedAccess,
     ResolvedAnonymousStructFieldType, ResolvedAnonymousStructType, ResolvedBinaryOperatorKind,
@@ -291,7 +291,7 @@ pub enum ResolveError {
     },
     NotInFunction,
     ExpectedBooleanExpression,
-    NotAnIterator(ResolvedType),
+    NotAnIterator(Span),
     UnsupportedIteratorPairs,
     NeedStructForFieldLookup,
     IntConversionError(ParseIntError),
@@ -2210,7 +2210,7 @@ impl<'a> Resolver<'a> {
                                *
                 */
             }
-            _ => return Err(ResolveError::NotAnIterator(resolved_type)),
+            _ => return Err(ResolveError::NotAnIterator(resolved_expression.span())),
         };
 
         Ok(ResolvedIterator {

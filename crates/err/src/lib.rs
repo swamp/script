@@ -4,7 +4,7 @@ use std::fmt::Display;
 use std::io;
 use std::io::{stderr, Write};
 use swamp_script_analyzer::ResolveError;
-use swamp_script_semantic::{Span, Spanned};
+use swamp_script_semantic::Span;
 use swamp_script_source_map::{FileId, SourceMap};
 
 pub struct SourceLinesWrap<'a> {
@@ -53,7 +53,7 @@ impl<C: Display + Clone> Report<C> {
         eira::FileSpanMessage::write(
             filename,
             &PosSpan {
-                pos: Pos { x: row, y: col },
+                pos: Pos { x: col, y: row },
                 length: primary_span.length as usize,
             },
             &mut writer,
@@ -65,7 +65,7 @@ impl<C: Display + Clone> Report<C> {
                 source_map.get_span_location_utf8(label.span.file_id, label.span.offset as usize);
 
             source_file_section.labels.push(eira::Label {
-                start: Pos { x: row, y: col },
+                start: Pos { x: col, y: row },
                 character_count: label.span.length as usize,
                 text: label.description.clone(),
                 color: Default::default(),
@@ -74,7 +74,7 @@ impl<C: Display + Clone> Report<C> {
 
         if self.config.labels.is_empty() {
             source_file_section.labels.push(eira::Label {
-                start: Pos { x: row, y: col },
+                start: Pos { x: col, y: row },
                 character_count: primary_span.length as usize,
                 text: self.config.error_name.clone(),
                 color: Default::default(),
@@ -198,9 +198,7 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
         ResolveError::TooManyTupleFields { .. } => todo!(),
         ResolveError::NotInFunction => todo!(),
         ResolveError::ExpectedBooleanExpression => todo!(),
-        ResolveError::NotAnIterator(resolved_type) => {
-            Report::build(Error, 101, "Not an iterator", &resolved_type.span())
-        }
+        ResolveError::NotAnIterator(span) => Report::build(Error, 101, "Not an iterator", &span),
         ResolveError::UnsupportedIteratorPairs => todo!(),
         ResolveError::NeedStructForFieldLookup => todo!(),
         ResolveError::IntConversionError(_) => todo!(),

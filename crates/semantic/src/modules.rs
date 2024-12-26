@@ -1,9 +1,9 @@
 use crate::ns::{ResolvedModuleNamespace, ResolvedModuleNamespaceRef};
+use crate::{ResolvedDefinition, ResolvedStatement};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
-use crate::{ResolvedDefinition, ResolvedStatement};
 
 #[derive(Debug)]
 pub struct ResolvedModules {
@@ -15,8 +15,6 @@ impl Default for ResolvedModules {
         Self::new()
     }
 }
-
-
 
 pub struct ResolvedModule {
     pub definitions: Vec<ResolvedDefinition>,
@@ -62,7 +60,10 @@ impl ResolvedModules {
         }
     }
     pub fn add(&mut self, module: ResolvedModuleRef) {
-        self.modules.insert(module.clone().borrow().namespace.borrow().path.clone(), module);
+        self.modules.insert(
+            module.clone().borrow().namespace.borrow().path.clone(),
+            module,
+        );
     }
 
     pub fn add_empty_module(&mut self, module_path: &[String]) -> ResolvedModuleRef {

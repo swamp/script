@@ -4,16 +4,17 @@
  */
 
 pub use crate::{
-    comma_seq, CommonEnumVariantType, ExternalFunctionId, Fp, ResolvedArrayItem,
-    ResolvedArrayItemRef, ResolvedArrayType, ResolvedArrayTypeRef, ResolvedBinaryOperator,
-    ResolvedBoolType, ResolvedBoolTypeRef, ResolvedBooleanExpression, ResolvedEnumLiteralData,
-    ResolvedEnumType, ResolvedEnumTypeRef, ResolvedEnumVariantContainerType,
-    ResolvedEnumVariantStructFieldType, ResolvedEnumVariantStructType,
-    ResolvedEnumVariantTupleFieldType, ResolvedEnumVariantTupleType, ResolvedEnumVariantType,
-    ResolvedEnumVariantTypeRef, ResolvedExpression, ResolvedExternalFunctionCall,
-    ResolvedExternalFunctionDefinition, ResolvedExternalFunctionDefinitionRef, ResolvedFloatType,
-    ResolvedFloatTypeRef, ResolvedFunctionSignature, ResolvedIndexType, ResolvedIntType,
-    ResolvedIntTypeRef, ResolvedInternalFunctionCall, ResolvedInternalFunctionDefinition,
+    comma_seq, ns::ResolvedModuleNamespaceRef, CommonEnumVariantType, ExternalFunctionId, Fp,
+    ResolvedArrayItem, ResolvedArrayItemRef, ResolvedArrayType, ResolvedArrayTypeRef,
+    ResolvedBinaryOperator, ResolvedBoolType, ResolvedBoolTypeRef, ResolvedBooleanExpression,
+    ResolvedEnumLiteralData, ResolvedEnumType, ResolvedEnumTypeRef,
+    ResolvedEnumVariantContainerType, ResolvedEnumVariantStructFieldType,
+    ResolvedEnumVariantStructType, ResolvedEnumVariantTupleFieldType, ResolvedEnumVariantTupleType,
+    ResolvedEnumVariantType, ResolvedEnumVariantTypeRef, ResolvedExpression,
+    ResolvedExternalFunctionCall, ResolvedExternalFunctionDefinition,
+    ResolvedExternalFunctionDefinitionRef, ResolvedFloatType, ResolvedFloatTypeRef,
+    ResolvedFunctionSignature, ResolvedIndexType, ResolvedIntType, ResolvedIntTypeRef,
+    ResolvedInternalFunctionCall, ResolvedInternalFunctionDefinition,
     ResolvedInternalFunctionDefinitionRef, ResolvedIterator, ResolvedLiteral,
     ResolvedLocalTypeIdentifier, ResolvedMatch, ResolvedMatchArm, ResolvedMemberCall,
     ResolvedModulePath, ResolvedModulePathRef, ResolvedMutArray, ResolvedMutStructTypeField,
@@ -23,5 +24,5 @@ pub use crate::{
     ResolvedStringTypeRef, ResolvedStructInstantiation, ResolvedStructType,
     ResolvedStructTypeField, ResolvedStructTypeFieldRef, ResolvedStructTypeRef, ResolvedTupleType,
     ResolvedType, ResolvedUnaryOperator, ResolvedUnitType, ResolvedUnitTypeRef, ResolvedVariable,
-    ResolvedVariableAssignment, ResolvedVariableRef, SemanticError, Span, TypeNumber, ns::ResolvedModuleNamespaceRef, Spanned
+    ResolvedVariableAssignment, ResolvedVariableRef, SemanticError, Span, Spanned, TypeNumber,
 };
