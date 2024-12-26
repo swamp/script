@@ -1,4 +1,4 @@
-use eira::{LabelItem, Layout, Pos, ScopeItem, SourceLines};
+use eira::{LabelItem, Layout, Pos, PosSpan, ScopeItem, SourceLines};
 use std::io::stderr;
 use yansi::{Color, Paint};
 
@@ -110,7 +110,10 @@ fn two_labels_on_same_line_scope() {
         r#"1
 fn main() {
     let x = undefined_value;
-    println!("{}", x);
+    if x {
+       skipped_line()
+       println!("{}", x);
+    }
     another line
 }
 "#,
@@ -119,13 +122,46 @@ fn main() {
     let mut l = Layout::new();
 
     l.scopes.push(ScopeItem {
-        start_y: 3,
-        end_y: 4,
+        start: PosSpan {
+            pos: Pos { x: 4, y: 4 },
+            length: 8,
+        },
+        end: PosSpan {
+            pos: Pos { x: 5, y: 7 },
+            length: 1,
+        },
+        color: Color::Red,
+        text: "If scope is here".bold().to_string(),
+    });
+
+    l.scopes.push(ScopeItem {
+        start: PosSpan {
+            pos: Pos { x: 4, y: 2 },
+            length: 8,
+        },
+        end: PosSpan {
+            pos: Pos { x: 1, y: 9 },
+            length: 1,
+        },
         color: Color::Green,
         text: "this is the scope".bold().to_string(),
     });
 
     let label_color = Color::Rgb(154, 128, 255);
+
+    let unknown_function_message = format!(
+        "{}{}{}",
+        "function '".bold(),
+        "println!".fg(Color::BrightBlue),
+        "' is unknown".bold()
+    );
+
+    l.labels.push(LabelItem {
+        start: Pos { x: 8, y: 6 },
+        character_count: 8,
+        color: Color::BrightBlue,
+        text: unknown_function_message,
+    });
 
     let variable_message = format!(
         "{}{}{}",
@@ -148,19 +184,6 @@ fn main() {
         text: "not sure what 'x' is".bold().to_string(),
     });
 
-    let message = format!(
-        "{}{}{}",
-        "function '".bold(),
-        "println!".fg(Color::BrightBlue),
-        "' is unknown".bold()
-    );
-
-    l.labels.push(LabelItem {
-        start: Pos { x: 5, y: 4 },
-        character_count: 8,
-        color: Color::BrightBlue,
-        text: message,
-    });
-
+    l.layout();
     l.draw(&source, stderr()).unwrap();
 }
