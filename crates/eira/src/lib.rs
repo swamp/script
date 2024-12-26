@@ -1,3 +1,6 @@
+pub mod prelude;
+
+use std::fmt::{Display, Formatter};
 use std::io;
 use std::io::Write;
 use yansi::{Color, Paint};
@@ -21,7 +24,7 @@ pub struct ColoredSpan {
 }
 
 #[derive(PartialEq, Eq)]
-pub struct ScopeItem {
+pub struct Scope {
     pub start: PosSpan,
     pub end: PosSpan,
     pub text: String,
@@ -29,7 +32,7 @@ pub struct ScopeItem {
 }
 
 #[derive(Clone, PartialEq, Eq)]
-pub struct LabelItem {
+pub struct Label {
     pub start: Pos,
     pub character_count: usize,
     pub text: String,
@@ -40,13 +43,13 @@ pub trait SourceLines {
     fn get_line(&self, line_number: usize) -> Option<&str>;
 }
 
-// Only one file is supported for a Layout
-pub struct Layout {
-    pub scopes: Vec<ScopeItem>,
-    pub labels: Vec<LabelItem>,
+// Scopes and Labels for a section of a source code file
+pub struct SourceFileSection {
+    pub scopes: Vec<Scope>,
+    pub labels: Vec<Label>,
 }
 
-impl Default for Layout {
+impl Default for SourceFileSection {
     fn default() -> Self {
         Self::new()
     }
@@ -54,12 +57,12 @@ impl Default for Layout {
 
 pub struct PrefixInfo<'a> {
     pub maximum_overlapping_scope_count: usize,
-    pub active_scopes: &'a [&'a ScopeItem],
+    pub active_scopes: &'a [&'a Scope],
     pub max_number_string_size: usize,
     line_number: Option<usize>,
 }
 
-impl Layout {
+impl SourceFileSection {
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -85,8 +88,8 @@ impl Layout {
 
     /// Calculates which spans that are active for the specified source line.
     fn get_colored_spans_for_line(
-        line_labels: &[&LabelItem],
-        scopes: &[&ScopeItem],
+        line_labels: &[&Label],
+        scopes: &[&Scope],
         line_number: usize,
     ) -> Vec<ColoredSpan> {
         let mut spans = Vec::new();
@@ -204,7 +207,7 @@ impl Layout {
 
     /// Write bars for active scopes
     fn write_scope_continuation<W: Write>(
-        active_scopes: &[&ScopeItem],
+        active_scopes: &[&Scope],
         max_scopes: usize,
         mut writer: W,
     ) -> io::Result<()> {
@@ -247,7 +250,7 @@ impl Layout {
     /// Calculates the maximum number of overlapping scope items for the source block
     /// Needed for the padding
     #[must_use]
-    pub fn calculate_max_overlapping_scopes(scopes: &[ScopeItem]) -> usize {
+    pub fn calculate_max_overlapping_scopes(scopes: &[Scope]) -> usize {
         scopes.iter().fold(0, |max_count, scope| {
             let overlapping = scopes
                 .iter()
@@ -265,7 +268,7 @@ impl Layout {
     /// if the line number was not provided in `PrefixInfo`.
     pub fn write_source_line_with_prefixes(
         prefix_info: &PrefixInfo,
-        labels: &[&LabelItem],
+        labels: &[&Label],
         source_line: &str,
         mut writer: impl Write,
     ) -> io::Result<()> {
@@ -330,7 +333,7 @@ impl Layout {
     ///
     pub fn write_underlines_for_upcoming_labels(
         prefix_info: &PrefixInfo,
-        line_labels: &[&LabelItem],
+        line_labels: &[&Label],
         mut writer: impl Write,
     ) -> io::Result<()> {
         Self::write_start_of_line_prefix(prefix_info, &mut writer)?;
@@ -360,7 +363,7 @@ impl Layout {
     ///
     pub fn write_labels(
         prefix_info: &PrefixInfo,
-        line_labels: &[&LabelItem],
+        line_labels: &[&Label],
         mut writer: impl Write,
     ) -> io::Result<()> {
         for (idx, label) in line_labels.iter().enumerate() {
@@ -398,7 +401,7 @@ impl Layout {
     ///
     pub fn write_text_for_ending_scopes(
         prefix_info: &PrefixInfo,
-        active_scopes: &[&ScopeItem],
+        active_scopes: &[&Scope],
         line_number: usize, // Line number is provided, since the prefix_info line_number is `None`.
         mut writer: impl Write,
     ) -> io::Result<()> {
@@ -429,7 +432,7 @@ impl Layout {
         Ok(())
     }
 
-    /// Draws the lines
+    /// Draws the source file section
     /// # Errors
     ///
     /// # Panics
@@ -493,5 +496,81 @@ impl Layout {
         }
 
         Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub enum Kind {
+    Help, // Give extra information about an error. Maybe should be included in each warning and error?
+    Note, // Extra context. Maybe should be included in each warning and error?
+    Warning,
+    Error,
+}
+
+impl Display for Kind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let prefix = match self {
+            Self::Help => "help",
+            Self::Note => "note",
+            Self::Warning => "warning",
+            Self::Error => "error",
+        };
+        write!(f, "{prefix}")
+    }
+}
+
+pub struct Header<C: Display> {
+    pub header_kind: Kind,
+    pub code: C,
+    pub message: String,
+}
+
+impl<C: Display> Header<C> {
+    const fn color_for_kind(kind: &Kind) -> Color {
+        match kind {
+            Kind::Help => Color::BrightBlue,
+            Kind::Note => Color::BrightMagenta,
+            Kind::Warning => Color::BrightYellow,
+            Kind::Error => Color::BrightRed,
+        }
+    }
+
+    /// # Errors
+    ///
+    pub fn write<W: Write>(&self, mut writer: W) -> io::Result<()> {
+        write!(
+            writer,
+            "{}",
+            self.header_kind.fg(Self::color_for_kind(&self.header_kind))
+        )?;
+        write!(writer, "[{}]", self.code.fg(Color::Blue))?;
+        write!(writer, ": ")?;
+        write!(writer, "{}", self.message.bold())?;
+        writeln!(writer)
+    }
+}
+
+pub struct FileSpanMessage;
+
+impl FileSpanMessage {
+    /// # Errors
+    ///
+    /// # Panics
+    ///
+    pub fn write<W: Write>(
+        relative_file_name: &str,
+        pos_span: &PosSpan,
+        mut writer: W,
+    ) -> io::Result<()> {
+        write!(writer, "  --> ")?;
+        write!(writer, "{}", relative_file_name.bright_cyan(),)?;
+        write!(
+            writer,
+            ":{}:{}",
+            pos_span.pos.y.fg(Color::BrightMagenta),
+            pos_span.pos.x.fg(Color::BrightMagenta),
+        )?;
+        writeln!(writer)?;
+        writeln!(writer)
     }
 }

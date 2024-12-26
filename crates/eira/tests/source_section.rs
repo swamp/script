@@ -1,4 +1,6 @@
-use eira::{LabelItem, Layout, Pos, PosSpan, ScopeItem, SourceLines};
+use eira::{
+    FileSpanMessage, Header, Kind, Label, Pos, PosSpan, Scope, SourceFileSection, SourceLines,
+};
 use std::io::stderr;
 use yansi::{Color, Paint};
 
@@ -28,8 +30,8 @@ fn main() {
 "#,
     );
 
-    let mut l = Layout::new();
-    l.labels.push(LabelItem {
+    let mut l = SourceFileSection::new();
+    l.labels.push(Label {
         start: Pos { x: 13, y: 3 },
         character_count: 15,
         color: Color::BrightGreen,
@@ -50,15 +52,15 @@ fn main() {
 "#,
     );
 
-    let mut l = Layout::new();
-    l.labels.push(LabelItem {
+    let mut l = SourceFileSection::new();
+    l.labels.push(Label {
         start: Pos { x: 13, y: 3 },
         character_count: 15,
         color: Color::BrightYellow,
 
         text: "this variable is not defined".to_string(),
     });
-    l.labels.push(LabelItem {
+    l.labels.push(Label {
         start: Pos { x: 5, y: 4 },
         character_count: 8,
         color: Color::BrightMagenta,
@@ -80,20 +82,20 @@ fn main() {
 "#,
     );
 
-    let mut l = Layout::new();
-    l.labels.push(LabelItem {
+    let mut l = SourceFileSection::new();
+    l.labels.push(Label {
         start: Pos { x: 13, y: 3 },
         character_count: 15,
         color: Color::BrightMagenta,
         text: "this variable is not defined".to_string(),
     });
-    l.labels.push(LabelItem {
+    l.labels.push(Label {
         start: Pos { x: 9, y: 3 },
         character_count: 1,
         color: Color::BrightYellow,
         text: "not sure what 'x' is".to_string(),
     });
-    l.labels.push(LabelItem {
+    l.labels.push(Label {
         start: Pos { x: 5, y: 4 },
         character_count: 8,
         color: Color::BrightCyan,
@@ -120,9 +122,26 @@ fn main() {
 "#,
     );
 
-    let mut l = Layout::new();
+    let header = Header {
+        header_kind: Kind::Error,
+        code: 2044,
+        message: "Illegal symbol for the type".to_string(),
+    };
+    header.write(stderr()).expect("header should work");
 
-    l.scopes.push(ScopeItem {
+    FileSpanMessage::write(
+        "imaginary/path/render.swamp",
+        &PosSpan {
+            pos: Pos { x: 14, y: 1 },
+            length: 13,
+        },
+        stderr(),
+    )
+    .expect("filespan message should work");
+
+    let mut l = SourceFileSection::new();
+
+    l.scopes.push(Scope {
         start: PosSpan {
             pos: Pos { x: 4, y: 4 },
             length: 8,
@@ -135,7 +154,7 @@ fn main() {
         text: "If scope is here".bold().to_string(),
     });
 
-    l.scopes.push(ScopeItem {
+    l.scopes.push(Scope {
         start: PosSpan {
             pos: Pos { x: 4, y: 2 },
             length: 8,
@@ -157,7 +176,7 @@ fn main() {
         "' is unknown".bold()
     );
 
-    l.labels.push(LabelItem {
+    l.labels.push(Label {
         start: Pos { x: 8, y: 6 },
         character_count: 8,
         color: Color::BrightBlue,
@@ -171,14 +190,14 @@ fn main() {
         "' defined".bold()
     );
 
-    l.labels.push(LabelItem {
+    l.labels.push(Label {
         start: Pos { x: 13, y: 3 },
         character_count: 15,
         color: label_color,
         text: variable_message,
     });
 
-    l.labels.push(LabelItem {
+    l.labels.push(Label {
         start: Pos { x: 9, y: 3 },
         character_count: 1,
         color: Color::BrightCyan,
