@@ -1546,10 +1546,10 @@ Expression(VariableAssignment(<38:1>, IfElse(VariableAccess(<45:12>), Literal(Fl
 #[test_log::test]
 fn check_return_type() {
     check(
-        r#"
+        r"
         fn x(a: Int) -> (Int, Float) {
         }
-    "#,
+    ",
         r"
     FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <12:1>, params: [Parameter { variable: <14:1>, param_type: Int(<17:3>) }], self_parameter: None, return_type: Some(Tuple([Int(<26:3>), Float(<31:5>)])) }, body: [] }))
 
@@ -1559,7 +1559,7 @@ fn check_return_type() {
 }
 
 #[test_log::test]
-fn check_prefix() {
+fn check_prefix_and_generic() {
     check(
         r"
         struct Logic {
@@ -1568,8 +1568,8 @@ fn check_prefix() {
          }
 ",
         r"
-StructDef(StructType { identifier: LocalTypeIdentifier(<16:5>), fields: [FieldType { field_name: FieldName(<36:10>), field_type: Int(<48:3>) }, FieldType { field_name: FieldName(<96:10>), field_type: TypeReference(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<113:6>), module_path: Some(ModulePath([ModulePathItem { node: <108:3> }])) }) }] })
-        
+StructDef(StructType { identifier: LocalTypeIdentifier(<16:5>), fields: [FieldType { field_name: FieldName(<36:10>), field_type: Int(<48:3>) }, FieldType { field_name: FieldName(<96:10>), field_type: Generic(TypeReference(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<113:6>), module_path: Some(ModulePath([ModulePathItem { node: <108:3> }])) }), [TypeReference(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<120:9>), module_path: None })]) }] })
+ 
 ",
     );
 }

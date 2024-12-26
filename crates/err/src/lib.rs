@@ -197,7 +197,9 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
         ResolveError::EnumVariantHasNoFields(_) => todo!(),
         ResolveError::TooManyTupleFields { .. } => todo!(),
         ResolveError::NotInFunction => todo!(),
-        ResolveError::ExpectedBooleanExpression => todo!(),
+        ResolveError::ExpectedBooleanExpression(span) => {
+            Report::build(Error, 102, "Expected a boolean expression", &span)
+        }
         ResolveError::NotAnIterator(span) => Report::build(Error, 101, "Not an iterator", &span),
         ResolveError::UnsupportedIteratorPairs => todo!(),
         ResolveError::NeedStructForFieldLookup => todo!(),

@@ -1736,24 +1736,24 @@ impl AstParser {
                 self.parse_type_from_str(&mut inner, &pair)
             }
             Rule::qualified_type_identifier => {
-                let qualified_identifier = self.parse_qualified_type_identifier(&pair)?;
                 let mut inner_pairs = pair.clone().into_inner();
                 let qualified_id = self.parse_qualified_type_identifier(&pair)?;
 
                 // Check for generic parameters
-                if let Some(params) = inner_pairs.next() {
-                    if params.as_rule() == Rule::generic_params {
-                        let type_params = self.parse_generic_params(&params)?;
-                        Ok(Type::Generic(
+                let mut remaining_pairs = pair.into_inner();
+                while let Some(next_pair) = remaining_pairs.next() {
+                    if next_pair.as_rule() == Rule::generic_params {
+                        let mut generic_types = Vec::new();
+                        for param in Self::convert_into_iterator(&next_pair) {
+                            generic_types.push(self.parse_type(param)?);
+                        }
+                        return Ok(Type::Generic(
                             Box::new(Type::TypeReference(qualified_id)),
-                            type_params,
-                        ))
-                    } else {
-                        Ok(Type::TypeReference(qualified_id))
+                            generic_types,
+                        ));
                     }
-                } else {
-                    Ok(Type::TypeReference(qualified_id))
                 }
+                Ok(Type::TypeReference(qualified_id))
             }
             Rule::tuple_type => {
                 let mut types = Vec::new();

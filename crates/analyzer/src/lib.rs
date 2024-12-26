@@ -290,7 +290,7 @@ pub enum ResolveError {
         got: usize,
     },
     NotInFunction,
-    ExpectedBooleanExpression,
+    ExpectedBooleanExpression(Span),
     NotAnIterator(Span),
     UnsupportedIteratorPairs,
     NeedStructForFieldLookup,
@@ -1979,7 +1979,11 @@ impl<'a> Resolver<'a> {
             ResolvedType::Optional(_) => {
                 ResolvedExpression::CoerceOptionToBool(Box::new(resolved_expression))
             }
-            _ => return Err(ResolveError::ExpectedBooleanExpression),
+            _ => {
+                return Err(ResolveError::ExpectedBooleanExpression(
+                    resolved_expression.span(),
+                ))
+            }
         };
 
         Ok(ResolvedBooleanExpression {
