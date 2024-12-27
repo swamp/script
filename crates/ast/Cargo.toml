@@ -7,6 +7,3 @@ repository = "https://github.com/swamp/script"
 description = "ast types for swamp script"
 
 [dependencies]
-seq-map = "0.0.13"
-fixed32 = "0.0.17"
-seq-fmt = "0.0.1"

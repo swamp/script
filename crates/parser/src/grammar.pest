@@ -51,10 +51,11 @@ impl_item = { normal_member_function | external_member_function }
 
 
 // Self parameter can be mut or not
-self_parameter = {
-    mut_keyword? ~ "self"
-}
+self_identifier = { "self" }
 
+self_parameter = {
+    mut_keyword? ~ self_identifier
+}
 
 // Struct destructuring
 struct_destructure = { "{" ~ identifier ~ ("," ~ " "* ~ identifier)* ~ "}" }  // PEST BUG: need explicit spaces after comma
@@ -178,7 +179,7 @@ break_stmt = { "break" }
 expression_statement = { expression }
 
 // Expression is the entry point
-expression = { assignment | logical | postfix | prefix }
+expression = { assignment | logical }
 
 
 chained_access = { identifier ~ (array_access | dot_access)+ }
@@ -215,10 +216,11 @@ comparison = { addition ~ ((op_lte | op_gte | op_eq | op_neq | op_lt | op_gt ) ~
 addition = { multiplication ~ ((op_add | op_sub | range_op) ~ multiplication)* }
 
 // Multiplication and division (highest precedence for binary ops)
-multiplication = { postfix ~ ((op_mul | op_div | op_mod) ~ postfix)* }
+multiplication = { prefix ~ ((op_mul | op_div | op_mod) ~ prefix)* }
+
 
 // Prefix operators
-prefix = { prefix_op* ~ primary }
+prefix = { prefix_op* ~ postfix }
 prefix_op = { op_not | op_neg }
 
 postfix = { primary ~ postfix_op* }
@@ -307,10 +309,10 @@ primary = {
     | static_call
     | function_call
     | struct_instantiation
-    | map_literal
     | parenthesized
     | literal
     | array_literal
+    | map_literal
     | variable
 }
 
@@ -462,12 +464,14 @@ struct_fields = { (struct_field ~ ("," ~ " "* ~ struct_field)* ~ trailing_comma?
 struct_field = { identifier ~ ":" ~ expression }
 
 qualified_identifier = {
-    module_path? ~ identifier
+    module_segments? ~ identifier
 }
 
-qualified_type_identifier = { module_path? ~ type_identifier }
-module_path = { module_segment+ }
-module_segment = { identifier ~ "::" }
+qualified_type_identifier = { 
+    module_segments? ~ type_identifier ~ generic_params?
+}
+
+module_segments = { (identifier ~ "::")+ }
 
 struct_instantiation = {
     (qualified_type_identifier ~ "{" ~ struct_fields? ~ "}")

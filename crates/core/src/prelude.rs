@@ -1,6 +1,6 @@
 pub use {
     crate::export::SwampExport,
     crate::typereg::TypeRegistry,
-    crate::value::{Value, ValueError},
+    crate::value::{SourceMapLookup, Value, ValueError},
     seq_map::SeqMap,
 };

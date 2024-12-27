@@ -2,7 +2,7 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use crate::util::{check, check_fail, check_value, eval};
+use crate::util::{check, check_fail, check_value, eval, eval_string};
 use fixed32::Fp;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -418,7 +418,7 @@ fn basic_eval_13() {
 
 #[test_log::test]
 fn basic_eval_14() {
-    let result = eval(
+    eval_string(
         r#"
 
         struct Position {
@@ -437,14 +437,13 @@ fn basic_eval_14() {
         ]
 
     "#,
+        "[Button { position: Position { x: -49, y: 101 }, layer: 1 }, Button { position: Position { x: 20, y: -88 }, layer: 44 }]"
     );
-
-    assert_eq!(result.to_string(), "[Button { position: Position { x: -49, y: 101 }, layer: 1 }, Button { position: Position { x: 20, y: -88 }, layer: 44 }]");
 }
 
 //#[test_log::test]
 fn _basic_eval_15() {
-    let result = eval(
+    let result = eval_string(
         r#"
 
         struct Position {
@@ -469,15 +468,13 @@ fn _basic_eval_15() {
         ]
 
         find_closest_button(buttons, Position { x: 20, y: -88 })
-    "#,
+    "#,  "[Button { position: Position { x: -49, y: 101 }, layer: 1 }, Button { position: Position { x: 20, y: -88 }, layer: 44 }]"
     );
-
-    assert_eq!(result.to_string(), "[Button { position: Position { x: -49, y: 101 }, layer: 1 }, Button { position: Position { x: 20, y: -88 }, layer: 44 }]");
 }
 
 #[test_log::test]
 fn basic_eval_16() {
-    let result = eval(
+    eval_string(
         r#"
 
         struct Position {
@@ -497,11 +494,7 @@ fn basic_eval_16() {
 
         find_closest_button(Position { x: 20, y: -88 })
     "#,
-    );
-
-    assert_eq!(
-        result.to_string(),
-        "(0, Button { position: Position { x: -49, y: 101 }, layer: 1 })"
+        "(0, Button { position: Position { x: -49, y: 101 }, layer: 1 })",
     );
 }
 
@@ -803,15 +796,14 @@ fn format_specifiers() {
 
 #[test_log::test]
 fn eval_map() {
-    let x = eval(
+    eval_string(
         "
 
     a = [2: 'hello', -1: 'world']
 
     ",
+        r#"[2: "hello", -1: "world"]"#,
     );
-
-    assert_eq!(x.to_string(), r#"[2: "hello", -1: "world"]"#);
 }
 
 #[test_log::test]
@@ -964,7 +956,7 @@ fn map_fn_return() {
 
 #[test_log::test]
 fn array_fn_return() {
-    let x = eval(
+    eval_string(
         "
 
     fn float_creator() -> [Float] {
@@ -973,41 +965,38 @@ fn array_fn_return() {
 
     a = float_creator()
     ",
+        "[2.40, 5.60, 8.90]",
     );
-
-    assert_eq!(x.to_string(), "[2.40, 5.60, 8.90]");
 }
 
 #[test_log::test]
 fn array_push() {
-    let x = eval(
+    eval_string(
         "
 
     mut a = [10, 20]
     a += 30
     ",
+        "[10, 20, 30]",
     );
-
-    assert_eq!(x.to_string(), "[10, 20, 30]");
 }
 
 #[test_log::test]
 fn array_extend() {
-    let x = eval(
+    eval_string(
         "
 
     mut a = [10, 20]
 
     a += [30, 40, 50]
     ",
+        "[10, 20, 30, 40, 50]",
     );
-
-    assert_eq!(x.to_string(), "[10, 20, 30, 40, 50]");
 }
 
 #[test_log::test]
 fn array_remove() {
-    let x = eval(
+    eval_string(
         "
 
     mut a = [10, 20]
@@ -1016,9 +1005,8 @@ fn array_remove() {
 
     a.remove(3)
     ",
+        "[10, 20, 30, 50]",
     );
-
-    assert_eq!(x.to_string(), "[10, 20, 30, 50]");
 }
 
 #[test_log::test]
@@ -1030,13 +1018,13 @@ fn array_remove_fail() {
 
     a.remove(1)
     ",
-        "ResolveError(VariableIsNotMutable(a))",
+        "ResolveError(VariableIsNotMutable(<6:1>))",
     );
 }
 
 #[test_log::test]
 fn array_clear() {
-    let x = eval(
+    eval_string(
         "
 
     mut a = [10, 20]
@@ -1045,9 +1033,8 @@ fn array_clear() {
 
     a.clear()
     ",
+        "[]",
     );
-
-    assert_eq!(x.to_string(), "[]");
 }
 
 #[test_log::test]
@@ -1066,19 +1053,18 @@ fn array_clear2() {
 
 #[test_log::test]
 fn sparse_map_create() {
-    let x = eval(
+    eval_string(
         "
 
     sparse = Sparse<Int>::new()
     ",
+        "Sparse<Int(ResolvedIntType)> len:0",
     );
-
-    assert_eq!(x.to_string(), "Sparse<Int> len:0");
 }
 
 #[test_log::test]
 fn sparse_map_add() {
-    let x = eval(
+    eval_string(
         "
 
     mut sparse = Sparse<Int>::new()
@@ -1087,14 +1073,13 @@ fn sparse_map_add() {
     print(id)
     id
     ",
+        "id:0:0",
     );
-
-    assert_eq!(x.to_string(), "id:0:0");
 }
 
 #[test_log::test]
 fn sparse_map_remove() {
-    let x = eval(
+    let x = eval_string(
         "
 
     mut sparse = Sparse<Int>::new()
@@ -1105,9 +1090,8 @@ fn sparse_map_remove() {
 
     sparse.remove(sparse_id)
     ",
+        "Sparse<Int(ResolvedIntType)> len:0",
     );
-
-    assert_eq!(x.to_string(), "Sparse<Int> len:0");
 }
 
 #[test_log::test]
@@ -1127,7 +1111,7 @@ fn sparse_map_iterate() {
     }
     ",
         "\
-    Sparse<Int> len:2
+    Sparse<Int(ResolvedIntType)> len:2
     id:0:0
     2
     3
@@ -1205,7 +1189,7 @@ fn sparse_map_iterate_pairs() {
     }
     ",
         "\
-    Sparse<Int> len:2
+    Sparse<Int(ResolvedIntType)> len:2
     id:0:0
     id:0:0
     2

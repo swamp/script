@@ -6,33 +6,35 @@ pub mod prelude;
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use swamp_script_analyzer::lookup::NameLookup;
 use swamp_script_analyzer::prelude::*;
-use swamp_script_ast::prelude::*;
 use swamp_script_dep_loader::prelude::*;
+use swamp_script_semantic::modules::ResolvedModules;
 use swamp_script_semantic::prelude::*;
-use swamp_script_semantic::ResolvedModules;
-use swamp_script_semantic::ResolvedProgramState;
-use swamp_script_semantic::ResolvedProgramTypes;
+use swamp_script_source_map::SourceMap;
 
 pub fn resolve_to_new_module(
     types: &ResolvedProgramTypes,
     state: &mut ResolvedProgramState,
     modules: &mut ResolvedModules,
-
-    module_path: &ModulePath,
+    module_path: &[String],
+    source_map: &SourceMap,
     ast_module: &ParseModule,
 ) -> Result<(), ResolveError> {
-    let resolved_module = ResolvedModule::new(module_path.clone());
+    let resolved_module = ResolvedModule::new(module_path);
     let resolved_module_ref = Rc::new(RefCell::new(resolved_module));
 
     resolve_to_existing_module(
         types,
         state,
         modules,
+        resolved_module_ref.borrow_mut().namespace.clone(),
+        &source_map,
         resolved_module_ref.clone(),
         ast_module,
     )?;
-    modules.add_module(resolved_module_ref)?;
+
+    // TODO: FIX modules.add_module(resolved_module_ref)?;
 
     Ok(())
 }
@@ -41,39 +43,48 @@ pub fn resolve_to_existing_module(
     types: &ResolvedProgramTypes,
     state: &mut ResolvedProgramState,
     modules: &mut ResolvedModules,
+    target_namespace: ResolvedModuleNamespaceRef,
+    source_map: &SourceMap,
     resolved_module: Rc<RefCell<ResolvedModule>>,
     ast_module: &ParseModule,
-) -> Result<(), ResolveError> {
-    for ast_def in ast_module.ast_module.definitions() {
-        let mut resolver = Resolver::new(&types, state, &modules, resolved_module.clone());
-        let resolved_def = resolver.resolve_definition(ast_def)?;
-        resolver.insert_definition(resolved_def)?;
-    }
+) -> Result<Vec<ResolvedStatement>, ResolveError> {
+    let statements = {
+        let mut name_lookup = NameLookup::new(target_namespace.clone(), &modules);
+        let mut resolver = Resolver::new(
+            &types,
+            state,
+            &mut name_lookup,
+            &source_map,
+            ast_module.file_id,
+        );
+        for ast_def in ast_module.ast_module.definitions() {
+            let _resolved_def = resolver.resolve_definition(ast_def)?;
+        }
 
-    {
-        let mut resolver = Resolver::new(&types, state, &modules, resolved_module.clone());
-        resolved_module.borrow_mut().statements =
-            resolver.resolve_statements(ast_module.ast_module.statements())?;
-    }
-    Ok(())
+        resolver.resolve_statements(ast_module.ast_module.statements())?
+    };
+
+    Ok(statements)
 }
 
 pub fn resolve_program(
     types: &ResolvedProgramTypes,
     state: &mut ResolvedProgramState,
     modules: &mut ResolvedModules,
-
-    module_paths_in_order: &[ModulePath],
+    source_map: &SourceMap,
+    module_paths_in_order: &[Vec<String>],
     parsed_modules: &DependencyParser,
 ) -> Result<(), ResolveError> {
     for module_path in module_paths_in_order {
         if let Some(parse_module) = parsed_modules.get_parsed_module(module_path) {
-            if modules.contains_key(module_path.clone()) {
+            if modules.contains_key(&*module_path.clone()) {
                 let existing_resolve_module = modules.modules.remove(module_path).unwrap();
-                resolve_to_existing_module(
+                let statements = resolve_to_existing_module(
                     types,
                     state,
                     modules,
+                    existing_resolve_module.borrow_mut().namespace.clone(),
+                    source_map,
                     existing_resolve_module.clone(),
                     parse_module,
                 )?;
@@ -81,7 +92,14 @@ pub fn resolve_program(
                     .modules
                     .insert(module_path.clone(), existing_resolve_module);
             } else {
-                resolve_to_new_module(types, state, modules, module_path, parse_module)?;
+                resolve_to_new_module(
+                    types,
+                    state,
+                    modules,
+                    module_path,
+                    source_map,
+                    parse_module,
+                )?;
             }
         } else {
             return Err(ResolveError::CanNotFindModule(module_path.clone()));

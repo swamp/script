@@ -1,4 +1,5 @@
 use swamp_script_core::value::ValueError;
+use swamp_script_semantic::ResolvedNode;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ConversionError {
@@ -12,7 +13,7 @@ pub enum ExecuteError {
     TypeError(String),
     ConversionError(ConversionError),
     ValueError(ValueError),
-    ArgumentIsNotMutable(String),
+    ArgumentIsNotMutable(ResolvedNode),
     CanNotUnwrap,
     IllegalIterator,
     ExpectedOptional,

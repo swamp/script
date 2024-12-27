@@ -12,3 +12,4 @@ tracing = "0.1.40"
 seq-map = "0.0.13"
 swamp-script-ast = { path = "../ast", version = "0.0.7" }
 swamp-script-parser = { path = "../parser", version = "0.0.7" }
+swamp-script-source-map = { path = "../source-map", version = "0.0.7" }

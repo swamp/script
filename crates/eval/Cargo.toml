@@ -13,14 +13,13 @@ fixed32 = "0.0.17"
 seq-map = "0.0.13"
 
 swamp-script-core = { path = "../core", version = "0.0.7" }
+swamp-script-source-map = { path = "../source-map", version = "0.0.7" }
+
 
 [dev-dependencies]
 test-log = { version = "0.2.16", features = ["trace", "log", "color"] }
-pest = "2.7.14" # TODO: remove pest
 
-swamp-script-ast = { path = "../ast", version = "0.0.7" }
 swamp-script-parser = { path = "../parser", version = "0.0.7" }
-swamp-script-dep-loader = { path = "../dep-loader", version = "0.0.7" }
 swamp-script-analyzer = { path = "../analyzer", version = "0.0.7" }
-swamp-script-eval-loader = { path = "../eval-loader", version = "0.0.7" }
+# swamp-script-eval-loader = { path = "../eval-loader", version = "0.0.7" }
 swamp-script-std = { path = "../std", version = "0.0.7" }

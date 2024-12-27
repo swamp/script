@@ -196,7 +196,7 @@ fn test_enum_definition() {
 
         if let Value::EnumVariantStruct(struct_type, _) = struct_value {
             assert_eq!(struct_type.common.variant_name.text, "Struct");
-            let fields = &struct_type.fields;
+            let fields = &struct_type.anonym_struct_ty;
             assert_eq!(fields.len(), 2);
 
             assert!(matches!(

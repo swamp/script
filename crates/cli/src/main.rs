@@ -7,17 +7,18 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
 use std::{fs, io};
-use swamp_script_analyzer::ResolveError;
-use swamp_script_ast::{ModulePath, Parameter, Type, Variable};
+use swamp_script_analyzer::{ResolveError, ResolvedProgram};
+use swamp_script_ast::{Node, Parameter, Type, Variable};
 use swamp_script_core::prelude::Value;
 use swamp_script_dep_loader::{
     parse_dependant_modules_and_resolve, DepLoaderError, DependencyParser, ParseModule,
 };
-use swamp_script_eval::{err::ExecuteError, eval_module, ExternalFunctions};
+use swamp_script_eval::{err::ExecuteError, eval_module, ExternalFunctions, SourceMapWrapper};
 use swamp_script_eval_loader::resolve_program;
 use swamp_script_parser::prelude::*;
 use swamp_script_parser::AstParser;
-use swamp_script_semantic::{ResolvedModuleRef, ResolvedProgram};
+use swamp_script_semantic::modules::ResolvedModuleRef;
+use swamp_script_source_map::SourceMap;
 use tracing::{debug, info, trace};
 use tracing_subscriber::EnvFilter;
 
@@ -69,7 +70,7 @@ fn command(command: &Commands) -> Result<(), CliError> {
 #[derive(Debug)]
 pub enum CliError {
     IoError(std::io::Error),
-    ParseError(pest::error::Error<Rule>), // TODO: pest should not leak through here
+    ParseError(ParseError),
     ResolveError(ResolveError),
     ExecuteError(ExecuteError),
     DepLoaderError(DepLoaderError),
@@ -108,8 +109,8 @@ impl From<DepLoaderError> for CliError {
     }
 }
 
-impl From<pest::error::Error<Rule>> for CliError {
-    fn from(value: pest::error::Error<Rule>) -> Self {
+impl From<ParseError> for CliError {
+    fn from(value: ParseError) -> Self {
         Self::ParseError(value)
     }
 }
@@ -163,11 +164,19 @@ fn register_print(interpreter: &mut ExternalFunctions<CliContext>) {
         .expect("should work to register");
 }
 
-pub fn eval(resolved_main_module: &ResolvedModuleRef) -> Result<Value, CliError> {
+pub fn eval(
+    resolved_main_module: &ResolvedModuleRef,
+    source_map_wrapper: SourceMapWrapper,
+) -> Result<Value, CliError> {
     let mut external_functions = ExternalFunctions::new();
     register_print(&mut external_functions);
     let mut context = CliContext;
-    let value = eval_module(&external_functions, resolved_main_module, &mut context)?;
+    let value = eval_module(
+        &external_functions,
+        &resolved_main_module.borrow().statements,
+        &source_map_wrapper,
+        &mut context,
+    )?;
     Ok(value)
 }
 
@@ -175,12 +184,13 @@ pub fn create_parsed_modules(
     script: &str,
     root_path: PathBuf,
 ) -> Result<DependencyParser, CliError> {
-    let parser = AstParser::new();
-    let ast_program = parser.parse_script(script)?;
+    let parser = AstParser;
+    let ast_program = parser.parse_module(script)?;
     trace!("ast_program:\n{:#?}", ast_program);
 
     let parse_module = ParseModule {
         ast_module: ast_program,
+        file_id: 0,
     };
 
     let mut graph = DependencyParser::new();
@@ -192,33 +202,33 @@ pub fn create_parsed_modules(
     Ok(graph)
 }
 
-fn compile_to_resolved_program(script: &str) -> Result<ResolvedProgram, CliError> {
+fn compile_to_resolved_program(script: &str) -> Result<(ResolvedProgram, SourceMap), CliError> {
     // Analyze
     let mut parsed_modules = create_parsed_modules(script, PathBuf::new())?;
-    let root_path = &ModulePath(vec!["main".to_string()]);
+    let root_path = &vec!["main".to_string()];
 
     let main_module = parsed_modules
         .get_parsed_module_mut(root_path)
         .unwrap_or_else(|| panic!("should exist {root_path:?}"));
 
+    let mut source_map = SourceMap::new("".as_ref());
+
     main_module.declare_external_function(
-        "print".to_string(),
         vec![Parameter {
             variable: Variable {
-                name: "data".to_string(),
-                is_mutable: false,
+                name: Default::default(),
+                is_mutable: None,
             },
-            param_type: Type::Any,
-            is_mutable: false,
-            is_self: false,
+            param_type: Type::Any(Node::default()),
         }],
-        Type::Unit,
+        None,
     );
 
     let module_paths_in_order = parse_dependant_modules_and_resolve(
         PathBuf::new(),
         root_path.clone(),
         &mut parsed_modules,
+        &mut source_map,
     )?;
 
     let mut resolved_program = ResolvedProgram::new();
@@ -226,22 +236,24 @@ fn compile_to_resolved_program(script: &str) -> Result<ResolvedProgram, CliError
         &resolved_program.types,
         &mut resolved_program.state,
         &mut resolved_program.modules,
+        &source_map,
         &module_paths_in_order,
         &parsed_modules,
     )?;
 
-    Ok(resolved_program)
+    Ok((resolved_program, source_map))
 }
 
 fn compile_and_eval(script: &str) -> Result<Value, CliError> {
-    let resolved_program = compile_to_resolved_program(script)?;
+    let (resolved_program, source_map) = compile_to_resolved_program(script)?;
 
     let resolved_main_module = resolved_program
         .modules
-        .get(&ModulePath(vec!["main".to_string()]))
+        .get(&vec!["main".to_string()])
         .expect("can not find main module");
 
-    eval(resolved_main_module)
+    let source_map_wrap = SourceMapWrapper { source_map };
+    eval(&resolved_main_module, source_map_wrap)
 }
 
 fn read_root_source_file(path: &Path) -> Result<String, CliError> {
@@ -259,12 +271,12 @@ fn build(path: &PathBuf) -> Result<(), CliError> {
     let source_file_contents = read_root_source_file(path)?;
 
     let program = compile_to_resolved_program(&source_file_contents)?;
-    eprintln!("{}", program);
+    eprintln!("{program:?}");
     Ok(())
 }
 
-fn module_path() -> ModulePath {
-    ModulePath(vec!["main".to_string()])
+fn module_path() -> Vec<String> {
+    vec!["main".to_string()]
 }
 
 fn run(path: &PathBuf) -> Result<(), CliError> {
