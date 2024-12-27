@@ -405,16 +405,95 @@ impl AstParser {
         Ok(Definition::Comment(self.to_node(pair)))
     }
 
-    fn parse_field_access(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
-        let mut inner = Self::convert_into_iterator(&pair);
-        let identifier = self.expect_identifier_next(&mut inner)?;
-        let base = Variable::new(identifier.0, None);
-        let field = self.expect_field_name_next(&mut inner)?;
+    fn parse_function_call_args(&self, pair: &Pair<Rule>) -> Result<Vec<Expression>, ParseError> {
+        let mut args = Vec::new();
+        for argument_pair in pair.clone().into_inner() {
+            let mut inner_arg = argument_pair.into_inner().peekable();
+            let has_mut = inner_arg
+                .peek()
+                .map(|p| p.as_rule() == Rule::mut_keyword)
+                .unwrap_or(false);
 
-        Ok(Expression::FieldAccess(
-            Box::new(Expression::VariableAccess(base)),
-            field.0,
-        ))
+            if has_mut {
+                let _mut_node = self.to_node(&inner_arg.next().unwrap());
+            }
+
+            let expr_pair = Self::next_pair(&mut inner_arg)?;
+            let expr = self.parse_expression(&expr_pair)?;
+            if has_mut {
+                // TODO:
+            }
+            args.push(expr);
+        }
+        Ok(args)
+    }
+
+    fn parse_postfix_expression(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
+        let mut inner = pair.clone().into_inner(); // children: primary, postfix_op, postfix_op, ...
+
+        let primary_pair = inner.next().ok_or_else(|| {
+            self.create_error_pair(SpecificError::UnexpectedPostfixOperator, &pair)
+        })?;
+        let mut expr = self.parse_primary(&primary_pair)?;
+
+        for op_pair in inner {
+            match op_pair.as_rule() {
+                Rule::postfix_op => {
+                    let mut sub_inner = op_pair.clone().into_inner();
+                    let child = sub_inner.next().ok_or_else(|| {
+                        self.create_error_pair(SpecificError::UnexpectedPostfixOperator, &op_pair)
+                    })?;
+
+                    match child.as_rule() {
+                        Rule::option_operator => {
+                            expr = Expression::PostfixOp(
+                                PostfixOperator::Unwrap(self.to_node(&child)),
+                                Box::new(expr),
+                            );
+                        }
+                        Rule::array_suffix => {
+                            let mut arr_inner = child.clone().into_inner();
+                            let index_pair = arr_inner.next().ok_or_else(|| {
+                                self.create_error_pair(
+                                    SpecificError::UnexpectedPostfixOperator,
+                                    &child,
+                                )
+                            })?;
+                            let index_expr = self.parse_expression(&index_pair)?;
+                            expr = Expression::IndexAccess(Box::new(expr), Box::new(index_expr));
+                        }
+                        Rule::method_or_field_suffix => {
+                            let mut suffix_inner = child.clone().into_inner();
+
+                            let ident_pair = suffix_inner.next().ok_or_else(|| {
+                                self.create_error_pair(SpecificError::InvalidMemberCall, &child)
+                            })?;
+                            let field_node = self.to_node(&ident_pair);
+
+                            if let Some(args_pair) = suffix_inner.next() {
+                                let args = self.parse_function_call_args(&args_pair)?;
+                                expr = Expression::MemberCall(Box::new(expr), field_node, args);
+                            } else {
+                                expr = Expression::FieldAccess(Box::new(expr), field_node);
+                            }
+                        }
+                        _ => {
+                            return Err(self.create_error_pair(
+                                SpecificError::UnexpectedPostfixOperator,
+                                &child,
+                            ));
+                        }
+                    }
+                }
+                _ => {
+                    return Err(
+                        self.create_error_pair(SpecificError::UnexpectedPostfixOperator, &op_pair)
+                    );
+                }
+            }
+        }
+
+        Ok(expr)
     }
 
     fn parse_struct_def(&self, pair: &Pair<Rule>) -> Result<Definition, ParseError> {
@@ -422,11 +501,9 @@ impl AstParser {
 
         let struct_name = self.expect_local_type_identifier_next(&mut inner)?;
 
-        // Get field definitions
         let field_defs = Self::next_pair(&mut inner)?;
         let mut fields = Vec::new();
 
-        // Parse each field definition
         for field_def in Self::convert_into_iterator(&field_defs) {
             let mut field_parts = Self::convert_into_iterator(&field_def);
 
@@ -883,45 +960,14 @@ impl AstParser {
         }
     }
 
-    fn parse_chained_access(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
-        let mut inner = Self::convert_into_iterator(&pair);
-
-        let identifier = self.expect_identifier_next(&mut inner)?;
-        // Parse base identifier
-        let base = Variable::new(identifier.0, None);
-        let mut expr = Expression::VariableAccess(base);
-
-        // Handle chain of accesses
-        while let Some(access) = inner.next() {
-            match access.as_rule() {
-                Rule::array_access => {
-                    let index_expr = self.parse_expression(&self.next_inner_pair(&access)?)?;
-                    expr = Expression::IndexAccess(Box::new(expr), Box::new(index_expr));
-                }
-                Rule::dot_access => {
-                    let field_name = self.next_inner_pair(&access)?;
-                    expr = Expression::FieldAccess(Box::new(expr), self.to_node(&field_name));
-                }
-                _ => {
-                    return Err(self.create_error_pair(
-                        SpecificError::UnexpectedAccessType(Self::pair_to_rule(&access)),
-                        &access,
-                    ))
-                }
-            }
-        }
-
-        Ok(expr)
-    }
-
     fn parse_assignment(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
-        let mut inner = Self::convert_into_iterator(&pair).peekable();
+        let mut inner = pair.clone().into_inner().peekable();
 
-        let is_mutable = if let Some(p) = inner.peek() {
-            if p.as_rule() == Rule::mut_keyword {
-                let mut_modifier = self.to_node(&p);
-                inner.next();
-                Some(mut_modifier)
+        let is_mutable = if let Some(peeked) = inner.peek() {
+            if peeked.as_rule() == Rule::mut_keyword {
+                let mut_node = self.to_node(peeked);
+                inner.next(); // consume it
+                Some(mut_node)
             } else {
                 None
             }
@@ -929,12 +975,14 @@ impl AstParser {
             None
         };
 
-        let left = Self::next_pair(&mut inner)?;
-        let operator = Self::next_pair(&mut inner)?;
-        let expr = self.parse_expression(&Self::next_pair(&mut inner)?)?;
-        let operator_node = self.to_node(&operator);
+        let lhs_pair = Self::next_pair(&mut inner)?;
 
-        let compound_op_kind: Option<CompoundOperatorKind> = match operator.as_rule() {
+        let op_pair = Self::next_pair(&mut inner)?;
+        let operator_node = self.to_node(&op_pair);
+
+        let rhs_expr = self.parse_expression(&Self::next_pair(&mut inner)?)?;
+
+        let compound_op_kind: Option<CompoundOperatorKind> = match op_pair.as_rule() {
             Rule::assign_op => None,
             Rule::add_assign_op => Some(CompoundOperatorKind::Add),
             Rule::sub_assign_op => Some(CompoundOperatorKind::Sub),
@@ -942,88 +990,105 @@ impl AstParser {
             Rule::div_assign_op => Some(CompoundOperatorKind::Div),
             _ => {
                 return Err(self.create_error_pair(
-                    SpecificError::UnknownAssignmentOperator(Self::pair_to_rule(&operator)),
-                    &operator,
+                    SpecificError::UnknownAssignmentOperator(Self::pair_to_rule(&op_pair)),
+                    &op_pair,
                 ));
             }
         };
 
-        // Only block compound operators for mut declarations
+        // Disallow compound operator if 'mut' keyword was used
         if compound_op_kind.is_some() && is_mutable.is_some() {
             return Err(
-                self.create_error_pair(SpecificError::CompoundOperatorCanNotContainMut, &operator)
+                self.create_error_pair(SpecificError::CompoundOperatorCanNotContainMut, &op_pair)
             );
         }
 
-        let compound_op = if let Some(op_kind) = compound_op_kind {
-            Some(CompoundOperator {
-                node: operator_node,
-                kind: op_kind,
-            })
-        } else {
-            None
-        };
+        let compound_op = compound_op_kind.map(|kind| CompoundOperator {
+            node: operator_node,
+            kind,
+        });
 
-        match left.as_rule() {
-            Rule::chained_access => {
-                let target = self.parse_chained_access(&left.clone())?;
-                match target {
-                    Expression::IndexAccess(array, index) => match compound_op {
-                        None => Ok(Expression::IndexAssignment(array, index, Box::new(expr))),
-                        Some(op) => Ok(Expression::IndexCompoundAssignment(
-                            array,
-                            index,
-                            op,
-                            Box::new(expr),
-                        )),
-                    },
-                    Expression::FieldAccess(obj, field) => match compound_op {
-                        None => Ok(Expression::FieldAssignment(obj, field, Box::new(expr))),
-                        Some(op) => Ok(Expression::FieldCompoundAssignment(
-                            obj,
-                            field,
-                            op,
-                            Box::new(expr),
-                        )),
-                    },
-                    _ => Err(self.create_error_pair(SpecificError::InvalidAssignmentTarget, &left)),
-                }
-            }
-
+        match lhs_pair.as_rule() {
             Rule::variable_list => {
-                let vars: Vec<_> = Self::convert_into_iterator(&left).collect();
+                let vars: Vec<_> = lhs_pair.into_inner().collect();
 
                 if vars.len() == 1 {
+                    // Single variable
                     let var = Variable::new(self.to_node(&vars[0]), is_mutable);
                     match compound_op {
-                        None => Ok(Expression::VariableAssignment(var, Box::new(expr))),
+                        None => Ok(Expression::VariableAssignment(var, Box::new(rhs_expr))),
                         Some(op) => Ok(Expression::VariableCompoundAssignment(
                             var.name,
                             op,
-                            Box::new(expr),
+                            Box::new(rhs_expr),
                         )),
                     }
                 } else {
-                    // Multiple variables don't support compound operators
+                    // Multiple variables => disallow compound operators
                     if compound_op.is_some() {
                         return Err(self.create_error_pair(
                             SpecificError::CompoundOperatorCanNotHaveMultipleVariables,
-                            &operator,
+                            &op_pair,
                         ));
                     }
                     let variables = vars
                         .into_iter()
-                        .to_owned()
-                        .map(|v| Variable::new(self.to_node(&v), None)) // TODO:
+                        .map(|v| Variable::new(self.to_node(&v), is_mutable.clone()))
                         .collect();
                     Ok(Expression::MultiVariableAssignment(
                         variables,
-                        Box::new(expr),
+                        Box::new(rhs_expr),
                     ))
                 }
             }
 
-            _ => Err(self.create_error_pair(SpecificError::InvalidAssignmentTarget, &left)),
+            _ => {
+                let lhs_expr = self.parse_expression(&lhs_pair)?;
+
+                match lhs_expr {
+                    Expression::VariableAccess(mut var) => {
+                        var.is_mutable = is_mutable;
+                        match compound_op {
+                            None => Ok(Expression::VariableAssignment(var, Box::new(rhs_expr))),
+                            Some(op) => Ok(Expression::VariableCompoundAssignment(
+                                var.name,
+                                op,
+                                Box::new(rhs_expr),
+                            )),
+                        }
+                    }
+                    Expression::FieldAccess(base, field_node) => match compound_op {
+                        None => Ok(Expression::FieldAssignment(
+                            base,
+                            field_node,
+                            Box::new(rhs_expr),
+                        )),
+                        Some(op) => Ok(Expression::FieldCompoundAssignment(
+                            base,
+                            field_node,
+                            op,
+                            Box::new(rhs_expr),
+                        )),
+                    },
+                    Expression::IndexAccess(base, index_expr) => match compound_op {
+                        None => Ok(Expression::IndexAssignment(
+                            base,
+                            index_expr,
+                            Box::new(rhs_expr),
+                        )),
+                        Some(op) => Ok(Expression::IndexCompoundAssignment(
+                            base,
+                            index_expr,
+                            op,
+                            Box::new(rhs_expr),
+                        )),
+                    },
+                    _ => {
+                        Err(self
+                            .create_error_pair(SpecificError::InvalidAssignmentTarget, &lhs_pair))
+                    }
+                }
+            }
         }
     }
 
@@ -1072,40 +1137,6 @@ impl AstParser {
         }
 
         Ok(final_expr)
-    }
-
-    fn parse_postfix_expression(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
-        let mut inner = Self::convert_into_iterator(&pair);
-        let mut expr = self.parse_primary(&Self::next_pair(&mut inner)?)?;
-
-        while let Some(op) = inner.next() {
-            match op.as_rule() {
-                Rule::postfix_op => {
-                    let inner_op = self.next_inner_pair(&op)?;
-                    match inner_op.as_rule() {
-                        Rule::option_operator => {
-                            expr = Expression::PostfixOp(
-                                PostfixOperator::Unwrap(self.to_node(&inner_op)),
-                                Box::new(expr),
-                            );
-                        }
-                        _ => {
-                            return Err(self.create_error_pair(
-                                SpecificError::UnknownOperator(Self::pair_to_rule(&inner_op)),
-                                &inner_op,
-                            ))
-                        }
-                    }
-                }
-                _ => {
-                    return Err(
-                        self.create_error_pair(SpecificError::UnexpectedPostfixOperator, &op)
-                    )
-                }
-            }
-        }
-
-        Ok(expr)
     }
 
     fn parse_binary_op(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
@@ -1170,34 +1201,6 @@ impl AstParser {
                 SpecificError::UnexpectedUnaryOperator(Self::pair_to_rule(&op)),
                 &op,
             )),
-        }
-    }
-
-    fn parse_member_call(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
-        let mut inner = Self::convert_into_iterator(&pair);
-
-        let base = Self::next_pair(&mut inner)?;
-        let mut expr = Expression::VariableAccess(Variable::new(self.to_node(&base), None));
-
-        while let Some(next) = inner.next() {
-            if next.as_rule() == Rule::identifier {
-                expr = Expression::FieldAccess(Box::new(expr), self.to_node(&next));
-            } else {
-                let mut args = vec![self.parse_expression(&next)?];
-                while let Some(arg) = inner.next() {
-                    args.push(self.parse_expression(&arg)?);
-                }
-
-                if let Expression::FieldAccess(obj, field_name) = expr {
-                    return Ok(Expression::MemberCall(obj, field_name, args));
-                }
-            }
-        }
-
-        if let Expression::FieldAccess(obj, method) = expr {
-            Ok(Expression::MemberCall(obj, method, vec![]))
-        } else {
-            Err(self.create_error_pair(SpecificError::InvalidMemberCall, &pair))
         }
     }
 
@@ -1327,14 +1330,11 @@ impl AstParser {
                 self.to_node(&pair),
                 None,
             ))),
-            Rule::field_access => self.parse_field_access(pair),
             Rule::function_call => self.parse_function_call(pair),
             Rule::static_call => self.parse_static_call(pair),
             Rule::match_expr => self.parse_match_expr(pair),
             Rule::map_literal => self.parse_map_literal(pair),
             Rule::array_literal => self.parse_array_literal(pair),
-            Rule::member_call => self.parse_member_call(pair),
-            Rule::chained_access => self.parse_chained_access(pair),
             Rule::float_lit => Ok(Expression::Literal(Literal::Float(self.to_node(&pair)))),
             Rule::parenthesized => {
                 let inner = self.next_inner_pair(&pair)?;

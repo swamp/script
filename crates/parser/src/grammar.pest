@@ -182,14 +182,11 @@ expression_statement = { expression }
 expression = { assignment | logical }
 
 
-chained_access = { identifier ~ (array_access | dot_access)+ }
-array_access = { "[" ~ expression ~ "]" }
-dot_access = { "." ~ identifier }
 
 
 assignment = {
     mut_keyword? ~
-    (chained_access | variable_list | field_access) ~
+    (postfix | variable_list) ~
     (assign_op | add_assign_op | sub_assign_op | mul_assign_op | div_assign_op) ~
     expression
 }
@@ -200,9 +197,6 @@ sub_assign_op = { "-=" }
 mul_assign_op = { "*=" }
 div_assign_op = { "/=" }
 
-
-field_access = { identifier ~ "." ~ identifier }
-field_assignment = { field_access ~ "=" ~ expression }
 
 // OPERATORS ------------------------------------------------------------
 
@@ -223,8 +217,24 @@ multiplication = { prefix ~ ((op_mul | op_div | op_mod) ~ prefix)* }
 prefix = { prefix_op* ~ postfix }
 prefix_op = { op_not | op_neg }
 
+array_suffix = { "[" ~ expression ~ "]" }
+
+method_or_field_suffix = {
+    "." ~ identifier ~ function_call_args?
+}
+function_call_args = {
+    "(" ~ (function_argument ~ ("," ~ " "* ~ function_argument)*)? ~ ")"
+}
+
 postfix = { primary ~ postfix_op* }
-postfix_op = { option_operator }
+postfix_op = {
+    // 1) Optional "?" operator
+    option_operator
+    // 2) Array suffix [ expression ]
+    | array_suffix
+    // 3) Dot + identifier + optional function call
+    | method_or_field_suffix
+}
 option_operator = { "?" }
 
 // Add range_op to infix operators
@@ -289,12 +299,6 @@ static_call = {
     "(" ~ (function_argument ~ ("," ~ " "* ~ function_argument)*)? ~ ")"
 }
 
-
-
-member_call = {
-    identifier ~ ("." ~ identifier)+ ~ "(" ~ (expression ~ ("," ~ expression)*)? ~ ")"
-}
-
 array_index = { "[" ~ expression ~ "]" }
 
 
@@ -303,8 +307,6 @@ primary = {
     if_expr
     | match_expr
     | interpolated_string
-    | member_call
-    | chained_access
     | enum_literal
     | static_call
     | function_call

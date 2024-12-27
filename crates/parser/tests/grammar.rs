@@ -345,7 +345,7 @@ fn only_chain() {
     check(
         script,
         r#"
-    Expression(MemberCall(MemberCall(FieldAccess(VariableAccess(p1), x), mul, [FieldAccess(VariableAccess(p1), x)]), add, [MemberCall(FieldAccess(VariableAccess(p1), y), mul, [FieldAccess(VariableAccess(p1), y)])]))
+Expression(MemberCall(MemberCall(FieldAccess(VariableAccess(<9:2>), <12:1>), <14:3>, [FieldAccess(VariableAccess(<18:2>), <21:1>)]), <24:3>, [MemberCall(FieldAccess(VariableAccess(<28:2>), <31:1>), <33:3>, [FieldAccess(VariableAccess(<37:2>), <40:1>)])]))
     "#,
     );
 }
@@ -361,10 +361,10 @@ fn method_chaining() {
     check(
         &script,
         r#"
-StructDef(StructType { identifier: Point, fields: SeqMap(x: Int, y: Int) })
+StructDef(StructType { identifier: LocalTypeIdentifier(<16:5>), fields: [FieldType { field_name: FieldName(<24:1>), field_type: Int(<27:3>) }, FieldType { field_name: FieldName(<32:1>), field_type: Int(<35:3>) }] })
 ---
-Let(VariableAssignment(p1), StructInstantiation(Point, SeqMap(x: Literal(Int(5)), y: Literal(Int(10)))))
-Let(VariableAssignment(dist), MemberCall(MemberCall(FieldAccess(VariableAccess(p1), x), mul, [FieldAccess(VariableAccess(p1), x)]), add, [MemberCall(FieldAccess(VariableAccess(p1), y), mul, [FieldAccess(VariableAccess(p1), y)])]))
+Expression(VariableAssignment(<49:2>, StructInstantiation(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<54:5>), module_path: None }, [FieldExpression { field_name: FieldName(<62:1>), expression: Literal(Int(<65:1>)) }, FieldExpression { field_name: FieldName(<68:1>), expression: Literal(Int(<71:2>)) }])))
+Expression(VariableAssignment(<84:4>, MemberCall(MemberCall(FieldAccess(VariableAccess(<91:2>), <94:1>), <96:3>, [FieldAccess(VariableAccess(<100:2>), <103:1>)]), <106:3>, [MemberCall(FieldAccess(VariableAccess(<110:2>), <113:1>), <115:3>, [FieldAccess(VariableAccess(<119:2>), <122:1>)])])))
 
     "#,
     );
@@ -487,9 +487,9 @@ fn empty_array_expression_call() {
     ";
 
     check(
-        &script,
+        script,
         r"
-Expression(MemberCall(Array([]), len, []))
+Expression(MemberCall(Literal(Array([])), <12:3>, []))
         ",
     );
 }
@@ -503,7 +503,7 @@ fn string_expression_call() {
     check(
         &script,
         r#"
-Expression(MemberCall(Literal(String(hello, world)), len, []))
+Expression(MemberCall(Literal(String(<9:14>)), <24:3>, []))
         "#,
     );
 }
@@ -517,7 +517,7 @@ fn real_round() {
     check(
         &script,
         r#"
-Expression(MemberCall(Literal(Float(2.2)), round, []))
+Expression(MemberCall(Literal(Float(<9:3>)), <13:5>, []))
         "#,
     );
 }
@@ -545,7 +545,7 @@ fn real_negative_round() {
     check(
         &script,
         r#"
-Expression(UnaryOp(Negate, MemberCall(Literal(Float(2.2)), round, [])))
+Expression(UnaryOp(Negate(<9:1>), MemberCall(Literal(Float(<10:3>)), <14:5>, [])))
         "#,
     );
 }
@@ -885,6 +885,9 @@ fn mut_let() {
         "Expression(VariableAssignment(mut <0:3> <4:1>, Literal(Int(<8:1>))))",
     );
 }
+
+
+
 
 #[test_log::test]
 fn import() {
@@ -1340,7 +1343,7 @@ fn option_operator_assignment_chained() {
             ",
         r#"
 
-Let(VariableAssignment(a), OptionOperator(MemberCall(OptionOperator(MemberCall(VariableAccess(another), LocalIdentifier { node: Node { span: Span { start: Position { offset: 14, line: 2, column: 14 }, end: Position { offset: 70, line: 3, column: 13 } } }, text: "get_current" }, [])), LocalIdentifier { node: Node { span: Span { start: Position { offset: 14, line: 2, column: 14 }, end: Position { offset: 70, line: 3, column: 13 } } }, text: "another_call" }, [VariableAccess(b), Literal(Int(42))])))
+Expression(VariableAssignment(<10:1>, PostfixOp(Unwrap(<56:1>), MemberCall(PostfixOp(Unwrap(<35:1>), MemberCall(VariableAccess(<14:7>), <22:11>, [])), <37:12>, [VariableAccess(<50:1>), Literal(Int(<53:2>))]))))
 
             "#,
     );
@@ -1375,7 +1378,7 @@ fn option_operator_if_let_expression_multiple_calls() {
             "#,
         r#"
 
-If(VariableAssignment(a, OptionOperator(MemberCall(OptionOperator(MemberCall(VariableAccess(another), LocalIdentifier { node: Node { span: Span { start: Position { offset: 17, line: 2, column: 17 }, end: Position { offset: 61, line: 2, column: 61 } } }, text: "get_current" }, [])), LocalIdentifier { node: Node { span: Span { start: Position { offset: 17, line: 2, column: 17 }, end: Position { offset: 61, line: 2, column: 61 } } }, text: "another_call" }, [VariableAccess(b), Literal(Int(42))]))), [Expression(InterpolatedString([Literal("this is "), Interpolation(VariableAccess(a), None)]))], Some([Expression(InterpolatedString([Literal("must be none")]))]))
+If(VariableAssignment(<13:1>, PostfixOp(Unwrap(<59:1>), MemberCall(PostfixOp(Unwrap(<38:1>), MemberCall(VariableAccess(<17:7>), <25:11>, [])), <40:12>, [VariableAccess(<53:1>), Literal(Int(<56:2>))]))), [Expression(InterpolatedString([Literal(<79:8>), Interpolation(VariableAccess(<88:1>), None)]))], Some([Expression(InterpolatedString([Literal(<123:12>)]))]))
 
             "#,
     )
@@ -1502,7 +1505,7 @@ fn nothing() -> SomeType<Int, Float> {
 
             ",
         "
-FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <4:7>, params: [], self_parameter: None, return_type: Some(TypeReference(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<17:8>), module_path: None })) }, body: [] }))
+FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <4:7>, params: [], self_parameter: None, return_type: Some(Generic(TypeReference(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<17:8>), module_path: None }), [Int(<26:3>), Float(<31:5>)])) }, body: [] }))
            ",
     );
 }
@@ -1581,6 +1584,8 @@ fn check_boolean_expression() {
     if !enemy.rect.intersects(shot_rect) {
     }
 ",
-        r"",
+        r"
+If(UnaryOp(Not(<8:1>), MemberCall(FieldAccess(VariableAccess(<9:5>), <15:4>), <20:10>, [VariableAccess(<31:9>)])), [], None)        
+        ",
     );
 }
