@@ -914,7 +914,7 @@ fn impl_def() {
         ",
         r"
 
-ImplDef(<18:12>, [Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <52:9>, params: [], self_parameter: Some(SelfParameter { is_mutable: None, self_node: <62:4> }), return_type: None }, body: [Expression(FieldAccess(VariableAccess(<97:4>), <102:1>))] }), Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <142:7>, params: [Parameter { variable: <160:1>, param_type: Int(<163:3>) }], self_parameter: Some(SelfParameter { is_mutable: Some(<150:3>), self_node: <154:4> }), return_type: None }, body: [Expression(FieldAssignment(VariableAccess(<197:4>), <202:1>, Literal(Int(<206:1>))))] }), Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <246:12>, params: [], self_parameter: None, return_type: None }, body: [Expression(Literal(Float(<292:3>)))] })])
+ImplDef(<18:12>, [Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <52:9>, params: [], self_parameter: Some(SelfParameter { is_mutable: None, self_node: <62:4> }), return_type: Some(Int(<71:3>)) }, body: [Expression(FieldAccess(VariableAccess(<97:4>), <102:1>))] }), Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <142:7>, params: [Parameter { variable: <160:1>, param_type: Int(<163:3>) }], self_parameter: Some(SelfParameter { is_mutable: Some(<150:3>), self_node: <154:4> }), return_type: Some(Int(<171:3>)) }, body: [Expression(FieldAssignment(VariableAccess(<197:4>), <202:1>, Literal(Int(<206:1>))))] }), Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <246:12>, params: [], self_parameter: None, return_type: Some(Float(<264:5>)) }, body: [Expression(Literal(Float(<292:3>)))] })])
 
         ",
     );
@@ -1571,5 +1571,16 @@ fn check_prefix_and_generic() {
 StructDef(StructType { identifier: LocalTypeIdentifier(<16:5>), fields: [FieldType { field_name: FieldName(<36:10>), field_type: Int(<48:3>) }, FieldType { field_name: FieldName(<96:10>), field_type: Generic(TypeReference(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<113:6>), module_path: Some(ModulePath([ModulePathItem { node: <108:3> }])) }), [TypeReference(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<120:9>), module_path: None })]) }] })
  
 ",
+    );
+}
+
+#[test_log::test]
+fn check_boolean_expression() {
+    check(
+        r"
+    if !enemy.rect.intersects(shot_rect) {
+    }
+",
+        r"",
     );
 }

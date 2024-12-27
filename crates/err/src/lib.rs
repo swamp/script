@@ -148,7 +148,9 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
         ResolveError::MissingFieldInStructInstantiation(_, _) => todo!(),
         ResolveError::ExpectedFunctionExpression => todo!(),
         ResolveError::CouldNotFindMember(_, _) => todo!(),
-        ResolveError::UnknownVariable(_) => todo!(),
+        ResolveError::UnknownVariable(node) => {
+            Report::build(Error, 105, "Unknown variable", &node.span)
+        }
         ResolveError::NotAnArray(_) => todo!(),
         ResolveError::ArrayIndexMustBeInt(_) => todo!(),
         ResolveError::OverwriteVariableWithAnotherType(_) => todo!(),

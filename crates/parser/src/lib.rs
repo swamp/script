@@ -619,20 +619,19 @@ impl AstParser {
 
         let mut inner = pair.clone().into_inner();
 
-        // Parse function name
         let name = self.expect_identifier_next(&mut inner)?;
 
-        // Parse self parameter and other parameters
         let mut parameters = Vec::new();
         let mut self_parameter = None;
+        let mut return_type = None;
 
-        while let Some(param_list) = inner.next() {
-            match param_list.as_rule() {
+        while let Some(next_pair) = inner.next() {
+            match next_pair.as_rule() {
                 Rule::self_parameter => {
                     let mut mut_keyword_node = None;
                     let mut self_node = None;
 
-                    for pair in param_list.into_inner() {
+                    for pair in next_pair.into_inner() {
                         match pair.as_rule() {
                             Rule::mut_keyword => {
                                 mut_keyword_node = Some(self.to_node(&pair));
@@ -640,10 +639,7 @@ impl AstParser {
                             Rule::self_identifier => {
                                 self_node = Some(self.to_node(&pair));
                             }
-                            _ => unreachable!(
-                                "Unexpected rule in self_parameter: {:?}",
-                                pair.as_rule()
-                            ),
+                            _ => unreachable!("Unexpected rule in self_parameter"),
                         }
                     }
 
@@ -653,22 +649,14 @@ impl AstParser {
                     });
                 }
                 Rule::parameter_list => {
-                    parameters = self.parse_parameters(&param_list)?;
+                    parameters = self.parse_parameters(&next_pair)?;
                 }
-                _ => break, // Exit loop when we hit non-parameter rules
+                Rule::return_type => {
+                    return_type = Some(self.parse_return_type(&next_pair)?);
+                }
+                _ => {}
             }
         }
-
-        // Parse return type if it exists
-        let return_type = if let Some(return_type_pair) = inner.next() {
-            if return_type_pair.as_rule() == Rule::return_type {
-                Some(self.parse_return_type(&return_type_pair)?)
-            } else {
-                None
-            }
-        } else {
-            None
-        };
 
         Ok(FunctionDeclaration {
             name: name.0,
@@ -679,17 +667,17 @@ impl AstParser {
     }
 
     fn parse_member_data(&self, pair: &Pair<Rule>) -> Result<FunctionWithBody, ParseError> {
-        let mut inner = pair.clone().into_inner();
-        let signature_pair = inner
-            .next()
-            .ok_or_else(|| self.create_error_pair(SpecificError::ExpectedMemberSignature, &pair))?;
+        if pair.as_rule() != Rule::normal_member_function {
+            return Err(self.create_error_pair(SpecificError::ExpectedMemberSignature, pair));
+        }
 
+        let mut inner = Self::convert_into_iterator(pair);
+
+        let signature_pair = Self::next_pair(&mut inner)?;
         let signature = self.parse_member_signature(&signature_pair)?;
 
-        let body =
-            self.parse_stmt_block(&inner.next().ok_or_else(|| {
-                self.create_error_pair(SpecificError::MissingFunctionBody, &pair)
-            })?)?;
+        let block_pair = Self::next_pair(&mut inner)?;
+        let body = self.parse_stmt_block(&block_pair)?;
 
         Ok(FunctionWithBody {
             declaration: signature,
