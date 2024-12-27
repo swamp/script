@@ -459,8 +459,7 @@ impl Value {
             Self::EnumVariantSimple(enum_variant_type_ref) => write!(
                 f,
                 "{}::{}",
-                source_map.get_text(&enum_variant_type_ref.owner.name.0),
-                source_map.get_text(&enum_variant_type_ref.name.0)
+                &enum_variant_type_ref.owner.assigned_name, &enum_variant_type_ref.assigned_name,
             ),
             Self::RustValue(_rust_type, rust_type_pointer) => {
                 write!(f, "{}", rust_type_pointer.borrow())

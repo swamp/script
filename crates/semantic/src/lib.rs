@@ -1409,18 +1409,21 @@ pub type ResolvedEnumTypeRef = Rc<ResolvedEnumType>;
 #[derive(Debug)]
 pub struct ResolvedEnumType {
     pub name: ResolvedLocalTypeIdentifier,
-    pub module_path: ResolvedModulePath,
+    pub assigned_name: String,
+    pub module_path: Vec<String>,
     pub number: TypeNumber,
 }
 
 impl ResolvedEnumType {
     pub fn new(
         name: ResolvedLocalTypeIdentifier,
-        module_path: ResolvedModulePath,
+        assigned_name: &str,
+        module_path: Vec<String>,
         number: TypeNumber,
     ) -> Self {
         Self {
             name,
+            assigned_name: assigned_name.to_string(),
             module_path,
             number,
         }
@@ -1438,6 +1441,7 @@ pub struct ResolvedEnumVariantType {
     pub owner: ResolvedEnumTypeRef,
     pub data: ResolvedEnumVariantContainerType,
     pub name: ResolvedLocalTypeIdentifier,
+    pub assigned_name: String,
     pub number: TypeNumber,
 }
 
@@ -1467,6 +1471,7 @@ impl ResolvedEnumVariantType {
     pub fn new(
         owner: ResolvedEnumTypeRef,
         name: ResolvedLocalTypeIdentifier,
+        assigned_name: &str,
         data: ResolvedEnumVariantContainerType,
         number: TypeNumber,
     ) -> Self {
@@ -1474,6 +1479,7 @@ impl ResolvedEnumVariantType {
             owner,
             data,
             name,
+            assigned_name: assigned_name.to_string(),
             number,
         }
     }

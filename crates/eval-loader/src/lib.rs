@@ -47,22 +47,24 @@ pub fn resolve_to_existing_module(
     source_map: &SourceMap,
     resolved_module: Rc<RefCell<ResolvedModule>>,
     ast_module: &ParseModule,
-) -> Result<(), ResolveError> {
-    let mut name_lookup = NameLookup::new(target_namespace.clone(), &modules);
-    let mut resolver = Resolver::new(
-        &types,
-        state,
-        &mut name_lookup,
-        &source_map,
-        ast_module.file_id,
-    );
-    for ast_def in ast_module.ast_module.definitions() {
-        let _resolved_def = resolver.resolve_definition(ast_def)?;
-    }
-    resolved_module.borrow_mut().statements =
-        resolver.resolve_statements(ast_module.ast_module.statements())?;
+) -> Result<Vec<ResolvedStatement>, ResolveError> {
+    let statements = {
+        let mut name_lookup = NameLookup::new(target_namespace.clone(), &modules);
+        let mut resolver = Resolver::new(
+            &types,
+            state,
+            &mut name_lookup,
+            &source_map,
+            ast_module.file_id,
+        );
+        for ast_def in ast_module.ast_module.definitions() {
+            let _resolved_def = resolver.resolve_definition(ast_def)?;
+        }
 
-    Ok(())
+        resolver.resolve_statements(ast_module.ast_module.statements())?
+    };
+
+    Ok(statements)
 }
 
 pub fn resolve_program(
@@ -77,7 +79,7 @@ pub fn resolve_program(
         if let Some(parse_module) = parsed_modules.get_parsed_module(module_path) {
             if modules.contains_key(&*module_path.clone()) {
                 let existing_resolve_module = modules.modules.remove(module_path).unwrap();
-                resolve_to_existing_module(
+                let statements = resolve_to_existing_module(
                     types,
                     state,
                     modules,

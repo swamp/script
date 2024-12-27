@@ -114,6 +114,10 @@ impl<'a> NameLookup<'a> {
         )
     }
 
+    pub fn get_path(&self) -> Vec<String> {
+        self.namespace.borrow().path.clone()
+    }
+
     pub fn add_struct(
         &self,
         struct_type_name: &str,
@@ -129,13 +133,13 @@ impl<'a> NameLookup<'a> {
     pub fn add_enum_type(
         &mut self,
         name: &str,
-        enum_type: ResolvedEnumType,
+        mut enum_type: ResolvedEnumType,
     ) -> Result<ResolvedEnumTypeRef, ResolveError> {
+        enum_type.module_path = self.namespace.borrow().path.clone();
+
         let enum_type_ref = Rc::new(enum_type);
-        Ok(self
-            .namespace
-            .borrow_mut()
-            .add_enum_type(name, enum_type_ref)?)
+
+        Ok(self.namespace.borrow_mut().add_enum_type(enum_type_ref)?)
     }
 
     pub fn add_enum_variant(

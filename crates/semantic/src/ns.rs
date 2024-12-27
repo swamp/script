@@ -139,15 +139,17 @@ impl ResolvedModuleNamespace {
 
     pub fn add_enum_type(
         &mut self,
-        enum_type_name: &str,
+        //        enum_type_name: &str,
         enum_type_ref: ResolvedEnumTypeRef,
     ) -> Result<ResolvedEnumTypeRef, SemanticError> {
+        assert!(!enum_type_ref.module_path.is_empty());
         self.enum_types
-            .insert(enum_type_name.to_string(), enum_type_ref.clone())
-            .map_err(|_| SemanticError::DuplicateEnumType(enum_type_name.to_string()))?;
+            .insert(enum_type_ref.assigned_name.clone(), enum_type_ref.clone())
+            .map_err(|_| SemanticError::DuplicateEnumType(enum_type_ref.assigned_name.clone()))?;
 
         Ok(enum_type_ref)
     }
+
     pub fn add_enum_variant(
         &mut self,
         enum_type_name: &str,

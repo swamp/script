@@ -163,7 +163,12 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
         ResolveError::WasNotStructType(_) => todo!(),
         ResolveError::UnknownStructField(_) => todo!(),
         ResolveError::MustBeEnumType(_) => todo!(),
-        ResolveError::UnknownEnumVariantTypeInPattern(_) => todo!(),
+        ResolveError::UnknownEnumVariantTypeInPattern(node) => Report::build(
+            Error,
+            106,
+            "Unknown enum variant type in pattern",
+            &node.span,
+        ),
         ResolveError::ExpectedEnumInPattern(_) => todo!(),
         ResolveError::WrongEnumVariantContainer(_) => todo!(),
         ResolveError::VariableIsNotMutable(_) => todo!(),

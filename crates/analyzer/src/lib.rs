@@ -751,7 +751,8 @@ impl<'a> Resolver<'a> {
 
         let enum_parent = ResolvedEnumType {
             name: ResolvedLocalTypeIdentifier(self.to_node(enum_type_name)),
-            module_path: ResolvedModulePath(vec![]),
+            assigned_name: self.get_text(&enum_type_name).to_string(),
+            module_path: self.shared.lookup.get_path().to_vec(),
             number: parent_number,
         };
 
@@ -851,6 +852,7 @@ impl<'a> Resolver<'a> {
                 owner: parent_ref.clone(),
                 data: container,
                 name: ResolvedLocalTypeIdentifier(self.to_node(variant_name_node)),
+                assigned_name: self.get_text(&variant_name_node).to_string(),
                 number: container_number.unwrap_or(0),
             };
 
@@ -2001,12 +2003,12 @@ impl<'a> Resolver<'a> {
             _ => Err(ResolveError::ExpectedEnumInPattern(self.to_node(ast_name)))?,
         };
 
-        let enum_name = self.get_text_resolved(&enum_type_ref.name.0).to_string();
+        let enum_name = &enum_type_ref.assigned_name;
         let variant_name = self.get_text(ast_name).to_string();
 
         self.shared
             .lookup
-            .get_enum_variant_type(&vec![], &enum_name, &variant_name)
+            .get_enum_variant_type(&enum_type_ref.module_path, &enum_name, &variant_name)
             .map_or_else(
                 || {
                     Err(ResolveError::UnknownEnumVariantTypeInPattern(
