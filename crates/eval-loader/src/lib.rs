@@ -21,7 +21,7 @@ pub fn resolve_to_new_module(
     source_map: &SourceMap,
     ast_module: &ParseModule,
 ) -> Result<(), ResolveError> {
-    let resolved_module = ResolvedModule::new(module_path.clone());
+    let resolved_module = ResolvedModule::new(module_path);
     let resolved_module_ref = Rc::new(RefCell::new(resolved_module));
 
     resolve_to_existing_module(
@@ -84,7 +84,7 @@ pub fn resolve_program(
                     state,
                     modules,
                     existing_resolve_module.borrow_mut().namespace.clone(),
-                    &source_map,
+                    source_map,
                     existing_resolve_module.clone(),
                     parse_module,
                 )?;
@@ -97,7 +97,7 @@ pub fn resolve_program(
                     state,
                     modules,
                     module_path,
-                    &source_map,
+                    source_map,
                     parse_module,
                 )?;
             }

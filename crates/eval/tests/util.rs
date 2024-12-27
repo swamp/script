@@ -7,7 +7,6 @@ use std::rc::Rc;
 use swamp_script_analyzer::lookup::NameLookup;
 use swamp_script_analyzer::{ResolveError, Resolver};
 use swamp_script_core::prelude::Value;
-use swamp_script_core::value::SourceMapLookup;
 use swamp_script_eval::prelude::ExecuteError;
 use swamp_script_eval::{eval_module, ExternalFunctions, SourceMapWrapper};
 use swamp_script_parser::AstParser;
@@ -15,8 +14,8 @@ use swamp_script_semantic::modules::ResolvedModules;
 use swamp_script_semantic::prelude::ResolvedModuleNamespaceRef;
 use swamp_script_semantic::{
     ExternalFunctionId, ResolvedExternalFunctionDefinition, ResolvedFunctionSignature,
-    ResolvedLocalIdentifier, ResolvedNode, ResolvedParameter, ResolvedProgramState,
-    ResolvedProgramTypes, ResolvedStatement, ResolvedType, Span,
+    ResolvedNode, ResolvedParameter, ResolvedProgramState, ResolvedProgramTypes, ResolvedStatement,
+    ResolvedType, Span,
 };
 use swamp_script_source_map::SourceMap;
 
@@ -80,9 +79,7 @@ fn internal_compile(
     Ok((resolved_statements, source_map))
 }
 
-fn compile_and_eval(
-    script: &str,
-) -> Result<(Value, Vec<String>, Rc<SourceMapWrapper>), EvalTestError> {
+fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError> {
     let mut modules = ResolvedModules::new();
     let resolved_path_str = vec!["test".to_string()];
     let main_module = modules.add_empty_module(&resolved_path_str);
@@ -135,7 +132,7 @@ fn compile_and_eval(
         &mut context,
     )?;
 
-    Ok((value, context.output, source_map_wrapper))
+    Ok((value, context.output))
 }
 
 pub struct TestContext {
@@ -151,8 +148,7 @@ fn register_print(
     external_functions
         .register_external_function("print", external_id, move |args: &[Value], context| {
             if let Some(value) = args.first() {
-                let display_value =
-                    value.convert_to_string_if_needed(context.source_map_wrapper.as_ref());
+                let display_value = value.convert_to_string_if_needed();
                 assert_eq!(context.secret, 42);
                 context.output.push(display_value);
                 Ok(Value::Unit)
@@ -165,19 +161,18 @@ fn register_print(
 
 #[allow(dead_code)] // TODO: this should not be needed since it is under tests/
 pub fn check(script: &str, expected_result: &str) {
-    let (_v, output, _) = compile_and_eval(script).expect("eval script failed");
+    let (_v, output) = compile_and_eval(script).expect("eval script failed");
 
     let actual_lines: Vec<&str> = output.iter().map(|s| s.trim()).collect();
     let expected_lines: Vec<&str> = expected_result
         .lines()
-        .map(|s| s.trim())
+        .map(str::trim)
         .filter(|s| !s.is_empty())
         .collect();
 
     assert_eq!(
         actual_lines, expected_lines,
-        "\nExpected:\n{:#?}\n\nGot:\n{:#?}\n",
-        expected_lines, actual_lines
+        "\nExpected:\n{expected_lines:#?}\n\nGot:\n{actual_lines:#?}\n",
     );
 }
 
@@ -195,27 +190,23 @@ pub fn check_fail(script: &str, expected_err: &str) {
 
 #[allow(dead_code)] // TODO: This should not be needed since it is under tests/
 pub fn check_value(script: &str, expected_value: Value) {
-    let (value_with_signal, _output, _) = compile_and_eval(script).expect("eval script failed");
-    let value: Value = value_with_signal.try_into().unwrap();
+    let (value, _output) = compile_and_eval(script).expect("eval script failed");
 
     assert_eq!(value, expected_value);
 }
 
 #[allow(dead_code)] // TODO: This should not be needed since it is under tests/
 pub fn eval(script: &str) -> Value {
-    let (value_with_signal, _output, _) = compile_and_eval(script).expect("eval script failed");
-    let value: Value = value_with_signal.try_into().unwrap();
+    let (value, _output) = compile_and_eval(script).expect("eval script failed");
 
     value
 }
 
 #[allow(dead_code)] // TODO: This should not be needed since it is under tests/
 pub fn eval_string(script: &str, expected_string: &str) {
-    let (value_with_signal, _output, source_map_wrapper) =
-        compile_and_eval(script).expect("eval script failed");
-    let value: Value = value_with_signal.try_into().unwrap();
+    let (value, _output) = compile_and_eval(script).expect("eval script failed");
 
-    let value_string = value.display(source_map_wrapper.as_ref()).to_string();
+    let value_string = value.to_string();
 
     assert_eq!(value_string, expected_string);
 }

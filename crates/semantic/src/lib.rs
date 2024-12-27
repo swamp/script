@@ -225,8 +225,8 @@ impl Spanned for ResolvedType {
     fn span(&self) -> Span {
         match self {
             // Primitives
-            Self::Int(_type_ref) => todo!(),
-            Self::Float(_type_ref) => todo!(),
+            Self::Int(_type_ref) => Span::dummy(),
+            Self::Float(_type_ref) => Span::dummy(),
             Self::String(_type_ref) => todo!(),
             Self::Bool(_type_ref) => todo!(),
             Self::Unit(_type_ref) => todo!(),
@@ -466,6 +466,12 @@ pub struct ResolvedBinaryOperator {
     pub kind: ResolvedBinaryOperatorKind,
     pub node: ResolvedNode,
     pub resolved_type: ResolvedType,
+}
+
+impl Spanned for ResolvedBinaryOperator {
+    fn span(&self) -> Span {
+        self.node.span.clone()
+    }
 }
 
 #[derive(Debug)]
@@ -1028,7 +1034,7 @@ impl Spanned for ResolvedExpression {
             }
 
             // Operators
-            Self::BinaryOp(op) => todo!(),
+            Self::BinaryOp(op) => op.span(),
             Self::UnaryOp(op) => op.span(),
             Self::PostfixOp(op) => op.span(),
             Self::CoerceOptionToBool(expr) => expr.span(),

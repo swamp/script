@@ -29,6 +29,8 @@ swamp-script-ast = { path = "../ast", version = "0.0.7" }
 swamp-script-semantic = { path = "../semantic", version = "0.0.7" }
 swamp-script-analyzer = { path = "../analyzer", version = "0.0.7" }
 
+swamp-script-source-map = { path = "../source-map", version = "0.0.7"}
+
 # Runner
 swamp-script-eval = { path = "../eval", version = "0.0.7" }
 swamp-script-eval-loader = { path = "../eval-loader", version = "0.0.7" }

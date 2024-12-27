@@ -89,6 +89,15 @@ impl<C: Display + Clone> Report<C> {
         };
         source_file_section.draw(&source_line_wrap, &mut writer)?;
 
+        if let Some(found_note) = &self.config.note {
+            let header = eira::Header {
+                header_kind: Kind::Note,
+                code: 100,
+                message: found_note.to_string(),
+            };
+            header.write(&mut writer)?;
+        }
+
         Ok(())
     }
 }
@@ -139,7 +148,12 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
     match err {
         ResolveError::NamespaceError(_) => todo!(),
         ResolveError::CanNotFindModule(_) => todo!(),
-        ResolveError::UnknownStructTypeReference(_) => todo!(),
+        ResolveError::UnknownStructTypeReference(qualified_type_identifier) => Report::build(
+            Error,
+            105,
+            "Unknown Struct Type Reference",
+            &qualified_type_identifier.span,
+        ),
         ResolveError::UnknownLocalStructTypeReference(_) => todo!(),
         ResolveError::DuplicateFieldName(_) => todo!(),
         ResolveError::Unknown(_) => todo!(),
@@ -154,14 +168,21 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
         ResolveError::NotAnArray(_) => todo!(),
         ResolveError::ArrayIndexMustBeInt(_) => todo!(),
         ResolveError::OverwriteVariableWithAnotherType(_) => todo!(),
-        ResolveError::WrongNumberOfArguments(_, _) => todo!(),
+        ResolveError::WrongNumberOfArguments(x, b) => {
+            Report::build(Error, 105, "Unknown variable", &node.span)
+        }
         ResolveError::IncompatibleArguments(_, _) => todo!(),
         ResolveError::CanOnlyOverwriteVariableWithMut(_) => todo!(),
         ResolveError::OverwriteVariableNotAllowedHere(_) => todo!(),
         ResolveError::NotNamedStruct(_) => todo!(),
         ResolveError::UnknownEnumVariantType(_) => todo!(),
         ResolveError::WasNotStructType(_) => todo!(),
-        ResolveError::UnknownStructField(_) => todo!(),
+        ResolveError::UnknownStructField(field_node) => Report::build(
+            Error,
+            106,
+            "Unknown Struct Field Reference",
+            &field_node.span,
+        ),
         ResolveError::MustBeEnumType(_) => todo!(),
         ResolveError::UnknownEnumVariantTypeInPattern(node) => Report::build(
             Error,
@@ -194,9 +215,15 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
         ResolveError::NonUniqueKeyValueInMap(_) => todo!(),
         ResolveError::UnknownIndexAwareCollection => todo!(),
         ResolveError::InvalidOperatorForArray(_) => todo!(),
-        ResolveError::IncompatibleTypes(_, _) => todo!(),
+        ResolveError::IncompatibleTypes(a, b) => {
+            Report::build(Error, 102, "Incompatible types", &a)
+                .with_label("first_type", a.clone())
+                .with_note(&format!("second_type {:?}", b))
+        }
         ResolveError::ExpectedArray(_) => todo!(),
-        ResolveError::UnknownMemberFunction(_) => todo!(),
+        ResolveError::UnknownMemberFunction(node) => {
+            Report::build(Error, 101, "Unknown member function", &node.span)
+        }
         ResolveError::WrongNumberOfTypeArguments(_, _) => todo!(),
         ResolveError::OnlyVariablesAllowedInEnumPattern => todo!(),
         ResolveError::ExpressionsNotAllowedInLetPattern => todo!(),

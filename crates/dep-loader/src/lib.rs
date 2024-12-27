@@ -44,45 +44,27 @@ pub struct ParseModule {
 }
 
 impl ParseModule {
-    /*
+    // TODO: HACK: declare_external_function() should be removed
     pub fn declare_external_function(
         &mut self,
-        name: String,
         parameters: Vec<Parameter>,
-        return_type: Type,
+        return_type: Option<Type>,
     ) {
-        let fake_identifier = LocalIdentifier {
-            node: Node {
-                span: Span {
-                    start: Position {
-                        offset: 0,
-                        line: 0,
-                        column: 0,
-                    },
-                    end: Position {
-                        offset: 0,
-                        line: 0,
-                        column: 0,
-                    },
-                },
-            },
-            text: name,
-        };
+        let fake_identifier = Node::default();
 
         let signature = FunctionDeclaration {
             name: fake_identifier.clone(),
             params: parameters,
+            self_parameter: None,
             return_type,
         };
         let external_signature = Function::External(signature);
 
         self.ast_module.definitions.insert(
             0, // add it first
-            Definition::FunctionDef(fake_identifier, external_signature),
+            Definition::FunctionDef(external_signature),
         );
     }
-
-     */
 }
 
 #[derive(Debug)]
@@ -275,8 +257,8 @@ impl DependencyParser {
              */
 
             temp_visited.remove(path);
-            visited.insert(Vec::from(path.clone()));
-            order.push(Vec::from(path.clone()));
+            visited.insert(Vec::from(path));
+            order.push(Vec::from(path));
 
             Ok(())
         }
@@ -319,7 +301,7 @@ pub fn parse_dependant_modules_and_resolve(
     debug!(current_directory=?get_current_dir().expect("failed to get current directory"), "current directory");
     let parse_root = ParseRoot::new(base_path);
 
-    dependency_parser.parse_all_dependant_modules(parse_root, &*module_path, source_map)?;
+    dependency_parser.parse_all_dependant_modules(parse_root, &module_path, source_map)?;
 
     let module_paths_in_order = dependency_parser.get_analysis_order()?;
 

@@ -2,7 +2,6 @@ use pathdiff::diff_paths;
 use seq_map::SeqMap;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
-use tracing::info;
 
 pub mod prelude;
 
@@ -45,7 +44,6 @@ impl SourceMap {
             path, self.base_path
         ));
 
-        info!(?relative_path, "add relative");
         let contents = fs::read_to_string(path)?;
 
         let id = self.next_file_id;
@@ -58,7 +56,6 @@ impl SourceMap {
 
     pub fn add_manual(&mut self, id: FileId, relative_path: &Path, contents: &str) {
         let line_offsets = Self::compute_line_offsets(contents);
-        info!(?line_offsets, "scanned");
 
         self.cache
             .insert(
@@ -74,7 +71,6 @@ impl SourceMap {
 
     pub fn add_manual_no_id(&mut self, relative_path: &Path, contents: &str) -> FileId {
         let line_offsets = Self::compute_line_offsets(contents);
-        info!(?line_offsets, "scanned");
         let id = self.next_file_id;
         self.next_file_id += 1;
 
@@ -93,7 +89,6 @@ impl SourceMap {
 
     pub fn read_file_relative(&mut self, relative_path: &str) -> io::Result<(FileId, String)> {
         let buf = self.to_file_system_path(relative_path);
-        info!(complete_path=?buf, "complete path");
         self.read_file(&buf)
     }
 
@@ -112,7 +107,6 @@ impl SourceMap {
      */
 
     fn to_file_system_path(&self, path: &str) -> PathBuf {
-        info!("converting from {path:?}");
         let mut path_buf = self.base_path.clone();
 
         path_buf.push(path);
@@ -120,7 +114,6 @@ impl SourceMap {
 
         let canon_path = path_buf.canonicalize().expect("can not canonicalize");
 
-        info!("converted to {canon_path:?}");
         canon_path
     }
 

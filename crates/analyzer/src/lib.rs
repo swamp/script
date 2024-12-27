@@ -225,7 +225,7 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
 pub enum ResolveError {
     NamespaceError(NamespaceError),
     CanNotFindModule(Vec<String>),
-    UnknownStructTypeReference(QualifiedTypeIdentifier),
+    UnknownStructTypeReference(ResolvedNode),
     UnknownLocalStructTypeReference(LocalTypeIdentifier),
     DuplicateFieldName(ResolvedNode),
     Unknown(String),
@@ -277,7 +277,7 @@ pub enum ResolveError {
     NonUniqueKeyValueInMap(SeqMapError),
     UnknownIndexAwareCollection,
     InvalidOperatorForArray(ResolvedNode),
-    IncompatibleTypes(ResolvedType, ResolvedType),
+    IncompatibleTypes(Span, ResolvedType),
     ExpectedArray(ResolvedType),
     UnknownMemberFunction(ResolvedNode),
     WrongNumberOfTypeArguments(usize, i32),
@@ -386,10 +386,6 @@ impl<'a> Resolver<'a> {
     fn start_function(&mut self, return_type: ResolvedType) {
         self.global.block_scope_stack = take(&mut self.scope.block_scope_stack);
         self.scope = FunctionScopeState::new(return_type);
-        info!(
-            len = self.scope.block_scope_stack.len(),
-            "start function scope"
-        );
     }
 
     fn stop_function(&mut self) {
@@ -680,7 +676,10 @@ impl<'a> Resolver<'a> {
             .lookup
             .get_struct(&path, &name_string)
             .map_or_else(
-                || Err(ResolveError::UnknownStructTypeReference(type_name.clone())),
+                || {
+                    let resolved_node = self.to_node(&type_name.name.0);
+                    Err(ResolveError::UnknownStructTypeReference(resolved_node))
+                },
                 Ok,
             )
     }
@@ -1157,7 +1156,6 @@ impl<'a> Resolver<'a> {
             };
 
             let function_name_str = self.get_text(&function_name.name).to_string();
-            info!(function=%function_name_str, "analyzing function");
 
             let resolved_function = self.resolve_impl_func(function, &found_struct)?;
             let resolved_function_ref = Rc::new(resolved_function);
@@ -1217,14 +1215,14 @@ impl<'a> Resolver<'a> {
             }
 
             return Err(ResolveError::IncompatibleTypes(
-                expr_type,
+                expr.span(),
                 return_type.clone(),
             ));
         }
 
         if !return_type.same_type(&expr_type) {
             return Err(ResolveError::IncompatibleTypes(
-                expr_type,
+                expr.span(),
                 return_type.clone(),
             ));
         }
@@ -1341,7 +1339,6 @@ impl<'a> Resolver<'a> {
         let mut resolved_parameters = Vec::new();
         for parameter in parameters {
             let debug_text = self.get_text(&parameter.variable.name);
-            info!(parameter=?debug_text, "parameter");
             let param_type = self.resolve_type(&parameter.param_type)?;
             resolved_parameters.push(ResolvedParameter {
                 name: self.to_node(&parameter.variable.name),
@@ -1429,9 +1426,7 @@ impl<'a> Resolver<'a> {
             Expression::IndexAccess(collection_expression, lookup) => {
                 let resolved_collection_expression =
                     self.resolve_expression(collection_expression)?;
-                debug!(resolved_collection_expression=?resolved_collection_expression, "resolve_collection_access");
                 let collection_resolution = resolution(&resolved_collection_expression);
-                debug!(collection_resolution=?collection_resolution, "collection_resolution");
                 match &collection_resolution {
                     ResolvedType::Array(array_type) => {
                         let int_expression = self.resolve_usize_index(lookup)?;
@@ -1887,7 +1882,8 @@ impl<'a> Resolver<'a> {
         } else {
             // If direct struct, return the struct type for both
             let struct_ref = self.shared.lookup.get_struct(&path, &name).ok_or_else(|| {
-                ResolveError::UnknownStructTypeReference(qualified_type_identifier.clone())
+                let type_reference_node = self.to_node(&qualified_type_identifier.name.0);
+                ResolveError::UnknownStructTypeReference(type_reference_node)
             })?;
             Ok((ResolvedType::Struct(struct_ref.clone()), struct_ref))
         }
@@ -2503,7 +2499,7 @@ impl<'a> Resolver<'a> {
             ) => {
                 if !left_type.same_type(&right_type) {
                     debug!(?left_type, ?right_type, "type mismatch in comparison");
-                    return Err(ResolveError::IncompatibleTypes(left_type, right_type));
+                    return Err(ResolveError::IncompatibleTypes(left.span(), right_type));
                 }
                 Ok(ResolvedBinaryOperator {
                     left: Box::new(left),
@@ -2518,7 +2514,7 @@ impl<'a> Resolver<'a> {
             _ => {
                 if !left_type.same_type(&right_type) {
                     debug!(?left_type, ?right_type, "type mismatch in operation");
-                    return Err(ResolveError::IncompatibleTypes(left_type, right_type));
+                    return Err(ResolveError::IncompatibleTypes(left.span(), right_type));
                 }
                 Ok(ResolvedBinaryOperator {
                     left: Box::new(left),
@@ -2692,9 +2688,7 @@ impl<'a> Resolver<'a> {
         usize_expression: &Expression,
     ) -> Result<ResolvedExpression, ResolveError> {
         let lookup_expression = self.resolve_expression(usize_expression)?;
-        debug!(lookup_expression=?lookup_expression, "lookup_expression");
         let lookup_resolution = resolution(&lookup_expression);
-        debug!(lookup_resolution=?lookup_resolution, "lookup_resolution");
 
         match &lookup_resolution {
             ResolvedType::Int(_) => {}
@@ -2720,7 +2714,6 @@ impl<'a> Resolver<'a> {
         };
 
         let debug_name = self.get_text_resolved(&assignment.variable_refs[0].name);
-        info!(var=%debug_name, "set variable");
 
         if is_reassignment {
             Ok(ResolvedExpression::ReassignVariable(assignment))
@@ -2793,7 +2786,7 @@ impl<'a> Resolver<'a> {
                             // Concatenating two arrays
                             if !target_type.same_type(&source_type) {
                                 return Err(ResolveError::IncompatibleTypes(
-                                    source_type,
+                                    resolved_source.span(),
                                     target_type.clone(),
                                 ));
                             }
@@ -2805,7 +2798,7 @@ impl<'a> Resolver<'a> {
                             // Appending a single item
                             if !source_type.same_type(&array_type_ref.item_type) {
                                 return Err(ResolveError::IncompatibleTypes(
-                                    source_type,
+                                    resolved_source.span(),
                                     target_type.clone(),
                                 ));
                             }
@@ -2937,10 +2930,6 @@ impl<'a> Resolver<'a> {
             }
 
             let var_name = self.get_text_resolved(&existing_variable.name);
-            info!(
-                "set or overwrite {var_name} {}",
-                self.scope.block_scope_stack.len()
-            );
 
             // For reassignment, check if the EXISTING variable is mutable
             if !existing_variable.is_mutable() {

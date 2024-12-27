@@ -353,7 +353,6 @@ impl Display for Value {
                 write!(f, ")")
             }
             Self::Struct(struct_type_ref, fields_in_strict_order, display_type) => {
-                let struct_name = display_type;
                 write!(f, "{} {{ ", struct_type_ref.borrow().assigned_name)?;
 
                 let fields = struct_type_ref
