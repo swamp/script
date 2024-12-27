@@ -1252,6 +1252,7 @@ pub type ResolvedModulePathRef = Rc<ResolvedModulePath>;
 #[derive(Debug)]
 pub struct ResolvedStructType {
     pub name: ResolvedNode,
+    pub assigned_name: String,
     pub anon_struct_type: ResolvedAnonymousStructType,
 
     // Resolved
@@ -1262,6 +1263,7 @@ pub struct ResolvedStructType {
 impl ResolvedStructType {
     pub fn new(
         name: ResolvedNode,
+        assigned_name: &str,
         anon_struct_type: ResolvedAnonymousStructType,
         number: TypeNumber,
     ) -> Self {
@@ -1270,6 +1272,7 @@ impl ResolvedStructType {
             //defined_in_module,
             anon_struct_type,
             name,
+            assigned_name: assigned_name.to_string(),
             functions: SeqMap::default(),
         }
     }
@@ -1369,6 +1372,7 @@ pub struct CommonEnumVariantType {
     pub number: TypeNumber,
     pub module_path: ResolvedModulePath,
     pub variant_name: ResolvedLocalTypeIdentifier,
+    pub assigned_name: String,
     pub enum_ref: ResolvedEnumTypeRef,
 }
 

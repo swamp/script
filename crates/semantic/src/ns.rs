@@ -100,6 +100,7 @@ impl ResolvedModuleNamespace {
 
         let resolved_struct_type = ResolvedStructType {
             name: Default::default(),
+            assigned_name: name.to_string(),
             anon_struct_type,
             number: type_number,
             functions: Default::default(),

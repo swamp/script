@@ -1043,7 +1043,7 @@ impl<'a, C> Interpreter<'a, C> {
                             let value = self.evaluate_expression(expr)?;
                             let formatted = match format_spec {
                                 Some(spec) => format_value(&value, &spec.kind)?,
-                                None => value.display(self.source_map).to_string(),
+                                None => value.to_string(),
                             };
                             result.push_str(&formatted);
                         }

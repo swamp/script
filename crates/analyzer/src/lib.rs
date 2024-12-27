@@ -728,6 +728,7 @@ impl<'a> Resolver<'a> {
 
         let resolved_struct = ResolvedStructType::new(
             self.to_node(&ast_struct.identifier.0),
+            &struct_name_str,
             resolved_anon_struct,
             self.shared.state.allocate_number(),
         );
@@ -789,6 +790,7 @@ impl<'a> Resolver<'a> {
                         number,
                         module_path: ResolvedModulePath(vec![]), // TODO:
                         variant_name: ResolvedLocalTypeIdentifier(self.to_node(variant_name_node)),
+                        assigned_name: self.get_text(&variant_name_node).to_string(),
                         enum_ref: parent_ref.clone(),
                     };
 
@@ -830,6 +832,7 @@ impl<'a> Resolver<'a> {
                         number,
                         module_path: ResolvedModulePath(vec![]), // TODO:
                         variant_name: ResolvedLocalTypeIdentifier(self.to_node(variant_name_node)),
+                        assigned_name: self.get_text(&variant_name_node).to_string(),
                         enum_ref: parent_ref.clone(),
                     };
 

@@ -191,11 +191,11 @@ impl Value {
         Ok(values)
     }
 
-    pub fn convert_to_string_if_needed(&self, source_map: &impl SourceMapLookup) -> String {
+    pub fn convert_to_string_if_needed(&self) -> String {
         match self {
             Self::String(string) => string.clone(),
-            Self::Reference(value) => value.borrow().convert_to_string_if_needed(source_map),
-            _ => self.display(source_map).to_string(),
+            Self::Reference(value) => value.borrow().convert_to_string_if_needed(),
+            _ => self.to_string(),
         }
     }
     pub fn expect_string(&self) -> Result<String, ValueError> {
@@ -314,31 +314,8 @@ pub trait SourceMapLookup: Debug {
     fn get_text(&self, resolved_node: &ResolvedNode) -> &str;
 }
 
-pub struct DisplayValue<'a> {
-    value: &'a Value,
-    source_map: &'a dyn SourceMapLookup,
-}
-
-impl std::fmt::Display for DisplayValue<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.value.fmt(self.source_map, f)
-    }
-}
-
-impl Value {
-    // Helper method to create the display wrapper
-    pub fn display<'a>(&'a self, source_map: &'a dyn SourceMapLookup) -> DisplayValue<'a> {
-        DisplayValue {
-            value: self,
-            source_map,
-        }
-    }
-
-    pub fn fmt(
-        &self,
-        source_map: &dyn SourceMapLookup,
-        f: &mut std::fmt::Formatter<'_>,
-    ) -> std::fmt::Result {
+impl Display for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         match self {
             Self::Int(n) => write!(f, "{}", n),
             Self::Float(n) => write!(f, "{}", n),
@@ -350,7 +327,7 @@ impl Value {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    val.fmt(source_map, f)?;
+                    write!(f, "{val}")?;
                 }
                 write!(f, "]")
             }
@@ -360,9 +337,7 @@ impl Value {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    key.fmt(source_map, f)?;
-                    write!(f, ": ")?;
-                    val.fmt(source_map, f)?;
+                    write!(f, "{key}:{val}")?;
                 }
                 write!(f, "]")
             }
@@ -373,17 +348,13 @@ impl Value {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    val.fmt(source_map, f)?;
+                    write!(f, "{val}")?;
                 }
                 write!(f, ")")
             }
             Self::Struct(struct_type_ref, fields_in_strict_order, display_type) => {
                 let struct_name = display_type;
-                write!(
-                    f,
-                    "{} {{ ",
-                    source_map.get_text(&struct_type_ref.borrow().name)
-                )?;
+                write!(f, "{} {{ ", struct_type_ref.borrow().assigned_name)?;
 
                 let fields = struct_type_ref
                     .borrow()
@@ -397,15 +368,14 @@ impl Value {
                         write!(f, ", ")?;
                     }
                     let field_name = &fields[i];
-                    write!(f, "{field_name}: ")?;
-                    val.fmt(source_map, f)?;
+                    write!(f, "{field_name}: {val}")?;
                 }
                 write!(f, " }}")
             }
             Self::InternalFunction(_reference) => write!(f, "<function>"), // TODO:
             Self::Unit => write!(f, "()"),
             Self::ExclusiveRange(start, end) => write!(f, "{start}..{end}"),
-            Self::Reference(reference) => reference.borrow().display(source_map).fmt(f),
+            Self::Reference(reference) => write!(f, "{}", reference.borrow().to_string()),
             Self::ExternalFunction(_) => write!(f, "<external>"), // TODO:
 
             // Enums ----
@@ -427,7 +397,7 @@ impl Value {
                 }
 
                 for field in fields_in_order {
-                    field.fmt(source_map, f)?;
+                    write!(f, "{field}")?;
                 }
 
                 Ok(())
@@ -444,13 +414,12 @@ impl Value {
                 write!(
                     f,
                     "{}::{} {{ ",
-                    source_map.get_text(&struct_variant.common.enum_ref.name.0),
-                    source_map.get_text(&struct_variant.common.variant_name.0)
+                    struct_variant.common.enum_ref.assigned_name,
+                    &struct_variant.common.assigned_name
                 )?;
 
                 for (field_name, value) in &decorated_values {
-                    write!(f, "{field_name}: ")?;
-                    value.fmt(source_map, f)?;
+                    write!(f, "{field_name}: {value}")?;
                 }
 
                 write!(f, " }}")?;
