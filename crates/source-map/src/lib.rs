@@ -26,7 +26,9 @@ pub struct RelativePath(pub String);
 
 impl SourceMap {
     pub fn new(base_path: &Path) -> Self {
-        let canon_path = base_path.canonicalize().expect("can not canonicalize");
+        let canon_path = base_path
+            .canonicalize()
+            .unwrap_or_else(|_| panic!("can not canonicalize {base_path:?}"));
         Self {
             base_path: canon_path,
             cache: SeqMap::new(),
@@ -131,13 +133,16 @@ impl SourceMap {
     }
 
     pub fn get_span_source(&self, file_id: FileId, offset: usize, length: usize) -> &str {
-        if let Some(file_info) = self.cache.get(&file_id) {
-            let start = offset as usize;
-            let end = start + length as usize;
-            &file_info.contents[start..end]
-        } else {
-            panic!("{}", &format!("Invalid file_id {file_id} in span"));
-        }
+        self.cache.get(&file_id).map_or_else(
+            || {
+                panic!("{}", &format!("Invalid file_id {file_id} in span"));
+            },
+            |file_info| {
+                let start = offset;
+                let end = start + length;
+                &file_info.contents[start..end]
+            },
+        )
     }
 
     #[must_use]

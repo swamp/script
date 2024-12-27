@@ -183,14 +183,16 @@ pub fn eval(
 pub fn create_parsed_modules(
     script: &str,
     root_path: PathBuf,
+    mut source_map: &mut SourceMap,
 ) -> Result<DependencyParser, CliError> {
     let parser = AstParser;
     let ast_program = parser.parse_module(script)?;
+    let assigned_file_id = source_map.add_manual_no_id(&*root_path, script);
     trace!("ast_program:\n{:#?}", ast_program);
 
     let parse_module = ParseModule {
         ast_module: ast_program,
-        file_id: 0,
+        file_id: assigned_file_id,
     };
 
     let mut graph = DependencyParser::new();
@@ -204,14 +206,13 @@ pub fn create_parsed_modules(
 
 fn compile_to_resolved_program(script: &str) -> Result<(ResolvedProgram, SourceMap), CliError> {
     // Analyze
-    let mut parsed_modules = create_parsed_modules(script, PathBuf::new())?;
+    let mut source_map = SourceMap::new("./".as_ref());
+    let mut parsed_modules = create_parsed_modules(script, PathBuf::new(), &mut source_map)?;
     let root_path = &vec!["main".to_string()];
 
     let main_module = parsed_modules
         .get_parsed_module_mut(root_path)
         .unwrap_or_else(|| panic!("should exist {root_path:?}"));
-
-    let mut source_map = SourceMap::new("".as_ref());
 
     main_module.declare_external_function(
         vec![Parameter {

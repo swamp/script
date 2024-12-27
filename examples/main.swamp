@@ -39,9 +39,9 @@ impl Vector2 {
     }
 }
 
-type Position = (Float, Float)
+//type Position = (Float, Float)
 
-fn new_position(x: Float, y: Float) -> Position {
+fn new_position(x: Float, y: Float) -> (Float, Float) {
     ( x, y )
 }
 
@@ -173,7 +173,7 @@ if weapon? {
     print('slot 0: Found weapon: {weapon.name}')
 }
 
-// Optional unwrapping with assignment 
+// Optional unwrapping with assignment
 if equipped = find_weapon_in_inventory(0)? {
     print('slot 0: Equipped {equipped.name} with {equipped.stats.power} power')
 }

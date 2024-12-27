@@ -1338,7 +1338,6 @@ impl<'a> Resolver<'a> {
     ) -> Result<Vec<ResolvedParameter>, ResolveError> {
         let mut resolved_parameters = Vec::new();
         for parameter in parameters {
-            let debug_text = self.get_text(&parameter.variable.name);
             let param_type = self.resolve_type(&parameter.param_type)?;
             resolved_parameters.push(ResolvedParameter {
                 name: self.to_node(&parameter.variable.name),

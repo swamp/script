@@ -886,9 +886,6 @@ fn mut_let() {
     );
 }
 
-
-
-
 #[test_log::test]
 fn import() {
     check(
