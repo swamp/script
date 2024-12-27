@@ -127,7 +127,6 @@ normal_member_function = {
 }
 
 
-
 // Regular function definitions
 function_def = {
     external_function |
@@ -179,19 +178,36 @@ break_stmt = { "break" }
 expression_statement = { expression }
 
 // Expression is the entry point
-expression = { assignment | logical }
+expression = { assignment_expression | logical }
 
 
-
-
-assignment = {
-    mut_keyword? ~
-    (postfix | variable_list) ~
-    (assign_op | add_assign_op | sub_assign_op | mul_assign_op | div_assign_op) ~
-    expression
+assignment_expression = {
+    multi_var_assignment
+    | single_lhs_assignment
 }
 
+multi_var_assignment = {
+    mut_keyword? ~ multi_variable_list ~ "=" ~ expression
+}
+
+multi_variable_list = {
+    variable_item ~ ("," ~ variable_item)+
+}
+
+single_lhs_assignment = {
+    mut_keyword? ~ postfix ~ (assign_op | compound_assign_op) ~ expression
+}
+
+// Operators
 assign_op = { "=" }
+
+compound_assign_op = {
+    add_assign_op
+    | sub_assign_op
+    | mul_assign_op
+    | div_assign_op
+}
+
 add_assign_op = { "+=" }
 sub_assign_op = { "-=" }
 mul_assign_op = { "*=" }
@@ -361,8 +377,13 @@ enum_pattern = {
 
 
 // For simple variable lists (like in let expressions) where we don't allow expressions
-variable_list = { identifier ~ ("," ~ " "* ~ identifier)* }   // PEST BUG: need explicit spaces after comma
+variable_list = {
+    variable_item ~ ("," ~ variable_item)*
+}
 
+variable_item = {
+    mut_keyword? ~ identifier
+}
 
 // For pattern matching with expressions
 pattern_list = {
@@ -469,7 +490,7 @@ qualified_identifier = {
     module_segments? ~ identifier
 }
 
-qualified_type_identifier = { 
+qualified_type_identifier = {
     module_segments? ~ type_identifier ~ generic_params?
 }
 

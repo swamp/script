@@ -936,7 +936,7 @@ impl AstParser {
                 self.parse_expression(&inner)
             }
 
-            Rule::assignment => self.parse_assignment(&pair),
+            Rule::assignment_expression => self.parse_assignment_expression(pair.clone()),
 
             Rule::addition => self.parse_binary_chain(pair),
 
@@ -955,6 +955,110 @@ impl AstParser {
             Rule::postfix => self.parse_postfix_expression(pair),
             _ => Err(self.create_error_pair(
                 SpecificError::UnexpectedExpressionType(Self::pair_to_rule(&pair)),
+                &pair,
+            )),
+        }
+    }
+
+    fn parse_multi_var_assignment(&self, pair: Pair<Rule>) -> Result<Expression, ParseError> {
+        let mut inner = pair.clone().into_inner();
+
+        let var_list_pair = inner.next().ok_or_else(|| {
+            self.create_error_pair(
+                SpecificError::UnexpectedRuleInParseScript("missing variable_list".to_string()),
+                &pair,
+            )
+        })?;
+
+        let variables = self.parse_variable_list(var_list_pair)?;
+
+        let rhs_pair = inner.next().ok_or_else(|| {
+            self.create_error_pair(
+                SpecificError::UnexpectedRuleInParseScript("missing RHS expression".to_string()),
+                &pair,
+            )
+        })?;
+        let rhs_expr = self.parse_expression(&rhs_pair)?;
+
+        Ok(Expression::MultiVariableAssignment(
+            variables,
+            Box::new(rhs_expr),
+        ))
+    }
+
+    fn parse_variable_list(&self, pair: Pair<Rule>) -> Result<Vec<Variable>, ParseError> {
+        let mut variables = Vec::new();
+        for item_pair in pair.into_inner() {
+            if item_pair.as_rule() == Rule::variable_item {
+                variables.push(self.parse_variable_item(item_pair)?);
+            }
+        }
+        Ok(variables)
+    }
+
+    fn parse_variable_item(&self, pair: Pair<Rule>) -> Result<Variable, ParseError> {
+        let mut inner = pair.clone().into_inner().peekable();
+
+        let mut_node = if let Some(peeked) = inner.peek() {
+            if peeked.as_rule() == Rule::mut_keyword {
+                // Convert 'mut' to a Node
+                let node = self.to_node(peeked);
+                inner.next(); // consume the 'mut' token
+                Some(node)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let name_pair = inner.next().ok_or_else(|| {
+            self.create_error_pair(
+                SpecificError::UnexpectedRuleInParseScript(
+                    "Expected identifier in variable_item".into(),
+                ),
+                &pair,
+            )
+        })?;
+
+        if name_pair.as_rule() != Rule::identifier {
+            return Err(self.create_error_pair(
+                SpecificError::UnexpectedRuleInParseScript(format!(
+                    "Expected identifier, found {:?}",
+                    name_pair.as_rule()
+                )),
+                &name_pair,
+            ));
+        }
+
+        let var_name_node = self.to_node(&name_pair);
+
+        Ok(Variable {
+            name: var_name_node,
+            is_mutable: mut_node,
+        })
+    }
+
+    fn parse_assignment_expression(&self, pair: Pair<Rule>) -> Result<Expression, ParseError> {
+        match pair.clone().as_rule() {
+            // HACK: It should be checked for an Rules::assignment_expression before calling this function
+            Rule::assignment_expression => {
+                let mut inner = pair.clone().into_inner();
+                let child = inner.next().ok_or_else(|| {
+                    self.create_error_pair(
+                        SpecificError::UnexpectedRuleInParseScript("Missing child".into()),
+                        &pair,
+                    )
+                })?;
+                self.parse_assignment_expression(child) // re-call on the child
+            }
+            Rule::multi_var_assignment => self.parse_multi_var_assignment(pair),
+            Rule::single_lhs_assignment => self.parse_assignment(&pair),
+            _ => Err(self.create_error_pair(
+                SpecificError::UnexpectedRuleInParseScript(format!(
+                    "Not an assignment expression: {:?}",
+                    pair.as_rule()
+                )),
                 &pair,
             )),
         }
@@ -984,10 +1088,32 @@ impl AstParser {
 
         let compound_op_kind: Option<CompoundOperatorKind> = match op_pair.as_rule() {
             Rule::assign_op => None,
-            Rule::add_assign_op => Some(CompoundOperatorKind::Add),
-            Rule::sub_assign_op => Some(CompoundOperatorKind::Sub),
-            Rule::mul_assign_op => Some(CompoundOperatorKind::Mul),
-            Rule::div_assign_op => Some(CompoundOperatorKind::Div),
+            Rule::compound_assign_op => {
+                let mut inner_op = op_pair.clone().into_inner();
+                let child = inner_op.next().ok_or_else(|| {
+                    self.create_error_pair(
+                        SpecificError::UnknownOperator(
+                            "No child found in compound_assign_op".to_string(),
+                        ),
+                        &op_pair,
+                    )
+                })?;
+                match child.as_rule() {
+                    Rule::add_assign_op => Some(CompoundOperatorKind::Add),
+                    Rule::sub_assign_op => Some(CompoundOperatorKind::Sub),
+                    Rule::mul_assign_op => Some(CompoundOperatorKind::Mul),
+                    Rule::div_assign_op => Some(CompoundOperatorKind::Div),
+                    _ => {
+                        return Err(self.create_error_pair(
+                            SpecificError::UnknownOperator(format!(
+                                "Found unexpected operator rule: {:?}",
+                                child.as_rule()
+                            )),
+                            &child,
+                        ));
+                    }
+                }
+            }
             _ => {
                 return Err(self.create_error_pair(
                     SpecificError::UnknownAssignmentOperator(Self::pair_to_rule(&op_pair)),
