@@ -20,9 +20,9 @@ pub use crate::{
     ResolvedModulePath, ResolvedModulePathRef, ResolvedMutArray, ResolvedMutStructTypeField,
     ResolvedMutStructTypeFieldRef, ResolvedMutVariable, ResolvedNode, ResolvedParameter,
     ResolvedPattern, ResolvedProgramState, ResolvedProgramTypes, ResolvedRustType,
-    ResolvedRustTypeRef, ResolvedStatement, ResolvedStringPart, ResolvedStringType,
-    ResolvedStringTypeRef, ResolvedStructInstantiation, ResolvedStructType,
-    ResolvedStructTypeField, ResolvedStructTypeFieldRef, ResolvedStructTypeRef, ResolvedTupleType,
-    ResolvedType, ResolvedUnaryOperator, ResolvedUnitType, ResolvedUnitTypeRef, ResolvedVariable,
+    ResolvedRustTypeRef, ResolvedStringPart, ResolvedStringType, ResolvedStringTypeRef,
+    ResolvedStructInstantiation, ResolvedStructType, ResolvedStructTypeField,
+    ResolvedStructTypeFieldRef, ResolvedStructTypeRef, ResolvedTupleType, ResolvedType,
+    ResolvedUnaryOperator, ResolvedUnitType, ResolvedUnitTypeRef, ResolvedVariable,
     ResolvedVariableAssignment, ResolvedVariableRef, SemanticError, Span, Spanned, TypeNumber,
 };

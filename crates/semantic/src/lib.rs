@@ -368,7 +368,7 @@ pub struct ResolvedLocalIdentifier(pub ResolvedNode);
 
 #[derive()]
 pub struct ResolvedInternalFunctionDefinition {
-    pub statements: Vec<ResolvedStatement>,
+    pub body: ResolvedExpression,
     pub name: ResolvedLocalIdentifier,
     pub signature: ResolvedFunctionSignature,
 }
@@ -757,7 +757,7 @@ pub struct Member {
 #[derive(Debug)]
 pub struct ResolvedBooleanExpression {
     #[allow(unused)]
-    pub expression: ResolvedExpression,
+    pub expression: Box<ResolvedExpression>,
 }
 
 #[derive(Debug)]
@@ -795,7 +795,7 @@ pub enum ResolvedPatternElement {
 pub struct ResolvedIterator {
     pub key_type: Option<ResolvedType>, // It does not have to support a key type
     pub value_type: ResolvedType,
-    pub resolved_expression: ResolvedExpression,
+    pub resolved_expression: Box<ResolvedExpression>,
     pub mutable_node: Option<ResolvedNode>,
 }
 
@@ -926,8 +926,6 @@ pub enum ResolvedExpression {
     MutMemberCall(MutMemberRef, Vec<ResolvedExpression>),
     MemberCall(ResolvedMemberCall),
 
-    Block(Vec<ResolvedStatement>),
-
     InterpolatedString(ResolvedStringTypeRef, Vec<ResolvedStringPart>),
 
     // Constructing
@@ -979,6 +977,36 @@ pub enum ResolvedExpression {
     SparseAdd(Box<ResolvedExpression>, Box<ResolvedExpression>),
     SparseRemove(Box<ResolvedExpression>, Box<ResolvedExpression>),
     SparseNew(ResolvedRustTypeRef, ResolvedType),
+
+    ForLoop(
+        ResolvedForPattern,
+        ResolvedIterator,
+        Box<ResolvedExpression>,
+    ),
+    WhileLoop(ResolvedBooleanExpression, Box<ResolvedExpression>),
+    Return(Option<Box<ResolvedExpression>>),
+    Break(ResolvedNode),
+    Continue(ResolvedNode), //
+    Block(Vec<ResolvedExpression>),
+    If(
+        ResolvedBooleanExpression,
+        Box<ResolvedExpression>,
+        Option<Box<ResolvedExpression>>,
+    ),
+
+    IfOnlyVariable {
+        variable: ResolvedVariableRef,
+        optional_expr: Box<ResolvedExpression>,
+        true_block: Box<ResolvedExpression>,
+        false_block: Option<Box<ResolvedExpression>>,
+    },
+
+    IfAssignExpression {
+        variable: ResolvedVariableRef,
+        optional_expr: Box<ResolvedExpression>,
+        true_block: Box<ResolvedExpression>,
+        false_block: Option<Box<ResolvedExpression>>,
+    },
 }
 
 pub trait Spanned {
@@ -1121,6 +1149,24 @@ impl Spanned for ResolvedExpression {
             Self::SparseNew(rust_type_ref, resolved_type) => {
                 todo!()
             }
+            Self::ForLoop(pattern, iterator, statements) => todo!(),
+            Self::WhileLoop(condition, statements) => todo!(),
+            Self::Return(expr) => todo!(),
+            Self::Break(node) => node.span(),
+            Self::Continue(node) => node.span(),
+            Self::If(condition, true_block, else_block) => todo!(),
+            Self::IfOnlyVariable {
+                variable,
+                optional_expr,
+                true_block,
+                false_block,
+            } => todo!(),
+            Self::IfAssignExpression {
+                variable,
+                optional_expr,
+                true_block,
+                false_block,
+            } => todo!(),
         }
     }
 }
@@ -1174,64 +1220,6 @@ pub enum ResolvedForPattern {
 impl Display for ResolvedForPattern {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "resolved_for_pattern")
-    }
-}
-
-#[derive(Debug)]
-pub enum ResolvedStatement {
-    // Standard
-    ForLoop(ResolvedForPattern, ResolvedIterator, Vec<ResolvedStatement>),
-    WhileLoop(ResolvedBooleanExpression, Vec<ResolvedStatement>),
-    Return(ResolvedExpression),
-    Break(ResolvedNode),            // Return with void
-    Continue(ResolvedNode),         //
-    Expression(ResolvedExpression), // Used for expressions with side effects (mutation, i/o)
-    Block(Vec<ResolvedStatement>),
-    If(
-        ResolvedBooleanExpression,
-        Vec<ResolvedStatement>,
-        Option<Vec<ResolvedStatement>>,
-    ),
-
-    IfOnlyVariable {
-        variable: ResolvedVariableRef,
-        optional_expr: Box<ResolvedExpression>,
-        true_block: Vec<ResolvedStatement>,
-        false_block: Option<Vec<ResolvedStatement>>,
-    },
-
-    IfAssignExpression {
-        variable: ResolvedVariableRef,
-        optional_expr: Box<ResolvedExpression>,
-        true_block: Vec<ResolvedStatement>,
-        false_block: Option<Vec<ResolvedStatement>>,
-    },
-}
-
-impl Spanned for ResolvedStatement {
-    fn span(&self) -> Span {
-        match self {
-            Self::ForLoop(pattern, iterator, statements) => todo!(),
-            Self::WhileLoop(condition, statements) => todo!(),
-            Self::Return(expr) => expr.span(),
-            Self::Break(node) => node.span(),
-            Self::Continue(node) => node.span(),
-            Self::Expression(expr) => expr.span(),
-            Self::Block(statements) => Span::merge_all(statements).unwrap_or_else(Span::dummy),
-            Self::If(condition, true_block, else_block) => todo!(),
-            Self::IfOnlyVariable {
-                variable,
-                optional_expr,
-                true_block,
-                false_block,
-            } => todo!(),
-            Self::IfAssignExpression {
-                variable,
-                optional_expr,
-                true_block,
-                false_block,
-            } => todo!(),
-        }
     }
 }
 

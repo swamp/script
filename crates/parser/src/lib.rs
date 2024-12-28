@@ -807,11 +807,11 @@ impl AstParser {
 
         // Return value is optional
         let expr = match inner.next() {
-            Some(expr_pair) => self.parse_expression(&expr_pair)?,
-            None => Expression::Literal(Literal::Unit),
+            Some(expr_pair) => Some(Box::new(self.parse_expression(&expr_pair)?)),
+            None => None,
         };
 
-        Ok(Expression::Return(Box::from(expr)))
+        Ok(Expression::Return(expr))
     }
 
     fn parse_expression(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {

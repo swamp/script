@@ -128,13 +128,11 @@ impl StructType {
 #[derive(Debug)]
 pub enum Definition {
     StructDef(StructType),
-
     EnumDef(Node, Vec<EnumVariantType>),
-
     FunctionDef(Function),
     ImplDef(Node, Vec<Function>),
-    TypeAlias(Node, Type),
     Import(Import),
+
     // Other
     Comment(Node),
 }
@@ -306,18 +304,19 @@ pub enum Expression {
     StaticCallGeneric(Node, Node, Vec<Expression>, Vec<Type>),
     MemberCall(Box<Expression>, Node, Vec<Expression>),
 
-    // Control Flow
-    Block(Vec<Expression>), // The only one with Vec<Expression>
+    Block(Vec<Expression>),
+
+    // Control flow
     ForLoop(ForPattern, IteratableExpression, Box<Expression>),
     WhileLoop(Box<Expression>, Box<Expression>),
-    Return(Box<Expression>),
+    Return(Option<Box<Expression>>),
     Break(Node),
     Continue(Node),
 
+    // Compare and Matching
     If(Box<Expression>, Box<Expression>, Option<Box<Expression>>),
     Match(Box<Expression>, Vec<MatchArm>),
 
-    // String Interpolation
     InterpolatedString(Vec<StringPart>),
 
     // Instantiation

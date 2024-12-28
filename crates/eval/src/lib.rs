@@ -176,7 +176,7 @@ pub fn util_execute_function<C>(
 ) -> Result<Value, ExecuteError> {
     let mut interpreter = Interpreter::<C>::new(externals, source_map, context);
     interpreter.bind_parameters(&func.signature.parameters, arguments)?;
-    let with_signal = interpreter.execute_statements(&func.statements)?;
+    let with_signal = interpreter.execute_statements(&func.body)?;
     interpreter.current_block_scopes.clear();
     interpreter.function_scope_stack.clear();
     Ok(Value::try_from(with_signal)?)
@@ -273,7 +273,7 @@ impl<'a, C> Interpreter<'a, C> {
             ResolvedFunction::Internal(function_data) => {
                 self.push_function_scope();
                 self.bind_parameters(&function_data.signature.parameters, &evaluated_args)?;
-                let result = self.execute_statements(&function_data.statements)?;
+                let result = self.execute_statements(&function_data.body)?;
 
                 let v = match result {
                     ValueWithSignal::Value(v) => v,
@@ -340,7 +340,7 @@ impl<'a, C> Interpreter<'a, C> {
 
         debug!(args=?evaluated_args, name=?call.function_definition.name, "call function with arguments");
 
-        let result = self.execute_statements(&call.function_definition.statements)?;
+        let result = self.execute_statements(&call.function_definition.body)?;
 
         self.pop_function_scope();
 
@@ -920,7 +920,7 @@ impl<'a, C> Interpreter<'a, C> {
                     ResolvedFunction::Internal(function_data) => {
                         self.push_function_scope();
                         self.bind_parameters(&function_data.signature.parameters, &evaluated_args)?;
-                        let result = self.execute_statements(&function_data.statements)?;
+                        let result = self.execute_statements(&function_data.body)?;
                         self.pop_function_scope();
                         match result {
                             ValueWithSignal::Value(v) | ValueWithSignal::Return(v) => Ok(v),
@@ -971,7 +971,7 @@ impl<'a, C> Interpreter<'a, C> {
                     ResolvedFunction::Internal(internal_function) => {
                         self.push_function_scope();
                         self.bind_parameters(parameters, &member_call_arguments)?;
-                        let result = self.execute_statements(&internal_function.statements)?;
+                        let result = self.execute_statements(&internal_function.body)?;
                         self.pop_function_scope();
 
                         match result {
