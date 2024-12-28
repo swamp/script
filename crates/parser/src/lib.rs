@@ -244,37 +244,29 @@ impl AstParser {
 
         let program_pair = Self::next_pair(&mut pairs)?;
 
-        let mut statements = Vec::new();
+        let mut expressions = Vec::new();
         let mut definitions = Vec::new();
         for pair in Self::convert_into_iterator(&program_pair) {
             match pair.as_rule() {
-                Rule::statement => {
-                    let inner = self.next_inner_pair(&pair)?;
-                    match inner.as_rule() {
-                        Rule::definition => {
-                            let def = self.parse_definition(&inner)?;
-                            definitions.push(def);
-                        }
-                        Rule::control_statement => {
-                            let stmt = self.parse_control_statement(&inner)?;
-                            statements.push(stmt);
-                        }
-                        _ => unreachable!(
-                            "statement should only contain definition or control_statement"
-                        ),
-                    }
+                Rule::definition => {
+                    let def = self.parse_definition(&pair)?;
+                    definitions.push(def);
                 }
-                Rule::EOI => {} // Ignore end of input
+                Rule::expression => {
+                    let expr = self.parse_expression(&pair)?;
+                    expressions.push(expr);
+                }
+                Rule::EOI => {}  // End of Input - do nothing
                 _ => {
                     return Err(self.create_error_pair(
                         SpecificError::UnexpectedRuleInParseScript(Self::pair_to_rule(&pair)),
                         &pair,
-                    ))
+                    ));
                 }
             }
         }
 
-        Ok(Module::new(definitions, statements))
+        Ok(Module::new(definitions, expressions))
     }
 
     fn parse_definition(&self, pair: &Pair<Rule>) -> Result<Definition, ParseError> {
@@ -283,71 +275,40 @@ impl AstParser {
             Rule::impl_def => self.parse_impl_def(&inner_pair),
             Rule::struct_def => self.parse_struct_def(&inner_pair),
             Rule::function_def => self.parse_function_def(&inner_pair),
-            Rule::import_stmt => todo!(),
+            Rule::import_definition => todo!(),
             Rule::doc_comment => self.parse_doc_comment(&inner_pair),
             Rule::enum_def => self.parse_enum_def(&inner_pair),
             _ => todo!(),
         }
     }
 
-    fn parse_control_statement(&self, pair: &Pair<Rule>) -> Result<Statement, ParseError> {
-        let inner = self.next_inner_pair(pair)?;
-        self.parse_statement(&inner)
-    }
 
-    fn parse_statement_to_control(&self, pair: &Pair<Rule>) -> Result<Statement, ParseError> {
-        match pair.as_rule() {
-            Rule::statement => {
-                let inner = self.next_inner_pair(pair)?;
-                match inner.as_rule() {
-                    Rule::control_statement => self.parse_control_statement(&inner),
-                    _ => Err(self.create_error_pair(
-                        SpecificError::ExpectedControlStatement(Self::pair_to_rule(&inner)),
-                        &inner,
-                    )),
-                }
-            }
-            _ => Err(self.create_error_pair(
-                SpecificError::ExpectedStatement(Self::pair_to_rule(&pair)),
-                &pair,
-            ))?,
-        }
-    }
+
+
 
     fn pair_to_rule(rule: &Pair<Rule>) -> String {
         format!("{:?}", rule.as_rule())
     }
 
-    fn parse_statement(&self, pair: &Pair<Rule>) -> Result<Statement, ParseError> {
-        match pair.as_rule() {
-            Rule::stmt_block => {
-                let mut statements = Vec::new();
-                for stmt in Self::convert_into_iterator(pair) {
-                    if stmt.as_rule() == Rule::statement {
-                        statements.push(self.parse_statement_to_control(&stmt)?);
-                    }
-                }
-                Ok(Statement::Block(statements))
-            }
-            Rule::if_stmt => self.parse_if_statement(pair),
-            Rule::for_loop => self.parse_for_loop(pair),
-            Rule::while_loop => self.parse_while_loop(pair),
-            Rule::return_stmt => self.parse_return(pair),
-            Rule::break_stmt => Ok(Statement::Break(self.to_node(pair))),
-            Rule::continue_stmt => Ok(Statement::Continue(self.to_node(pair))),
-            Rule::expression_statement => {
-                let expr = self.parse_expression(&self.next_inner_pair(pair)?)?;
-                Ok(Statement::Expression(expr))
-            }
-            Rule::EOI => Ok(Statement::Expression(Expression::Literal(Literal::Unit))), // Handle EOI
-            _ => Err(self.create_error_pair(
-                SpecificError::ExpectedStatement(Self::pair_to_rule(pair)),
-                &pair,
-            )),
+    fn parse_block(&self, block_pair: &Pair<Rule>) -> Result<Vec<Expression>, ParseError> {
+        /*
+             if pair.as_rule() != Rule::block {
+            return Err(self.create_error_pair(SpecificError::ExpectedStatementBlock, &pair));
         }
+         */
+        let mut expressions = Vec::new();
+
+        for pair in Self::convert_into_iterator(block_pair) {
+            if pair.as_rule() == Rule::expression {
+                let expr = self.parse_expression(&pair)?;
+                expressions.push(expr);
+            }
+        }
+
+        Ok(expressions)
     }
 
-    fn parse_if_statement(&self, pair: &Pair<Rule>) -> Result<Statement, ParseError> {
+    fn parse_if_statement(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
         let mut inner = Self::convert_into_iterator(pair);
 
         // Parse condition
@@ -355,30 +316,18 @@ impl AstParser {
 
         // Parse then block
         let then_block = Self::next_pair(&mut inner)?;
-        let mut then_statements = Vec::new();
-        for stmt in Self::convert_into_iterator(&then_block) {
-            if stmt.as_rule() == Rule::statement {
-                then_statements.push(self.parse_statement_to_control(&stmt)?);
-            }
-        }
+        let then_statements = self.parse_block(&then_block)?;
 
         // Parse optional else block (which might be another if statement)
         let else_statements = if let Some(else_token) = inner.next() {
             // We don't need to get another token after 'else', it's part of the if_stmt rule
             match else_token.as_rule() {
-                Rule::if_stmt => {
+                Rule::if_expr => {
                     // Handle else if by returning the parsed if statement in a Vec
                     vec![self.parse_if_statement(&else_token)?]
                 }
-                Rule::stmt_block => {
-                    // Handle regular else block
-                    let mut stmts = Vec::new();
-                    for stmt in Self::convert_into_iterator(&else_token) {
-                        if stmt.as_rule() == Rule::statement {
-                            stmts.push(self.parse_statement_to_control(&stmt)?);
-                        }
-                    }
-                    stmts
+                Rule::block => {
+                    self.parse_block(&else_token)?
                 }
                 _ => {
                     return Err(self.create_error_pair(
@@ -397,7 +346,7 @@ impl AstParser {
             Some(else_statements)
         };
 
-        Ok(Statement::If(condition, then_statements, else_value))
+        Ok(Expression::If(Box::from(condition), then_statements, else_value))
     }
 
     fn parse_doc_comment(&self, pair: &Pair<Rule>) -> Result<Definition, ParseError> {
@@ -522,19 +471,7 @@ impl AstParser {
         Ok(Definition::StructDef(struct_def))
     }
 
-    fn parse_stmt_block(&self, pair: &Pair<Rule>) -> Result<Vec<Statement>, ParseError> {
-        if pair.as_rule() != Rule::stmt_block {
-            return Err(self.create_error_pair(SpecificError::ExpectedStatementBlock, &pair));
-        }
 
-        let mut statements = Vec::new();
-        for stmt in Self::convert_into_iterator(&pair) {
-            if stmt.as_rule() == Rule::statement {
-                statements.push(self.parse_statement_to_control(&stmt)?);
-            }
-        }
-        Ok(statements)
-    }
 
     fn parse_function_def(&self, pair: &Pair<Rule>) -> Result<Definition, ParseError> {
         let function_pair = self.next_inner_pair(pair)?;
@@ -548,7 +485,7 @@ impl AstParser {
 
                 let signature = self.parse_function_signature(&signature_pair)?;
 
-                let body = self.parse_stmt_block(&inner.next().ok_or_else(|| {
+                let body = self.parse_block(&inner.next().ok_or_else(|| {
                     self.create_error_pair(SpecificError::MissingFunctionBody, &function_pair)
                 })?)?;
 
@@ -753,7 +690,7 @@ impl AstParser {
         let signature = self.parse_member_signature(&signature_pair)?;
 
         let block_pair = Self::next_pair(&mut inner)?;
-        let body = self.parse_stmt_block(&block_pair)?;
+        let body = self.parse_block(&block_pair)?;
 
         Ok(FunctionWithBody {
             declaration: signature,
@@ -761,7 +698,7 @@ impl AstParser {
         })
     }
 
-    fn parse_for_loop(&self, pair: &Pair<Rule>) -> Result<Statement, ParseError> {
+    fn parse_for_loop(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
         let mut inner = Self::convert_into_iterator(&pair);
 
         let pattern_pair = Self::next_pair(&mut inner)?;
@@ -861,27 +798,22 @@ impl AstParser {
 
         let mut_expression = IteratableExpression {
             is_mut: is_mut_iter,
-            expression: iterable_expression,
+            expression: Box::new(iterable_expression),
         };
 
         // Parse the statement block
         let block_pair = Self::next_pair(&mut inner)?;
-        if block_pair.as_rule() != Rule::stmt_block {
+        if block_pair.as_rule() != Rule::block {
             return Err(self.create_error_pair(SpecificError::ExpectedBlock, &block_pair));
         }
 
-        let mut body = Vec::new();
-        for stmt in Self::convert_into_iterator(&block_pair) {
-            if stmt.as_rule() == Rule::statement {
-                body.push(self.parse_statement_to_control(&stmt)?);
-            }
-        }
+        let body = self.parse_block(&block_pair)?;
 
         // Return the ForLoop statement with MutExpression
-        Ok(Statement::ForLoop(pattern, mut_expression, body))
+        Ok(Expression::ForLoop(pattern, mut_expression, body))
     }
 
-    fn parse_while_loop(&self, pair: &Pair<Rule>) -> Result<Statement, ParseError> {
+    fn parse_while_loop(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
         let mut inner = Self::convert_into_iterator(&pair);
 
         // Parse condition
@@ -889,23 +821,18 @@ impl AstParser {
 
         // Parse block
         let block_pair = Self::next_pair(&mut inner)?;
-        if block_pair.as_rule() != Rule::stmt_block {
+        if block_pair.as_rule() != Rule::block {
             return Err(
                 self.create_error_pair(SpecificError::ExpectedBlockInWhileLoop, &block_pair)
             );
         }
 
-        let mut body = Vec::new();
-        for stmt in Self::convert_into_iterator(&block_pair) {
-            if stmt.as_rule() == Rule::statement {
-                body.push(self.parse_statement_to_control(&stmt)?);
-            }
-        }
+        let body = self.parse_block(&block_pair)?;
 
-        Ok(Statement::WhileLoop(condition, body))
+        Ok(Expression::WhileLoop(Box::from(condition), body))
     }
 
-    fn parse_return(&self, pair: &Pair<Rule>) -> Result<Statement, ParseError> {
+    fn parse_return(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
         let mut inner = Self::convert_into_iterator(&pair);
 
         // Return value is optional
@@ -914,7 +841,7 @@ impl AstParser {
             None => Expression::Literal(Literal::Unit),
         };
 
-        Ok(Statement::Return(expr))
+        Ok(Expression::Return(Box::from(expr)))
     }
 
     fn parse_expression(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
@@ -1427,9 +1354,20 @@ impl AstParser {
                 let inner = self.next_inner_pair(&pair)?;
                 self.parse_expression(&inner)
             }
-            Rule::if_expr => self.parse_if_expr(pair),
             Rule::struct_instantiation => self.parse_struct_instantiation(pair),
             Rule::enum_literal => Ok(Expression::Literal(self.parse_enum_literal(pair)?)),
+
+            Rule::return_expr => self.parse_return(pair),
+            Rule::break_expr => Ok(Expression::Break(self.to_node(pair))),
+            Rule::continue_expr => Ok(Expression::Continue(self.to_node(pair))),
+            Rule::block => {
+                let expressions = self.parse_block(&pair)?;
+                Ok(Expression::Block(expressions))
+            }
+            Rule::if_expr => self.parse_if_statement(pair),
+            Rule::for_loop => self.parse_for_loop(pair),
+            Rule::while_loop => self.parse_while_loop(pair),
+            
             _ => Err(self.create_error_pair(
                 SpecificError::UnknownPrimary(Self::pair_to_rule(&pair)),
                 &pair,
@@ -1979,29 +1917,10 @@ impl AstParser {
 
                 // Handle both block and direct expression cases
                 let expr = match Self::next_pair(&mut arm_inner)? {
-                    block if block.as_rule() == Rule::match_block => {
-                        let mut statements = Vec::new();
+                    block if block.as_rule() == Rule::block => {
+                        let expressions = self.parse_block(&block)?;
 
-                        for stmt in Self::convert_into_iterator(&block) {
-                            match stmt.as_rule() {
-                                Rule::statement => {
-                                    statements.push(self.parse_statement_to_control(&stmt)?);
-                                }
-                                Rule::expression => {
-                                    //last_expr = Some(self.parse_expression(stmt)?);
-                                }
-                                _ => {
-                                    return Err(self.create_error_pair(
-                                        SpecificError::UnexpectedMatchArmRule(Self::pair_to_rule(
-                                            &stmt,
-                                        )),
-                                        &stmt,
-                                    ))
-                                }
-                            }
-                        }
-
-                        Expression::Block(statements)
+                        Expression::Block(expressions)
                     }
                     expr => self.parse_expression(&expr)?,
                 };

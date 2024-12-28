@@ -760,7 +760,7 @@ impl<'a> Resolver<'a> {
         let parent_ref = self
             .shared
             .lookup
-            .add_enum_type(&enum_type_str, enum_parent)?;
+            .add_enum_type( enum_parent)?;
 
         for variant_type in ast_variants {
             let mut container_number: Option<TypeNumber> = None;

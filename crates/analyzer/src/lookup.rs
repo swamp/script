@@ -132,7 +132,6 @@ impl<'a> NameLookup<'a> {
 
     pub fn add_enum_type(
         &mut self,
-        name: &str,
         mut enum_type: ResolvedEnumType,
     ) -> Result<ResolvedEnumTypeRef, ResolveError> {
         enum_type.module_path = self.namespace.borrow().path.clone();

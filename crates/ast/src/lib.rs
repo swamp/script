@@ -154,19 +154,7 @@ pub enum ForPattern {
 #[derive(Debug)]
 pub struct IteratableExpression {
     pub is_mut: Option<Node>,
-    pub expression: Expression,
-}
-
-#[derive(Debug)]
-pub enum Statement {
-    ForLoop(ForPattern, IteratableExpression, Vec<Statement>),
-    WhileLoop(Expression, Vec<Statement>),
-    Return(Expression),
-    Break(Node),
-    Continue(Node),
-    Expression(Expression), // Used for expressions with side effects (mutation, i/o) TODO: Remove this
-    Block(Vec<Statement>),
-    If(Expression, Vec<Statement>, Option<Vec<Statement>>),
+    pub expression: Box<Expression>,
 }
 
 #[derive(Eq, PartialEq)]
@@ -219,7 +207,7 @@ pub struct FunctionDeclaration {
 #[derive(Debug)]
 pub struct FunctionWithBody {
     pub declaration: FunctionDeclaration,
-    pub body: Vec<Statement>,
+    pub body: Vec<Expression>,
 }
 
 #[derive(Debug)]
@@ -260,7 +248,7 @@ pub struct ImplMemberData {
     pub self_param: SelfParameter,
     pub params: Vec<Parameter>,
     pub return_type: Type,
-    pub body: Vec<Statement>, // Will be empty for external members
+    pub body: Vec<Expression>, // Will be empty for external members
 }
 
 pub type ImplMemberRef = Rc<ImplMember>;
@@ -271,7 +259,7 @@ pub struct SelfParameter {
     pub self_node: Node,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum CompoundOperatorKind {
     Add, // +=
     Sub, // -=
@@ -328,7 +316,15 @@ pub enum Expression {
         Vec<Type>, // Generic arguments
     ),
     MemberCall(Box<Expression>, Node, Vec<Expression>),
-    Block(Vec<Statement>),
+    Block(Vec<Expression>),
+
+    ForLoop(ForPattern, IteratableExpression, Vec<Expression>),
+    WhileLoop(Box<Expression>, Vec<Expression>),
+    Return(Box<Expression>),
+    Break(Node),
+    Continue(Node),
+
+    If(Box<Expression>, Vec<Expression>, Option<Vec<Expression>>),
 
     InterpolatedString(Vec<StringPart>),
 
@@ -491,7 +487,7 @@ pub enum PrecisionType {
 
 #[derive()]
 pub struct Module {
-    pub statements: Vec<Statement>,
+    pub expressions: Vec<Expression>,
     pub definitions: Vec<Definition>,
 }
 
@@ -501,11 +497,11 @@ impl Debug for Module {
             writeln!(f, "{definition:?}")?;
         }
 
-        if !self.definitions.is_empty() && !self.statements.is_empty() {
+        if !self.definitions.is_empty() && !self.expressions.is_empty() {
             writeln!(f, "---")?;
         }
 
-        for statement in &self.statements {
+        for statement in &self.expressions {
             writeln!(f, "{statement:?}")?;
         }
 
@@ -515,16 +511,16 @@ impl Debug for Module {
 
 impl Module {
     #[must_use]
-    pub fn new(definitions: Vec<Definition>, statements: Vec<Statement>) -> Self {
+    pub fn new(definitions: Vec<Definition>, expressions: Vec<Expression>) -> Self {
         Self {
-            statements,
+            expressions,
             definitions,
         }
     }
 
     #[must_use]
-    pub const fn statements(&self) -> &Vec<Statement> {
-        &self.statements
+    pub const fn expressions(&self) -> &Vec<Expression> {
+        &self.expressions
     }
 
     #[must_use]
