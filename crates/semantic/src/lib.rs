@@ -1193,7 +1193,22 @@ pub enum ResolvedLiteral {
 
 impl Spanned for ResolvedLiteral {
     fn span(&self) -> Span {
-        todo!()
+        match self {
+            ResolvedLiteral::FloatLiteral(_v, node, _) => node.span.clone(),
+            ResolvedLiteral::UnitLiteral(_) => Span::dummy(), // TODO: UnitLiteral should have node
+            ResolvedLiteral::NoneLiteral(node) => node.span.clone(),
+            ResolvedLiteral::IntLiteral(_, node, _) => node.span.clone(),
+            ResolvedLiteral::StringLiteral(_, node, _) => node.span.clone(),
+            ResolvedLiteral::BoolLiteral(_, node, _) => node.span.clone(),
+            ResolvedLiteral::EnumVariantLiteral(variant_type_ref, _) => {
+                variant_type_ref.name.0.span.clone()
+            }
+            ResolvedLiteral::TupleLiteral(_tuple_type_ref, tuples) => {
+                todo!()
+            }
+            ResolvedLiteral::Array(_, _) => todo!(),
+            ResolvedLiteral::Map(_, _) => todo!(),
+        }
     }
 }
 

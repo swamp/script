@@ -215,7 +215,19 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
         ResolvedExpression::VariableCompoundAssignment(var_compound_assignment) => {
             var_compound_assignment.variable_ref.resolved_type.clone()
         }
-        _ => todo!(),
+        ResolvedExpression::ForLoop(_pattern, _iterator_expr, expr) => resolution(expr),
+        ResolvedExpression::WhileLoop(_condition, expr) => resolution(expr),
+        ResolvedExpression::Return(ref maybe_expr) => maybe_expr
+            .as_ref()
+            .map_or(ResolvedType::Unit(Rc::new(ResolvedUnitType)), |expr| {
+                resolution(&*expr)
+            }),
+        ResolvedExpression::Break(_) => ResolvedType::Unit(Rc::new(ResolvedUnitType)),
+        ResolvedExpression::Continue(_) => ResolvedType::Unit(Rc::new(ResolvedUnitType)),
+        ResolvedExpression::Block(expressions) => resolution(&expressions[expressions.len() - 1]),
+        ResolvedExpression::If(_, true_expr, _) => resolution(true_expr),
+        ResolvedExpression::IfOnlyVariable { true_block, .. } => resolution(true_block),
+        ResolvedExpression::IfAssignExpression { true_block, .. } => resolution(true_block),
     };
 
     resolution_expression
