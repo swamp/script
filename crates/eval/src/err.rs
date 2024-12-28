@@ -23,4 +23,6 @@ pub enum ExecuteError {
     NotSparseValue,
     CoerceOptionToBoolFailed,
     VariableWasNotMutable,
+    ContinueNotAllowedHere,
+    BreakNotAllowedHere,
 }

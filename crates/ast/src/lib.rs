@@ -476,7 +476,7 @@ pub enum PrecisionType {
 
 #[derive()]
 pub struct Module {
-    pub expressions: Vec<Expression>,
+    pub expression: Option<Expression>,
     pub definitions: Vec<Definition>,
 }
 
@@ -486,12 +486,12 @@ impl Debug for Module {
             writeln!(f, "{definition:?}")?;
         }
 
-        if !self.definitions.is_empty() && !self.expressions.is_empty() {
+        if !self.definitions.is_empty() && !self.expression.is_none() {
             writeln!(f, "---")?;
         }
 
-        for statement in &self.expressions {
-            writeln!(f, "{statement:?}")?;
+        if let Some(found_expression) = &self.expression {
+            writeln!(f, "{found_expression:?}")?;
         }
 
         Ok(())
@@ -500,16 +500,16 @@ impl Debug for Module {
 
 impl Module {
     #[must_use]
-    pub fn new(definitions: Vec<Definition>, expressions: Vec<Expression>) -> Self {
+    pub fn new(definitions: Vec<Definition>, expression: Option<Expression>) -> Self {
         Self {
-            expressions,
+            expression,
             definitions,
         }
     }
 
     #[must_use]
-    pub const fn expressions(&self) -> &Vec<Expression> {
-        &self.expressions
+    pub const fn expression(&self) -> &Option<Expression> {
+        &self.expression
     }
 
     #[must_use]

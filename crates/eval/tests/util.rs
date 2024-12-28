@@ -13,9 +13,9 @@ use swamp_script_parser::AstParser;
 use swamp_script_semantic::modules::ResolvedModules;
 use swamp_script_semantic::prelude::ResolvedModuleNamespaceRef;
 use swamp_script_semantic::{
-    ExternalFunctionId, ResolvedExternalFunctionDefinition, ResolvedFunctionSignature,
-    ResolvedNode, ResolvedParameter, ResolvedProgramState, ResolvedProgramTypes, ResolvedStatement,
-    ResolvedType, Span,
+    ExternalFunctionId, ResolvedExpression, ResolvedExternalFunctionDefinition,
+    ResolvedFunctionSignature, ResolvedNode, ResolvedParameter, ResolvedProgramState,
+    ResolvedProgramTypes, ResolvedType, Span,
 };
 use swamp_script_source_map::SourceMap;
 
@@ -43,7 +43,7 @@ fn internal_compile(
     script: &str,
     target_namespace: &ResolvedModuleNamespaceRef,
     modules: &ResolvedModules,
-) -> Result<(Vec<ResolvedStatement>, SourceMap), ResolveError> {
+) -> Result<(Option<ResolvedExpression>, SourceMap), ResolveError> {
     let parser = AstParser {};
 
     let program = parser.parse_module(script).expect("Failed to parse script");
@@ -69,14 +69,12 @@ fn internal_compile(
         //  resolved_definitions.push(resolved_definition);
     }
 
-    let mut resolved_statements = Vec::new();
-    for statement in &program.statements {
-        let resolved_statement = resolver.resolve_statement(statement)?;
+    let maybe_resolved_expression = program
+        .expression
+        .map(|expr| resolver.resolve_expression(&expr))
+        .transpose()?;
 
-        resolved_statements.push(resolved_statement);
-    }
-
-    Ok((resolved_statements, source_map))
+    Ok((maybe_resolved_expression, source_map))
 }
 
 fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError> {
@@ -109,9 +107,9 @@ fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError>
         .add_external_function_declaration("print", external_print)
         .expect("TODO: panic message");
 
-    let (statements, source_map) =
+    let (maybe_expression, source_map) =
         internal_compile(script, &main_module.borrow_mut().namespace, &modules)?;
-    main_module.borrow_mut().statements = statements;
+    main_module.borrow_mut().expression = maybe_expression;
 
     let source_map_wrapper = Rc::new(SourceMapWrapper { source_map });
 
@@ -127,7 +125,7 @@ fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError>
 
     let value = eval_module(
         &externals,
-        &main_module.borrow().statements,
+        main_module.borrow().expression.as_ref().unwrap(),
         source_map_wrapper.as_ref(),
         &mut context,
     )?;

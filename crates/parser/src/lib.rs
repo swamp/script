@@ -267,7 +267,13 @@ impl AstParser {
             }
         }
 
-        Ok(Module::new(definitions, expressions))
+        let maybe_expression = match expressions.len() {
+            0 => None,
+            1 => Some(expressions.into_iter().next().unwrap()),
+            _ => Some(Expression::Block(expressions)),
+        };
+
+        Ok(Module::new(definitions, maybe_expression))
     }
 
     fn parse_definition(&self, pair: &Pair<Rule>) -> Result<Definition, ParseError> {

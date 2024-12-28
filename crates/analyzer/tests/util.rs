@@ -41,7 +41,7 @@ fn internal_compile(script: &str) -> Result<ResolvedModule, ResolveError> {
     }
 
     let mut resolved_expressions = Vec::new();
-    for expression in &program.expressions {
+    for expression in &program.expression {
         let resolved_statement = resolver.resolve_expression(expression)?;
 
         resolved_expressions.push(resolved_statement);
@@ -51,7 +51,7 @@ fn internal_compile(script: &str) -> Result<ResolvedModule, ResolveError> {
 
     let resolved_module = ResolvedModule {
         definitions: resolved_definitions,
-        expressions: resolved_expressions,
+        expression: resolved_expressions,
         namespace: ns_ref,
     };
 

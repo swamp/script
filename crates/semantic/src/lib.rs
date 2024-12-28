@@ -940,13 +940,6 @@ pub enum ResolvedExpression {
         Box<ResolvedExpression>,
     ),
 
-    // Comparing
-    IfElse(
-        Box<ResolvedBooleanExpression>,
-        Box<ResolvedExpression>,
-        Box<ResolvedExpression>,
-    ),
-
     // Special if-else variants for optional unwrapping
     IfElseOnlyVariable {
         variable: ResolvedVariableRef,
@@ -1109,7 +1102,6 @@ impl Spanned for ResolvedExpression {
             }
 
             // Control Flow
-            Self::IfElse(cond, then_expr, else_expr) => todo!(),
             Self::IfElseOnlyVariable {
                 variable,
                 optional_expr,

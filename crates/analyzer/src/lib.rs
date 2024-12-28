@@ -162,7 +162,6 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
         ResolvedExpression::ExclusiveRange(range_type, _, _) => {
             ResolvedType::ExclusiveRange(range_type.clone())
         }
-        ResolvedExpression::IfElse(_condition, consequence, _alternate) => resolution(consequence),
         ResolvedExpression::IfElseOnlyVariable { true_block, .. } => resolution(true_block),
         ResolvedExpression::IfElseAssignExpression { true_block, .. } => resolution(true_block),
         ResolvedExpression::Match(resolved_match) => resolved_match.arms[0].expression_type.clone(),
@@ -224,7 +223,10 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
             }),
         ResolvedExpression::Break(_) => ResolvedType::Unit(Rc::new(ResolvedUnitType)),
         ResolvedExpression::Continue(_) => ResolvedType::Unit(Rc::new(ResolvedUnitType)),
-        ResolvedExpression::Block(expressions) => resolution(&expressions[expressions.len() - 1]),
+        ResolvedExpression::Block(expressions) => match expressions.last() {
+            Some(last_expr) => resolution(last_expr),
+            None => ResolvedType::Unit(Rc::new(ResolvedUnitType)),
+        },
         ResolvedExpression::If(_, true_expr, _) => resolution(true_expr),
         ResolvedExpression::IfOnlyVariable { true_block, .. } => resolution(true_block),
         ResolvedExpression::IfAssignExpression { true_block, .. } => resolution(true_block),
@@ -3225,16 +3227,16 @@ impl<'a> Resolver<'a> {
                 ResolvedExpression::Option(Some(Box::new(resolved_false)))
             };*/
 
-            Ok(ResolvedExpression::IfElse(
-                Box::from(resolved_condition),
+            Ok(ResolvedExpression::If(
+                *Box::from(resolved_condition),
                 Box::from(resolved_true),
-                Box::from(resolved_false),
+                Option::from(Box::from(resolved_false)),
             ))
         } else {
-            Ok(ResolvedExpression::IfElse(
-                Box::from(resolved_condition),
+            Ok(ResolvedExpression::If(
+                *Box::from(resolved_condition),
                 Box::from(resolved_true),
-                Box::from(resolved_false),
+                Option::from(Box::from(resolved_false)),
             ))
         }
     }
