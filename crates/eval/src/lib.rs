@@ -256,7 +256,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             };
 
-            self.set_local_var(index, value, param.is_mutable(), &param.resolved_type)?;
+            self.set_local_var(index, value, param.is_mutable())?;
         }
 
         Ok(())
@@ -496,28 +496,16 @@ impl<'a, C> Interpreter<'a, C> {
         self.lookup_mut_var(variable.scope_index, variable.variable_index)
     }
 
-    fn assign_value(target_type: &ResolvedType, value: Value) -> Value {
-        match value {
-            Value::Struct(struct_ref, fields, _) => {
-                // Use the target's display type instead of the value's type
-                Value::Struct(struct_ref, fields, target_type.clone())
-            }
-            _ => value,
-        }
-    }
-
     #[inline]
     fn set_local_var(
         &mut self,
         variable_index: usize,
         value: Value,
         _is_mutable: bool,
-        var_type: &ResolvedType,
     ) -> Result<(), ExecuteError> {
         let last_scope_index = self.current_block_scopes.len() - 1;
-        let assigned = Self::assign_value(var_type, value);
 
-        self.current_block_scopes[last_scope_index].variables[variable_index] = assigned;
+        self.current_block_scopes[last_scope_index].variables[variable_index] = value;
         Ok(())
     }
 
@@ -608,11 +596,7 @@ impl<'a, C> Interpreter<'a, C> {
                     field_values[*array_index] = value;
                 }
 
-                Value::Struct(
-                    struct_instantiation.struct_type_ref.clone(),
-                    field_values,
-                    struct_instantiation.display_type_ref.clone(),
-                )
+                Value::Struct(struct_instantiation.struct_type_ref.clone(), field_values)
             }
 
             ResolvedExpression::ExclusiveRange(_resolved_type_ref, start, end) => {
@@ -1484,7 +1468,6 @@ impl<'a, C> Interpreter<'a, C> {
                                     var_ref.variable_index,
                                     actual_value.clone(),
                                     false,
-                                    &var_ref.resolved_type,
                                 )?;
                                 let result = self.evaluate_expression(&arm.expression);
                                 self.pop_block_scope();
@@ -1509,7 +1492,6 @@ impl<'a, C> Interpreter<'a, C> {
                                                 var_ref.variable_index,
                                                 value.clone(),
                                                 false,
-                                                &var_ref.resolved_type,
                                             )?;
                                         }
                                         ResolvedPatternElement::VariableWithFieldIndex(
@@ -1520,7 +1502,6 @@ impl<'a, C> Interpreter<'a, C> {
                                                 var_ref.variable_index,
                                                 value.clone(),
                                                 false,
-                                                &var_ref.resolved_type,
                                             )?;
                                         }
                                         ResolvedPatternElement::Wildcard(_) => {
@@ -1563,7 +1544,6 @@ impl<'a, C> Interpreter<'a, C> {
                                                     var_ref.variable_index,
                                                     value.clone(),
                                                     false,
-                                                    &var_ref.resolved_type,
                                                 )?;
                                             }
                                             ResolvedPatternElement::VariableWithFieldIndex(
@@ -1574,7 +1554,6 @@ impl<'a, C> Interpreter<'a, C> {
                                                     var_ref.variable_index,
                                                     value.clone(),
                                                     false,
-                                                    &var_ref.resolved_type,
                                                 )?;
                                             }
                                             ResolvedPatternElement::Wildcard(_) => continue,
@@ -1603,7 +1582,6 @@ impl<'a, C> Interpreter<'a, C> {
                                                 var_ref.variable_index,
                                                 value.clone(),
                                                 false,
-                                                &var_ref.resolved_type,
                                             )?;
                                         }
                                     }
@@ -1861,15 +1839,15 @@ impl<'a, C> Interpreter<'a, C> {
             match lookup {
                 ResolvedAccess::FieldIndex(_resolved_node, index) => {
                     value = match &value {
-                        Value::Struct(_struct_type, fields, _) => fields[*index].clone(),
+                        Value::Struct(_struct_type, fields) => fields[*index].clone(),
                         Value::Reference(r) => {
                             let inner_value = r.borrow();
                             match &*inner_value {
-                                Value::Struct(_struct_type, fields, _) => fields[*index].clone(),
+                                Value::Struct(_struct_type, fields) => fields[*index].clone(),
                                 Value::Reference(r2) => {
                                     let inner_value2 = r2.borrow();
                                     match &*inner_value2 {
-                                        Value::Struct(_struct_type, fields, _) => {
+                                        Value::Struct(_struct_type, fields) => {
                                             fields[*index].clone()
                                         }
                                         _ => {
@@ -1936,7 +1914,7 @@ impl<'a, C> Interpreter<'a, C> {
 
                     let mut borrowed = current_ref.borrow_mut();
                     let next_val = match &mut *borrowed {
-                        Value::Struct(_struct_type, fields, _) => {
+                        Value::Struct(_struct_type, fields) => {
                             fields.get_mut(field_index).ok_or_else(|| {
                                 ExecuteError::TypeError("Field index out of range".to_string())
                             })?
@@ -2013,7 +1991,7 @@ impl<'a, C> Interpreter<'a, C> {
         if let Some(ResolvedAccess::FieldIndex(_resolved_node, last_index)) = lookups.last() {
             let mut borrowed = current_ref.borrow_mut();
             match &mut *borrowed {
-                Value::Struct(_struct_type, fields, _) => {
+                Value::Struct(_struct_type, fields) => {
                     if fields.len() <= *last_index {
                         return Err(ExecuteError::TypeError(
                             "Field index out of range".to_string(),
@@ -2024,7 +2002,7 @@ impl<'a, C> Interpreter<'a, C> {
                 Value::Reference(x) => {
                     let mut inner = x.borrow_mut();
                     match &mut *inner {
-                        Value::Struct(_struct_type, fields, _) => {
+                        Value::Struct(_struct_type, fields) => {
                             if fields.len() <= *last_index {
                                 return Err(ExecuteError::TypeError(
                                     "Field index out of range".to_string(),
@@ -2059,7 +2037,7 @@ impl<'a, C> Interpreter<'a, C> {
 
                     let mut borrowed = current_ref.borrow_mut();
                     let next_val = match &mut *borrowed {
-                        Value::Struct(_struct_type, fields, _) => {
+                        Value::Struct(_struct_type, fields) => {
                             fields.get_mut(field_index).ok_or_else(|| {
                                 ExecuteError::TypeError("Field index out of range".to_string())
                             })?
@@ -2136,7 +2114,7 @@ impl<'a, C> Interpreter<'a, C> {
         if let Some(ResolvedAccess::FieldIndex(_resolved_node, last_index)) = lookups.last() {
             let mut borrowed = current_ref.borrow_mut();
             match &mut *borrowed {
-                Value::Struct(_struct_type, fields, _) => {
+                Value::Struct(_struct_type, fields) => {
                     if fields.len() <= *last_index {
                         return Err(ExecuteError::TypeError(
                             "Field index out of range".to_string(),
@@ -2147,7 +2125,7 @@ impl<'a, C> Interpreter<'a, C> {
                 Value::Reference(x) => {
                     let mut inner = x.borrow_mut();
                     match &mut *inner {
-                        Value::Struct(_struct_type, fields, _) => {
+                        Value::Struct(_struct_type, fields) => {
                             if fields.len() <= *last_index {
                                 return Err(ExecuteError::TypeError(
                                     "Field index out of range".to_string(),

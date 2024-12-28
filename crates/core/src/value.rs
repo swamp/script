@@ -49,7 +49,7 @@ pub enum Value {
     Array(ResolvedArrayTypeRef, Vec<Value>),
     Map(ResolvedMapTypeRef, SeqMap<Value, Value>), // Do not change to HashMap, the order is important for it to be deterministic
     Tuple(ResolvedTupleTypeRef, Vec<Value>),
-    Struct(ResolvedStructTypeRef, Vec<Value>, ResolvedType), // type of the struct, and the fields themselves in strict order
+    Struct(ResolvedStructTypeRef, Vec<Value>), // type of the struct, and the fields themselves in strict order
 
     EnumVariantSimple(ResolvedEnumVariantTypeRef),
     EnumVariantTuple(ResolvedEnumVariantTupleTypeRef, Vec<Value>),
@@ -278,7 +278,7 @@ impl Value {
 
     pub fn downcast_hidden_rust<T: RustType + 'static>(&self) -> Option<Rc<RefCell<Box<T>>>> {
         match self {
-            Value::Struct(_struct_ref, fields, _) => fields[0].downcast_rust(),
+            Value::Struct(_struct_ref, fields) => fields[0].downcast_rust(),
             _ => None,
         }
     }
@@ -295,10 +295,9 @@ impl Value {
         struct_type: ResolvedStructTypeRef,
         rust_description: ResolvedRustTypeRef,
         value: T,
-        resolved_type: ResolvedType,
     ) -> Self {
         let rust_value = Self::new_rust_value(rust_description, value);
-        Value::Struct(struct_type, vec![rust_value], resolved_type)
+        Value::Struct(struct_type, vec![rust_value])
     }
 
     #[must_use]
@@ -352,7 +351,7 @@ impl Display for Value {
                 }
                 write!(f, ")")
             }
-            Self::Struct(struct_type_ref, fields_in_strict_order, display_type) => {
+            Self::Struct(struct_type_ref, fields_in_strict_order) => {
                 write!(f, "{} {{ ", struct_type_ref.borrow().assigned_name)?;
 
                 let fields = struct_type_ref
@@ -477,7 +476,7 @@ impl Hash for Value {
             Self::Reference(r) => r.borrow().hash(state),
             Self::Option(o) => o.hash(state),
             Self::Array(_, arr) => arr.hash(state),
-            Self::Struct(type_ref, values, _resolved_type) => {
+            Self::Struct(type_ref, values) => {
                 type_ref.borrow().number.hash(state);
                 for v in values {
                     v.hash(state);
