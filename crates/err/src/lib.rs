@@ -168,7 +168,7 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
         ResolveError::NotAnArray(_) => todo!(),
         ResolveError::ArrayIndexMustBeInt(_) => todo!(),
         ResolveError::OverwriteVariableWithAnotherType(_) => todo!(),
-        ResolveError::WrongNumberOfArguments(x, b) => {
+        ResolveError::WrongNumberOfArguments(_, _) => {
             todo!()
         }
         ResolveError::IncompatibleArguments(_, _) => todo!(),

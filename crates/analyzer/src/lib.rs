@@ -19,14 +19,13 @@ use swamp_script_ast::{
 };
 use swamp_script_semantic::modules::ResolvedModules;
 use swamp_script_semantic::{
-    create_rust_type, prelude::*, FileId, LocalTypeName, ResolvedAccess,
-    ResolvedAnonymousStructFieldType, ResolvedAnonymousStructType, ResolvedBinaryOperatorKind,
-    ResolvedBoolType, ResolvedCompoundOperator, ResolvedCompoundOperatorKind, ResolvedFieldName,
-    ResolvedForPattern, ResolvedFormatSpecifier, ResolvedFormatSpecifierKind,
-    ResolvedLocalIdentifier, ResolvedLocalTypeIdentifier, ResolvedPatternElement,
-    ResolvedPostfixOperatorKind, ResolvedPrecisionType, ResolvedStaticCallGeneric,
-    ResolvedTupleTypeRef, ResolvedUnaryOperatorKind, ResolvedVariableCompoundAssignment, Span,
-    TypeNumber,
+    create_rust_type, prelude::*, FileId, ResolvedAccess, ResolvedAnonymousStructFieldType,
+    ResolvedAnonymousStructType, ResolvedBinaryOperatorKind, ResolvedBoolType,
+    ResolvedCompoundOperator, ResolvedCompoundOperatorKind, ResolvedFieldName, ResolvedForPattern,
+    ResolvedFormatSpecifier, ResolvedFormatSpecifierKind, ResolvedLocalIdentifier,
+    ResolvedLocalTypeIdentifier, ResolvedPatternElement, ResolvedPostfixOperatorKind,
+    ResolvedPrecisionType, ResolvedStaticCallGeneric, ResolvedTupleTypeRef,
+    ResolvedUnaryOperatorKind, ResolvedVariableCompoundAssignment, Span, TypeNumber,
 };
 use swamp_script_semantic::{
     ResolvedDefinition, ResolvedEnumTypeRef, ResolvedFunction, ResolvedFunctionRef,
@@ -2650,8 +2649,6 @@ impl<'a> Resolver<'a> {
             expression: Box::from(converted_expression),
         };
 
-        let debug_name = self.get_text_resolved(&assignment.variable_refs[0].name);
-
         if is_reassignment {
             Ok(ResolvedExpression::ReassignVariable(assignment))
         } else {
@@ -2865,8 +2862,6 @@ impl<'a> Resolver<'a> {
                     self.to_node(&variable.name),
                 ));
             }
-
-            let var_name = self.get_text_resolved(&existing_variable.name);
 
             // For reassignment, check if the EXISTING variable is mutable
             if !existing_variable.is_mutable() {

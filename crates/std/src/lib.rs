@@ -6,7 +6,7 @@ pub const SPARSE_TYPE_ID: TypeNumber = 999;
 
 #[must_use]
 pub fn create_std_module() -> ResolvedModule {
-    let mut std_module = ResolvedModule::new(&["std".to_string()]);
+    let std_module = ResolvedModule::new(&["std".to_string()]);
     let sparse_rust_type = ResolvedRustType {
         type_name: "Sparse".to_string(),
         number: SPARSE_TYPE_ID,

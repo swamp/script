@@ -84,7 +84,7 @@ pub fn resolve_program(
         if let Some(parse_module) = parsed_modules.get_parsed_module(module_path) {
             if modules.contains_key(&*module_path.clone()) {
                 let existing_resolve_module = modules.modules.remove(module_path).unwrap();
-                let statements = resolve_to_existing_module(
+                let maybe_expression = resolve_to_existing_module(
                     types,
                     state,
                     modules,

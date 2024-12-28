@@ -4,5 +4,4 @@
  */
 pub use crate::{
     err::ConversionError, err::ExecuteError, util_execute_function, ExternalFunctions, Interpreter,
-    SourceMapWrapper,
 };

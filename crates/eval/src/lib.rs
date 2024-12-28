@@ -8,14 +8,13 @@ use seq_map::SeqMap;
 use std::fmt::Debug;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use swamp_script_core::extra::{SparseValueId, SparseValueMap};
-use swamp_script_core::value::{format_value, to_rust_value, SourceMapLookup, Value, ValueError};
+use swamp_script_core::value::{format_value, to_rust_value, Value, ValueError};
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
     ResolvedAccess, ResolvedBinaryOperatorKind, ResolvedCompoundOperatorKind, ResolvedForPattern,
     ResolvedFunction, ResolvedPatternElement, ResolvedPostfixOperatorKind, ResolvedStaticCall,
     ResolvedUnaryOperatorKind,
 };
-use swamp_script_source_map::SourceMap;
 use tracing::{debug, error, info, warn};
 
 pub mod err;
@@ -102,21 +101,6 @@ impl Default for BlockScope {
     }
 }
 
-#[derive(Debug)]
-pub struct SourceMapWrapper {
-    pub source_map: SourceMap,
-}
-
-impl SourceMapLookup for SourceMapWrapper {
-    fn get_text(&self, resolved_node: &ResolvedNode) -> &str {
-        self.source_map.get_span_source(
-            resolved_node.span.file_id,
-            resolved_node.span.offset as usize,
-            resolved_node.span.length as usize,
-        )
-    }
-}
-
 #[derive(Debug, Default)]
 pub struct ExternalFunctions<C> {
     external_functions: HashMap<String, EvalExternalFunctionRef<C>>,
@@ -158,23 +142,20 @@ impl<C> ExternalFunctions<C> {
 pub fn eval_module<C>(
     externals: &ExternalFunctions<C>,
     root_expression: &ResolvedExpression,
-    source_map: &dyn SourceMapLookup,
     context: &mut C,
 ) -> Result<Value, ExecuteError> {
-    let mut interpreter = Interpreter::<C>::new(externals, source_map, context);
+    let mut interpreter = Interpreter::<C>::new(externals, context);
     let value = interpreter.evaluate_expression(root_expression)?;
     Ok(value)
 }
 
 pub fn util_execute_function<C>(
-    //&mut self,
     externals: &ExternalFunctions<C>,
     func: &ResolvedInternalFunctionDefinitionRef,
     arguments: &[Value],
-    source_map: &dyn SourceMapLookup,
     context: &mut C,
 ) -> Result<Value, ExecuteError> {
-    let mut interpreter = Interpreter::<C>::new(externals, source_map, context);
+    let mut interpreter = Interpreter::<C>::new(externals, context);
     interpreter.bind_parameters(&func.signature.parameters, arguments)?;
     let value = interpreter.evaluate_expression(&func.body)?;
     interpreter.current_block_scopes.clear();
@@ -187,17 +168,11 @@ pub struct Interpreter<'a, C> {
     current_block_scopes: Vec<BlockScope>,
     externals: &'a ExternalFunctions<C>,
     context: &'a mut C,
-    source_map: &'a dyn SourceMapLookup,
 }
 
 impl<'a, C> Interpreter<'a, C> {
-    pub fn new(
-        externals: &'a ExternalFunctions<C>,
-        source_map: &'a dyn SourceMapLookup,
-        context: &'a mut C,
-    ) -> Self {
+    pub fn new(externals: &'a ExternalFunctions<C>, context: &'a mut C) -> Self {
         Self {
-            source_map,
             function_scope_stack: vec![FunctionScope::default()],
             current_block_scopes: vec![BlockScope::default()],
             externals,

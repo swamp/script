@@ -4,14 +4,13 @@
  */
 pub mod prelude;
 
-use pest::error::Error;
 use seq_map::SeqMap;
 use std::collections::HashSet;
 use std::path::PathBuf;
-use std::{env, fs, io};
+use std::{env, io};
 use swamp_script_ast::prelude::*;
 use swamp_script_ast::Function;
-use swamp_script_parser::{AstParser, ParseError, Rule};
+use swamp_script_parser::{AstParser, ParseError};
 use swamp_script_source_map::{FileId, SourceMap};
 use tracing::{debug, info, trace};
 
@@ -184,7 +183,7 @@ impl DependencyParser {
                     info!("module parsed: {parse_module:?}");
 
                     self.already_parsed_modules
-                        .insert(Vec::from(path.clone()), parse_module)
+                        .insert(Vec::from(path), parse_module)
                         .expect("TODO: panic message");
 
                     self.already_parsed_modules
@@ -202,7 +201,7 @@ impl DependencyParser {
             */
             self.import_scanned_modules
                 .insert(
-                    Vec::from(path.clone()),
+                    Vec::from(path),
                     ModuleInfo {
                         path: path.to_vec(),
                         imports: vec![], // TODO: FIX
@@ -238,14 +237,14 @@ impl DependencyParser {
             order: &mut Vec<Vec<String>>,
         ) -> Result<(), DependencyError> {
             if temp_visited.contains(path) {
-                return Err(DependencyError::CircularDependency(Vec::from(path.clone())));
+                return Err(DependencyError::CircularDependency(Vec::from(path)));
             }
 
             if visited.contains(path) {
                 return Ok(());
             }
 
-            temp_visited.insert(Vec::from(path.clone()));
+            temp_visited.insert(Vec::from(path));
 
             /* TODO: FIX
             if let Some(module) = graph.import_scanned_modules.get(path) {
