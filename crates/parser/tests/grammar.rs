@@ -723,6 +723,24 @@ Match(VariableAccess(<14:5>), [MatchArm { pattern: EnumPattern(<34:8>, Some([Var
 }
 
 #[test_log::test]
+fn match_expression_simple_variant() {
+    let script = r"
+       match state {
+            EnumType
+            _ => 0,
+        }
+";
+
+    check(
+        script,
+        r"
+
+Match(VariableAccess(<14:5>), [MatchArm { pattern: EnumPattern(<34:8>, Some([Wildcard(<55:1>)])), expression: Literal(Int(<60:1>)) }])
+",
+    );
+}
+
+#[test_log::test]
 fn deconstructing_struct() {
     let script = "x, y = pos"; // No raw string literal
     check(
@@ -1580,6 +1598,432 @@ fn check_boolean_expression_no_block() {
 ",
         r"
 If(UnaryOp(Not(<8:1>), MemberCall(FieldAccess(VariableAccess(<9:5>), <15:4>), <20:10>, [VariableAccess(<31:9>)])), Literal(Int(<42:1>)), Some(Literal(Int(<49:1>))))
+        ",
+    );
+}
+
+#[test_log::test]
+fn documentation_comment() {
+    check(
+        r"
+        /// This is a doc comment
+x = if true 2 else 4
+",
+        r"
+VariableAssignment(<35:1>, If(Literal(Bool(<42:4>)), Literal(Int(<47:1>)), Some(Literal(Int(<54:1>)))))
+        ",
+    );
+}
+
+#[test_log::test]
+fn external_function() {
+    check(
+        r"
+        /// This is a doc comment
+external fn something(i: Int) -> Float
+",
+        r"
+FunctionDef(External(FunctionDeclaration { name: <47:9>, params: [Parameter { variable: <57:1>, param_type: Int(<60:3>) }], self_parameter: None, return_type: Some(Float(<68:5>)) }))
+        ",
+    );
+}
+
+#[test_log::test]
+fn external_member_function() {
+    check(
+        r"
+        struct Api {
+            x : Int,
+        }
+        
+        impl Api {
+            external fn something(self, i: Int) -> Float {}
+        }
+",
+        r"
+If(UnaryOp(Not(<8:1>), MemberCall(FieldAccess(VariableAccess(<9:5>), <15:4>), <20:10>, [VariableAccess(<31:9>)])), Literal(Int(<42:1>)), Some(Literal(Int(<49:1>))))
+        ",
+    );
+}
+
+#[test_log::test]
+fn variable() {
+    check(
+        r"
+some_variable
+",
+        r"
+VariableAccess(<1:13>)
+        ",
+    );
+}
+
+#[test_log::test]
+fn block() {
+    check(
+        r"
+if true {
+    {
+        a = 3
+    }
+}
+",
+        r"
+If(Literal(Bool(<4:4>)), Block([Block([VariableAssignment(<25:1>, Literal(Int(<29:1>)))])]), None)
+        ",
+    );
+}
+
+#[test_log::test]
+fn unary() {
+    check(
+        r"
+-a
+",
+        r"
+UnaryOp(Negate(<1:1>), VariableAccess(<2:1>))
+        ",
+    );
+}
+
+#[test_log::test]
+fn unary_not() {
+    check(
+        r"
+!a
+",
+        r"
+UnaryOp(Not(<1:1>), VariableAccess(<2:1>))
+        ",
+    );
+}
+
+#[test_log::test]
+fn mut_variable() {
+    check(
+        r"
+mut a = 3
+",
+        r"
+VariableAssignment(mut <1:3> <5:1>, Literal(Int(<9:1>)))
+        ",
+    );
+}
+
+#[test_log::test]
+fn mut_variable_list() {
+    check(
+        r"
+a, mut b = 3
+",
+        r"
+MultiVariableAssignment([<1:1>, mut <4:3> <8:1>], Literal(Int(<12:1>)))
+        ",
+    );
+}
+
+#[test_log::test]
+fn compound_sub() {
+    check(
+        r"
+a -= 3
+",
+        r"
+VariableCompoundAssignment(<1:1>, CompoundOperator { node: <3:2>, kind: Sub }, Literal(Int(<6:1>)))
+        ",
+    );
+}
+
+#[test_log::test]
+fn compound_div() {
+    check(
+        r"
+a /= 3
+",
+        r"
+VariableCompoundAssignment(<1:1>, CompoundOperator { node: <3:2>, kind: Div }, Literal(Int(<6:1>)))
+        ",
+    );
+}
+
+#[test_log::test]
+fn compound_mul() {
+    check(
+        r"
+a *= 3
+",
+        r"
+VariableCompoundAssignment(<1:1>, CompoundOperator { node: <3:2>, kind: Mul }, Literal(Int(<6:1>)))
+        ",
+    );
+}
+
+#[test_log::test]
+fn compound_remainder() {
+    check(
+        r"
+a %= 3
+",
+        r"
+If(UnaryOp(Not(<8:1>), MemberCall(FieldAccess(VariableAccess(<9:5>), <15:4>), <20:10>, [VariableAccess(<31:9>)])), Literal(Int(<42:1>)), Some(Literal(Int(<49:1>))))
+        ",
+    );
+}
+
+#[test_log::test]
+fn index_compound_remainder() {
+    check(
+        r"
+a[1] %= 3
+",
+        r"
+If(UnaryOp(Not(<8:1>), MemberCall(FieldAccess(VariableAccess(<9:5>), <15:4>), <20:10>, [VariableAccess(<31:9>)])), Literal(Int(<42:1>)), Some(Literal(Int(<49:1>))))
+        ",
+    );
+}
+
+#[test_log::test]
+fn index_compound_add() {
+    check(
+        r"
+a[i] += 3
+",
+        r"
+IndexCompoundAssignment(VariableAccess(<1:1>), VariableAccess(<3:1>), CompoundOperator { node: <6:2>, kind: Add }, Literal(Int(<9:1>)))
+        ",
+    );
+}
+
+#[test_log::test]
+fn index_compound_sub() {
+    check(
+        r"
+a[i] -= 3
+",
+        r"
+IndexCompoundAssignment(VariableAccess(<1:1>), VariableAccess(<3:1>), CompoundOperator { node: <6:2>, kind: Sub }, Literal(Int(<9:1>)))
+        ",
+    );
+}
+
+#[test_log::test]
+fn index_compound_mul() {
+    check(
+        r"
+a[i] *= 3
+",
+        r"
+IndexCompoundAssignment(VariableAccess(<1:1>), VariableAccess(<3:1>), CompoundOperator { node: <6:2>, kind: Mul }, Literal(Int(<9:1>)))
+        ",
+    );
+}
+
+#[test_log::test]
+fn index_compound_div() {
+    check(
+        r"
+a[i] /= 3
+",
+        r"
+IndexCompoundAssignment(VariableAccess(<1:1>), VariableAccess(<3:1>), CompoundOperator { node: <6:2>, kind: Div }, Literal(Int(<9:1>)))
+        ",
+    );
+}
+
+#[test_log::test]
+fn neq() {
+    check(
+        r"
+a != 5
+",
+        r"
+BinaryOp(VariableAccess(<1:1>), NotEqual(<3:2>), Literal(Int(<6:1>)))
+        ",
+    );
+}
+
+#[test_log::test]
+fn lte() {
+    check(
+        r"
+a <= 5
+",
+        r"
+BinaryOp(VariableAccess(<1:1>), LessEqual(<3:2>), Literal(Int(<6:1>)))
+        ",
+    );
+}
+
+#[test_log::test]
+fn gte() {
+    check(
+        r"
+a >= 5
+",
+        r"
+BinaryOp(VariableAccess(<1:1>), GreaterEqual(<3:2>), Literal(Int(<6:1>)))
+        ",
+    );
+}
+
+#[test_log::test]
+fn interpolate() {
+    check(
+        r"
+'{a:X} {b:b}  '
+",
+        r"
+InterpolatedString([Interpolation(VariableAccess(<3:1>), Some(UpperHex(<5:1>))), Literal(<7:1>), Interpolation(VariableAccess(<9:1>), Some(Binary(<11:1>))), Literal(<13:2>)])
+        ",
+    );
+}
+
+#[test_log::test]
+fn generic() {
+    check(
+        r"
+struct Something {
+    sparse: Sparse<Int>
+}
+",
+        r"
+StructDef(StructType { identifier: LocalTypeIdentifier(<8:9>), fields: [FieldType { field_name: FieldName(<24:6>), field_type: Generic(TypeReference(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<32:6>), module_path: None }), [Int(<39:3>)]) }] })
+
+        ",
+    );
+}
+
+#[test_log::test]
+fn optional() {
+    check(
+        r"
+struct Hello {
+    first_name: String?,
+}
+",
+        r"
+StructDef(StructType { identifier: LocalTypeIdentifier(<8:5>), fields: [FieldType { field_name: FieldName(<20:10>), field_type: Optional(String(<32:6>), <38:1>) }] })
+
+        ",
+    );
+}
+
+#[test_log::test]
+fn pattern_list() {
+    check(
+        r"
+match x {
+    a, b => print(a)
+}
+",
+        r"
+Match(VariableAccess(<7:1>), [MatchArm { pattern: PatternList([Variable(<15:1>), Variable(<18:1>)]), expression: FunctionCall(VariableAccess(<23:5>), [VariableAccess(<29:1>)]) }])
+        ",
+    );
+}
+
+#[test_log::test]
+fn array_type() {
+    check(
+        r"
+fn something(a: Int) -> [Bool] {
+    [true, false]
+}
+",
+        r"
+FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <4:9>, params: [Parameter { variable: <14:1>, param_type: Int(<17:3>) }], self_parameter: None, return_type: Some(Array(Bool(<26:4>))) }, body: Block([Literal(Array([Literal(Bool(<39:4>)), Literal(Bool(<45:5>))]))]) }))
+        ",
+    );
+}
+
+#[test_log::test]
+fn multi_var() {
+    check(
+        r"
+a, b = 3
+",
+        r"
+MultiVariableAssignment([<1:1>, <4:1>], Literal(Int(<8:1>)))
+        ",
+    );
+}
+
+#[test_log::test]
+fn multi_var_assign() {
+    check(
+        r"
+a = b = c = 3
+",
+        r"
+VariableAssignment(<1:1>, VariableAssignment(<5:1>, VariableAssignment(<9:1>, Literal(Int(<13:1>)))))
+        ",
+    );
+}
+
+#[test_log::test]
+fn mut_arg() {
+    check(
+        r"
+fn write(mut x: Int) {
+    x = 4
+}
+",
+        r"
+FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <4:5>, params: [Parameter { variable: mut <10:3> <14:1>, param_type: Int(<17:3>) }], self_parameter: None, return_type: None }, body: Block([VariableAssignment(<28:1>, Literal(Int(<32:1>)))]) }))
+
+        ",
+    );
+}
+
+#[test_log::test]
+fn mut_static_call() {
+    check(
+        r"
+Something::update(a, mut b)
+",
+        r"
+StaticCall(<1:9>, <12:6>, [VariableAccess(<19:1>), mut<22:3> VariableAccess(<26:1>)])
+        ",
+    );
+}
+
+#[test_log::test]
+fn none() {
+    check(
+        r"
+call(none)
+",
+        r"
+FunctionCall(VariableAccess(<1:4>), [Literal(None(<6:4>))])
+        ",
+    );
+}
+
+#[test_log::test]
+fn unit() {
+    check(
+        r"
+fn func() -> Sparse<()> {
+    ()
+}
+",
+        r"
+StaticCall(<1:9>, <12:6>, [VariableAccess(<19:1>), Mut VariableAccess(<26:1>)])
+        ",
+    );
+}
+
+#[test_log::test]
+fn module_path_reference() {
+    check(
+        r"
+fn func() -> module::something::TypeReference {
+    ()
+}
+",
+        r"
+FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <4:4>, params: [], self_parameter: None, return_type: Some(TypeReference(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<33:13>), module_path: Some(ModulePath([ModulePathItem { node: <14:6> }, ModulePathItem { node: <22:9> }])) })) }, body: Block([Literal(Unit)]) }))
+
         ",
     );
 }

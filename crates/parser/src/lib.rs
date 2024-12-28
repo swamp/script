@@ -857,7 +857,7 @@ impl AstParser {
             Rule::postfix => self.parse_postfix_expression(pair),
             _ => Err(self.create_error_pair(
                 SpecificError::UnexpectedExpressionType(Self::pair_to_rule(pair)),
-                &pair,
+                pair,
             )),
         }
     }
@@ -868,7 +868,7 @@ impl AstParser {
         let var_list_pair = inner.next().ok_or_else(|| {
             self.create_error_pair(
                 SpecificError::UnexpectedRuleInParseScript("missing variable_list".to_string()),
-                &pair,
+                pair,
             )
         })?;
 
@@ -877,7 +877,7 @@ impl AstParser {
         let rhs_pair = inner.next().ok_or_else(|| {
             self.create_error_pair(
                 SpecificError::UnexpectedRuleInParseScript("missing RHS expression".to_string()),
-                &pair,
+                pair,
             )
         })?;
         let rhs_expr = self.parse_expression(&rhs_pair)?;
@@ -949,7 +949,7 @@ impl AstParser {
                 let child = inner.next().ok_or_else(|| {
                     self.create_error_pair(
                         SpecificError::UnexpectedRuleInParseScript("Missing child".into()),
-                        &pair,
+                        pair,
                     )
                 })?;
                 self.parse_assignment_expression(&child) // re-call on the child
@@ -961,7 +961,7 @@ impl AstParser {
                     "Not an assignment expression: {:?}",
                     pair.as_rule()
                 )),
-                &pair,
+                pair,
             )),
         }
     }
@@ -1187,10 +1187,7 @@ impl AstParser {
 
     fn parse_binary_operator(&self, pair: &Pair<Rule>) -> Result<BinaryOperator, ParseError> {
         let op = match pair.as_rule() {
-            Rule::infix_op | Rule::prefix_op => {
-                let inner = self.next_inner_pair(&pair)?;
-                inner
-            }
+            Rule::infix_op | Rule::prefix_op => self.next_inner_pair(pair)?,
             _ => pair.clone(),
         };
 
@@ -1346,7 +1343,7 @@ impl AstParser {
 
             _ => Err(self.create_error_pair(
                 SpecificError::UnknownPrimary(Self::pair_to_rule(&pair)),
-                &pair,
+                pair,
             )),
         }
     }
@@ -1391,12 +1388,7 @@ impl AstParser {
                 }
             }
         }
-        /*
-                // Add any remaining literal text
-                if !current_literal.is_empty() {
-                    parts.push(StringPart::Literal(current_literal));
-                }
-        */
+
         Ok(Expression::InterpolatedString(parts))
     }
 
@@ -1849,7 +1841,7 @@ impl AstParser {
             }
             _ => Err(self.create_error_pair(
                 SpecificError::UnknownEnumVariant(Self::pair_to_rule(&pair)),
-                &pair,
+                pair,
             ))?,
         };
 
