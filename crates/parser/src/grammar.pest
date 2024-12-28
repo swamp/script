@@ -7,18 +7,18 @@ block_comment = _{ "/*" ~ (!"*/" ~ ANY)* ~ "*/" }
 program = { SOI ~ statement* ~ EOI }
 
 doc_comment = @{ "///" ~ (!NEWLINE ~ ANY)* ~ NEWLINE }
-type_alias = { "type" ~ type_identifier ~ "=" ~ type_name }
 
 // Separate out definitions
 definition = {
     doc_comment* ~
-    (import_stmt
+    (
+    import_stmt
     | struct_def
     | enum_def
     | function_def
     | impl_def
     | trait_def
-    | type_alias)
+    )
 }
 
 control_statement = {

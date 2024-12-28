@@ -7,13 +7,6 @@ use crate::util::check;
 mod util;
 
 /*
-#[test_log::test]
-fn alias() {
-    let script = r#"
-    alias Velocity = Int"
-     "#;
-    check(&script, r#""#);
-}
 
 //#[test_log::test]
 fn pipe() {
