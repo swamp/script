@@ -32,10 +32,7 @@ fn match_value_expressions() {
 
 #[test_log::test]
 fn assignment() {
-    check(
-        "a = 3",
-        "VariableAssignment(<0:1>, Literal(Int(<4:1>)))",
-    );
+    check("a = 3", "VariableAssignment(<0:1>, Literal(Int(<4:1>)))");
 }
 
 #[test_log::test]
@@ -102,8 +99,8 @@ fn while_loop() {
     check(
         script,
         r#"
-VariableAssignment(<13:1>, Literal(Int(<17:1>))))
-WhileLoop(BinaryOp(VariableAccess(<37:1>), LessThan(<39:1>), Literal(Int(<41:1>))), [FunctionCall(VariableAccess(<61:5>), [VariableAccess(<67:1>)])), VariableAssignment(<86:1>, BinaryOp(VariableAccess(<90:1>), Add(<92:1>), Literal(Int(<94:1>)))))])
+VariableAssignment(<13:1>, Literal(Int(<17:1>)))
+WhileLoop(BinaryOp(VariableAccess(<37:1>), LessThan(<39:1>), Literal(Int(<41:1>))), [FunctionCall(VariableAccess(<61:5>), [VariableAccess(<67:1>)]), VariableAssignment(<86:1>, BinaryOp(VariableAccess(<90:1>), Add(<92:1>), Literal(Int(<94:1>))))])
 
         "#,
     );
@@ -262,7 +259,7 @@ fn compound_conditions() {
     check(
         script,
         r#"
-WhileLoop(BinaryOp(BinaryOp(VariableAccess(<15:1>), GreaterThan(<17:1>), Literal(Int(<19:1>))), LogicalAnd(<21:2>), BinaryOp(VariableAccess(<24:1>), LessThan(<26:1>), Literal(Int(<28:2>)))), [VariableAssignment(<45:1>, BinaryOp(VariableAccess(<49:1>), Subtract(<51:1>), Literal(Int(<53:1>))))), VariableAssignment(<67:1>, BinaryOp(VariableAccess(<71:1>), Add(<73:1>), Literal(Int(<75:1>)))))]
+WhileLoop(BinaryOp(BinaryOp(VariableAccess(<15:1>), GreaterThan(<17:1>), Literal(Int(<19:1>))), LogicalAnd(<21:2>), BinaryOp(VariableAccess(<24:1>), LessThan(<26:1>), Literal(Int(<28:2>)))), [VariableAssignment(<45:1>, BinaryOp(VariableAccess(<49:1>), Subtract(<51:1>), Literal(Int(<53:1>)))), VariableAssignment(<67:1>, BinaryOp(VariableAccess(<71:1>), Add(<73:1>), Literal(Int(<75:1>))))])
 "#,
     );
 }
@@ -283,8 +280,8 @@ fn nested_loops() {
     check(
         script,
         r#"
-VariableAssignment(<9:1>, Literal(Int(<13:1>))))
-WhileLoop(BinaryOp(VariableAccess(<29:1>), LessThan(<31:1>), Literal(Int(<33:1>))), [VariableAssignment(<49:1>, Literal(Int(<53:1>)))), WhileLoop(BinaryOp(VariableAccess(<73:1>), LessThan(<75:1>), Literal(Int(<77:1>))), [FunctionCall(VariableAccess(<97:5>), [BinaryOp(VariableAccess(<103:1>), Add(<105:1>), VariableAccess(<107:1>))])), VariableAssignment(<126:1>, BinaryOp(VariableAccess(<130:1>), Add(<132:1>), Literal(Int(<134:1>)))))]), VariableAssignment(<162:1>, BinaryOp(VariableAccess(<166:1>), Add(<168:1>), Literal(Int(<170:1>)))))])
+VariableAssignment(<9:1>, Literal(Int(<13:1>)))
+WhileLoop(BinaryOp(VariableAccess(<29:1>), LessThan(<31:1>), Literal(Int(<33:1>))), [VariableAssignment(<49:1>, Literal(Int(<53:1>))), WhileLoop(BinaryOp(VariableAccess(<73:1>), LessThan(<75:1>), Literal(Int(<77:1>))), [FunctionCall(VariableAccess(<97:5>), [BinaryOp(VariableAccess(<103:1>), Add(<105:1>), VariableAccess(<107:1>))]), VariableAssignment(<126:1>, BinaryOp(VariableAccess(<130:1>), Add(<132:1>), Literal(Int(<134:1>))))]), VariableAssignment(<162:1>, BinaryOp(VariableAccess(<166:1>), Add(<168:1>), Literal(Int(<170:1>))))])
   "#,
     );
 }
@@ -868,7 +865,7 @@ fn increment(mut x: Int) -> Int {
     check(
         &script,
         "
-FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <29:9>, params: [Parameter { variable: mut <39:3> <43:1>, param_type: Int(<46:3>) }], self_parameter: None, return_type: Some(Int(<54:3>)) }, body: [VariableAssignment(<64:1>, BinaryOp(VariableAccess(<68:1>), Add(<70:1>), Literal(Int(<72:1>))))), VariableAccess(<78:1>))] })
+FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <29:9>, params: [Parameter { variable: mut <39:3> <43:1>, param_type: Int(<46:3>) }], self_parameter: None, return_type: Some(Int(<54:3>)) }, body: [VariableAssignment(<64:1>, BinaryOp(VariableAccess(<68:1>), Add(<70:1>), Literal(Int(<72:1>)))), VariableAccess(<78:1>)] }))
 ",
     );
 }
@@ -880,7 +877,6 @@ fn mut_let() {
         "VariableAssignment(mut <0:3> <4:1>, Literal(Int(<8:1>)))",
     );
 }
-
 
 #[test_log::test]
 fn impl_def() {
@@ -1219,7 +1215,7 @@ fn for_continue() {
         "#,
         r"
 
-ForLoop(Single(ForVar { identifier: <12:1>, is_mut: None }), IteratableExpression { is_mut: None, expression: ExclusiveRange(Literal(Int(<17:1>)), Literal(Int(<20:1>))) }, [If(BinaryOp(BinaryOp(VariableAccess(<40:1>), Modulo(<42:1>), Literal(Int(<44:1>))), Equal(<46:2>), Literal(Int(<49:1>))), [Continue(<69:8>)], None), FunctionCall(VariableAccess(<105:5>), [Literal(String(<111:13>))]))])
+ForLoop(Single(ForVar { identifier: <12:1>, is_mut: None }), IteratableExpression { is_mut: None, expression: ExclusiveRange(Literal(Int(<17:1>)), Literal(Int(<20:1>))) }, [If(BinaryOp(BinaryOp(VariableAccess(<40:1>), Modulo(<42:1>), Literal(Int(<44:1>))), Equal(<46:2>), Literal(Int(<49:1>))), [Continue(<69:8>)], None), FunctionCall(VariableAccess(<105:5>), [Literal(String(<111:13>))])])
 
     ",
     );

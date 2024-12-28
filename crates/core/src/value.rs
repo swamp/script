@@ -274,7 +274,8 @@ impl Value {
         }
     }
 
-    #[must_use] pub fn downcast_hidden_rust<T: RustType + 'static>(&self) -> Option<Rc<RefCell<Box<T>>>> {
+    #[must_use]
+    pub fn downcast_hidden_rust<T: RustType + 'static>(&self) -> Option<Rc<RefCell<Box<T>>>> {
         match self {
             Value::Struct(_struct_ref, fields) => fields[0].downcast_rust(),
             _ => None,

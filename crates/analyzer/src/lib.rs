@@ -757,10 +757,7 @@ impl<'a> Resolver<'a> {
         };
 
         let enum_type_str = self.get_text(enum_type_name).to_string();
-        let parent_ref = self
-            .shared
-            .lookup
-            .add_enum_type( enum_parent)?;
+        let parent_ref = self.shared.lookup.add_enum_type(enum_parent)?;
 
         for variant_type in ast_variants {
             let mut container_number: Option<TypeNumber> = None;

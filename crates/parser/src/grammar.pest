@@ -302,6 +302,7 @@ primary = {
     | return_expr
     | break_expr
     | continue_expr
+    | block
     | interpolated_string
     | enum_literal
     | static_call
@@ -320,8 +321,8 @@ identifier_pattern = { identifier }
 
 if_expr = { "if" ~ expression ~ block ~ ("else" ~ block)? }
 
-// Blocks
-block = { "{" ~ expression ~ "}" }
+// Blocks are expressions that return the last evaluated expression
+block = { "{" ~ expression* ~ "}" }
 
 // Match expression
 match_expr = { "match" ~ expression ~ "{" ~ match_arms ~ "}" }

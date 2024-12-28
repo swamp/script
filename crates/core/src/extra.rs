@@ -37,7 +37,8 @@ impl Display for SparseValueMap {
 }
 
 impl SparseValueMap {
-    #[must_use] pub fn new(resolved_type: ResolvedType) -> Self {
+    #[must_use]
+    pub fn new(resolved_type: ResolvedType) -> Self {
         let type_parameter = match &resolved_type {
             ResolvedType::Generic(_, parameters) => parameters[0].clone(),
             _ => panic!("illegal sparse type. not generic"),
@@ -76,14 +77,16 @@ impl SparseValueMap {
     }
 
     #[allow(unused)]
-    #[must_use] pub fn iter(&self) -> sparse_slot::Iter<'_, Value> {
+    #[must_use]
+    pub fn iter(&self) -> sparse_slot::Iter<'_, Value> {
         self.sparse_slot.iter()
     }
     pub fn iter_mut(&mut self) -> sparse_slot::IterMut<'_, Value> {
         self.sparse_slot.iter_mut()
     }
 
-    #[must_use] pub fn values(&self) -> Vec<Value> {
+    #[must_use]
+    pub fn values(&self) -> Vec<Value> {
         self.sparse_slot.iter().map(|(_id, v)| v.clone()).collect()
     }
 }

@@ -256,7 +256,7 @@ impl AstParser {
                     let expr = self.parse_expression(&pair)?;
                     expressions.push(expr);
                 }
-                Rule::EOI => {}  // End of Input - do nothing
+                Rule::EOI => {} // End of Input - do nothing
                 _ => {
                     return Err(self.create_error_pair(
                         SpecificError::UnexpectedRuleInParseScript(Self::pair_to_rule(&pair)),
@@ -281,10 +281,6 @@ impl AstParser {
             _ => todo!(),
         }
     }
-
-
-
-
 
     fn pair_to_rule(rule: &Pair<Rule>) -> String {
         format!("{:?}", rule.as_rule())
@@ -326,9 +322,7 @@ impl AstParser {
                     // Handle else if by returning the parsed if statement in a Vec
                     vec![self.parse_if_statement(&else_token)?]
                 }
-                Rule::block => {
-                    self.parse_block(&else_token)?
-                }
+                Rule::block => self.parse_block(&else_token)?,
                 _ => {
                     return Err(self.create_error_pair(
                         SpecificError::ExpectedIfOrElse(Self::pair_to_rule(&else_token)),
@@ -346,7 +340,11 @@ impl AstParser {
             Some(else_statements)
         };
 
-        Ok(Expression::If(Box::from(condition), then_statements, else_value))
+        Ok(Expression::If(
+            Box::from(condition),
+            then_statements,
+            else_value,
+        ))
     }
 
     fn parse_doc_comment(&self, pair: &Pair<Rule>) -> Result<Definition, ParseError> {
@@ -470,8 +468,6 @@ impl AstParser {
 
         Ok(Definition::StructDef(struct_def))
     }
-
-
 
     fn parse_function_def(&self, pair: &Pair<Rule>) -> Result<Definition, ParseError> {
         let function_pair = self.next_inner_pair(pair)?;
@@ -1367,7 +1363,7 @@ impl AstParser {
             Rule::if_expr => self.parse_if_statement(pair),
             Rule::for_loop => self.parse_for_loop(pair),
             Rule::while_loop => self.parse_while_loop(pair),
-            
+
             _ => Err(self.create_error_pair(
                 SpecificError::UnknownPrimary(Self::pair_to_rule(&pair)),
                 &pair,
@@ -1942,75 +1938,56 @@ impl AstParser {
     fn parse_match_pattern(&self, pair: &Pair<Rule>) -> Result<Pattern, ParseError> {
         match pair.as_rule() {
             Rule::match_pattern => {
-                let inner = self.next_inner_pair(&pair)?;
-                self.parse_match_pattern(&inner)
+                // Directly pass inner to parse recursively
+                self.parse_match_pattern(&self.next_inner_pair(pair)?)
             }
             Rule::pattern_list => {
-                // Single identifier pattern
-                let mut elements = Vec::new();
-                for item in Self::convert_into_iterator(&pair) {
-                    match item.as_rule() {
-                        Rule::pattern_field => {
-                            if item.as_str() == "_" {
-                                elements.push(PatternElement::Wildcard(self.to_node(&item)));
-                            } else {
-                                elements.push(PatternElement::Variable(self.to_node(&pair)));
-                            }
-                        }
-                        _ => {
-                            return Err(self.create_error_pair(
-                                SpecificError::UnexpectedPatternListElement(Self::pair_to_rule(
-                                    &item,
-                                )),
-                                &item,
-                            ));
-                        }
-                    }
-                }
+                let elements = self.parse_pattern_list(pair)?;
                 Ok(Pattern::PatternList(elements))
             }
             Rule::enum_pattern => {
-                let mut inner = Self::convert_into_iterator(&pair);
+                let mut inner = Self::convert_into_iterator(pair);
                 let variant = self.expect_local_type_identifier_next(&mut inner)?;
 
-                if let Some(pattern_list) = inner.next() {
-                    let mut elements = Vec::new();
-                    for item in Self::convert_into_iterator(&pattern_list) {
-                        match item.as_rule() {
-                            Rule::pattern_field => {
-                                if item.as_str() == "_" {
-                                    elements.push(PatternElement::Wildcard(self.to_node(&item)));
-                                } else {
-                                    elements.push(PatternElement::Variable(self.to_node(&item)));
-                                }
-                            }
-                            Rule::expression => {
-                                elements.push(PatternElement::Expression(
-                                    self.parse_expression(&item)?,
-                                ));
-                            }
-                            _ => {
-                                return Err(self.create_error_pair(
-                                    SpecificError::UnexpectedElementInPatternList,
-                                    &item,
-                                ))
-                            }
-                        }
+                // Parse pattern list if present
+                let elements = inner
+                    .next()
+                    .map(|p| self.parse_pattern_list(&p))
+                    .transpose()?;
+
+                Ok(Pattern::EnumPattern(variant.0, elements))
+            }
+            Rule::literal => Ok(Pattern::Literal(self.parse_literal(pair)?)),
+            Rule::wildcard_pattern => Ok(Pattern::PatternList(vec![PatternElement::Wildcard(
+                self.to_node(pair),
+            )])),
+            _ => Err(self.create_error_pair(SpecificError::UnknownMatchType, pair)),
+        }
+    }
+
+    fn parse_pattern_list(&self, pair: &Pair<Rule>) -> Result<Vec<PatternElement>, ParseError> {
+        let mut elements = Vec::new();
+        for item in Self::convert_into_iterator(pair) {
+            match item.as_rule() {
+                Rule::pattern_field => {
+                    if item.as_str() == "_" {
+                        elements.push(PatternElement::Wildcard(self.to_node(&item)));
+                    } else {
+                        elements.push(PatternElement::Variable(self.to_node(&item)));
                     }
-                    Ok(Pattern::EnumPattern(variant.0, Some(elements)))
-                } else {
-                    Ok(Pattern::EnumPattern(variant.0, None))
+                }
+                Rule::expression => {
+                    elements.push(PatternElement::Expression(self.parse_expression(&item)?));
+                }
+                _ => {
+                    return Err(self.create_error_pair(
+                        SpecificError::UnexpectedPatternListElement(Self::pair_to_rule(&item)),
+                        &item,
+                    ));
                 }
             }
-            Rule::literal => {
-                let lit = self.parse_literal(pair)?;
-                Ok(Pattern::Literal(lit))
-            }
-            Rule::wildcard_pattern => Ok(Pattern::PatternList(vec![PatternElement::Wildcard(
-                self.to_node(&pair),
-            )])),
-            _ => Err(self.create_error_pair(SpecificError::UnknownMatchType, &pair)),
         }
+        Ok(elements)
     }
 
     fn to_node(&self, pair: &Pair<Rule>) -> Node {
