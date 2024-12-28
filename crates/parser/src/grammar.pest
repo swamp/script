@@ -95,7 +95,7 @@ external_function = {
 }
 
 normal_function = {
-    function_signature ~ block
+    function_signature ~ expression
 }
 
 
@@ -111,7 +111,7 @@ external_member_function = {
 }
 
 normal_member_function = {
-    member_signature ~ block
+    member_signature ~ expression
 }
 
 
@@ -131,7 +131,7 @@ mut_keyword = { "mut" }
 return_type = { "->" ~ type_name }
 
 
-for_loop = { "for" ~ for_pattern ~ "in" ~ mut_keyword? ~ expression ~ block }
+for_loop = { "for" ~ for_pattern ~ "in" ~ mut_keyword? ~ expression ~ expression }
 
 
 mut_identifier = { mut_keyword? ~ identifier }
@@ -139,7 +139,7 @@ for_pattern = { for_pair | mut_identifier }
 for_pair = { mut_identifier ~ "," ~ mut_identifier }
 
 // While-loop
-while_loop = { "while" ~ expression ~ block }
+while_loop = { "while" ~ expression ~ expression }
 
 import_definition = {
     "use" ~ (
@@ -319,7 +319,7 @@ primary = {
 
 identifier_pattern = { identifier }
 
-if_expr = { "if" ~ expression ~ block ~ ("else" ~ block)? }
+if_expr = { "if" ~ expression ~ expression ~ ("else" ~ (if_expr | expression))? }
 
 // Blocks are expressions that return the last evaluated expression
 block = { "{" ~ expression* ~ "}" }
@@ -329,7 +329,7 @@ match_expr = { "match" ~ expression ~ "{" ~ match_arms ~ "}" }
 
 match_arms = { match_arm ~ ("," ~ match_arm)* ~ ","? }
 match_arm = {
-    match_pattern ~ "=>" ~ (block | expression)
+    match_pattern ~ "=>" ~ expression
 }
 
 

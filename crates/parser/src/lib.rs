@@ -76,6 +76,7 @@ pub enum SpecificError {
     ExpectedForPattern,
     ExpectedBlock,
     InvalidForPattern,
+    UnexpectedRuleInElse(String),
 }
 
 #[derive(Debug)]
@@ -304,46 +305,30 @@ impl AstParser {
         Ok(expressions)
     }
 
-    fn parse_if_statement(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
+    fn parse_if_expression(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
         let mut inner = Self::convert_into_iterator(pair);
 
         // Parse condition
         let condition = self.parse_expression(&Self::next_pair(&mut inner)?)?;
 
-        // Parse then block
-        let then_block = Self::next_pair(&mut inner)?;
-        let then_statements = self.parse_block(&then_block)?;
+        // Parse `then` branch (block or inline expression)
+        let then_branch = self.parse_expression(&Self::next_pair(&mut inner)?)?;
 
-        // Parse optional else block (which might be another if statement)
-        let else_statements = if let Some(else_token) = inner.next() {
-            // We don't need to get another token after 'else', it's part of the if_stmt rule
-            match else_token.as_rule() {
-                Rule::if_expr => {
-                    // Handle else if by returning the parsed if statement in a Vec
-                    vec![self.parse_if_statement(&else_token)?]
+        // Parse optional `else` branch
+        let else_branch = inner
+            .next()
+            .map(|p| {
+                match p.as_rule() {
+                    Rule::if_expr => self.parse_if_expression(&p), // Recursively handle `else if`
+                    _ => self.parse_expression(&p),                // Inline or block `else`
                 }
-                Rule::block => self.parse_block(&else_token)?,
-                _ => {
-                    return Err(self.create_error_pair(
-                        SpecificError::ExpectedIfOrElse(Self::pair_to_rule(&else_token)),
-                        &else_token,
-                    ))
-                }
-            }
-        } else {
-            Vec::new()
-        };
-
-        let else_value = if else_statements.is_empty() {
-            None
-        } else {
-            Some(else_statements)
-        };
+            })
+            .transpose()?;
 
         Ok(Expression::If(
-            Box::from(condition),
-            then_statements,
-            else_value,
+            Box::new(condition),
+            Box::new(then_branch),
+            else_branch.map(Box::new),
         ))
     }
 
@@ -481,7 +466,7 @@ impl AstParser {
 
                 let signature = self.parse_function_signature(&signature_pair)?;
 
-                let body = self.parse_block(&inner.next().ok_or_else(|| {
+                let body = self.parse_expression(&inner.next().ok_or_else(|| {
                     self.create_error_pair(SpecificError::MissingFunctionBody, &function_pair)
                 })?)?;
 
@@ -686,7 +671,7 @@ impl AstParser {
         let signature = self.parse_member_signature(&signature_pair)?;
 
         let block_pair = Self::next_pair(&mut inner)?;
-        let body = self.parse_block(&block_pair)?;
+        let body = self.parse_expression(&block_pair)?;
 
         Ok(FunctionWithBody {
             declaration: signature,
@@ -797,35 +782,24 @@ impl AstParser {
             expression: Box::new(iterable_expression),
         };
 
-        // Parse the statement block
-        let block_pair = Self::next_pair(&mut inner)?;
-        if block_pair.as_rule() != Rule::block {
-            return Err(self.create_error_pair(SpecificError::ExpectedBlock, &block_pair));
-        }
-
-        let body = self.parse_block(&block_pair)?;
+        let body = self.parse_expression(&Self::next_pair(&mut inner)?)?;
 
         // Return the ForLoop statement with MutExpression
-        Ok(Expression::ForLoop(pattern, mut_expression, body))
+        Ok(Expression::ForLoop(
+            pattern,
+            mut_expression,
+            Box::from(body),
+        ))
     }
 
     fn parse_while_loop(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
         let mut inner = Self::convert_into_iterator(&pair);
 
-        // Parse condition
         let condition = self.parse_expression(&Self::next_pair(&mut inner)?)?;
 
-        // Parse block
-        let block_pair = Self::next_pair(&mut inner)?;
-        if block_pair.as_rule() != Rule::block {
-            return Err(
-                self.create_error_pair(SpecificError::ExpectedBlockInWhileLoop, &block_pair)
-            );
-        }
+        let body = self.parse_expression(&Self::next_pair(&mut inner)?)?;
 
-        let body = self.parse_block(&block_pair)?;
-
-        Ok(Expression::WhileLoop(Box::from(condition), body))
+        Ok(Expression::WhileLoop(Box::from(condition), Box::from(body)))
     }
 
     fn parse_return(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
@@ -1360,7 +1334,7 @@ impl AstParser {
                 let expressions = self.parse_block(&pair)?;
                 Ok(Expression::Block(expressions))
             }
-            Rule::if_expr => self.parse_if_statement(pair),
+            Rule::if_expr => self.parse_if_expression(pair),
             Rule::for_loop => self.parse_for_loop(pair),
             Rule::while_loop => self.parse_while_loop(pair),
 
@@ -1502,30 +1476,6 @@ impl AstParser {
         };
 
         Ok(Literal::EnumVariant(enum_variant_literal))
-    }
-
-    fn parse_if_expr(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
-        let mut inner = pair.clone().into_inner();
-
-        // Parse condition
-        let condition = self.parse_expression(&inner.next().unwrap())?;
-
-        // Parse then block
-        let then_block = inner.next().unwrap();
-        let then_expr = self.parse_expression(&then_block.into_inner().next().unwrap())?;
-
-        // Parse else block if it exists
-        let else_expr = if let Some(else_block) = inner.next() {
-            Some(self.parse_expression(&else_block.into_inner().next().unwrap())?)
-        } else {
-            None
-        };
-
-        Ok(Expression::IfElse(
-            Box::new(condition),
-            Box::new(then_expr),
-            Box::new(else_expr.unwrap()),
-        ))
     }
 
     fn parse_literal(&self, pair: &Pair<Rule>) -> Result<Literal, ParseError> {

@@ -54,9 +54,10 @@ fn function_call() {
     check(
         script,
         "
-FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <16:3>, params: [Parameter { variable: <20:1>, param_type: Int(<23:3>) }, Parameter { variable: <28:1>, param_type: Int(<31:3>) }], self_parameter: None, return_type: Some(Int(<39:3>)) }, body: [BinaryOp(VariableAccess(<61:1>), Add(<63:1>), VariableAccess(<65:1>))] }))
+FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <16:3>, params: [Parameter { variable: <20:1>, param_type: Int(<23:3>) }, Parameter { variable: <28:1>, param_type: Int(<31:3>) }], self_parameter: None, return_type: Some(Int(<39:3>)) }, body: Block([BinaryOp(VariableAccess(<61:1>), Add(<63:1>), VariableAccess(<65:1>))]) }))
 ---
 VariableAssignment(<93:6>, FunctionCall(VariableAccess(<102:3>), [Literal(Int(<106:2>)), Literal(Int(<110:2>))]))
+
 
 
     ",
@@ -100,7 +101,7 @@ fn while_loop() {
         script,
         r#"
 VariableAssignment(<13:1>, Literal(Int(<17:1>)))
-WhileLoop(BinaryOp(VariableAccess(<37:1>), LessThan(<39:1>), Literal(Int(<41:1>))), [FunctionCall(VariableAccess(<61:5>), [VariableAccess(<67:1>)]), VariableAssignment(<86:1>, BinaryOp(VariableAccess(<90:1>), Add(<92:1>), Literal(Int(<94:1>))))])
+WhileLoop(BinaryOp(VariableAccess(<37:1>), LessThan(<39:1>), Literal(Int(<41:1>))), Block([FunctionCall(VariableAccess(<61:5>), [VariableAccess(<67:1>)]), VariableAssignment(<86:1>, BinaryOp(VariableAccess(<90:1>), Add(<92:1>), Literal(Int(<94:1>))))]))
 
         "#,
     );
@@ -118,7 +119,7 @@ fn if_expression() {
 
     check(
         script,
-        "VariableAssignment(<13:1>, If(Literal(Bool(<20:4>)), [VariableAccess(<43:1>)], Some([VariableAccess(<82:1>)])))",
+        "VariableAssignment(<13:1>, If(Literal(Bool(<20:4>)), Block([VariableAccess(<43:1>)]), Some(Block([VariableAccess(<82:1>)]))))",
     );
 }
 
@@ -259,7 +260,7 @@ fn compound_conditions() {
     check(
         script,
         r#"
-WhileLoop(BinaryOp(BinaryOp(VariableAccess(<15:1>), GreaterThan(<17:1>), Literal(Int(<19:1>))), LogicalAnd(<21:2>), BinaryOp(VariableAccess(<24:1>), LessThan(<26:1>), Literal(Int(<28:2>)))), [VariableAssignment(<45:1>, BinaryOp(VariableAccess(<49:1>), Subtract(<51:1>), Literal(Int(<53:1>)))), VariableAssignment(<67:1>, BinaryOp(VariableAccess(<71:1>), Add(<73:1>), Literal(Int(<75:1>))))])
+WhileLoop(BinaryOp(BinaryOp(VariableAccess(<15:1>), GreaterThan(<17:1>), Literal(Int(<19:1>))), LogicalAnd(<21:2>), BinaryOp(VariableAccess(<24:1>), LessThan(<26:1>), Literal(Int(<28:2>)))), Block([VariableAssignment(<45:1>, BinaryOp(VariableAccess(<49:1>), Subtract(<51:1>), Literal(Int(<53:1>)))), VariableAssignment(<67:1>, BinaryOp(VariableAccess(<71:1>), Add(<73:1>), Literal(Int(<75:1>))))]))
 "#,
     );
 }
@@ -281,8 +282,8 @@ fn nested_loops() {
         script,
         r#"
 VariableAssignment(<9:1>, Literal(Int(<13:1>)))
-WhileLoop(BinaryOp(VariableAccess(<29:1>), LessThan(<31:1>), Literal(Int(<33:1>))), [VariableAssignment(<49:1>, Literal(Int(<53:1>))), WhileLoop(BinaryOp(VariableAccess(<73:1>), LessThan(<75:1>), Literal(Int(<77:1>))), [FunctionCall(VariableAccess(<97:5>), [BinaryOp(VariableAccess(<103:1>), Add(<105:1>), VariableAccess(<107:1>))]), VariableAssignment(<126:1>, BinaryOp(VariableAccess(<130:1>), Add(<132:1>), Literal(Int(<134:1>))))]), VariableAssignment(<162:1>, BinaryOp(VariableAccess(<166:1>), Add(<168:1>), Literal(Int(<170:1>))))])
-  "#,
+WhileLoop(BinaryOp(VariableAccess(<29:1>), LessThan(<31:1>), Literal(Int(<33:1>))), Block([VariableAssignment(<49:1>, Literal(Int(<53:1>))), WhileLoop(BinaryOp(VariableAccess(<73:1>), LessThan(<75:1>), Literal(Int(<77:1>))), Block([FunctionCall(VariableAccess(<97:5>), [BinaryOp(VariableAccess(<103:1>), Add(<105:1>), VariableAccess(<107:1>))]), VariableAssignment(<126:1>, BinaryOp(VariableAccess(<130:1>), Add(<132:1>), Literal(Int(<134:1>))))])), VariableAssignment(<162:1>, BinaryOp(VariableAccess(<166:1>), Add(<168:1>), Literal(Int(<170:1>))))]))
+ "#,
     );
 }
 
@@ -372,7 +373,7 @@ fn function_definition() {
     check(
         script,
         "
-FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <12:3>, params: [Parameter { variable: <16:1>, param_type: Int(<19:3>) }, Parameter { variable: <24:1>, param_type: Int(<27:3>) }], self_parameter: None, return_type: Some(Int(<35:3>)) }, body: [BinaryOp(VariableAccess(<53:1>), Add(<55:1>), VariableAccess(<57:1>))] }))
+FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <12:3>, params: [Parameter { variable: <16:1>, param_type: Int(<19:3>) }, Parameter { variable: <24:1>, param_type: Int(<27:3>) }], self_parameter: None, return_type: Some(Int(<35:3>)) }, body: Block([BinaryOp(VariableAccess(<53:1>), Add(<55:1>), VariableAccess(<57:1>))]) }))
     ",
     );
 }
@@ -388,7 +389,8 @@ fn function_with_no_parameters() {
     check(
         &script,
         r"
-FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <12:3>, params: [], self_parameter: None, return_type: Some(Int(<21:3>)) }, body: [Literal(Int(<39:2>))] }))
+FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <12:3>, params: [], self_parameter: None, return_type: Some(Int(<21:3>)) }, body: Block([Literal(Int(<39:2>))]) }))
+
 
     ",
     );
@@ -405,7 +407,8 @@ fn function_with_no_parameters_return() {
     check(
         script,
         "
-FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <12:3>, params: [], self_parameter: None, return_type: Some(Int(<21:3>)) }, body: [Return(Literal(Int(<46:2>)))] }))
+FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <12:3>, params: [], self_parameter: None, return_type: Some(Int(<21:3>)) }, body: Block([Return(Literal(Int(<46:2>)))]) }))
+
     ",
     );
 }
@@ -422,7 +425,7 @@ fn function_call_with_no_parameters() {
     check(
         script,
         "
-FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <12:6>, params: [], self_parameter: None, return_type: Some(Int(<24:3>)) }, body: [Literal(Int(<42:2>))] }))
+FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <12:6>, params: [], self_parameter: None, return_type: Some(Int(<24:3>)) }, body: Block([Literal(Int(<42:2>))]) }))
 ---
 VariableAssignment(<63:6>, FunctionCall(VariableAccess(<72:6>), []))
 
@@ -593,7 +596,7 @@ fn tuple_type() {
         &script,
         r"
 
-FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <8:10>, params: [], self_parameter: None, return_type: Some(Tuple([String(<26:6>), Int(<34:3>), Float(<39:5>)])) }, body: [Literal(Tuple([Literal(String(<59:7>)), Literal(Int(<68:1>)), Literal(Float(<71:3>))]))] }))
+FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <8:10>, params: [], self_parameter: None, return_type: Some(Tuple([String(<26:6>), Int(<34:3>), Float(<39:5>)])) }, body: Block([Literal(Tuple([Literal(String(<59:7>)), Literal(Int(<68:1>)), Literal(Float(<71:3>))]))]) }))
 
         ",
     );
@@ -754,7 +757,8 @@ for x in 1..10 {
     check(
         script,
         "
-ForLoop(Single(ForVar { identifier: <5:1>, is_mut: None }), IteratableExpression { is_mut: None, expression: ExclusiveRange(Literal(Int(<10:1>)), Literal(Int(<13:2>))) }, [])
+ForLoop(Single(ForVar { identifier: <5:1>, is_mut: None }), IteratableExpression { is_mut: None, expression: ExclusiveRange(Literal(Int(<10:1>)), Literal(Int(<13:2>))) }, Block([]))
+
 ",
     );
 }
@@ -784,7 +788,7 @@ for x in [1, 2, 3] {
     check(
         &script,
         "
-ForLoop(Single(ForVar { identifier: <6:1>, is_mut: None }), IteratableExpression { is_mut: None, expression: Literal(Array([Literal(Int(<12:1>)), Literal(Int(<15:1>)), Literal(Int(<18:1>))])) }, [])
+ForLoop(Single(ForVar { identifier: <6:1>, is_mut: None }), IteratableExpression { is_mut: None, expression: Literal(Array([Literal(Int(<12:1>)), Literal(Int(<15:1>)), Literal(Int(<18:1>))])) }, Block([]))
 
 "
     );
@@ -865,7 +869,7 @@ fn increment(mut x: Int) -> Int {
     check(
         &script,
         "
-FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <29:9>, params: [Parameter { variable: mut <39:3> <43:1>, param_type: Int(<46:3>) }], self_parameter: None, return_type: Some(Int(<54:3>)) }, body: [VariableAssignment(<64:1>, BinaryOp(VariableAccess(<68:1>), Add(<70:1>), Literal(Int(<72:1>)))), VariableAccess(<78:1>)] }))
+FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <29:9>, params: [Parameter { variable: mut <39:3> <43:1>, param_type: Int(<46:3>) }], self_parameter: None, return_type: Some(Int(<54:3>)) }, body: Block([VariableAssignment(<64:1>, BinaryOp(VariableAccess(<68:1>), Add(<70:1>), Literal(Int(<72:1>)))), VariableAccess(<78:1>)]) }))
 ",
     );
 }
@@ -898,7 +902,7 @@ fn impl_def() {
         ",
         r"
 
-ImplDef(<18:12>, [Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <52:9>, params: [], self_parameter: Some(SelfParameter { is_mutable: None, self_node: <62:4> }), return_type: Some(Int(<71:3>)) }, body: [FieldAccess(VariableAccess(<97:4>), <102:1>)] }), Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <142:7>, params: [Parameter { variable: <160:1>, param_type: Int(<163:3>) }], self_parameter: Some(SelfParameter { is_mutable: Some(<150:3>), self_node: <154:4> }), return_type: Some(Int(<171:3>)) }, body: [FieldAssignment(VariableAccess(<197:4>), <202:1>, Literal(Int(<206:1>)))] }), Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <246:12>, params: [], self_parameter: None, return_type: Some(Float(<264:5>)) }, body: [Literal(Float(<292:3>))] })])
+ImplDef(<18:12>, [Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <52:9>, params: [], self_parameter: Some(SelfParameter { is_mutable: None, self_node: <62:4> }), return_type: Some(Int(<71:3>)) }, body: Block([FieldAccess(VariableAccess(<97:4>), <102:1>)]) }), Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <142:7>, params: [Parameter { variable: <160:1>, param_type: Int(<163:3>) }], self_parameter: Some(SelfParameter { is_mutable: Some(<150:3>), self_node: <154:4> }), return_type: Some(Int(<171:3>)) }, body: Block([FieldAssignment(VariableAccess(<197:4>), <202:1>, Literal(Int(<206:1>)))]) }), Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <246:12>, params: [], self_parameter: None, return_type: Some(Float(<264:5>)) }, body: Block([Literal(Float(<292:3>))]) })])
 
         ",
     );
@@ -1182,7 +1186,7 @@ fn enum_match_tuple_basic() {
     "#,
         "
 
-Match(VariableAccess(<18:1>), [MatchArm { pattern: EnumPattern(<38:5>, Some([Literal(Tuple([VariableAccess(<44:1>), VariableAccess(<47:1>), VariableAccess(<50:1>)])))])), expression: Block([FunctionCall(VariableAccess(<132:5>), [Literal(String(<138:8>))])), FunctionCall(VariableAccess(<168:5>), [VariableAccess(<174:1>)])), FunctionCall(VariableAccess(<197:5>), [VariableAccess(<203:1>)])), FunctionCall(VariableAccess(<226:5>), [VariableAccess(<232:1>)]))]) }]))
+Match(VariableAccess(<18:1>), [MatchArm { pattern: EnumPattern(<38:5>, Some([Expression(Literal(Tuple([VariableAccess(<44:1>), VariableAccess(<47:1>), VariableAccess(<50:1>)])))])), expression: Block([FunctionCall(VariableAccess(<132:5>), [Literal(String(<138:8>))]), FunctionCall(VariableAccess(<168:5>), [VariableAccess(<174:1>)]), FunctionCall(VariableAccess(<197:5>), [VariableAccess(<203:1>)]), FunctionCall(VariableAccess(<226:5>), [VariableAccess(<232:1>)])]) }])
 
     ",
     );
@@ -1196,7 +1200,8 @@ fn print_if() {
             "x is greater than 41"
         }
     "#,
-        "If(BinaryOp(VariableAccess(<11:1>), GreaterThan(<13:1>), Literal(Int(<15:2>))), [Literal(String(<32:22>))], None)",
+        "If(BinaryOp(VariableAccess(<11:1>), GreaterThan(<13:1>), Literal(Int(<15:2>))), Block([Literal(String(<32:22>))]), None)
+",
     );
 }
 
@@ -1215,7 +1220,7 @@ fn for_continue() {
         "#,
         r"
 
-ForLoop(Single(ForVar { identifier: <12:1>, is_mut: None }), IteratableExpression { is_mut: None, expression: ExclusiveRange(Literal(Int(<17:1>)), Literal(Int(<20:1>))) }, [If(BinaryOp(BinaryOp(VariableAccess(<40:1>), Modulo(<42:1>), Literal(Int(<44:1>))), Equal(<46:2>), Literal(Int(<49:1>))), [Continue(<69:8>)], None), FunctionCall(VariableAccess(<105:5>), [Literal(String(<111:13>))])])
+ForLoop(Single(ForVar { identifier: <12:1>, is_mut: None }), IteratableExpression { is_mut: None, expression: ExclusiveRange(Literal(Int(<17:1>)), Literal(Int(<20:1>))) }, Block([If(BinaryOp(BinaryOp(VariableAccess(<40:1>), Modulo(<42:1>), Literal(Int(<44:1>))), Equal(<46:2>), Literal(Int(<49:1>))), Block([Continue(<69:8>)]), None), FunctionCall(VariableAccess(<105:5>), [Literal(String(<111:13>))])]))
 
     ",
     );
@@ -1233,7 +1238,7 @@ fn else_problem() {
             "#,
         r#"
 
-If(BinaryOp(VariableAccess(<13:1>), LessThan(<15:1>), Literal(Int(<17:1>))), [Return(Literal(String(<44:10>)))], Some([If(BinaryOp(VariableAccess(<73:1>), Equal(<75:2>), Literal(Int(<78:1>))), [Return(Literal(String(<101:10>)))], None)]))
+If(BinaryOp(VariableAccess(<13:1>), LessThan(<15:1>), Literal(Int(<17:1>))), Block([Return(Literal(String(<44:10>)))]), Some(If(BinaryOp(VariableAccess(<73:1>), Equal(<75:2>), Literal(Int(<78:1>))), Block([Return(Literal(String(<101:10>)))]), None)))
 
             "#,
     )
@@ -1278,8 +1283,7 @@ fn option_operator_if_variable() {
             "#,
         r#"
 
-If(PostfixOp(Unwrap(<14:1>), VariableAccess(<13:1>)), [InterpolatedString([Literal(<28:8>), Interpolation(VariableAccess(<37:1>), None)])], Some([InterpolatedString([Literal(<69:8>)])]))
-
+If(PostfixOp(Unwrap(<14:1>), VariableAccess(<13:1>)), Block([InterpolatedString([Literal(<28:8>), Interpolation(VariableAccess(<37:1>), None)])]), Some(Block([InterpolatedString([Literal(<69:8>)])])))
 
             "#,
     )
@@ -1297,7 +1301,7 @@ fn option_operator_if_expression() {
             "#,
         r#"
 
-If(PostfixOp(Unwrap(<40:1>), BinaryOp(BinaryOp(BinaryOp(VariableAccess(<14:1>), Multiply(<15:1>), Literal(Int(<16:1>))), Add(<17:1>), Literal(Int(<18:2>))), Add(<20:1>), MemberCall(VariableAccess(<21:9>), <31:4>, [Literal(Int(<36:2>))]))), [InterpolatedString([Literal(<54:23>)])], Some([InterpolatedString([Literal(<107:12>)])]))
+If(PostfixOp(Unwrap(<40:1>), BinaryOp(BinaryOp(BinaryOp(VariableAccess(<14:1>), Multiply(<15:1>), Literal(Int(<16:1>))), Add(<17:1>), Literal(Int(<18:2>))), Add(<20:1>), MemberCall(VariableAccess(<21:9>), <31:4>, [Literal(Int(<36:2>))]))), Block([InterpolatedString([Literal(<54:23>)])]), Some(Block([InterpolatedString([Literal(<107:12>)])])))
 
             "#,
     )
@@ -1342,8 +1346,8 @@ fn option_operator_if_let_expression() {
             ",
         r"
 
-If(VariableAssignment(<13:1>, PostfixOp(Unwrap(<38:1>), MemberCall(VariableAccess(<17:7>), <25:11>, []))), [InterpolatedString([Literal(<58:8>), Interpolation(VariableAccess(<67:1>), None)])], Some([InterpolatedString([Literal(<102:12>)])]))
-           ",
+If(VariableAssignment(<13:1>, PostfixOp(Unwrap(<38:1>), MemberCall(VariableAccess(<17:7>), <25:11>, []))), Block([InterpolatedString([Literal(<58:8>), Interpolation(VariableAccess(<67:1>), None)])]), Some(Block([InterpolatedString([Literal(<102:12>)])])))
+          ",
     );
 }
 
@@ -1359,7 +1363,7 @@ fn option_operator_if_let_expression_multiple_calls() {
             "#,
         r#"
 
-If(VariableAssignment(<13:1>, PostfixOp(Unwrap(<59:1>), MemberCall(PostfixOp(Unwrap(<38:1>), MemberCall(VariableAccess(<17:7>), <25:11>, [])), <40:12>, [VariableAccess(<53:1>), Literal(Int(<56:2>))]))), [InterpolatedString([Literal(<79:8>), Interpolation(VariableAccess(<88:1>), None)])], Some([InterpolatedString([Literal(<123:12>)])]))
+If(VariableAssignment(<13:1>, PostfixOp(Unwrap(<59:1>), MemberCall(PostfixOp(Unwrap(<38:1>), MemberCall(VariableAccess(<17:7>), <25:11>, [])), <40:12>, [VariableAccess(<53:1>), Literal(Int(<56:2>))]))), Block([InterpolatedString([Literal(<79:8>), Interpolation(VariableAccess(<88:1>), None)])]), Some(Block([InterpolatedString([Literal(<123:12>)])])))
 
             "#,
     )
@@ -1393,8 +1397,7 @@ fn if_assignment() {
         "
 
 VariableAssignment(<5:1>, Literal(Int(<9:1>)))
-VariableAssignment(<15:1>, If(VariableAssignment(<22:1>, BinaryOp(VariableAccess(<26:1>), GreaterThan(<28:1>), Literal(Int(<30:1>)))), [BinaryOp(VariableAccess(<42:1>), Add(<44:1>), Literal(Int(<46:1>)))], Some([BinaryOp(VariableAccess(<69:1>), Add(<71:1>), Literal(Int(<73:1>)))])))
-
+VariableAssignment(<15:1>, If(VariableAssignment(<22:1>, BinaryOp(VariableAccess(<26:1>), GreaterThan(<28:1>), Literal(Int(<30:1>)))), Block([BinaryOp(VariableAccess(<42:1>), Add(<44:1>), Literal(Int(<46:1>)))]), Some(Block([BinaryOp(VariableAccess(<69:1>), Add(<71:1>), Literal(Int(<73:1>)))]))))
 
             ",
     );
@@ -1456,8 +1459,7 @@ fn map_creator() -> [Int: String] {
 
             ",
         "
-FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <4:11>, params: [], self_parameter: None, return_type: Some(Map(Int(<22:3>), String(<27:6>))) }, body: [Literal(Map([(Literal(Int(<38:1>)), InterpolatedString([Literal(<42:5>)])), (UnaryOp(Negate(<50:1>), Literal(Int(<51:1>))), InterpolatedString([Literal(<55:5>)]))]))] }))
-
+FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <4:11>, params: [], self_parameter: None, return_type: Some(Map(Int(<22:3>), String(<27:6>))) }, body: Block([Literal(Map([(Literal(Int(<38:1>)), InterpolatedString([Literal(<42:5>)])), (UnaryOp(Negate(<50:1>), Literal(Int(<51:1>))), InterpolatedString([Literal(<55:5>)]))]))]) }))
             ",
     );
 }
@@ -1470,7 +1472,8 @@ fn test() -> Int { 42 }
             ",
         "
 
-FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <4:4>, params: [], self_parameter: None, return_type: Some(Int(<14:3>)) }, body: [Literal(Int(<20:2>))] }))
+FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <4:4>, params: [], self_parameter: None, return_type: Some(Int(<14:3>)) }, body: Block([Literal(Int(<20:2>))]) }))
+
 
             ",
     );
@@ -1485,7 +1488,7 @@ fn nothing() -> SomeType<Int, Float> {
 
             ",
         "
-FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <4:7>, params: [], self_parameter: None, return_type: Some(Generic(TypeReference(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<17:8>), module_path: None }), [Int(<26:3>), Float(<31:5>)])) }, body: [] }))
+FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <4:7>, params: [], self_parameter: None, return_type: Some(Generic(TypeReference(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<17:8>), module_path: None }), [Int(<26:3>), Float(<31:5>)])) }, body: Block([]) }))
            ",
     );
 }
@@ -1520,7 +1523,7 @@ fn check_some_bug() {
     "#,
         r"
 VariableAssignment(<9:12>, Literal(Bool(<24:5>)))
-VariableAssignment(<38:1>, If(VariableAccess(<45:12>), [Literal(Float(<60:3>))], Some([UnaryOp(Negate(<73:1>), Literal(Float(<74:4>)))])))
+VariableAssignment(<38:1>, If(VariableAccess(<45:12>), Block([Literal(Float(<60:3>))]), Some(Block([UnaryOp(Negate(<73:1>), Literal(Float(<74:4>)))]))))
 
         ",
     );
@@ -1534,8 +1537,7 @@ fn check_return_type() {
         }
     ",
         r"
-    FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <12:1>, params: [Parameter { variable: <14:1>, param_type: Int(<17:3>) }], self_parameter: None, return_type: Some(Tuple([Int(<26:3>), Float(<31:5>)])) }, body: [] }))
-
+FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <12:1>, params: [Parameter { variable: <14:1>, param_type: Int(<17:3>) }], self_parameter: None, return_type: Some(Tuple([Int(<26:3>), Float(<31:5>)])) }, body: Block([]) }))
 
     ",
     );
@@ -1565,7 +1567,19 @@ fn check_boolean_expression() {
     }
 ",
         r"
-If(UnaryOp(Not(<8:1>), MemberCall(FieldAccess(VariableAccess(<9:5>), <15:4>), <20:10>, [VariableAccess(<31:9>)])), [], None)
+If(UnaryOp(Not(<8:1>), MemberCall(FieldAccess(VariableAccess(<9:5>), <15:4>), <20:10>, [VariableAccess(<31:9>)])), Block([]), None)
+        ",
+    );
+}
+
+#[test_log::test]
+fn check_boolean_expression_no_block() {
+    check(
+        r"
+    if !enemy.rect.intersects(shot_rect) 2 else 3
+",
+        r"
+If(UnaryOp(Not(<8:1>), MemberCall(FieldAccess(VariableAccess(<9:5>), <15:4>), <20:10>, [VariableAccess(<31:9>)])), Literal(Int(<42:1>)), Some(Literal(Int(<49:1>))))
         ",
     );
 }

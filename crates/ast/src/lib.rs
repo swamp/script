@@ -207,7 +207,7 @@ pub struct FunctionDeclaration {
 #[derive(Debug)]
 pub struct FunctionWithBody {
     pub declaration: FunctionDeclaration,
-    pub body: Vec<Expression>,
+    pub body: Expression,
 }
 
 #[derive(Debug)]
@@ -276,66 +276,56 @@ pub struct CompoundOperator {
 /// Expressions are things that "converts" to a value when evaluated.
 #[derive(Debug)]
 pub enum Expression {
-    // Access / Lookup values
+    // Access
     FieldAccess(Box<Expression>, Node),
     VariableAccess(Variable),
-    MutRef(MutVariableRef), // Used when passing with mut keyword. mut are implicitly passed by reference
-    IndexAccess(Box<Expression>, Box<Expression>), // Read from an array or map: arr[3]
+    MutRef(MutVariableRef),
+    IndexAccess(Box<Expression>, Box<Expression>),
 
-    // Assignment ----
-
-    // Since it is a cool language, we can "chain" assignments together. like a = b = c = 1. Even for field assignments, like a.b = c.d = e.f = 1
+    // Assignments
     VariableAssignment(Variable, Box<Expression>),
+    VariableCompoundAssignment(Node, CompoundOperator, Box<Expression>),
     MultiVariableAssignment(Vec<Variable>, Box<Expression>),
+    IndexAssignment(Box<Expression>, Box<Expression>, Box<Expression>),
     IndexCompoundAssignment(
         Box<Expression>,
         Box<Expression>,
         CompoundOperator,
         Box<Expression>,
     ),
-    VariableCompoundAssignment(Node, CompoundOperator, Box<Expression>),
+    FieldAssignment(Box<Expression>, Node, Box<Expression>),
     FieldCompoundAssignment(Box<Expression>, Node, CompoundOperator, Box<Expression>),
 
-    IndexAssignment(Box<Expression>, Box<Expression>, Box<Expression>), // target, index, source. Write to an index in an array or map: arr[3] = 42
-    FieldAssignment(Box<Expression>, Node, Box<Expression>),
-
-    // Operators ----
+    // Operators
     BinaryOp(Box<Expression>, BinaryOperator, Box<Expression>),
     UnaryOp(UnaryOperator, Box<Expression>),
 
-    // Postfix operators
-    PostfixOp(PostfixOperator, Box<Expression>),
-
-    // Calls ----
+    // Calls
     FunctionCall(Box<Expression>, Vec<Expression>),
-    StaticCall(Node, Node, Vec<Expression>), // Type::func(args)
-    StaticCallGeneric(
-        Node,
-        Node,
-        Vec<Expression>,
-        Vec<Type>, // Generic arguments
-    ),
+    StaticCall(Node, Node, Vec<Expression>),
+    StaticCallGeneric(Node, Node, Vec<Expression>, Vec<Type>),
     MemberCall(Box<Expression>, Node, Vec<Expression>),
-    Block(Vec<Expression>),
 
-    ForLoop(ForPattern, IteratableExpression, Vec<Expression>),
-    WhileLoop(Box<Expression>, Vec<Expression>),
+    // Control Flow
+    Block(Vec<Expression>), // The only one with Vec<Expression>
+    ForLoop(ForPattern, IteratableExpression, Box<Expression>),
+    WhileLoop(Box<Expression>, Box<Expression>),
     Return(Box<Expression>),
     Break(Node),
     Continue(Node),
 
-    If(Box<Expression>, Vec<Expression>, Option<Vec<Expression>>),
+    If(Box<Expression>, Box<Expression>, Option<Box<Expression>>),
+    Match(Box<Expression>, Vec<MatchArm>),
 
+    // String Interpolation
     InterpolatedString(Vec<StringPart>),
 
-    // Constructing
+    // Instantiation
     StructInstantiation(QualifiedTypeIdentifier, Vec<FieldExpression>),
     ExclusiveRange(Box<Expression>, Box<Expression>),
     Literal(Literal),
 
-    // Comparing
-    IfElse(Box<Expression>, Box<Expression>, Box<Expression>),
-    Match(Box<Expression>, Vec<MatchArm>),
+    PostfixOp(PostfixOperator, Box<Expression>),
 }
 
 #[derive(Debug)]
