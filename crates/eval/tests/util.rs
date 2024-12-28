@@ -8,7 +8,7 @@ use swamp_script_analyzer::lookup::NameLookup;
 use swamp_script_analyzer::{ResolveError, Resolver};
 use swamp_script_core::prelude::Value;
 use swamp_script_eval::prelude::ExecuteError;
-use swamp_script_eval::{eval_module, ExternalFunctions, SourceMapWrapper};
+use swamp_script_eval::{eval_module, ExternalFunctions};
 use swamp_script_parser::AstParser;
 use swamp_script_semantic::modules::ResolvedModules;
 use swamp_script_semantic::prelude::ResolvedModuleNamespaceRef;
@@ -111,8 +111,6 @@ fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError>
         internal_compile(script, &main_module.borrow_mut().namespace, &modules)?;
     main_module.borrow_mut().expression = maybe_expression;
 
-    let source_map_wrapper = Rc::new(SourceMapWrapper { source_map });
-
     // Run
     let mut externals = ExternalFunctions::new();
     register_print(1, &mut externals);
@@ -120,13 +118,11 @@ fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError>
     let mut context = TestContext {
         secret: 42,
         output: vec![],
-        source_map_wrapper: source_map_wrapper.clone(),
     };
 
     let value = eval_module(
         &externals,
         main_module.borrow().expression.as_ref().unwrap(),
-        source_map_wrapper.as_ref(),
         &mut context,
     )?;
 
@@ -136,7 +132,6 @@ fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError>
 pub struct TestContext {
     pub secret: i32,
     pub output: Vec<String>,
-    pub source_map_wrapper: Rc<SourceMapWrapper>,
 }
 
 fn register_print(

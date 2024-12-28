@@ -13,7 +13,7 @@ use swamp_script_core::prelude::Value;
 use swamp_script_dep_loader::{
     parse_dependant_modules_and_resolve, DepLoaderError, DependencyParser, ParseModule,
 };
-use swamp_script_eval::{err::ExecuteError, eval_module, ExternalFunctions, SourceMapWrapper};
+use swamp_script_eval::{err::ExecuteError, eval_module, ExternalFunctions};
 use swamp_script_eval_loader::resolve_program;
 use swamp_script_parser::prelude::*;
 use swamp_script_parser::AstParser;
@@ -164,17 +164,13 @@ fn register_print(interpreter: &mut ExternalFunctions<CliContext>) {
         .expect("should work to register");
 }
 
-pub fn eval(
-    resolved_main_module: &ResolvedModuleRef,
-    source_map_wrapper: SourceMapWrapper,
-) -> Result<Value, CliError> {
+pub fn eval(resolved_main_module: &ResolvedModuleRef) -> Result<Value, CliError> {
     let mut external_functions = ExternalFunctions::new();
     register_print(&mut external_functions);
     let mut context = CliContext;
     let value = eval_module(
         &external_functions,
-        &resolved_main_module.borrow().statements,
-        &source_map_wrapper,
+        resolved_main_module.borrow().expression.as_ref().unwrap(),
         &mut context,
     )?;
     Ok(value)
@@ -253,8 +249,7 @@ fn compile_and_eval(script: &str) -> Result<Value, CliError> {
         .get(&vec!["main".to_string()])
         .expect("can not find main module");
 
-    let source_map_wrap = SourceMapWrapper { source_map };
-    eval(&resolved_main_module, source_map_wrap)
+    eval(&resolved_main_module)
 }
 
 fn read_root_source_file(path: &Path) -> Result<String, CliError> {

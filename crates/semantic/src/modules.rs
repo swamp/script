@@ -28,12 +28,19 @@ impl Debug for ResolvedModule {
             writeln!(f, "{resolved_def:?}")?;
         }
 
-        if !self.definitions.is_empty() && !self.expression.is_some() {
+        if !self.definitions.is_empty() && self.expression.is_some() {
             writeln!(f, "---\n")?;
         }
 
-        if let Some(resolved_statement) = &self.expression {
-            writeln!(f, "{resolved_statement:?}")?;
+        if let Some(resolved_expression) = &self.expression {
+            match resolved_expression {
+                ResolvedExpression::Block(expressions) => {
+                    for expression in expressions {
+                        writeln!(f, "{expression:?}")?;
+                    }
+                }
+                _ => writeln!(f, "{resolved_expression:?}")?,
+            }
         }
 
         Ok(())

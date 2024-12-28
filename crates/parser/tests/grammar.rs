@@ -407,7 +407,7 @@ fn function_with_no_parameters_return() {
     check(
         script,
         "
-FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <12:3>, params: [], self_parameter: None, return_type: Some(Int(<21:3>)) }, body: Block([Return(Literal(Int(<46:2>)))]) }))
+FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <12:3>, params: [], self_parameter: None, return_type: Some(Int(<21:3>)) }, body: Block([Return(Some(Literal(Int(<46:2>))))]) }))
 
     ",
     );
@@ -1238,7 +1238,7 @@ fn else_problem() {
             "#,
         r#"
 
-If(BinaryOp(VariableAccess(<13:1>), LessThan(<15:1>), Literal(Int(<17:1>))), Block([Return(Literal(String(<44:10>)))]), Some(If(BinaryOp(VariableAccess(<73:1>), Equal(<75:2>), Literal(Int(<78:1>))), Block([Return(Literal(String(<101:10>)))]), None)))
+If(BinaryOp(VariableAccess(<13:1>), LessThan(<15:1>), Literal(Int(<17:1>))), Block([Return(Some(Literal(String(<44:10>))))]), Some(If(BinaryOp(VariableAccess(<73:1>), Equal(<75:2>), Literal(Int(<78:1>))), Block([Return(Some(Literal(String(<101:10>))))]), None)))
 
             "#,
     )

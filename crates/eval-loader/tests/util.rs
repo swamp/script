@@ -5,13 +5,13 @@
 use std::env;
 use std::path::PathBuf;
 use swamp_script_analyzer::ResolveError;
+use swamp_script_analyzer::ResolvedProgram;
 use swamp_script_ast::ModulePath;
 use swamp_script_dep_loader::{
     parse_dependant_modules_and_resolve, DepLoaderError, DependencyParser, ParseModule,
 };
 use swamp_script_eval_loader::resolve_program;
 use swamp_script_parser::{AstParser, Rule};
-use swamp_script_semantic::ResolvedProgram;
 use tracing::{debug, warn};
 use tracing::{error, trace};
 
@@ -53,7 +53,7 @@ impl From<pest::error::Error<Rule>> for TestError {
 }
 
 pub fn create_program(script: &str) -> Result<ResolvedProgram, TestError> {
-    let parser = AstParser::new();
+    let parser = AstParser;
     let ast_module = parser.parse_script(script)?;
     trace!("ast_program:\n{:#?}", ast_module);
 

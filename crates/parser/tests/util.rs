@@ -14,14 +14,14 @@ pub fn check(script: &str, expected_output: &str) {
 
     let actual = formatted_output
         .lines()
-        .map(|line| line.trim())
+        .map(str::trim)
         .filter(|line| !line.is_empty())
         .collect::<Vec<_>>()
         .join("\n");
 
     let expected = expected_output
         .lines()
-        .map(|line| line.trim())
+        .map(str::trim)
         .filter(|line| !line.is_empty())
         .collect::<Vec<_>>()
         .join("\n");

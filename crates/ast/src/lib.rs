@@ -491,7 +491,14 @@ impl Debug for Module {
         }
 
         if let Some(found_expression) = &self.expression {
-            writeln!(f, "{found_expression:?}")?;
+            match found_expression {
+                Expression::Block(expressions) => {
+                    for expression in expressions {
+                        writeln!(f, "{expression:?}")?;
+                    }
+                }
+                _ => writeln!(f, "{found_expression:?}")?,
+            }
         }
 
         Ok(())

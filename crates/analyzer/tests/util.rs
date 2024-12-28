@@ -40,18 +40,17 @@ fn internal_compile(script: &str) -> Result<ResolvedModule, ResolveError> {
         resolved_definitions.push(resolved_definition);
     }
 
-    let mut resolved_expressions = Vec::new();
-    for expression in &program.expression {
-        let resolved_statement = resolver.resolve_expression(expression)?;
-
-        resolved_expressions.push(resolved_statement);
-    }
+    let expression = &program.expression;
+    let maybe_resolved_expression = match expression {
+        Some(unwrapped_expression) => Some(resolver.resolve_expression(unwrapped_expression)?),
+        None => None,
+    };
 
     let ns_ref = Rc::new(RefCell::new(ResolvedModuleNamespace::new(&[])));
 
     let resolved_module = ResolvedModule {
         definitions: resolved_definitions,
-        expression: resolved_expressions,
+        expression: maybe_resolved_expression,
         namespace: ns_ref,
     };
 
