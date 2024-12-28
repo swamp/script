@@ -47,7 +47,7 @@ pub fn resolve_to_existing_module(
     source_map: &SourceMap,
     resolved_module: Rc<RefCell<ResolvedModule>>,
     ast_module: &ParseModule,
-) -> Result<Vec<ResolvedStatement>, ResolveError> {
+) -> Result<Option<ResolvedExpression>, ResolveError> {
     let statements = {
         let mut name_lookup = NameLookup::new(target_namespace.clone(), &modules);
         let mut resolver = Resolver::new(
@@ -61,7 +61,12 @@ pub fn resolve_to_existing_module(
             let _resolved_def = resolver.resolve_definition(ast_def)?;
         }
 
-        resolver.resolve_statements(ast_module.ast_module.statements())?
+        let maybe_resolved_expression = if let Some(expr) = ast_module.ast_module.expression() {
+            Some(resolver.resolve_expression(expr)?)
+        } else {
+            None
+        };
+        maybe_resolved_expression
     };
 
     Ok(statements)

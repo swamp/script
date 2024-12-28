@@ -10,13 +10,13 @@ use std::cell::RefCell;
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
 use std::rc::Rc;
+use swamp_script_semantic::ResolvedNode;
 use swamp_script_semantic::{
     ExternalFunctionId, ResolvedArrayTypeRef, ResolvedEnumVariantStructTypeRef,
     ResolvedEnumVariantTupleTypeRef, ResolvedEnumVariantTypeRef, ResolvedFormatSpecifierKind,
     ResolvedInternalFunctionDefinitionRef, ResolvedMapTypeRef, ResolvedPrecisionType,
     ResolvedRustTypeRef, ResolvedStructTypeRef, ResolvedTupleTypeRef, TypeNumber,
 };
-use swamp_script_semantic::{ResolvedNode, ResolvedType};
 
 pub trait RustType: Any + Debug + Display {
     fn as_any(&self) -> &dyn Any;
@@ -200,28 +200,28 @@ impl Value {
     }
     pub fn expect_string(&self) -> Result<String, ValueError> {
         match self.unref() {
-            Value::String(s) => Ok(s),
+            Self::String(s) => Ok(s),
             _ => Err(ValueError::ConversionError("Expected string value".into())),
         }
     }
 
     pub fn expect_int(&self) -> Result<i32, ValueError> {
         match self.unref() {
-            Value::Int(v) => Ok(v),
+            Self::Int(v) => Ok(v),
             _ => Err(ValueError::ConversionError("Expected int value".into())),
         }
     }
 
     pub fn as_bool(&self) -> Result<bool, String> {
         match self {
-            Value::Bool(b) => Ok(*b),
+            Self::Bool(b) => Ok(*b),
             _ => Err("Expected boolean value".to_string()),
         }
     }
 
     pub fn is_truthy(&self) -> Result<bool, String> {
         let v = match self {
-            Value::Bool(b) => *b,
+            Self::Bool(b) => *b,
             _ => return Err("Expected boolean value".to_string()),
         };
 
@@ -230,7 +230,7 @@ impl Value {
 
     pub fn downcast_rust<T: RustType + 'static>(&self) -> Option<Rc<RefCell<Box<T>>>> {
         match self {
-            Value::RustValue(_rust_type_ref, rc) => {
+            Self::RustValue(_rust_type_ref, rc) => {
                 let type_matches = {
                     let guard = rc.borrow();
                     (**guard).as_any().is::<T>()
@@ -247,17 +247,15 @@ impl Value {
     }
 
     pub fn downcast_rust_mut_or_not<T: RustType + 'static>(&self) -> Option<Rc<RefCell<Box<T>>>> {
-        if let Some(found) = self.downcast_rust_mut() {
-            Some(found)
-        } else {
-            self.downcast_rust()
-        }
+        self.downcast_rust_mut()
+            .map_or_else(|| self.downcast_rust(), Some)
     }
 
+    #[must_use]
     pub fn downcast_rust_mut<T: RustType + 'static>(&self) -> Option<Rc<RefCell<Box<T>>>> {
         match self {
-            Value::Reference(r) => match &*r.borrow() {
-                Value::RustValue(_rust_type_ref, rc) => {
+            Self::Reference(r) => match &*r.borrow() {
+                Self::RustValue(_rust_type_ref, rc) => {
                     let type_matches = {
                         let guard = rc.borrow();
                         (**guard).as_any().is::<T>()
@@ -276,6 +274,7 @@ impl Value {
         }
     }
 
+    #[must_use]
     pub fn downcast_hidden_rust<T: RustType + 'static>(&self) -> Option<Rc<RefCell<Box<T>>>> {
         match self {
             Value::Struct(_struct_ref, fields) => fields[0].downcast_rust(),
@@ -303,7 +302,7 @@ impl Value {
     #[must_use]
     pub fn unref(&self) -> Self {
         match self {
-            Value::Reference(ref inner) => inner.borrow().clone(),
+            Self::Reference(ref inner) => inner.borrow().clone(),
             _ => self.clone(),
         }
     }

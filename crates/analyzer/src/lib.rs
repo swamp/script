@@ -151,7 +151,6 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
             signature(&static_call_generic.function).return_type.clone()
         }
 
-        ResolvedExpression::Block(_statements) => ResolvedType::Unit(Rc::new(ResolvedUnitType)), // TODO: Fix this
         ResolvedExpression::InterpolatedString(string_type, _parts) => {
             ResolvedType::String(string_type.clone())
         }
@@ -163,7 +162,6 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
         ResolvedExpression::ExclusiveRange(range_type, _, _) => {
             ResolvedType::ExclusiveRange(range_type.clone())
         }
-        ResolvedExpression::IfElse(_condition, consequence, _alternate) => resolution(consequence),
         ResolvedExpression::IfElseOnlyVariable { true_block, .. } => resolution(true_block),
         ResolvedExpression::IfElseAssignExpression { true_block, .. } => resolution(true_block),
         ResolvedExpression::Match(resolved_match) => resolved_match.arms[0].expression_type.clone(),
@@ -216,6 +214,22 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
         ResolvedExpression::VariableCompoundAssignment(var_compound_assignment) => {
             var_compound_assignment.variable_ref.resolved_type.clone()
         }
+        ResolvedExpression::ForLoop(_pattern, _iterator_expr, expr) => resolution(expr),
+        ResolvedExpression::WhileLoop(_condition, expr) => resolution(expr),
+        ResolvedExpression::Return(ref maybe_expr) => maybe_expr
+            .as_ref()
+            .map_or(ResolvedType::Unit(Rc::new(ResolvedUnitType)), |expr| {
+                resolution(&*expr)
+            }),
+        ResolvedExpression::Break(_) => ResolvedType::Unit(Rc::new(ResolvedUnitType)),
+        ResolvedExpression::Continue(_) => ResolvedType::Unit(Rc::new(ResolvedUnitType)),
+        ResolvedExpression::Block(expressions) => match expressions.last() {
+            Some(last_expr) => resolution(last_expr),
+            None => ResolvedType::Unit(Rc::new(ResolvedUnitType)),
+        },
+        ResolvedExpression::If(_, true_expr, _) => resolution(true_expr),
+        ResolvedExpression::IfOnlyVariable { true_block, .. } => resolution(true_block),
+        ResolvedExpression::IfAssignExpression { true_block, .. } => resolution(true_block),
     };
 
     resolution_expression
@@ -437,28 +451,28 @@ impl<'a> Resolver<'a> {
         &mut self,
         var: &Variable,
         expr: &Expression,
-        statements: &Vec<Statement>,
-        maybe_else_statements: &Option<Vec<Statement>>,
-    ) -> Result<ResolvedStatement, ResolveError> {
+        true_expression: &Expression,
+        maybe_else_expression: &Option<Box<Expression>>,
+    ) -> Result<ResolvedExpression, ResolveError> {
         let resolved_var_expr = self.resolve_expression(expr)?;
 
         if let ResolvedType::Optional(inner_type) = resolution(&resolved_var_expr) {
             self.push_block_scope("if_unwrap");
             let resolved_var_ref =
                 self.create_local_variable(&var.name, &var.is_mutable, &inner_type)?;
-            let resolved_true = self.resolve_statements(statements)?;
+            let resolved_true = self.resolve_expression(true_expression)?;
             self.pop_block_scope("if_unwrap");
 
-            let resolved_false = if let Some(else_statements) = maybe_else_statements {
-                Some(self.resolve_statements(else_statements)?)
+            let resolved_false = if let Some(else_expression) = maybe_else_expression {
+                Some(Box::new(self.resolve_expression(else_expression)?))
             } else {
                 None
             };
 
-            Ok(ResolvedStatement::IfOnlyVariable {
+            Ok(ResolvedExpression::IfOnlyVariable {
                 variable: resolved_var_ref,
                 optional_expr: Box::new(resolved_var_expr),
-                true_block: resolved_true,
+                true_block: Box::from(resolved_true),
                 false_block: resolved_false,
             })
         } else {
@@ -470,28 +484,28 @@ impl<'a> Resolver<'a> {
         &mut self,
         var: &Variable,
         inner_expr: &Expression,
-        statements: &Vec<Statement>,
-        maybe_else_statements: &Option<Vec<Statement>>,
-    ) -> Result<ResolvedStatement, ResolveError> {
+        statements: &Expression,
+        maybe_else_statements: &Option<Box<Expression>>,
+    ) -> Result<ResolvedExpression, ResolveError> {
         let resolved_expr = self.resolve_expression(inner_expr)?;
 
         if let ResolvedType::Optional(inner_type) = resolution(&resolved_expr) {
             self.push_block_scope("if_assign_unwrap");
             let resolved_var_ref =
                 self.create_local_variable(&var.name, &var.is_mutable, &inner_type)?;
-            let resolved_true = self.resolve_statements(statements)?;
+            let resolved_true = self.resolve_expression(statements)?;
             self.pop_block_scope("if_assign_unwrap");
 
             let resolved_false = if let Some(else_statements) = maybe_else_statements {
-                Some(self.resolve_statements(else_statements)?)
+                Some(Box::new(self.resolve_expression(else_statements)?))
             } else {
                 None
             };
 
-            Ok(ResolvedStatement::IfAssignExpression {
+            Ok(ResolvedExpression::IfAssignExpression {
                 variable: resolved_var_ref,
                 optional_expr: Box::new(resolved_expr),
-                true_block: resolved_true,
+                true_block: Box::from(resolved_true),
                 false_block: resolved_false,
             })
         } else {
@@ -502,51 +516,24 @@ impl<'a> Resolver<'a> {
     fn resolve_normal_if_statement(
         &mut self,
         condition: &Expression,
-        statements: &[Statement],
-        maybe_else_statements: &Option<Vec<Statement>>,
-    ) -> Result<ResolvedStatement, ResolveError> {
+        true_expression: &Expression,
+        maybe_false_expression: &Option<Box<Expression>>,
+    ) -> Result<ResolvedExpression, ResolveError> {
         let condition = self.resolve_bool_expression(condition)?;
 
         // For the true branch
-        let mut resolved_statements = Vec::new();
-        for (i, stmt) in statements.iter().enumerate() {
-            let resolved_stmt = self.resolve_statement(stmt)?;
-            /*
-            if i == statements.len() - 1 {
-                if let ResolvedStatement::Expression(expr) = resolved_stmt {
-                    resolved_stmt = ResolvedStatement::Expression(ResolvedExpression::Option(
-                        Some(Box::new(expr)),
-                    ));
-                }
-            }
-
-             */
-            resolved_statements.push(resolved_stmt);
-        }
+        let resolved_true = Box::new(self.resolve_expression(&true_expression)?);
 
         // For the else branch
-        let else_statements = if let Some(else_statements) = maybe_else_statements {
-            let mut resolved = Vec::new();
-            for (_i, stmt) in else_statements.iter().enumerate() {
-                let resolved_stmt = self.resolve_statement(stmt)?;
-                /*
-                if i == else_statements.len() - 1 {
-                    if let ResolvedStatement::Expression(expr) = resolved_stmt {
-                        resolved_stmt = ResolvedStatement::Expression(ResolvedExpression::Option(
-                            Some(Box::new(expr)),
-                        ));
-                    }
-                }*/
-                resolved.push(resolved_stmt);
-            }
-            Some(resolved)
+        let else_statements = if let Some(false_expression) = maybe_false_expression {
+            Some(Box::new(self.resolve_expression(&false_expression)?))
         } else {
             None
         };
 
-        Ok(ResolvedStatement::If(
+        Ok(ResolvedExpression::If(
             condition,
-            resolved_statements,
+            resolved_true,
             else_statements,
         ))
     }
@@ -757,10 +744,7 @@ impl<'a> Resolver<'a> {
         };
 
         let enum_type_str = self.get_text(enum_type_name).to_string();
-        let parent_ref = self
-            .shared
-            .lookup
-            .add_enum_type(&enum_type_str, enum_parent)?;
+        let parent_ref = self.shared.lookup.add_enum_type(enum_parent)?;
 
         for variant_type in ast_variants {
             let mut container_number: Option<TypeNumber> = None;
@@ -908,9 +892,6 @@ impl<'a> Resolver<'a> {
                     self.resolve_impl_definition(type_identifier, functions)?;
                 ResolvedDefinition::ImplType(attached_type_type)
             }
-            Definition::TypeAlias(identifier, target_type) => ResolvedDefinition::Alias(
-                self.resolve_type_alias_definition(identifier, target_type)?,
-            ),
             Definition::Comment(comment_ref) => {
                 ResolvedDefinition::Comment(self.to_node(comment_ref))
             }
@@ -922,26 +903,13 @@ impl<'a> Resolver<'a> {
 
     fn resolve_statements_in_function(
         &mut self,
-        statements: &[Statement],
+        expression: &Expression,
         return_type: &ResolvedType,
-    ) -> Result<Vec<ResolvedStatement>, ResolveError> {
-        let mut resolved_statements = Vec::new();
+    ) -> Result<ResolvedExpression, ResolveError> {
+        let resolved_statement = self.resolve_expression(expression)?;
+        let wrapped_expr = Self::check_and_wrap_return_value(resolved_statement, return_type)?;
 
-        for (i, statement) in statements.iter().enumerate() {
-            let mut resolved_statement = self.resolve_statement(statement)?;
-
-            // Handle last statement in function
-            if i == statements.len() - 1 {
-                if let ResolvedStatement::Expression(expr) = resolved_statement {
-                    let wrapped_expr = Self::check_and_wrap_return_value(expr, return_type)?;
-                    resolved_statement = ResolvedStatement::Expression(wrapped_expr);
-                }
-            }
-
-            resolved_statements.push(resolved_statement);
-        }
-
-        Ok(resolved_statements)
+        Ok(wrapped_expr)
     }
 
     fn resolve_function_definition(
@@ -979,7 +947,7 @@ impl<'a> Resolver<'a> {
                         parameters,
                         return_type,
                     },
-                    statements,
+                    body: statements,
                     name: ResolvedLocalIdentifier(self.to_node(&function_data.declaration.name)),
                 };
 
@@ -1068,7 +1036,7 @@ impl<'a> Resolver<'a> {
                     )?;
                 }
 
-                let statements = self.resolve_statements(&function_data.body)?;
+                let statements = self.resolve_expression(&function_data.body)?;
 
                 let internal = ResolvedInternalFunctionDefinition {
                     signature: ResolvedFunctionSignature {
@@ -1076,7 +1044,7 @@ impl<'a> Resolver<'a> {
                         parameters,
                         return_type,
                     },
-                    statements,
+                    body: statements,
                     name: ResolvedLocalIdentifier(self.to_node(&function_data.declaration.name)),
                 };
 
@@ -1125,18 +1093,6 @@ impl<'a> Resolver<'a> {
             }
         };
         Ok(resolved_fn)
-    }
-
-    pub fn resolve_type_alias_definition(
-        &mut self,
-        name: &Node,
-        target_type: &Type,
-    ) -> Result<ResolvedType, ResolveError> {
-        let resolved_type = self.resolve_type(target_type)?;
-        let alias_type =
-            ResolvedType::Alias(LocalTypeName(self.to_node(name)), Box::new(resolved_type));
-
-        Ok(alias_type)
     }
 
     fn resolve_impl_definition(
@@ -1233,105 +1189,6 @@ impl<'a> Resolver<'a> {
         self.scope.return_type.clone()
     }
 
-    pub fn resolve_statement(
-        &mut self,
-        statement: &Statement,
-    ) -> Result<ResolvedStatement, ResolveError> {
-        let converted = match statement {
-            Statement::ForLoop(pattern, iteratable_expression, statements) => {
-                let resolved_iterator = self.resolve_iterator(
-                    &iteratable_expression.expression,
-                    &iteratable_expression.is_mut,
-                )?;
-
-                self.push_block_scope("for_loop");
-                let pattern = self.resolve_for_pattern(
-                    pattern,
-                    resolved_iterator.key_type.as_ref(),
-                    &resolved_iterator.value_type,
-                )?;
-                let resolved_statements = self.resolve_statements(statements)?;
-                self.pop_block_scope("for_loop");
-
-                ResolvedStatement::ForLoop(pattern, resolved_iterator, resolved_statements)
-            }
-            Statement::WhileLoop(expression, statements) => {
-                let condition = self.resolve_bool_expression(expression)?;
-                self.push_block_scope("while_loop");
-                let resolved_statements = self.resolve_statements(statements)?;
-                self.pop_block_scope("while_loop");
-
-                ResolvedStatement::WhileLoop(condition, resolved_statements)
-            }
-            Statement::Return(expr) => {
-                let resolved_expr = self.resolve_expression(expr)?;
-                let return_type = self.current_function_return_type();
-                let wrapped_expr = Self::check_and_wrap_return_value(resolved_expr, &return_type)?;
-                ResolvedStatement::Return(wrapped_expr)
-            }
-            Statement::Break(node) => ResolvedStatement::Break(self.to_node(node)),
-            Statement::Continue(node) => ResolvedStatement::Continue(self.to_node(node)),
-            Statement::Expression(expression) => {
-                ResolvedStatement::Expression(self.resolve_expression(expression)?)
-            }
-            Statement::Block(statements) => {
-                ResolvedStatement::Block(self.resolve_statements(statements)?)
-            }
-            Statement::If(expression, statements, maybe_else_statements) => match expression {
-                Expression::PostfixOp(PostfixOperator::Unwrap(_unwrap_node), expr) => {
-                    if let Expression::VariableAccess(var) = &**expr {
-                        self.handle_optional_unwrap_statement(
-                            var,
-                            expr,
-                            statements,
-                            maybe_else_statements,
-                        )?
-                    } else {
-                        Err(ResolveError::ExpectedVariable)?
-                    }
-                }
-                Expression::VariableAssignment(var, expr) => {
-                    if let Expression::PostfixOp(
-                        PostfixOperator::Unwrap(_unwrap_node),
-                        inner_expr,
-                    ) = &**expr
-                    {
-                        self.handle_optional_assign_unwrap_statement(
-                            var,
-                            inner_expr,
-                            statements,
-                            maybe_else_statements,
-                        )?
-                    } else {
-                        self.resolve_normal_if_statement(
-                            expression,
-                            statements,
-                            maybe_else_statements,
-                        )?
-                    }
-                }
-                _ => {
-                    self.resolve_normal_if_statement(expression, statements, maybe_else_statements)?
-                }
-            },
-        };
-
-        Ok(converted)
-    }
-
-    pub fn resolve_statements(
-        &mut self,
-        statements: &Vec<Statement>,
-    ) -> Result<Vec<ResolvedStatement>, ResolveError> {
-        let mut resolved_statements = Vec::new();
-        for statement in statements {
-            let resolved_statement = self.resolve_statement(statement)?;
-            resolved_statements.push(resolved_statement);
-        }
-
-        Ok(resolved_statements)
-    }
-
     fn resolve_parameters(
         &mut self,
         parameters: &Vec<Parameter>,
@@ -1406,7 +1263,7 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn resolve_expression(
+    pub fn resolve_expression(
         &mut self,
         ast_expression: &Expression,
     ) -> Result<ResolvedExpression, ResolveError> {
@@ -1626,9 +1483,8 @@ impl<'a> Resolver<'a> {
                     ast_arguments,
                 )?)
             }
-            Expression::Block(statements) => {
-                let statements = self.resolve_statements(statements)?;
-                ResolvedExpression::Block(statements)
+            Expression::Block(expressions) => {
+                ResolvedExpression::Block(self.resolve_expressions(expressions)?)
             }
             Expression::InterpolatedString(string_parts) => ResolvedExpression::InterpolatedString(
                 self.shared.types.string_type.clone(),
@@ -1655,9 +1511,91 @@ impl<'a> Resolver<'a> {
                 ResolvedExpression::Literal(self.resolve_literal(literal)?)
             }
 
-            // Comparison
-            Expression::IfElse(condition, consequence, alternate) => {
-                self.analyze_optional_condition(condition, consequence, alternate)?
+            Expression::ForLoop(pattern, iteratable_expression, statements) => {
+                let resolved_iterator = self.resolve_iterator(
+                    &iteratable_expression.expression,
+                    &iteratable_expression.is_mut,
+                )?;
+
+                self.push_block_scope("for_loop");
+                let pattern = self.resolve_for_pattern(
+                    pattern,
+                    resolved_iterator.key_type.as_ref(),
+                    &resolved_iterator.value_type,
+                )?;
+                let resolved_statements = self.resolve_expression(statements)?;
+                self.pop_block_scope("for_loop");
+
+                ResolvedExpression::ForLoop(
+                    pattern,
+                    resolved_iterator,
+                    Box::from(resolved_statements),
+                )
+            }
+            Expression::WhileLoop(expression, statements) => {
+                let condition = self.resolve_bool_expression(expression)?;
+                self.push_block_scope("while_loop");
+                let resolved_statements = self.resolve_expression(statements)?;
+                self.pop_block_scope("while_loop");
+
+                ResolvedExpression::WhileLoop(condition, Box::from(resolved_statements))
+            }
+            Expression::Return(expr) => {
+                let wrapped_expr = if let Some(found_expr) = expr {
+                    let resolved_expr = self.resolve_expression(found_expr)?;
+                    let return_type = self.current_function_return_type();
+                    Some(Box::new(Self::check_and_wrap_return_value(
+                        resolved_expr,
+                        &return_type,
+                    )?))
+                } else {
+                    None
+                };
+                ResolvedExpression::Return(wrapped_expr)
+            }
+            Expression::Break(node) => ResolvedExpression::Break(self.to_node(node)),
+            Expression::Continue(node) => ResolvedExpression::Continue(self.to_node(node)),
+
+            Expression::If(expression, true_expression, maybe_false_expression) => {
+                match &**expression {
+                    Expression::PostfixOp(PostfixOperator::Unwrap(_unwrap_node), expr) => {
+                        if let Expression::VariableAccess(var) = &**expr {
+                            self.handle_optional_unwrap_statement(
+                                var,
+                                expr,
+                                true_expression,
+                                maybe_false_expression,
+                            )?
+                        } else {
+                            Err(ResolveError::ExpectedVariable)?
+                        }
+                    }
+                    Expression::VariableAssignment(var, expr) => {
+                        if let Expression::PostfixOp(
+                            PostfixOperator::Unwrap(_unwrap_node),
+                            inner_expr,
+                        ) = &**expr
+                        {
+                            self.handle_optional_assign_unwrap_statement(
+                                var,
+                                inner_expr,
+                                true_expression,
+                                maybe_false_expression,
+                            )?
+                        } else {
+                            self.resolve_normal_if_statement(
+                                expression,
+                                true_expression,
+                                maybe_false_expression,
+                            )?
+                        }
+                    }
+                    _ => self.resolve_normal_if_statement(
+                        expression,
+                        true_expression,
+                        maybe_false_expression,
+                    )?,
+                }
             }
 
             Expression::Match(expression, arms) => {
@@ -1987,7 +1925,7 @@ impl<'a> Resolver<'a> {
         };
 
         Ok(ResolvedBooleanExpression {
-            expression: bool_expression,
+            expression: Box::from(bool_expression),
         })
     }
 
@@ -2220,7 +2158,7 @@ impl<'a> Resolver<'a> {
         Ok(ResolvedIterator {
             key_type,
             value_type,
-            resolved_expression,
+            resolved_expression: Box::new(resolved_expression),
             mutable_node: self.to_node_option(is_mutable),
         })
     }
@@ -3289,16 +3227,16 @@ impl<'a> Resolver<'a> {
                 ResolvedExpression::Option(Some(Box::new(resolved_false)))
             };*/
 
-            Ok(ResolvedExpression::IfElse(
-                Box::from(resolved_condition),
+            Ok(ResolvedExpression::If(
+                *Box::from(resolved_condition),
                 Box::from(resolved_true),
-                Box::from(resolved_false),
+                Option::from(Box::from(resolved_false)),
             ))
         } else {
-            Ok(ResolvedExpression::IfElse(
-                Box::from(resolved_condition),
+            Ok(ResolvedExpression::If(
+                *Box::from(resolved_condition),
                 Box::from(resolved_true),
-                Box::from(resolved_false),
+                Option::from(Box::from(resolved_false)),
             ))
         }
     }

@@ -40,18 +40,18 @@ fn internal_compile(script: &str) -> Result<ResolvedModule, ResolveError> {
         resolved_definitions.push(resolved_definition);
     }
 
-    let mut resolved_statements = Vec::new();
-    for statement in &program.statements {
-        let resolved_statement = resolver.resolve_statement(statement)?;
+    let mut resolved_expressions = Vec::new();
+    for expression in &program.expression {
+        let resolved_statement = resolver.resolve_expression(expression)?;
 
-        resolved_statements.push(resolved_statement);
+        resolved_expressions.push(resolved_statement);
     }
 
     let ns_ref = Rc::new(RefCell::new(ResolvedModuleNamespace::new(&[])));
 
     let resolved_module = ResolvedModule {
         definitions: resolved_definitions,
-        statements: resolved_statements,
+        expression: resolved_expressions,
         namespace: ns_ref,
     };
 

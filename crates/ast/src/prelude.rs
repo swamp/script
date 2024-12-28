@@ -7,6 +7,6 @@ pub use crate::{
     FunctionDeclaration, FunctionWithBody, IdentifierName, ImplItem, ImplMember, Import,
     ImportItems, Literal, LocalIdentifier, LocalTypeIdentifier, MatchArm, Module, ModulePath,
     MutVariableRef, Node, Parameter, Pattern, PostfixOperator, PrecisionType,
-    QualifiedTypeIdentifier, SelfParameter, Statement, StringConst, StringPart, StructType, Type,
+    QualifiedTypeIdentifier, SelfParameter, StringConst, StringPart, StructType, Type,
     UnaryOperator, Variable,
 };

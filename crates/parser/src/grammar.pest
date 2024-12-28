@@ -4,37 +4,20 @@ space = _{ " " | "\t" | NEWLINE }
 line_comment = _{ "//" ~  (!NEWLINE ~ ANY)* ~ NEWLINE }
 block_comment = _{ "/*" ~ (!"*/" ~ ANY)* ~ "*/" }
 
-program = { SOI ~ statement* ~ EOI }
+program = { SOI ~ (definition | expression)* ~ EOI }
 
 doc_comment = @{ "///" ~ (!NEWLINE ~ ANY)* ~ NEWLINE }
 
-// Separate out definitions
 definition = {
     doc_comment* ~
     (
-    import_stmt
+    import_definition
     | struct_def
     | enum_def
     | function_def
     | impl_def
     | trait_def
     )
-}
-
-control_statement = {
-    continue_stmt
-    | break_stmt
-    | for_loop
-    | while_loop
-    | if_stmt
-    | return_stmt
-    | expression_statement
-}
-
-// STATEMENTS ------------------------------------------------------------
-statement = {
-    definition
-    | control_statement
 }
 
 trait_def = {
@@ -85,19 +68,14 @@ simple_variant = { type_identifier }
 tuple_variant = { type_identifier ~ "(" ~ type_name ~ ("," ~ type_name)* ~ ")" }
 struct_variant = { type_identifier ~ "{" ~ struct_type_field ~ ("," ~ struct_type_field)* ~ trailing_comma? ~ "}" }
 
-// Field definitions within a struct
 field_definitions = { (field_def ~ ("," ~ field_def)*)? }
 
-
-// Single field definition
 field_def = { identifier ~ ":" ~ type_name }
 
-// Common function signature
 function_signature = {
     "fn" ~ identifier ~ "(" ~ (parameter_list ~ ","?)? ~ ")" ~ return_type?
 }
 
-// Common member signature (includes self parameter)
 member_signature = {
      "fn" ~ identifier ~ "(" ~ (self_parameter ~ ("," ~ parameter_list)? | parameter_list)? ~ ")" ~ return_type?
 }
@@ -107,11 +85,10 @@ external_function = {
 }
 
 normal_function = {
-    function_signature ~ stmt_block
+    function_signature ~ expression
 }
 
 
-// Member definitions in impl blocks
 member_def = {
     external_member_function |
     normal_member_function
@@ -123,41 +100,36 @@ external_member_function = {
 }
 
 normal_member_function = {
-    member_signature ~ stmt_block
+    member_signature ~ expression
 }
 
 
-// Regular function definitions
 function_def = {
     external_function |
     normal_function
 }
 
-// Parameters
 parameter_list = { parameter ~ ("," ~ " "* ~ parameter)* }  // PEST BUG: need explicit spaces after comma
 
 parameter = { mut_keyword? ~ identifier ~ ":" ~ type_name }
 mut_keyword = { "mut" }
 
-// Return type
 return_type = { "->" ~ type_name }
 
 
-for_loop = { "for" ~ for_pattern ~ "in" ~ mut_keyword? ~ expression ~ stmt_block }
+for_loop = { "for" ~ for_pattern ~ "in" ~ mut_keyword? ~ expression ~ expression }
 
 
 mut_identifier = { mut_keyword? ~ identifier }
 for_pattern = { for_pair | mut_identifier }
 for_pair = { mut_identifier ~ "," ~ mut_identifier }
 
-// While-loop
-while_loop = { "while" ~ expression ~ stmt_block }
+while_loop = { "while" ~ expression ~ expression }
 
-// Import statements
-import_stmt = {
-    "import" ~ (
-        import_list_from |  // import { sin, cos } from math
-        import_path        // import math or import geometry.shapes
+import_definition = {
+    "use" ~ (
+        import_list_from |
+        import_path
     )
 }
 
@@ -165,21 +137,12 @@ import_path = @{ identifier ~ ("." ~ identifier)* }
 import_list = { "{" ~ identifier ~ ("," ~ identifier)* ~ "}" }
 import_list_from = { import_list ~ "from" ~ import_path }
 
-// Return statement
-return_stmt = { "return" ~ expression }
+return_expr = { "return" ~ expression }
+continue_expr = { "continue" }
+break_expr = { "break" }
 
 
-continue_stmt = { "continue" }
-
-// Break statement
-break_stmt = { "break" }
-
-// Expression statement (an expression evaluated for its side effects)
-expression_statement = { expression }
-
-// Expression is the entry point
 expression = { assignment_expression | logical }
-
 
 assignment_expression = {
     multi_var_assignment
@@ -244,11 +207,8 @@ function_call_args = {
 
 postfix = { primary ~ postfix_op* }
 postfix_op = {
-    // 1) Optional "?" operator
     option_operator
-    // 2) Array suffix [ expression ]
     | array_suffix
-    // 3) Dot + identifier + optional function call
     | method_or_field_suffix
 }
 option_operator = { "?" }
@@ -305,7 +265,6 @@ function_argument = {
     mut_keyword? ~ expression
 }
 
-// Function and member related
 function_call = {
     identifier ~ "(" ~ (function_argument ~ ("," ~ " "* ~ function_argument)*)? ~ ")" // PEST BUG: need to be explicit about spaces after ,
 }
@@ -318,10 +277,15 @@ static_call = {
 array_index = { "[" ~ expression ~ "]" }
 
 
-// Primary expressions with proper float handling
 primary = {
     if_expr
     | match_expr
+    | for_loop
+    | while_loop
+    | return_expr
+    | break_expr
+    | continue_expr
+    | block
     | interpolated_string
     | enum_literal
     | static_call
@@ -338,26 +302,15 @@ primary = {
 
 identifier_pattern = { identifier }
 
-// If expression
-if_expr = { "if" ~ expression ~ block ~ "else" ~ block } // when used as an expression, the else part is mandatory
+if_expr = { "if" ~ expression ~ expression ~ ("else" ~ (if_expr | expression))? }
 
-// If statement has an optional `else`
-if_stmt = {
-    "if" ~ expression ~ stmt_block ~
-    ("else" ~ (if_stmt | stmt_block))?
-}
+block = { "{" ~ expression* ~ "}" }
 
-// Blocks
-stmt_block = { "{" ~ statement* ~ "}" } // Only for a small part of the language, for function definition and while and for loops.
-block = { "{" ~ expression ~ "}" } // This should be the most common one
-match_block = { "{" ~ statement* ~ expression? ~ "}" } // Match blocks can be a single expression. might be cool to try to have this for a normal block as well.
-
-// Match expression
 match_expr = { "match" ~ expression ~ "{" ~ match_arms ~ "}" }
 
 match_arms = { match_arm ~ ("," ~ match_arm)* ~ ","? }
 match_arm = {
-    match_pattern ~ "=>" ~ (match_block | expression)
+    match_pattern ~ "=>" ~ expression
 }
 
 
@@ -376,7 +329,6 @@ enum_pattern = {
 }
 
 
-// For simple variable lists (like in let expressions) where we don't allow expressions
 variable_list = {
     variable_item ~ ("," ~ variable_item)*
 }
@@ -385,7 +337,6 @@ variable_item = {
     mut_keyword? ~ identifier
 }
 
-// For pattern matching with expressions
 pattern_list = {
     (pattern_field | expression) ~
     ("," ~ " "* ~ (pattern_field | expression))*
@@ -407,7 +358,6 @@ type_name = { base_type ~ optional_marker? }
 
 optional_marker = { "?" }
 
-// This is used to refer to a specific type, not used in type definitions
 base_type = {
     built_in_type
     | qualified_type_identifier ~ generic_params?
@@ -427,13 +377,10 @@ literal = { tuple_lit | float_lit | int_lit | string_lit | bool_lit | unit_lit |
 
 none_lit = { "none" }
 
-// Integer literal
 int_lit = @{ "-"? ~ ASCII_DIGIT+ }
 
-// Floating-point literal
 float_lit = @{ "-"? ~ ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT+ }
 
-// String literal
 string_lit = @{ "\"" ~ ( "\\\"" | !"\"" ~ ANY )* ~ "\"" }
 
 // Interpolated string. Took a while to get this right due to Pest bug not handling space after comma correctly
@@ -462,27 +409,22 @@ format_specifier = @{
   | ".." ~ ASCII_DIGIT+ ~ ("f" | "s")
 }
 
-// Boolean literal
 bool_lit = { "true" | "false" }
 
 unit_lit = { "()" }
 
 enum_literal = { qualified_type_identifier ~ "::" ~ type_identifier ~ (struct_fields_lit | tuple_fields)? }
 
-// Add tuple literal definition
 tuple_lit = { "(" ~ expression ~ ("," ~ " "* ~ expression)* ~ ")" }  // PEST BUG: need explicit spaces after comma
 
-// Similar to struct_fields
 struct_fields_lit = { "{" ~ struct_field ~ ("," ~ " "* ~ struct_field)* ~ ","? ~ "}" }  // PEST BUG: need explicit spaces after comma
 
-// Array and map literals
 array_literal = { "[" ~ (expression ~ ("," ~ " "* ~ expression)*)? ~ "]" }  // PEST BUG: need explicit spaces after comma
 map_literal = {"[" ~ (map_entry ~ ("," ~ " "* ~ map_entry)*)? ~ "]"}  // PEST BUG: need explicit spaces after comma
 map_entry = {
     expression ~ ":" ~ expression
 }
-// Struct related
-// Similar to struct_fields_lit
+
 struct_fields = { (struct_field ~ ("," ~ " "* ~ struct_field)* ~ trailing_comma? )? }  // PEST BUG: need explicit spaces after comma
 struct_field = { identifier ~ ":" ~ expression }
 

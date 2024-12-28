@@ -1,5 +1,5 @@
 use crate::ns::{ResolvedModuleNamespace, ResolvedModuleNamespaceRef};
-use crate::{ResolvedDefinition, ResolvedStatement};
+use crate::{ResolvedDefinition, ResolvedExpression};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
@@ -18,7 +18,7 @@ impl Default for ResolvedModules {
 
 pub struct ResolvedModule {
     pub definitions: Vec<ResolvedDefinition>,
-    pub statements: Vec<ResolvedStatement>,
+    pub expression: Option<ResolvedExpression>,
     pub namespace: ResolvedModuleNamespaceRef,
 }
 
@@ -28,11 +28,11 @@ impl Debug for ResolvedModule {
             writeln!(f, "{resolved_def:?}")?;
         }
 
-        if !self.definitions.is_empty() && !self.statements.is_empty() {
+        if !self.definitions.is_empty() && !self.expression.is_some() {
             writeln!(f, "---\n")?;
         }
 
-        for resolved_statement in &self.statements {
+        if let Some(resolved_statement) = &self.expression {
             writeln!(f, "{resolved_statement:?}")?;
         }
 
@@ -48,7 +48,7 @@ impl ResolvedModule {
         Self {
             definitions: Vec::new(),
             namespace: ns_ref,
-            statements: Vec::new(),
+            expression: None,
         }
     }
 }
@@ -70,7 +70,7 @@ impl ResolvedModules {
         let ns_ref = Rc::new(RefCell::new(ResolvedModuleNamespace::new(module_path)));
         let module = ResolvedModule {
             definitions: vec![],
-            statements: vec![],
+            expression: None,
             namespace: ns_ref,
         };
         let module_ref = Rc::new(RefCell::new(module));
