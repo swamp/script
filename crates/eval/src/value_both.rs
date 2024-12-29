@@ -1,7 +1,7 @@
 use crate::prelude::ValueReference;
 use std::cell::RefCell;
 use std::rc::Rc;
-use swamp_script_core::prelude::Value;
+use swamp_script_core::prelude::{Value, ValueError};
 use swamp_script_core::value::RustType;
 
 #[derive(Debug, Clone)]
@@ -35,6 +35,29 @@ impl VariableValue {
             Self::Reference(r) => r.convert_to_string_if_needed(),
         }
     }
+
+    pub fn into_iter(self) -> Result<Box<dyn Iterator<Item = Value>>, ValueError> {
+        match self {
+            Self::Value(v) => v.into_iter(),
+            Self::Reference(r) => Err(ValueError::CanNotCoerceToIterator),
+        }
+    }
+
+    pub fn into_iter_pairs(self) -> Result<Box<dyn Iterator<Item = (Value, Value)>>, ValueError> {
+        match self {
+            Self::Value(v) => v.into_iter_pairs(),
+            Self::Reference(r) => Err(ValueError::CanNotCoerceToIterator),
+        }
+    }
+
+    pub fn into_iter_pairs_mut(
+        self,
+    ) -> Result<Box<dyn Iterator<Item = (Value, ValueReference)>>, ValueError> {
+        match self {
+            Self::Value(v) => Err(ValueError::CanNotCoerceToIterator),
+            Self::Reference(r) => r.into_iter_mut_pairs(),
+        }
+    }
 }
 
 #[inline]
@@ -43,7 +66,7 @@ pub fn convert_to_values(mem_values: &[VariableValue]) -> Option<Vec<Value>> {
         .iter()
         .map(|e| match e {
             VariableValue::Value(v) => Some(v.clone()),
-            _ => None,
+            VariableValue::Reference(v) => Some(v.0.borrow().clone()),
         })
         .collect()
 }

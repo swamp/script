@@ -18,6 +18,8 @@ use swamp_script_semantic::{
 };
 use swamp_script_semantic::{ResolvedNode, Span};
 
+pub type ValueRef = Rc<RefCell<Value>>;
+
 pub trait RustType: Any + Debug + Display {
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
@@ -46,10 +48,10 @@ pub enum Value {
     Option(Option<Box<Value>>),
 
     // Containers
-    Array(ResolvedArrayTypeRef, Vec<Value>),
-    Map(ResolvedMapTypeRef, SeqMap<Value, Value>), // Do not change to HashMap, the order is important for it to be deterministic
-    Tuple(ResolvedTupleTypeRef, Vec<Value>),
-    Struct(ResolvedStructTypeRef, Vec<Value>), // type of the struct, and the fields themselves in strict order
+    Array(ResolvedArrayTypeRef, Vec<ValueRef>),
+    Map(ResolvedMapTypeRef, SeqMap<Value, ValueRef>), // Do not change to HashMap, the order is important for it to be deterministic
+    Tuple(ResolvedTupleTypeRef, Vec<ValueRef>),
+    Struct(ResolvedStructTypeRef, Vec<ValueRef>), // type of the struct, and the fields themselves in strict order
 
     EnumVariantSimple(ResolvedEnumVariantTypeRef),
     EnumVariantTuple(ResolvedEnumVariantTupleTypeRef, Vec<Value>),
@@ -88,14 +90,15 @@ pub const SPARSE_TYPE_ID: TypeNumber = 999;
 // Iterators
 
 impl Value {
-    pub fn into_iter(
-        self,
-        is_mutable: bool,
-    ) -> Result<Box<dyn Iterator<Item = Value>>, ValueError> {
+    pub fn into_iter(self) -> Result<Box<dyn Iterator<Item = Value>>, ValueError> {
         match self {
             // TODO: Self::Reference(value_ref) => value_ref.borrow().clone().into_iter(is_mutable),
-            Self::Array(_, values) => Ok(Box::new(values.into_iter())),
-            Self::Map(_, seq_map) => Ok(Box::new(seq_map.into_values())),
+            Self::Array(_, values) => Ok(Box::new(
+                values.into_iter().map(|item| item.borrow().clone()),
+            )),
+            Self::Map(_, seq_map) => Ok(Box::new(
+                seq_map.into_values().map(|item| item.borrow().clone()),
+            )),
             Self::RustValue(ref rust_type_ref, _) => match rust_type_ref.number {
                 SPARSE_TYPE_ID => {
                     let sparse_map = self
@@ -123,19 +126,21 @@ impl Value {
 
     pub fn into_iter_pairs(self) -> Result<Box<dyn Iterator<Item = (Value, Value)>>, ValueError> {
         let values = match self {
-            Self::Map(_, seq_map) => Box::new(seq_map.into_iter()),
+            Self::Map(_, seq_map) => {
+                Box::new(seq_map.into_iter().map(|(k, v)| (k, v.borrow().clone())))
+            }
             Self::Tuple(_type_ref, elements) => {
                 let iter = elements
                     .into_iter()
                     .enumerate()
-                    .map(move |(i, v)| (Value::Int(i as i32), v));
+                    .map(move |(i, v)| (Value::Int(i as i32), v.borrow().clone()));
                 Box::new(iter) as Box<dyn Iterator<Item = (Value, Value)>>
             }
             Self::Array(_type_ref, array) => {
                 let iter = array
                     .into_iter()
                     .enumerate()
-                    .map(move |(i, v)| (Value::Int(i as i32), v));
+                    .map(move |(i, v)| (Value::Int(i as i32), v.borrow().clone()));
                 Box::new(iter) as Box<dyn Iterator<Item = (Value, Value)>>
             }
             Self::RustValue(ref rust_type_ref, ref _rust_value) => {
@@ -230,7 +235,7 @@ impl Value {
     #[must_use]
     pub fn downcast_hidden_rust<T: RustType + 'static>(&self) -> Option<Rc<RefCell<Box<T>>>> {
         match self {
-            Value::Struct(_struct_ref, fields) => fields[0].downcast_rust(),
+            Value::Struct(_struct_ref, fields) => fields[0].borrow().downcast_rust(),
             _ => None,
         }
     }
@@ -248,7 +253,7 @@ impl Value {
         rust_description: ResolvedRustTypeRef,
         value: T,
     ) -> Self {
-        let rust_value = Self::new_rust_value(rust_description, value);
+        let rust_value = Rc::new(RefCell::new(Self::new_rust_value(rust_description, value)));
         Value::Struct(struct_type, vec![rust_value])
     }
 }
@@ -271,7 +276,7 @@ impl Display for Value {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{val}")?;
+                    write!(f, "{}", val.borrow())?;
                 }
                 write!(f, "]")
             }
@@ -281,7 +286,7 @@ impl Display for Value {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{key}:{val}")?;
+                    write!(f, "{key}:{}", val.borrow())?;
                 }
                 write!(f, "]")
             }
@@ -292,7 +297,7 @@ impl Display for Value {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{val}")?;
+                    write!(f, "{}", val.borrow())?;
                 }
                 write!(f, ")")
             }
@@ -311,7 +316,7 @@ impl Display for Value {
                         write!(f, ", ")?;
                     }
                     let field_name = &fields[i];
-                    write!(f, "{field_name}: {val}")?;
+                    write!(f, "{field_name}: {}", val.borrow())?;
                 }
                 write!(f, " }}")
             }
@@ -407,15 +412,15 @@ impl Hash for Value {
             Self::Bool(b) => b.hash(state),
             Self::Unit => (),
             Self::Option(o) => o.hash(state),
-            Self::Array(_, arr) => arr.hash(state),
+            Self::Array(_, arr) => {}
             Self::Struct(type_ref, values) => {
                 type_ref.borrow().number.hash(state);
                 for v in values {
-                    v.hash(state);
+                    v.borrow().hash(state);
                 }
             }
-            Self::Map(_, items) => items.hash(state),
-            Self::Tuple(_, arr) => arr.hash(state),
+            Self::Map(_, items) => {}
+            Self::Tuple(_, arr) => {}
             Self::EnumVariantSimple(_) => (),
             Self::EnumVariantTuple(_, fields) => fields.hash(state),
             Self::EnumVariantStruct(_, fields) => fields.hash(state),
@@ -451,4 +456,9 @@ pub fn format_value(value: &Value, spec: &ResolvedFormatSpecifierKind) -> Result
             "Unsupported format specifier {spec:?} for value type {value:?}"
         )),
     }
+}
+
+#[must_use]
+pub fn convert_vec_to_rc_refcell(vec: Vec<Value>) -> Vec<Rc<RefCell<Value>>> {
+    vec.into_iter().map(|v| Rc::new(RefCell::new(v))).collect()
 }

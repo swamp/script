@@ -7,6 +7,6 @@ pub use crate::{
     err::ExecuteError,
     util_execute_function,
     value_both::{convert_to_values, VariableValue},
-    value_ref::{ValueRef, ValueReference},
+    value_ref::ValueReference,
     ExternalFunctions, Interpreter,
 };

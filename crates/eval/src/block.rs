@@ -1,8 +1,9 @@
 use crate::err::ExecuteError;
-use crate::prelude::{ValueRef, ValueReference, VariableValue};
+use crate::prelude::{ValueReference, VariableValue};
 use std::cell::RefCell;
 use std::rc::Rc;
 use swamp_script_core::prelude::Value;
+use swamp_script_core::value::ValueRef;
 use swamp_script_semantic::ResolvedVariableRef;
 
 #[derive(Debug, Clone)]
@@ -86,6 +87,16 @@ impl BlockScopes {
         }
     }
 
+    /// Initializes a variable for the first time
+    #[inline]
+    pub fn initialize_var_mut(&mut self, variable: &ResolvedVariableRef, value_ref: ValueRef) {
+        // TODO: Check that we are not overwriting an existing used variables (debug)
+        self.current_block_scopes[variable.scope_index].set(
+            variable.variable_index,
+            VariableValue::Reference(ValueReference(value_ref)),
+        );
+    }
+
     #[inline]
     fn set_local_var(&mut self, variable_index: usize, value: VariableValue) {
         let last_scope_index = self.current_block_scopes.len() - 1;
@@ -155,7 +166,7 @@ impl BlockScopes {
         &self,
         relative_scope_index: usize,
         variable_index: usize,
-    ) -> Result<&Rc<RefCell<Value>>, ExecuteError> {
+    ) -> Result<Rc<RefCell<Value>>, ExecuteError> {
         if relative_scope_index >= self.current_block_scopes.len() {
             panic!(
                 "illegal scope index {relative_scope_index} of {}",
@@ -170,7 +181,7 @@ impl BlockScopes {
         let existing_var = &variables[variable_index];
 
         Ok(match existing_var {
-            VariableValue::Reference(reference) => &reference.0,
+            VariableValue::Reference(reference) => reference.0.clone(),
             _ => return Err(ExecuteError::VariableWasNotMutable),
         })
     }
@@ -179,7 +190,7 @@ impl BlockScopes {
     pub fn lookup_mut_variable(
         &self,
         variable: &ResolvedVariableRef,
-    ) -> Result<&Rc<RefCell<Value>>, ExecuteError> {
+    ) -> Result<Rc<RefCell<Value>>, ExecuteError> {
         self.lookup_mut_var(variable.scope_index, variable.variable_index)
     }
 

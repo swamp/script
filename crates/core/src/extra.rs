@@ -20,7 +20,6 @@ pub struct SparseValueMap {
     pub sparse_slot: SparseSlot<Rc<RefCell<Value>>>,
     pub id_generator: IndexAllocator,
     pub type_parameter: ResolvedType,
-    //pub rust_type_ref: ResolvedRustTypeRef,
     pub resolved_type: ResolvedType,
     pub rust_type_ref_for_id: ResolvedRustTypeRef,
 }

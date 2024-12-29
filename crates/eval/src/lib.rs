@@ -4,13 +4,16 @@
  */
 use crate::block::{BlockScope, BlockScopes};
 use crate::err::ConversionError;
-use crate::prelude::{ValueRef, ValueReference, VariableValue};
+use crate::prelude::{ValueReference, VariableValue};
 use err::ExecuteError;
 use seq_map::SeqMap;
 use std::fmt::Debug;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use swamp_script_core::extra::{SparseValueId, SparseValueMap};
-use swamp_script_core::value::{format_value, to_rust_value, SourceMapLookup, Value, ValueError};
+use swamp_script_core::value::ValueRef;
+use swamp_script_core::value::{
+    convert_vec_to_rc_refcell, format_value, to_rust_value, SourceMapLookup, Value, ValueError,
+};
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
     ResolvedAccess, ResolvedBinaryOperatorKind, ResolvedCompoundOperatorKind, ResolvedForPattern,
@@ -431,6 +434,65 @@ impl<'a, C> Interpreter<'a, C> {
 
     */
 
+    fn evaluate_for_loop_mutable(
+        &mut self,
+        pattern: &ResolvedForPattern,
+        iterator_expr: &ResolvedIterator,
+        body: &Box<ResolvedExpression>,
+    ) -> Result<ValueWithSignal, ExecuteError> {
+        let mut result = Value::Unit;
+
+        let iterator_value = ValueReference(
+            self.evaluate_expression_mut_location_start(&iterator_expr.resolved_expression)?,
+        );
+
+        match pattern {
+            ResolvedForPattern::Single(var_ref) => {
+                self.push_block_scope();
+
+                for value in iterator_value.into_iter_mut()? {
+                    self.current_block_scopes.initialize_var_mut(var_ref, value);
+
+                    match self.evaluate_expression_with_signal(body)? {
+                        ValueWithSignal::Value(v) => result = v,
+                        ValueWithSignal::Return(v) => return Ok(ValueWithSignal::Return(v)),
+                        ValueWithSignal::Break => break,
+                        ValueWithSignal::Continue => continue,
+                    }
+                }
+
+                self.pop_block_scope();
+            }
+
+            ResolvedForPattern::Pair(first_ref, second_ref) => {
+                self.push_block_scope();
+
+                for (key, value_reference) in iterator_value.into_iter_mut_pairs()? {
+                    // Set both variables
+                    self.current_block_scopes.initialize_var(
+                        first_ref.scope_index,
+                        first_ref.variable_index,
+                        key,
+                        false,
+                    );
+                    self.current_block_scopes
+                        .initialize_var_mut(second_ref, value_reference.0);
+
+                    match self.evaluate_expression_with_signal(body)? {
+                        ValueWithSignal::Value(v) => result = v,
+                        ValueWithSignal::Return(v) => return Ok(ValueWithSignal::Return(v)),
+                        ValueWithSignal::Break => break,
+                        ValueWithSignal::Continue => continue,
+                    }
+                }
+
+                self.pop_block_scope();
+            }
+        }
+
+        Ok(ValueWithSignal::Value(result))
+    }
+
     fn evaluate_for_loop(
         &mut self,
         pattern: &ResolvedForPattern,
@@ -438,13 +500,14 @@ impl<'a, C> Interpreter<'a, C> {
         body: &Box<ResolvedExpression>,
     ) -> Result<ValueWithSignal, ExecuteError> {
         let mut result = Value::Unit;
+
         let iterator_value = self.evaluate_expression(&iterator_expr.resolved_expression)?;
 
         match pattern {
             ResolvedForPattern::Single(var_ref) => {
                 self.push_block_scope();
 
-                for value in iterator_value.into_iter(iterator_expr.is_mutable())? {
+                for value in iterator_value.into_iter()? {
                     self.current_block_scopes.initialize_var(
                         var_ref.scope_index,
                         var_ref.variable_index,
@@ -467,6 +530,7 @@ impl<'a, C> Interpreter<'a, C> {
                 self.push_block_scope();
 
                 // iterator_expr.is_mutable() should select reference
+
                 for (key, value) in iterator_value.into_iter_pairs()? {
                     // Set both variables
                     self.current_block_scopes.initialize_var(
@@ -646,13 +710,13 @@ impl<'a, C> Interpreter<'a, C> {
 
                 ResolvedLiteral::TupleLiteral(tuple_type, resolved_expressions) => {
                     let values = self.evaluate_expressions(resolved_expressions)?;
-                    Value::Tuple(tuple_type.clone(), values)
+                    Value::Tuple(tuple_type.clone(), convert_vec_to_rc_refcell(values))
                 }
 
                 ResolvedLiteral::UnitLiteral(_) => Value::Unit,
                 ResolvedLiteral::Array(array_type, expressions) => {
                     let values = self.evaluate_expressions(expressions)?;
-                    Value::Array(array_type.clone(), values)
+                    Value::Array(array_type.clone(), convert_vec_to_rc_refcell(values))
                 }
                 ResolvedLiteral::Map(map_type_ref, expressions) => {
                     let mut items = SeqMap::new();
@@ -660,7 +724,7 @@ impl<'a, C> Interpreter<'a, C> {
                         let key_val = self.evaluate_expression(key)?;
                         let value_val = self.evaluate_expression(value)?;
                         items
-                            .insert(key_val, value_val)
+                            .insert(key_val, Rc::new(RefCell::new(value_val)))
                             .map_err(|_err| ExecuteError::NonUniqueKeysInMapLiteralDetected)?;
                     }
                     Value::Map(map_type_ref.clone(), items)
@@ -674,7 +738,10 @@ impl<'a, C> Interpreter<'a, C> {
                     values.push(self.evaluate_expression(element)?);
                 }
 
-                Value::Array(array_instantiation.array_type_ref.clone(), values)
+                Value::Array(
+                    array_instantiation.array_type_ref.clone(),
+                    convert_vec_to_rc_refcell(values),
+                )
             }
 
             ResolvedExpression::StructInstantiation(struct_instantiation) => {
@@ -692,7 +759,10 @@ impl<'a, C> Interpreter<'a, C> {
                     field_values[*array_index] = value;
                 }
 
-                Value::Struct(struct_instantiation.struct_type_ref.clone(), field_values)
+                Value::Struct(
+                    struct_instantiation.struct_type_ref.clone(),
+                    convert_vec_to_rc_refcell(field_values),
+                )
             }
 
             ResolvedExpression::ExclusiveRange(_resolved_type_ref, start, end) => {
@@ -789,7 +859,7 @@ impl<'a, C> Interpreter<'a, C> {
                     .lookup_variable_mut_ref(variable_ref)?;
 
                 if let Value::Array(_type_id, ref mut vector) = &mut *array_val.borrow_mut() {
-                    vector.push(source_val);
+                    vector.push(Rc::new(RefCell::new(source_val)));
                 } else {
                     Err("Cannot extend non-array reference".to_string())?;
                 }
@@ -842,7 +912,7 @@ impl<'a, C> Interpreter<'a, C> {
                     if i < 0 || i >= elements.len() as i32 {
                         return Err(format!("Array index out of bounds: {i}"))?;
                     }
-                    elements[i as usize] = new_val.clone();
+                    elements[i as usize] = Rc::new(RefCell::new(new_val.clone()));
                 } else {
                     Err("Cannot index into non-array reference".to_string())?;
                 }
@@ -857,7 +927,7 @@ impl<'a, C> Interpreter<'a, C> {
 
                 if let Value::Map(_type_id, ref mut elements) = &mut *map_val.borrow_mut() {
                     elements
-                        .insert(index_val, new_val.clone())
+                        .insert(index_val, Rc::new(RefCell::new(new_val.clone())))
                         .expect("todo: improve error handling");
                 } else {
                     Err("Cannot index into non-array reference".to_string())?;
@@ -903,7 +973,7 @@ impl<'a, C> Interpreter<'a, C> {
                         if i < 0 || i >= vector.len() as i32 {
                             return Err(format!("Array index out of bounds: {i}"))?;
                         }
-                        vector[i as usize].clone()
+                        vector[i as usize].borrow().clone()
                     } else {
                         return Err("Cannot extend non-array reference".to_string())?;
                     }
@@ -922,7 +992,7 @@ impl<'a, C> Interpreter<'a, C> {
                         let x = seq_map.get(&index_val);
                         x.map_or_else(
                             || Value::Option(None),
-                            |v| Value::Option(Some(Box::from(v.clone()))),
+                            |v| Value::Option(Some(Box::from(v.borrow().clone()))),
                         )
                     } else {
                         return Err(ExecuteError::NotAMap);
@@ -994,8 +1064,17 @@ impl<'a, C> Interpreter<'a, C> {
             }
 
             ResolvedExpression::MemberCall(resolved_member_call) => {
-                let member_value =
-                    self.evaluate_expression(&resolved_member_call.self_expression)?;
+                let mem_self_value = if resolved_member_call.self_is_mutable {
+                    VariableValue::Reference(ValueReference(
+                        self.evaluate_expression_mut_location_start(
+                            &resolved_member_call.self_expression,
+                        )?,
+                    ))
+                } else {
+                    VariableValue::Value(
+                        self.evaluate_expression(&resolved_member_call.self_expression)?,
+                    )
+                };
 
                 let parameters = match &*resolved_member_call.function {
                     ResolvedFunction::Internal(function_data) => {
@@ -1007,7 +1086,7 @@ impl<'a, C> Interpreter<'a, C> {
                 };
 
                 let mut member_call_arguments = Vec::new();
-                member_call_arguments.push(VariableValue::Value(member_value)); // Add self as first argument
+                member_call_arguments.push(mem_self_value); // Add self as first argument
                 member_call_arguments.extend(self.evaluate_args(&*resolved_member_call.arguments)?);
 
                 // Check total number of parameters (including self)
@@ -1326,9 +1405,15 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            ResolvedExpression::ForLoop(pattern, iterator_expr, body) => self
-                .evaluate_for_loop(pattern, iterator_expr, body)?
-                .try_into()?,
+            ResolvedExpression::ForLoop(pattern, iterator_expr, body) => {
+                if iterator_expr.is_mutable() {
+                    self.evaluate_for_loop_mutable(pattern, iterator_expr, body)?
+                        .try_into()?
+                } else {
+                    self.evaluate_for_loop(pattern, iterator_expr, body)?
+                        .try_into()?
+                }
+            }
         };
 
         Ok(value)
@@ -1368,15 +1453,19 @@ impl<'a, C> Interpreter<'a, C> {
                                 for (element, value) in elements.iter().zip(values.iter()) {
                                     match element {
                                         ResolvedPatternElement::Variable(var_ref) => {
-                                            self.current_block_scopes
-                                                .set_local_var_value(var_ref, value.clone());
+                                            self.current_block_scopes.set_local_var_value(
+                                                var_ref,
+                                                value.borrow().clone(),
+                                            );
                                         }
                                         ResolvedPatternElement::VariableWithFieldIndex(
                                             var_ref,
                                             _,
                                         ) => {
-                                            self.current_block_scopes
-                                                .set_local_var_value(var_ref, value.clone());
+                                            self.current_block_scopes.set_local_var_value(
+                                                var_ref,
+                                                value.borrow().clone(),
+                                            );
                                         }
                                         ResolvedPatternElement::Wildcard(_) => {
                                             // Skip wildcards
@@ -1647,12 +1736,12 @@ impl<'a, C> Interpreter<'a, C> {
     fn expressions_equal_to_values(
         &mut self,
         p0: &[ResolvedExpression],
-        p1: &[Value],
+        p1: &[ValueRef],
     ) -> Result<bool, ExecuteError> {
         for (a, b_value) in p0.iter().zip(p1.iter()) {
             let a_value = self.evaluate_expression(a)?;
 
-            if a_value != *b_value {
+            if a_value != *b_value.borrow() {
                 return Ok(false);
             }
         }
@@ -1671,6 +1760,11 @@ impl<'a, C> Interpreter<'a, C> {
                 .current_block_scopes
                 .lookup_mut_variable(var_ref)?
                 .clone()),
+            ResolvedExpression::FieldAccess(base_expression, _type_ref, resolved_access) => {
+                //info!(?base_expression, "base expression for field access");
+                let start = self.evaluate_expression_mut_location_start(base_expression)?;
+                self.get_location(start, resolved_access)
+            }
             _ => Err(ExecuteError::NotMutLocationFound),
         }
     }
@@ -1695,17 +1789,17 @@ impl<'a, C> Interpreter<'a, C> {
 
     fn get_next_location(
         &mut self,
-        start: ValueRef,
+        start: &ValueRef,
         lookup: &ResolvedAccess,
     ) -> Result<ValueRef, ExecuteError> {
         let next_val_ref = match lookup {
             ResolvedAccess::FieldIndex(_resolved_node, i) => {
                 let field_index = *i;
 
-                let mut borrowed = start.borrow_mut();
-                let next_val = match &mut *borrowed {
+                let borrowed = start.borrow();
+                let next_val = match &*borrowed {
                     Value::Struct(_struct_type, fields) => {
-                        fields.get_mut(field_index).ok_or_else(|| {
+                        fields.get(field_index).ok_or_else(|| {
                             ExecuteError::TypeError("Field index out of range".to_string())
                         })?
                     }
@@ -1716,17 +1810,16 @@ impl<'a, C> Interpreter<'a, C> {
                     }
                 };
 
-                Rc::new(RefCell::new(next_val.clone()))
+                next_val.clone()
             }
 
             ResolvedAccess::ArrayIndex(index_expr) => {
                 let index_value = self.evaluate_expression(index_expr)?;
                 let index_int = index_value.expect_int()? as usize;
-
-                let mut borrowed = start.borrow_mut();
-                let next_val = match &mut *borrowed {
+                let borrowed = start.borrow();
+                let next_val = match &*borrowed {
                     Value::Array(_array_type, fields) => {
-                        fields.get_mut(index_int).ok_or_else(|| {
+                        fields.get(index_int).ok_or_else(|| {
                             ExecuteError::TypeError("Field index out of range".to_string())
                         })?
                     }
@@ -1735,16 +1828,16 @@ impl<'a, C> Interpreter<'a, C> {
                     }
                 };
 
-                Rc::new(RefCell::new(next_val.clone()))
+                next_val.clone()
             }
 
             ResolvedAccess::MapIndex(index_expr) => {
                 let index_value = self.evaluate_expression(index_expr)?;
 
-                let mut borrowed = start.borrow_mut();
-                let next_val = match &mut *borrowed {
+                let borrowed = start.borrow();
+                let next_val = match &*borrowed {
                     Value::Map(_map_type, seq_map) => {
-                        seq_map.get_mut(&index_value).ok_or_else(|| {
+                        seq_map.get(&index_value).ok_or_else(|| {
                             ExecuteError::TypeError("key value not found in map".to_string())
                         })?
                     }
@@ -1753,7 +1846,7 @@ impl<'a, C> Interpreter<'a, C> {
                     }
                 };
 
-                Rc::new(RefCell::new(next_val.clone()))
+                next_val.clone()
             }
         };
 
@@ -1767,7 +1860,7 @@ impl<'a, C> Interpreter<'a, C> {
     ) -> Result<ValueRef, ExecuteError> {
         let mut next_ref = start;
         for lookup in lookups {
-            next_ref = self.get_next_location(next_ref, lookup)?;
+            next_ref = self.get_next_location(&next_ref, lookup)?;
         }
         Ok(next_ref)
     }
@@ -1777,7 +1870,7 @@ impl<'a, C> Interpreter<'a, C> {
         start: Value,
         lookup: &ResolvedAccess,
     ) -> Result<Value, ExecuteError> {
-        let next_value = match lookup {
+        let next_value: Value = match lookup {
             ResolvedAccess::FieldIndex(_resolved_node, i) => {
                 let field_index = *i;
 
@@ -1787,6 +1880,7 @@ impl<'a, C> Interpreter<'a, C> {
                         .ok_or_else(|| {
                             ExecuteError::TypeError("Field index out of range".to_string())
                         })?
+                        .borrow()
                         .clone(),
                     _ => {
                         return Err(ExecuteError::TypeError(
@@ -1806,6 +1900,7 @@ impl<'a, C> Interpreter<'a, C> {
                         .ok_or_else(|| {
                             ExecuteError::TypeError("Field index out of range".to_string())
                         })?
+                        .borrow()
                         .clone(),
                     _ => {
                         return Err(ExecuteError::TypeError("Expected array".to_string()));
@@ -1822,6 +1917,7 @@ impl<'a, C> Interpreter<'a, C> {
                         .ok_or_else(|| {
                             ExecuteError::TypeError("key value not found in map".to_string())
                         })?
+                        .borrow()
                         .clone(),
                     _ => {
                         return Err(ExecuteError::TypeError("Expected array".to_string()));
@@ -1869,7 +1965,7 @@ impl<'a, C> Interpreter<'a, C> {
         let source = self.evaluate_expression(source_expression)?;
         let value_ref = self.evaluate_location(start_expression, lookups)?;
 
-        Self::apply_compound_operator(&mut *value_ref.borrow_mut(), operator, &source)?;
+        Self::apply_compound_operator(&mut value_ref.borrow_mut(), operator, &source)?;
         let temp = value_ref.borrow();
         Ok(temp.clone())
     }

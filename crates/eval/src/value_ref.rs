@@ -4,12 +4,14 @@ use std::hash::Hash;
 use std::rc::Rc;
 use swamp_script_core::extra::{SparseValueId, SparseValueMap};
 use swamp_script_core::prelude::{Value, ValueError};
+use swamp_script_core::value::ValueRef;
 use swamp_script_core::value::{RustType, SPARSE_TYPE_ID};
-
-pub type ValueRef = Rc<RefCell<Value>>;
+use tracing::info;
 
 #[derive(Debug, Clone)]
 pub struct ValueReference(pub ValueRef);
+
+impl ValueReference {}
 
 impl ValueReference {
     #[inline]
@@ -17,7 +19,50 @@ impl ValueReference {
         *self.0.borrow_mut() = v;
     }
 
-    pub fn into_iter_pairs(
+    pub(crate) fn into_iter_mut(self) -> Result<Box<dyn Iterator<Item = ValueRef>>, ValueError> {
+        let inner = self.0.borrow();
+        let result = match &*inner {
+            Value::RustValue(ref rust_type_ref, ref _rust_value) => {
+                Box::new(match rust_type_ref.number {
+                    SPARSE_TYPE_ID => {
+                        let sparse_map = inner
+                            .downcast_rust::<SparseValueMap>()
+                            .expect("must be sparsemap");
+
+                        let id_type_ref = sparse_map.borrow().rust_type_ref_for_id.clone();
+
+                        let pairs: Vec<_> = sparse_map
+                            .borrow_mut()
+                            .iter_mut()
+                            .map(|(k, v)| v.clone())
+                            .collect();
+
+                        Box::new(pairs.into_iter()) as Box<dyn Iterator<Item = ValueRef>>
+                    }
+                    _ => return Err(ValueError::CanNotCoerceToIterator),
+                })
+            }
+            Value::Map(ref type_ref, seq_map) => {
+                // Clone each Rc<RefCell<Value>> and collect into a Vec
+                let cloned_rc: Vec<ValueRef> = seq_map.values().cloned().collect();
+
+                // Box the iterator from the Vec
+                Box::new(cloned_rc.into_iter()) as Box<dyn Iterator<Item = ValueRef> + 'static>
+            }
+
+            /*
+                        Self::Array(_, values) => Ok(Box::new(values.into_iter())),
+            Self::Map(_, seq_map) => Ok(Box::new(seq_map.into_values())),
+             */
+            _ => {
+                info!(?inner, "not sure what this is:");
+                todo!()
+            }
+        };
+        Ok(result)
+    }
+
+    pub fn into_iter_mut_pairs(
         self,
     ) -> Result<Box<dyn Iterator<Item = (Value, ValueReference)>>, ValueError> {
         let inner = self.0.borrow();
