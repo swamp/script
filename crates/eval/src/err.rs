@@ -25,4 +25,7 @@ pub enum ExecuteError {
     VariableWasNotMutable,
     ContinueNotAllowedHere,
     BreakNotAllowedHere,
+    NotMutLocationFound,
+    IndexWasNotInteger,
+    NotAMap,
 }

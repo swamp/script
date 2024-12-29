@@ -10,13 +10,13 @@ use std::cell::RefCell;
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
 use std::rc::Rc;
-use swamp_script_semantic::ResolvedNode;
 use swamp_script_semantic::{
     ExternalFunctionId, ResolvedArrayTypeRef, ResolvedEnumVariantStructTypeRef,
     ResolvedEnumVariantTupleTypeRef, ResolvedEnumVariantTypeRef, ResolvedFormatSpecifierKind,
     ResolvedInternalFunctionDefinitionRef, ResolvedMapTypeRef, ResolvedPrecisionType,
     ResolvedRustTypeRef, ResolvedStructTypeRef, ResolvedTupleTypeRef, TypeNumber,
 };
+use swamp_script_semantic::{ResolvedNode, Span};
 
 pub trait RustType: Any + Debug + Display {
     fn as_any(&self) -> &dyn Any;
@@ -42,7 +42,7 @@ pub enum Value {
     Bool(bool),
     #[default]
     Unit, // Means 'no value' ()
-    Reference(Rc<RefCell<Value>>),
+
     Option(Option<Box<Value>>),
 
     // Containers
@@ -93,7 +93,7 @@ impl Value {
         is_mutable: bool,
     ) -> Result<Box<dyn Iterator<Item = Value>>, ValueError> {
         match self {
-            Self::Reference(value_ref) => value_ref.borrow().clone().into_iter(is_mutable),
+            // TODO: Self::Reference(value_ref) => value_ref.borrow().clone().into_iter(is_mutable),
             Self::Array(_, values) => Ok(Box::new(values.into_iter())),
             Self::Map(_, seq_map) => Ok(Box::new(seq_map.into_values())),
             Self::RustValue(ref rust_type_ref, _) => match rust_type_ref.number {
@@ -101,7 +101,13 @@ impl Value {
                     let sparse_map = self
                         .downcast_rust::<SparseValueMap>()
                         .expect("must be sparsemap");
-                    let values: Vec<_> = sparse_map.borrow().values().into_iter().collect();
+                    let values: Vec<_> = sparse_map
+                        .borrow()
+                        .values()
+                        .iter()
+                        .map(|item| item.borrow().clone())
+                        .into_iter()
+                        .collect();
                     Ok(Box::new(values.into_iter()))
                 }
                 _ => Err(ValueError::NotSparseMap),
@@ -115,29 +121,22 @@ impl Value {
         }
     }
 
-    pub fn into_iter_pairs(
-        self,
-        is_mutable: bool,
-    ) -> Result<Box<dyn Iterator<Item = (Value, Value)>>, ValueError> {
+    pub fn into_iter_pairs(self) -> Result<Box<dyn Iterator<Item = (Value, Value)>>, ValueError> {
         let values = match self {
-            Self::Reference(value_ref) => value_ref
-                .borrow_mut()
-                .to_owned()
-                .into_iter_pairs(is_mutable)?,
             Self::Map(_, seq_map) => Box::new(seq_map.into_iter()),
             Self::Tuple(_type_ref, elements) => {
                 let iter = elements
                     .into_iter()
                     .enumerate()
                     .map(move |(i, v)| (Value::Int(i as i32), v));
-                Box::new(iter)
+                Box::new(iter) as Box<dyn Iterator<Item = (Value, Value)>>
             }
             Self::Array(_type_ref, array) => {
                 let iter = array
                     .into_iter()
                     .enumerate()
                     .map(move |(i, v)| (Value::Int(i as i32), v));
-                Box::new(iter)
+                Box::new(iter) as Box<dyn Iterator<Item = (Value, Value)>>
             }
             Self::RustValue(ref rust_type_ref, ref _rust_value) => {
                 Box::new(match rust_type_ref.number {
@@ -148,40 +147,23 @@ impl Value {
 
                         let id_type_ref = sparse_map.borrow().rust_type_ref_for_id.clone();
 
-                        if is_mutable {
-                            let pairs: Vec<_> = sparse_map
-                                .borrow_mut()
-                                .iter_mut()
-                                .map(|(k, v)| {
-                                    (
-                                        Value::RustValue(
-                                            id_type_ref.clone(),
-                                            Rc::new(RefCell::new(Box::new(SparseValueId(k)))),
-                                        ),
-                                        v.clone(),
-                                    )
-                                })
-                                .collect();
+                        let pairs: Vec<_> = sparse_map
+                            .borrow()
+                            .iter()
+                            .map(|(k, v)| {
+                                (
+                                    Value::RustValue(
+                                        id_type_ref.clone(),
+                                        Rc::new(RefCell::new(Box::new(SparseValueId(k)))),
+                                    ),
+                                    v.borrow().clone(),
+                                )
+                            })
+                            .collect();
 
-                            Box::new(pairs.into_iter())
-                        } else {
-                            let pairs: Vec<_> = sparse_map
-                                .borrow()
-                                .iter()
-                                .map(|(k, v)| {
-                                    (
-                                        Value::RustValue(
-                                            id_type_ref.clone(),
-                                            Rc::new(RefCell::new(Box::new(SparseValueId(k)))),
-                                        ),
-                                        v.clone(),
-                                    )
-                                })
-                                .collect();
-
-                            Box::new(pairs.into_iter())
-                        }
+                        Box::new(pairs.into_iter()) as Box<dyn Iterator<Item = (Value, Value)>>
                     }
+
                     _ => return Err(ValueError::NotSparseMap),
                 })
             }
@@ -194,20 +176,19 @@ impl Value {
     pub fn convert_to_string_if_needed(&self) -> String {
         match self {
             Self::String(string) => string.clone(),
-            Self::Reference(value) => value.borrow().convert_to_string_if_needed(),
             _ => self.to_string(),
         }
     }
     pub fn expect_string(&self) -> Result<String, ValueError> {
-        match self.unref() {
-            Self::String(s) => Ok(s),
+        match self {
+            Self::String(s) => Ok(s.clone()),
             _ => Err(ValueError::ConversionError("Expected string value".into())),
         }
     }
 
     pub fn expect_int(&self) -> Result<i32, ValueError> {
-        match self.unref() {
-            Self::Int(v) => Ok(v),
+        match self {
+            Self::Int(v) => Ok(*v),
             _ => Err(ValueError::ConversionError("Expected int value".into())),
         }
     }
@@ -246,34 +227,6 @@ impl Value {
         }
     }
 
-    pub fn downcast_rust_mut_or_not<T: RustType + 'static>(&self) -> Option<Rc<RefCell<Box<T>>>> {
-        self.downcast_rust_mut()
-            .map_or_else(|| self.downcast_rust(), Some)
-    }
-
-    #[must_use]
-    pub fn downcast_rust_mut<T: RustType + 'static>(&self) -> Option<Rc<RefCell<Box<T>>>> {
-        match self {
-            Self::Reference(r) => match &*r.borrow() {
-                Self::RustValue(_rust_type_ref, rc) => {
-                    let type_matches = {
-                        let guard = rc.borrow();
-                        (**guard).as_any().is::<T>()
-                    };
-
-                    if type_matches {
-                        Some(unsafe { std::mem::transmute(rc.clone()) })
-                    } else {
-                        None
-                    }
-                }
-                _ => None,
-            },
-
-            _ => None,
-        }
-    }
-
     #[must_use]
     pub fn downcast_hidden_rust<T: RustType + 'static>(&self) -> Option<Rc<RefCell<Box<T>>>> {
         match self {
@@ -298,18 +251,11 @@ impl Value {
         let rust_value = Self::new_rust_value(rust_description, value);
         Value::Struct(struct_type, vec![rust_value])
     }
-
-    #[must_use]
-    pub fn unref(&self) -> Self {
-        match self {
-            Self::Reference(ref inner) => inner.borrow().clone(),
-            _ => self.clone(),
-        }
-    }
 }
 
 pub trait SourceMapLookup: Debug {
     fn get_text(&self, resolved_node: &ResolvedNode) -> &str;
+    fn get_text_span(&self, span: &Span) -> &str;
 }
 
 impl Display for Value {
@@ -372,7 +318,7 @@ impl Display for Value {
             Self::InternalFunction(_reference) => write!(f, "<function>"), // TODO:
             Self::Unit => write!(f, "()"),
             Self::ExclusiveRange(start, end) => write!(f, "{start}..{end}"),
-            Self::Reference(reference) => write!(f, "{}", reference.borrow().to_string()),
+
             Self::ExternalFunction(_) => write!(f, "<external>"), // TODO:
 
             // Enums ----
@@ -438,18 +384,6 @@ impl Display for Value {
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::Reference(r1), Self::Reference(r2)) => {
-                // Compare the actual values inside the references
-                r1.borrow().eq(&*r2.borrow())
-            }
-            (Self::Reference(r1), other) => {
-                // Compare reference value with direct value
-                r1.borrow().eq(other)
-            }
-            (other, Self::Reference(r2)) => {
-                // Compare direct value with reference value
-                other.eq(&*r2.borrow())
-            }
             // Regular value comparisons
             (Self::Int(a), Self::Int(b)) => a == b,
             (Self::Float(a), Self::Float(b)) => a == b,
@@ -472,7 +406,6 @@ impl Hash for Value {
             Self::String(s) => s.hash(state),
             Self::Bool(b) => b.hash(state),
             Self::Unit => (),
-            Self::Reference(r) => r.borrow().hash(state),
             Self::Option(o) => o.hash(state),
             Self::Array(_, arr) => arr.hash(state),
             Self::Struct(type_ref, values) => {

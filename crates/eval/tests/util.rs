@@ -7,7 +7,7 @@ use std::rc::Rc;
 use swamp_script_analyzer::lookup::NameLookup;
 use swamp_script_analyzer::{ResolveError, Resolver};
 use swamp_script_core::prelude::Value;
-use swamp_script_eval::prelude::ExecuteError;
+use swamp_script_eval::prelude::{ExecuteError, VariableValue};
 use swamp_script_eval::{eval_module, ExternalFunctions};
 use swamp_script_parser::AstParser;
 use swamp_script_semantic::modules::ResolvedModules;
@@ -139,16 +139,20 @@ fn register_print(
     external_functions: &mut ExternalFunctions<TestContext>,
 ) {
     external_functions
-        .register_external_function("print", external_id, move |args: &[Value], context| {
-            if let Some(value) = args.first() {
-                let display_value = value.convert_to_string_if_needed();
-                assert_eq!(context.secret, 42);
-                context.output.push(display_value);
-                Ok(Value::Unit)
-            } else {
-                Err("print requires at least one argument".to_string())?
-            }
-        })
+        .register_external_function(
+            "print",
+            external_id,
+            move |args: &[VariableValue], context: &mut TestContext| {
+                if let Some(value) = args.first() {
+                    let display_value = value.convert_to_string_if_needed();
+                    assert_eq!(context.secret, 42);
+                    context.output.push(display_value);
+                    Ok(Value::Unit)
+                } else {
+                    Err("print requires at least one argument".to_string())?
+                }
+            },
+        )
         .expect("should work to register");
 }
 

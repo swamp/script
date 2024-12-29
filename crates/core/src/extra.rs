@@ -17,7 +17,7 @@ impl Display for SparseValueId {
 
 #[derive(Debug)]
 pub struct SparseValueMap {
-    pub sparse_slot: SparseSlot<Value>,
+    pub sparse_slot: SparseSlot<Rc<RefCell<Value>>>,
     pub id_generator: IndexAllocator,
     pub type_parameter: ResolvedType,
     //pub rust_type_ref: ResolvedRustTypeRef,
@@ -45,7 +45,7 @@ impl SparseValueMap {
         };
         let rust_type_ref_for_id = create_rust_type("SparseId", 998);
         Self {
-            sparse_slot: SparseSlot::<Value>::new(1024),
+            sparse_slot: SparseSlot::<Rc<RefCell<Value>>>::new(1024),
             id_generator: IndexAllocator::new(),
             type_parameter,
             resolved_type,
@@ -60,7 +60,7 @@ impl SparseValueMap {
         let id = Id { index, generation };
 
         // Always store mutable references
-        let mutable_reference = Value::Reference(Rc::new(RefCell::new(v)));
+        let mutable_reference = Rc::new(RefCell::new(v));
 
         self.sparse_slot
             .try_set(id, mutable_reference)
@@ -78,15 +78,15 @@ impl SparseValueMap {
 
     #[allow(unused)]
     #[must_use]
-    pub fn iter(&self) -> sparse_slot::Iter<'_, Value> {
+    pub fn iter(&self) -> sparse_slot::Iter<'_, Rc<RefCell<Value>>> {
         self.sparse_slot.iter()
     }
-    pub fn iter_mut(&mut self) -> sparse_slot::IterMut<'_, Value> {
+    pub fn iter_mut(&mut self) -> sparse_slot::IterMut<'_, Rc<RefCell<Value>>> {
         self.sparse_slot.iter_mut()
     }
 
     #[must_use]
-    pub fn values(&self) -> Vec<Value> {
+    pub fn values(&self) -> Vec<Rc<RefCell<Value>>> {
         self.sparse_slot.iter().map(|(_id, v)| v.clone()).collect()
     }
 }

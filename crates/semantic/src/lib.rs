@@ -53,6 +53,9 @@ impl Span {
         if other.file_id == 0xffff {
             return self.clone();
         }
+        if self.file_id == 0xffff {
+            return self.clone();
+        }
         assert_eq!(
             self.file_id, other.file_id,
             "file_id must be the same when merging"
@@ -144,11 +147,17 @@ impl Debug for Span {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ResolvedParameter {
     pub name: ResolvedNode,
     pub resolved_type: ResolvedType,
     pub is_mutable: Option<ResolvedNode>,
+}
+
+impl Debug for ResolvedParameter {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ResolvedParameter")
+    }
 }
 
 impl ResolvedParameter {
@@ -228,14 +237,14 @@ impl Spanned for ResolvedType {
             Self::Int(_type_ref) => Span::dummy(),
             Self::Float(_type_ref) => Span::dummy(),
             Self::String(_type_ref) => todo!(),
-            Self::Bool(_type_ref) => todo!(),
+            Self::Bool(type_ref) => Span::dummy(),
             Self::Unit(_type_ref) => todo!(),
 
             // Compound Types
             Self::Array(_type_ref) => todo!(),
             Self::Tuple(_type_ref) => todo!(),
-            Self::Struct(_type_ref) => todo!(),
-            Self::Map(_type_ref) => todo!(),
+            Self::Struct(type_ref) => type_ref.borrow().name.span.clone(),
+            Self::Map(type_ref) => type_ref.key_type.span(),
 
             // Generic Types
             Self::Generic(base_type, type_params) => base_type.span().merge_iter(type_params),
@@ -718,6 +727,15 @@ pub enum ResolvedStringPart {
     Interpolation(ResolvedExpression, Option<ResolvedFormatSpecifier>),
 }
 
+impl Spanned for ResolvedStringPart {
+    fn span(&self) -> Span {
+        match self {
+            Self::Literal(node, _) => node.span.clone(),
+            Self::Interpolation(expr, _) => expr.span(),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct ResolvedMutTupleField {
     #[allow(unused)]
@@ -734,7 +752,10 @@ pub enum ResolvedFunction {
 
 impl Spanned for ResolvedFunction {
     fn span(&self) -> Span {
-        todo!()
+        match self {
+            Self::Internal(def) => def.span(),
+            Self::External(def) => def.span(),
+        }
     }
 }
 
@@ -1064,13 +1085,13 @@ impl Spanned for ResolvedExpression {
 
             // Calls
             Self::FunctionInternalCall(call) => todo!(),
-            Self::FunctionExternalCall(call) => todo!(),
+            Self::FunctionExternalCall(call) => call.arguments[0].span(),
             Self::StaticCall(call) => call.span(),
             Self::StaticCallGeneric(call) => todo!(),
             Self::MutMemberCall(member_ref, args) => {
                 todo!()
             }
-            Self::MemberCall(call) => todo!(),
+            Self::MemberCall(call) => call.function.span(),
 
             // Blocks and Strings
             Self::Block(statements) => statements
@@ -1082,12 +1103,12 @@ impl Spanned for ResolvedExpression {
                         .unwrap_or_else(|| first.span())
                 })
                 .unwrap_or_else(Span::dummy),
-            Self::InterpolatedString(str_ref, parts) => {
-                todo!()
-            }
+            Self::InterpolatedString(str_ref, parts) => parts[0].span(),
 
             // Constructing
-            Self::StructInstantiation(struct_inst) => todo!(),
+            Self::StructInstantiation(struct_inst) => {
+                struct_inst.source_order_expressions[0].1.span()
+            }
             Self::Array(array_inst) => array_inst.span(),
             Self::Tuple(exprs) => exprs
                 .first()
@@ -1143,7 +1164,7 @@ impl Spanned for ResolvedExpression {
             Self::SparseNew(rust_type_ref, resolved_type) => {
                 todo!()
             }
-            Self::ForLoop(pattern, iterator, statements) => todo!(),
+            Self::ForLoop(pattern, iterator, statements) => statements.span(),
             Self::WhileLoop(condition, statements) => todo!(),
             Self::Return(expr) => todo!(),
             Self::Break(node) => node.span(),

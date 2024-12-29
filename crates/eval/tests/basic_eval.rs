@@ -717,10 +717,7 @@ fn optional_field_mut() {
     ",
     );
 
-    assert_eq!(
-        result,
-        Value::Reference(Rc::new(RefCell::new(Value::Int(3))))
-    );
+    assert_eq!(result, Value::Int(3));
 }
 
 #[test_log::test]
