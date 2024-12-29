@@ -344,6 +344,12 @@ impl<'a, C> Interpreter<'a, C> {
                     }
                 }
 
+                ResolvedExpression::MutStructFieldRef(base_expr, access_chain) => {
+                    VariableValue::Reference(ValueReference(
+                        self.evaluate_location(base_expr, access_chain)?.clone(),
+                    ))
+                }
+
                 // If it is accessing a variable, we want the full access of it
                 ResolvedExpression::VariableAccess(variable_ref) => self
                     .current_block_scopes
@@ -1009,7 +1015,10 @@ impl<'a, C> Interpreter<'a, C> {
                 .current_block_scopes
                 .lookup_var_value(&var_ref.variable_ref),
 
-            ResolvedExpression::MutStructFieldRef(_) => todo!(),
+            ResolvedExpression::MutStructFieldRef(base_expr, access_chain) => self
+                .evaluate_location(base_expr, access_chain)?
+                .borrow()
+                .clone(),
 
             // Operators
             ResolvedExpression::BinaryOp(binary_operator) => {

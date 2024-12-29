@@ -107,7 +107,7 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
         ResolvedExpression::MutVariableRef(mut_var_ref) => {
             mut_var_ref.variable_ref.resolved_type.clone()
         }
-        ResolvedExpression::MutStructFieldRef(_) => todo!(),
+        ResolvedExpression::MutStructFieldRef(_, _) => todo!(),
 
         ResolvedExpression::ArrayAccess(array_item_ref) => array_item_ref.item_type.clone(),
         ResolvedExpression::MapIndexAccess(map_item) => map_item.item_type.clone(),
@@ -316,6 +316,7 @@ pub enum ResolveError {
     BoolConversionError,
     DuplicateFieldInStructInstantiation(String, Rc<RefCell<ResolvedStructType>>),
     InternalError(&'static str),
+    WasNotFieldMutRef,
 }
 
 impl From<SemanticError> for ResolveError {
@@ -3487,12 +3488,11 @@ impl<'a> Resolver<'a> {
         Ok(None)
     }
 
-    fn resolve_field_access(
+    fn resolve_field_access_helper(
         &mut self,
         base_expression: &Expression,
-        struct_field_ref: &ResolvedStructTypeFieldRef,
         ast_field_name: &Node,
-    ) -> Result<ResolvedExpression, ResolveError> {
+    ) -> Result<(ResolvedExpression, Vec<ResolvedAccess>), ResolveError> {
         let mut access_chain = Vec::new();
         let (resolved_last_type, resolved_base_expression) =
             self.collect_field_chain(base_expression, &mut access_chain)?;
@@ -3506,8 +3506,20 @@ impl<'a> Resolver<'a> {
             field_index,
         ));
 
+        Ok((resolved_base_expression, access_chain))
+    }
+
+    fn resolve_field_access(
+        &mut self,
+        base_expression: &Expression,
+        struct_field_ref: &ResolvedStructTypeFieldRef,
+        ast_field_name: &Node,
+    ) -> Result<ResolvedExpression, ResolveError> {
+        let (base_expr, access_chain) =
+            self.resolve_field_access_helper(base_expression, ast_field_name)?;
+
         Ok(ResolvedExpression::FieldAccess(
-            Box::from(resolved_base_expression),
+            Box::from(base_expr),
             struct_field_ref.clone(),
             access_chain,
         ))
@@ -3734,7 +3746,7 @@ impl<'a> Resolver<'a> {
     }
 
     fn resolve_mut_ref(
-        &self,
+        &mut self,
         location_expression: &LocationExpression,
     ) -> Result<ResolvedExpression, ResolveError> {
         let mut_expr = match location_expression {
@@ -3749,7 +3761,11 @@ impl<'a> Resolver<'a> {
                 ResolvedExpression::MutVariableRef(Rc::new(mut_var))
             }
             LocationExpression::IndexAccess(_, _) => todo!(),
-            LocationExpression::FieldAccess(b) => todo!(),
+            LocationExpression::FieldAccess(expression, node) => {
+                let (base_repr, access_chain) =
+                    self.resolve_field_access_helper(expression, node)?;
+                ResolvedExpression::MutStructFieldRef(base_repr.into(), access_chain)
+            }
         };
 
         Ok(mut_expr)

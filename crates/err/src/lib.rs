@@ -242,5 +242,6 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
         ResolveError::BoolConversionError => todo!(),
         ResolveError::DuplicateFieldInStructInstantiation(_, _) => todo!(),
         ResolveError::InternalError(_) => todo!(),
+        ResolveError::WasNotFieldMutRef => todo!(),
     }
 }

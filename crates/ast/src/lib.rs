@@ -272,7 +272,7 @@ pub struct CompoundOperator {
 pub enum LocationExpression {
     Variable(Variable),
     IndexAccess(Box<Expression>, Box<Expression>), // TODO: Not supported yet
-    FieldAccess(Box<Expression>),                  // TODO: Not supported yet
+    FieldAccess(Box<Expression>, Node),            // TODO: Not supported yet
 }
 
 /// Expressions are things that "converts" to a value when evaluated.

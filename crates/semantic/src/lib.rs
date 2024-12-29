@@ -901,7 +901,11 @@ pub enum ResolvedExpression {
     ExternalFunctionAccess(ResolvedExternalFunctionDefinitionRef),
 
     MutVariableRef(ResolvedMutVariableRef), // Used when passing with mut keyword. mut are implicitly passed by reference
-    MutStructFieldRef(ResolvedMutStructTypeFieldRef),
+    MutStructFieldRef(
+        Box<ResolvedExpression>,
+        //ResolvedStructTypeFieldRef,
+        Vec<ResolvedAccess>,
+    ),
 
     Option(Option<Box<ResolvedExpression>>),
     ArrayAccess(ResolvedArrayItemRef), // Read from an array: arr[3]
@@ -1182,7 +1186,7 @@ impl Spanned for ResolvedExpression {
                 true_block,
                 false_block,
             } => todo!(),
-            &ResolvedExpression::MutStructFieldRef(_) => todo!(),
+            &ResolvedExpression::MutStructFieldRef(_, _) => todo!(),
         }
     }
 }

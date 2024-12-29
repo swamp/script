@@ -1562,8 +1562,10 @@ impl AstParser {
                         Expression::VariableAccess(var) => {
                             args.push(Expression::MutRef(LocationExpression::Variable(var)));
                         }
-                        Expression::FieldAccess(expr, _node) => {
-                            args.push(Expression::MutRef(LocationExpression::FieldAccess(expr)));
+                        Expression::FieldAccess(expr, node) => {
+                            args.push(Expression::MutRef(LocationExpression::FieldAccess(
+                                expr, node,
+                            )));
                         }
                         _ => {
                             return Err(self
@@ -1970,8 +1972,8 @@ impl AstParser {
         next: &Pair<Rule>,
     ) -> Result<LocationExpression, ParseError> {
         let location = match expr {
-            Expression::FieldAccess(expression, _node) => {
-                LocationExpression::FieldAccess(expression)
+            Expression::FieldAccess(expression, node) => {
+                LocationExpression::FieldAccess(expression, node)
             }
             Expression::VariableAccess(variable) => LocationExpression::Variable(variable),
             Expression::IndexAccess(a, b) => LocationExpression::IndexAccess(a, b),
