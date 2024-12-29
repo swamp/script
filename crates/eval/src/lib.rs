@@ -323,12 +323,13 @@ impl<'a, C> Interpreter<'a, C> {
 
         for arg in args {
             match arg {
-                ResolvedExpression::MutRef(var_ref) => {
-                    match self.lookup_var(
+                ResolvedExpression::MutVariableRef(var_ref) => {
+                    let found_var = self.lookup_var(
                         var_ref.variable_ref.scope_index,
                         var_ref.variable_ref.variable_index,
-                    )? {
-                        Value::Reference(r) => evaluated.push(Value::Reference(r.clone())),
+                    )?;
+                    match found_var {
+                        Value::Reference(_) => evaluated.push(found_var.clone()),
                         _ => {
                             Err("Can only take mutable reference of mutable variable".to_string())?;
                         }
@@ -1062,7 +1063,7 @@ impl<'a, C> Interpreter<'a, C> {
                 self.evaluate_field_access(struct_field_access, field_ref, access_list)?
             }
 
-            ResolvedExpression::MutRef(var_ref) => {
+            ResolvedExpression::MutVariableRef(var_ref) => {
                 let value = self.lookup_var(
                     var_ref.variable_ref.scope_index,
                     var_ref.variable_ref.variable_index,
@@ -1073,6 +1074,8 @@ impl<'a, C> Interpreter<'a, C> {
                     _ => Err("Can only take mutable reference of mutable variable".to_string())?,
                 }
             }
+
+            ResolvedExpression::MutStructFieldRef(_) => todo!(),
 
             // Operators
             ResolvedExpression::BinaryOp(binary_operator) => {
@@ -1945,7 +1948,9 @@ impl<'a, C> Interpreter<'a, C> {
                             })?
                         }
                         _ => {
-                            return Err(ExecuteError::TypeError("Expected struct".to_string()));
+                            return Err(ExecuteError::TypeError(
+                                "field assignment: Expected struct".to_string(),
+                            ));
                         }
                     };
 
@@ -2035,10 +2040,18 @@ impl<'a, C> Interpreter<'a, C> {
                             }
                             fields[*last_index] = source.clone();
                         }
-                        _ => return Err(ExecuteError::TypeError("Expected struct".to_string())),
+                        _ => {
+                            return Err(ExecuteError::TypeError(
+                                "field_index Expected struct".to_string(),
+                            ))
+                        }
                     }
                 }
-                _ => return Err(ExecuteError::TypeError("Expected struct".to_string())),
+                _ => {
+                    return Err(ExecuteError::TypeError(
+                        "evaluate field assignment: Expected struct".to_string(),
+                    ))
+                }
             }
         }
 
@@ -2068,7 +2081,9 @@ impl<'a, C> Interpreter<'a, C> {
                             })?
                         }
                         _ => {
-                            return Err(ExecuteError::TypeError("Expected struct".to_string()));
+                            return Err(ExecuteError::TypeError(
+                                "compound: Expected struct".to_string(),
+                            ));
                         }
                     };
 
@@ -2162,7 +2177,12 @@ impl<'a, C> Interpreter<'a, C> {
                                 &source,
                             )?;
                         }
-                        _ => return Err(ExecuteError::TypeError("Expected struct".to_string())),
+                        _ => {
+                            error!(?inner, "field_assignment_compound err");
+                            return Err(ExecuteError::TypeError(
+                                "field_assignment_compound Expected struct".to_string(),
+                            ));
+                        }
                     }
                 }
                 _ => return Err(ExecuteError::TypeError("Expected struct".to_string())),

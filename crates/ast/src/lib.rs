@@ -184,9 +184,6 @@ impl Debug for Variable {
     }
 }
 
-#[derive(Debug)]
-pub struct MutVariableRef(pub Variable); // Just wraps a variable when passed with mut keyword
-
 #[derive(Debug, Eq, PartialEq)]
 pub struct Parameter {
     pub variable: Variable,
@@ -271,13 +268,20 @@ pub struct CompoundOperator {
     pub kind: CompoundOperatorKind,
 }
 
+#[derive(Debug)]
+pub enum LocationExpression {
+    Variable(Variable),
+    IndexAccess(Box<Expression>, Box<Expression>), // TODO: Not supported yet
+    FieldAccess(Box<Expression>),                  // TODO: Not supported yet
+}
+
 /// Expressions are things that "converts" to a value when evaluated.
 #[derive(Debug)]
 pub enum Expression {
     // Access
     FieldAccess(Box<Expression>, Node),
     VariableAccess(Variable),
-    MutRef(MutVariableRef),
+    MutRef(LocationExpression),
     IndexAccess(Box<Expression>, Box<Expression>),
 
     // Assignments

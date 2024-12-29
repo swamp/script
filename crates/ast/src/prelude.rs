@@ -5,8 +5,7 @@
 pub use crate::{
     AnonymousStructType, BinaryOperator, Definition, EnumVariantType, Expression, FormatSpecifier,
     FunctionDeclaration, FunctionWithBody, IdentifierName, ImplItem, ImplMember, Import,
-    ImportItems, Literal, LocalIdentifier, LocalTypeIdentifier, MatchArm, Module, ModulePath,
-    MutVariableRef, Node, Parameter, Pattern, PostfixOperator, PrecisionType,
-    QualifiedTypeIdentifier, SelfParameter, StringConst, StringPart, StructType, Type,
-    UnaryOperator, Variable,
+    ImportItems, Literal, LocalIdentifier, LocalTypeIdentifier, MatchArm, Module, ModulePath, Node,
+    Parameter, Pattern, PostfixOperator, PrecisionType, QualifiedTypeIdentifier, SelfParameter,
+    StringConst, StringPart, StructType, Type, UnaryOperator, Variable,
 };

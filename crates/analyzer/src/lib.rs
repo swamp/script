@@ -15,7 +15,7 @@ use std::rc::Rc;
 use swamp_script_ast::prelude::*;
 use swamp_script_ast::{
     CompoundOperator, CompoundOperatorKind, EnumVariantLiteral, FieldExpression, ForPattern,
-    Function, PatternElement, PostfixOperator, SpanWithoutFileId,
+    Function, LocationExpression, PatternElement, PostfixOperator, SpanWithoutFileId,
 };
 use swamp_script_semantic::modules::ResolvedModules;
 use swamp_script_semantic::{
@@ -104,7 +104,11 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
         ResolvedExpression::ExternalFunctionAccess(external_function_def) => {
             ResolvedType::FunctionExternal(external_function_def.clone())
         }
-        ResolvedExpression::MutRef(mut_var_ref) => mut_var_ref.variable_ref.resolved_type.clone(),
+        ResolvedExpression::MutVariableRef(mut_var_ref) => {
+            mut_var_ref.variable_ref.resolved_type.clone()
+        }
+        ResolvedExpression::MutStructFieldRef(_) => todo!(),
+
         ResolvedExpression::ArrayAccess(array_item_ref) => array_item_ref.item_type.clone(),
         ResolvedExpression::MapIndexAccess(map_item) => map_item.item_type.clone(),
         ResolvedExpression::InitializeVariable(variable_assignment) => {
@@ -1277,7 +1281,7 @@ impl<'a> Resolver<'a> {
             Expression::VariableAccess(variable) => {
                 self.resolve_variable_or_function_access(&variable.name)?
             }
-            Expression::MutRef(variable) => self.resolve_mut_ref(variable)?,
+            Expression::MutRef(location_expression) => self.resolve_mut_ref(location_expression)?,
             Expression::IndexAccess(collection_expression, lookup) => {
                 let resolved_collection_expression =
                     self.resolve_expression(collection_expression)?;
@@ -2189,7 +2193,10 @@ impl<'a> Resolver<'a> {
             }
 
             if parameter.is_mutable.is_some()
-                && !matches!(resolved_argument_expression, ResolvedExpression::MutRef(_))
+                && !matches!(
+                    resolved_argument_expression,
+                    ResolvedExpression::MutVariableRef(_)
+                )
             {
                 return Err(ResolveError::ArgumentIsNotMutable);
             }
@@ -3728,16 +3735,24 @@ impl<'a> Resolver<'a> {
 
     fn resolve_mut_ref(
         &self,
-        variable: &MutVariableRef,
+        location_expression: &LocationExpression,
     ) -> Result<ResolvedExpression, ResolveError> {
-        let var = self.find_variable(&variable.0)?;
-        if !var.is_mutable() {
-            Err(ResolveError::VariableIsNotMutable(
-                self.to_node(&variable.0.name),
-            ))?;
-        }
-        let mut_var = ResolvedMutVariable { variable_ref: var };
-        Ok(ResolvedExpression::MutRef(Rc::new(mut_var)))
+        let mut_expr = match location_expression {
+            LocationExpression::Variable(variable) => {
+                let var = self.find_variable(&variable)?;
+                if !var.is_mutable() {
+                    Err(ResolveError::VariableIsNotMutable(
+                        self.to_node(&variable.name),
+                    ))?;
+                }
+                let mut_var = ResolvedMutVariable { variable_ref: var };
+                ResolvedExpression::MutVariableRef(Rc::new(mut_var))
+            }
+            LocationExpression::IndexAccess(_, _) => todo!(),
+            LocationExpression::FieldAccess(b) => todo!(),
+        };
+
+        Ok(mut_expr)
     }
 }
 

@@ -879,7 +879,9 @@ pub enum ResolvedExpression {
     InternalFunctionAccess(ResolvedInternalFunctionDefinitionRef),
     ExternalFunctionAccess(ResolvedExternalFunctionDefinitionRef),
 
-    MutRef(ResolvedMutVariableRef), // Used when passing with mut keyword. mut are implicitly passed by reference
+    MutVariableRef(ResolvedMutVariableRef), // Used when passing with mut keyword. mut are implicitly passed by reference
+    MutStructFieldRef(ResolvedMutStructTypeFieldRef),
+
     Option(Option<Box<ResolvedExpression>>),
     ArrayAccess(ResolvedArrayItemRef), // Read from an array: arr[3]
     MapIndexAccess(ResolvedMapIndexLookup),
@@ -1019,7 +1021,7 @@ impl Spanned for ResolvedExpression {
             }
             Self::InternalFunctionAccess(func) => func.span(),
             Self::ExternalFunctionAccess(func) => func.span(),
-            Self::MutRef(var_ref) => var_ref.span(),
+            Self::MutVariableRef(var_ref) => var_ref.span(),
             Self::Option(opt_expr) => opt_expr
                 .as_ref()
                 .map(|expr| expr.span())
@@ -1159,6 +1161,7 @@ impl Spanned for ResolvedExpression {
                 true_block,
                 false_block,
             } => todo!(),
+            &ResolvedExpression::MutStructFieldRef(_) => todo!(),
         }
     }
 }

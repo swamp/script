@@ -10,8 +10,8 @@ use pest::Parser;
 use pest_derive::Parser;
 use swamp_script_ast::{
     prelude::*, CompoundOperator, CompoundOperatorKind, EnumVariantLiteral, FieldExpression,
-    FieldName, FieldType, ForPattern, ForVar, IteratableExpression, ModulePathItem, PatternElement,
-    SpanWithoutFileId,
+    FieldName, FieldType, ForPattern, ForVar, IteratableExpression, LocationExpression,
+    ModulePathItem, PatternElement, SpanWithoutFileId,
 };
 use swamp_script_ast::{Function, PostfixOperator};
 
@@ -77,6 +77,7 @@ pub enum SpecificError {
     ExpectedBlock,
     InvalidForPattern,
     UnexpectedRuleInElse(String),
+    ExpectedLocationExpression,
 }
 
 #[derive(Debug)]
@@ -1559,7 +1560,10 @@ impl AstParser {
                 if has_mut {
                     match expr {
                         Expression::VariableAccess(var) => {
-                            args.push(Expression::MutRef(MutVariableRef(var)));
+                            args.push(Expression::MutRef(LocationExpression::Variable(var)));
+                        }
+                        Expression::FieldAccess(expr, _node) => {
+                            args.push(Expression::MutRef(LocationExpression::FieldAccess(expr)));
                         }
                         _ => {
                             return Err(self
@@ -1624,7 +1628,12 @@ impl AstParser {
                     arg_inner.next();
                 }
 
-                let expr = self.parse_expression(&Self::next_pair(&mut arg_inner)?)?;
+                let next = &Self::next_pair(&mut arg_inner)?;
+                let mut expr = self.parse_expression(next)?;
+
+                if has_mut {
+                    expr = Expression::MutRef(self.convert_to_location_expression(expr, next)?);
+                }
                 args.push(expr);
             }
         }
@@ -1953,5 +1962,24 @@ impl AstParser {
             offset: pest_span.start() as u32,
             length: (pest_span.end() - pest_span.start()) as u16,
         }
+    }
+
+    fn convert_to_location_expression(
+        &self,
+        expr: Expression,
+        next: &Pair<Rule>,
+    ) -> Result<LocationExpression, ParseError> {
+        let location = match expr {
+            Expression::FieldAccess(expression, _node) => {
+                LocationExpression::FieldAccess(expression)
+            }
+            Expression::VariableAccess(variable) => LocationExpression::Variable(variable),
+            Expression::IndexAccess(a, b) => LocationExpression::IndexAccess(a, b),
+            _ => {
+                return Err(self.create_error_pair(SpecificError::ExpectedLocationExpression, next))
+            }
+        };
+
+        Ok(location)
     }
 }

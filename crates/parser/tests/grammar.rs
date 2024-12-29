@@ -1982,7 +1982,19 @@ fn mut_static_call() {
 Something::update(a, mut b)
 ",
         r"
-StaticCall(<1:9>, <12:6>, [VariableAccess(<19:1>), mut<22:3> VariableAccess(<26:1>)])
+StaticCall(<1:9>, <12:6>, [VariableAccess(<19:1>), MutRef(Variable(<26:1>))])
+        ",
+    );
+}
+
+#[test_log::test]
+fn mut_location_field() {
+    check(
+        r"
+something(mut field.a)
+",
+        r"
+FunctionCall(VariableAccess(<1:9>), [MutRef(FieldAccess(VariableAccess(<15:5>)))])
         ",
     );
 }
