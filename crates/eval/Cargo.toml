@@ -22,4 +22,4 @@ test-log = { version = "0.2.16", features = ["trace", "log", "color"] }
 swamp-script-parser = { path = "../parser", version = "0.0.7" }
 swamp-script-analyzer = { path = "../analyzer", version = "0.0.7" }
 # swamp-script-eval-loader = { path = "../eval-loader", version = "0.0.7" }
-swamp-script-std = { path = "../std", version = "0.0.7" }
+# swamp-script-std = { path = "../std", version = "0.0.7" }

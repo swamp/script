@@ -13,6 +13,7 @@ use swamp_script_core::prelude::Value;
 use swamp_script_dep_loader::{
     parse_dependant_modules_and_resolve, DepLoaderError, DependencyParser, ParseModule,
 };
+use swamp_script_eval::prelude::VariableValue;
 use swamp_script_eval::{err::ExecuteError, eval_module, ExternalFunctions};
 use swamp_script_eval_loader::resolve_program;
 use swamp_script_parser::prelude::*;
@@ -151,7 +152,7 @@ fn register_print(interpreter: &mut ExternalFunctions<CliContext>) {
         .register_external_function(
             "print",
             1, /* TODO: HARD CODED */
-            move |args: &[Value], _context| {
+            move |args: &[VariableValue], _context| {
                 if let Some(value) = args.first() {
                     let display_value = value.convert_to_string_if_needed();
                     println!("{display_value}");

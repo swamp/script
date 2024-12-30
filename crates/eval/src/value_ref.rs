@@ -29,12 +29,12 @@ impl ValueReference {
                             .downcast_rust::<SparseValueMap>()
                             .expect("must be sparsemap");
 
-                        let id_type_ref = sparse_map.borrow().rust_type_ref_for_id.clone();
+                        //let id_type_ref = sparse_map.borrow().rust_type_ref_for_id.clone();
 
                         let pairs: Vec<_> = sparse_map
                             .borrow_mut()
                             .iter_mut()
-                            .map(|(k, v)| v.clone())
+                            .map(|(_k, v)| v.clone())
                             .collect();
 
                         Box::new(pairs.into_iter()) as Box<dyn Iterator<Item = ValueRef>>
@@ -42,7 +42,7 @@ impl ValueReference {
                     _ => return Err(ValueError::CanNotCoerceToIterator),
                 })
             }
-            Value::Map(ref type_ref, seq_map) => {
+            Value::Map(ref _type_ref, seq_map) => {
                 // Clone each Rc<RefCell<Value>> and collect into a Vec
                 let cloned_rc: Vec<ValueRef> = seq_map.values().cloned().collect();
 

@@ -8,8 +8,6 @@ description = "tests for swamp macro"
 
 [dependencies]
 swamp-script-derive = { path = "../derive" , version = "0.0.7" }
-swamp-script-eval = { path = "../eval" , version = "0.0.7" }
-
 
 [dev-dependencies]
 swamp-script-derive = { path = "../derive" , version = "0.0.7" }

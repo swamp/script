@@ -20,7 +20,7 @@ use swamp_script_semantic::{
     ResolvedFunction, ResolvedPatternElement, ResolvedPostfixOperatorKind, ResolvedStaticCall,
     ResolvedUnaryOperatorKind,
 };
-use tracing::{error, info, trace, warn};
+use tracing::{error, trace, warn};
 
 pub mod err;
 
@@ -1217,8 +1217,8 @@ impl<'a, C> Interpreter<'a, C> {
                     let v = self.evaluate_expression(expression)?;
                     match v {
                         Value::Option(_) => {
-                            if let Some(source_map) = self.debug_source_map {}
-                            warn!(?v, "unnecessary wrap!, should be investigated"); // TODO: Is there a case where this is ok?
+                            if let Some(_source_map) = self.debug_source_map {}
+                            warn!(?v, "unnecessary wrap!, should be investigated");
                             v
                         }
                         _ => Value::Option(Some(Box::from(v))),

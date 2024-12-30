@@ -8,17 +8,12 @@ description = "cli for swamp script"
 
 [dependencies]
 clap = { version = "4.4", features = ["derive"] }
-pest = "2.7.14" # TODO: remove pest
 tracing = "0.1.40"
 
-
-tracing-log = "0.2.0"
 tracing-subscriber = { version = "0.3.18", features = [
     "registry",
     "env-filter",
 ] }
-
-
 
 
 # Ast and Parser

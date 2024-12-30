@@ -51,7 +51,7 @@ pub fn compile_and_resolve(
         &resolved_program.types,
         &mut resolved_program.state,
         &mut resolved_program.modules,
-        &source_map,
+        source_map,
         &module_paths_in_order,
         &dependency_parser,
     )?;

@@ -151,17 +151,6 @@ impl BlockScopes {
     }
 
     #[inline]
-    fn lookup_variable_mut_reference(
-        &self,
-        variable: &ResolvedVariableRef,
-    ) -> Result<&ValueReference, ExecuteError> {
-        let complete_var = self.lookup_var(variable.scope_index, variable.variable_index);
-        match complete_var {
-            VariableValue::Value(_) => Err(ExecuteError::VariableWasNotMutable),
-            VariableValue::Reference(reference) => Ok(&reference),
-        }
-    }
-    #[inline]
     fn lookup_mut_var(
         &self,
         relative_scope_index: usize,
