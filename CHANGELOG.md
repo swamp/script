@@ -1,5 +1,18 @@
 # Changelog
 
+## 🔖 [v0.0.8](https://github.com/swamp/script/releases/tag/v0.0.8) (2024-12-30)
+
+
+### General
+
+* ✨ Keyword `use` reads and parses the specified files.
+* ✨ Add `MutStructFieldRef` for location of mutable struct field reference
+* 🐞 Wrapping Option values for assignments when needed
+* 🐞 Do not wrap `none` with option
+* 🐞 Enum variant structs, `ResolvedEnumLiteralData::Struct`, handle fields in source code order
+* 🔥 Type aliases
+* 🎨 More errors have `Span` information
+
 ## 🔖 [v0.0.5](https://github.com/swamp/script/releases/tag/v0.0.5) (2024-12-06)
 
 - Array extends, push, remove and clear.
