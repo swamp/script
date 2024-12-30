@@ -2039,3 +2039,15 @@ FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name:
         ",
     );
 }
+
+#[test_log::test]
+fn destruct() {
+    check(
+        r"
+x, y = logic.pos.floor()
+",
+        r"
+MultiVariableAssignment([<1:1>, <4:1>], MemberCall(FieldAccess(VariableAccess(<8:5>), <14:3>), <18:5>, []))
+        ",
+    );
+}

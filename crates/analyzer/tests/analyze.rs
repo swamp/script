@@ -647,3 +647,17 @@ InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable
 ",
     );
 }
+
+#[test_log::test]
+fn tuple_destructuring() {
+    check(
+        r"
+        x, y = (2, 3)
+    ",
+        r"
+
+TupleDestructuring([ResolvedVariable { name: <9:1>, resolved_type: Tuple(ResolvedTupleType([Int(ResolvedIntType), Int(ResolvedIntType)])), mutable_node: None, scope_index: 0, variable_index: 0 }, ResolvedVariable { name: <12:1>, resolved_type: Tuple(ResolvedTupleType([Int(ResolvedIntType), Int(ResolvedIntType)])), mutable_node: None, scope_index: 0, variable_index: 1 }], ResolvedTupleType([Int(ResolvedIntType), Int(ResolvedIntType)]), Literal(TupleLiteral(ResolvedTupleType([Int(ResolvedIntType), Int(ResolvedIntType)]), [Literal(IntLiteral(2, <17:1>, ResolvedIntType)), Literal(IntLiteral(3, <20:1>, ResolvedIntType))])))
+
+",
+    );
+}

@@ -1422,6 +1422,24 @@ impl<'a, C> Interpreter<'a, C> {
                         .try_into()?
                 }
             }
+            ResolvedExpression::TupleDestructuring(variable_refs, _, expr) => {
+                let value = self.evaluate_expression(expr)?;
+                if let Value::Tuple(_tuple_ref, values) = value {
+                    if variable_refs.len() > values.len() {
+                        return Err(ExecuteError::NotAnArray);
+                    }
+                    for (index, variable_ref) in variable_refs.iter().enumerate() {
+                        let value = &values[index].borrow().clone();
+                        self.current_block_scopes.initialize_var(
+                            variable_ref.scope_index,
+                            variable_ref.variable_index,
+                            value.clone(),
+                            false,
+                        );
+                    }
+                }
+                Value::Unit
+            }
         };
 
         Ok(value)

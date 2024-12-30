@@ -1027,6 +1027,11 @@ pub enum ResolvedExpression {
         true_block: Box<ResolvedExpression>,
         false_block: Option<Box<ResolvedExpression>>,
     },
+    TupleDestructuring(
+        Vec<ResolvedVariableRef>,
+        ResolvedTupleTypeRef,
+        Box<ResolvedExpression>,
+    ),
 }
 
 pub trait Spanned {
@@ -1187,6 +1192,7 @@ impl Spanned for ResolvedExpression {
                 false_block,
             } => todo!(),
             &ResolvedExpression::MutStructFieldRef(_, _) => todo!(),
+            &ResolvedExpression::TupleDestructuring(_, _, _) => todo!(),
         }
     }
 }

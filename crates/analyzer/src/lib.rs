@@ -233,6 +233,7 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
         ResolvedExpression::If(_, true_expr, _) => resolution(true_expr),
         ResolvedExpression::IfOnlyVariable { true_block, .. } => resolution(true_block),
         ResolvedExpression::IfAssignExpression { true_block, .. } => resolution(true_block),
+        ResolvedExpression::TupleDestructuring(_, _, expr) => resolution(expr),
     };
 
     resolution_expression
@@ -2702,6 +2703,19 @@ impl<'a> Resolver<'a> {
             variable_refs.push(variable_ref);
             if !is_reassignment {
                 all_reassignment = false;
+            }
+        }
+
+        if variable_refs.len() > 1 {
+            match expression_type {
+                ResolvedType::Tuple(tuple) => {
+                    return Ok(ResolvedExpression::TupleDestructuring(
+                        variable_refs,
+                        tuple,
+                        Box::from(converted_expression),
+                    ))
+                }
+                _ => {}
             }
         }
 
