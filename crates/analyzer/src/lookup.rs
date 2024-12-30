@@ -30,7 +30,7 @@ impl<'a> NameLookup<'a> {
             self.modules
                 .modules
                 .get(path)
-                .map(|module| module.borrow_mut().namespace.clone())
+                .map(|module| module.borrow().namespace.clone())
         }
     }
 

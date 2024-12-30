@@ -989,12 +989,11 @@ impl<'a, C> Interpreter<'a, C> {
             }
 
             ResolvedExpression::MapIndexAccess(ref map_lookup) => {
-                let map_ref =
-                    self.evaluate_expression_mut_location_start(&map_lookup.map_expression)?;
+                let map_ref = self.evaluate_expression(&map_lookup.map_expression)?;
                 let index_val = self.evaluate_expression(&map_lookup.index_expression)?;
 
                 let result = {
-                    if let Value::Map(_type_id, ref mut seq_map) = &mut *map_ref.borrow_mut() {
+                    if let Value::Map(_type_id, ref seq_map) = map_ref {
                         let x = seq_map.get(&index_val);
                         x.map_or_else(
                             || Value::Option(None),

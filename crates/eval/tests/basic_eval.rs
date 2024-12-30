@@ -118,6 +118,7 @@ fn basic_eval_with_doc_comment() {
         r#"
         /// This is important documentation
         fn add() -> Int {
+            2
         }
 
         a = 3
@@ -404,9 +405,8 @@ fn basic_eval_13() {
             }
         }
 
-        type CoolPerson = Ossian
 
-        mut ossian = CoolPerson { happy: 3 }
+        mut ossian = Ossian { happy: 3 }
 
         Ossian::unrelated_function(3.5) // TODO: change to Ossian::unrelated_function(3.5) ?
         ossian.coding()
@@ -888,7 +888,7 @@ fn map_insert_with_immutable() {
     a[3] = 'ossian'
 
     ",
-        "ExecuteError(Error(\"Invalid map assignment: must be mutable\"))",
+        "ExecuteError(VariableWasNotMutable)",
     );
 }
 

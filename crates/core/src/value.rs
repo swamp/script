@@ -286,7 +286,7 @@ impl Display for Value {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
-                    write!(f, "{key}:{}", val.borrow())?;
+                    write!(f, "{key}: {}", val.borrow())?;
                 }
                 write!(f, "]")
             }
