@@ -314,7 +314,7 @@ pub enum ResolveError {
     IntConversionError(ParseIntError),
     FloatConversionError(ParseFloatError),
     BoolConversionError,
-    DuplicateFieldInStructInstantiation(String, Rc<RefCell<ResolvedStructType>>),
+    DuplicateFieldInStructInstantiation(String),
     InternalError(&'static str),
     WasNotFieldMutRef,
 }
@@ -1684,14 +1684,28 @@ impl<'a> Resolver<'a> {
                         _variant,
                         anonym_struct_field_and_expressions,
                     ) => {
-                        let mut resolved = Vec::new();
-                        for field_and_expr in anonym_struct_field_and_expressions {
-                            let resolved_expression = self
-                                .resolve_expression(&field_and_expr.expression)
-                                .expect("enum struct expressions should resolve");
-                            resolved.push(resolved_expression);
+                        if let ResolvedEnumVariantContainerType::Struct(
+                            resolved_variant_struct_ref,
+                        ) = &variant_ref.data
+                        {
+                            let mut resolved = Vec::new();
+                            if anonym_struct_field_and_expressions.len()
+                                != resolved_variant_struct_ref.anon_struct.defined_fields.len()
+                            {
+                                return Err(ResolveError::ArgumentIsNotMutable);
+                            }
+
+                            self.resolve_anon_struct_instantiation(
+                                &resolved_variant_struct_ref.anon_struct,
+                                anonym_struct_field_and_expressions,
+                            )?;
+
+                            ResolvedEnumLiteralData::Struct(resolved)
+                        } else {
+                            return Err(ResolveError::WrongEnumVariantContainer(
+                                variant_ref.clone(),
+                            ));
                         }
-                        ResolvedEnumLiteralData::Struct(resolved)
                     }
                 };
 
@@ -1830,6 +1844,59 @@ impl<'a> Resolver<'a> {
         }
     }
 
+    fn resolve_anon_struct_instantiation(
+        &mut self,
+        struct_to_instantiate: &ResolvedAnonymousStructType,
+        ast_fields: &Vec<FieldExpression>,
+    ) -> Result<Vec<(usize, ResolvedExpression)>, ResolveError> {
+        let mut seen_fields = HashSet::new();
+        let mut source_order_expressions = Vec::new();
+
+        for field in ast_fields {
+            let field_name = self.get_text(&field.field_name.0).to_string();
+
+            // If we can not insert it, it is a duplicate
+            if !seen_fields.insert(field_name.clone()) {
+                return Err(ResolveError::DuplicateFieldInStructInstantiation(
+                    field_name,
+                ));
+            }
+
+            //            let borrowed_struct = struct_to_instantiate.borrow();
+
+            let maybe_looked_up_field = struct_to_instantiate.defined_fields.get(&field_name);
+
+            if maybe_looked_up_field.is_none() {
+                return Err(ResolveError::UnknownStructField(
+                    self.to_node(&field.field_name.0),
+                ));
+            }
+
+            let looked_up_field = maybe_looked_up_field.expect("checked earlier");
+
+            let field_index_in_definition = struct_to_instantiate
+                .defined_fields
+                .get_index(&field_name)
+                .expect("field_name is checked earlier");
+
+            let resolved_expression = self.resolve_expression(&field.expression)?;
+            let upgraded_resolved_expression =
+                wrap_in_some_if_optional(&looked_up_field.field_type, resolved_expression);
+
+            let expression_type = resolution(&upgraded_resolved_expression);
+
+            if !looked_up_field.field_type.same_type(&expression_type) {
+                error!("types: {looked_up_field:?} expr: {expression_type:?}");
+                return Err(ResolveError::ExpressionIsOfWrongFieldType);
+            }
+
+            source_order_expressions
+                .push((field_index_in_definition, upgraded_resolved_expression));
+        }
+
+        Ok(source_order_expressions)
+    }
+
     fn resolve_struct_instantiation(
         &mut self,
         qualified_type_identifier: &QualifiedTypeIdentifier,
@@ -1851,56 +1918,10 @@ impl<'a> Resolver<'a> {
             ));
         }
 
-        let mut seen_fields = HashSet::new();
-        let mut source_order_expressions = Vec::new();
-
-        for field in ast_fields {
-            let field_name = self.get_text(&field.field_name.0).to_string();
-
-            // If we can not insert it, it is a duplicate
-            if !seen_fields.insert(field_name.clone()) {
-                return Err(ResolveError::DuplicateFieldInStructInstantiation(
-                    field_name,
-                    struct_to_instantiate,
-                ));
-            }
-
-            let borrowed_struct = struct_to_instantiate.borrow();
-
-            let maybe_looked_up_field = borrowed_struct
-                .anon_struct_type
-                .defined_fields
-                .get(&field_name);
-
-            if maybe_looked_up_field.is_none() {
-                return Err(ResolveError::UnknownStructField(
-                    self.to_node(&field.field_name.0),
-                ));
-            }
-
-            let looked_up_field = maybe_looked_up_field.expect("checked earlier");
-
-            let field_index_in_definition = struct_to_instantiate
-                .borrow()
-                .anon_struct_type
-                .defined_fields
-                .get_index(&field_name)
-                .expect("field_name is checked earlier");
-
-            let resolved_expression = self.resolve_expression(&field.expression)?;
-            let upgraded_resolved_expression =
-                wrap_in_some_if_optional(&looked_up_field.field_type, resolved_expression);
-
-            let expression_type = resolution(&upgraded_resolved_expression);
-
-            if !looked_up_field.field_type.same_type(&expression_type) {
-                error!("types: {looked_up_field:?} expr: {expression_type:?}");
-                return Err(ResolveError::ExpressionIsOfWrongFieldType);
-            }
-
-            source_order_expressions
-                .push((field_index_in_definition, upgraded_resolved_expression));
-        }
+        let source_order_expressions = self.resolve_anon_struct_instantiation(
+            &struct_to_instantiate.borrow().anon_struct_type,
+            ast_fields,
+        )?;
 
         Ok(ResolvedStructInstantiation {
             source_order_expressions,

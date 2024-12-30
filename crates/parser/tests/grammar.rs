@@ -1994,7 +1994,7 @@ fn mut_location_field() {
 something(mut field.a)
 ",
         r"
-FunctionCall(VariableAccess(<1:9>), [MutRef(FieldAccess(VariableAccess(<15:5>)))])
+FunctionCall(VariableAccess(<1:9>), [MutRef(FieldAccess(VariableAccess(<15:5>), <21:1>))])
         ",
     );
 }
