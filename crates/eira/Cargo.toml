@@ -1,6 +1,6 @@
 [package]
 name = "eira"
-version = "0.0.1"
+version = "0.0.8"
 edition = "2021"
 license = "MIT"
 description = "Ansi-colored error reporting output"
