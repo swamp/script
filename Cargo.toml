@@ -28,6 +28,9 @@ members = [
     "crates/core",
     "crates/std",
 
+    # "crates/extra", # Not used yet
+    "crates/err", 
 
-    "crates/source-map", "crates/extra", "crates/err", "crates/eira",
+    "crates/source-map", # Move this later
+    "crates/eira", # Move this later
 ]

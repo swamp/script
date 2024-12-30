@@ -180,7 +180,7 @@ pub fn eval(resolved_main_module: &ResolvedModuleRef) -> Result<Value, CliError>
 pub fn create_parsed_modules(
     script: &str,
     root_path: PathBuf,
-    mut source_map: &mut SourceMap,
+    source_map: &mut SourceMap,
 ) -> Result<DependencyParser, CliError> {
     let parser = AstParser;
     let ast_program = parser.parse_module(script)?;
@@ -243,7 +243,7 @@ fn compile_to_resolved_program(script: &str) -> Result<(ResolvedProgram, SourceM
 }
 
 fn compile_and_eval(script: &str) -> Result<Value, CliError> {
-    let (resolved_program, source_map) = compile_to_resolved_program(script)?;
+    let (resolved_program, _source_map) = compile_to_resolved_program(script)?;
 
     let resolved_main_module = resolved_program
         .modules

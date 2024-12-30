@@ -2,6 +2,9 @@
 name = "swamp-script-error-report"
 version = "0.0.8"
 edition = "2021"
+license = "MIT"
+description = "Swamp script error report"
+repository = "https://github.com/swamp/script"
 
 [dependencies]
 swamp-script-semantic = { path = "../semantic", version = "0.0.8" }
