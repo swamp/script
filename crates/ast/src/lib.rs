@@ -42,7 +42,25 @@ pub struct QualifiedTypeIdentifier {
 }
 
 impl QualifiedTypeIdentifier {
-    pub fn new(name: LocalTypeIdentifier, module_path: Vec<ModulePathItem>) -> Self {
+    pub fn new(name: LocalTypeIdentifier, module_path: Vec<Node>) -> Self {
+        let module_path = if module_path.is_empty() {
+            None
+        } else {
+            Some(ModulePath(module_path))
+        };
+
+        Self { name, module_path }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub struct QualifiedIdentifier {
+    pub name: Node,
+    pub module_path: Option<ModulePath>,
+}
+
+impl QualifiedIdentifier {
+    pub fn new(name: Node, module_path: Vec<Node>) -> Self {
         let module_path = if module_path.is_empty() {
             None
         } else {
@@ -87,12 +105,7 @@ pub struct FieldName(pub Node);
 pub struct StringConst(pub Node);
 
 #[derive(Debug, Eq, Hash, PartialEq, Clone)]
-pub struct ModulePathItem {
-    pub node: Node,
-}
-
-#[derive(Debug, Eq, Hash, PartialEq, Clone)]
-pub struct ModulePath(pub Vec<ModulePathItem>);
+pub struct ModulePath(pub Vec<Node>);
 
 impl ModulePath {
     pub fn new() -> Self {
@@ -101,8 +114,9 @@ impl ModulePath {
 }
 
 #[derive(Debug)]
-pub struct Import {
+pub struct Use {
     pub module_path: ModulePath,
+    pub assigned_path: Vec<String>,
     pub items: ImportItems,
 }
 
@@ -131,7 +145,7 @@ pub enum Definition {
     EnumDef(Node, Vec<EnumVariantType>),
     FunctionDef(Function),
     ImplDef(Node, Vec<Function>),
-    Import(Import),
+    Use(Use),
 
     // Other
     Comment(Node),
@@ -281,6 +295,8 @@ pub enum Expression {
     // Access
     FieldAccess(Box<Expression>, Node),
     VariableAccess(Variable),
+    FunctionAccess(QualifiedIdentifier),
+
     MutRef(LocationExpression),
     IndexAccess(Box<Expression>, Box<Expression>),
 

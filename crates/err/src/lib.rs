@@ -243,5 +243,8 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
         ResolveError::DuplicateFieldInStructInstantiation(_) => todo!(),
         ResolveError::InternalError(_) => todo!(),
         ResolveError::WasNotFieldMutRef => todo!(),
+        ResolveError::UnknownFunction(node) => {
+            Report::build(Error, 1026, "Unknown function", &node.span)
+        }
     }
 }

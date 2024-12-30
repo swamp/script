@@ -15,7 +15,8 @@ use std::rc::Rc;
 use swamp_script_ast::prelude::*;
 use swamp_script_ast::{
     CompoundOperator, CompoundOperatorKind, EnumVariantLiteral, FieldExpression, ForPattern,
-    Function, LocationExpression, PatternElement, PostfixOperator, SpanWithoutFileId,
+    Function, LocationExpression, PatternElement, PostfixOperator, QualifiedIdentifier,
+    SpanWithoutFileId,
 };
 use swamp_script_semantic::modules::ResolvedModules;
 use swamp_script_semantic::{
@@ -98,6 +99,7 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
             struct_field_ref.resolved_type.clone()
         }
         ResolvedExpression::VariableAccess(variable_ref) => variable_ref.resolved_type.clone(),
+
         ResolvedExpression::InternalFunctionAccess(internal_function_def) => {
             ResolvedType::FunctionInternal(internal_function_def.clone())
         }
@@ -318,6 +320,7 @@ pub enum ResolveError {
     DuplicateFieldInStructInstantiation(String),
     InternalError(&'static str),
     WasNotFieldMutRef,
+    UnknownFunction(ResolvedNode),
 }
 
 impl From<SemanticError> for ResolveError {
@@ -620,7 +623,7 @@ impl<'a> Resolver<'a> {
             .map_or_else(Vec::new, |found_path| {
                 let mut v = Vec::new();
                 for p in &found_path.0 {
-                    v.push(self.get_text(&p.node).to_string());
+                    v.push(self.get_text(&p).to_string());
                 }
                 v
             });
@@ -900,7 +903,7 @@ impl<'a> Resolver<'a> {
             Definition::Comment(comment_ref) => {
                 ResolvedDefinition::Comment(self.to_node(comment_ref))
             }
-            Definition::Import(_) => todo!(), // TODO: Implement import resolution
+            Definition::Use(use_info) => self.resolve_use_definition(&use_info)?,
         };
 
         Ok(resolved_def)
@@ -1280,8 +1283,10 @@ impl<'a> Resolver<'a> {
 
                 self.resolve_field_access(expression, &struct_field_ref, field_name)?
             }
-            Expression::VariableAccess(variable) => {
-                self.resolve_variable_or_function_access(&variable.name)?
+            Expression::VariableAccess(variable) => self.resolve_variable(&variable.name)?,
+
+            Expression::FunctionAccess(qualified_identifier) => {
+                self.resolve_function_access(&qualified_identifier)?
             }
             Expression::MutRef(location_expression) => self.resolve_mut_ref(location_expression)?,
             Expression::IndexAccess(collection_expression, lookup) => {
@@ -2571,43 +2576,43 @@ impl<'a> Resolver<'a> {
         Ok(resolved_parts)
     }
 
-    fn resolve_variable_or_function_access(
+    fn resolve_function_access(
         &self,
-        var_or_function_ref_node: &Node,
+        function_ref_node: &QualifiedIdentifier,
     ) -> Result<ResolvedExpression, ResolveError> {
-        self.try_find_variable(var_or_function_ref_node)
+        let path = self.get_module_path(&function_ref_node.module_path);
+        let name = self.get_text(&function_ref_node.name).to_string();
+        self.shared
+            .lookup
+            .get_internal_function(&*path, &name)
             .map_or_else(
                 || {
-                    let name = self.get_text(var_or_function_ref_node).to_string();
                     self.shared
                         .lookup
-                        .get_internal_function(&[], &name)
+                        .get_external_function_declaration(&*path, &name)
                         .map_or_else(
                             || {
-                                self.shared
-                                    .lookup
-                                    .get_external_function_declaration(&[], &name)
-                                    .map_or_else(
-                                        || {
-                                            error!("unknown external function {:?}", name);
-                                            Err(ResolveError::UnknownVariable(
-                                                self.to_node(var_or_function_ref_node),
-                                            ))
-                                        },
-                                        |external_function_ref| {
-                                            Ok(ResolvedExpression::ExternalFunctionAccess(
-                                                external_function_ref,
-                                            ))
-                                        },
-                                    )
+                                error!("unknown function {path:?} {name:?}");
+                                Err(ResolveError::UnknownFunction(
+                                    self.to_node(&function_ref_node.name),
+                                ))
                             },
-                            |function_ref| {
-                                Ok(ResolvedExpression::InternalFunctionAccess(function_ref))
+                            |external_function_ref| {
+                                Ok(ResolvedExpression::ExternalFunctionAccess(
+                                    external_function_ref,
+                                ))
                             },
                         )
                 },
-                |variable_ref| Ok(ResolvedExpression::VariableAccess(variable_ref)),
+                |function_ref| Ok(ResolvedExpression::InternalFunctionAccess(function_ref)),
             )
+    }
+
+    fn resolve_variable(&self, var_node: &Node) -> Result<ResolvedExpression, ResolveError> {
+        self.try_find_variable(var_node).map_or(
+            Err(ResolveError::UnknownVariable(self.to_node(var_node))),
+            |variable_ref| Ok(ResolvedExpression::VariableAccess(variable_ref)),
+        )
     }
 
     #[allow(unused)]
@@ -3684,22 +3689,22 @@ impl<'a> Resolver<'a> {
         }
     }
 
+    fn get_module_path(&self, module_path: &Option<ModulePath>) -> Vec<String> {
+        module_path.as_ref().map_or_else(Vec::new, |found| {
+            let mut strings = Vec::new();
+            for path_item in &found.0 {
+                strings.push(self.get_text(path_item).to_string());
+            }
+            strings
+        })
+    }
+
     fn get_enum_variant_type(
         &self,
         qualified_type_identifier: &QualifiedTypeIdentifier,
         variant_name: &str,
     ) -> Option<ResolvedEnumVariantTypeRef> {
-        let path: Vec<String> =
-            qualified_type_identifier
-                .module_path
-                .as_ref()
-                .map_or_else(Vec::new, |found| {
-                    let mut strings = Vec::new();
-                    for path_item in &found.0 {
-                        strings.push(self.get_text(&path_item.node).to_string());
-                    }
-                    strings
-                });
+        let path = self.get_module_path(&qualified_type_identifier.module_path);
 
         let enum_name = self.get_text(&qualified_type_identifier.name.0).to_string();
 
@@ -3804,6 +3809,17 @@ impl<'a> Resolver<'a> {
         };
 
         Ok(mut_expr)
+    }
+
+    fn resolve_use_definition(
+        &self,
+        use_definition: &Use,
+    ) -> Result<ResolvedDefinition, ResolveError> {
+        let mut nodes = Vec::new();
+        for ast_node in &use_definition.module_path.0 {
+            nodes.push(self.to_node(&ast_node))
+        }
+        Ok(ResolvedDefinition::Use(nodes))
     }
 }
 

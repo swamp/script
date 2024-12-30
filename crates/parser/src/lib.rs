@@ -11,7 +11,7 @@ use pest_derive::Parser;
 use swamp_script_ast::{
     prelude::*, CompoundOperator, CompoundOperatorKind, EnumVariantLiteral, FieldExpression,
     FieldName, FieldType, ForPattern, ForVar, IteratableExpression, LocationExpression,
-    ModulePathItem, PatternElement, SpanWithoutFileId,
+    PatternElement, QualifiedIdentifier, SpanWithoutFileId,
 };
 use swamp_script_ast::{Function, PostfixOperator};
 
@@ -78,6 +78,9 @@ pub enum SpecificError {
     InvalidForPattern,
     UnexpectedRuleInElse(String),
     ExpectedLocationExpression,
+    ExpectedImportPath,
+    ExpectedIdentifier,
+    ExpectedIdentifierAfterPath,
 }
 
 #[derive(Debug)]
@@ -283,11 +286,28 @@ impl AstParser {
             Rule::impl_def => self.parse_impl_def(&inner_pair),
             Rule::struct_def => self.parse_struct_def(&inner_pair),
             Rule::function_def => self.parse_function_def(&inner_pair),
-            Rule::import_definition => todo!(),
+            Rule::import_definition => self.parse_use(&inner_pair),
             Rule::doc_comment => self.parse_doc_comment(&inner_pair),
             Rule::enum_def => self.parse_enum_def(&inner_pair),
             _ => todo!(),
         }
+    }
+
+    fn parse_use(&self, pair: &Pair<Rule>) -> Result<Definition, ParseError> {
+        let import_path = self.next_inner_pair(pair)?;
+
+        let mut segments = Vec::new();
+        let mut assigned_path = Vec::new();
+        for pair in import_path.into_inner() {
+            segments.push(self.to_node(&pair));
+            assigned_path.push(pair.as_str().to_string())
+        }
+
+        Ok(Definition::Use(Use {
+            module_path: ModulePath(segments),
+            items: ImportItems::Module,
+            assigned_path,
+        }))
     }
 
     fn pair_to_rule(rule: &Pair<Rule>) -> String {
@@ -1230,13 +1250,11 @@ impl AstParser {
         }
     }
 
-    fn parse_module_segments(&self, pair: Pair<Rule>) -> Vec<ModulePathItem> {
+    fn parse_module_segments(&self, pair: Pair<Rule>) -> Vec<Node> {
         pair.into_inner()
             .filter_map(|segment| {
                 if segment.as_rule() == Rule::identifier {
-                    Some(ModulePathItem {
-                        node: self.to_node(&segment),
-                    })
+                    Some(self.to_node(&segment))
                 } else {
                     None
                 }
@@ -1275,6 +1293,31 @@ impl AstParser {
                 SpecificError::ExpectedTypeIdentifier(Self::pair_to_rule(&first)),
                 &first,
             )),
+        }
+    }
+
+    fn parse_qualified_identifier(
+        &self,
+        pair: &Pair<Rule>,
+    ) -> Result<QualifiedIdentifier, ParseError> {
+        let mut inner_pairs = pair.clone().into_inner();
+
+        let first = inner_pairs
+            .next()
+            .ok_or_else(|| self.create_error_pair(SpecificError::ExpectedIdentifier, pair))?;
+
+        match first.as_rule() {
+            Rule::module_segments => {
+                let module_path = self.parse_module_segments(first.clone());
+                let id = inner_pairs.next().ok_or_else(|| {
+                    self.create_error_pair(SpecificError::ExpectedIdentifierAfterPath, &first)
+                })?;
+
+                let identifier = self.to_node(&id);
+                Ok(QualifiedIdentifier::new(identifier, module_path))
+            }
+            Rule::identifier => Ok(QualifiedIdentifier::new(self.to_node(&first), Vec::new())),
+            _ => Err(self.create_error_pair(SpecificError::ExpectedIdentifier, &first)),
         }
     }
 
@@ -1537,7 +1580,7 @@ impl AstParser {
         let mut inner = Self::convert_into_iterator(&pair);
 
         // Parse function name
-        let func_name = self.expect_identifier_next(&mut inner)?;
+        let qualified_identifier = self.parse_qualified_identifier(&inner.next().unwrap())?;
         let mut args = Vec::new();
 
         // Parse arguments
@@ -1583,7 +1626,7 @@ impl AstParser {
         }
 
         Ok(Expression::FunctionCall(
-            Box::new(Expression::VariableAccess(Variable::new(func_name.0, None))),
+            Box::new(Expression::FunctionAccess(qualified_identifier)),
             args,
         ))
     }

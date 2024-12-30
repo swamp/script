@@ -1570,6 +1570,7 @@ pub enum ResolvedDefinition {
     FunctionDef(ResolvedFunction),
     Alias(ResolvedType),
     Comment(ResolvedNode),
+    Use(Vec<ResolvedNode>),
 }
 
 // Immutable part

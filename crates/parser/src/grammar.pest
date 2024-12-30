@@ -127,15 +127,11 @@ for_pair = { mut_identifier ~ "," ~ mut_identifier }
 while_loop = { "while" ~ expression ~ expression }
 
 import_definition = {
-    "use" ~ (
-        import_list_from |
+    "use" ~
         import_path
-    )
 }
 
-import_path = @{ identifier ~ ("." ~ identifier)* }
-import_list = { "{" ~ identifier ~ ("," ~ identifier)* ~ "}" }
-import_list_from = { import_list ~ "from" ~ import_path }
+import_path = { identifier ~ ("." ~ identifier)* }
 
 return_expr = { "return" ~ expression }
 continue_expr = { "continue" }
@@ -266,7 +262,7 @@ function_argument = {
 }
 
 function_call = {
-    identifier ~ "(" ~ (function_argument ~ ("," ~ " "* ~ function_argument)*)? ~ ")" // PEST BUG: need to be explicit about spaces after ,
+     qualified_identifier ~ "(" ~ (function_argument ~ ("," ~ " "* ~ function_argument)*)? ~ ")" // PEST BUG: need to be explicit about spaces after ,
 }
 
 static_call = {

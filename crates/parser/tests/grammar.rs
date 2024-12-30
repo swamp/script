@@ -2051,3 +2051,51 @@ MultiVariableAssignment([<1:1>, <4:1>], MemberCall(FieldAccess(VariableAccess(<8
         ",
     );
 }
+
+#[test_log::test]
+fn use_statement() {
+    check(
+        r"
+use gameplay
+",
+        r"
+Use(Use { module_path: ModulePath([<5:8>]), items: Module })
+        ",
+    );
+}
+
+#[test_log::test]
+fn use_statement_3() {
+    check(
+        r"
+use gameplay.other.another
+",
+        r"
+Use(Use { module_path: ModulePath([<5:8>, <14:5>, <20:7>]), items: Module })
+        ",
+    );
+}
+
+#[test_log::test]
+fn qualified_function_call() {
+    check(
+        r"
+gamplay::utility_func(2)
+",
+        r"
+FunctionCall(FunctionAccess(QualifiedIdentifier { name: <10:12>, module_path: Some(ModulePath([<1:7>])) }), [Literal(Int(<23:1>))])
+        ",
+    );
+}
+
+#[test_log::test]
+fn qualified_function_call_3() {
+    check(
+        r"
+gamplay::some::other::utility_func(2)
+",
+        r"
+FunctionCall(FunctionAccess(QualifiedIdentifier { name: <23:12>, module_path: Some(ModulePath([<1:7>, <10:4>, <16:5>])) }), [Literal(Int(<36:1>))])
+        ",
+    );
+}

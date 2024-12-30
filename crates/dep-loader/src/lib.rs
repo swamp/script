@@ -90,7 +90,7 @@ impl ParseRoot {
 #[allow(unused)]
 pub struct ModuleInfo {
     path: Vec<String>,
-    imports: Vec<String>,
+    imports: Vec<Vec<String>>,
     parsed: bool,
     analyzed: bool,
 }
@@ -144,12 +144,12 @@ impl From<io::Error> for DependencyError {
     }
 }
 
-fn get_all_import_paths(parsed_module: &ParseModule) -> Vec<ModulePath> {
+fn get_all_import_paths(parsed_module: &ParseModule) -> Vec<Vec<String>> {
     let mut imports = vec![];
 
     for def in parsed_module.ast_module.definitions() {
         match def {
-            Definition::Import(import) => imports.push(import.module_path.clone()),
+            Definition::Use(import) => imports.push(import.assigned_path.clone()),
             _ => continue,
         }
     }
@@ -164,10 +164,10 @@ impl DependencyParser {
         module_path: &[String],
         source_map: &mut SourceMap,
     ) -> Result<(), DependencyError> {
-        let mut to_parse = vec![module_path];
+        let mut to_parse = vec![module_path.to_vec()];
 
         while let Some(path) = to_parse.pop() {
-            let module_path_vec = &path.to_vec();
+            let module_path_vec = &path.clone();
             if self.import_scanned_modules.contains_key(module_path_vec) {
                 continue;
             }
@@ -183,35 +183,32 @@ impl DependencyParser {
                     info!("module parsed: {parse_module:?}");
 
                     self.already_parsed_modules
-                        .insert(Vec::from(path), parse_module)
+                        .insert(path.clone(), parse_module)
                         .expect("TODO: panic message");
 
                     self.already_parsed_modules
-                        .get(&path.to_vec())
+                        .get(&path.clone())
                         .expect("we just inserted it")
                 };
 
-            /*
-            TODO: FIX
             let imports = get_all_import_paths(parsed_module_to_scan);
-            imports.iter().map(|path| path.0.iter().map(|x| x.node))
             for import in &imports {
-                info!("..found import: {import:?}");
+                info!("..found use: {import:?}");
             }
-            */
+
             self.import_scanned_modules
                 .insert(
-                    Vec::from(path),
+                    path.clone(),
                     ModuleInfo {
-                        path: path.to_vec(),
-                        imports: vec![], // TODO: FIX
+                        path: path.clone(),
+                        imports: imports.clone(),
                         parsed: false,
                         analyzed: false,
                     },
                 )
                 .expect("TODO: panic message");
 
-            // TODO: FIX: to_parse.extend(imports);
+            to_parse.extend(imports.clone());
         }
         Ok(())
     }
@@ -229,6 +226,15 @@ impl DependencyParser {
         let mut visited = HashSet::new();
         let mut temp_visited = HashSet::new();
 
+        println!("\nStarting dependency analysis:");
+        println!(
+            "All modules: {:?}",
+            self.import_scanned_modules
+                .keys()
+                .cloned()
+                .collect::<Vec<_>>()
+        );
+
         fn visit(
             graph: &DependencyParser,
             path: &[String],
@@ -236,35 +242,47 @@ impl DependencyParser {
             temp_visited: &mut HashSet<Vec<String>>,
             order: &mut Vec<Vec<String>>,
         ) -> Result<(), DependencyError> {
+            println!("\nVisiting module: {:?}", path);
+            println!("  Current order: {:?}", order);
+            println!("  Already visited: {:?}", visited);
+
             if temp_visited.contains(path) {
+                println!("  Cycle detected at: {:?}", path);
                 return Err(DependencyError::CircularDependency(Vec::from(path)));
             }
 
             if visited.contains(path) {
+                println!("  Already processed, skipping");
                 return Ok(());
             }
 
             temp_visited.insert(Vec::from(path));
 
-            /* TODO: FIX
-            if let Some(module) = graph.import_scanned_modules.get(path) {
+            if let Some(module) = graph.import_scanned_modules.get(&path.to_vec()) {
+                println!("  Module dependencies: {:?}", module.imports);
                 for import in &module.imports {
+                    println!("  Processing dependency: {:?}", import);
                     visit(graph, import, visited, temp_visited, order)?;
                 }
             }
 
-             */
+            order.push(Vec::from(path));
+            visited.insert(Vec::from(path));
+
+            println!("  Added to order: {:?}", path);
+            println!("  Updated order: {:?}", order);
 
             temp_visited.remove(path);
-            visited.insert(Vec::from(path));
-            order.push(Vec::from(path));
 
             Ok(())
         }
 
         for path in self.import_scanned_modules.keys() {
+            println!("\nStarting new root module: {:?}", path);
             if !visited.contains(path) {
                 visit(self, path, &mut visited, &mut temp_visited, &mut order)?;
+            } else {
+                println!("  Already processed, skipping");
             }
         }
 
@@ -302,7 +320,11 @@ pub fn parse_dependant_modules_and_resolve(
 
     dependency_parser.parse_all_dependant_modules(parse_root, &module_path, source_map)?;
 
+    info!(modules=?dependency_parser.already_parsed_modules,"dependency parser has modules");
+
     let module_paths_in_order = dependency_parser.get_analysis_order()?;
+
+    info!(?module_paths_in_order, "order in which to analyze");
 
     Ok(module_paths_in_order)
 }

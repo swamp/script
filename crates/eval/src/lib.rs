@@ -21,7 +21,7 @@ use swamp_script_semantic::{
     ResolvedUnaryOperatorKind,
 };
 use swamp_script_source_map::SourceMap;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, trace, warn};
 
 pub mod err;
 
@@ -287,7 +287,7 @@ impl<'a, C> Interpreter<'a, C> {
         match &func_val {
             Value::InternalFunction(internal_func_ref) => {
                 if let Some(debug_source_map) = &self.debug_source_map {
-                    info!(
+                    trace!(
                         "internal func: {}",
                         debug_source_map.get_text(&internal_func_ref.name.0)
                     );
@@ -301,23 +301,17 @@ impl<'a, C> Interpreter<'a, C> {
         }
 
         let evaluated_args = self.evaluate_args(&call.arguments)?;
-        debug!("call {:?}", func_val);
 
         self.push_function_scope();
 
-        // Bind parameters before executing body
         self.bind_parameters(
             &call.function_definition.signature.parameters,
             &evaluated_args,
         )?;
 
-        debug!(args=?evaluated_args, name=?call.function_definition.name, "call function with arguments");
-
         let result = self.evaluate_expression(&call.function_definition.body)?;
 
         self.pop_function_scope();
-
-        debug!(value=?result, name=?call.function_definition.name, "function returned");
 
         Ok(result)
     }

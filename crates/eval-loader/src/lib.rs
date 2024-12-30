@@ -12,6 +12,7 @@ use swamp_script_dep_loader::prelude::*;
 use swamp_script_semantic::modules::ResolvedModules;
 use swamp_script_semantic::prelude::*;
 use swamp_script_source_map::SourceMap;
+use tracing::info;
 
 pub fn resolve_to_new_module(
     types: &ResolvedProgramTypes,
@@ -29,12 +30,12 @@ pub fn resolve_to_new_module(
         state,
         modules,
         resolved_module_ref.borrow_mut().namespace.clone(),
-        &source_map,
+        source_map,
         resolved_module_ref.clone(),
         ast_module,
     )?;
 
-    // TODO: FIX modules.add_module(resolved_module_ref)?;
+    modules.add(resolved_module_ref);
 
     Ok(())
 }
@@ -83,6 +84,7 @@ pub fn resolve_program(
     for module_path in module_paths_in_order {
         if let Some(parse_module) = parsed_modules.get_parsed_module(module_path) {
             if modules.contains_key(&*module_path.clone()) {
+                info!(?module_path, "this is an existing module");
                 let existing_resolve_module = modules.modules.remove(module_path).unwrap();
                 let maybe_expression = resolve_to_existing_module(
                     types,
@@ -97,6 +99,7 @@ pub fn resolve_program(
                     .modules
                     .insert(module_path.clone(), existing_resolve_module);
             } else {
+                info!(?module_path, "this is a new module");
                 resolve_to_new_module(
                     types,
                     state,

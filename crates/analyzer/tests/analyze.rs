@@ -661,3 +661,27 @@ TupleDestructuring([ResolvedVariable { name: <9:1>, resolved_type: Tuple(Resolve
 ",
     );
 }
+
+#[test_log::test]
+fn definition_use() {
+    check(
+        r"
+        use gameplay
+    ",
+        r"
+Use([<13:8>])
+",
+    );
+}
+
+#[test_log::test]
+fn definition_use_3() {
+    check(
+        r"
+        use gameplay.other.some
+    ",
+        r"
+Use([<13:8>, <22:5>, <28:4>])
+",
+    );
+}
