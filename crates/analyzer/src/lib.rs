@@ -7,7 +7,6 @@ pub mod prelude;
 
 use crate::lookup::NameLookup;
 use seq_map::{SeqMap, SeqMapError};
-use std::cell::RefCell;
 use std::collections::HashSet;
 use std::mem::take;
 use std::num::{ParseFloatError, ParseIntError};
@@ -1666,14 +1665,13 @@ impl<'a> Resolver<'a> {
                             resolved_variant_struct_ref,
                         ) = &variant_ref.data
                         {
-                            let mut resolved = Vec::new();
                             if anonym_struct_field_and_expressions.len()
                                 != resolved_variant_struct_ref.anon_struct.defined_fields.len()
                             {
                                 return Err(ResolveError::ArgumentIsNotMutable);
                             }
 
-                            self.resolve_anon_struct_instantiation(
+                            let resolved = self.resolve_anon_struct_instantiation(
                                 &resolved_variant_struct_ref.anon_struct,
                                 anonym_struct_field_and_expressions,
                             )?;
@@ -3004,14 +3002,16 @@ impl<'a> Resolver<'a> {
             EnumVariantLiteral::Tuple(_qualified_name, _variant_name, expressions) => {
                 ResolvedEnumLiteralData::Tuple(self.resolve_expressions(expressions)?)
             }
-            EnumVariantLiteral::Struct(_qualified_name, _variant_name, field_expressions) => {
-                let mut resolved_expressions = Vec::new();
-                for field_expression in field_expressions {
-                    let resolved_expression =
-                        self.resolve_expression(&field_expression.expression)?;
-                    resolved_expressions.push(resolved_expression);
+            EnumVariantLiteral::Struct(_qualified_name, variant_name, field_expressions) => {
+                if let ResolvedEnumVariantContainerType::Struct(struct_ref) = &variant_ref.data {
+                    let resolved = self.resolve_anon_struct_instantiation(
+                        &struct_ref.anon_struct,
+                        field_expressions,
+                    )?;
+                    ResolvedEnumLiteralData::Struct(resolved)
+                } else {
+                    return Err(ResolveError::WrongEnumVariantContainer(variant_ref.clone()));
                 }
-                ResolvedEnumLiteralData::Struct(resolved_expressions)
             }
         };
 

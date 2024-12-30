@@ -412,15 +412,15 @@ impl Hash for Value {
             Self::Bool(b) => b.hash(state),
             Self::Unit => (),
             Self::Option(o) => o.hash(state),
-            Self::Array(_, arr) => {}
+            Self::Array(_, _arr) => {}
             Self::Struct(type_ref, values) => {
                 type_ref.borrow().number.hash(state);
                 for v in values {
                     v.borrow().hash(state);
                 }
             }
-            Self::Map(_, items) => {}
-            Self::Tuple(_, arr) => {}
+            Self::Map(_, _items) => {}
+            Self::Tuple(_, _arr) => {}
             Self::EnumVariantSimple(_) => (),
             Self::EnumVariantTuple(_, fields) => fields.hash(state),
             Self::EnumVariantStruct(_, fields) => fields.hash(state),

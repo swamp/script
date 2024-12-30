@@ -7,7 +7,7 @@ use swamp_script_semantic::{
     ResolvedEnumType, ResolvedEnumTypeRef, ResolvedEnumVariantType, ResolvedEnumVariantTypeRef,
     ResolvedExternalFunctionDefinitionRef, ResolvedInternalFunctionDefinition,
     ResolvedInternalFunctionDefinitionRef, ResolvedRustTypeRef, ResolvedStructType,
-    ResolvedStructTypeRef, ResolvedType,
+    ResolvedStructTypeRef,
 };
 
 #[derive()]

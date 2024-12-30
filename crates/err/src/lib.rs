@@ -201,7 +201,7 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
         ResolveError::SemanticError(_) => todo!(),
         ResolveError::SeqMapError(_) => todo!(),
         ResolveError::ExpectedMemberCall(_) => todo!(),
-        ResolveError::CouldNotFindStaticMember(x, y) => {
+        ResolveError::CouldNotFindStaticMember(x, _y) => {
             Report::build(Error, 234101, "Could not find static member", &x.span)
         }
         ResolveError::TypeAliasNotAStruct(_) => todo!(),

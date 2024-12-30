@@ -2,7 +2,7 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use crate::block::{BlockScope, BlockScopes};
+use crate::block::BlockScopes;
 use crate::err::ConversionError;
 use crate::prelude::{ValueReference, VariableValue};
 use err::ExecuteError;
@@ -20,8 +20,7 @@ use swamp_script_semantic::{
     ResolvedFunction, ResolvedPatternElement, ResolvedPostfixOperatorKind, ResolvedStaticCall,
     ResolvedUnaryOperatorKind,
 };
-use swamp_script_source_map::SourceMap;
-use tracing::{debug, error, info, trace, warn};
+use tracing::{error, info, trace, warn};
 
 pub mod err;
 
@@ -667,7 +666,7 @@ impl<'a, C> Interpreter<'a, C> {
 
     // ---------------
     fn evaluate_expression(&mut self, expr: &ResolvedExpression) -> Result<Value, ExecuteError> {
-        if let Some(debug_source_map) = &self.debug_source_map {
+        if let Some(_debug_source_map) = &self.debug_source_map {
             //info!(?expr, "evaluate_expr");
             //info!("span: {}", debug_source_map.get_text_span(&expr.span()));
         }
@@ -690,13 +689,16 @@ impl<'a, C> Interpreter<'a, C> {
                         },
 
                         ResolvedEnumVariantContainerType::Struct(struct_type_ref) => match data {
-                            ResolvedEnumLiteralData::Struct(resolved_field_values) => {
-                                let mut values = Vec::with_capacity(resolved_field_values.len());
-                                for resolved_expression in resolved_field_values {
+                            ResolvedEnumLiteralData::Struct(source_order_field_values) => {
+                                let mut field_values =
+                                    Vec::with_capacity(source_order_field_values.len());
+                                field_values
+                                    .resize_with(source_order_field_values.len(), Default::default);
+                                for (index, resolved_expression) in source_order_field_values {
                                     let value = self.evaluate_expression(resolved_expression)?;
-                                    values.push(value);
+                                    field_values[*index] = value;
                                 }
-                                Value::EnumVariantStruct(struct_type_ref.clone(), values)
+                                Value::EnumVariantStruct(struct_type_ref.clone(), field_values)
                             }
                             _ => return Err("wrong container type".to_string())?,
                         },

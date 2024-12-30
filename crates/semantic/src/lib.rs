@@ -236,7 +236,7 @@ impl Spanned for ResolvedType {
             Self::Int(_type_ref) => Span::dummy(),
             Self::Float(_type_ref) => Span::dummy(),
             Self::String(_type_ref) => todo!(),
-            Self::Bool(type_ref) => Span::dummy(),
+            Self::Bool(_type_ref) => Span::dummy(),
             Self::Unit(_type_ref) => todo!(),
 
             // Compound Types
@@ -1061,10 +1061,10 @@ impl Spanned for ResolvedExpression {
             Self::VariableCompoundAssignment(assign) => assign.span(),
             Self::ArrayExtend(var_ref, expr) => var_ref.span().merge(&expr.span()),
             Self::ArrayPush(var_ref, expr) => var_ref.span().merge(&expr.span()),
-            Self::ArrayAssignment(array, index, expr) => {
+            Self::ArrayAssignment(_array, _index, _expr) => {
                 todo!()
             }
-            Self::MapAssignment(map, key, value) => {
+            Self::MapAssignment(_map, _key, _value) => {
                 todo!()
             }
             Self::StructFieldAssignment(base, accesses, value) => {
@@ -1089,11 +1089,11 @@ impl Spanned for ResolvedExpression {
             Self::CoerceOptionToBool(expr) => expr.span(),
 
             // Calls
-            Self::FunctionInternalCall(call) => todo!(),
+            Self::FunctionInternalCall(_call) => todo!(),
             Self::FunctionExternalCall(call) => call.arguments[0].span(),
             Self::StaticCall(call) => call.span(),
-            Self::StaticCallGeneric(call) => todo!(),
-            Self::MutMemberCall(member_ref, args) => {
+            Self::StaticCallGeneric(_call) => todo!(),
+            Self::MutMemberCall(_member_ref, _args) => {
                 todo!()
             }
             Self::MemberCall(call) => call.function.span(),
@@ -1108,7 +1108,7 @@ impl Spanned for ResolvedExpression {
                         .unwrap_or_else(|| first.span())
                 })
                 .unwrap_or_else(Span::dummy),
-            Self::InterpolatedString(str_ref, parts) => parts[0].span(),
+            Self::InterpolatedString(_str_ref, parts) => parts[0].span(),
 
             // Constructing
             Self::StructInstantiation(struct_inst) => {
@@ -1125,7 +1125,7 @@ impl Spanned for ResolvedExpression {
                 })
                 .unwrap_or_else(Span::dummy),
             Self::Literal(lit) => lit.span(),
-            Self::ExclusiveRange(range_ref, start, end) => {
+            Self::ExclusiveRange(_range_ref, _start, _end) => {
                 todo!()
             }
 
@@ -1150,7 +1150,7 @@ impl Spanned for ResolvedExpression {
                 .merge(&optional_expr.span())
                 .merge(&true_block.span())
                 .merge(&false_block.span()),
-            Self::Match(match_expr) => todo!(),
+            Self::Match(_match_expr) => todo!(),
             Self::LetVar(var_ref, expr) => var_ref.span().merge(&expr.span()),
 
             // Array Operations
@@ -1166,27 +1166,17 @@ impl Spanned for ResolvedExpression {
             // Special Methods
             Self::SparseAdd(expr1, expr2) => expr1.span().merge(&expr2.span()),
             Self::SparseRemove(expr1, expr2) => expr1.span().merge(&expr2.span()),
-            Self::SparseNew(rust_type_ref, resolved_type) => {
+            Self::SparseNew(_rust_type_ref, _resolved_type) => {
                 todo!()
             }
-            Self::ForLoop(pattern, iterator, statements) => statements.span(),
-            Self::WhileLoop(condition, statements) => todo!(),
-            Self::Return(expr) => todo!(),
+            Self::ForLoop(_pattern, _iterator, statements) => statements.span(),
+            Self::WhileLoop(_condition, _expression) => todo!(),
+            Self::Return(_maybe_expr) => todo!(),
             Self::Break(node) => node.span(),
             Self::Continue(node) => node.span(),
-            Self::If(condition, true_block, else_block) => todo!(),
-            Self::IfOnlyVariable {
-                variable,
-                optional_expr,
-                true_block,
-                false_block,
-            } => todo!(),
-            Self::IfAssignExpression {
-                variable,
-                optional_expr,
-                true_block,
-                false_block,
-            } => todo!(),
+            Self::If(_condition, _true_expr, _false_expr) => todo!(),
+            Self::IfOnlyVariable { .. } => todo!(),
+            Self::IfAssignExpression { .. } => todo!(),
             &ResolvedExpression::MutStructFieldRef(_, _) => todo!(),
             &ResolvedExpression::TupleDestructuring(_, _, _) => todo!(),
         }
@@ -1225,7 +1215,7 @@ impl Spanned for ResolvedLiteral {
             ResolvedLiteral::EnumVariantLiteral(variant_type_ref, _) => {
                 variant_type_ref.name.0.span.clone()
             }
-            ResolvedLiteral::TupleLiteral(_tuple_type_ref, tuples) => {
+            ResolvedLiteral::TupleLiteral(_tuple_type_ref, _tuples) => {
                 todo!()
             }
             ResolvedLiteral::Array(_, _) => todo!(),
@@ -1646,7 +1636,7 @@ impl ResolvedProgramState {
 pub enum ResolvedEnumLiteralData {
     Nothing,
     Tuple(Vec<ResolvedExpression>),
-    Struct(Vec<ResolvedExpression>),
+    Struct(Vec<(usize, ResolvedExpression)>),
 }
 
 #[derive(Debug)]

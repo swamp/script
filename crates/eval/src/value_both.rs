@@ -39,14 +39,14 @@ impl VariableValue {
     pub fn into_iter(self) -> Result<Box<dyn Iterator<Item = Value>>, ValueError> {
         match self {
             Self::Value(v) => v.into_iter(),
-            Self::Reference(r) => Err(ValueError::CanNotCoerceToIterator),
+            Self::Reference(_r) => Err(ValueError::CanNotCoerceToIterator),
         }
     }
 
     pub fn into_iter_pairs(self) -> Result<Box<dyn Iterator<Item = (Value, Value)>>, ValueError> {
         match self {
             Self::Value(v) => v.into_iter_pairs(),
-            Self::Reference(r) => Err(ValueError::CanNotCoerceToIterator),
+            Self::Reference(_r) => Err(ValueError::CanNotCoerceToIterator),
         }
     }
 
@@ -54,7 +54,7 @@ impl VariableValue {
         self,
     ) -> Result<Box<dyn Iterator<Item = (Value, ValueReference)>>, ValueError> {
         match self {
-            Self::Value(v) => Err(ValueError::CanNotCoerceToIterator),
+            Self::Value(_v) => Err(ValueError::CanNotCoerceToIterator),
             Self::Reference(r) => r.into_iter_mut_pairs(),
         }
     }
