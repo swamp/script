@@ -603,7 +603,6 @@ impl<'a, C> Interpreter<'a, C> {
                 match condition_value {
                     Value::Option(Some(inner_value)) => {
                         self.push_block_scope();
-                        info!(value=?inner_value.clone(), "shadow variable");
                         self.current_block_scopes.initialize_var(
                             variable.scope_index,
                             variable.variable_index,
@@ -1218,7 +1217,8 @@ impl<'a, C> Interpreter<'a, C> {
                     let v = self.evaluate_expression(expression)?;
                     match v {
                         Value::Option(_) => {
-                            warn!("unnecessary wrap!, should be investigated"); // TODO: Is there a case where this is ok?
+                            if let Some(source_map) = self.debug_source_map {}
+                            warn!(?v, "unnecessary wrap!, should be investigated"); // TODO: Is there a case where this is ok?
                             v
                         }
                         _ => Value::Option(Some(Box::from(v))),
@@ -1351,7 +1351,6 @@ impl<'a, C> Interpreter<'a, C> {
                 match condition_value {
                     Value::Option(Some(inner_value)) => {
                         self.push_block_scope();
-                        info!(value=?inner_value.clone(), "shadow variable");
                         self.current_block_scopes.initialize_var(
                             variable.scope_index,
                             variable.variable_index,

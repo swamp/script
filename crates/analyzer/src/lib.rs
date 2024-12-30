@@ -3535,7 +3535,7 @@ impl<'a> Resolver<'a> {
 
         let _ast_field_name_str = self.get_text(ast_field_name).to_string();
         // Add the last lookup that is part of the field_assignment itself
-        let (_field_type, field_index) =
+        let (field_type, field_index) =
             self.get_field_index(&resolved_last_type, ast_field_name)?;
 
         chain.push(ResolvedAccess::FieldIndex(
@@ -3543,10 +3543,8 @@ impl<'a> Resolver<'a> {
             field_index,
         ));
 
-        let resolved_target_type = resolution(&resolved_first_base_expression);
-
         let source_expression = self.resolve_expression(ast_source_expression)?;
-        let wrapped_expression = wrap_in_some_if_optional(&resolved_target_type, source_expression);
+        let wrapped_expression = wrap_in_some_if_optional(&field_type, source_expression);
 
         Ok(ResolvedExpression::StructFieldAssignment(
             Box::new(resolved_first_base_expression),
@@ -3569,7 +3567,7 @@ impl<'a> Resolver<'a> {
         let resolved_operator = self.resolve_compound_operator(ast_operator);
 
         // Add the last lookup that is part of the field_assignment itself
-        let (_field_type, field_index) =
+        let (field_type, field_index) =
             self.get_field_index(&resolved_last_type, ast_field_name)?;
 
         chain.push(ResolvedAccess::FieldIndex(
@@ -3577,10 +3575,8 @@ impl<'a> Resolver<'a> {
             field_index,
         ));
 
-        let resolved_target_type = resolution(&resolved_first_base_expression);
-
         let source_expression = self.resolve_expression(ast_source_expression)?;
-        let wrapped_expression = wrap_in_some_if_optional(&resolved_target_type, source_expression);
+        let wrapped_expression = wrap_in_some_if_optional(&field_type, source_expression);
 
         Ok(ResolvedExpression::FieldCompoundAssignment(
             Box::new(resolved_first_base_expression),
@@ -3788,7 +3784,14 @@ fn wrap_in_some_if_optional(
     match target_type {
         ResolvedType::Optional(_) => match resolved_value {
             ResolvedExpression::Option(_) => resolved_value,
-            _ => ResolvedExpression::Option(Some(Box::new(resolved_value))),
+            _ => {
+                if let ResolvedExpression::Literal(ResolvedLiteral::NoneLiteral(_)) = resolved_value
+                {
+                    resolved_value
+                } else {
+                    ResolvedExpression::Option(Some(Box::new(resolved_value)))
+                }
+            }
         },
         _ => resolved_value,
     }

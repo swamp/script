@@ -197,7 +197,7 @@ impl BlockScopes {
     // Overwrite ============================
     #[inline]
     pub fn set_local_var_value(&mut self, var: &ResolvedVariableRef, value: Value) {
-        self.set_local_var(var.variable_index, VariableValue::Value(value))
+        self.set_local_var(var.variable_index, VariableValue::Value(value));
     }
 
     #[inline]

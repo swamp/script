@@ -707,8 +707,8 @@ fn optional_field_mut() {
     }
 
     mut s = SomeStruct { some_field: 2 }
-
     s.some_field = 3
+    print(s)
 
     mut x = 0
     if a = s.some_field? {
@@ -719,6 +719,28 @@ fn optional_field_mut() {
     );
 
     assert_eq!(result, Value::Int(3));
+}
+
+#[test_log::test]
+fn optional_field_mut_print() {
+    check(
+        "
+
+    struct SomeStruct {
+       some_field: Int?
+    }
+
+    mut s = SomeStruct { some_field: 2 }
+
+print('before: {s.some_field}')
+    s.some_field = 3
+print('after: {s.some_field}')
+    ",
+        r"
+before: Some(Int(2))
+after: Some(Int(3))    
+    ",
+    );
 }
 
 #[test_log::test]
