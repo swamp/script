@@ -222,7 +222,6 @@ pub enum ResolvedType {
 
     ExclusiveRange(ResolvedExclusiveRangeTypeRef),
 
-    Alias(LocalTypeName, Box<ResolvedType>), // The alias name and the actual type
     Optional(Box<ResolvedType>),
 
     RustType(ResolvedRustTypeRef),
@@ -259,9 +258,6 @@ impl Spanned for ResolvedType {
 
             // Range Type
             Self::ExclusiveRange(_type_ref) => todo!(),
-
-            // Type Alias
-            Self::Alias(type_name, actual_type) => type_name.span().merge(&actual_type.span()),
 
             // Optional Type
             Self::Optional(inner_type) => inner_type.span(),

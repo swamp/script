@@ -83,16 +83,6 @@ pub fn signature(f: &ResolvedFunction) -> &ResolvedFunctionSignature {
     }
 }
 
-pub fn unalias_type(resolved_type: ResolvedType) -> ResolvedType {
-    match resolved_type {
-        ResolvedType::Alias(_identifier, reference_to_type) => {
-            unalias_type((*reference_to_type).clone())
-        }
-
-        _ => resolved_type,
-    }
-}
-
 pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
     let resolution_expression = match expression {
         ResolvedExpression::FieldAccess(_expr, struct_field_ref, _lookups) => {
@@ -263,7 +253,7 @@ pub enum ResolveError {
     CanOnlyOverwriteVariableWithMut(ResolvedNode),
     OverwriteVariableNotAllowedHere(ResolvedNode),
     NotNamedStruct(ResolvedType),
-    UnknownEnumVariantType(QualifiedTypeIdentifier),
+    UnknownEnumVariantType(ResolvedNode),
     WasNotStructType(ResolvedNode),
     UnknownStructField(ResolvedNode),
     MustBeEnumType(Pattern),
@@ -278,7 +268,7 @@ pub enum ResolveError {
     SeqMapError(SeqMapError),
     ExpectedMemberCall(ResolvedNode),
     CouldNotFindStaticMember(ResolvedNode, ResolvedNode),
-    TypeAliasNotAStruct(QualifiedTypeIdentifier),
+    TypeAliasNotAStruct(ResolvedNode),
     ModuleNotUnique,
     ExpressionIsOfWrongFieldType,
     ExpectedOptional,
@@ -636,20 +626,17 @@ impl<'a> Resolver<'a> {
     ) -> Result<ResolvedType, ResolveError> {
         let (path, text) = self.get_path(type_name_to_find);
 
-        let resolved_type =
-            if let Some(aliased_type) = self.shared.lookup.get_type_alias(&path, &text) {
-                aliased_type
-            } else if let Some(found) = self.shared.lookup.get_struct(&path, &text) {
-                ResolvedType::Struct(found)
-            } else if let Some(found) = self.shared.lookup.get_enum(&path, &text) {
-                ResolvedType::Enum(found)
-            } else if let Some(found) = self.shared.lookup.get_rust_type(&path, &text) {
-                ResolvedType::RustType(found)
-            } else {
-                Err(ResolveError::UnknownTypeReference(
-                    self.to_node(&type_name_to_find.name.0),
-                ))?
-            };
+        let resolved_type = if let Some(found) = self.shared.lookup.get_struct(&path, &text) {
+            ResolvedType::Struct(found)
+        } else if let Some(found) = self.shared.lookup.get_enum(&path, &text) {
+            ResolvedType::Enum(found)
+        } else if let Some(found) = self.shared.lookup.get_rust_type(&path, &text) {
+            ResolvedType::RustType(found)
+        } else {
+            Err(ResolveError::UnknownTypeReference(
+                self.to_node(&type_name_to_find.name.0),
+            ))?
+        };
 
         Ok(resolved_type)
     }
@@ -659,13 +646,6 @@ impl<'a> Resolver<'a> {
         type_name: &QualifiedTypeIdentifier,
     ) -> Result<ResolvedStructTypeRef, ResolveError> {
         let (path, name_string) = self.get_path(type_name);
-        if let Some(aliased_type) = self.shared.lookup.get_type_alias(&path, &name_string) {
-            let unaliased = unalias_type(aliased_type);
-            return match unaliased {
-                ResolvedType::Struct(struct_ref) => Ok(struct_ref),
-                _ => Err(ResolveError::TypeAliasNotAStruct(type_name.clone())),
-            };
-        }
 
         self.shared
             .lookup
@@ -677,16 +657,6 @@ impl<'a> Resolver<'a> {
                 },
                 Ok,
             )
-    }
-
-    pub fn find_struct_type_local_mut(
-        &self,
-        type_name: &Node,
-    ) -> Result<ResolvedStructTypeRef, ResolveError> {
-        self.find_struct_type(&QualifiedTypeIdentifier::new(
-            LocalTypeIdentifier(type_name.clone()),
-            vec![],
-        ))
     }
 
     pub fn resolve_struct_type_definition(
@@ -1108,7 +1078,13 @@ impl<'a> Resolver<'a> {
         attached_to_type: &Node,
         functions: &Vec<Function>,
     ) -> Result<ResolvedType, ResolveError> {
-        let found_struct = self.find_struct_type_local_mut(attached_to_type)?;
+        let fake_qualified_type_name = QualifiedTypeIdentifier {
+            name: LocalTypeIdentifier(attached_to_type.clone()),
+            module_path: None,
+            generic_params: vec![],
+        };
+
+        let found_struct = self.find_struct_type(&fake_qualified_type_name)?;
 
         for function in functions {
             let new_return_type = self.resolve_return_type(function)?;
@@ -1458,19 +1434,15 @@ impl<'a> Resolver<'a> {
                 )?)
             }
 
-            Expression::StaticCallGeneric(type_name, function_name, arguments, generic_types) => {
-                if let Some(found) = self.check_for_internal_static_call(
-                    type_name,
-                    function_name,
-                    generic_types,
-                    arguments,
-                )? {
+            Expression::StaticCallGeneric(type_name, function_name, arguments) => {
+                if let Some(found) =
+                    self.check_for_internal_static_call(type_name, function_name, arguments)?
+                {
                     found
                 } else {
                     ResolvedExpression::StaticCallGeneric(self.resolve_static_call_generic(
                         type_name,
                         function_name,
-                        generic_types,
                         arguments,
                     )?)
                 }
@@ -1831,23 +1803,12 @@ impl<'a> Resolver<'a> {
         //   let namespace = self.get_namespace(qualified_type_identifier)?;
 
         let (path, name) = self.get_path(qualified_type_identifier);
-        // If it's an alias, return both the alias and the underlying struct
-        if let Some(alias_type) = self.shared.lookup.get_type_alias(&path, &name) {
-            let unaliased = unalias_type(alias_type.clone());
-            match unaliased {
-                ResolvedType::Struct(struct_ref) => Ok((alias_type, struct_ref)),
-                _ => Err(ResolveError::TypeAliasNotAStruct(
-                    qualified_type_identifier.clone(),
-                )),
-            }
-        } else {
-            // If direct struct, return the struct type for both
-            let struct_ref = self.shared.lookup.get_struct(&path, &name).ok_or_else(|| {
-                let type_reference_node = self.to_node(&qualified_type_identifier.name.0);
-                ResolveError::UnknownStructTypeReference(type_reference_node)
-            })?;
-            Ok((ResolvedType::Struct(struct_ref.clone()), struct_ref))
-        }
+        // If direct struct, return the struct type for both
+        let struct_ref = self.shared.lookup.get_struct(&path, &name).ok_or_else(|| {
+            let type_reference_node = self.to_node(&qualified_type_identifier.name.0);
+            ResolveError::UnknownStructTypeReference(type_reference_node)
+        })?;
+        Ok((ResolvedType::Struct(struct_ref.clone()), struct_ref))
     }
 
     fn resolve_anon_struct_instantiation(
@@ -2356,21 +2317,20 @@ impl<'a> Resolver<'a> {
 
     fn resolve_static_call(
         &mut self,
-        type_name: &Node,
+        type_name: &QualifiedTypeIdentifier,
         function_name: &Node,
         arguments: &[Expression],
     ) -> Result<ResolvedStaticCall, ResolveError> {
         let resolved_arguments = self.resolve_expressions(arguments)?;
-
-        let struct_type_ref = self.find_struct_type_local_mut(type_name)?;
-        let struct_ref = struct_type_ref.borrow();
-
         let function_name_str = self.get_text(function_name).to_string();
+
+        let struct_type_ref = self.find_struct_type(type_name)?;
+        let struct_ref = struct_type_ref.borrow();
 
         struct_ref.functions.get(&function_name_str).map_or_else(
             || {
                 Err(ResolveError::CouldNotFindStaticMember(
-                    self.to_node(type_name),
+                    self.to_node(&type_name.name.0),
                     self.to_node(function_name),
                 ))
             },
@@ -3016,7 +2976,7 @@ impl<'a> Resolver<'a> {
             .map_or_else(
                 || {
                     Err(ResolveError::UnknownEnumVariantType(
-                        qualified_type_identifier.clone(),
+                        self.to_node(&qualified_type_identifier.name.0),
                     ))
                 },
                 Ok,
@@ -3453,15 +3413,14 @@ impl<'a> Resolver<'a> {
 
     fn resolve_static_call_generic(
         &mut self,
-        type_name: &Node,
+        type_name: &QualifiedTypeIdentifier,
         function_name: &Node,
-        generic_types: &[Type],
         arguments: &[Expression],
     ) -> Result<ResolvedStaticCallGeneric, ResolveError> {
         let resolved_arguments = self.resolve_expressions(arguments)?;
-        let resolved_generic_types = self.resolve_types(generic_types)?;
+        let resolved_generic_types = self.resolve_types(&type_name.generic_params)?;
 
-        let struct_type_ref = self.find_struct_type_local_mut(type_name)?;
+        let struct_type_ref = self.find_struct_type(type_name)?;
         let struct_ref = struct_type_ref.borrow();
 
         let function_name_str = self.get_text(function_name).to_string();
@@ -3469,7 +3428,7 @@ impl<'a> Resolver<'a> {
         struct_ref.functions.get(&function_name_str).map_or_else(
             || {
                 Err(ResolveError::CouldNotFindStaticMember(
-                    self.to_node(type_name),
+                    self.to_node(&type_name.name.0),
                     self.to_node(function_name),
                 ))
             },
@@ -3485,14 +3444,13 @@ impl<'a> Resolver<'a> {
 
     fn check_for_internal_static_call(
         &mut self,
-        type_name: &Node,
+        type_name: &QualifiedTypeIdentifier,
         function_name: &Node,
-        generic_types: &[Type],
         arguments: &[Expression],
     ) -> Result<Option<ResolvedExpression>, ResolveError> {
         let (type_name_text, function_name_text) = {
             (
-                self.get_text(type_name).to_string(),
+                self.get_text(&type_name.name.0).to_string(),
                 self.get_text(function_name),
             )
         };
@@ -3501,7 +3459,7 @@ impl<'a> Resolver<'a> {
             if !arguments.is_empty() {
                 return Err(ResolveError::WrongNumberOfArguments(arguments.len(), 0));
             }
-            let resolved_generic_types = self.resolve_types(generic_types)?;
+            let resolved_generic_types = self.resolve_types(&type_name.generic_params)?;
             if resolved_generic_types.len() != 1 {
                 return Err(ResolveError::WrongNumberOfTypeArguments(
                     resolved_generic_types.len(),

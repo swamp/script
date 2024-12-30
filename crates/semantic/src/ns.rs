@@ -32,9 +32,6 @@ pub struct ResolvedModuleNamespace {
     internal_functions: SeqMap<String, ResolvedInternalFunctionDefinitionRef>,
     external_function_declarations: SeqMap<String, ResolvedExternalFunctionDefinitionRef>,
 
-    #[allow(unused)]
-    type_aliases: SeqMap<String, ResolvedType>,
-
     pub path: Vec<String>,
 }
 
@@ -56,7 +53,6 @@ impl ResolvedModuleNamespace {
             enum_variant_types: Default::default(),
             internal_functions: Default::default(),
             external_function_declarations: Default::default(),
-            type_aliases: Default::default(),
             path: path.to_vec(),
         }
     }
@@ -193,10 +189,6 @@ impl ResolvedModuleNamespace {
 
     pub fn get_rust_type(&self, name: &str) -> Option<&ResolvedRustTypeRef> {
         self.build_in_rust_types.get(&name.to_string())
-    }
-
-    pub fn get_type_alias(&self, name: &str) -> Option<&ResolvedType> {
-        self.type_aliases.get(&name.to_string())
     }
 
     #[must_use]

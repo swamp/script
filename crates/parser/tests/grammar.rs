@@ -2099,3 +2099,29 @@ FunctionCall(FunctionAccess(QualifiedIdentifier { name: <23:12>, module_path: So
         ",
     );
 }
+
+#[test_log::test]
+fn qualified_static_call() {
+    check(
+        r"
+gameplay::Something::new()
+",
+        r"
+StaticCall(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<11:9>), module_path: Some(ModulePath([<1:8>])), generic_params: [] }, <22:3>, [])
+
+        ",
+    );
+}
+
+#[test_log::test]
+fn qualified_static_call_generic() {
+    check(
+        r"
+gameplay::Something<TypeParam>::new()
+",
+        r"
+StaticCallGeneric(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<11:9>), module_path: Some(ModulePath([<1:8>])), generic_params: [TypeReference(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<21:9>), module_path: None, generic_params: [] })] }, <33:3>, [])
+
+        ",
+    );
+}

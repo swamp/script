@@ -106,14 +106,6 @@ impl<'a> NameLookup<'a> {
         )
     }
 
-    pub fn get_type_alias(&self, path: &Vec<String>, name: &str) -> Option<ResolvedType> {
-        let namespace = self.get_namespace(path);
-        namespace.map_or_else(
-            || None,
-            |found_ns| found_ns.borrow().get_type_alias(name).cloned(),
-        )
-    }
-
     pub fn get_path(&self) -> Vec<String> {
         self.namespace.borrow().path.clone()
     }

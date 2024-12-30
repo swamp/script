@@ -35,10 +35,11 @@ impl Debug for Node {
 }
 
 /// Identifiers ================
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct QualifiedTypeIdentifier {
     pub name: LocalTypeIdentifier,
     pub module_path: Option<ModulePath>,
+    pub generic_params: Vec<Type>,
 }
 
 impl QualifiedTypeIdentifier {
@@ -49,7 +50,29 @@ impl QualifiedTypeIdentifier {
             Some(ModulePath(module_path))
         };
 
-        Self { name, module_path }
+        Self {
+            name,
+            module_path,
+            generic_params: Vec::new(),
+        }
+    }
+
+    pub fn new_with_generics(
+        name: LocalTypeIdentifier,
+        module_path: Vec<Node>,
+        generic_params: Vec<Type>,
+    ) -> Self {
+        let module_path = if module_path.is_empty() {
+            None
+        } else {
+            Some(ModulePath(module_path))
+        };
+
+        Self {
+            name,
+            module_path,
+            generic_params,
+        }
     }
 }
 
@@ -320,8 +343,8 @@ pub enum Expression {
 
     // Calls
     FunctionCall(Box<Expression>, Vec<Expression>),
-    StaticCall(Node, Node, Vec<Expression>),
-    StaticCallGeneric(Node, Node, Vec<Expression>, Vec<Type>),
+    StaticCall(QualifiedTypeIdentifier, Node, Vec<Expression>),
+    StaticCallGeneric(QualifiedTypeIdentifier, Node, Vec<Expression>),
     MemberCall(Box<Expression>, Node, Vec<Expression>),
 
     Block(Vec<Expression>),
