@@ -198,17 +198,17 @@ impl Value {
         }
     }
 
-    pub fn as_bool(&self) -> Result<bool, String> {
+    pub fn as_bool(&self) -> Result<bool, ValueError> {
         match self {
             Self::Bool(b) => Ok(*b),
-            _ => Err("Expected boolean value".to_string()),
+            _ => Err(ValueError::ConversionError("Expected bool value".into())),
         }
     }
 
-    pub fn is_truthy(&self) -> Result<bool, String> {
+    pub fn is_truthy(&self) -> Result<bool, ValueError> {
         let v = match self {
             Self::Bool(b) => *b,
-            _ => return Err("Expected boolean value".to_string()),
+            _ => return Err(ValueError::ConversionError("Expected bool value".into())),
         };
 
         Ok(v)
