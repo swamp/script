@@ -18,6 +18,7 @@ use swamp_script_ast::{
     SpanWithoutFileId,
 };
 use swamp_script_semantic::modules::ResolvedModules;
+use swamp_script_semantic::ResolvedProgramTypes;
 use swamp_script_semantic::{
     create_rust_type, prelude::*, FileId, ResolvedAccess, ResolvedAnonymousStructFieldType,
     ResolvedAnonymousStructType, ResolvedBinaryOperatorKind, ResolvedBoolType,
@@ -32,7 +33,6 @@ use swamp_script_semantic::{
     ResolvedDefinition, ResolvedEnumTypeRef, ResolvedFunction, ResolvedFunctionRef,
     ResolvedFunctionSignature, ResolvedMapTypeRef, ResolvedMutMap, ResolvedStaticCall,
 };
-use swamp_script_semantic::{ResolvedMapIndexLookup, ResolvedProgramTypes};
 use swamp_script_semantic::{ResolvedMapType, ResolvedProgramState};
 use swamp_script_semantic::{ResolvedModulePath, ResolvedPostfixOperator};
 use swamp_script_source_map::SourceMap;
@@ -100,8 +100,9 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
             mut_var_ref.variable_ref.resolved_type.clone()
         }
         ResolvedExpression::MutStructFieldRef(_, _) => todo!(),
+        ResolvedExpression::MutArrayIndexRef(_base, _index) => todo!(),
 
-        ResolvedExpression::ArrayAccess(array_item_ref) => array_item_ref.item_type.clone(),
+        ResolvedExpression::ArrayAccess(_, array_item_ref, _) => array_item_ref.item_type.clone(),
         ResolvedExpression::MapIndexAccess(map_item) => map_item.item_type.clone(),
         ResolvedExpression::InitializeVariable(variable_assignment) => {
             variable_assignment.variable_refs[0].resolved_type.clone()
@@ -1256,59 +1257,18 @@ impl<'a> Resolver<'a> {
 
                 self.resolve_field_access(expression, &struct_field_ref, field_name)?
             }
+            Expression::IndexAccess(expression, index_expr) => {
+                let array_item_ref = self.resolve_into_array_type_ref(expression.as_ref())?;
+
+                self.resolve_array_index_access(expression, &array_item_ref, index_expr)?
+            }
+
             Expression::VariableAccess(variable) => self.resolve_variable(&variable.name)?,
 
             Expression::FunctionAccess(qualified_identifier) => {
                 self.resolve_function_access(&qualified_identifier)?
             }
             Expression::MutRef(location_expression) => self.resolve_mut_ref(location_expression)?,
-            Expression::IndexAccess(collection_expression, lookup) => {
-                let resolved_collection_expression =
-                    self.resolve_expression(collection_expression)?;
-                let collection_resolution = resolution(&resolved_collection_expression);
-                match &collection_resolution {
-                    ResolvedType::Array(array_type) => {
-                        let int_expression = self.resolve_usize_index(lookup)?;
-                        let array_item = ResolvedArrayItem {
-                            array_type: collection_resolution.clone(),
-                            item_type: array_type.item_type.clone(),
-                            int_expression,
-                            array_expression: resolved_collection_expression,
-                        };
-
-                        let array_item_ref = Rc::new(array_item); // TODO: why do I require ref?
-
-                        ResolvedExpression::ArrayAccess(array_item_ref)
-                    }
-                    ResolvedType::Map(map_type_ref) => {
-                        let resolved_lookup_expr = self.resolve_expression(lookup)?;
-                        let index_type = resolution(&resolved_lookup_expr);
-
-                        if !map_type_ref.key_type.same_type(&index_type) {
-                            return Err(ResolveError::NotSameKeyTypeForMapIndex(
-                                map_type_ref.key_type.clone(),
-                                index_type,
-                            ));
-                        }
-                        let map_lookup = ResolvedMapIndexLookup {
-                            map_type: collection_resolution.clone(),
-                            item_type: ResolvedType::Optional(Box::from(
-                                map_type_ref.value_type.clone(),
-                            )),
-                            map_type_ref: map_type_ref.clone(),
-                            index_expression: Box::from(resolved_lookup_expr),
-                            map_expression: Box::from(resolved_collection_expression),
-                        };
-
-                        ResolvedExpression::MapIndexAccess(map_lookup)
-                    }
-                    _ => {
-                        return Err(ResolveError::TypeIsNotAnIndexCollection(
-                            collection_resolution,
-                        ))
-                    }
-                }
-            }
 
             // Assignments
             Expression::IndexAssignment(collection_expression, index_expression, source_expr) => {
@@ -1699,6 +1659,20 @@ impl<'a> Resolver<'a> {
         };
 
         Ok(resolved_literal)
+    }
+
+    fn resolve_into_array_type_ref(
+        &mut self,
+        struct_expression: &Expression,
+    ) -> Result<ResolvedArrayTypeRef, ResolveError> {
+        let resolved_expr = self.resolve_expression(struct_expression)?;
+        let resolved_type = resolution(&resolved_expr);
+
+        if let ResolvedType::Array(array_type) = resolved_type {
+            Ok(array_type)
+        } else {
+            Err(ResolveError::ExpectedArray(resolved_type))
+        }
     }
 
     fn resolve_into_struct_field_ref(
@@ -3338,6 +3312,21 @@ impl<'a> Resolver<'a> {
         Ok((resolved_base_expression, access_chain))
     }
 
+    fn resolve_array_index_access_helper(
+        &mut self,
+        base_expression: &Expression,
+        last_index_expr: &Expression,
+    ) -> Result<(ResolvedExpression, Vec<ResolvedAccess>), ResolveError> {
+        let mut access_chain = Vec::new();
+        let (_resolved_last_type, resolved_base_expression) =
+            self.collect_field_chain(base_expression, &mut access_chain)?;
+
+        let last_resolved_index = self.resolve_expression(&last_index_expr)?;
+        access_chain.push(ResolvedAccess::ArrayIndex(last_resolved_index));
+
+        Ok((resolved_base_expression, access_chain))
+    }
+
     fn resolve_field_access(
         &mut self,
         base_expression: &Expression,
@@ -3350,6 +3339,22 @@ impl<'a> Resolver<'a> {
         Ok(ResolvedExpression::FieldAccess(
             Box::from(base_expr),
             struct_field_ref.clone(),
+            access_chain,
+        ))
+    }
+
+    fn resolve_array_index_access(
+        &mut self,
+        base_expression: &Expression,
+        array_type_ref: &ResolvedArrayTypeRef,
+        array_usize_expression: &Expression,
+    ) -> Result<ResolvedExpression, ResolveError> {
+        let (base_expr, access_chain) =
+            self.resolve_array_index_access_helper(base_expression, array_usize_expression)?;
+
+        Ok(ResolvedExpression::ArrayAccess(
+            Box::from(base_expr),
+            array_type_ref.clone(),
             access_chain,
         ))
     }
@@ -3585,7 +3590,11 @@ impl<'a> Resolver<'a> {
                 let mut_var = ResolvedMutVariable { variable_ref: var };
                 ResolvedExpression::MutVariableRef(Rc::new(mut_var))
             }
-            LocationExpression::IndexAccess(_, _) => todo!(),
+            LocationExpression::IndexAccess(expression, index_expr) => {
+                let (base_repr, access_chain) =
+                    self.resolve_array_index_access_helper(expression, index_expr)?;
+                ResolvedExpression::MutArrayIndexRef(base_repr.into(), access_chain)
+            }
             LocationExpression::FieldAccess(expression, node) => {
                 let (base_repr, access_chain) =
                     self.resolve_field_access_helper(expression, node)?;
@@ -3644,7 +3653,6 @@ impl<'a> Resolver<'a> {
                 }
                 UseItem::Type(node) => {
                     let ident_resolved_node = self.to_node(&node.0);
-                    let ident = ResolvedUseItem::Identifier(ident_resolved_node.clone());
                     let ident_text = self.get_text_resolved(&ident_resolved_node);
 
                     if let Some(found_struct) = lookup.get_struct(&path, ident_text) {

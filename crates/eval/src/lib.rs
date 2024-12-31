@@ -343,6 +343,12 @@ impl<'a, C> Interpreter<'a, C> {
                     ))
                 }
 
+                ResolvedExpression::MutArrayIndexRef(base_expr, access_chain) => {
+                    VariableValue::Reference(ValueReference(
+                        self.evaluate_location(base_expr, access_chain)?.clone(),
+                    ))
+                }
+
                 // If it is accessing a variable, we want the full access of it
                 ResolvedExpression::VariableAccess(variable_ref) => self
                     .current_block_scopes
@@ -960,29 +966,6 @@ impl<'a, C> Interpreter<'a, C> {
                 self.current_block_scopes.lookup_var_value(var)
             }
 
-            ResolvedExpression::ArrayAccess(array_item_ref) => {
-                let array_ref =
-                    self.evaluate_expression_mut_location_start(&array_item_ref.array_expression)?;
-                let index_val = self.evaluate_expression(&array_item_ref.int_expression)?;
-                let i = if let Value::Int(v) = index_val {
-                    v
-                } else {
-                    return Err(ExecuteError::IndexWasNotInteger);
-                };
-                let result = {
-                    if let Value::Array(_type_id, ref mut vector) = &mut *array_ref.borrow_mut() {
-                        if i < 0 || i >= vector.len() as i32 {
-                            return Err(format!("Array index out of bounds: {i}"))?;
-                        }
-                        vector[i as usize].borrow().clone()
-                    } else {
-                        return Err("Cannot extend non-array reference".to_string())?;
-                    }
-                };
-
-                result
-            }
-
             ResolvedExpression::MapIndexAccess(ref map_lookup) => {
                 let map_ref = self.evaluate_expression(&map_lookup.map_expression)?;
                 let index_val = self.evaluate_expression(&map_lookup.index_expression)?;
@@ -1005,11 +988,42 @@ impl<'a, C> Interpreter<'a, C> {
                 self.evaluate_lookups(struct_field_access, access_list)?
             }
 
+            ResolvedExpression::ArrayAccess(base_expr, _, access_list) => {
+                self.evaluate_lookups(base_expr, access_list)?
+                /*
+                let array_ref =
+                    self.evaluate_expression_mut_location_start(&array_item_ref.array_expression)?;
+                let index_val = self.evaluate_expression(&array_item_ref.int_expression)?;
+                let i = if let Value::Int(v) = index_val {
+                    v
+                } else {
+                    return Err(ExecuteError::IndexWasNotInteger);
+                };
+                let result = {
+                    if let Value::Array(_type_id, ref mut vector) = &mut *array_ref.borrow_mut() {
+                        if i < 0 || i >= vector.len() as i32 {
+                            return Err(format!("Array index out of bounds: {i}"))?;
+                        }
+                        vector[i as usize].borrow().clone()
+                    } else {
+                        return Err("Cannot extend non-array reference".to_string())?;
+                    }
+                };
+
+                result
+
+                     */
+            }
             ResolvedExpression::MutVariableRef(var_ref) => self
                 .current_block_scopes
                 .lookup_var_value(&var_ref.variable_ref),
 
             ResolvedExpression::MutStructFieldRef(base_expr, access_chain) => self
+                .evaluate_location(base_expr, access_chain)?
+                .borrow()
+                .clone(),
+
+            ResolvedExpression::MutArrayIndexRef(base_expr, access_chain) => self
                 .evaluate_location(base_expr, access_chain)?
                 .borrow()
                 .clone(),
@@ -1782,6 +1796,11 @@ impl<'a, C> Interpreter<'a, C> {
                 .lookup_mut_variable(var_ref)?
                 .clone()),
             ResolvedExpression::FieldAccess(base_expression, _type_ref, resolved_access) => {
+                //info!(?base_expression, "base expression for field access");
+                let start = self.evaluate_expression_mut_location_start(base_expression)?;
+                self.get_location(start, resolved_access)
+            }
+            ResolvedExpression::ArrayAccess(base_expression, _array_item_ref, resolved_access) => {
                 //info!(?base_expression, "base expression for field access");
                 let start = self.evaluate_expression_mut_location_start(base_expression)?;
                 self.get_location(start, resolved_access)

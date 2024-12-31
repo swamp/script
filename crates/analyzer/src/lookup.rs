@@ -153,7 +153,7 @@ impl<'a> NameLookup<'a> {
 
     pub(crate) fn add_enum_link(
         &self,
-        enum_type: ResolvedEnumTypeRef,
+        _enum_type: ResolvedEnumTypeRef,
     ) -> Result<(), SemanticError> {
         //self.namespace.borrow_mut().add_enum_type()
         todo!()

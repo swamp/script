@@ -883,20 +883,21 @@ pub enum ResolvedExpression {
         ResolvedStructTypeFieldRef,
         Vec<ResolvedAccess>,
     ),
+    ArrayAccess(
+        Box<ResolvedExpression>,
+        ResolvedArrayTypeRef,
+        Vec<ResolvedAccess>,
+    ), // Read from an array: arr[3]
+    MapIndexAccess(ResolvedMapIndexLookup),
 
     InternalFunctionAccess(ResolvedInternalFunctionDefinitionRef),
     ExternalFunctionAccess(ResolvedExternalFunctionDefinitionRef),
 
     MutVariableRef(ResolvedMutVariableRef), // Used when passing with mut keyword. mut are implicitly passed by reference
-    MutStructFieldRef(
-        Box<ResolvedExpression>,
-        //ResolvedStructTypeFieldRef,
-        Vec<ResolvedAccess>,
-    ),
+    MutStructFieldRef(Box<ResolvedExpression>, Vec<ResolvedAccess>),
+    MutArrayIndexRef(Box<ResolvedExpression>, Vec<ResolvedAccess>),
 
     Option(Option<Box<ResolvedExpression>>),
-    ArrayAccess(ResolvedArrayItemRef), // Read from an array: arr[3]
-    MapIndexAccess(ResolvedMapIndexLookup),
 
     // Assignment
     // Since it is a cool language, we can "chain" assignments together. like a = b = c = 1. Even for field assignments, like a.b = c.d = e.f = 1
@@ -1036,6 +1037,9 @@ impl Spanned for ResolvedExpression {
                 }
                 span
             }
+            Self::ArrayAccess(_, _arr_ref, _access) => todo!(),
+            Self::MapIndexAccess(lookup) => lookup.span(),
+
             Self::InternalFunctionAccess(func) => func.span(),
             Self::ExternalFunctionAccess(func) => func.span(),
             Self::MutVariableRef(var_ref) => var_ref.span(),
@@ -1043,8 +1047,6 @@ impl Spanned for ResolvedExpression {
                 .as_ref()
                 .map(|expr| expr.span())
                 .unwrap_or_else(Span::dummy),
-            Self::ArrayAccess(arr_ref) => arr_ref.span(),
-            Self::MapIndexAccess(lookup) => lookup.span(),
 
             // Assignments
             Self::InitializeVariable(assign) => assign.span(),
@@ -1168,8 +1170,9 @@ impl Spanned for ResolvedExpression {
             Self::If(_condition, _true_expr, _false_expr) => todo!(),
             Self::IfOnlyVariable { .. } => todo!(),
             Self::IfAssignExpression { .. } => todo!(),
-            &ResolvedExpression::MutStructFieldRef(_, _) => todo!(),
-            &ResolvedExpression::TupleDestructuring(_, _, _) => todo!(),
+            Self::MutStructFieldRef(_, _) => todo!(),
+            Self::MutArrayIndexRef(_, _) => todo!(),
+            Self::TupleDestructuring(_, _, _) => todo!(),
         }
     }
 }
