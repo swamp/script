@@ -198,6 +198,13 @@ impl Value {
         }
     }
 
+    pub fn expect_float(&self) -> Result<Fp, ValueError> {
+        match self {
+            Self::Float(v) => Ok(*v),
+            _ => Err(ValueError::ConversionError("Expected int value".into())),
+        }
+    }
+
     pub fn as_bool(&self) -> Result<bool, ValueError> {
         match self {
             Self::Bool(b) => Ok(*b),
