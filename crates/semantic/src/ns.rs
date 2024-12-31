@@ -6,7 +6,7 @@ use crate::{
     ResolvedAnonymousStructFieldType, ResolvedAnonymousStructType, ResolvedEnumTypeRef,
     ResolvedEnumVariantType, ResolvedEnumVariantTypeRef, ResolvedExternalFunctionDefinition,
     ResolvedExternalFunctionDefinitionRef, ResolvedFieldName, ResolvedInternalFunctionDefinition,
-    ResolvedInternalFunctionDefinitionRef, ResolvedRustType, ResolvedRustTypeRef,
+    ResolvedInternalFunctionDefinitionRef, ResolvedNode, ResolvedRustType, ResolvedRustTypeRef,
     ResolvedStructType, ResolvedStructTypeRef, ResolvedType, SemanticError, TypeNumber,
 };
 use seq_map::SeqMap;
@@ -59,15 +59,26 @@ impl ResolvedModuleNamespace {
 
     pub fn add_struct(
         &mut self,
-        name: &str,
         struct_type: ResolvedStructType,
     ) -> Result<ResolvedStructTypeRef, SemanticError> {
+        let name = struct_type.assigned_name.clone();
         let struct_ref = Rc::new(RefCell::new(struct_type));
         self.structs
-            .insert(name.to_string(), struct_ref.clone())
-            .map_err(|_| SemanticError::DuplicateStructName(name.to_string()))?;
+            .insert(name.clone(), struct_ref.clone())
+            .map_err(|_| SemanticError::DuplicateStructName(name))?;
 
         Ok(struct_ref)
+    }
+
+    pub fn add_struct_ref(
+        &mut self,
+        struct_type_ref: ResolvedStructTypeRef,
+    ) -> Result<(), SemanticError> {
+        let name = struct_type_ref.borrow().assigned_name.clone();
+        self.structs
+            .insert(name.clone(), struct_type_ref)
+            .map_err(|_| SemanticError::DuplicateStructName(name))?;
+        Ok(())
     }
 
     pub fn add_generated_struct(
@@ -95,14 +106,14 @@ impl ResolvedModuleNamespace {
         };
 
         let resolved_struct_type = ResolvedStructType {
-            name: Default::default(),
+            name: ResolvedNode::default(),
             assigned_name: name.to_string(),
             anon_struct_type,
             number: type_number,
-            functions: Default::default(),
+            functions: SeqMap::default(),
         };
 
-        self.add_struct(name, resolved_struct_type)
+        self.add_struct(resolved_struct_type)
     }
 
     pub fn add_built_in_rust_type(
@@ -117,21 +128,6 @@ impl ResolvedModuleNamespace {
             })?;
 
         Ok(rust_type_ref)
-    }
-
-    pub fn add_type_alias(
-        &mut self,
-        name: &str,
-        _resolved_type: ResolvedType,
-    ) -> Result<(), SemanticError> {
-        let _name_str = name.to_string();
-        /* TODO:
-        self.type_aliases
-            .insert(LocalTypeName(name_str.clone()), resolved_type)
-            .map_err(|_| SemanticError::DuplicateTypeAlias(name_str))?;
-
-         */
-        Ok(())
     }
 
     pub fn add_enum_type(
@@ -177,6 +173,17 @@ impl ResolvedModuleNamespace {
             .insert(name.to_string(), function_ref.clone())
             .expect("todo: add seqmap error handling");
         Ok(function_ref)
+    }
+
+    pub fn add_internal_function_link(
+        &mut self,
+        name: &str,
+        function_ref: ResolvedInternalFunctionDefinitionRef,
+    ) -> Result<(), SemanticError> {
+        self.internal_functions
+            .insert(name.to_string(), function_ref.clone())
+            .expect("todo: add seqmap error handling");
+        Ok(())
     }
 
     pub fn get_struct(&self, name: &str) -> Option<&ResolvedStructTypeRef> {
@@ -228,5 +235,16 @@ impl ResolvedModuleNamespace {
             .insert(name.to_string(), decl_ref.clone())
             .map_err(|_| SemanticError::DuplicateExternalFunction(name.to_string()))?;
         Ok(decl_ref)
+    }
+
+    pub fn add_external_function_declaration_link(
+        &mut self,
+        name: &str,
+        decl_ref: ResolvedExternalFunctionDefinitionRef,
+    ) -> Result<(), SemanticError> {
+        self.external_function_declarations
+            .insert(name.to_string(), decl_ref.clone())
+            .map_err(|_| SemanticError::DuplicateExternalFunction(name.to_string()))?;
+        Ok(())
     }
 }

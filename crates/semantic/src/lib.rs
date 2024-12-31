@@ -1547,6 +1547,18 @@ impl ImplType {
 }
 
 #[derive(Debug)]
+pub enum ResolvedUseItem {
+    Identifier(ResolvedNode),
+    TypeIdentifier(ResolvedNode),
+}
+
+#[derive(Debug)]
+pub struct ResolvedUse {
+    pub path: Vec<ResolvedNode>,
+    pub items: Vec<ResolvedUseItem>,
+}
+
+#[derive(Debug)]
 pub enum ResolvedDefinition {
     StructType(ResolvedStructTypeRef),
     EnumType(ResolvedEnumTypeRef, Vec<ResolvedEnumVariantTypeRef>),
@@ -1556,7 +1568,7 @@ pub enum ResolvedDefinition {
     FunctionDef(ResolvedFunction),
     Alias(ResolvedType),
     Comment(ResolvedNode),
-    Use(Vec<ResolvedNode>),
+    Use(ResolvedUse),
 }
 
 // Immutable part

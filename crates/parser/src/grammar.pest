@@ -128,10 +128,16 @@ while_loop = { "while" ~ expression ~ expression }
 
 import_definition = {
     "use" ~
-        import_path
+        import_path ~ ("{" ~ import_list ~ "}")?
 }
 
 import_path = { identifier ~ ("." ~ identifier)* }
+
+import_list = {
+    import_list_item ~ ("," ~ import_list_item)* ~ ","?
+}
+
+import_list_item = { type_identifier | identifier }
 
 return_expr = { "return" ~ expression }
 continue_expr = { "continue" }

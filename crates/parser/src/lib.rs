@@ -294,7 +294,8 @@ impl AstParser {
     }
 
     fn parse_use(&self, pair: &Pair<Rule>) -> Result<Definition, ParseError> {
-        let import_path = self.next_inner_pair(pair)?;
+        let mut inner = Self::convert_into_iterator(pair);
+        let import_path = Self::next_pair(&mut inner)?;
 
         let mut segments = Vec::new();
         let mut assigned_path = Vec::new();
@@ -303,9 +304,36 @@ impl AstParser {
             assigned_path.push(pair.as_str().to_string());
         }
 
+        let items = if let Some(import_list) = inner.next() {
+            let mut imported_items = Vec::new();
+            for list_item in import_list.into_inner() {
+                let item = Self::next_pair(&mut list_item.into_inner())?;
+
+                let import_item = match item.as_rule() {
+                    Rule::identifier => {
+                        UseItem::Identifier(LocalIdentifier::new(self.to_node(&item)))
+                    }
+                    Rule::type_identifier => {
+                        UseItem::Type(LocalTypeIdentifier::new(self.to_node(&item)))
+                    }
+                    _ => {
+                        return Err(
+                            self.create_error_pair(SpecificError::ExpectedIdentifier, &item)
+                        );
+                    }
+                };
+
+                imported_items.push(import_item);
+            }
+
+            imported_items
+        } else {
+            Vec::new()
+        };
+
         Ok(Definition::Use(Use {
             module_path: ModulePath(segments),
-            items: ImportItems::Module,
+            items,
             assigned_path,
         }))
     }

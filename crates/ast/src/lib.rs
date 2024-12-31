@@ -137,16 +137,16 @@ impl ModulePath {
 }
 
 #[derive(Debug)]
-pub struct Use {
-    pub module_path: ModulePath,
-    pub assigned_path: Vec<String>,
-    pub items: ImportItems,
+pub enum UseItem {
+    Identifier(LocalIdentifier),
+    Type(LocalTypeIdentifier),
 }
 
 #[derive(Debug)]
-pub enum ImportItems {
-    Module, // import the whole module (use last path item as namespace)
-    Specific(Vec<LocalTypeIdentifier>), // import { sin, cos } from math
+pub struct Use {
+    pub module_path: ModulePath,
+    pub assigned_path: Vec<String>,
+    pub items: Vec<UseItem>,
 }
 
 #[derive(Debug, Eq, PartialEq, Default)]
@@ -565,5 +565,18 @@ impl Module {
     #[must_use]
     pub const fn definitions(&self) -> &Vec<Definition> {
         &self.definitions
+    }
+
+    #[must_use]
+    pub fn imports(&self) -> Vec<&Use> {
+        let mut use_items = Vec::new();
+
+        for def in &self.definitions {
+            if let Definition::Use(use_info) = def {
+                use_items.push(use_info);
+            }
+        }
+
+        use_items
     }
 }

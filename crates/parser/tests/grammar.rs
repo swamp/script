@@ -1635,7 +1635,7 @@ fn external_member_function() {
         struct Api {
             x : Int,
         }
-        
+
         impl Api {
             external fn something(self, i: Int) -> Float {}
         }
@@ -2073,6 +2073,30 @@ use gameplay.other.another
         r"
 Use(Use { module_path: ModulePath([<5:8>, <14:5>, <20:7>]), items: Module })
         ",
+    );
+}
+
+#[test_log::test]
+fn use_statement_items() {
+    check(
+        r"
+use gameplay { some_fn, SomeType }
+",
+        r#"
+Use(Use { module_path: ModulePath([<5:8>]), assigned_path: ["gameplay"], items: [Identifier(LocalIdentifier(<16:7>)), Type(LocalTypeIdentifier(<25:8>))] })
+        "#,
+    );
+}
+
+#[test_log::test]
+fn use_statement_3_items() {
+    check(
+        r"
+use gameplay.something.other { some_fn, SomeType }
+",
+        r#"
+Use(Use { module_path: ModulePath([<5:8>, <14:9>, <24:5>]), assigned_path: ["gameplay", "something", "other"], items: [Identifier(LocalIdentifier(<32:7>)), Type(LocalTypeIdentifier(<41:8>))] })
+        "#,
     );
 }
 

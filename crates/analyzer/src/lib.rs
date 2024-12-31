@@ -25,7 +25,8 @@ use swamp_script_semantic::{
     ResolvedFormatSpecifier, ResolvedFormatSpecifierKind, ResolvedLocalIdentifier,
     ResolvedLocalTypeIdentifier, ResolvedPatternElement, ResolvedPostfixOperatorKind,
     ResolvedPrecisionType, ResolvedStaticCallGeneric, ResolvedTupleTypeRef,
-    ResolvedUnaryOperatorKind, ResolvedVariableCompoundAssignment, Span, TypeNumber,
+    ResolvedUnaryOperatorKind, ResolvedUse, ResolvedUseItem, ResolvedVariableCompoundAssignment,
+    Span, TypeNumber,
 };
 use swamp_script_semantic::{
     ResolvedDefinition, ResolvedEnumTypeRef, ResolvedFunction, ResolvedFunctionRef,
@@ -696,10 +697,7 @@ impl<'a> Resolver<'a> {
             self.shared.state.allocate_number(),
         );
 
-        let resolved_struct_ref = self
-            .shared
-            .lookup
-            .add_struct(&struct_name_str, resolved_struct)?;
+        let resolved_struct_ref = self.shared.lookup.add_struct(resolved_struct)?;
 
         Ok(resolved_struct_ref)
     }
@@ -3609,9 +3607,67 @@ impl<'a> Resolver<'a> {
     ) -> Result<ResolvedDefinition, ResolveError> {
         let mut nodes = Vec::new();
         for ast_node in &use_definition.module_path.0 {
-            nodes.push(self.to_node(&ast_node))
+            nodes.push(self.to_node(&ast_node));
         }
-        Ok(ResolvedDefinition::Use(nodes))
+
+        let path: Vec<String> = nodes
+            .iter()
+            .map(|node| {
+                let text = self.get_text_resolved(&node);
+                text.to_string()
+            })
+            .collect();
+
+        let mut items = Vec::new();
+        let lookup = &self.shared.lookup;
+
+        for ast_items in &use_definition.items {
+            let resolved_item = match ast_items {
+                UseItem::Identifier(node) => {
+                    let ident_resolved_node = self.to_node(&node.0);
+                    let ident = ResolvedUseItem::Identifier(ident_resolved_node.clone());
+                    let ident_text = self.get_text_resolved(&ident_resolved_node);
+
+                    lookup.get_internal_function(&path, ident_text).ok_or(
+                        ResolveError::UnknownTypeReference(ident_resolved_node.clone()),
+                    )?;
+                    if let Some(found_internal_function) =
+                        lookup.get_internal_function(&path, ident_text)
+                    {
+                        lookup.add_internal_function_link(ident_text, found_internal_function)?;
+                    } else if let Some(found_external_function_def) =
+                        lookup.get_external_function_declaration(&path, ident_text)
+                    {
+                        lookup.add_external_function_declaration_link(
+                            ident_text,
+                            found_external_function_def,
+                        )?;
+                    } else {
+                        return Err(ResolveError::UnknownFunction(ident_resolved_node.clone()));
+                    }
+                    ident
+                }
+                UseItem::Type(node) => {
+                    let ident_resolved_node = self.to_node(&node.0);
+                    let ident = ResolvedUseItem::Identifier(ident_resolved_node.clone());
+                    let ident_text = self.get_text_resolved(&ident_resolved_node);
+
+                    if let Some(found_struct) = lookup.get_struct(&path, ident_text) {
+                        lookup.add_struct_link(found_struct)?;
+                    } else if let Some(found_enum) = lookup.get_enum(&path, ident_text) {
+                        lookup.add_enum_link(found_enum)?;
+                    } else {
+                        return Err(ResolveError::UnknownTypeReference(
+                            ident_resolved_node.clone(),
+                        ));
+                    }
+                    ResolvedUseItem::TypeIdentifier(self.to_node(&node.0))
+                }
+            };
+            items.push(resolved_item);
+        }
+
+        Ok(ResolvedDefinition::Use(ResolvedUse { path: nodes, items }))
     }
 }
 

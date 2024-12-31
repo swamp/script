@@ -8,6 +8,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use swamp_script_analyzer::lookup::NameLookup;
 use swamp_script_analyzer::prelude::*;
+use swamp_script_ast::UseItem;
 use swamp_script_dep_loader::prelude::*;
 use swamp_script_semantic::modules::ResolvedModules;
 use swamp_script_semantic::prelude::*;
@@ -52,12 +53,13 @@ pub fn resolve_to_existing_module(
     let statements = {
         let mut name_lookup = NameLookup::new(target_namespace.clone(), &modules);
         let mut resolver = Resolver::new(
-            &types,
+            types,
             state,
             &mut name_lookup,
-            &source_map,
+            source_map,
             ast_module.file_id,
         );
+
         for ast_def in ast_module.ast_module.definitions() {
             let _resolved_def = resolver.resolve_definition(ast_def)?;
         }

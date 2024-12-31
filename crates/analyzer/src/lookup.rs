@@ -7,7 +7,7 @@ use swamp_script_semantic::{
     ResolvedEnumType, ResolvedEnumTypeRef, ResolvedEnumVariantType, ResolvedEnumVariantTypeRef,
     ResolvedExternalFunctionDefinitionRef, ResolvedInternalFunctionDefinition,
     ResolvedInternalFunctionDefinitionRef, ResolvedRustTypeRef, ResolvedStructType,
-    ResolvedStructTypeRef,
+    ResolvedStructTypeRef, SemanticError,
 };
 
 #[derive()]
@@ -112,14 +112,9 @@ impl<'a> NameLookup<'a> {
 
     pub fn add_struct(
         &self,
-        struct_type_name: &str,
         struct_type: ResolvedStructType,
     ) -> Result<ResolvedStructTypeRef, ResolveError> {
-        //let struct_type_ref = Rc::new(struct_type);
-        Ok(self
-            .namespace
-            .borrow_mut()
-            .add_struct(struct_type_name, struct_type)?)
+        Ok(self.namespace.borrow_mut().add_struct(struct_type)?)
     }
 
     pub fn add_enum_type(
@@ -154,5 +149,42 @@ impl<'a> NameLookup<'a> {
             .namespace
             .borrow_mut()
             .add_internal_function(function_name, function)?)
+    }
+
+    pub(crate) fn add_enum_link(
+        &self,
+        enum_type: ResolvedEnumTypeRef,
+    ) -> Result<(), SemanticError> {
+        //self.namespace.borrow_mut().add_enum_type()
+        todo!()
+    }
+
+    pub(crate) fn add_struct_link(
+        &self,
+        struct_type: ResolvedStructTypeRef,
+    ) -> Result<(), SemanticError> {
+        self.namespace
+            .borrow_mut()
+            .add_struct_ref(struct_type.clone())
+    }
+
+    pub(crate) fn add_external_function_declaration_link(
+        &self,
+        name: &str,
+        external_fn_def: ResolvedExternalFunctionDefinitionRef,
+    ) -> Result<(), SemanticError> {
+        self.namespace
+            .borrow_mut()
+            .add_external_function_declaration_link(name, external_fn_def)
+    }
+
+    pub(crate) fn add_internal_function_link(
+        &self,
+        name: &str,
+        internal_fn: ResolvedInternalFunctionDefinitionRef,
+    ) -> Result<(), SemanticError> {
+        self.namespace
+            .borrow_mut()
+            .add_internal_function_link(name, internal_fn)
     }
 }

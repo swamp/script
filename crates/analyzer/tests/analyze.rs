@@ -160,7 +160,7 @@ a = Test::Struct { a: 10, b: 2.3 }
 
 EnumType(ResolvedEnumType { name: ResolvedLocalTypeIdentifier(<7:4>), assigned_name: "Test", module_path: ["test"], number: 1 }, [ResolvedEnumVariantType { owner: ResolvedEnumType { name: ResolvedLocalTypeIdentifier(<7:4>), assigned_name: "Test", module_path: ["test"], number: 1 }, data: Struct(ResolvedEnumVariantStructType { common: CommonEnumVariantType { number: 2, module_path: ResolvedModulePath([]), variant_name: ResolvedLocalTypeIdentifier(<18:6>), assigned_name: "Struct", enum_ref: ResolvedEnumType { name: ResolvedLocalTypeIdentifier(<7:4>), assigned_name: "Test", module_path: ["test"], number: 1 } }, anon_struct: ResolvedAnonymousStructType { defined_fields: SeqMap("a": ResolvedAnonymousStructFieldType { identifier: ResolvedFieldName(<27:1>), field_type: Int(ResolvedIntType), index: 0 }, "b": ResolvedAnonymousStructFieldType { identifier: ResolvedFieldName(<35:1>), field_type: Float(ResolvedFloatType), index: 1 }) } }), name: ResolvedLocalTypeIdentifier(<18:6>), assigned_name: "Struct", number: 2 }, ResolvedEnumVariantType { owner: ResolvedEnumType { name: ResolvedLocalTypeIdentifier(<7:4>), assigned_name: "Test", module_path: ["test"], number: 1 }, data: Nothing, name: ResolvedLocalTypeIdentifier(<51:6>), assigned_name: "Simple", number: 0 }, ResolvedEnumVariantType { owner: ResolvedEnumType { name: ResolvedLocalTypeIdentifier(<7:4>), assigned_name: "Test", module_path: ["test"], number: 1 }, data: Tuple(ResolvedEnumVariantTupleType { common: CommonEnumVariantType { number: 3, module_path: ResolvedModulePath([]), variant_name: ResolvedLocalTypeIdentifier(<67:5>), assigned_name: "Tuple", enum_ref: ResolvedEnumType { name: ResolvedLocalTypeIdentifier(<7:4>), assigned_name: "Test", module_path: ["test"], number: 1 } }, fields_in_order: [Int(ResolvedIntType), Int(ResolvedIntType)] }), name: ResolvedLocalTypeIdentifier(<67:5>), assigned_name: "Tuple", number: 3 }])
 ---
-InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <87:1>, resolved_type: Enum(ResolvedEnumType { name: ResolvedLocalTypeIdentifier(<7:4>), assigned_name: "Test", module_path: ["test"], number: 1 }), mutable_node: None, scope_index: 0, variable_index: 0 }], expression: Literal(EnumVariantLiteral(ResolvedEnumVariantType { owner: ResolvedEnumType { name: ResolvedLocalTypeIdentifier(<7:4>), assigned_name: "Test", module_path: ["test"], number: 1 }, data: Struct(ResolvedEnumVariantStructType { common: CommonEnumVariantType { number: 2, module_path: ResolvedModulePath([]), variant_name: ResolvedLocalTypeIdentifier(<18:6>), assigned_name: "Struct", enum_ref: ResolvedEnumType { name: ResolvedLocalTypeIdentifier(<7:4>), assigned_name: "Test", module_path: ["test"], number: 1 } }, anon_struct: ResolvedAnonymousStructType { defined_fields: SeqMap("a": ResolvedAnonymousStructFieldType { identifier: ResolvedFieldName(<27:1>), field_type: Int(ResolvedIntType), index: 0 }, "b": ResolvedAnonymousStructFieldType { identifier: ResolvedFieldName(<35:1>), field_type: Float(ResolvedFloatType), index: 1 }) } }), name: ResolvedLocalTypeIdentifier(<18:6>), assigned_name: "Struct", number: 2 }, Struct([]))) })
+InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <87:1>, resolved_type: Enum(ResolvedEnumType { name: ResolvedLocalTypeIdentifier(<7:4>), assigned_name: "Test", module_path: ["test"], number: 1 }), mutable_node: None, scope_index: 0, variable_index: 0 }], expression: Literal(EnumVariantLiteral(ResolvedEnumVariantType { owner: ResolvedEnumType { name: ResolvedLocalTypeIdentifier(<7:4>), assigned_name: "Test", module_path: ["test"], number: 1 }, data: Struct(ResolvedEnumVariantStructType { common: CommonEnumVariantType { number: 2, module_path: ResolvedModulePath([]), variant_name: ResolvedLocalTypeIdentifier(<18:6>), assigned_name: "Struct", enum_ref: ResolvedEnumType { name: ResolvedLocalTypeIdentifier(<7:4>), assigned_name: "Test", module_path: ["test"], number: 1 } }, anon_struct: ResolvedAnonymousStructType { defined_fields: SeqMap("a": ResolvedAnonymousStructFieldType { identifier: ResolvedFieldName(<27:1>), field_type: Int(ResolvedIntType), index: 0 }, "b": ResolvedAnonymousStructFieldType { identifier: ResolvedFieldName(<35:1>), field_type: Float(ResolvedFloatType), index: 1 }) } }), name: ResolvedLocalTypeIdentifier(<18:6>), assigned_name: "Struct", number: 2 }, Struct([(0, Literal(IntLiteral(10, <109:2>, ResolvedIntType))), (1, Literal(FloatLiteral(fp:2.300 (150732), <116:3>, ResolvedFloatType)))]))) })
 
 "#,
     );
@@ -669,7 +669,7 @@ fn definition_use() {
         use gameplay
     ",
         r"
-Use([<13:8>])
+Use(ResolvedUse { path: [<13:8>], items: [] })
 ",
     );
 }
@@ -681,7 +681,7 @@ fn definition_use_3() {
         use gameplay.other.some
     ",
         r"
-Use([<13:8>, <22:5>, <28:4>])
+Use(ResolvedUse { path: [<13:8>, <22:5>, <28:4>], items: [] })
 ",
     );
 }
