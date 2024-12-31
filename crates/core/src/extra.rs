@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
+ * Licensed under the MIT License. See LICENSE in the project root for license information.
+ */
+
 use crate::idx_gen::IndexAllocator;
 use crate::value::{to_rust_value, Value};
 use sparse_slot::{Id, SparseSlot};
