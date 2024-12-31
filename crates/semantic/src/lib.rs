@@ -813,15 +813,6 @@ pub struct ResolvedIterator {
     pub key_type: Option<ResolvedType>, // It does not have to support a key type
     pub value_type: ResolvedType,
     pub resolved_expression: Box<ResolvedExpression>,
-    pub mutable_node: Option<ResolvedNode>,
-}
-
-impl ResolvedIterator {
-    #[inline]
-    #[must_use]
-    pub const fn is_mutable(&self) -> bool {
-        self.mutable_node.is_some()
-    }
 }
 
 #[derive(Debug)]
@@ -1242,6 +1233,16 @@ impl Spanned for ResolvedArrayInstantiation {
 pub enum ResolvedForPattern {
     Single(ResolvedVariableRef),
     Pair(ResolvedVariableRef, ResolvedVariableRef),
+}
+
+impl ResolvedForPattern {
+    #[must_use]
+    pub fn is_mutable(&self) -> bool {
+        match self {
+            Self::Single(variable) => variable.is_mutable(),
+            Self::Pair(a, b) => a.is_mutable() || b.is_mutable(),
+        }
+    }
 }
 
 impl Display for ResolvedForPattern {

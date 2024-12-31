@@ -1491,10 +1491,7 @@ impl<'a> Resolver<'a> {
             }
 
             Expression::ForLoop(pattern, iteratable_expression, statements) => {
-                let resolved_iterator = self.resolve_iterator(
-                    &iteratable_expression.expression,
-                    &iteratable_expression.is_mut,
-                )?;
+                let resolved_iterator = self.resolve_iterator(&iteratable_expression.expression)?;
 
                 self.push_block_scope("for_loop");
                 let pattern = self.resolve_for_pattern(
@@ -2111,7 +2108,6 @@ impl<'a> Resolver<'a> {
     fn resolve_iterator(
         &mut self,
         expression: &Expression,
-        is_mutable: &Option<Node>,
     ) -> Result<ResolvedIterator, ResolveError> {
         let resolved_expression = self.resolve_expression(expression)?;
         let resolved_type = resolution(&resolved_expression);
@@ -2147,7 +2143,6 @@ impl<'a> Resolver<'a> {
             key_type,
             value_type,
             resolved_expression: Box::new(resolved_expression),
-            mutable_node: self.to_node_option(is_mutable),
         })
     }
 

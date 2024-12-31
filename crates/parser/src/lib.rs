@@ -824,16 +824,9 @@ impl AstParser {
 
         // Parse the 'mut' keyword before the iterable expression, if present
         let next_pair = Self::next_pair(&mut inner)?;
-        let (is_mut_iter, iterable_expression) = if next_pair.as_rule() == Rule::mut_keyword {
-            let mut_node = self.to_node(&next_pair);
-            let iterable_pair = Self::next_pair(&mut inner)?;
-            (Some(mut_node), self.parse_expression(&iterable_pair)?)
-        } else {
-            (None, self.parse_expression(&next_pair)?)
-        };
+        let iterable_expression = self.parse_expression(&next_pair)?;
 
         let mut_expression = IteratableExpression {
-            is_mut: is_mut_iter,
             expression: Box::new(iterable_expression),
         };
 

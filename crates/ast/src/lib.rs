@@ -188,7 +188,6 @@ pub enum ForPattern {
 
 #[derive(Debug)]
 pub struct IteratableExpression {
-    pub is_mut: Option<Node>,
     pub expression: Box<Expression>,
 }
 

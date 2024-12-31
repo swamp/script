@@ -117,7 +117,7 @@ mut_keyword = { "mut" }
 return_type = { "->" ~ type_name }
 
 
-for_loop = { "for" ~ for_pattern ~ "in" ~ mut_keyword? ~ expression ~ expression }
+for_loop = { "for" ~ for_pattern ~ "in" ~ expression ~ expression }
 
 
 mut_identifier = { mut_keyword? ~ identifier }

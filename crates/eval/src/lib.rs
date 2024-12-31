@@ -511,7 +511,7 @@ impl<'a, C> Interpreter<'a, C> {
                         var_ref.scope_index,
                         var_ref.variable_index,
                         value,
-                        iterator_expr.is_mutable(),
+                        var_ref.is_mutable(),
                     );
 
                     match self.evaluate_expression_with_signal(body)? {
@@ -1409,7 +1409,7 @@ impl<'a, C> Interpreter<'a, C> {
             }
 
             ResolvedExpression::ForLoop(pattern, iterator_expr, body) => {
-                if iterator_expr.is_mutable() {
+                if pattern.is_mutable() {
                     self.evaluate_for_loop_mutable(pattern, iterator_expr, body)?
                         .try_into()?
                 } else {
