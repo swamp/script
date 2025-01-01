@@ -1384,3 +1384,35 @@ fn tuple_destructuring_1() {
 
     assert_eq!(result, Value::Int(2));
 }
+
+#[test_log::test]
+fn struct_instantiation_rest() {
+    check(
+        "
+    struct Test {
+        a: Int,
+        b: Float,
+    }
+
+    print(Test { b: 2.4, .. })
+
+    ",
+        "Test { a: 0, b: 2.40 }",
+    );
+}
+
+#[test_log::test]
+fn struct_instantiation_missing_fail() {
+    check_fail(
+        "
+    struct Test {
+        a: Int,
+        b: Float,
+    }
+
+    print(Test { b: 2.4 })
+
+    ",
+        r#"ResolveError(MissingFieldInStructInstantiation("a", ResolvedAnonymousStructType { defined_fields: SeqMap("a": ResolvedAnonymousStructFieldType { identifier: ResolvedFieldName(<27:1>), field_type: Int(ResolvedIntType), index: 0 }, "b": ResolvedAnonymousStructFieldType { identifier: ResolvedFieldName(<43:1>), field_type: Float(ResolvedFloatType), index: 0 }) }))"#,
+    );
+}

@@ -18,6 +18,9 @@ use swamp_script_ast::{
     SpanWithoutFileId,
 };
 use swamp_script_semantic::modules::ResolvedModules;
+use swamp_script_semantic::ResolvedLiteral::{
+    BoolLiteral, FloatLiteral, IntLiteral, StringLiteral,
+};
 use swamp_script_semantic::ResolvedProgramTypes;
 use swamp_script_semantic::{
     create_rust_type, prelude::*, FileId, ResolvedAccess, ResolvedAnonymousStructFieldType,
@@ -242,7 +245,7 @@ pub enum ResolveError {
     Unknown(String),
     UnknownImplTargetTypeReference(LocalTypeIdentifier),
     WrongFieldCountInStructInstantiation(ResolvedStructTypeRef, usize),
-    MissingFieldInStructInstantiation(String, ResolvedStructTypeRef),
+    MissingFieldInStructInstantiation(String, ResolvedAnonymousStructType),
     ExpectedFunctionExpression,
     CouldNotFindMember(ResolvedNode, ResolvedNode),
     UnknownVariable(ResolvedNode),
@@ -312,6 +315,7 @@ pub enum ResolveError {
     InternalError(&'static str),
     WasNotFieldMutRef,
     UnknownFunction(ResolvedNode),
+    NoDefaultImplemented(ResolvedType),
 }
 
 impl From<SemanticError> for ResolveError {
@@ -1631,6 +1635,7 @@ impl<'a> Resolver<'a> {
                             let resolved = self.resolve_anon_struct_instantiation(
                                 &resolved_variant_struct_ref.anon_struct,
                                 anonym_struct_field_and_expressions,
+                                false,
                             )?;
 
                             ResolvedEnumLiteralData::Struct(resolved)
@@ -1784,31 +1789,39 @@ impl<'a> Resolver<'a> {
         &mut self,
         struct_to_instantiate: &ResolvedAnonymousStructType,
         ast_fields: &Vec<FieldExpression>,
+        allow_rest: bool,
     ) -> Result<Vec<(usize, ResolvedExpression)>, ResolveError> {
-        let mut seen_fields = HashSet::new();
+        let mut missing_fields: HashSet<String> = struct_to_instantiate
+            .defined_fields
+            .keys()
+            .cloned()
+            .collect();
+
         let mut source_order_expressions = Vec::new();
 
         for field in ast_fields {
             let field_name = self.get_text(&field.field_name.0).to_string();
 
-            // If we can not insert it, it is a duplicate
-            if !seen_fields.insert(field_name.clone()) {
-                return Err(ResolveError::DuplicateFieldInStructInstantiation(
-                    field_name,
-                ));
+            // If we can't remove it from missing_fields, it's either a duplicate or unknown field
+            if !missing_fields.remove(&field_name) {
+                return if struct_to_instantiate
+                    .defined_fields
+                    .contains_key(&field_name)
+                {
+                    Err(ResolveError::DuplicateFieldInStructInstantiation(
+                        field_name,
+                    ))
+                } else {
+                    Err(ResolveError::UnknownStructField(
+                        self.to_node(&field.field_name.0),
+                    ))
+                };
             }
 
-            //            let borrowed_struct = struct_to_instantiate.borrow();
-
-            let maybe_looked_up_field = struct_to_instantiate.defined_fields.get(&field_name);
-
-            if maybe_looked_up_field.is_none() {
-                return Err(ResolveError::UnknownStructField(
-                    self.to_node(&field.field_name.0),
-                ));
-            }
-
-            let looked_up_field = maybe_looked_up_field.expect("checked earlier");
+            let looked_up_field = struct_to_instantiate
+                .defined_fields
+                .get(&field_name)
+                .expect("field existence checked above");
 
             let field_index_in_definition = struct_to_instantiate
                 .defined_fields
@@ -1830,7 +1843,72 @@ impl<'a> Resolver<'a> {
                 .push((field_index_in_definition, upgraded_resolved_expression));
         }
 
+        if allow_rest {
+            // Call `default()` for the missing fields
+            for missing_field_name in missing_fields {
+                let field = struct_to_instantiate
+                    .defined_fields
+                    .get(&missing_field_name)
+                    .expect("field must exist in struct definition");
+
+                let field_index = struct_to_instantiate
+                    .defined_fields
+                    .get_index(&missing_field_name)
+                    .expect("field must exist in struct definition");
+
+                // Here you would create the default value for the field
+                let default_expression =
+                    Self::create_default_value_for_type(&field.field_type, self.shared.types)?;
+
+                source_order_expressions.push((field_index, default_expression));
+            }
+        } else if !missing_fields.is_empty() {
+            return Err(ResolveError::MissingFieldInStructInstantiation(
+                missing_fields.iter().next().unwrap().clone(),
+                struct_to_instantiate.clone(),
+            ));
+        }
+
         Ok(source_order_expressions)
+    }
+
+    fn create_default_value_for_type(
+        field_type: &ResolvedType,
+        types: &ResolvedProgramTypes,
+    ) -> Result<ResolvedExpression, ResolveError> {
+        let expr = match field_type {
+            ResolvedType::Bool(_) => ResolvedExpression::Literal(ResolvedLiteral::BoolLiteral(
+                false,
+                ResolvedNode::new_unknown(),
+                types.bool_type.clone(),
+            )),
+            ResolvedType::Int(_) => ResolvedExpression::Literal(ResolvedLiteral::IntLiteral(
+                0,
+                ResolvedNode::new_unknown(),
+                types.int_type.clone(),
+            )),
+            ResolvedType::Float(_) => ResolvedExpression::Literal(ResolvedLiteral::FloatLiteral(
+                Fp::zero(),
+                ResolvedNode::new_unknown(),
+                types.float_type.clone(),
+            )),
+            ResolvedType::String(_) => ResolvedExpression::Literal(ResolvedLiteral::StringLiteral(
+                "".to_string(),
+                ResolvedNode::new_unknown(),
+                types.string_type.clone(),
+            )),
+            ResolvedType::Array(array_type_ref) => {
+                ResolvedExpression::Literal(ResolvedLiteral::Array(array_type_ref.clone(), vec![]))
+            }
+            ResolvedType::Map(map_type_ref) => {
+                ResolvedExpression::Literal(ResolvedLiteral::Map(map_type_ref.clone(), vec![]))
+            }
+            ResolvedType::Optional(_optional_type) => ResolvedExpression::Literal(
+                ResolvedLiteral::NoneLiteral(ResolvedNode::new_unknown()),
+            ),
+            _ => return Err(ResolveError::NoDefaultImplemented(field_type.clone())),
+        };
+        Ok(expr)
     }
 
     fn resolve_struct_instantiation(
@@ -1842,22 +1920,10 @@ impl<'a> Resolver<'a> {
         let (display_type_ref, struct_to_instantiate) =
             self.get_struct_types(qualified_type_identifier)?;
 
-        if ast_fields.len()
-            != struct_to_instantiate
-                .borrow()
-                .anon_struct_type
-                .defined_fields
-                .len()
-        {
-            return Err(ResolveError::WrongFieldCountInStructInstantiation(
-                struct_to_instantiate,
-                ast_fields.len(),
-            ));
-        }
-
         let source_order_expressions = self.resolve_anon_struct_instantiation(
             &struct_to_instantiate.borrow().anon_struct_type,
             ast_fields,
+            has_rest,
         )?;
 
         Ok(ResolvedStructInstantiation {
@@ -2978,6 +3044,7 @@ impl<'a> Resolver<'a> {
                     let resolved = self.resolve_anon_struct_instantiation(
                         &struct_ref.anon_struct,
                         field_expressions,
+                        false,
                     )?;
                     ResolvedEnumLiteralData::Struct(resolved)
                 } else {

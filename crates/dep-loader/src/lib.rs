@@ -98,6 +98,7 @@ pub struct ModuleInfo {
 pub struct DependencyParser {
     pub import_scanned_modules: SeqMap<Vec<String>, ModuleInfo>,
     already_parsed_modules: SeqMap<Vec<String>, ParseModule>,
+    pub already_resolved_modules: HashSet<Vec<String>>,
 }
 
 impl Default for DependencyParser {
@@ -111,7 +112,12 @@ impl DependencyParser {
         Self {
             import_scanned_modules: SeqMap::new(),
             already_parsed_modules: SeqMap::new(),
+            already_resolved_modules: HashSet::new(),
         }
+    }
+
+    pub fn add_resolved_module(&mut self, module_path: Vec<String>) {
+        self.already_resolved_modules.insert(module_path);
     }
 
     pub fn add_ast_module(&mut self, module_path: Vec<String>, parsed_module: ParseModule) {
@@ -176,22 +182,33 @@ impl DependencyParser {
                 if let Some(parsed_module) = self.already_parsed_modules.get(module_path_vec) {
                     parsed_module
                 } else {
-                    info!("a module we haven't seen before: {path:?}");
-                    let (file_id, script) =
-                        source_map.read_file_relative(module_path_vec.join("/").as_ref())?;
-                    let parse_module = parse_root.parse(script, file_id)?;
+                    if self.already_resolved_modules.contains(module_path_vec) {
+                        info!("a module that already has been resolved {path:?}");
+                        continue;
+                    } else {
+                        info!("a module we haven't seen before: {path:?}");
+                        let (file_id, script) =
+                            source_map.read_file_relative(module_path_vec.join("/").as_ref())?;
+                        let parse_module = parse_root.parse(script, file_id)?;
 
-                    self.already_parsed_modules
-                        .insert(path.clone(), parse_module)
-                        .expect("TODO: panic message");
+                        self.already_parsed_modules
+                            .insert(path.clone(), parse_module)
+                            .expect("TODO: panic message");
 
-                    self.already_parsed_modules
-                        .get(&path.clone())
-                        .expect("we just inserted it")
+                        self.already_parsed_modules
+                            .get(&path.clone())
+                            .expect("we just inserted it")
+                    }
                 };
 
             let imports = get_all_import_paths(parsed_module_to_scan);
-            for import in &imports {
+
+            let mut filtered_imports: Vec<Vec<String>> = imports
+                .into_iter()
+                .filter(|import| !self.already_resolved_modules.contains(import))
+                .collect();
+
+            for import in &filtered_imports {
                 info!("..found use: {import:?}");
             }
 
@@ -200,14 +217,14 @@ impl DependencyParser {
                     path.clone(),
                     ModuleInfo {
                         path: path.clone(),
-                        imports: imports.clone(),
+                        imports: filtered_imports.clone(),
                         parsed: false,
                         analyzed: false,
                     },
                 )
                 .expect("TODO: panic message");
 
-            to_parse.extend(imports.clone());
+            to_parse.extend(filtered_imports.clone());
         }
         Ok(())
     }

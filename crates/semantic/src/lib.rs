@@ -633,7 +633,7 @@ impl Spanned for ResolvedStructTypeField {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ResolvedAnonymousStructFieldType {
     pub identifier: ResolvedFieldName,
 
@@ -1270,7 +1270,7 @@ pub struct ResolvedIdentifierName(pub ResolvedNode);
 #[derive(Debug)]
 pub struct ResolvedLocalTypeIdentifier(pub ResolvedNode);
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ResolvedFieldName(pub ResolvedNode);
 
 pub type ResolvedModulePathRef = Rc<ResolvedModulePath>;
@@ -1402,7 +1402,7 @@ pub struct CommonEnumVariantType {
     pub enum_ref: ResolvedEnumTypeRef,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ResolvedAnonymousStructType {
     pub defined_fields: SeqMap<String, ResolvedAnonymousStructFieldType>,
 }

@@ -9,6 +9,7 @@ use std::fmt::Display;
 use std::io;
 use std::io::{stderr, Write};
 use swamp_script_analyzer::ResolveError;
+use swamp_script_parser::SpecificError;
 use swamp_script_semantic::Span;
 use swamp_script_source_map::{FileId, SourceMap};
 
@@ -142,6 +143,77 @@ impl<C: Display + std::clone::Clone> Builder<C> {
     }
 }
 
+pub fn show_parse_error(err: &SpecificError, span: &Span, source_map: &SourceMap) {
+    let builder = build_parse_error(&err, span);
+    let report = builder.build();
+    report.print(source_map, stderr()).unwrap();
+}
+
+pub fn build_parse_error(err: &SpecificError, span: &Span) -> Builder<usize> {
+    match err {
+        SpecificError::General(general) => Report::build(
+            Error,
+            1,
+            &format!("General Parse Error: {}", general),
+            &span,
+        ),
+        SpecificError::ExpectingTypeIdentifier => todo!(),
+        SpecificError::ExpectingInnerPair => todo!(),
+        SpecificError::UnexpectedTypeRule => todo!(),
+        SpecificError::ExpectedTypeIdentifier(_) => todo!(),
+        SpecificError::ExpectedLocalTypeIdentifier(_) => todo!(),
+        SpecificError::UnexpectedRuleInParseScript(_) => todo!(),
+        SpecificError::ExpectedControlStatement(_) => todo!(),
+        SpecificError::ExpectedStatement(_) => todo!(),
+        SpecificError::ExpectedIfOrElse(_) => todo!(),
+        SpecificError::MissingFunctionSignature => todo!(),
+        SpecificError::MissingFunctionBody => todo!(),
+        SpecificError::ExpectedStatementBlock => todo!(),
+        SpecificError::ExpectedFunctionDefinition => todo!(),
+        SpecificError::ExpectedParameter => todo!(),
+        SpecificError::ExpectedImplItem => todo!(),
+        SpecificError::ExpectedMemberSignature => todo!(),
+        SpecificError::ExpectedBlockInWhileLoop => todo!(),
+        SpecificError::UnexpectedExpressionType(_) => todo!(),
+        SpecificError::UnexpectedAccessType(_) => todo!(),
+        SpecificError::UnknownAssignmentOperator(_) => todo!(),
+        SpecificError::CompoundOperatorCanNotContainMut => todo!(),
+        SpecificError::InvalidAssignmentTarget => todo!(),
+        SpecificError::CompoundOperatorCanNotHaveMultipleVariables => todo!(),
+        SpecificError::ExpectedExpressionAfterPrefixOperator => todo!(),
+        SpecificError::UnknownOperator(_) => todo!(),
+        SpecificError::UnexpectedPostfixOperator => todo!(),
+        SpecificError::UnexpectedUnaryOperator(_) => todo!(),
+        SpecificError::InvalidMemberCall => todo!(),
+        SpecificError::UnknownMatchType => todo!(),
+        SpecificError::UnexpectedElementInPatternList => todo!(),
+        SpecificError::InvalidPrecisionValue => todo!(),
+        SpecificError::InvalidPrecisionType => todo!(),
+        SpecificError::ExpectedTypeIdentifierAfterPath => todo!(),
+        SpecificError::UnexpectedPatternListElement(_) => todo!(),
+        SpecificError::MustHaveAtLeastOneArm => todo!(),
+        SpecificError::UnexpectedMatchArmRule(_) => todo!(),
+        SpecificError::UnknownEnumVariant(_) => todo!(),
+        SpecificError::UnknownLiteral => todo!(),
+        SpecificError::UnknownPrimary(_) => todo!(),
+        SpecificError::InvalidFormatSpecifier => todo!(),
+        SpecificError::UnexpectedVariantField => todo!(),
+        SpecificError::MutOnlyForVariables => todo!(),
+        SpecificError::UnexpectedTokenInFunctionCall => todo!(),
+        SpecificError::ExpectedExpressionInInterpolation => todo!(),
+        SpecificError::UnexpectedRuleInInterpolation => todo!(),
+        SpecificError::ExpectedForPattern => todo!(),
+        SpecificError::ExpectedBlock => todo!(),
+        SpecificError::InvalidForPattern => todo!(),
+        SpecificError::UnexpectedRuleInElse(_) => todo!(),
+        SpecificError::ExpectedLocationExpression => todo!(),
+        SpecificError::ExpectedImportPath => todo!(),
+        SpecificError::ExpectedIdentifier => todo!(),
+        SpecificError::ExpectedIdentifierAfterPath => todo!(),
+        SpecificError::ExpectedFieldOrRest => todo!(),
+    }
+}
+
 pub fn show_error(err: &ResolveError, source_map: &SourceMap) {
     let builder = build_resolve_error(err);
     let report = builder.build();
@@ -152,7 +224,12 @@ pub fn show_error(err: &ResolveError, source_map: &SourceMap) {
 pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
     match err {
         ResolveError::NamespaceError(_) => todo!(),
-        ResolveError::CanNotFindModule(_) => todo!(),
+        ResolveError::CanNotFindModule(x) => Report::build(
+            Error,
+            902,
+            &format!("Can not find module {x:?}"),
+            &Span::default(),
+        ),
         ResolveError::UnknownStructTypeReference(qualified_type_identifier) => Report::build(
             Error,
             105,
@@ -253,5 +330,6 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
         ResolveError::UnknownFunction(node) => {
             Report::build(Error, 1026, "Unknown function", &node.span)
         }
+        ResolveError::NoDefaultImplemented(_) => todo!(),
     }
 }
