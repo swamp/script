@@ -14,6 +14,7 @@ use swamp_script_ast::{
     PatternElement, QualifiedIdentifier, SpanWithoutFileId,
 };
 use swamp_script_ast::{Function, PostfixOperator};
+use tracing::info;
 
 pub struct ParseResult<'a> {
     #[allow(dead_code)]
@@ -81,6 +82,7 @@ pub enum SpecificError {
     ExpectedImportPath,
     ExpectedIdentifier,
     ExpectedIdentifierAfterPath,
+    ExpectedFieldOrRest,
 }
 
 #[derive(Debug)]
@@ -1383,29 +1385,46 @@ impl AstParser {
     fn parse_struct_instantiation(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
         let mut inner = Self::convert_into_iterator(pair);
 
+        let type_pair = inner.next().unwrap();
+
         // Get struct name (required)
-        let struct_name = self.parse_qualified_type_identifier(&inner.next().unwrap())?;
+        let struct_name = self.parse_qualified_type_identifier(&type_pair)?;
+
         let mut fields = Vec::new();
+        let mut has_rest = false;
 
-        // Parse fields if they exist
-        if let Some(fields_pair) = inner.next() {
-            for field in Self::convert_into_iterator(&fields_pair) {
-                if field.as_rule() == Rule::struct_field {
-                    let mut field_inner = Self::convert_into_iterator(&field);
-                    let ident = self.expect_identifier_next(&mut field_inner)?;
-                    let field_name = FieldName(ident.0);
-                    let field_value = self.parse_expression(&Self::next_pair(&mut field_inner)?)?;
+        // Parsing the fields (and maybe rest_fields "..")
+        if let Some(field_list) = inner.next() {
+            for field_pair in field_list.into_inner() {
+                match field_pair.as_rule() {
+                    Rule::struct_field => {
+                        let mut field_inner = field_pair.into_inner();
+                        let ident = self.expect_identifier_next(&mut field_inner)?;
+                        let field_name = FieldName(ident.0);
+                        let field_value = self.parse_expression(&field_inner.next().unwrap())?;
 
-                    let field = FieldExpression {
-                        field_name,
-                        expression: field_value,
-                    };
-                    fields.push(field);
+                        fields.push(FieldExpression {
+                            field_name,
+                            expression: field_value,
+                        });
+                    }
+                    Rule::rest_fields => {
+                        has_rest = true;
+                    }
+                    _ => {
+                        return Err(
+                            self.create_error_pair(SpecificError::ExpectedFieldOrRest, &field_pair)
+                        )
+                    }
                 }
             }
         }
 
-        Ok(Expression::StructInstantiation(struct_name, fields))
+        Ok(Expression::StructInstantiation(
+            struct_name,
+            fields,
+            has_rest,
+        ))
     }
 
     fn parse_primary(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {

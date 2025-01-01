@@ -820,6 +820,7 @@ pub struct ResolvedStructInstantiation {
     pub source_order_expressions: Vec<(usize, ResolvedExpression)>,
     pub struct_type_ref: ResolvedStructTypeRef,
     pub display_type_ref: ResolvedType,
+    pub has_rest: bool,
 }
 
 #[derive(Debug)]

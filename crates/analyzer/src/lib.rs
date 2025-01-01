@@ -1431,10 +1431,12 @@ impl<'a> Resolver<'a> {
             ),
 
             // Creation
-            Expression::StructInstantiation(struct_identifier, fields) => {
-                ResolvedExpression::StructInstantiation(
-                    self.resolve_struct_instantiation(struct_identifier, fields)?,
-                )
+            Expression::StructInstantiation(struct_identifier, fields, has_rest) => {
+                ResolvedExpression::StructInstantiation(self.resolve_struct_instantiation(
+                    struct_identifier,
+                    fields,
+                    *has_rest,
+                )?)
             }
             Expression::ExclusiveRange(min_value, max_value) => {
                 let min_expression = self.resolve_expression(min_value)?;
@@ -1835,6 +1837,7 @@ impl<'a> Resolver<'a> {
         &mut self,
         qualified_type_identifier: &QualifiedTypeIdentifier,
         ast_fields: &Vec<FieldExpression>,
+        has_rest: bool,
     ) -> Result<ResolvedStructInstantiation, ResolveError> {
         let (display_type_ref, struct_to_instantiate) =
             self.get_struct_types(qualified_type_identifier)?;
@@ -1861,6 +1864,7 @@ impl<'a> Resolver<'a> {
             source_order_expressions,
             struct_type_ref: struct_to_instantiate,
             display_type_ref,
+            has_rest,
         })
     }
 

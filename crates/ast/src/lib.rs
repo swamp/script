@@ -362,7 +362,7 @@ pub enum Expression {
     InterpolatedString(Vec<StringPart>),
 
     // Instantiation
-    StructInstantiation(QualifiedTypeIdentifier, Vec<FieldExpression>),
+    StructInstantiation(QualifiedTypeIdentifier, Vec<FieldExpression>, bool),
     ExclusiveRange(Box<Expression>, Box<Expression>),
     Literal(Literal),
 

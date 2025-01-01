@@ -427,7 +427,8 @@ map_entry = {
     expression ~ ":" ~ expression
 }
 
-struct_fields = { (struct_field ~ ("," ~ " "* ~ struct_field)* ~ trailing_comma? )? }  // PEST BUG: need explicit spaces after comma
+// struct_fields = { (struct_field ~ ("," ~ " "* ~ struct_field)* ~ trailing_comma? )? }  // PEST BUG: need explicit spaces after comma
+
 struct_field = { identifier ~ ":" ~ expression }
 
 qualified_identifier = {
@@ -440,9 +441,13 @@ qualified_type_identifier = {
 
 module_segments = { (identifier ~ "::")+ }
 
-struct_instantiation = {
-    (qualified_type_identifier ~ "{" ~ struct_fields? ~ "}")
-    | ("{" ~ struct_fields? ~ "}")  // Anonymous struct, not sure if we want to implement it, since it is a pain to write out.
+struct_instantiation = { qualified_type_identifier ~ "{" ~ struct_field_list ~ "}" }
+
+struct_field_list = {
+    (struct_field ~ ("," ~ struct_field)* ~ ","? ~ rest_fields?)
+    | rest_fields
 }
+
+rest_fields = { ".." }
 
 tuple_fields = { "(" ~ expression ~ ("," ~ " "* ~ expression)* ~ ","? ~ ")" }  // PEST BUG: need explicit spaces after comma

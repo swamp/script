@@ -2149,3 +2149,50 @@ StaticCallGeneric(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<11:9>), m
         ",
     );
 }
+
+#[test_log::test]
+fn struct_instantiation_rest() {
+    check(
+        r"
+SomeStruct {
+    x: 3,
+    ..
+}
+",
+        r"
+StructInstantiation(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<1:10>), module_path: None, generic_params: [] }, [FieldExpression { field_name: FieldName(<18:1>), expression: Literal(Int(<21:1>)) }], true)
+
+        ",
+    );
+}
+
+#[test_log::test]
+fn struct_instantiation_no_rest() {
+    check(
+        r"
+SomeStruct {
+    x: 3,
+}
+",
+        r"
+StructInstantiation(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<1:10>), module_path: None, generic_params: [] }, [FieldExpression { field_name: FieldName(<18:1>), expression: Literal(Int(<21:1>)) }], false)
+
+        ",
+    );
+}
+
+#[test_log::test]
+fn struct_instantiation_no_rest_no_trailing() {
+    check(
+        r"
+SomeStruct {
+    x: 3,
+    y: 4
+}
+",
+        r"
+StructInstantiation(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<1:10>), module_path: None, generic_params: [] }, [FieldExpression { field_name: FieldName(<18:1>), expression: Literal(Int(<21:1>)) }, FieldExpression { field_name: FieldName(<28:1>), expression: Literal(Int(<31:1>)) }], false)
+
+        ",
+    );
+}
