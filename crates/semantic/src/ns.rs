@@ -5,7 +5,7 @@
 use crate::{
     ResolvedAnonymousStructFieldType, ResolvedAnonymousStructType, ResolvedEnumTypeRef,
     ResolvedEnumVariantType, ResolvedEnumVariantTypeRef, ResolvedExternalFunctionDefinition,
-    ResolvedExternalFunctionDefinitionRef, ResolvedFieldName, ResolvedInternalFunctionDefinition,
+    ResolvedExternalFunctionDefinitionRef, ResolvedInternalFunctionDefinition,
     ResolvedInternalFunctionDefinitionRef, ResolvedNode, ResolvedRustType, ResolvedRustTypeRef,
     ResolvedStructType, ResolvedStructTypeRef, ResolvedType, SemanticError, TypeNumber,
 };
@@ -91,9 +91,8 @@ impl ResolvedModuleNamespace {
 
         for (index, (field_name, field_type)) in fields.iter().enumerate() {
             let af = ResolvedAnonymousStructFieldType {
-                identifier: ResolvedFieldName(Default::default()),
+                identifier: None,
                 field_type: field_type.clone(),
-                index,
             };
 
             resolved_fields
@@ -109,7 +108,6 @@ impl ResolvedModuleNamespace {
             name: ResolvedNode::default(),
             assigned_name: name.to_string(),
             anon_struct_type,
-            number: type_number,
             functions: SeqMap::default(),
         };
 

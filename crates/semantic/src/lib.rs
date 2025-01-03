@@ -7,6 +7,7 @@ pub mod ns;
 pub mod prelude;
 
 pub use fixed32::Fp;
+use seq_fmt::comma;
 use seq_map::{SeqMap, SeqMapError};
 use std::cell::RefCell;
 use std::fmt;
@@ -229,6 +230,31 @@ pub enum ResolvedType {
     Any,
 }
 
+impl Display for ResolvedType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        match self {
+            Self::Int(_) => write!(f, "Int"),
+            Self::Float(_) => write!(f, "Float"),
+            Self::String(_) => write!(f, "String"),
+            Self::Bool(_) => write!(f, "Bool"),
+            Self::Unit(_) => write!(f, "()"),
+            Self::Array(array_ref) => write!(f, "[{}]", &array_ref.item_type.to_string()),
+            Self::Tuple(tuple) => write!(f, "({})", comma(&tuple.0)),
+            Self::Struct(struct_ref) => write!(f, "{}", struct_ref.borrow().assigned_name),
+            Self::Map(_) => todo!(),
+            Self::Generic(_, _) => todo!(),
+            Self::Enum(_) => todo!(),
+            Self::EnumVariant(_) => todo!(),
+            Self::FunctionInternal(_) => todo!(),
+            Self::FunctionExternal(_) => todo!(),
+            Self::ExclusiveRange(_) => todo!(),
+            Self::Optional(_) => todo!(),
+            Self::RustType(_) => todo!(),
+            Self::Any => todo!(),
+        }
+    }
+}
+
 impl Spanned for ResolvedType {
     fn span(&self) -> Span {
         match self {
@@ -346,10 +372,7 @@ impl ResolvedType {
 }
 
 fn compare_struct_types(a: &ResolvedStructTypeRef, b: &ResolvedStructTypeRef) -> bool {
-    let struct_a = a.borrow();
-    let struct_b = b.borrow();
-
-    if struct_a.number != struct_b.number {
+    if !Rc::ptr_eq(a, b) {
         return false;
     }
 
@@ -604,9 +627,9 @@ pub enum ResolvedAccess {
 impl Spanned for ResolvedAccess {
     fn span(&self) -> Span {
         match self {
-            ResolvedAccess::FieldIndex(node, _) => node.span.clone(),
-            ResolvedAccess::ArrayIndex(expr) => expr.span(),
-            ResolvedAccess::MapIndex(expr) => expr.span(),
+            Self::FieldIndex(node, _) => node.span.clone(),
+            Self::ArrayIndex(expr) => expr.span(),
+            Self::MapIndex(expr) => expr.span(),
         }
     }
 }
@@ -635,10 +658,9 @@ impl Spanned for ResolvedStructTypeField {
 
 #[derive(Debug, Clone)]
 pub struct ResolvedAnonymousStructFieldType {
-    pub identifier: ResolvedFieldName,
+    pub identifier: Option<ResolvedNode>,
 
     pub field_type: ResolvedType,
-    pub index: usize,
 }
 
 pub type ResolvedStructTypeFieldRef = Rc<ResolvedStructTypeField>;
@@ -1270,9 +1292,6 @@ pub struct ResolvedIdentifierName(pub ResolvedNode);
 #[derive(Debug)]
 pub struct ResolvedLocalTypeIdentifier(pub ResolvedNode);
 
-#[derive(Debug, Clone)]
-pub struct ResolvedFieldName(pub ResolvedNode);
-
 pub type ResolvedModulePathRef = Rc<ResolvedModulePath>;
 
 #[derive(Debug)]
@@ -1282,7 +1301,6 @@ pub struct ResolvedStructType {
     pub anon_struct_type: ResolvedAnonymousStructType,
 
     // Resolved
-    pub number: TypeNumber,
     pub functions: SeqMap<String, ResolvedFunctionRef>,
 }
 
@@ -1291,10 +1309,8 @@ impl ResolvedStructType {
         name: ResolvedNode,
         assigned_name: &str,
         anon_struct_type: ResolvedAnonymousStructType,
-        number: TypeNumber,
     ) -> Self {
         Self {
-            number,
             //defined_in_module,
             anon_struct_type,
             name,

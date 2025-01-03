@@ -421,7 +421,7 @@ impl Hash for Value {
             Self::Option(o) => o.hash(state),
             Self::Array(_, _arr) => {}
             Self::Struct(type_ref, values) => {
-                type_ref.borrow().number.hash(state);
+                type_ref.borrow().name().span.hash(state);
                 for v in values {
                     v.borrow().hash(state);
                 }

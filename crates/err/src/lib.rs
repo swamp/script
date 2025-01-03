@@ -288,7 +288,9 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
         }
         ResolveError::TypeAliasNotAStruct(_) => todo!(),
         ResolveError::ModuleNotUnique => todo!(),
-        ResolveError::ExpressionIsOfWrongFieldType => todo!(),
+        ResolveError::ExpressionIsOfWrongFieldType(span, expected_type, encountered_type) => {
+            Report::build(Error, 234101, &format!("Field initialization expression is of wrong type. expected {expected_type}, encountered: {encountered_type}"), &span)
+        },
         ResolveError::ExpectedOptional => todo!(),
         ResolveError::ExpectedVariable => todo!(),
         ResolveError::EmptyMapLiteral => todo!(),

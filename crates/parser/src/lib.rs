@@ -14,7 +14,6 @@ use swamp_script_ast::{
     PatternElement, QualifiedIdentifier, SpanWithoutFileId,
 };
 use swamp_script_ast::{Function, PostfixOperator};
-use tracing::info;
 
 pub struct ParseResult<'a> {
     #[allow(dead_code)]

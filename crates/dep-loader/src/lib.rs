@@ -203,7 +203,7 @@ impl DependencyParser {
 
             let imports = get_all_import_paths(parsed_module_to_scan);
 
-            let mut filtered_imports: Vec<Vec<String>> = imports
+            let filtered_imports: Vec<Vec<String>> = imports
                 .into_iter()
                 .filter(|import| !self.already_resolved_modules.contains(import))
                 .collect();

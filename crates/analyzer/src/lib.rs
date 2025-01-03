@@ -18,14 +18,11 @@ use swamp_script_ast::{
     SpanWithoutFileId,
 };
 use swamp_script_semantic::modules::ResolvedModules;
-use swamp_script_semantic::ResolvedLiteral::{
-    BoolLiteral, FloatLiteral, IntLiteral, StringLiteral,
-};
 use swamp_script_semantic::ResolvedProgramTypes;
 use swamp_script_semantic::{
     create_rust_type, prelude::*, FileId, ResolvedAccess, ResolvedAnonymousStructFieldType,
     ResolvedAnonymousStructType, ResolvedBinaryOperatorKind, ResolvedBoolType,
-    ResolvedCompoundOperator, ResolvedCompoundOperatorKind, ResolvedFieldName, ResolvedForPattern,
+    ResolvedCompoundOperator, ResolvedCompoundOperatorKind, ResolvedForPattern,
     ResolvedFormatSpecifier, ResolvedFormatSpecifierKind, ResolvedLocalIdentifier,
     ResolvedLocalTypeIdentifier, ResolvedPatternElement, ResolvedPostfixOperatorKind,
     ResolvedPrecisionType, ResolvedStaticCallGeneric, ResolvedTupleTypeRef,
@@ -274,7 +271,7 @@ pub enum ResolveError {
     CouldNotFindStaticMember(ResolvedNode, ResolvedNode),
     TypeAliasNotAStruct(ResolvedNode),
     ModuleNotUnique,
-    ExpressionIsOfWrongFieldType,
+    ExpressionIsOfWrongFieldType(Span, ResolvedType, ResolvedType),
     ExpectedOptional,
     ExpectedVariable,
     EmptyMapLiteral,
@@ -675,9 +672,8 @@ impl<'a> Resolver<'a> {
             let name_string = self.get_text(&field_name_and_type.field_name.0).to_string();
 
             let field_type = ResolvedAnonymousStructFieldType {
-                identifier: ResolvedFieldName(self.to_node(&field_name_and_type.field_name.0)),
+                identifier: Some(self.to_node(&field_name_and_type.field_name.0)),
                 field_type: resolved_type,
-                index: 0,
             };
 
             resolved_fields
@@ -699,7 +695,6 @@ impl<'a> Resolver<'a> {
             self.to_node(&ast_struct.identifier.0),
             &struct_name_str,
             resolved_anon_struct,
-            self.shared.state.allocate_number(),
         );
 
         let resolved_struct_ref = self.shared.lookup.add_struct(resolved_struct)?;
@@ -774,11 +769,8 @@ impl<'a> Resolver<'a> {
                             self.get_text(&field_with_type.field_name.0).to_string();
 
                         let resolved_field = ResolvedAnonymousStructFieldType {
-                            identifier: ResolvedFieldName(
-                                self.to_node(&field_with_type.field_name.0),
-                            ),
+                            identifier: Some(self.to_node(&field_with_type.field_name.0)),
                             field_type: resolved_type,
-                            index,
                         };
 
                         fields.insert(field_name_str, resolved_field).map_err(|_| {
@@ -1836,7 +1828,11 @@ impl<'a> Resolver<'a> {
 
             if !looked_up_field.field_type.same_type(&expression_type) {
                 error!("types: {looked_up_field:?} expr: {expression_type:?}");
-                return Err(ResolveError::ExpressionIsOfWrongFieldType);
+                return Err(ResolveError::ExpressionIsOfWrongFieldType(
+                    self.to_node(&field.field_name.0).span,
+                    looked_up_field.field_type.clone(),
+                    expression_type,
+                ));
             }
 
             source_order_expressions
