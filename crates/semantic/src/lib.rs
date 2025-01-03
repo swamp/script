@@ -267,7 +267,7 @@ impl Spanned for ResolvedType {
 
             // Compound Types
             Self::Array(_type_ref) => todo!(),
-            Self::Tuple(_type_ref) => todo!(),
+            Self::Tuple(tuple_ref) => tuple_ref.0[0].span(),
             Self::Struct(type_ref) => type_ref.borrow().name.span.clone(),
             Self::Map(type_ref) => type_ref.key_type.span(),
 
@@ -417,11 +417,15 @@ pub type ResolvedInternalFunctionDefinitionRef = Rc<ResolvedInternalFunctionDefi
 
 pub type ExternalFunctionId = u32;
 
-#[derive(Debug)]
 pub struct ResolvedExternalFunctionDefinition {
     pub name: ResolvedNode,
     pub signature: ResolvedFunctionSignature,
     pub id: ExternalFunctionId,
+}
+impl Debug for ResolvedExternalFunctionDefinition {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "external fn")
+    }
 }
 
 impl Spanned for ResolvedExternalFunctionDefinition {

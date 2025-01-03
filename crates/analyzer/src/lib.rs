@@ -1889,12 +1889,23 @@ impl<'a> Resolver<'a> {
                 types.float_type.clone(),
             )),
             ResolvedType::String(_) => ResolvedExpression::Literal(ResolvedLiteral::StringLiteral(
-                "".to_string(),
+                String::new(),
                 ResolvedNode::new_unknown(),
                 types.string_type.clone(),
             )),
             ResolvedType::Array(array_type_ref) => {
                 ResolvedExpression::Literal(ResolvedLiteral::Array(array_type_ref.clone(), vec![]))
+            }
+            ResolvedType::Tuple(tuple_type_ref) => {
+                let mut expressions = Vec::new();
+                for resolved_type in &tuple_type_ref.0 {
+                    let expr = Self::create_default_value_for_type(resolved_type, types)?;
+                    expressions.push(expr);
+                }
+                ResolvedExpression::Literal(ResolvedLiteral::TupleLiteral(
+                    tuple_type_ref.clone(),
+                    expressions,
+                ))
             }
             ResolvedType::Map(map_type_ref) => {
                 ResolvedExpression::Literal(ResolvedLiteral::Map(map_type_ref.clone(), vec![]))
@@ -1902,6 +1913,23 @@ impl<'a> Resolver<'a> {
             ResolvedType::Optional(_optional_type) => ResolvedExpression::Literal(
                 ResolvedLiteral::NoneLiteral(ResolvedNode::new_unknown()),
             ),
+            ResolvedType::Struct(struct_ref) => {
+                /*pub struct ResolvedMemberCall {
+                    pub function: ResolvedFunctionRef,
+                    pub arguments: Vec<ResolvedExpression>,
+                    pub self_expression: Box<ResolvedExpression>,
+                    pub self_is_mutable: bool,
+                }*/
+                let struct_ref_borrow = struct_ref.borrow();
+                let function = struct_ref_borrow
+                    .functions
+                    .get(&"default".to_string())
+                    .expect("should have default");
+                ResolvedExpression::StaticCall(ResolvedStaticCall {
+                    function: function.clone(),
+                    arguments: vec![],
+                })
+            }
             _ => return Err(ResolveError::NoDefaultImplemented(field_type.clone())),
         };
         Ok(expr)

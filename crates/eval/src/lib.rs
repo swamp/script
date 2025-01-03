@@ -34,14 +34,13 @@ type RawFunctionFn<C> = dyn FnMut(&[VariableValue], &mut C) -> Result<Value, Exe
 type FunctionFn<C> = Box<RawFunctionFn<C>>;
 
 pub struct EvalExternalFunction<C> {
-    pub name: String,
     pub func: FunctionFn<C>,
     pub id: ExternalFunctionId,
 }
 
 impl<C> Debug for EvalExternalFunction<C> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "external_fn {} {}", self.id, self.name)
+        write!(f, "external_fn {}", self.id)
     }
 }
 
@@ -93,7 +92,7 @@ struct FunctionScope {
 
 #[derive(Debug, Default)]
 pub struct ExternalFunctions<C> {
-    external_functions: HashMap<String, EvalExternalFunctionRef<C>>,
+    //    external_functions: HashMap<String, EvalExternalFunctionRef<C>>,
     external_functions_by_id: HashMap<ExternalFunctionId, EvalExternalFunctionRef<C>>,
 }
 
@@ -101,19 +100,17 @@ impl<C> ExternalFunctions<C> {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            external_functions: HashMap::new(),
+            //          external_functions: HashMap::new(),
             external_functions_by_id: HashMap::new(),
         }
     }
 
     pub fn register_external_function(
         &mut self,
-        name: &str,
         function_id: ExternalFunctionId,
         handler: impl FnMut(&[VariableValue], &mut C) -> Result<Value, ExecuteError> + 'static,
     ) -> Result<(), String> {
         let external_func = EvalExternalFunction {
-            name: name.to_string(),
             func: Box::new(handler),
             id: function_id,
         };
@@ -122,8 +119,8 @@ impl<C> ExternalFunctions<C> {
 
         self.external_functions_by_id
             .insert(function_id, external_func_ref.clone());
-        self.external_functions
-            .insert(name.to_string(), external_func_ref);
+        //    self.external_functions
+        //      .insert(name.to_string(), external_func_ref);
 
         Ok(())
     }
@@ -256,7 +253,7 @@ impl<'a, C> Interpreter<'a, C> {
                     .externals
                     .external_functions_by_id
                     .get(&external.id)
-                    .expect("external function missing")
+                    .expect("static call: external function missing")
                     .borrow_mut();
                 (func.func)(&evaluated_args, self.context)
             }
@@ -272,7 +269,7 @@ impl<'a, C> Interpreter<'a, C> {
             .externals
             .external_functions_by_id
             .get(&call.function_definition.id)
-            .expect("external function missing")
+            .expect("function call: external function missing")
             .borrow_mut();
         let v = (func.func)(&evaluated_args, self.context)?;
         Ok(v)
@@ -1073,7 +1070,7 @@ impl<'a, C> Interpreter<'a, C> {
                             .externals
                             .external_functions_by_id
                             .get(&external.id)
-                            .expect("external function missing")
+                            .expect("call_generic: external function missing")
                             .borrow_mut();
                         (func.func)(&evaluated_args, self.context)
                     }
@@ -1129,7 +1126,7 @@ impl<'a, C> Interpreter<'a, C> {
                             .externals
                             .external_functions_by_id
                             .get(&external_func.id)
-                            .expect("external function missing")
+                            .expect("member call: external function missing")
                             .borrow_mut();
                         (func.func)(&member_call_arguments, self.context)?
                     }

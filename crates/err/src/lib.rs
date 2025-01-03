@@ -10,7 +10,7 @@ use std::io;
 use std::io::{stderr, Write};
 use swamp_script_analyzer::ResolveError;
 use swamp_script_parser::SpecificError;
-use swamp_script_semantic::Span;
+use swamp_script_semantic::{Span, Spanned};
 use swamp_script_source_map::{FileId, SourceMap};
 
 pub struct SourceLinesWrap<'a> {
@@ -332,6 +332,8 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
         ResolveError::UnknownFunction(node) => {
             Report::build(Error, 1026, "Unknown function", &node.span)
         }
-        ResolveError::NoDefaultImplemented(_) => todo!(),
+        ResolveError::NoDefaultImplemented(resolved_type) => {
+            Report::build(Error, 104, "No default() function", &resolved_type.span())
+        },
     }
 }
