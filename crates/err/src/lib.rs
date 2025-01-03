@@ -335,5 +335,6 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
         ResolveError::NoDefaultImplemented(resolved_type) => {
             Report::build(Error, 104, "No default() function", &resolved_type.span())
         },
+        ResolveError::NoDefaultImplementedForStruct(_) => todo!(),
     }
 }

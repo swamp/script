@@ -313,6 +313,7 @@ pub enum ResolveError {
     WasNotFieldMutRef,
     UnknownFunction(ResolvedNode),
     NoDefaultImplemented(ResolvedType),
+    NoDefaultImplementedForStruct(ResolvedStructTypeRef),
 }
 
 impl From<SemanticError> for ResolveError {
@@ -547,8 +548,8 @@ impl<'a> Resolver<'a> {
             Type::Bool(_) => ResolvedType::Bool(self.shared.types.bool_type.clone()),
             Type::Unit(_) => ResolvedType::Unit(self.shared.types.unit_type.clone()),
             Type::Struct(ast_struct) => {
-                let (display_type, _struct_ref) = self.get_struct_types(ast_struct)?;
-                display_type
+                let struct_ref = self.get_struct_type(ast_struct)?;
+                ResolvedType::Struct(struct_ref.clone())
             }
             Type::Array(ast_type) => ResolvedType::Array(self.resolve_array_type(ast_type)?),
             Type::Map(key_type, value_type) => {
@@ -1428,11 +1429,7 @@ impl<'a> Resolver<'a> {
 
             // Creation
             Expression::StructInstantiation(struct_identifier, fields, has_rest) => {
-                ResolvedExpression::StructInstantiation(self.resolve_struct_instantiation(
-                    struct_identifier,
-                    fields,
-                    *has_rest,
-                )?)
+                self.resolve_struct_instantiation(struct_identifier, fields, *has_rest)?
             }
             Expression::ExclusiveRange(min_value, max_value) => {
                 let min_expression = self.resolve_expression(min_value)?;
@@ -1762,27 +1759,27 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn get_struct_types(
+    fn get_struct_type(
         &self,
         qualified_type_identifier: &QualifiedTypeIdentifier,
-    ) -> Result<(ResolvedType, ResolvedStructTypeRef), ResolveError> {
+    ) -> Result<ResolvedStructTypeRef, ResolveError> {
         //   let namespace = self.get_namespace(qualified_type_identifier)?;
 
         let (path, name) = self.get_path(qualified_type_identifier);
-        // If direct struct, return the struct type for both
+
         let struct_ref = self.shared.lookup.get_struct(&path, &name).ok_or_else(|| {
             let type_reference_node = self.to_node(&qualified_type_identifier.name.0);
             ResolveError::UnknownStructTypeReference(type_reference_node)
         })?;
-        Ok((ResolvedType::Struct(struct_ref.clone()), struct_ref))
+
+        Ok(struct_ref)
     }
 
-    fn resolve_anon_struct_instantiation(
+    fn resolve_anon_struct_instantiation_helper(
         &mut self,
         struct_to_instantiate: &ResolvedAnonymousStructType,
         ast_fields: &Vec<FieldExpression>,
-        allow_rest: bool,
-    ) -> Result<Vec<(usize, ResolvedExpression)>, ResolveError> {
+    ) -> Result<(Vec<(usize, ResolvedExpression)>, HashSet<String>), ResolveError> {
         let mut missing_fields: HashSet<String> = struct_to_instantiate
             .defined_fields
             .keys()
@@ -1839,6 +1836,17 @@ impl<'a> Resolver<'a> {
                 .push((field_index_in_definition, upgraded_resolved_expression));
         }
 
+        Ok((source_order_expressions, missing_fields))
+    }
+
+    fn resolve_anon_struct_instantiation(
+        &mut self,
+        struct_to_instantiate: &ResolvedAnonymousStructType,
+        ast_fields: &Vec<FieldExpression>,
+        allow_rest: bool,
+    ) -> Result<Vec<(usize, ResolvedExpression)>, ResolveError> {
+        let (mut source_order_expressions, missing_fields) =
+            self.resolve_anon_struct_instantiation_helper(struct_to_instantiate, ast_fields)?;
         if allow_rest {
             // Call `default()` for the missing fields
             for missing_field_name in missing_fields {
@@ -1914,21 +1922,17 @@ impl<'a> Resolver<'a> {
                 ResolvedLiteral::NoneLiteral(ResolvedNode::new_unknown()),
             ),
             ResolvedType::Struct(struct_ref) => {
-                /*pub struct ResolvedMemberCall {
-                    pub function: ResolvedFunctionRef,
-                    pub arguments: Vec<ResolvedExpression>,
-                    pub self_expression: Box<ResolvedExpression>,
-                    pub self_is_mutable: bool,
-                }*/
                 let struct_ref_borrow = struct_ref.borrow();
-                let function = struct_ref_borrow
-                    .functions
-                    .get(&"default".to_string())
-                    .expect("should have default");
-                ResolvedExpression::StaticCall(ResolvedStaticCall {
-                    function: function.clone(),
-                    arguments: vec![],
-                })
+                if let Some(function) = struct_ref_borrow.functions.get(&"default".to_string()) {
+                    ResolvedExpression::StaticCall(ResolvedStaticCall {
+                        function: function.clone(),
+                        arguments: vec![],
+                    })
+                } else {
+                    return Err(ResolveError::NoDefaultImplementedForStruct(
+                        struct_ref.clone(),
+                    ));
+                }
             }
             _ => return Err(ResolveError::NoDefaultImplemented(field_type.clone())),
         };
@@ -1940,22 +1944,104 @@ impl<'a> Resolver<'a> {
         qualified_type_identifier: &QualifiedTypeIdentifier,
         ast_fields: &Vec<FieldExpression>,
         has_rest: bool,
-    ) -> Result<ResolvedStructInstantiation, ResolveError> {
-        let (display_type_ref, struct_to_instantiate) =
-            self.get_struct_types(qualified_type_identifier)?;
+    ) -> Result<ResolvedExpression, ResolveError> {
+        let struct_to_instantiate = self.get_struct_type(qualified_type_identifier)?;
 
-        let source_order_expressions = self.resolve_anon_struct_instantiation(
-            &struct_to_instantiate.borrow().anon_struct_type,
-            ast_fields,
-            has_rest,
-        )?;
+        let (mut source_order_expressions, missing_fields) = self
+            .resolve_anon_struct_instantiation_helper(
+                &struct_to_instantiate.borrow().anon_struct_type,
+                ast_fields,
+            )?;
 
-        Ok(ResolvedStructInstantiation {
-            source_order_expressions,
-            struct_type_ref: struct_to_instantiate,
-            display_type_ref,
-            has_rest,
-        })
+        if has_rest {
+            if let Some(function) = struct_to_instantiate
+                .clone()
+                .borrow()
+                .functions
+                .get(&"default".to_string())
+            {
+                let mut expressions = Vec::new();
+
+                self.push_block_scope("struct_instantiation");
+
+                let temp_var = self.create_local_variable_generated(
+                    "__generated",
+                    true,
+                    &ResolvedType::Struct(struct_to_instantiate.clone()),
+                )?;
+
+                // temp_var = StructType::default()
+                expressions.push(ResolvedExpression::InitializeVariable(
+                    ResolvedVariableAssignment {
+                        variable_refs: vec![temp_var.clone()],
+                        expression: Box::new(ResolvedExpression::StaticCall(ResolvedStaticCall {
+                            function: function.clone(),
+                            arguments: vec![],
+                        })),
+                    },
+                ));
+
+                // overwrite fields with assignments
+                for (field_target_index, field_expressions) in source_order_expressions {
+                    info!(
+                        field_target_index,
+                        scope = temp_var.scope_index,
+                        variable_index = temp_var.variable_index,
+                        "overwriting index"
+                    );
+                    let overwrite_expression = ResolvedExpression::StructFieldAssignment(
+                        Box::new(ResolvedExpression::VariableAccess(temp_var.clone())),
+                        vec![ResolvedAccess::FieldIndex(
+                            ResolvedNode::default(),
+                            field_target_index,
+                        )],
+                        Box::new(field_expressions),
+                    );
+                    expressions.push(overwrite_expression);
+                }
+
+                expressions.push(ResolvedExpression::VariableAccess(temp_var)); // make sure the block returns the overwritten temp_var
+
+                self.pop_block_scope("struct instantiation");
+                Ok(ResolvedExpression::Block(expressions))
+            } else {
+                {
+                    let borrowed_anon_type = &struct_to_instantiate.borrow().anon_struct_type;
+
+                    for missing_field_name in missing_fields {
+                        let field = borrowed_anon_type
+                            .defined_fields
+                            .get(&missing_field_name)
+                            .expect("should have been verified by helper function");
+                        let field_index = borrowed_anon_type
+                            .defined_fields
+                            .get_index(&missing_field_name)
+                            .expect("should have been verified earlier");
+
+                        let expression = Self::create_default_value_for_type(
+                            &field.field_type,
+                            self.shared.types,
+                        )?; // expression is usually a literal
+
+                        source_order_expressions.push((field_index, expression))
+                    }
+                }
+
+                Ok(ResolvedExpression::StructInstantiation(
+                    ResolvedStructInstantiation {
+                        source_order_expressions,
+                        struct_type_ref: struct_to_instantiate,
+                    },
+                ))
+            }
+        } else {
+            Ok(ResolvedExpression::StructInstantiation(
+                ResolvedStructInstantiation {
+                    source_order_expressions,
+                    struct_type_ref: struct_to_instantiate,
+                },
+            ))
+        }
     }
 
     fn resolve_bool_expression(
@@ -3020,6 +3106,54 @@ impl<'a> Resolver<'a> {
 
         variables
             .insert(variable_str, variable_ref.clone())
+            .expect("should have checked earlier for variable");
+
+        Ok(variable_ref)
+    }
+
+    fn create_local_variable_generated(
+        &mut self,
+        variable_str: &str,
+        is_mutable: bool,
+        variable_type_ref: &ResolvedType,
+    ) -> Result<ResolvedVariableRef, ResolveError> {
+        /*
+
+
+        if let Some(_existing_variable) = self.try_find_local_variable(variable) {
+            return Err(ResolveError::OverwriteVariableNotAllowedHere(
+                variable.clone(),
+            ));
+        }
+        let variable_str = self.get_text_resolved(variable).to_string();
+
+         */
+
+        let scope_index = self.scope.block_scope_stack.len() - 1;
+
+        let variables = &mut self
+            .scope
+            .block_scope_stack
+            .last_mut()
+            .expect("block scope should have at least one scope")
+            .variables;
+
+        let resolved_variable = ResolvedVariable {
+            name: Default::default(),
+            resolved_type: variable_type_ref.clone(),
+            mutable_node: if is_mutable {
+                Some(ResolvedNode::default())
+            } else {
+                None
+            },
+            scope_index,
+            variable_index: variables.len(),
+        };
+
+        let variable_ref = Rc::new(resolved_variable);
+
+        variables
+            .insert(variable_str.to_string(), variable_ref.clone())
             .expect("should have checked earlier for variable");
 
         Ok(variable_ref)

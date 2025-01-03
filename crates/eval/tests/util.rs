@@ -140,7 +140,6 @@ fn register_print(
 ) {
     external_functions
         .register_external_function(
-            "print",
             external_id,
             move |args: &[VariableValue], context: &mut TestContext| {
                 if let Some(value) = args.first() {
