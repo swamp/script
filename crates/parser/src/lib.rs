@@ -2034,7 +2034,7 @@ impl AstParser {
                 // Handle both block and direct expression cases
                 let expr = match Self::next_pair(&mut arm_inner)? {
                     block if block.as_rule() == Rule::block => {
-                        let (expression, constants) = self.parse_block(&block)?;
+                        let (expression, _constants) = self.parse_block(&block)?; // TODO: Handle constants in arm-expressions
                         expression
                     }
                     expr => self.parse_expression(&expr)?,

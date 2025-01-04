@@ -102,11 +102,10 @@ impl ResolvedModuleNamespace {
         &mut self,
         name: &str,
         fields: &[(&str, ResolvedType)],
-        type_number: TypeNumber,
     ) -> Result<ResolvedStructTypeRef, SemanticError> {
         let mut resolved_fields = SeqMap::new();
 
-        for (index, (field_name, field_type)) in fields.iter().enumerate() {
+        for (_index, (field_name, field_type)) in fields.iter().enumerate() {
             let af = ResolvedAnonymousStructFieldType {
                 identifier: None,
                 field_type: field_type.clone(),

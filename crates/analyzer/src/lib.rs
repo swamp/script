@@ -768,7 +768,7 @@ impl<'a> Resolver<'a> {
                 EnumVariantType::Struct(_variant_name_node, ast_struct_fields) => {
                     let mut fields = SeqMap::new();
 
-                    for (index, field_with_type) in ast_struct_fields.fields.iter().enumerate() {
+                    for (_index, field_with_type) in ast_struct_fields.fields.iter().enumerate() {
                         let resolved_type = self.resolve_type(&field_with_type.field_type)?;
                         let field_name_str =
                             self.get_text(&field_with_type.field_name.0).to_string();
