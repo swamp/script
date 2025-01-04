@@ -14,11 +14,13 @@ use swamp_script_core::value::ValueRef;
 use swamp_script_core::value::{
     convert_vec_to_rc_refcell, format_value, to_rust_value, SourceMapLookup, Value, ValueError,
 };
+use swamp_script_semantic::modules::ResolvedModules;
+use swamp_script_semantic::ns::ResolvedModuleNamespace;
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
-    ResolvedAccess, ResolvedBinaryOperatorKind, ResolvedCompoundOperatorKind, ResolvedForPattern,
-    ResolvedFunction, ResolvedPatternElement, ResolvedPostfixOperatorKind, ResolvedStaticCall,
-    ResolvedUnaryOperatorKind,
+    ConstantId, ResolvedAccess, ResolvedBinaryOperatorKind, ResolvedCompoundOperatorKind,
+    ResolvedForPattern, ResolvedFunction, ResolvedPatternElement, ResolvedPostfixOperatorKind,
+    ResolvedStaticCall, ResolvedUnaryOperatorKind,
 };
 use tracing::{error, trace, warn};
 
@@ -96,6 +98,28 @@ pub struct ExternalFunctions<C> {
     external_functions_by_id: HashMap<ExternalFunctionId, EvalExternalFunctionRef<C>>,
 }
 
+pub struct Constants {
+    pub values: Vec<Value>,
+}
+
+impl Constants {
+    #[must_use]
+    pub fn lookup_constant_value(&self, id: ConstantId) -> &Value {
+        &self.values[id as usize]
+    }
+
+    pub fn set(&mut self, id: ConstantId, value: Value) {
+        self.values[id as usize] = value;
+    }
+
+    pub fn new() -> Self {
+        let arr: [Value; 1024] = core::array::from_fn(|_| Value::Unit);
+        Self {
+            values: arr.to_vec(),
+        }
+    }
+}
+
 impl<C> ExternalFunctions<C> {
     #[must_use]
     pub fn new() -> Self {
@@ -128,22 +152,39 @@ impl<C> ExternalFunctions<C> {
 
 pub fn eval_module<C>(
     externals: &ExternalFunctions<C>,
+    constants: &Constants,
     root_expression: &ResolvedExpression,
     context: &mut C,
 ) -> Result<Value, ExecuteError> {
-    let mut interpreter = Interpreter::<C>::new(externals, context);
+    let mut interpreter = Interpreter::<C>::new(externals, constants, context);
     let value = interpreter.evaluate_expression(root_expression)?;
     Ok(value)
 }
 
+pub fn eval_constants<C>(
+    externals: &ExternalFunctions<C>,
+    constants: &mut Constants,
+    modules: &ResolvedModules,
+    context: &mut C,
+) -> Result<(), ExecuteError> {
+    for constant in &modules.constants {
+        let mut interpreter = Interpreter::<C>::new(externals, constants, context);
+        let value = interpreter.evaluate_expression(&constant.expr)?;
+        constants.set(constant.id, value);
+    }
+
+    Ok(())
+}
+
 pub fn util_execute_function<C>(
     externals: &ExternalFunctions<C>,
+    constants: &Constants,
     func: &ResolvedInternalFunctionDefinitionRef,
     arguments: &[VariableValue],
     context: &mut C,
     debug_source_map: Option<&dyn SourceMapLookup>,
 ) -> Result<Value, ExecuteError> {
-    let mut interpreter = Interpreter::<C>::new(externals, context);
+    let mut interpreter = Interpreter::<C>::new(externals, constants, context);
     interpreter.debug_source_map = debug_source_map;
     interpreter.bind_parameters(&func.signature.parameters, &arguments)?;
     let value = interpreter.evaluate_expression(&func.body)?;
@@ -155,19 +196,25 @@ pub fn util_execute_function<C>(
 pub struct Interpreter<'a, C> {
     function_scope_stack: Vec<FunctionScope>,
     current_block_scopes: BlockScopes,
+    constants: &'a Constants,
     externals: &'a ExternalFunctions<C>,
     context: &'a mut C,
     debug_source_map: Option<&'a dyn SourceMapLookup>,
 }
 
 impl<'a, C> Interpreter<'a, C> {
-    pub fn new(externals: &'a ExternalFunctions<C>, context: &'a mut C) -> Self {
+    pub fn new(
+        externals: &'a ExternalFunctions<C>,
+        constants: &'a Constants,
+        context: &'a mut C,
+    ) -> Self {
         Self {
             function_scope_stack: vec![FunctionScope::default()],
             current_block_scopes: BlockScopes::default(),
             externals,
             context,
             debug_source_map: None,
+            constants,
         }
     }
 
@@ -961,6 +1008,10 @@ impl<'a, C> Interpreter<'a, C> {
             // ------------- LOOKUP ---------------------
             ResolvedExpression::VariableAccess(var) => {
                 self.current_block_scopes.lookup_var_value(var)
+            }
+
+            ResolvedExpression::ConstantAccess(constant) => {
+                self.constants.lookup_constant_value(constant.id).clone()
             }
 
             ResolvedExpression::MapIndexAccess(ref map_lookup) => {

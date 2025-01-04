@@ -9,22 +9,22 @@ use std::rc::Rc;
 use swamp_script_semantic::modules::ResolvedModules;
 use swamp_script_semantic::ns::{ResolvedModuleNamespace, ResolvedModuleNamespaceRef};
 use swamp_script_semantic::{
-    ResolvedEnumType, ResolvedEnumTypeRef, ResolvedEnumVariantType, ResolvedEnumVariantTypeRef,
-    ResolvedExternalFunctionDefinitionRef, ResolvedInternalFunctionDefinition,
-    ResolvedInternalFunctionDefinitionRef, ResolvedRustTypeRef, ResolvedStructType,
-    ResolvedStructTypeRef, SemanticError,
+    ResolvedConstant, ResolvedConstantRef, ResolvedEnumType, ResolvedEnumTypeRef,
+    ResolvedEnumVariantType, ResolvedEnumVariantTypeRef, ResolvedExternalFunctionDefinitionRef,
+    ResolvedInternalFunctionDefinition, ResolvedInternalFunctionDefinitionRef, ResolvedRustTypeRef,
+    ResolvedStructType, ResolvedStructTypeRef, SemanticError,
 };
 
 #[derive()]
 pub struct NameLookup<'a> {
     namespace: Rc<RefCell<ResolvedModuleNamespace>>,
-    modules: &'a ResolvedModules,
+    modules: &'a mut ResolvedModules,
 }
 
 impl<'a> NameLookup<'a> {
     pub fn new(
         namespace: Rc<RefCell<ResolvedModuleNamespace>>,
-        modules: &'a ResolvedModules,
+        modules: &'a mut ResolvedModules,
     ) -> Self {
         Self { namespace, modules }
     }
@@ -85,6 +85,14 @@ impl<'a> NameLookup<'a> {
         )
     }
 
+    pub fn get_constant(&self, path: &Vec<String>, name: &str) -> Option<ResolvedConstantRef> {
+        let namespace = self.get_namespace(path);
+        namespace.map_or_else(
+            || None,
+            |found_ns| found_ns.borrow().get_constant(name).cloned(),
+        )
+    }
+
     pub fn get_enum_variant_type(
         &self,
         path: &Vec<String>,
@@ -113,6 +121,14 @@ impl<'a> NameLookup<'a> {
 
     pub fn get_path(&self) -> Vec<String> {
         self.namespace.borrow().path.clone()
+    }
+
+    pub fn add_constant(
+        &mut self,
+        constant: ResolvedConstant,
+    ) -> Result<ResolvedConstantRef, ResolveError> {
+        let constant_ref = self.modules.add_constant(constant);
+        Ok(self.namespace.borrow_mut().add_constant_ref(constant_ref)?)
     }
 
     pub fn add_struct(

@@ -9,7 +9,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use swamp_script_core::prelude::Value;
 use swamp_script_core::value::ValueRef;
-use swamp_script_semantic::ResolvedVariableRef;
+use swamp_script_semantic::{ResolvedConstantRef, ResolvedVariableRef};
 
 #[derive(Debug, Clone)]
 pub struct BlockScope {
@@ -45,6 +45,8 @@ impl BlockScope {
 pub struct BlockScopes {
     current_block_scopes: Vec<BlockScope>,
 }
+
+impl BlockScopes {}
 
 impl Default for BlockScopes {
     fn default() -> Self {

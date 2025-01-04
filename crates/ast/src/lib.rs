@@ -113,6 +113,16 @@ impl LocalIdentifier {
     }
 }
 
+#[derive(PartialEq, Eq, Hash, Debug)]
+pub struct ConstantIdentifier(pub Node);
+
+impl ConstantIdentifier {
+    #[must_use]
+    pub fn new(node: Node) -> Self {
+        Self(node)
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct MemberFunctionIdentifier(pub Node);
 
@@ -163,6 +173,12 @@ impl StructType {
 }
 
 #[derive(Debug)]
+pub struct ConstantInfo {
+    pub constant_identifier: ConstantIdentifier,
+    pub expression: Box<Expression>,
+}
+
+#[derive(Debug)]
 pub enum Definition {
     StructDef(StructType),
     EnumDef(Node, Vec<EnumVariantType>),
@@ -172,6 +188,7 @@ pub enum Definition {
 
     // Other
     Comment(Node),
+    Constant(ConstantInfo),
 }
 
 #[derive(Debug)]
@@ -239,6 +256,7 @@ pub struct FunctionDeclaration {
 pub struct FunctionWithBody {
     pub declaration: FunctionDeclaration,
     pub body: Expression,
+    pub constants: Vec<ConstantInfo>,
 }
 
 #[derive(Debug)]
@@ -317,6 +335,7 @@ pub enum Expression {
     // Access
     FieldAccess(Box<Expression>, Node),
     VariableAccess(Variable),
+    ConstantAccess(ConstantIdentifier),
     FunctionAccess(QualifiedIdentifier),
 
     MutRef(LocationExpression),

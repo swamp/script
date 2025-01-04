@@ -690,3 +690,50 @@ Use(ResolvedUse { path: [<13:8>, <22:5>, <28:4>], items: [] })
 ",
     );
 }
+
+#[test_log::test]
+fn constant() {
+    check(
+        r"
+        const HELLO=3
+    ",
+        r"
+Constant(<15:5>, Literal(IntLiteral(3, <21:1>, ResolvedIntType)))
+",
+    );
+}
+
+#[test_log::test]
+fn constant_in_function() {
+    check(
+        r"
+        fn some_fn() {
+            const HELLO=3
+            3
+        }
+    ",
+        r#"
+
+FunctionDef(Internal(ResolvedInternalFunctionDefinition { body: Block([Literal(IntLiteral(3, <62:1>, ResolvedIntType))]), name: ResolvedLocalIdentifier(<12:7>), signature: ResolvedFunctionSignature { first_parameter_is_self: false, parameters: [], return_type: Unit(ResolvedUnitType) }, constants: [ResolvedConstant { name: <42:5>, assigned_name: "HELLO", id: 1, expr: Literal(IntLiteral(3, <48:1>, ResolvedIntType)) }] }))
+
+"#,
+    );
+}
+
+#[test_log::test]
+fn constant_access_in_function() {
+    check(
+        r"
+        fn some_fn() -> Int {
+            const HELLO=3
+            HELLO
+            HELLO
+        }
+    ",
+        r#"
+
+FunctionDef(Internal(ResolvedInternalFunctionDefinition { body: Block([Literal(IntLiteral(3, <62:1>, ResolvedIntType))]), name: ResolvedLocalIdentifier(<12:7>), signature: ResolvedFunctionSignature { first_parameter_is_self: false, parameters: [], return_type: Unit(ResolvedUnitType) }, constants: [ResolvedConstant { name: <42:5>, assigned_name: "HELLO", id: 1, expr: Literal(IntLiteral(3, <48:1>, ResolvedIntType)) }] }))
+
+"#,
+    );
+}

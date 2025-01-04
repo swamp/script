@@ -2,13 +2,13 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
+
 use std::path::Path;
-use std::rc::Rc;
 use swamp_script_analyzer::lookup::NameLookup;
 use swamp_script_analyzer::{ResolveError, Resolver};
 use swamp_script_core::prelude::Value;
 use swamp_script_eval::prelude::{ExecuteError, VariableValue};
-use swamp_script_eval::{eval_module, ExternalFunctions};
+use swamp_script_eval::{eval_constants, eval_module, Constants, ExternalFunctions};
 use swamp_script_parser::AstParser;
 use swamp_script_semantic::modules::ResolvedModules;
 use swamp_script_semantic::prelude::ResolvedModuleNamespaceRef;
@@ -42,7 +42,7 @@ impl From<ExecuteError> for EvalTestError {
 fn internal_compile(
     script: &str,
     target_namespace: &ResolvedModuleNamespaceRef,
-    modules: &ResolvedModules,
+    mut modules: &mut ResolvedModules,
 ) -> Result<(Option<ResolvedExpression>, SourceMap), ResolveError> {
     let parser = AstParser {};
 
@@ -59,7 +59,7 @@ fn internal_compile(
     // let resolved_path_str = vec!["test".to_string()];
     // let own_module = modules.add_empty_module(&resolved_path_str);
 
-    let mut name_lookup = NameLookup::new(target_namespace.clone(), &modules);
+    let mut name_lookup = NameLookup::new(target_namespace.clone(), &mut modules);
 
     let mut resolver = Resolver::new(&types, &mut state, &mut name_lookup, &source_map, file_id);
 
@@ -108,7 +108,7 @@ fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError>
         .expect("TODO: panic message");
 
     let (maybe_expression, source_map) =
-        internal_compile(script, &main_module.borrow_mut().namespace, &modules)?;
+        internal_compile(script, &main_module.borrow_mut().namespace, &mut modules)?;
     main_module.borrow_mut().expression = maybe_expression;
 
     // Run
@@ -120,8 +120,13 @@ fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError>
         output: vec![],
     };
 
+    let mut constants = Constants::new();
+
+    eval_constants(&externals, &mut constants, &modules, &mut context)?;
+
     let value = eval_module(
         &externals,
+        &constants,
         main_module.borrow().expression.as_ref().unwrap(),
         &mut context,
     )?;

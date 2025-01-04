@@ -16,6 +16,7 @@ definition = {
     | enum_def
     | function_def
     | impl_def
+    | const_def
     | trait_def
     )
 }
@@ -85,7 +86,7 @@ external_function = {
 }
 
 normal_function = {
-    function_signature ~ expression
+    function_signature ~ block
 }
 
 
@@ -145,6 +146,10 @@ break_expr = { "break" }
 
 
 expression = { assignment_expression | logical }
+
+const_def = {
+    "const" ~ constant_identifier ~ "=" ~ expression
+}
 
 assignment_expression = {
     multi_var_assignment
@@ -259,6 +264,7 @@ constant_identifier = @{
 
 // EXPRESSIONS ------------------------------------------------------------
 variable = { identifier }
+constant = { constant_identifier }
 
 argument_list = { expression ~ ("," ~ " "* ~ expression)* }  // PEST BUG: need explicit spaces after comma
 parenthesized = { "(" ~ expression ~ ")" }
@@ -298,6 +304,7 @@ primary = {
     | array_literal
     | map_literal
     | variable
+    | constant
 }
 
 
@@ -306,7 +313,9 @@ identifier_pattern = { identifier }
 
 if_expr = { "if" ~ expression ~ expression ~ ("else" ~ (if_expr | expression))? }
 
-block = { "{" ~ expression* ~ "}" }
+expression_in_block = { const_def | expression }
+
+block = { "{" ~ expression_in_block* ~ "}" }
 
 match_expr = { "match" ~ expression ~ "{" ~ match_arms ~ "}" }
 

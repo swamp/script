@@ -4,8 +4,6 @@
  */
 use crate::util::{check, check_fail, check_value, eval, eval_string};
 use fixed32::Fp;
-use std::cell::RefCell;
-use std::rc::Rc;
 use swamp_script_core::prelude::Value;
 
 mod util;
@@ -1415,4 +1413,36 @@ fn struct_instantiation_missing_fail() {
     ",
         r#"ResolveError(MissingFieldInStructInstantiation("a", ResolvedAnonymousStructType { defined_fields: SeqMap("a": ResolvedAnonymousStructFieldType { identifier: ResolvedFieldName(<27:1>), field_type: Int(ResolvedIntType), index: 0 }, "b": ResolvedAnonymousStructFieldType { identifier: ResolvedFieldName(<43:1>), field_type: Float(ResolvedFloatType), index: 0 }) }))"#,
     );
+}
+
+#[test_log::test]
+fn constants_in_function() {
+    let result = eval(
+        "
+    fn hello() -> Int {
+        const SOMETHING = 42
+
+        SOMETHING
+    }
+    hello()
+    ",
+    );
+
+    assert_eq!(result, Value::Int(42));
+}
+
+#[test_log::test]
+fn constants_outside_function() {
+    let result = eval(
+        "
+    const SOMETHING_HERE = 42
+
+    fn hello() -> Int {
+        SOMETHING_HERE
+    }
+    hello()
+    ",
+    );
+
+    assert_eq!(result, Value::Int(42));
 }

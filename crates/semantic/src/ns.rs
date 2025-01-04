@@ -3,11 +3,12 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use crate::{
-    ResolvedAnonymousStructFieldType, ResolvedAnonymousStructType, ResolvedEnumTypeRef,
-    ResolvedEnumVariantType, ResolvedEnumVariantTypeRef, ResolvedExternalFunctionDefinition,
-    ResolvedExternalFunctionDefinitionRef, ResolvedInternalFunctionDefinition,
-    ResolvedInternalFunctionDefinitionRef, ResolvedNode, ResolvedRustType, ResolvedRustTypeRef,
-    ResolvedStructType, ResolvedStructTypeRef, ResolvedType, SemanticError, TypeNumber,
+    ConstantId, ResolvedAnonymousStructFieldType, ResolvedAnonymousStructType, ResolvedConstant,
+    ResolvedConstantRef, ResolvedEnumTypeRef, ResolvedEnumVariantType, ResolvedEnumVariantTypeRef,
+    ResolvedExpression, ResolvedExternalFunctionDefinition, ResolvedExternalFunctionDefinitionRef,
+    ResolvedInternalFunctionDefinition, ResolvedInternalFunctionDefinitionRef, ResolvedNode,
+    ResolvedRustType, ResolvedRustTypeRef, ResolvedStructType, ResolvedStructTypeRef, ResolvedType,
+    SemanticError, TypeNumber,
 };
 use seq_map::SeqMap;
 use std::cell::RefCell;
@@ -21,6 +22,8 @@ pub struct ResolvedModulePathStr(pub Vec<String>);
 pub struct ResolvedModuleNamespace {
     #[allow(unused)]
     structs: SeqMap<String, ResolvedStructTypeRef>,
+
+    constants: SeqMap<String, ResolvedConstantRef>,
 
     #[allow(unused)]
     build_in_rust_types: SeqMap<String, ResolvedRustTypeRef>,
@@ -53,8 +56,22 @@ impl ResolvedModuleNamespace {
             enum_variant_types: Default::default(),
             internal_functions: Default::default(),
             external_function_declarations: Default::default(),
+            constants: Default::default(),
             path: path.to_vec(),
         }
+    }
+
+    pub fn add_constant_ref(
+        &mut self,
+        constant_ref: ResolvedConstantRef,
+    ) -> Result<ResolvedConstantRef, SemanticError> {
+        let name = constant_ref.assigned_name.clone();
+
+        self.constants
+            .insert(name.to_string(), constant_ref.clone())
+            .map_err(|_| SemanticError::DuplicateConstName(name.to_string()))?;
+
+        Ok(constant_ref)
     }
 
     pub fn add_struct(
@@ -190,6 +207,10 @@ impl ResolvedModuleNamespace {
 
     pub fn get_enum(&self, name: &str) -> Option<&ResolvedEnumTypeRef> {
         self.enum_types.get(&name.to_string())
+    }
+
+    pub fn get_constant(&self, name: &str) -> Option<&ResolvedConstantRef> {
+        self.constants.get(&name.to_string())
     }
 
     pub fn get_rust_type(&self, name: &str) -> Option<&ResolvedRustTypeRef> {

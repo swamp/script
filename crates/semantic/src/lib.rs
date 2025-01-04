@@ -309,6 +309,7 @@ pub enum SemanticError {
     DuplicateFieldName(String),
     DuplicateExternalFunction(String),
     DuplicateRustType(String),
+    DuplicateConstName(String),
 }
 
 impl ResolvedType {
@@ -394,11 +395,12 @@ impl ResolvedNode {
 #[derive(Debug)]
 pub struct ResolvedLocalIdentifier(pub ResolvedNode);
 
-#[derive()]
+#[derive(Debug)]
 pub struct ResolvedInternalFunctionDefinition {
     pub body: ResolvedExpression,
     pub name: ResolvedLocalIdentifier,
     pub signature: ResolvedFunctionSignature,
+    pub constants: Vec<ResolvedConstantRef>,
 }
 
 impl Spanned for ResolvedInternalFunctionDefinition {
@@ -407,15 +409,11 @@ impl Spanned for ResolvedInternalFunctionDefinition {
     }
 }
 
-impl Debug for ResolvedInternalFunctionDefinition {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "InternalFuncDef")
-    }
-}
-
 pub type ResolvedInternalFunctionDefinitionRef = Rc<ResolvedInternalFunctionDefinition>;
 
 pub type ExternalFunctionId = u32;
+
+pub type ConstantId = u32;
 
 pub struct ResolvedExternalFunctionDefinition {
     pub name: ResolvedNode,
@@ -903,6 +901,7 @@ pub fn create_rust_type(name: &str, type_number: TypeNumber) -> ResolvedRustType
 pub enum ResolvedExpression {
     // Access Lookup values
     VariableAccess(ResolvedVariableRef),
+    ConstantAccess(ResolvedConstantRef),
     FieldAccess(
         Box<ResolvedExpression>,
         ResolvedStructTypeFieldRef,
@@ -1055,6 +1054,7 @@ impl Spanned for ResolvedExpression {
     fn span(&self) -> Span {
         match self {
             Self::VariableAccess(var_ref) => var_ref.span(),
+            Self::ConstantAccess(constant_ref) => constant_ref.span(),
             Self::FieldAccess(base, field, accesses) => {
                 let mut span = base.span().merge(&field.span());
                 for access in accesses {
@@ -1295,6 +1295,22 @@ pub struct ResolvedIdentifierName(pub ResolvedNode);
 pub struct ResolvedLocalTypeIdentifier(pub ResolvedNode);
 
 pub type ResolvedModulePathRef = Rc<ResolvedModulePath>;
+
+#[derive(Debug)]
+pub struct ResolvedConstant {
+    pub name: ResolvedNode,
+    pub assigned_name: String,
+    pub id: ConstantId,
+    pub expr: ResolvedExpression,
+    pub resolved_type: ResolvedType,
+}
+pub type ResolvedConstantRef = Rc<ResolvedConstant>;
+
+impl Spanned for ResolvedConstant {
+    fn span(&self) -> Span {
+        self.name.span.clone()
+    }
+}
 
 #[derive(Debug)]
 pub struct ResolvedStructType {
@@ -1592,6 +1608,7 @@ pub enum ResolvedDefinition {
     Alias(ResolvedType),
     Comment(ResolvedNode),
     Use(ResolvedUse),
+    Constant(ResolvedNode, ResolvedConstantRef),
 }
 
 // Immutable part

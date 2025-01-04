@@ -2058,9 +2058,9 @@ fn use_statement() {
         r"
 use gameplay
 ",
-        r"
-Use(Use { module_path: ModulePath([<5:8>]), items: Module })
-        ",
+        r#"
+Use(Use { module_path: ModulePath([<5:8>]), assigned_path: ["gameplay"], items: [] })
+        "#,
     );
 }
 
@@ -2194,5 +2194,48 @@ SomeStruct {
 StructInstantiation(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<1:10>), module_path: None, generic_params: [] }, [FieldExpression { field_name: FieldName(<18:1>), expression: Literal(Int(<21:1>)) }, FieldExpression { field_name: FieldName(<28:1>), expression: Literal(Int(<31:1>)) }], false)
 
         ",
+    );
+}
+
+#[test_log::test]
+fn constant_def() {
+    check(
+        r"
+const B = 3
+",
+        r"
+Constant(ConstantInfo { constant_identifier: ConstantIdentifier(<7:1>), expression: Literal(Int(<11:1>)) })
+        ",
+    );
+}
+
+#[test_log::test]
+fn constant_in_function() {
+    check(
+        r"
+fn some_func() {
+    const AB = 3
+}
+",
+        r"
+FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <4:9>, params: [], self_parameter: None, return_type: None }, body: Block([]), constants: [ConstantInfo { constant_identifier: ConstantIdentifier(<28:2>), expression: Literal(Int(<33:1>)) }] }))        ",
+    );
+}
+
+#[test_log::test]
+fn constant_access_in_function() {
+    check(
+        r"
+fn some_func() -> Int {
+    const AB = 3
+    
+    AB
+}
+",
+        r"
+
+FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <4:9>, params: [], self_parameter: None, return_type: Some(Int(<19:3>)) }, body: Block([ConstantAccess(ConstantIdentifier(<51:2>))]), constants: [ConstantInfo { constant_identifier: ConstantIdentifier(<35:2>), expression: Literal(Int(<40:1>)) }] }))
+
+",
     );
 }

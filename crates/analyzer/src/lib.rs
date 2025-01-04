@@ -89,6 +89,7 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
             struct_field_ref.resolved_type.clone()
         }
         ResolvedExpression::VariableAccess(variable_ref) => variable_ref.resolved_type.clone(),
+        ResolvedExpression::ConstantAccess(constant_ref) => constant_ref.resolved_type.clone(),
 
         ResolvedExpression::InternalFunctionAccess(internal_function_def) => {
             ResolvedType::FunctionInternal(internal_function_def.clone())
@@ -314,6 +315,7 @@ pub enum ResolveError {
     UnknownFunction(ResolvedNode),
     NoDefaultImplemented(ResolvedType),
     NoDefaultImplementedForStruct(ResolvedStructTypeRef),
+    UnknownConstant(ResolvedNode),
 }
 
 impl From<SemanticError> for ResolveError {
@@ -331,6 +333,7 @@ impl From<SeqMapError> for ResolveError {
 #[derive(Debug)]
 pub struct BlockScope {
     variables: SeqMap<String, ResolvedVariableRef>,
+    constants: SeqMap<String, ResolvedConstantRef>,
 }
 
 impl Default for BlockScope {
@@ -344,6 +347,7 @@ impl BlockScope {
     pub fn new() -> Self {
         Self {
             variables: SeqMap::new(),
+            constants: SeqMap::new(),
         }
     }
 }
@@ -868,7 +872,8 @@ impl<'a> Resolver<'a> {
             Definition::Comment(comment_ref) => {
                 ResolvedDefinition::Comment(self.to_node(comment_ref))
             }
-            Definition::Use(use_info) => self.resolve_use_definition(&use_info)?,
+            Definition::Use(use_info) => self.resolve_use_definition(use_info)?,
+            Definition::Constant(const_info) => self.resolve_constant_definition(const_info)?,
         };
 
         Ok(resolved_def)
@@ -909,9 +914,11 @@ impl<'a> Resolver<'a> {
                     )?;
                 }
 
+                // Constants must be resolved first, since they can be referenced in the function expressions
+                let constants = self.resolve_constants(&function_data.constants)?;
+
                 let statements =
                     self.resolve_statements_in_function(&function_data.body, &return_type)?;
-
                 self.scope.return_type = self.shared.types.unit_type();
 
                 let internal = ResolvedInternalFunctionDefinition {
@@ -922,6 +929,7 @@ impl<'a> Resolver<'a> {
                     },
                     body: statements,
                     name: ResolvedLocalIdentifier(self.to_node(&function_data.declaration.name)),
+                    constants,
                 };
 
                 let function_name = self.get_text(&function_data.declaration.name).to_string();
@@ -1009,7 +1017,11 @@ impl<'a> Resolver<'a> {
                     )?;
                 }
 
-                let statements = self.resolve_expression(&function_data.body)?;
+                // Constants needs to be resolved before the function expressions, since they can be accessed.
+                let constants = self.resolve_constants(&function_data.constants)?;
+
+                let statements =
+                    self.resolve_statements_in_function(&function_data.body, &return_type)?;
 
                 let internal = ResolvedInternalFunctionDefinition {
                     signature: ResolvedFunctionSignature {
@@ -1019,12 +1031,14 @@ impl<'a> Resolver<'a> {
                     },
                     body: statements,
                     name: ResolvedLocalIdentifier(self.to_node(&function_data.declaration.name)),
+                    constants,
                 };
 
                 let internal_ref = Rc::new(internal);
 
                 ResolvedFunction::Internal(internal_ref)
             }
+
             Function::External(signature) => {
                 let mut parameters = Vec::new();
 
@@ -1261,6 +1275,10 @@ impl<'a> Resolver<'a> {
             }
 
             Expression::VariableAccess(variable) => self.resolve_variable(&variable.name)?,
+
+            Expression::ConstantAccess(constant_identifier) => {
+                self.resolve_constant_access(constant_identifier)?
+            }
 
             Expression::FunctionAccess(qualified_identifier) => {
                 self.resolve_function_access(&qualified_identifier)?
@@ -2720,6 +2738,18 @@ impl<'a> Resolver<'a> {
         )
     }
 
+    fn resolve_constant_access(
+        &self,
+        constant_identifier: &ConstantIdentifier,
+    ) -> Result<ResolvedExpression, ResolveError> {
+        self.try_find_constant(constant_identifier).map_or(
+            Err(ResolveError::UnknownConstant(
+                self.to_node(&constant_identifier.0),
+            )),
+            |constant_ref| Ok(ResolvedExpression::ConstantAccess(constant_ref)),
+        )
+    }
+
     #[allow(unused)]
     fn find_variable(&self, variable: &Variable) -> Result<ResolvedVariableRef, ResolveError> {
         self.try_find_variable(&variable.name).map_or_else(
@@ -2744,6 +2774,20 @@ impl<'a> Resolver<'a> {
         }
 
         None
+    }
+
+    fn try_find_constant(
+        &self,
+        constant_identifier: &ConstantIdentifier,
+    ) -> Option<ResolvedConstantRef> {
+        let constant_name = self.get_text(&constant_identifier.0);
+        for scope in self.scope.block_scope_stack.iter().rev() {
+            if let Some(value) = scope.constants.get(&constant_name.to_string()) {
+                return Some(value.clone());
+            }
+        }
+
+        self.shared.lookup.get_constant(&vec![], constant_name)
     }
 
     fn try_find_local_variable(&self, node: &ResolvedNode) -> Option<&ResolvedVariableRef> {
@@ -2996,6 +3040,7 @@ impl<'a> Resolver<'a> {
     fn push_block_scope(&mut self, _debug_str: &str) {
         self.scope.block_scope_stack.push(BlockScope {
             variables: SeqMap::default(),
+            constants: SeqMap::default(),
         });
     }
 
@@ -3900,6 +3945,68 @@ impl<'a> Resolver<'a> {
         }
 
         Ok(ResolvedDefinition::Use(ResolvedUse { path: nodes, items }))
+    }
+
+    fn resolve_constant(
+        &mut self,
+        constant: &ConstantInfo,
+    ) -> Result<(ResolvedConstantRef, String, ResolvedNode), ResolveError> {
+        let (constant, name_node, name_text) = {
+            let resolved_expr = self.resolve_expression(&constant.expression)?;
+            let resolved_type = resolution(&resolved_expr);
+            let name_node = self.to_node(&constant.constant_identifier.0);
+            let name_text = self.get_text_resolved(&name_node).to_string();
+            let constant = ResolvedConstant {
+                name: name_node.clone(),
+                assigned_name: name_text.to_string(),
+                id: 0xffff,
+                expr: resolved_expr,
+                resolved_type,
+            };
+            (constant, name_node, name_text)
+        };
+
+        let const_ref = self.shared.lookup.add_constant(constant)?;
+
+        Ok((const_ref, name_text, name_node))
+    }
+
+    fn resolve_constant_definition(
+        &mut self,
+        constant: &ConstantInfo,
+    ) -> Result<ResolvedDefinition, ResolveError> {
+        let (constant_ref, name, node) = self.resolve_constant(constant)?;
+
+        self.global
+            .block_scope_stack
+            .last_mut()
+            .unwrap()
+            .constants
+            .insert(name, constant_ref.clone())?;
+
+        Ok(ResolvedDefinition::Constant(node, constant_ref))
+    }
+
+    fn resolve_constants(
+        &mut self,
+        ast_constants: &Vec<ConstantInfo>,
+    ) -> Result<Vec<ResolvedConstantRef>, ResolveError> {
+        let mut constants = Vec::new();
+        for constant in ast_constants {
+            let (constant_ref, name, _node) = self.resolve_constant(&constant)?;
+
+            constants.push(constant_ref.clone());
+
+            let constants = &mut self
+                .scope
+                .block_scope_stack
+                .last_mut()
+                .expect("block scope should have at least one scope")
+                .constants;
+
+            constants.insert(name, constant_ref)?;
+        }
+        Ok(constants)
     }
 }
 
