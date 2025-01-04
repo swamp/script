@@ -43,14 +43,14 @@ pub fn resolve_to_new_module(
 pub fn resolve_to_existing_module(
     types: &ResolvedProgramTypes,
     state: &mut ResolvedProgramState,
-    modules: &mut ResolvedModules,
+    mut modules: &mut ResolvedModules,
     target_namespace: ResolvedModuleNamespaceRef,
     source_map: &SourceMap,
     resolved_module: Rc<RefCell<ResolvedModule>>,
     ast_module: &ParseModule,
 ) -> Result<Option<ResolvedExpression>, ResolveError> {
     let statements = {
-        let mut name_lookup = NameLookup::new(target_namespace.clone(), &modules);
+        let mut name_lookup = NameLookup::new(target_namespace.clone(), &mut modules);
         let mut resolver = Resolver::new(
             types,
             state,

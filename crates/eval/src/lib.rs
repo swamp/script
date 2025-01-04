@@ -98,6 +98,7 @@ pub struct ExternalFunctions<C> {
     external_functions_by_id: HashMap<ExternalFunctionId, EvalExternalFunctionRef<C>>,
 }
 
+#[derive(Debug)]
 pub struct Constants {
     pub values: Vec<Value>,
 }

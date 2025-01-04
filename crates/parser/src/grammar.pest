@@ -101,7 +101,7 @@ external_member_function = {
 }
 
 normal_member_function = {
-    member_signature ~ expression
+    member_signature ~ block
 }
 
 

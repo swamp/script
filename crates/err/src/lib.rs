@@ -223,6 +223,7 @@ pub fn show_error(err: &ResolveError, source_map: &SourceMap) {
 #[must_use]
 pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
     match err {
+        ResolveError::UnknownConstant(_) => todo!(),
         ResolveError::NamespaceError(_) => todo!(),
         ResolveError::CanNotFindModule(x) => Report::build(
             Error,
