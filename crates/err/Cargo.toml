@@ -1,15 +1,15 @@
 [package]
 name = "swamp-script-error-report"
-version = "0.0.9"
+version = "0.0.10"
 edition = "2021"
 license = "MIT"
 description = "Swamp script error report"
 repository = "https://github.com/swamp/script"
 
 [dependencies]
-swamp-script-semantic = { path = "../semantic", version = "0.0.9" }
-swamp-script-source-map = { path = "../source-map", version = "0.0.9" }
+swamp-script-semantic = { path = "../semantic", version = "0.0.10" }
+swamp-script-source-map = { path = "../source-map", version = "0.0.10" }
 
-swamp-script-analyzer = { path = "../analyzer", version = "0.0.9" }
-swamp-script-parser = { path = "../parser", version = "0.0.9" }
-eira = { path = "../eira", version = "0.0.9" }
+swamp-script-analyzer = { path = "../analyzer", version = "0.0.10" }
+swamp-script-parser = { path = "../parser", version = "0.0.10" }
+eira = { path = "../eira", version = "0.0.10" }

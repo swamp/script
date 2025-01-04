@@ -1,6 +1,6 @@
 [package]
 name = "swamp-script-core"
-version = "0.0.9"
+version = "0.0.10"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/swamp/script"
@@ -8,7 +8,7 @@ description = "core parts for swamp evaluator"
 
 
 [dependencies]
-swamp-script-semantic = { path = "../semantic", version = "0.0.9" }
+swamp-script-semantic = { path = "../semantic", version = "0.0.10" }
 fixed32 = "0.0.17"
 seq-fmt = "0.0.1"
 seq-map = "0.0.13"

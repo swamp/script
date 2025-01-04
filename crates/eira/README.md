@@ -16,7 +16,7 @@ Add eira to your project's `Cargo.toml`:
 
 ```toml
 [dependencies]
-eira = "0.0.9"
+eira = "0.0.10"
 ```
 
 ## About Contributions
