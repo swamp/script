@@ -10,6 +10,7 @@ description = "semantic types for swamp script"
 seq-map = "0.0.13"
 fixed32 = "0.0.17"
 seq-fmt = "0.0.1"
+seq-set = "0.0.1"
 
 [dev-dependencies]
 test-log = { version = "0.2.16", features = ["trace", "log", "color"] }

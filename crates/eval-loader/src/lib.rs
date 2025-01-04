@@ -87,7 +87,7 @@ pub fn resolve_program(
             if modules.contains_key(&*module_path.clone()) {
                 info!(?module_path, "this is an existing module");
                 let existing_resolve_module = modules.modules.remove(module_path).unwrap();
-                let maybe_expression = resolve_to_existing_module(
+                let _maybe_expression = resolve_to_existing_module(
                     types,
                     state,
                     modules,

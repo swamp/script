@@ -9,6 +9,7 @@ pub mod prelude;
 pub use fixed32::Fp;
 use seq_fmt::comma;
 use seq_map::{SeqMap, SeqMapError};
+use seq_set::SeqSet;
 use std::cell::RefCell;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
@@ -310,6 +311,8 @@ pub enum SemanticError {
     DuplicateExternalFunction(String),
     DuplicateRustType(String),
     DuplicateConstName(String),
+    CircularConstantDependency(Vec<ConstantId>),
+    DuplicateConstantId(ConstantId),
 }
 
 impl ResolvedType {
@@ -1044,6 +1047,238 @@ pub enum ResolvedExpression {
         ResolvedTupleTypeRef,
         Box<ResolvedExpression>,
     ),
+}
+
+impl ResolvedExpression {
+    pub fn collect_constant_dependencies(&self, deps: &mut SeqSet<ConstantId>) {
+        match self {
+            Self::ConstantAccess(const_ref) => {
+                deps.insert(const_ref.id.clone());
+            }
+            ResolvedExpression::FieldAccess(expr, _, _accesses) => {
+                expr.collect_constant_dependencies(deps);
+            }
+            ResolvedExpression::ArrayAccess(expr, _, _accesses) => {
+                expr.collect_constant_dependencies(deps);
+            }
+            ResolvedExpression::MapIndexAccess(map_index) => {
+                map_index.map_expression.collect_constant_dependencies(deps);
+            }
+            ResolvedExpression::InternalFunctionAccess(_func_def_ref) => {}
+            ResolvedExpression::ExternalFunctionAccess(_func_def_ref) => {}
+            ResolvedExpression::MutVariableRef(_mut_var_ref) => {}
+            ResolvedExpression::MutStructFieldRef(expr, _accesses) => {
+                expr.collect_constant_dependencies(deps);
+            }
+            ResolvedExpression::MutArrayIndexRef(expr, _accesses) => {
+                expr.collect_constant_dependencies(deps);
+            }
+            ResolvedExpression::Option(opt_expr) => {
+                if let Some(expr) = opt_expr {
+                    expr.collect_constant_dependencies(deps);
+                }
+            }
+            ResolvedExpression::InitializeVariable(assign)
+            | ResolvedExpression::ReassignVariable(assign) => {
+                assign.expression.collect_constant_dependencies(deps);
+            }
+            ResolvedExpression::VariableCompoundAssignment(compound_assign) => {
+                compound_assign
+                    .expression
+                    .collect_constant_dependencies(deps);
+            }
+            ResolvedExpression::ArrayExtend(_var_ref, expr)
+            | ResolvedExpression::ArrayPush(_var_ref, expr) => {
+                expr.collect_constant_dependencies(deps);
+            }
+            ResolvedExpression::ArrayAssignment(_mut_array, _, expr) => {
+                expr.collect_constant_dependencies(deps);
+            }
+            ResolvedExpression::MapAssignment(_mut_map, _, expr) => {
+                expr.collect_constant_dependencies(deps);
+            }
+            ResolvedExpression::StructFieldAssignment(expr, _accesses, source_expr) => {
+                expr.collect_constant_dependencies(deps);
+                source_expr.collect_constant_dependencies(deps);
+            }
+            ResolvedExpression::FieldCompoundAssignment(expr, _accesses, _, source_expr) => {
+                expr.collect_constant_dependencies(deps);
+                source_expr.collect_constant_dependencies(deps);
+            }
+            ResolvedExpression::BinaryOp(bin_op) => {
+                bin_op.left.collect_constant_dependencies(deps);
+                bin_op.right.collect_constant_dependencies(deps);
+            }
+            ResolvedExpression::UnaryOp(unary_op) => {
+                unary_op.left.collect_constant_dependencies(deps);
+            }
+            ResolvedExpression::PostfixOp(postfix_op) => {
+                postfix_op.left.collect_constant_dependencies(deps);
+            }
+            ResolvedExpression::CoerceOptionToBool(expr) => {
+                expr.collect_constant_dependencies(deps);
+            }
+            ResolvedExpression::FunctionInternalCall(func_call) => {
+                for arg in &func_call.arguments {
+                    arg.collect_constant_dependencies(deps);
+                }
+            }
+            ResolvedExpression::FunctionExternalCall(func_call) => {
+                for arg in &func_call.arguments {
+                    arg.collect_constant_dependencies(deps);
+                }
+            }
+            ResolvedExpression::StaticCall(static_call) => {
+                for arg in &static_call.arguments {
+                    arg.collect_constant_dependencies(deps);
+                }
+            }
+            ResolvedExpression::StaticCallGeneric(static_call) => {
+                for arg in &static_call.arguments {
+                    arg.collect_constant_dependencies(deps);
+                }
+            }
+            ResolvedExpression::MutMemberCall(_mut_member_ref, args) => {
+                for arg in args {
+                    arg.collect_constant_dependencies(deps);
+                }
+            }
+            ResolvedExpression::MemberCall(member_call) => {
+                for arg in &member_call.arguments {
+                    arg.collect_constant_dependencies(deps);
+                }
+            }
+            ResolvedExpression::InterpolatedString(_, parts) => {
+                for part in parts {
+                    match part {
+                        ResolvedStringPart::Literal(_, _) => {}
+                        ResolvedStringPart::Interpolation(expr, _) => {
+                            expr.collect_constant_dependencies(deps)
+                        }
+                    }
+                }
+            }
+            ResolvedExpression::StructInstantiation(struct_inst) => {
+                for (_index, expr) in &struct_inst.source_order_expressions {
+                    expr.collect_constant_dependencies(deps);
+                }
+            }
+            ResolvedExpression::Array(array_inst) => {
+                for expr in &array_inst.expressions {
+                    expr.collect_constant_dependencies(deps);
+                }
+            }
+            ResolvedExpression::Tuple(tuple_exprs) => {
+                for expr in tuple_exprs {
+                    expr.collect_constant_dependencies(deps);
+                }
+            }
+            ResolvedExpression::Literal(_) => {}
+            ResolvedExpression::ExclusiveRange(_, start_expr, end_expr) => {
+                start_expr.collect_constant_dependencies(deps);
+                end_expr.collect_constant_dependencies(deps);
+            }
+            ResolvedExpression::IfElseOnlyVariable {
+                optional_expr,
+                true_block,
+                false_block,
+                ..
+            } => {
+                optional_expr.collect_constant_dependencies(deps);
+                true_block.collect_constant_dependencies(deps);
+                false_block.collect_constant_dependencies(deps);
+            }
+            ResolvedExpression::IfElseAssignExpression {
+                optional_expr,
+                true_block,
+                false_block,
+                ..
+            } => {
+                optional_expr.collect_constant_dependencies(deps);
+                true_block.collect_constant_dependencies(deps);
+                false_block.collect_constant_dependencies(deps);
+            }
+            ResolvedExpression::Match(resolved_match) => {
+                resolved_match
+                    .expression
+                    .collect_constant_dependencies(deps);
+            }
+            ResolvedExpression::LetVar(_var_ref, expr) => {
+                expr.collect_constant_dependencies(deps);
+            }
+            ResolvedExpression::ArrayRemoveIndex(_var_ref, expr) => {
+                expr.collect_constant_dependencies(deps);
+            }
+            ResolvedExpression::ArrayClear(_var_ref) => {
+                //var_ref.collect_constant_dependencies(deps);
+            }
+            ResolvedExpression::FloatRound(expr)
+            | ResolvedExpression::FloatFloor(expr)
+            | ResolvedExpression::FloatSign(expr)
+            | ResolvedExpression::FloatAbs(expr) => {
+                expr.collect_constant_dependencies(deps);
+            }
+            ResolvedExpression::SparseAdd(expr1, expr2)
+            | ResolvedExpression::SparseRemove(expr1, expr2) => {
+                expr1.collect_constant_dependencies(deps);
+                expr2.collect_constant_dependencies(deps);
+            }
+            ResolvedExpression::SparseNew(_, _) => {}
+
+            ResolvedExpression::ForLoop(_, _, expr) => {
+                expr.collect_constant_dependencies(deps);
+            }
+            ResolvedExpression::WhileLoop(_, expr) => {
+                expr.collect_constant_dependencies(deps);
+            }
+            ResolvedExpression::Return(expr_opt) => {
+                if let Some(expr) = expr_opt {
+                    expr.collect_constant_dependencies(deps);
+                }
+            }
+            ResolvedExpression::Break(_) | ResolvedExpression::Continue(_) => {}
+            ResolvedExpression::Block(expressions) => {
+                for expr in expressions {
+                    expr.collect_constant_dependencies(deps);
+                }
+            }
+            ResolvedExpression::If(cond, true_block, false_block) => {
+                cond.expression.collect_constant_dependencies(deps);
+                true_block.collect_constant_dependencies(deps);
+                if let Some(false_block) = false_block {
+                    false_block.collect_constant_dependencies(deps);
+                }
+            }
+            ResolvedExpression::IfOnlyVariable {
+                optional_expr,
+                true_block,
+                false_block,
+                ..
+            } => {
+                optional_expr.collect_constant_dependencies(deps);
+                true_block.collect_constant_dependencies(deps);
+                if let Some(false_block) = false_block {
+                    false_block.collect_constant_dependencies(deps);
+                }
+            }
+            ResolvedExpression::IfAssignExpression {
+                optional_expr,
+                true_block,
+                false_block,
+                ..
+            } => {
+                optional_expr.collect_constant_dependencies(deps);
+                true_block.collect_constant_dependencies(deps);
+                if let Some(false_block) = false_block {
+                    false_block.collect_constant_dependencies(deps);
+                }
+            }
+            ResolvedExpression::TupleDestructuring(_vars, _, expr) => {
+                expr.collect_constant_dependencies(deps);
+            }
+            ResolvedExpression::VariableAccess(_) => {}
+        }
+    }
 }
 
 pub trait Spanned {

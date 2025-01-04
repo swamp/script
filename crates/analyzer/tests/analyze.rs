@@ -732,7 +732,7 @@ fn constant_access_in_function() {
     ",
         r#"
 
-FunctionDef(Internal(ResolvedInternalFunctionDefinition { body: Block([Literal(IntLiteral(3, <62:1>, ResolvedIntType))]), name: ResolvedLocalIdentifier(<12:7>), signature: ResolvedFunctionSignature { first_parameter_is_self: false, parameters: [], return_type: Unit(ResolvedUnitType) }, constants: [ResolvedConstant { name: <42:5>, assigned_name: "HELLO", id: 1, expr: Literal(IntLiteral(3, <48:1>, ResolvedIntType)) }] }))
+FunctionDef(Internal(ResolvedInternalFunctionDefinition { body: Block([ConstantAccess(ResolvedConstant { name: <49:5>, assigned_name: "HELLO", id: 0, expr: Literal(IntLiteral(3, <55:1>, ResolvedIntType)), resolved_type: Int(ResolvedIntType) }), ConstantAccess(ResolvedConstant { name: <49:5>, assigned_name: "HELLO", id: 0, expr: Literal(IntLiteral(3, <55:1>, ResolvedIntType)), resolved_type: Int(ResolvedIntType) })]), name: ResolvedLocalIdentifier(<12:7>), signature: ResolvedFunctionSignature { first_parameter_is_self: false, parameters: [], return_type: Int(ResolvedIntType) }, constants: [ResolvedConstant { name: <49:5>, assigned_name: "HELLO", id: 0, expr: Literal(IntLiteral(3, <55:1>, ResolvedIntType)), resolved_type: Int(ResolvedIntType) }] }))
 
 "#,
     );

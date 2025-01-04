@@ -3,12 +3,12 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use crate::{
-    ConstantId, ResolvedAnonymousStructFieldType, ResolvedAnonymousStructType, ResolvedConstant,
-    ResolvedConstantRef, ResolvedEnumTypeRef, ResolvedEnumVariantType, ResolvedEnumVariantTypeRef,
-    ResolvedExpression, ResolvedExternalFunctionDefinition, ResolvedExternalFunctionDefinitionRef,
+    ResolvedAnonymousStructFieldType, ResolvedAnonymousStructType, ResolvedConstantRef,
+    ResolvedEnumTypeRef, ResolvedEnumVariantType, ResolvedEnumVariantTypeRef,
+    ResolvedExternalFunctionDefinition, ResolvedExternalFunctionDefinitionRef,
     ResolvedInternalFunctionDefinition, ResolvedInternalFunctionDefinitionRef, ResolvedNode,
     ResolvedRustType, ResolvedRustTypeRef, ResolvedStructType, ResolvedStructTypeRef, ResolvedType,
-    SemanticError, TypeNumber,
+    SemanticError,
 };
 use seq_map::SeqMap;
 use std::cell::RefCell;

@@ -15,7 +15,7 @@ use swamp_script_semantic::prelude::ResolvedModuleNamespaceRef;
 use swamp_script_semantic::{
     ExternalFunctionId, ResolvedExpression, ResolvedExternalFunctionDefinition,
     ResolvedFunctionSignature, ResolvedNode, ResolvedParameter, ResolvedProgramState,
-    ResolvedProgramTypes, ResolvedType, Span,
+    ResolvedProgramTypes, ResolvedType, SemanticError, Span,
 };
 use swamp_script_source_map::SourceMap;
 
@@ -30,6 +30,12 @@ pub enum EvalTestError {
 impl From<ResolveError> for EvalTestError {
     fn from(e: ResolveError) -> Self {
         Self::ResolveError(e)
+    }
+}
+
+impl From<SemanticError> for EvalTestError {
+    fn from(e: SemanticError) -> Self {
+        Self::ResolveError(e.into())
     }
 }
 
@@ -119,6 +125,8 @@ fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError>
         secret: 42,
         output: vec![],
     };
+
+    modules.finalize()?;
 
     let mut constants = Constants::new();
 

@@ -15,7 +15,6 @@ use swamp_script_core::value::{
     convert_vec_to_rc_refcell, format_value, to_rust_value, SourceMapLookup, Value, ValueError,
 };
 use swamp_script_semantic::modules::ResolvedModules;
-use swamp_script_semantic::ns::ResolvedModuleNamespace;
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
     ConstantId, ResolvedAccess, ResolvedBinaryOperatorKind, ResolvedCompoundOperatorKind,
@@ -106,7 +105,11 @@ pub struct Constants {
 impl Constants {
     #[must_use]
     pub fn lookup_constant_value(&self, id: ConstantId) -> &Value {
-        &self.values[id as usize]
+        let x = &self.values[id as usize];
+        if *x == Value::Unit {
+            panic!("illegal constant")
+        }
+        x
     }
 
     pub fn set(&mut self, id: ConstantId, value: Value) {
@@ -168,7 +171,7 @@ pub fn eval_constants<C>(
     modules: &ResolvedModules,
     context: &mut C,
 ) -> Result<(), ExecuteError> {
-    for constant in &modules.constants {
+    for constant in &modules.constants_in_eval_order {
         let mut interpreter = Interpreter::<C>::new(externals, constants, context);
         let value = interpreter.evaluate_expression(&constant.expr)?;
         constants.set(constant.id, value);
