@@ -7,7 +7,7 @@ pub mod prelude;
 
 use crate::lookup::NameLookup;
 use seq_map::{SeqMap, SeqMapError};
-use std::collections::HashSet;
+use seq_set::SeqSet;
 use std::mem::take;
 use std::num::{ParseFloatError, ParseIntError};
 use std::rc::Rc;
@@ -252,7 +252,7 @@ pub enum ResolveError {
     Unknown(String),
     UnknownImplTargetTypeReference(LocalTypeIdentifier),
     WrongFieldCountInStructInstantiation(ResolvedStructTypeRef, usize),
-    MissingFieldInStructInstantiation(String, ResolvedAnonymousStructType),
+    MissingFieldInStructInstantiation(Span, Vec<String>, ResolvedAnonymousStructType),
     ExpectedFunctionExpression,
     CouldNotFindMember(ResolvedNode, ResolvedNode),
     UnknownVariable(ResolvedNode),
@@ -283,7 +283,7 @@ pub enum ResolveError {
     ModuleNotUnique,
     ExpressionIsOfWrongFieldType(Span, ResolvedType, ResolvedType),
     ExpectedOptional,
-    ExpectedVariable,
+    ExpectedVariable(ResolvedNode),
     EmptyMapLiteral,
     MapKeyTypeMismatch {
         expected: ResolvedType,
@@ -1516,7 +1516,7 @@ impl<'a> Resolver<'a> {
 
             Expression::If(expression, true_expression, maybe_false_expression) => {
                 match &**expression {
-                    Expression::PostfixOp(PostfixOperator::Unwrap(_unwrap_node), expr) => {
+                    Expression::PostfixOp(PostfixOperator::Unwrap(unwrap_node), expr) => {
                         if let Expression::VariableAccess(var) = &**expr {
                             self.handle_optional_unwrap_statement(
                                 var,
@@ -1525,7 +1525,7 @@ impl<'a> Resolver<'a> {
                                 maybe_false_expression,
                             )?
                         } else {
-                            Err(ResolveError::ExpectedVariable)?
+                            Err(ResolveError::ExpectedVariable(self.to_node(&unwrap_node)))?
                         }
                     }
                     Expression::VariableAssignment(var, expr) => {
@@ -1621,9 +1621,7 @@ impl<'a> Resolver<'a> {
                 };
 
                 // Handle enum variant literals in patterns
-                let variant_ref = self
-                    .resolve_enum_variant_ref(enum_name, variant_name)
-                    .expect("enum variant should exist");
+                let variant_ref = self.resolve_enum_variant_ref(enum_name, variant_name)?;
 
                 let resolved_data = match enum_literal {
                     EnumVariantLiteral::Simple(_, _) => ResolvedEnumLiteralData::Nothing,
@@ -1634,8 +1632,8 @@ impl<'a> Resolver<'a> {
                         ResolvedEnumLiteralData::Tuple(resolved)
                     }
                     EnumVariantLiteral::Struct(
-                        _node,
-                        _variant,
+                        _qualified_type_identifier,
+                        variant,
                         anonym_struct_field_and_expressions,
                     ) => {
                         if let ResolvedEnumVariantContainerType::Struct(
@@ -1649,6 +1647,7 @@ impl<'a> Resolver<'a> {
                             }
 
                             let resolved = self.resolve_anon_struct_instantiation(
+                                variant.0.clone(),
                                 &resolved_variant_struct_ref.anon_struct,
                                 anonym_struct_field_and_expressions,
                                 false,
@@ -1806,8 +1805,8 @@ impl<'a> Resolver<'a> {
         &mut self,
         struct_to_instantiate: &ResolvedAnonymousStructType,
         ast_fields: &Vec<FieldExpression>,
-    ) -> Result<(Vec<(usize, ResolvedExpression)>, HashSet<String>), ResolveError> {
-        let mut missing_fields: HashSet<String> = struct_to_instantiate
+    ) -> Result<(Vec<(usize, ResolvedExpression)>, SeqSet<String>), ResolveError> {
+        let mut missing_fields: SeqSet<String> = struct_to_instantiate
             .defined_fields
             .keys()
             .cloned()
@@ -1868,6 +1867,7 @@ impl<'a> Resolver<'a> {
 
     fn resolve_anon_struct_instantiation(
         &mut self,
+        node: Node,
         struct_to_instantiate: &ResolvedAnonymousStructType,
         ast_fields: &Vec<FieldExpression>,
         allow_rest: bool,
@@ -1895,7 +1895,8 @@ impl<'a> Resolver<'a> {
             }
         } else if !missing_fields.is_empty() {
             return Err(ResolveError::MissingFieldInStructInstantiation(
-                missing_fields.iter().next().unwrap().clone(),
+                self.to_node(&node).span,
+                missing_fields.to_vec(),
                 struct_to_instantiate.clone(),
             ));
         }
@@ -2062,12 +2063,20 @@ impl<'a> Resolver<'a> {
                 ))
             }
         } else {
-            Ok(ResolvedExpression::StructInstantiation(
-                ResolvedStructInstantiation {
-                    source_order_expressions,
-                    struct_type_ref: struct_to_instantiate,
-                },
-            ))
+            if missing_fields.is_empty() {
+                Ok(ResolvedExpression::StructInstantiation(
+                    ResolvedStructInstantiation {
+                        source_order_expressions,
+                        struct_type_ref: struct_to_instantiate,
+                    },
+                ))
+            } else {
+                Err(ResolveError::MissingFieldInStructInstantiation(
+                    self.to_node(&qualified_type_identifier.name.0).span,
+                    missing_fields.to_vec(),
+                    struct_to_instantiate.borrow().anon_struct_type.clone(),
+                ))
+            }
         }
     }
 
@@ -3254,6 +3263,7 @@ impl<'a> Resolver<'a> {
             EnumVariantLiteral::Struct(_qualified_name, variant_name, field_expressions) => {
                 if let ResolvedEnumVariantContainerType::Struct(struct_ref) = &variant_ref.data {
                     let resolved = self.resolve_anon_struct_instantiation(
+                        variant_name.0.clone(),
                         &struct_ref.anon_struct,
                         field_expressions,
                         false,

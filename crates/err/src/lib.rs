@@ -225,7 +225,7 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
     match err {
         ResolveError::UnknownConstant(constant_node) => Report::build(
             Error,
-            902,
+            903,
             &format!("Unknown constant"),
             &constant_node.span,
         ),
@@ -247,7 +247,14 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
         ResolveError::Unknown(_) => todo!(),
         ResolveError::UnknownImplTargetTypeReference(_) => todo!(),
         ResolveError::WrongFieldCountInStructInstantiation(_, _) => todo!(),
-        ResolveError::MissingFieldInStructInstantiation(_, _) => todo!(),
+        ResolveError::MissingFieldInStructInstantiation(span, fields, struct_type) => Report::build(
+            Error,
+            903,
+            &format!("missing fields in instantiation"),
+            &span,
+        ).with_note(&format!("fields: {fields:?}")
+
+        ),
         ResolveError::ExpectedFunctionExpression => todo!(),
         ResolveError::CouldNotFindMember(_, _) => todo!(),
         ResolveError::UnknownVariable(node) => {
@@ -263,7 +270,12 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
         ResolveError::CanOnlyOverwriteVariableWithMut(_) => todo!(),
         ResolveError::OverwriteVariableNotAllowedHere(_) => todo!(),
         ResolveError::NotNamedStruct(_) => todo!(),
-        ResolveError::UnknownEnumVariantType(_) => todo!(),
+        ResolveError::UnknownEnumVariantType(node) =>  Report::build(
+            Error,
+            903,
+            &format!("Unknown enum variant type"),
+            &node.span,
+        ),
         ResolveError::WasNotStructType(_) => todo!(),
         ResolveError::UnknownStructField(field_node) => Report::build(
             Error,
@@ -298,7 +310,9 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
             Report::build(Error, 234101, &format!("Field initialization expression is of wrong type. expected {expected_type}, encountered: {encountered_type}"), &span)
         },
         ResolveError::ExpectedOptional => todo!(),
-        ResolveError::ExpectedVariable => todo!(),
+        ResolveError::ExpectedVariable(node) => {
+            Report::build(Error, 234201, &format!("Expected variable"), &node.span)
+        },
         ResolveError::EmptyMapLiteral => todo!(),
         ResolveError::MapKeyTypeMismatch { .. } => todo!(),
         ResolveError::MapValueTypeMismatch { .. } => todo!(),
