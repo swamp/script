@@ -204,10 +204,19 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
         ResolvedExpression::SparseRemove(_, _) => ResolvedType::Any, // TODO: return correct type
         ResolvedExpression::SparseNew(_rust_type_ref, resolved_type) => resolved_type.clone(),
         ResolvedExpression::CoerceOptionToBool(_) => ResolvedType::Bool(Rc::new(ResolvedBoolType)),
+
+        // Float
         ResolvedExpression::FloatFloor(_) => ResolvedType::Int(Rc::new(ResolvedIntType {})),
         ResolvedExpression::FloatRound(_) => ResolvedType::Int(Rc::new(ResolvedIntType {})),
         ResolvedExpression::FloatSign(_) => ResolvedType::Float(Rc::new(ResolvedFloatType {})),
         ResolvedExpression::FloatAbs(_) => ResolvedType::Float(Rc::new(ResolvedFloatType {})),
+        ResolvedExpression::FloatRnd(_) => ResolvedType::Int(Rc::new(ResolvedIntType {})),
+
+        // Int
+        ResolvedExpression::IntAbs(_) => ResolvedType::Int(Rc::new(ResolvedIntType {})),
+        ResolvedExpression::IntRnd(_) => ResolvedType::Int(Rc::new(ResolvedIntType {})),
+        ResolvedExpression::IntToFloat(_) => ResolvedType::Float(Rc::new(ResolvedFloatType {})),
+
         ResolvedExpression::VariableCompoundAssignment(var_compound_assignment) => {
             var_compound_assignment.variable_ref.resolved_type.clone()
         }
@@ -3397,6 +3406,45 @@ impl<'a> Resolver<'a> {
                 }
                 Ok(ResolvedExpression::FloatAbs(Box::new(expr)))
             }
+            "rnd" => {
+                if !ast_arguments.is_empty() {
+                    return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 0));
+                }
+                Ok(ResolvedExpression::FloatRnd(Box::new(expr)))
+            }
+            _ => Err(ResolveError::UnknownMemberFunction(
+                self.to_node(ast_member_function_name),
+            )),
+        }
+    }
+
+    fn resolve_int_member_call(
+        &self,
+        expr: ResolvedExpression,
+        ast_member_function_name: &Node,
+        ast_arguments: &[Expression],
+    ) -> Result<ResolvedExpression, ResolveError> {
+        let function_name_str = self.get_text(ast_member_function_name);
+        match function_name_str {
+            "abs" => {
+                if !ast_arguments.is_empty() {
+                    return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 0));
+                }
+                Ok(ResolvedExpression::IntAbs(Box::new(expr)))
+            }
+            "rnd" => {
+                if !ast_arguments.is_empty() {
+                    return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 0));
+                }
+                Ok(ResolvedExpression::IntRnd(Box::new(expr)))
+            }
+
+            "to_float" => {
+                if !ast_arguments.is_empty() {
+                    return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 0));
+                }
+                Ok(ResolvedExpression::IntToFloat(Box::new(expr)))
+            }
             _ => Err(ResolveError::UnknownMemberFunction(
                 self.to_node(ast_member_function_name),
             )),
@@ -3424,6 +3472,14 @@ impl<'a> Resolver<'a> {
             }
             ResolvedType::Float(_) => {
                 let resolved = self.resolve_float_member_call(
+                    resolved_expr,
+                    ast_member_function_name,
+                    ast_arguments,
+                )?;
+                return Ok(Some(resolved));
+            }
+            ResolvedType::Int(_) => {
+                let resolved = self.resolve_int_member_call(
                     resolved_expr,
                     ast_member_function_name,
                     ast_arguments,

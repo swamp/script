@@ -1376,6 +1376,41 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
+            ResolvedExpression::FloatRnd(float_expr) => {
+                let value = self.evaluate_expression(float_expr)?;
+                if let Value::Float(f) = value {
+                    let new_raw = squirrel_prng::squirrel_noise5(f.inner() as u32, 0);
+                    Value::Int(new_raw as i32)
+                } else {
+                    return Err(ExecuteError::TypeError("Expected float".to_string()));
+                }
+            }
+
+            ResolvedExpression::IntAbs(int_expr) => {
+                let value = self.evaluate_expression(int_expr)?;
+                if let Value::Int(i) = value {
+                    Value::Int(i.abs())
+                } else {
+                    return Err(ExecuteError::TypeError("Expected int".to_string()));
+                }
+            }
+            ResolvedExpression::IntRnd(int_expr) => {
+                let value = self.evaluate_expression(int_expr)?;
+                if let Value::Int(i) = value {
+                    Value::Int(squirrel_prng::squirrel_noise5(i as u32, 0) as i32)
+                } else {
+                    return Err(ExecuteError::TypeError("Expected int".to_string()));
+                }
+            }
+            ResolvedExpression::IntToFloat(int_expr) => {
+                let value = self.evaluate_expression(int_expr)?;
+                if let Value::Int(i) = value {
+                    Value::Float(Fp::from(i as i16))
+                } else {
+                    return Err(ExecuteError::TypeError("Expected int".to_string()));
+                }
+            }
+
             ResolvedExpression::Continue(_) => {
                 return Err(ExecuteError::ContinueNotAllowedHere);
             }
@@ -1677,6 +1712,17 @@ impl<'a, C> Interpreter<'a, C> {
         ))
     }
 
+    #[inline(always)]
+    const fn modulo(a: i32, b: i32) -> i32 {
+        ((a % b) + b) % b
+    }
+
+    #[inline(always)]
+    const fn modulo_fp(a: Fp, b: Fp) -> Fp {
+        let raw = ((a.inner() % b.inner()) + b.inner()) % b.inner();
+        Fp::from_raw(raw)
+    }
+
     fn evaluate_binary_op(
         left_val: Value,
         op: &ResolvedBinaryOperatorKind,
@@ -1697,7 +1743,9 @@ impl<'a, C> Interpreter<'a, C> {
                 }
                 Value::Int(a / b)
             }
-            (Value::Int(a), ResolvedBinaryOperatorKind::Modulo, Value::Int(b)) => Value::Int(a % b),
+            (Value::Int(a), ResolvedBinaryOperatorKind::Modulo, Value::Int(b)) => {
+                Value::Int(Self::modulo(a, b))
+            }
 
             // Float operations
             (Value::Float(a), ResolvedBinaryOperatorKind::Add, Value::Float(b)) => {
@@ -1716,7 +1764,7 @@ impl<'a, C> Interpreter<'a, C> {
                 Value::Float(a / b)
             }
             (Value::Float(a), ResolvedBinaryOperatorKind::Modulo, Value::Float(b)) => {
-                Value::Float(a % b)
+                Value::Float(Self::modulo_fp(a, b))
             }
 
             (Value::Float(a), ResolvedBinaryOperatorKind::GreaterThan, Value::Float(b)) => {

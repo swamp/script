@@ -1002,10 +1002,17 @@ pub enum ResolvedExpression {
     ArrayRemoveIndex(ResolvedVariableRef, Box<ResolvedExpression>),
     ArrayClear(ResolvedVariableRef),
 
+    // Integer built in
+    IntAbs(Box<ResolvedExpression>),
+    IntRnd(Box<ResolvedExpression>),
+    IntToFloat(Box<ResolvedExpression>),
+
+    // Float built in
     FloatRound(Box<ResolvedExpression>),
     FloatFloor(Box<ResolvedExpression>),
     FloatSign(Box<ResolvedExpression>),
     FloatAbs(Box<ResolvedExpression>),
+    FloatRnd(Box<ResolvedExpression>),
 
     // --- Special methods
     // TODO: Have a better interface for these "engine" member calls
@@ -1277,6 +1284,10 @@ impl ResolvedExpression {
                 expr.collect_constant_dependencies(deps);
             }
             ResolvedExpression::VariableAccess(_) => {}
+            &ResolvedExpression::IntAbs(_)
+            | &ResolvedExpression::IntRnd(_)
+            | &ResolvedExpression::FloatRnd(_) => todo!(),
+            &ResolvedExpression::IntToFloat(_) => todo!(),
         }
     }
 }
@@ -1415,6 +1426,12 @@ impl Spanned for ResolvedExpression {
             Self::FloatFloor(expr) => expr.span(),
             Self::FloatSign(expr) => expr.span(),
             Self::FloatAbs(expr) => expr.span(),
+            Self::FloatRnd(float_expr) => float_expr.span(),
+
+            // Int operations
+            Self::IntAbs(int_expr) => int_expr.span(),
+            Self::IntRnd(int_expr) => int_expr.span(),
+            Self::IntToFloat(int_expr) => int_expr.span(),
 
             // Special Methods
             Self::SparseAdd(expr1, expr2) => expr1.span().merge(&expr2.span()),
