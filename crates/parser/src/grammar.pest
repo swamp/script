@@ -370,15 +370,24 @@ type_name = { base_type ~ optional_marker? }
 optional_marker = { "?" }
 
 base_type = {
-    built_in_type
+    function_type
+    | built_in_type
     | qualified_type_identifier ~ generic_params?
     | array_type
     | map_type
     | tuple_type
+    | unit_type
 }
 
 generic_params = { "<" ~ type_name ~ ("," ~ " "* ~ type_name)* ~ ">" }  // PEST BUG: need explicit spaces after comma
 
+function_type = {
+    "(" ~ function_params? ~ ")" ~ "->" ~ type_name
+}
+
+function_params = {
+    type_name ~ ("," ~ " "* ~ type_name)*
+}
 
 
 // LITERALS ------------------------------------------------------------
@@ -460,3 +469,5 @@ struct_field_list = {
 rest_fields = { ".." }
 
 tuple_fields = { "(" ~ expression ~ ("," ~ " "* ~ expression)* ~ ","? ~ ")" }  // PEST BUG: need explicit spaces after comma
+
+unit_type = { "()" }
