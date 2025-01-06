@@ -386,6 +386,7 @@ pub enum Expression {
     Literal(Literal),
 
     PostfixOp(PostfixOperator, Box<Expression>),
+    StaticMemberFunctionReference(QualifiedTypeIdentifier, Node),
 }
 
 #[derive(Debug)]

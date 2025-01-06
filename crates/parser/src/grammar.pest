@@ -283,12 +283,15 @@ function_argument = {
 
 
 static_call = {
-    qualified_type_identifier ~ "::" ~ identifier ~
+    static_member_reference ~
     "(" ~ (function_argument ~ ("," ~ " "* ~ function_argument)*)? ~ ")"
 }
 
 array_index = { "[" ~ expression ~ "]" }
 
+static_member_reference = {
+    qualified_type_identifier ~ "::" ~ identifier
+}
 
 primary = {
     if_expr
@@ -301,6 +304,7 @@ primary = {
     | block
     | interpolated_string
     | enum_literal
+    | static_member_reference
     | static_call
     | struct_instantiation
     | parenthesized

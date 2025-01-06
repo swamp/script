@@ -195,8 +195,8 @@ impl AstParser {
         &self,
         inner_pairs: &mut impl Iterator<Item = Pair<'a, Rule>>,
     ) -> Result<QualifiedTypeIdentifier, ParseError> {
-        let first = Self::next_pair(inner_pairs)?;
-
+        let mut first = Self::next_pair(inner_pairs)?;
+        println!("first: {:?}", first.as_rule());
         match first.as_rule() {
             Rule::module_segments => {
                 let module_path = self.parse_module_segments(first.clone());
@@ -1476,6 +1476,19 @@ impl AstParser {
         ))
     }
 
+    fn parse_static_member_reference(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
+        let mut inner = pair.clone().into_inner();
+        println!("inner {}", inner.as_str());
+
+        let type_identifier = self.parse_qualified_type_identifier(&inner.next().unwrap())?;
+        let member_name = self.expect_identifier_next(&mut inner)?;
+
+        Ok(Expression::StaticMemberFunctionReference(
+            type_identifier,
+            member_name.0,
+        ))
+    }
+
     fn parse_primary(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
         match pair.as_rule() {
             Rule::primary => {
@@ -1488,6 +1501,7 @@ impl AstParser {
                 self.to_node(pair),
                 None,
             ))),
+            Rule::static_member_reference => self.parse_static_member_reference(pair),
             Rule::constant => Ok(Expression::ConstantAccess(ConstantIdentifier(
                 self.to_node(pair),
             ))),

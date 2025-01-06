@@ -1479,3 +1479,29 @@ fn function_ref() {
 
     assert_eq!(result, Value::Int(-20));
 }
+
+#[test_log::test]
+fn function_member_ref() {
+    let result = eval(
+        "
+
+        struct Test {
+            i: Int,
+        }
+
+        impl Test {
+            fn static_in_member(a: Int) -> Int {
+              a * 2
+            }
+        }       
+
+        fn caller(fn: (Int) -> Int, arg: Int) -> Int {
+            fn(arg)
+        }
+
+        caller(Test::static_in_member, -10)
+    ",
+    );
+
+    assert_eq!(result, Value::Int(-20));
+}

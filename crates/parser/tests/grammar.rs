@@ -2228,7 +2228,7 @@ fn constant_access_in_function() {
         r"
 fn some_func() -> Int {
     const AB = 3
-    
+
     AB
 }
 ",
@@ -2271,6 +2271,36 @@ some_fn(-1)
 FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <4:7>, params: [Parameter { variable: <12:1>, param_type: Int(<15:3>) }], self_parameter: None, return_type: Some(Float(<23:5>)) }, body: Block([Literal(Float(<35:3>))]), constants: [] }))
 ---
 FunctionCall(VariableAccess(<42:7>), [UnaryOp(Negate(<50:1>), Literal(Int(<51:1>)))])
+",
+    );
+}
+
+#[test_log::test]
+fn static_member_call() {
+    check(
+        r"        struct Test {
+            i: Int,
+        }
+
+        impl Test {
+            fn static_in_member(a: Int) -> Int {
+              a * 2
+            }
+        }
+
+        fn caller(fn: (Int) -> Int, arg: Int) -> Int {
+            fn(arg)
+        }
+
+        caller(Test::static_in_member, -10)",
+        r"
+
+StructDef(StructType { identifier: LocalTypeIdentifier(<15:4>), fields: [FieldType { field_name: FieldName(<34:1>), field_type: Int(<37:3>) }] })
+ImplDef(<66:4>, [Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <88:16>, params: [Parameter { variable: <105:1>, param_type: Int(<108:3>) }], self_parameter: None, return_type: Some(Int(<116:3>)) }, body: Block([BinaryOp(VariableAccess(<136:1>), Multiply(<138:1>), Literal(Int(<140:1>)))]), constants: [] })])
+FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <178:6>, params: [Parameter { variable: <185:2>, param_type: Function([Int(<190:3>)], Int(<198:3>)) }, Parameter { variable: <203:3>, param_type: Int(<208:3>) }], self_parameter: None, return_type: Some(Int(<216:3>)) }, body: Block([FunctionCall(VariableAccess(<234:2>), [VariableAccess(<237:3>)])]), constants: [] }))
+---
+FunctionCall(VariableAccess(<261:6>), [StaticMemberFunctionReference(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<268:4>), module_path: None, generic_params: [] }, <274:16>), UnaryOp(Negate(<292:1>), Literal(Int(<293:2>)))])
+
 ",
     );
 }

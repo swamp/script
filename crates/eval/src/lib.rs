@@ -1320,6 +1320,7 @@ impl<'a, C> Interpreter<'a, C> {
                     .expect("should have external function ref");
                 Value::ExternalFunction(external_ref.borrow().id)
             }
+
             //ResolvedExpression::MutMemberCall(_, _) => todo!(),
             ResolvedExpression::Tuple(_) => todo!(),
             ResolvedExpression::LetVar(_, _) => todo!(),

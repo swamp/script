@@ -1299,6 +1299,27 @@ impl<'a> Resolver<'a> {
         }
     }
 
+    fn resolve_static_member_access(
+        &self,
+        struct_reference: &QualifiedTypeIdentifier,
+        member_name_node: &Node,
+    ) -> Result<ResolvedExpression, ResolveError> {
+        let struct_type = self.get_struct_type(&struct_reference)?;
+        let resolved_node = self.to_node(member_name_node);
+        let member_name = self.get_text(&member_name_node);
+        let binding = struct_type.borrow();
+        let member_function = binding.functions.get(&member_name.to_string()).ok_or(
+            ResolveError::UnknownMemberFunction(self.to_node(&member_name_node)),
+        )?;
+
+        let expr = match &**member_function {
+            ResolvedFunction::Internal(x) => ResolvedExpression::InternalFunctionAccess(x.clone()),
+            ResolvedFunction::External(y) => ResolvedExpression::ExternalFunctionAccess(y.clone()),
+        };
+
+        Ok(expr)
+    }
+
     pub fn resolve_expression(
         &mut self,
         ast_expression: &Expression,
@@ -1311,6 +1332,7 @@ impl<'a> Resolver<'a> {
 
                 self.resolve_field_access(expression, &struct_field_ref, field_name)?
             }
+
             Expression::IndexAccess(expression, index_expr) => {
                 let array_item_ref = self.resolve_into_array_type_ref(expression.as_ref())?;
 
@@ -1319,6 +1341,10 @@ impl<'a> Resolver<'a> {
 
             Expression::VariableAccess(variable) => self.resolve_variable_like(&variable.name)?,
 
+            Expression::StaticMemberFunctionReference(type_identifier, member_name) => {
+                self.resolve_static_member_access(type_identifier, member_name)?
+            }
+
             Expression::ConstantAccess(constant_identifier) => {
                 self.resolve_constant_access(constant_identifier)?
             }
@@ -1326,6 +1352,7 @@ impl<'a> Resolver<'a> {
             Expression::FunctionAccess(qualified_identifier) => {
                 self.resolve_function_access(&qualified_identifier)?
             }
+
             Expression::MutRef(location_expression) => self.resolve_mut_ref(location_expression)?,
 
             // Assignments

@@ -946,6 +946,7 @@ pub enum ResolvedExpression {
     MapIndexAccess(ResolvedMapIndexLookup),
 
     InternalFunctionAccess(ResolvedInternalFunctionDefinitionRef),
+
     ExternalFunctionAccess(ResolvedExternalFunctionDefinitionRef),
 
     MutVariableRef(ResolvedMutVariableRef), // Used when passing with mut keyword. mut are implicitly passed by reference
