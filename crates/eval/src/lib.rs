@@ -190,7 +190,7 @@ pub fn util_execute_function<C>(
 ) -> Result<Value, ExecuteError> {
     let mut interpreter = Interpreter::<C>::new(externals, constants, context);
     interpreter.debug_source_map = debug_source_map;
-    interpreter.bind_parameters(&func.signature.parameters, &arguments)?;
+    interpreter.bind_parameters(&func.parameters, &arguments)?;
     let value = interpreter.evaluate_expression(&func.body)?;
     interpreter.current_block_scopes.clear();
     interpreter.function_scope_stack.clear();
@@ -293,7 +293,7 @@ impl<'a, C> Interpreter<'a, C> {
         match &*static_call.function {
             ResolvedFunction::Internal(function_data) => {
                 self.push_function_scope();
-                self.bind_parameters(&function_data.signature.parameters, &evaluated_args)?;
+                self.bind_parameters(&function_data.parameters, &evaluated_args)?;
                 let result = self.evaluate_expression(&function_data.body)?;
 
                 self.pop_function_scope();
@@ -326,6 +326,51 @@ impl<'a, C> Interpreter<'a, C> {
         Ok(v)
     }
 
+    fn evaluate_function_call(
+        &mut self,
+        function_expression: &Box<ResolvedExpression>,
+        arguments: &Vec<ResolvedExpression>,
+    ) -> Result<Value, ExecuteError> {
+        let func_val = self.evaluate_expression(&function_expression)?;
+        let evaluated_args = self.evaluate_args(&arguments)?;
+
+        match &func_val {
+            Value::InternalFunction(internal_func_ref) => {
+                if let Some(debug_source_map) = &self.debug_source_map {
+                    trace!(
+                        "internal func: {}",
+                        debug_source_map.get_text(&internal_func_ref.name.0)
+                    );
+                }
+                self.push_function_scope();
+
+                self.bind_parameters(&internal_func_ref.parameters, &evaluated_args)?;
+
+                let result = self.evaluate_expression(&internal_func_ref.body)?;
+
+                self.pop_function_scope();
+
+                Ok(result)
+            }
+
+            Value::ExternalFunction(external_function_id) => {
+                let mut func = self
+                    .externals
+                    .external_functions_by_id
+                    .get(external_function_id)
+                    .ok_or(ExecuteError::MissingExternalFunction(*external_function_id))?
+                    .borrow_mut();
+
+                (func.func)(&evaluated_args, self.context)
+            }
+            _ => {
+                return Err(ExecuteError::Error(
+                    "internal error, can only execute internal function".to_owned(),
+                ))
+            }
+        }
+    }
+
     fn evaluate_internal_function_call(
         &mut self,
         call: &ResolvedInternalFunctionCall,
@@ -351,10 +396,7 @@ impl<'a, C> Interpreter<'a, C> {
 
         self.push_function_scope();
 
-        self.bind_parameters(
-            &call.function_definition.signature.parameters,
-            &evaluated_args,
-        )?;
+        self.bind_parameters(&call.function_definition.parameters, &evaluated_args)?;
 
         let result = self.evaluate_expression(&call.function_definition.body)?;
 
@@ -1098,96 +1140,100 @@ impl<'a, C> Interpreter<'a, C> {
             }
 
             // Calling
-            ResolvedExpression::FunctionInternalCall(resolved_internal_call) => {
-                self.evaluate_internal_function_call(resolved_internal_call)?
+            ResolvedExpression::FunctionCall(_signature, expr, arguments) => {
+                self.evaluate_function_call(expr, arguments)?
             }
-
-            ResolvedExpression::FunctionExternalCall(resolved_external_call) => {
-                self.evaluate_external_function_call(resolved_external_call)?
-            }
-
-            ResolvedExpression::StaticCall(static_call) => {
-                self.evaluate_static_function_call(static_call)?
-            }
-
-            ResolvedExpression::StaticCallGeneric(static_call_generic) => {
-                let evaluated_args = self.evaluate_args(&static_call_generic.arguments)?;
-                match &*static_call_generic.function {
-                    ResolvedFunction::Internal(function_data) => {
-                        self.push_function_scope();
-                        self.bind_parameters(&function_data.signature.parameters, &evaluated_args)?;
-                        let result = self.evaluate_expression(&function_data.body)?;
-                        self.pop_function_scope();
-                        Ok(result)
+            /*
+                    ResolvedExpression::FunctionInternalCall(resolved_internal_call) => {
+                        self.evaluate_internal_function_call(resolved_internal_call)?
                     }
-                    ResolvedFunction::External(external) => {
-                        let mut func = self
-                            .externals
-                            .external_functions_by_id
-                            .get(&external.id)
-                            .expect("call_generic: external function missing")
-                            .borrow_mut();
-                        (func.func)(&evaluated_args, self.context)
+
+                    ResolvedExpression::FunctionExternalCall(resolved_external_call) => {
+                        self.evaluate_external_function_call(resolved_external_call)?
                     }
-                }?
-            }
 
-            ResolvedExpression::MemberCall(resolved_member_call) => {
-                let mem_self_value = if resolved_member_call.self_is_mutable {
-                    VariableValue::Reference(ValueReference(
-                        self.evaluate_expression_mut_location_start(
-                            &resolved_member_call.self_expression,
-                        )?,
-                    ))
-                } else {
-                    VariableValue::Value(
-                        self.evaluate_expression(&resolved_member_call.self_expression)?,
-                    )
-                };
-
-                let parameters = match &*resolved_member_call.function {
-                    ResolvedFunction::Internal(function_data) => {
-                        &function_data.signature.parameters
+                    ResolvedExpression::StaticCall(static_call) => {
+                        self.evaluate_static_function_call(static_call)?
                     }
-                    ResolvedFunction::External(external_data) => {
-                        &external_data.signature.parameters
+
+                    ResolvedExpression::StaticCallGeneric(static_call_generic) => {
+                        let evaluated_args = self.evaluate_args(&static_call_generic.arguments)?;
+                        match &*static_call_generic.function {
+                            ResolvedFunction::Internal(function_data) => {
+                                self.push_function_scope();
+                                self.bind_parameters(&function_data.signature.parameters, &evaluated_args)?;
+                                let result = self.evaluate_expression(&function_data.body)?;
+                                self.pop_function_scope();
+                                Ok(result)
+                            }
+                            ResolvedFunction::External(external) => {
+                                let mut func = self
+                                    .externals
+                                    .external_functions_by_id
+                                    .get(&external.id)
+                                    .expect("call_generic: external function missing")
+                                    .borrow_mut();
+                                (func.func)(&evaluated_args, self.context)
+                            }
+                        }?
                     }
-                };
 
-                let mut member_call_arguments = Vec::new();
-                member_call_arguments.push(mem_self_value); // Add self as first argument
-                member_call_arguments.extend(self.evaluate_args(&*resolved_member_call.arguments)?);
+                    ResolvedExpression::MemberCall(resolved_member_call) => {
+                        let mem_self_value = if resolved_member_call.self_is_mutable {
+                            VariableValue::Reference(ValueReference(
+                                self.evaluate_expression_mut_location_start(
+                                    &resolved_member_call.self_expression,
+                                )?,
+                            ))
+                        } else {
+                            VariableValue::Value(
+                                self.evaluate_expression(&resolved_member_call.self_expression)?,
+                            )
+                        };
 
-                // Check total number of parameters (including self)
-                if member_call_arguments.len() != parameters.len() {
-                    return Err(ExecuteError::Error(format!(
-                        "wrong number of arguments: expected {}, got {}",
-                        parameters.len(),
-                        member_call_arguments.len()
-                    )));
-                }
+                        let parameters = match &*resolved_member_call.function {
+                            ResolvedFunction::Internal(function_data) => {
+                                &function_data.signature.parameters
+                            }
+                            ResolvedFunction::External(external_data) => {
+                                &external_data.signature.parameters
+                            }
+                        };
 
-                match &*resolved_member_call.function {
-                    ResolvedFunction::Internal(internal_function) => {
-                        self.push_function_scope();
-                        self.bind_parameters(parameters, &member_call_arguments)?;
-                        let result = self.evaluate_expression(&internal_function.body)?;
-                        self.pop_function_scope();
+                        let mut member_call_arguments = Vec::new();
+                        member_call_arguments.push(mem_self_value); // Add self as first argument
+                        member_call_arguments.extend(self.evaluate_args(&*resolved_member_call.arguments)?);
 
-                        result
+                        // Check total number of parameters (including self)
+                        if member_call_arguments.len() != parameters.len() {
+                            return Err(ExecuteError::Error(format!(
+                                "wrong number of arguments: expected {}, got {}",
+                                parameters.len(),
+                                member_call_arguments.len()
+                            )));
+                        }
+
+                        match &*resolved_member_call.function {
+                            ResolvedFunction::Internal(internal_function) => {
+                                self.push_function_scope();
+                                self.bind_parameters(parameters, &member_call_arguments)?;
+                                let result = self.evaluate_expression(&internal_function.body)?;
+                                self.pop_function_scope();
+
+                                result
+                            }
+                            ResolvedFunction::External(external_func) => {
+                                let mut func = self
+                                    .externals
+                                    .external_functions_by_id
+                                    .get(&external_func.id)
+                                    .expect("member call: external function missing")
+                                    .borrow_mut();
+                                (func.func)(&member_call_arguments, self.context)?
+                            }
+                        }
                     }
-                    ResolvedFunction::External(external_func) => {
-                        let mut func = self
-                            .externals
-                            .external_functions_by_id
-                            .get(&external_func.id)
-                            .expect("member call: external function missing")
-                            .borrow_mut();
-                        (func.func)(&member_call_arguments, self.context)?
-                    }
-                }
-            }
-
+            */
             ResolvedExpression::Block(statements) => self.evaluate_block(statements)?.try_into()?,
 
             ResolvedExpression::InterpolatedString(_string_type_ref, parts) => {
@@ -1274,7 +1320,7 @@ impl<'a, C> Interpreter<'a, C> {
                     .expect("should have external function ref");
                 Value::ExternalFunction(external_ref.borrow().id)
             }
-            ResolvedExpression::MutMemberCall(_, _) => todo!(),
+            //ResolvedExpression::MutMemberCall(_, _) => todo!(),
             ResolvedExpression::Tuple(_) => todo!(),
             ResolvedExpression::LetVar(_, _) => todo!(),
             ResolvedExpression::Option(inner) => match inner {

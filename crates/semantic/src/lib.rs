@@ -11,6 +11,7 @@ use seq_fmt::comma;
 use seq_map::{SeqMap, SeqMapError};
 use seq_set::SeqSet;
 use std::cell::RefCell;
+use std::cmp::PartialEq;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
@@ -149,7 +150,7 @@ impl Debug for Span {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct ResolvedParameter {
     pub name: ResolvedNode,
     pub resolved_type: ResolvedType,
@@ -170,14 +171,13 @@ impl ResolvedParameter {
     }
 }
 
-#[derive(Debug)]
-pub struct ResolvedFunctionSignature {
-    pub first_parameter_is_self: bool,
-    pub parameters: Vec<ResolvedParameter>,
-    pub return_type: ResolvedType,
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct FunctionTypeSignature {
+    pub parameters: Vec<ResolvedType>,
+    pub return_type: Box<ResolvedType>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct ResolvedRustType {
     pub type_name: String, // To identify the specific Rust type
     pub number: u32,       // For type comparison
@@ -200,7 +200,7 @@ impl Spanned for LocalTypeName {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ResolvedType {
     // Primitives
     Int(ResolvedIntTypeRef),
@@ -219,16 +219,23 @@ pub enum ResolvedType {
     Enum(ResolvedEnumTypeRef),
     EnumVariant(ResolvedEnumVariantTypeRef),
 
-    FunctionInternal(ResolvedInternalFunctionDefinitionRef),
-    FunctionExternal(ResolvedExternalFunctionDefinitionRef),
-
+    Function(FunctionTypeSignature),
+    //FunctionExternal(ResolvedExternalFunctionDefinitionRef),
     ExclusiveRange(ResolvedExclusiveRangeTypeRef),
 
     Optional(Box<ResolvedType>),
 
     RustType(ResolvedRustTypeRef),
 
+    Mutable(Box<ResolvedType>),
+
     Any,
+}
+
+impl ResolvedType {
+    pub fn is_mutable(&self) -> bool {
+        todo!()
+    }
 }
 
 impl Display for ResolvedType {
@@ -246,11 +253,11 @@ impl Display for ResolvedType {
             Self::Generic(_, _) => todo!(),
             Self::Enum(_) => todo!(),
             Self::EnumVariant(_) => todo!(),
-            Self::FunctionInternal(_) => todo!(),
-            Self::FunctionExternal(_) => todo!(),
+            Self::Function(_signature) => todo!(),
             Self::ExclusiveRange(_) => todo!(),
             Self::Optional(_) => todo!(),
             Self::RustType(_) => todo!(),
+            Self::Mutable(_) => todo!(),
             Self::Any => todo!(),
         }
     }
@@ -280,8 +287,7 @@ impl Spanned for ResolvedType {
             Self::EnumVariant(_type_ref) => todo!(),
 
             // Function Types
-            Self::FunctionInternal(_func_ref) => todo!(),
-            Self::FunctionExternal(_func_ref) => todo!(),
+            Self::Function(_signature) => todo!(),
 
             // Range Type
             Self::ExclusiveRange(_type_ref) => todo!(),
@@ -294,6 +300,8 @@ impl Spanned for ResolvedType {
 
             // Any Type (might want to use a dummy span or specific location)
             Self::Any => Span::dummy(),
+
+            Self::Mutable(boxed_type) => boxed_type.span(),
         }
     }
 }
@@ -344,7 +352,7 @@ impl ResolvedType {
                 a.0.iter().zip(b.0.iter()).all(|(a, b)| a.same_type(b))
             }
             (Self::Enum(_), Self::Enum(_)) => true,
-            (Self::FunctionInternal(_), Self::FunctionInternal(_)) => true,
+            (Self::Function(a), Self::Function(b)) => a == b,
             (Self::ExclusiveRange(_), Self::ExclusiveRange(_)) => true,
             (Self::EnumVariant(a), Self::EnumVariant(b)) => a.owner.number == b.owner.number,
             (Self::Optional(inner_type_a), Self::Optional(inner_type_b)) => {
@@ -395,16 +403,25 @@ impl ResolvedNode {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct ResolvedLocalIdentifier(pub ResolvedNode);
 
 #[derive(Debug)]
 pub struct ResolvedInternalFunctionDefinition {
     pub body: ResolvedExpression,
     pub name: ResolvedLocalIdentifier,
-    pub signature: ResolvedFunctionSignature,
+    pub parameters: Vec<ResolvedParameter>,
+    pub signature: FunctionTypeSignature,
     pub constants: Vec<ResolvedConstantRef>,
 }
+
+impl PartialEq<Self> for ResolvedInternalFunctionDefinition {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+
+impl Eq for ResolvedInternalFunctionDefinition {}
 
 impl Spanned for ResolvedInternalFunctionDefinition {
     fn span(&self) -> Span {
@@ -420,9 +437,19 @@ pub type ConstantId = u32;
 
 pub struct ResolvedExternalFunctionDefinition {
     pub name: ResolvedNode,
-    pub signature: ResolvedFunctionSignature,
+    pub parameters: Vec<ResolvedParameter>,
+    pub signature: FunctionTypeSignature,
     pub id: ExternalFunctionId,
 }
+
+impl PartialEq<Self> for ResolvedExternalFunctionDefinition {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for ResolvedExternalFunctionDefinition {}
+
 impl Debug for ResolvedExternalFunctionDefinition {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "external fn")
@@ -547,6 +574,7 @@ impl Spanned for ResolvedPostfixOperator {
 #[derive()]
 pub struct ResolvedInternalFunctionCall {
     pub arguments: Vec<ResolvedExpression>,
+
     pub function_definition: ResolvedInternalFunctionDefinitionRef,
     pub function_expression: Box<ResolvedExpression>,
 }
@@ -661,7 +689,7 @@ impl Spanned for ResolvedStructTypeField {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ResolvedAnonymousStructFieldType {
     pub identifier: Option<ResolvedNode>,
 
@@ -767,7 +795,7 @@ pub struct ResolvedMutTupleField {
 
 pub type ResolvedFunctionRef = Rc<ResolvedFunction>;
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum ResolvedFunction {
     Internal(ResolvedInternalFunctionDefinitionRef),
     External(ResolvedExternalFunctionDefinitionRef),
@@ -961,6 +989,12 @@ pub enum ResolvedExpression {
     CoerceOptionToBool(Box<ResolvedExpression>),
 
     // Calls
+    FunctionCall(
+        FunctionTypeSignature,
+        Box<ResolvedExpression>,
+        Vec<ResolvedExpression>,
+    ),
+    /*
     FunctionInternalCall(ResolvedInternalFunctionCall), // ResolvedFunctionReference, Vec<ResolvedExpression>
     FunctionExternalCall(ResolvedExternalFunctionCall),
     StaticCall(ResolvedStaticCall),
@@ -968,6 +1002,7 @@ pub enum ResolvedExpression {
     MutMemberCall(MutMemberRef, Vec<ResolvedExpression>),
     MemberCall(ResolvedMemberCall),
 
+     */
     InterpolatedString(ResolvedStringTypeRef, Vec<ResolvedStringPart>),
 
     // Constructing
@@ -1125,6 +1160,12 @@ impl ResolvedExpression {
             ResolvedExpression::CoerceOptionToBool(expr) => {
                 expr.collect_constant_dependencies(deps);
             }
+            ResolvedExpression::FunctionCall(_func_type, _func_expr, arguments) => {
+                for arg in arguments {
+                    arg.collect_constant_dependencies(deps);
+                }
+            }
+            /*
             ResolvedExpression::FunctionInternalCall(func_call) => {
                 for arg in &func_call.arguments {
                     arg.collect_constant_dependencies(deps);
@@ -1155,6 +1196,8 @@ impl ResolvedExpression {
                     arg.collect_constant_dependencies(deps);
                 }
             }
+
+             */
             ResolvedExpression::InterpolatedString(_, parts) => {
                 for part in parts {
                     match part {
@@ -1353,6 +1396,8 @@ impl Spanned for ResolvedExpression {
             Self::CoerceOptionToBool(expr) => expr.span(),
 
             // Calls
+            Self::FunctionCall(_func_type, _expr, _arg) => todo!(),
+            /*
             Self::FunctionInternalCall(_call) => todo!(),
             Self::FunctionExternalCall(call) => call.arguments[0].span(),
             Self::StaticCall(call) => call.span(),
@@ -1362,6 +1407,7 @@ impl Spanned for ResolvedExpression {
             }
             Self::MemberCall(call) => call.function.span(),
 
+             */
             // Blocks and Strings
             Self::Block(statements) => statements
                 .first()
@@ -1531,9 +1577,9 @@ impl Display for ResolvedForPattern {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct ResolvedModulePathItem(pub ResolvedNode);
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct ResolvedModulePath(pub Vec<ResolvedModulePathItem>);
 
 pub type ResolvedStructTypeRef = Rc<RefCell<ResolvedStructType>>;
@@ -1543,7 +1589,7 @@ pub type TypeNumber = u32;
 #[derive(Debug)]
 pub struct ResolvedIdentifierName(pub ResolvedNode);
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct ResolvedLocalTypeIdentifier(pub ResolvedNode);
 
 pub type ResolvedModulePathRef = Rc<ResolvedModulePath>;
@@ -1564,7 +1610,7 @@ impl Spanned for ResolvedConstant {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct ResolvedStructType {
     pub name: ResolvedNode,
     pub assigned_name: String,
@@ -1664,14 +1710,14 @@ pub struct ResolvedOptionType {
 
 pub type ResolvedArrayTypeRef = Rc<ResolvedArrayType>;
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct ResolvedArrayType {
     pub item_type: ResolvedType,
 }
 
 pub type ResolvedMapTypeRef = Rc<ResolvedMapType>;
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct ResolvedMapType {
     pub key_type: ResolvedType,
     pub value_type: ResolvedType,
@@ -1679,7 +1725,7 @@ pub struct ResolvedMapType {
 
 pub type ResolvedEnumVariantStructTypeRef = Rc<ResolvedEnumVariantStructType>;
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct CommonEnumVariantType {
     pub number: TypeNumber,
     pub module_path: ResolvedModulePath,
@@ -1688,12 +1734,12 @@ pub struct CommonEnumVariantType {
     pub enum_ref: ResolvedEnumTypeRef,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ResolvedAnonymousStructType {
     pub defined_fields: SeqMap<String, ResolvedAnonymousStructFieldType>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct ResolvedEnumVariantStructType {
     pub common: CommonEnumVariantType,
 
@@ -1702,7 +1748,7 @@ pub struct ResolvedEnumVariantStructType {
 
 pub type ResolvedEnumVariantTupleTypeRef = Rc<ResolvedEnumVariantTupleType>;
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct ResolvedEnumVariantTupleType {
     pub common: CommonEnumVariantType,
 
@@ -1711,7 +1757,7 @@ pub struct ResolvedEnumVariantTupleType {
 
 pub type ResolvedTupleTypeRef = Rc<ResolvedTupleType>;
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct ResolvedTupleType(pub Vec<ResolvedType>);
 
 impl ResolvedTupleType {
@@ -1722,7 +1768,7 @@ impl ResolvedTupleType {
 
 pub type ResolvedEnumTypeRef = Rc<ResolvedEnumType>;
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct ResolvedEnumType {
     pub name: ResolvedLocalTypeIdentifier,
     pub assigned_name: String,
@@ -1752,7 +1798,7 @@ impl ResolvedEnumType {
 
 pub type ResolvedEnumVariantTypeRef = Rc<ResolvedEnumVariantType>;
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct ResolvedEnumVariantType {
     pub owner: ResolvedEnumTypeRef,
     pub data: ResolvedEnumVariantContainerType,
@@ -1809,7 +1855,7 @@ impl ResolvedEnumVariantType {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ResolvedEnumVariantContainerType {
     Struct(ResolvedEnumVariantStructTypeRef),
     Tuple(ResolvedEnumVariantTupleTypeRef),

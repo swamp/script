@@ -18,7 +18,6 @@ use swamp_script_ast::{
     SpanWithoutFileId,
 };
 use swamp_script_semantic::modules::ResolvedModules;
-use swamp_script_semantic::ResolvedProgramTypes;
 use swamp_script_semantic::{
     create_rust_type, prelude::*, FileId, ResolvedAccess, ResolvedAnonymousStructFieldType,
     ResolvedAnonymousStructType, ResolvedBinaryOperatorKind, ResolvedBoolType,
@@ -29,9 +28,10 @@ use swamp_script_semantic::{
     ResolvedUnaryOperatorKind, ResolvedUse, ResolvedUseItem, ResolvedVariableCompoundAssignment,
     Span, TypeNumber,
 };
+use swamp_script_semantic::{FunctionTypeSignature, ResolvedProgramTypes};
 use swamp_script_semantic::{
     ResolvedDefinition, ResolvedEnumTypeRef, ResolvedFunction, ResolvedFunctionRef,
-    ResolvedFunctionSignature, ResolvedMapTypeRef, ResolvedMutMap, ResolvedStaticCall,
+    ResolvedMapTypeRef, ResolvedMutMap, ResolvedStaticCall,
 };
 use swamp_script_semantic::{ResolvedMapType, ResolvedProgramState};
 use swamp_script_semantic::{ResolvedModulePath, ResolvedPostfixOperator};
@@ -76,7 +76,7 @@ pub const fn convert_span(without: &SpanWithoutFileId, file_id: FileId) -> Span 
 
 pub const SPARSE_TYPE_ID: TypeNumber = 999;
 
-pub fn signature(f: &ResolvedFunction) -> &ResolvedFunctionSignature {
+pub fn signature(f: &ResolvedFunction) -> &FunctionTypeSignature {
     match f {
         ResolvedFunction::Internal(internal) => &internal.signature,
         ResolvedFunction::External(external) => &external.signature,
@@ -92,10 +92,10 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
         ResolvedExpression::ConstantAccess(constant_ref) => constant_ref.resolved_type.clone(),
 
         ResolvedExpression::InternalFunctionAccess(internal_function_def) => {
-            ResolvedType::FunctionInternal(internal_function_def.clone())
+            ResolvedType::Function(internal_function_def.signature.clone())
         }
         ResolvedExpression::ExternalFunctionAccess(external_function_def) => {
-            ResolvedType::FunctionExternal(external_function_def.clone())
+            ResolvedType::Function(external_function_def.signature.clone())
         }
         ResolvedExpression::MutVariableRef(mut_var_ref) => {
             mut_var_ref.variable_ref.resolved_type.clone()
@@ -127,27 +127,32 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
         ResolvedExpression::UnaryOp(unary_op) => unary_op.resolved_type.clone(),
         ResolvedExpression::PostfixOp(postfix_op) => postfix_op.resolved_type.clone(),
 
-        ResolvedExpression::FunctionInternalCall(internal_fn_call) => internal_fn_call
+        ResolvedExpression::FunctionCall(signature, _fn_expr, _arguments) => {
+            *signature.return_type.clone()
+        }
+        /*
+        ResolvedExpression::FunctionInternalCall(internal_fn_call) => *internal_fn_call
             .function_definition
             .signature
             .return_type
             .clone(),
-        ResolvedExpression::FunctionExternalCall(external_fn_call) => external_fn_call
+        ResolvedExpression::FunctionExternalCall(external_fn_call) => *external_fn_call
             .function_definition
             .signature
             .return_type
             .clone(),
         ResolvedExpression::MutMemberCall(_, _) => todo!(),
         ResolvedExpression::MemberCall(member_call) => {
-            signature(&member_call.function).return_type.clone()
+            *signature(&member_call.function).return_type.clone()
         }
         ResolvedExpression::StaticCall(static_call) => {
-            signature(&static_call.function).return_type.clone()
+            *signature(&static_call.function).return_type.clone()
         }
         ResolvedExpression::StaticCallGeneric(static_call_generic) => {
-            signature(&static_call_generic.function).return_type.clone()
+            *signature(&static_call_generic.function).return_type.clone()
         }
 
+         */
         ResolvedExpression::InterpolatedString(string_type, _parts) => {
             ResolvedType::String(string_type.clone())
         }
@@ -325,6 +330,7 @@ pub enum ResolveError {
     NoDefaultImplemented(ResolvedType),
     NoDefaultImplementedForStruct(ResolvedStructTypeRef),
     UnknownConstant(ResolvedNode),
+    ExpectedFunctionTypeForFunctionCall(Span),
 }
 
 impl From<SemanticError> for ResolveError {
@@ -562,7 +568,7 @@ impl<'a> Resolver<'a> {
             Type::Unit(_) => ResolvedType::Unit(self.shared.types.unit_type.clone()),
             Type::Struct(ast_struct) => {
                 let struct_ref = self.get_struct_type(ast_struct)?;
-                ResolvedType::Struct(struct_ref.clone())
+                ResolvedType::Struct(struct_ref)
             }
             Type::Array(ast_type) => ResolvedType::Array(self.resolve_array_type(ast_type)?),
             Type::Map(key_type, value_type) => {
@@ -582,6 +588,15 @@ impl<'a> Resolver<'a> {
             Type::Optional(inner_type_ast, _node) => {
                 let inner_resolved_type = self.resolve_type(inner_type_ast)?;
                 ResolvedType::Optional(Box::from(inner_resolved_type))
+            }
+            Type::Function(parameters, return_type) => {
+                let parameter_types = self.resolve_types(parameters)?;
+
+                let resolved_return_type = self.resolve_type(return_type)?;
+                ResolvedType::Function(FunctionTypeSignature {
+                    parameters: parameter_types,
+                    return_type: Box::new(resolved_return_type),
+                })
             }
         };
 
@@ -930,12 +945,16 @@ impl<'a> Resolver<'a> {
                     self.resolve_statements_in_function(&function_data.body, &return_type)?;
                 self.scope.return_type = self.shared.types.unit_type();
 
+                let parameter_types = parameters
+                    .iter()
+                    .map(|param| param.resolved_type.clone())
+                    .collect();
                 let internal = ResolvedInternalFunctionDefinition {
-                    signature: ResolvedFunctionSignature {
-                        first_parameter_is_self: function_data.declaration.self_parameter.is_some(),
-                        parameters,
-                        return_type,
+                    signature: FunctionTypeSignature {
+                        parameters: parameter_types,
+                        return_type: Box::new(return_type),
                     },
+                    parameters,
                     body: statements,
                     name: ResolvedLocalIdentifier(self.to_node(&function_data.declaration.name)),
                     constants,
@@ -959,14 +978,18 @@ impl<'a> Resolver<'a> {
                 let return_type = external_return_type;
                 let external_function_id = self.shared.state.allocate_external_function_id();
 
+                let parameter_types = parameters
+                    .iter()
+                    .map(|param| param.resolved_type.clone())
+                    .collect();
                 let external = ResolvedExternalFunctionDefinition {
-                    signature: ResolvedFunctionSignature {
-                        first_parameter_is_self: ast_signature.self_parameter.is_some(),
-                        parameters,
-                        return_type,
+                    signature: FunctionTypeSignature {
+                        parameters: parameter_types,
+                        return_type: Box::new(return_type),
                     },
                     name: self.to_node(&ast_signature.name),
                     id: external_function_id,
+                    parameters,
                 };
 
                 ResolvedFunction::External(Rc::new(external))
@@ -1032,13 +1055,18 @@ impl<'a> Resolver<'a> {
                 let statements =
                     self.resolve_statements_in_function(&function_data.body, &return_type)?;
 
+                let parameter_types = parameters
+                    .iter()
+                    .map(|param| param.resolved_type.clone())
+                    .collect();
+
                 let internal = ResolvedInternalFunctionDefinition {
-                    signature: ResolvedFunctionSignature {
-                        first_parameter_is_self: function_data.declaration.self_parameter.is_some(),
-                        parameters,
-                        return_type,
+                    signature: FunctionTypeSignature {
+                        parameters: parameter_types,
+                        return_type: Box::new(return_type),
                     },
                     body: statements,
+                    parameters,
                     name: ResolvedLocalIdentifier(self.to_node(&function_data.declaration.name)),
                     constants,
                 };
@@ -1072,14 +1100,18 @@ impl<'a> Resolver<'a> {
                 }
 
                 let return_type = self.resolve_maybe_type(&signature.return_type)?;
+                let parameter_types = parameters
+                    .iter()
+                    .map(|param| param.resolved_type.clone())
+                    .collect();
 
                 let external = ResolvedExternalFunctionDefinition {
                     name: self.to_node(&signature.name),
-                    signature: ResolvedFunctionSignature {
-                        first_parameter_is_self: signature.self_parameter.is_some(),
-                        parameters,
-                        return_type,
+                    signature: FunctionTypeSignature {
+                        parameters: parameter_types,
+                        return_type: Box::new(return_type),
                     },
+                    parameters,
                     id: 0,
                 };
 
@@ -1198,6 +1230,8 @@ impl<'a> Resolver<'a> {
         let mut resolved_parameters = Vec::new();
         for parameter in parameters {
             let param_type = self.resolve_type(&parameter.param_type)?;
+            let debug_name = self.get_text(&parameter.variable.name);
+            info!(?debug_name, ?param_type, orig_type=?parameter.param_type, "setting parameter to type");
             resolved_parameters.push(ResolvedParameter {
                 name: self.to_node(&parameter.variable.name),
                 resolved_type: param_type,
@@ -1283,7 +1317,7 @@ impl<'a> Resolver<'a> {
                 self.resolve_array_index_access(expression, &array_item_ref, index_expr)?
             }
 
-            Expression::VariableAccess(variable) => self.resolve_variable(&variable.name)?,
+            Expression::VariableAccess(variable) => self.resolve_variable_like(&variable.name)?,
 
             Expression::ConstantAccess(constant_identifier) => {
                 self.resolve_constant_access(constant_identifier)?
@@ -1407,12 +1441,17 @@ impl<'a> Resolver<'a> {
             Expression::FunctionCall(function_expression, parameter_expressions) => {
                 self.resolve_function_call(function_expression, parameter_expressions)?
             }
+
             Expression::StaticCall(type_name, function_name, arguments) => {
+                todo!()
+                /*
                 ResolvedExpression::StaticCall(self.resolve_static_call(
                     type_name,
                     function_name,
                     arguments,
                 )?)
+
+                 */
             }
 
             Expression::StaticCallGeneric(type_name, function_name, arguments) => {
@@ -1421,11 +1460,15 @@ impl<'a> Resolver<'a> {
                 {
                     found
                 } else {
+                    todo!()
+                    /*
                     ResolvedExpression::StaticCallGeneric(self.resolve_static_call_generic(
                         type_name,
                         function_name,
                         arguments,
                     )?)
+
+                     */
                 }
             }
 
@@ -1440,11 +1483,15 @@ impl<'a> Resolver<'a> {
                     return Ok(internal_expression);
                 }
 
+                todo!()
+                /*
                 ResolvedExpression::MemberCall(self.resolve_member_call(
                     ast_member_expression,
                     ast_identifier,
                     ast_arguments,
                 )?)
+
+                 */
             }
             Expression::Block(expressions) => {
                 ResolvedExpression::Block(self.resolve_expressions(expressions)?)
@@ -1952,10 +1999,14 @@ impl<'a> Resolver<'a> {
             ResolvedType::Struct(struct_ref) => {
                 let struct_ref_borrow = struct_ref.borrow();
                 if let Some(function) = struct_ref_borrow.functions.get(&"default".to_string()) {
+                    todo!()
+                    /*
                     ResolvedExpression::StaticCall(ResolvedStaticCall {
                         function: function.clone(),
                         arguments: vec![],
                     })
+
+                     */
                 } else {
                     return Err(ResolveError::NoDefaultImplementedForStruct(
                         struct_ref.clone(),
@@ -2002,10 +2053,11 @@ impl<'a> Resolver<'a> {
                 expressions.push(ResolvedExpression::InitializeVariable(
                     ResolvedVariableAssignment {
                         variable_refs: vec![temp_var.clone()],
-                        expression: Box::new(ResolvedExpression::StaticCall(ResolvedStaticCall {
-                            function: function.clone(),
-                            arguments: vec![],
-                        })),
+                        expression: todo!(), /* Box::new(ResolvedExpression::StaticCall(ResolvedStaticCall {
+                                                 function: function.clone(),
+                                                 arguments: vec![],
+                                             }))
+                                             */
                     },
                 ));
 
@@ -2338,7 +2390,7 @@ impl<'a> Resolver<'a> {
 
     fn resolve_and_verify_parameters(
         &mut self,
-        fn_parameters: &[ResolvedParameter],
+        fn_parameters: &[ResolvedType],
         arguments: &[Expression],
     ) -> Result<Vec<ResolvedExpression>, ResolveError> {
         let resolved_arguments = self.resolve_expressions(arguments)?;
@@ -2352,17 +2404,17 @@ impl<'a> Resolver<'a> {
         for (parameter_index, resolved_argument_expression) in resolved_arguments.iter().enumerate()
         {
             let parameter = &fn_parameters[parameter_index];
-            let parameter_type = &parameter.resolved_type;
+            let parameter_type = &parameter;
             let argument_type = resolution(resolved_argument_expression);
             if !argument_type.same_type(parameter_type) {
                 error!("{argument_type:?}: {resolved_argument_expression:?}");
                 return Err(ResolveError::IncompatibleArguments(
                     argument_type,
-                    parameter_type.clone(),
+                    parameter_type.clone().clone(),
                 ));
             }
 
-            if parameter.is_mutable.is_some()
+            if parameter.is_mutable()
                 && !matches!(
                     resolved_argument_expression,
                     ResolvedExpression::MutVariableRef(_)
@@ -2374,24 +2426,25 @@ impl<'a> Resolver<'a> {
 
         Ok(resolved_arguments)
     }
+    /*
+        fn resolve_internal_function_call(
+            &mut self,
+            fn_def: &ResolvedInternalFunctionDefinitionRef,
+            function_expr: ResolvedExpression,
+            arguments: &[Expression],
+        ) -> Result<ResolvedExpression, ResolveError> {
+            let resolved_arguments =
+                self.resolve_and_verify_parameters(&fn_def.signature.parameters, arguments)?;
 
-    fn resolve_internal_function_call(
-        &mut self,
-        fn_def: &ResolvedInternalFunctionDefinitionRef,
-        function_expr: ResolvedExpression,
-        arguments: &[Expression],
-    ) -> Result<ResolvedExpression, ResolveError> {
-        let resolved_arguments =
-            self.resolve_and_verify_parameters(&fn_def.signature.parameters, arguments)?;
-
-        Ok(ResolvedExpression::FunctionInternalCall(
-            ResolvedInternalFunctionCall {
-                arguments: resolved_arguments,
-                function_definition: fn_def.clone(),
-                function_expression: Box::from(function_expr),
-            },
-        ))
-    }
+            Ok(ResolvedExpression::FunctionInternalCall(
+                ResolvedInternalFunctionCall {
+                    arguments: resolved_arguments,
+                    function_definition: fn_def.clone(),
+                    function_expression: Box::from(function_expr),
+                },
+            ))
+        }
+    */
 
     fn resolve_external_function_call(
         &mut self,
@@ -2402,6 +2455,8 @@ impl<'a> Resolver<'a> {
         let resolved_arguments =
             self.resolve_and_verify_parameters(&fn_def.signature.parameters, arguments)?;
 
+        todo!()
+        /*
         Ok(ResolvedExpression::FunctionExternalCall(
             ResolvedExternalFunctionCall {
                 arguments: resolved_arguments,
@@ -2409,6 +2464,8 @@ impl<'a> Resolver<'a> {
                 function_expression: Box::from(function_expr),
             },
         ))
+
+         */
     }
 
     fn resolve_function_call(
@@ -2417,82 +2474,25 @@ impl<'a> Resolver<'a> {
         arguments: &[Expression],
     ) -> Result<ResolvedExpression, ResolveError> {
         let function_expr = self.resolve_expression(function_expression)?;
+        info!(?function_expr, "function expression");
         let resolution_type = resolution(&function_expr);
+        info!(?resolution_type, "function expression resulted in type");
 
-        match resolution_type {
-            ResolvedType::FunctionInternal(ref function_call) => {
-                if function_call.signature.first_parameter_is_self {
-                    // For member functions, extract the target object from the function expression
-                    match function_expression {
-                        Expression::MemberCall(ref target, _, _) => {
-                            let mut all_args = Vec::new();
+        let resolved_arguments = self.resolve_expressions(arguments)?;
+        if let ResolvedType::Function(signature) = resolution_type {
+            // TODO: Verify signature with resolved_arguments
 
-                            // extend_from_slice is using Clone for unknown reason,
-                            // even though we have ownership of the Expression in &[Expression].
-                            unsafe {
-                                // Move target expression into vec
-                                let target_expr = std::ptr::read(&**target);
-                                all_args.push(target_expr);
+            info!(?function_expr, "function expression");
 
-                                let target_ptr = all_args.as_mut_ptr().add(1);
-                                std::ptr::copy_nonoverlapping(
-                                    arguments.as_ptr(),
-                                    target_ptr,
-                                    arguments.len(),
-                                );
-                                all_args.set_len(1 + arguments.len());
-                            }
-
-                            self.resolve_internal_function_call(
-                                function_call,
-                                function_expr,
-                                &all_args,
-                            )
-                        }
-                        _ => Err(ResolveError::ExpectedMemberCall(
-                            function_call.name.0.clone(),
-                        )),
-                    }
-                } else {
-                    // Regular function call
-                    self.resolve_internal_function_call(function_call, function_expr, arguments)
-                }
-            }
-            ResolvedType::FunctionExternal(ref function_call) => {
-                // Similar handling for external functions
-                if function_call.signature.first_parameter_is_self {
-                    match function_expression {
-                        Expression::MemberCall(target, _, _) => {
-                            let mut all_args = Vec::new();
-
-                            // extend_from_slice is using Clone for unknown reason,
-                            // even though we have ownership of the Expression in &[Expression].
-                            unsafe {
-                                // Move target expression into vec
-                                let target_expr = std::ptr::read(&**target);
-                                all_args.push(target_expr);
-
-                                let target_ptr = all_args.as_mut_ptr().add(1);
-                                std::ptr::copy_nonoverlapping(
-                                    arguments.as_ptr(),
-                                    target_ptr,
-                                    arguments.len(),
-                                );
-                                all_args.set_len(1 + arguments.len());
-                            }
-                            self.resolve_external_function_call(
-                                function_call,
-                                function_expr,
-                                &all_args,
-                            )
-                        }
-                        _ => Err(ResolveError::ExpectedMemberCall(function_call.name.clone())),
-                    }
-                } else {
-                    self.resolve_external_function_call(function_call, function_expr, arguments)
-                }
-            }
-            _ => Err(ResolveError::ExpectedFunctionExpression),
+            Ok(ResolvedExpression::FunctionCall(
+                signature,
+                Box::from(function_expr),
+                resolved_arguments,
+            ))
+        } else {
+            Err(ResolveError::ExpectedFunctionTypeForFunctionCall(
+                function_expr.span(),
+            ))
         }
     }
 
@@ -2540,7 +2540,7 @@ impl<'a> Resolver<'a> {
                     .parameters
                     .first()
                     .ok_or_else(|| ResolveError::WrongNumberOfArguments(0, 1))?;
-                (first_param.is_mutable.clone(), &function_data.signature)
+                (first_param.is_mutable().clone(), &function_data.signature)
             }
             ResolvedFunction::External(external) => {
                 let first_param = external
@@ -2548,7 +2548,7 @@ impl<'a> Resolver<'a> {
                     .parameters
                     .first()
                     .ok_or_else(|| ResolveError::WrongNumberOfArguments(0, 1))?;
-                (first_param.is_mutable.clone(), &external.signature)
+                (first_param.is_mutable().clone(), &external.signature)
             }
         };
 
@@ -2568,7 +2568,7 @@ impl<'a> Resolver<'a> {
             arguments: resolved_arguments,
             self_expression: Box::new(resolved_expression),
             // struct_type_ref: resolved_struct_type_ref.clone(),
-            self_is_mutable: is_self_mutable.is_some(),
+            self_is_mutable: is_self_mutable,
         })
     }
 
@@ -2749,11 +2749,39 @@ impl<'a> Resolver<'a> {
             )
     }
 
-    fn resolve_variable(&self, var_node: &Node) -> Result<ResolvedExpression, ResolveError> {
-        self.try_find_variable(var_node).map_or(
-            Err(ResolveError::UnknownVariable(self.to_node(var_node))),
-            |variable_ref| Ok(ResolvedExpression::VariableAccess(variable_ref)),
-        )
+    // The ast assumes it is something similar to a variable, but it can be a function reference as well.
+    fn resolve_variable_like(&self, var_node: &Node) -> Result<ResolvedExpression, ResolveError> {
+        let text = self.get_text(var_node);
+        self.shared
+            .lookup
+            .get_internal_function(&[], text)
+            .map_or_else(
+                || {
+                    self.shared
+                        .lookup
+                        .get_external_function_declaration(&[], text)
+                        .map_or_else(
+                            || {
+                                self.try_find_variable(var_node).map_or(
+                                    Err(ResolveError::UnknownVariable(self.to_node(var_node))),
+                                    |variable_ref| {
+                                        Ok(ResolvedExpression::VariableAccess(variable_ref))
+                                    },
+                                )
+                            },
+                            |found_external_function| {
+                                Ok(ResolvedExpression::ExternalFunctionAccess(
+                                    found_external_function,
+                                ))
+                            },
+                        )
+                },
+                |found_internal_function| {
+                    Ok(ResolvedExpression::InternalFunctionAccess(
+                        found_internal_function,
+                    ))
+                },
+            )
     }
 
     fn resolve_constant_access(

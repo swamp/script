@@ -326,7 +326,7 @@ for a in 0..3 {
 }
         ",
         r"
-        
+
 InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <5:1>, resolved_type: Int(ResolvedIntType), mutable_node: Some(<1:3>), scope_index: 0, variable_index: 0 }], expression: Literal(IntLiteral(0, <9:1>, ResolvedIntType)) })
 ForLoop(Single(ResolvedVariable { name: <15:1>, resolved_type: Int(ResolvedIntType), mutable_node: None, scope_index: 1, variable_index: 0 }), ResolvedIterator { key_type: None, value_type: Int(ResolvedIntType), resolved_expression: ExclusiveRange(ResolvedExclusiveRangeType, Literal(IntLiteral(0, <20:1>, ResolvedIntType)), Literal(IntLiteral(3, <23:1>, ResolvedIntType))) }, Block([VariableCompoundAssignment(ResolvedVariableCompoundAssignment { variable_ref: ResolvedVariable { name: <5:1>, resolved_type: Int(ResolvedIntType), mutable_node: Some(<1:3>), scope_index: 0, variable_index: 0 }, expression: VariableAccess(ResolvedVariable { name: <15:1>, resolved_type: Int(ResolvedIntType), mutable_node: None, scope_index: 1, variable_index: 0 }), compound_operator: ResolvedCompoundOperator { node: <33:2>, kind: Add } })]))
 
@@ -345,7 +345,7 @@ for a in arr {
 }
         ",
         r"
-        
+
 InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <1:3>, resolved_type: Array(ResolvedArrayType { item_type: Int(ResolvedIntType) }), mutable_node: None, scope_index: 0, variable_index: 0 }], expression: Literal(Array(ResolvedArrayType { item_type: Int(ResolvedIntType) }, [Literal(IntLiteral(40, <8:2>, ResolvedIntType)), Literal(IntLiteral(50, <12:2>, ResolvedIntType)), Literal(IntLiteral(60, <16:2>, ResolvedIntType))])) })
 InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <24:1>, resolved_type: Int(ResolvedIntType), mutable_node: Some(<20:3>), scope_index: 0, variable_index: 1 }], expression: Literal(IntLiteral(0, <28:1>, ResolvedIntType)) })
 ForLoop(Single(ResolvedVariable { name: <34:1>, resolved_type: Int(ResolvedIntType), mutable_node: None, scope_index: 1, variable_index: 0 }), ResolvedIterator { key_type: Some(Int(ResolvedIntType)), value_type: Int(ResolvedIntType), resolved_expression: VariableAccess(ResolvedVariable { name: <1:3>, resolved_type: Array(ResolvedArrayType { item_type: Int(ResolvedIntType) }), mutable_node: None, scope_index: 0, variable_index: 0 }) }, Block([VariableCompoundAssignment(ResolvedVariableCompoundAssignment { variable_ref: ResolvedVariable { name: <24:1>, resolved_type: Int(ResolvedIntType), mutable_node: Some(<20:3>), scope_index: 0, variable_index: 1 }, expression: VariableAccess(ResolvedVariable { name: <34:1>, resolved_type: Int(ResolvedIntType), mutable_node: None, scope_index: 1, variable_index: 0 }), compound_operator: ResolvedCompoundOperator { node: <51:2>, kind: Add } })]))
@@ -365,7 +365,7 @@ for index, a in arr {
 }
         ",
         r"
-        
+
 InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <1:3>, resolved_type: Array(ResolvedArrayType { item_type: Int(ResolvedIntType) }), mutable_node: None, scope_index: 0, variable_index: 0 }], expression: Literal(Array(ResolvedArrayType { item_type: Int(ResolvedIntType) }, [Literal(IntLiteral(40, <8:2>, ResolvedIntType)), Literal(IntLiteral(50, <12:2>, ResolvedIntType)), Literal(IntLiteral(60, <16:2>, ResolvedIntType))])) })
 InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <24:1>, resolved_type: Int(ResolvedIntType), mutable_node: Some(<20:3>), scope_index: 0, variable_index: 1 }], expression: Literal(IntLiteral(0, <28:1>, ResolvedIntType)) })
 ForLoop(Pair(ResolvedVariable { name: <34:5>, resolved_type: Int(ResolvedIntType), mutable_node: None, scope_index: 1, variable_index: 0 }, ResolvedVariable { name: <41:1>, resolved_type: Int(ResolvedIntType), mutable_node: None, scope_index: 1, variable_index: 1 }), ResolvedIterator { key_type: Some(Int(ResolvedIntType)), value_type: Int(ResolvedIntType), resolved_expression: VariableAccess(ResolvedVariable { name: <1:3>, resolved_type: Array(ResolvedArrayType { item_type: Int(ResolvedIntType) }), mutable_node: None, scope_index: 0, variable_index: 0 }) }, Block([VariableCompoundAssignment(ResolvedVariableCompoundAssignment { variable_ref: ResolvedVariable { name: <24:1>, resolved_type: Int(ResolvedIntType), mutable_node: Some(<20:3>), scope_index: 0, variable_index: 1 }, expression: VariableAccess(ResolvedVariable { name: <41:1>, resolved_type: Int(ResolvedIntType), mutable_node: None, scope_index: 1, variable_index: 1 }), compound_operator: ResolvedCompoundOperator { node: <58:2>, kind: Add } })]))
@@ -385,7 +385,7 @@ for index, a in arr {
 }
         ",
         r"
-        
+
 InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <1:3>, resolved_type: Array(ResolvedArrayType { item_type: Int(ResolvedIntType) }), mutable_node: None, scope_index: 0, variable_index: 0 }], expression: Literal(Array(ResolvedArrayType { item_type: Int(ResolvedIntType) }, [Literal(IntLiteral(40, <8:2>, ResolvedIntType)), Literal(IntLiteral(50, <12:2>, ResolvedIntType)), Literal(IntLiteral(60, <16:2>, ResolvedIntType))])) })
 InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <24:1>, resolved_type: Int(ResolvedIntType), mutable_node: Some(<20:3>), scope_index: 0, variable_index: 1 }], expression: Literal(IntLiteral(0, <28:1>, ResolvedIntType)) })
 ForLoop(Pair(ResolvedVariable { name: <34:5>, resolved_type: Int(ResolvedIntType), mutable_node: None, scope_index: 1, variable_index: 0 }, ResolvedVariable { name: <41:1>, resolved_type: Int(ResolvedIntType), mutable_node: None, scope_index: 1, variable_index: 1 }), ResolvedIterator { key_type: Some(Int(ResolvedIntType)), value_type: Int(ResolvedIntType), resolved_expression: VariableAccess(ResolvedVariable { name: <1:3>, resolved_type: Array(ResolvedArrayType { item_type: Int(ResolvedIntType) }), mutable_node: None, scope_index: 0, variable_index: 0 }) }, Block([VariableCompoundAssignment(ResolvedVariableCompoundAssignment { variable_ref: ResolvedVariable { name: <24:1>, resolved_type: Int(ResolvedIntType), mutable_node: Some(<20:3>), scope_index: 0, variable_index: 1 }, expression: VariableAccess(ResolvedVariable { name: <41:1>, resolved_type: Int(ResolvedIntType), mutable_node: None, scope_index: 1, variable_index: 1 }), compound_operator: ResolvedCompoundOperator { node: <58:2>, kind: Add } })]))
@@ -405,7 +405,7 @@ for a in 0..3 {
 }
         ",
         r"
-        
+
 InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <5:1>, resolved_type: Int(ResolvedIntType), mutable_node: Some(<1:3>), scope_index: 0, variable_index: 0 }], expression: Literal(IntLiteral(0, <9:1>, ResolvedIntType)) })
 ForLoop(Single(ResolvedVariable { name: <15:1>, resolved_type: Int(ResolvedIntType), mutable_node: None, scope_index: 1, variable_index: 0 }), ResolvedIterator { key_type: None, value_type: Int(ResolvedIntType), resolved_expression: ExclusiveRange(ResolvedExclusiveRangeType, Literal(IntLiteral(0, <20:1>, ResolvedIntType)), Literal(IntLiteral(3, <23:1>, ResolvedIntType))) }, Block([VariableCompoundAssignment(ResolvedVariableCompoundAssignment { variable_ref: ResolvedVariable { name: <5:1>, resolved_type: Int(ResolvedIntType), mutable_node: Some(<1:3>), scope_index: 0, variable_index: 0 }, expression: VariableAccess(ResolvedVariable { name: <15:1>, resolved_type: Int(ResolvedIntType), mutable_node: None, scope_index: 1, variable_index: 0 }), compound_operator: ResolvedCompoundOperator { node: <33:2>, kind: Add } }), Break(<42:5>)]))
 
@@ -424,7 +424,7 @@ enum GameState {
 }
 
 game_state = GameState::Paused
-        
+
 match game_state {
     Playing => 1,
     Paused => 2,
@@ -433,7 +433,7 @@ match game_state {
 }
         ",
         r#"
-        
+
 EnumType(ResolvedEnumType { name: ResolvedLocalTypeIdentifier(<6:9>), assigned_name: "GameState", module_path: ["test"], number: 1 }, [ResolvedEnumVariantType { owner: ResolvedEnumType { name: ResolvedLocalTypeIdentifier(<6:9>), assigned_name: "GameState", module_path: ["test"], number: 1 }, data: Nothing, name: ResolvedLocalTypeIdentifier(<22:7>), assigned_name: "Playing", number: 0 }, ResolvedEnumVariantType { owner: ResolvedEnumType { name: ResolvedLocalTypeIdentifier(<6:9>), assigned_name: "GameState", module_path: ["test"], number: 1 }, data: Nothing, name: ResolvedLocalTypeIdentifier(<35:6>), assigned_name: "Paused", number: 0 }, ResolvedEnumVariantType { owner: ResolvedEnumType { name: ResolvedLocalTypeIdentifier(<6:9>), assigned_name: "GameState", module_path: ["test"], number: 1 }, data: Nothing, name: ResolvedLocalTypeIdentifier(<47:8>), assigned_name: "GameOver", number: 0 }])
 ---
 InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <60:10>, resolved_type: Enum(ResolvedEnumType { name: ResolvedLocalTypeIdentifier(<6:9>), assigned_name: "GameState", module_path: ["test"], number: 1 }), mutable_node: None, scope_index: 0, variable_index: 0 }], expression: Literal(EnumVariantLiteral(ResolvedEnumVariantType { owner: ResolvedEnumType { name: ResolvedLocalTypeIdentifier(<6:9>), assigned_name: "GameState", module_path: ["test"], number: 1 }, data: Nothing, name: ResolvedLocalTypeIdentifier(<35:6>), assigned_name: "Paused", number: 0 }, Nothing)) })
@@ -454,7 +454,7 @@ enum GameState {
 }
 
 game_state = GameState::Paused
-        
+
 match game_state {
     Playing => 1,
     Paused time => 2,
@@ -463,7 +463,7 @@ match game_state {
 }
         ",
         r#"
-        
+
 EnumType(ResolvedEnumType { name: ResolvedLocalTypeIdentifier(<6:9>), assigned_name: "GameState", module_path: ["test"], number: 1 }, [ResolvedEnumVariantType { owner: ResolvedEnumType { name: ResolvedLocalTypeIdentifier(<6:9>), assigned_name: "GameState", module_path: ["test"], number: 1 }, data: Nothing, name: ResolvedLocalTypeIdentifier(<22:7>), assigned_name: "Playing", number: 0 }, ResolvedEnumVariantType { owner: ResolvedEnumType { name: ResolvedLocalTypeIdentifier(<6:9>), assigned_name: "GameState", module_path: ["test"], number: 1 }, data: Struct(ResolvedEnumVariantStructType { common: CommonEnumVariantType { number: 2, module_path: ResolvedModulePath([]), variant_name: ResolvedLocalTypeIdentifier(<35:6>), assigned_name: "Paused", enum_ref: ResolvedEnumType { name: ResolvedLocalTypeIdentifier(<6:9>), assigned_name: "GameState", module_path: ["test"], number: 1 } }, anon_struct: ResolvedAnonymousStructType { defined_fields: SeqMap("time": ResolvedAnonymousStructFieldType { identifier: ResolvedFieldName(<44:4>), field_type: Int(ResolvedIntType), index: 0 }) } }), name: ResolvedLocalTypeIdentifier(<35:6>), assigned_name: "Paused", number: 2 }, ResolvedEnumVariantType { owner: ResolvedEnumType { name: ResolvedLocalTypeIdentifier(<6:9>), assigned_name: "GameState", module_path: ["test"], number: 1 }, data: Nothing, name: ResolvedLocalTypeIdentifier(<61:8>), assigned_name: "GameOver", number: 0 }])
 ---
 InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <74:10>, resolved_type: Enum(ResolvedEnumType { name: ResolvedLocalTypeIdentifier(<6:9>), assigned_name: "GameState", module_path: ["test"], number: 1 }), mutable_node: None, scope_index: 0, variable_index: 0 }], expression: Literal(EnumVariantLiteral(ResolvedEnumVariantType { owner: ResolvedEnumType { name: ResolvedLocalTypeIdentifier(<6:9>), assigned_name: "GameState", module_path: ["test"], number: 1 }, data: Struct(ResolvedEnumVariantStructType { common: CommonEnumVariantType { number: 2, module_path: ResolvedModulePath([]), variant_name: ResolvedLocalTypeIdentifier(<35:6>), assigned_name: "Paused", enum_ref: ResolvedEnumType { name: ResolvedLocalTypeIdentifier(<6:9>), assigned_name: "GameState", module_path: ["test"], number: 1 } }, anon_struct: ResolvedAnonymousStructType { defined_fields: SeqMap("time": ResolvedAnonymousStructFieldType { identifier: ResolvedFieldName(<44:4>), field_type: Int(ResolvedIntType), index: 0 }) } }), name: ResolvedLocalTypeIdentifier(<35:6>), assigned_name: "Paused", number: 2 }, Nothing)) })
@@ -484,7 +484,7 @@ enum GameState {
 }
 
 game_state = GameState::Paused
-        
+
 match game_state {
     Playing => 1,
     Paused time, _ => 2,
@@ -493,7 +493,7 @@ match game_state {
 }
         ",
         r#"
-        
+
 EnumType(ResolvedEnumType { name: ResolvedLocalTypeIdentifier(<6:9>), assigned_name: "GameState", module_path: ["test"], number: 1 }, [ResolvedEnumVariantType { owner: ResolvedEnumType { name: ResolvedLocalTypeIdentifier(<6:9>), assigned_name: "GameState", module_path: ["test"], number: 1 }, data: Nothing, name: ResolvedLocalTypeIdentifier(<22:7>), assigned_name: "Playing", number: 0 }, ResolvedEnumVariantType { owner: ResolvedEnumType { name: ResolvedLocalTypeIdentifier(<6:9>), assigned_name: "GameState", module_path: ["test"], number: 1 }, data: Tuple(ResolvedEnumVariantTupleType { common: CommonEnumVariantType { number: 2, module_path: ResolvedModulePath([]), variant_name: ResolvedLocalTypeIdentifier(<35:6>), assigned_name: "Paused", enum_ref: ResolvedEnumType { name: ResolvedLocalTypeIdentifier(<6:9>), assigned_name: "GameState", module_path: ["test"], number: 1 } }, fields_in_order: [Float(ResolvedFloatType), Float(ResolvedFloatType)] }), name: ResolvedLocalTypeIdentifier(<35:6>), assigned_name: "Paused", number: 2 }, ResolvedEnumVariantType { owner: ResolvedEnumType { name: ResolvedLocalTypeIdentifier(<6:9>), assigned_name: "GameState", module_path: ["test"], number: 1 }, data: Nothing, name: ResolvedLocalTypeIdentifier(<62:8>), assigned_name: "GameOver", number: 0 }])
 ---
 InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <75:10>, resolved_type: Enum(ResolvedEnumType { name: ResolvedLocalTypeIdentifier(<6:9>), assigned_name: "GameState", module_path: ["test"], number: 1 }), mutable_node: None, scope_index: 0, variable_index: 0 }], expression: Literal(EnumVariantLiteral(ResolvedEnumVariantType { owner: ResolvedEnumType { name: ResolvedLocalTypeIdentifier(<6:9>), assigned_name: "GameState", module_path: ["test"], number: 1 }, data: Tuple(ResolvedEnumVariantTupleType { common: CommonEnumVariantType { number: 2, module_path: ResolvedModulePath([]), variant_name: ResolvedLocalTypeIdentifier(<35:6>), assigned_name: "Paused", enum_ref: ResolvedEnumType { name: ResolvedLocalTypeIdentifier(<6:9>), assigned_name: "GameState", module_path: ["test"], number: 1 } }, fields_in_order: [Float(ResolvedFloatType), Float(ResolvedFloatType)] }), name: ResolvedLocalTypeIdentifier(<35:6>), assigned_name: "Paused", number: 2 }, Nothing)) })
@@ -508,14 +508,14 @@ fn match_value() {
     check(
         r"
 score = 2
-        
+
 match score {
     2 => 'low',
     _ => 'high',
 }
         ",
         r#"
-        
+
 InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <1:5>, resolved_type: Int(ResolvedIntType), mutable_node: None, scope_index: 0, variable_index: 0 }], expression: Literal(IntLiteral(2, <9:1>, ResolvedIntType)) })
 Match(ResolvedMatch { arms: [ResolvedMatchArm { pattern: Literal(IntLiteral(2, <38:1>, ResolvedIntType)), expression: InterpolatedString(ResolvedStringType, [Literal(<44:3>, "low")]), expression_type: String(ResolvedStringType) }, ResolvedMatchArm { pattern: PatternList([Wildcard(<54:1>)]), expression: InterpolatedString(ResolvedStringType, [Literal(<60:4>, "high")]), expression_type: String(ResolvedStringType) }], expression: VariableAccess(ResolvedVariable { name: <1:5>, resolved_type: Int(ResolvedIntType), mutable_node: None, scope_index: 0, variable_index: 0 }) })
 
@@ -558,7 +558,7 @@ a = 44
 b = a > 43 && false
         ",
         r"
-        
+
 InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <1:1>, resolved_type: Int(ResolvedIntType), mutable_node: None, scope_index: 0, variable_index: 0 }], expression: Literal(IntLiteral(44, <5:2>, ResolvedIntType)) })
 InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <8:1>, resolved_type: Bool(ResolvedBoolType), mutable_node: None, scope_index: 0, variable_index: 1 }], expression: BinaryOp(ResolvedBinaryOperator { left: BinaryOp(ResolvedBinaryOperator { left: VariableAccess(ResolvedVariable { name: <1:1>, resolved_type: Int(ResolvedIntType), mutable_node: None, scope_index: 0, variable_index: 0 }), right: Literal(IntLiteral(43, <16:2>, ResolvedIntType)), kind: GreaterThan, node: <14:1>, resolved_type: Bool(ResolvedBoolType) }), right: Literal(BoolLiteral(false, <22:5>, ResolvedBoolType)), kind: LogicalAnd, node: <19:2>, resolved_type: Bool(ResolvedBoolType) }) })
 
@@ -574,7 +574,7 @@ a = 44
 b = !(a > 43)
         ",
         r"
-        
+
 InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <1:1>, resolved_type: Int(ResolvedIntType), mutable_node: None, scope_index: 0, variable_index: 0 }], expression: Literal(IntLiteral(44, <5:2>, ResolvedIntType)) })
 InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <8:1>, resolved_type: Bool(ResolvedBoolType), mutable_node: None, scope_index: 0, variable_index: 1 }], expression: UnaryOp(ResolvedUnaryOperator { left: BinaryOp(ResolvedBinaryOperator { left: VariableAccess(ResolvedVariable { name: <1:1>, resolved_type: Int(ResolvedIntType), mutable_node: None, scope_index: 0, variable_index: 0 }), right: Literal(IntLiteral(43, <18:2>, ResolvedIntType)), kind: GreaterThan, node: <16:1>, resolved_type: Bool(ResolvedBoolType) }), kind: Not, resolved_type: Bool(ResolvedBoolType), node: <12:1> }) })
 
@@ -595,7 +595,7 @@ changing(mut a)
 
         ",
         r"
-        
+
 FunctionDef(Internal(InternalFuncDef))
 ---
 InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <46:1>, resolved_type: Int(ResolvedIntType), mutable_node: Some(<42:3>), scope_index: 0, variable_index: 0 }], expression: Literal(IntLiteral(43, <50:2>, ResolvedIntType)) })
@@ -621,7 +621,7 @@ impl Position {
             y: -102.18,
         }
     }
-    
+
     fn move(mut self, pos: Position) {
         self.x += pos.x
         self.y += pos.y
@@ -630,7 +630,7 @@ impl Position {
 
         ",
         r#"
-        
+
 StructType(RefCell { value: ResolvedStructType { name: <8:8>, assigned_name: "Position", anon_struct_type: ResolvedAnonymousStructType { defined_fields: SeqMap("x": ResolvedAnonymousStructFieldType { identifier: ResolvedFieldName(<23:1>), field_type: Float(ResolvedFloatType), index: 0 }, "y": ResolvedAnonymousStructFieldType { identifier: ResolvedFieldName(<37:1>), field_type: Float(ResolvedFloatType), index: 0 }) }, number: 1, functions: SeqMap("new": Internal(InternalFuncDef), "move": Internal(InternalFuncDef)) } })
 ImplType(Struct(RefCell { value: ResolvedStructType { name: <8:8>, assigned_name: "Position", anon_struct_type: ResolvedAnonymousStructType { defined_fields: SeqMap("x": ResolvedAnonymousStructFieldType { identifier: ResolvedFieldName(<23:1>), field_type: Float(ResolvedFloatType), index: 0 }, "y": ResolvedAnonymousStructFieldType { identifier: ResolvedFieldName(<37:1>), field_type: Float(ResolvedFloatType), index: 0 }) }, number: 1, functions: SeqMap("new": Internal(InternalFuncDef), "move": Internal(InternalFuncDef)) } }))
 
@@ -735,5 +735,40 @@ fn constant_access_in_function() {
 FunctionDef(Internal(ResolvedInternalFunctionDefinition { body: Block([ConstantAccess(ResolvedConstant { name: <49:5>, assigned_name: "HELLO", id: 0, expr: Literal(IntLiteral(3, <55:1>, ResolvedIntType)), resolved_type: Int(ResolvedIntType) }), ConstantAccess(ResolvedConstant { name: <49:5>, assigned_name: "HELLO", id: 0, expr: Literal(IntLiteral(3, <55:1>, ResolvedIntType)), resolved_type: Int(ResolvedIntType) })]), name: ResolvedLocalIdentifier(<12:7>), signature: ResolvedFunctionSignature { first_parameter_is_self: false, parameters: [], return_type: Int(ResolvedIntType) }, constants: [ResolvedConstant { name: <49:5>, assigned_name: "HELLO", id: 0, expr: Literal(IntLiteral(3, <55:1>, ResolvedIntType)), resolved_type: Int(ResolvedIntType) }] }))
 
 "#,
+    );
+}
+
+#[test_log::test]
+fn function_ref() {
+    check(
+        r"
+        fn caller(some_fn: (Int) -> Float)  {
+            some_fn(2)
+        }
+    ",
+        r"
+
+FunctionDef(Internal(ResolvedInternalFunctionDefinition { body: Block([FunctionCall(FunctionTypeSignature { parameters: [Int(ResolvedIntType)], return_type: Float(ResolvedFloatType) }, VariableAccess(ResolvedVariable { name: <19:7>, resolved_type: Function(FunctionTypeSignature { parameters: [Int(ResolvedIntType)], return_type: Float(ResolvedFloatType) }), mutable_node: None, scope_index: 0, variable_index: 0 }), [Literal(IntLiteral(2, <67:1>, ResolvedIntType))])]), name: ResolvedLocalIdentifier(<12:6>), parameters: [ResolvedParameter], signature: FunctionTypeSignature { parameters: [Function(FunctionTypeSignature { parameters: [Int(ResolvedIntType)], return_type: Float(ResolvedFloatType) })], return_type: Unit(ResolvedUnitType) }, constants: [] }))
+
+",
+    );
+}
+
+#[test_log::test]
+fn function_call_basic() {
+    check(
+        r"
+        fn some_fn(a: Int) -> Float {
+            2.0
+        }
+        some_fn(1)
+    ",
+        r"
+
+FunctionDef(Internal(ResolvedInternalFunctionDefinition { body: Block([Literal(FloatLiteral(fp:2.000 (131072), <51:3>, ResolvedFloatType))]), name: ResolvedLocalIdentifier(<12:7>), signature: FunctionTypeSignature { first_parameter_is_self: false, parameters: [ResolvedParameter], return_type: Float(ResolvedFloatType) }, constants: [] }))
+---
+FunctionInternalCall(InFuncCall(InternalFunctionAccess(ResolvedInternalFunctionDefinition { body: Block([Literal(FloatLiteral(fp:2.000 (131072), <51:3>, ResolvedFloatType))]), name: ResolvedLocalIdentifier(<12:7>), signature: FunctionTypeSignature { first_parameter_is_self: false, parameters: [ResolvedParameter], return_type: Float(ResolvedFloatType) }, constants: [] }) [Literal(IntLiteral(1, <81:1>, ResolvedIntType))]))
+
+",
     );
 }

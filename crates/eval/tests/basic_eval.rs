@@ -1446,3 +1446,36 @@ fn constants_outside_function() {
 
     assert_eq!(result, Value::Int(42));
 }
+
+#[test_log::test]
+fn function_call_basic() {
+    let result = eval(
+        "
+        fn some_fn(a: Int) -> Int {
+            a * 2
+        }
+        some_fn(-10)
+    ",
+    );
+
+    assert_eq!(result, Value::Int(-20));
+}
+
+#[test_log::test]
+fn function_ref() {
+    let result = eval(
+        "
+        fn caller(fn: (Int) -> Int, arg: Int) -> Int {
+            fn(arg)
+        }
+
+        fn some_fn(a: Int) -> Int {
+            a * 2
+        }
+
+        caller(some_fn, -10)
+    ",
+    );
+
+    assert_eq!(result, Value::Int(-20));
+}

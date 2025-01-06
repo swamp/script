@@ -2239,3 +2239,38 @@ FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name:
 ",
     );
 }
+
+#[test_log::test]
+fn function_ref() {
+    check(
+        r"
+fn caller(some_fn: (Int) -> Float) -> Float {
+    some_fn(2)
+}
+",
+        r"
+
+FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <4:6>, params: [Parameter { variable: <11:7>, param_type: Function([Int(<21:3>)], Float(<29:5>)) }], self_parameter: None, return_type: Some(Float(<39:5>)) }, body: Block([FunctionCall(VariableAccess(<51:7>), [Literal(Int(<59:1>))])]), constants: [] }))
+",
+    );
+}
+
+#[test_log::test]
+fn basic_function_call() {
+    check(
+        r"
+fn some_fn(a: Int) -> Float {
+    2.0
+}
+
+some_fn(-1)
+
+",
+        r"
+
+FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <4:7>, params: [Parameter { variable: <12:1>, param_type: Int(<15:3>) }], self_parameter: None, return_type: Some(Float(<23:5>)) }, body: Block([Literal(Float(<35:3>))]), constants: [] }))
+---
+FunctionCall(VariableAccess(<42:7>), [UnaryOp(Negate(<50:1>), Literal(Int(<51:1>)))])
+",
+    );
+}

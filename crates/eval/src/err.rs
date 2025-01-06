@@ -4,7 +4,7 @@
  */
 
 use swamp_script_core::value::ValueError;
-use swamp_script_semantic::ResolvedNode;
+use swamp_script_semantic::{ExternalFunctionId, ResolvedNode};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ConversionError {
@@ -33,4 +33,5 @@ pub enum ExecuteError {
     NotMutLocationFound,
     IndexWasNotInteger,
     NotAMap,
+    MissingExternalFunction(ExternalFunctionId),
 }

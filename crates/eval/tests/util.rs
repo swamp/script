@@ -13,8 +13,8 @@ use swamp_script_parser::AstParser;
 use swamp_script_semantic::modules::ResolvedModules;
 use swamp_script_semantic::prelude::ResolvedModuleNamespaceRef;
 use swamp_script_semantic::{
-    ExternalFunctionId, ResolvedExpression, ResolvedExternalFunctionDefinition,
-    ResolvedFunctionSignature, ResolvedNode, ResolvedParameter, ResolvedProgramState,
+    ExternalFunctionId, FunctionTypeSignature, ResolvedExpression,
+    ResolvedExternalFunctionDefinition, ResolvedNode, ResolvedParameter, ResolvedProgramState,
     ResolvedProgramTypes, ResolvedType, SemanticError, Span,
 };
 use swamp_script_source_map::SourceMap;
@@ -92,16 +92,17 @@ fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError>
         name: ResolvedNode {
             span: Span::default(),
         },
-        signature: ResolvedFunctionSignature {
-            first_parameter_is_self: false,
-            parameters: vec![ResolvedParameter {
-                name: ResolvedNode {
-                    span: Span::default(),
-                },
-                resolved_type: ResolvedType::Any,
-                is_mutable: None,
-            }],
-            return_type: ResolvedType::Any,
+        parameters: vec![ResolvedParameter {
+            name: ResolvedNode {
+                span: Span::default(),
+            },
+            resolved_type: ResolvedType::Any,
+            is_mutable: None,
+        }],
+        signature: FunctionTypeSignature {
+            //first_parameter_is_self: false,
+            parameters: vec![ResolvedType::Any],
+            return_type: Box::from(ResolvedType::Any),
         },
         id: 1,
     };

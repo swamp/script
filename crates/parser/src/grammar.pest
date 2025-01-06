@@ -206,18 +206,26 @@ prefix_op = { op_not | op_neg }
 array_suffix = { "[" ~ expression ~ "]" }
 
 method_or_field_suffix = {
-    "." ~ identifier ~ function_call_args?
+    "." ~ identifier
 }
+
 function_call_args = {
     "(" ~ (function_argument ~ ("," ~ " "* ~ function_argument)*)? ~ ")"
 }
 
 postfix = { primary ~ postfix_op* }
+
 postfix_op = {
-    option_operator
+    function_call
+    | option_operator
     | array_suffix
     | method_or_field_suffix
 }
+
+function_call = {
+    "(" ~ (function_argument ~ ("," ~ " "* ~ function_argument)*)? ~ ")"
+}
+
 option_operator = { "?" }
 
 // Add range_op to infix operators
@@ -273,9 +281,6 @@ function_argument = {
     mut_keyword? ~ expression
 }
 
-function_call = {
-     qualified_identifier ~ "(" ~ (function_argument ~ ("," ~ " "* ~ function_argument)*)? ~ ")" // PEST BUG: need to be explicit about spaces after ,
-}
 
 static_call = {
     qualified_type_identifier ~ "::" ~ identifier ~
@@ -297,7 +302,6 @@ primary = {
     | interpolated_string
     | enum_literal
     | static_call
-    | function_call
     | struct_instantiation
     | parenthesized
     | literal

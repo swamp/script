@@ -465,6 +465,7 @@ pub enum Type {
     Enum(QualifiedTypeIdentifier),
     TypeReference(QualifiedTypeIdentifier),
     Optional(Box<Type>, Node),
+    Function(Vec<Type>, Box<Type>),
 }
 
 // Takes a left and right side expression

@@ -492,6 +492,12 @@ impl AstParser {
                                 Box::new(expr),
                             );
                         }
+
+                        Rule::function_call => {
+                            let args = self.parse_function_call_arguments(&child)?;
+                            expr = Expression::FunctionCall(Box::new(expr), args);
+                        }
+
                         Rule::array_suffix => {
                             let mut arr_inner = child.clone().into_inner();
                             let index_pair = arr_inner.next().ok_or_else(|| {
@@ -504,19 +510,7 @@ impl AstParser {
                             expr = Expression::IndexAccess(Box::new(expr), Box::new(index_expr));
                         }
                         Rule::method_or_field_suffix => {
-                            let mut suffix_inner = child.clone().into_inner();
-
-                            let ident_pair = suffix_inner.next().ok_or_else(|| {
-                                self.create_error_pair(SpecificError::InvalidMemberCall, &child)
-                            })?;
-                            let field_node = self.to_node(&ident_pair);
-
-                            if let Some(args_pair) = suffix_inner.next() {
-                                let args = self.parse_function_call_args(&args_pair)?;
-                                expr = Expression::MemberCall(Box::new(expr), field_node, args);
-                            } else {
-                                expr = Expression::FieldAccess(Box::new(expr), field_node);
-                            }
+                            expr = Expression::FieldAccess(Box::new(expr), self.to_node(&child));
                         }
                         _ => {
                             return Err(self.create_error_pair(
@@ -1497,7 +1491,6 @@ impl AstParser {
             Rule::constant => Ok(Expression::ConstantAccess(ConstantIdentifier(
                 self.to_node(pair),
             ))),
-            Rule::function_call => self.parse_function_call(pair),
             Rule::static_call => self.parse_static_call(pair),
             Rule::match_expr => self.parse_match_expr(pair),
             Rule::map_literal => self.parse_map_literal(pair),
@@ -1712,11 +1705,11 @@ impl AstParser {
         Ok(Expression::Literal(Literal::Map(entries)))
     }
 
-    fn parse_function_call(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
-        let mut inner = Self::convert_into_iterator(&pair);
-
-        // Parse function name
-        let qualified_identifier = self.parse_qualified_identifier(&inner.next().unwrap())?;
+    fn parse_function_call_arguments(
+        &self,
+        pair: &Pair<Rule>,
+    ) -> Result<Vec<Expression>, ParseError> {
+        let mut inner = Self::convert_into_iterator(pair);
         let mut args = Vec::new();
 
         // Parse arguments
@@ -1761,10 +1754,7 @@ impl AstParser {
             }
         }
 
-        Ok(Expression::FunctionCall(
-            Box::new(Expression::FunctionAccess(qualified_identifier)),
-            args,
-        ))
+        Ok(args)
     }
 
     fn parse_static_call(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
@@ -1854,6 +1844,27 @@ impl AstParser {
                 } else {
                     Ok(base_type)
                 }
+            }
+            Rule::function_type => {
+                let mut function_inner = pair.into_inner();
+
+                // Parse parameter types
+                let param_types = if let Some(params) = function_inner
+                    .next()
+                    .filter(|p| p.as_rule() == Rule::function_params)
+                {
+                    params
+                        .into_inner()
+                        .map(|param| self.parse_type(param))
+                        .collect::<Result<Vec<_>, _>>()?
+                } else {
+                    Vec::new()
+                };
+
+                // Parse return type
+                let return_type = self.parse_type(function_inner.next().unwrap())?;
+
+                Ok(Type::Function(param_types, Box::new(return_type)))
             }
             Rule::optional_type => {
                 let inner = self.next_inner_pair(&pair)?;
@@ -2011,10 +2022,12 @@ impl AstParser {
                 let anon = AnonymousStructType { fields };
                 EnumVariantType::Struct(name.0, anon)
             }
-            _ => Err(self.create_error_pair(
-                SpecificError::UnknownEnumVariant(Self::pair_to_rule(&pair)),
-                pair,
-            ))?,
+            _ => {
+                return Err(self.create_error_pair(
+                    SpecificError::UnknownEnumVariant(Self::pair_to_rule(pair)),
+                    pair,
+                ))
+            }
         };
 
         Ok(enum_variant)
