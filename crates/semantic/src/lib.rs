@@ -173,7 +173,8 @@ impl ResolvedParameter {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct FunctionTypeSignature {
-    pub parameters: Vec<ResolvedType>,
+    pub first_parameter_is_self: bool,
+    pub parameters: Vec<ResolvedTypeForParameter>,
     pub return_type: Box<ResolvedType>,
 }
 
@@ -201,6 +202,12 @@ impl Spanned for LocalTypeName {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ResolvedTypeForParameter {
+    pub resolved_type: ResolvedType,
+    pub is_mutable: bool,
+}
+
+#[derive(Clone, Eq, PartialEq)]
 pub enum ResolvedType {
     // Primitives
     Int(ResolvedIntTypeRef),
@@ -227,14 +234,12 @@ pub enum ResolvedType {
 
     RustType(ResolvedRustTypeRef),
 
-    Mutable(Box<ResolvedType>),
-
     Any,
 }
 
-impl ResolvedType {
-    pub fn is_mutable(&self) -> bool {
-        todo!()
+impl Debug for ResolvedType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "type")
     }
 }
 
@@ -257,7 +262,6 @@ impl Display for ResolvedType {
             Self::ExclusiveRange(_) => todo!(),
             Self::Optional(_) => todo!(),
             Self::RustType(_) => todo!(),
-            Self::Mutable(_) => todo!(),
             Self::Any => todo!(),
         }
     }
@@ -300,8 +304,6 @@ impl Spanned for ResolvedType {
 
             // Any Type (might want to use a dummy span or specific location)
             Self::Any => Span::dummy(),
-
-            Self::Mutable(boxed_type) => boxed_type.span(),
         }
     }
 }
@@ -928,7 +930,7 @@ pub fn create_rust_type(name: &str, type_number: TypeNumber) -> ResolvedRustType
     Rc::new(rust_type)
 }
 
-#[derive(Debug)]
+//#[derive(Debug)]
 pub enum ResolvedExpression {
     // Access Lookup values
     VariableAccess(ResolvedVariableRef),
@@ -938,6 +940,7 @@ pub enum ResolvedExpression {
         ResolvedStructTypeFieldRef,
         Vec<ResolvedAccess>,
     ),
+
     ArrayAccess(
         Box<ResolvedExpression>,
         ResolvedArrayTypeRef,
@@ -1001,9 +1004,9 @@ pub enum ResolvedExpression {
     StaticCall(ResolvedStaticCall),
     StaticCallGeneric(ResolvedStaticCallGeneric),
     MutMemberCall(MutMemberRef, Vec<ResolvedExpression>),
-    MemberCall(ResolvedMemberCall),
 
      */
+    MemberCall(ResolvedMemberCall),
     InterpolatedString(ResolvedStringTypeRef, Vec<ResolvedStringPart>),
 
     // Constructing
@@ -1090,6 +1093,12 @@ pub enum ResolvedExpression {
         ResolvedTupleTypeRef,
         Box<ResolvedExpression>,
     ),
+}
+
+impl fmt::Debug for ResolvedExpression {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "expr")
+    }
 }
 
 impl ResolvedExpression {
@@ -1332,6 +1341,7 @@ impl ResolvedExpression {
             | &ResolvedExpression::IntRnd(_)
             | &ResolvedExpression::FloatRnd(_) => todo!(),
             &ResolvedExpression::IntToFloat(_) => todo!(),
+            &ResolvedExpression::MemberCall(_) => todo!(),
         }
     }
 }
@@ -1497,6 +1507,7 @@ impl Spanned for ResolvedExpression {
             Self::MutStructFieldRef(_, _) => todo!(),
             Self::MutArrayIndexRef(_, _) => todo!(),
             Self::TupleDestructuring(_, _, _) => todo!(),
+            ResolvedExpression::MemberCall(_) => todo!(),
         }
     }
 }

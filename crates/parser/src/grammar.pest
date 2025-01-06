@@ -213,10 +213,13 @@ function_call_args = {
     "(" ~ (function_argument ~ ("," ~ " "* ~ function_argument)*)? ~ ")"
 }
 
+member_call = { "." ~ identifier ~ function_call_args }
+
 postfix = { primary ~ postfix_op* }
 
 postfix_op = {
-    function_call
+    member_call
+    | function_call
     | option_operator
     | array_suffix
     | method_or_field_suffix

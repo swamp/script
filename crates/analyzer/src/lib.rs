@@ -25,8 +25,8 @@ use swamp_script_semantic::{
     ResolvedFormatSpecifier, ResolvedFormatSpecifierKind, ResolvedLocalIdentifier,
     ResolvedLocalTypeIdentifier, ResolvedPatternElement, ResolvedPostfixOperatorKind,
     ResolvedPrecisionType, ResolvedStaticCallGeneric, ResolvedTupleTypeRef,
-    ResolvedUnaryOperatorKind, ResolvedUse, ResolvedUseItem, ResolvedVariableCompoundAssignment,
-    Span, TypeNumber,
+    ResolvedTypeForParameter, ResolvedUnaryOperatorKind, ResolvedUse, ResolvedUseItem,
+    ResolvedVariableCompoundAssignment, Span, TypeNumber,
 };
 use swamp_script_semantic::{FunctionTypeSignature, ResolvedProgramTypes};
 use swamp_script_semantic::{
@@ -129,6 +129,10 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
 
         ResolvedExpression::FunctionCall(signature, _fn_expr, _arguments) => {
             *signature.return_type.clone()
+        }
+
+        ResolvedExpression::MemberCall(call) => {
+            *signature(&call.function).return_type.clone().clone()
         }
         /*
         ResolvedExpression::FunctionInternalCall(internal_fn_call) => *internal_fn_call
@@ -590,10 +594,11 @@ impl<'a> Resolver<'a> {
                 ResolvedType::Optional(Box::from(inner_resolved_type))
             }
             Type::Function(parameters, return_type) => {
-                let parameter_types = self.resolve_types(parameters)?;
+                let parameter_types = self.resolve_param_types(parameters)?;
 
                 let resolved_return_type = self.resolve_type(return_type)?;
                 ResolvedType::Function(FunctionTypeSignature {
+                    first_parameter_is_self: false,
                     parameters: parameter_types,
                     return_type: Box::new(resolved_return_type),
                 })
@@ -947,10 +952,14 @@ impl<'a> Resolver<'a> {
 
                 let parameter_types = parameters
                     .iter()
-                    .map(|param| param.resolved_type.clone())
+                    .map(|param| ResolvedTypeForParameter {
+                        resolved_type: param.resolved_type.clone(),
+                        is_mutable: param.is_mutable(),
+                    })
                     .collect();
                 let internal = ResolvedInternalFunctionDefinition {
                     signature: FunctionTypeSignature {
+                        first_parameter_is_self: false,
                         parameters: parameter_types,
                         return_type: Box::new(return_type),
                     },
@@ -980,10 +989,14 @@ impl<'a> Resolver<'a> {
 
                 let parameter_types = parameters
                     .iter()
-                    .map(|param| param.resolved_type.clone())
+                    .map(|param| ResolvedTypeForParameter {
+                        resolved_type: param.resolved_type.clone(),
+                        is_mutable: param.is_mutable(),
+                    })
                     .collect();
                 let external = ResolvedExternalFunctionDefinition {
                     signature: FunctionTypeSignature {
+                        first_parameter_is_self: false,
                         parameters: parameter_types,
                         return_type: Box::new(return_type),
                     },
@@ -1057,11 +1070,15 @@ impl<'a> Resolver<'a> {
 
                 let parameter_types = parameters
                     .iter()
-                    .map(|param| param.resolved_type.clone())
+                    .map(|param| ResolvedTypeForParameter {
+                        resolved_type: param.resolved_type.clone(),
+                        is_mutable: param.is_mutable(),
+                    })
                     .collect();
 
                 let internal = ResolvedInternalFunctionDefinition {
                     signature: FunctionTypeSignature {
+                        first_parameter_is_self: function_data.declaration.self_parameter.is_some(),
                         parameters: parameter_types,
                         return_type: Box::new(return_type),
                     },
@@ -1102,12 +1119,16 @@ impl<'a> Resolver<'a> {
                 let return_type = self.resolve_maybe_type(&signature.return_type)?;
                 let parameter_types = parameters
                     .iter()
-                    .map(|param| param.resolved_type.clone())
+                    .map(|param| ResolvedTypeForParameter {
+                        resolved_type: param.resolved_type.clone(),
+                        is_mutable: param.is_mutable(),
+                    })
                     .collect();
 
                 let external = ResolvedExternalFunctionDefinition {
                     name: self.to_node(&signature.name),
                     signature: FunctionTypeSignature {
+                        first_parameter_is_self: signature.self_parameter.is_some(),
                         parameters: parameter_types,
                         return_type: Box::new(return_type),
                     },
@@ -1267,7 +1288,7 @@ impl<'a> Resolver<'a> {
         access_chain: &mut Vec<ResolvedAccess>,
     ) -> Result<(ResolvedType, ResolvedExpression), ResolveError> {
         match expr {
-            Expression::FieldAccess(source, field) => {
+            Expression::FieldOrMemberAccess(source, field) => {
                 let (resolved_type, base_expr) = self.collect_field_chain(source, access_chain)?;
 
                 let (field_type, field_index) = self.get_field_index(&resolved_type, field)?;
@@ -1299,6 +1320,13 @@ impl<'a> Resolver<'a> {
         }
     }
 
+    fn convert_to_function_access(function: &ResolvedFunctionRef) -> ResolvedExpression {
+        match &**function {
+            ResolvedFunction::Internal(x) => ResolvedExpression::InternalFunctionAccess(x.clone()),
+            ResolvedFunction::External(y) => ResolvedExpression::ExternalFunctionAccess(y.clone()),
+        }
+    }
+
     fn resolve_static_member_access(
         &self,
         struct_reference: &QualifiedTypeIdentifier,
@@ -1309,13 +1337,10 @@ impl<'a> Resolver<'a> {
         let member_name = self.get_text(&member_name_node);
         let binding = struct_type.borrow();
         let member_function = binding.functions.get(&member_name.to_string()).ok_or(
-            ResolveError::UnknownMemberFunction(self.to_node(&member_name_node)),
+            ResolveError::UnknownMemberFunction(self.to_node(member_name_node)),
         )?;
 
-        let expr = match &**member_function {
-            ResolvedFunction::Internal(x) => ResolvedExpression::InternalFunctionAccess(x.clone()),
-            ResolvedFunction::External(y) => ResolvedExpression::ExternalFunctionAccess(y.clone()),
-        };
+        let expr = Self::convert_to_function_access(member_function);
 
         Ok(expr)
     }
@@ -1326,11 +1351,8 @@ impl<'a> Resolver<'a> {
     ) -> Result<ResolvedExpression, ResolveError> {
         let expression = match ast_expression {
             // Lookups
-            Expression::FieldAccess(expression, field_name) => {
-                let struct_field_ref =
-                    self.resolve_into_struct_field_ref(expression.as_ref(), field_name)?;
-
-                self.resolve_field_access(expression, &struct_field_ref, field_name)?
+            Expression::FieldOrMemberAccess(expression, field_name) => {
+                self.resolve_field_or_member_access(expression, field_name)?
             }
 
             Expression::IndexAccess(expression, index_expr) => {
@@ -1510,15 +1532,11 @@ impl<'a> Resolver<'a> {
                     return Ok(internal_expression);
                 }
 
-                todo!()
-                /*
                 ResolvedExpression::MemberCall(self.resolve_member_call(
                     ast_member_expression,
                     ast_identifier,
                     ast_arguments,
                 )?)
-
-                 */
             }
             Expression::Block(expressions) => {
                 ResolvedExpression::Block(self.resolve_expressions(expressions)?)
@@ -2417,7 +2435,7 @@ impl<'a> Resolver<'a> {
 
     fn resolve_and_verify_parameters(
         &mut self,
-        fn_parameters: &[ResolvedType],
+        fn_parameters: &[ResolvedTypeForParameter],
         arguments: &[Expression],
     ) -> Result<Vec<ResolvedExpression>, ResolveError> {
         let resolved_arguments = self.resolve_expressions(arguments)?;
@@ -2433,15 +2451,15 @@ impl<'a> Resolver<'a> {
             let parameter = &fn_parameters[parameter_index];
             let parameter_type = &parameter;
             let argument_type = resolution(resolved_argument_expression);
-            if !argument_type.same_type(parameter_type) {
+            if !argument_type.same_type(&parameter_type.resolved_type) {
                 error!("{argument_type:?}: {resolved_argument_expression:?}");
                 return Err(ResolveError::IncompatibleArguments(
                     argument_type,
-                    parameter_type.clone().clone(),
+                    parameter_type.resolved_type.clone().clone(),
                 ));
             }
 
-            if parameter.is_mutable()
+            if parameter.is_mutable
                 && !matches!(
                     resolved_argument_expression,
                     ResolvedExpression::MutVariableRef(_)
@@ -2567,7 +2585,7 @@ impl<'a> Resolver<'a> {
                     .parameters
                     .first()
                     .ok_or_else(|| ResolveError::WrongNumberOfArguments(0, 1))?;
-                (first_param.is_mutable().clone(), &function_data.signature)
+                (first_param.is_mutable.clone(), &function_data.signature)
             }
             ResolvedFunction::External(external) => {
                 let first_param = external
@@ -2575,7 +2593,7 @@ impl<'a> Resolver<'a> {
                     .parameters
                     .first()
                     .ok_or_else(|| ResolveError::WrongNumberOfArguments(0, 1))?;
-                (first_param.is_mutable().clone(), &external.signature)
+                (first_param.is_mutable.clone(), &external.signature)
             }
         };
 
@@ -3722,22 +3740,6 @@ impl<'a> Resolver<'a> {
         Ok((resolved_base_expression, access_chain))
     }
 
-    fn resolve_field_access(
-        &mut self,
-        base_expression: &Expression,
-        struct_field_ref: &ResolvedStructTypeFieldRef,
-        ast_field_name: &Node,
-    ) -> Result<ResolvedExpression, ResolveError> {
-        let (base_expr, access_chain) =
-            self.resolve_field_access_helper(base_expression, ast_field_name)?;
-
-        Ok(ResolvedExpression::FieldAccess(
-            Box::from(base_expr),
-            struct_field_ref.clone(),
-            access_chain,
-        ))
-    }
-
     fn resolve_array_index_access(
         &mut self,
         base_expression: &Expression,
@@ -4128,6 +4130,67 @@ impl<'a> Resolver<'a> {
             constants.insert(name, constant_ref)?;
         }
         Ok(constants)
+    }
+
+    fn resolve_field_or_member_access(
+        &mut self,
+        expression: &Expression,
+        field_or_member_name: &Node,
+    ) -> Result<ResolvedExpression, ResolveError> {
+        let resolved_expression = self.resolve_expression(expression)?;
+        let resolved_type = resolution(&resolved_expression);
+        let field_or_member_name_str = self.get_text(field_or_member_name).to_string();
+
+        if let ResolvedType::Struct(struct_type_ref) = resolved_type {
+            let borrow_struct = struct_type_ref.borrow();
+            if let Some(found_function) = borrow_struct.functions.get(&field_or_member_name_str) {
+                Ok(Self::convert_to_function_access(found_function))
+            } else if let Some(found_field_ref) = borrow_struct
+                .anon_struct_type
+                .defined_fields
+                .get(&field_or_member_name_str)
+            {
+                let (base_expr, access_chain) =
+                    self.resolve_field_access_helper(expression, field_or_member_name)?;
+                let index = borrow_struct
+                    .anon_struct_type
+                    .defined_fields
+                    .get_index(&field_or_member_name_str)
+                    .expect("field name has been checked previously");
+                let field = ResolvedStructTypeField {
+                    struct_type_ref: struct_type_ref.clone(),
+                    index,
+                    resolved_type: found_field_ref.field_type.clone(),
+                    field_name: ResolvedLocalIdentifier(self.to_node(field_or_member_name)),
+                };
+                Ok(ResolvedExpression::FieldAccess(
+                    Box::from(base_expr),
+                    ResolvedStructTypeFieldRef::from(field),
+                    access_chain,
+                ))
+            } else {
+                Err(ResolveError::UnknownStructField(
+                    self.to_node(field_or_member_name),
+                ))
+            }
+        } else {
+            Err(ResolveError::NeedStructForFieldLookup)
+        }
+    }
+
+    fn resolve_param_types(
+        &mut self,
+        type_for_parameters: &Vec<TypeForParameter>,
+    ) -> Result<Vec<ResolvedTypeForParameter>, ResolveError> {
+        let mut vec = Vec::new();
+        for x in type_for_parameters {
+            vec.push(ResolvedTypeForParameter {
+                resolved_type: self.resolve_type(&x.ast_type)?,
+                is_mutable: x.is_mutable,
+            });
+        }
+
+        Ok(vec)
     }
 }
 

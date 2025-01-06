@@ -11,9 +11,10 @@ use pest_derive::Parser;
 use swamp_script_ast::{
     prelude::*, CompoundOperator, CompoundOperatorKind, EnumVariantLiteral, FieldExpression,
     FieldName, FieldType, ForPattern, ForVar, IteratableExpression, LocationExpression,
-    PatternElement, QualifiedIdentifier, SpanWithoutFileId,
+    PatternElement, QualifiedIdentifier, SpanWithoutFileId, TypeForParameter,
 };
 use swamp_script_ast::{Function, PostfixOperator};
+use tracing::info;
 
 pub struct ParseResult<'a> {
     #[allow(dead_code)]
@@ -498,6 +499,16 @@ impl AstParser {
                             expr = Expression::FunctionCall(Box::new(expr), args);
                         }
 
+                        Rule::member_call => {
+                            let mut inner = child.into_inner();
+
+                            let member_identifier = self.expect_identifier_next(&mut inner)?;
+                            let args_pair = inner.next().unwrap();
+                            let args = self.parse_function_call_arguments(&args_pair)?;
+                            expr =
+                                Expression::MemberCall(Box::new(expr), member_identifier.0, args);
+                        }
+
                         Rule::array_suffix => {
                             let mut arr_inner = child.clone().into_inner();
                             let index_pair = arr_inner.next().ok_or_else(|| {
@@ -510,7 +521,11 @@ impl AstParser {
                             expr = Expression::IndexAccess(Box::new(expr), Box::new(index_expr));
                         }
                         Rule::method_or_field_suffix => {
-                            expr = Expression::FieldAccess(Box::new(expr), self.to_node(&child));
+                            let mut inner = child.into_inner();
+                            let debug_text = inner.as_str();
+                            let identifier = self.expect_identifier_next(&mut inner)?;
+                            info!(?debug_text, "method_or_field");
+                            expr = Expression::FieldOrMemberAccess(Box::new(expr), identifier.0);
                         }
                         _ => {
                             return Err(self.create_error_pair(
@@ -1178,7 +1193,7 @@ impl AstParser {
                             )),
                         }
                     }
-                    Expression::FieldAccess(base, field_node) => match compound_op {
+                    Expression::FieldOrMemberAccess(base, field_node) => match compound_op {
                         None => Ok(Expression::FieldAssignment(
                             base,
                             field_node,
@@ -1748,7 +1763,7 @@ impl AstParser {
                         Expression::VariableAccess(var) => {
                             args.push(Expression::MutRef(LocationExpression::Variable(var)));
                         }
-                        Expression::FieldAccess(expr, node) => {
+                        Expression::FieldOrMemberAccess(expr, node) => {
                             args.push(Expression::MutRef(LocationExpression::FieldAccess(
                                 expr, node,
                             )));
@@ -1869,8 +1884,13 @@ impl AstParser {
                 {
                     params
                         .into_inner()
-                        .map(|param| self.parse_type(param))
-                        .collect::<Result<Vec<_>, _>>()?
+                        .map(|param| {
+                            Ok(TypeForParameter {
+                                ast_type: self.parse_type(param).unwrap(),
+                                is_mutable: false,
+                            })
+                        })
+                        .collect::<Result<Vec<_>, ParseError>>()?
                 } else {
                     Vec::new()
                 };
@@ -2159,7 +2179,7 @@ impl AstParser {
         next: &Pair<Rule>,
     ) -> Result<LocationExpression, ParseError> {
         let location = match expr {
-            Expression::FieldAccess(expression, node) => {
+            Expression::FieldOrMemberAccess(expression, node) => {
                 LocationExpression::FieldAccess(expression, node)
             }
             Expression::VariableAccess(variable) => LocationExpression::Variable(variable),

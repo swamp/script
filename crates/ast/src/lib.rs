@@ -333,7 +333,7 @@ pub enum LocationExpression {
 #[derive(Debug)]
 pub enum Expression {
     // Access
-    FieldAccess(Box<Expression>, Node),
+    FieldOrMemberAccess(Box<Expression>, Node),
     VariableAccess(Variable),
     ConstantAccess(ConstantIdentifier),
     FunctionAccess(QualifiedIdentifier),
@@ -450,6 +450,12 @@ pub enum EnumVariantType {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
+pub struct TypeForParameter {
+    pub ast_type: Type,
+    pub is_mutable: bool,
+}
+
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub enum Type {
     // Primitives
     Int(Node),
@@ -466,7 +472,7 @@ pub enum Type {
     Enum(QualifiedTypeIdentifier),
     TypeReference(QualifiedTypeIdentifier),
     Optional(Box<Type>, Node),
-    Function(Vec<Type>, Box<Type>),
+    Function(Vec<TypeForParameter>, Box<Type>),
 }
 
 // Takes a left and right side expression

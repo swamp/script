@@ -736,7 +736,7 @@ print('after: {s.some_field}')
     ",
         r"
 before: Some(Int(2))
-after: Some(Int(3))    
+after: Some(Int(3))
     ",
     );
 }
@@ -1484,7 +1484,6 @@ fn function_ref() {
 fn function_member_ref() {
     let result = eval(
         "
-
         struct Test {
             i: Int,
         }
@@ -1493,7 +1492,7 @@ fn function_member_ref() {
             fn static_in_member(a: Int) -> Int {
               a * 2
             }
-        }       
+        }
 
         fn caller(fn: (Int) -> Int, arg: Int) -> Int {
             fn(arg)
@@ -1504,4 +1503,67 @@ fn function_member_ref() {
     );
 
     assert_eq!(result, Value::Int(-20));
+}
+
+#[test_log::test]
+fn function_static_member_call() {
+    let result = eval(
+        "
+        struct Test {
+            i: Int,
+        }
+
+        impl Test {
+            fn static_in_member(a: Int) -> Int {
+              a * 2
+            }
+        }
+
+        Test::static_in_member(4)
+    ",
+    );
+
+    assert_eq!(result, Value::Int(8));
+}
+
+#[test_log::test]
+fn function_value_call() {
+    let result = eval(
+        "
+struct StructWithFunction {
+    some_fn: (Int) -> Int,
+}
+
+fn add_two(a: Int) -> Int {
+    a + 2
+}
+
+s = StructWithFunction { some_fn: add_two }
+s.some_fn(10)
+    ",
+    );
+
+    assert_eq!(result, Value::Int(12));
+}
+
+#[test_log::test]
+fn function_member_fn_call() {
+    let result = eval(
+        "
+        struct Test {
+            i: Int,
+        }
+
+        impl Test {
+            fn member(self, a: Int) -> Int {
+              self.i * a
+            }
+        }
+
+        t = Test { i: 20 }
+        t.member(10)
+    ",
+    );
+
+    assert_eq!(result, Value::Int(200));
 }
