@@ -363,7 +363,7 @@ pub enum Expression {
     FunctionCall(Box<Expression>, Vec<Expression>),
     StaticCall(QualifiedTypeIdentifier, Node, Vec<Expression>),
     StaticCallGeneric(QualifiedTypeIdentifier, Node, Vec<Expression>),
-    MemberCall(Box<Expression>, Node, Vec<Expression>),
+    MemberOrFieldCall(Box<Expression>, Node, Vec<Expression>),
 
     Block(Vec<Expression>),
 

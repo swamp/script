@@ -1332,9 +1332,9 @@ impl<'a> Resolver<'a> {
         struct_reference: &QualifiedTypeIdentifier,
         member_name_node: &Node,
     ) -> Result<ResolvedExpression, ResolveError> {
-        let struct_type = self.get_struct_type(&struct_reference)?;
+        let struct_type = self.get_struct_type(struct_reference)?;
         let resolved_node = self.to_node(member_name_node);
-        let member_name = self.get_text(&member_name_node);
+        let member_name = self.get_text(member_name_node);
         let binding = struct_type.borrow();
         let member_function = binding.functions.get(&member_name.to_string()).ok_or(
             ResolveError::UnknownMemberFunction(self.to_node(member_name_node)),
@@ -1521,22 +1521,8 @@ impl<'a> Resolver<'a> {
                 }
             }
 
-            Expression::MemberCall(ast_member_expression, ast_identifier, ast_arguments) => {
-                let result = self.check_for_internal_member_call(
-                    ast_member_expression,
-                    ast_identifier,
-                    ast_arguments,
-                )?;
-
-                if let Some(internal_expression) = result {
-                    return Ok(internal_expression);
-                }
-
-                ResolvedExpression::MemberCall(self.resolve_member_call(
-                    ast_member_expression,
-                    ast_identifier,
-                    ast_arguments,
-                )?)
+            Expression::MemberOrFieldCall(ast_member_expression, ast_identifier, ast_arguments) => {
+                self.member_or_field_call(ast_member_expression, ast_identifier, ast_arguments)?
             }
             Expression::Block(expressions) => {
                 ResolvedExpression::Block(self.resolve_expressions(expressions)?)
@@ -4191,6 +4177,78 @@ impl<'a> Resolver<'a> {
         }
 
         Ok(vec)
+    }
+
+    fn member_or_field_call(
+        &mut self,
+        ast_member_expression: &Expression,
+        ast_identifier: &Node,
+        ast_arguments: &[Expression],
+    ) -> Result<ResolvedExpression, ResolveError> {
+        let resolved_expression = self.resolve_expression(ast_member_expression)?;
+        let resolved_type = resolution(&resolved_expression);
+        let resolved_arguments = self.resolve_expressions(ast_arguments)?;
+        let field_or_member_name_str = self.get_text(ast_identifier).to_string();
+
+        // the resolved expression must be a struct either way
+        let expr = if let ResolvedType::Struct(struct_type_ref) = resolved_type {
+            let borrow_struct = struct_type_ref.borrow();
+            if let Some(found_function) = borrow_struct.functions.get(&field_or_member_name_str) {
+                let member_signature = signature(found_function);
+                if member_signature.first_parameter_is_self {
+                    ResolvedExpression::MemberCall(self.resolve_member_call(
+                        ast_member_expression,
+                        ast_identifier,
+                        ast_arguments,
+                    )?)
+                } else {
+                    ResolvedExpression::FunctionCall(
+                        member_signature.clone(),
+                        Box::from(resolved_expression),
+                        resolved_arguments,
+                    )
+                }
+            } else if let Some(found_field_ref) = borrow_struct
+                .anon_struct_type
+                .defined_fields
+                .get(&field_or_member_name_str)
+            {
+                let (base_expr, access_chain) =
+                    self.resolve_field_access_helper(ast_member_expression, ast_identifier)?;
+                let index = borrow_struct
+                    .anon_struct_type
+                    .defined_fields
+                    .get_index(&field_or_member_name_str)
+                    .expect("field name has been checked previously");
+                let field = ResolvedStructTypeField {
+                    struct_type_ref: struct_type_ref.clone(),
+                    index,
+                    resolved_type: found_field_ref.field_type.clone(),
+                    field_name: ResolvedLocalIdentifier(self.to_node(ast_identifier)),
+                };
+                let field_access_expr = ResolvedExpression::FieldAccess(
+                    Box::from(base_expr),
+                    ResolvedStructTypeFieldRef::from(field),
+                    access_chain,
+                );
+                if let ResolvedType::Function(found_function_signature) =
+                    &found_field_ref.field_type
+                {
+                    ResolvedExpression::FunctionCall(
+                        found_function_signature.clone(),
+                        Box::from(field_access_expr),
+                        resolved_arguments,
+                    )
+                } else {
+                    return Err(ResolveError::WasNotStructType(self.to_node(ast_identifier)));
+                }
+            } else {
+                return Err(ResolveError::WasNotStructType(self.to_node(ast_identifier)));
+            }
+        } else {
+            return Err(ResolveError::WasNotStructType(self.to_node(ast_identifier)));
+        };
+        Ok(expr)
     }
 }
 

@@ -505,8 +505,11 @@ impl AstParser {
                             let member_identifier = self.expect_identifier_next(&mut inner)?;
                             let args_pair = inner.next().unwrap();
                             let args = self.parse_function_call_arguments(&args_pair)?;
-                            expr =
-                                Expression::MemberCall(Box::new(expr), member_identifier.0, args);
+                            expr = Expression::MemberOrFieldCall(
+                                Box::new(expr),
+                                member_identifier.0,
+                                args,
+                            );
                         }
 
                         Rule::array_suffix => {
