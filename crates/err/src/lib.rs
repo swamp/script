@@ -356,5 +356,7 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
             Report::build(Error, 104, "No default() function", &resolved_type.span())
         },
         ResolveError::NoDefaultImplementedForStruct(_) => todo!(),
+        &ResolveError::ExpectedFunctionTypeForFunctionCall(_) => todo!(),
+        &ResolveError::TypeDoNotSupportIndexAccess(_) => todo!(),
     }
 }

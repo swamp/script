@@ -23,10 +23,10 @@ use swamp_script_semantic::{
     ResolvedAnonymousStructType, ResolvedBinaryOperatorKind, ResolvedBoolType,
     ResolvedCompoundOperator, ResolvedCompoundOperatorKind, ResolvedForPattern,
     ResolvedFormatSpecifier, ResolvedFormatSpecifierKind, ResolvedLocalIdentifier,
-    ResolvedLocalTypeIdentifier, ResolvedPatternElement, ResolvedPostfixOperatorKind,
-    ResolvedPrecisionType, ResolvedStaticCallGeneric, ResolvedTupleTypeRef,
-    ResolvedTypeForParameter, ResolvedUnaryOperatorKind, ResolvedUse, ResolvedUseItem,
-    ResolvedVariableCompoundAssignment, Span, TypeNumber,
+    ResolvedLocalTypeIdentifier, ResolvedMapIndexLookup, ResolvedPatternElement,
+    ResolvedPostfixOperatorKind, ResolvedPrecisionType, ResolvedStaticCallGeneric,
+    ResolvedTupleTypeRef, ResolvedTypeForParameter, ResolvedUnaryOperatorKind, ResolvedUse,
+    ResolvedUseItem, ResolvedVariableCompoundAssignment, Span, TypeNumber,
 };
 use swamp_script_semantic::{FunctionTypeSignature, ResolvedProgramTypes};
 use swamp_script_semantic::{
@@ -335,6 +335,7 @@ pub enum ResolveError {
     NoDefaultImplementedForStruct(ResolvedStructTypeRef),
     UnknownConstant(ResolvedNode),
     ExpectedFunctionTypeForFunctionCall(Span),
+    TypeDoNotSupportIndexAccess(Span),
 }
 
 impl From<SemanticError> for ResolveError {
@@ -937,8 +938,8 @@ impl<'a> Resolver<'a> {
                 // Set up scope for function body
                 for param in &parameters {
                     self.create_local_variable_resolved(
-                        &param.name,
-                        &param.is_mutable,
+                        &param.node.as_ref().unwrap().name,
+                        &param.node.as_ref().unwrap().is_mutable,
                         &param.resolved_type.clone(),
                     )?;
                 }
@@ -950,20 +951,12 @@ impl<'a> Resolver<'a> {
                     self.resolve_statements_in_function(&function_data.body, &return_type)?;
                 self.scope.return_type = self.shared.types.unit_type();
 
-                let parameter_types = parameters
-                    .iter()
-                    .map(|param| ResolvedTypeForParameter {
-                        resolved_type: param.resolved_type.clone(),
-                        is_mutable: param.is_mutable(),
-                    })
-                    .collect();
                 let internal = ResolvedInternalFunctionDefinition {
                     signature: FunctionTypeSignature {
                         first_parameter_is_self: false,
-                        parameters: parameter_types,
+                        parameters,
                         return_type: Box::new(return_type),
                     },
-                    parameters,
                     body: statements,
                     name: ResolvedLocalIdentifier(self.to_node(&function_data.declaration.name)),
                     constants,
@@ -987,22 +980,14 @@ impl<'a> Resolver<'a> {
                 let return_type = external_return_type;
                 let external_function_id = self.shared.state.allocate_external_function_id();
 
-                let parameter_types = parameters
-                    .iter()
-                    .map(|param| ResolvedTypeForParameter {
-                        resolved_type: param.resolved_type.clone(),
-                        is_mutable: param.is_mutable(),
-                    })
-                    .collect();
                 let external = ResolvedExternalFunctionDefinition {
                     signature: FunctionTypeSignature {
                         first_parameter_is_self: false,
-                        parameters: parameter_types,
+                        parameters,
                         return_type: Box::new(return_type),
                     },
                     name: self.to_node(&ast_signature.name),
                     id: external_function_id,
-                    parameters,
                 };
 
                 ResolvedFunction::External(Rc::new(external))
@@ -1034,20 +1019,28 @@ impl<'a> Resolver<'a> {
 
                 if let Some(found_self) = &function_data.declaration.self_parameter {
                     let resolved_type = ResolvedType::Struct(found_struct.clone());
-                    parameters.push(ResolvedParameter {
-                        name: self.to_node(&found_self.self_node),
+                    parameters.push(ResolvedTypeForParameter {
+                        name: self.get_text(&found_self.self_node).to_string(),
                         resolved_type,
-                        is_mutable: self.to_node_option(&found_self.is_mutable),
+                        is_mutable: found_self.is_mutable.is_some(),
+                        node: Option::from(ResolvedParameterNode {
+                            name: self.to_node(&found_self.self_node),
+                            is_mutable: self.to_node_option(&found_self.is_mutable),
+                        }),
                     });
                 }
 
                 for param in &function_data.declaration.params {
                     let resolved_type = self.resolve_type(&param.param_type)?;
 
-                    parameters.push(ResolvedParameter {
-                        name: self.to_node(&param.variable.name),
+                    parameters.push(ResolvedTypeForParameter {
+                        name: self.get_text(&param.variable.name).to_string(),
                         resolved_type,
-                        is_mutable: self.to_node_option(&param.variable.is_mutable),
+                        is_mutable: param.variable.is_mutable.is_some(),
+                        node: Option::from(ResolvedParameterNode {
+                            name: self.to_node(&param.variable.name),
+                            is_mutable: self.to_node_option(&param.variable.is_mutable),
+                        }),
                     });
                 }
 
@@ -1056,8 +1049,8 @@ impl<'a> Resolver<'a> {
 
                 for param in &parameters {
                     self.create_local_variable_resolved(
-                        &param.name,
-                        &param.is_mutable,
+                        &param.node.as_ref().unwrap().name,
+                        &param.node.as_ref().unwrap().is_mutable,
                         &param.resolved_type,
                     )?;
                 }
@@ -1068,22 +1061,13 @@ impl<'a> Resolver<'a> {
                 let statements =
                     self.resolve_statements_in_function(&function_data.body, &return_type)?;
 
-                let parameter_types = parameters
-                    .iter()
-                    .map(|param| ResolvedTypeForParameter {
-                        resolved_type: param.resolved_type.clone(),
-                        is_mutable: param.is_mutable(),
-                    })
-                    .collect();
-
                 let internal = ResolvedInternalFunctionDefinition {
                     signature: FunctionTypeSignature {
                         first_parameter_is_self: function_data.declaration.self_parameter.is_some(),
-                        parameters: parameter_types,
+                        parameters,
                         return_type: Box::new(return_type),
                     },
                     body: statements,
-                    parameters,
                     name: ResolvedLocalIdentifier(self.to_node(&function_data.declaration.name)),
                     constants,
                 };
@@ -1098,10 +1082,14 @@ impl<'a> Resolver<'a> {
 
                 if let Some(found_self) = &signature.self_parameter {
                     let resolved_type = ResolvedType::Struct(found_struct.clone());
-                    parameters.push(ResolvedParameter {
-                        name: self.to_node(&found_self.self_node),
+                    parameters.push(ResolvedTypeForParameter {
+                        name: self.get_text(&found_self.self_node).to_string(),
                         resolved_type,
-                        is_mutable: self.to_node_option(&found_self.is_mutable),
+                        is_mutable: found_self.is_mutable.is_some(),
+                        node: Option::from(ResolvedParameterNode {
+                            name: self.to_node(&found_self.self_node),
+                            is_mutable: self.to_node_option(&found_self.is_mutable),
+                        }),
                     });
                 }
 
@@ -1109,30 +1097,26 @@ impl<'a> Resolver<'a> {
                 for param in &signature.params {
                     let resolved_type = self.resolve_type(&param.param_type)?;
 
-                    parameters.push(ResolvedParameter {
-                        name: self.to_node(&param.variable.name),
+                    parameters.push(ResolvedTypeForParameter {
+                        name: self.get_text(&param.variable.name).to_string(),
                         resolved_type,
-                        is_mutable: self.to_node_option(&param.variable.is_mutable),
+                        is_mutable: param.variable.is_mutable.is_some(),
+                        node: Option::from(ResolvedParameterNode {
+                            name: self.to_node(&param.variable.name),
+                            is_mutable: self.to_node_option(&param.variable.is_mutable),
+                        }),
                     });
                 }
 
                 let return_type = self.resolve_maybe_type(&signature.return_type)?;
-                let parameter_types = parameters
-                    .iter()
-                    .map(|param| ResolvedTypeForParameter {
-                        resolved_type: param.resolved_type.clone(),
-                        is_mutable: param.is_mutable(),
-                    })
-                    .collect();
 
                 let external = ResolvedExternalFunctionDefinition {
                     name: self.to_node(&signature.name),
                     signature: FunctionTypeSignature {
                         first_parameter_is_self: signature.self_parameter.is_some(),
-                        parameters: parameter_types,
+                        parameters,
                         return_type: Box::new(return_type),
                     },
-                    parameters,
                     id: 0,
                 };
 
@@ -1247,16 +1231,20 @@ impl<'a> Resolver<'a> {
     fn resolve_parameters(
         &mut self,
         parameters: &Vec<Parameter>,
-    ) -> Result<Vec<ResolvedParameter>, ResolveError> {
+    ) -> Result<Vec<ResolvedTypeForParameter>, ResolveError> {
         let mut resolved_parameters = Vec::new();
         for parameter in parameters {
             let param_type = self.resolve_type(&parameter.param_type)?;
             let debug_name = self.get_text(&parameter.variable.name);
             info!(?debug_name, ?param_type, orig_type=?parameter.param_type, "setting parameter to type");
-            resolved_parameters.push(ResolvedParameter {
-                name: self.to_node(&parameter.variable.name),
+            resolved_parameters.push(ResolvedTypeForParameter {
+                name: self.get_text(&parameter.variable.name).to_string(),
                 resolved_type: param_type,
-                is_mutable: self.to_node_option(&parameter.variable.is_mutable),
+                is_mutable: parameter.variable.is_mutable.is_some(),
+                node: Some(ResolvedParameterNode {
+                    is_mutable: self.to_node_option(&parameter.variable.is_mutable),
+                    name: self.to_node(&parameter.variable.name),
+                }),
             });
         }
         Ok(resolved_parameters)
@@ -1345,6 +1333,31 @@ impl<'a> Resolver<'a> {
         Ok(expr)
     }
 
+    pub fn resolve_index_access(
+        &mut self,
+        expression: &Expression,
+        key_expr: &Expression,
+    ) -> Result<ResolvedExpression, ResolveError> {
+        let resolved_expr = self.resolve_expression(expression)?;
+        let resolved_type = resolution(&resolved_expr);
+
+        let expr = match resolved_type {
+            ResolvedType::Array(array_type) => {
+                self.resolve_array_index_access(expression, &array_type, key_expr)?
+            }
+            ResolvedType::Map(map_type) => {
+                self.resolve_map_index_access(expression, &map_type, key_expr)?
+            }
+            _ => {
+                return Err(ResolveError::TypeDoNotSupportIndexAccess(
+                    resolved_expr.span(),
+                ))
+            }
+        };
+
+        Ok(expr)
+    }
+
     pub fn resolve_expression(
         &mut self,
         ast_expression: &Expression,
@@ -1356,9 +1369,7 @@ impl<'a> Resolver<'a> {
             }
 
             Expression::IndexAccess(expression, index_expr) => {
-                let array_item_ref = self.resolve_into_array_type_ref(expression.as_ref())?;
-
-                self.resolve_array_index_access(expression, &array_item_ref, index_expr)?
+                self.resolve_index_access(expression, index_expr)?
             }
 
             Expression::VariableAccess(variable) => self.resolve_variable_like(&variable.name)?,
@@ -1759,20 +1770,6 @@ impl<'a> Resolver<'a> {
         };
 
         Ok(resolved_literal)
-    }
-
-    fn resolve_into_array_type_ref(
-        &mut self,
-        struct_expression: &Expression,
-    ) -> Result<ResolvedArrayTypeRef, ResolveError> {
-        let resolved_expr = self.resolve_expression(struct_expression)?;
-        let resolved_type = resolution(&resolved_expr);
-
-        if let ResolvedType::Array(array_type) = resolved_type {
-            Ok(array_type)
-        } else {
-            Err(ResolveError::ExpectedArray(resolved_type))
-        }
     }
 
     fn resolve_into_struct_field_ref(
@@ -3742,6 +3739,24 @@ impl<'a> Resolver<'a> {
         ))
     }
 
+    fn resolve_map_index_access(
+        &mut self,
+        base_expression: &Expression,
+        map_type_ref: &ResolvedMapTypeRef,
+        key_expression: &Expression,
+    ) -> Result<ResolvedExpression, ResolveError> {
+        let resolved_key_expression = self.resolve_expression(key_expression)?;
+        let resolved_map_expression = self.resolve_expression(base_expression)?;
+
+        Ok(ResolvedExpression::MapIndexAccess(ResolvedMapIndexLookup {
+            map_type: ResolvedType::Map(map_type_ref.clone()),
+            item_type: ResolvedType::Any,
+            map_type_ref: map_type_ref.clone(),
+            index_expression: Box::from(resolved_key_expression),
+            map_expression: Box::from(resolved_map_expression),
+        }))
+    }
+
     fn resolve_field_assignment(
         &mut self,
         ast_struct_field_expr: &Expression,
@@ -4171,8 +4186,10 @@ impl<'a> Resolver<'a> {
         let mut vec = Vec::new();
         for x in type_for_parameters {
             vec.push(ResolvedTypeForParameter {
+                name: "".to_string(),
                 resolved_type: self.resolve_type(&x.ast_type)?,
                 is_mutable: x.is_mutable,
+                node: None,
             });
         }
 
@@ -4185,6 +4202,14 @@ impl<'a> Resolver<'a> {
         ast_identifier: &Node,
         ast_arguments: &[Expression],
     ) -> Result<ResolvedExpression, ResolveError> {
+        if let Some(found_internal) = self.check_for_internal_member_call(
+            ast_member_expression,
+            ast_identifier,
+            ast_arguments,
+        )? {
+            return Ok(found_internal);
+        }
+
         let resolved_expression = self.resolve_expression(ast_member_expression)?;
         let resolved_type = resolution(&resolved_expression);
         let resolved_arguments = self.resolve_expressions(ast_arguments)?;

@@ -151,19 +151,18 @@ impl Debug for Span {
 }
 
 #[derive(Clone, Eq, PartialEq)]
-pub struct ResolvedParameter {
+pub struct ResolvedParameterNode {
     pub name: ResolvedNode,
-    pub resolved_type: ResolvedType,
     pub is_mutable: Option<ResolvedNode>,
 }
 
-impl Debug for ResolvedParameter {
+impl Debug for ResolvedParameterNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "ResolvedParameter")
     }
 }
 
-impl ResolvedParameter {
+impl ResolvedParameterNode {
     #[inline]
     #[must_use]
     pub const fn is_mutable(&self) -> bool {
@@ -203,8 +202,10 @@ impl Spanned for LocalTypeName {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ResolvedTypeForParameter {
+    pub name: String,
     pub resolved_type: ResolvedType,
     pub is_mutable: bool,
+    pub node: Option<ResolvedParameterNode>,
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -239,7 +240,35 @@ pub enum ResolvedType {
 
 impl Debug for ResolvedType {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "type")
+        match self {
+            ResolvedType::Int(_) => write!(f, "Int"),
+            ResolvedType::Float(_) => write!(f, "Float"),
+            ResolvedType::String(_) => write!(f, "String"),
+            ResolvedType::Bool(_) => write!(f, "Bool"),
+            ResolvedType::Unit(_) => write!(f, "()"),
+            ResolvedType::Array(array_type_ref) => write!(f, "[{:?}]", array_type_ref.item_type),
+            ResolvedType::Tuple(tuple_type_ref) => write!(f, "( {:?} )", tuple_type_ref.0),
+            ResolvedType::Struct(struct_type_ref) => {
+                write!(f, "{}", struct_type_ref.borrow().assigned_name)
+            }
+            ResolvedType::Map(map_type_ref) => write!(
+                f,
+                "[{:?}:{:?}]",
+                map_type_ref.key_type, map_type_ref.value_type
+            ),
+            ResolvedType::Generic(base, parameters) => write!(f, "{:?}<{:?}>", base, parameters),
+            ResolvedType::Enum(enum_type_ref) => write!(f, "{:?}", enum_type_ref.assigned_name),
+            ResolvedType::EnumVariant(enum_type_variant) => {
+                write!(f, "{:?}", enum_type_variant.assigned_name)
+            }
+            ResolvedType::Function(function_type_signature) => {
+                write!(f, "{:?}", function_type_signature)
+            }
+            ResolvedType::ExclusiveRange(range) => write!(f, "{:?}", range),
+            ResolvedType::Optional(base_type) => write!(f, "{:?}?", base_type),
+            ResolvedType::RustType(rust_type) => write!(f, "{:?}?", rust_type.type_name),
+            ResolvedType::Any => write!(f, "Any"),
+        }
     }
 }
 
@@ -408,13 +437,18 @@ impl ResolvedNode {
 #[derive(Debug, Eq, PartialEq)]
 pub struct ResolvedLocalIdentifier(pub ResolvedNode);
 
-#[derive(Debug)]
+//#[derive(Debug)]
 pub struct ResolvedInternalFunctionDefinition {
     pub body: ResolvedExpression,
     pub name: ResolvedLocalIdentifier,
-    pub parameters: Vec<ResolvedParameter>,
     pub signature: FunctionTypeSignature,
     pub constants: Vec<ResolvedConstantRef>,
+}
+
+impl Debug for ResolvedInternalFunctionDefinition {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self.signature)
+    }
 }
 
 impl PartialEq<Self> for ResolvedInternalFunctionDefinition {
@@ -439,7 +473,6 @@ pub type ConstantId = u32;
 
 pub struct ResolvedExternalFunctionDefinition {
     pub name: ResolvedNode,
-    pub parameters: Vec<ResolvedParameter>,
     pub signature: FunctionTypeSignature,
     pub id: ExternalFunctionId,
 }
@@ -930,7 +963,7 @@ pub fn create_rust_type(name: &str, type_number: TypeNumber) -> ResolvedRustType
     Rc::new(rust_type)
 }
 
-//#[derive(Debug)]
+#[derive(Debug)]
 pub enum ResolvedExpression {
     // Access Lookup values
     VariableAccess(ResolvedVariableRef),
@@ -1093,12 +1126,6 @@ pub enum ResolvedExpression {
         ResolvedTupleTypeRef,
         Box<ResolvedExpression>,
     ),
-}
-
-impl fmt::Debug for ResolvedExpression {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "expr")
-    }
 }
 
 impl ResolvedExpression {

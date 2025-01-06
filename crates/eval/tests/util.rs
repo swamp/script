@@ -14,7 +14,7 @@ use swamp_script_semantic::modules::ResolvedModules;
 use swamp_script_semantic::prelude::ResolvedModuleNamespaceRef;
 use swamp_script_semantic::{
     ExternalFunctionId, FunctionTypeSignature, ResolvedExpression,
-    ResolvedExternalFunctionDefinition, ResolvedNode, ResolvedParameter, ResolvedProgramState,
+    ResolvedExternalFunctionDefinition, ResolvedNode, ResolvedParameterNode, ResolvedProgramState,
     ResolvedProgramTypes, ResolvedType, ResolvedTypeForParameter, SemanticError, Span,
 };
 use swamp_script_source_map::SourceMap;
@@ -92,11 +92,14 @@ fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError>
         name: ResolvedNode {
             span: Span::default(),
         },
-        parameters: vec![ResolvedParameter {
+        parameters: vec![ResolvedParameterNode {
             name: ResolvedNode {
                 span: Span::default(),
             },
-            resolved_type: ResolvedType::Any,
+            resolved_type: ResolvedTypeForParameter {
+                resolved_type: ResolvedType::Any,
+                is_mutable: false,
+            },
             is_mutable: None,
         }],
         signature: FunctionTypeSignature {

@@ -1771,6 +1771,11 @@ impl AstParser {
                                 expr, node,
                             )));
                         }
+                        Expression::IndexAccess(expr, node) => {
+                            args.push(Expression::MutRef(LocationExpression::IndexAccess(
+                                expr, node,
+                            )));
+                        }
                         _ => {
                             return Err(self
                                 .create_error_pair(SpecificError::MutOnlyForVariables, &arg_pair))

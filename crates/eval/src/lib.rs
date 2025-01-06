@@ -190,7 +190,7 @@ pub fn util_execute_function<C>(
 ) -> Result<Value, ExecuteError> {
     let mut interpreter = Interpreter::<C>::new(externals, constants, context);
     interpreter.debug_source_map = debug_source_map;
-    interpreter.bind_parameters(&func.parameters, &arguments)?;
+    interpreter.bind_parameters(&func.signature.parameters, &arguments)?;
     let value = interpreter.evaluate_expression(&func.body)?;
     interpreter.current_block_scopes.clear();
     interpreter.function_scope_stack.clear();
@@ -254,17 +254,21 @@ impl<'a, C> Interpreter<'a, C> {
 
     fn bind_parameters(
         &mut self,
-        params: &[ResolvedParameter],
+        params: &[ResolvedTypeForParameter],
         args: &[VariableValue],
     ) -> Result<(), ExecuteError> {
         for (index, (param, arg)) in params.iter().zip(args).enumerate() {
-            let complete_value = if param.is_mutable() {
+            let complete_value = if param.is_mutable {
                 match arg {
                     VariableValue::Reference(_r) => {
                         // For mutable parameters, use the SAME reference
                         arg.clone()
                     }
-                    _ => return Err(ExecuteError::ArgumentIsNotMutable(param.name.clone())),
+                    _ => {
+                        return Err(ExecuteError::ArgumentIsNotMutable(
+                            param.node.as_ref().unwrap().name.clone(),
+                        ))
+                    }
                 }
             } else {
                 match arg {
@@ -273,11 +277,8 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             };
 
-            self.current_block_scopes.set_local_var_ex(
-                index,
-                complete_value,
-                param.is_mutable(),
-            )?;
+            self.current_block_scopes
+                .set_local_var_ex(index, complete_value, param.is_mutable)?;
         }
 
         Ok(())
@@ -293,7 +294,7 @@ impl<'a, C> Interpreter<'a, C> {
         match &*static_call.function {
             ResolvedFunction::Internal(function_data) => {
                 self.push_function_scope();
-                self.bind_parameters(&function_data.parameters, &evaluated_args)?;
+                self.bind_parameters(&function_data.signature.parameters, &evaluated_args)?;
                 let result = self.evaluate_expression(&function_data.body)?;
 
                 self.pop_function_scope();
@@ -344,7 +345,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
                 self.push_function_scope();
 
-                self.bind_parameters(&internal_func_ref.parameters, &evaluated_args)?;
+                self.bind_parameters(&internal_func_ref.signature.parameters, &evaluated_args)?;
 
                 let result = self.evaluate_expression(&internal_func_ref.body)?;
 
@@ -396,7 +397,10 @@ impl<'a, C> Interpreter<'a, C> {
 
         self.push_function_scope();
 
-        self.bind_parameters(&call.function_definition.parameters, &evaluated_args)?;
+        self.bind_parameters(
+            &call.function_definition.signature.parameters,
+            &evaluated_args,
+        )?;
 
         let result = self.evaluate_expression(&call.function_definition.body)?;
 
@@ -1183,7 +1187,7 @@ impl<'a, C> Interpreter<'a, C> {
                     ResolvedFunction::Internal(internal_function) => {
                         self.push_function_scope();
                         self.bind_parameters(
-                            &*internal_function.parameters,
+                            &*internal_function.signature.parameters,
                             &member_call_arguments,
                         )?;
                         let result = self.evaluate_expression(&internal_function.body)?;

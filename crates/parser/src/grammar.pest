@@ -384,8 +384,8 @@ base_type = {
     function_type
     | built_in_type
     | qualified_type_identifier ~ generic_params?
-    | array_type
     | map_type
+    | array_type
     | tuple_type
     | unit_type
 }
