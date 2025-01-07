@@ -1216,10 +1216,7 @@ impl AstParser {
                         Box::new(rhs_expr),
                     )),
                 },
-                _ => {
-                    Err(self
-                        .create_error_pair(SpecificError::InvalidAssignmentTarget, &lhs_pair))
-                }
+                _ => Err(self.create_error_pair(SpecificError::InvalidAssignmentTarget, &lhs_pair)),
             }
         }
     }
@@ -1621,10 +1618,7 @@ impl AstParser {
         }
     }
 
-    fn parse_enum_literal(
-        &self,
-        pair: &Pair<Rule>,
-    ) -> Result<Literal, ParseError> {
+    fn parse_enum_literal(&self, pair: &Pair<Rule>) -> Result<Literal, ParseError> {
         let mut inner = Self::convert_into_iterator(pair);
 
         // Parse enum type name

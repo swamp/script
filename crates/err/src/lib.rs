@@ -166,12 +166,9 @@ pub fn build_parse_error(err: &SpecificError, span: &Span) -> Builder<usize> {
         ),
         SpecificError::ExpectingTypeIdentifier => todo!(),
         SpecificError::ExpectingInnerPair => todo!(),
-        SpecificError::UnexpectedTypeRule => Report::build(
-            Error,
-            1,
-            &format!("unexpected type rule"),
-            &span,
-        ),
+        SpecificError::UnexpectedTypeRule => {
+            Report::build(Error, 1, &format!("unexpected type rule"), &span)
+        }
         SpecificError::ExpectedTypeIdentifier(_) => todo!(),
         SpecificError::ExpectedLocalTypeIdentifier(_) => todo!(),
         SpecificError::UnexpectedRuleInParseScript(_) => todo!(),

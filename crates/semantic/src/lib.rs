@@ -873,8 +873,16 @@ pub enum ResolvedFunction {
 impl ResolvedFunction {
     pub fn name(&self) -> Option<&ResolvedNode> {
         match self {
-            ResolvedFunction::Internal(x) => Some(&x.name.0),
-            ResolvedFunction::External(y) => y.name.as_ref(),
+            Self::Internal(x) => Some(&x.name.0),
+            Self::External(y) => y.name.as_ref(),
+        }
+    }
+
+    #[must_use]
+    pub fn signature(&self) -> &FunctionTypeSignature {
+        match self {
+            Self::Internal(internal) => &internal.signature,
+            Self::External(external) => &external.signature,
         }
     }
 }
@@ -1417,6 +1425,193 @@ impl ResolvedExpression {
             &ResolvedExpression::IntToFloat(_) => todo!(),
             &ResolvedExpression::MemberCall(_) => todo!(),
         }
+    }
+
+    #[must_use]
+    #[allow(clippy::too_many_lines, clippy::match_same_arms)]
+    pub fn resolution(&self) -> ResolvedType {
+        let resolution_expression = match self {
+            // Lookups
+            Self::FieldAccess(_expr, struct_field_ref, _lookups) => {
+                struct_field_ref.resolved_type.clone()
+            }
+            Self::VariableAccess(variable_ref) => variable_ref.resolved_type.clone(),
+            Self::ConstantAccess(constant_ref) => constant_ref.resolved_type.clone(),
+
+            Self::InternalFunctionAccess(internal_function_def) => {
+                ResolvedType::Function(internal_function_def.signature.clone())
+            }
+            Self::ExternalFunctionAccess(external_function_def) => {
+                ResolvedType::Function(external_function_def.signature.clone())
+            }
+
+            // Index Access
+            Self::ArrayAccess(_, array_item_ref, _) => array_item_ref.item_type.clone(),
+            Self::MapIndexAccess(map_item) => map_item.item_type.clone(),
+
+            // Convert to mutable reference
+            Self::MutVariableRef(mut_var_ref) => mut_var_ref.variable_ref.resolved_type.clone(),
+            Self::MutStructFieldRef(_, _) => todo!(),
+            Self::MutArrayIndexRef(_base, _index) => todo!(),
+
+            // Variable
+            Self::InitializeVariable(variable_assignment) => {
+                variable_assignment.variable_refs[0].resolved_type.clone()
+            }
+            Self::ReassignVariable(variable_assignments) => {
+                variable_assignments.variable_refs[0].resolved_type.clone()
+            }
+            Self::VariableCompoundAssignment(var_compound_assignment) => {
+                var_compound_assignment.variable_ref.resolved_type.clone()
+            }
+
+            // Assignments
+            Self::ArrayAssignment(_, _, _) => todo!(),
+            Self::MapAssignment(_, _, _) => todo!(),
+            Self::StructFieldAssignment(_struct_field, _lookups, source_resolution) => {
+                source_resolution.resolution()
+            }
+            Self::FieldCompoundAssignment(
+                _resolved_expression,
+                _access,
+                _op_,
+                source_resolution,
+            ) => source_resolution.resolution(),
+
+            // Operators
+            Self::BinaryOp(binary_op) => binary_op.resolved_type.clone(),
+            Self::UnaryOp(unary_op) => unary_op.resolved_type.clone(),
+            Self::PostfixOp(postfix_op) => postfix_op.resolved_type.clone(),
+
+            // Calls
+            Self::FunctionCall(signature, _fn_expr, _arguments) => *signature.return_type.clone(),
+            Self::MemberCall(call) => *call.function.signature().return_type.clone().clone(),
+            Self::FunctionInternalCall(internal_fn_call) => *internal_fn_call
+                .function_definition
+                .signature
+                .return_type
+                .clone(),
+            Self::FunctionExternalCall(external_fn_call) => *external_fn_call
+                .function_definition
+                .signature
+                .return_type
+                .clone(),
+            Self::StaticCall(static_call) => *static_call.function.signature().return_type.clone(),
+            Self::StaticCallGeneric(static_call_generic) => {
+                *static_call_generic.function.signature().return_type.clone()
+            }
+            Self::InterpolatedString(string_type, _parts) => {
+                ResolvedType::String(string_type.clone())
+            }
+
+            // Instantiation
+            Self::StructInstantiation(struct_instantiation) => {
+                ResolvedType::Struct(struct_instantiation.struct_type_ref.clone())
+            }
+            Self::Array(array_instantiation) => array_instantiation.array_type.clone(),
+            Self::Tuple(_) => todo!(),
+            Self::ExclusiveRange(range_type, _, _) => {
+                ResolvedType::ExclusiveRange(range_type.clone())
+            }
+
+            // Option operations
+            Self::Option(inner_opt) => inner_opt.as_ref().map_or_else(
+                || todo!("Handle None type inference"),
+                |inner_expr| {
+                    let inner_type = inner_expr.resolution();
+                    ResolvedType::Optional(Box::new(inner_type))
+                },
+            ),
+            Self::IfElseOnlyVariable { true_block, .. } => true_block.resolution(),
+            Self::IfElseAssignExpression { true_block, .. } => true_block.resolution(),
+            Self::IfOnlyVariable { true_block, .. } => true_block.resolution(),
+            Self::IfAssignExpression { true_block, .. } => true_block.resolution(),
+
+            Self::LetVar(_, _) => todo!(),
+
+            // Literals
+            Self::Literal(literal) => match literal {
+                ResolvedLiteral::BoolLiteral(_value, _node, bool_type_ref) => {
+                    ResolvedType::Bool(bool_type_ref.clone())
+                }
+                ResolvedLiteral::FloatLiteral(_float_value, _node, float_type) => {
+                    ResolvedType::Float(float_type.clone())
+                }
+                ResolvedLiteral::IntLiteral(_int_value, _node, int_type) => {
+                    ResolvedType::Int(int_type.clone())
+                }
+                ResolvedLiteral::StringLiteral(_string_value, _node, string_type) => {
+                    ResolvedType::String(string_type.clone())
+                }
+                ResolvedLiteral::UnitLiteral(unit_literal) => {
+                    ResolvedType::Unit(unit_literal.clone())
+                }
+                ResolvedLiteral::EnumVariantLiteral(variant_ref, _data) => {
+                    ResolvedType::Enum(variant_ref.owner.clone())
+                }
+                ResolvedLiteral::TupleLiteral(tuple_type_ref, _data) => {
+                    ResolvedType::Tuple(tuple_type_ref.clone())
+                }
+                ResolvedLiteral::Array(array_type_ref, _data) => {
+                    ResolvedType::Array(array_type_ref.clone())
+                }
+                ResolvedLiteral::Map(map_type_ref, _data) => {
+                    ResolvedType::Map(map_type_ref.clone())
+                }
+                ResolvedLiteral::NoneLiteral(_) => ResolvedType::Any,
+            },
+
+            // Array member functions
+            Self::ArrayExtend(variable_ref, _) => variable_ref.resolved_type.clone(),
+            Self::ArrayPush(variable_ref, _) => variable_ref.resolved_type.clone(),
+            Self::ArrayRemoveIndex(variable_ref, _) => variable_ref.resolved_type.clone(),
+            Self::ArrayClear(variable_ref) => variable_ref.resolved_type.clone(),
+
+            // Sparse member functions
+            Self::SparseAdd(_, _) => ResolvedType::Any, // TODO: return correct type
+            Self::SparseRemove(_, _) => ResolvedType::Any, // TODO: return correct type
+            Self::SparseNew(_rust_type_ref, resolved_type) => resolved_type.clone(),
+            Self::CoerceOptionToBool(_) => ResolvedType::Bool(Rc::new(ResolvedBoolType)),
+
+            // Float member functions
+            Self::FloatFloor(_) => ResolvedType::Int(Rc::new(ResolvedIntType {})),
+            Self::FloatRound(_) => ResolvedType::Int(Rc::new(ResolvedIntType {})),
+            Self::FloatSign(_) => ResolvedType::Float(Rc::new(ResolvedFloatType {})),
+            Self::FloatAbs(_) => ResolvedType::Float(Rc::new(ResolvedFloatType {})),
+            Self::FloatRnd(_) => ResolvedType::Int(Rc::new(ResolvedIntType {})),
+
+            // Int member functions
+            Self::IntAbs(_) => ResolvedType::Int(Rc::new(ResolvedIntType {})),
+            Self::IntRnd(_) => ResolvedType::Int(Rc::new(ResolvedIntType {})),
+            Self::IntToFloat(_) => ResolvedType::Float(Rc::new(ResolvedFloatType {})),
+
+            // Loops
+            Self::ForLoop(_pattern, _iterator_expr, expr) => expr.resolution(),
+            Self::WhileLoop(_condition, expr) => expr.resolution(),
+
+            // Control
+            Self::Return(ref maybe_expr) => maybe_expr
+                .as_ref()
+                .map_or(ResolvedType::Unit(Rc::new(ResolvedUnitType)), |expr| {
+                    expr.resolution()
+                }),
+            Self::Break(_) => ResolvedType::Unit(Rc::new(ResolvedUnitType)),
+            Self::Continue(_) => ResolvedType::Unit(Rc::new(ResolvedUnitType)),
+
+            Self::Block(expressions) => expressions.last().map_or_else(
+                || ResolvedType::Unit(Rc::new(ResolvedUnitType)),
+                Self::resolution,
+            ),
+
+            // Matching and comparing
+            Self::Match(resolved_match) => resolved_match.arms[0].expression_type.clone(),
+            Self::If(_, true_expr, _) => true_expr.resolution(),
+
+            // Other
+            Self::TupleDestructuring(_, _, expr) => expr.resolution(),
+        };
+
+        resolution_expression
     }
 }
 

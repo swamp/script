@@ -45,6 +45,12 @@ pub struct ResolvedProgram {
     pub modules: ResolvedModules,
 }
 
+impl Default for ResolvedProgram {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ResolvedProgram {
     #[must_use]
     pub fn new() -> Self {
@@ -75,179 +81,6 @@ pub const fn convert_span(without: &SpanWithoutFileId, file_id: FileId) -> Span 
 }
 
 pub const SPARSE_TYPE_ID: TypeNumber = 999;
-
-pub fn signature(f: &ResolvedFunction) -> &FunctionTypeSignature {
-    match f {
-        ResolvedFunction::Internal(internal) => &internal.signature,
-        ResolvedFunction::External(external) => &external.signature,
-    }
-}
-
-pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
-    let resolution_expression = match expression {
-        ResolvedExpression::FieldAccess(_expr, struct_field_ref, _lookups) => {
-            struct_field_ref.resolved_type.clone()
-        }
-        ResolvedExpression::VariableAccess(variable_ref) => variable_ref.resolved_type.clone(),
-        ResolvedExpression::ConstantAccess(constant_ref) => constant_ref.resolved_type.clone(),
-
-        ResolvedExpression::InternalFunctionAccess(internal_function_def) => {
-            ResolvedType::Function(internal_function_def.signature.clone())
-        }
-        ResolvedExpression::ExternalFunctionAccess(external_function_def) => {
-            ResolvedType::Function(external_function_def.signature.clone())
-        }
-        ResolvedExpression::MutVariableRef(mut_var_ref) => {
-            mut_var_ref.variable_ref.resolved_type.clone()
-        }
-        ResolvedExpression::MutStructFieldRef(_, _) => todo!(),
-        ResolvedExpression::MutArrayIndexRef(_base, _index) => todo!(),
-
-        ResolvedExpression::ArrayAccess(_, array_item_ref, _) => array_item_ref.item_type.clone(),
-        ResolvedExpression::MapIndexAccess(map_item) => map_item.item_type.clone(),
-        ResolvedExpression::InitializeVariable(variable_assignment) => {
-            variable_assignment.variable_refs[0].resolved_type.clone()
-        }
-        ResolvedExpression::ReassignVariable(variable_assignments) => {
-            variable_assignments.variable_refs[0].resolved_type.clone()
-        }
-
-        ResolvedExpression::ArrayAssignment(_, _, _) => todo!(),
-        ResolvedExpression::MapAssignment(_, _, _) => todo!(),
-        ResolvedExpression::StructFieldAssignment(_struct_field, _lookups, source_resolution) => {
-            resolution(source_resolution)
-        }
-        ResolvedExpression::FieldCompoundAssignment(
-            _resolved_expression,
-            _access,
-            _op_,
-            source_resolution,
-        ) => resolution(source_resolution),
-        ResolvedExpression::BinaryOp(binary_op) => binary_op.resolved_type.clone(),
-        ResolvedExpression::UnaryOp(unary_op) => unary_op.resolved_type.clone(),
-        ResolvedExpression::PostfixOp(postfix_op) => postfix_op.resolved_type.clone(),
-
-        ResolvedExpression::FunctionCall(signature, _fn_expr, _arguments) => {
-            *signature.return_type.clone()
-        }
-
-        ResolvedExpression::MemberCall(call) => {
-            *signature(&call.function).return_type.clone().clone()
-        }
-        ResolvedExpression::FunctionInternalCall(internal_fn_call) => *internal_fn_call
-            .function_definition
-            .signature
-            .return_type
-            .clone(),
-        ResolvedExpression::FunctionExternalCall(external_fn_call) => *external_fn_call
-            .function_definition
-            .signature
-            .return_type
-            .clone(),
-        //        ResolvedExpression::MutMemberCall(_, _) => todo!(),
-        ResolvedExpression::MemberCall(member_call) => {
-            *signature(&member_call.function).return_type.clone()
-        }
-        ResolvedExpression::StaticCall(static_call) => {
-            *signature(&static_call.function).return_type.clone()
-        }
-        ResolvedExpression::StaticCallGeneric(static_call_generic) => {
-            *signature(&static_call_generic.function).return_type.clone()
-        }
-
-        ResolvedExpression::InterpolatedString(string_type, _parts) => {
-            ResolvedType::String(string_type.clone())
-        }
-        ResolvedExpression::StructInstantiation(struct_instantiation) => {
-            ResolvedType::Struct(struct_instantiation.struct_type_ref.clone())
-        }
-        ResolvedExpression::Array(array_instantiation) => array_instantiation.array_type.clone(),
-        ResolvedExpression::Tuple(_) => todo!(),
-        ResolvedExpression::ExclusiveRange(range_type, _, _) => {
-            ResolvedType::ExclusiveRange(range_type.clone())
-        }
-        ResolvedExpression::IfElseOnlyVariable { true_block, .. } => resolution(true_block),
-        ResolvedExpression::IfElseAssignExpression { true_block, .. } => resolution(true_block),
-        ResolvedExpression::Match(resolved_match) => resolved_match.arms[0].expression_type.clone(),
-        ResolvedExpression::LetVar(_, _) => todo!(),
-        ResolvedExpression::Literal(literal) => match literal {
-            ResolvedLiteral::BoolLiteral(_value, _node, bool_type_ref) => {
-                ResolvedType::Bool(bool_type_ref.clone())
-            }
-            ResolvedLiteral::FloatLiteral(_float_value, _node, float_type) => {
-                ResolvedType::Float(float_type.clone())
-            }
-            ResolvedLiteral::IntLiteral(_int_value, _node, int_type) => {
-                ResolvedType::Int(int_type.clone())
-            }
-            ResolvedLiteral::StringLiteral(_string_value, _node, string_type) => {
-                ResolvedType::String(string_type.clone())
-            }
-            ResolvedLiteral::UnitLiteral(unit_literal) => ResolvedType::Unit(unit_literal.clone()),
-            ResolvedLiteral::EnumVariantLiteral(variant_ref, _data) => {
-                ResolvedType::Enum(variant_ref.owner.clone())
-            }
-            ResolvedLiteral::TupleLiteral(tuple_type_ref, _data) => {
-                ResolvedType::Tuple(tuple_type_ref.clone())
-            }
-            ResolvedLiteral::Array(array_type_ref, _data) => {
-                ResolvedType::Array(array_type_ref.clone())
-            }
-            ResolvedLiteral::Map(map_type_ref, _data) => ResolvedType::Map(map_type_ref.clone()),
-            ResolvedLiteral::NoneLiteral(_) => ResolvedType::Any,
-        },
-        ResolvedExpression::Option(inner_opt) => inner_opt.as_ref().map_or_else(
-            || todo!("Handle None type inference"),
-            |inner_expr| {
-                let inner_type = resolution(inner_expr);
-                ResolvedType::Optional(Box::new(inner_type))
-            },
-        ),
-        ResolvedExpression::ArrayExtend(variable_ref, _) => variable_ref.resolved_type.clone(),
-        ResolvedExpression::ArrayPush(variable_ref, _) => variable_ref.resolved_type.clone(),
-        ResolvedExpression::ArrayRemoveIndex(variable_ref, _) => variable_ref.resolved_type.clone(),
-        ResolvedExpression::ArrayClear(variable_ref) => variable_ref.resolved_type.clone(),
-        ResolvedExpression::SparseAdd(_, _) => ResolvedType::Any, // TODO: return correct type
-        ResolvedExpression::SparseRemove(_, _) => ResolvedType::Any, // TODO: return correct type
-        ResolvedExpression::SparseNew(_rust_type_ref, resolved_type) => resolved_type.clone(),
-        ResolvedExpression::CoerceOptionToBool(_) => ResolvedType::Bool(Rc::new(ResolvedBoolType)),
-
-        // Float
-        ResolvedExpression::FloatFloor(_) => ResolvedType::Int(Rc::new(ResolvedIntType {})),
-        ResolvedExpression::FloatRound(_) => ResolvedType::Int(Rc::new(ResolvedIntType {})),
-        ResolvedExpression::FloatSign(_) => ResolvedType::Float(Rc::new(ResolvedFloatType {})),
-        ResolvedExpression::FloatAbs(_) => ResolvedType::Float(Rc::new(ResolvedFloatType {})),
-        ResolvedExpression::FloatRnd(_) => ResolvedType::Int(Rc::new(ResolvedIntType {})),
-
-        // Int
-        ResolvedExpression::IntAbs(_) => ResolvedType::Int(Rc::new(ResolvedIntType {})),
-        ResolvedExpression::IntRnd(_) => ResolvedType::Int(Rc::new(ResolvedIntType {})),
-        ResolvedExpression::IntToFloat(_) => ResolvedType::Float(Rc::new(ResolvedFloatType {})),
-
-        ResolvedExpression::VariableCompoundAssignment(var_compound_assignment) => {
-            var_compound_assignment.variable_ref.resolved_type.clone()
-        }
-        ResolvedExpression::ForLoop(_pattern, _iterator_expr, expr) => resolution(expr),
-        ResolvedExpression::WhileLoop(_condition, expr) => resolution(expr),
-        ResolvedExpression::Return(ref maybe_expr) => maybe_expr
-            .as_ref()
-            .map_or(ResolvedType::Unit(Rc::new(ResolvedUnitType)), |expr| {
-                resolution(&*expr)
-            }),
-        ResolvedExpression::Break(_) => ResolvedType::Unit(Rc::new(ResolvedUnitType)),
-        ResolvedExpression::Continue(_) => ResolvedType::Unit(Rc::new(ResolvedUnitType)),
-        ResolvedExpression::Block(expressions) => match expressions.last() {
-            Some(last_expr) => resolution(last_expr),
-            None => ResolvedType::Unit(Rc::new(ResolvedUnitType)),
-        },
-        ResolvedExpression::If(_, true_expr, _) => resolution(true_expr),
-        ResolvedExpression::IfOnlyVariable { true_block, .. } => resolution(true_block),
-        ResolvedExpression::IfAssignExpression { true_block, .. } => resolution(true_block),
-        ResolvedExpression::TupleDestructuring(_, _, expr) => resolution(expr),
-    };
-
-    resolution_expression
-}
 
 #[derive(Debug)]
 pub enum ResolveError {
@@ -479,7 +312,7 @@ impl<'a> Resolver<'a> {
     ) -> Result<ResolvedExpression, ResolveError> {
         let resolved_var_expr = self.resolve_expression(expr)?;
 
-        if let ResolvedType::Optional(inner_type) = resolution(&resolved_var_expr) {
+        if let ResolvedType::Optional(inner_type) = resolved_var_expr.resolution() {
             self.push_block_scope("if_unwrap");
             let resolved_var_ref =
                 self.create_local_variable(&var.name, &var.is_mutable, &inner_type)?;
@@ -512,7 +345,7 @@ impl<'a> Resolver<'a> {
     ) -> Result<ResolvedExpression, ResolveError> {
         let resolved_expr = self.resolve_expression(inner_expr)?;
 
-        if let ResolvedType::Optional(inner_type) = resolution(&resolved_expr) {
+        if let ResolvedType::Optional(inner_type) = resolved_expr.resolution() {
             self.push_block_scope("if_assign_unwrap");
             let resolved_var_ref =
                 self.create_local_variable(&var.name, &var.is_mutable, &inner_type)?;
@@ -1192,7 +1025,7 @@ impl<'a> Resolver<'a> {
         expr: ResolvedExpression,
         return_type: &ResolvedType,
     ) -> Result<ResolvedExpression, ResolveError> {
-        let expr_type = resolution(&expr);
+        let expr_type = expr.resolution();
 
         // If return type is Unit, ignore the expression's type and return Unit
         // TODO: In future versions, always have a return statement
@@ -1235,7 +1068,6 @@ impl<'a> Resolver<'a> {
         let mut resolved_parameters = Vec::new();
         for parameter in parameters {
             let param_type = self.resolve_type(&parameter.param_type)?;
-            let debug_name = self.get_text(&parameter.variable.name);
             resolved_parameters.push(ResolvedTypeForParameter {
                 name: self.get_text(&parameter.variable.name).to_string(),
                 resolved_type: param_type,
@@ -1301,7 +1133,7 @@ impl<'a> Resolver<'a> {
             }
             _ => {
                 let resolved_expr = self.resolve_expression(expr)?;
-                let resolved_type = resolution(&resolved_expr);
+                let resolved_type = resolved_expr.resolution();
                 Ok((resolved_type, resolved_expr))
             }
         }
@@ -1320,7 +1152,6 @@ impl<'a> Resolver<'a> {
         member_name_node: &Node,
     ) -> Result<ResolvedExpression, ResolveError> {
         let struct_type = self.get_struct_type(struct_reference)?;
-        let resolved_node = self.to_node(member_name_node);
         let member_name = self.get_text(member_name_node);
         let binding = struct_type.borrow();
         let member_function = binding.functions.get(&member_name.to_string()).ok_or(
@@ -1338,7 +1169,7 @@ impl<'a> Resolver<'a> {
         key_expr: &Expression,
     ) -> Result<ResolvedExpression, ResolveError> {
         let resolved_expr = self.resolve_expression(expression)?;
-        let resolved_type = resolution(&resolved_expr);
+        let resolved_type = resolved_expr.resolution();
 
         let expr = match resolved_type {
             ResolvedType::Array(array_type) => {
@@ -1382,7 +1213,7 @@ impl<'a> Resolver<'a> {
             }
 
             Expression::FunctionAccess(qualified_identifier) => {
-                self.resolve_function_access(&qualified_identifier)?
+                self.resolve_function_access(qualified_identifier)?
             }
 
             Expression::MutRef(location_expression) => self.resolve_mut_ref(location_expression)?,
@@ -1393,17 +1224,17 @@ impl<'a> Resolver<'a> {
                     self.resolve_expression(collection_expression)?;
                 debug!(resolved_collection_expression=?resolved_collection_expression, "resolve_collection_access");
 
-                let collection_resolution = resolution(&resolved_collection_expression);
+                let collection_resolution = resolved_collection_expression.resolution();
                 debug!(collection_resolution=?collection_resolution, "collection_resolution");
 
                 let resolved_index_expression = self.resolve_expression(index_expression)?;
                 debug!(resolved_index_expression=?resolved_index_expression, "resolve_index_access");
 
-                let index_resolution = resolution(&resolved_index_expression);
+                let index_resolution = resolved_index_expression.resolution();
                 debug!(index_resolution=?index_resolution, "index_resolution");
 
                 let resolved_source_expression = self.resolve_expression(source_expr)?;
-                let resolved_source_expression_type = resolution(&resolved_source_expression);
+                let resolved_source_expression_type = resolved_source_expression.resolution();
 
                 info!("COLLECTION: {resolved_collection_expression:?}");
 
@@ -1515,15 +1346,11 @@ impl<'a> Resolver<'a> {
                 {
                     found
                 } else {
-                    todo!()
-                    /*
                     ResolvedExpression::StaticCallGeneric(self.resolve_static_call_generic(
                         type_name,
                         function_name,
                         arguments,
                     )?)
-
-                     */
                 }
             }
 
@@ -1767,49 +1594,6 @@ impl<'a> Resolver<'a> {
         Ok(resolved_literal)
     }
 
-    fn resolve_into_struct_field_ref(
-        &mut self,
-        struct_expression: &Expression,
-        name: &Node,
-    ) -> Result<ResolvedStructTypeFieldRef, ResolveError> {
-        let resolved_expr = self.resolve_expression(struct_expression)?;
-        let resolved_type = resolution(&resolved_expr);
-        let ResolvedType::Struct(struct_ref) = &resolved_type else {
-            warn!(found_type=?resolved_type, expr=?resolved_expr, "NOT STRUCT TYPE");
-            return Err(ResolveError::WasNotStructType(self.to_node(name)));
-        };
-
-        let borrowed_struct = struct_ref.borrow();
-
-        let field_name = self.get_text(name).to_string();
-
-        if let Some(field_index) = borrowed_struct
-            .anon_struct_type
-            .defined_fields
-            .get_index(&field_name)
-        {
-            let field_resolved_type = borrowed_struct
-                .anon_struct_type
-                .defined_fields
-                .get(&field_name)
-                .expect("checked earlier");
-
-            let field = ResolvedStructTypeField {
-                struct_type_ref: struct_ref.clone(),
-                index: field_index,
-                resolved_type: field_resolved_type.field_type.clone(),
-                field_name: ResolvedLocalIdentifier(self.to_node(name)),
-                //struct_expression: Box::from(resolved_expr),
-            };
-
-            let field_ref = Rc::new(field);
-
-            Ok(field_ref)
-        } else {
-            Err(ResolveError::UnknownStructField(self.to_node(name)))
-        }
-    }
-
     #[allow(unused)]
     fn resolve_into_named_struct_ref(
         &mut self,
@@ -1817,7 +1601,7 @@ impl<'a> Resolver<'a> {
     ) -> Result<(ResolvedStructTypeRef, ResolvedExpression), ResolveError> {
         let resolved = self.resolve_expression(struct_expression)?;
 
-        let resolved_type = resolution(&resolved);
+        let resolved_type = resolved.resolution();
         match resolved_type {
             ResolvedType::Struct(named_struct) => Ok((named_struct, resolved)),
             _ => Err(ResolveError::NotNamedStruct(resolved_type.clone())),
@@ -1831,7 +1615,7 @@ impl<'a> Resolver<'a> {
     ) -> Result<(ResolvedFunctionRef, ResolvedExpression), ResolveError> {
         let resolved = self.resolve_expression(expression)?;
 
-        let resolved_type = resolution(&resolved);
+        let resolved_type = resolved.resolution();
         match resolved_type {
             ResolvedType::Struct(resolved_struct_type_ref) => {
                 let struct_ref = resolved_struct_type_ref.borrow();
@@ -1917,7 +1701,7 @@ impl<'a> Resolver<'a> {
             let upgraded_resolved_expression =
                 wrap_in_some_if_optional(&looked_up_field.field_type, resolved_expression);
 
-            let expression_type = resolution(&upgraded_resolved_expression);
+            let expression_type = upgraded_resolved_expression.resolution();
 
             if !looked_up_field.field_type.same_type(&expression_type) {
                 error!("types: {looked_up_field:?} expr: {expression_type:?}");
@@ -2119,7 +1903,7 @@ impl<'a> Resolver<'a> {
                             self.shared.types,
                         )?; // expression is usually a literal
 
-                        source_order_expressions.push((field_index, expression))
+                        source_order_expressions.push((field_index, expression));
                     }
                 }
 
@@ -2130,21 +1914,19 @@ impl<'a> Resolver<'a> {
                     },
                 ))
             }
+        } else if missing_fields.is_empty() {
+            Ok(ResolvedExpression::StructInstantiation(
+                ResolvedStructInstantiation {
+                    source_order_expressions,
+                    struct_type_ref: struct_to_instantiate,
+                },
+            ))
         } else {
-            if missing_fields.is_empty() {
-                Ok(ResolvedExpression::StructInstantiation(
-                    ResolvedStructInstantiation {
-                        source_order_expressions,
-                        struct_type_ref: struct_to_instantiate,
-                    },
-                ))
-            } else {
-                Err(ResolveError::MissingFieldInStructInstantiation(
-                    self.to_node(&qualified_type_identifier.name.0).span,
-                    missing_fields.to_vec(),
-                    struct_to_instantiate.borrow().anon_struct_type.clone(),
-                ))
-            }
+            Err(ResolveError::MissingFieldInStructInstantiation(
+                self.to_node(&qualified_type_identifier.name.0).span,
+                missing_fields.to_vec(),
+                struct_to_instantiate.borrow().anon_struct_type.clone(),
+            ))
         }
     }
 
@@ -2153,7 +1935,7 @@ impl<'a> Resolver<'a> {
         expression: &Expression,
     ) -> Result<ResolvedBooleanExpression, ResolveError> {
         let resolved_expression = self.resolve_expression(expression)?;
-        let expr_type = resolution(&resolved_expression);
+        let expr_type = resolved_expression.resolution();
 
         let bool_expression = match expr_type {
             ResolvedType::Bool(_) => resolved_expression,
@@ -2368,7 +2150,7 @@ impl<'a> Resolver<'a> {
         expression: &Expression,
     ) -> Result<ResolvedIterator, ResolveError> {
         let resolved_expression = self.resolve_expression(expression)?;
-        let resolved_type = resolution(&resolved_expression);
+        let resolved_type = resolved_expression.resolution();
         let (key_type, value_type): (Option<ResolvedType>, ResolvedType) = match resolved_type {
             ResolvedType::Array(array_type) => (
                 Some(self.shared.types.int_type()),
@@ -2421,12 +2203,12 @@ impl<'a> Resolver<'a> {
         {
             let parameter = &fn_parameters[parameter_index];
             let parameter_type = &parameter;
-            let argument_type = resolution(resolved_argument_expression);
+            let argument_type = resolved_argument_expression.resolution();
             if !argument_type.same_type(&parameter_type.resolved_type) {
                 error!("{argument_type:?}: {resolved_argument_expression:?}");
                 return Err(ResolveError::IncompatibleArguments(
                     argument_type,
-                    parameter_type.resolved_type.clone().clone(),
+                    parameter_type.resolved_type.clone(),
                 ));
             }
 
@@ -2442,30 +2224,28 @@ impl<'a> Resolver<'a> {
 
         Ok(resolved_arguments)
     }
-    /*
-        fn resolve_internal_function_call(
-            &mut self,
-            fn_def: &ResolvedInternalFunctionDefinitionRef,
-            function_expr: ResolvedExpression,
-            arguments: &[Expression],
-        ) -> Result<ResolvedExpression, ResolveError> {
-            let resolved_arguments =
-                self.resolve_and_verify_parameters(&fn_def.signature.parameters, arguments)?;
+    fn resolve_internal_function_call(
+        &mut self,
+        fn_def: &ResolvedInternalFunctionDefinitionRef,
+        function_expr: ResolvedExpression,
+        arguments: &[Expression],
+    ) -> Result<ResolvedExpression, ResolveError> {
+        let resolved_arguments =
+            self.resolve_and_verify_parameters(&fn_def.signature.parameters, arguments)?;
 
-            Ok(ResolvedExpression::FunctionInternalCall(
-                ResolvedInternalFunctionCall {
-                    arguments: resolved_arguments,
-                    function_definition: fn_def.clone(),
-                    function_expression: Box::from(function_expr),
-                },
-            ))
-        }
-    */
+        Ok(ResolvedExpression::FunctionInternalCall(
+            ResolvedInternalFunctionCall {
+                arguments: resolved_arguments,
+                function_definition: fn_def.clone(),
+                function_expression: Box::from(function_expr),
+            },
+        ))
+    }
 
     fn resolve_external_function_call(
         &mut self,
         fn_def: &ResolvedExternalFunctionDefinitionRef,
-        function_expr: ResolvedExpression,
+        function_expr: &ResolvedExpression,
         arguments: &[Expression],
     ) -> Result<ResolvedExpression, ResolveError> {
         let resolved_arguments =
@@ -2490,11 +2270,11 @@ impl<'a> Resolver<'a> {
         arguments: &[Expression],
     ) -> Result<ResolvedExpression, ResolveError> {
         let function_expr = self.resolve_expression(function_expression)?;
-        let resolution_type = resolution(&function_expr);
+        let resolution_type = function_expr.resolution();
 
         let resolved_arguments = self.resolve_expressions(arguments)?;
         if let ResolvedType::Function(signature) = resolution_type {
-            // TODO: Verify signature with resolved_arguments
+            self.verify_signature_and_args(&signature, &resolved_arguments)?;
 
             Ok(ResolvedExpression::FunctionCall(
                 signature,
@@ -2552,7 +2332,7 @@ impl<'a> Resolver<'a> {
                     .parameters
                     .first()
                     .ok_or_else(|| ResolveError::WrongNumberOfArguments(0, 1))?;
-                (first_param.is_mutable.clone(), &function_data.signature)
+                (first_param.is_mutable, &function_data.signature)
             }
             ResolvedFunction::External(external) => {
                 let first_param = external
@@ -2560,7 +2340,7 @@ impl<'a> Resolver<'a> {
                     .parameters
                     .first()
                     .ok_or_else(|| ResolveError::WrongNumberOfArguments(0, 1))?;
-                (first_param.is_mutable.clone(), &external.signature)
+                (first_param.is_mutable, &external.signature)
             }
         };
 
@@ -2591,10 +2371,10 @@ impl<'a> Resolver<'a> {
         ast_right: &Expression,
     ) -> Result<ResolvedBinaryOperator, ResolveError> {
         let left = self.resolve_expression(ast_left)?;
-        let left_type = resolution(&left);
+        let left_type = left.resolution();
 
         let right = self.resolve_expression(ast_right)?;
-        let right_type = resolution(&right);
+        let right_type = right.resolution();
 
         let (resolved_node, kind) = self.convert_binary_operator_kind(ast_op);
 
@@ -2657,7 +2437,7 @@ impl<'a> Resolver<'a> {
         ast_left: &Expression,
     ) -> Result<ResolvedUnaryOperator, ResolveError> {
         let left = self.resolve_expression(ast_left)?;
-        let resolved_type = resolution(&left);
+        let resolved_type = left.resolution();
 
         let (node, kind) = match ast_op {
             UnaryOperator::Not(node) => (node, ResolvedUnaryOperatorKind::Not),
@@ -2678,7 +2458,7 @@ impl<'a> Resolver<'a> {
         ast_left: &Expression,
     ) -> Result<ResolvedPostfixOperator, ResolveError> {
         let left = self.resolve_expression(ast_left)?;
-        let resolved_type = resolution(&left);
+        let resolved_type = left.resolution();
 
         let (resolved_node, resolved_op_kind) = match ast_op {
             PostfixOperator::Unwrap(node) => {
@@ -2737,7 +2517,7 @@ impl<'a> Resolver<'a> {
         let name = self.get_text(&function_ref_node.name).to_string();
         self.shared
             .lookup
-            .get_internal_function(&*path, &name)
+            .get_internal_function(&path, &name)
             .map_or_else(
                 || {
                     self.shared
@@ -2866,7 +2646,7 @@ impl<'a> Resolver<'a> {
         usize_expression: &Expression,
     ) -> Result<ResolvedExpression, ResolveError> {
         let lookup_expression = self.resolve_expression(usize_expression)?;
-        let lookup_resolution = resolution(&lookup_expression);
+        let lookup_resolution = lookup_expression.resolution();
 
         match &lookup_resolution {
             ResolvedType::Int(_) => {}
@@ -2882,7 +2662,7 @@ impl<'a> Resolver<'a> {
         ast_expression: &Expression,
     ) -> Result<ResolvedExpression, ResolveError> {
         let converted_expression = self.resolve_expression(ast_expression)?;
-        let expression_type = resolution(&converted_expression);
+        let expression_type = converted_expression.resolution();
         let (variable_ref, is_reassignment) =
             self.set_or_overwrite_variable_with_type(ast_variable, &expression_type)?;
 
@@ -2904,7 +2684,7 @@ impl<'a> Resolver<'a> {
         ast_expression: &Expression,
     ) -> Result<ResolvedExpression, ResolveError> {
         let converted_expression = self.resolve_expression(ast_expression)?;
-        let expression_type = resolution(&converted_expression);
+        let expression_type = converted_expression.resolution();
 
         let mut variable_refs = Vec::new();
         let mut all_reassignment = true;
@@ -2919,15 +2699,12 @@ impl<'a> Resolver<'a> {
         }
 
         if variable_refs.len() > 1 {
-            match expression_type {
-                ResolvedType::Tuple(tuple) => {
-                    return Ok(ResolvedExpression::TupleDestructuring(
-                        variable_refs,
-                        tuple,
-                        Box::from(converted_expression),
-                    ))
-                }
-                _ => {}
+            if let ResolvedType::Tuple(tuple) = expression_type {
+                return Ok(ResolvedExpression::TupleDestructuring(
+                    variable_refs,
+                    tuple,
+                    Box::from(converted_expression),
+                ));
             }
         }
 
@@ -2970,7 +2747,7 @@ impl<'a> Resolver<'a> {
             ResolvedType::Array(array_type_ref) => {
                 match resolved_compound_operator.kind {
                     ResolvedCompoundOperatorKind::Add => {
-                        let source_type = resolution(&resolved_source);
+                        let source_type = resolved_source.resolution();
                         if let ResolvedType::Array(_source_array_type) = &source_type {
                             // Concatenating two arrays
                             if !target_type.same_type(&source_type) {
@@ -3014,7 +2791,7 @@ impl<'a> Resolver<'a> {
         let item_type = if expressions.is_empty() {
             ResolvedType::Any
         } else {
-            resolution(&expressions[0])
+            expressions[0].resolution()
         };
 
         let array_type = ResolvedArrayType { item_type };
@@ -3031,7 +2808,7 @@ impl<'a> Resolver<'a> {
         let expressions = self.resolve_expressions(items)?;
         let mut tuple_types = Vec::new();
         for expr in &expressions {
-            let item_type = resolution(expr);
+            let item_type = expr.resolution();
             tuple_types.push(item_type);
         }
 
@@ -3054,8 +2831,8 @@ impl<'a> Resolver<'a> {
         let (first_key, first_value) = &entries[0];
         let resolved_first_key = self.resolve_expression(first_key)?;
         let resolved_first_value = self.resolve_expression(first_value)?;
-        let key_type = resolution(&resolved_first_key);
-        let value_type = resolution(&resolved_first_value);
+        let key_type = resolved_first_key.resolution();
+        let value_type = resolved_first_value.resolution();
 
         // Check all entries match the types
         let mut resolved_entries = Vec::new();
@@ -3065,17 +2842,17 @@ impl<'a> Resolver<'a> {
             let resolved_key = self.resolve_expression(key)?;
             let resolved_value = self.resolve_expression(value)?;
 
-            if !resolution(&resolved_key).same_type(&key_type) {
+            if !resolved_key.resolution().same_type(&key_type) {
                 return Err(ResolveError::MapKeyTypeMismatch {
                     expected: key_type,
-                    found: resolution(&resolved_key),
+                    found: resolved_key.resolution(),
                 });
             }
 
-            if !resolution(&resolved_value).same_type(&value_type) {
+            if !resolved_value.resolution().same_type(&value_type) {
                 return Err(ResolveError::MapValueTypeMismatch {
                     expected: value_type,
-                    found: resolution(&resolved_value),
+                    found: resolved_value.resolution(),
                 });
             }
 
@@ -3242,7 +3019,7 @@ impl<'a> Resolver<'a> {
             .variables;
 
         let resolved_variable = ResolvedVariable {
-            name: Default::default(),
+            name: ResolvedNode::default(),
             resolved_type: variable_type_ref.clone(),
             mutable_node: if is_mutable {
                 Some(ResolvedNode::default())
@@ -3327,7 +3104,7 @@ impl<'a> Resolver<'a> {
         arms: &Vec<MatchArm>,
     ) -> Result<ResolvedMatch, ResolveError> {
         let resolved_expression = self.resolve_expression(expression)?;
-        let resolved_type = resolution(&resolved_expression);
+        let resolved_type = resolved_expression.resolution();
 
         let mut resolved_arms = Vec::new();
 
@@ -3356,7 +3133,7 @@ impl<'a> Resolver<'a> {
             self.pop_block_scope("resolve_arm");
         }
 
-        let resolved_type = resolution(&resolved_expression);
+        let resolved_type = resolved_expression.resolution();
 
         Ok(ResolvedMatchArm {
             pattern: resolved_pattern,
@@ -3509,7 +3286,7 @@ impl<'a> Resolver<'a> {
     ) -> Result<Option<ResolvedExpression>, ResolveError> {
         let resolved_expr = self.resolve_expression(source)?;
 
-        match resolution(&resolved_expr) {
+        match resolved_expr.resolution() {
             ResolvedType::Array(_) => {
                 if let ResolvedExpression::VariableAccess(var_ref) = resolved_expr {
                     let resolved = self.resolve_array_member_call(
@@ -3554,7 +3331,7 @@ impl<'a> Resolver<'a> {
         ast_arguments: &[Expression],
     ) -> Result<Option<ResolvedExpression>, ResolveError> {
         // TODO: Early out
-        if let ResolvedType::Generic(generic_type, _parameters) = resolution(&self_expression) {
+        if let ResolvedType::Generic(generic_type, _parameters) = self_expression.resolution() {
             if let ResolvedType::RustType(rust_type_ref) = *generic_type {
                 if rust_type_ref.as_ref().number == SPARSE_TYPE_ID {
                     let function_name_str = self.get_text(ast_member_function_name);
@@ -4061,7 +3838,7 @@ impl<'a> Resolver<'a> {
     ) -> Result<(ResolvedConstantRef, String, ResolvedNode), ResolveError> {
         let (constant, name_node, name_text) = {
             let resolved_expr = self.resolve_expression(&constant.expression)?;
-            let resolved_type = resolution(&resolved_expr);
+            let resolved_type = resolved_expr.resolution();
             let name_node = self.to_node(&constant.constant_identifier.0);
             let name_text = self.get_text_resolved(&name_node).to_string();
             let constant = ResolvedConstant {
@@ -4123,7 +3900,7 @@ impl<'a> Resolver<'a> {
         field_or_member_name: &Node,
     ) -> Result<ResolvedExpression, ResolveError> {
         let resolved_expression = self.resolve_expression(expression)?;
-        let resolved_type = resolution(&resolved_expression);
+        let resolved_type = resolved_expression.resolution();
         let field_or_member_name_str = self.get_text(field_or_member_name).to_string();
 
         if let ResolvedType::Struct(struct_type_ref) = resolved_type {
@@ -4170,7 +3947,7 @@ impl<'a> Resolver<'a> {
         let mut vec = Vec::new();
         for x in type_for_parameters {
             vec.push(ResolvedTypeForParameter {
-                name: "".to_string(),
+                name: String::new(),
                 resolved_type: self.resolve_type(&x.ast_type)?,
                 is_mutable: x.is_mutable,
                 node: None,
@@ -4195,7 +3972,7 @@ impl<'a> Resolver<'a> {
         }
 
         let resolved_expression = self.resolve_expression(ast_member_expression)?;
-        let resolved_type = resolution(&resolved_expression);
+        let resolved_type = resolved_expression.resolution();
         let resolved_arguments = self.resolve_expressions(ast_arguments)?;
         let field_or_member_name_str = self.get_text(ast_identifier).to_string();
 
@@ -4203,7 +3980,7 @@ impl<'a> Resolver<'a> {
         let expr = if let ResolvedType::Struct(struct_type_ref) = resolved_type {
             let borrow_struct = struct_type_ref.borrow();
             if let Some(found_function) = borrow_struct.functions.get(&field_or_member_name_str) {
-                let member_signature = signature(found_function);
+                let member_signature = found_function.signature();
                 if member_signature.first_parameter_is_self {
                     ResolvedExpression::MemberCall(self.resolve_member_call(
                         ast_member_expression,
@@ -4258,6 +4035,29 @@ impl<'a> Resolver<'a> {
             return Err(ResolveError::WasNotStructType(self.to_node(ast_identifier)));
         };
         Ok(expr)
+    }
+
+    fn verify_signature_and_args(
+        &self,
+        signature: &FunctionTypeSignature,
+        arguments: &[ResolvedExpression],
+    ) -> Result<(), ResolveError> {
+        if signature.parameters.len() != arguments.len() {
+            return Err(ResolveError::WrongNumberOfArguments(
+                signature.parameters.len(),
+                arguments.len(),
+            ));
+        }
+
+        for (param, arg) in signature.parameters.iter().zip(arguments) {
+            if !param.resolved_type.same_type(&arg.resolution()) {
+                return Err(ResolveError::IncompatibleTypes(
+                    arg.span(),
+                    param.resolved_type.clone(),
+                ));
+            }
+        }
+        Ok(())
     }
 }
 

@@ -43,7 +43,8 @@ pub struct QualifiedTypeIdentifier {
 }
 
 impl QualifiedTypeIdentifier {
-    #[must_use] pub fn new(name: LocalTypeIdentifier, module_path: Vec<Node>) -> Self {
+    #[must_use]
+    pub fn new(name: LocalTypeIdentifier, module_path: Vec<Node>) -> Self {
         let module_path = if module_path.is_empty() {
             None
         } else {
@@ -57,7 +58,8 @@ impl QualifiedTypeIdentifier {
         }
     }
 
-    #[must_use] pub fn new_with_generics(
+    #[must_use]
+    pub fn new_with_generics(
         name: LocalTypeIdentifier,
         module_path: Vec<Node>,
         generic_params: Vec<Type>,
@@ -83,7 +85,8 @@ pub struct QualifiedIdentifier {
 }
 
 impl QualifiedIdentifier {
-    #[must_use] pub fn new(name: Node, module_path: Vec<Node>) -> Self {
+    #[must_use]
+    pub fn new(name: Node, module_path: Vec<Node>) -> Self {
         let module_path = if module_path.is_empty() {
             None
         } else {
@@ -98,7 +101,8 @@ impl QualifiedIdentifier {
 pub struct LocalTypeIdentifier(pub Node);
 
 impl LocalTypeIdentifier {
-    #[must_use] pub const fn new(node: Node) -> Self {
+    #[must_use]
+    pub const fn new(node: Node) -> Self {
         Self(node)
     }
 }
@@ -147,7 +151,8 @@ impl Default for ModulePath {
 }
 
 impl ModulePath {
-    #[must_use] pub const fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self(vec![])
     }
 }
@@ -226,7 +231,8 @@ pub struct Variable {
 }
 
 impl Variable {
-    #[must_use] pub const fn new(name: Node, is_mutable: Option<Node>) -> Self {
+    #[must_use]
+    pub const fn new(name: Node, is_mutable: Option<Node>) -> Self {
         Self { name, is_mutable }
     }
 }

@@ -186,10 +186,10 @@ enum Test {
 a = Test::Struct { a: 10, b: 2 }
 
         ",
-        r#"
+        r"
 
 ExpressionIsOfWrongFieldType(<113:1 (65535)>, Float(ResolvedFloatType), Int(ResolvedIntType))
-"#,
+",
     );
 }
 
@@ -641,10 +641,10 @@ ImplType(Position)
 #[test_log::test]
 fn check_some_bug() {
     check(
-        r#"
+        r"
         is_attacking = false
         c = if is_attacking { 3.5 } else { -13.3 }
-    "#,
+    ",
         r"
 InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <9:12>, resolved_type: Bool(ResolvedBoolType), mutable_node: None, scope_index: 0, variable_index: 0 }], expression: Literal(BoolLiteral(false, <24:5>, ResolvedBoolType)) })
 InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <38:1>, resolved_type: Float(ResolvedFloatType), mutable_node: None, scope_index: 0, variable_index: 1 }], expression: If(ResolvedBooleanExpression { expression: VariableAccess(ResolvedVariable { name: <9:12>, resolved_type: Bool(ResolvedBoolType), mutable_node: None, scope_index: 0, variable_index: 0 }) }, Block([Literal(FloatLiteral(fp:3.500 (229376), <60:3>, ResolvedFloatType))]), Some(Block([UnaryOp(ResolvedUnaryOperator { left: Literal(FloatLiteral(fp:13.300 (871628), <74:4>, ResolvedFloatType)), kind: Negate, resolved_type: Float(ResolvedFloatType), node: <73:1> })]))) })

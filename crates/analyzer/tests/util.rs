@@ -57,12 +57,16 @@ fn internal_compile(script: &str) -> Result<ResolvedModule, ResolveError> {
     Ok(resolved_module)
 }
 
+/// # Panics
+/// Intentionally panics if error message is not equal to the error encountered.
 pub fn check_fail(script: &str, expected_error_message: &str) {
     let error = internal_compile(script).expect_err("should have failed");
 
     assert_eq!(format!("{error:?}"), expected_error_message.trim());
 }
 
+/// # Panics
+/// Intentionally panics if output is not the same as the `expected_output`
 pub fn check(script: &str, expected_output: &str) {
     let resolved_module = internal_compile(script).expect("should work to analyze");
 
