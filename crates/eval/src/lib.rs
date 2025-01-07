@@ -2253,11 +2253,23 @@ impl<'a> ResolvedExpressionDisplay<'a> {
 impl<'a> fmt::Display for ResolvedExpressionDisplay<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.expr {
-            ResolvedExpression::VariableAccess(_) => write!(f, "VariableAccess"),
+            ResolvedExpression::VariableAccess(variable) => write!(
+                f,
+                "VariableAccess {} mut:{}",
+                self.get_text(&variable.name),
+                variable.is_mutable()
+            ),
             ResolvedExpression::ConstantAccess(access) => {
                 write!(f, "ConstantAccess {} ", self.lookup.get_text(&access.name))
             }
-            ResolvedExpression::FieldAccess(_, _, _) => write!(f, "FieldAccess"),
+            ResolvedExpression::FieldAccess(_, b, c) => {
+                write!(
+                    f,
+                    "FieldAccess {}.{} lookups:{c:?}",
+                    b.struct_type_ref.borrow().assigned_name,
+                    self.get_text(&b.field_name.0)
+                )
+            }
             ResolvedExpression::ArrayAccess(_, _, _) => write!(f, "ArrayAccess"),
             ResolvedExpression::MapIndexAccess(_) => write!(f, "MapIndexAccess"),
             ResolvedExpression::InternalFunctionAccess(_) => write!(f, "InternalFunctionAccess"),
@@ -2270,9 +2282,9 @@ impl<'a> fmt::Display for ResolvedExpressionDisplay<'a> {
                 let mut names = Vec::new();
                 for node in &variable.variable_refs {
                     let variable_name = self.get_text(&node.name);
-                    names.push(variable_name);
+                    names.push(variable_name.to_string());
                 }
-                write!(f, "InitializeVariable {}", comma(&names),)
+                write!(f, "InitializeVariable {}", comma(&names))
             }
             ResolvedExpression::ReassignVariable(_) => write!(f, "ReassignVariable"),
             ResolvedExpression::VariableCompoundAssignment(_) => {
@@ -2307,7 +2319,13 @@ impl<'a> fmt::Display for ResolvedExpressionDisplay<'a> {
             ResolvedExpression::StaticCallGeneric(_) => write!(f, "StaticCallGeneric"),
             ResolvedExpression::FunctionInternalCall(_) => write!(f, "FunctionInternalCall"),
             ResolvedExpression::FunctionExternalCall(_) => write!(f, "FunctionExternalCall"),
-            ResolvedExpression::MemberCall(_) => write!(f, "MemberCall"),
+            ResolvedExpression::MemberCall(member_call) => {
+                let name_str = match &*member_call.function {
+                    ResolvedFunction::External(external) => &external.assigned_name,
+                    ResolvedFunction::Internal(internal) => self.get_text(&internal.name.0),
+                };
+                write!(f, "MemberCall {name_str}")
+            }
             ResolvedExpression::InterpolatedString(_, _) => write!(f, "InterpolatedString"),
             ResolvedExpression::StructInstantiation(_) => write!(f, "StructInstantiation"),
             ResolvedExpression::Array(_) => write!(f, "Array"),

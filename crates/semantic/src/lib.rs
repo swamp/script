@@ -472,7 +472,8 @@ pub type ExternalFunctionId = u32;
 pub type ConstantId = u32;
 
 pub struct ResolvedExternalFunctionDefinition {
-    pub name: ResolvedNode,
+    pub name: Option<ResolvedNode>,
+    pub assigned_name: String,
     pub signature: FunctionTypeSignature,
     pub id: ExternalFunctionId,
 }
@@ -493,7 +494,7 @@ impl Debug for ResolvedExternalFunctionDefinition {
 
 impl Spanned for ResolvedExternalFunctionDefinition {
     fn span(&self) -> Span {
-        self.name.span.clone()
+        Span::default()
     }
 }
 
@@ -834,6 +835,15 @@ pub type ResolvedFunctionRef = Rc<ResolvedFunction>;
 pub enum ResolvedFunction {
     Internal(ResolvedInternalFunctionDefinitionRef),
     External(ResolvedExternalFunctionDefinitionRef),
+}
+
+impl ResolvedFunction {
+    pub fn name(&self) -> Option<&ResolvedNode> {
+        match self {
+            ResolvedFunction::Internal(x) => Some(&x.name.0),
+            ResolvedFunction::External(y) => y.name.as_ref(),
+        }
+    }
 }
 
 impl Spanned for ResolvedFunction {
@@ -1690,12 +1700,11 @@ impl ResolvedStructType {
 
     pub fn add_external_member_function(
         &mut self,
-        function_name: &str,
         external_func: ResolvedExternalFunctionDefinitionRef,
     ) -> Result<(), SeqMapError> {
+        let name = external_func.assigned_name.clone();
         let func = ResolvedFunction::External(external_func);
-        self.functions
-            .insert(function_name.to_string(), func.into())?;
+        self.functions.insert(name, func.into())?;
         Ok(())
     }
 

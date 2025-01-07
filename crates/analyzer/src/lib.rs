@@ -979,12 +979,13 @@ impl<'a> Resolver<'a> {
                 let external_function_id = self.shared.state.allocate_external_function_id();
 
                 let external = ResolvedExternalFunctionDefinition {
+                    assigned_name: self.get_text(&ast_signature.name).to_string(),
                     signature: FunctionTypeSignature {
                         first_parameter_is_self: false,
                         parameters,
                         return_type: Box::new(return_type),
                     },
-                    name: self.to_node(&ast_signature.name),
+                    name: Some(self.to_node(&ast_signature.name)),
                     id: external_function_id,
                 };
 
@@ -1109,7 +1110,8 @@ impl<'a> Resolver<'a> {
                 let return_type = self.resolve_maybe_type(&signature.return_type)?;
 
                 let external = ResolvedExternalFunctionDefinition {
-                    name: self.to_node(&signature.name),
+                    assigned_name: self.get_text(&signature.name).to_string(),
+                    name: Some(self.to_node(&signature.name)),
                     signature: FunctionTypeSignature {
                         first_parameter_is_self: signature.self_parameter.is_some(),
                         parameters,
