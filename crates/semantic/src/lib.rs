@@ -447,7 +447,7 @@ pub struct ResolvedInternalFunctionDefinition {
 
 impl Debug for ResolvedInternalFunctionDefinition {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self.signature)
+        write!(f, "{:?}\n{:?}", self.signature, self.body)
     }
 }
 
@@ -1026,19 +1026,23 @@ pub enum ResolvedExpression {
     CoerceOptionToBool(Box<ResolvedExpression>),
 
     // Calls
+
+    // For calls from returned function values
     FunctionCall(
         FunctionTypeSignature,
         Box<ResolvedExpression>,
         Vec<ResolvedExpression>,
     ),
-    /*
-    FunctionInternalCall(ResolvedInternalFunctionCall), // ResolvedFunctionReference, Vec<ResolvedExpression>
-    FunctionExternalCall(ResolvedExternalFunctionCall),
+
     StaticCall(ResolvedStaticCall),
     StaticCallGeneric(ResolvedStaticCallGeneric),
-    MutMemberCall(MutMemberRef, Vec<ResolvedExpression>),
 
-     */
+    FunctionInternalCall(ResolvedInternalFunctionCall),
+    FunctionExternalCall(ResolvedExternalFunctionCall),
+
+    /*
+    MutMemberCall(MutMemberRef, Vec<ResolvedExpression>),
+    */
     MemberCall(ResolvedMemberCall),
     InterpolatedString(ResolvedStringTypeRef, Vec<ResolvedStringPart>),
 
@@ -1202,7 +1206,6 @@ impl ResolvedExpression {
                     arg.collect_constant_dependencies(deps);
                 }
             }
-            /*
             ResolvedExpression::FunctionInternalCall(func_call) => {
                 for arg in &func_call.arguments {
                     arg.collect_constant_dependencies(deps);
@@ -1223,18 +1226,19 @@ impl ResolvedExpression {
                     arg.collect_constant_dependencies(deps);
                 }
             }
+            /*
             ResolvedExpression::MutMemberCall(_mut_member_ref, args) => {
                 for arg in args {
                     arg.collect_constant_dependencies(deps);
                 }
             }
+            */
             ResolvedExpression::MemberCall(member_call) => {
                 for arg in &member_call.arguments {
                     arg.collect_constant_dependencies(deps);
                 }
             }
 
-             */
             ResolvedExpression::InterpolatedString(_, parts) => {
                 for part in parts {
                     match part {
@@ -1435,17 +1439,17 @@ impl Spanned for ResolvedExpression {
 
             // Calls
             Self::FunctionCall(_func_type, _expr, _arg) => todo!(),
-            /*
             Self::FunctionInternalCall(_call) => todo!(),
             Self::FunctionExternalCall(call) => call.arguments[0].span(),
             Self::StaticCall(call) => call.span(),
             Self::StaticCallGeneric(_call) => todo!(),
+            /*
             Self::MutMemberCall(_member_ref, _args) => {
                 todo!()
             }
+            */
             Self::MemberCall(call) => call.function.span(),
 
-             */
             // Blocks and Strings
             Self::Block(statements) => statements
                 .first()

@@ -1506,7 +1506,8 @@ fn nothing() -> SomeType<Int, Float> {
 
             ",
         "
-FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <4:7>, params: [], self_parameter: None, return_type: Some(Generic(TypeReference(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<17:8>), module_path: None }), [Int(<26:3>), Float(<31:5>)])) }, body: Block([]) }))
+FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <4:7>, params: [], self_parameter: None, return_type: Some(Generic(TypeReference(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<17:8>), module_path: None, generic_params: [Int(<26:3>), Float(<31:5>)] }), [Int(<26:3>), Float(<31:5>)])) }, body: Block([]), constants: [] }))
+
            ",
     );
 }
@@ -1571,7 +1572,8 @@ fn check_prefix_and_generic() {
          }
 ",
         r"
-StructDef(StructType { identifier: LocalTypeIdentifier(<16:5>), fields: [FieldType { field_name: FieldName(<36:10>), field_type: Int(<48:3>) }, FieldType { field_name: FieldName(<96:10>), field_type: Generic(TypeReference(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<113:6>), module_path: Some(ModulePath([ModulePathItem { node: <108:3> }])) }), [TypeReference(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<120:9>), module_path: None })]) }] })
+
+StructDef(StructType { identifier: LocalTypeIdentifier(<16:5>), fields: [FieldType { field_name: FieldName(<36:10>), field_type: Int(<48:3>) }, FieldType { field_name: FieldName(<96:10>), field_type: Generic(TypeReference(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<113:6>), module_path: Some(ModulePath([<108:3>])), generic_params: [TypeReference(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<120:9>), module_path: None, generic_params: [] })] }), [TypeReference(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<120:9>), module_path: None, generic_params: [] })]) }] })
 
 ",
     );
@@ -2300,6 +2302,47 @@ ImplDef(<66:4>, [Internal(FunctionWithBody { declaration: FunctionDeclaration { 
 FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <178:6>, params: [Parameter { variable: <185:2>, param_type: Function([Int(<190:3>)], Int(<198:3>)) }, Parameter { variable: <203:3>, param_type: Int(<208:3>) }], self_parameter: None, return_type: Some(Int(<216:3>)) }, body: Block([FunctionCall(VariableAccess(<234:2>), [VariableAccess(<237:3>)])]), constants: [] }))
 ---
 FunctionCall(VariableAccess(<261:6>), [StaticMemberFunctionReference(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<268:4>), module_path: None, generic_params: [] }, <274:16>), UnaryOp(Negate(<292:1>), Literal(Int(<293:2>)))])
+
+",
+    );
+}
+
+#[test_log::test]
+fn static_member_call_new() {
+    check(
+        r" 
+        Sparse<Shot>::new()
+         ",
+        r"
+
+
+",
+    );
+}
+
+#[test_log::test]
+fn static_member_call_new_args() {
+    check(
+        r" 
+        Sparse<Shot>::new(2, 3)
+         ",
+        r"
+
+
+",
+    );
+}
+
+#[test_log::test]
+fn struct_calls() {
+    check(
+        r" 
+        fn start(a: Assets) {
+            assets.frame_fixed_grid_material_png('player/ship_16x16')
+        }
+         ",
+        r"
+
 
 ",
     );

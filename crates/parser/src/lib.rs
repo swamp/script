@@ -527,7 +527,6 @@ impl AstParser {
                             let mut inner = child.into_inner();
                             let debug_text = inner.as_str();
                             let identifier = self.expect_identifier_next(&mut inner)?;
-                            info!(?debug_text, "method_or_field");
                             expr = Expression::FieldOrMemberAccess(Box::new(expr), identifier.0);
                         }
                         _ => {
@@ -1797,16 +1796,20 @@ impl AstParser {
     fn parse_static_call(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
         let mut inner = Self::convert_into_iterator(pair);
 
+        // Step 1: Extract `static_member_reference` from `static_call`
+        let static_member_ref_pair = inner.next().unwrap();
+        // Navigate within static_member_reference
+        let mut static_member_inner = static_member_ref_pair.clone().into_inner();
         // Parse type name
-        let type_name_pair = Self::next_pair(&mut inner)?;
+        let type_name_pair = Self::next_pair(&mut static_member_inner)?;
 
         let qualified_type_identifier = self.parse_qualified_type_identifier(&type_name_pair)?;
 
-        let function_name = self.expect_identifier_next(&mut inner)?;
-
+        let function_name = self.expect_identifier_next(&mut static_member_inner)?;
+        let mut function_call_args_pair = Self::next_pair(&mut inner)?.into_inner();
         // Parse arguments
         let mut args = Vec::new();
-        while let Some(arg_pair) = inner.next() {
+        while let Some(arg_pair) = function_call_args_pair.next() {
             if arg_pair.as_rule() == Rule::function_argument {
                 let mut arg_inner = Self::convert_into_iterator(&arg_pair).peekable();
                 let has_mut = arg_inner

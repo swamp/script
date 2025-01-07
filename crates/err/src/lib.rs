@@ -9,6 +9,7 @@ use std::fmt::Display;
 use std::io;
 use std::io::{stderr, Write};
 use swamp_script_analyzer::ResolveError;
+use swamp_script_eval::prelude::ExecuteError;
 use swamp_script_parser::SpecificError;
 use swamp_script_semantic::{Span, Spanned};
 use swamp_script_source_map::{FileId, SourceMap};
@@ -141,6 +142,12 @@ impl<C: Display + std::clone::Clone> Builder<C> {
     pub fn build(self) -> Report<C> {
         Report::new(self)
     }
+}
+
+pub fn show_execute_error(err: &ExecuteError, source_map: &SourceMap) {
+    let builder = build_execute_error(&err);
+    let report = builder.build();
+    report.print(source_map, stderr()).unwrap();
 }
 
 pub fn show_parse_error(err: &SpecificError, span: &Span, source_map: &SourceMap) {
@@ -358,5 +365,36 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
         ResolveError::NoDefaultImplementedForStruct(_) => todo!(),
         &ResolveError::ExpectedFunctionTypeForFunctionCall(_) => todo!(),
         &ResolveError::TypeDoNotSupportIndexAccess(_) => todo!(),
+    }
+}
+
+#[must_use]
+pub fn build_execute_error(err: &ExecuteError) -> Builder<usize> {
+    match err {
+        ExecuteError::Error(err_string) => Report::build(
+            Error,
+            1041,
+            &format!("execute error {err_string}"),
+            &Span::dummy(),
+        ),
+        ExecuteError::TypeError(_) => todo!(),
+        ExecuteError::ConversionError(_) => todo!(),
+        ExecuteError::ValueError(_) => todo!(),
+        ExecuteError::ArgumentIsNotMutable(_) => todo!(),
+        ExecuteError::CanNotUnwrap => todo!(),
+        ExecuteError::IllegalIterator => todo!(),
+        ExecuteError::ExpectedOptional => todo!(),
+        ExecuteError::NonUniqueKeysInMapLiteralDetected => todo!(),
+        ExecuteError::NotAnArray => todo!(),
+        ExecuteError::ValueIsNotMutable => todo!(),
+        ExecuteError::NotSparseValue => todo!(),
+        ExecuteError::CoerceOptionToBoolFailed => todo!(),
+        ExecuteError::VariableWasNotMutable => todo!(),
+        ExecuteError::ContinueNotAllowedHere => todo!(),
+        ExecuteError::BreakNotAllowedHere => todo!(),
+        ExecuteError::NotMutLocationFound => todo!(),
+        ExecuteError::IndexWasNotInteger => todo!(),
+        ExecuteError::NotAMap => todo!(),
+        ExecuteError::MissingExternalFunction(_) => todo!(),
     }
 }

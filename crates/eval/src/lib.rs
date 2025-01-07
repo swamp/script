@@ -6,9 +6,12 @@ use crate::block::BlockScopes;
 use crate::err::ConversionError;
 use crate::prelude::{ValueReference, VariableValue};
 use err::ExecuteError;
+use seq_fmt::comma;
 use seq_map::SeqMap;
 use std::fmt::Debug;
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::io;
+use std::io::Write;
+use std::{cell::RefCell, collections::HashMap, fmt, rc::Rc};
 use swamp_script_core::extra::{SparseValueId, SparseValueMap};
 use swamp_script_core::value::ValueRef;
 use swamp_script_core::value::{
@@ -21,7 +24,8 @@ use swamp_script_semantic::{
     ResolvedForPattern, ResolvedFunction, ResolvedPatternElement, ResolvedPostfixOperatorKind,
     ResolvedStaticCall, ResolvedUnaryOperatorKind,
 };
-use tracing::{error, trace, warn};
+use swamp_script_source_map::SourceMap;
+use tracing::{error, info, trace, warn};
 
 pub mod err;
 
@@ -366,7 +370,10 @@ impl<'a, C> Interpreter<'a, C> {
             }
             _ => {
                 return Err(ExecuteError::Error(
-                    "internal error, can only execute internal function".to_owned(),
+                    format!(
+                    "internal error, can only execute internal or external function {func_val:?}"
+                )
+                    .to_owned(),
                 ))
             }
         }
@@ -507,7 +514,7 @@ impl<'a, C> Interpreter<'a, C> {
 
         self.push_block_scope();
         for expression in expressions {
-            //info!(expression=?expression, "evaluate in block");
+            self.debug_expr(&expression, "in_block");
             match self.evaluate_expression_with_signal(&expression)? {
                 ValueWithSignal::Value(v) => result = v,
                 ValueWithSignal::Return(v) => return Ok(ValueWithSignal::Return(v)),
@@ -660,10 +667,22 @@ impl<'a, C> Interpreter<'a, C> {
         Ok(ValueWithSignal::Value(result))
     }
 
+    fn debug_expr(&self, expr: &ResolvedExpression, debug_str: &str) {
+        if let Some(debug_source_map) = self.debug_source_map {
+            let wrapped = ResolvedExpressionDisplay::new(expr, debug_source_map);
+            info!(expr = %wrapped, "{}", format!("{debug_str}"));
+            //eprintln!("{}: {}", debug_str, wrapped);
+            //io::stderr().flush().expect("Failed to flush stdout");
+        }
+    }
+
     fn evaluate_expression_with_signal(
         &mut self,
         expr: &ResolvedExpression,
     ) -> Result<ValueWithSignal, ExecuteError> {
+        if let Some(debug_source_map) = &self.debug_source_map {
+            self.debug_expr(expr, "evaluate_expression_with_signal");
+        }
         match expr {
             ResolvedExpression::Break(_) => Ok(ValueWithSignal::Break),
             ResolvedExpression::Continue(_) => Ok(ValueWithSignal::Continue),
@@ -765,9 +784,8 @@ impl<'a, C> Interpreter<'a, C> {
 
     // ---------------
     fn evaluate_expression(&mut self, expr: &ResolvedExpression) -> Result<Value, ExecuteError> {
-        if let Some(_debug_source_map) = &self.debug_source_map {
-            //info!(?expr, "evaluate_expr");
-            //info!("span: {}", debug_source_map.get_text_span(&expr.span()));
+        if let Some(debug_source_map) = &self.debug_source_map {
+            self.debug_expr(&expr, "evaluate_expression");
         }
         let value = match expr {
             // Constructing
@@ -1206,43 +1224,40 @@ impl<'a, C> Interpreter<'a, C> {
                     }
                 }
             }
-            /*
-                    ResolvedExpression::FunctionInternalCall(resolved_internal_call) => {
-                        self.evaluate_internal_function_call(resolved_internal_call)?
+            ResolvedExpression::FunctionInternalCall(resolved_internal_call) => {
+                self.evaluate_internal_function_call(resolved_internal_call)?
+            }
+
+            ResolvedExpression::FunctionExternalCall(resolved_external_call) => {
+                self.evaluate_external_function_call(resolved_external_call)?
+            }
+
+            ResolvedExpression::StaticCall(static_call) => {
+                self.evaluate_static_function_call(static_call)?
+            }
+
+            ResolvedExpression::StaticCallGeneric(static_call_generic) => {
+                let evaluated_args = self.evaluate_args(&static_call_generic.arguments)?;
+                match &*static_call_generic.function {
+                    ResolvedFunction::Internal(function_data) => {
+                        self.push_function_scope();
+                        self.bind_parameters(&function_data.signature.parameters, &evaluated_args)?;
+                        let result = self.evaluate_expression(&function_data.body)?;
+                        self.pop_function_scope();
+                        Ok(result)
                     }
-
-                    ResolvedExpression::FunctionExternalCall(resolved_external_call) => {
-                        self.evaluate_external_function_call(resolved_external_call)?
+                    ResolvedFunction::External(external) => {
+                        let mut func = self
+                            .externals
+                            .external_functions_by_id
+                            .get(&external.id)
+                            .expect("call_generic: external function missing")
+                            .borrow_mut();
+                        (func.func)(&evaluated_args, self.context)
                     }
+                }?
+            }
 
-                    ResolvedExpression::StaticCall(static_call) => {
-                        self.evaluate_static_function_call(static_call)?
-                    }
-
-                    ResolvedExpression::StaticCallGeneric(static_call_generic) => {
-                        let evaluated_args = self.evaluate_args(&static_call_generic.arguments)?;
-                        match &*static_call_generic.function {
-                            ResolvedFunction::Internal(function_data) => {
-                                self.push_function_scope();
-                                self.bind_parameters(&function_data.signature.parameters, &evaluated_args)?;
-                                let result = self.evaluate_expression(&function_data.body)?;
-                                self.pop_function_scope();
-                                Ok(result)
-                            }
-                            ResolvedFunction::External(external) => {
-                                let mut func = self
-                                    .externals
-                                    .external_functions_by_id
-                                    .get(&external.id)
-                                    .expect("call_generic: external function missing")
-                                    .borrow_mut();
-                                (func.func)(&evaluated_args, self.context)
-                            }
-                        }?
-                    }
-
-
-            */
             ResolvedExpression::Block(statements) => self.evaluate_block(statements)?.try_into()?,
 
             ResolvedExpression::InterpolatedString(_string_type_ref, parts) => {
@@ -2205,5 +2220,129 @@ impl<'a, C> Interpreter<'a, C> {
             }
         }
         Ok(())
+    }
+}
+
+pub struct ResolvedExpressionDisplay<'a> {
+    expr: &'a ResolvedExpression,
+    lookup: &'a dyn SourceMapLookup,
+}
+
+impl<'a> ResolvedExpressionDisplay<'a> {
+    pub fn new(expr: &'a ResolvedExpression, lookup: &'a dyn SourceMapLookup) -> Self {
+        ResolvedExpressionDisplay { expr, lookup }
+    }
+
+    fn get_text(&self, resolved_node: &ResolvedNode) -> &str {
+        if resolved_node.span.file_id == 0 || resolved_node.span.file_id == 0xffff {
+            return "";
+        }
+
+        self.lookup.get_text(resolved_node)
+    }
+
+    fn get_text_span(&self, span: &Span) -> &str {
+        if span.file_id == 0 || span.file_id == 0xffff {
+            return "";
+        }
+
+        self.lookup.get_text_span(span)
+    }
+}
+
+impl<'a> fmt::Display for ResolvedExpressionDisplay<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.expr {
+            ResolvedExpression::VariableAccess(_) => write!(f, "VariableAccess"),
+            ResolvedExpression::ConstantAccess(access) => {
+                write!(f, "ConstantAccess {} ", self.lookup.get_text(&access.name))
+            }
+            ResolvedExpression::FieldAccess(_, _, _) => write!(f, "FieldAccess"),
+            ResolvedExpression::ArrayAccess(_, _, _) => write!(f, "ArrayAccess"),
+            ResolvedExpression::MapIndexAccess(_) => write!(f, "MapIndexAccess"),
+            ResolvedExpression::InternalFunctionAccess(_) => write!(f, "InternalFunctionAccess"),
+            ResolvedExpression::ExternalFunctionAccess(_) => write!(f, "ExternalFunctionAccess"),
+            ResolvedExpression::MutVariableRef(_) => write!(f, "MutVariableRef"),
+            ResolvedExpression::MutStructFieldRef(_, _) => write!(f, "MutStructFieldRef"),
+            ResolvedExpression::MutArrayIndexRef(_, _) => write!(f, "MutArrayIndexRef"),
+            ResolvedExpression::Option(_) => write!(f, "Option"),
+            ResolvedExpression::InitializeVariable(variable) => {
+                let mut names = Vec::new();
+                for node in &variable.variable_refs {
+                    let variable_name = self.get_text(&node.name);
+                    names.push(variable_name);
+                }
+                write!(f, "InitializeVariable {}", comma(&names),)
+            }
+            ResolvedExpression::ReassignVariable(_) => write!(f, "ReassignVariable"),
+            ResolvedExpression::VariableCompoundAssignment(_) => {
+                write!(f, "VariableCompoundAssignment")
+            }
+            ResolvedExpression::ArrayExtend(_, _) => write!(f, "ArrayExtend"),
+            ResolvedExpression::ArrayPush(_, _) => write!(f, "ArrayPush"),
+            ResolvedExpression::ArrayAssignment(_, _, _) => write!(f, "ArrayAssignment"),
+            ResolvedExpression::MapAssignment(_, _, _) => write!(f, "MapAssignment"),
+            ResolvedExpression::StructFieldAssignment(_, _, _) => {
+                write!(f, "StructFieldAssignment")
+            }
+            ResolvedExpression::FieldCompoundAssignment(_, _, _, _) => {
+                write!(f, "FieldCompoundAssignment")
+            }
+            ResolvedExpression::BinaryOp(_) => write!(f, "BinaryOp"),
+            ResolvedExpression::UnaryOp(_) => write!(f, "UnaryOp"),
+            ResolvedExpression::PostfixOp(_) => write!(f, "PostfixOp"),
+            ResolvedExpression::CoerceOptionToBool(_) => write!(f, "CoerceOptionToBool"),
+            ResolvedExpression::FunctionCall(a, b, c) => write!(
+                f,
+                "FunctionCall {}",
+                ResolvedExpressionDisplay::new(b, self.lookup)
+            ),
+            ResolvedExpression::StaticCall(call) => {
+                write!(
+                    f,
+                    "StaticCall {}",
+                    self.get_text_span(&call.function.span())
+                )
+            }
+            ResolvedExpression::StaticCallGeneric(_) => write!(f, "StaticCallGeneric"),
+            ResolvedExpression::FunctionInternalCall(_) => write!(f, "FunctionInternalCall"),
+            ResolvedExpression::FunctionExternalCall(_) => write!(f, "FunctionExternalCall"),
+            ResolvedExpression::MemberCall(_) => write!(f, "MemberCall"),
+            ResolvedExpression::InterpolatedString(_, _) => write!(f, "InterpolatedString"),
+            ResolvedExpression::StructInstantiation(_) => write!(f, "StructInstantiation"),
+            ResolvedExpression::Array(_) => write!(f, "Array"),
+            ResolvedExpression::Tuple(_) => write!(f, "Tuple"),
+            ResolvedExpression::Literal(_) => write!(f, "Literal"),
+            ResolvedExpression::ExclusiveRange(_, _, _) => write!(f, "ExclusiveRange"),
+            ResolvedExpression::IfElseOnlyVariable { .. } => write!(f, "IfElseOnlyVariable"),
+            ResolvedExpression::IfElseAssignExpression { .. } => {
+                write!(f, "IfElseAssignExpression")
+            }
+            ResolvedExpression::Match(_) => write!(f, "Match"),
+            ResolvedExpression::LetVar(_, _) => write!(f, "LetVar"),
+            ResolvedExpression::ArrayRemoveIndex(_, _) => write!(f, "ArrayRemoveIndex"),
+            ResolvedExpression::ArrayClear(_) => write!(f, "ArrayClear"),
+            ResolvedExpression::IntAbs(_) => write!(f, "IntAbs"),
+            ResolvedExpression::IntRnd(_) => write!(f, "IntRnd"),
+            ResolvedExpression::IntToFloat(_) => write!(f, "IntToFloat"),
+            ResolvedExpression::FloatRound(_) => write!(f, "FloatRound"),
+            ResolvedExpression::FloatFloor(_) => write!(f, "FloatFloor"),
+            ResolvedExpression::FloatSign(_) => write!(f, "FloatSign"),
+            ResolvedExpression::FloatAbs(_) => write!(f, "FloatAbs"),
+            ResolvedExpression::FloatRnd(_) => write!(f, "FloatRnd"),
+            ResolvedExpression::SparseAdd(_, _) => write!(f, "SparseAdd"),
+            ResolvedExpression::SparseRemove(_, _) => write!(f, "SparseRemove"),
+            ResolvedExpression::SparseNew(_, _) => write!(f, "SparseNew"),
+            ResolvedExpression::ForLoop(_, _, _) => write!(f, "ForLoop"),
+            ResolvedExpression::WhileLoop(_, _) => write!(f, "WhileLoop"),
+            ResolvedExpression::Return(_) => write!(f, "Return"),
+            ResolvedExpression::Break(_) => write!(f, "Break"),
+            ResolvedExpression::Continue(_) => write!(f, "Continue"),
+            ResolvedExpression::Block(_) => write!(f, "Block"),
+            ResolvedExpression::If(_, _, _) => write!(f, "If"),
+            ResolvedExpression::IfOnlyVariable { .. } => write!(f, "IfOnlyVariable"),
+            ResolvedExpression::IfAssignExpression { .. } => write!(f, "IfAssignExpression"),
+            ResolvedExpression::TupleDestructuring(_, _, _) => write!(f, "TupleDestructuring"),
+        }
     }
 }

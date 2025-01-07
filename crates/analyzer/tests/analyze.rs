@@ -771,3 +771,25 @@ FunctionCall(FunctionTypeSignature { first_parameter_is_self: false, parameters:
 "#,
     );
 }
+
+#[test_log::test]
+fn struct_calls() {
+    check(
+        r" 
+        struct Assets {
+        }
+        
+        impl Assets {
+            fn frame_fixed_grid_material_png(self, name: String) {
+            }
+        }
+        fn start(assets: Assets) {
+            assets.frame_fixed_grid_material_png('player/ship_16x16')
+        }
+         ",
+        r"
+
+
+",
+    );
+}

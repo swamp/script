@@ -215,6 +215,18 @@ function_call_args = {
 
 member_call = { "." ~ identifier ~ function_call_args }
 
+function_call = {
+    "(" ~ (function_argument ~ ("," ~ " "* ~ function_argument)*)? ~ ")"
+}
+
+static_member_reference = {
+    qualified_type_identifier ~ "::" ~ identifier
+}
+
+static_call = {
+    static_member_reference ~ function_call_args
+}
+
 postfix = { primary ~ postfix_op* }
 
 postfix_op = {
@@ -225,9 +237,8 @@ postfix_op = {
     | method_or_field_suffix
 }
 
-function_call = {
-    "(" ~ (function_argument ~ ("," ~ " "* ~ function_argument)*)? ~ ")"
-}
+
+
 
 option_operator = { "?" }
 
@@ -285,19 +296,15 @@ function_argument = {
 }
 
 
-static_call = {
-    static_member_reference ~
-    "(" ~ (function_argument ~ ("," ~ " "* ~ function_argument)*)? ~ ")"
-}
+
 
 array_index = { "[" ~ expression ~ "]" }
 
-static_member_reference = {
-    qualified_type_identifier ~ "::" ~ identifier
-}
 
 primary = {
-    if_expr
+    static_call
+    | static_member_reference
+    | if_expr
     | match_expr
     | for_loop
     | while_loop
@@ -307,8 +314,6 @@ primary = {
     | block
     | interpolated_string
     | enum_literal
-    | static_member_reference
-    | static_call
     | struct_instantiation
     | parenthesized
     | literal
@@ -383,7 +388,7 @@ optional_marker = { "?" }
 base_type = {
     function_type
     | built_in_type
-    | qualified_type_identifier ~ generic_params?
+    | qualified_type_identifier
     | map_type
     | array_type
     | tuple_type

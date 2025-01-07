@@ -11,6 +11,7 @@ tracing = "0.1.40"
 swamp-script-semantic = { path = "../semantic", version = "0.0.10" }
 fixed32 = "0.0.17"
 seq-map = "0.0.13"
+seq-fmt = "0.0.1"
 
 swamp-script-core = { path = "../core", version = "0.0.10" }
 swamp-script-source-map = { path = "../source-map", version = "0.0.10" }

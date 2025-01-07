@@ -134,7 +134,6 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
         ResolvedExpression::MemberCall(call) => {
             *signature(&call.function).return_type.clone().clone()
         }
-        /*
         ResolvedExpression::FunctionInternalCall(internal_fn_call) => *internal_fn_call
             .function_definition
             .signature
@@ -145,7 +144,7 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
             .signature
             .return_type
             .clone(),
-        ResolvedExpression::MutMemberCall(_, _) => todo!(),
+        //        ResolvedExpression::MutMemberCall(_, _) => todo!(),
         ResolvedExpression::MemberCall(member_call) => {
             *signature(&member_call.function).return_type.clone()
         }
@@ -156,7 +155,6 @@ pub fn resolution(expression: &ResolvedExpression) -> ResolvedType {
             *signature(&static_call_generic.function).return_type.clone()
         }
 
-         */
         ResolvedExpression::InterpolatedString(string_type, _parts) => {
             ResolvedType::String(string_type.clone())
         }
@@ -1236,7 +1234,6 @@ impl<'a> Resolver<'a> {
         for parameter in parameters {
             let param_type = self.resolve_type(&parameter.param_type)?;
             let debug_name = self.get_text(&parameter.variable.name);
-            info!(?debug_name, ?param_type, orig_type=?parameter.param_type, "setting parameter to type");
             resolved_parameters.push(ResolvedTypeForParameter {
                 name: self.get_text(&parameter.variable.name).to_string(),
                 resolved_type: param_type,
@@ -1503,15 +1500,11 @@ impl<'a> Resolver<'a> {
             }
 
             Expression::StaticCall(type_name, function_name, arguments) => {
-                todo!()
-                /*
                 ResolvedExpression::StaticCall(self.resolve_static_call(
                     type_name,
                     function_name,
                     arguments,
                 )?)
-
-                 */
             }
 
             Expression::StaticCallGeneric(type_name, function_name, arguments) => {
@@ -2081,22 +2074,15 @@ impl<'a> Resolver<'a> {
                 expressions.push(ResolvedExpression::InitializeVariable(
                     ResolvedVariableAssignment {
                         variable_refs: vec![temp_var.clone()],
-                        expression: todo!(), /* Box::new(ResolvedExpression::StaticCall(ResolvedStaticCall {
-                                                 function: function.clone(),
-                                                 arguments: vec![],
-                                             }))
-                                             */
+                        expression: Box::new(ResolvedExpression::StaticCall(ResolvedStaticCall {
+                            function: function.clone(),
+                            arguments: vec![],
+                        })),
                     },
                 ));
 
                 // overwrite fields with assignments
                 for (field_target_index, field_expressions) in source_order_expressions {
-                    info!(
-                        field_target_index,
-                        scope = temp_var.scope_index,
-                        variable_index = temp_var.variable_index,
-                        "overwriting index"
-                    );
                     let overwrite_expression = ResolvedExpression::StructFieldAssignment(
                         Box::new(ResolvedExpression::VariableAccess(temp_var.clone())),
                         vec![ResolvedAccess::FieldIndex(
@@ -2502,15 +2488,11 @@ impl<'a> Resolver<'a> {
         arguments: &[Expression],
     ) -> Result<ResolvedExpression, ResolveError> {
         let function_expr = self.resolve_expression(function_expression)?;
-        info!(?function_expr, "function expression");
         let resolution_type = resolution(&function_expr);
-        info!(?resolution_type, "function expression resulted in type");
 
         let resolved_arguments = self.resolve_expressions(arguments)?;
         if let ResolvedType::Function(signature) = resolution_type {
             // TODO: Verify signature with resolved_arguments
-
-            info!(?function_expr, "function expression");
 
             Ok(ResolvedExpression::FunctionCall(
                 signature,

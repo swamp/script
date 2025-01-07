@@ -48,7 +48,7 @@ impl From<ExecuteError> for EvalTestError {
 fn internal_compile(
     script: &str,
     target_namespace: &ResolvedModuleNamespaceRef,
-    mut modules: &mut ResolvedModules,
+    modules: &mut ResolvedModules,
 ) -> Result<(Option<ResolvedExpression>, SourceMap), ResolveError> {
     let parser = AstParser {};
 
@@ -65,7 +65,7 @@ fn internal_compile(
     // let resolved_path_str = vec!["test".to_string()];
     // let own_module = modules.add_empty_module(&resolved_path_str);
 
-    let mut name_lookup = NameLookup::new(target_namespace.clone(), &mut modules);
+    let mut name_lookup = NameLookup::new(target_namespace.clone(), modules);
 
     let mut resolver = Resolver::new(&types, &mut state, &mut name_lookup, &source_map, file_id);
 
@@ -92,21 +92,14 @@ fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError>
         name: ResolvedNode {
             span: Span::default(),
         },
-        parameters: vec![ResolvedParameterNode {
-            name: ResolvedNode {
-                span: Span::default(),
-            },
-            resolved_type: ResolvedTypeForParameter {
-                resolved_type: ResolvedType::Any,
-                is_mutable: false,
-            },
-            is_mutable: None,
-        }],
+
         signature: FunctionTypeSignature {
             first_parameter_is_self: false,
             parameters: vec![ResolvedTypeForParameter {
+                name: String::new(),
                 resolved_type: ResolvedType::Any,
                 is_mutable: false,
+                node: None,
             }],
             return_type: Box::from(ResolvedType::Any),
         },
