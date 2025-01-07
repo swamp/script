@@ -1449,6 +1449,94 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
+            ResolvedExpression::FloatCos(expr) => {
+                let value = self.evaluate_expression(expr)?;
+                if let Value::Float(f) = value {
+                    Value::Float(f.cos())
+                } else {
+                    return Err(ExecuteError::TypeError("Expected float".to_string()));
+                }
+            }
+
+            ResolvedExpression::FloatAcos(expr) => {
+                let value = self.evaluate_expression(expr)?;
+                if let Value::Float(f) = value {
+                    Value::Float(f.acos())
+                } else {
+                    return Err(ExecuteError::TypeError("Expected float".to_string()));
+                }
+            }
+
+            ResolvedExpression::FloatSin(expr) => {
+                let value = self.evaluate_expression(expr)?;
+                if let Value::Float(f) = value {
+                    Value::Float(f.sin())
+                } else {
+                    return Err(ExecuteError::TypeError("Expected float".to_string()));
+                }
+            }
+
+            ResolvedExpression::FloatAsin(expr) => {
+                let value = self.evaluate_expression(expr)?;
+                if let Value::Float(f) = value {
+                    Value::Float(f.asin())
+                } else {
+                    return Err(ExecuteError::TypeError("Expected float".to_string()));
+                }
+            }
+
+            ResolvedExpression::FloatSqrt(expr) => {
+                let value = self.evaluate_expression(expr)?;
+                if let Value::Float(f) = value {
+                    Value::Float(f.sqrt())
+                } else {
+                    return Err(ExecuteError::TypeError("Expected float".to_string()));
+                }
+            }
+
+            ResolvedExpression::FloatMin(expr, min) => {
+                let value = self.evaluate_expression(expr)?;
+                let min_value = self.evaluate_expression(min)?;
+                if let (Value::Float(f), Value::Float(min_f)) = (value, min_value) {
+                    Value::Float(f.min(min_f))
+                } else {
+                    return Err(ExecuteError::TypeError("Expected float".to_string()));
+                }
+            }
+
+            ResolvedExpression::FloatMax(expr, max) => {
+                let value = self.evaluate_expression(expr)?;
+                let max_value = self.evaluate_expression(max)?;
+                if let (Value::Float(f), Value::Float(max_f)) = (value, max_value) {
+                    Value::Float(f.max(max_f))
+                } else {
+                    return Err(ExecuteError::TypeError("Expected float".to_string()));
+                }
+            }
+
+            ResolvedExpression::FloatAtan2(y, x) => {
+                let y_value = self.evaluate_expression(y)?;
+                let x_value = self.evaluate_expression(x)?;
+                if let (Value::Float(y_f), Value::Float(x_f)) = (y_value, x_value) {
+                    Value::Float(Fp::from(-9999)) //y_f.atan2(x_f)) // TODO: Implement atan2
+                } else {
+                    return Err(ExecuteError::TypeError("Expected float".to_string()));
+                }
+            }
+
+            ResolvedExpression::FloatClamp(v, min, max) => {
+                let v_value = self.evaluate_expression(v)?;
+                let min_value = self.evaluate_expression(min)?;
+                let max_value = self.evaluate_expression(max)?;
+                if let (Value::Float(f), Value::Float(min_f), Value::Float(max_f)) =
+                    (v_value, min_value, max_value)
+                {
+                    Value::Float(f.clamp(min_f, max_f))
+                } else {
+                    return Err(ExecuteError::TypeError("Expected float".to_string()));
+                }
+            }
+
             ResolvedExpression::FloatRnd(float_expr) => {
                 let value = self.evaluate_expression(float_expr)?;
                 if let Value::Float(f) = value {
@@ -1467,6 +1555,40 @@ impl<'a, C> Interpreter<'a, C> {
                     return Err(ExecuteError::TypeError("Expected int".to_string()));
                 }
             }
+
+            ResolvedExpression::IntClamp(v, min, max) => {
+                let v_value = self.evaluate_expression(v)?;
+                let min_value = self.evaluate_expression(min)?;
+                let max_value = self.evaluate_expression(max)?;
+                if let (Value::Int(f), Value::Int(min_f), Value::Int(max_f)) =
+                    (v_value, min_value, max_value)
+                {
+                    Value::Int(f.clamp(min_f, max_f))
+                } else {
+                    return Err(ExecuteError::TypeError("Expected int".to_string()));
+                }
+            }
+
+            ResolvedExpression::IntMin(expr, max) => {
+                let value = self.evaluate_expression(expr)?;
+                let max_value = self.evaluate_expression(max)?;
+                if let (Value::Int(f), Value::Int(max_f)) = (value, max_value) {
+                    Value::Int(f.min(max_f))
+                } else {
+                    return Err(ExecuteError::TypeError("Expected int".to_string()));
+                }
+            }
+
+            ResolvedExpression::IntMax(expr, max) => {
+                let value = self.evaluate_expression(expr)?;
+                let max_value = self.evaluate_expression(max)?;
+                if let (Value::Int(f), Value::Int(max_f)) = (value, max_value) {
+                    Value::Int(f.max(max_f))
+                } else {
+                    return Err(ExecuteError::TypeError("Expected int".to_string()));
+                }
+            }
+
             ResolvedExpression::IntRnd(int_expr) => {
                 let value = self.evaluate_expression(int_expr)?;
                 if let Value::Int(i) = value {
@@ -1475,6 +1597,7 @@ impl<'a, C> Interpreter<'a, C> {
                     return Err(ExecuteError::TypeError("Expected int".to_string()));
                 }
             }
+
             ResolvedExpression::IntToFloat(int_expr) => {
                 let value = self.evaluate_expression(int_expr)?;
                 if let Value::Int(i) = value {
@@ -2361,6 +2484,7 @@ impl<'a> fmt::Display for ResolvedExpressionDisplay<'a> {
             ResolvedExpression::IfOnlyVariable { .. } => write!(f, "IfOnlyVariable"),
             ResolvedExpression::IfAssignExpression { .. } => write!(f, "IfAssignExpression"),
             ResolvedExpression::TupleDestructuring(_, _, _) => write!(f, "TupleDestructuring"),
+            _ => todo!(),
         }
     }
 }

@@ -1136,6 +1136,13 @@ pub enum ResolvedExpression {
     IntAbs(Box<ResolvedExpression>),
     IntRnd(Box<ResolvedExpression>),
     IntToFloat(Box<ResolvedExpression>),
+    IntClamp(
+        Box<ResolvedExpression>,
+        Box<ResolvedExpression>,
+        Box<ResolvedExpression>,
+    ),
+    IntMin(Box<ResolvedExpression>, Box<ResolvedExpression>),
+    IntMax(Box<ResolvedExpression>, Box<ResolvedExpression>),
 
     // Float built in
     FloatRound(Box<ResolvedExpression>),
@@ -1143,6 +1150,19 @@ pub enum ResolvedExpression {
     FloatSign(Box<ResolvedExpression>),
     FloatAbs(Box<ResolvedExpression>),
     FloatRnd(Box<ResolvedExpression>),
+    FloatCos(Box<ResolvedExpression>),
+    FloatSin(Box<ResolvedExpression>),
+    FloatAcos(Box<ResolvedExpression>),
+    FloatAsin(Box<ResolvedExpression>),
+    FloatAtan2(Box<ResolvedExpression>, Box<ResolvedExpression>),
+    FloatSqrt(Box<ResolvedExpression>),
+    FloatClamp(
+        Box<ResolvedExpression>,
+        Box<ResolvedExpression>,
+        Box<ResolvedExpression>,
+    ),
+    FloatMin(Box<ResolvedExpression>, Box<ResolvedExpression>),
+    FloatMax(Box<ResolvedExpression>, Box<ResolvedExpression>),
 
     // --- Special methods
     // TODO: Have a better interface for these "engine" member calls
@@ -1371,7 +1391,16 @@ impl ResolvedExpression {
             Self::FloatRound(expr)
             | Self::FloatFloor(expr)
             | Self::FloatSign(expr)
-            | Self::FloatAbs(expr) => {
+            | Self::FloatAbs(expr)
+            | Self::FloatAcos(expr)
+            | Self::FloatCos(expr)
+            | Self::FloatSqrt(expr)
+            | Self::FloatClamp(expr, _, _)
+            | Self::FloatMin(expr, _)
+            | Self::FloatMax(expr, _)
+            | Self::FloatSin(expr)
+            | Self::FloatAsin(expr)
+            | Self::FloatAtan2(expr, _) => {
                 expr.collect_constant_dependencies(deps);
             }
             Self::SparseAdd(expr1, expr2) | Self::SparseRemove(expr1, expr2) => {
@@ -1432,8 +1461,13 @@ impl ResolvedExpression {
                 expr.collect_constant_dependencies(deps);
             }
             Self::VariableAccess(_) => {}
-            Self::IntAbs(_) | Self::IntRnd(_) | Self::FloatRnd(_) => todo!(),
-            Self::IntToFloat(_) => todo!(),
+            Self::IntAbs(_)
+            | Self::IntRnd(_)
+            | Self::FloatRnd(_)
+            | Self::IntClamp(_, _, _)
+            | Self::IntMin(_, _)
+            | Self::IntMax(_, _) => {}
+            Self::IntToFloat(_) => {}
         }
     }
 
@@ -1591,11 +1625,23 @@ impl ResolvedExpression {
             Self::FloatFloor(_) => ResolvedType::Int(Rc::new(ResolvedIntType {})),
             Self::FloatRound(_) => ResolvedType::Int(Rc::new(ResolvedIntType {})),
             Self::FloatSign(_) => ResolvedType::Float(Rc::new(ResolvedFloatType {})),
-            Self::FloatAbs(_) => ResolvedType::Float(Rc::new(ResolvedFloatType {})),
+            Self::FloatAbs(_)
+            | Self::FloatCos(_)
+            | Self::FloatSin(_)
+            | Self::FloatAsin(_)
+            | Self::FloatAcos(_)
+            | Self::FloatMin(_, _)
+            | Self::FloatAtan2(_, _)
+            | Self::FloatSqrt(_)
+            | Self::FloatClamp(_, _, _)
+            | Self::FloatMax(_, _) => ResolvedType::Float(Rc::new(ResolvedFloatType {})),
+
             Self::FloatRnd(_) => ResolvedType::Int(Rc::new(ResolvedIntType {})),
 
             // Int member functions
-            Self::IntAbs(_) => ResolvedType::Int(Rc::new(ResolvedIntType {})),
+            Self::IntAbs(_) | Self::IntClamp(_, _, _) | Self::IntMin(_, _) | Self::IntMax(_, _) => {
+                ResolvedType::Int(Rc::new(ResolvedIntType {}))
+            }
             Self::IntRnd(_) => ResolvedType::Int(Rc::new(ResolvedIntType {})),
             Self::IntToFloat(_) => ResolvedType::Float(Rc::new(ResolvedFloatType {})),
 
@@ -1785,6 +1831,7 @@ impl Spanned for ResolvedExpression {
             Self::MutStructFieldRef(a, _b, _access_chain) => a.span(),
             Self::MutArrayIndexRef(_, _, _) => todo!(),
             Self::TupleDestructuring(_, _, _) => todo!(),
+            _ => todo!(),
         }
     }
 }

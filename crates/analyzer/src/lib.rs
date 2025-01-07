@@ -3196,8 +3196,70 @@ impl<'a> Resolver<'a> {
         Ok(expr)
     }
 
+    fn resolve_single_float_expression(
+        &mut self,
+        ast_arguments: &[Expression],
+    ) -> Result<ResolvedExpression, ResolveError> {
+        if ast_arguments.len() != 1 {
+            return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 1));
+        }
+        let expr2 = self.resolve_expression(&ast_arguments[0])?;
+        if expr2.resolution() != self.shared.types.float_type() {
+            return Err(ResolveError::IncompatibleArguments(
+                expr2.resolution(),
+                self.shared.types.float_type(),
+            ));
+        }
+
+        Ok(expr2)
+    }
+
+    fn resolve_single_int_expression(
+        &mut self,
+        ast_arguments: &[Expression],
+    ) -> Result<ResolvedExpression, ResolveError> {
+        if ast_arguments.len() != 1 {
+            return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 1));
+        }
+        let expr2 = self.resolve_expression(&ast_arguments[0])?;
+        if expr2.resolution() != self.shared.types.int_type() {
+            return Err(ResolveError::IncompatibleArguments(
+                expr2.resolution(),
+                self.shared.types.int_type(),
+            ));
+        }
+
+        Ok(expr2)
+    }
+
+    fn resolve_two_float_expressions(
+        &mut self,
+        ast_arguments: &[Expression],
+    ) -> Result<(ResolvedExpression, ResolvedExpression), ResolveError> {
+        if ast_arguments.len() != 2 {
+            return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 2));
+        }
+        let expr2 = self.resolve_expression(&ast_arguments[0])?;
+        if expr2.resolution() != self.shared.types.float_type() {
+            return Err(ResolveError::IncompatibleArguments(
+                expr2.resolution(),
+                self.shared.types.float_type(),
+            ));
+        }
+
+        let expr3 = self.resolve_expression(&ast_arguments[1])?;
+        if expr3.resolution() != self.shared.types.float_type() {
+            return Err(ResolveError::IncompatibleArguments(
+                expr3.resolution(),
+                self.shared.types.float_type(),
+            ));
+        }
+
+        Ok((expr2, expr3))
+    }
+
     fn resolve_float_member_call(
-        &self,
+        &mut self,
         expr: ResolvedExpression,
         ast_member_function_name: &Node,
         ast_arguments: &[Expression],
@@ -3234,6 +3296,59 @@ impl<'a> Resolver<'a> {
                 }
                 Ok(ResolvedExpression::FloatRnd(Box::new(expr)))
             }
+            "cos" => {
+                if !ast_arguments.is_empty() {
+                    return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 0));
+                }
+                Ok(ResolvedExpression::FloatCos(Box::new(expr)))
+            }
+            "sin" => {
+                if !ast_arguments.is_empty() {
+                    return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 0));
+                }
+                Ok(ResolvedExpression::FloatSin(Box::new(expr)))
+            }
+            "acos" => {
+                if !ast_arguments.is_empty() {
+                    return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 0));
+                }
+                Ok(ResolvedExpression::FloatAcos(Box::new(expr)))
+            }
+            "asin" => {
+                if !ast_arguments.is_empty() {
+                    return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 0));
+                }
+                Ok(ResolvedExpression::FloatAsin(Box::new(expr)))
+            }
+            "atan2" => {
+                let float_argument = self.resolve_single_float_expression(ast_arguments)?;
+                Ok(ResolvedExpression::FloatAtan2(
+                    Box::new(expr),
+                    Box::new(float_argument),
+                ))
+            }
+            "min" => {
+                let float_argument = self.resolve_single_float_expression(ast_arguments)?;
+                Ok(ResolvedExpression::FloatMin(
+                    Box::new(expr),
+                    Box::new(float_argument),
+                ))
+            }
+            "max" => {
+                let float_argument = self.resolve_single_float_expression(ast_arguments)?;
+                Ok(ResolvedExpression::FloatMax(
+                    Box::new(expr),
+                    Box::new(float_argument),
+                ))
+            }
+            "clamp" => {
+                let (min, max) = self.resolve_two_float_expressions(ast_arguments)?;
+                Ok(ResolvedExpression::FloatClamp(
+                    Box::new(expr),
+                    Box::new(min),
+                    Box::new(max),
+                ))
+            }
             _ => Err(ResolveError::UnknownMemberFunction(
                 self.to_node(ast_member_function_name),
             )),
@@ -3241,7 +3356,7 @@ impl<'a> Resolver<'a> {
     }
 
     fn resolve_int_member_call(
-        &self,
+        &mut self,
         expr: ResolvedExpression,
         ast_member_function_name: &Node,
         ast_arguments: &[Expression],
@@ -3259,6 +3374,22 @@ impl<'a> Resolver<'a> {
                     return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 0));
                 }
                 Ok(ResolvedExpression::IntRnd(Box::new(expr)))
+            }
+
+            "max" => {
+                let int_argument = self.resolve_single_int_expression(ast_arguments)?;
+                Ok(ResolvedExpression::IntMax(
+                    Box::new(expr),
+                    Box::new(int_argument),
+                ))
+            }
+
+            "min" => {
+                let int_argument = self.resolve_single_int_expression(ast_arguments)?;
+                Ok(ResolvedExpression::IntMin(
+                    Box::new(expr),
+                    Box::new(int_argument),
+                ))
             }
 
             "to_float" => {
