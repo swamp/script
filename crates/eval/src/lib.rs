@@ -438,13 +438,13 @@ impl<'a, C> Interpreter<'a, C> {
                     }
                 }
 
-                ResolvedExpression::MutStructFieldRef(base_expr, access_chain) => {
+                ResolvedExpression::MutStructFieldRef(base_expr, _type, access_chain) => {
                     VariableValue::Reference(ValueReference(
                         self.evaluate_location(base_expr, access_chain)?.clone(),
                     ))
                 }
 
-                ResolvedExpression::MutArrayIndexRef(base_expr, access_chain) => {
+                ResolvedExpression::MutArrayIndexRef(base_expr, _, access_chain) => {
                     VariableValue::Reference(ValueReference(
                         self.evaluate_location(base_expr, access_chain)?.clone(),
                     ))
@@ -1134,12 +1134,12 @@ impl<'a, C> Interpreter<'a, C> {
                 .current_block_scopes
                 .lookup_var_value(&var_ref.variable_ref),
 
-            ResolvedExpression::MutStructFieldRef(base_expr, access_chain) => self
+            ResolvedExpression::MutStructFieldRef(base_expr, _type, access_chain) => self
                 .evaluate_location(base_expr, access_chain)?
                 .borrow()
                 .clone(),
 
-            ResolvedExpression::MutArrayIndexRef(base_expr, access_chain) => self
+            ResolvedExpression::MutArrayIndexRef(base_expr, _resolved_type, access_chain) => self
                 .evaluate_location(base_expr, access_chain)?
                 .borrow()
                 .clone(),
@@ -2275,8 +2275,8 @@ impl<'a> fmt::Display for ResolvedExpressionDisplay<'a> {
             ResolvedExpression::InternalFunctionAccess(_) => write!(f, "InternalFunctionAccess"),
             ResolvedExpression::ExternalFunctionAccess(_) => write!(f, "ExternalFunctionAccess"),
             ResolvedExpression::MutVariableRef(_) => write!(f, "MutVariableRef"),
-            ResolvedExpression::MutStructFieldRef(_, _) => write!(f, "MutStructFieldRef"),
-            ResolvedExpression::MutArrayIndexRef(_, _) => write!(f, "MutArrayIndexRef"),
+            ResolvedExpression::MutStructFieldRef(_, _, _) => write!(f, "MutStructFieldRef"),
+            ResolvedExpression::MutArrayIndexRef(_, _, _) => write!(f, "MutArrayIndexRef"),
             ResolvedExpression::Option(_) => write!(f, "Option"),
             ResolvedExpression::InitializeVariable(variable) => {
                 let mut names = Vec::new();

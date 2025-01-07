@@ -11,7 +11,7 @@ use std::io::{stderr, Write};
 use swamp_script_analyzer::ResolveError;
 use swamp_script_eval::prelude::ExecuteError;
 use swamp_script_parser::SpecificError;
-use swamp_script_semantic::{Span, Spanned};
+use swamp_script_semantic::{ResolvedNode, Span, Spanned};
 use swamp_script_source_map::{FileId, SourceMap};
 
 pub struct SourceLinesWrap<'a> {
@@ -272,10 +272,16 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
         ResolveError::NotAnArray(_) => todo!(),
         ResolveError::ArrayIndexMustBeInt(_) => todo!(),
         ResolveError::OverwriteVariableWithAnotherType(_) => todo!(),
-        ResolveError::WrongNumberOfArguments(_, _) => {
-            todo!()
+        ResolveError::WrongNumberOfArguments(expected, encountered) => {
+            Report::build(Error, 105, "wrong number of arguments", &Span::default())
         }
-        ResolveError::IncompatibleArguments(_, _) => todo!(),
+        ResolveError::IncompatibleArguments(a, b) =>   Report::build(
+            Error,
+            904,
+            &format!("Incompatible arguments"),
+            &a.span(),
+        )             .with_label("first_type", a.span().clone())
+            .with_label("second_type", b.span().clone()),
         ResolveError::CanOnlyOverwriteVariableWithMut(_) => todo!(),
         ResolveError::OverwriteVariableNotAllowedHere(_) => todo!(),
         ResolveError::NotNamedStruct(_) => todo!(),
@@ -302,7 +308,7 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
         ResolveError::ExpectedEnumInPattern(_) => todo!(),
         ResolveError::WrongEnumVariantContainer(_) => todo!(),
         ResolveError::VariableIsNotMutable(_) => todo!(),
-        ResolveError::ArgumentIsNotMutable => todo!(),
+        ResolveError::ArgumentIsNotMutable(span) => Report::build(Error, 1401, "Argument is not mutable", &span),
         ResolveError::WrongNumberOfTupleDeconstructVariables => todo!(),
         ResolveError::UnknownTypeReference(x) => {
             Report::build(Error, 101, "Unknown type reference", &x.span)

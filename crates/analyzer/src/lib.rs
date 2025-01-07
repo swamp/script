@@ -20,13 +20,13 @@ use swamp_script_ast::{
 use swamp_script_semantic::modules::ResolvedModules;
 use swamp_script_semantic::{
     create_rust_type, prelude::*, FileId, ResolvedAccess, ResolvedAnonymousStructFieldType,
-    ResolvedAnonymousStructType, ResolvedBinaryOperatorKind, ResolvedBoolType,
-    ResolvedCompoundOperator, ResolvedCompoundOperatorKind, ResolvedForPattern,
-    ResolvedFormatSpecifier, ResolvedFormatSpecifierKind, ResolvedLocalIdentifier,
-    ResolvedLocalTypeIdentifier, ResolvedMapIndexLookup, ResolvedPatternElement,
-    ResolvedPostfixOperatorKind, ResolvedPrecisionType, ResolvedStaticCallGeneric,
-    ResolvedTupleTypeRef, ResolvedTypeForParameter, ResolvedUnaryOperatorKind, ResolvedUse,
-    ResolvedUseItem, ResolvedVariableCompoundAssignment, Span, TypeNumber,
+    ResolvedAnonymousStructType, ResolvedBinaryOperatorKind, ResolvedCompoundOperator,
+    ResolvedCompoundOperatorKind, ResolvedForPattern, ResolvedFormatSpecifier,
+    ResolvedFormatSpecifierKind, ResolvedLocalIdentifier, ResolvedLocalTypeIdentifier,
+    ResolvedMapIndexLookup, ResolvedPatternElement, ResolvedPostfixOperatorKind,
+    ResolvedPrecisionType, ResolvedStaticCallGeneric, ResolvedTupleTypeRef,
+    ResolvedTypeForParameter, ResolvedUnaryOperatorKind, ResolvedUse, ResolvedUseItem,
+    ResolvedVariableCompoundAssignment, Span, TypeNumber,
 };
 use swamp_script_semantic::{FunctionTypeSignature, ResolvedProgramTypes};
 use swamp_script_semantic::{
@@ -36,7 +36,7 @@ use swamp_script_semantic::{
 use swamp_script_semantic::{ResolvedMapType, ResolvedProgramState};
 use swamp_script_semantic::{ResolvedModulePath, ResolvedPostfixOperator};
 use swamp_script_source_map::SourceMap;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 
 #[derive(Debug)]
 pub struct ResolvedProgram {
@@ -96,7 +96,7 @@ pub enum ResolveError {
     ExpectedFunctionExpression,
     CouldNotFindMember(ResolvedNode, ResolvedNode),
     UnknownVariable(ResolvedNode),
-    NotAnArray(Expression),
+    NotAnArray(Span),
     ArrayIndexMustBeInt(ResolvedType),
     OverwriteVariableWithAnotherType(ResolvedNode),
     WrongNumberOfArguments(usize, usize),
@@ -112,7 +112,7 @@ pub enum ResolveError {
     ExpectedEnumInPattern(ResolvedNode),
     WrongEnumVariantContainer(ResolvedEnumVariantTypeRef),
     VariableIsNotMutable(ResolvedNode),
-    ArgumentIsNotMutable,
+    ArgumentIsNotMutable(Span),
     WrongNumberOfTupleDeconstructVariables,
     UnknownTypeReference(ResolvedNode),
     SemanticError(SemanticError),
@@ -1554,7 +1554,10 @@ impl<'a> Resolver<'a> {
                             if anonym_struct_field_and_expressions.len()
                                 != resolved_variant_struct_ref.anon_struct.defined_fields.len()
                             {
-                                return Err(ResolveError::ArgumentIsNotMutable);
+                                return Err(ResolveError::WrongNumberOfArguments(
+                                    anonym_struct_field_and_expressions.len(),
+                                    resolved_variant_struct_ref.anon_struct.defined_fields.len(),
+                                ));
                             }
 
                             let resolved = self.resolve_anon_struct_instantiation(
@@ -1806,14 +1809,10 @@ impl<'a> Resolver<'a> {
             ResolvedType::Struct(struct_ref) => {
                 let struct_ref_borrow = struct_ref.borrow();
                 if let Some(function) = struct_ref_borrow.functions.get(&"default".to_string()) {
-                    todo!()
-                    /*
                     ResolvedExpression::StaticCall(ResolvedStaticCall {
                         function: function.clone(),
                         arguments: vec![],
                     })
-
-                     */
                 } else {
                     return Err(ResolveError::NoDefaultImplementedForStruct(
                         struct_ref.clone(),
@@ -2212,13 +2211,11 @@ impl<'a> Resolver<'a> {
                 ));
             }
 
-            if parameter.is_mutable
-                && !matches!(
-                    resolved_argument_expression,
-                    ResolvedExpression::MutVariableRef(_)
-                )
-            {
-                return Err(ResolveError::ArgumentIsNotMutable);
+            if parameter.is_mutable && !resolved_argument_expression.is_coerce_to_mutable() {
+                info!(expr=?resolved_argument_expression, "this is not mutable");
+                return Err(ResolveError::ArgumentIsNotMutable(
+                    resolved_argument_expression.span(),
+                ));
             }
         }
 
@@ -2245,14 +2242,12 @@ impl<'a> Resolver<'a> {
     fn resolve_external_function_call(
         &mut self,
         fn_def: &ResolvedExternalFunctionDefinitionRef,
-        function_expr: &ResolvedExpression,
+        function_expr: ResolvedExpression,
         arguments: &[Expression],
     ) -> Result<ResolvedExpression, ResolveError> {
         let resolved_arguments =
             self.resolve_and_verify_parameters(&fn_def.signature.parameters, arguments)?;
 
-        todo!()
-        /*
         Ok(ResolvedExpression::FunctionExternalCall(
             ResolvedExternalFunctionCall {
                 arguments: resolved_arguments,
@@ -2260,8 +2255,6 @@ impl<'a> Resolver<'a> {
                 function_expression: Box::from(function_expr),
             },
         ))
-
-         */
     }
 
     fn resolve_function_call(
@@ -2294,26 +2287,25 @@ impl<'a> Resolver<'a> {
         function_name: &Node,
         arguments: &[Expression],
     ) -> Result<ResolvedStaticCall, ResolveError> {
-        let resolved_arguments = self.resolve_expressions(arguments)?;
         let function_name_str = self.get_text(function_name).to_string();
 
         let struct_type_ref = self.find_struct_type(type_name)?;
         let struct_ref = struct_type_ref.borrow();
 
-        struct_ref.functions.get(&function_name_str).map_or_else(
-            || {
-                Err(ResolveError::CouldNotFindStaticMember(
-                    self.to_node(&type_name.name.0),
-                    self.to_node(function_name),
-                ))
-            },
-            |function_ref| {
-                Ok(ResolvedStaticCall {
-                    function: function_ref.clone(),
-                    arguments: resolved_arguments,
-                })
-            },
-        )
+        if let Some(function_ref) = struct_ref.functions.get(&function_name_str) {
+            let resolved_arguments = self
+                .resolve_and_verify_parameters(&function_ref.signature().parameters, arguments)?;
+
+            Ok(ResolvedStaticCall {
+                function: function_ref.clone(),
+                arguments: resolved_arguments,
+            })
+        } else {
+            Err(ResolveError::CouldNotFindStaticMember(
+                self.to_node(&type_name.name.0),
+                self.to_node(function_name),
+            ))
+        }
     }
 
     fn resolve_member_call(
@@ -3452,13 +3444,13 @@ impl<'a> Resolver<'a> {
         &mut self,
         base_expression: &Expression,
         ast_field_name: &Node,
-    ) -> Result<(ResolvedExpression, Vec<ResolvedAccess>), ResolveError> {
+    ) -> Result<(ResolvedExpression, Vec<ResolvedAccess>, ResolvedType), ResolveError> {
         let mut access_chain = Vec::new();
         let (resolved_last_type, resolved_base_expression) =
             self.collect_field_chain(base_expression, &mut access_chain)?;
 
         // Add the last lookup that is part of the field lookup
-        let (_field_type, field_index) =
+        let (field_type, field_index) =
             self.get_field_index(&resolved_last_type, ast_field_name)?;
 
         access_chain.push(ResolvedAccess::FieldIndex(
@@ -3466,22 +3458,38 @@ impl<'a> Resolver<'a> {
             field_index,
         ));
 
-        Ok((resolved_base_expression, access_chain))
+        Ok((resolved_base_expression, access_chain, field_type))
     }
 
     fn resolve_array_index_access_helper(
         &mut self,
         base_expression: &Expression,
         last_index_expr: &Expression,
-    ) -> Result<(ResolvedExpression, Vec<ResolvedAccess>), ResolveError> {
+    ) -> Result<
+        (
+            ResolvedExpression,
+            Vec<ResolvedAccess>,
+            ResolvedArrayTypeRef,
+        ),
+        ResolveError,
+    > {
         let mut access_chain = Vec::new();
-        let (_resolved_last_type, resolved_base_expression) =
+        let (resolved_last_type, resolved_base_expression) =
             self.collect_field_chain(base_expression, &mut access_chain)?;
 
-        let last_resolved_index = self.resolve_expression(&last_index_expr)?;
+        let last_resolved_index = self.resolve_expression(last_index_expr)?;
+        let resolved_array_type_ref = if let ResolvedType::Array(array_type) = resolved_last_type {
+            array_type
+        } else {
+            return Err(ResolveError::NotAnArray(resolved_base_expression.span()));
+        };
         access_chain.push(ResolvedAccess::ArrayIndex(last_resolved_index));
 
-        Ok((resolved_base_expression, access_chain))
+        Ok((
+            resolved_base_expression,
+            access_chain,
+            resolved_array_type_ref,
+        ))
     }
 
     fn resolve_array_index_access(
@@ -3490,7 +3498,7 @@ impl<'a> Resolver<'a> {
         array_type_ref: &ResolvedArrayTypeRef,
         array_usize_expression: &Expression,
     ) -> Result<ResolvedExpression, ResolveError> {
-        let (base_expr, access_chain) =
+        let (base_expr, access_chain, _last_type) =
             self.resolve_array_index_access_helper(base_expression, array_usize_expression)?;
 
         Ok(ResolvedExpression::ArrayAccess(
@@ -3750,14 +3758,14 @@ impl<'a> Resolver<'a> {
                 ResolvedExpression::MutVariableRef(Rc::new(mut_var))
             }
             LocationExpression::IndexAccess(expression, index_expr) => {
-                let (base_repr, access_chain) =
+                let (base_repr, access_chain, last_type) =
                     self.resolve_array_index_access_helper(expression, index_expr)?;
-                ResolvedExpression::MutArrayIndexRef(base_repr.into(), access_chain)
+                ResolvedExpression::MutArrayIndexRef(base_repr.into(), last_type, access_chain)
             }
             LocationExpression::FieldAccess(expression, node) => {
-                let (base_repr, access_chain) =
+                let (base_repr, access_chain, field_ref) =
                     self.resolve_field_access_helper(expression, node)?;
-                ResolvedExpression::MutStructFieldRef(base_repr.into(), access_chain)
+                ResolvedExpression::MutStructFieldRef(base_repr.into(), field_ref, access_chain)
             }
         };
 
@@ -3912,7 +3920,7 @@ impl<'a> Resolver<'a> {
                 .defined_fields
                 .get(&field_or_member_name_str)
             {
-                let (base_expr, access_chain) =
+                let (base_expr, access_chain, _resulting_type) =
                     self.resolve_field_access_helper(expression, field_or_member_name)?;
                 let index = borrow_struct
                     .anon_struct_type
@@ -3999,7 +4007,7 @@ impl<'a> Resolver<'a> {
                 .defined_fields
                 .get(&field_or_member_name_str)
             {
-                let (base_expr, access_chain) =
+                let (base_expr, access_chain, _resulting_type) =
                     self.resolve_field_access_helper(ast_member_expression, ast_identifier)?;
                 let index = borrow_struct
                     .anon_struct_type

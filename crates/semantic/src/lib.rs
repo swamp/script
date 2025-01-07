@@ -339,7 +339,7 @@ impl Spanned for ResolvedType {
             Self::Unit(_type_ref) => todo!(),
 
             // Compound Types
-            Self::Array(_type_ref) => todo!(),
+            Self::Array(type_ref) => type_ref.item_type.span(),
             Self::Tuple(tuple_ref) => tuple_ref.0[0].span(),
             Self::Struct(type_ref) => type_ref.borrow().name.span.clone(),
             Self::Map(type_ref) => type_ref.key_type.span(),
@@ -416,7 +416,6 @@ impl ResolvedType {
                 a.0.iter().zip(b.0.iter()).all(|(a, b)| a.same_type(b))
             }
             (Self::Enum(_), Self::Enum(_)) => true,
-            (Self::Function(a), Self::Function(b)) => a == b,
             (Self::ExclusiveRange(_), Self::ExclusiveRange(_)) => true,
             (Self::EnumVariant(a), Self::EnumVariant(b)) => a.owner.number == b.owner.number,
             (Self::Optional(inner_type_a), Self::Optional(inner_type_b)) => {
@@ -1037,8 +1036,12 @@ pub enum ResolvedExpression {
     ExternalFunctionAccess(ResolvedExternalFunctionDefinitionRef),
 
     MutVariableRef(ResolvedMutVariableRef), // Used when passing with mut keyword. mut are implicitly passed by reference
-    MutStructFieldRef(Box<ResolvedExpression>, Vec<ResolvedAccess>),
-    MutArrayIndexRef(Box<ResolvedExpression>, Vec<ResolvedAccess>),
+    MutStructFieldRef(Box<ResolvedExpression>, ResolvedType, Vec<ResolvedAccess>),
+    MutArrayIndexRef(
+        Box<ResolvedExpression>,
+        ResolvedArrayTypeRef,
+        Vec<ResolvedAccess>,
+    ),
 
     Option(Option<Box<ResolvedExpression>>),
 
@@ -1184,6 +1187,19 @@ pub enum ResolvedExpression {
 }
 
 impl ResolvedExpression {
+    #[must_use]
+    pub fn is_coerce_to_mutable(&self) -> bool {
+        match self {
+            Self::VariableAccess(var_access) => var_access.is_mutable(),
+            _ => matches!(
+                self,
+                Self::MutArrayIndexRef(_, _, _)
+                    | Self::MutVariableRef(_)
+                    | Self::MutStructFieldRef(_, _, _)
+            ),
+        }
+    }
+
     pub fn collect_constant_dependencies(&self, deps: &mut SeqSet<ConstantId>) {
         match self {
             Self::ConstantAccess(const_ref) => {
@@ -1201,10 +1217,10 @@ impl ResolvedExpression {
             ResolvedExpression::InternalFunctionAccess(_func_def_ref) => {}
             ResolvedExpression::ExternalFunctionAccess(_func_def_ref) => {}
             ResolvedExpression::MutVariableRef(_mut_var_ref) => {}
-            ResolvedExpression::MutStructFieldRef(expr, _accesses) => {
+            ResolvedExpression::MutStructFieldRef(expr, _, _accesses) => {
                 expr.collect_constant_dependencies(deps);
             }
-            ResolvedExpression::MutArrayIndexRef(expr, _accesses) => {
+            ResolvedExpression::MutArrayIndexRef(expr, resolved_type, _accesses) => {
                 expr.collect_constant_dependencies(deps);
             }
             ResolvedExpression::Option(opt_expr) => {
@@ -1423,7 +1439,6 @@ impl ResolvedExpression {
             | &ResolvedExpression::IntRnd(_)
             | &ResolvedExpression::FloatRnd(_) => todo!(),
             &ResolvedExpression::IntToFloat(_) => todo!(),
-            &ResolvedExpression::MemberCall(_) => todo!(),
         }
     }
 
@@ -1451,8 +1466,12 @@ impl ResolvedExpression {
 
             // Convert to mutable reference
             Self::MutVariableRef(mut_var_ref) => mut_var_ref.variable_ref.resolved_type.clone(),
-            Self::MutStructFieldRef(_, _) => todo!(),
-            Self::MutArrayIndexRef(_base, _index) => todo!(),
+            Self::MutStructFieldRef(_base_expr, resulting_type, _access_chain) => {
+                resulting_type.clone()
+            }
+            Self::MutArrayIndexRef(_base, resolved_array_type_ref, _index) => {
+                resolved_array_type_ref.item_type.clone()
+            }
 
             // Variable
             Self::InitializeVariable(variable_assignment) => {
@@ -1619,6 +1638,7 @@ pub trait Spanned {
     fn span(&self) -> Span;
 }
 
+#[allow(clippy::too_many_lines, clippy::match_same_arms)]
 impl Spanned for ResolvedExpression {
     fn span(&self) -> Span {
         match self {
@@ -1639,8 +1659,7 @@ impl Spanned for ResolvedExpression {
             Self::MutVariableRef(var_ref) => var_ref.span(),
             Self::Option(opt_expr) => opt_expr
                 .as_ref()
-                .map(|expr| expr.span())
-                .unwrap_or_else(Span::dummy),
+                .map_or_else(Span::dummy, |expr| expr.span()),
 
             // Assignments
             Self::InitializeVariable(assign) => assign.span(),
@@ -1681,11 +1700,6 @@ impl Spanned for ResolvedExpression {
             Self::FunctionExternalCall(call) => call.arguments[0].span(),
             Self::StaticCall(call) => call.span(),
             Self::StaticCallGeneric(_call) => todo!(),
-            /*
-            Self::MutMemberCall(_member_ref, _args) => {
-                todo!()
-            }
-            */
             Self::MemberCall(call) => call.function.span(),
 
             // Blocks and Strings
@@ -1773,10 +1787,9 @@ impl Spanned for ResolvedExpression {
             Self::If(_condition, _true_expr, _false_expr) => todo!(),
             Self::IfOnlyVariable { .. } => todo!(),
             Self::IfAssignExpression { .. } => todo!(),
-            Self::MutStructFieldRef(_, _) => todo!(),
-            Self::MutArrayIndexRef(_, _) => todo!(),
+            Self::MutStructFieldRef(a, b, c) => a.span(),
+            Self::MutArrayIndexRef(_, _, _) => todo!(),
             Self::TupleDestructuring(_, _, _) => todo!(),
-            ResolvedExpression::MemberCall(_) => todo!(),
         }
     }
 }
