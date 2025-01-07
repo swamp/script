@@ -8,9 +8,9 @@ description = "parser for swamp script"
 
 
 [dependencies]
-pest = "2.7.14"
-pest_derive = "2.7.14"
-tracing = "0.1.40"
+pest = "2.7.15"
+pest_derive = "2.7.15"
+tracing = "0.1.41"
 
 swamp-script-ast = { path = "../ast", version = "0.0.10" }
 

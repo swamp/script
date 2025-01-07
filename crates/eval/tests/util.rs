@@ -89,10 +89,8 @@ fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError>
     let main_module = modules.add_empty_module(&resolved_path_str);
 
     let external_print = ResolvedExternalFunctionDefinition {
-        name: ResolvedNode {
-            span: Span::default(),
-        },
-
+        name: None,
+        assigned_name: "print".to_string(),
         signature: FunctionTypeSignature {
             first_parameter_is_self: false,
             parameters: vec![ResolvedTypeForParameter {

@@ -43,7 +43,7 @@ pub struct QualifiedTypeIdentifier {
 }
 
 impl QualifiedTypeIdentifier {
-    pub fn new(name: LocalTypeIdentifier, module_path: Vec<Node>) -> Self {
+    #[must_use] pub fn new(name: LocalTypeIdentifier, module_path: Vec<Node>) -> Self {
         let module_path = if module_path.is_empty() {
             None
         } else {
@@ -57,7 +57,7 @@ impl QualifiedTypeIdentifier {
         }
     }
 
-    pub fn new_with_generics(
+    #[must_use] pub fn new_with_generics(
         name: LocalTypeIdentifier,
         module_path: Vec<Node>,
         generic_params: Vec<Type>,
@@ -83,7 +83,7 @@ pub struct QualifiedIdentifier {
 }
 
 impl QualifiedIdentifier {
-    pub fn new(name: Node, module_path: Vec<Node>) -> Self {
+    #[must_use] pub fn new(name: Node, module_path: Vec<Node>) -> Self {
         let module_path = if module_path.is_empty() {
             None
         } else {
@@ -98,7 +98,7 @@ impl QualifiedIdentifier {
 pub struct LocalTypeIdentifier(pub Node);
 
 impl LocalTypeIdentifier {
-    pub fn new(node: Node) -> Self {
+    #[must_use] pub const fn new(node: Node) -> Self {
         Self(node)
     }
 }
@@ -108,7 +108,7 @@ pub struct LocalIdentifier(pub Node);
 
 impl LocalIdentifier {
     #[must_use]
-    pub fn new(node: Node) -> Self {
+    pub const fn new(node: Node) -> Self {
         Self(node)
     }
 }
@@ -118,7 +118,7 @@ pub struct ConstantIdentifier(pub Node);
 
 impl ConstantIdentifier {
     #[must_use]
-    pub fn new(node: Node) -> Self {
+    pub const fn new(node: Node) -> Self {
         Self(node)
     }
 }
@@ -140,8 +140,14 @@ pub struct StringConst(pub Node);
 #[derive(Debug, Eq, Hash, PartialEq, Clone)]
 pub struct ModulePath(pub Vec<Node>);
 
+impl Default for ModulePath {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ModulePath {
-    pub fn new() -> Self {
+    #[must_use] pub const fn new() -> Self {
         Self(vec![])
     }
 }
@@ -220,7 +226,7 @@ pub struct Variable {
 }
 
 impl Variable {
-    pub fn new(name: Node, is_mutable: Option<Node>) -> Self {
+    #[must_use] pub const fn new(name: Node, is_mutable: Option<Node>) -> Self {
         Self { name, is_mutable }
     }
 }
@@ -555,7 +561,7 @@ impl Debug for Module {
             writeln!(f, "{definition:?}")?;
         }
 
-        if !self.definitions.is_empty() && !self.expression.is_none() {
+        if !self.definitions.is_empty() && self.expression.is_some() {
             writeln!(f, "---")?;
         }
 

@@ -14,7 +14,6 @@ use swamp_script_ast::{
     PatternElement, QualifiedIdentifier, SpanWithoutFileId, TypeForParameter,
 };
 use swamp_script_ast::{Function, PostfixOperator};
-use tracing::info;
 
 pub struct ParseResult<'a> {
     #[allow(dead_code)]
@@ -196,8 +195,7 @@ impl AstParser {
         &self,
         inner_pairs: &mut impl Iterator<Item = Pair<'a, Rule>>,
     ) -> Result<QualifiedTypeIdentifier, ParseError> {
-        let mut first = Self::next_pair(inner_pairs)?;
-        println!("first: {:?}", first.as_rule());
+        let first = Self::next_pair(inner_pairs)?;
         match first.as_rule() {
             Rule::module_segments => {
                 let module_path = self.parse_module_segments(first.clone());
@@ -447,6 +445,7 @@ impl AstParser {
         Ok(Definition::Comment(self.to_node(pair)))
     }
 
+    #[allow(unused)]
     fn parse_function_call_args(&self, pair: &Pair<Rule>) -> Result<Vec<Expression>, ParseError> {
         let mut args = Vec::new();
         for argument_pair in pair.clone().into_inner() {
@@ -474,7 +473,7 @@ impl AstParser {
         let mut inner = pair.clone().into_inner(); // children: primary, postfix_op, postfix_op, ...
 
         let primary_pair = inner.next().ok_or_else(|| {
-            self.create_error_pair(SpecificError::UnexpectedPostfixOperator, &pair)
+            self.create_error_pair(SpecificError::UnexpectedPostfixOperator, pair)
         })?;
         let mut expr = self.parse_primary(&primary_pair)?;
 
@@ -525,7 +524,6 @@ impl AstParser {
                         }
                         Rule::method_or_field_suffix => {
                             let mut inner = child.into_inner();
-                            let debug_text = inner.as_str();
                             let identifier = self.expect_identifier_next(&mut inner)?;
                             expr = Expression::FieldOrMemberAccess(Box::new(expr), identifier.0);
                         }
@@ -549,25 +547,25 @@ impl AstParser {
     }
 
     fn parse_struct_def(&self, pair: &Pair<Rule>) -> Result<Definition, ParseError> {
-        let mut inner = Self::convert_into_iterator(&pair);
+        let mut inner = Self::convert_into_iterator(pair);
 
         let struct_name = self.expect_local_type_identifier_next(&mut inner)?;
 
-        let field_defs = Self::next_pair(&mut inner)?;
+        let field_definitions = Self::next_pair(&mut inner)?;
         let mut fields = Vec::new();
 
-        for field_def in Self::convert_into_iterator(&field_defs) {
+        for field_def in Self::convert_into_iterator(&field_definitions) {
             let mut field_parts = Self::convert_into_iterator(&field_def);
 
             let field_name = self.expect_field_name_next(&mut field_parts)?;
             let field_type = self.parse_type(Self::next_pair(&mut field_parts)?)?;
 
-            let anonym_field = FieldType {
+            let anonymous_struct_field = FieldType {
                 field_name,
                 field_type,
             };
 
-            fields.push(anonym_field);
+            fields.push(anonymous_struct_field);
         }
 
         let struct_def = StructType::new(struct_name, fields);
@@ -622,7 +620,7 @@ impl AstParser {
         pair: &Pair<Rule>,
     ) -> Result<FunctionDeclaration, ParseError> {
         if pair.as_rule() != Rule::function_signature {
-            return Err(self.create_error_pair(SpecificError::MissingFunctionSignature, &pair));
+            return Err(self.create_error_pair(SpecificError::MissingFunctionSignature, pair));
         }
 
         let mut inner = pair.clone().into_inner();
@@ -700,7 +698,7 @@ impl AstParser {
     }
 
     fn parse_impl_def(&self, pair: &Pair<Rule>) -> Result<Definition, ParseError> {
-        let mut inner = Self::convert_into_iterator(&pair);
+        let mut inner = Self::convert_into_iterator(pair);
         let type_name = self.expect_local_type_identifier_next(&mut inner)?;
         let mut functions = Vec::new();
 
@@ -730,7 +728,7 @@ impl AstParser {
 
     fn parse_member_signature(&self, pair: &Pair<Rule>) -> Result<FunctionDeclaration, ParseError> {
         if pair.as_rule() != Rule::member_signature {
-            return Err(self.create_error_pair(SpecificError::ExpectedMemberSignature, &pair));
+            return Err(self.create_error_pair(SpecificError::ExpectedMemberSignature, pair));
         }
 
         let mut inner = pair.clone().into_inner();
@@ -803,7 +801,7 @@ impl AstParser {
     }
 
     fn parse_for_loop(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
-        let mut inner = Self::convert_into_iterator(&pair);
+        let mut inner = Self::convert_into_iterator(pair);
 
         let pattern_pair = Self::next_pair(&mut inner)?;
         if pattern_pair.as_rule() != Rule::for_pattern {
@@ -909,7 +907,7 @@ impl AstParser {
     }
 
     fn parse_while_loop(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
-        let mut inner = Self::convert_into_iterator(&pair);
+        let mut inner = Self::convert_into_iterator(pair);
 
         let condition = self.parse_expression(&Self::next_pair(&mut inner)?)?;
 
@@ -919,7 +917,7 @@ impl AstParser {
     }
 
     fn parse_return(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
-        let mut inner = Self::convert_into_iterator(&pair);
+        let mut inner = Self::convert_into_iterator(pair);
 
         // Return value is optional
         let expr = match inner.next() {
@@ -1002,13 +1000,13 @@ impl AstParser {
         let mut variables = Vec::new();
         for item_pair in pair.clone().into_inner() {
             if item_pair.as_rule() == Rule::variable_item {
-                variables.push(self.parse_variable_item(item_pair)?);
+                variables.push(self.parse_variable_item(&item_pair)?);
             }
         }
         Ok(variables)
     }
 
-    fn parse_variable_item(&self, pair: Pair<Rule>) -> Result<Variable, ParseError> {
+    fn parse_variable_item(&self, pair: &Pair<Rule>) -> Result<Variable, ParseError> {
         let mut inner = pair.clone().into_inner().peekable();
 
         let mut_node = if let Some(peeked) = inner.peek() {
@@ -1029,7 +1027,7 @@ impl AstParser {
                 SpecificError::UnexpectedRuleInParseScript(
                     "Expected identifier in variable_item".into(),
                 ),
-                &pair,
+                pair,
             )
         })?;
 
@@ -1053,7 +1051,7 @@ impl AstParser {
 
     fn parse_assignment_expression(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
         match pair.clone().as_rule() {
-            // HACK: It should be checked for an Rules::assignment_expression before calling this function
+            // HACK: It should be checked for a Rules::assignment_expression before calling this function
             Rule::assignment_expression => {
                 let mut inner = pair.clone().into_inner();
                 let child = inner.next().ok_or_else(|| {
@@ -1064,8 +1062,8 @@ impl AstParser {
                 })?;
                 self.parse_assignment_expression(&child) // re-call on the child
             }
-            Rule::multi_var_assignment => self.parse_multi_var_assignment(&pair),
-            Rule::single_lhs_assignment => self.parse_assignment(&pair),
+            Rule::multi_var_assignment => self.parse_multi_var_assignment(pair),
+            Rule::single_lhs_assignment => self.parse_assignment(pair),
             _ => Err(self.create_error_pair(
                 SpecificError::UnexpectedRuleInParseScript(format!(
                     "Not an assignment expression: {:?}",
@@ -1146,13 +1144,43 @@ impl AstParser {
             kind,
         });
 
-        match lhs_pair.as_rule() {
-            Rule::variable_list => {
-                let vars: Vec<_> = lhs_pair.into_inner().collect();
+        if lhs_pair.as_rule() == Rule::variable_list {
+            let vars: Vec<_> = lhs_pair.into_inner().collect();
 
-                if vars.len() == 1 {
-                    // Single variable
-                    let var = Variable::new(self.to_node(&vars[0]), is_mutable);
+            if vars.len() == 1 {
+                // Single variable
+                let var = Variable::new(self.to_node(&vars[0]), is_mutable);
+                match compound_op {
+                    None => Ok(Expression::VariableAssignment(var, Box::new(rhs_expr))),
+                    Some(op) => Ok(Expression::VariableCompoundAssignment(
+                        var.name,
+                        op,
+                        Box::new(rhs_expr),
+                    )),
+                }
+            } else {
+                // Multiple variables => disallow compound operators
+                if compound_op.is_some() {
+                    return Err(self.create_error_pair(
+                        SpecificError::CompoundOperatorCanNotHaveMultipleVariables,
+                        &op_pair,
+                    ));
+                }
+                let variables = vars
+                    .into_iter()
+                    .map(|v| Variable::new(self.to_node(&v), is_mutable.clone()))
+                    .collect();
+                Ok(Expression::MultiVariableAssignment(
+                    variables,
+                    Box::new(rhs_expr),
+                ))
+            }
+        } else {
+            let lhs_expr = self.parse_expression(&lhs_pair)?;
+
+            match lhs_expr {
+                Expression::VariableAccess(mut var) => {
+                    var.is_mutable = is_mutable;
                     match compound_op {
                         None => Ok(Expression::VariableAssignment(var, Box::new(rhs_expr))),
                         Some(op) => Ok(Expression::VariableCompoundAssignment(
@@ -1161,77 +1189,43 @@ impl AstParser {
                             Box::new(rhs_expr),
                         )),
                     }
-                } else {
-                    // Multiple variables => disallow compound operators
-                    if compound_op.is_some() {
-                        return Err(self.create_error_pair(
-                            SpecificError::CompoundOperatorCanNotHaveMultipleVariables,
-                            &op_pair,
-                        ));
-                    }
-                    let variables = vars
-                        .into_iter()
-                        .map(|v| Variable::new(self.to_node(&v), is_mutable.clone()))
-                        .collect();
-                    Ok(Expression::MultiVariableAssignment(
-                        variables,
-                        Box::new(rhs_expr),
-                    ))
                 }
-            }
-
-            _ => {
-                let lhs_expr = self.parse_expression(&lhs_pair)?;
-
-                match lhs_expr {
-                    Expression::VariableAccess(mut var) => {
-                        var.is_mutable = is_mutable;
-                        match compound_op {
-                            None => Ok(Expression::VariableAssignment(var, Box::new(rhs_expr))),
-                            Some(op) => Ok(Expression::VariableCompoundAssignment(
-                                var.name,
-                                op,
-                                Box::new(rhs_expr),
-                            )),
-                        }
-                    }
-                    Expression::FieldOrMemberAccess(base, field_node) => match compound_op {
-                        None => Ok(Expression::FieldAssignment(
-                            base,
-                            field_node,
-                            Box::new(rhs_expr),
-                        )),
-                        Some(op) => Ok(Expression::FieldCompoundAssignment(
-                            base,
-                            field_node,
-                            op,
-                            Box::new(rhs_expr),
-                        )),
-                    },
-                    Expression::IndexAccess(base, index_expr) => match compound_op {
-                        None => Ok(Expression::IndexAssignment(
-                            base,
-                            index_expr,
-                            Box::new(rhs_expr),
-                        )),
-                        Some(op) => Ok(Expression::IndexCompoundAssignment(
-                            base,
-                            index_expr,
-                            op,
-                            Box::new(rhs_expr),
-                        )),
-                    },
-                    _ => {
-                        Err(self
-                            .create_error_pair(SpecificError::InvalidAssignmentTarget, &lhs_pair))
-                    }
+                Expression::FieldOrMemberAccess(base, field_node) => match compound_op {
+                    None => Ok(Expression::FieldAssignment(
+                        base,
+                        field_node,
+                        Box::new(rhs_expr),
+                    )),
+                    Some(op) => Ok(Expression::FieldCompoundAssignment(
+                        base,
+                        field_node,
+                        op,
+                        Box::new(rhs_expr),
+                    )),
+                },
+                Expression::IndexAccess(base, index_expr) => match compound_op {
+                    None => Ok(Expression::IndexAssignment(
+                        base,
+                        index_expr,
+                        Box::new(rhs_expr),
+                    )),
+                    Some(op) => Ok(Expression::IndexCompoundAssignment(
+                        base,
+                        index_expr,
+                        op,
+                        Box::new(rhs_expr),
+                    )),
+                },
+                _ => {
+                    Err(self
+                        .create_error_pair(SpecificError::InvalidAssignmentTarget, &lhs_pair))
                 }
             }
         }
     }
 
     fn parse_binary_chain(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
-        let mut inner = Self::convert_into_iterator(&pair);
+        let mut inner = Self::convert_into_iterator(pair);
         let mut left = self.parse_expression(&Self::next_pair(&mut inner)?)?;
 
         while let Some(op) = inner.next() {
@@ -1249,11 +1243,11 @@ impl AstParser {
 
     fn parse_prefix_expression(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
         let _span = pair.as_span();
-        let mut inner = Self::convert_into_iterator(pair).peekable();
+        let inner = Self::convert_into_iterator(pair);
         let mut expr = None;
         let mut prefix_ops = Vec::new();
 
-        while let Some(part) = inner.next() {
+        for part in inner {
             match part.as_rule() {
                 Rule::prefix_op | Rule::op_neg | Rule::op_not => {
                     let op = self.parse_unary_operator(&part)?;
@@ -1267,7 +1261,7 @@ impl AstParser {
         }
 
         let mut final_expr = expr.ok_or_else(|| {
-            self.create_error_pair(SpecificError::ExpectedExpressionAfterPrefixOperator, &pair)
+            self.create_error_pair(SpecificError::ExpectedExpressionAfterPrefixOperator, pair)
         })?;
 
         for op in prefix_ops.into_iter().rev() {
@@ -1278,7 +1272,7 @@ impl AstParser {
     }
 
     fn parse_binary_op(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
-        let mut inner = Self::convert_into_iterator(&pair);
+        let mut inner = Self::convert_into_iterator(pair);
         let mut left = self.parse_expression(&Self::next_pair(&mut inner)?)?;
 
         while let Some(op) = inner.next() {
@@ -1325,7 +1319,7 @@ impl AstParser {
     fn parse_unary_operator(&self, pair: &Pair<Rule>) -> Result<UnaryOperator, ParseError> {
         let op = match pair.as_rule() {
             Rule::prefix_op => &self.next_inner_pair(pair)?,
-            _ => &pair,
+            _ => pair,
         };
 
         let node = self.to_node(op);
@@ -1333,8 +1327,8 @@ impl AstParser {
             Rule::op_neg => Ok(UnaryOperator::Negate(node)),
             Rule::op_not => Ok(UnaryOperator::Not(node)),
             _ => Err(self.create_error_pair(
-                SpecificError::UnexpectedUnaryOperator(Self::pair_to_rule(&op)),
-                &op,
+                SpecificError::UnexpectedUnaryOperator(Self::pair_to_rule(op)),
+                op,
             )),
         }
     }
@@ -1360,7 +1354,7 @@ impl AstParser {
 
         let first = inner_pairs.next().ok_or_else(|| {
             self.create_error_pair(
-                SpecificError::ExpectedTypeIdentifier(Self::pair_to_rule(&pair)),
+                SpecificError::ExpectedTypeIdentifier(Self::pair_to_rule(pair)),
                 pair,
             )
         })?;
@@ -1423,6 +1417,7 @@ impl AstParser {
         Ok(generic_types)
     }
 
+    #[allow(unused)] // TODO: Use this again
     fn parse_qualified_identifier(
         &self,
         pair: &Pair<Rule>,
@@ -1459,7 +1454,7 @@ impl AstParser {
         let mut fields = Vec::new();
         let mut has_rest = false;
 
-        // Parsing the fields (and maybe rest_fields "..")
+        // Parsing the fields (and maybe rest_fields [..])
         if let Some(field_list) = inner.next() {
             for field_pair in field_list.into_inner() {
                 match field_pair.as_rule() {
@@ -1526,9 +1521,9 @@ impl AstParser {
             Rule::match_expr => self.parse_match_expr(pair),
             Rule::map_literal => self.parse_map_literal(pair),
             Rule::array_literal => self.parse_array_literal(pair),
-            Rule::float_lit => Ok(Expression::Literal(Literal::Float(self.to_node(&pair)))),
+            Rule::float_lit => Ok(Expression::Literal(Literal::Float(self.to_node(pair)))),
             Rule::parenthesized => {
-                let inner = self.next_inner_pair(&pair)?;
+                let inner = self.next_inner_pair(pair)?;
                 self.parse_expression(&inner)
             }
             Rule::struct_instantiation => self.parse_struct_instantiation(pair),
@@ -1546,7 +1541,7 @@ impl AstParser {
             Rule::while_loop => self.parse_while_loop(pair),
 
             _ => Err(self.create_error_pair(
-                SpecificError::UnknownPrimary(Self::pair_to_rule(&pair)),
+                SpecificError::UnknownPrimary(Self::pair_to_rule(pair)),
                 pair,
             )),
         }
@@ -1555,7 +1550,7 @@ impl AstParser {
     fn parse_interpolated_string(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
         let mut parts = Vec::new();
 
-        for part_pair in Self::convert_into_iterator(&pair) {
+        for part_pair in Self::convert_into_iterator(pair) {
             match part_pair.as_rule() {
                 Rule::text => {
                     parts.push(StringPart::Literal(self.to_node(&part_pair)));
@@ -1629,8 +1624,8 @@ impl AstParser {
     fn parse_enum_literal(
         &self,
         pair: &Pair<Rule>,
-    ) -> Result<swamp_script_ast::Literal, ParseError> {
-        let mut inner = Self::convert_into_iterator(&pair);
+    ) -> Result<Literal, ParseError> {
+        let mut inner = Self::convert_into_iterator(pair);
 
         // Parse enum type name
         let enum_type = self.parse_qualified_type_identifier(&inner.next().unwrap())?;
@@ -1650,11 +1645,11 @@ impl AstParser {
                             let field_name = self.expect_field_name_next(&mut field_inner)?;
                             let field_expression =
                                 self.parse_expression(&Self::next_pair(&mut field_inner)?)?;
-                            let anonym_field = FieldExpression {
+                            let anonymous_struct_field = FieldExpression {
                                 field_name,
                                 expression: field_expression,
                             };
-                            fields.push(anonym_field);
+                            fields.push(anonymous_struct_field);
                         }
                     }
                     EnumVariantLiteral::Struct(enum_type, variant_type_identifier, fields)
@@ -1715,7 +1710,7 @@ impl AstParser {
 
     fn parse_array_literal(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
         let mut elements = Vec::new();
-        for element in Self::convert_into_iterator(&pair) {
+        for element in Self::convert_into_iterator(pair) {
             elements.push(self.parse_expression(&element)?);
         }
         Ok(Expression::Literal(Literal::Array(elements)))
@@ -1724,7 +1719,7 @@ impl AstParser {
     fn parse_map_literal(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
         let mut entries = Vec::new();
 
-        for entry_pair in Self::convert_into_iterator(&pair) {
+        for entry_pair in Self::convert_into_iterator(pair) {
             if entry_pair.as_rule() == Rule::map_entry {
                 let mut entry_inner = Self::convert_into_iterator(&entry_pair);
                 let key = self.parse_expression(&Self::next_pair(&mut entry_inner)?)?;
@@ -1740,11 +1735,11 @@ impl AstParser {
         &self,
         pair: &Pair<Rule>,
     ) -> Result<Vec<Expression>, ParseError> {
-        let mut inner = Self::convert_into_iterator(pair);
+        let inner = Self::convert_into_iterator(pair);
         let mut args = Vec::new();
 
         // Parse arguments
-        while let Some(arg_pair) = inner.next() {
+        for arg_pair in inner {
             if arg_pair.as_rule() == Rule::function_argument {
                 let mut arg_inner = Self::convert_into_iterator(&arg_pair).peekable();
 
@@ -1806,10 +1801,10 @@ impl AstParser {
         let qualified_type_identifier = self.parse_qualified_type_identifier(&type_name_pair)?;
 
         let function_name = self.expect_identifier_next(&mut static_member_inner)?;
-        let mut function_call_args_pair = Self::next_pair(&mut inner)?.into_inner();
+        let function_call_args_pair = Self::next_pair(&mut inner)?.into_inner();
         // Parse arguments
         let mut args = Vec::new();
-        while let Some(arg_pair) = function_call_args_pair.next() {
+        for arg_pair in function_call_args_pair {
             if arg_pair.as_rule() == Rule::function_argument {
                 let mut arg_inner = Self::convert_into_iterator(&arg_pair).peekable();
                 let has_mut = arg_inner
@@ -1831,14 +1826,14 @@ impl AstParser {
             }
         }
 
-        if !qualified_type_identifier.generic_params.is_empty() {
-            Ok(Expression::StaticCallGeneric(
+        if qualified_type_identifier.generic_params.is_empty() {
+            Ok(Expression::StaticCall(
                 qualified_type_identifier,
                 function_name.0,
                 args,
             ))
         } else {
-            Ok(Expression::StaticCall(
+            Ok(Expression::StaticCallGeneric(
                 qualified_type_identifier,
                 function_name.0,
                 args,
@@ -1924,8 +1919,8 @@ impl AstParser {
                 let qualified_id = self.parse_qualified_type_identifier(&pair)?;
 
                 // Check for generic parameters
-                let mut remaining_pairs = pair.into_inner();
-                while let Some(next_pair) = remaining_pairs.next() {
+                let remaining_pairs = pair.into_inner();
+                for next_pair in remaining_pairs {
                     if next_pair.as_rule() == Rule::generic_params {
                         let mut generic_types = Vec::new();
                         for param in Self::convert_into_iterator(&next_pair) {
@@ -1981,7 +1976,7 @@ impl AstParser {
         }
     }
 
-    #[allow(unused)]
+    #[allow(unused)] // TODO: Use this again
     fn parse_local_type_identifier(
         &self,
         pair: &Pair<Rule>,
@@ -1992,7 +1987,7 @@ impl AstParser {
                 pair,
             ));
         }
-        Ok(LocalTypeIdentifier::new(self.to_node(&pair)))
+        Ok(LocalTypeIdentifier::new(self.to_node(pair)))
     }
 
     fn parse_local_type_identifier_next<'a>(
@@ -2010,7 +2005,7 @@ impl AstParser {
     }
 
     fn parse_enum_def(&self, pair: &Pair<Rule>) -> Result<Definition, ParseError> {
-        let mut inner = Self::convert_into_iterator(&pair);
+        let mut inner = Self::convert_into_iterator(pair);
 
         // Parse enum name
         let name = self.parse_local_type_identifier_next(&mut inner)?;
@@ -2035,33 +2030,33 @@ impl AstParser {
 
     fn parse_enum_variant(&self, pair: &Pair<Rule>) -> Result<EnumVariantType, ParseError> {
         let enum_variant = match pair.as_rule() {
-            Rule::simple_variant => EnumVariantType::Simple(self.to_node(&pair)),
+            Rule::simple_variant => EnumVariantType::Simple(self.to_node(pair)),
             Rule::tuple_variant => {
-                let mut inner = Self::convert_into_iterator(&pair);
+                let mut inner = Self::convert_into_iterator(pair);
                 let name = self.expect_local_type_identifier_next(&mut inner)?;
 
                 let mut types = Vec::new();
-                while let Some(type_pair) = inner.next() {
+                for type_pair in inner {
                     types.push(self.parse_type(type_pair)?);
                 }
 
                 EnumVariantType::Tuple(name.0, types)
             }
             Rule::struct_variant => {
-                let mut inner = Self::convert_into_iterator(&pair);
+                let mut inner = Self::convert_into_iterator(pair);
                 let name = self.expect_local_type_identifier_next(&mut inner)?;
 
                 let mut fields = Vec::new();
 
-                while let Some(field_pair) = inner.next() {
+                for field_pair in inner {
                     let mut field_inner = Self::convert_into_iterator(&field_pair);
                     let field_name = self.expect_field_name_next(&mut field_inner)?;
                     let field_type = self.parse_type(Self::next_pair(&mut field_inner)?)?;
-                    let anonym_field = FieldType {
+                    let anonymous_enum_variant_field = FieldType {
                         field_name,
                         field_type,
                     };
-                    fields.push(anonym_field);
+                    fields.push(anonymous_enum_variant_field);
                 }
 
                 let anon = AnonymousStructType { fields };
@@ -2079,7 +2074,7 @@ impl AstParser {
     }
 
     fn parse_match_expr(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
-        let mut inner = Self::convert_into_iterator(&pair);
+        let mut inner = Self::convert_into_iterator(pair);
         let value = self.parse_expression(&Self::next_pair(&mut inner)?)?;
         let arms_pair = Self::next_pair(&mut inner)?;
         let mut arms = Vec::new();
@@ -2106,7 +2101,7 @@ impl AstParser {
         }
 
         if arms.is_empty() {
-            return Err(self.create_error_pair(SpecificError::MustHaveAtLeastOneArm, &pair));
+            return Err(self.create_error_pair(SpecificError::MustHaveAtLeastOneArm, pair));
         }
 
         Ok(Expression::Match(Box::new(value), arms))

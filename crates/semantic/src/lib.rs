@@ -177,6 +177,29 @@ pub struct FunctionTypeSignature {
     pub return_type: Box<ResolvedType>,
 }
 
+impl FunctionTypeSignature {
+    pub fn same_type(&self, other: &FunctionTypeSignature) -> bool {
+        if self.first_parameter_is_self != other.first_parameter_is_self
+            || self.parameters.len() != other.parameters.len()
+            || !self.return_type.same_type(&other.return_type)
+        {
+            return false;
+        }
+
+        for (param, other_param) in self.parameters.iter().zip(other.parameters.clone()) {
+            if !param.resolved_type.same_type(&other_param.resolved_type) {
+                return false;
+            }
+
+            if param.is_mutable != other_param.is_mutable {
+                return false;
+            }
+        }
+
+        true
+    }
+}
+
 #[derive(Debug, Eq, PartialEq)]
 pub struct ResolvedRustType {
     pub type_name: String, // To identify the specific Rust type
@@ -200,12 +223,21 @@ impl Spanned for LocalTypeName {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct ResolvedTypeForParameter {
     pub name: String,
     pub resolved_type: ResolvedType,
     pub is_mutable: bool,
     pub node: Option<ResolvedParameterNode>,
+}
+
+impl Eq for ResolvedTypeForParameter {}
+
+impl PartialEq for ResolvedTypeForParameter {
+    fn eq(&self, other: &Self) -> bool {
+        // Name and Nodes are not interesting for a function signature
+        self.resolved_type.same_type(&other.resolved_type) && self.is_mutable == other.is_mutable
+    }
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -287,7 +319,7 @@ impl Display for ResolvedType {
             Self::Generic(_, _) => todo!(),
             Self::Enum(_) => todo!(),
             Self::EnumVariant(_) => todo!(),
-            Self::Function(_signature) => todo!(),
+            Self::Function(signature) => write!(f, "function {signature:?}"),
             Self::ExclusiveRange(_) => todo!(),
             Self::Optional(_) => todo!(),
             Self::RustType(_) => todo!(),
@@ -366,6 +398,7 @@ impl ResolvedType {
         match (self, other) {
             (Self::Any, _) => true,
             (_, Self::Any) => true,
+            (Self::Function(a), Self::Function(b)) => a.same_type(b),
             (Self::Int(_), Self::Int(_)) => true,
             (Self::Float(_), Self::Float(_)) => true,
             (Self::String(_), Self::String(_)) => true,
