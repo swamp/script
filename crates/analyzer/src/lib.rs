@@ -2221,6 +2221,8 @@ impl<'a> Resolver<'a> {
 
         Ok(resolved_arguments)
     }
+
+    #[allow(unused)] // TODO:
     fn resolve_internal_function_call(
         &mut self,
         fn_def: &ResolvedInternalFunctionDefinitionRef,
@@ -2239,6 +2241,7 @@ impl<'a> Resolver<'a> {
         ))
     }
 
+    #[allow(unused)] // TODO:
     fn resolve_external_function_call(
         &mut self,
         fn_def: &ResolvedExternalFunctionDefinitionRef,

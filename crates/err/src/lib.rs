@@ -11,7 +11,7 @@ use std::io::{stderr, Write};
 use swamp_script_analyzer::ResolveError;
 use swamp_script_eval::prelude::ExecuteError;
 use swamp_script_parser::SpecificError;
-use swamp_script_semantic::{ResolvedNode, Span, Spanned};
+use swamp_script_semantic::{Span, Spanned};
 use swamp_script_source_map::{FileId, SourceMap};
 
 pub struct SourceLinesWrap<'a> {
@@ -256,7 +256,7 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
         ResolveError::Unknown(_) => todo!(),
         ResolveError::UnknownImplTargetTypeReference(_) => todo!(),
         ResolveError::WrongFieldCountInStructInstantiation(_, _) => todo!(),
-        ResolveError::MissingFieldInStructInstantiation(span, fields, struct_type) => Report::build(
+        ResolveError::MissingFieldInStructInstantiation(span, fields, _struct_type) => Report::build(
             Error,
             903,
             &format!("missing fields in instantiation"),
@@ -272,7 +272,7 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
         ResolveError::NotAnArray(_) => todo!(),
         ResolveError::ArrayIndexMustBeInt(_) => todo!(),
         ResolveError::OverwriteVariableWithAnotherType(_) => todo!(),
-        ResolveError::WrongNumberOfArguments(expected, encountered) => {
+        ResolveError::WrongNumberOfArguments(_expected, _encountered) => {
             Report::build(Error, 105, "wrong number of arguments", &Span::default())
         }
         ResolveError::IncompatibleArguments(a, b) =>   Report::build(

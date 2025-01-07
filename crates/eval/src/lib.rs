@@ -9,8 +9,8 @@ use err::ExecuteError;
 use seq_fmt::comma;
 use seq_map::SeqMap;
 use std::fmt::Debug;
-use std::io;
-use std::io::Write;
+//use std::io;
+//use std::io::Write;
 use std::{cell::RefCell, collections::HashMap, fmt, rc::Rc};
 use swamp_script_core::extra::{SparseValueId, SparseValueMap};
 use swamp_script_core::value::ValueRef;
@@ -680,7 +680,7 @@ impl<'a, C> Interpreter<'a, C> {
         &mut self,
         expr: &ResolvedExpression,
     ) -> Result<ValueWithSignal, ExecuteError> {
-        if let Some(debug_source_map) = &self.debug_source_map {
+        if let Some(_debug_source_map) = &self.debug_source_map {
             self.debug_expr(expr, "evaluate_expression_with_signal");
         }
         match expr {
@@ -784,7 +784,7 @@ impl<'a, C> Interpreter<'a, C> {
 
     // ---------------
     fn evaluate_expression(&mut self, expr: &ResolvedExpression) -> Result<Value, ExecuteError> {
-        if let Some(debug_source_map) = &self.debug_source_map {
+        if let Some(_debug_source_map) = &self.debug_source_map {
             self.debug_expr(&expr, "evaluate_expression");
         }
         let value = match expr {
@@ -2304,7 +2304,7 @@ impl<'a> fmt::Display for ResolvedExpressionDisplay<'a> {
             ResolvedExpression::UnaryOp(_) => write!(f, "UnaryOp"),
             ResolvedExpression::PostfixOp(_) => write!(f, "PostfixOp"),
             ResolvedExpression::CoerceOptionToBool(_) => write!(f, "CoerceOptionToBool"),
-            ResolvedExpression::FunctionCall(a, b, c) => write!(
+            ResolvedExpression::FunctionCall(_a, b, _c) => write!(
                 f,
                 "FunctionCall {}",
                 ResolvedExpressionDisplay::new(b, self.lookup)
