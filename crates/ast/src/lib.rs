@@ -322,10 +322,11 @@ pub struct SelfParameter {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum CompoundOperatorKind {
-    Add, // +=
-    Sub, // -=
-    Mul, // *=
-    Div, // /=
+    Add,    // +=
+    Sub,    // -=
+    Mul,    // *=
+    Div,    // /=
+    Modulo, // %=
 }
 
 #[derive(Debug)]

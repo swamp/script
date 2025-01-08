@@ -232,6 +232,12 @@ pub fn show_error(err: &ResolveError, source_map: &SourceMap) {
 #[must_use]
 pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
     match err {
+        ResolveError::EmptyArrayCanOnlyBeMapOrArray => Report::build(
+            Error,
+            903,
+            &format!("EmptyArrayCanOnlyBeMapOrArray"),
+            &Span::default(),
+        ),
         ResolveError::UnknownConstant(constant_node) => Report::build(
             Error,
             903,

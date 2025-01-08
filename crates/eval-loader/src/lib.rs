@@ -24,18 +24,16 @@ pub fn resolve_to_new_module(
 ) -> Result<(), ResolveError> {
     let resolved_module = ResolvedModule::new(module_path);
     let resolved_module_ref = Rc::new(RefCell::new(resolved_module));
+    modules.add(resolved_module_ref);
 
     resolve_to_existing_module(
         types,
         state,
         modules,
-        resolved_module_ref.borrow_mut().namespace.clone(),
+        module_path.to_vec(),
         source_map,
-        resolved_module_ref.clone(),
         ast_module,
     )?;
-
-    modules.add(resolved_module_ref);
 
     Ok(())
 }
@@ -44,13 +42,12 @@ pub fn resolve_to_existing_module(
     types: &ResolvedProgramTypes,
     state: &mut ResolvedProgramState,
     mut modules: &mut ResolvedModules,
-    target_namespace: ResolvedModuleNamespaceRef,
+    path: Vec<String>,
     source_map: &SourceMap,
-    resolved_module: Rc<RefCell<ResolvedModule>>,
     ast_module: &ParseModule,
 ) -> Result<Option<ResolvedExpression>, ResolveError> {
     let statements = {
-        let mut name_lookup = NameLookup::new(target_namespace.clone(), &mut modules);
+        let mut name_lookup = NameLookup::new(path.clone(), &mut modules);
         let mut resolver = Resolver::new(
             types,
             state,
@@ -58,6 +55,8 @@ pub fn resolve_to_existing_module(
             source_map,
             ast_module.file_id,
         );
+
+        info!(?path, "analyzing");
 
         for ast_def in ast_module.ast_module.definitions() {
             let _resolved_def = resolver.resolve_definition(ast_def)?;
@@ -84,21 +83,17 @@ pub fn resolve_program(
 ) -> Result<(), ResolveError> {
     for module_path in module_paths_in_order {
         if let Some(parse_module) = parsed_modules.get_parsed_module(module_path) {
-            if modules.contains_key(&*module_path.clone()) {
+            if let Some(found_module) = modules.get(&*module_path.clone()) {
                 info!(?module_path, "this is an existing module");
-                let existing_resolve_module = modules.modules.remove(module_path).unwrap();
+
                 let _maybe_expression = resolve_to_existing_module(
                     types,
                     state,
                     modules,
-                    existing_resolve_module.borrow_mut().namespace.clone(),
+                    module_path.clone(),
                     source_map,
-                    existing_resolve_module.clone(),
                     parse_module,
                 )?;
-                modules
-                    .modules
-                    .insert(module_path.clone(), existing_resolve_module);
             } else {
                 info!(?module_path, "this is a new module");
                 resolve_to_new_module(

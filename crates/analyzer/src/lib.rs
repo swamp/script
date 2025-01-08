@@ -373,6 +373,38 @@ impl<'a> Resolver<'a> {
         }
     }
 
+    pub fn resolve_expression_expecting_type(
+        &mut self,
+        ast_expression: &Expression,
+        expected_type: &ResolvedType,
+    ) -> Result<ResolvedExpression, ResolveError> {
+        match ast_expression {
+            Expression::Literal(ast_literal) => match ast_literal {
+                Literal::Array(items) => {
+                    if items.is_empty() {
+                        match expected_type {
+                            ResolvedType::Map(map_type_ref) => Ok(ResolvedExpression::Literal(
+                                ResolvedLiteral::Map(map_type_ref.clone(), vec![]),
+                            )),
+                            ResolvedType::Array(array_type_ref) => Ok(ResolvedExpression::Literal(
+                                ResolvedLiteral::Array(array_type_ref.clone(), vec![]),
+                            )),
+                            _ => Err(ResolveError::EmptyArrayCanOnlyBeMapOrArray),
+                        }
+                    } else {
+                        self.resolve_expression(ast_expression)
+                    }
+                }
+                _ => self.resolve_expression(ast_expression),
+            },
+
+            _ => {
+                // Delegate to the general expression resolver
+                self.resolve_expression(ast_expression)
+            }
+        }
+    }
+
     pub fn resolve_expression(
         &mut self,
         ast_expression: &Expression,
@@ -407,21 +439,15 @@ impl<'a> Resolver<'a> {
             Expression::IndexAssignment(collection_expression, index_expression, source_expr) => {
                 let resolved_collection_expression =
                     self.resolve_expression(collection_expression)?;
-                debug!(resolved_collection_expression=?resolved_collection_expression, "resolve_collection_access");
 
                 let collection_resolution = resolved_collection_expression.resolution();
-                debug!(collection_resolution=?collection_resolution, "collection_resolution");
 
                 let resolved_index_expression = self.resolve_expression(index_expression)?;
-                debug!(resolved_index_expression=?resolved_index_expression, "resolve_index_access");
 
                 let index_resolution = resolved_index_expression.resolution();
-                debug!(index_resolution=?index_resolution, "index_resolution");
 
                 let resolved_source_expression = self.resolve_expression(source_expr)?;
                 let resolved_source_expression_type = resolved_source_expression.resolution();
-
-                info!("COLLECTION: {resolved_collection_expression:?}");
 
                 match collection_resolution {
                     ResolvedType::Array(array_type_ref) => {
@@ -1159,6 +1185,7 @@ impl<'a> Resolver<'a> {
             CompoundOperatorKind::Sub => ResolvedCompoundOperatorKind::Sub,
             CompoundOperatorKind::Mul => ResolvedCompoundOperatorKind::Mul,
             CompoundOperatorKind::Div => ResolvedCompoundOperatorKind::Div,
+            CompoundOperatorKind::Modulo => ResolvedCompoundOperatorKind::Modulo,
         };
 
         ResolvedCompoundOperator {

@@ -8,6 +8,7 @@ use swamp_script_semantic::{
 
 #[derive(Debug)]
 pub enum ResolveError {
+    EmptyArrayCanOnlyBeMapOrArray,
     NamespaceError(NamespaceError),
     CanNotFindModule(Vec<String>),
     UnknownStructTypeReference(ResolvedNode),

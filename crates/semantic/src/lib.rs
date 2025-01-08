@@ -315,7 +315,7 @@ impl Display for ResolvedType {
             Self::Array(array_ref) => write!(f, "[{}]", &array_ref.item_type.to_string()),
             Self::Tuple(tuple) => write!(f, "({})", comma(&tuple.0)),
             Self::Struct(struct_ref) => write!(f, "{}", struct_ref.borrow().assigned_name),
-            Self::Map(_) => todo!(),
+            Self::Map(map_ref) => write!(f, "[{}:{}]", map_ref.key_type, map_ref.value_type),
             Self::Generic(_, _) => todo!(),
             Self::Enum(_) => todo!(),
             Self::EnumVariant(_) => todo!(),
@@ -323,7 +323,7 @@ impl Display for ResolvedType {
             Self::ExclusiveRange(_) => todo!(),
             Self::Optional(_) => todo!(),
             Self::RustType(_) => todo!(),
-            Self::Any => todo!(),
+            Self::Any => write!(f, "ANY"),
         }
     }
 }
@@ -978,6 +978,7 @@ pub enum ResolvedCompoundOperatorKind {
     Sub,
     Mul,
     Div,
+    Modulo,
 }
 
 #[derive(Debug)]
@@ -1746,7 +1747,7 @@ impl Spanned for ResolvedExpression {
             Self::CoerceOptionToBool(expr) => expr.span(),
 
             // Calls
-            Self::FunctionCall(_func_type, _expr, _arg) => todo!(),
+            Self::FunctionCall(_func_type, expr, _arg) => expr.span(),
             Self::FunctionInternalCall(_call) => todo!(),
             Self::FunctionExternalCall(call) => call.arguments[0].span(),
             Self::StaticCall(call) => call.span(),

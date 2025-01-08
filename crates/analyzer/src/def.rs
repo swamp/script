@@ -16,6 +16,7 @@ use swamp_script_semantic::{
     ResolvedStructTypeRef, ResolvedType, ResolvedTypeForParameter, ResolvedUse, ResolvedUseItem,
     TypeNumber,
 };
+use tracing::info;
 
 impl<'a> Resolver<'a> {
     fn resolve_use_definition(
@@ -190,12 +191,13 @@ impl<'a> Resolver<'a> {
 
             let variant_name_str = self.get_text(variant_name_node).to_string();
 
+            let unique_variant_type_number = self.shared.state.allocate_number();
             let variant_type = ResolvedEnumVariantType {
                 owner: parent_ref.clone(),
                 data: container,
                 name: ResolvedLocalTypeIdentifier(self.to_node(variant_name_node)),
                 assigned_name: self.get_text(&variant_name_node).to_string(),
-                number: container_number.unwrap_or(0),
+                number: unique_variant_type_number,
             };
 
             let variant_type_ref = self.shared.lookup.add_enum_variant(
@@ -294,6 +296,7 @@ impl<'a> Resolver<'a> {
                 };
 
                 let function_name = self.get_text(&function_data.declaration.name).to_string();
+                info!(?function_name, "adding function");
                 let function_ref = self
                     .shared
                     .lookup

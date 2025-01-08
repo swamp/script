@@ -942,6 +942,7 @@ impl<'a, C> Interpreter<'a, C> {
                     ResolvedCompoundOperatorKind::Sub => current_int - int_mod,
                     ResolvedCompoundOperatorKind::Mul => current_int * int_mod,
                     ResolvedCompoundOperatorKind::Div => current_int / int_mod,
+                    ResolvedCompoundOperatorKind::Modulo => Self::modulo(current_int, int_mod),
                 };
 
                 let new_value = Value::Int(new_result);
@@ -2347,6 +2348,13 @@ impl<'a, C> Interpreter<'a, C> {
                 *target = Self::evaluate_binary_op(
                     target.clone(),
                     &ResolvedBinaryOperatorKind::Subtract,
+                    source.clone(),
+                )?;
+            }
+            ResolvedCompoundOperatorKind::Modulo => {
+                *target = Self::evaluate_binary_op(
+                    target.clone(),
+                    &ResolvedBinaryOperatorKind::Modulo,
                     source.clone(),
                 )?;
             }

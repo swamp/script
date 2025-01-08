@@ -176,12 +176,14 @@ compound_assign_op = {
     | sub_assign_op
     | mul_assign_op
     | div_assign_op
-}
+    | modulo_assign_op
+    }
 
 add_assign_op = { "+=" }
 sub_assign_op = { "-=" }
 mul_assign_op = { "*=" }
 div_assign_op = { "/=" }
+modulo_assign_op = { "%=" }
 
 
 // OPERATORS ------------------------------------------------------------

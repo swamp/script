@@ -1113,6 +1113,7 @@ impl AstParser {
                     Rule::sub_assign_op => Some(CompoundOperatorKind::Sub),
                     Rule::mul_assign_op => Some(CompoundOperatorKind::Mul),
                     Rule::div_assign_op => Some(CompoundOperatorKind::Div),
+                    Rule::modulo_assign_op => Some(CompoundOperatorKind::Modulo),
                     _ => {
                         return Err(self.create_error_pair(
                             SpecificError::UnknownOperator(format!(
