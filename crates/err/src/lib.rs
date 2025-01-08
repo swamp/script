@@ -8,7 +8,7 @@ use eira::{Kind, Pos, PosSpan, SourceLines};
 use std::fmt::Display;
 use std::io;
 use std::io::{stderr, Write};
-use swamp_script_analyzer::ResolveError;
+use swamp_script_analyzer::prelude::ResolveError;
 use swamp_script_eval::prelude::ExecuteError;
 use swamp_script_parser::SpecificError;
 use swamp_script_semantic::{Span, Spanned};

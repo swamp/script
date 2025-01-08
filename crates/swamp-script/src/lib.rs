@@ -3,8 +3,8 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use std::path::Path;
-use swamp_script_analyzer::ResolveError;
-use swamp_script_analyzer::ResolvedProgram;
+use swamp_script_analyzer::prelude::ResolveError;
+use swamp_script_analyzer::prelude::ResolvedProgram;
 use swamp_script_dep_loader::{
     parse_dependant_modules_and_resolve, DepLoaderError, DependencyParser, ParseModule,
 };
