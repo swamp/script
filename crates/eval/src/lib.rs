@@ -1560,10 +1560,10 @@ impl<'a, C> Interpreter<'a, C> {
                 let v_value = self.evaluate_expression(v)?;
                 let min_value = self.evaluate_expression(min)?;
                 let max_value = self.evaluate_expression(max)?;
-                if let (Value::Int(f), Value::Int(min_f), Value::Int(max_f)) =
+                if let (Value::Int(i), Value::Int(min_i), Value::Int(max_i)) =
                     (v_value, min_value, max_value)
                 {
-                    Value::Int(f.clamp(min_f, max_f))
+                    Value::Int(i.clamp(min_i, max_i))
                 } else {
                     return Err(ExecuteError::TypeError("Expected int".to_string()));
                 }
@@ -1572,8 +1572,8 @@ impl<'a, C> Interpreter<'a, C> {
             ResolvedExpression::IntMin(expr, max) => {
                 let value = self.evaluate_expression(expr)?;
                 let max_value = self.evaluate_expression(max)?;
-                if let (Value::Int(f), Value::Int(max_f)) = (value, max_value) {
-                    Value::Int(f.min(max_f))
+                if let (Value::Int(i), Value::Int(min_i)) = (value, max_value) {
+                    Value::Int(i.min(min_i))
                 } else {
                     return Err(ExecuteError::TypeError("Expected int".to_string()));
                 }
@@ -1582,8 +1582,8 @@ impl<'a, C> Interpreter<'a, C> {
             ResolvedExpression::IntMax(expr, max) => {
                 let value = self.evaluate_expression(expr)?;
                 let max_value = self.evaluate_expression(max)?;
-                if let (Value::Int(f), Value::Int(max_f)) = (value, max_value) {
-                    Value::Int(f.max(max_f))
+                if let (Value::Int(i), Value::Int(max_i)) = (value, max_value) {
+                    Value::Int(i.max(max_i))
                 } else {
                     return Err(ExecuteError::TypeError("Expected int".to_string()));
                 }
