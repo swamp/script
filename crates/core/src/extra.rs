@@ -4,6 +4,7 @@
  */
 
 use crate::idx_gen::IndexAllocator;
+use crate::value::ValueRef;
 use crate::value::{to_rust_value, Value};
 use sparse_slot::{Id, SparseSlot};
 use std::cell::RefCell;
@@ -42,12 +43,12 @@ impl Display for SparseValueMap {
 
 impl SparseValueMap {
     #[must_use]
-    pub fn new(resolved_type: ResolvedType) -> Self {
+    pub fn new(rust_type_ref_for_id: ResolvedRustTypeRef, resolved_type: ResolvedType) -> Self {
         let type_parameter = match &resolved_type {
             ResolvedType::Generic(_, parameters) => parameters[0].clone(),
             _ => panic!("illegal sparse type. not generic"),
         };
-        let rust_type_ref_for_id = create_rust_type("SparseId", 998);
+
         Self {
             sparse_slot: SparseSlot::<Rc<RefCell<Value>>>::new(1024),
             id_generator: IndexAllocator::new(),
@@ -78,6 +79,10 @@ impl SparseValueMap {
     pub fn remove(&mut self, id: &SparseValueId) {
         self.id_generator.remove((id.0.index, id.0.generation));
         self.sparse_slot.remove(id.0);
+    }
+
+    pub fn get(&mut self, id: &SparseValueId) -> Option<&ValueRef> {
+        self.sparse_slot.get(id.0)
     }
 
     #[allow(unused)]

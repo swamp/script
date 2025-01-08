@@ -24,6 +24,7 @@ pub enum ResolveError {
     NotAnArray(Span),
     ArrayIndexMustBeInt(ResolvedType),
     OverwriteVariableWithAnotherType(ResolvedNode),
+    ExpectedMutableLocation(Span),
     WrongNumberOfArguments(usize, usize),
     IncompatibleArguments(ResolvedType, ResolvedType),
     CanOnlyOverwriteVariableWithMut(ResolvedNode),

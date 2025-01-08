@@ -1,5 +1,5 @@
 use crate::err::ResolveError;
-use crate::Resolver;
+use crate::{Resolver, SPARSE_TYPE_ID};
 use swamp_script_ast::{Expression, Node, QualifiedTypeIdentifier};
 use swamp_script_semantic::{
     ResolvedAccess, ResolvedArrayTypeRef, ResolvedExpression, ResolvedFunction,
@@ -84,6 +84,24 @@ impl<'a> Resolver<'a> {
             }
             ResolvedType::Map(map_type) => {
                 self.resolve_map_index_access(expression, &map_type, key_expr)?
+            }
+            ResolvedType::Generic(base_type, generic_type_parameters) => {
+                if let ResolvedType::RustType(found_rust_type) = *base_type {
+                    if found_rust_type.number == SPARSE_TYPE_ID {
+                        let contained_type = &generic_type_parameters[0];
+                        let resolved_key =
+                            self.resolve_expression_expecting_type(&key_expr, contained_type)?;
+                        return Ok(ResolvedExpression::SparseAccess(
+                            Box::new(resolved_expr),
+                            Box::new(resolved_key),
+                            ResolvedType::Optional(Box::new(contained_type.clone())),
+                        ));
+                    }
+                }
+
+                return Err(ResolveError::TypeDoNotSupportIndexAccess(
+                    resolved_expr.span(),
+                ));
             }
             _ => {
                 return Err(ResolveError::TypeDoNotSupportIndexAccess(

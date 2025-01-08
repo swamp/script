@@ -464,7 +464,7 @@ impl Display for Value {
             Self::RustValue(_rust_type, rust_type_pointer) => {
                 write!(f, "{}", rust_type_pointer.borrow())
             }
-            Self::Option(maybe_val) => write!(f, "{maybe_val:?}"),
+            Self::Option(maybe_val) => write!(f, "Maybe"),
         }
     }
 }

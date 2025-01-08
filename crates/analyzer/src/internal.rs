@@ -1,7 +1,9 @@
 use crate::err::ResolveError;
 use crate::{Resolver, SPARSE_TYPE_ID};
 use swamp_script_ast::{Expression, Node};
-use swamp_script_semantic::{ResolvedExpression, ResolvedType, ResolvedVariableRef};
+use swamp_script_semantic::{
+    ResolvedExpression, ResolvedMapTypeRef, ResolvedType, ResolvedVariableRef, Spanned,
+};
 
 impl<'a> Resolver<'a> {
     pub(crate) fn check_for_internal_member_call(
@@ -23,6 +25,19 @@ impl<'a> Resolver<'a> {
                     return Ok(Some(resolved));
                 }
             }
+
+            ResolvedType::Map(map_type_ref) => {
+                //if let ResolvedExpression::VariableAccess(var_ref) = resolved_expr {
+                let resolved = self.resolve_map_member_call(
+                    resolved_expr,
+                    map_type_ref,
+                    ast_member_function_name,
+                    ast_arguments,
+                )?;
+                return Ok(Some(resolved));
+                //}
+            }
+
             ResolvedType::Float(_) => {
                 let resolved = self.resolve_float_member_call(
                     resolved_expr,
@@ -56,6 +71,61 @@ impl<'a> Resolver<'a> {
             }
         }
         Ok(None)
+    }
+
+    fn resolve_map_member_call(
+        &mut self,
+        map_expr: ResolvedExpression,
+        map_type: ResolvedMapTypeRef,
+        ast_member_function_name: &Node,
+        ast_arguments: &[Expression],
+    ) -> Result<ResolvedExpression, ResolveError> {
+        let member_function_name_str = self.get_text(ast_member_function_name);
+        let expr = match member_function_name_str {
+            "remove" => {
+                /*  // TODO:
+                if !map_expr.is_coerce_to_mutable() {
+                    return Err(ResolveError::ExpectedMutableLocation(map_expr.span()));
+                }
+                */
+
+                if ast_arguments.len() != 1 {
+                    return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 1));
+                }
+
+                let key_expr =
+                    self.resolve_expression_expecting_type(&ast_arguments[0], &map_type.key_type)?;
+
+                ResolvedExpression::MapRemove(
+                    Box::new(map_expr),
+                    Box::new(key_expr),
+                    map_type.clone(),
+                )
+            }
+
+            "has" => {
+                /*  // TODO:
+                if !map_expr.is_coerce_to_mutable() {
+                    return Err(ResolveError::ExpectedMutableLocation(map_expr.span()));
+                }
+                */
+
+                if ast_arguments.len() != 1 {
+                    return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 1));
+                }
+
+                let key_expr =
+                    self.resolve_expression_expecting_type(&ast_arguments[0], &map_type.key_type)?;
+
+                ResolvedExpression::MapHas(Box::new(map_expr), Box::new(key_expr))
+            }
+            _ => {
+                return Err(ResolveError::UnknownMemberFunction(
+                    self.to_node(ast_member_function_name),
+                ))
+            }
+        };
+        Ok(expr)
     }
 
     fn resolve_array_member_call(

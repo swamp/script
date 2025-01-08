@@ -623,7 +623,10 @@ impl<'a, C> Interpreter<'a, C> {
 
                     match self.evaluate_expression_with_signal(body)? {
                         ValueWithSignal::Value(v) => result = v,
-                        ValueWithSignal::Return(v) => return Ok(ValueWithSignal::Return(v)),
+                        ValueWithSignal::Return(v) => {
+                            self.pop_block_scope();
+                            return Ok(ValueWithSignal::Return(v));
+                        }
                         ValueWithSignal::Break => break,
                         ValueWithSignal::Continue => continue,
                     }
@@ -697,6 +700,14 @@ impl<'a, C> Interpreter<'a, C> {
 
             ResolvedExpression::WhileLoop(condition, body) => {
                 self.evaluate_while_loop(condition, body)
+            }
+
+            ResolvedExpression::ForLoop(pattern, iterator_expr, body) => {
+                if pattern.is_mutable() {
+                    self.evaluate_for_loop_mutable(pattern, iterator_expr, body)
+                } else {
+                    self.evaluate_for_loop(pattern, iterator_expr, body)
+                }
             }
 
             ResolvedExpression::If(condition, consequences, optional_alternative) => {
@@ -788,6 +799,99 @@ impl<'a, C> Interpreter<'a, C> {
             self.debug_expr(&expr, "evaluate_expression");
         }
         let value = match expr {
+            // Illegal in this context
+            ResolvedExpression::Continue(_) => {
+                return Err(ExecuteError::ContinueNotAllowedHere);
+            }
+            ResolvedExpression::Break(_) => {
+                return Err(ExecuteError::BreakNotAllowedHere);
+            }
+            ResolvedExpression::Return(maybe_expr) => {
+                return Err(ExecuteError::BreakNotAllowedHere);
+            }
+
+            ResolvedExpression::WhileLoop(condition, body) => {
+                panic!("should have been handled earlier")
+            }
+
+            ResolvedExpression::ForLoop(pattern, iterator_expr, body) => {
+                panic!("should have been handled earlier")
+            }
+            ResolvedExpression::IfOnlyVariable {
+                variable,
+                optional_expr,
+                true_block,
+                false_block,
+            } => {
+                panic!("should have been handled earlier");
+                /*
+                let condition_value = self.evaluate_expression(optional_expr)?;
+                match condition_value {
+                    Value::Option(Some(inner_value)) => {
+                        self.push_block_scope();
+                        self.current_block_scopes.initialize_var(
+                            variable.scope_index,
+                            variable.variable_index,
+                            *inner_value,
+                            variable.is_mutable(),
+                        );
+
+                        let result = self.evaluate_expression(true_block)?;
+
+                        self.pop_block_scope();
+
+                        result
+                    }
+                    Value::Option(None) => {
+                        if let Some(else_block) = false_block {
+                            self.evaluate_expression(else_block)?
+                        } else {
+                            Value::Unit
+                        }
+                    }
+                    _ => return Err(ExecuteError::ExpectedOptional),
+                }
+
+                 */
+            }
+
+            ResolvedExpression::IfAssignExpression {
+                variable,
+                optional_expr,
+                true_block,
+                false_block,
+            } => {
+                panic!("should have been handled earlier");
+                /*
+                let value = self.evaluate_expression(optional_expr)?;
+                match value {
+                    Value::Option(Some(inner_value)) => {
+                        self.push_block_scope();
+                        self.current_block_scopes.initialize_var(
+                            variable.scope_index,
+                            variable.variable_index,
+                            *inner_value,
+                            variable.is_mutable(),
+                        );
+
+                        let result = self.evaluate_expression(true_block)?;
+                        self.pop_block_scope();
+
+                        result
+                    }
+                    Value::Option(None) => {
+                        if let Some(else_block) = false_block {
+                            self.evaluate_expression(else_block)?
+                        } else {
+                            Value::Unit
+                        }
+                    }
+                    _ => return Err(ExecuteError::ExpectedOptional),
+                }
+
+                 */
+            }
+
             // Constructing
             ResolvedExpression::Literal(lit) => match lit {
                 ResolvedLiteral::IntLiteral(n, _resolved_node, _) => Value::Int(*n),
@@ -1101,6 +1205,40 @@ impl<'a, C> Interpreter<'a, C> {
                 result
             }
 
+            ResolvedExpression::MapHas(box_expr, index_expr) => {
+                let map_ref = self.evaluate_expression(&box_expr)?;
+                let index_val = self.evaluate_expression(&index_expr)?;
+
+                let result = {
+                    if let Value::Map(_type_id, ref seq_map) = map_ref {
+                        let has_key = seq_map.contains_key(&index_val);
+                        Value::Bool(has_key)
+                    } else {
+                        return Err(ExecuteError::NotAMap);
+                    }
+                };
+                result
+            }
+
+            ResolvedExpression::MapRemove(map_expr, index_expr, map_type_ref) => {
+                let map_ref = self.evaluate_location(&map_expr, &vec![])?;
+                let index_val = self.evaluate_expression(&index_expr)?;
+
+                let result = {
+                    let mut borrowed = map_ref.borrow_mut();
+                    if let Value::Map(_type_id, ref mut seq_map) = &mut *borrowed {
+                        let x = seq_map.remove(&index_val);
+                        x.map_or_else(
+                            || Value::Option(None),
+                            |v| Value::Option(Some(Box::from(v.borrow().clone()))),
+                        )
+                    } else {
+                        return Err(ExecuteError::NotAMap);
+                    }
+                };
+                result
+            }
+
             ResolvedExpression::FieldAccess(struct_field_access, _field_ref, access_list) => {
                 self.evaluate_lookups(struct_field_access, access_list)?
             }
@@ -1368,7 +1506,8 @@ impl<'a, C> Interpreter<'a, C> {
 
             // --------------- SPECIAL FUNCTIONS
             ResolvedExpression::SparseNew(rust_type_ref, resolved_type) => {
-                let sparse_value_map = SparseValueMap::new(resolved_type.clone());
+                let sparse_value_map =
+                    SparseValueMap::new(rust_type_ref.clone(), resolved_type.clone());
                 to_rust_value(rust_type_ref.clone(), sparse_value_map)
             }
 
@@ -1401,6 +1540,29 @@ impl<'a, C> Interpreter<'a, C> {
 
                 resolved_sparse_value
             }
+            ResolvedExpression::SparseAccess(sparse_rust, id_expression, _expected_type) => {
+                let resolved_sparse_value = self.evaluate_expression(sparse_rust)?;
+                let sparse_value_map = resolved_sparse_value.downcast_rust::<SparseValueMap>();
+                if let Some(found) = sparse_value_map {
+                    let id_value = self.evaluate_expression(id_expression)?;
+                    if let Some(found_id) = id_value.downcast_rust::<SparseValueId>() {
+                        if let Some(found_value) = found.borrow_mut().get(&found_id.borrow()) {
+                            Value::Option(Some(Box::new(found_value.borrow().clone())))
+                        } else {
+                            Value::Option(None)
+                        }
+                    } else {
+                        return Err(ExecuteError::Error(
+                            "not a SparseId, can not access".to_string(),
+                        ));
+                    }
+                } else {
+                    return Err(ExecuteError::Error(
+                        "not a SparseId, can not access".to_string(),
+                    ));
+                }
+            }
+
             ResolvedExpression::CoerceOptionToBool(expression) => {
                 let value = self.evaluate_expression(expression)?;
                 match value {
@@ -1617,26 +1779,6 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            ResolvedExpression::Continue(_) => {
-                return Err(ExecuteError::ContinueNotAllowedHere);
-            }
-            ResolvedExpression::Break(_) => {
-                return Err(ExecuteError::BreakNotAllowedHere);
-            }
-            ResolvedExpression::Return(maybe_expr) => {
-                let value = match maybe_expr {
-                    None => Value::Unit,
-                    Some(expr) => self.evaluate_expression(expr)?,
-                };
-
-                return Ok(value);
-            }
-
-            ResolvedExpression::WhileLoop(condition, body) => {
-                let signal = self.evaluate_while_loop(condition, body)?;
-                signal.try_into()?
-            }
-
             ResolvedExpression::If(condition, consequences, optional_alternative) => {
                 let cond_value = self.evaluate_expression(&condition.expression)?;
                 if cond_value.is_truthy()? {
@@ -1648,82 +1790,6 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            ResolvedExpression::IfOnlyVariable {
-                variable,
-                optional_expr,
-                true_block,
-                false_block,
-            } => {
-                let condition_value = self.evaluate_expression(optional_expr)?;
-                match condition_value {
-                    Value::Option(Some(inner_value)) => {
-                        self.push_block_scope();
-                        self.current_block_scopes.initialize_var(
-                            variable.scope_index,
-                            variable.variable_index,
-                            *inner_value,
-                            variable.is_mutable(),
-                        );
-
-                        let result = self.evaluate_expression(true_block)?;
-
-                        self.pop_block_scope();
-
-                        result
-                    }
-                    Value::Option(None) => {
-                        if let Some(else_block) = false_block {
-                            self.evaluate_expression(else_block)?
-                        } else {
-                            Value::Unit
-                        }
-                    }
-                    _ => return Err(ExecuteError::ExpectedOptional),
-                }
-            }
-
-            ResolvedExpression::IfAssignExpression {
-                variable,
-                optional_expr,
-                true_block,
-                false_block,
-            } => {
-                let value = self.evaluate_expression(optional_expr)?;
-                match value {
-                    Value::Option(Some(inner_value)) => {
-                        self.push_block_scope();
-                        self.current_block_scopes.initialize_var(
-                            variable.scope_index,
-                            variable.variable_index,
-                            *inner_value,
-                            variable.is_mutable(),
-                        );
-
-                        let result = self.evaluate_expression(true_block)?;
-                        self.pop_block_scope();
-
-                        result
-                    }
-                    Value::Option(None) => {
-                        if let Some(else_block) = false_block {
-                            self.evaluate_expression(else_block)?
-                        } else {
-                            Value::Unit
-                        }
-                    }
-                    _ => return Err(ExecuteError::ExpectedOptional),
-                }
-            }
-
-            ResolvedExpression::ForLoop(pattern, iterator_expr, body) => {
-                if pattern.is_mutable() {
-                    self.evaluate_for_loop_mutable(pattern, iterator_expr, body)?
-                        .try_into()?
-                } else {
-                    self.evaluate_for_loop(pattern, iterator_expr, body)?
-                        .try_into()?
-                }
-            }
             ResolvedExpression::TupleDestructuring(variable_refs, _, expr) => {
                 let value = self.evaluate_expression(expr)?;
                 if let Value::Tuple(_tuple_ref, values) = value {

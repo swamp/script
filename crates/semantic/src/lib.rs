@@ -1030,7 +1030,14 @@ pub enum ResolvedExpression {
         ResolvedArrayTypeRef,
         Vec<ResolvedAccess>,
     ), // Read from an array: arr[3]
+
     MapIndexAccess(ResolvedMapIndexLookup),
+    MapRemove(
+        Box<ResolvedExpression>,
+        Box<ResolvedExpression>,
+        ResolvedMapTypeRef,
+    ),
+    MapHas(Box<ResolvedExpression>, Box<ResolvedExpression>),
 
     InternalFunctionAccess(ResolvedInternalFunctionDefinitionRef),
 
@@ -1173,6 +1180,11 @@ pub enum ResolvedExpression {
     SparseAdd(Box<ResolvedExpression>, Box<ResolvedExpression>),
     SparseRemove(Box<ResolvedExpression>, Box<ResolvedExpression>),
     SparseNew(ResolvedRustTypeRef, ResolvedType),
+    SparseAccess(
+        Box<ResolvedExpression>,
+        Box<ResolvedExpression>,
+        ResolvedType,
+    ),
 
     ForLoop(
         ResolvedForPattern,
@@ -1268,6 +1280,14 @@ impl ResolvedExpression {
             }
             Self::MapAssignment(_mut_map, _, expr) => {
                 expr.collect_constant_dependencies(deps);
+            }
+            Self::MapRemove(expr, expr2, _) => {
+                expr.collect_constant_dependencies(deps);
+                expr2.collect_constant_dependencies(deps);
+            }
+            Self::MapHas(expr, expr2) => {
+                expr.collect_constant_dependencies(deps);
+                expr2.collect_constant_dependencies(deps);
             }
             Self::StructFieldAssignment(expr, _accesses, source_expr) => {
                 expr.collect_constant_dependencies(deps);
@@ -1416,6 +1436,10 @@ impl ResolvedExpression {
                 expr2.collect_constant_dependencies(deps);
             }
             Self::SparseNew(_, _) => {}
+            Self::SparseAccess(expr, expr2, _) => {
+                expr.collect_constant_dependencies(deps);
+                expr2.collect_constant_dependencies(deps);
+            }
 
             Self::ForLoop(_, _, expr) => {
                 expr.collect_constant_dependencies(deps);
@@ -1500,6 +1524,8 @@ impl ResolvedExpression {
             // Index Access
             Self::ArrayAccess(_, array_item_ref, _) => array_item_ref.item_type.clone(),
             Self::MapIndexAccess(map_item) => map_item.item_type.clone(),
+            Self::MapRemove(_, _, map_type_ref) => map_type_ref.value_type.clone(),
+            Self::MapHas(_, _) => ResolvedType::Bool(Rc::new(ResolvedBoolType {})),
 
             // Convert to mutable reference
             Self::MutVariableRef(mut_var_ref) => mut_var_ref.variable_ref.resolved_type.clone(),
@@ -1627,6 +1653,9 @@ impl ResolvedExpression {
             Self::SparseAdd(_, _) => ResolvedType::Any, // TODO: return correct type
             Self::SparseRemove(_, _) => ResolvedType::Any, // TODO: return correct type
             Self::SparseNew(_rust_type_ref, resolved_type) => resolved_type.clone(),
+            Self::SparseAccess(_sparse_expression, _key_expression, expected_type) => {
+                expected_type.clone()
+            }
             Self::CoerceOptionToBool(_) => ResolvedType::Bool(Rc::new(ResolvedBoolType)),
 
             // Float member functions
