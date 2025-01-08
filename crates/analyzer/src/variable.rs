@@ -213,13 +213,20 @@ impl<'a> Resolver<'a> {
     ) -> Result<ResolvedExpression, ResolveError> {
         let resolved_variable = self.find_variable_from_node(target)?;
         let resolved_source = self.resolve_expression(source)?;
+        let source_type = resolved_source.resolution();
 
         let target_type = &resolved_variable.resolved_type;
 
         let resolved_compound_operator = self.resolve_compound_operator(operator);
 
         match &target_type {
-            ResolvedType::Int(_) => {
+            ResolvedType::Int => {
+                if source_type != ResolvedType::Int {
+                    return Err(ResolveError::IncompatibleTypes(
+                        resolved_compound_operator.node.span().clone(),
+                        source_type,
+                    ));
+                }
                 let compound_assignment = ResolvedVariableCompoundAssignment {
                     variable_ref: resolved_variable,
                     expression: Box::from(resolved_source),

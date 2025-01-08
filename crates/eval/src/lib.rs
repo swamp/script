@@ -894,10 +894,11 @@ impl<'a, C> Interpreter<'a, C> {
 
             // Constructing
             ResolvedExpression::Literal(lit) => match lit {
-                ResolvedLiteral::IntLiteral(n, _resolved_node, _) => Value::Int(*n),
-                ResolvedLiteral::FloatLiteral(f, _resolved_node, _) => Value::Float(*f),
-                ResolvedLiteral::StringLiteral(s, _resolved_node, _) => Value::String(s.clone()),
-                ResolvedLiteral::BoolLiteral(b, _resolved_node, _) => Value::Bool(*b),
+                ResolvedLiteral::IntLiteral(n, _resolved_node) => Value::Int(*n),
+                ResolvedLiteral::FloatLiteral(f, _resolved_node) => Value::Float(*f),
+                ResolvedLiteral::StringLiteral(s, _resolved_node) => Value::String(s.clone()),
+                ResolvedLiteral::BoolLiteral(b, _resolved_node) => Value::Bool(*b),
+
                 ResolvedLiteral::EnumVariantLiteral(enum_variant_type, data) => {
                     let variant_container_value: Value = match &enum_variant_type.data {
                         ResolvedEnumVariantContainerType::Tuple(tuple_type) => match data {
@@ -1399,7 +1400,7 @@ impl<'a, C> Interpreter<'a, C> {
 
             ResolvedExpression::Block(statements) => self.evaluate_block(statements)?.try_into()?,
 
-            ResolvedExpression::InterpolatedString(_string_type_ref, parts) => {
+            ResolvedExpression::InterpolatedString(parts) => {
                 let mut result = String::new();
 
                 for part in parts {
@@ -1948,24 +1949,20 @@ impl<'a, C> Interpreter<'a, C> {
                 }
 
                 ResolvedPattern::Literal(lit) => match (lit, &actual_value) {
-                    (ResolvedLiteral::IntLiteral(a, _resolved_node, _), Value::Int(b))
+                    (ResolvedLiteral::IntLiteral(a, _resolved_node), Value::Int(b)) if a == b => {
+                        return self.evaluate_expression(&arm.expression);
+                    }
+                    (ResolvedLiteral::FloatLiteral(a, _resolved_node), Value::Float(b))
                         if a == b =>
                     {
                         return self.evaluate_expression(&arm.expression);
                     }
-                    (ResolvedLiteral::FloatLiteral(a, _resolved_node, _), Value::Float(b))
-                        if a == b =>
-                    {
-                        return self.evaluate_expression(&arm.expression);
-                    }
-                    (ResolvedLiteral::StringLiteral(a, _resolved_node, _), Value::String(b))
+                    (ResolvedLiteral::StringLiteral(a, _resolved_node), Value::String(b))
                         if *a == *b =>
                     {
                         return self.evaluate_expression(&arm.expression);
                     }
-                    (ResolvedLiteral::BoolLiteral(a, _resolved_node, _), Value::Bool(b))
-                        if a == b =>
-                    {
+                    (ResolvedLiteral::BoolLiteral(a, _resolved_node), Value::Bool(b)) if a == b => {
                         return self.evaluate_expression(&arm.expression);
                     }
                     (
@@ -2532,7 +2529,7 @@ impl<'a> fmt::Display for ResolvedExpressionDisplay<'a> {
                 };
                 write!(f, "MemberCall {name_str}")
             }
-            ResolvedExpression::InterpolatedString(_, _) => write!(f, "InterpolatedString"),
+            ResolvedExpression::InterpolatedString(_) => write!(f, "InterpolatedString"),
             ResolvedExpression::StructInstantiation(_) => write!(f, "StructInstantiation"),
             ResolvedExpression::Array(_) => write!(f, "Array"),
             ResolvedExpression::Tuple(_) => write!(f, "Tuple"),

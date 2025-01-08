@@ -243,11 +243,11 @@ impl PartialEq for ResolvedTypeForParameter {
 #[derive(Clone, Eq, PartialEq)]
 pub enum ResolvedType {
     // Primitives
-    Int(ResolvedIntTypeRef),
-    Float(ResolvedFloatTypeRef),
-    String(ResolvedStringTypeRef),
-    Bool(ResolvedBoolTypeRef),
-    Unit(ResolvedUnitTypeRef),
+    Int,
+    Float,
+    String,
+    Bool,
+    Unit,
 
     Array(ResolvedArrayTypeRef),
     Tuple(ResolvedTupleTypeRef),
@@ -273,11 +273,11 @@ pub enum ResolvedType {
 impl Debug for ResolvedType {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            ResolvedType::Int(_) => write!(f, "Int"),
-            ResolvedType::Float(_) => write!(f, "Float"),
-            ResolvedType::String(_) => write!(f, "String"),
-            ResolvedType::Bool(_) => write!(f, "Bool"),
-            ResolvedType::Unit(_) => write!(f, "()"),
+            ResolvedType::Int => write!(f, "Int"),
+            ResolvedType::Float => write!(f, "Float"),
+            ResolvedType::String => write!(f, "String"),
+            ResolvedType::Bool => write!(f, "Bool"),
+            ResolvedType::Unit => write!(f, "()"),
             ResolvedType::Array(array_type_ref) => write!(f, "[{:?}]", array_type_ref.item_type),
             ResolvedType::Tuple(tuple_type_ref) => write!(f, "( {:?} )", tuple_type_ref.0),
             ResolvedType::Struct(struct_type_ref) => {
@@ -307,11 +307,11 @@ impl Debug for ResolvedType {
 impl Display for ResolvedType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         match self {
-            Self::Int(_) => write!(f, "Int"),
-            Self::Float(_) => write!(f, "Float"),
-            Self::String(_) => write!(f, "String"),
-            Self::Bool(_) => write!(f, "Bool"),
-            Self::Unit(_) => write!(f, "()"),
+            Self::Int => write!(f, "Int"),
+            Self::Float => write!(f, "Float"),
+            Self::String => write!(f, "String"),
+            Self::Bool => write!(f, "Bool"),
+            Self::Unit => write!(f, "()"),
             Self::Array(array_ref) => write!(f, "[{}]", &array_ref.item_type.to_string()),
             Self::Tuple(tuple) => write!(f, "({})", comma(&tuple.0)),
             Self::Struct(struct_ref) => write!(f, "{}", struct_ref.borrow().assigned_name),
@@ -332,11 +332,11 @@ impl Spanned for ResolvedType {
     fn span(&self) -> Span {
         match self {
             // Primitives
-            Self::Int(_type_ref) => Span::dummy(),
-            Self::Float(_type_ref) => Span::dummy(),
-            Self::String(_type_ref) => todo!(),
-            Self::Bool(_type_ref) => Span::dummy(),
-            Self::Unit(_type_ref) => todo!(),
+            Self::Int => Span::dummy(),
+            Self::Float => Span::dummy(),
+            Self::String => todo!(),
+            Self::Bool => Span::dummy(),
+            Self::Unit => todo!(),
 
             // Compound Types
             Self::Array(type_ref) => type_ref.item_type.span(),
@@ -399,11 +399,11 @@ impl ResolvedType {
             (Self::Any, _) => true,
             (_, Self::Any) => true,
             (Self::Function(a), Self::Function(b)) => a.same_type(b),
-            (Self::Int(_), Self::Int(_)) => true,
-            (Self::Float(_), Self::Float(_)) => true,
-            (Self::String(_), Self::String(_)) => true,
-            (Self::Bool(_), Self::Bool(_)) => true,
-            (Self::Unit(_), Self::Unit(_)) => true,
+            (Self::Int, Self::Int) => true,
+            (Self::Float, Self::Float) => true,
+            (Self::String, Self::String) => true,
+            (Self::Bool, Self::Bool) => true,
+            (Self::Unit, Self::Unit) => true,
             (Self::Array(_), Self::Array(_)) => true,
             (Self::Map(a), Self::Map(b)) => {
                 a.key_type.same_type(&b.key_type) && a.value_type.same_type(&b.value_type)
@@ -1106,7 +1106,7 @@ pub enum ResolvedExpression {
     MutMemberCall(MutMemberRef, Vec<ResolvedExpression>),
     */
     MemberCall(ResolvedMemberCall),
-    InterpolatedString(ResolvedStringTypeRef, Vec<ResolvedStringPart>),
+    InterpolatedString(Vec<ResolvedStringPart>),
 
     // Constructing
     StructInstantiation(ResolvedStructInstantiation),
@@ -1348,7 +1348,7 @@ impl ResolvedExpression {
                 }
             }
 
-            Self::InterpolatedString(_, parts) => {
+            Self::InterpolatedString(parts) => {
                 for part in parts {
                     match part {
                         ResolvedStringPart::Literal(_, _) => {}
@@ -1525,7 +1525,7 @@ impl ResolvedExpression {
             Self::ArrayAccess(_, array_item_ref, _) => array_item_ref.item_type.clone(),
             Self::MapIndexAccess(map_item) => map_item.item_type.clone(),
             Self::MapRemove(_, _, map_type_ref) => map_type_ref.value_type.clone(),
-            Self::MapHas(_, _) => ResolvedType::Bool(Rc::new(ResolvedBoolType {})),
+            Self::MapHas(_, _) => ResolvedType::Bool,
 
             // Convert to mutable reference
             Self::MutVariableRef(mut_var_ref) => mut_var_ref.variable_ref.resolved_type.clone(),
@@ -1582,9 +1582,7 @@ impl ResolvedExpression {
             Self::StaticCallGeneric(static_call_generic) => {
                 *static_call_generic.function.signature().return_type.clone()
             }
-            Self::InterpolatedString(string_type, _parts) => {
-                ResolvedType::String(string_type.clone())
-            }
+            Self::InterpolatedString(_parts) => ResolvedType::String,
 
             // Instantiation
             Self::StructInstantiation(struct_instantiation) => {
@@ -1613,21 +1611,11 @@ impl ResolvedExpression {
 
             // Literals
             Self::Literal(literal) => match literal {
-                ResolvedLiteral::BoolLiteral(_value, _node, bool_type_ref) => {
-                    ResolvedType::Bool(bool_type_ref.clone())
-                }
-                ResolvedLiteral::FloatLiteral(_float_value, _node, float_type) => {
-                    ResolvedType::Float(float_type.clone())
-                }
-                ResolvedLiteral::IntLiteral(_int_value, _node, int_type) => {
-                    ResolvedType::Int(int_type.clone())
-                }
-                ResolvedLiteral::StringLiteral(_string_value, _node, string_type) => {
-                    ResolvedType::String(string_type.clone())
-                }
-                ResolvedLiteral::UnitLiteral(unit_literal) => {
-                    ResolvedType::Unit(unit_literal.clone())
-                }
+                ResolvedLiteral::BoolLiteral(_value, _node) => ResolvedType::Bool,
+                ResolvedLiteral::FloatLiteral(_float_value, _node) => ResolvedType::Float,
+                ResolvedLiteral::IntLiteral(_int_value, _node) => ResolvedType::Int,
+                ResolvedLiteral::StringLiteral(_string_value, _node) => ResolvedType::String,
+                ResolvedLiteral::UnitLiteral(_unit_literal) => ResolvedType::Unit,
                 ResolvedLiteral::EnumVariantLiteral(variant_ref, _data) => {
                     ResolvedType::Enum(variant_ref.owner.clone())
                 }
@@ -1656,12 +1644,12 @@ impl ResolvedExpression {
             Self::SparseAccess(_sparse_expression, _key_expression, expected_type) => {
                 expected_type.clone()
             }
-            Self::CoerceOptionToBool(_) => ResolvedType::Bool(Rc::new(ResolvedBoolType)),
+            Self::CoerceOptionToBool(_) => ResolvedType::Bool,
 
             // Float member functions
-            Self::FloatFloor(_) => ResolvedType::Int(Rc::new(ResolvedIntType {})),
-            Self::FloatRound(_) => ResolvedType::Int(Rc::new(ResolvedIntType {})),
-            Self::FloatSign(_) => ResolvedType::Float(Rc::new(ResolvedFloatType {})),
+            Self::FloatFloor(_) => ResolvedType::Int,
+            Self::FloatRound(_) => ResolvedType::Int,
+            Self::FloatSign(_) => ResolvedType::Float,
             Self::FloatAbs(_)
             | Self::FloatCos(_)
             | Self::FloatSin(_)
@@ -1671,19 +1659,19 @@ impl ResolvedExpression {
             | Self::FloatAtan2(_, _)
             | Self::FloatSqrt(_)
             | Self::FloatClamp(_, _, _)
-            | Self::FloatMax(_, _) => ResolvedType::Float(Rc::new(ResolvedFloatType {})),
+            | Self::FloatMax(_, _) => ResolvedType::Float,
 
-            Self::FloatRnd(_) => ResolvedType::Int(Rc::new(ResolvedIntType {})),
+            Self::FloatRnd(_) => ResolvedType::Int,
 
             // Int member functions
             Self::IntAbs(_) | Self::IntClamp(_, _, _) | Self::IntMin(_, _) | Self::IntMax(_, _) => {
-                ResolvedType::Int(Rc::new(ResolvedIntType {}))
+                ResolvedType::Int
             }
-            Self::IntRnd(_) => ResolvedType::Int(Rc::new(ResolvedIntType {})),
-            Self::IntToFloat(_) => ResolvedType::Float(Rc::new(ResolvedFloatType {})),
+            Self::IntRnd(_) => ResolvedType::Int,
+            Self::IntToFloat(_) => ResolvedType::Float,
 
             // String
-            Self::StringLen(_) => ResolvedType::Int(Rc::new(ResolvedIntType {})),
+            Self::StringLen(_) => ResolvedType::Int,
 
             // Loops
             Self::ForLoop(_pattern, _iterator_expr, expr) => expr.resolution(),
@@ -1692,16 +1680,13 @@ impl ResolvedExpression {
             // Control
             Self::Return(ref maybe_expr) => maybe_expr
                 .as_ref()
-                .map_or(ResolvedType::Unit(Rc::new(ResolvedUnitType)), |expr| {
-                    expr.resolution()
-                }),
-            Self::Break(_) => ResolvedType::Unit(Rc::new(ResolvedUnitType)),
-            Self::Continue(_) => ResolvedType::Unit(Rc::new(ResolvedUnitType)),
+                .map_or(ResolvedType::Unit, |expr| expr.resolution()),
+            Self::Break(_) => ResolvedType::Unit,
+            Self::Continue(_) => ResolvedType::Unit,
 
-            Self::Block(expressions) => expressions.last().map_or_else(
-                || ResolvedType::Unit(Rc::new(ResolvedUnitType)),
-                Self::resolution,
-            ),
+            Self::Block(expressions) => expressions
+                .last()
+                .map_or_else(|| ResolvedType::Unit, Self::resolution),
 
             // Matching and comparing
             Self::Match(resolved_match) => resolved_match.arms[0].expression_type.clone(),
@@ -1793,7 +1778,7 @@ impl Spanned for ResolvedExpression {
                         .unwrap_or_else(|| first.span())
                 })
                 .unwrap_or_else(Span::dummy),
-            Self::InterpolatedString(_str_ref, parts) => parts[0].span(),
+            Self::InterpolatedString(parts) => parts[0].span(),
 
             // Constructing
             Self::StructInstantiation(struct_inst) => {
@@ -1881,12 +1866,13 @@ pub struct ResolvedStringConst(pub ResolvedNode);
 
 #[derive(Debug)]
 pub enum ResolvedLiteral {
-    FloatLiteral(Fp, ResolvedNode, ResolvedFloatTypeRef),
-    UnitLiteral(ResolvedUnitTypeRef),
+    FloatLiteral(Fp, ResolvedNode),
+    UnitLiteral(ResolvedNode),
     NoneLiteral(ResolvedNode),
-    IntLiteral(i32, ResolvedNode, ResolvedIntTypeRef),
-    StringLiteral(String, ResolvedNode, ResolvedStringTypeRef),
-    BoolLiteral(bool, ResolvedNode, ResolvedBoolTypeRef),
+    IntLiteral(i32, ResolvedNode),
+    StringLiteral(String, ResolvedNode),
+    BoolLiteral(bool, ResolvedNode),
+
     EnumVariantLiteral(ResolvedEnumVariantTypeRef, ResolvedEnumLiteralData),
     TupleLiteral(ResolvedTupleTypeRef, Vec<ResolvedExpression>),
     Array(ResolvedArrayTypeRef, Vec<ResolvedExpression>),
@@ -1899,12 +1885,12 @@ pub enum ResolvedLiteral {
 impl Spanned for ResolvedLiteral {
     fn span(&self) -> Span {
         match self {
-            ResolvedLiteral::FloatLiteral(_v, node, _) => node.span.clone(),
+            ResolvedLiteral::FloatLiteral(_v, node) => node.span.clone(),
             ResolvedLiteral::UnitLiteral(_) => Span::dummy(), // TODO: UnitLiteral should have node
             ResolvedLiteral::NoneLiteral(node) => node.span.clone(),
-            ResolvedLiteral::IntLiteral(_, node, _) => node.span.clone(),
-            ResolvedLiteral::StringLiteral(_, node, _) => node.span.clone(),
-            ResolvedLiteral::BoolLiteral(_, node, _) => node.span.clone(),
+            ResolvedLiteral::IntLiteral(_, node) => node.span.clone(),
+            ResolvedLiteral::StringLiteral(_, node) => node.span.clone(),
+            ResolvedLiteral::BoolLiteral(_, node) => node.span.clone(),
             ResolvedLiteral::EnumVariantLiteral(variant_type_ref, _) => {
                 variant_type_ref.name.0.span.clone()
             }
@@ -2310,22 +2296,22 @@ impl ResolvedProgramTypes {
     }
 
     pub fn unit_type(&self) -> ResolvedType {
-        ResolvedType::Unit(self.unit_type.clone())
+        ResolvedType::Unit
     }
 
     pub fn int_type(&self) -> ResolvedType {
-        ResolvedType::Int(self.int_type.clone())
+        ResolvedType::Int
     }
 
     pub fn float_type(&self) -> ResolvedType {
-        ResolvedType::Float(self.float_type.clone())
+        ResolvedType::Float
     }
 
     pub fn string_type(&self) -> ResolvedType {
-        ResolvedType::String(self.string_type.clone())
+        ResolvedType::String
     }
     pub fn bool_type(&self) -> ResolvedType {
-        ResolvedType::Bool(self.bool_type.clone())
+        ResolvedType::Bool
     }
 }
 

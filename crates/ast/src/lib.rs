@@ -419,7 +419,7 @@ pub enum Literal {
     Tuple(Vec<Expression>),
     Array(Vec<Expression>),
     Map(Vec<(Expression, Expression)>),
-    Unit,       // ()
+    Unit(Node), // ()
     None(Node), // none
 }
 

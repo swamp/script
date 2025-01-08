@@ -18,25 +18,19 @@ impl<'a> Resolver<'a> {
                 ResolvedLiteral::IntLiteral(
                     Self::str_to_int(integer_text).map_err(ResolveError::IntConversionError)?,
                     self.to_node(int_node),
-                    self.shared.types.int_type.clone(),
                 )
             }
             Literal::Float(float_node) => {
                 let float_str = self.get_text(float_node);
                 let float =
                     Self::str_to_float(float_str).map_err(ResolveError::FloatConversionError)?;
-                ResolvedLiteral::FloatLiteral(
-                    Fp::from(float),
-                    self.to_node(float_node),
-                    self.shared.types.float_type.clone(),
-                )
+                ResolvedLiteral::FloatLiteral(Fp::from(float), self.to_node(float_node))
             }
             Literal::String(string_node) => {
                 let string_str = self.get_text(string_node);
                 ResolvedLiteral::StringLiteral(
                     string_str[1..string_str.len() - 1].to_string(), // remove prefix and suffix quotes
                     self.to_node(string_node),
-                    self.shared.types.string_type.clone(),
                 )
             }
             Literal::Bool(bool_node) => {
@@ -48,11 +42,7 @@ impl<'a> Resolver<'a> {
                 } else {
                     return Err(ResolveError::BoolConversionError);
                 };
-                ResolvedLiteral::BoolLiteral(
-                    bool_val,
-                    self.to_node(bool_node),
-                    self.shared.types.bool_type.clone(),
-                )
+                ResolvedLiteral::BoolLiteral(bool_val, self.to_node(bool_node))
             }
             Literal::EnumVariant(ref enum_literal) => {
                 let (enum_name, variant_name) = match enum_literal {
@@ -126,7 +116,7 @@ impl<'a> Resolver<'a> {
                 let (tuple_type_ref, resolved_items) = self.resolve_tuple_literal(expressions)?;
                 ResolvedLiteral::TupleLiteral(tuple_type_ref, resolved_items)
             }
-            Literal::Unit => ResolvedLiteral::UnitLiteral(self.shared.types.unit_type.clone()),
+            Literal::Unit(node) => ResolvedLiteral::UnitLiteral(self.to_node(node)),
             Literal::None(none_node) => ResolvedLiteral::NoneLiteral(self.to_node(none_node)),
         };
 

@@ -92,11 +92,11 @@ impl<'a> Resolver<'a> {
     pub fn resolve_type(&mut self, ast_type: &Type) -> Result<ResolvedType, ResolveError> {
         let resolved = match ast_type {
             Type::Any(_) => ResolvedType::Any,
-            Type::Int(_) => ResolvedType::Int(self.shared.types.int_type.clone()),
-            Type::Float(_) => ResolvedType::Float(self.shared.types.float_type.clone()),
-            Type::String(_) => ResolvedType::String(self.shared.types.string_type.clone()),
-            Type::Bool(_) => ResolvedType::Bool(self.shared.types.bool_type.clone()),
-            Type::Unit(_) => ResolvedType::Unit(self.shared.types.unit_type.clone()),
+            Type::Int(_) => ResolvedType::Int,
+            Type::Float(_) => ResolvedType::Float,
+            Type::String(_) => ResolvedType::String,
+            Type::Bool(_) => ResolvedType::Bool,
+            Type::Unit(_) => ResolvedType::Unit,
             Type::Struct(ast_struct) => {
                 let struct_ref = self.get_struct_type(ast_struct)?;
                 ResolvedType::Struct(struct_ref)

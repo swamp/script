@@ -38,7 +38,7 @@ impl<'a> Resolver<'a> {
                 //}
             }
 
-            ResolvedType::Float(_) => {
+            ResolvedType::Float => {
                 let resolved = self.resolve_float_member_call(
                     resolved_expr,
                     ast_member_function_name,
@@ -46,7 +46,7 @@ impl<'a> Resolver<'a> {
                 )?;
                 return Ok(Some(resolved));
             }
-            ResolvedType::Int(_) => {
+            ResolvedType::Int => {
                 let resolved = self.resolve_int_member_call(
                     resolved_expr,
                     ast_member_function_name,
@@ -54,7 +54,7 @@ impl<'a> Resolver<'a> {
                 )?;
                 return Ok(Some(resolved));
             }
-            ResolvedType::String(_) => {
+            ResolvedType::String => {
                 let resolved = self.resolve_string_member_call(
                     resolved_expr,
                     ast_member_function_name,
@@ -177,13 +177,8 @@ impl<'a> Resolver<'a> {
         if ast_arguments.len() != 1 {
             return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 1));
         }
-        let expr2 = self.resolve_expression(&ast_arguments[0])?;
-        if expr2.resolution() != self.shared.types.float_type() {
-            return Err(ResolveError::IncompatibleArguments(
-                expr2.resolution(),
-                self.shared.types.float_type(),
-            ));
-        }
+        let expr2 =
+            self.resolve_expression_expecting_type(&ast_arguments[0], &ResolvedType::Float)?;
 
         Ok(expr2)
     }
@@ -195,13 +190,8 @@ impl<'a> Resolver<'a> {
         if ast_arguments.len() != 1 {
             return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 1));
         }
-        let expr2 = self.resolve_expression(&ast_arguments[0])?;
-        if expr2.resolution() != self.shared.types.int_type() {
-            return Err(ResolveError::IncompatibleArguments(
-                expr2.resolution(),
-                self.shared.types.int_type(),
-            ));
-        }
+        let expr2 =
+            self.resolve_expression_expecting_type(&ast_arguments[0], &ResolvedType::Int)?;
 
         Ok(expr2)
     }
@@ -213,21 +203,10 @@ impl<'a> Resolver<'a> {
         if ast_arguments.len() != 2 {
             return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 2));
         }
-        let expr2 = self.resolve_expression(&ast_arguments[0])?;
-        if expr2.resolution() != self.shared.types.float_type() {
-            return Err(ResolveError::IncompatibleArguments(
-                expr2.resolution(),
-                self.shared.types.float_type(),
-            ));
-        }
-
-        let expr3 = self.resolve_expression(&ast_arguments[1])?;
-        if expr3.resolution() != self.shared.types.float_type() {
-            return Err(ResolveError::IncompatibleArguments(
-                expr3.resolution(),
-                self.shared.types.float_type(),
-            ));
-        }
+        let expr2 =
+            self.resolve_expression_expecting_type(&ast_arguments[0], &ResolvedType::Float)?;
+        let expr3 =
+            self.resolve_expression_expecting_type(&ast_arguments[1], &ResolvedType::Float)?;
 
         Ok((expr2, expr3))
     }

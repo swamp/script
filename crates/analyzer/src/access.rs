@@ -88,9 +88,16 @@ impl<'a> Resolver<'a> {
             ResolvedType::Generic(base_type, generic_type_parameters) => {
                 if let ResolvedType::RustType(found_rust_type) = *base_type {
                     if found_rust_type.number == SPARSE_TYPE_ID {
+                        let sparse_id = self
+                            .shared
+                            .lookup
+                            .get_rust_type(&vec!["std".to_string()], "SparseId")
+                            .expect("SparseId is missing");
                         let contained_type = &generic_type_parameters[0];
-                        let resolved_key =
-                            self.resolve_expression_expecting_type(&key_expr, contained_type)?;
+                        let resolved_key = self.resolve_expression_expecting_type(
+                            &key_expr,
+                            &ResolvedType::RustType(sparse_id),
+                        )?;
                         return Ok(ResolvedExpression::SparseAccess(
                             Box::new(resolved_expr),
                             Box::new(resolved_key),

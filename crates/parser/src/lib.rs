@@ -1690,7 +1690,7 @@ impl AstParser {
                 Ok(Literal::String(node))
             }
             Rule::bool_lit => Ok(Literal::Bool(node)),
-            Rule::unit_lit => Ok(Literal::Unit),
+            Rule::unit_lit => Ok(Literal::Unit(node)),
             Rule::none_lit => Ok(Literal::None(node)),
             Rule::tuple_lit => {
                 let mut expressions = Vec::new();

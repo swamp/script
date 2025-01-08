@@ -301,7 +301,7 @@ impl<'a> Resolver<'a> {
 
         // If return type is Unit, ignore the expression's type and return Unit
         // TODO: In future versions, always have a return statement
-        if let ResolvedType::Unit(_) = return_type {
+        if let ResolvedType::Unit = return_type {
             return Ok(expr);
         }
 
@@ -373,34 +373,47 @@ impl<'a> Resolver<'a> {
         }
     }
 
+    pub fn is_empty_array_literal(ast_expression: &Expression) -> bool {
+        match ast_expression {
+            Expression::Literal(ast_literal) => match ast_literal {
+                Literal::Array(items) => {
+                    if items.is_empty() {
+                        return true;
+                    }
+                }
+                _ => {}
+            },
+            _ => {}
+        }
+        false
+    }
+
     pub fn resolve_expression_expecting_type(
         &mut self,
         ast_expression: &Expression,
         expected_type: &ResolvedType,
     ) -> Result<ResolvedExpression, ResolveError> {
-        match ast_expression {
-            Expression::Literal(ast_literal) => match ast_literal {
-                Literal::Array(items) => {
-                    if items.is_empty() {
-                        match expected_type {
-                            ResolvedType::Map(map_type_ref) => Ok(ResolvedExpression::Literal(
-                                ResolvedLiteral::Map(map_type_ref.clone(), vec![]),
-                            )),
-                            ResolvedType::Array(array_type_ref) => Ok(ResolvedExpression::Literal(
-                                ResolvedLiteral::Array(array_type_ref.clone(), vec![]),
-                            )),
-                            _ => Err(ResolveError::EmptyArrayCanOnlyBeMapOrArray),
-                        }
-                    } else {
-                        self.resolve_expression(ast_expression)
-                    }
-                }
-                _ => self.resolve_expression(ast_expression),
-            },
-
-            _ => {
-                // Delegate to the general expression resolver
-                self.resolve_expression(ast_expression)
+        if Self::is_empty_array_literal(&ast_expression) {
+            match expected_type {
+                ResolvedType::Map(map_type_ref) => Ok(ResolvedExpression::Literal(
+                    ResolvedLiteral::Map(map_type_ref.clone(), vec![]),
+                )),
+                ResolvedType::Array(array_type_ref) => Ok(ResolvedExpression::Literal(
+                    ResolvedLiteral::Array(array_type_ref.clone(), vec![]),
+                )),
+                _ => Err(ResolveError::EmptyArrayCanOnlyBeMapOrArray),
+            }
+        } else {
+            let resolved_expr = self.resolve_expression(ast_expression)?;
+            let resolved_type = resolved_expr.resolution();
+            if resolved_type.same_type(expected_type) {
+                Ok(resolved_expr)
+            } else {
+                error!(?resolved_expr, ?expected_type, "incompatible types");
+                Err(ResolveError::IncompatibleTypes(
+                    resolved_expr.span(),
+                    expected_type.clone(),
+                ))
             }
         }
     }
@@ -572,7 +585,6 @@ impl<'a> Resolver<'a> {
                 ResolvedExpression::Block(self.resolve_expressions(expressions)?)
             }
             Expression::InterpolatedString(string_parts) => ResolvedExpression::InterpolatedString(
-                self.shared.types.string_type.clone(),
                 self.resolve_interpolated_string(string_parts)?,
             ),
 
@@ -581,8 +593,10 @@ impl<'a> Resolver<'a> {
                 self.resolve_struct_instantiation(struct_identifier, fields, *has_rest)?
             }
             Expression::ExclusiveRange(min_value, max_value) => {
-                let min_expression = self.resolve_expression(min_value)?;
-                let max_expression = self.resolve_expression(max_value)?;
+                let min_expression =
+                    self.resolve_expression_expecting_type(min_value, &ResolvedType::Int)?;
+                let max_expression =
+                    self.resolve_expression_expecting_type(max_value, &ResolvedType::Int)?;
                 ResolvedExpression::ExclusiveRange(
                     self.shared.types.exclusive_range_type.clone(),
                     Box::from(min_expression),
@@ -752,25 +766,21 @@ impl<'a> Resolver<'a> {
         types: &ResolvedProgramTypes,
     ) -> Result<ResolvedExpression, ResolveError> {
         let expr = match field_type {
-            ResolvedType::Bool(_) => ResolvedExpression::Literal(ResolvedLiteral::BoolLiteral(
+            ResolvedType::Bool => ResolvedExpression::Literal(ResolvedLiteral::BoolLiteral(
                 false,
                 ResolvedNode::new_unknown(),
-                types.bool_type.clone(),
             )),
-            ResolvedType::Int(_) => ResolvedExpression::Literal(ResolvedLiteral::IntLiteral(
+            ResolvedType::Int => ResolvedExpression::Literal(ResolvedLiteral::IntLiteral(
                 0,
                 ResolvedNode::new_unknown(),
-                types.int_type.clone(),
             )),
-            ResolvedType::Float(_) => ResolvedExpression::Literal(ResolvedLiteral::FloatLiteral(
+            ResolvedType::Float => ResolvedExpression::Literal(ResolvedLiteral::FloatLiteral(
                 Fp::zero(),
                 ResolvedNode::new_unknown(),
-                types.float_type.clone(),
             )),
-            ResolvedType::String(_) => ResolvedExpression::Literal(ResolvedLiteral::StringLiteral(
+            ResolvedType::String => ResolvedExpression::Literal(ResolvedLiteral::StringLiteral(
                 String::new(),
                 ResolvedNode::new_unknown(),
-                types.string_type.clone(),
             )),
             ResolvedType::Array(array_type_ref) => {
                 ResolvedExpression::Literal(ResolvedLiteral::Array(array_type_ref.clone(), vec![]))
@@ -818,7 +828,7 @@ impl<'a> Resolver<'a> {
         let expr_type = resolved_expression.resolution();
 
         let bool_expression = match expr_type {
-            ResolvedType::Bool(_) => resolved_expression,
+            ResolvedType::Bool => resolved_expression,
             ResolvedType::Optional(_) => {
                 ResolvedExpression::CoerceOptionToBool(Box::new(resolved_expression))
             }
@@ -854,7 +864,11 @@ impl<'a> Resolver<'a> {
                 // TODO: HACK: We assume it is a container that iterates over the type parameters
                 // TODO: HACK: We assume that it is a sparse map
                 // TODO: HACK: Remove hardcoded number
-                let rust_type_ref_for_id = create_rust_type("SparseId", 998);
+                let rust_type_ref_for_id = self
+                    .shared
+                    .lookup
+                    .get_rust_type(&vec!["std".to_string()], "SparseId")
+                    .expect("SparseId was missing");
                 let rust_id_type = ResolvedType::RustType(rust_type_ref_for_id);
                 (Some(rust_id_type), params[0].clone())
                 /*
@@ -981,11 +995,12 @@ impl<'a> Resolver<'a> {
         &mut self,
         usize_expression: &Expression,
     ) -> Result<ResolvedExpression, ResolveError> {
-        let lookup_expression = self.resolve_expression(usize_expression)?;
+        let lookup_expression =
+            self.resolve_expression_expecting_type(usize_expression, &ResolvedType::Int)?;
         let lookup_resolution = lookup_expression.resolution();
 
         match &lookup_resolution {
-            ResolvedType::Int(_) => {}
+            ResolvedType::Int => {}
             _ => Err(ResolveError::ArrayIndexMustBeInt(lookup_resolution))?,
         }
 

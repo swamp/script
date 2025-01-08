@@ -10,13 +10,6 @@ use swamp_script_semantic::prelude::*;
 
 #[derive(Debug)]
 pub struct TypeRegistry {
-    // Primitive types
-    float_type: ResolvedFloatTypeRef,
-    int_type: ResolvedIntTypeRef,
-    string_type: ResolvedStringTypeRef,
-    bool_type: ResolvedBoolTypeRef,
-    unit_type: ResolvedUnitTypeRef,
-
     // Container type constructors
     #[allow(unused)]
     array_types: RefCell<SeqMap<TypeNumber, ResolvedArrayTypeRef>>,
@@ -30,11 +23,6 @@ pub struct TypeRegistry {
 impl TypeRegistry {
     pub fn new() -> Self {
         let registry = Self {
-            float_type: Rc::new(ResolvedFloatType {}),
-            int_type: Rc::new(ResolvedIntType {}),
-            string_type: Rc::new(ResolvedStringType {}),
-            bool_type: Rc::new(ResolvedBoolType {}),
-            unit_type: Rc::new(ResolvedUnitType {}),
             array_types: RefCell::new(SeqMap::new()),
             struct_types: RefCell::new(SeqMap::new()),
             next_type_number: RefCell::new(0),
@@ -51,23 +39,23 @@ impl TypeRegistry {
 
     // Primitive type getters
     pub fn get_float_type(&self) -> ResolvedType {
-        ResolvedType::Float(self.float_type.clone())
+        ResolvedType::Float
     }
 
     pub fn get_int_type(&self) -> ResolvedType {
-        ResolvedType::Int(self.int_type.clone())
+        ResolvedType::Int
     }
 
     pub fn get_string_type(&self) -> ResolvedType {
-        ResolvedType::String(self.string_type.clone())
+        ResolvedType::String
     }
 
     pub fn get_bool_type(&self) -> ResolvedType {
-        ResolvedType::Bool(self.bool_type.clone())
+        ResolvedType::Bool
     }
 
     pub fn get_unit_type(&self) -> ResolvedType {
-        ResolvedType::Unit(self.unit_type.clone())
+        ResolvedType::Unit
     }
 
     // Container type constructors

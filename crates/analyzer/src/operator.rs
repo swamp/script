@@ -25,7 +25,7 @@ impl<'a> Resolver<'a> {
 
         match (&kind, &left_type, &right_type) {
             // String concatenation - allow any type on the right
-            (&ResolvedBinaryOperatorKind::Add, ResolvedType::String(_), _) => {
+            (&ResolvedBinaryOperatorKind::Add, ResolvedType::String, _) => {
                 Ok(ResolvedBinaryOperator {
                     left: Box::new(left),
                     right: Box::new(right),
