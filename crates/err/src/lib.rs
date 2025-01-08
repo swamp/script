@@ -282,7 +282,12 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
             &a.span(),
         )             .with_label("first_type", a.span().clone())
             .with_label("second_type", b.span().clone()),
-        ResolveError::CanOnlyOverwriteVariableWithMut(_) => todo!(),
+        ResolveError::CanOnlyOverwriteVariableWithMut(node) =>  Report::build(
+            Error,
+            90423,
+            &format!("Variable needs to be mut to overwrite"),
+            &node.span,
+        ),
         ResolveError::OverwriteVariableNotAllowedHere(_) => todo!(),
         ResolveError::NotNamedStruct(_) => todo!(),
         ResolveError::UnknownEnumVariantType(node) =>  Report::build(
@@ -291,7 +296,12 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
             &format!("Unknown enum variant type"),
             &node.span,
         ),
-        ResolveError::WasNotStructType(_) => todo!(),
+        ResolveError::WasNotStructType(node) => Report::build(
+            Error,
+            903,
+            &format!("Not a struct type"),
+            &node.span,
+        ),
         ResolveError::UnknownStructField(field_node) => Report::build(
             Error,
             106,

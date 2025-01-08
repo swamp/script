@@ -39,6 +39,14 @@ impl<'a> Resolver<'a> {
                 )?;
                 return Ok(Some(resolved));
             }
+            ResolvedType::String(_) => {
+                let resolved = self.resolve_string_member_call(
+                    resolved_expr,
+                    ast_member_function_name,
+                    ast_arguments,
+                )?;
+                return Ok(Some(resolved));
+            }
             _ => {
                 return self.check_for_internal_member_call_extra(
                     resolved_expr,
@@ -244,6 +252,26 @@ impl<'a> Resolver<'a> {
                     Box::new(min),
                     Box::new(max),
                 ))
+            }
+            _ => Err(ResolveError::UnknownMemberFunction(
+                self.to_node(ast_member_function_name),
+            )),
+        }
+    }
+
+    fn resolve_string_member_call(
+        &mut self,
+        expr: ResolvedExpression,
+        ast_member_function_name: &Node,
+        ast_arguments: &[Expression],
+    ) -> Result<ResolvedExpression, ResolveError> {
+        let function_name_str = self.get_text(ast_member_function_name);
+        match function_name_str {
+            "len" => {
+                if !ast_arguments.is_empty() {
+                    return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 0));
+                }
+                Ok(ResolvedExpression::StringLen(Box::new(expr)))
             }
             _ => Err(ResolveError::UnknownMemberFunction(
                 self.to_node(ast_member_function_name),

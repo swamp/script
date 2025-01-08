@@ -1164,6 +1164,9 @@ pub enum ResolvedExpression {
     FloatMin(Box<ResolvedExpression>, Box<ResolvedExpression>),
     FloatMax(Box<ResolvedExpression>, Box<ResolvedExpression>),
 
+    // String built in
+    StringLen(Box<ResolvedExpression>),
+
     // --- Special methods
     // TODO: Have a better interface for these "engine" member calls
     SparseAdd(Box<ResolvedExpression>, Box<ResolvedExpression>),
@@ -1401,6 +1404,10 @@ impl ResolvedExpression {
             | Self::FloatSin(expr)
             | Self::FloatAsin(expr)
             | Self::FloatAtan2(expr, _) => {
+                expr.collect_constant_dependencies(deps);
+            }
+
+            Self::StringLen(expr) => {
                 expr.collect_constant_dependencies(deps);
             }
             Self::SparseAdd(expr1, expr2) | Self::SparseRemove(expr1, expr2) => {
@@ -1644,6 +1651,9 @@ impl ResolvedExpression {
             }
             Self::IntRnd(_) => ResolvedType::Int(Rc::new(ResolvedIntType {})),
             Self::IntToFloat(_) => ResolvedType::Float(Rc::new(ResolvedFloatType {})),
+
+            // String
+            Self::StringLen(_) => ResolvedType::Int(Rc::new(ResolvedIntType {})),
 
             // Loops
             Self::ForLoop(_pattern, _iterator_expr, expr) => expr.resolution(),

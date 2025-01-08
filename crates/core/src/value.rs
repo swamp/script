@@ -201,7 +201,7 @@ impl Value {
     pub fn expect_float(&self) -> Result<Fp, ValueError> {
         match self {
             Self::Float(v) => Ok(*v),
-            _ => Err(ValueError::ConversionError("Expected int value".into())),
+            _ => Err(ValueError::ConversionError("Expected float value".into())),
         }
     }
 

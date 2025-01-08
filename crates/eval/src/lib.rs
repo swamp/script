@@ -1272,7 +1272,7 @@ impl<'a, C> Interpreter<'a, C> {
                             let value = self.evaluate_expression(expr)?;
                             let formatted = match format_spec {
                                 Some(spec) => format_value(&value, &spec.kind)?,
-                                None => value.to_string(),
+                                None => value.convert_to_string_if_needed(),
                             };
                             result.push_str(&formatted);
                         }
@@ -1604,6 +1604,15 @@ impl<'a, C> Interpreter<'a, C> {
                     Value::Float(Fp::from(i as i16))
                 } else {
                     return Err(ExecuteError::TypeError("Expected int".to_string()));
+                }
+            }
+
+            ResolvedExpression::StringLen(string_expr) => {
+                let value = self.evaluate_expression(string_expr)?;
+                if let Value::String(s) = value {
+                    Value::Int(s.len().try_into().expect("string len overflow"))
+                } else {
+                    return Err(ExecuteError::TypeError("Expected string".to_string()));
                 }
             }
 
