@@ -36,7 +36,7 @@ impl<T: Any + Debug + Display> RustType for T {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default)]
 pub enum Value {
     Int(i32),
     Float(Fp),
@@ -66,6 +66,82 @@ pub enum Value {
 
     // Other
     RustValue(ResolvedRustTypeRef, Rc<RefCell<Box<dyn RustType>>>),
+}
+
+impl Clone for Value {
+    fn clone(&self) -> Self {
+        match self {
+            Value::Int(i) => Value::Int(*i),
+            Value::Float(f) => Value::Float(*f),
+            Value::String(s) => Value::String(s.clone()),
+            Value::Bool(b) => Value::Bool(*b),
+            Value::Unit => Value::Unit,
+
+            Value::Option(opt) => {
+                let cloned_opt = opt
+                    .as_ref()
+                    .map(|boxed_val| Box::new((**boxed_val).clone()));
+                Value::Option(cloned_opt)
+            }
+
+            // Containers
+            Value::Array(resolved_ref, vec_refs) => {
+                Value::Array(resolved_ref.clone(), deep_clone_valrefs(&vec_refs))
+            }
+
+            Value::Map(resolved_ref, seq_map) => {
+                let cloned_seq_map = seq_map
+                    .iter()
+                    .map(|(key, val_ref)| (key.clone(), deep_clone_valref(val_ref)))
+                    .collect();
+
+                Value::Map(resolved_ref.clone(), cloned_seq_map)
+            }
+
+            Value::Tuple(resolved_ref, vec_refs) => {
+                Value::Tuple(resolved_ref.clone(), deep_clone_valrefs(vec_refs))
+            }
+
+            Value::Struct(resolved_ref, vec_refs) => {
+                Value::Struct(resolved_ref.clone(), deep_clone_valrefs(vec_refs))
+            }
+
+            Value::EnumVariantSimple(resolved_ref) => {
+                Value::EnumVariantSimple(resolved_ref.clone())
+            }
+
+            Value::EnumVariantTuple(resolved_ref, vec_values) => {
+                Value::EnumVariantTuple(resolved_ref.clone(), vec_values.clone())
+            }
+
+            Value::EnumVariantStruct(resolved_ref, vec_values) => {
+                Value::EnumVariantStruct(resolved_ref.clone(), vec_values.clone())
+            }
+
+            Value::ExclusiveRange(start, end) => {
+                Value::ExclusiveRange(Box::new(**start), Box::new(**end))
+            }
+
+            Value::InternalFunction(resolved_def_ref) => {
+                Value::InternalFunction(resolved_def_ref.clone())
+            }
+
+            Value::ExternalFunction(external_id) => Value::ExternalFunction(*external_id),
+
+            Value::RustValue(resolved_rust_ref, rust_type_rc) => {
+                Value::RustValue(resolved_rust_ref.clone(), rust_type_rc.clone())
+            }
+        }
+    }
+}
+
+fn deep_clone_valrefs(vec_values: &[ValueRef]) -> Vec<ValueRef> {
+    vec_values.iter().map(|v| deep_clone_valref(v)).collect()
+}
+
+fn deep_clone_valref(val_ref: &ValueRef) -> ValueRef {
+    let cloned_value = val_ref.borrow().clone();
+    Rc::new(RefCell::new(cloned_value))
 }
 
 pub fn to_rust_value<T: RustType + 'static>(type_ref: ResolvedRustTypeRef, value: T) -> Value {
