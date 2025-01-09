@@ -37,7 +37,7 @@ impl<'a> Resolver<'a> {
     pub(crate) fn resolve_pattern(
         &mut self,
         ast_pattern: &Pattern,
-        expression_type: &ResolvedType,
+        expected_condition_type: &ResolvedType,
     ) -> Result<(ResolvedPattern, bool), ResolveError> {
         match ast_pattern {
             Pattern::PatternList(elements) => {
@@ -51,7 +51,7 @@ impl<'a> Resolver<'a> {
                                 scope_is_pushed = true;
                             }
                             let variable_ref =
-                                self.create_local_variable(var, &None, expression_type)?;
+                                self.create_local_variable(var, &None, expected_condition_type)?;
                             resolved_elements.push(ResolvedPatternElement::Variable(variable_ref));
                         }
                         PatternElement::Expression(_expr) => {
@@ -72,7 +72,7 @@ impl<'a> Resolver<'a> {
             Pattern::EnumPattern(variant_name, maybe_elements) => {
                 let mut scope_was_pushed = false;
                 let enum_variant_type_ref =
-                    self.find_variant_in_pattern(expression_type, variant_name)?;
+                    self.find_variant_in_pattern(expected_condition_type, variant_name)?;
 
                 if let Some(elements) = maybe_elements {
                     let mut resolved_elements = Vec::new();
@@ -193,9 +193,10 @@ impl<'a> Resolver<'a> {
                 }
             }
 
-            Pattern::Literal(ast_literal) => {
-                Ok((self.resolve_pattern_literal(ast_literal)?, false))
-            }
+            Pattern::Literal(ast_literal) => Ok((
+                self.resolve_pattern_literal(ast_literal, expected_condition_type)?,
+                false,
+            )),
         }
     }
 }

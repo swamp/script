@@ -1129,10 +1129,10 @@ impl<'a> Resolver<'a> {
         &mut self,
         arm: &MatchArm,
         _expression: &ResolvedExpression,
-        expression_type: &ResolvedType,
+        expected_condition_type: &ResolvedType,
     ) -> Result<ResolvedMatchArm, ResolveError> {
         let (resolved_pattern, scope_was_pushed) =
-            self.resolve_pattern(&arm.pattern, expression_type)?;
+            self.resolve_pattern(&arm.pattern, expected_condition_type)?;
 
         let resolved_expression = self.resolve_expression(&arm.expression)?;
         if scope_was_pushed {
@@ -1159,9 +1159,20 @@ impl<'a> Resolver<'a> {
     fn resolve_pattern_literal(
         &mut self,
         ast_literal: &Literal,
+        expected_condition_type: &ResolvedType,
     ) -> Result<ResolvedPattern, ResolveError> {
-        let resolved_literal = self.resolve_literal(ast_literal)?;
+        let resolved_literal = self.resolve_literal(ast_literal.clone())?;
 
+        let resolved_literal_copy = self.resolve_literal(ast_literal.clone())?;
+        let resolved_literal_expr = ResolvedExpression::Literal(resolved_literal_copy);
+        let span = resolved_literal_expr.span().clone();
+        let literal_type = resolved_literal_expr.resolution();
+        if !literal_type.same_type(expected_condition_type) {
+            return Err(ResolveError::IncompatibleTypes(
+                span,
+                expected_condition_type.clone(),
+            ));
+        }
         Ok(ResolvedPattern::Literal(resolved_literal))
     }
 

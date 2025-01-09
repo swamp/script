@@ -63,6 +63,7 @@ impl<'a> Resolver<'a> {
 
     fn resolve_member_call(
         &mut self,
+        self_expression: &ResolvedExpression,
         ast_member_expression: &Expression,
         ast_member_function_name: &Node,
         ast_arguments: &[Expression],
@@ -70,7 +71,7 @@ impl<'a> Resolver<'a> {
         let (function_ref, resolved_expression) =
             self.resolve_into_member_function(ast_member_expression, ast_member_function_name)?;
 
-        let (is_self_mutable, signature) = match &*function_ref {
+        let (member_function_requires_mutable_self, signature) = match &*function_ref {
             ResolvedFunction::Internal(function_data) => {
                 let first_param = function_data
                     .signature
@@ -89,6 +90,12 @@ impl<'a> Resolver<'a> {
             }
         };
 
+        if member_function_requires_mutable_self && !self_expression.is_coerce_to_mutable() {
+            return Err(ResolveError::ExpectedMutableLocation(
+                self_expression.span(),
+            ));
+        }
+
         let resolved_arguments =
             self.resolve_and_verify_parameters(&signature.parameters[1..], ast_arguments)?;
 
@@ -97,7 +104,7 @@ impl<'a> Resolver<'a> {
             arguments: resolved_arguments,
             self_expression: Box::new(resolved_expression),
             // struct_type_ref: resolved_struct_type_ref.clone(),
-            self_is_mutable: is_self_mutable,
+            self_is_mutable: member_function_requires_mutable_self,
         })
     }
 
@@ -291,6 +298,7 @@ impl<'a> Resolver<'a> {
                 let member_signature = found_function.signature();
                 if member_signature.first_parameter_is_self {
                     ResolvedExpression::MemberCall(self.resolve_member_call(
+                        &resolved_expression,
                         ast_member_expression,
                         ast_identifier,
                         ast_arguments,
