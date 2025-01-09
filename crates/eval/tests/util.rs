@@ -5,17 +5,17 @@
 
 use std::path::Path;
 use swamp_script_analyzer::lookup::NameLookup;
-use swamp_script_analyzer::{ResolveError, Resolver};
+use swamp_script_analyzer::prelude::ResolveError;
+use swamp_script_analyzer::Resolver;
 use swamp_script_core::prelude::Value;
 use swamp_script_eval::prelude::{ExecuteError, VariableValue};
 use swamp_script_eval::{eval_constants, eval_module, Constants, ExternalFunctions};
 use swamp_script_parser::AstParser;
 use swamp_script_semantic::modules::ResolvedModules;
-use swamp_script_semantic::prelude::ResolvedModuleNamespaceRef;
 use swamp_script_semantic::{
     ExternalFunctionId, FunctionTypeSignature, ResolvedExpression,
-    ResolvedExternalFunctionDefinition, ResolvedNode, ResolvedParameterNode, ResolvedProgramState,
-    ResolvedProgramTypes, ResolvedType, ResolvedTypeForParameter, SemanticError, Span,
+    ResolvedExternalFunctionDefinition, ResolvedProgramState, ResolvedProgramTypes, ResolvedType,
+    ResolvedTypeForParameter, SemanticError,
 };
 use swamp_script_source_map::SourceMap;
 
@@ -47,7 +47,7 @@ impl From<ExecuteError> for EvalTestError {
 
 fn internal_compile(
     script: &str,
-    target_namespace: &ResolvedModuleNamespaceRef,
+    target_namespace: &[String],
     modules: &mut ResolvedModules,
 ) -> Result<(Option<ResolvedExpression>, SourceMap), ResolveError> {
     let parser = AstParser {};
@@ -65,7 +65,7 @@ fn internal_compile(
     // let resolved_path_str = vec!["test".to_string()];
     // let own_module = modules.add_empty_module(&resolved_path_str);
 
-    let mut name_lookup = NameLookup::new(target_namespace.clone(), modules);
+    let mut name_lookup = NameLookup::new(target_namespace.to_vec(), modules);
 
     let mut resolver = Resolver::new(&types, &mut state, &mut name_lookup, &source_map, file_id);
 
@@ -111,8 +111,8 @@ fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError>
         .add_external_function_declaration("print", external_print)
         .expect("TODO: panic message");
 
-    let (maybe_expression, source_map) =
-        internal_compile(script, &main_module.borrow_mut().namespace, &mut modules)?;
+    let (maybe_expression, _source_map) =
+        internal_compile(script, &resolved_path_str, &mut modules)?;
     main_module.borrow_mut().expression = maybe_expression;
 
     // Run

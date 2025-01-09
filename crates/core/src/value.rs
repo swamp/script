@@ -464,7 +464,7 @@ impl Display for Value {
             Self::RustValue(_rust_type, rust_type_pointer) => {
                 write!(f, "{}", rust_type_pointer.borrow())
             }
-            Self::Option(maybe_val) => write!(f, "Maybe"),
+            Self::Option(_maybe_val) => write!(f, "Maybe"), // TODO: Fix this. It is recursing now
         }
     }
 }

@@ -9,8 +9,6 @@ use err::ExecuteError;
 use seq_fmt::comma;
 use seq_map::SeqMap;
 use std::fmt::Debug;
-//use std::io;
-//use std::io::Write;
 use std::{cell::RefCell, collections::HashMap, fmt, rc::Rc};
 use swamp_script_core::extra::{SparseValueId, SparseValueMap};
 use swamp_script_core::value::ValueRef;
@@ -24,7 +22,6 @@ use swamp_script_semantic::{
     ResolvedForPattern, ResolvedFunction, ResolvedPatternElement, ResolvedPostfixOperatorKind,
     ResolvedStaticCall, ResolvedUnaryOperatorKind,
 };
-use swamp_script_source_map::SourceMap;
 use tracing::{error, info, trace, warn};
 
 pub mod err;
@@ -806,23 +803,18 @@ impl<'a, C> Interpreter<'a, C> {
             ResolvedExpression::Break(_) => {
                 return Err(ExecuteError::BreakNotAllowedHere);
             }
-            ResolvedExpression::Return(maybe_expr) => {
+            ResolvedExpression::Return(_maybe_expr) => {
                 return Err(ExecuteError::BreakNotAllowedHere);
             }
 
-            ResolvedExpression::WhileLoop(condition, body) => {
+            ResolvedExpression::WhileLoop(_condition, _body) => {
                 panic!("should have been handled earlier")
             }
 
-            ResolvedExpression::ForLoop(pattern, iterator_expr, body) => {
+            ResolvedExpression::ForLoop(_pattern, _iterator_expr, _body) => {
                 panic!("should have been handled earlier")
             }
-            ResolvedExpression::IfOnlyVariable {
-                variable,
-                optional_expr,
-                true_block,
-                false_block,
-            } => {
+            ResolvedExpression::IfOnlyVariable { .. } => {
                 panic!("should have been handled earlier");
                 /*
                 let condition_value = self.evaluate_expression(optional_expr)?;
@@ -855,12 +847,7 @@ impl<'a, C> Interpreter<'a, C> {
                  */
             }
 
-            ResolvedExpression::IfAssignExpression {
-                variable,
-                optional_expr,
-                true_block,
-                false_block,
-            } => {
+            ResolvedExpression::IfAssignExpression { .. } => {
                 panic!("should have been handled earlier");
                 /*
                 let value = self.evaluate_expression(optional_expr)?;
@@ -1221,7 +1208,7 @@ impl<'a, C> Interpreter<'a, C> {
                 result
             }
 
-            ResolvedExpression::MapRemove(map_expr, index_expr, map_type_ref) => {
+            ResolvedExpression::MapRemove(map_expr, index_expr, _map_type_ref) => {
                 let map_ref = self.evaluate_location(&map_expr, &vec![])?;
                 let index_val = self.evaluate_expression(&index_expr)?;
 
@@ -1681,7 +1668,7 @@ impl<'a, C> Interpreter<'a, C> {
             ResolvedExpression::FloatAtan2(y, x) => {
                 let y_value = self.evaluate_expression(y)?;
                 let x_value = self.evaluate_expression(x)?;
-                if let (Value::Float(y_f), Value::Float(x_f)) = (y_value, x_value) {
+                if let (Value::Float(_y_f), Value::Float(_x_f)) = (y_value, x_value) {
                     Value::Float(Fp::from(-9999)) //y_f.atan2(x_f)) // TODO: Implement atan2
                 } else {
                     return Err(ExecuteError::TypeError("Expected float".to_string()));
@@ -2423,6 +2410,21 @@ impl<'a, C> Interpreter<'a, C> {
             }
         }
         Ok(())
+    }
+
+    #[inline]
+    fn evaluate_variable_block(
+        &mut self,
+        _variable_refs: &[ResolvedVariableRef],
+        expression: &ResolvedExpression,
+    ) -> Result<Value, ExecuteError> {
+        self.push_block_scope();
+
+        let value = self.evaluate_expression(&expression)?;
+
+        self.pop_block_scope();
+
+        Ok(value)
     }
 }
 

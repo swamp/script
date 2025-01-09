@@ -442,7 +442,7 @@ fn basic_eval_14() {
 
 //#[test_log::test]
 fn _basic_eval_15() {
-    let result = eval_string(
+    let _result = eval_string(
         r#"
 
         struct Position {
@@ -1097,7 +1097,7 @@ fn sparse_map_add() {
 
 #[test_log::test]
 fn sparse_map_remove() {
-    let x = eval_string(
+    let _x = eval_string(
         "
 
     mut sparse = Sparse<Int>::new()
@@ -1566,4 +1566,53 @@ fn function_member_fn_call() {
     );
 
     assert_eq!(result, Value::Int(200));
+}
+
+#[test_log::test]
+fn with_block() {
+    let result = eval(
+        "
+        x = 4
+        t = 6
+
+        result = with x {
+           x + 5
+        }
+    ",
+    );
+
+    assert_eq!(result, Value::Int(9));
+}
+
+#[test_log::test]
+fn fail_with_block() {
+    check_fail(
+        "
+        x = 4
+        t = 6
+
+        result = with x {
+           x + t + 5 // t is not available in this scope
+
+        }
+    ",
+        "ResolveError(UnknownVariable(<71:1>))",
+    );
+}
+
+#[test_log::test]
+fn with_normal_block() {
+    let result = eval(
+        "
+        x = 4
+        t = 6
+
+        with x {
+           x + 5
+           t = 3
+        }
+    ",
+    );
+
+    assert_eq!(result, Value::Int(9));
 }

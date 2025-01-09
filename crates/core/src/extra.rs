@@ -10,7 +10,7 @@ use sparse_slot::{Id, SparseSlot};
 use std::cell::RefCell;
 use std::fmt::{Display, Formatter};
 use std::rc::Rc;
-use swamp_script_semantic::{create_rust_type, ResolvedRustTypeRef, ResolvedType};
+use swamp_script_semantic::{ResolvedRustTypeRef, ResolvedType};
 
 #[derive(Debug)]
 pub struct SparseValueId(pub Id);
