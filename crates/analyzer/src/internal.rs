@@ -384,9 +384,22 @@ impl<'a> Resolver<'a> {
         ast_arguments: &[Expression],
     ) -> Result<Option<ResolvedExpression>, ResolveError> {
         // TODO: Early out
-        if let ResolvedType::Generic(generic_type, _parameters) = self_expression.resolution() {
+        if let ResolvedType::Generic(generic_type, parameters) = self_expression.resolution() {
             if let ResolvedType::RustType(rust_type_ref) = *generic_type {
                 if rust_type_ref.as_ref().number == SPARSE_TYPE_ID {
+                    if parameters.len() != 1 {
+                        return Err(ResolveError::WrongNumberOfTypeArguments(
+                            parameters.len(),
+                            1,
+                        ));
+                    }
+                    let sparse_id_type = self
+                        .shared
+                        .lookup
+                        .get_rust_type(&vec!["std".to_string()], "SparseId")
+                        .expect("should have SparseId");
+                    let key_type = ResolvedType::RustType(sparse_id_type);
+                    let value_type = &parameters[0];
                     let function_name_str = self.get_text(ast_member_function_name);
                     // TODO: Remove hack
                     match function_name_str {
@@ -397,7 +410,10 @@ impl<'a> Resolver<'a> {
                                     1,
                                 ));
                             }
-                            let value = self.resolve_expression(&ast_arguments[0])?;
+                            let value = self.resolve_expression_expecting_type(
+                                &ast_arguments[0],
+                                &value_type,
+                            )?;
                             return Ok(Some(ResolvedExpression::SparseAdd(
                                 Box::new(self_expression),
                                 Box::new(value),
@@ -410,8 +426,8 @@ impl<'a> Resolver<'a> {
                                     1,
                                 ));
                             }
-                            let sparse_slot_id_expression =
-                                self.resolve_expression(&ast_arguments[0])?;
+                            let sparse_slot_id_expression = self
+                                .resolve_expression_expecting_type(&ast_arguments[0], &key_type)?;
                             return Ok(Some(ResolvedExpression::SparseRemove(
                                 Box::new(self_expression),
                                 Box::new(sparse_slot_id_expression),

@@ -1302,29 +1302,6 @@ impl<'a> Resolver<'a> {
         Ok(mut_expr)
     }
 
-    fn verify_signature_and_args(
-        &self,
-        signature: &FunctionTypeSignature,
-        arguments: &[ResolvedExpression],
-    ) -> Result<(), ResolveError> {
-        if signature.parameters.len() != arguments.len() {
-            return Err(ResolveError::WrongNumberOfArguments(
-                signature.parameters.len(),
-                arguments.len(),
-            ));
-        }
-
-        for (param, arg) in signature.parameters.iter().zip(arguments) {
-            if !param.resolved_type.same_type(&arg.resolution()) {
-                return Err(ResolveError::IncompatibleTypes(
-                    arg.span(),
-                    param.resolved_type.clone(),
-                ));
-            }
-        }
-        Ok(())
-    }
-
     fn resolve_with_expr(
         &mut self,
         variables: &[VariableBinding],

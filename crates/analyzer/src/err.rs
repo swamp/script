@@ -8,6 +8,8 @@ use swamp_script_semantic::{
 
 #[derive(Debug)]
 pub enum ResolveError {
+    TooManyDestructureVariables,
+    CanNotDestructure(Span),
     EmptyArrayCanOnlyBeMapOrArray,
     NamespaceError(NamespaceError),
     CanNotFindModule(Vec<String>),
@@ -26,7 +28,7 @@ pub enum ResolveError {
     OverwriteVariableWithAnotherType(ResolvedNode),
     ExpectedMutableLocation(Span),
     WrongNumberOfArguments(usize, usize),
-    IncompatibleArguments(ResolvedType, ResolvedType),
+    IncompatibleArguments(Span, ResolvedType, ResolvedType),
     CanOnlyOverwriteVariableWithMut(ResolvedNode),
     OverwriteVariableNotAllowedHere(ResolvedNode),
     NotNamedStruct(ResolvedType),

@@ -12,12 +12,10 @@ use swamp_script_semantic::{
 use tracing::{error, info};
 
 impl<'a> Resolver<'a> {
-    fn resolve_and_verify_parameters(
-        &mut self,
+    fn verify_arguments(
         fn_parameters: &[ResolvedTypeForParameter],
-        arguments: &[Expression],
-    ) -> Result<Vec<ResolvedExpression>, ResolveError> {
-        let resolved_arguments = self.resolve_expressions(arguments)?;
+        resolved_arguments: &[ResolvedExpression],
+    ) -> Result<(), ResolveError> {
         if resolved_arguments.len() != fn_parameters.len() {
             return Err(ResolveError::WrongNumberOfArguments(
                 resolved_arguments.len(),
@@ -30,9 +28,11 @@ impl<'a> Resolver<'a> {
             let parameter = &fn_parameters[parameter_index];
             let parameter_type = &parameter;
             let argument_type = resolved_argument_expression.resolution();
+
             if !argument_type.same_type(&parameter_type.resolved_type) {
-                error!("{argument_type:?}: {resolved_argument_expression:?}");
+                info!(%argument_type, param_type=%parameter_type.resolved_type, "incompatible");
                 return Err(ResolveError::IncompatibleArguments(
+                    resolved_argument_expression.span(),
                     argument_type,
                     parameter_type.resolved_type.clone(),
                 ));
@@ -45,6 +45,18 @@ impl<'a> Resolver<'a> {
                 ));
             }
         }
+
+        Ok(())
+    }
+
+    fn resolve_and_verify_parameters(
+        &mut self,
+        fn_parameters: &[ResolvedTypeForParameter],
+        arguments: &[Expression],
+    ) -> Result<Vec<ResolvedExpression>, ResolveError> {
+        let resolved_arguments = self.resolve_expressions(arguments)?;
+
+        Self::verify_arguments(fn_parameters, &resolved_arguments)?;
 
         Ok(resolved_arguments)
     }
@@ -77,16 +89,8 @@ impl<'a> Resolver<'a> {
             }
         };
 
-        // Validate argument count (subtract 1 for self parameter)
-        if ast_arguments.len() != signature.parameters.len() - 1 {
-            return Err(ResolveError::WrongNumberOfArguments(
-                ast_arguments.len(),
-                signature.parameters.len() - 1,
-            ));
-        }
-
-        // Now resolve the arguments
-        let resolved_arguments = self.resolve_expressions(ast_arguments)?;
+        let resolved_arguments =
+            self.resolve_and_verify_parameters(&signature.parameters[1..], ast_arguments)?;
 
         Ok(ResolvedMemberCall {
             function: function_ref.clone(),
@@ -100,14 +104,14 @@ impl<'a> Resolver<'a> {
     pub(crate) fn resolve_function_call(
         &mut self,
         function_expression: &Expression,
-        arguments: &[Expression],
+        ast_arguments: &[Expression],
     ) -> Result<ResolvedExpression, ResolveError> {
         let function_expr = self.resolve_expression(function_expression)?;
         let resolution_type = function_expr.resolution();
 
-        let resolved_arguments = self.resolve_expressions(arguments)?;
         if let ResolvedType::Function(signature) = resolution_type {
-            self.verify_signature_and_args(&signature, &resolved_arguments)?;
+            let resolved_arguments =
+                self.resolve_and_verify_parameters(&signature.parameters, ast_arguments)?;
 
             Ok(ResolvedExpression::FunctionCall(
                 signature,

@@ -56,7 +56,8 @@ impl<'a> Resolver<'a> {
             field_index,
         ));
 
-        let source_expression = self.resolve_expression(ast_source_expression)?;
+        let source_expression =
+            self.resolve_expression_expecting_type(ast_source_expression, &field_type)?;
         let wrapped_expression = wrap_in_some_if_optional(&field_type, source_expression);
 
         Ok(ResolvedExpression::FieldCompoundAssignment(

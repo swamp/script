@@ -355,22 +355,33 @@ impl<'a> Resolver<'a> {
         let mut variable_refs = Vec::new();
         let mut all_reassignment = true;
 
-        for ast_variable in ast_variables {
-            let (variable_ref, is_reassignment) =
-                self.set_or_overwrite_variable_with_type(ast_variable, &expression_type)?;
-            variable_refs.push(variable_ref);
-            if !is_reassignment {
-                all_reassignment = false;
-            }
-        }
-
-        if variable_refs.len() > 1 {
+        if ast_variables.len() > 1 {
             if let ResolvedType::Tuple(tuple) = expression_type {
+                if ast_variables.len() > tuple.0.len() {
+                    return Err(ResolveError::TooManyDestructureVariables);
+                }
+                for (variable_ref, tuple_type) in ast_variables.iter().zip(tuple.0.clone()) {
+                    let (variable_ref, is_reassignment) =
+                        self.set_or_overwrite_variable_with_type(&variable_ref, &tuple_type)?;
+                    variable_refs.push(variable_ref);
+                }
                 return Ok(ResolvedExpression::TupleDestructuring(
                     variable_refs,
                     tuple,
                     Box::from(converted_expression),
                 ));
+            } else {
+                return Err(ResolveError::CanNotDestructure(
+                    self.to_node(&ast_variables[0].name).span,
+                ));
+            }
+        } else {
+            let ast_variable = &ast_variables[0];
+            let (variable_ref, is_reassignment) =
+                self.set_or_overwrite_variable_with_type(&ast_variable, &expression_type)?;
+            variable_refs.push(variable_ref);
+            if !is_reassignment {
+                all_reassignment = false;
             }
         }
 

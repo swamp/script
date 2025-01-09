@@ -56,9 +56,16 @@ impl Span {
         if other.file_id == 0xffff {
             return self.clone();
         }
+        if other.file_id == 0 {
+            return self.clone();
+        }
         if self.file_id == 0xffff {
             return self.clone();
         }
+        if self.file_id == 0 {
+            return self.clone();
+        }
+
         assert_eq!(
             self.file_id, other.file_id,
             "file_id must be the same when merging"
@@ -334,7 +341,7 @@ impl Spanned for ResolvedType {
             // Primitives
             Self::Int => Span::dummy(),
             Self::Float => Span::dummy(),
-            Self::String => todo!(),
+            Self::String => Span::dummy(),
             Self::Bool => Span::dummy(),
             Self::Unit => todo!(),
 
@@ -1694,7 +1701,7 @@ impl ResolvedExpression {
             Self::If(_, true_expr, _) => true_expr.resolution(),
 
             // Other
-            Self::TupleDestructuring(_, _, expr) => expr.resolution(),
+            Self::TupleDestructuring(_, tuple_type, expr) => ResolvedType::Unit,
         };
 
         resolution_expression

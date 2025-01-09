@@ -232,6 +232,18 @@ pub fn show_error(err: &ResolveError, source_map: &SourceMap) {
 #[must_use]
 pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
     match err {
+        ResolveError::TooManyDestructureVariables => Report::build(
+            Error,
+            4203,
+            &format!("TooManyDestructureVariables"),
+            &Span::default(),
+        ),
+        ResolveError::CanNotDestructure(span) => Report::build(
+            Error,
+            4203,
+            &format!("Can Not Destructure"),
+            &span,
+        ),
         ResolveError::EmptyArrayCanOnlyBeMapOrArray => Report::build(
             Error,
             903,
@@ -281,11 +293,11 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
         ResolveError::WrongNumberOfArguments(_expected, _encountered) => {
             Report::build(Error, 105, "wrong number of arguments", &Span::default())
         }
-        ResolveError::IncompatibleArguments(a, b) =>   Report::build(
+        ResolveError::IncompatibleArguments(span, a, b) =>   Report::build(
             Error,
             904,
             &format!("Incompatible arguments"),
-            &a.span(),
+            &span,
         )             .with_label("first_type", a.span().clone())
             .with_label("second_type", b.span().clone()),
         ResolveError::CanOnlyOverwriteVariableWithMut(node) =>  Report::build(
