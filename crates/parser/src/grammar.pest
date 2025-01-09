@@ -351,7 +351,7 @@ match_arm = {
 }
 
 // MATCH PATTERNS ------------------------------------------------------------
-match_pattern = { normal_pattern | wildcard_pattern }
+match_pattern = { wildcard_pattern | normal_pattern }
 normal_pattern = { pattern ~ guard_clause? }
 
 pattern = {

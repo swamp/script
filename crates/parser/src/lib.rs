@@ -2184,39 +2184,35 @@ impl AstParser {
     fn parse_normal_match_pattern(&self, pair: &Pair<Rule>) -> Result<NormalPattern, ParseError> {
         println!("parse_normal_match_pattern {:?}", pair.as_rule());
         let mut inner = Self::convert_into_iterator(pair);
-        let pattern_inside = inner.next().expect("should have inner");
-        println!(
-            "parse_normal_match_pattern_inner {:?}",
-            pattern_inside.as_rule()
-        );
-        let mut pattern_inside_that = Self::convert_into_iterator(&pattern_inside);
+        let pattern = inner.next().expect("should have inner");
+        println!("parse_normal_match_pattern_inner {:?}", pattern.as_rule());
 
-        let pattern_inside_inside = pattern_inside_that.next().expect("should have inner");
+        match pattern.as_rule() {
+            Rule::pattern => {
+                let mut pattern_inner = Self::convert_into_iterator(&pattern);
+                let pattern_type = pattern_inner.next().expect("should have inner");
 
-        println!(
-            "pattern_inside_inside {:?}",
-            pattern_inside_inside.as_rule()
-        );
-        match pattern_inside_inside.as_rule() {
-            Rule::pattern_list => {
-                let elements = self.parse_pattern_list(pair)?;
-                Ok(NormalPattern::PatternList(elements))
+                match pattern_type.as_rule() {
+                    Rule::enum_pattern => {
+                        let mut inner = Self::convert_into_iterator(&pattern_type);
+                        let variant = self.expect_local_type_identifier_next(&mut inner)?;
+                        let elements = inner
+                            .next()
+                            .map(|p| self.parse_pattern_list(&p))
+                            .transpose()?;
+                        Ok(NormalPattern::EnumPattern(variant.0, elements))
+                    }
+                    Rule::pattern_list => {
+                        let elements = self.parse_pattern_list(&pattern_type)?;
+                        Ok(NormalPattern::PatternList(elements))
+                    }
+                    Rule::literal => Ok(NormalPattern::Literal(self.parse_literal(&pattern_type)?)),
+                    _ => {
+                        Err(self.create_error_pair(SpecificError::UnknownMatchType, &pattern_type))
+                    }
+                }
             }
-            Rule::enum_pattern => {
-                let mut inner = Self::convert_into_iterator(&pattern_inside_inside);
-                let variant = self.expect_local_type_identifier_next(&mut inner)?;
-
-                // Parse pattern list if present
-                let elements = inner
-                    .next()
-                    .map(|p| self.parse_pattern_list(&p))
-                    .transpose()?;
-
-                Ok(NormalPattern::EnumPattern(variant.0, elements))
-            }
-            Rule::literal => Ok(NormalPattern::Literal(self.parse_literal(pair)?)),
-
-            _ => Err(self.create_error_pair(SpecificError::UnknownMatchType, pair)),
+            _ => Err(self.create_error_pair(SpecificError::UnknownMatchType, &pattern)),
         }
     }
 

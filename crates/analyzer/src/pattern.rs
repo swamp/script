@@ -1,9 +1,9 @@
 use crate::err::ResolveError;
 use crate::Resolver;
-use swamp_script_ast::{Node, Pattern, PatternElement};
+use swamp_script_ast::{Node, NormalPattern, Pattern, PatternElement};
 use swamp_script_semantic::{
-    ResolvedEnumVariantContainerType, ResolvedEnumVariantTypeRef, ResolvedPattern,
-    ResolvedPatternElement, ResolvedType,
+    ResolvedEnumVariantContainerType, ResolvedEnumVariantTypeRef, ResolvedNormalPattern,
+    ResolvedPattern, ResolvedPatternElement, ResolvedType,
 };
 use tracing::info;
 
@@ -40,7 +40,30 @@ impl<'a> Resolver<'a> {
         expected_condition_type: &ResolvedType,
     ) -> Result<(ResolvedPattern, bool), ResolveError> {
         match ast_pattern {
-            Pattern::PatternList(elements) => {
+            Pattern::Wildcard(node) => Ok((ResolvedPattern::Wildcard(self.to_node(&node)), false)),
+            Pattern::NormalPattern(normal_pattern, maybe_guard) => {
+                let (normal_pattern, was_pushed) =
+                    self.resolve_normal_pattern(normal_pattern, expected_condition_type)?;
+                let resolved_guard = if let Some(guard_clause) = maybe_guard {
+                    Some(self.resolve_bool_expression(&guard_clause.0)?)
+                } else {
+                    None
+                };
+                Ok((
+                    ResolvedPattern::Normal(normal_pattern, resolved_guard),
+                    was_pushed,
+                ))
+            }
+        }
+    }
+
+    pub(crate) fn resolve_normal_pattern(
+        &mut self,
+        ast_normal_pattern: &NormalPattern,
+        expected_condition_type: &ResolvedType,
+    ) -> Result<(ResolvedNormalPattern, bool), ResolveError> {
+        match ast_normal_pattern {
+            NormalPattern::PatternList(elements) => {
                 let mut resolved_elements = Vec::new();
                 let mut scope_is_pushed = false;
                 for element in elements {
@@ -64,12 +87,12 @@ impl<'a> Resolver<'a> {
                     }
                 }
                 Ok((
-                    ResolvedPattern::PatternList(resolved_elements),
+                    ResolvedNormalPattern::PatternList(resolved_elements),
                     scope_is_pushed,
                 ))
             }
 
-            Pattern::EnumPattern(variant_name, maybe_elements) => {
+            NormalPattern::EnumPattern(variant_name, maybe_elements) => {
                 let mut scope_was_pushed = false;
                 let enum_variant_type_ref =
                     self.find_variant_in_pattern(expected_condition_type, variant_name)?;
@@ -179,7 +202,7 @@ impl<'a> Resolver<'a> {
                     }
 
                     Ok((
-                        ResolvedPattern::EnumPattern(
+                        ResolvedNormalPattern::EnumPattern(
                             enum_variant_type_ref,
                             Some(resolved_elements),
                         ),
@@ -187,13 +210,13 @@ impl<'a> Resolver<'a> {
                     ))
                 } else {
                     Ok((
-                        ResolvedPattern::EnumPattern(enum_variant_type_ref, None),
+                        ResolvedNormalPattern::EnumPattern(enum_variant_type_ref, None),
                         false,
                     ))
                 }
             }
 
-            Pattern::Literal(ast_literal) => Ok((
+            NormalPattern::Literal(ast_literal) => Ok((
                 self.resolve_pattern_literal(ast_literal, expected_condition_type)?,
                 false,
             )),

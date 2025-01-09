@@ -34,6 +34,7 @@ use swamp_script_semantic::prelude::*;
 
 use swamp_script_source_map::SourceMap;
 
+use swamp_script_semantic::ResolvedNormalPattern;
 use tracing::error;
 
 #[derive(Debug)]
@@ -1160,7 +1161,7 @@ impl<'a> Resolver<'a> {
         &mut self,
         ast_literal: &Literal,
         expected_condition_type: &ResolvedType,
-    ) -> Result<ResolvedPattern, ResolveError> {
+    ) -> Result<ResolvedNormalPattern, ResolveError> {
         let resolved_literal = self.resolve_literal(ast_literal.clone())?;
 
         let resolved_literal_copy = self.resolve_literal(ast_literal.clone())?;
@@ -1173,7 +1174,7 @@ impl<'a> Resolver<'a> {
                 expected_condition_type.clone(),
             ));
         }
-        Ok(ResolvedPattern::Literal(resolved_literal))
+        Ok(ResolvedNormalPattern::Literal(resolved_literal))
     }
 
     const fn to_node(&self, node: &Node) -> ResolvedNode {

@@ -940,6 +940,12 @@ pub struct ResolvedMatchArm {
 
 #[derive(Debug)]
 pub enum ResolvedPattern {
+    Normal(ResolvedNormalPattern, Option<ResolvedBooleanExpression>),
+    Wildcard(ResolvedNode),
+}
+
+#[derive(Debug)]
+pub enum ResolvedNormalPattern {
     PatternList(Vec<ResolvedPatternElement>),
     EnumPattern(
         ResolvedEnumVariantTypeRef,

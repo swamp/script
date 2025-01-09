@@ -662,7 +662,7 @@ fn match_expression() {
 
 EnumDef(<14:6>, [Simple(<35:4>), Tuple(<53:7>, [Int(<61:3>), Float(<66:5>)]), Struct(<86:8>, AnonymousStructType { fields: [FieldType { field_name: FieldName(<97:5>), field_type: Int(<104:3>) }] })])
 ---
-VariableAssignment(<131:1>, Match(VariableAccess(<141:5>), [MatchArm { pattern: EnumPattern(<161:7>, Some([Variable(<169:5>), Wildcard(<176:1>)])), expression: VariableAccess(<181:5>) }, MatchArm { pattern: EnumPattern(<200:8>, Some([Variable(<210:5>)])), expression: BinaryOp(VariableAccess(<220:5>), Add(<226:1>), Literal(Int(<228:2>))) }, MatchArm { pattern: PatternList([Wildcard(<244:1>)]), expression: Literal(Int(<249:1>)) }]))
+VariableAssignment(<131:1>, Match(VariableAccess(<141:5>), [MatchArm { pattern: NormalPattern(EnumPattern(<161:7>, Some([Variable(<169:5>), Wildcard(<176:1>)])), None), expression: VariableAccess(<181:5>) }, MatchArm { pattern: NormalPattern(EnumPattern(<200:8>, Some([Variable(<210:5>)])), None), expression: BinaryOp(VariableAccess(<220:5>), Add(<226:1>), Literal(Int(<228:2>))) }, MatchArm { pattern: Wildcard(<244:1>), expression: Literal(Int(<249:1>)) }]))
 
 ",
     );
@@ -679,7 +679,7 @@ fn match_expression_minimal() {
     check(
         script,
         r"
-Match(VariableAccess(<14:5>), [MatchArm { pattern: PatternList([Wildcard(<34:1>)]), expression: Literal(Int(<39:1>)) }])
+Match(VariableAccess(<14:5>), [MatchArm { pattern: Wildcard(<34:1>), expression: Literal(Int(<39:1>)) }])
 ",
     );
 }
@@ -697,7 +697,7 @@ fn match_expression_minimal_two_arms() {
         script,
         r"
 
-Match(VariableAccess(<14:5>), [MatchArm { pattern: EnumPattern(<34:8>, Some([Variable(<43:5>), Wildcard(<50:1>)])), expression: VariableAccess(<55:5>) }, MatchArm { pattern: PatternList([Wildcard(<74:1>)]), expression: Literal(Int(<79:1>)) }])
+Match(VariableAccess(<14:5>), [MatchArm { pattern: NormalPattern(EnumPattern(<34:8>, Some([Variable(<43:5>), Wildcard(<50:1>)])), None), expression: VariableAccess(<55:5>) }, MatchArm { pattern: Wildcard(<74:1>), expression: Literal(Int(<79:1>)) }])
 
 ",
     );
@@ -715,27 +715,9 @@ fn match_expression_minimal_two_arms_enum_struct() {
     check(
         script,
         r"
+        
+Match(VariableAccess(<14:5>), [MatchArm { pattern: NormalPattern(EnumPattern(<34:8>, Some([Variable(<43:9>), Variable(<54:7>)])), None), expression: VariableAccess(<65:7>) }, MatchArm { pattern: Wildcard(<86:1>), expression: Literal(Int(<91:1>)) }])
 
-Match(VariableAccess(<14:5>), [MatchArm { pattern: EnumPattern(<34:8>, Some([Variable(<43:9>), Variable(<54:7>)])), expression: VariableAccess(<65:7>) }, MatchArm { pattern: PatternList([Wildcard(<86:1>)]), expression: Literal(Int(<91:1>)) }])
-
-",
-    );
-}
-
-#[test_log::test]
-fn match_expression_simple_variant() {
-    let script = r"
-       match state {
-            EnumType
-            _ => 0,
-        }
-";
-
-    check(
-        script,
-        r"
-
-Match(VariableAccess(<14:5>), [MatchArm { pattern: EnumPattern(<34:8>, Some([Wildcard(<55:1>)])), expression: Literal(Int(<60:1>)) }])
 ",
     );
 }

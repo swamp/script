@@ -19,8 +19,8 @@ use swamp_script_semantic::modules::ResolvedModules;
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
     ConstantId, ResolvedAccess, ResolvedBinaryOperatorKind, ResolvedCompoundOperatorKind,
-    ResolvedForPattern, ResolvedFunction, ResolvedPatternElement, ResolvedPostfixOperatorKind,
-    ResolvedStaticCall, ResolvedUnaryOperatorKind,
+    ResolvedForPattern, ResolvedFunction, ResolvedNormalPattern, ResolvedPatternElement,
+    ResolvedPostfixOperatorKind, ResolvedStaticCall, ResolvedUnaryOperatorKind,
 };
 use tracing::{error, info, trace, warn};
 
@@ -1807,159 +1807,173 @@ impl<'a, C> Interpreter<'a, C> {
 
         for arm in &resolved_match.arms {
             match &arm.pattern {
-                ResolvedPattern::PatternList(elements) => {
-                    // Handle single variable/wildcard patterns that match any value
-                    if elements.len() == 1 {
-                        return match &elements[0] {
-                            ResolvedPatternElement::Variable(var_ref)
-                            | ResolvedPatternElement::VariableWithFieldIndex(var_ref, _) => {
-                                self.push_block_scope();
-                                self.current_block_scopes
-                                    .set_local_var_value(var_ref, actual_value.clone());
-                                let result = self.evaluate_expression(&arm.expression);
-                                self.pop_block_scope();
-                                result
-                            }
-                            ResolvedPatternElement::Wildcard(_) => {
-                                // Wildcard matches anything
-                                self.evaluate_expression(&arm.expression)
-                            }
-                        };
-                    }
-
-                    match &actual_value {
-                        Value::Tuple(_tuple_type_ref, values) => {
-                            if elements.len() == values.len() {
-                                self.push_block_scope();
-
-                                for (element, value) in elements.iter().zip(values.iter()) {
-                                    match element {
-                                        ResolvedPatternElement::Variable(var_ref) => {
-                                            self.current_block_scopes.set_local_var_value(
-                                                var_ref,
-                                                value.borrow().clone(),
-                                            );
-                                        }
-                                        ResolvedPatternElement::VariableWithFieldIndex(
-                                            var_ref,
-                                            _,
-                                        ) => {
-                                            self.current_block_scopes.set_local_var_value(
-                                                var_ref,
-                                                value.borrow().clone(),
-                                            );
-                                        }
-                                        ResolvedPatternElement::Wildcard(_) => {
-                                            // Skip wildcards
-                                            continue;
-                                        }
-                                    }
-                                }
-
-                                let result = self.evaluate_expression(&arm.expression);
-                                self.pop_block_scope();
-                                return result;
-                            }
-                        }
-                        _ => continue,
-                    }
+                ResolvedPattern::Wildcard(_node) => {
+                    return self.evaluate_expression(&arm.expression)
                 }
-
-                ResolvedPattern::EnumPattern(variant_ref, maybe_elements) => {
-                    match &actual_value {
-                        Value::EnumVariantTuple(value_tuple_type, values) => {
-                            // First check if the variant types match
-                            if variant_ref.number != value_tuple_type.common.number {
-                                continue; // Try next pattern
+                ResolvedPattern::Normal(normal_pattern, maybe_guard) => {
+                    match &normal_pattern {
+                        ResolvedNormalPattern::PatternList(elements) => {
+                            // Handle single variable/wildcard patterns that match any value
+                            if elements.len() == 1 {
+                                return match &elements[0] {
+                                    ResolvedPatternElement::Variable(var_ref)
+                                    | ResolvedPatternElement::VariableWithFieldIndex(var_ref, _) => {
+                                        self.push_block_scope();
+                                        self.current_block_scopes
+                                            .set_local_var_value(var_ref, actual_value.clone());
+                                        let result = self.evaluate_expression(&arm.expression);
+                                        self.pop_block_scope();
+                                        result
+                                    }
+                                    ResolvedPatternElement::Wildcard(_) => {
+                                        // Wildcard matches anything
+                                        self.evaluate_expression(&arm.expression)
+                                    }
+                                };
                             }
 
-                            if let Some(elements) = maybe_elements {
-                                if elements.len() == values.len() {
-                                    self.push_block_scope();
+                            match &actual_value {
+                                Value::Tuple(_tuple_type_ref, values) => {
+                                    if elements.len() == values.len() {
+                                        self.push_block_scope();
 
-                                    for (element, value) in elements.iter().zip(values.iter()) {
-                                        match element {
-                                            ResolvedPatternElement::Variable(var_ref) => {
-                                                self.current_block_scopes
-                                                    .set_local_var_value(var_ref, value.clone());
+                                        for (element, value) in elements.iter().zip(values.iter()) {
+                                            match element {
+                                                ResolvedPatternElement::Variable(var_ref) => {
+                                                    self.current_block_scopes.set_local_var_value(
+                                                        var_ref,
+                                                        value.borrow().clone(),
+                                                    );
+                                                }
+                                                ResolvedPatternElement::VariableWithFieldIndex(
+                                                    var_ref,
+                                                    _,
+                                                ) => {
+                                                    self.current_block_scopes.set_local_var_value(
+                                                        var_ref,
+                                                        value.borrow().clone(),
+                                                    );
+                                                }
+                                                ResolvedPatternElement::Wildcard(_) => {
+                                                    // Skip wildcards
+                                                    continue;
+                                                }
                                             }
-                                            ResolvedPatternElement::VariableWithFieldIndex(
-                                                var_ref,
-                                                _,
-                                            ) => {
-                                                self.current_block_scopes
-                                                    .set_local_var_value(var_ref, value.clone());
-                                            }
-                                            ResolvedPatternElement::Wildcard(_) => continue,
                                         }
-                                    }
 
-                                    let result = self.evaluate_expression(&arm.expression);
-                                    self.pop_block_scope();
-                                    return result;
+                                        let result = self.evaluate_expression(&arm.expression);
+                                        self.pop_block_scope();
+                                        return result;
+                                    }
                                 }
+                                _ => {}
                             }
                         }
-                        Value::EnumVariantStruct(value_struct_type, values) => {
-                            if value_struct_type.common.number == variant_ref.number {
-                                if let Some(elements) = maybe_elements {
-                                    self.push_block_scope();
 
-                                    for element in elements {
-                                        if let ResolvedPatternElement::VariableWithFieldIndex(
-                                            var_ref,
-                                            field_index,
-                                        ) = element
-                                        {
-                                            let value = &values[*field_index];
-                                            self.current_block_scopes
-                                                .set_local_var_value(var_ref, value.clone());
-                                        }
+                        ResolvedNormalPattern::EnumPattern(variant_ref, maybe_elements) => {
+                            match &actual_value {
+                                Value::EnumVariantTuple(value_tuple_type, values) => {
+                                    // First check if the variant types match
+                                    if variant_ref.number != value_tuple_type.common.number {
+                                        continue; // Try next pattern
                                     }
 
-                                    let result = self.evaluate_expression(&arm.expression);
-                                    self.pop_block_scope();
-                                    return result;
+                                    if let Some(elements) = maybe_elements {
+                                        if elements.len() == values.len() {
+                                            self.push_block_scope();
+
+                                            for (element, value) in
+                                                elements.iter().zip(values.iter())
+                                            {
+                                                match element {
+                                                    ResolvedPatternElement::Variable(var_ref) => {
+                                                        self.current_block_scopes
+                                                            .set_local_var_value(var_ref, value.clone());
+                                                    }
+                                                    ResolvedPatternElement::VariableWithFieldIndex(
+                                                        var_ref,
+                                                        _,
+                                                    ) => {
+                                                        self.current_block_scopes
+                                                            .set_local_var_value(var_ref, value.clone());
+                                                    }
+                                                    ResolvedPatternElement::Wildcard(_) => continue,
+                                                }
+                                            }
+
+                                            let result = self.evaluate_expression(&arm.expression);
+                                            self.pop_block_scope();
+                                            return result;
+                                        }
+                                    }
                                 }
+                                Value::EnumVariantStruct(value_struct_type, values) => {
+                                    if value_struct_type.common.number == variant_ref.number {
+                                        if let Some(elements) = maybe_elements {
+                                            self.push_block_scope();
+
+                                            for element in elements {
+                                                if let ResolvedPatternElement::VariableWithFieldIndex(
+                                                    var_ref,
+                                                    field_index,
+                                                ) = element
+                                                {
+                                                    let value = &values[*field_index];
+                                                    self.current_block_scopes
+                                                        .set_local_var_value(var_ref, value.clone());
+                                                }
+                                            }
+
+                                            let result = self.evaluate_expression(&arm.expression);
+                                            self.pop_block_scope();
+                                            return result;
+                                        }
+                                    }
+                                }
+
+                                Value::EnumVariantSimple(value_variant_ref) => {
+                                    if value_variant_ref.number == variant_ref.number
+                                        && maybe_elements.is_none()
+                                    {
+                                        return self.evaluate_expression(&arm.expression);
+                                    }
+                                }
+                                _ => {}
                             }
                         }
 
-                        Value::EnumVariantSimple(value_variant_ref) => {
-                            if value_variant_ref.number == variant_ref.number
-                                && maybe_elements.is_none()
+                        ResolvedNormalPattern::Literal(lit) => match (lit, &actual_value) {
+                            (ResolvedLiteral::IntLiteral(a, _resolved_node), Value::Int(b))
+                                if a == b =>
                             {
                                 return self.evaluate_expression(&arm.expression);
                             }
-                        }
-                        _ => continue,
+                            (ResolvedLiteral::FloatLiteral(a, _resolved_node), Value::Float(b))
+                                if a == b =>
+                            {
+                                return self.evaluate_expression(&arm.expression);
+                            }
+                            (
+                                ResolvedLiteral::StringLiteral(a, _resolved_node),
+                                Value::String(b),
+                            ) if *a == *b => {
+                                return self.evaluate_expression(&arm.expression);
+                            }
+                            (ResolvedLiteral::BoolLiteral(a, _resolved_node), Value::Bool(b))
+                                if a == b =>
+                            {
+                                return self.evaluate_expression(&arm.expression);
+                            }
+                            (
+                                ResolvedLiteral::TupleLiteral(_a_type_ref, a_values),
+                                Value::Tuple(_b_type_ref, b_values),
+                            ) if self.expressions_equal_to_values(&a_values, &b_values)? => {
+                                return self.evaluate_expression(&arm.expression);
+                            }
+                            _ => {}
+                        },
                     }
                 }
-
-                ResolvedPattern::Literal(lit) => match (lit, &actual_value) {
-                    (ResolvedLiteral::IntLiteral(a, _resolved_node), Value::Int(b)) if a == b => {
-                        return self.evaluate_expression(&arm.expression);
-                    }
-                    (ResolvedLiteral::FloatLiteral(a, _resolved_node), Value::Float(b))
-                        if a == b =>
-                    {
-                        return self.evaluate_expression(&arm.expression);
-                    }
-                    (ResolvedLiteral::StringLiteral(a, _resolved_node), Value::String(b))
-                        if *a == *b =>
-                    {
-                        return self.evaluate_expression(&arm.expression);
-                    }
-                    (ResolvedLiteral::BoolLiteral(a, _resolved_node), Value::Bool(b)) if a == b => {
-                        return self.evaluate_expression(&arm.expression);
-                    }
-                    (
-                        ResolvedLiteral::TupleLiteral(_a_type_ref, a_values),
-                        Value::Tuple(_b_type_ref, b_values),
-                    ) if self.expressions_equal_to_values(&a_values, &b_values)? => {
-                        return self.evaluate_expression(&arm.expression);
-                    }
-                    _ => continue,
-                },
             }
         }
 
