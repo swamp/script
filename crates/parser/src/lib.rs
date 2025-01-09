@@ -11,7 +11,7 @@ use pest_derive::Parser;
 use swamp_script_ast::{
     prelude::*, CompoundOperator, CompoundOperatorKind, EnumVariantLiteral, FieldExpression,
     FieldName, FieldType, ForPattern, ForVar, IteratableExpression, LocationExpression,
-    PatternElement, QualifiedIdentifier, SpanWithoutFileId, TypeForParameter,
+    PatternElement, QualifiedIdentifier, SpanWithoutFileId, TypeForParameter, VariableBinding,
 };
 use swamp_script_ast::{Function, PostfixOperator};
 
@@ -412,6 +412,49 @@ impl AstParser {
 
         let block_expr = Expression::Block(expressions);
         Ok((block_expr, constants))
+    }
+
+    fn parse_with_expr(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
+        let mut inner = Self::convert_into_iterator(pair);
+        let binding_list =
+            self.parse_variable_binding_list(&inner.next().expect("variable list missing"))?;
+        let expr = self.parse_expression(&inner.next().expect("block missing"))?;
+
+        Ok(Expression::With(binding_list, Box::from(expr)))
+    }
+
+    fn parse_variable_binding_list(
+        &self,
+        pair: &Pair<Rule>,
+    ) -> Result<Vec<VariableBinding>, ParseError> {
+        let inner = Self::convert_into_iterator(pair);
+        let mut bindings = Vec::new();
+
+        // Each item in inner will be a variable_binding
+        for binding_pair in inner {
+            if binding_pair.as_rule() == Rule::variable_binding {
+                bindings.push(self.parse_variable_binding(&binding_pair)?);
+            }
+        }
+
+        Ok(bindings)
+    }
+
+    fn parse_variable_binding(&self, pair: &Pair<Rule>) -> Result<VariableBinding, ParseError> {
+        let mut inner = Self::convert_into_iterator(pair);
+
+        let variable = self.parse_variable_item(&inner.next().expect("variable missing"))?;
+
+        let expression = if let Some(expr_pair) = inner.next() {
+            self.parse_mut_expression(&expr_pair)?
+        } else {
+            Expression::VariableAccess(variable.clone())
+        };
+
+        Ok(VariableBinding {
+            variable,
+            expression,
+        })
     }
 
     fn parse_if_expression(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
@@ -1530,6 +1573,7 @@ impl AstParser {
             Rule::return_expr => self.parse_return(pair),
             Rule::break_expr => Ok(Expression::Break(self.to_node(pair))),
             Rule::continue_expr => Ok(Expression::Continue(self.to_node(pair))),
+            Rule::with_expr => self.parse_with_expr(pair),
             Rule::block => {
                 let (expression, _constants) = self.parse_block(pair)?;
                 Ok(expression)
@@ -1726,6 +1770,44 @@ impl AstParser {
         Ok(Expression::Literal(Literal::Map(entries)))
     }
 
+    fn parse_mut_expression(&self, arg_pair: &Pair<Rule>) -> Result<Expression, ParseError> {
+        let mut arg_inner = Self::convert_into_iterator(&arg_pair).peekable();
+
+        let has_mut = arg_inner
+            .peek()
+            .map(|p| p.as_rule() == Rule::mut_keyword)
+            .unwrap_or(false);
+
+        if has_mut {
+            arg_inner.next(); // consume mut keyword
+        }
+
+        let expr = self.parse_expression(&Self::next_pair(&mut arg_inner)?)?;
+
+        let result_expr = if has_mut {
+            match expr {
+                Expression::VariableAccess(var) => {
+                    Expression::MutRef(LocationExpression::Variable(var))
+                }
+                Expression::FieldOrMemberAccess(expr, node) => {
+                    Expression::MutRef(LocationExpression::FieldAccess(expr, node))
+                }
+                Expression::IndexAccess(expr, node) => {
+                    Expression::MutRef(LocationExpression::IndexAccess(expr, node))
+                }
+                _ => {
+                    return Err(
+                        self.create_error_pair(SpecificError::MutOnlyForVariables, &arg_pair)
+                    )
+                }
+            }
+        } else {
+            expr
+        };
+
+        Ok(result_expr)
+    }
+
     fn parse_function_call_arguments(
         &self,
         pair: &Pair<Rule>,
@@ -1736,43 +1818,10 @@ impl AstParser {
         // Parse arguments
         for arg_pair in inner {
             if arg_pair.as_rule() == Rule::function_argument {
-                let mut arg_inner = Self::convert_into_iterator(&arg_pair).peekable();
+                //let mut arg_inner = Self::convert_into_iterator(&arg_pair).peekable();
 
-                // Check for mut keyword
-                let has_mut = arg_inner
-                    .peek()
-                    .map(|p| p.as_rule() == Rule::mut_keyword)
-                    .unwrap_or(false);
-
-                if has_mut {
-                    arg_inner.next(); // consume mut keyword
-                }
-
-                let expr = self.parse_expression(&Self::next_pair(&mut arg_inner)?)?;
-
-                if has_mut {
-                    match expr {
-                        Expression::VariableAccess(var) => {
-                            args.push(Expression::MutRef(LocationExpression::Variable(var)));
-                        }
-                        Expression::FieldOrMemberAccess(expr, node) => {
-                            args.push(Expression::MutRef(LocationExpression::FieldAccess(
-                                expr, node,
-                            )));
-                        }
-                        Expression::IndexAccess(expr, node) => {
-                            args.push(Expression::MutRef(LocationExpression::IndexAccess(
-                                expr, node,
-                            )));
-                        }
-                        _ => {
-                            return Err(self
-                                .create_error_pair(SpecificError::MutOnlyForVariables, &arg_pair))
-                        }
-                    }
-                } else {
-                    args.push(expr);
-                }
+                let expr = self.parse_mut_expression(&arg_pair)?;
+                args.push(expr);
             } else {
                 return Err(
                     self.create_error_pair(SpecificError::UnexpectedTokenInFunctionCall, &arg_pair)

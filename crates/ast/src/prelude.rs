@@ -8,5 +8,5 @@ pub use crate::{
     IdentifierName, ImplItem, ImplMember, Literal, LocalIdentifier, LocalTypeIdentifier, MatchArm,
     Module, ModulePath, Node, Parameter, Pattern, PostfixOperator, PrecisionType,
     QualifiedTypeIdentifier, SelfParameter, StringConst, StringPart, StructType, Type,
-    TypeForParameter, UnaryOperator, Use, UseItem, Variable,
+    TypeForParameter, UnaryOperator, Use, UseItem, Variable, VariableBinding,
 };

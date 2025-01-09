@@ -224,10 +224,16 @@ pub struct VariableNotMut {
     pub name: LocalIdentifier,
 }
 
-#[derive(Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct Variable {
     pub name: Node,
     pub is_mutable: Option<Node>,
+}
+
+#[derive(Debug)]
+pub struct VariableBinding {
+    pub variable: Variable,
+    pub expression: Expression,
 }
 
 impl Variable {
@@ -379,6 +385,7 @@ pub enum Expression {
     MemberOrFieldCall(Box<Expression>, Node, Vec<Expression>),
 
     Block(Vec<Expression>),
+    With(Vec<VariableBinding>, Box<Expression>),
 
     // Control flow
     ForLoop(ForPattern, IteratableExpression, Box<Expression>),

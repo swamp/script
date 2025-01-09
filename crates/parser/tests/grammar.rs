@@ -2347,3 +2347,73 @@ fn struct_calls() {
 ",
     );
 }
+
+#[test_log::test]
+fn with_block() {
+    check(
+        r" 
+        with x, y {
+            a = x + y
+            a
+        }
+         ",
+        r"
+
+VariableBlock([<14:1>, <17:1>], Block([VariableAssignment(<34:1>, BinaryOp(VariableAccess(<38:1>), Add(<40:1>), VariableAccess(<42:1>))), VariableAccess(<56:1>)]))
+
+",
+    );
+}
+
+#[test_log::test]
+fn with_block_assign() {
+    check(
+        r" 
+        with x, y=3 {
+            a = x + y
+            a
+        }
+         ",
+        r"
+
+With([VariableBinding { variable: <15:1>, expression: VariableAccess(<15:1>) }, VariableBinding { variable: <18:1>, expression: Literal(Int(<20:1>)) }], Block([VariableAssignment(<36:1>, BinaryOp(VariableAccess(<40:1>), Add(<42:1>), VariableAccess(<44:1>))), VariableAccess(<58:1>)]))
+
+",
+    );
+}
+
+#[test_log::test]
+fn with_block_mut() {
+    check(
+        r" 
+        with x, mut y {
+            a = x + y
+            y = 4
+            a
+        }
+         ",
+        r"
+
+With([VariableBinding { variable: <15:1>, expression: VariableAccess(<15:1>) }, VariableBinding { variable: mut <18:3> <22:1>, expression: VariableAccess(mut <18:3> <22:1>) }], Block([VariableAssignment(<38:1>, BinaryOp(VariableAccess(<42:1>), Add(<44:1>), VariableAccess(<46:1>))), VariableAssignment(<60:1>, Literal(Int(<64:1>))), VariableAccess(<78:1>)]))
+
+",
+    );
+}
+
+#[test_log::test]
+fn with_assign() {
+    check(
+        r" 
+        result = with x, mut y {
+            a = x + y
+            y = 4
+            a
+        }
+         ",
+        r"
+
+VariableAssignment(<10:6>, With([VariableBinding { variable: <24:1>, expression: VariableAccess(<24:1>) }, VariableBinding { variable: mut <27:3> <31:1>, expression: VariableAccess(mut <27:3> <31:1>) }], Block([VariableAssignment(<47:1>, BinaryOp(VariableAccess(<51:1>), Add(<53:1>), VariableAccess(<55:1>))), VariableAssignment(<69:1>, Literal(Int(<73:1>))), VariableAccess(<87:1>)])))
+
+",
+    );
+}

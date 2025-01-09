@@ -306,7 +306,8 @@ array_index = { "[" ~ expression ~ "]" }
 
 
 primary = {
-    static_call
+    with_expr
+    | static_call
     | static_member_reference
     | if_expr
     | match_expr
@@ -336,6 +337,10 @@ if_expr = { "if" ~ expression ~ expression ~ ("else" ~ (if_expr | expression))? 
 expression_in_block = { const_def | expression }
 
 block = { "{" ~ expression_in_block* ~ "}" }
+with_expr = { "with" ~ variable_binding_list ~ expression }
+
+variable_binding_list = { variable_binding ~ ("," ~ variable_binding)* ~ ","? }
+variable_binding = { variable_item ~ ("=" ~ function_argument)? }
 
 match_expr = { "match" ~ expression ~ "{" ~ match_arms ~ "}" }
 
