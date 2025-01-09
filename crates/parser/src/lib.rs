@@ -1531,7 +1531,6 @@ impl AstParser {
 
     fn parse_static_member_reference(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
         let mut inner = pair.clone().into_inner();
-        println!("inner {}", inner.as_str());
 
         let type_identifier = self.parse_qualified_type_identifier(&inner.next().unwrap())?;
         let member_name = self.expect_identifier_next(&mut inner)?;
@@ -2152,21 +2151,19 @@ impl AstParser {
     }
 
     fn parse_match_pattern(&self, pair: &Pair<Rule>) -> Result<Pattern, ParseError> {
-        println!("parse_match_pattern {:?}", pair.as_rule());
         let mut inner = Self::convert_into_iterator(pair);
         let pattern_inside = inner.next().expect("should have inner");
-        println!("pattern_inside {:?}", pattern_inside.as_rule());
         match pattern_inside.as_rule() {
             Rule::normal_pattern => {
-                let match_pattern =
-                    self.parse_normal_match_pattern(&self.next_inner_pair(pair)?)?;
-                // Peek to see if the next pair is a guard_clause
-                let guard_clause = if let Some(next_pair) = inner.peekable().peek() {
-                    if next_pair.as_rule() == Rule::guard_clause {
-                        Some(self.parse_guard_clause(next_pair)?)
-                    } else {
-                        None
-                    }
+                let match_pattern = self.parse_normal_match_pattern(&pattern_inside)?;
+                let inner_pairs: Vec<_> = pattern_inside.clone().into_inner().collect();
+                let has_guard = inner_pairs
+                    .get(1)
+                    .map(|p| p.as_rule() == Rule::guard_clause)
+                    .unwrap_or(false);
+
+                let guard_clause = if has_guard {
+                    Some(self.parse_guard_clause(&inner_pairs[1])?)
                 } else {
                     None
                 };
@@ -2178,14 +2175,17 @@ impl AstParser {
     }
 
     fn parse_guard_clause(&self, pair: &Pair<Rule>) -> Result<GuardClause, ParseError> {
-        Ok(GuardClause(self.parse_expression(pair)?))
+        let inner = pair
+            .clone()
+            .into_inner()
+            .next()
+            .ok_or_else(|| self.create_error_pair(SpecificError::MissingFunctionBody, pair))?;
+        Ok(GuardClause(self.parse_expression(&inner)?))
     }
 
     fn parse_normal_match_pattern(&self, pair: &Pair<Rule>) -> Result<NormalPattern, ParseError> {
-        println!("parse_normal_match_pattern {:?}", pair.as_rule());
         let mut inner = Self::convert_into_iterator(pair);
         let pattern = inner.next().expect("should have inner");
-        println!("parse_normal_match_pattern_inner {:?}", pattern.as_rule());
 
         match pattern.as_rule() {
             Rule::pattern => {
@@ -2219,7 +2219,6 @@ impl AstParser {
     fn parse_pattern_list(&self, pair: &Pair<Rule>) -> Result<Vec<PatternElement>, ParseError> {
         let mut elements = Vec::new();
         for item in Self::convert_into_iterator(pair) {
-            println!("parse_pattern_list {:?}", item.as_rule());
             match item.as_rule() {
                 Rule::pattern_field => {
                     if item.as_str() == "_" {

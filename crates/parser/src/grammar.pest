@@ -375,7 +375,7 @@ wildcard_pattern = { "_" }
 
 // GUARD CLAUSE ---------------------------------------------------------------
 
-guard_clause = { "if" ~ expression }
+guard_clause = { "|" ~ expression }
 
 variable_list = {
     variable_item ~ ("," ~ variable_item)*

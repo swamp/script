@@ -650,7 +650,7 @@ fn match_expression() {
 
         v = match state {
             Running speed, _ => speed,
-            Sleeping  hours  => hours + 10,
+            Sleeping  hours   => hours + 10,
             _ => 0,
         }
 
@@ -689,6 +689,25 @@ fn match_expression_minimal_two_arms() {
     let script = r#"
        match state {
             EnumType ident, _ => ident,
+            _ => 0,
+        }
+"#;
+
+    check(
+        script,
+        r"
+
+Match(VariableAccess(<14:5>), [MatchArm { pattern: NormalPattern(EnumPattern(<34:8>, Some([Variable(<43:5>), Wildcard(<50:1>)])), None), expression: VariableAccess(<55:5>) }, MatchArm { pattern: Wildcard(<74:1>), expression: Literal(Int(<79:1>)) }])
+
+",
+    );
+}
+
+#[test_log::test]
+fn match_expression_minimal_two_arms_guard() {
+    let script = r#"
+       match state {
+            EnumType | false && true  => ident,
             _ => 0,
         }
 "#;

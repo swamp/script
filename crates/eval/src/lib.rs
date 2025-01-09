@@ -1811,6 +1811,14 @@ impl<'a, C> Interpreter<'a, C> {
                     return self.evaluate_expression(&arm.expression)
                 }
                 ResolvedPattern::Normal(normal_pattern, maybe_guard) => {
+                    if let Some(found_guard) = maybe_guard {
+                        if !self
+                            .evaluate_expression(&found_guard.expression)?
+                            .is_truthy()?
+                        {
+                            continue;
+                        }
+                    }
                     match &normal_pattern {
                         ResolvedNormalPattern::PatternList(elements) => {
                             // Handle single variable/wildcard patterns that match any value
