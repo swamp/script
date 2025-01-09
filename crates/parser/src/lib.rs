@@ -2152,17 +2152,58 @@ impl AstParser {
     }
 
     fn parse_match_pattern(&self, pair: &Pair<Rule>) -> Result<Pattern, ParseError> {
-        match pair.as_rule() {
-            Rule::match_pattern => {
-                // Directly pass inner to parse recursively
-                self.parse_match_pattern(&self.next_inner_pair(pair)?)
+        println!("parse_match_pattern {:?}", pair.as_rule());
+        let mut inner = Self::convert_into_iterator(pair);
+        let pattern_inside = inner.next().expect("should have inner");
+        println!("pattern_inside {:?}", pattern_inside.as_rule());
+        match pattern_inside.as_rule() {
+            Rule::normal_pattern => {
+                let match_pattern =
+                    self.parse_normal_match_pattern(&self.next_inner_pair(pair)?)?;
+                // Peek to see if the next pair is a guard_clause
+                let guard_clause = if let Some(next_pair) = inner.peekable().peek() {
+                    if next_pair.as_rule() == Rule::guard_clause {
+                        Some(self.parse_guard_clause(next_pair)?)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+                Ok(Pattern::NormalPattern(match_pattern, guard_clause))
             }
+            Rule::wildcard_pattern => Ok(Pattern::Wildcard(self.to_node(pair))),
+            _ => Err(self.create_error_pair(SpecificError::MustHaveAtLeastOneArm, pair)),
+        }
+    }
+
+    fn parse_guard_clause(&self, pair: &Pair<Rule>) -> Result<GuardClause, ParseError> {
+        Ok(GuardClause(self.parse_expression(pair)?))
+    }
+
+    fn parse_normal_match_pattern(&self, pair: &Pair<Rule>) -> Result<NormalPattern, ParseError> {
+        println!("parse_normal_match_pattern {:?}", pair.as_rule());
+        let mut inner = Self::convert_into_iterator(pair);
+        let pattern_inside = inner.next().expect("should have inner");
+        println!(
+            "parse_normal_match_pattern_inner {:?}",
+            pattern_inside.as_rule()
+        );
+        let mut pattern_inside_that = Self::convert_into_iterator(&pattern_inside);
+
+        let pattern_inside_inside = pattern_inside_that.next().expect("should have inner");
+
+        println!(
+            "pattern_inside_inside {:?}",
+            pattern_inside_inside.as_rule()
+        );
+        match pattern_inside_inside.as_rule() {
             Rule::pattern_list => {
                 let elements = self.parse_pattern_list(pair)?;
-                Ok(Pattern::PatternList(elements))
+                Ok(NormalPattern::PatternList(elements))
             }
             Rule::enum_pattern => {
-                let mut inner = Self::convert_into_iterator(pair);
+                let mut inner = Self::convert_into_iterator(&pattern_inside_inside);
                 let variant = self.expect_local_type_identifier_next(&mut inner)?;
 
                 // Parse pattern list if present
@@ -2171,12 +2212,10 @@ impl AstParser {
                     .map(|p| self.parse_pattern_list(&p))
                     .transpose()?;
 
-                Ok(Pattern::EnumPattern(variant.0, elements))
+                Ok(NormalPattern::EnumPattern(variant.0, elements))
             }
-            Rule::literal => Ok(Pattern::Literal(self.parse_literal(pair)?)),
-            Rule::wildcard_pattern => Ok(Pattern::PatternList(vec![PatternElement::Wildcard(
-                self.to_node(pair),
-            )])),
+            Rule::literal => Ok(NormalPattern::Literal(self.parse_literal(pair)?)),
+
             _ => Err(self.create_error_pair(SpecificError::UnknownMatchType, pair)),
         }
     }
@@ -2184,6 +2223,7 @@ impl AstParser {
     fn parse_pattern_list(&self, pair: &Pair<Rule>) -> Result<Vec<PatternElement>, ParseError> {
         let mut elements = Vec::new();
         for item in Self::convert_into_iterator(pair) {
+            println!("parse_pattern_list {:?}", item.as_rule());
             match item.as_rule() {
                 Rule::pattern_field => {
                     if item.as_str() == "_" {

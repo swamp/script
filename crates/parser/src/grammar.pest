@@ -342,6 +342,7 @@ with_expr = { "with" ~ variable_binding_list ~ expression }
 variable_binding_list = { variable_binding ~ ("," ~ variable_binding)* ~ ","? }
 variable_binding = { variable_item ~ ("=" ~ function_argument)? }
 
+// MATCH EXPRESSIONS ---------------------------------------------------------
 match_expr = { "match" ~ expression ~ "{" ~ match_arms ~ "}" }
 
 match_arms = { match_arm ~ ("," ~ match_arm)* ~ ","? }
@@ -349,21 +350,32 @@ match_arm = {
     match_pattern ~ "=>" ~ expression
 }
 
-
 // MATCH PATTERNS ------------------------------------------------------------
+match_pattern = { normal_pattern | wildcard_pattern }
+normal_pattern = { pattern ~ guard_clause? }
 
-// ENUM =================
-match_pattern = {
-    wildcard_pattern
-    | enum_pattern
+pattern = {
+    enum_pattern
     | literal
     | pattern_list
 }
+
+pattern_list = {
+    (pattern_field | expression) ~
+    ("," ~ " "* ~ (pattern_field | expression))*
+}  // PEST BUG: need explicit spaces after comma
 
 enum_pattern = {
     type_identifier ~ pattern_list?
 }
 
+pattern_field = { identifier | "_" }
+
+wildcard_pattern = { "_" }
+
+// GUARD CLAUSE ---------------------------------------------------------------
+
+guard_clause = { "if" ~ expression }
 
 variable_list = {
     variable_item ~ ("," ~ variable_item)*
@@ -373,14 +385,6 @@ variable_item = {
     mut_keyword? ~ identifier
 }
 
-pattern_list = {
-    (pattern_field | expression) ~
-    ("," ~ " "* ~ (pattern_field | expression))*
-}  // PEST BUG: need explicit spaces after comma
-
-pattern_field = { identifier | "_" }
-
-wildcard_pattern = { "_" }
 
 // TYPES ------------------------------------------------------------
 built_in_type = { "Int" | "Float" | "String" | "Bool" }

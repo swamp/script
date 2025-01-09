@@ -527,9 +527,19 @@ pub enum PostfixOperator {
     Unwrap(Node), // option_operator
 }
 
+#[derive(Debug)]
+pub struct GuardClause(pub Expression);
+
 // Patterns are used in matching and destructuring
 #[derive(Debug)]
 pub enum Pattern {
+    Wildcard(Node),
+    NormalPattern(NormalPattern, Option<GuardClause>),
+}
+
+// Patterns are used in matching and destructuring
+#[derive(Debug)]
+pub enum NormalPattern {
     PatternList(Vec<PatternElement>),
     EnumPattern(Node, Option<Vec<PatternElement>>),
     Literal(Literal),
