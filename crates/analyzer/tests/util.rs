@@ -29,9 +29,9 @@ fn internal_compile(script: &str) -> Result<ResolvedModule, ResolveError> {
 
     source_map.add_manual(file_id, Path::new("some_path/main"), script);
     let resolved_path_str = vec!["test".to_string()];
-    let own_module = modules.add_empty_module(&resolved_path_str);
+    let _own_module = modules.add_empty_module(&resolved_path_str);
 
-    let mut name_lookup = NameLookup::new(own_module.borrow_mut().namespace.clone(), &mut modules);
+    let mut name_lookup = NameLookup::new(resolved_path_str, &mut modules);
 
     let mut resolver = Resolver::new(&types, &mut state, &mut name_lookup, &source_map, file_id);
 

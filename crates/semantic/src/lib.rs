@@ -1458,6 +1458,7 @@ impl ResolvedExpression {
                     expr.collect_constant_dependencies(deps);
                 }
             }
+
             Self::If(cond, true_block, false_block) => {
                 cond.expression.collect_constant_dependencies(deps);
                 true_block.collect_constant_dependencies(deps);

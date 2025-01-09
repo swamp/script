@@ -2,7 +2,7 @@ use crate::err::ResolveError;
 use crate::{Resolver, SPARSE_TYPE_ID};
 use swamp_script_ast::{Expression, Node};
 use swamp_script_semantic::{
-    ResolvedExpression, ResolvedMapTypeRef, ResolvedType, ResolvedVariableRef, Spanned,
+    ResolvedExpression, ResolvedMapTypeRef, ResolvedType, ResolvedVariableRef,
 };
 
 impl<'a> Resolver<'a> {

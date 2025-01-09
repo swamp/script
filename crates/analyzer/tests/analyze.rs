@@ -775,10 +775,10 @@ FunctionCall(FunctionTypeSignature { first_parameter_is_self: false, parameters:
 #[test_log::test]
 fn struct_calls() {
     check(
-        r" 
+        r"
         struct Assets {
         }
-        
+
         impl Assets {
             fn frame_fixed_grid_material_png(self, name: String) {
             }
@@ -788,6 +788,113 @@ fn struct_calls() {
         }
          ",
         r"
+
+
+",
+    );
+}
+
+#[test_log::test]
+fn with_simple() {
+    check(
+        r"
+        x = 4
+        y = 5
+
+        with y {
+            y + 3
+        }
+         ",
+        r"
+
+InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <10:1>, resolved_type: Int, mutable_node: None, scope_index: 0, variable_index: 0 }], expression: Literal(IntLiteral(4, <14:1>)) })
+InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <24:1>, resolved_type: Int, mutable_node: None, scope_index: 0, variable_index: 1 }], expression: Literal(IntLiteral(5, <28:1>)) })
+Block([InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <52:1>, resolved_type: Int, mutable_node: None, scope_index: 1, variable_index: 0 }], expression: VariableAccess(ResolvedVariable { name: <24:1>, resolved_type: Int, mutable_node: None, scope_index: 0, variable_index: 1 }) }), Block([BinaryOp(ResolvedBinaryOperator { left: VariableAccess(ResolvedVariable { name: <52:1>, resolved_type: Int, mutable_node: None, scope_index: 1, variable_index: 0 }), right: Literal(IntLiteral(3, <72:1>)), kind: Add, node: <70:1>, resolved_type: Int })])])
+
+",
+    );
+}
+
+#[test_log::test]
+fn with_simple_two() {
+    check(
+        r"
+        x = 4
+        y = 5
+
+        with y, x {
+            y + 3
+        }
+         ",
+        r"
+
+InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <10:1>, resolved_type: Int, mutable_node: None, scope_index: 0, variable_index: 0 }], expression: Literal(IntLiteral(4, <14:1>)) })
+InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <24:1>, resolved_type: Int, mutable_node: None, scope_index: 0, variable_index: 1 }], expression: Literal(IntLiteral(5, <28:1>)) })
+Block([InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <52:1>, resolved_type: Int, mutable_node: None, scope_index: 1, variable_index: 0 }], expression: VariableAccess(ResolvedVariable { name: <24:1>, resolved_type: Int, mutable_node: None, scope_index: 0, variable_index: 1 }) }), InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <55:1>, resolved_type: Int, mutable_node: None, scope_index: 1, variable_index: 1 }], expression: VariableAccess(ResolvedVariable { name: <10:1>, resolved_type: Int, mutable_node: None, scope_index: 0, variable_index: 0 }) }), Block([BinaryOp(ResolvedBinaryOperator { left: VariableAccess(ResolvedVariable { name: <52:1>, resolved_type: Int, mutable_node: None, scope_index: 1, variable_index: 0 }), right: Literal(IntLiteral(3, <75:1>)), kind: Add, node: <73:1>, resolved_type: Int })])])
+
+",
+    );
+}
+
+#[test_log::test]
+fn with_simple_assign() {
+    check(
+        r"
+        x = 4
+        y = 5
+
+        a = with y {
+            y + 3
+        }
+         ",
+        r"
+
+InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <10:1>, resolved_type: Int, mutable_node: None, scope_index: 0, variable_index: 0 }], expression: Literal(IntLiteral(4, <14:1>)) })
+InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <24:1>, resolved_type: Int, mutable_node: None, scope_index: 0, variable_index: 1 }], expression: Literal(IntLiteral(5, <28:1>)) })
+InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <46:1>, resolved_type: Int, mutable_node: None, scope_index: 0, variable_index: 2 }], expression: Block([InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <55:1>, resolved_type: Int, mutable_node: None, scope_index: 1, variable_index: 0 }], expression: VariableAccess(ResolvedVariable { name: <24:1>, resolved_type: Int, mutable_node: None, scope_index: 0, variable_index: 1 }) }), Block([BinaryOp(ResolvedBinaryOperator { left: VariableAccess(ResolvedVariable { name: <55:1>, resolved_type: Int, mutable_node: None, scope_index: 1, variable_index: 0 }), right: Literal(IntLiteral(3, <75:1>)), kind: Add, node: <73:1>, resolved_type: Int })])]) })
+
+",
+    );
+}
+
+#[test_log::test]
+fn with_simple_multi_assign() {
+    check(
+        r"
+        x = 4
+        y = 5
+
+        a = with y, x {
+            y + 3
+        }
+         ",
+        r"
+
+InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <10:1>, resolved_type: Int, mutable_node: None, scope_index: 0, variable_index: 0 }], expression: Literal(IntLiteral(4, <14:1>)) })
+InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <24:1>, resolved_type: Int, mutable_node: None, scope_index: 0, variable_index: 1 }], expression: Literal(IntLiteral(5, <28:1>)) })
+InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <47:1>, resolved_type: Int, mutable_node: None, scope_index: 0, variable_index: 2 }], expression: Block([InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <56:1>, resolved_type: Int, mutable_node: None, scope_index: 1, variable_index: 0 }], expression: VariableAccess(ResolvedVariable { name: <24:1>, resolved_type: Int, mutable_node: None, scope_index: 0, variable_index: 1 }) }), InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <59:1>, resolved_type: Int, mutable_node: None, scope_index: 1, variable_index: 1 }], expression: VariableAccess(ResolvedVariable { name: <10:1>, resolved_type: Int, mutable_node: None, scope_index: 0, variable_index: 0 }) }), Block([BinaryOp(ResolvedBinaryOperator { left: VariableAccess(ResolvedVariable { name: <56:1>, resolved_type: Int, mutable_node: None, scope_index: 1, variable_index: 0 }), right: Literal(IntLiteral(3, <79:1>)), kind: Add, node: <77:1>, resolved_type: Int })])]) })
+
+",
+    );
+}
+
+#[test_log::test]
+fn with_simple_multi_assign_shadow() {
+    check(
+        r"
+        x = 4
+        y = 5
+
+        a = with x {
+            x + 3
+            y = 3
+        }
+         ",
+        r"
+
+InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <9:1>, resolved_type: Int, mutable_node: None, scope_index: 0, variable_index: 0 }], expression: Literal(IntLiteral(4, <13:1>)) })
+InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <23:1>, resolved_type: Int, mutable_node: None, scope_index: 0, variable_index: 1 }], expression: Literal(IntLiteral(5, <27:1>)) })
+InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <38:1>, resolved_type: Int, mutable_node: None, scope_index: 0, variable_index: 2 }], expression: Block([InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <47:1>, resolved_type: Int, mutable_node: None, scope_index: 1, variable_index: 0 }], expression: VariableAccess(ResolvedVariable { name: <9:1>, resolved_type: Int, mutable_node: None, scope_index: 0, variable_index: 0 }) }), Block([BinaryOp(ResolvedBinaryOperator { left: VariableAccess(ResolvedVariable { name: <47:1>, resolved_type: Int, mutable_node: None, scope_index: 1, variable_index: 0 }), right: Literal(IntLiteral(3, <67:1>)), kind: Add, node: <65:1>, resolved_type: Int }), InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <81:1>, resolved_type: Int, mutable_node: None, scope_index: 1, variable_index: 1 }], expression: Literal(IntLiteral(3, <85:1>)) })])]) })
 
 
 ",

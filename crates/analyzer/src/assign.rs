@@ -1,10 +1,7 @@
 use crate::err::ResolveError;
 use crate::{wrap_in_some_if_optional, Resolver};
 use swamp_script_ast::{CompoundOperator, Expression, Node};
-use swamp_script_semantic::{
-    ResolvedAccess, ResolvedCompoundOperatorKind, ResolvedExpression, ResolvedType,
-    ResolvedVariableCompoundAssignment,
-};
+use swamp_script_semantic::{ResolvedAccess, ResolvedExpression};
 
 impl<'a> Resolver<'a> {
     pub(crate) fn resolve_field_assignment(

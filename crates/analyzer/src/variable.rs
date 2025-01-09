@@ -1,5 +1,5 @@
 use crate::err::ResolveError;
-use crate::Resolver;
+use crate::{BlockScopeMode, Resolver};
 use std::rc::Rc;
 use swamp_script_ast::{CompoundOperator, Expression, Node, Variable};
 use swamp_script_semantic::{
@@ -31,7 +31,10 @@ impl<'a> Resolver<'a> {
         )
     }
 
-    fn find_variable_from_node(&self, node: &Node) -> Result<ResolvedVariableRef, ResolveError> {
+    pub(crate) fn find_variable_from_node(
+        &self,
+        node: &Node,
+    ) -> Result<ResolvedVariableRef, ResolveError> {
         self.try_find_variable(node).map_or_else(
             || Err(ResolveError::UnknownVariable(self.to_node(node))),
             Ok,
@@ -40,9 +43,13 @@ impl<'a> Resolver<'a> {
 
     pub(crate) fn try_find_variable(&self, node: &Node) -> Option<ResolvedVariableRef> {
         let variable_text = self.get_text(node);
+
         for scope in self.scope.block_scope_stack.iter().rev() {
             if let Some(value) = scope.variables.get(&variable_text.to_string()) {
                 return Some(value.clone());
+            }
+            if scope.mode == BlockScopeMode::Closed {
+                break;
             }
         }
 
@@ -155,6 +162,25 @@ impl<'a> Resolver<'a> {
             .expect("should have checked earlier for variable");
 
         Ok(variable_ref)
+    }
+
+    pub(crate) fn link_local_variable_resolved(
+        &mut self,
+        variable_ref: ResolvedVariableRef,
+    ) -> Result<(), ResolveError> {
+        let variable_name = self.get_text_resolved(&variable_ref.name).to_string();
+        let variables = &mut self
+            .scope
+            .block_scope_stack
+            .last_mut()
+            .expect("block scope should have at least one scope")
+            .variables;
+
+        variables
+            .insert(variable_name, variable_ref.clone())
+            .expect("should have checked earlier for variable");
+
+        Ok(())
     }
 
     pub(crate) fn create_local_variable_generated(
@@ -281,6 +307,27 @@ impl<'a> Resolver<'a> {
         ast_expression: &Expression,
     ) -> Result<ResolvedExpression, ResolveError> {
         let converted_expression = self.resolve_expression(ast_expression)?;
+        let expression_type = converted_expression.resolution();
+        let (variable_ref, is_reassignment) =
+            self.set_or_overwrite_variable_with_type(ast_variable, &expression_type)?;
+
+        let assignment = ResolvedVariableAssignment {
+            variable_refs: vec![variable_ref],
+            expression: Box::from(converted_expression),
+        };
+
+        if is_reassignment {
+            Ok(ResolvedExpression::ReassignVariable(assignment))
+        } else {
+            Ok(ResolvedExpression::InitializeVariable(assignment))
+        }
+    }
+
+    pub(crate) fn resolve_variable_assignment_resolved(
+        &mut self,
+        ast_variable: &Variable,
+        converted_expression: ResolvedExpression,
+    ) -> Result<ResolvedExpression, ResolveError> {
         let expression_type = converted_expression.resolution();
         let (variable_ref, is_reassignment) =
             self.set_or_overwrite_variable_with_type(ast_variable, &expression_type)?;

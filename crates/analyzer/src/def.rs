@@ -107,7 +107,7 @@ impl<'a> Resolver<'a> {
         let parent_ref = self.shared.lookup.add_enum_type(enum_parent)?;
 
         for variant_type in ast_variants {
-            let mut container_number: Option<TypeNumber> = None;
+            let mut container_number: Option<TypeNumber> = None; // what is container_number used for
 
             let variant_name_node = match variant_type {
                 EnumVariantType::Simple(name) => name,

@@ -21,37 +21,20 @@ pub mod variable;
 
 use crate::err::ResolveError;
 use crate::lookup::NameLookup;
-use seq_map::{SeqMap, SeqMapError};
-use seq_set::SeqSet;
+use seq_map::SeqMap;
 use std::mem::take;
 use std::num::{ParseFloatError, ParseIntError};
 use std::rc::Rc;
 use swamp_script_ast::prelude::*;
 use swamp_script_ast::{
-    CompoundOperator, CompoundOperatorKind, EnumVariantLiteral, FieldExpression, ForPattern,
-    Function, LocationExpression, PatternElement, PostfixOperator, QualifiedIdentifier,
-    SpanWithoutFileId,
+    CompoundOperator, CompoundOperatorKind, EnumVariantLiteral, ForPattern, Function,
+    LocationExpression, PostfixOperator, QualifiedIdentifier, SpanWithoutFileId,
 };
-use swamp_script_semantic::modules::ResolvedModules;
-use swamp_script_semantic::{
-    create_rust_type, prelude::*, FileId, ResolvedAccess, ResolvedAnonymousStructFieldType,
-    ResolvedAnonymousStructType, ResolvedBinaryOperatorKind, ResolvedCompoundOperator,
-    ResolvedCompoundOperatorKind, ResolvedForPattern, ResolvedFormatSpecifier,
-    ResolvedFormatSpecifierKind, ResolvedLocalIdentifier, ResolvedLocalTypeIdentifier,
-    ResolvedMapIndexLookup, ResolvedPatternElement, ResolvedPostfixOperatorKind,
-    ResolvedPrecisionType, ResolvedStaticCallGeneric, ResolvedTupleTypeRef,
-    ResolvedTypeForParameter, ResolvedUnaryOperatorKind, ResolvedUse, ResolvedUseItem,
-    ResolvedVariableCompoundAssignment, Span, TypeNumber,
-};
-use swamp_script_semantic::{FunctionTypeSignature, ResolvedProgramTypes};
-use swamp_script_semantic::{
-    ResolvedDefinition, ResolvedEnumTypeRef, ResolvedFunction, ResolvedFunctionRef,
-    ResolvedMapTypeRef, ResolvedMutMap, ResolvedStaticCall,
-};
-use swamp_script_semantic::{ResolvedMapType, ResolvedProgramState};
-use swamp_script_semantic::{ResolvedModulePath, ResolvedPostfixOperator};
+use swamp_script_semantic::prelude::*;
+
 use swamp_script_source_map::SourceMap;
-use tracing::{debug, error, info};
+
+use tracing::error;
 
 #[derive(Debug)]
 pub struct ResolvedProgram {
@@ -88,8 +71,15 @@ pub const fn convert_span(without: &SpanWithoutFileId, file_id: FileId) -> Span 
 
 pub const SPARSE_TYPE_ID: TypeNumber = 999;
 
+#[derive(Debug, Eq, PartialEq)]
+pub enum BlockScopeMode {
+    Open,
+    Closed,
+}
+
 #[derive(Debug)]
 pub struct BlockScope {
+    mode: BlockScopeMode,
     variables: SeqMap<String, ResolvedVariableRef>,
     constants: SeqMap<String, ResolvedConstantRef>,
 }
@@ -104,6 +94,7 @@ impl BlockScope {
     #[must_use]
     pub fn new() -> Self {
         Self {
+            mode: BlockScopeMode::Open,
             variables: SeqMap::new(),
             constants: SeqMap::new(),
         }
@@ -584,6 +575,11 @@ impl<'a> Resolver<'a> {
             Expression::Block(expressions) => {
                 ResolvedExpression::Block(self.resolve_expressions(expressions)?)
             }
+
+            Expression::With(variable_bindings, expression) => {
+                self.resolve_with_expr(variable_bindings, expression)?
+            }
+
             Expression::InterpolatedString(string_parts) => ResolvedExpression::InterpolatedString(
                 self.resolve_interpolated_string(string_parts)?,
             ),
@@ -1027,12 +1023,25 @@ impl<'a> Resolver<'a> {
 
     fn push_block_scope(&mut self, _debug_str: &str) {
         self.scope.block_scope_stack.push(BlockScope {
+            mode: BlockScopeMode::Open,
             variables: SeqMap::default(),
             constants: SeqMap::default(),
         });
     }
 
     fn pop_block_scope(&mut self, _debug_str: &str) {
+        self.scope.block_scope_stack.pop();
+    }
+
+    fn push_closed_block_scope(&mut self) {
+        self.scope.block_scope_stack.push(BlockScope {
+            mode: BlockScopeMode::Closed,
+            variables: SeqMap::default(),
+            constants: SeqMap::default(),
+        });
+    }
+
+    fn pop_closed_block_scope(&mut self) {
         self.scope.block_scope_stack.pop();
     }
 
@@ -1314,6 +1323,36 @@ impl<'a> Resolver<'a> {
             }
         }
         Ok(())
+    }
+
+    fn resolve_with_expr(
+        &mut self,
+        variables: &[VariableBinding],
+        expression: &Expression,
+    ) -> Result<ResolvedExpression, ResolveError> {
+        let mut variable_expressions = Vec::new();
+        for variable in variables {
+            let var = self.resolve_expression(&variable.expression)?;
+            variable_expressions.push(var);
+        }
+
+        self.push_closed_block_scope();
+        let mut expressions = Vec::new();
+        for (variable_binding, resolved_expression) in variables.iter().zip(variable_expressions) {
+            let initialize_variable_expression = self.resolve_variable_assignment_resolved(
+                &variable_binding.variable,
+                resolved_expression,
+            )?;
+            expressions.push(initialize_variable_expression);
+        }
+
+        let resolved_expression = self.resolve_expression(expression)?;
+        expressions.push(resolved_expression);
+
+        let block_expression = ResolvedExpression::Block(expressions);
+        self.pop_closed_block_scope();
+
+        Ok(block_expression)
     }
 }
 
