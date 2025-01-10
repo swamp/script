@@ -1,6 +1,6 @@
 [package]
 name = "swamp-script-cli"
-version = "0.0.10"
+version = "0.0.11"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/swamp/script"
@@ -17,23 +17,23 @@ tracing-subscriber = { version = "0.3.18", features = [
 
 
 # Ast and Parser
-swamp-script-parser = { path = "../parser", version = "0.0.10" }
-swamp-script-ast = { path = "../ast", version = "0.0.10" }
+swamp-script-parser = { path = "../parser", version = "0.0.11" }
+swamp-script-ast = { path = "../ast", version = "0.0.11" }
 
 # Semantic and Analyzer
-swamp-script-semantic = { path = "../semantic", version = "0.0.10" }
-swamp-script-analyzer = { path = "../analyzer", version = "0.0.10" }
+swamp-script-semantic = { path = "../semantic", version = "0.0.11" }
+swamp-script-analyzer = { path = "../analyzer", version = "0.0.11" }
 
-swamp-script-source-map = { path = "../source-map", version = "0.0.10" }
+swamp-script-source-map = { path = "../source-map", version = "0.0.11" }
 
-swamp-script-error-report = { path = "../err", version = "0.0.10"}
+swamp-script-error-report = { path = "../err", version = "0.0.11" }
 
 # Runner
-swamp-script-eval = { path = "../eval", version = "0.0.10" }
-swamp-script-eval-loader = { path = "../eval-loader", version = "0.0.10" }
-swamp-script-core = { path = "../core", version = "0.0.10" }
+swamp-script-eval = { path = "../eval", version = "0.0.11" }
+swamp-script-eval-loader = { path = "../eval-loader", version = "0.0.11" }
+swamp-script-core = { path = "../core", version = "0.0.11" }
 
-swamp-script-dep-loader = { path = "../dep-loader", version = "0.0.10" }
+swamp-script-dep-loader = { path = "../dep-loader", version = "0.0.11" }
 
 [[bin]]
 name = "swamp"
