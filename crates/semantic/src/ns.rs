@@ -146,7 +146,6 @@ impl ResolvedModuleNamespace {
 
     pub fn add_enum_type(
         &mut self,
-        //        enum_type_name: &str,
         enum_type_ref: ResolvedEnumTypeRef,
     ) -> Result<ResolvedEnumTypeRef, SemanticError> {
         assert!(!enum_type_ref.module_path.is_empty());

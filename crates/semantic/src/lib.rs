@@ -274,22 +274,21 @@ pub enum ResolvedType {
     Bool,
     Unit,
 
+    // Containers
     Array(ResolvedArrayTypeRef),
     Tuple(ResolvedTupleTypeRef),
     Struct(ResolvedStructTypeRef),
     Map(ResolvedMapTypeRef),
 
-    Generic(Box<ResolvedType>, Vec<ResolvedType>),
-
     Enum(ResolvedEnumTypeRef),
     EnumVariant(ResolvedEnumVariantTypeRef),
 
-    Function(FunctionTypeSignature),
+    Generic(Box<ResolvedType>, Vec<ResolvedType>),
 
+    Function(FunctionTypeSignature),
     Iterable(Box<ResolvedType>),
 
     Optional(Box<ResolvedType>),
-
     RustType(ResolvedRustTypeRef),
 
     Any,
@@ -298,33 +297,33 @@ pub enum ResolvedType {
 impl Debug for ResolvedType {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            ResolvedType::Int => write!(f, "Int"),
-            ResolvedType::Float => write!(f, "Float"),
-            ResolvedType::String => write!(f, "String"),
-            ResolvedType::Bool => write!(f, "Bool"),
-            ResolvedType::Unit => write!(f, "()"),
-            ResolvedType::Array(array_type_ref) => write!(f, "[{:?}]", array_type_ref.item_type),
-            ResolvedType::Tuple(tuple_type_ref) => write!(f, "( {:?} )", tuple_type_ref.0),
-            ResolvedType::Struct(struct_type_ref) => {
+            Self::Int => write!(f, "Int"),
+            Self::Float => write!(f, "Float"),
+            Self::String => write!(f, "String"),
+            Self::Bool => write!(f, "Bool"),
+            Self::Unit => write!(f, "()"),
+            Self::Array(array_type_ref) => write!(f, "[{:?}]", array_type_ref.item_type),
+            Self::Tuple(tuple_type_ref) => write!(f, "( {:?} )", tuple_type_ref.0),
+            Self::Struct(struct_type_ref) => {
                 write!(f, "{}", struct_type_ref.borrow().assigned_name)
             }
-            ResolvedType::Map(map_type_ref) => write!(
+            Self::Map(map_type_ref) => write!(
                 f,
                 "[{:?}:{:?}]",
                 map_type_ref.key_type, map_type_ref.value_type
             ),
-            ResolvedType::Generic(base, parameters) => write!(f, "{:?}<{:?}>", base, parameters),
-            ResolvedType::Enum(enum_type_ref) => write!(f, "{:?}", enum_type_ref.assigned_name),
-            ResolvedType::EnumVariant(enum_type_variant) => {
+            Self::Generic(base, parameters) => write!(f, "{:?}<{:?}>", base, parameters),
+            Self::Enum(enum_type_ref) => write!(f, "{:?}", enum_type_ref.assigned_name),
+            Self::EnumVariant(enum_type_variant) => {
                 write!(f, "{:?}", enum_type_variant.assigned_name)
             }
-            ResolvedType::Function(function_type_signature) => {
+            Self::Function(function_type_signature) => {
                 write!(f, "{:?}", function_type_signature)
             }
-            ResolvedType::Iterable(type_generated) => write!(f, "Iterable<{type_generated:?}>"),
-            ResolvedType::Optional(base_type) => write!(f, "{:?}?", base_type),
-            ResolvedType::RustType(rust_type) => write!(f, "{:?}?", rust_type.type_name),
-            ResolvedType::Any => write!(f, "Any"),
+            Self::Iterable(type_generated) => write!(f, "Iterable<{type_generated:?}>"),
+            Self::Optional(base_type) => write!(f, "{:?}?", base_type),
+            Self::RustType(rust_type) => write!(f, "{:?}?", rust_type.type_name),
+            Self::Any => write!(f, "Any"),
         }
     }
 }
@@ -1084,6 +1083,7 @@ pub enum ResolvedExpression {
 
     ExternalFunctionAccess(ResolvedExternalFunctionDefinitionRef),
 
+    // Mut Location
     MutVariableRef(ResolvedMutVariableRef), // Used when passing with mut keyword. mut are implicitly passed by reference
     MutStructFieldRef(Box<ResolvedExpression>, ResolvedType, Vec<ResolvedAccess>),
     MutArrayIndexRef(
@@ -1272,6 +1272,7 @@ impl ResolvedExpression {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     pub fn collect_constant_dependencies(&self, deps: &mut SeqSet<ConstantId>) {
         match self {
             Self::ConstantAccess(const_ref) => {
@@ -1371,13 +1372,6 @@ impl ResolvedExpression {
                     arg.collect_constant_dependencies(deps);
                 }
             }
-            /*
-            Self::MutMemberCall(_mut_member_ref, args) => {
-                for arg in args {
-                    arg.collect_constant_dependencies(deps);
-                }
-            }
-            */
             Self::MemberCall(member_call) => {
                 for arg in &member_call.arguments {
                     arg.collect_constant_dependencies(deps);
