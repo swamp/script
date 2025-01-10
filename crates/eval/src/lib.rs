@@ -22,7 +22,6 @@ use swamp_script_semantic::{
     ResolvedForPattern, ResolvedFunction, ResolvedNormalPattern, ResolvedPatternElement,
     ResolvedPostfixOperatorKind, ResolvedStaticCall, ResolvedUnaryOperatorKind,
 };
-use tracing::{error, info, trace, warn};
 
 pub mod err;
 
@@ -246,7 +245,6 @@ impl<'a, C> Interpreter<'a, C> {
     #[inline]
     fn pop_function_scope(&mut self) {
         if self.function_scope_stack.len() == 1 {
-            error!("you popped too far");
             panic!("you popped too far");
         }
         let last_one = self.function_scope_stack.pop().expect("pop function scope");
@@ -338,12 +336,6 @@ impl<'a, C> Interpreter<'a, C> {
 
         match &func_val {
             Value::InternalFunction(internal_func_ref) => {
-                if let Some(debug_source_map) = &self.debug_source_map {
-                    trace!(
-                        "internal func: {}",
-                        debug_source_map.get_text(&internal_func_ref.name.0)
-                    );
-                }
                 self.push_function_scope();
 
                 self.bind_parameters(&internal_func_ref.signature.parameters, &evaluated_args)?;
@@ -382,14 +374,7 @@ impl<'a, C> Interpreter<'a, C> {
     ) -> Result<Value, ExecuteError> {
         let func_val = self.evaluate_expression(&call.function_expression)?;
         match &func_val {
-            Value::InternalFunction(internal_func_ref) => {
-                if let Some(debug_source_map) = &self.debug_source_map {
-                    trace!(
-                        "internal func: {}",
-                        debug_source_map.get_text(&internal_func_ref.name.0)
-                    );
-                }
-            }
+            Value::InternalFunction(_internal_func_ref) => {}
             _ => {
                 return Err(ExecuteError::Error(
                     "internal error, can only execute internal function".to_owned(),
@@ -511,7 +496,6 @@ impl<'a, C> Interpreter<'a, C> {
 
         self.push_block_scope();
         for expression in expressions {
-            self.debug_expr(&expression, "in_block");
             match self.evaluate_expression_with_signal(&expression)? {
                 ValueWithSignal::Value(v) => result = v,
                 ValueWithSignal::Return(v) => return Ok(ValueWithSignal::Return(v)),
@@ -667,6 +651,7 @@ impl<'a, C> Interpreter<'a, C> {
         Ok(ValueWithSignal::Value(result))
     }
 
+    /*
     fn debug_expr(&self, expr: &ResolvedExpression, debug_str: &str) {
         if let Some(debug_source_map) = self.debug_source_map {
             let wrapped = ResolvedExpressionDisplay::new(expr, debug_source_map);
@@ -676,13 +661,12 @@ impl<'a, C> Interpreter<'a, C> {
         }
     }
 
+     */
+
     fn evaluate_expression_with_signal(
         &mut self,
         expr: &ResolvedExpression,
     ) -> Result<ValueWithSignal, ExecuteError> {
-        if let Some(_debug_source_map) = &self.debug_source_map {
-            self.debug_expr(expr, "evaluate_expression_with_signal");
-        }
         match expr {
             ResolvedExpression::Break(_) => Ok(ValueWithSignal::Break),
             ResolvedExpression::Continue(_) => Ok(ValueWithSignal::Continue),
@@ -792,9 +776,6 @@ impl<'a, C> Interpreter<'a, C> {
 
     // ---------------
     fn evaluate_expression(&mut self, expr: &ResolvedExpression) -> Result<Value, ExecuteError> {
-        if let Some(_debug_source_map) = &self.debug_source_map {
-            self.debug_expr(&expr, "evaluate_expression");
-        }
         let value = match expr {
             // Illegal in this context
             ResolvedExpression::Continue(_) => {
@@ -1498,14 +1479,28 @@ impl<'a, C> Interpreter<'a, C> {
                     let v = self.evaluate_expression(expression)?;
                     match v {
                         Value::Option(_) => {
-                            if let Some(_source_map) = self.debug_source_map {}
-                            warn!(?v, "unnecessary wrap!, should be investigated");
+                            panic!("unnecessary wrap!, should be investigated");
                             v
                         }
                         _ => Value::Option(Some(Box::from(v))),
                     }
                 }
             },
+
+            ResolvedExpression::NoneCoalesceOperator(base_expr, default_expr) => {
+                let value = self.evaluate_expression(base_expr)?;
+                if let Value::Option(found_option) = value {
+                    match found_option {
+                        None => self.evaluate_expression(default_expr)?,
+                        Some(some_value) => {
+                            // TODO: Verify type of value
+                            *some_value
+                        }
+                    }
+                } else {
+                    return Err(ExecuteError::ExpectedOptional);
+                }
+            }
 
             // --------------- SPECIAL FUNCTIONS
             ResolvedExpression::SparseNew(rust_type_ref, resolved_type) => {

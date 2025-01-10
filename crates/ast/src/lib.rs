@@ -377,6 +377,7 @@ pub enum Expression {
     // Operators
     BinaryOp(Box<Expression>, BinaryOperator, Box<Expression>),
     UnaryOp(UnaryOperator, Box<Expression>),
+    NoneCoalesceOperator(Box<Expression>, Box<Expression>),
 
     // Calls
     FunctionCall(Box<Expression>, Vec<Expression>),

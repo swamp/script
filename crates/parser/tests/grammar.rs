@@ -2481,3 +2481,35 @@ VariableAssignment(<2:1>, Guard([GuardExpr { condition: VariableAccess(<9:20>), 
 ",
     );
 }
+
+#[test_log::test]
+fn default_operator() {
+    check(
+        r"
+a = none         
+a ?? 23
+         ",
+        r"
+
+VariableAssignment(<2:1>, Guard([GuardExpr { condition: VariableAccess(<9:20>), result: VariableAccess(<33:6>) }, GuardExpr { condition: BinaryOp(BinaryOp(VariableAccess(<42:1>), GreaterThan(<44:1>), Literal(Int(<46:1>))), LogicalOr(<48:2>), BinaryOp(VariableAccess(<51:1>), LessThan(<53:1>), Literal(Int(<55:1>)))), result: InterpolatedString([Literal(<61:5>)]) }], Some(InterpolatedString([Literal(<76:21>)]))))
+
+
+",
+    );
+}
+
+#[test_log::test]
+fn default_operator_chain() {
+    check(
+        r"
+a = none         
+a ?? 23 ?? 99 
+         ",
+        r"
+
+VariableAssignment(<2:1>, Guard([GuardExpr { condition: VariableAccess(<9:20>), result: VariableAccess(<33:6>) }, GuardExpr { condition: BinaryOp(BinaryOp(VariableAccess(<42:1>), GreaterThan(<44:1>), Literal(Int(<46:1>))), LogicalOr(<48:2>), BinaryOp(VariableAccess(<51:1>), LessThan(<53:1>), Literal(Int(<55:1>)))), result: InterpolatedString([Literal(<61:5>)]) }], Some(InterpolatedString([Literal(<76:21>)]))))
+
+
+",
+    );
+}

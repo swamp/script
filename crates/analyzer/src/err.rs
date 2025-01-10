@@ -95,6 +95,7 @@ pub enum ResolveError {
     UnknownConstant(ResolvedNode),
     ExpectedFunctionTypeForFunctionCall(Span),
     TypeDoNotSupportIndexAccess(Span),
+    NoneCoalesceNeedsOptionalType(Span),
 }
 
 impl From<SemanticError> for ResolveError {

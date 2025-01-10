@@ -550,6 +550,15 @@ impl<'a> Resolver<'a> {
                 ResolvedExpression::PostfixOp(self.resolve_postfix_op(operator, expression)?)
             }
 
+            Expression::NoneCoalesceOperator(base_expr, default_expr) => {
+                let (base_expr, default_expr) =
+                    self.resolve_none_coalesce_operator(&base_expr, &default_expr)?;
+                ResolvedExpression::NoneCoalesceOperator(
+                    Box::from(base_expr),
+                    Box::from(default_expr),
+                )
+            }
+
             // Calls
             Expression::FunctionCall(function_expression, parameter_expressions) => {
                 self.resolve_function_call(function_expression, parameter_expressions)?
@@ -818,6 +827,7 @@ impl<'a> Resolver<'a> {
             ResolvedType::Optional(_optional_type) => ResolvedExpression::Literal(
                 ResolvedLiteral::NoneLiteral(ResolvedNode::new_unknown()),
             ),
+
             ResolvedType::Struct(struct_ref) => {
                 let struct_ref_borrow = struct_ref.borrow();
                 if let Some(function) = struct_ref_borrow.functions.get(&"default".to_string()) {
@@ -1393,6 +1403,23 @@ impl<'a> Resolver<'a> {
         };
 
         Ok(ResolvedExpression::Guard(guards, resolved_wildcard))
+    }
+
+    fn resolve_none_coalesce_operator(
+        &mut self,
+        base_expr: &Expression,
+        default_expr: &Expression,
+    ) -> Result<(ResolvedExpression, ResolvedExpression), ResolveError> {
+        let expr = self.resolve_expression(&base_expr)?;
+        let resolved_type = expr.resolution();
+
+        if let ResolvedType::Optional(found_type) = resolved_type {
+            let resolved_default_expr =
+                self.resolve_expression_expecting_type(default_expr, &found_type)?;
+            Ok((expr, resolved_default_expr))
+        } else {
+            Err(ResolveError::NoneCoalesceNeedsOptionalType(expr.span()))
+        }
     }
 }
 

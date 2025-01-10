@@ -520,7 +520,7 @@ impl AstParser {
         })?;
         let mut expr = self.parse_primary(&primary_pair)?;
 
-        for op_pair in inner {
+        for op_pair in inner.clone() {
             match op_pair.as_rule() {
                 Rule::postfix_op => {
                     let mut sub_inner = op_pair.clone().into_inner();
@@ -533,6 +533,17 @@ impl AstParser {
                             expr = Expression::PostfixOp(
                                 PostfixOperator::Unwrap(self.to_node(&child)),
                                 Box::new(expr),
+                            );
+                        }
+
+                        Rule::default_operator => {
+                            let mut postfix_inner = Self::convert_into_iterator(&child);
+                            let expr_pair = postfix_inner.next().expect("must have following");
+                            let default_expression = self.parse_expression(&expr_pair)?;
+                            //inner.next().unwrap();
+                            expr = Expression::NoneCoalesceOperator(
+                                Box::new(expr),
+                                Box::new(default_expression),
                             );
                         }
 

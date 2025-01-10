@@ -232,6 +232,12 @@ pub fn show_error(err: &ResolveError, source_map: &SourceMap) {
 #[must_use]
 pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
     match err {
+        ResolveError::NoneCoalesceNeedsOptionalType(span) => Report::build(
+            Error,
+            4243,
+            &format!("none coalesce `??` needs an optional type on the left hand side"),
+            &span,
+        ),
         ResolveError::TooManyDestructureVariables => Report::build(
             Error,
             4203,

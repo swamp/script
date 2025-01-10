@@ -1093,6 +1093,7 @@ pub enum ResolvedExpression {
     ),
 
     Option(Option<Box<ResolvedExpression>>),
+    NoneCoalesceOperator(Box<ResolvedExpression>, Box<ResolvedExpression>),
 
     // Assignment
     // Since it is a cool language, we can "chain" assignments together. like a = b = c = 1. Even for field assignments, like a.b = c.d = e.f = 1
@@ -1300,6 +1301,10 @@ impl ResolvedExpression {
                 if let Some(expr) = opt_expr {
                     expr.collect_constant_dependencies(deps);
                 }
+            }
+            Self::NoneCoalesceOperator(base_expr, default_expr) => {
+                base_expr.collect_constant_dependencies(deps);
+                default_expr.collect_constant_dependencies(deps);
             }
             Self::InitializeVariable(assign) | Self::ReassignVariable(assign) => {
                 assign.expression.collect_constant_dependencies(deps);
@@ -1649,6 +1654,9 @@ impl ResolvedExpression {
                     ResolvedType::Optional(Box::new(inner_type))
                 },
             ),
+
+            Self::NoneCoalesceOperator(_base_expr, default_expr) => default_expr.resolution(),
+
             Self::IfElseOnlyVariable { true_block, .. } => true_block.resolution(),
             Self::IfElseAssignExpression { true_block, .. } => true_block.resolution(),
             Self::IfOnlyVariable { true_block, .. } => true_block.resolution(),
