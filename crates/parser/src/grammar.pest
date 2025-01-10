@@ -432,7 +432,7 @@ float_lit = @{ "-"? ~ ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT+ }
 
 string_lit = @{ "\"" ~ ( "\\\"" | !"\"" ~ ANY )* ~ "\"" }
 
-// Interpolated string. Took a while to get this right due to Pest bug not handling space after comma correctly
+// Interpolated string. Took a while to get this right due to turning on and off the general whitespace rule with Compound Atomic (`${}`) and Non-Atomic (`!{}`)
 interpolated_string = ${
     "'" ~ interpolated_content ~ "'"
 }
@@ -441,7 +441,7 @@ interpolated_content = _{
     (interpolation | text)*
 }
 
-interpolation = {
+interpolation = !{
     "{" ~ expression ~ (":" ~ format_specifier)? ~ "}"
 }
 
