@@ -1621,7 +1621,7 @@ impl AstParser {
                 Rule::text => {
                     parts.push(StringPart::Literal(
                         self.to_node(&part_pair),
-                        self.unescape_string(&part_pair)?,
+                        self.unescape_string(&part_pair, false)?,
                     ));
                 }
                 Rule::interpolation => {
@@ -1827,10 +1827,15 @@ impl AstParser {
             .map_err(|_| self.create_error_pair(SpecificError::InvalidHexEscape, pair))?)
     }
 
-    fn unescape_string(&self, pair: &Pair<Rule>) -> Result<String, ParseError> {
+    fn unescape_string(&self, pair: &Pair<Rule>, is_literal: bool) -> Result<String, ParseError> {
         let mut octets = Vec::new();
 
-        let raw = pair.as_str();
+        let raw = if is_literal {
+            &pair.as_str()[1..pair.as_str().len() - 1]
+        } else {
+            pair.as_str()
+        };
+
         let mut chars = raw.chars().peekable();
 
         while let Some(ch) = chars.next() {
@@ -1893,7 +1898,7 @@ impl AstParser {
             Rule::int_lit => Ok(Literal::Int(node)),
             Rule::float_lit => Ok(Literal::Float(node)),
             Rule::string_lit => {
-                let processed_string = self.unescape_string(&inner)?;
+                let processed_string = self.unescape_string(&inner, true)?;
                 Ok(Literal::String(node, processed_string))
             }
             Rule::bool_lit => Ok(Literal::Bool(node)),
