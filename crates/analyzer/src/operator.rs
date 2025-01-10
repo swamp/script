@@ -31,7 +31,7 @@ impl<'a> Resolver<'a> {
                     right: Box::new(right),
                     kind,
                     node: resolved_node,
-                    resolved_type: self.shared.types.string_type(),
+                    resolved_type: ResolvedType::String,
                 })
             }
 
@@ -55,7 +55,7 @@ impl<'a> Resolver<'a> {
                     right: Box::new(right),
                     kind,
                     node: resolved_node,
-                    resolved_type: self.shared.types.bool_type(),
+                    resolved_type: ResolvedType::Bool,
                 })
             }
 

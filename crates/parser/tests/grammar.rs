@@ -797,6 +797,20 @@ ExclusiveRange(Literal(Int(<6:1>)), Literal(Int(<9:2>)))",
 }
 
 #[test_log::test]
+fn inclusive_range_literal() {
+    let script = r#"
+
+    0..=39
+
+    "#;
+    check(
+        script,
+        "
+InclusiveRange(Literal(Int(<6:1>)), Literal(Int(<10:2>)))",
+    );
+}
+
+#[test_log::test]
 fn for_array() {
     let script = r#"
 

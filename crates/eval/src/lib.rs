@@ -976,12 +976,23 @@ impl<'a, C> Interpreter<'a, C> {
                 )
             }
 
-            ResolvedExpression::ExclusiveRange(_resolved_type_ref, start, end) => {
+            ResolvedExpression::ExclusiveRange(start, end) => {
                 let start_val = self.evaluate_expression(start)?;
                 let end_val = self.evaluate_expression(end)?;
                 match (start_val, end_val) {
                     (Value::Int(s), Value::Int(e)) => {
                         Value::ExclusiveRange(Box::new(s), Box::new(e))
+                    }
+                    _ => Err("Range bounds must be integers".to_string())?,
+                }
+            }
+
+            ResolvedExpression::InclusiveRange(start, end) => {
+                let start_val = self.evaluate_expression(start)?;
+                let end_val = self.evaluate_expression(end)?;
+                match (start_val, end_val) {
+                    (Value::Int(s), Value::Int(e)) => {
+                        Value::InclusiveRange(Box::new(s), Box::new(e))
                     }
                     _ => Err("Range bounds must be integers".to_string())?,
                 }
@@ -2456,21 +2467,6 @@ impl<'a, C> Interpreter<'a, C> {
         }
         Ok(())
     }
-
-    #[inline]
-    fn evaluate_variable_block(
-        &mut self,
-        _variable_refs: &[ResolvedVariableRef],
-        expression: &ResolvedExpression,
-    ) -> Result<Value, ExecuteError> {
-        self.push_block_scope();
-
-        let value = self.evaluate_expression(&expression)?;
-
-        self.pop_block_scope();
-
-        Ok(value)
-    }
 }
 
 pub struct ResolvedExpressionDisplay<'a> {
@@ -2581,7 +2577,7 @@ impl<'a> fmt::Display for ResolvedExpressionDisplay<'a> {
             ResolvedExpression::Array(_) => write!(f, "Array"),
             ResolvedExpression::Tuple(_) => write!(f, "Tuple"),
             ResolvedExpression::Literal(_) => write!(f, "Literal"),
-            ResolvedExpression::ExclusiveRange(_, _, _) => write!(f, "ExclusiveRange"),
+            ResolvedExpression::ExclusiveRange(_, _) => write!(f, "ExclusiveRange"),
             ResolvedExpression::IfElseOnlyVariable { .. } => write!(f, "IfElseOnlyVariable"),
             ResolvedExpression::IfElseAssignExpression { .. } => {
                 write!(f, "IfElseAssignExpression")

@@ -6,9 +6,7 @@
 pub mod collections;
 pub mod prelude;
 
-use swamp_script_semantic::{
-    create_rust_type, modules::ResolvedModule, ResolvedRustType, TypeNumber,
-};
+use swamp_script_semantic::{modules::ResolvedModule, ResolvedRustType, TypeNumber};
 pub const SPARSE_TYPE_ID: TypeNumber = 999;
 pub const SPARSE_ID_TYPE_ID: TypeNumber = 998;
 
@@ -31,7 +29,9 @@ pub fn create_std_module() -> ResolvedModule {
             type_name: "SparseId".to_string(),
             number: SPARSE_ID_TYPE_ID,
         };
-        borrowed_namespace.add_built_in_rust_type(rust_type_ref_for_id);
+        borrowed_namespace
+            .add_built_in_rust_type(rust_type_ref_for_id)
+            .expect("could not register SparseId type");
     }
 
     std_module

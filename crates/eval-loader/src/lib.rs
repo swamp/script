@@ -15,7 +15,6 @@ use swamp_script_source_map::SourceMap;
 use tracing::info;
 
 pub fn resolve_to_new_module(
-    types: &ResolvedProgramTypes,
     state: &mut ResolvedProgramState,
     modules: &mut ResolvedModules,
     module_path: &[String],
@@ -26,20 +25,12 @@ pub fn resolve_to_new_module(
     let resolved_module_ref = Rc::new(RefCell::new(resolved_module));
     modules.add(resolved_module_ref);
 
-    resolve_to_existing_module(
-        types,
-        state,
-        modules,
-        module_path.to_vec(),
-        source_map,
-        ast_module,
-    )?;
+    resolve_to_existing_module(state, modules, module_path.to_vec(), source_map, ast_module)?;
 
     Ok(())
 }
 
 pub fn resolve_to_existing_module(
-    types: &ResolvedProgramTypes,
     state: &mut ResolvedProgramState,
     mut modules: &mut ResolvedModules,
     path: Vec<String>,
@@ -48,13 +39,7 @@ pub fn resolve_to_existing_module(
 ) -> Result<Option<ResolvedExpression>, ResolveError> {
     let statements = {
         let mut name_lookup = NameLookup::new(path.clone(), &mut modules);
-        let mut resolver = Resolver::new(
-            types,
-            state,
-            &mut name_lookup,
-            source_map,
-            ast_module.file_id,
-        );
+        let mut resolver = Resolver::new(state, &mut name_lookup, source_map, ast_module.file_id);
 
         info!(?path, "analyzing");
 
@@ -74,7 +59,6 @@ pub fn resolve_to_existing_module(
 }
 
 pub fn resolve_program(
-    types: &ResolvedProgramTypes,
     state: &mut ResolvedProgramState,
     modules: &mut ResolvedModules,
     source_map: &SourceMap,
@@ -83,11 +67,10 @@ pub fn resolve_program(
 ) -> Result<(), ResolveError> {
     for module_path in module_paths_in_order {
         if let Some(parse_module) = parsed_modules.get_parsed_module(module_path) {
-            if let Some(found_module) = modules.get(&*module_path.clone()) {
+            if let Some(_found_module) = modules.get(&*module_path.clone()) {
                 info!(?module_path, "this is an existing module");
 
                 let _maybe_expression = resolve_to_existing_module(
-                    types,
                     state,
                     modules,
                     module_path.clone(),
@@ -96,14 +79,7 @@ pub fn resolve_program(
                 )?;
             } else {
                 info!(?module_path, "this is a new module");
-                resolve_to_new_module(
-                    types,
-                    state,
-                    modules,
-                    module_path,
-                    source_map,
-                    parse_module,
-                )?;
+                resolve_to_new_module(state, modules, module_path, source_map, parse_module)?;
             }
         } else {
             return Err(ResolveError::CanNotFindModule(module_path.clone()));

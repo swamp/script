@@ -184,6 +184,12 @@ pub struct FunctionTypeSignature {
     pub return_type: Box<ResolvedType>,
 }
 
+impl Display for FunctionTypeSignature {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        write!(f, "({})->{}", comma(&self.parameters), self.return_type)
+    }
+}
+
 impl FunctionTypeSignature {
     pub fn same_type(&self, other: &FunctionTypeSignature) -> bool {
         if self.first_parameter_is_self != other.first_parameter_is_self
@@ -238,6 +244,18 @@ pub struct ResolvedTypeForParameter {
     pub node: Option<ResolvedParameterNode>,
 }
 
+impl Display for ResolvedTypeForParameter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        write!(
+            f,
+            "{}{}: {}",
+            if self.is_mutable { "mut " } else { "" },
+            self.name,
+            self.resolved_type
+        )
+    }
+}
+
 impl Eq for ResolvedTypeForParameter {}
 
 impl PartialEq for ResolvedTypeForParameter {
@@ -267,8 +285,8 @@ pub enum ResolvedType {
     EnumVariant(ResolvedEnumVariantTypeRef),
 
     Function(FunctionTypeSignature),
-    //FunctionExternal(ResolvedExternalFunctionDefinitionRef),
-    ExclusiveRange(ResolvedExclusiveRangeTypeRef),
+
+    Iterable(Box<ResolvedType>),
 
     Optional(Box<ResolvedType>),
 
@@ -303,7 +321,7 @@ impl Debug for ResolvedType {
             ResolvedType::Function(function_type_signature) => {
                 write!(f, "{:?}", function_type_signature)
             }
-            ResolvedType::ExclusiveRange(range) => write!(f, "{:?}", range),
+            ResolvedType::Iterable(type_generated) => write!(f, "Iterable<{type_generated:?}>"),
             ResolvedType::Optional(base_type) => write!(f, "{:?}?", base_type),
             ResolvedType::RustType(rust_type) => write!(f, "{:?}?", rust_type.type_name),
             ResolvedType::Any => write!(f, "Any"),
@@ -323,13 +341,17 @@ impl Display for ResolvedType {
             Self::Tuple(tuple) => write!(f, "({})", comma(&tuple.0)),
             Self::Struct(struct_ref) => write!(f, "{}", struct_ref.borrow().assigned_name),
             Self::Map(map_ref) => write!(f, "[{}:{}]", map_ref.key_type, map_ref.value_type),
-            Self::Generic(_, _) => todo!(),
-            Self::Enum(_) => todo!(),
-            Self::EnumVariant(_) => todo!(),
-            Self::Function(signature) => write!(f, "function {signature:?}"),
-            Self::ExclusiveRange(_) => todo!(),
-            Self::Optional(_) => todo!(),
-            Self::RustType(_) => todo!(),
+            Self::Generic(base_type, params) => write!(f, "{base_type}<{}>", comma(params)),
+            Self::Enum(enum_type) => write!(f, "{}", enum_type.assigned_name),
+            Self::EnumVariant(variant) => write!(
+                f,
+                "{}::{}",
+                variant.owner.assigned_name, variant.assigned_name
+            ),
+            Self::Function(signature) => write!(f, "function {signature}"),
+            Self::Iterable(generating_type) => write!(f, "Iterable<{generating_type}>"),
+            Self::Optional(base_type) => write!(f, "{base_type}?"),
+            Self::RustType(rust_type) => write!(f, "RustType {}", rust_type.type_name),
             Self::Any => write!(f, "ANY"),
         }
     }
@@ -362,7 +384,7 @@ impl Spanned for ResolvedType {
             Self::Function(_signature) => todo!(),
 
             // Range Type
-            Self::ExclusiveRange(_type_ref) => todo!(),
+            Self::Iterable(_type_ref) => todo!(),
 
             // Optional Type
             Self::Optional(inner_type) => inner_type.span(),
@@ -423,7 +445,7 @@ impl ResolvedType {
                 a.0.iter().zip(b.0.iter()).all(|(a, b)| a.same_type(b))
             }
             (Self::Enum(_), Self::Enum(_)) => true,
-            (Self::ExclusiveRange(_), Self::ExclusiveRange(_)) => true,
+            (Self::Iterable(a), Self::Iterable(b)) => a.same_type(b),
             (Self::EnumVariant(a), Self::EnumVariant(b)) => a.owner.number == b.owner.number,
             (Self::Optional(inner_type_a), Self::Optional(inner_type_b)) => {
                 inner_type_a.same_type(inner_type_b)
@@ -1121,9 +1143,6 @@ pub enum ResolvedExpression {
     FunctionInternalCall(ResolvedInternalFunctionCall),
     FunctionExternalCall(ResolvedExternalFunctionCall),
 
-    /*
-    MutMemberCall(MutMemberRef, Vec<ResolvedExpression>),
-    */
     MemberCall(ResolvedMemberCall),
     InterpolatedString(Vec<ResolvedStringPart>),
 
@@ -1132,12 +1151,9 @@ pub enum ResolvedExpression {
     Array(ResolvedArrayInstantiation),
     Tuple(Vec<ResolvedExpression>),
     Literal(ResolvedLiteral),
-    //Map(HashMap<ResolvedExpression, ResolvedExpression>), // Not implemented yet. Maybe call this a dictionary or similar, to avoid confusion with map()
-    ExclusiveRange(
-        ResolvedExclusiveRangeTypeRef,
-        Box<ResolvedExpression>,
-        Box<ResolvedExpression>,
-    ),
+    ExclusiveRange(Box<ResolvedExpression>, Box<ResolvedExpression>),
+
+    InclusiveRange(Box<ResolvedExpression>, Box<ResolvedExpression>),
 
     // Special if-else variants for optional unwrapping
     IfElseOnlyVariable {
@@ -1394,7 +1410,11 @@ impl ResolvedExpression {
                 }
             }
             Self::Literal(_) => {}
-            Self::ExclusiveRange(_, start_expr, end_expr) => {
+            Self::ExclusiveRange(start_expr, end_expr) => {
+                start_expr.collect_constant_dependencies(deps);
+                end_expr.collect_constant_dependencies(deps);
+            }
+            Self::InclusiveRange(start_expr, end_expr) => {
                 start_expr.collect_constant_dependencies(deps);
                 end_expr.collect_constant_dependencies(deps);
             }
@@ -1624,9 +1644,8 @@ impl ResolvedExpression {
             }
             Self::Array(array_instantiation) => array_instantiation.array_type.clone(),
             Self::Tuple(_) => todo!(),
-            Self::ExclusiveRange(range_type, _, _) => {
-                ResolvedType::ExclusiveRange(range_type.clone())
-            }
+            Self::ExclusiveRange(_, _) => ResolvedType::Iterable(Box::new(ResolvedType::Int)),
+            Self::InclusiveRange(_, _) => ResolvedType::Iterable(Box::new(ResolvedType::Int)),
 
             // Option operations
             Self::Option(inner_opt) => inner_opt.as_ref().map_or_else(
@@ -1733,7 +1752,7 @@ impl ResolvedExpression {
             Self::If(_, true_expr, _) => true_expr.resolution(),
 
             // Other
-            Self::TupleDestructuring(_, tuple_type, expr) => ResolvedType::Unit,
+            Self::TupleDestructuring(_, _tuple_type, _expr) => ResolvedType::Unit,
         };
 
         resolution_expression
@@ -1835,9 +1854,7 @@ impl Spanned for ResolvedExpression {
                 })
                 .unwrap_or_else(Span::dummy),
             Self::Literal(lit) => lit.span(),
-            Self::ExclusiveRange(_range_ref, _start, _end) => {
-                todo!()
-            }
+            Self::ExclusiveRange(start, end) => start.span().merge(&end.span()),
 
             // Control Flow
             Self::IfElseOnlyVariable {
@@ -2308,51 +2325,6 @@ pub enum ResolvedDefinition {
     Comment(ResolvedNode),
     Use(ResolvedUse),
     Constant(ResolvedNode, ResolvedConstantRef),
-}
-
-// Immutable part
-#[derive(Debug)]
-pub struct ResolvedProgramTypes {
-    pub int_type: ResolvedIntTypeRef,
-    pub float_type: ResolvedFloatTypeRef,
-    pub string_type: ResolvedStringTypeRef,
-    pub bool_type: ResolvedBoolTypeRef,
-    pub unit_type: ResolvedUnitTypeRef,
-    pub none_type: ResolvedNoneTypeRef,
-    pub exclusive_range_type: ResolvedExclusiveRangeTypeRef,
-}
-
-impl ResolvedProgramTypes {
-    pub fn new() -> Self {
-        Self {
-            int_type: Rc::new(ResolvedIntType {}),
-            float_type: Rc::new(ResolvedFloatType),
-            string_type: Rc::new(ResolvedStringType),
-            bool_type: Rc::new(ResolvedBoolType),
-            unit_type: Rc::new(ResolvedUnitType),
-            none_type: Rc::new(ResolvedNoneType),
-            exclusive_range_type: Rc::new(ResolvedExclusiveRangeType),
-        }
-    }
-
-    pub fn unit_type(&self) -> ResolvedType {
-        ResolvedType::Unit
-    }
-
-    pub fn int_type(&self) -> ResolvedType {
-        ResolvedType::Int
-    }
-
-    pub fn float_type(&self) -> ResolvedType {
-        ResolvedType::Float
-    }
-
-    pub fn string_type(&self) -> ResolvedType {
-        ResolvedType::String
-    }
-    pub fn bool_type(&self) -> ResolvedType {
-        ResolvedType::Bool
-    }
 }
 
 // Mutable part

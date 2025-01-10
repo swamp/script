@@ -82,10 +82,7 @@ impl<'a> Resolver<'a> {
                             .get_index(&missing_field_name)
                             .expect("should have been verified earlier");
 
-                        let expression = Self::create_default_value_for_type(
-                            &field.field_type,
-                            self.shared.types,
-                        )?; // expression is usually a literal
+                        let expression = Self::create_default_value_for_type(&field.field_type)?; // expression is usually a literal
 
                         source_order_expressions.push((field_index, expression));
                     }
@@ -204,8 +201,7 @@ impl<'a> Resolver<'a> {
                     .expect("field must exist in struct definition");
 
                 // Here you would create the default value for the field
-                let default_expression =
-                    Self::create_default_value_for_type(&field.field_type, self.shared.types)?;
+                let default_expression = Self::create_default_value_for_type(&field.field_type)?;
 
                 source_order_expressions.push((field_index, default_expression));
             }

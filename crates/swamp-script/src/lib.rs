@@ -48,7 +48,6 @@ pub fn compile_and_resolve(
 
     let mut resolved_program = ResolvedProgram::new();
     resolve_program(
-        &resolved_program.types,
         &mut resolved_program.state,
         &mut resolved_program.modules,
         source_map,

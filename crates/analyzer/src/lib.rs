@@ -39,7 +39,6 @@ use tracing::error;
 
 #[derive(Debug)]
 pub struct ResolvedProgram {
-    pub types: ResolvedProgramTypes,
     pub state: ResolvedProgramState,
     pub modules: ResolvedModules,
 }
@@ -54,7 +53,6 @@ impl ResolvedProgram {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            types: ResolvedProgramTypes::new(),
             state: ResolvedProgramState::new(),
             modules: ResolvedModules::new(),
         }
@@ -103,7 +101,6 @@ impl BlockScope {
 }
 
 pub struct SharedState<'a> {
-    pub types: &'a ResolvedProgramTypes,
     pub state: &'a mut ResolvedProgramState,
     pub lookup: &'a mut NameLookup<'a>,
     pub source_map: &'a SourceMap,
@@ -132,14 +129,12 @@ pub struct Resolver<'a> {
 
 impl<'a> Resolver<'a> {
     pub fn new(
-        types: &'a ResolvedProgramTypes,
         state: &'a mut ResolvedProgramState,
         lookup: &'a mut NameLookup<'a>,
         source_map: &'a SourceMap,
         file_id: FileId,
     ) -> Self {
         let shared = SharedState {
-            types,
             state,
             lookup,
             source_map,
@@ -233,7 +228,7 @@ impl<'a> Resolver<'a> {
         };
 
         let resolved_return_type = match ast_return_type {
-            None => self.shared.types.unit_type(),
+            None => ResolvedType::Unit,
             Some(x) => self.resolve_type(x)?,
         };
 
@@ -256,7 +251,7 @@ impl<'a> Resolver<'a> {
         maybe_type: &Option<Type>,
     ) -> Result<ResolvedType, ResolveError> {
         let found_type = match maybe_type {
-            None => self.shared.types.unit_type(),
+            None => ResolvedType::Unit,
             Some(ast_type) => self.resolve_type(ast_type)?,
         };
         Ok(found_type)
@@ -607,7 +602,17 @@ impl<'a> Resolver<'a> {
                 let max_expression =
                     self.resolve_expression_expecting_type(max_value, &ResolvedType::Int)?;
                 ResolvedExpression::ExclusiveRange(
-                    self.shared.types.exclusive_range_type.clone(),
+                    Box::from(min_expression),
+                    Box::from(max_expression),
+                )
+            }
+
+            Expression::InclusiveRange(min_value, max_value) => {
+                let min_expression =
+                    self.resolve_expression_expecting_type(min_value, &ResolvedType::Int)?;
+                let max_expression =
+                    self.resolve_expression_expecting_type(max_value, &ResolvedType::Int)?;
+                ResolvedExpression::InclusiveRange(
                     Box::from(min_expression),
                     Box::from(max_expression),
                 )
@@ -775,7 +780,6 @@ impl<'a> Resolver<'a> {
 
     fn create_default_value_for_type(
         field_type: &ResolvedType,
-        types: &ResolvedProgramTypes,
     ) -> Result<ResolvedExpression, ResolveError> {
         let expr = match field_type {
             ResolvedType::Bool => ResolvedExpression::Literal(ResolvedLiteral::BoolLiteral(
@@ -800,7 +804,7 @@ impl<'a> Resolver<'a> {
             ResolvedType::Tuple(tuple_type_ref) => {
                 let mut expressions = Vec::new();
                 for resolved_type in &tuple_type_ref.0 {
-                    let expr = Self::create_default_value_for_type(resolved_type, types)?;
+                    let expr = Self::create_default_value_for_type(resolved_type)?;
                     expressions.push(expr);
                 }
                 ResolvedExpression::Literal(ResolvedLiteral::TupleLiteral(
@@ -863,15 +867,14 @@ impl<'a> Resolver<'a> {
         let resolved_expression = self.resolve_expression(expression)?;
         let resolved_type = resolved_expression.resolution();
         let (key_type, value_type): (Option<ResolvedType>, ResolvedType) = match resolved_type {
-            ResolvedType::Array(array_type) => (
-                Some(self.shared.types.int_type()),
-                array_type.item_type.clone(),
-            ),
+            ResolvedType::Array(array_type) => {
+                (Some(ResolvedType::Int), array_type.item_type.clone())
+            }
             ResolvedType::Map(map_type_ref) => (
                 Some(map_type_ref.key_type.clone()),
                 map_type_ref.value_type.clone(),
             ),
-            ResolvedType::ExclusiveRange(_) => (None, self.shared.types.int_type()),
+            ResolvedType::Iterable(item_type) => (None, *item_type),
             ResolvedType::Generic(_base_type, params) => {
                 // TODO: HACK: We assume it is a container that iterates over the type parameters
                 // TODO: HACK: We assume that it is a sparse map
@@ -1177,9 +1180,9 @@ impl<'a> Resolver<'a> {
         ast_literal: &Literal,
         expected_condition_type: &ResolvedType,
     ) -> Result<ResolvedNormalPattern, ResolveError> {
-        let resolved_literal = self.resolve_literal(ast_literal.clone())?;
+        let resolved_literal = self.resolve_literal(ast_literal)?;
 
-        let resolved_literal_copy = self.resolve_literal(ast_literal.clone())?;
+        let resolved_literal_copy = self.resolve_literal(ast_literal)?;
         let resolved_literal_expr = ResolvedExpression::Literal(resolved_literal_copy);
         let span = resolved_literal_expr.span().clone();
         let literal_type = resolved_literal_expr.resolution();

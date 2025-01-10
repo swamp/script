@@ -59,6 +59,7 @@ pub enum Value {
 
     // Number generators
     ExclusiveRange(Box<i32>, Box<i32>),
+    InclusiveRange(Box<i32>, Box<i32>),
 
     // Higher order
     InternalFunction(ResolvedInternalFunctionDefinitionRef),
@@ -120,6 +121,10 @@ impl Clone for Value {
 
             Value::ExclusiveRange(start, end) => {
                 Value::ExclusiveRange(Box::new(**start), Box::new(**end))
+            }
+
+            Value::InclusiveRange(start, end) => {
+                Value::InclusiveRange(Box::new(**start), Box::new(**end))
             }
 
             Value::InternalFunction(resolved_def_ref) => {
@@ -406,6 +411,7 @@ impl Display for Value {
             Self::InternalFunction(_reference) => write!(f, "<function>"), // TODO:
             Self::Unit => write!(f, "()"),
             Self::ExclusiveRange(start, end) => write!(f, "{start}..{end}"),
+            Self::InclusiveRange(start, end) => write!(f, "{start}..={end}"),
 
             Self::ExternalFunction(_) => write!(f, "<external>"), // TODO:
 
@@ -508,6 +514,10 @@ impl Hash for Value {
             Self::EnumVariantTuple(_, fields) => fields.hash(state),
             Self::EnumVariantStruct(_, fields) => fields.hash(state),
             Self::ExclusiveRange(start, end) => {
+                start.hash(state);
+                end.hash(state);
+            }
+            Self::InclusiveRange(start, end) => {
                 start.hash(state);
                 end.hash(state);
             }

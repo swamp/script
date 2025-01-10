@@ -14,7 +14,6 @@ use swamp_script_semantic::{
     ResolvedFunction, ResolvedInternalFunctionDefinition, ResolvedLocalIdentifier,
     ResolvedLocalTypeIdentifier, ResolvedModulePath, ResolvedParameterNode, ResolvedStructType,
     ResolvedStructTypeRef, ResolvedType, ResolvedTypeForParameter, ResolvedUse, ResolvedUseItem,
-    TypeNumber,
 };
 use tracing::info;
 
@@ -107,8 +106,6 @@ impl<'a> Resolver<'a> {
         let parent_ref = self.shared.lookup.add_enum_type(enum_parent)?;
 
         for variant_type in ast_variants {
-            let mut container_number: Option<TypeNumber> = None; // what is container_number used for
-
             let variant_name_node = match variant_type {
                 EnumVariantType::Simple(name) => name,
                 EnumVariantType::Tuple(name, _) => name,
@@ -127,7 +124,6 @@ impl<'a> Resolver<'a> {
                     }
 
                     let number = self.shared.state.allocate_number();
-                    container_number = Some(number);
 
                     let common = CommonEnumVariantType {
                         number,
@@ -166,7 +162,6 @@ impl<'a> Resolver<'a> {
                     }
 
                     let number = self.shared.state.allocate_number();
-                    container_number = Some(number);
 
                     let common = CommonEnumVariantType {
                         number,
@@ -263,7 +258,7 @@ impl<'a> Resolver<'a> {
                 let return_type = if let Some(found) = &function_data.declaration.return_type {
                     self.resolve_type(found)?
                 } else {
-                    self.shared.types.unit_type()
+                    ResolvedType::Unit
                 };
 
                 self.scope.return_type = return_type.clone();
@@ -282,7 +277,7 @@ impl<'a> Resolver<'a> {
 
                 let statements =
                     self.resolve_statements_in_function(&function_data.body, &return_type)?;
-                self.scope.return_type = self.shared.types.unit_type();
+                self.scope.return_type = ResolvedType::Unit;
 
                 let internal = ResolvedInternalFunctionDefinition {
                     signature: FunctionTypeSignature {
@@ -308,7 +303,7 @@ impl<'a> Resolver<'a> {
                 let external_return_type = if let Some(found) = &ast_signature.return_type {
                     self.resolve_type(found)?
                 } else {
-                    self.shared.types.unit_type()
+                    ResolvedType::Unit
                 };
 
                 let return_type = external_return_type;

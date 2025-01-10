@@ -1611,8 +1611,9 @@ fn with_normal_block() {
            x + 5
            t = 3
         }
-    ",
+    t // t should not have been affected
+            ",
     );
 
-    assert_eq!(result, Value::Int(9));
+    assert_eq!(result, Value::Int(6));
 }

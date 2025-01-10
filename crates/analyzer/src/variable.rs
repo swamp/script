@@ -164,25 +164,6 @@ impl<'a> Resolver<'a> {
         Ok(variable_ref)
     }
 
-    pub(crate) fn link_local_variable_resolved(
-        &mut self,
-        variable_ref: ResolvedVariableRef,
-    ) -> Result<(), ResolveError> {
-        let variable_name = self.get_text_resolved(&variable_ref.name).to_string();
-        let variables = &mut self
-            .scope
-            .block_scope_stack
-            .last_mut()
-            .expect("block scope should have at least one scope")
-            .variables;
-
-        variables
-            .insert(variable_name, variable_ref.clone())
-            .expect("should have checked earlier for variable");
-
-        Ok(())
-    }
-
     pub(crate) fn create_local_variable_generated(
         &mut self,
         variable_str: &str,
@@ -361,7 +342,7 @@ impl<'a> Resolver<'a> {
                     return Err(ResolveError::TooManyDestructureVariables);
                 }
                 for (variable_ref, tuple_type) in ast_variables.iter().zip(tuple.0.clone()) {
-                    let (variable_ref, is_reassignment) =
+                    let (variable_ref, _is_reassignment) =
                         self.set_or_overwrite_variable_with_type(&variable_ref, &tuple_type)?;
                     variable_refs.push(variable_ref);
                 }

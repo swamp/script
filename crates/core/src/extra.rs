@@ -50,7 +50,7 @@ impl SparseValueMap {
         };
 
         Self {
-            sparse_slot: SparseSlot::<Rc<RefCell<Value>>>::new(1024),
+            sparse_slot: SparseSlot::<Rc<RefCell<Value>>>::new(2048),
             id_generator: IndexAllocator::new(),
             type_parameter,
             resolved_type,

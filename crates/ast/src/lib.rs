@@ -404,6 +404,7 @@ pub enum Expression {
     // Instantiation
     StructInstantiation(QualifiedTypeIdentifier, Vec<FieldExpression>, bool),
     ExclusiveRange(Box<Expression>, Box<Expression>),
+    InclusiveRange(Box<Expression>, Box<Expression>),
     Literal(Literal),
 
     PostfixOp(PostfixOperator, Box<Expression>),

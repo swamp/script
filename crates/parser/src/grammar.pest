@@ -189,15 +189,14 @@ modulo_assign_op = { "%=" }
 // OPERATORS ------------------------------------------------------------
 
 // Logical operators (lowest precedence)
-logical = { comparison ~ ((op_and | op_or) ~ comparison)* }
+logical = { range ~ ((op_and | op_or) ~ range)* }
 
-// Comparison operators
+range = { comparison ~ ((inclusive_range_op | exclusive_range_op) ~ comparison)? }
+
 comparison = { addition ~ ((op_lte | op_gte | op_eq | op_neq | op_lt | op_gt ) ~ addition)* }
 
-// Addition and subtraction
-addition = { multiplication ~ ((op_add | op_sub | range_op) ~ multiplication)* }
+addition = { multiplication ~ ((op_add | op_sub) ~ multiplication)* }
 
-// Multiplication and division (highest precedence for binary ops)
 multiplication = { prefix ~ ((op_mul | op_div | op_mod) ~ prefix)* }
 
 
@@ -246,13 +245,11 @@ postfix_op = {
 
 option_operator = { "?" }
 
-// Add range_op to infix operators
-infix_op = { range_op | op_or | op_and | op_eq | op_neq | op_lt | op_gt | op_lte | op_gte | op_add | op_sub | op_mul | op_div }
+infix_op = { exclusive_range_op | op_or | op_and | op_eq | op_neq | op_lt | op_gt | op_lte | op_gte | op_add | op_sub | op_mul | op_div }
 
-// Define range operator
-range_op = { ".." }
+exclusive_range_op = { ".." }
+inclusive_range_op = { "..=" }
 
-// Operator definitions as rules
 op_or = { "||" }
 op_and = { "&&" }
 op_eq = { "==" }

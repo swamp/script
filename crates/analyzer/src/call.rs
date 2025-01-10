@@ -9,7 +9,7 @@ use swamp_script_semantic::{
     ResolvedStaticCallGeneric, ResolvedStructTypeField, ResolvedStructTypeFieldRef, ResolvedType,
     ResolvedTypeForParameter, Spanned,
 };
-use tracing::{error, info};
+use tracing::info;
 
 impl<'a> Resolver<'a> {
     fn verify_arguments(

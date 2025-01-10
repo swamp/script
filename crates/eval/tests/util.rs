@@ -14,7 +14,7 @@ use swamp_script_parser::AstParser;
 use swamp_script_semantic::modules::ResolvedModules;
 use swamp_script_semantic::{
     ExternalFunctionId, FunctionTypeSignature, ResolvedExpression,
-    ResolvedExternalFunctionDefinition, ResolvedProgramState, ResolvedProgramTypes, ResolvedType,
+    ResolvedExternalFunctionDefinition, ResolvedProgramState, ResolvedType,
     ResolvedTypeForParameter, SemanticError,
 };
 use swamp_script_source_map::SourceMap;
@@ -54,7 +54,6 @@ fn internal_compile(
 
     let program = parser.parse_module(script).expect("Failed to parse script");
 
-    let types = ResolvedProgramTypes::new();
     let mut state = ResolvedProgramState::new();
     // let modules = ResolvedModules::new();
 
@@ -67,7 +66,7 @@ fn internal_compile(
 
     let mut name_lookup = NameLookup::new(target_namespace.to_vec(), modules);
 
-    let mut resolver = Resolver::new(&types, &mut state, &mut name_lookup, &source_map, file_id);
+    let mut resolver = Resolver::new(&mut state, &mut name_lookup, &source_map, file_id);
 
     //let mut resolved_definitions = Vec::new();
     for definition in &program.definitions {

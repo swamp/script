@@ -11,7 +11,7 @@ use swamp_script_analyzer::Resolver;
 use swamp_script_parser::AstParser;
 use swamp_script_semantic::modules::{ResolvedModule, ResolvedModules};
 use swamp_script_semantic::ns::ResolvedModuleNamespace;
-use swamp_script_semantic::{ResolvedProgramState, ResolvedProgramTypes};
+use swamp_script_semantic::ResolvedProgramState;
 use swamp_script_source_map::SourceMap;
 use tracing::warn;
 
@@ -20,7 +20,6 @@ fn internal_compile(script: &str) -> Result<ResolvedModule, ResolveError> {
 
     let program = parser.parse_module(script).expect("Failed to parse script");
 
-    let types = ResolvedProgramTypes::new();
     let mut state = ResolvedProgramState::new();
     let mut modules = ResolvedModules::new();
 
@@ -33,7 +32,7 @@ fn internal_compile(script: &str) -> Result<ResolvedModule, ResolveError> {
 
     let mut name_lookup = NameLookup::new(resolved_path_str, &mut modules);
 
-    let mut resolver = Resolver::new(&types, &mut state, &mut name_lookup, &source_map, file_id);
+    let mut resolver = Resolver::new(&mut state, &mut name_lookup, &source_map, file_id);
 
     let mut resolved_definitions = Vec::new();
     for definition in &program.definitions {

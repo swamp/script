@@ -992,6 +992,7 @@ impl AstParser {
             Rule::assignment_expression => self.parse_assignment_expression(pair),
 
             Rule::addition => self.parse_binary_chain(pair),
+            Rule::range => self.parse_binary_chain(pair),
 
             Rule::logical | Rule::comparison | Rule::multiplication => self.parse_binary_op(pair),
 
@@ -1271,12 +1272,18 @@ impl AstParser {
 
         while let Some(op) = inner.next() {
             let right = self.parse_expression(&Self::next_pair(&mut inner)?)?;
-            left = if op.as_rule() == Rule::range_op {
-                Expression::ExclusiveRange(Box::new(left), Box::new(right))
-            } else {
-                let operator = self.parse_binary_operator(&op)?;
-                Expression::BinaryOp(Box::new(left), operator, Box::new(right))
-            };
+            left = match op.as_rule() {
+                Rule::exclusive_range_op => {
+                    Expression::ExclusiveRange(Box::new(left), Box::new(right))
+                }
+                Rule::inclusive_range_op => {
+                    Expression::InclusiveRange(Box::new(left), Box::new(right))
+                }
+                _ => {
+                    let operator = self.parse_binary_operator(&op)?;
+                    Expression::BinaryOp(Box::new(left), operator, Box::new(right))
+                }
+            }
         }
 
         Ok(left)
