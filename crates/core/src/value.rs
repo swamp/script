@@ -201,6 +201,11 @@ impl Value {
                 let end = *max_val;
                 Ok(Box::new((start..end).map(Value::Int)))
             }
+            Self::InclusiveRange(start_val, max_val) => {
+                let start = *start_val;
+                let end = *max_val;
+                Ok(Box::new((start..=end).map(Value::Int)))
+            }
             _ => Err(ValueError::CanNotCoerceToIterator),
         }
     }
