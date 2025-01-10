@@ -164,6 +164,24 @@ pub fn build_parse_error(err: &SpecificError, span: &Span) -> Builder<usize> {
             &format!("General Parse Error: {}", general),
             &span,
         ),
+        SpecificError::UnknownEscapeCharacter(char) => Report::build(
+            Error,
+            1,
+            &format!("Unknown escape character '{char}'"),
+            &span,
+        ),
+        SpecificError::UnfinishedEscapeSequence => {
+            Report::build(Error, 1, &format!("Unfinished escape sequence"), &span)
+        }
+        SpecificError::InvalidUnicodeEscape => {
+            Report::build(Error, 1, &format!("invalid unicode escape sequence"), &span)
+        }
+        SpecificError::InvalidHexEscape => {
+            Report::build(Error, 1, &format!("invalid hex escape sequence"), &span)
+        }
+        SpecificError::InvalidUtf8Sequence => {
+            Report::build(Error, 1, &format!("invalid utf-8 escape sequence"), &span)
+        }
         SpecificError::ExpectingTypeIdentifier => todo!(),
         SpecificError::ExpectingInnerPair => todo!(),
         SpecificError::UnexpectedTypeRule => {

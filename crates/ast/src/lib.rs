@@ -423,7 +423,7 @@ pub struct MatchArm {
 pub enum Literal {
     Int(Node),
     Float(Node),
-    String(Node),
+    String(Node, String),
     Bool(Node),
     EnumVariant(EnumVariantLiteral),
     Tuple(Vec<Expression>),
@@ -563,7 +563,7 @@ pub enum PatternElement {
 
 #[derive(Debug)]
 pub enum StringPart {
-    Literal(Node),
+    Literal(Node, String),
     Interpolation(Box<Expression>, Option<FormatSpecifier>),
 }
 

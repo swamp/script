@@ -26,13 +26,10 @@ impl<'a> Resolver<'a> {
                     Self::str_to_float(float_str).map_err(ResolveError::FloatConversionError)?;
                 ResolvedLiteral::FloatLiteral(Fp::from(float), self.to_node(float_node))
             }
-            Literal::String(string_node) => {
-                let string_str = self.get_text(string_node);
-                ResolvedLiteral::StringLiteral(
-                    string_str[1..string_str.len() - 1].to_string(), // remove prefix and suffix quotes
-                    self.to_node(string_node),
-                )
-            }
+            Literal::String(string_node, processed_string) => ResolvedLiteral::StringLiteral(
+                processed_string.to_string(),
+                self.to_node(string_node),
+            ),
             Literal::Bool(bool_node) => {
                 let bool_str = self.get_text(bool_node);
                 let bool_val = if bool_str == "false" {

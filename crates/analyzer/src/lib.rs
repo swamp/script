@@ -932,10 +932,10 @@ impl<'a> Resolver<'a> {
         let mut resolved_parts = Vec::new();
         for part in string_parts {
             let resolved_string_part = match part {
-                StringPart::Literal(string_node) => {
-                    let string_str = self.get_text(string_node).to_string();
-                    ResolvedStringPart::Literal(self.to_node(string_node), string_str)
-                }
+                StringPart::Literal(string_node, processed_string) => ResolvedStringPart::Literal(
+                    self.to_node(string_node),
+                    processed_string.to_string(),
+                ),
                 StringPart::Interpolation(expression, format_specifier) => {
                     let expr = self.resolve_expression(expression)?;
                     let resolved_format_specifier = self.resolve_format_specifier(format_specifier);
