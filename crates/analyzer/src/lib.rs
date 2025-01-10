@@ -379,9 +379,10 @@ impl<'a> Resolver<'a> {
         &mut self,
         ast_expression: &Expression,
         expected_type: Option<ResolvedType>,
+        allow_some: bool,
     ) -> Result<ResolvedExpression, ResolveError> {
         if let Some(found_type) = expected_type {
-            self.resolve_expression_expecting_type(ast_expression, &found_type)
+            self.resolve_expression_expecting_type(ast_expression, &found_type, allow_some)
         } else {
             self.resolve_expression(ast_expression)
         }
@@ -391,6 +392,7 @@ impl<'a> Resolver<'a> {
         &mut self,
         ast_expression: &Expression,
         expected_type: &ResolvedType,
+        allow_some_wrap: bool,
     ) -> Result<ResolvedExpression, ResolveError> {
         if Self::is_empty_array_literal(&ast_expression) {
             match expected_type {
@@ -403,8 +405,13 @@ impl<'a> Resolver<'a> {
                 _ => Err(ResolveError::EmptyArrayCanOnlyBeMapOrArray),
             }
         } else {
-            let resolved_expr = self.resolve_expression(ast_expression)?;
+            let mut resolved_expr = self.resolve_expression(ast_expression)?;
+
+            if allow_some_wrap {
+                resolved_expr = wrap_in_some_if_optional(expected_type, resolved_expr);
+            }
             let resolved_type = resolved_expr.resolution();
+
             if resolved_type.same_type(expected_type) {
                 Ok(resolved_expr)
             } else {
@@ -607,9 +614,9 @@ impl<'a> Resolver<'a> {
             }
             Expression::ExclusiveRange(min_value, max_value) => {
                 let min_expression =
-                    self.resolve_expression_expecting_type(min_value, &ResolvedType::Int)?;
+                    self.resolve_expression_expecting_type(min_value, &ResolvedType::Int, false)?;
                 let max_expression =
-                    self.resolve_expression_expecting_type(max_value, &ResolvedType::Int)?;
+                    self.resolve_expression_expecting_type(max_value, &ResolvedType::Int, false)?;
                 ResolvedExpression::ExclusiveRange(
                     Box::from(min_expression),
                     Box::from(max_expression),
@@ -618,9 +625,9 @@ impl<'a> Resolver<'a> {
 
             Expression::InclusiveRange(min_value, max_value) => {
                 let min_expression =
-                    self.resolve_expression_expecting_type(min_value, &ResolvedType::Int)?;
+                    self.resolve_expression_expecting_type(min_value, &ResolvedType::Int, false)?;
                 let max_expression =
-                    self.resolve_expression_expecting_type(max_value, &ResolvedType::Int)?;
+                    self.resolve_expression_expecting_type(max_value, &ResolvedType::Int, false)?;
                 ResolvedExpression::InclusiveRange(
                     Box::from(min_expression),
                     Box::from(max_expression),
@@ -1021,7 +1028,7 @@ impl<'a> Resolver<'a> {
         usize_expression: &Expression,
     ) -> Result<ResolvedExpression, ResolveError> {
         let lookup_expression =
-            self.resolve_expression_expecting_type(usize_expression, &ResolvedType::Int)?;
+            self.resolve_expression_expecting_type(usize_expression, &ResolvedType::Int, false)?;
         let lookup_resolution = lookup_expression.resolution();
 
         match &lookup_resolution {
@@ -1381,8 +1388,11 @@ impl<'a> Resolver<'a> {
         let mut guards = Vec::new();
         for guard in guard_expressions {
             let resolved_condition = self.resolve_bool_expression(&guard.condition)?;
-            let resolved_result = self
-                .resolve_expression_maybe_expecting_type(&guard.result, expecting_type.clone())?;
+            let resolved_result = self.resolve_expression_maybe_expecting_type(
+                &guard.result,
+                expecting_type.clone(),
+                true,
+            )?;
             if expecting_type.is_none() {
                 expecting_type = Some(resolved_result.resolution().clone());
             }
@@ -1397,6 +1407,7 @@ impl<'a> Resolver<'a> {
             Some(Box::new(self.resolve_expression_maybe_expecting_type(
                 found_wildcard,
                 expecting_type,
+                true,
             )?))
         } else {
             None
@@ -1415,7 +1426,7 @@ impl<'a> Resolver<'a> {
 
         if let ResolvedType::Optional(found_type) = resolved_type {
             let resolved_default_expr =
-                self.resolve_expression_expecting_type(default_expr, &found_type)?;
+                self.resolve_expression_expecting_type(default_expr, &found_type, true)?;
             Ok((expr, resolved_default_expr))
         } else {
             Err(ResolveError::NoneCoalesceNeedsOptionalType(expr.span()))

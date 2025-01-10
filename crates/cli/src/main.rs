@@ -7,14 +7,16 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
 use std::{fs, io};
-use swamp_script_analyzer::{ResolveError, ResolvedProgram};
+use swamp_script_analyzer::prelude::ResolveError;
+use swamp_script_analyzer::ResolvedProgram;
 use swamp_script_ast::{Node, Parameter, Type, Variable};
 use swamp_script_core::prelude::Value;
 use swamp_script_dep_loader::{
     parse_dependant_modules_and_resolve, DepLoaderError, DependencyParser, ParseModule,
 };
+use swamp_script_error_report::{show_error, show_parse_error};
 use swamp_script_eval::prelude::VariableValue;
-use swamp_script_eval::{err::ExecuteError, eval_module, ExternalFunctions};
+use swamp_script_eval::{err::ExecuteError, eval_module, Constants, ExternalFunctions};
 use swamp_script_eval_loader::resolve_program;
 use swamp_script_parser::prelude::*;
 use swamp_script_parser::AstParser;
@@ -56,9 +58,7 @@ fn init_logging() {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     init_logging();
 
-    let cli = Cli::parse();
-
-    Ok(command(&cli.command)?)
+    Ok(())
 }
 
 fn command(command: &Commands) -> Result<(), CliError> {
@@ -150,7 +150,6 @@ fn resolve_swamp_file(path: &Path) -> Result<PathBuf, String> {
 fn register_print(interpreter: &mut ExternalFunctions<CliContext>) {
     interpreter
         .register_external_function(
-            "print",
             1, /* TODO: HARD CODED */
             move |args: &[VariableValue], _context| {
                 if let Some(value) = args.first() {
@@ -168,9 +167,11 @@ fn register_print(interpreter: &mut ExternalFunctions<CliContext>) {
 pub fn eval(resolved_main_module: &ResolvedModuleRef) -> Result<Value, CliError> {
     let mut external_functions = ExternalFunctions::new();
     register_print(&mut external_functions);
+    let constants = Constants::new();
     let mut context = CliContext;
     let value = eval_module(
         &external_functions,
+        &constants,
         resolved_main_module.borrow().expression.as_ref().unwrap(),
         &mut context,
     )?;
@@ -214,7 +215,7 @@ fn compile_to_resolved_program(script: &str) -> Result<(ResolvedProgram, SourceM
     main_module.declare_external_function(
         vec![Parameter {
             variable: Variable {
-                name: Default::default(),
+                name: Node::default(),
                 is_mutable: None,
             },
             param_type: Type::Any(Node::default()),
@@ -231,7 +232,6 @@ fn compile_to_resolved_program(script: &str) -> Result<(ResolvedProgram, SourceM
 
     let mut resolved_program = ResolvedProgram::new();
     resolve_program(
-        &resolved_program.types,
         &mut resolved_program.state,
         &mut resolved_program.modules,
         &source_map,
@@ -247,7 +247,7 @@ fn compile_and_eval(script: &str) -> Result<Value, CliError> {
 
     let resolved_main_module = resolved_program
         .modules
-        .get(&vec!["main".to_string()])
+        .get(&["main".to_string()])
         .expect("can not find main module");
 
     eval(&resolved_main_module)
@@ -264,7 +264,7 @@ fn read_root_source_file(path: &Path) -> Result<String, CliError> {
     Ok(file)
 }
 
-fn build(path: &PathBuf) -> Result<(), CliError> {
+fn build(path: &Path) -> Result<(), CliError> {
     let source_file_contents = read_root_source_file(path)?;
 
     let program = compile_to_resolved_program(&source_file_contents)?;
@@ -276,13 +276,13 @@ fn module_path() -> Vec<String> {
     vec!["main".to_string()]
 }
 
-fn run(path: &PathBuf) -> Result<(), CliError> {
+fn run(path: &Path) -> Result<(), CliError> {
     let source_file_contents = read_root_source_file(path)?;
 
     let value = compile_and_eval(&source_file_contents)?;
 
     info!("returned: {:?}", value);
-    eprintln!("{}", value);
+    eprintln!("{value}");
 
     Ok(())
 }

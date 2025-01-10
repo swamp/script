@@ -26,6 +26,8 @@ swamp-script-analyzer = { path = "../analyzer", version = "0.0.10" }
 
 swamp-script-source-map = { path = "../source-map", version = "0.0.10" }
 
+swamp-script-error-report = { path = "../err", version = "0.0.10"}
+
 # Runner
 swamp-script-eval = { path = "../eval", version = "0.0.10" }
 swamp-script-eval-loader = { path = "../eval-loader", version = "0.0.10" }

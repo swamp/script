@@ -1480,7 +1480,6 @@ impl<'a, C> Interpreter<'a, C> {
                     match v {
                         Value::Option(_) => {
                             panic!("unnecessary wrap!, should be investigated");
-                            v
                         }
                         _ => Value::Option(Some(Box::from(v))),
                     }

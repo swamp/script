@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
+ * Licensed under the MIT License. See LICENSE in the project root for license information.
+ */
+
 use crate::err::ResolveError;
 use crate::{Resolver, SPARSE_TYPE_ID};
 use swamp_script_ast::{Expression, Node, QualifiedTypeIdentifier};
@@ -97,6 +102,7 @@ impl<'a> Resolver<'a> {
                         let resolved_key = self.resolve_expression_expecting_type(
                             &key_expr,
                             &ResolvedType::RustType(sparse_id),
+                            false,
                         )?;
                         return Ok(ResolvedExpression::SparseAccess(
                             Box::new(resolved_expr),

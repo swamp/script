@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
+ * Licensed under the MIT License. See LICENSE in the project root for license information.
+ */
+
 use crate::err::ResolveError;
 use crate::{Resolver, SPARSE_TYPE_ID};
 use swamp_script_ast::{Expression, Node};
@@ -93,8 +98,11 @@ impl<'a> Resolver<'a> {
                     return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 1));
                 }
 
-                let key_expr =
-                    self.resolve_expression_expecting_type(&ast_arguments[0], &map_type.key_type)?;
+                let key_expr = self.resolve_expression_expecting_type(
+                    &ast_arguments[0],
+                    &map_type.key_type,
+                    true,
+                )?;
 
                 ResolvedExpression::MapRemove(
                     Box::new(map_expr),
@@ -114,8 +122,11 @@ impl<'a> Resolver<'a> {
                     return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 1));
                 }
 
-                let key_expr =
-                    self.resolve_expression_expecting_type(&ast_arguments[0], &map_type.key_type)?;
+                let key_expr = self.resolve_expression_expecting_type(
+                    &ast_arguments[0],
+                    &map_type.key_type,
+                    false,
+                )?;
 
                 ResolvedExpression::MapHas(Box::new(map_expr), Box::new(key_expr))
             }
@@ -178,7 +189,7 @@ impl<'a> Resolver<'a> {
             return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 1));
         }
         let expr2 =
-            self.resolve_expression_expecting_type(&ast_arguments[0], &ResolvedType::Float)?;
+            self.resolve_expression_expecting_type(&ast_arguments[0], &ResolvedType::Float, false)?;
 
         Ok(expr2)
     }
@@ -191,7 +202,7 @@ impl<'a> Resolver<'a> {
             return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 1));
         }
         let expr2 =
-            self.resolve_expression_expecting_type(&ast_arguments[0], &ResolvedType::Int)?;
+            self.resolve_expression_expecting_type(&ast_arguments[0], &ResolvedType::Int, false)?;
 
         Ok(expr2)
     }
@@ -204,9 +215,9 @@ impl<'a> Resolver<'a> {
             return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 2));
         }
         let expr2 =
-            self.resolve_expression_expecting_type(&ast_arguments[0], &ResolvedType::Float)?;
+            self.resolve_expression_expecting_type(&ast_arguments[0], &ResolvedType::Float, false)?;
         let expr3 =
-            self.resolve_expression_expecting_type(&ast_arguments[1], &ResolvedType::Float)?;
+            self.resolve_expression_expecting_type(&ast_arguments[1], &ResolvedType::Float, false)?;
 
         Ok((expr2, expr3))
     }
@@ -413,6 +424,7 @@ impl<'a> Resolver<'a> {
                             let value = self.resolve_expression_expecting_type(
                                 &ast_arguments[0],
                                 &value_type,
+                                false,
                             )?;
                             return Ok(Some(ResolvedExpression::SparseAdd(
                                 Box::new(self_expression),
@@ -427,7 +439,11 @@ impl<'a> Resolver<'a> {
                                 ));
                             }
                             let sparse_slot_id_expression = self
-                                .resolve_expression_expecting_type(&ast_arguments[0], &key_type)?;
+                                .resolve_expression_expecting_type(
+                                    &ast_arguments[0],
+                                    &key_type,
+                                    false,
+                                )?;
                             return Ok(Some(ResolvedExpression::SparseRemove(
                                 Box::new(self_expression),
                                 Box::new(sparse_slot_id_expression),

@@ -1,12 +1,16 @@
+/*
+ * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
+ * Licensed under the MIT License. See LICENSE in the project root for license information.
+ */
+
 use crate::err::ResolveError;
-use crate::{wrap_in_some_if_optional, Resolver};
+use crate::Resolver;
 use seq_set::SeqSet;
 use swamp_script_ast::{FieldExpression, Node, QualifiedTypeIdentifier};
 use swamp_script_semantic::{
     ResolvedAccess, ResolvedAnonymousStructType, ResolvedExpression, ResolvedNode,
     ResolvedStaticCall, ResolvedStructInstantiation, ResolvedType, ResolvedVariableAssignment,
 };
-use tracing::error;
 
 impl<'a> Resolver<'a> {
     pub(crate) fn resolve_struct_instantiation(
@@ -156,11 +160,10 @@ impl<'a> Resolver<'a> {
             let resolved_expression = self.resolve_expression_expecting_type(
                 &field.expression,
                 &looked_up_field.field_type,
+                true,
             )?;
-            let upgraded_resolved_expression =
-                wrap_in_some_if_optional(&looked_up_field.field_type, resolved_expression);
-
-            let expression_type = upgraded_resolved_expression.resolution();
+            /*
+            let expression_type = resolved_expression.resolution();
 
             if !looked_up_field.field_type.same_type(&expression_type) {
                 error!("types: {looked_up_field:?} expr: {expression_type:?}");
@@ -171,8 +174,9 @@ impl<'a> Resolver<'a> {
                 ));
             }
 
-            source_order_expressions
-                .push((field_index_in_definition, upgraded_resolved_expression));
+             */
+
+            source_order_expressions.push((field_index_in_definition, resolved_expression));
         }
 
         Ok((source_order_expressions, missing_fields))

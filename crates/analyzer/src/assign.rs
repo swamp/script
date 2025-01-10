@@ -1,5 +1,10 @@
+/*
+ * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
+ * Licensed under the MIT License. See LICENSE in the project root for license information.
+ */
+
 use crate::err::ResolveError;
-use crate::{wrap_in_some_if_optional, Resolver};
+use crate::Resolver;
 use swamp_script_ast::{CompoundOperator, Expression, Node};
 use swamp_script_semantic::{ResolvedAccess, ResolvedExpression};
 
@@ -24,13 +29,13 @@ impl<'a> Resolver<'a> {
             field_index,
         ));
 
-        let source_expression = self.resolve_expression(ast_source_expression)?;
-        let wrapped_expression = wrap_in_some_if_optional(&field_type, source_expression);
+        let source_expression =
+            self.resolve_expression_expecting_type(ast_source_expression, &field_type, true)?;
 
         Ok(ResolvedExpression::StructFieldAssignment(
             Box::new(resolved_first_base_expression),
             chain,
-            Box::from(wrapped_expression),
+            Box::from(source_expression),
         ))
     }
 
@@ -57,14 +62,13 @@ impl<'a> Resolver<'a> {
         ));
 
         let source_expression =
-            self.resolve_expression_expecting_type(ast_source_expression, &field_type)?;
-        let wrapped_expression = wrap_in_some_if_optional(&field_type, source_expression);
+            self.resolve_expression_expecting_type(ast_source_expression, &field_type, true)?;
 
         Ok(ResolvedExpression::FieldCompoundAssignment(
             Box::new(resolved_first_base_expression),
             chain,
             resolved_operator,
-            Box::from(wrapped_expression),
+            Box::from(source_expression),
         ))
     }
 }
