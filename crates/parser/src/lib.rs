@@ -8,6 +8,8 @@ use pest::error::{Error, ErrorVariant, InputLocation};
 use pest::iterators::Pair;
 use pest::Parser;
 use pest_derive::Parser;
+use std::iter::Peekable;
+use std::str::Chars;
 use swamp_script_ast::{
     prelude::*, CompoundOperator, CompoundOperatorKind, EnumVariantLiteral, FieldExpression,
     FieldName, FieldType, ForPattern, ForVar, IteratableExpression, LocationExpression,
@@ -82,6 +84,11 @@ pub enum SpecificError {
     ExpectedIdentifier,
     ExpectedIdentifierAfterPath,
     ExpectedFieldOrRest,
+    UnknownEscapeCharacter(char),
+    UnfinishedEscapeSequence,
+    InvalidUnicodeEscape,
+    InvalidHexEscape,
+    InvalidUtf8Sequence,
 }
 
 #[derive(Debug)]
@@ -1612,7 +1619,10 @@ impl AstParser {
         for part_pair in Self::convert_into_iterator(pair) {
             match part_pair.as_rule() {
                 Rule::text => {
-                    parts.push(StringPart::Literal(self.to_node(&part_pair)));
+                    parts.push(StringPart::Literal(
+                        self.to_node(&part_pair),
+                        self.unescape_string(&part_pair)?,
+                    ));
                 }
                 Rule::interpolation => {
                     let inner = self.next_inner_pair(&part_pair.clone())?;
@@ -1731,6 +1741,151 @@ impl AstParser {
         Ok(Literal::EnumVariant(enum_variant_literal))
     }
 
+    fn unescape_unicode(
+        &self,
+        chars: &mut Peekable<Chars>,
+        octets: &mut Vec<u8>,
+        pair: &Pair<Rule>,
+    ) -> Result<(), ParseError> {
+        match chars.next() {
+            Some('(') => {
+                let mut hex_digits = String::new();
+
+                while let Some(&c) = chars.peek() {
+                    if c == ')' {
+                        break;
+                    }
+                    if c.is_ascii_hexdigit() && hex_digits.len() < 6 {
+                        hex_digits.push(c);
+                        chars.next();
+                    } else {
+                        return Err(
+                            self.create_error_pair(SpecificError::InvalidUnicodeEscape, pair)
+                        );
+                    }
+                }
+
+                match chars.next() {
+                    Some(')') => {
+                        if hex_digits.is_empty() {
+                            return Err(
+                                self.create_error_pair(SpecificError::InvalidUnicodeEscape, pair)
+                            );
+                        }
+
+                        let code = u32::from_str_radix(&hex_digits, 16).map_err(|_| {
+                            self.create_error_pair(SpecificError::InvalidUnicodeEscape, pair)
+                        })?;
+
+                        if code > 0x0010_FFFF {
+                            return Err(
+                                self.create_error_pair(SpecificError::InvalidUnicodeEscape, pair)
+                            );
+                        }
+
+                        if let Some(c) = std::char::from_u32(code) {
+                            let mut buf = [0; 4];
+                            let encoded = c.encode_utf8(&mut buf);
+                            octets.extend_from_slice(encoded.as_bytes());
+                        } else {
+                            return Err(
+                                self.create_error_pair(SpecificError::InvalidUnicodeEscape, pair)
+                            );
+                        }
+                    }
+                    _ => {
+                        return Err(
+                            self.create_error_pair(SpecificError::InvalidUnicodeEscape, pair)
+                        );
+                    }
+                }
+            }
+            _ => {
+                return Err(self.create_error_pair(SpecificError::InvalidUnicodeEscape, pair));
+            }
+        }
+        Ok(())
+    }
+
+    fn unescape_hex(
+        &self,
+        chars: &mut Peekable<Chars>,
+        pair: &Pair<Rule>,
+    ) -> Result<u8, ParseError> {
+        let mut hex_digits = String::new();
+        for _ in 0..2 {
+            match chars.next() {
+                Some(h) if h.is_ascii_hexdigit() => {
+                    hex_digits.push(h);
+                }
+                _ => {
+                    return Err(self.create_error_pair(SpecificError::InvalidHexEscape, pair));
+                }
+            }
+        }
+        Ok(u8::from_str_radix(&hex_digits, 16)
+            .map_err(|_| self.create_error_pair(SpecificError::InvalidHexEscape, pair))?)
+    }
+
+    fn unescape_string(&self, pair: &Pair<Rule>) -> Result<String, ParseError> {
+        let mut octets = Vec::new();
+
+        let raw = pair.as_str();
+        let mut chars = raw.chars().peekable();
+
+        while let Some(ch) = chars.next() {
+            if ch == '\\' {
+                let Some(next_ch) = chars.next() else {
+                    return Err(
+                        self.create_error_pair(SpecificError::UnfinishedEscapeSequence, pair)
+                    );
+                };
+                match next_ch {
+                    'n' => {
+                        octets.push(b'\n');
+                    }
+                    't' => {
+                        octets.push(b'\t');
+                    }
+                    '\\' => {
+                        octets.push(b'\\');
+                    }
+                    '"' => {
+                        octets.push(b'"');
+                    }
+                    '\'' => {
+                        octets.push(b'\'');
+                    }
+                    // Two hexadecimal digits that result in an `u8`
+                    'x' => {
+                        let code = self.unescape_hex(&mut chars, pair)?;
+                        octets.push(code);
+                    }
+                    // Unicode character
+                    'u' => {
+                        self.unescape_unicode(&mut chars, &mut octets, pair)?;
+                    }
+
+                    other => {
+                        return Err(self.create_error_pair(
+                            SpecificError::UnknownEscapeCharacter(other),
+                            pair,
+                        ));
+                    }
+                }
+            } else {
+                let mut buf = [0; 4];
+                let utf8_bytes = ch.encode_utf8(&mut buf);
+                octets.extend_from_slice(utf8_bytes.as_bytes());
+            }
+        }
+
+        let output = String::from_utf8(octets)
+            .map_err(|_| self.create_error_pair(SpecificError::InvalidUtf8Sequence, pair))?;
+
+        Ok(output)
+    }
+
     fn parse_literal(&self, pair: &Pair<Rule>) -> Result<Literal, ParseError> {
         let inner = self.next_inner_pair(pair)?;
         let node = self.to_node(&inner);
@@ -1738,17 +1893,8 @@ impl AstParser {
             Rule::int_lit => Ok(Literal::Int(node)),
             Rule::float_lit => Ok(Literal::Float(node)),
             Rule::string_lit => {
-                let _content = inner.as_str();
-                // Remove quotes and handle escapes
-                /*
-                let processed = content[1..content.len() - 1]
-                    .replace("\\\"", "\"")
-                    .replace("\\n", "\n")
-                    .replace("\\t", "\t")
-                    .replace("\\\\", "\\");
-
-                 */
-                Ok(Literal::String(node))
+                let processed_string = self.unescape_string(&inner)?;
+                Ok(Literal::String(node, processed_string))
             }
             Rule::bool_lit => Ok(Literal::Bool(node)),
             Rule::unit_lit => Ok(Literal::Unit(node)),
