@@ -5,7 +5,7 @@
 pub use crate::{
     AnonymousStructType, BinaryOperator, ConstantIdentifier, ConstantInfo, Definition,
     EnumVariantType, Expression, FormatSpecifier, FunctionDeclaration, FunctionWithBody,
-    GuardClause, IdentifierName, ImplItem, ImplMember, Literal, LocalIdentifier,
+    GuardClause, GuardExpr, IdentifierName, ImplItem, ImplMember, Literal, LocalIdentifier,
     LocalTypeIdentifier, MatchArm, Module, ModulePath, Node, NormalPattern, Parameter, Pattern,
     PostfixOperator, PrecisionType, QualifiedTypeIdentifier, SelfParameter, StringConst,
     StringPart, StructType, Type, TypeForParameter, UnaryOperator, Use, UseItem, Variable,

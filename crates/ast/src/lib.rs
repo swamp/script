@@ -397,6 +397,7 @@ pub enum Expression {
     // Compare and Matching
     If(Box<Expression>, Box<Expression>, Option<Box<Expression>>),
     Match(Box<Expression>, Vec<MatchArm>),
+    Guard(Vec<GuardExpr>, Option<Box<Expression>>),
 
     InterpolatedString(Vec<StringPart>),
 
@@ -525,6 +526,12 @@ pub enum UnaryOperator {
 #[derive(Debug)]
 pub enum PostfixOperator {
     Unwrap(Node), // option_operator
+}
+
+#[derive(Debug)]
+pub struct GuardExpr {
+    pub condition: Expression,
+    pub result: Expression,
 }
 
 #[derive(Debug)]

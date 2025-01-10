@@ -1028,6 +1028,12 @@ pub fn create_rust_type(name: &str, type_number: TypeNumber) -> ResolvedRustType
 }
 
 #[derive(Debug)]
+pub struct ResolvedGuard {
+    pub condition: ResolvedBooleanExpression,
+    pub result: ResolvedExpression,
+}
+
+#[derive(Debug)]
 pub enum ResolvedExpression {
     // Access Lookup values
     VariableAccess(ResolvedVariableRef),
@@ -1149,6 +1155,7 @@ pub enum ResolvedExpression {
     },
 
     Match(ResolvedMatch),
+    Guard(Vec<ResolvedGuard>, Option<Box<ResolvedExpression>>),
     LetVar(ResolvedVariableRef, Box<ResolvedExpression>),
     ArrayRemoveIndex(ResolvedVariableRef, Box<ResolvedExpression>),
     ArrayClear(ResolvedVariableRef),
@@ -1415,6 +1422,19 @@ impl ResolvedExpression {
                 resolved_match
                     .expression
                     .collect_constant_dependencies(deps);
+            }
+
+            Self::Guard(guards, wildcard) => {
+                for guard in guards {
+                    guard
+                        .condition
+                        .expression
+                        .collect_constant_dependencies(deps);
+                    guard.result.collect_constant_dependencies(deps);
+                }
+                if let Some(found_wildcard) = wildcard {
+                    found_wildcard.collect_constant_dependencies(deps);
+                }
             }
             Self::LetVar(_var_ref, expr) => {
                 expr.collect_constant_dependencies(deps);
@@ -1704,6 +1724,12 @@ impl ResolvedExpression {
 
             // Matching and comparing
             Self::Match(resolved_match) => resolved_match.arms[0].expression_type.clone(),
+
+            Self::Guard(guards, wildcard) => wildcard.as_ref().map_or_else(
+                || guards[0].result.resolution(),
+                |found_wildcard| found_wildcard.resolution(),
+            ),
+
             Self::If(_, true_expr, _) => true_expr.resolution(),
 
             // Other

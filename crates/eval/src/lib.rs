@@ -1461,6 +1461,10 @@ impl<'a, C> Interpreter<'a, C> {
 
             ResolvedExpression::Match(resolved_match) => self.eval_match(resolved_match)?,
 
+            ResolvedExpression::Guard(guards, maybe_wildcard) => {
+                self.eval_guard(guards, maybe_wildcard.as_deref())?
+            }
+
             ResolvedExpression::InternalFunctionAccess(fetch_function) => {
                 Value::InternalFunction(fetch_function.clone())
             }
@@ -1799,6 +1803,25 @@ impl<'a, C> Interpreter<'a, C> {
         };
 
         Ok(value)
+    }
+
+    fn eval_guard(
+        &mut self,
+        guards: &[ResolvedGuard],
+        maybe_wildcard: Option<&ResolvedExpression>,
+    ) -> Result<Value, ExecuteError> {
+        for guard in guards {
+            if self
+                .evaluate_expression(&guard.condition.expression)?
+                .is_truthy()?
+            {
+                return Ok(self.evaluate_expression(&guard.result)?);
+            }
+        }
+
+        self.evaluate_expression(
+            &maybe_wildcard.expect("must have wildcard '_' if nothing matches in the guard"),
+        )
     }
 
     #[inline(always)]

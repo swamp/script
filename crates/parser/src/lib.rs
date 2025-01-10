@@ -1568,7 +1568,7 @@ impl AstParser {
             }
             Rule::struct_instantiation => self.parse_struct_instantiation(pair),
             Rule::enum_literal => Ok(Expression::Literal(self.parse_enum_literal(pair)?)),
-
+            Rule::guard_expr_list => self.parse_guard_expr_list(pair),
             Rule::return_expr => self.parse_return(pair),
             Rule::break_expr => Ok(Expression::Break(self.to_node(pair))),
             Rule::continue_expr => Ok(Expression::Continue(self.to_node(pair))),
@@ -2181,6 +2181,37 @@ impl AstParser {
             .next()
             .ok_or_else(|| self.create_error_pair(SpecificError::MissingFunctionBody, pair))?;
         Ok(GuardClause(self.parse_expression(&inner)?))
+    }
+
+    fn parse_guard_expr_list(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
+        let mut guard_exprs = Vec::new();
+        let mut wildcard = None;
+
+        for expr_pair in Self::convert_into_iterator(pair) {
+            match expr_pair.as_rule() {
+                Rule::guard_expr => {
+                    let mut guard_inner = Self::convert_into_iterator(&expr_pair);
+                    let guard_clause = Self::next_pair(&mut guard_inner)?;
+                    let condition = self.parse_guard_clause(&guard_clause)?;
+                    let result = self.parse_expression(&Self::next_pair(&mut guard_inner)?)?;
+                    guard_exprs.push(GuardExpr {
+                        condition: condition.0,
+                        result,
+                    });
+                }
+                Rule::wildcard_guard_expr => {
+                    let mut wild_inner = Self::convert_into_iterator(&expr_pair);
+                    let result = self.parse_expression(&Self::next_pair(&mut wild_inner)?)?;
+                    wildcard = Some(Box::new(result));
+                }
+                _ => {
+                    println!("Unexpected rule: {:?}", expr_pair.as_rule());
+                    continue;
+                }
+            }
+        }
+
+        Ok(Expression::Guard(guard_exprs, wildcard))
     }
 
     fn parse_normal_match_pattern(&self, pair: &Pair<Rule>) -> Result<NormalPattern, ParseError> {

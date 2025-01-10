@@ -900,3 +900,54 @@ InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable
 ",
     );
 }
+
+#[test_log::test]
+fn guard_single() {
+    check(
+        r"
+        a = 3
+
+        | a > 2 -> 'hello'
+
+         ",
+        r#"
+
+InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <9:1>, resolved_type: Int, mutable_node: None, scope_index: 0, variable_index: 0 }], expression: Literal(IntLiteral(3, <13:1>)) })
+Guard([ResolvedGuard { condition: ResolvedBooleanExpression { expression: BinaryOp(ResolvedBinaryOperator { left: VariableAccess(ResolvedVariable { name: <9:1>, resolved_type: Int, mutable_node: None, scope_index: 0, variable_index: 0 }), right: Literal(IntLiteral(2, <38:1>)), kind: GreaterThan, node: <36:1>, resolved_type: Bool }) }, result: InterpolatedString([Literal(<44:5>, "hello")]) }], None)
+
+"#,
+    );
+}
+
+#[test_log::test]
+fn guard_multi() {
+    check(
+        r"
+        | 3 > 2 -> 'hello'
+        | 3 != 0 -> 'goodbye'
+        | _ -> 'not sure'
+         ",
+        r#"
+
+Guard([ResolvedGuard { condition: ResolvedBooleanExpression { expression: BinaryOp(ResolvedBinaryOperator { left: Literal(IntLiteral(3, <11:1>)), right: Literal(IntLiteral(2, <15:1>)), kind: GreaterThan, node: <13:1>, resolved_type: Bool }) }, result: InterpolatedString([Literal(<21:5>, "hello")]) }, ResolvedGuard { condition: ResolvedBooleanExpression { expression: BinaryOp(ResolvedBinaryOperator { left: Literal(IntLiteral(3, <38:1>)), right: Literal(IntLiteral(0, <43:1>)), kind: NotEqual, node: <40:2>, resolved_type: Bool }) }, result: InterpolatedString([Literal(<49:7>, "goodbye")]) }], Some(InterpolatedString([Literal(<74:8>, "not sure")])))
+
+"#,
+    );
+}
+
+#[test_log::test]
+fn guard_multi_assign() {
+    check(
+        r"
+        a =
+            | 3 > 2 -> 'hello'
+            | 3 != 0 -> 'goodbye'
+            | _ -> 'you say'
+         ",
+        r#"
+
+InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <9:1>, resolved_type: String, mutable_node: None, scope_index: 0, variable_index: 0 }], expression: Guard([ResolvedGuard { condition: ResolvedBooleanExpression { expression: BinaryOp(ResolvedBinaryOperator { left: Literal(IntLiteral(3, <27:1>)), right: Literal(IntLiteral(2, <31:1>)), kind: GreaterThan, node: <29:1>, resolved_type: Bool }) }, result: InterpolatedString([Literal(<37:5>, "hello")]) }, ResolvedGuard { condition: ResolvedBooleanExpression { expression: BinaryOp(ResolvedBinaryOperator { left: Literal(IntLiteral(3, <58:1>)), right: Literal(IntLiteral(0, <63:1>)), kind: NotEqual, node: <60:2>, resolved_type: Bool }) }, result: InterpolatedString([Literal(<69:7>, "goodbye")]) }], Some(InterpolatedString([Literal(<98:7>, "you say")]))) })
+
+"#,
+    );
+}

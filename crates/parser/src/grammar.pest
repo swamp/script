@@ -307,6 +307,7 @@ array_index = { "[" ~ expression ~ "]" }
 
 primary = {
     with_expr
+    | guard_expr_list
     | static_call
     | static_member_reference
     | if_expr
@@ -375,7 +376,10 @@ wildcard_pattern = { "_" }
 
 // GUARD CLAUSE ---------------------------------------------------------------
 
-guard_clause = { "|" ~ expression }
+guard_clause = { "|" ~ (!("_") ~ expression) }
+guard_expr = { guard_clause ~ "->" ~ expression }
+guard_expr_list = { guard_expr ~ (guard_expr)* ~ (wildcard_guard_expr)? }
+wildcard_guard_expr = { "|" ~ "_" ~ "->" ~ expression }
 
 variable_list = {
     variable_item ~ ("," ~ variable_item)*

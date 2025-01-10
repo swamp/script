@@ -2418,3 +2418,52 @@ VariableAssignment(<10:6>, With([VariableBinding { variable: <24:1>, expression:
 ",
     );
 }
+
+#[test_log::test]
+fn guard_expression() {
+    check(
+        r" 
+a = | some_bool_expression -> result
+         ",
+        r"
+
+VariableAssignment(<2:1>, Guard([GuardExpr { condition: VariableAccess(<8:20>), result: VariableAccess(<32:6>) }], None))
+
+",
+    );
+}
+
+#[test_log::test]
+fn multiple_guards() {
+    check(
+        r" 
+a = 
+| some_bool_expression -> result
+| a > 0 || b < 3 -> 'hello'
+         ",
+        r"
+
+ariableAssignment(<2:1>, Guard([GuardExpr { condition: VariableAccess(<9:20>), result: VariableAccess(<33:6>) }, GuardExpr { condition: BinaryOp(BinaryOp(VariableAccess(<42:1>), GreaterThan(<44:1>), Literal(Int(<46:1>))), LogicalOr(<48:2>), BinaryOp(VariableAccess(<51:1>), LessThan(<53:1>), Literal(Int(<55:1>)))), result: InterpolatedString([Literal(<61:5>)]) }], None))
+
+
+",
+    );
+}
+
+#[test_log::test]
+fn multiple_guards_with_wildcard() {
+    check(
+        r" 
+a = 
+| some_bool_expression -> result
+| a > 0 || b < 3 -> 'hello'
+| _ -> 'saved by the wildcard'
+         ",
+        r"
+
+VariableAssignment(<2:1>, Guard([GuardExpr { condition: VariableAccess(<9:20>), result: VariableAccess(<33:6>) }, GuardExpr { condition: BinaryOp(BinaryOp(VariableAccess(<42:1>), GreaterThan(<44:1>), Literal(Int(<46:1>))), LogicalOr(<48:2>), BinaryOp(VariableAccess(<51:1>), LessThan(<53:1>), Literal(Int(<55:1>)))), result: InterpolatedString([Literal(<61:5>)]) }], Some(InterpolatedString([Literal(<76:21>)]))))
+
+
+",
+    );
+}

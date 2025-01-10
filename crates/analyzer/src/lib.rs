@@ -380,6 +380,18 @@ impl<'a> Resolver<'a> {
         false
     }
 
+    pub fn resolve_expression_maybe_expecting_type(
+        &mut self,
+        ast_expression: &Expression,
+        expected_type: Option<ResolvedType>,
+    ) -> Result<ResolvedExpression, ResolveError> {
+        if let Some(found_type) = expected_type {
+            self.resolve_expression_expecting_type(ast_expression, &found_type)
+        } else {
+            self.resolve_expression(ast_expression)
+        }
+    }
+
     pub fn resolve_expression_expecting_type(
         &mut self,
         ast_expression: &Expression,
@@ -691,6 +703,9 @@ impl<'a> Resolver<'a> {
 
             Expression::Match(expression, arms) => {
                 ResolvedExpression::Match(self.resolve_match(expression, arms)?)
+            }
+            Expression::Guard(guard_expressions, wildcard) => {
+                self.resolve_guard(guard_expressions, wildcard)?
             }
         };
 
@@ -1342,6 +1357,39 @@ impl<'a> Resolver<'a> {
         self.pop_closed_block_scope();
 
         Ok(block_expression)
+    }
+
+    fn resolve_guard(
+        &mut self,
+        guard_expressions: &Vec<GuardExpr>,
+        wildcard: &Option<Box<Expression>>,
+    ) -> Result<ResolvedExpression, ResolveError> {
+        let mut expecting_type = None;
+        let mut guards = Vec::new();
+        for guard in guard_expressions {
+            let resolved_condition = self.resolve_bool_expression(&guard.condition)?;
+            let resolved_result = self
+                .resolve_expression_maybe_expecting_type(&guard.result, expecting_type.clone())?;
+            if expecting_type.is_none() {
+                expecting_type = Some(resolved_result.resolution().clone());
+            }
+
+            guards.push(ResolvedGuard {
+                condition: resolved_condition,
+                result: resolved_result,
+            });
+        }
+
+        let resolved_wildcard = if let Some(found_wildcard) = wildcard {
+            Some(Box::new(self.resolve_expression_maybe_expecting_type(
+                found_wildcard,
+                expecting_type,
+            )?))
+        } else {
+            None
+        };
+
+        Ok(ResolvedExpression::Guard(guards, resolved_wildcard))
     }
 }
 
