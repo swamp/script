@@ -138,10 +138,12 @@ impl Clone for Value {
     }
 }
 
+#[inline]
 fn deep_clone_valrefs(vec_values: &[ValueRef]) -> Vec<ValueRef> {
     vec_values.iter().map(deep_clone_valref).collect()
 }
 
+#[inline]
 fn deep_clone_valref(val_ref: &ValueRef) -> ValueRef {
     let cloned_value = val_ref.borrow().clone();
     Rc::new(RefCell::new(cloned_value))

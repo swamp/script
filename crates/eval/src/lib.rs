@@ -660,6 +660,7 @@ impl<'a, C> Interpreter<'a, C> {
 
      */
 
+    #[inline]
     fn evaluate_expression_with_signal(
         &mut self,
         expr: &ResolvedExpression,
@@ -773,6 +774,7 @@ impl<'a, C> Interpreter<'a, C> {
 
     // ---------------
     #[allow(clippy::too_many_lines)]
+    #[inline]
     fn evaluate_expression(&mut self, expr: &ResolvedExpression) -> Result<Value, ExecuteError> {
         let value = match expr {
             // Illegal in this context
@@ -2302,6 +2304,7 @@ impl<'a, C> Interpreter<'a, C> {
         self.get_location(start, lookups)
     }
 
+    #[inline]
     fn evaluate_lookups(
         &mut self,
         expr: &ResolvedExpression,
