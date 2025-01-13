@@ -1010,3 +1010,18 @@ StringRangeAccess(VariableAccess(ResolvedVariable { name: <9:1>, resolved_type: 
 "#,
     );
 }
+
+#[test_log::test]
+fn string_iterable() {
+    check(
+        r"
+        a = 'some string'
+        for y in a {
+        }
+         ",
+        r#"
+
+
+"#,
+    );
+}

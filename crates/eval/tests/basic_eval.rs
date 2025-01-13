@@ -1692,3 +1692,41 @@ fn string_range_mut_assignment_inclusive() {
         ",
     );
 }
+
+#[test_log::test]
+fn string_iterable() {
+    check(
+        "
+        str = 'hello'
+        for s in str {
+            print('{s}')
+        }
+            ",
+        r"
+        h
+        e
+        l
+        l
+        o
+        ",
+    );
+}
+
+#[test_log::test]
+fn string_iterable_with_index() {
+    check(
+        "
+        str = 'hello'
+        for i, s in str {
+            print('{i}:{s}')
+        }
+            ",
+        r"
+        0:h
+        1:e
+        2:l
+        3:l
+        4:o
+        ",
+    );
+}

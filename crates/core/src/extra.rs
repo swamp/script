@@ -81,7 +81,8 @@ impl SparseValueMap {
         self.sparse_slot.remove(id.0);
     }
 
-    pub fn get(&mut self, id: &SparseValueId) -> Option<&ValueRef> {
+    #[must_use]
+    pub fn get(&self, id: &SparseValueId) -> Option<&ValueRef> {
         self.sparse_slot.get(id.0)
     }
 

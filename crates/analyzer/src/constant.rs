@@ -57,7 +57,7 @@ impl<'a> Resolver<'a> {
     ) -> Result<Vec<ResolvedConstantRef>, ResolveError> {
         let mut constants = Vec::new();
         for constant in ast_constants {
-            let (constant_ref, name, _node) = self.resolve_constant(&constant)?;
+            let (constant_ref, name, _node) = self.resolve_constant(constant)?;
 
             constants.push(constant_ref.clone());
 

@@ -973,6 +973,7 @@ impl<'a> Resolver<'a> {
                 Some(map_type_ref.key_type.clone()),
                 map_type_ref.value_type.clone(),
             ),
+            ResolvedType::String => (Some(ResolvedType::Int), ResolvedType::String),
             ResolvedType::Iterable(item_type) => (None, *item_type),
             ResolvedType::Generic(_base_type, params) => {
                 // TODO: HACK: We assume it is a container that iterates over the type parameters

@@ -75,6 +75,10 @@ impl<'a> Resolver<'a> {
         Ok(expr)
     }
 
+    /// # Errors
+    ///
+    /// # Panics
+    ///
     pub fn resolve_index_access(
         &mut self,
         expression: &Expression,
@@ -100,7 +104,7 @@ impl<'a> Resolver<'a> {
                             .expect("SparseId is missing");
                         let contained_type = &generic_type_parameters[0];
                         let resolved_key = self.resolve_expression_expecting_type(
-                            &key_expr,
+                            key_expr,
                             &ResolvedType::RustType(sparse_id),
                             false,
                         )?;
@@ -126,6 +130,8 @@ impl<'a> Resolver<'a> {
         Ok(expr)
     }
 
+    /// # Errors
+    ///
     pub fn resolve_range_access(
         &mut self,
         expression: &Expression,
@@ -264,9 +270,7 @@ impl<'a> Resolver<'a> {
             self.collect_field_chain(base_expression, &mut access_chain)?;
 
         let last_resolved_index = self.resolve_expression(last_index_expr)?;
-        let resolved_array_type_ref = if let ResolvedType::Array(array_type) = resolved_last_type {
-            array_type
-        } else {
+        let ResolvedType::Array(resolved_array_type_ref) = resolved_last_type else {
             return Err(ResolveError::NotAnArray(resolved_base_expression.span()));
         };
         access_chain.push(ResolvedAccess::ArrayIndex(last_resolved_index));
@@ -307,6 +311,8 @@ impl<'a> Resolver<'a> {
         Ok((resolved_min, resolved_max))
     }
 
+    /// # Errors
+    ///
     pub fn resolve_array_range_access(
         &mut self,
         base_expression: ResolvedExpression,
@@ -326,6 +332,8 @@ impl<'a> Resolver<'a> {
         ))
     }
 
+    /// # Errors
+    ///
     pub fn resolve_string_range_access(
         &mut self,
         base_expr: &Expression,
@@ -333,10 +341,10 @@ impl<'a> Resolver<'a> {
         max_expr: &Expression,
         mode: &ResolvedRangeMode,
     ) -> Result<ResolvedExpression, ResolveError> {
-        let base_expression = self.resolve_expression(&base_expr)?;
+        let base_expression = self.resolve_expression(base_expr)?;
 
         let (resolved_min_expr, resolved_max_expr) =
-            self.resolve_min_max_expr(&min_expr, max_expr)?;
+            self.resolve_min_max_expr(min_expr, max_expr)?;
 
         Ok(ResolvedExpression::StringRangeAccess(
             Box::from(base_expression),

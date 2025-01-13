@@ -72,76 +72,74 @@ pub enum Value {
 impl Clone for Value {
     fn clone(&self) -> Self {
         match self {
-            Value::Int(i) => Value::Int(*i),
-            Value::Float(f) => Value::Float(*f),
-            Value::String(s) => Value::String(s.clone()),
-            Value::Bool(b) => Value::Bool(*b),
-            Value::Unit => Value::Unit,
+            Self::Int(i) => Self::Int(*i),
+            Self::Float(f) => Self::Float(*f),
+            Self::String(s) => Self::String(s.clone()),
+            Self::Bool(b) => Self::Bool(*b),
+            Self::Unit => Self::Unit,
 
-            Value::Option(opt) => {
+            Self::Option(opt) => {
                 let cloned_opt = opt
                     .as_ref()
                     .map(|boxed_val| Box::new((**boxed_val).clone()));
-                Value::Option(cloned_opt)
+                Self::Option(cloned_opt)
             }
 
             // Containers
-            Value::Array(resolved_ref, vec_refs) => {
-                Value::Array(resolved_ref.clone(), deep_clone_valrefs(&vec_refs))
+            Self::Array(resolved_ref, vec_refs) => {
+                Self::Array(resolved_ref.clone(), deep_clone_valrefs(vec_refs))
             }
 
-            Value::Map(resolved_ref, seq_map) => {
+            Self::Map(resolved_ref, seq_map) => {
                 let cloned_seq_map = seq_map
                     .iter()
                     .map(|(key, val_ref)| (key.clone(), deep_clone_valref(val_ref)))
                     .collect();
 
-                Value::Map(resolved_ref.clone(), cloned_seq_map)
+                Self::Map(resolved_ref.clone(), cloned_seq_map)
             }
 
-            Value::Tuple(resolved_ref, vec_refs) => {
-                Value::Tuple(resolved_ref.clone(), deep_clone_valrefs(vec_refs))
+            Self::Tuple(resolved_ref, vec_refs) => {
+                Self::Tuple(resolved_ref.clone(), deep_clone_valrefs(vec_refs))
             }
 
-            Value::Struct(resolved_ref, vec_refs) => {
-                Value::Struct(resolved_ref.clone(), deep_clone_valrefs(vec_refs))
+            Self::Struct(resolved_ref, vec_refs) => {
+                Self::Struct(resolved_ref.clone(), deep_clone_valrefs(vec_refs))
             }
 
-            Value::EnumVariantSimple(resolved_ref) => {
-                Value::EnumVariantSimple(resolved_ref.clone())
+            Self::EnumVariantSimple(resolved_ref) => Self::EnumVariantSimple(resolved_ref.clone()),
+
+            Self::EnumVariantTuple(resolved_ref, vec_values) => {
+                Self::EnumVariantTuple(resolved_ref.clone(), vec_values.clone())
             }
 
-            Value::EnumVariantTuple(resolved_ref, vec_values) => {
-                Value::EnumVariantTuple(resolved_ref.clone(), vec_values.clone())
+            Self::EnumVariantStruct(resolved_ref, vec_values) => {
+                Self::EnumVariantStruct(resolved_ref.clone(), vec_values.clone())
             }
 
-            Value::EnumVariantStruct(resolved_ref, vec_values) => {
-                Value::EnumVariantStruct(resolved_ref.clone(), vec_values.clone())
+            Self::ExclusiveRange(start, end) => {
+                Self::ExclusiveRange(Box::new(**start), Box::new(**end))
             }
 
-            Value::ExclusiveRange(start, end) => {
-                Value::ExclusiveRange(Box::new(**start), Box::new(**end))
+            Self::InclusiveRange(start, end) => {
+                Self::InclusiveRange(Box::new(**start), Box::new(**end))
             }
 
-            Value::InclusiveRange(start, end) => {
-                Value::InclusiveRange(Box::new(**start), Box::new(**end))
+            Self::InternalFunction(resolved_def_ref) => {
+                Self::InternalFunction(resolved_def_ref.clone())
             }
 
-            Value::InternalFunction(resolved_def_ref) => {
-                Value::InternalFunction(resolved_def_ref.clone())
-            }
+            Self::ExternalFunction(external_id) => Self::ExternalFunction(*external_id),
 
-            Value::ExternalFunction(external_id) => Value::ExternalFunction(*external_id),
-
-            Value::RustValue(resolved_rust_ref, rust_type_rc) => {
-                Value::RustValue(resolved_rust_ref.clone(), rust_type_rc.clone())
+            Self::RustValue(resolved_rust_ref, rust_type_rc) => {
+                Self::RustValue(resolved_rust_ref.clone(), rust_type_rc.clone())
             }
         }
     }
 }
 
 fn deep_clone_valrefs(vec_values: &[ValueRef]) -> Vec<ValueRef> {
-    vec_values.iter().map(|v| deep_clone_valref(v)).collect()
+    vec_values.iter().map(deep_clone_valref).collect()
 }
 
 fn deep_clone_valref(val_ref: &ValueRef) -> ValueRef {
@@ -171,11 +169,23 @@ pub const SPARSE_TYPE_ID: TypeNumber = 999;
 // Iterators
 
 impl Value {
-    pub fn into_iter(self) -> Result<Box<dyn Iterator<Item = Value>>, ValueError> {
+    /// # Errors
+    ///
+    /// # Panics
+    ///
+    #[allow(clippy::should_implement_trait)] // TODO: Fix this
+    pub fn into_iter(self) -> Result<Box<dyn Iterator<Item = Self>>, ValueError> {
         match self {
             // TODO: Self::Reference(value_ref) => value_ref.borrow().clone().into_iter(is_mutable),
             Self::Array(_, values) => Ok(Box::new(
                 values.into_iter().map(|item| item.borrow().clone()),
+            )),
+            Self::String(values) => Ok(Box::new(
+                values
+                    .chars()
+                    .map(|item| Self::String(item.to_string()))
+                    .collect::<Vec<Self>>()
+                    .into_iter(),
             )),
             Self::Map(_, seq_map) => Ok(Box::new(
                 seq_map.into_values().map(|item| item.borrow().clone()),
@@ -190,7 +200,6 @@ impl Value {
                         .values()
                         .iter()
                         .map(|item| item.borrow().clone())
-                        .into_iter()
                         .collect();
                     Ok(Box::new(values.into_iter()))
                 }
@@ -210,7 +219,11 @@ impl Value {
         }
     }
 
-    pub fn into_iter_pairs(self) -> Result<Box<dyn Iterator<Item = (Value, Value)>>, ValueError> {
+    /// # Errors
+    ///
+    /// # Panics
+    ///
+    pub fn into_iter_pairs(self) -> Result<Box<dyn Iterator<Item = (Self, Self)>>, ValueError> {
         let values = match self {
             Self::Map(_, seq_map) => {
                 Box::new(seq_map.into_iter().map(|(k, v)| (k, v.borrow().clone())))
@@ -219,15 +232,24 @@ impl Value {
                 let iter = elements
                     .into_iter()
                     .enumerate()
-                    .map(move |(i, v)| (Value::Int(i as i32), v.borrow().clone()));
-                Box::new(iter) as Box<dyn Iterator<Item = (Value, Value)>>
+                    .map(move |(i, v)| (Self::Int(i as i32), v.borrow().clone()));
+                Box::new(iter) as Box<dyn Iterator<Item = (Self, Self)>>
             }
             Self::Array(_type_ref, array) => {
                 let iter = array
                     .into_iter()
                     .enumerate()
-                    .map(move |(i, v)| (Value::Int(i as i32), v.borrow().clone()));
-                Box::new(iter) as Box<dyn Iterator<Item = (Value, Value)>>
+                    .map(move |(i, v)| (Self::Int(i as i32), v.borrow().clone()));
+                Box::new(iter) as Box<dyn Iterator<Item = (Self, Self)>>
+            }
+            Self::String(string) => {
+                let iter = string
+                    .chars()
+                    .enumerate()
+                    .map(|(i, v)| (Self::Int(i as i32), Self::String(v.to_string())))
+                    .collect::<Vec<(Self, Self)>>()
+                    .into_iter();
+                Box::new(iter) as Box<dyn Iterator<Item = (Self, Self)> + 'static>
             }
             Self::RustValue(ref rust_type_ref, ref _rust_value) => {
                 Box::new(match rust_type_ref.number {
@@ -243,7 +265,7 @@ impl Value {
                             .iter()
                             .map(|(k, v)| {
                                 (
-                                    Value::RustValue(
+                                    Self::RustValue(
                                         id_type_ref.clone(),
                                         Rc::new(RefCell::new(Box::new(SparseValueId(k)))),
                                     ),
@@ -252,7 +274,7 @@ impl Value {
                             })
                             .collect();
 
-                        Box::new(pairs.into_iter()) as Box<dyn Iterator<Item = (Value, Value)>>
+                        Box::new(pairs.into_iter()) as Box<dyn Iterator<Item = (Self, Self)>>
                     }
 
                     _ => return Err(ValueError::NotSparseMap),
@@ -264,12 +286,16 @@ impl Value {
         Ok(values)
     }
 
+    #[must_use]
     pub fn convert_to_string_if_needed(&self) -> String {
         match self {
             Self::String(string) => string.clone(),
             _ => self.to_string(),
         }
     }
+
+    /// # Errors
+    ///
     pub fn expect_string(&self) -> Result<String, ValueError> {
         match self {
             Self::String(s) => Ok(s.clone()),
@@ -277,6 +303,8 @@ impl Value {
         }
     }
 
+    /// # Errors
+    ///
     pub fn expect_int(&self) -> Result<i32, ValueError> {
         match self {
             Self::Int(v) => Ok(*v),
@@ -284,6 +312,8 @@ impl Value {
         }
     }
 
+    /// # Errors
+    ///
     pub fn expect_float(&self) -> Result<Fp, ValueError> {
         match self {
             Self::Float(v) => Ok(*v),
@@ -291,6 +321,8 @@ impl Value {
         }
     }
 
+    /// # Errors
+    ///
     pub fn as_bool(&self) -> Result<bool, ValueError> {
         match self {
             Self::Bool(b) => Ok(*b),
@@ -298,6 +330,8 @@ impl Value {
         }
     }
 
+    /// # Errors
+    ///
     pub fn is_truthy(&self) -> Result<bool, ValueError> {
         let v = match self {
             Self::Bool(b) => *b,
@@ -307,6 +341,9 @@ impl Value {
         Ok(v)
     }
 
+    /// # Errors
+    ///
+    #[must_use]
     pub fn downcast_rust<T: RustType + 'static>(&self) -> Option<Rc<RefCell<Box<T>>>> {
         match self {
             Self::RustValue(_rust_type_ref, rc) => {
@@ -328,7 +365,7 @@ impl Value {
     #[must_use]
     pub fn downcast_hidden_rust<T: RustType + 'static>(&self) -> Option<Rc<RefCell<Box<T>>>> {
         match self {
-            Value::Struct(_struct_ref, fields) => fields[0].borrow().downcast_rust(),
+            Self::Struct(_struct_ref, fields) => fields[0].borrow().downcast_rust(),
             _ => None,
         }
     }
@@ -338,7 +375,7 @@ impl Value {
         value: T,
     ) -> Self {
         let boxed = Box::new(Box::new(value)) as Box<dyn RustType>;
-        Value::RustValue(rust_type_ref, Rc::new(RefCell::new(boxed)))
+        Self::RustValue(rust_type_ref, Rc::new(RefCell::new(boxed)))
     }
 
     pub fn new_hidden_rust_struct<T: RustType + 'static>(
@@ -357,12 +394,13 @@ pub trait SourceMapLookup: Debug {
 }
 
 impl Display for Value {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+    #[allow(clippy::too_many_lines)]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
-            Self::Int(n) => write!(f, "{}", n),
-            Self::Float(n) => write!(f, "{}", n),
-            Self::String(s) => write!(f, "\"{}\"", s),
-            Self::Bool(b) => write!(f, "{}", b),
+            Self::Int(n) => write!(f, "{n}"),
+            Self::Float(n) => write!(f, "{n}"),
+            Self::String(s) => write!(f, "\"{s}\""),
+            Self::Bool(b) => write!(f, "{b}"),
             Self::Array(_item_type, arr) => {
                 write!(f, "[")?;
                 for (i, val) in arr.iter().enumerate() {
@@ -373,7 +411,7 @@ impl Display for Value {
                 }
                 write!(f, "]")
             }
-            Value::Map(_map_type_ref, items) => {
+            Self::Map(_map_type_ref, items) => {
                 write!(f, "[")?;
                 for (i, (key, val)) in items.iter().enumerate() {
                     if i > 0 {
@@ -533,6 +571,8 @@ impl Hash for Value {
     }
 }
 
+/// # Errors
+///
 pub fn format_value(value: &Value, spec: &ResolvedFormatSpecifierKind) -> Result<String, String> {
     match (value, spec) {
         (Value::Int(n), ResolvedFormatSpecifierKind::LowerHex) => Ok(format!("{n:x}")),

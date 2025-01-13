@@ -320,7 +320,7 @@ impl<'a> Resolver<'a> {
     }
 
     fn resolve_string_member_call(
-        &mut self,
+        &self,
         expr: ResolvedExpression,
         ast_member_function_name: &Node,
         ast_arguments: &[Expression],
@@ -423,7 +423,7 @@ impl<'a> Resolver<'a> {
                             }
                             let value = self.resolve_expression_expecting_type(
                                 &ast_arguments[0],
-                                &value_type,
+                                value_type,
                                 false,
                             )?;
                             return Ok(Some(ResolvedExpression::SparseAdd(

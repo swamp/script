@@ -29,13 +29,13 @@ impl<'a> Resolver<'a> {
     ) -> Result<ResolvedDefinition, ResolveError> {
         let mut nodes = Vec::new();
         for ast_node in &use_definition.module_path.0 {
-            nodes.push(self.to_node(&ast_node));
+            nodes.push(self.to_node(ast_node));
         }
 
         let path: Vec<String> = nodes
             .iter()
             .map(|node| {
-                let text = self.get_text_resolved(&node);
+                let text = self.get_text_resolved(node);
                 text.to_string()
             })
             .collect();
@@ -102,8 +102,8 @@ impl<'a> Resolver<'a> {
 
         let enum_parent = ResolvedEnumType {
             name: ResolvedLocalTypeIdentifier(self.to_node(enum_type_name)),
-            assigned_name: self.get_text(&enum_type_name).to_string(),
-            module_path: self.shared.lookup.get_path().to_vec(),
+            assigned_name: self.get_text(enum_type_name).to_string(),
+            module_path: self.shared.lookup.get_path(),
             number: parent_number,
         };
 
@@ -134,7 +134,7 @@ impl<'a> Resolver<'a> {
                         number,
                         module_path: ResolvedModulePath(vec![]), // TODO:
                         variant_name: ResolvedLocalTypeIdentifier(self.to_node(variant_name_node)),
-                        assigned_name: self.get_text(&variant_name_node).to_string(),
+                        assigned_name: self.get_text(variant_name_node).to_string(),
                         enum_ref: parent_ref.clone(),
                     };
 
@@ -172,7 +172,7 @@ impl<'a> Resolver<'a> {
                         number,
                         module_path: ResolvedModulePath(vec![]), // TODO:
                         variant_name: ResolvedLocalTypeIdentifier(self.to_node(variant_name_node)),
-                        assigned_name: self.get_text(&variant_name_node).to_string(),
+                        assigned_name: self.get_text(variant_name_node).to_string(),
                         enum_ref: parent_ref.clone(),
                     };
 
@@ -196,7 +196,7 @@ impl<'a> Resolver<'a> {
                 owner: parent_ref.clone(),
                 data: container,
                 name: ResolvedLocalTypeIdentifier(self.to_node(variant_name_node)),
-                assigned_name: self.get_text(&variant_name_node).to_string(),
+                assigned_name: self.get_text(variant_name_node).to_string(),
                 number: unique_variant_type_number,
             };
 
@@ -212,6 +212,8 @@ impl<'a> Resolver<'a> {
         Ok((parent_ref, resolved_variants))
     }
 
+    /// # Errors
+    ///
     pub fn resolve_struct_type_definition(
         &mut self,
         ast_struct: &StructType,
@@ -332,6 +334,8 @@ impl<'a> Resolver<'a> {
         Ok(ResolvedDefinition::FunctionDef(resolved_function))
     }
 
+    /// # Errors
+    ///
     pub fn resolve_definition(
         &mut self,
         ast_def: &Definition,
