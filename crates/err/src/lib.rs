@@ -440,6 +440,9 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
 pub fn build_execute_error(err: &ExecuteError) -> Builder<usize> {
     match err {
         ExecuteError::ExpectedInt => Report::build(Error, 104, "expected int", &Span::default()),
+        ExecuteError::IncompatiableTypes => {
+            Report::build(Error, 1045, "incompatible types", &Span::default())
+        }
         ExecuteError::ExpectedString => {
             Report::build(Error, 104, "expected string", &Span::default())
         }
