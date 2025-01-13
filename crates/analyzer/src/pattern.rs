@@ -28,7 +28,7 @@ impl<'a> Resolver<'a> {
 
         self.shared
             .lookup
-            .get_enum_variant_type(&enum_type_ref.module_path, &enum_name, &variant_name)
+            .get_enum_variant_type(&enum_type_ref.module_path, enum_name, &variant_name)
             .map_or_else(
                 || {
                     Err(ResolveError::UnknownEnumVariantTypeInPattern(
@@ -45,7 +45,7 @@ impl<'a> Resolver<'a> {
         expected_condition_type: &ResolvedType,
     ) -> Result<(ResolvedPattern, bool), ResolveError> {
         match ast_pattern {
-            Pattern::Wildcard(node) => Ok((ResolvedPattern::Wildcard(self.to_node(&node)), false)),
+            Pattern::Wildcard(node) => Ok((ResolvedPattern::Wildcard(self.to_node(node)), false)),
             Pattern::NormalPattern(normal_pattern, maybe_guard) => {
                 let (normal_pattern, was_pushed) =
                     self.resolve_normal_pattern(normal_pattern, expected_condition_type)?;
@@ -62,6 +62,7 @@ impl<'a> Resolver<'a> {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     pub(crate) fn resolve_normal_pattern(
         &mut self,
         ast_normal_pattern: &NormalPattern,

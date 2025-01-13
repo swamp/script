@@ -21,6 +21,8 @@ pub struct NameLookup<'a> {
 }
 
 impl<'a> NameLookup<'a> {
+    /// # Panics
+    ///
     pub fn new(default_path: Vec<String>, modules: &'a mut ResolvedModules) -> Self {
         assert!(!default_path.is_empty(), "own path must exist");
         Self {
@@ -41,10 +43,15 @@ impl<'a> NameLookup<'a> {
     }
 
     fn own_namespace(&self) -> ResolvedModuleNamespaceRef {
-        self.get_namespace(&vec![])
-            .expect(&format!("could not find own namespace {:?}", self.default_path).to_string())
+        self.get_namespace(&[]).unwrap_or_else(|| {
+            panic!(
+                "{}",
+                format!("could not find own namespace {:?}", self.default_path)
+            )
+        })
     }
 
+    #[must_use]
     pub fn get_internal_function(
         &self,
         path: &[String],
@@ -75,7 +82,8 @@ impl<'a> NameLookup<'a> {
         )
     }
 
-    pub fn get_struct(&self, path: &Vec<String>, name: &str) -> Option<ResolvedStructTypeRef> {
+    #[must_use]
+    pub fn get_struct(&self, path: &[String], name: &str) -> Option<ResolvedStructTypeRef> {
         let namespace = self.get_namespace(path);
         namespace.map_or_else(
             || None,
@@ -83,7 +91,8 @@ impl<'a> NameLookup<'a> {
         )
     }
 
-    pub fn get_enum(&self, path: &Vec<String>, name: &str) -> Option<ResolvedEnumTypeRef> {
+    #[must_use]
+    pub fn get_enum(&self, path: &[String], name: &str) -> Option<ResolvedEnumTypeRef> {
         let namespace = self.get_namespace(path);
         namespace.map_or_else(
             || None,
@@ -91,7 +100,8 @@ impl<'a> NameLookup<'a> {
         )
     }
 
-    pub fn get_constant(&self, path: &Vec<String>, name: &str) -> Option<ResolvedConstantRef> {
+    #[must_use]
+    pub fn get_constant(&self, path: &[String], name: &str) -> Option<ResolvedConstantRef> {
         let namespace = self.get_namespace(path);
         namespace.map_or_else(
             || None,
@@ -99,9 +109,10 @@ impl<'a> NameLookup<'a> {
         )
     }
 
+    #[must_use]
     pub fn get_enum_variant_type(
         &self,
-        path: &Vec<String>,
+        path: &[String],
         enum_type_name: &str,
         variant_name: &str,
     ) -> Option<ResolvedEnumVariantTypeRef> {
@@ -117,7 +128,8 @@ impl<'a> NameLookup<'a> {
         )
     }
 
-    pub fn get_rust_type(&self, path: &Vec<String>, name: &str) -> Option<ResolvedRustTypeRef> {
+    #[must_use]
+    pub fn get_rust_type(&self, path: &[String], name: &str) -> Option<ResolvedRustTypeRef> {
         let namespace = self.get_namespace(path);
         namespace.map_or_else(
             || None,
@@ -129,6 +141,8 @@ impl<'a> NameLookup<'a> {
         self.default_path.clone()
     }
 
+    /// # Errors
+    ///
     pub fn add_constant(
         &mut self,
         constant: ResolvedConstant,
@@ -140,6 +154,8 @@ impl<'a> NameLookup<'a> {
             .add_constant_ref(constant_ref)?)
     }
 
+    /// # Errors
+    ///
     pub fn add_struct(
         &self,
         struct_type: ResolvedStructType,
@@ -147,11 +163,15 @@ impl<'a> NameLookup<'a> {
         Ok(self.own_namespace().borrow_mut().add_struct(struct_type)?)
     }
 
+    /// # Errors
+    ///
     pub fn add_enum_type(
         &mut self,
         mut enum_type: ResolvedEnumType,
     ) -> Result<ResolvedEnumTypeRef, ResolveError> {
-        enum_type.module_path = self.own_namespace().borrow().path.clone();
+        enum_type
+            .module_path
+            .clone_from(&self.own_namespace().borrow().path);
 
         let enum_type_ref = Rc::new(enum_type);
 
@@ -161,9 +181,11 @@ impl<'a> NameLookup<'a> {
             .add_enum_type(enum_type_ref)?)
     }
 
+    /// # Errors
+    ///
     pub fn add_enum_variant(
         &mut self,
-        enum_name: &String,
+        enum_name: &str,
         variant_name: &str,
         variant_type: ResolvedEnumVariantType,
     ) -> Result<ResolvedEnumVariantTypeRef, ResolveError> {
@@ -174,6 +196,8 @@ impl<'a> NameLookup<'a> {
         )?)
     }
 
+    /// # Errors
+    ///
     pub fn add_internal_function_ref(
         &mut self,
         function_name: &str,

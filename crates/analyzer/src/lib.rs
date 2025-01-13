@@ -113,6 +113,7 @@ pub struct FunctionScopeState {
 }
 
 impl FunctionScopeState {
+    #[must_use]
     pub fn new(return_type: ResolvedType) -> Self {
         Self {
             block_scope_stack: vec![BlockScope::new()],
@@ -165,11 +166,11 @@ impl<'a> Resolver<'a> {
         let condition = self.resolve_bool_expression(condition)?;
 
         // For the true branch
-        let resolved_true = Box::new(self.resolve_expression(&true_expression)?);
+        let resolved_true = Box::new(self.resolve_expression(true_expression)?);
 
         // For the else branch
         let else_statements = if let Some(false_expression) = maybe_false_expression {
-            Some(Box::new(self.resolve_expression(&false_expression)?))
+            Some(Box::new(self.resolve_expression(false_expression)?))
         } else {
             None
         };
@@ -214,7 +215,7 @@ impl<'a> Resolver<'a> {
             .map_or_else(Vec::new, |found_path| {
                 let mut v = Vec::new();
                 for p in &found_path.0 {
-                    v.push(self.get_text(&p).to_string());
+                    v.push(self.get_text(p).to_string());
                 }
                 v
             });
@@ -288,7 +289,7 @@ impl<'a> Resolver<'a> {
 
         // If return type is Unit, ignore the expression's type and return Unit
         // TODO: In future versions, always have a return statement
-        if let ResolvedType::Unit = return_type {
+        if matches!(return_type, ResolvedType::Unit) {
             return Ok(expr);
         }
 
@@ -360,21 +361,13 @@ impl<'a> Resolver<'a> {
         }
     }
 
+    #[must_use]
     pub fn is_empty_array_literal(ast_expression: &Expression) -> bool {
-        match ast_expression {
-            Expression::Literal(ast_literal) => match ast_literal {
-                Literal::Array(items) => {
-                    if items.is_empty() {
-                        return true;
-                    }
-                }
-                _ => {}
-            },
-            _ => {}
-        }
-        false
+        matches!(ast_expression, Expression::Literal(Literal::Array(items)) if items.is_empty())
     }
 
+    /// # Errors
+    ///
     pub fn resolve_expression_maybe_expecting_type(
         &mut self,
         ast_expression: &Expression,
@@ -388,13 +381,15 @@ impl<'a> Resolver<'a> {
         }
     }
 
+    /// # Errors
+    ///
     pub fn resolve_expression_expecting_type(
         &mut self,
         ast_expression: &Expression,
         expected_type: &ResolvedType,
         allow_some_wrap: bool,
     ) -> Result<ResolvedExpression, ResolveError> {
-        if Self::is_empty_array_literal(&ast_expression) {
+        if Self::is_empty_array_literal(ast_expression) {
             match expected_type {
                 ResolvedType::Map(map_type_ref) => Ok(ResolvedExpression::Literal(
                     ResolvedLiteral::Map(map_type_ref.clone(), vec![]),
@@ -424,6 +419,8 @@ impl<'a> Resolver<'a> {
         }
     }
 
+    /// # Errors
+    ///
     #[allow(clippy::too_many_lines)]
     pub fn resolve_expression(
         &mut self,
@@ -641,7 +638,7 @@ impl<'a> Resolver<'a> {
 
             Expression::NoneCoalesceOperator(base_expr, default_expr) => {
                 let (base_expr, default_expr) =
-                    self.resolve_none_coalesce_operator(&base_expr, &default_expr)?;
+                    self.resolve_none_coalesce_operator(base_expr, default_expr)?;
                 ResolvedExpression::NoneCoalesceOperator(
                     Box::from(base_expr),
                     Box::from(default_expr),
@@ -773,7 +770,7 @@ impl<'a> Resolver<'a> {
                                 maybe_false_expression,
                             )?
                         } else {
-                            Err(ResolveError::ExpectedVariable(self.to_node(&unwrap_node)))?
+                            Err(ResolveError::ExpectedVariable(self.to_node(unwrap_node)))?
                         }
                     }
                     Expression::VariableAssignment(var, expr) => {
@@ -982,7 +979,7 @@ impl<'a> Resolver<'a> {
                 let rust_type_ref_for_id = self
                     .shared
                     .lookup
-                    .get_rust_type(&vec!["std".to_string()], "SparseId")
+                    .get_rust_type(&["std".to_string()], "SparseId")
                     .expect("SparseId was missing");
                 let rust_id_type = ResolvedType::RustType(rust_type_ref_for_id);
                 (Some(rust_id_type), params[0].clone())
@@ -1052,7 +1049,7 @@ impl<'a> Resolver<'a> {
                 || {
                     self.shared
                         .lookup
-                        .get_external_function_declaration(&*path, &name)
+                        .get_external_function_declaration(&path, &name)
                         .map_or_else(
                             || {
                                 error!("unknown function {path:?} {name:?}");
@@ -1205,7 +1202,7 @@ impl<'a> Resolver<'a> {
             EnumVariantLiteral::Struct(_qualified_name, variant_name, field_expressions) => {
                 if let ResolvedEnumVariantContainerType::Struct(struct_ref) = &variant_ref.data {
                     let resolved = self.resolve_anon_struct_instantiation(
-                        variant_name.0.clone(),
+                        &variant_name.0.clone(),
                         &struct_ref.anon_struct,
                         field_expressions,
                         false,
@@ -1284,7 +1281,7 @@ impl<'a> Resolver<'a> {
 
         let resolved_literal_copy = self.resolve_literal(ast_literal)?;
         let resolved_literal_expr = ResolvedExpression::Literal(resolved_literal_copy);
-        let span = resolved_literal_expr.span().clone();
+        let span = resolved_literal_expr.span();
         let literal_type = resolved_literal_expr.resolution();
         if !literal_type.same_type(expected_condition_type) {
             return Err(ResolveError::IncompatibleTypes(
@@ -1408,7 +1405,7 @@ impl<'a> Resolver<'a> {
     ) -> Result<ResolvedExpression, ResolveError> {
         let mut_expr = match location_expression {
             LocationExpression::Variable(variable) => {
-                let var = self.find_variable(&variable)?;
+                let var = self.find_variable(variable)?;
                 if !var.is_mutable() {
                     Err(ResolveError::VariableIsNotMutable(
                         self.to_node(&variable.name),
@@ -1504,7 +1501,7 @@ impl<'a> Resolver<'a> {
         base_expr: &Expression,
         default_expr: &Expression,
     ) -> Result<(ResolvedExpression, ResolvedExpression), ResolveError> {
-        let expr = self.resolve_expression(&base_expr)?;
+        let expr = self.resolve_expression(base_expr)?;
         let resolved_type = expr.resolution();
 
         if let ResolvedType::Optional(found_type) = resolved_type {

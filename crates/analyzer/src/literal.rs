@@ -89,7 +89,7 @@ impl<'a> Resolver<'a> {
                             }
 
                             let resolved = self.resolve_anon_struct_instantiation(
-                                variant.0.clone(),
+                                &variant.0.clone(),
                                 &resolved_variant_struct_ref.anon_struct,
                                 anonym_struct_field_and_expressions,
                                 false,

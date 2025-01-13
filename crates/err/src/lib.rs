@@ -4,7 +4,7 @@
  */
 
 use eira::Kind::Error;
-use eira::{Kind, Pos, PosSpan, SourceLines};
+use eira::{Color, Kind, Pos, PosSpan, SourceLines};
 use std::fmt::Display;
 use std::io;
 use std::io::{stderr, Write};
@@ -45,9 +45,11 @@ impl<C: Display + Clone> Report<C> {
         Self { config }
     }
 
+    /// # Errors
+    ///
     pub fn print(&self, source_map: &SourceMap, mut writer: impl Write) -> io::Result<()> {
         let header = eira::Header {
-            header_kind: self.config.kind.clone(),
+            header_kind: self.config.kind,
             code: self.config.error_code.clone(),
             message: self.config.error_name.clone(),
         };
@@ -75,7 +77,7 @@ impl<C: Display + Clone> Report<C> {
                 start: Pos { x: col, y: row },
                 character_count: label.span.length as usize,
                 text: label.description.clone(),
-                color: Default::default(),
+                color: Color::default(),
             });
         }
 
@@ -119,13 +121,14 @@ pub struct Builder<C> {
     pub kind: Kind,
     pub error_code: C,
     pub error_name: String,
-    pub labels: Vec<crate::Label>,
+    pub labels: Vec<Label>,
     pub note: Option<String>,
 }
 
-impl<C: Display + std::clone::Clone> Builder<C> {
+impl<C: Display + Clone> Builder<C> {
+    #[must_use]
     pub fn with_label(mut self, label: &str, span: Span) -> Self {
-        let l = crate::Label {
+        let l = Label {
             span,
             description: label.to_string(),
         };
@@ -134,6 +137,7 @@ impl<C: Display + std::clone::Clone> Builder<C> {
         self
     }
 
+    #[must_use]
     pub fn with_note(mut self, note: &str) -> Self {
         self.note = Some(note.to_string());
         self
@@ -144,18 +148,23 @@ impl<C: Display + std::clone::Clone> Builder<C> {
     }
 }
 
+/// # Panics
+///
 pub fn show_execute_error(err: &ExecuteError, source_map: &SourceMap) {
-    let builder = build_execute_error(&err);
+    let builder = build_execute_error(err);
     let report = builder.build();
     report.print(source_map, stderr()).unwrap();
 }
 
+/// # Panics
+///
 pub fn show_parse_error(err: &SpecificError, span: &Span, source_map: &SourceMap) {
-    let builder = build_parse_error(&err, span);
+    let builder = build_parse_error(err, span);
     let report = builder.build();
     report.print(source_map, stderr()).unwrap();
 }
 
+#[must_use]
 pub fn build_parse_error(err: &SpecificError, span: &Span) -> Builder<usize> {
     match err {
         SpecificError::General(general) => Report::build(
@@ -241,13 +250,16 @@ pub fn build_parse_error(err: &SpecificError, span: &Span) -> Builder<usize> {
     }
 }
 
+/// # Panics
+///
 pub fn show_error(err: &ResolveError, source_map: &SourceMap) {
     let builder = build_resolve_error(err);
     let report = builder.build();
-    report.print(&source_map, stderr()).unwrap();
+    report.print(source_map, stderr()).unwrap();
 }
 
 #[must_use]
+#[allow(clippy::too_many_lines)]
 pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
     match err {
         ResolveError::TypeDoNotSupportRangeAccess(span) => Report::build(
@@ -327,7 +339,7 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
             Error,
             904,
             &format!("Incompatible arguments"),
-            &span,
+            span,
         )             .with_label("first_type", a.span().clone())
             .with_label("second_type", b.span().clone()),
         ResolveError::CanOnlyOverwriteVariableWithMut(node) =>  Report::build(

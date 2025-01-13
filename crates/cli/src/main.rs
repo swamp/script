@@ -14,7 +14,6 @@ use swamp_script_core::prelude::Value;
 use swamp_script_dep_loader::{
     parse_dependant_modules_and_resolve, DepLoaderError, DependencyParser, ParseModule,
 };
-use swamp_script_error_report::{show_error, show_parse_error};
 use swamp_script_eval::prelude::VariableValue;
 use swamp_script_eval::{err::ExecuteError, eval_module, Constants, ExternalFunctions};
 use swamp_script_eval_loader::resolve_program;
@@ -55,7 +54,7 @@ fn init_logging() {
         .init();
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), Box<dyn Error>> {
     init_logging();
 
     Ok(())
@@ -70,7 +69,7 @@ fn command(command: &Commands) -> Result<(), CliError> {
 
 #[derive(Debug)]
 pub enum CliError {
-    IoError(std::io::Error),
+    IoError(io::Error),
     ParseError(ParseError),
     ResolveError(ResolveError),
     ExecuteError(ExecuteError),
@@ -164,6 +163,10 @@ fn register_print(interpreter: &mut ExternalFunctions<CliContext>) {
         .expect("should work to register");
 }
 
+/// # Errors
+///
+/// # Panics
+///
 pub fn eval(resolved_main_module: &ResolvedModuleRef) -> Result<Value, CliError> {
     let mut external_functions = ExternalFunctions::new();
     register_print(&mut external_functions);
@@ -178,14 +181,16 @@ pub fn eval(resolved_main_module: &ResolvedModuleRef) -> Result<Value, CliError>
     Ok(value)
 }
 
+/// # Errors
+///
 pub fn create_parsed_modules(
     script: &str,
-    root_path: PathBuf,
+    root_path: &Path,
     source_map: &mut SourceMap,
 ) -> Result<DependencyParser, CliError> {
     let parser = AstParser;
     let ast_program = parser.parse_module(script)?;
-    let assigned_file_id = source_map.add_manual_no_id(&*root_path, script);
+    let assigned_file_id = source_map.add_manual_no_id(root_path, script);
     trace!("ast_program:\n{:#?}", ast_program);
 
     let parse_module = ParseModule {
@@ -205,7 +210,7 @@ pub fn create_parsed_modules(
 fn compile_to_resolved_program(script: &str) -> Result<(ResolvedProgram, SourceMap), CliError> {
     // Analyze
     let mut source_map = SourceMap::new("./".as_ref());
-    let mut parsed_modules = create_parsed_modules(script, PathBuf::new(), &mut source_map)?;
+    let mut parsed_modules = create_parsed_modules(script, &PathBuf::new(), &mut source_map)?;
     let root_path = &vec!["main".to_string()];
 
     let main_module = parsed_modules

@@ -184,7 +184,7 @@ impl<'a> Resolver<'a> {
 
     pub(crate) fn resolve_anon_struct_instantiation(
         &mut self,
-        node: Node,
+        node: &Node,
         struct_to_instantiate: &ResolvedAnonymousStructType,
         ast_fields: &Vec<FieldExpression>,
         allow_rest: bool,

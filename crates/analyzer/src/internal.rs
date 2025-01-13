@@ -35,7 +35,7 @@ impl<'a> Resolver<'a> {
                 //if let ResolvedExpression::VariableAccess(var_ref) = resolved_expr {
                 let resolved = self.resolve_map_member_call(
                     resolved_expr,
-                    map_type_ref,
+                    &map_type_ref,
                     ast_member_function_name,
                     ast_arguments,
                 )?;
@@ -81,7 +81,7 @@ impl<'a> Resolver<'a> {
     fn resolve_map_member_call(
         &mut self,
         map_expr: ResolvedExpression,
-        map_type: ResolvedMapTypeRef,
+        map_type: &ResolvedMapTypeRef,
         ast_member_function_name: &Node,
         ast_arguments: &[Expression],
     ) -> Result<ResolvedExpression, ResolveError> {

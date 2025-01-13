@@ -150,6 +150,7 @@ impl<'a> Resolver<'a> {
                     let mut fields = SeqMap::new();
 
                     for (_index, field_with_type) in ast_struct_fields.fields.iter().enumerate() {
+                        // TODO: Check the index
                         let resolved_type = self.resolve_type(&field_with_type.field_type)?;
                         let field_name_str =
                             self.get_text(&field_with_type.field_name.0).to_string();

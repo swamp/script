@@ -8,7 +8,9 @@ pub mod prelude;
 use std::fmt::{Display, Formatter};
 use std::io;
 use std::io::Write;
-use yansi::{Color, Paint};
+use yansi::Paint;
+
+pub use yansi::Color;
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct Pos {
@@ -422,10 +424,9 @@ impl SourceFileSection {
                         if s == scope {
                             write!(writer, "{}", "╰─── ".fg(s.color))?;
                             break; // stop writing since we are on the scope text we should print
-                        } else {
-                            write!(writer, "{}", "│".fg(s.color))?;
-                            Self::scope_margin_pad(3, &mut writer)?;
                         }
+                        write!(writer, "{}", "│".fg(s.color))?;
+                        Self::scope_margin_pad(3, &mut writer)?;
                     } else {
                         write!(writer, "    ")?;
                     }
@@ -531,7 +532,7 @@ pub struct Header<C: Display> {
 }
 
 impl<C: Display> Header<C> {
-    const fn color_for_kind(kind: &Kind) -> Color {
+    const fn color_for_kind(kind: Kind) -> Color {
         match kind {
             Kind::Help => Color::BrightBlue,
             Kind::Note => Color::BrightMagenta,
@@ -546,7 +547,7 @@ impl<C: Display> Header<C> {
         write!(
             writer,
             "{}",
-            self.header_kind.fg(Self::color_for_kind(&self.header_kind))
+            self.header_kind.fg(Self::color_for_kind(self.header_kind))
         )?;
         write!(writer, "[{}]", self.code.fg(Color::Blue))?;
         write!(writer, ": ")?;
