@@ -341,11 +341,18 @@ pub struct CompoundOperator {
     pub kind: CompoundOperatorKind,
 }
 
+// A location must be a single Value location. It can never be a slice or something that can have a "variable" size
 #[derive(Debug)]
 pub enum LocationExpression {
     Variable(Variable),
-    IndexAccess(Box<Expression>, Box<Expression>), // TODO: Not supported yet
-    FieldAccess(Box<Expression>, Node),            // TODO: Not supported yet
+    IndexAccess(Box<Expression>, Box<Expression>),
+    FieldAccess(Box<Expression>, Node),
+}
+
+#[derive(Debug)]
+pub enum RangeMode {
+    Inclusive,
+    Exclusive,
 }
 
 /// Expressions are things that "converts" to a value when evaluated.
@@ -359,12 +366,20 @@ pub enum Expression {
 
     MutRef(LocationExpression),
     IndexAccess(Box<Expression>, Box<Expression>),
+    RangeAccess(Box<Expression>, Box<Expression>, Box<Expression>, RangeMode),
 
     // Assignments
     VariableAssignment(Variable, Box<Expression>),
     VariableCompoundAssignment(Node, CompoundOperator, Box<Expression>),
     MultiVariableAssignment(Vec<Variable>, Box<Expression>),
     IndexAssignment(Box<Expression>, Box<Expression>, Box<Expression>),
+    RangeAssignment(
+        Box<Expression>,
+        Box<Expression>,
+        Box<Expression>,
+        RangeMode,
+        Box<Expression>,
+    ),
     IndexCompoundAssignment(
         Box<Expression>,
         Box<Expression>,

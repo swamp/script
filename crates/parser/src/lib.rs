@@ -13,7 +13,8 @@ use std::str::Chars;
 use swamp_script_ast::{
     prelude::*, CompoundOperator, CompoundOperatorKind, EnumVariantLiteral, FieldExpression,
     FieldName, FieldType, ForPattern, ForVar, IteratableExpression, LocationExpression,
-    PatternElement, QualifiedIdentifier, SpanWithoutFileId, TypeForParameter, VariableBinding,
+    PatternElement, QualifiedIdentifier, RangeMode, SpanWithoutFileId, TypeForParameter,
+    VariableBinding,
 };
 use swamp_script_ast::{Function, PostfixOperator};
 
@@ -581,7 +582,30 @@ impl AstParser {
                                 )
                             })?;
                             let index_expr = self.parse_expression(&index_pair)?;
-                            expr = Expression::IndexAccess(Box::new(expr), Box::new(index_expr));
+                            match index_expr {
+                                Expression::ExclusiveRange(start, end) => {
+                                    expr = Expression::RangeAccess(
+                                        Box::new(expr),
+                                        start,
+                                        end,
+                                        RangeMode::Exclusive,
+                                    );
+                                }
+                                Expression::InclusiveRange(start, end) => {
+                                    expr = Expression::RangeAccess(
+                                        Box::new(expr),
+                                        start,
+                                        end,
+                                        RangeMode::Inclusive,
+                                    );
+                                }
+                                _ => {
+                                    expr = Expression::IndexAccess(
+                                        Box::new(expr),
+                                        Box::new(index_expr),
+                                    )
+                                }
+                            }
                         }
                         Rule::method_or_field_suffix => {
                             let mut inner = child.into_inner();
@@ -1136,6 +1160,7 @@ impl AstParser {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     fn parse_assignment(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
         let mut inner = pair.clone().into_inner().peekable();
 
@@ -1279,6 +1304,18 @@ impl AstParser {
                         Box::new(rhs_expr),
                     )),
                 },
+                Expression::RangeAccess(base, start_expr, end_expr, range_mode) => {
+                    match compound_op {
+                        None => Ok(Expression::RangeAssignment(
+                            base,
+                            start_expr,
+                            end_expr,
+                            range_mode,
+                            Box::new(rhs_expr),
+                        )),
+                        _ => todo!(),
+                    }
+                }
                 _ => Err(self.create_error_pair(SpecificError::InvalidAssignmentTarget, &lhs_pair)),
             }
         }

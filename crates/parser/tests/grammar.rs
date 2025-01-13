@@ -2513,3 +2513,47 @@ VariableAssignment(<2:1>, Guard([GuardExpr { condition: VariableAccess(<9:20>), 
 ",
     );
 }
+
+#[test_log::test]
+fn array_range_access() {
+    check(
+        r"
+a[3..4]
+         ",
+        r"
+
+RangeAccess(VariableAccess(<1:1>), Literal(Int(<3:1>)), Literal(Int(<6:1>)), Exclusive)
+
+",
+    );
+}
+
+#[test_log::test]
+fn array_range_access_expr_exclusive() {
+    check(
+        r"
+a[some_fn()+33..some_var]
+         ",
+        r"
+
+RangeAccess(VariableAccess(<1:1>), BinaryOp(FunctionCall(VariableAccess(<3:7>), []), Add(<12:1>), Literal(Int(<13:2>))), VariableAccess(<17:8>), Exclusive)
+
+
+",
+    );
+}
+
+#[test_log::test]
+fn array_range_access_expr_inclusive() {
+    check(
+        r"
+a[some_fn()+33..=some_var]
+         ",
+        r"
+
+RangeAccess(VariableAccess(<1:1>), BinaryOp(FunctionCall(VariableAccess(<3:7>), []), Add(<12:1>), Literal(Int(<13:2>))), VariableAccess(<18:8>), Inclusive)
+
+
+",
+    );
+}
