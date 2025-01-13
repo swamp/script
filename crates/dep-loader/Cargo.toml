@@ -1,6 +1,6 @@
 [package]
 name = "swamp-script-dep-loader"
-version = "0.0.11"
+version = "0.0.12"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/swamp/script"
@@ -9,6 +9,6 @@ description = "dependency parser and loader for swamp script"
 [dependencies]
 tracing = "0.1.40"
 seq-map = "0.0.13"
-swamp-script-ast = { path = "../ast", version = "0.0.11" }
-swamp-script-parser = { path = "../parser", version = "0.0.11" }
-swamp-script-source-map = { path = "../source-map", version = "0.0.11" }
+swamp-script-ast = { path = "../ast", version = "0.0.12" }
+swamp-script-parser = { path = "../parser", version = "0.0.12" }
+swamp-script-source-map = { path = "../source-map", version = "0.0.12" }

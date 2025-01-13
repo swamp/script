@@ -1,6 +1,6 @@
 [package]
 name = "swamp-script"
-version = "0.0.11"
+version = "0.0.12"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/swamp/script"
@@ -8,23 +8,23 @@ description = "script language for embedding"
 
 [dependencies]
 
-swamp-script-source-map = { path = "../source-map", version = "0.0.11" }
+swamp-script-source-map = { path = "../source-map", version = "0.0.12" }
 
 # Ast and Parser
-swamp-script-parser = { path = "../parser", version = "0.0.11" }
-swamp-script-ast = { path = "../ast", version = "0.0.11" }
+swamp-script-parser = { path = "../parser", version = "0.0.12" }
+swamp-script-ast = { path = "../ast", version = "0.0.12" }
 
 # Semantic and Analyzer
-swamp-script-semantic = { path = "../semantic", version = "0.0.11" }
-swamp-script-analyzer = { path = "../analyzer", version = "0.0.11" }
+swamp-script-semantic = { path = "../semantic", version = "0.0.12" }
+swamp-script-analyzer = { path = "../analyzer", version = "0.0.12" }
 
-swamp-script-error-report = { path = "../err", version = "0.0.11" }
+swamp-script-error-report = { path = "../err", version = "0.0.12" }
 
 # Core and Std
-swamp-script-core = { path = "../core", version = "0.0.11" }
-swamp-script-std = { path = "../std", version = "0.0.11" }
+swamp-script-core = { path = "../core", version = "0.0.12" }
+swamp-script-std = { path = "../std", version = "0.0.12" }
 
 # Runner
-swamp-script-eval = { path = "../eval", version = "0.0.11" }
-swamp-script-dep-loader = { path = "../dep-loader", version = "0.0.11" }
-swamp-script-eval-loader = { path = "../eval-loader", version = "0.0.11" }
+swamp-script-eval = { path = "../eval", version = "0.0.12" }
+swamp-script-dep-loader = { path = "../dep-loader", version = "0.0.12" }
+swamp-script-eval-loader = { path = "../eval-loader", version = "0.0.12" }
