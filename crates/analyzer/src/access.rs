@@ -5,11 +5,11 @@
 
 use crate::err::ResolveError;
 use crate::{Resolver, SPARSE_TYPE_ID};
-use swamp_script_ast::{Expression, Node, QualifiedTypeIdentifier};
+use swamp_script_ast::{Expression, Node, QualifiedTypeIdentifier, RangeMode};
 use swamp_script_semantic::{
     ResolvedAccess, ResolvedArrayTypeRef, ResolvedExpression, ResolvedFunction,
     ResolvedFunctionRef, ResolvedLocalIdentifier, ResolvedMapIndexLookup, ResolvedMapTypeRef,
-    ResolvedStructTypeField, ResolvedStructTypeFieldRef, ResolvedType, Spanned,
+    ResolvedRangeMode, ResolvedStructTypeField, ResolvedStructTypeFieldRef, ResolvedType, Spanned,
 };
 
 impl<'a> Resolver<'a> {
@@ -118,6 +118,42 @@ impl<'a> Resolver<'a> {
             }
             _ => {
                 return Err(ResolveError::TypeDoNotSupportIndexAccess(
+                    resolved_expr.span(),
+                ))
+            }
+        };
+
+        Ok(expr)
+    }
+
+    pub fn resolve_range_access(
+        &mut self,
+        expression: &Expression,
+        min: &Expression,
+        max: &Expression,
+        mode: &RangeMode,
+    ) -> Result<ResolvedExpression, ResolveError> {
+        let resolved_expr = self.resolve_expression(expression)?;
+        let resolved_type = resolved_expr.resolution();
+
+        let resolved_range_mode = match mode {
+            RangeMode::Inclusive => ResolvedRangeMode::Inclusive,
+            RangeMode::Exclusive => ResolvedRangeMode::Exclusive,
+        };
+
+        let expr = match resolved_type {
+            ResolvedType::Array(array_type) => self.resolve_array_range_access(
+                resolved_expr,
+                &array_type,
+                min,
+                max,
+                &resolved_range_mode,
+            )?,
+            ResolvedType::String => {
+                self.resolve_string_range_access(expression, min, max, &resolved_range_mode)?
+            }
+            _ => {
+                return Err(ResolveError::TypeDoNotSupportRangeAccess(
                     resolved_expr.span(),
                 ))
             }
@@ -255,6 +291,58 @@ impl<'a> Resolver<'a> {
             Box::from(base_expr),
             array_type_ref.clone(),
             access_chain,
+        ))
+    }
+
+    pub(crate) fn resolve_min_max_expr(
+        &mut self,
+        min_expr: &Expression,
+        max_expr: &Expression,
+    ) -> Result<(ResolvedExpression, ResolvedExpression), ResolveError> {
+        let resolved_min =
+            self.resolve_expression_expecting_type(min_expr, &ResolvedType::Int, false)?;
+        let resolved_max =
+            self.resolve_expression_expecting_type(max_expr, &ResolvedType::Int, false)?;
+
+        Ok((resolved_min, resolved_max))
+    }
+
+    pub fn resolve_array_range_access(
+        &mut self,
+        base_expression: ResolvedExpression,
+        array_type_ref: &ResolvedArrayTypeRef,
+        min_expr: &Expression,
+        max_expr: &Expression,
+        mode: &ResolvedRangeMode,
+    ) -> Result<ResolvedExpression, ResolveError> {
+        let (min_expr, max_expr) = self.resolve_min_max_expr(min_expr, max_expr)?;
+
+        Ok(ResolvedExpression::ArrayRangeAccess(
+            Box::from(base_expression),
+            array_type_ref.clone(),
+            Box::new(min_expr),
+            Box::new(max_expr),
+            mode.clone(),
+        ))
+    }
+
+    pub fn resolve_string_range_access(
+        &mut self,
+        base_expr: &Expression,
+        min_expr: &Expression,
+        max_expr: &Expression,
+        mode: &ResolvedRangeMode,
+    ) -> Result<ResolvedExpression, ResolveError> {
+        let base_expression = self.resolve_expression(&base_expr)?;
+
+        let (resolved_min_expr, resolved_max_expr) =
+            self.resolve_min_max_expr(&min_expr, max_expr)?;
+
+        Ok(ResolvedExpression::StringRangeAccess(
+            Box::from(base_expression),
+            Box::new(resolved_min_expr),
+            Box::new(resolved_max_expr),
+            mode.clone(),
         ))
     }
 }

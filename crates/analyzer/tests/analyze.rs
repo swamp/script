@@ -951,3 +951,62 @@ InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable
 "#,
     );
 }
+
+#[test_log::test]
+fn array_range_access() {
+    check(
+        r"
+        arr = [2, 3, 4, 5, 6]
+        arr[3..4]
+         ",
+        r"
+
+InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <9:3>, resolved_type: [Int], mutable_node: None, scope_index: 0, variable_index: 0 }], expression: Literal(Array(ResolvedArrayType { item_type: Int }, [Literal(IntLiteral(2, <16:1>)), Literal(IntLiteral(3, <19:1>)), Literal(IntLiteral(4, <22:1>)), Literal(IntLiteral(5, <25:1>)), Literal(IntLiteral(6, <28:1>))])) })
+ArrayRangeAccess(VariableAccess(ResolvedVariable { name: <9:3>, resolved_type: [Int], mutable_node: None, scope_index: 0, variable_index: 0 }), ResolvedArrayType { item_type: Int }, Literal(IntLiteral(3, <43:1>)), Literal(IntLiteral(4, <46:1>)), Exclusive)
+
+
+",
+    );
+}
+
+#[test_log::test]
+fn array_range_access_expr_exclusive() {
+    check(
+        r"
+        fn some_fn() -> Int {
+            1
+        }
+        
+        a = [2, 4]
+        some_var = 0
+        a[some_fn()+33..some_var]
+         ",
+        r"
+
+FunctionDef(Internal(FunctionTypeSignature { first_parameter_is_self: false, parameters: [], return_type: Int }
+Block([Literal(IntLiteral(1, <43:1>))])))
+---
+InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <72:1>, resolved_type: [Int], mutable_node: None, scope_index: 0, variable_index: 0 }], expression: Literal(Array(ResolvedArrayType { item_type: Int }, [Literal(IntLiteral(2, <77:1>)), Literal(IntLiteral(4, <80:1>))])) })
+InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <91:8>, resolved_type: Int, mutable_node: None, scope_index: 0, variable_index: 1 }], expression: Literal(IntLiteral(0, <102:1>)) })
+ArrayRangeAccess(VariableAccess(ResolvedVariable { name: <72:1>, resolved_type: [Int], mutable_node: None, scope_index: 0, variable_index: 0 }), ResolvedArrayType { item_type: Int }, BinaryOp(ResolvedBinaryOperator { left: FunctionCall(FunctionTypeSignature { first_parameter_is_self: false, parameters: [], return_type: Int }, InternalFunctionAccess(FunctionTypeSignature { first_parameter_is_self: false, parameters: [], return_type: Int }
+Block([Literal(IntLiteral(1, <43:1>))])), []), right: Literal(IntLiteral(33, <124:2>)), kind: Add, node: <123:1>, resolved_type: Int }), VariableAccess(ResolvedVariable { name: <91:8>, resolved_type: Int, mutable_node: None, scope_index: 0, variable_index: 1 }), Exclusive)
+
+",
+    );
+}
+
+#[test_log::test]
+fn string_range_access() {
+    check(
+        r"
+        a = 'some string'
+        a[2..4]
+         ",
+        r#"
+
+InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <9:1>, resolved_type: String, mutable_node: None, scope_index: 0, variable_index: 0 }], expression: InterpolatedString([Literal(<14:11>, "some string")]) })
+StringRangeAccess(VariableAccess(ResolvedVariable { name: <9:1>, resolved_type: String, mutable_node: None, scope_index: 0, variable_index: 0 }), Literal(IntLiteral(2, <37:1>)), Literal(IntLiteral(4, <40:1>)), Exclusive)
+
+"#,
+    );
+}

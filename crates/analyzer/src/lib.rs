@@ -28,13 +28,13 @@ use std::rc::Rc;
 use swamp_script_ast::prelude::*;
 use swamp_script_ast::{
     CompoundOperator, CompoundOperatorKind, EnumVariantLiteral, ForPattern, Function,
-    LocationExpression, PostfixOperator, QualifiedIdentifier, SpanWithoutFileId,
+    LocationExpression, PostfixOperator, QualifiedIdentifier, RangeMode, SpanWithoutFileId,
 };
 use swamp_script_semantic::prelude::*;
 
 use swamp_script_source_map::SourceMap;
 
-use swamp_script_semantic::ResolvedNormalPattern;
+use swamp_script_semantic::{ResolvedNormalPattern, ResolvedRangeMode};
 use tracing::error;
 
 #[derive(Debug)]
@@ -424,6 +424,7 @@ impl<'a> Resolver<'a> {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     pub fn resolve_expression(
         &mut self,
         ast_expression: &Expression,
@@ -438,6 +439,9 @@ impl<'a> Resolver<'a> {
                 self.resolve_index_access(expression, index_expr)?
             }
 
+            Expression::RangeAccess(expression, min_expr, max_expr, mode) => {
+                self.resolve_range_access(expression, min_expr, max_expr, mode)?
+            }
             Expression::VariableAccess(variable) => self.resolve_variable_like(&variable.name)?,
 
             Expression::StaticMemberFunctionReference(type_identifier, member_name) => {
@@ -512,6 +516,84 @@ impl<'a> Resolver<'a> {
                         ResolvedExpression::MapAssignment(
                             mut_map,
                             index_type,
+                            Box::from(resolved_source_expression),
+                        )
+                    }
+                    _ => return Err(ResolveError::UnknownIndexAwareCollection),
+                }
+            }
+
+            Expression::RangeAssignment(
+                collection_expression,
+                start_expression,
+                end_expression,
+                mode,
+                source_expr,
+            ) => {
+                let resolved_collection_expression =
+                    self.resolve_expression(collection_expression)?;
+
+                let collection_resolution = resolved_collection_expression.resolution();
+
+                let resolved_range_mode = match mode {
+                    RangeMode::Inclusive => ResolvedRangeMode::Inclusive,
+                    RangeMode::Exclusive => ResolvedRangeMode::Exclusive,
+                };
+
+                let resolved_start_expression = self.resolve_expression_expecting_type(
+                    start_expression,
+                    &ResolvedType::Int,
+                    false,
+                )?;
+                let resolved_end_expression = self.resolve_expression_expecting_type(
+                    end_expression,
+                    &ResolvedType::Int,
+                    false,
+                )?;
+
+                let resolved_source_expression = self.resolve_expression(source_expr)?;
+                let resolved_source_expression_type = resolved_source_expression.resolution();
+
+                match &collection_resolution {
+                    ResolvedType::Array(target_array_type_ref) => {
+                        if let ResolvedType::Array(found_source_array) =
+                            resolved_source_expression_type
+                        {
+                            if !target_array_type_ref
+                                .item_type
+                                .same_type(&found_source_array.item_type)
+                            {
+                                return Err(ResolveError::IncompatibleTypes(
+                                    resolved_source_expression.span(),
+                                    collection_resolution.clone(),
+                                ));
+                            }
+                            ResolvedExpression::AssignArrayRange(
+                                Box::from(resolved_collection_expression),
+                                target_array_type_ref.clone(),
+                                Box::from(resolved_start_expression),
+                                Box::from(resolved_end_expression),
+                                resolved_range_mode,
+                                Box::from(resolved_source_expression),
+                            )
+                        } else {
+                            return Err(ResolveError::NotAnArray(
+                                resolved_collection_expression.span(),
+                            ));
+                        }
+                    }
+                    ResolvedType::String => {
+                        if !resolved_source_expression_type.same_type(&ResolvedType::String) {
+                            return Err(ResolveError::IncompatibleTypes(
+                                resolved_source_expression.span(),
+                                collection_resolution.clone(),
+                            ));
+                        }
+                        ResolvedExpression::AssignStringRange(
+                            Box::from(resolved_collection_expression),
+                            Box::from(resolved_start_expression),
+                            Box::from(resolved_end_expression),
+                            resolved_range_mode,
                             Box::from(resolved_source_expression),
                         )
                     }

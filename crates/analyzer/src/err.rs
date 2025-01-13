@@ -101,6 +101,7 @@ pub enum ResolveError {
     ExpectedFunctionTypeForFunctionCall(Span),
     TypeDoNotSupportIndexAccess(Span),
     NoneCoalesceNeedsOptionalType(Span),
+    TypeDoNotSupportRangeAccess(Span),
 }
 
 impl From<SemanticError> for ResolveError {

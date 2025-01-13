@@ -250,6 +250,12 @@ pub fn show_error(err: &ResolveError, source_map: &SourceMap) {
 #[must_use]
 pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
     match err {
+        ResolveError::TypeDoNotSupportRangeAccess(span) => Report::build(
+            Error,
+            4253,
+            &format!("type do not support range access"),
+            &span,
+        ),
         ResolveError::NoneCoalesceNeedsOptionalType(span) => Report::build(
             Error,
             4243,
@@ -426,12 +432,17 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
         &ResolveError::ExpectedFunctionTypeForFunctionCall(_) => todo!(),
         &ResolveError::TypeDoNotSupportIndexAccess(_) => todo!(),
         ResolveError::ExpectedMutableLocation(span) =>  Report::build(Error, 104, "expected mutable location", &span),
+
     }
 }
 
 #[must_use]
 pub fn build_execute_error(err: &ExecuteError) -> Builder<usize> {
     match err {
+        ExecuteError::ExpectedInt => Report::build(Error, 104, "expected int", &Span::default()),
+        ExecuteError::ExpectedString => {
+            Report::build(Error, 104, "expected string", &Span::default())
+        }
         ExecuteError::Error(err_string) => Report::build(
             Error,
             1041,

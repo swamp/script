@@ -1054,6 +1054,12 @@ pub struct ResolvedGuard {
     pub result: ResolvedExpression,
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum ResolvedRangeMode {
+    Inclusive,
+    Exclusive,
+}
+
 #[derive(Debug)]
 pub enum ResolvedExpression {
     // Access Lookup values
@@ -1257,6 +1263,34 @@ pub enum ResolvedExpression {
         ResolvedTupleTypeRef,
         Box<ResolvedExpression>,
     ),
+    ArrayRangeAccess(
+        Box<ResolvedExpression>,
+        ResolvedArrayTypeRef,
+        Box<ResolvedExpression>,
+        Box<ResolvedExpression>,
+        ResolvedRangeMode,
+    ),
+    StringRangeAccess(
+        Box<ResolvedExpression>,
+        Box<ResolvedExpression>,
+        Box<ResolvedExpression>,
+        ResolvedRangeMode,
+    ),
+    AssignArrayRange(
+        Box<ResolvedExpression>,
+        ResolvedArrayTypeRef,
+        Box<ResolvedExpression>,
+        Box<ResolvedExpression>,
+        ResolvedRangeMode,
+        Box<ResolvedExpression>,
+    ),
+    AssignStringRange(
+        Box<ResolvedExpression>,
+        Box<ResolvedExpression>,
+        Box<ResolvedExpression>,
+        ResolvedRangeMode,
+        Box<ResolvedExpression>,
+    ),
 }
 
 impl ResolvedExpression {
@@ -1284,6 +1318,16 @@ impl ResolvedExpression {
             }
             Self::ArrayAccess(expr, _, _accesses) => {
                 expr.collect_constant_dependencies(deps);
+            }
+            Self::ArrayRangeAccess(base_expr, _, min_expr, max_expr, _mode) => {
+                base_expr.collect_constant_dependencies(deps);
+                min_expr.collect_constant_dependencies(deps);
+                max_expr.collect_constant_dependencies(deps);
+            }
+            Self::StringRangeAccess(base_expr, min_expr, max_expr, _mode) => {
+                base_expr.collect_constant_dependencies(deps);
+                min_expr.collect_constant_dependencies(deps);
+                max_expr.collect_constant_dependencies(deps);
             }
             Self::MapIndexAccess(map_index) => {
                 map_index.map_expression.collect_constant_dependencies(deps);
@@ -1327,6 +1371,20 @@ impl ResolvedExpression {
                 expr.collect_constant_dependencies(deps);
                 expr2.collect_constant_dependencies(deps);
             }
+
+            Self::AssignArrayRange(expr, _array_type, start_expr, end_expr, _mode, assign) => {
+                expr.collect_constant_dependencies(deps);
+                start_expr.collect_constant_dependencies(deps);
+                end_expr.collect_constant_dependencies(deps);
+                assign.collect_constant_dependencies(deps);
+            }
+            Self::AssignStringRange(expr, start_expr, end_expr, _mode, assign) => {
+                expr.collect_constant_dependencies(deps);
+                start_expr.collect_constant_dependencies(deps);
+                end_expr.collect_constant_dependencies(deps);
+                assign.collect_constant_dependencies(deps);
+            }
+
             Self::MapHas(expr, expr2) => {
                 expr.collect_constant_dependencies(deps);
                 expr2.collect_constant_dependencies(deps);
@@ -1580,6 +1638,11 @@ impl ResolvedExpression {
             Self::MapRemove(_, _, map_type_ref) => map_type_ref.value_type.clone(),
             Self::MapHas(_, _) => ResolvedType::Bool,
 
+            Self::ArrayRangeAccess(_base_expr, array_type_ref, _min, _max, _mode) => {
+                ResolvedType::Array(array_type_ref.clone())
+            }
+            Self::StringRangeAccess(_base_expr, _min, _max, _mode) => ResolvedType::String,
+
             // Convert to mutable reference
             Self::MutVariableRef(mut_var_ref) => mut_var_ref.variable_ref.resolved_type.clone(),
             Self::MutStructFieldRef(_base_expr, resulting_type, _access_chain) => {
@@ -1612,6 +1675,17 @@ impl ResolvedExpression {
                 _op_,
                 source_resolution,
             ) => source_resolution.resolution(),
+
+            Self::AssignArrayRange(
+                _base_expr,
+                _resolved_array_type_ref,
+                _start_expr,
+                _end_expr,
+                _mode,
+                _,
+            ) => ResolvedType::Unit,
+
+            Self::AssignStringRange(_base, _start_expr, _end_expr, _mode, _) => ResolvedType::Unit,
 
             // Operators
             Self::BinaryOp(binary_op) => binary_op.resolved_type.clone(),
