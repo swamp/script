@@ -34,4 +34,7 @@ pub enum ExecuteError {
     IndexWasNotInteger,
     NotAMap,
     MissingExternalFunction(ExternalFunctionId),
+    ExpectedInt,
+    ExpectedString,
+    IncompatiableTypes,
 }

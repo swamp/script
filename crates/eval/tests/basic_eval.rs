@@ -1617,3 +1617,78 @@ fn with_normal_block() {
 
     assert_eq!(result, Value::Int(6));
 }
+
+#[test_log::test]
+fn string_range_access() {
+    let result = eval(
+        "
+        a = 'some string'
+        a[2..4]
+            ",
+    );
+
+    assert_eq!(result, Value::String("me".to_string()));
+}
+
+#[test_log::test]
+fn array_range_access() {
+    check(
+        "
+        a = [0, 1, 1, 2, 3, 5, 8, 13]
+        print(a [ 4 .. 6 ])
+            ",
+        r"
+        [3, 5]
+        ",
+    );
+}
+
+#[test_log::test]
+fn array_range_assignment() {
+    check(
+        "
+        mut a = [0, 1, 1, 2, 3, 5, 8, 13]
+        print(a[0..2])
+        a[0..2] = [-1, 99]
+        print(a[0..2])
+        print(a [ 4 .. 6 ])
+            ",
+        r"
+        [0, 1]
+        [-1, 99]
+        [3, 5]
+        ",
+    );
+}
+
+#[test_log::test]
+fn string_range_mut_assignment() {
+    check(
+        "
+        mut str = 'h4ck3r'
+        print(str)
+        str[2..5] = '123'
+        print(str)
+            ",
+        r"
+        h4ck3r
+        h4123r
+        ",
+    );
+}
+
+#[test_log::test]
+fn string_range_mut_assignment_inclusive() {
+    check(
+        "
+        mut str = 'h4ck3r'
+        print(str)
+        str[2..=5] = '1234'
+        print(str)
+            ",
+        r"
+        h4ck3r
+        h41234
+        ",
+    );
+}

@@ -19,7 +19,7 @@ use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
     ConstantId, ResolvedAccess, ResolvedBinaryOperatorKind, ResolvedCompoundOperatorKind,
     ResolvedForPattern, ResolvedFunction, ResolvedNormalPattern, ResolvedPatternElement,
-    ResolvedPostfixOperatorKind, ResolvedStaticCall, ResolvedUnaryOperatorKind,
+    ResolvedPostfixOperatorKind, ResolvedRangeMode, ResolvedStaticCall, ResolvedUnaryOperatorKind,
 };
 
 pub mod err;
@@ -1154,6 +1154,75 @@ impl<'a, C> Interpreter<'a, C> {
                 source_expression,
             )?,
 
+            ResolvedExpression::AssignArrayRange(
+                base_expr,
+                _resolved_type,
+                start_expr,
+                end_expr,
+                mode,
+                assign,
+            ) => {
+                let start = self.evaluate_expression_mut_location_start(base_expr)?;
+
+                let rhs_value = self.evaluate_expression(assign)?;
+                if let Value::Array(source_array_type, rhs_values) = rhs_value {
+                    let mut borrow = start.borrow_mut();
+                    if let Value::Array(target_array_type, ref mut values) = &mut *borrow {
+                        if !source_array_type
+                            .item_type
+                            .same_type(&target_array_type.item_type)
+                        {
+                            return Err(ExecuteError::IncompatiableTypes);
+                        }
+                        let (start, end) = self.evaluate_and_calculate_range(
+                            start_expr,
+                            end_expr,
+                            mode,
+                            values.len(),
+                        )?;
+                        let mut index = start;
+                        for value_ref in &mut values[start..end] {
+                            *value_ref = rhs_values[index].clone();
+                            index += 1;
+                        }
+                        Value::Unit
+                    } else {
+                        return Err(ExecuteError::NotAnArray);
+                    }
+                } else {
+                    return Err(ExecuteError::NotAnArray);
+                }
+            }
+
+            ResolvedExpression::AssignStringRange(
+                base_expr,
+                start_expr,
+                end_expr,
+                mode,
+                assign,
+            ) => {
+                let start = self.evaluate_expression_mut_location_start(base_expr)?;
+
+                let rhs_value = self.evaluate_expression(assign)?;
+                if let Value::String(source_string) = rhs_value {
+                    let mut borrow = start.borrow_mut();
+                    if let Value::String(ref mut target_string) = &mut *borrow {
+                        let (start, end) = self.evaluate_and_calculate_range(
+                            start_expr,
+                            end_expr,
+                            mode,
+                            target_string.len(),
+                        )?;
+                        target_string.replace_range(start..end, &source_string);
+                        Value::Unit
+                    } else {
+                        return Err(ExecuteError::NotAnArray);
+                    }
+                } else {
+                    return Err(ExecuteError::NotAnArray);
+                }
+            }
+
             // ------------- LOOKUP ---------------------
             ResolvedExpression::VariableAccess(var) => {
                 self.current_block_scopes.lookup_var_value(var)
@@ -1214,6 +1283,24 @@ impl<'a, C> Interpreter<'a, C> {
 
             ResolvedExpression::FieldAccess(struct_field_access, _field_ref, access_list) => {
                 self.evaluate_lookups(struct_field_access, access_list)?
+            }
+
+            ResolvedExpression::ArrayRangeAccess(
+                base_expr,
+                array_type_ref,
+                start_expr,
+                end_expr,
+                mode,
+            ) => self.evaluate_array_range_access(
+                base_expr,
+                array_type_ref,
+                start_expr,
+                end_expr,
+                mode,
+            )?,
+
+            ResolvedExpression::StringRangeAccess(base_expr, start_expr, end_expr, mode) => {
+                self.evaluate_string_range_access(base_expr, start_expr, end_expr, mode)?
             }
 
             ResolvedExpression::ArrayAccess(base_expr, _, access_list) => {
@@ -2451,5 +2538,107 @@ impl<'a, C> Interpreter<'a, C> {
             }
         }
         Ok(())
+    }
+
+    fn evaluate_range(
+        &mut self,
+        min_expr: &ResolvedExpression,
+        max_expr: &ResolvedExpression,
+    ) -> Result<(i32, i32), ExecuteError> {
+        let min_value = self.evaluate_expression_int(&min_expr)?;
+        let max_value = self.evaluate_expression_int(&max_expr)?;
+
+        Ok((min_value, max_value))
+    }
+
+    fn calculate_range(
+        start_val: i32,
+        end_val: i32,
+        len: usize,
+        mode: &ResolvedRangeMode,
+    ) -> (usize, usize) {
+        let adjusted_min = if start_val < 0 {
+            len + start_val as usize
+        } else {
+            start_val as usize
+        };
+
+        let mut adjusted_max = if end_val < 0 {
+            len + end_val as usize
+        } else {
+            end_val as usize
+        };
+        if ResolvedRangeMode::Inclusive == mode.clone() {
+            adjusted_max += 1;
+        }
+
+        (adjusted_min, adjusted_max)
+    }
+
+    fn evaluate_and_calculate_range(
+        &mut self,
+        min_expr: &ResolvedExpression,
+        max_expr: &ResolvedExpression,
+        mode: &ResolvedRangeMode,
+        len: usize,
+    ) -> Result<(usize, usize), ExecuteError> {
+        let (start_val, end_val) = self.evaluate_range(min_expr, max_expr)?;
+
+        Ok(Self::calculate_range(start_val, end_val, len, mode))
+    }
+
+    #[inline]
+    fn evaluate_array_range_access(
+        &mut self,
+        base_expr: &ResolvedExpression,
+        array_type_ref: &ResolvedArrayTypeRef,
+        min_expr: &ResolvedExpression,
+        max_expr: &ResolvedExpression,
+        mode: &ResolvedRangeMode,
+    ) -> Result<Value, ExecuteError> {
+        let array_value = self.evaluate_expression(base_expr)?;
+
+        if let Value::Array(_, values) = array_value {
+            let (adjusted_start, adjusted_end) =
+                self.evaluate_and_calculate_range(min_expr, max_expr, mode, values.len())?;
+
+            let slice = &values.as_slice()[adjusted_start..adjusted_end];
+            Ok(Value::Array(array_type_ref.clone(), Vec::from(slice)))
+        } else {
+            Err(ExecuteError::NotAnArray)
+        }
+    }
+
+    fn evaluate_expression_int(
+        &mut self,
+        int_expr: &ResolvedExpression,
+    ) -> Result<i32, ExecuteError> {
+        let v = self.evaluate_expression(&int_expr)?;
+
+        if let Value::Int(i) = v {
+            Ok(i)
+        } else {
+            Err(ExecuteError::ExpectedInt)
+        }
+    }
+
+    fn evaluate_string_range_access(
+        &mut self,
+        string_expr: &ResolvedExpression,
+        start_expr: &ResolvedExpression,
+        end_expr: &ResolvedExpression,
+        mode: &ResolvedRangeMode,
+    ) -> Result<Value, ExecuteError> {
+        let string_value = self.evaluate_expression(string_expr)?;
+
+        if let Value::String(string) = string_value {
+            let (adjusted_start, adjusted_end) =
+                self.evaluate_and_calculate_range(start_expr, end_expr, mode, string.len())?;
+            Ok(Value::String(
+                string[adjusted_start..adjusted_end].to_string(),
+            ))
+        } else {
+            Err(ExecuteError::ExpectedString)
+        }
     }
 }
