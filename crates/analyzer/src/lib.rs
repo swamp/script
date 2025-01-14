@@ -357,7 +357,9 @@ impl<'a> Resolver<'a> {
                 },
             )
         } else {
-            Err(ResolveError::NeedStructForFieldLookup)
+            Err(ResolveError::NeedStructForFieldLookup(
+                self.to_node(name).span,
+            ))
         }
     }
 

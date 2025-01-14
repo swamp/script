@@ -83,6 +83,7 @@ impl<'a> Resolver<'a> {
                                 != resolved_variant_struct_ref.anon_struct.defined_fields.len()
                             {
                                 return Err(ResolveError::WrongNumberOfArguments(
+                                    self.to_node(&variant.0).span,
                                     anonym_struct_field_and_expressions.len(),
                                     resolved_variant_struct_ref.anon_struct.defined_fields.len(),
                                 ));

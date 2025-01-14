@@ -10,6 +10,7 @@ use std::rc::Rc;
 use swamp_script_core::prelude::Value;
 use swamp_script_core::value::ValueRef;
 use swamp_script_semantic::ResolvedVariableRef;
+use tracing::error;
 
 #[derive(Debug, Clone)]
 pub struct BlockScope {
@@ -178,7 +179,11 @@ impl BlockScopes {
 
         Ok(match existing_var {
             VariableValue::Reference(reference) => reference.0.clone(),
-            _ => return Err(ExecuteError::VariableWasNotMutable),
+            _ => {
+                error!(?existing_var, "was not mutable");
+
+                return Err(ExecuteError::VariableWasNotMutable);
+            }
         })
     }
 

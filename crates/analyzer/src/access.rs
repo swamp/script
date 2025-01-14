@@ -179,7 +179,7 @@ impl<'a> Resolver<'a> {
 
         Ok(ResolvedExpression::MapIndexAccess(ResolvedMapIndexLookup {
             map_type: ResolvedType::Map(map_type_ref.clone()),
-            item_type: ResolvedType::Any,
+            item_type: map_type_ref.value_type.clone(),
             map_type_ref: map_type_ref.clone(),
             index_expression: Box::from(resolved_key_expression),
             map_expression: Box::from(resolved_map_expression),
@@ -228,7 +228,9 @@ impl<'a> Resolver<'a> {
                 ))
             }
         } else {
-            Err(ResolveError::NeedStructForFieldLookup)
+            Err(ResolveError::NeedStructForFieldLookup(
+                self.to_node(field_or_member_name).span,
+            ))
         }
     }
 

@@ -6,7 +6,8 @@
 use crate::err::ResolveError;
 use crate::Resolver;
 use swamp_script_ast::{Expression, Variable};
-use swamp_script_semantic::{ResolvedExpression, ResolvedType};
+use swamp_script_semantic::{ResolvedExpression, ResolvedType, Spanned};
+use tracing::info;
 
 impl<'a> Resolver<'a> {
     pub(crate) fn handle_optional_unwrap_statement(
@@ -17,8 +18,12 @@ impl<'a> Resolver<'a> {
         maybe_else_expression: &Option<Box<Expression>>,
     ) -> Result<ResolvedExpression, ResolveError> {
         let resolved_var_expr = self.resolve_expression(expr)?;
-
-        if let ResolvedType::Optional(inner_type) = resolved_var_expr.resolution() {
+        let resolved_var_type = resolved_var_expr.resolution();
+        if resolved_var_type == ResolvedType::Any {
+            println!("problem");
+        }
+        info!(?resolved_var_type, "resolved_var_type");
+        if let ResolvedType::Optional(inner_type) = resolved_var_type {
             self.push_block_scope("if_unwrap");
             let resolved_var_ref =
                 self.create_local_variable(&var.name, &var.is_mutable, &inner_type)?;
@@ -38,7 +43,7 @@ impl<'a> Resolver<'a> {
                 false_block: resolved_false,
             })
         } else {
-            Err(ResolveError::ExpectedOptional)
+            Err(ResolveError::ExpectedOptional(resolved_var_expr.span()))
         }
     }
 
@@ -71,7 +76,7 @@ impl<'a> Resolver<'a> {
                 false_block: resolved_false,
             })
         } else {
-            Err(ResolveError::ExpectedOptional)
+            Err(ResolveError::ExpectedOptional(resolved_expr.span()))
         }
     }
 }

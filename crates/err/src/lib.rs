@@ -331,9 +331,9 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
         }
         ResolveError::NotAnArray(_) => todo!(),
         ResolveError::ArrayIndexMustBeInt(_) => todo!(),
-        ResolveError::OverwriteVariableWithAnotherType(_) => todo!(),
-        ResolveError::WrongNumberOfArguments(_expected, _encountered) => {
-            Report::build(Error, 105, "wrong number of arguments", &Span::default())
+        ResolveError::OverwriteVariableWithAnotherType(node) => Report::build(Error, 144205, "overwrite variable with another type", &node.span),
+        ResolveError::WrongNumberOfArguments(span, _expected, _encountered) => {
+            Report::build(Error, 105, "wrong number of arguments", &span)
         }
         ResolveError::IncompatibleArguments(span, a, b) =>   Report::build(
             Error,
@@ -394,7 +394,7 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
         ResolveError::ExpressionIsOfWrongFieldType(span, expected_type, encountered_type) => {
             Report::build(Error, 234101, &format!("Field initialization expression is of wrong type. expected {expected_type}, encountered: {encountered_type}"), &span)
         },
-        ResolveError::ExpectedOptional => todo!(),
+        ResolveError::ExpectedOptional(span) => Report::build(Error, 234101, &format!("expected optional type"), &span),
         ResolveError::ExpectedVariable(node) => {
             Report::build(Error, 234201, &format!("Expected variable"), &node.span)
         },
@@ -427,7 +427,7 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
         }
         ResolveError::NotAnIterator(span) => Report::build(Error, 101, "Not an iterator", &span),
         ResolveError::UnsupportedIteratorPairs => todo!(),
-        ResolveError::NeedStructForFieldLookup => todo!(),
+        ResolveError::NeedStructForFieldLookup(span) => Report::build(Error, 12301, "need struct for field lookup", &span),
         ResolveError::IntConversionError(_) => todo!(),
         ResolveError::FloatConversionError(_) => todo!(),
         ResolveError::BoolConversionError => todo!(),

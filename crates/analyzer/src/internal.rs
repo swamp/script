@@ -6,8 +6,9 @@
 use crate::err::ResolveError;
 use crate::{Resolver, SPARSE_TYPE_ID};
 use swamp_script_ast::{Expression, Node};
+use swamp_script_semantic::Span;
 use swamp_script_semantic::{
-    ResolvedExpression, ResolvedMapTypeRef, ResolvedType, ResolvedVariableRef,
+    ResolvedExpression, ResolvedMapTypeRef, ResolvedType, ResolvedVariableRef, Spanned,
 };
 
 impl<'a> Resolver<'a> {
@@ -86,6 +87,7 @@ impl<'a> Resolver<'a> {
         ast_arguments: &[Expression],
     ) -> Result<ResolvedExpression, ResolveError> {
         let member_function_name_str = self.get_text(ast_member_function_name);
+        let span = self.to_node(ast_member_function_name).span;
         let expr = match member_function_name_str {
             "remove" => {
                 /*  // TODO:
@@ -95,7 +97,11 @@ impl<'a> Resolver<'a> {
                 */
 
                 if ast_arguments.len() != 1 {
-                    return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 1));
+                    return Err(ResolveError::WrongNumberOfArguments(
+                        span,
+                        ast_arguments.len(),
+                        1,
+                    ));
                 }
 
                 let key_expr = self.resolve_expression_expecting_type(
@@ -119,7 +125,11 @@ impl<'a> Resolver<'a> {
                 */
 
                 if ast_arguments.len() != 1 {
-                    return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 1));
+                    return Err(ResolveError::WrongNumberOfArguments(
+                        span,
+                        ast_arguments.len(),
+                        1,
+                    ));
                 }
 
                 let key_expr = self.resolve_expression_expecting_type(
@@ -145,6 +155,7 @@ impl<'a> Resolver<'a> {
         ast_member_function_name: &Node,
         ast_arguments: &[Expression],
     ) -> Result<ResolvedExpression, ResolveError> {
+        let span = self.to_node(ast_member_function_name).span;
         let member_function_name_str = self.get_text(ast_member_function_name);
         let expr = match member_function_name_str {
             "remove" => {
@@ -153,7 +164,11 @@ impl<'a> Resolver<'a> {
                 }
 
                 if ast_arguments.len() != 1 {
-                    return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 1));
+                    return Err(ResolveError::WrongNumberOfArguments(
+                        span,
+                        ast_arguments.len(),
+                        1,
+                    ));
                 }
                 let index_expr = self.resolve_usize_index(&ast_arguments[0])?;
 
@@ -166,7 +181,11 @@ impl<'a> Resolver<'a> {
                 }
 
                 if !ast_arguments.is_empty() {
-                    return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 0));
+                    return Err(ResolveError::WrongNumberOfArguments(
+                        span,
+                        ast_arguments.len(),
+                        0,
+                    ));
                 }
 
                 ResolvedExpression::ArrayClear(var_ref)
@@ -183,10 +202,15 @@ impl<'a> Resolver<'a> {
 
     fn resolve_single_float_expression(
         &mut self,
+        span: Span,
         ast_arguments: &[Expression],
     ) -> Result<ResolvedExpression, ResolveError> {
         if ast_arguments.len() != 1 {
-            return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 1));
+            return Err(ResolveError::WrongNumberOfArguments(
+                span,
+                ast_arguments.len(),
+                1,
+            ));
         }
         let expr2 =
             self.resolve_expression_expecting_type(&ast_arguments[0], &ResolvedType::Float, false)?;
@@ -196,10 +220,15 @@ impl<'a> Resolver<'a> {
 
     fn resolve_single_int_expression(
         &mut self,
+        span: Span,
         ast_arguments: &[Expression],
     ) -> Result<ResolvedExpression, ResolveError> {
         if ast_arguments.len() != 1 {
-            return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 1));
+            return Err(ResolveError::WrongNumberOfArguments(
+                span,
+                ast_arguments.len(),
+                1,
+            ));
         }
         let expr2 =
             self.resolve_expression_expecting_type(&ast_arguments[0], &ResolvedType::Int, false)?;
@@ -209,10 +238,15 @@ impl<'a> Resolver<'a> {
 
     fn resolve_two_float_expressions(
         &mut self,
+        span: Span,
         ast_arguments: &[Expression],
     ) -> Result<(ResolvedExpression, ResolvedExpression), ResolveError> {
         if ast_arguments.len() != 2 {
-            return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 2));
+            return Err(ResolveError::WrongNumberOfArguments(
+                span,
+                ast_arguments.len(),
+                2,
+            ));
         }
         let expr2 =
             self.resolve_expression_expecting_type(&ast_arguments[0], &ResolvedType::Float, false)?;
@@ -229,84 +263,121 @@ impl<'a> Resolver<'a> {
         ast_arguments: &[Expression],
     ) -> Result<ResolvedExpression, ResolveError> {
         let function_name_str = self.get_text(ast_member_function_name);
+        let span = self.to_node(ast_member_function_name).span;
         match function_name_str {
             "round" => {
                 if !ast_arguments.is_empty() {
-                    return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 0));
+                    return Err(ResolveError::WrongNumberOfArguments(
+                        span,
+                        ast_arguments.len(),
+                        0,
+                    ));
                 }
                 Ok(ResolvedExpression::FloatRound(Box::new(expr)))
             }
             "floor" => {
                 if !ast_arguments.is_empty() {
-                    return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 0));
+                    return Err(ResolveError::WrongNumberOfArguments(
+                        span,
+                        ast_arguments.len(),
+                        0,
+                    ));
                 }
                 Ok(ResolvedExpression::FloatFloor(Box::new(expr)))
             }
             "sign" => {
                 if !ast_arguments.is_empty() {
-                    return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 0));
+                    return Err(ResolveError::WrongNumberOfArguments(
+                        span,
+                        ast_arguments.len(),
+                        0,
+                    ));
                 }
                 Ok(ResolvedExpression::FloatSign(Box::new(expr)))
             }
             "abs" => {
                 if !ast_arguments.is_empty() {
-                    return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 0));
+                    return Err(ResolveError::WrongNumberOfArguments(
+                        span,
+                        ast_arguments.len(),
+                        0,
+                    ));
                 }
                 Ok(ResolvedExpression::FloatAbs(Box::new(expr)))
             }
             "rnd" => {
                 if !ast_arguments.is_empty() {
-                    return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 0));
+                    return Err(ResolveError::WrongNumberOfArguments(
+                        span,
+                        ast_arguments.len(),
+                        0,
+                    ));
                 }
                 Ok(ResolvedExpression::FloatRnd(Box::new(expr)))
             }
             "cos" => {
                 if !ast_arguments.is_empty() {
-                    return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 0));
+                    return Err(ResolveError::WrongNumberOfArguments(
+                        span,
+                        ast_arguments.len(),
+                        0,
+                    ));
                 }
                 Ok(ResolvedExpression::FloatCos(Box::new(expr)))
             }
             "sin" => {
                 if !ast_arguments.is_empty() {
-                    return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 0));
+                    return Err(ResolveError::WrongNumberOfArguments(
+                        span,
+                        ast_arguments.len(),
+                        0,
+                    ));
                 }
                 Ok(ResolvedExpression::FloatSin(Box::new(expr)))
             }
             "acos" => {
                 if !ast_arguments.is_empty() {
-                    return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 0));
+                    return Err(ResolveError::WrongNumberOfArguments(
+                        span,
+                        ast_arguments.len(),
+                        0,
+                    ));
                 }
                 Ok(ResolvedExpression::FloatAcos(Box::new(expr)))
             }
             "asin" => {
                 if !ast_arguments.is_empty() {
-                    return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 0));
+                    return Err(ResolveError::WrongNumberOfArguments(
+                        span,
+                        ast_arguments.len(),
+                        0,
+                    ));
                 }
                 Ok(ResolvedExpression::FloatAsin(Box::new(expr)))
             }
             "atan2" => {
-                let float_argument = self.resolve_single_float_expression(ast_arguments)?;
+                let float_argument = self.resolve_single_float_expression(span, ast_arguments)?;
                 Ok(ResolvedExpression::FloatAtan2(
                     Box::new(expr),
                     Box::new(float_argument),
                 ))
             }
             "min" => {
-                let float_argument = self.resolve_single_float_expression(ast_arguments)?;
+                let float_argument = self.resolve_single_float_expression(span, ast_arguments)?;
                 Ok(ResolvedExpression::FloatMin(
                     Box::new(expr),
                     Box::new(float_argument),
                 ))
             }
             "max" => {
-                let float_argument = self.resolve_single_float_expression(ast_arguments)?;
+                let float_argument = self.resolve_single_float_expression(span, ast_arguments)?;
                 Ok(ResolvedExpression::FloatMax(
                     Box::new(expr),
                     Box::new(float_argument),
                 ))
             }
             "clamp" => {
-                let (min, max) = self.resolve_two_float_expressions(ast_arguments)?;
+                let (min, max) = self.resolve_two_float_expressions(span, ast_arguments)?;
                 Ok(ResolvedExpression::FloatClamp(
                     Box::new(expr),
                     Box::new(min),
@@ -329,7 +400,11 @@ impl<'a> Resolver<'a> {
         match function_name_str {
             "len" => {
                 if !ast_arguments.is_empty() {
-                    return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 0));
+                    return Err(ResolveError::WrongNumberOfArguments(
+                        expr.span(),
+                        ast_arguments.len(),
+                        0,
+                    ));
                 }
                 Ok(ResolvedExpression::StringLen(Box::new(expr)))
             }
@@ -349,19 +424,28 @@ impl<'a> Resolver<'a> {
         match function_name_str {
             "abs" => {
                 if !ast_arguments.is_empty() {
-                    return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 0));
+                    return Err(ResolveError::WrongNumberOfArguments(
+                        expr.span(),
+                        ast_arguments.len(),
+                        0,
+                    ));
                 }
                 Ok(ResolvedExpression::IntAbs(Box::new(expr)))
             }
             "rnd" => {
                 if !ast_arguments.is_empty() {
-                    return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 0));
+                    return Err(ResolveError::WrongNumberOfArguments(
+                        expr.span(),
+                        ast_arguments.len(),
+                        0,
+                    ));
                 }
                 Ok(ResolvedExpression::IntRnd(Box::new(expr)))
             }
 
             "max" => {
-                let int_argument = self.resolve_single_int_expression(ast_arguments)?;
+                let int_argument =
+                    self.resolve_single_int_expression(expr.span(), ast_arguments)?;
                 Ok(ResolvedExpression::IntMax(
                     Box::new(expr),
                     Box::new(int_argument),
@@ -369,7 +453,8 @@ impl<'a> Resolver<'a> {
             }
 
             "min" => {
-                let int_argument = self.resolve_single_int_expression(ast_arguments)?;
+                let int_argument =
+                    self.resolve_single_int_expression(expr.span(), ast_arguments)?;
                 Ok(ResolvedExpression::IntMin(
                     Box::new(expr),
                     Box::new(int_argument),
@@ -378,7 +463,11 @@ impl<'a> Resolver<'a> {
 
             "to_float" => {
                 if !ast_arguments.is_empty() {
-                    return Err(ResolveError::WrongNumberOfArguments(ast_arguments.len(), 0));
+                    return Err(ResolveError::WrongNumberOfArguments(
+                        expr.span(),
+                        ast_arguments.len(),
+                        0,
+                    ));
                 }
                 Ok(ResolvedExpression::IntToFloat(Box::new(expr)))
             }
@@ -417,6 +506,7 @@ impl<'a> Resolver<'a> {
                         "add" => {
                             if ast_arguments.len() != 1 {
                                 return Err(ResolveError::WrongNumberOfArguments(
+                                    self_expression.span(),
                                     ast_arguments.len(),
                                     1,
                                 ));
@@ -429,11 +519,13 @@ impl<'a> Resolver<'a> {
                             return Ok(Some(ResolvedExpression::SparseAdd(
                                 Box::new(self_expression),
                                 Box::new(value),
+                                key_type,
                             )));
                         }
                         "remove" => {
                             if ast_arguments.len() != 1 {
                                 return Err(ResolveError::WrongNumberOfArguments(
+                                    self_expression.span(),
                                     ast_arguments.len(),
                                     1,
                                 ));
@@ -447,6 +539,7 @@ impl<'a> Resolver<'a> {
                             return Ok(Some(ResolvedExpression::SparseRemove(
                                 Box::new(self_expression),
                                 Box::new(sparse_slot_id_expression),
+                                ResolvedType::Unit, //ResolvedType::Optional(value_type),
                             )));
                         }
                         _ => {}

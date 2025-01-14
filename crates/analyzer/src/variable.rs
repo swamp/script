@@ -98,6 +98,11 @@ impl<'a> Resolver<'a> {
             .variables;
         let variable_index = variables.len();
 
+        if *variable_type_ref == ResolvedType::Any {
+            println!("problem");
+        }
+
+        assert_ne!(*variable_type_ref, ResolvedType::Any);
         let resolved_variable = ResolvedVariable {
             name,
             resolved_type: variable_type_ref.clone(),
@@ -152,6 +157,7 @@ impl<'a> Resolver<'a> {
             .expect("block scope should have at least one scope")
             .variables;
 
+        assert_ne!(*variable_type_ref, ResolvedType::Any);
         let resolved_variable = ResolvedVariable {
             name: variable.clone(),
             resolved_type: variable_type_ref.clone(),
@@ -196,6 +202,7 @@ impl<'a> Resolver<'a> {
             .expect("block scope should have at least one scope")
             .variables;
 
+        assert_ne!(*variable_type_ref, ResolvedType::Any);
         let resolved_variable = ResolvedVariable {
             name: ResolvedNode::default(),
             resolved_type: variable_type_ref.clone(),

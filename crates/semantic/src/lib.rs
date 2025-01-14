@@ -1220,8 +1220,16 @@ pub enum ResolvedExpression {
 
     // --- Special methods
     // TODO: Have a better interface for these "engine" member calls
-    SparseAdd(Box<ResolvedExpression>, Box<ResolvedExpression>),
-    SparseRemove(Box<ResolvedExpression>, Box<ResolvedExpression>),
+    SparseAdd(
+        Box<ResolvedExpression>,
+        Box<ResolvedExpression>,
+        ResolvedType,
+    ),
+    SparseRemove(
+        Box<ResolvedExpression>,
+        Box<ResolvedExpression>,
+        ResolvedType,
+    ),
     SparseNew(ResolvedRustTypeRef, ResolvedType),
     SparseAccess(
         Box<ResolvedExpression>,
@@ -1541,7 +1549,7 @@ impl ResolvedExpression {
             Self::StringLen(expr) => {
                 expr.collect_constant_dependencies(deps);
             }
-            Self::SparseAdd(expr1, expr2) | Self::SparseRemove(expr1, expr2) => {
+            Self::SparseAdd(expr1, expr2, _) | Self::SparseRemove(expr1, expr2, _) => {
                 expr1.collect_constant_dependencies(deps);
                 expr2.collect_constant_dependencies(deps);
             }
@@ -1634,7 +1642,9 @@ impl ResolvedExpression {
 
             // Index Access
             Self::ArrayAccess(_, array_item_ref, _) => array_item_ref.item_type.clone(),
-            Self::MapIndexAccess(map_item) => map_item.item_type.clone(),
+            Self::MapIndexAccess(map_item) => {
+                ResolvedType::Optional(Box::new(map_item.item_type.clone()))
+            }
             Self::MapRemove(_, _, map_type_ref) => map_type_ref.value_type.clone(),
             Self::MapHas(_, _) => ResolvedType::Bool,
 
@@ -1767,8 +1777,8 @@ impl ResolvedExpression {
             Self::ArrayClear(variable_ref) => variable_ref.resolved_type.clone(),
 
             // Sparse member functions
-            Self::SparseAdd(_, _) => ResolvedType::Any, // TODO: return correct type
-            Self::SparseRemove(_, _) => ResolvedType::Any, // TODO: return correct type
+            Self::SparseAdd(_, _, return_type) => return_type.clone(),
+            Self::SparseRemove(_, _, return_type) => return_type.clone(),
             Self::SparseNew(_rust_type_ref, resolved_type) => resolved_type.clone(),
             Self::SparseAccess(_sparse_expression, _key_expression, expected_type) => {
                 expected_type.clone()
@@ -1846,7 +1856,7 @@ impl Spanned for ResolvedExpression {
             Self::VariableAccess(var_ref) => var_ref.span(),
             Self::ConstantAccess(constant_ref) => constant_ref.span(),
             Self::FieldAccess(base, field, accesses) => {
-                let mut span = base.span().merge(&field.span());
+                let mut span = base.span();
                 for access in accesses {
                     span = span.merge(&access.span());
                 }
@@ -1973,8 +1983,8 @@ impl Spanned for ResolvedExpression {
             Self::IntToFloat(int_expr) => int_expr.span(),
 
             // Special Methods
-            Self::SparseAdd(expr1, expr2) => expr1.span().merge(&expr2.span()),
-            Self::SparseRemove(expr1, expr2) => expr1.span().merge(&expr2.span()),
+            Self::SparseAdd(expr1, expr2, _) => expr1.span().merge(&expr2.span()),
+            Self::SparseRemove(expr1, expr2, _) => expr1.span().merge(&expr2.span()),
             Self::SparseNew(_rust_type_ref, _resolved_type) => {
                 todo!()
             }
@@ -2105,7 +2115,7 @@ impl Spanned for ResolvedConstant {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Eq, PartialEq)]
 pub struct ResolvedStructType {
     pub name: ResolvedNode,
     pub assigned_name: String,
@@ -2113,6 +2123,12 @@ pub struct ResolvedStructType {
 
     // Resolved
     pub functions: SeqMap<String, ResolvedFunctionRef>,
+}
+
+impl Debug for ResolvedStructType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "struct {:?}", self.assigned_name)
+    }
 }
 
 impl ResolvedStructType {

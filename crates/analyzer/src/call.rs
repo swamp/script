@@ -7,6 +7,7 @@ use crate::err::ResolveError;
 use crate::{Resolver, SPARSE_TYPE_ID};
 use std::rc::Rc;
 use swamp_script_ast::{Expression, Node, QualifiedTypeIdentifier};
+use swamp_script_semantic::Span;
 use swamp_script_semantic::{
     ResolvedExpression, ResolvedExternalFunctionCall, ResolvedExternalFunctionDefinitionRef,
     ResolvedFunction, ResolvedInternalFunctionCall, ResolvedInternalFunctionDefinitionRef,
@@ -18,11 +19,13 @@ use tracing::info;
 
 impl<'a> Resolver<'a> {
     fn verify_arguments(
+        span: &Span,
         fn_parameters: &[ResolvedTypeForParameter],
         resolved_arguments: &[ResolvedExpression],
     ) -> Result<(), ResolveError> {
         if resolved_arguments.len() != fn_parameters.len() {
             return Err(ResolveError::WrongNumberOfArguments(
+                span.clone(),
                 resolved_arguments.len(),
                 fn_parameters.len(),
             ));
@@ -56,12 +59,13 @@ impl<'a> Resolver<'a> {
 
     fn resolve_and_verify_parameters(
         &mut self,
+        span: &Span,
         fn_parameters: &[ResolvedTypeForParameter],
         arguments: &[Expression],
     ) -> Result<Vec<ResolvedExpression>, ResolveError> {
         let resolved_arguments = self.resolve_expressions(arguments)?;
 
-        Self::verify_arguments(fn_parameters, &resolved_arguments)?;
+        Self::verify_arguments(span, fn_parameters, &resolved_arguments)?;
 
         Ok(resolved_arguments)
     }
@@ -78,19 +82,15 @@ impl<'a> Resolver<'a> {
 
         let (member_function_requires_mutable_self, signature) = match &*function_ref {
             ResolvedFunction::Internal(function_data) => {
-                let first_param = function_data
-                    .signature
-                    .parameters
-                    .first()
-                    .ok_or_else(|| ResolveError::WrongNumberOfArguments(0, 1))?;
+                let first_param = function_data.signature.parameters.first().ok_or_else(|| {
+                    ResolveError::WrongNumberOfArguments(resolved_expression.span(), 0, 1)
+                })?;
                 (first_param.is_mutable, &function_data.signature)
             }
             ResolvedFunction::External(external) => {
-                let first_param = external
-                    .signature
-                    .parameters
-                    .first()
-                    .ok_or_else(|| ResolveError::WrongNumberOfArguments(0, 1))?;
+                let first_param = external.signature.parameters.first().ok_or_else(|| {
+                    ResolveError::WrongNumberOfArguments(resolved_expression.span(), 0, 1)
+                })?;
                 (first_param.is_mutable, &external.signature)
             }
         };
@@ -101,8 +101,11 @@ impl<'a> Resolver<'a> {
             ));
         }
 
-        let resolved_arguments =
-            self.resolve_and_verify_parameters(&signature.parameters[1..], ast_arguments)?;
+        let resolved_arguments = self.resolve_and_verify_parameters(
+            &resolved_expression.span(),
+            &signature.parameters[1..],
+            ast_arguments,
+        )?;
 
         Ok(ResolvedMemberCall {
             function: function_ref.clone(),
@@ -122,8 +125,11 @@ impl<'a> Resolver<'a> {
         let resolution_type = function_expr.resolution();
 
         if let ResolvedType::Function(signature) = resolution_type {
-            let resolved_arguments =
-                self.resolve_and_verify_parameters(&signature.parameters, ast_arguments)?;
+            let resolved_arguments = self.resolve_and_verify_parameters(
+                &function_expr.span(),
+                &signature.parameters,
+                ast_arguments,
+            )?;
 
             Ok(ResolvedExpression::FunctionCall(
                 signature,
@@ -149,8 +155,11 @@ impl<'a> Resolver<'a> {
         let struct_ref = struct_type_ref.borrow();
 
         if let Some(function_ref) = struct_ref.functions.get(&function_name_str) {
-            let resolved_arguments = self
-                .resolve_and_verify_parameters(&function_ref.signature().parameters, arguments)?;
+            let resolved_arguments = self.resolve_and_verify_parameters(
+                &self.to_node(function_name).span,
+                &function_ref.signature().parameters,
+                arguments,
+            )?;
 
             Ok(ResolvedStaticCall {
                 function: function_ref.clone(),
@@ -171,8 +180,11 @@ impl<'a> Resolver<'a> {
         function_expr: ResolvedExpression,
         arguments: &[Expression],
     ) -> Result<ResolvedExpression, ResolveError> {
-        let resolved_arguments =
-            self.resolve_and_verify_parameters(&fn_def.signature.parameters, arguments)?;
+        let resolved_arguments = self.resolve_and_verify_parameters(
+            &function_expr.span(),
+            &fn_def.signature.parameters,
+            arguments,
+        )?;
 
         Ok(ResolvedExpression::FunctionInternalCall(
             ResolvedInternalFunctionCall {
@@ -190,8 +202,11 @@ impl<'a> Resolver<'a> {
         function_expr: ResolvedExpression,
         arguments: &[Expression],
     ) -> Result<ResolvedExpression, ResolveError> {
-        let resolved_arguments =
-            self.resolve_and_verify_parameters(&fn_def.signature.parameters, arguments)?;
+        let resolved_arguments = self.resolve_and_verify_parameters(
+            &function_expr.span(),
+            &fn_def.signature.parameters,
+            arguments,
+        )?;
 
         Ok(ResolvedExpression::FunctionExternalCall(
             ResolvedExternalFunctionCall {
@@ -248,7 +263,11 @@ impl<'a> Resolver<'a> {
 
         if type_name_text == "Sparse" && function_name_text == "new" {
             if !arguments.is_empty() {
-                return Err(ResolveError::WrongNumberOfArguments(arguments.len(), 0));
+                return Err(ResolveError::WrongNumberOfArguments(
+                    self.to_node(function_name).span,
+                    arguments.len(),
+                    0,
+                ));
             }
             let resolved_generic_types = self.resolve_types(&type_name.generic_params)?;
             if resolved_generic_types.len() != 1 {
