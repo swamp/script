@@ -4,9 +4,12 @@
  */
 use crate::util::{check, check_fail, check_value, eval, eval_string};
 use fixed32::Fp;
+use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::rc::Rc;
 use swamp_script_core::prelude::Value;
+use swamp_script_core::value::ValueRef;
+use swamp_script_semantic::{ResolvedAnonymousStructType, ResolvedNode, ResolvedStructType};
 
 mod util;
 
@@ -1852,7 +1855,7 @@ fn option_var_mut() {
         print('affected map: {map[2]}')
          ",
         r#"
-        
+
 before: hello
 after: hello goodbye
 affected map: Option("hello goodbye")
@@ -1876,7 +1879,7 @@ fn option_expr_intentionally_immutable() {
         print('affected {map[2]}')
          ",
         r#"
-        
+
 before: hello
 after: hello goodbye
 affected Option("hello")
@@ -1895,7 +1898,7 @@ fn option_expr_mut_struct() {
         struct Player {
             pos: Pos,
         }
-        
+
         mut map = [2: Player { pos: Pos { x: 10, y: -91 } } ]
         mut a = mut map[2]
         if mut another = a? {
@@ -1908,7 +1911,7 @@ fn option_expr_mut_struct() {
         print('affected map: {map[2]}')
          ",
         r"
-        
+
     before: Player { pos: Pos { x: 10, y: -91 } }
     after: Player { pos: Pos { x: 10, y: 16 } }
     affected map: Option(Player { pos: Pos { x: 10, y: 16 } })
@@ -1927,10 +1930,62 @@ a = 'hello'
 print('after {map[2]}')
          ",
         r#"
-        
+
 before Option("hi")
 after Option("hello")
-        
+
 "#,
     );
+}
+
+#[test_log::test]
+fn serialize_octets() {
+    let v = Value::Int(2);
+    let mut buf = [0u8; 4];
+    let size = v.quick_serialize(&mut buf);
+    assert_eq!(size, 4);
+    assert_eq!(buf[0], 2);
+}
+
+#[allow(unused)]
+fn values_to_value_refs(values: &[Value]) -> Vec<ValueRef> {
+    let mut items = Vec::new();
+
+    for x in values.iter().cloned() {
+        items.push(Rc::new(RefCell::new(x)));
+    }
+
+    items
+}
+
+fn values_to_value_refs_owned(values: Vec<Value>) -> Vec<ValueRef> {
+    values
+        .into_iter()
+        .map(|x| Rc::new(RefCell::new(x)))
+        .collect()
+}
+
+#[test_log::test]
+fn serialize_struct_octets() {
+    let a = Value::Int(2);
+    let b = Value::String("some string".to_string());
+    let c = Value::Float(Fp::from(2.0));
+
+    let struct_type = ResolvedStructType {
+        name: ResolvedNode::default(),
+        assigned_name: "SomeStructType".to_string(),
+        anon_struct_type: ResolvedAnonymousStructType {
+            defined_fields: SeqMap::default(),
+        },
+        functions: SeqMap::default(),
+    };
+    let struct_type_ref = Rc::new(RefCell::new(struct_type));
+
+    let fields = values_to_value_refs_owned(vec![a, b, c]);
+    let struct_value = Value::Struct(struct_type_ref, fields);
+
+    let mut buf = [0u8; 256];
+    let size = struct_value.quick_serialize(&mut buf);
+
+    assert_eq!(size, 21);
 }

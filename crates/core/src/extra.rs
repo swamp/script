@@ -4,8 +4,8 @@
  */
 
 use crate::idx_gen::IndexAllocator;
-use crate::value::ValueRef;
 use crate::value::{to_rust_value, Value};
+use crate::value::{QuickSerialize, ValueRef};
 use sparse_slot::{Id, SparseSlot};
 use std::cell::RefCell;
 use std::fmt::{Display, Formatter};
@@ -21,6 +21,24 @@ impl Display for SparseValueId {
     }
 }
 
+impl QuickSerialize for SparseValueId {
+    fn quick_serialize(&self, octets: &mut [u8]) -> usize {
+        let mut offset = 0;
+
+        // Serialize the index
+        let index_octets = self.0.index.to_ne_bytes();
+        octets[offset..offset + index_octets.len()].copy_from_slice(&index_octets);
+        offset += index_octets.len();
+
+        // Serialize the generation
+        let generation_octets = self.0.generation.to_ne_bytes();
+        octets[offset..offset + generation_octets.len()].copy_from_slice(&generation_octets);
+        offset += generation_octets.len();
+
+        offset
+    }
+}
+
 #[derive(Debug)]
 pub struct SparseValueMap {
     pub sparse_slot: SparseSlot<Rc<RefCell<Value>>>,
@@ -28,6 +46,22 @@ pub struct SparseValueMap {
     pub type_parameter: ResolvedType,
     pub resolved_type: ResolvedType,
     pub rust_type_ref_for_id: ResolvedRustTypeRef,
+}
+
+impl QuickSerialize for SparseValueMap {
+    fn quick_serialize(&self, octets: &mut [u8]) -> usize {
+        let mut offset = 0;
+        for (id, value) in self.sparse_slot.iter() {
+            let value_octets = id.index.to_ne_bytes();
+            octets[offset..offset + value_octets.len()].copy_from_slice(&value_octets);
+            offset += value_octets.len();
+
+            let value_size = value.borrow().quick_serialize(&mut octets[offset..]);
+            offset += value_size;
+        }
+
+        offset
+    }
 }
 
 impl Display for SparseValueMap {

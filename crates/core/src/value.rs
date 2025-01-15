@@ -6,6 +6,7 @@ use crate::extra::{SparseValueId, SparseValueMap};
 use core::any::Any;
 use fixed32::Fp;
 use seq_map::SeqMap;
+use std::cell::Ref;
 use std::cell::RefCell;
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
@@ -20,19 +21,44 @@ use swamp_script_semantic::{ResolvedNode, Span};
 
 pub type ValueRef = Rc<RefCell<Value>>;
 
-pub trait RustType: Any + Debug + Display {
+pub trait RustType: Any + Debug + Display + QuickSerialize {
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
 // Blanket implementation
-impl<T: Any + Debug + Display> RustType for T {
+impl<T: Any + Debug + Display + QuickSerialize> RustType for T {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
+    }
+}
+
+pub trait QuickSerialize {
+    fn quick_serialize(&self, _octets: &mut [u8]) -> usize {
+        0
+    }
+}
+
+impl<'a, T: QuickSerialize + ?Sized> QuickSerialize for Ref<'a, T> {
+    fn quick_serialize(&self, octets: &mut [u8]) -> usize {
+        (**self).quick_serialize(octets)
+    }
+}
+
+impl<T: QuickSerialize> QuickSerialize for Box<T> {
+    fn quick_serialize(&self, octets: &mut [u8]) -> usize {
+        // Delegate serialization to the inner T
+        (**self).quick_serialize(octets)
+    }
+}
+
+impl QuickSerialize for Rc<RefCell<dyn RustType>> {
+    fn quick_serialize(&self, octets: &mut [u8]) -> usize {
+        self.borrow().quick_serialize(octets)
     }
 }
 
@@ -67,6 +93,144 @@ pub enum Value {
 
     // Other
     RustValue(ResolvedRustTypeRef, Rc<RefCell<Box<dyn RustType>>>),
+}
+
+#[allow(unused)]
+fn quick_serialize_values(values: &[Value], buffer: &mut [u8]) -> usize {
+    let mut offset = 0;
+
+    for value in values {
+        let bytes_written = value.quick_serialize(&mut buffer[offset..]);
+        offset += bytes_written;
+    }
+
+    offset
+}
+
+impl Value {
+    /// Serialize as quickly as possible
+    /// Endian format is undefined. It is only used for serializing during a running application
+    ///
+    #[allow(clippy::too_many_lines)]
+    #[inline]
+    pub fn quick_serialize(&self, octets: &mut [u8]) -> usize {
+        match self {
+            Self::Int(x) => {
+                let value_octets = x.to_ne_bytes();
+                octets[..value_octets.len()].copy_from_slice(&value_octets);
+                value_octets.len()
+            }
+            Self::Float(fp) => {
+                let value_octets = fp.inner().to_ne_bytes();
+                octets[..value_octets.len()].copy_from_slice(&value_octets);
+                value_octets.len()
+            }
+            Self::String(s) => {
+                let len = s.len() as u16;
+                let len_bytes = len.to_ne_bytes();
+                octets[..len_bytes.len()].copy_from_slice(&len_bytes);
+                let mut offset = len_bytes.len();
+
+                // Serialize the string bytes
+                octets[offset..offset + len as usize].copy_from_slice(s.as_bytes());
+                offset += len as usize;
+                offset
+            }
+
+            Self::Bool(b) => {
+                octets[0] = if *b { 1 } else { 0 };
+                1
+            }
+
+            Self::Unit => 0,
+            Self::Option(maybe_value) => match maybe_value {
+                None => {
+                    octets[0] = 0;
+                    1
+                }
+                Some(inner_value) => {
+                    octets[0] = 1;
+                    let inner_size = inner_value.borrow().quick_serialize(&mut octets[1..]);
+                    1 + inner_size
+                }
+            },
+            Self::Array(_array_ref, values) => {
+                let mut offset = 0;
+                for value in values {
+                    let size = value.borrow().quick_serialize(&mut octets[offset..]);
+                    offset += size;
+                }
+                offset
+            }
+            Self::Map(_map_ref, values) => {
+                let mut offset = 0;
+                for (key, value_ref) in values {
+                    offset += key.quick_serialize(&mut octets[offset..]);
+                    offset += value_ref.borrow().quick_serialize(&mut octets[offset..]);
+                }
+                offset
+            }
+
+            Self::Tuple(_tuple_type_ref, values) => {
+                let mut offset = 0;
+                for value in values {
+                    let size = value.borrow().quick_serialize(&mut octets[offset..]);
+                    offset += size;
+                }
+                offset
+            }
+
+            Self::Struct(_struct_type, values) => {
+                let mut offset = 0;
+                for value in values {
+                    let size = value.borrow().quick_serialize(&mut octets[offset..]);
+                    offset += size;
+                }
+                offset
+            }
+
+            Self::EnumVariantSimple(enum_variant) => {
+                octets[0] = enum_variant.container_index;
+                1
+            }
+            Self::EnumVariantTuple(enum_tuple_ref, values) => {
+                let mut offset = 0;
+                octets[offset] = enum_tuple_ref.common.container_index;
+                offset += 1;
+                for value in values {
+                    let size = value.quick_serialize(&mut octets[offset..]);
+                    offset += size;
+                }
+                offset
+            }
+            Self::EnumVariantStruct(enum_struct_ref, values) => {
+                let mut offset = 0;
+                octets[offset] = enum_struct_ref.common.container_index;
+                offset += 1;
+                for value in values {
+                    let size = value.quick_serialize(&mut octets[offset..]);
+                    offset += size;
+                }
+                offset
+            }
+
+            Self::ExclusiveRange(_, _) => {
+                todo!("range is not supported yet")
+            }
+            Self::InclusiveRange(_, _) => {
+                todo!("range is not supported yet")
+            }
+
+            Self::InternalFunction(_) => {
+                todo!("internal_functions are not supported yet")
+            }
+            Self::ExternalFunction(_) => {
+                todo!("external_functions are not supported yet")
+            }
+
+            Self::RustValue(_rust_value, rust_value) => rust_value.borrow().quick_serialize(octets),
+        }
+    }
 }
 
 impl Clone for Value {
