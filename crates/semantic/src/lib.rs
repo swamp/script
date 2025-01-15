@@ -1104,6 +1104,11 @@ pub enum ResolvedExpression {
         ResolvedArrayTypeRef,
         Vec<ResolvedAccess>,
     ),
+    MutMapIndexRef(
+        Box<ResolvedExpression>,
+        ResolvedMapTypeRef,
+        Box<ResolvedExpression>,
+    ),
 
     Option(Option<Box<ResolvedExpression>>),
     NoneCoalesceOperator(Box<ResolvedExpression>, Box<ResolvedExpression>),
@@ -1319,6 +1324,7 @@ impl ResolvedExpression {
                 Self::MutArrayIndexRef(_, _, _)
                     | Self::MutVariableRef(_)
                     | Self::MutStructFieldRef(_, _, _)
+                    | Self::MutMapIndexRef(_, _, _),
             ),
         }
     }
@@ -1355,6 +1361,9 @@ impl ResolvedExpression {
                 expr.collect_constant_dependencies(deps);
             }
             Self::MutArrayIndexRef(expr, _resolved_type, _accesses) => {
+                expr.collect_constant_dependencies(deps);
+            }
+            Self::MutMapIndexRef(expr, _resolved_type, _accesses) => {
                 expr.collect_constant_dependencies(deps);
             }
             Self::Option(opt_expr) => {
@@ -1669,6 +1678,9 @@ impl ResolvedExpression {
             Self::MutArrayIndexRef(_base, resolved_array_type_ref, _index) => {
                 resolved_array_type_ref.item_type.clone()
             }
+            Self::MutMapIndexRef(_base, map_type, _index) => {
+                ResolvedType::Optional(Box::new(map_type.value_type.clone()))
+            }
 
             // Variable
             Self::InitializeVariable(variable_assignment) => {
@@ -1683,7 +1695,7 @@ impl ResolvedExpression {
 
             // Assignments
             Self::ArrayAssignment(_, _, _) => todo!(),
-            Self::MapAssignment(c, a, d) => ResolvedType::Unit,
+            Self::MapAssignment(_c, _a, _d) => ResolvedType::Unit,
             Self::StructFieldAssignment(_struct_field, _lookups, source_resolution) => {
                 source_resolution.resolution()
             }

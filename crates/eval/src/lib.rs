@@ -21,7 +21,6 @@ use swamp_script_semantic::{
     ResolvedForPattern, ResolvedFunction, ResolvedNormalPattern, ResolvedPatternElement,
     ResolvedPostfixOperatorKind, ResolvedRangeMode, ResolvedStaticCall, ResolvedUnaryOperatorKind,
 };
-use tracing::info;
 
 pub mod err;
 
@@ -335,7 +334,6 @@ impl<'a, C> Interpreter<'a, C> {
         arguments: &[ResolvedExpression],
     ) -> Result<Value, ExecuteError> {
         let func_val = self.evaluate_expression(function_expression)?;
-        info!(%func_val, " function value ");
         let evaluated_args = self.evaluate_args(arguments)?;
 
         match &func_val {
@@ -426,6 +424,27 @@ impl<'a, C> Interpreter<'a, C> {
                 VariableValue::Reference(ValueReference(
                     self.evaluate_location(base_expr, access_chain)?.clone(),
                 ))
+            }
+
+            ResolvedExpression::MutMapIndexRef(map_expression, _map_type, key_expression) => {
+                let map_ref = self.evaluate_expression_mut_location_start(&map_expression)?;
+                let key_val = self.evaluate_expression(&key_expression)?;
+
+                let option_val = {
+                    if let Value::Map(_type_id, ref seq_map) = &*map_ref.borrow_mut() {
+                        let x = seq_map.get(&key_val);
+                        x.map_or_else(
+                            || Value::Option(None),
+                            |v| Value::Option(Some(Box::from(v.clone()))),
+                        )
+                    } else {
+                        return Err(ExecuteError::NotAMap);
+                    }
+                };
+
+                let option_val_ref = Rc::new(RefCell::new(option_val));
+
+                VariableValue::Reference(ValueReference(option_val_ref))
             }
 
             // If it is accessing a variable, we want the full access of it
@@ -672,6 +691,7 @@ impl<'a, C> Interpreter<'a, C> {
      */
 
     #[inline]
+    #[allow(clippy::too_many_lines)]
     fn evaluate_expression_with_signal(
         &mut self,
         expr: &ResolvedExpression,
@@ -731,13 +751,10 @@ impl<'a, C> Interpreter<'a, C> {
                         result
                     }
 
-                    Value::Option(None) => {
-                        if let Some(else_block) = false_block {
-                            self.evaluate_expression_with_signal(else_block)
-                        } else {
-                            Ok(ValueWithSignal::Value(Value::Unit))
-                        }
-                    }
+                    Value::Option(None) => false_block.as_ref().map_or_else(
+                        || Ok(ValueWithSignal::Value(Value::Unit)),
+                        |else_block| self.evaluate_expression_with_signal(else_block),
+                    ),
                     _ => Err(ExecuteError::ExpectedOptional),
                 }
             }
@@ -748,30 +765,43 @@ impl<'a, C> Interpreter<'a, C> {
                 true_block,
                 false_block,
             } => {
-                let value = self.evaluate_expression(optional_expr)?;
-                match value {
-                    Value::Option(Some(inner_value)) => {
-                        self.push_block_scope();
-                        self.current_block_scopes.initialize_var(
-                            variable.scope_index,
-                            variable.variable_index,
-                            inner_value.borrow().clone(),
-                            variable.is_mutable(),
-                        );
+                let value_mem = self.evaluate_mut_expression(optional_expr)?;
+                let was_some = match value_mem {
+                    VariableValue::Value(v) => match v {
+                        Value::Option(maybe_value) => match maybe_value {
+                            None => false,
+                            Some(unwrapped_value) => {
+                                self.push_block_scope();
+                                self.current_block_scopes
+                                    .initialize_var_mut(variable, *unwrapped_value.clone());
+                                true
+                            }
+                        },
+                        _ => return Err(ExecuteError::ExpectedOptional),
+                    },
+                    VariableValue::Reference(reference) => match &*reference.0.borrow() {
+                        Value::Option(maybe_value) => match maybe_value {
+                            None => false,
+                            Some(unwrapped_value) => {
+                                self.push_block_scope();
+                                self.current_block_scopes
+                                    .initialize_var_mut(variable, *unwrapped_value.clone());
+                                true
+                            }
+                        },
+                        _ => return Err(ExecuteError::ExpectedOptional),
+                    },
+                };
 
-                        let result = self.evaluate_expression_with_signal(true_block)?;
-                        self.pop_block_scope();
+                if was_some {
+                    let result = self.evaluate_expression_with_signal(true_block)?;
+                    self.pop_block_scope();
 
-                        Ok(result)
-                    }
-                    Value::Option(None) => {
-                        if let Some(else_block) = false_block {
-                            self.evaluate_expression_with_signal(else_block)
-                        } else {
-                            Ok(ValueWithSignal::Value(Value::Unit))
-                        }
-                    }
-                    _ => return Err(ExecuteError::ExpectedOptional),
+                    Ok(result)
+                } else if let Some(else_block) = false_block {
+                    self.evaluate_expression_with_signal(else_block)
+                } else {
+                    Ok(ValueWithSignal::Value(Value::Unit))
                 }
             }
 
@@ -989,40 +1019,13 @@ impl<'a, C> Interpreter<'a, C> {
             // ==================== ASSIGNMENT ====================
             ResolvedExpression::InitializeVariable(var_assignment) => {
                 let target_var = &var_assignment.variable_refs;
+                let source_value_or_reference =
+                    self.evaluate_mut_expression(&var_assignment.expression)?;
 
-                if target_var.is_mutable() {
-                    let value_or_ref = self.evaluate_mut_expression(&var_assignment.expression)?;
-                    match value_or_ref {
-                        VariableValue::Value(value) => {
-                            self.current_block_scopes.initialize_var(
-                                target_var.scope_index,
-                                target_var.variable_index,
-                                value.clone(),
-                                target_var.is_mutable(),
-                            );
-                            value
-                        }
-                        VariableValue::Reference(existing_value_ref) => {
-                            self.current_block_scopes
-                                .initialize_var_mut(target_var, existing_value_ref.0.clone());
-                            existing_value_ref.unref().clone()
-                        }
-                    }
-                } else {
-                    let new_value = self.evaluate_expression(&var_assignment.expression)?;
+                self.current_block_scopes
+                    .initialize_var_mem(target_var, source_value_or_reference)?;
 
-                    // Initialize all variables (single or multiple)
-                    //                for variable_ref in &var_assignment.variable_refs {
-                    self.current_block_scopes.initialize_var(
-                        target_var.scope_index,
-                        target_var.variable_index,
-                        new_value.clone(),
-                        target_var.is_mutable(),
-                    );
-                    //              }
-
-                    new_value
-                }
+                Value::Unit
             }
 
             ResolvedExpression::ReassignVariable(var_assignment) => {
@@ -1369,6 +1372,24 @@ impl<'a, C> Interpreter<'a, C> {
                 .evaluate_location(base_expr, access_chain)?
                 .borrow()
                 .clone(),
+
+            ResolvedExpression::MutMapIndexRef(map_expression, _map_type_ref, key_expression) => {
+                let map_ref = self.evaluate_expression(&map_expression)?;
+                let key_val = self.evaluate_expression(&key_expression)?;
+
+                let result = {
+                    if let Value::Map(_type_id, ref seq_map) = map_ref {
+                        let x = seq_map.get(&key_val);
+                        x.map_or_else(
+                            || Value::Option(None),
+                            |v| Value::Option(Some(Box::from(v.clone()))),
+                        )
+                    } else {
+                        return Err(ExecuteError::NotAMap);
+                    }
+                };
+                result
+            }
 
             // Operators
             ResolvedExpression::BinaryOp(binary_operator) => {
@@ -2301,7 +2322,6 @@ impl<'a, C> Interpreter<'a, C> {
         &mut self,
         expr: &ResolvedExpression,
     ) -> Result<ValueRef, ExecuteError> {
-        info!(?expr, "mut_location");
         // TODO: We need support for more locations
         match expr {
             ResolvedExpression::VariableAccess(var_ref) => {

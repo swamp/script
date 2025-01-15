@@ -1418,9 +1418,30 @@ impl<'a> Resolver<'a> {
                 ResolvedExpression::MutVariableRef(Rc::new(mut_var))
             }
             LocationExpression::IndexAccess(expression, index_expr) => {
-                let (base_repr, access_chain, last_type) =
-                    self.resolve_array_index_access_helper(expression, index_expr)?;
-                ResolvedExpression::MutArrayIndexRef(base_repr.into(), last_type, access_chain)
+                let resolved_base = self.resolve_expression(expression)?;
+                let resolved_type = resolved_base.resolution();
+                match resolved_type {
+                    ResolvedType::Array(_) => {
+                        let (base_repr, access_chain, last_type) =
+                            self.resolve_array_index_access_helper(expression, index_expr)?;
+                        ResolvedExpression::MutArrayIndexRef(
+                            base_repr.into(),
+                            last_type,
+                            access_chain,
+                        )
+                    }
+
+                    ResolvedType::Map(map_type_ref) => {
+                        let resolved_index_expr = self.resolve_expression(index_expr)?;
+                        ResolvedExpression::MutMapIndexRef(
+                            Box::from(resolved_base),
+                            map_type_ref,
+                            Box::from(resolved_index_expr),
+                        )
+                    }
+
+                    _ => return Err(ResolveError::ExpectedMutableLocation(Span::dummy())),
+                }
             }
             LocationExpression::FieldAccess(expression, node) => {
                 let (base_repr, access_chain, field_ref) =

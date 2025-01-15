@@ -256,6 +256,44 @@ impl BlockScopes {
         }
     }
 
+    pub(crate) fn initialize_var_mem(
+        &mut self,
+        init_var: &ResolvedVariableRef,
+        source_memory: VariableValue,
+    ) -> Result<(), ExecuteError> {
+        let is_mutable = init_var.is_mutable();
+        match &source_memory {
+            VariableValue::Value(normal_value) => {
+                if is_mutable {
+                    self.current_block_scopes[init_var.scope_index].set(
+                        init_var.variable_index,
+                        VariableValue::Reference(ValueReference(Rc::new(RefCell::new(
+                            normal_value.clone(),
+                        )))),
+                    );
+                } else {
+                    self.current_block_scopes[init_var.scope_index]
+                        .set(init_var.variable_index, source_memory);
+                }
+            }
+            VariableValue::Reference(reference) => {
+                if is_mutable {
+                    self.current_block_scopes[init_var.scope_index].set(
+                        init_var.variable_index,
+                        VariableValue::Reference(reference.clone()),
+                    );
+                } else {
+                    self.current_block_scopes[init_var.scope_index].set(
+                        init_var.variable_index,
+                        VariableValue::Value(reference.0.borrow().clone()),
+                    );
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     #[inline]
     pub fn set_local_var_ex(
         &mut self,

@@ -1802,15 +1802,17 @@ fn option_array_assign_found_mut() {
     check(
         r"
         mut arr = ['hello', 'goodbye']
+        print('before {arr[1]}')
         mut a = mut arr[1]
         a = 'hi'
         print('affected {arr[1]}')
          ",
-        r#"
+        r"
 
-x: hello-hi
-affected Option("hello-hi")
-"#,
+before goodbye
+affected hi
+
+",
     );
 }
 
@@ -1838,8 +1840,8 @@ not found
 fn option_var_mut() {
     check(
         r"
-        map = [2: 'hello']
-        mut a = map[2]
+        mut map = [2: 'hello']
+        mut a = mut map[2]
         if a? {
             print('before: {a}')
             a = a + ' goodbye'
@@ -1859,7 +1861,7 @@ affected map: Option("hello goodbye")
 }
 
 #[test_log::test]
-fn option_expr_mut() {
+fn option_expr_intentionally_immutable() {
     check(
         r"
         map = [2: 'hello']
@@ -1871,13 +1873,14 @@ fn option_expr_mut() {
         } else {
             print('not found')
         }
+        print('affected {map[2]}')
          ",
-        r"
+        r#"
         
 before: hello
 after: hello goodbye
-
-",
+affected Option("hello")
+"#,
     );
 }
 
@@ -1893,8 +1896,8 @@ fn option_expr_mut_struct() {
             pos: Pos,
         }
         
-        map = [2: Player { pos: Pos { x: 10, y: -91 } } ]
-        mut a = map[2]
+        mut map = [2: Player { pos: Pos { x: 10, y: -91 } } ]
+        mut a = mut map[2]
         if mut another = a? {
             print('before: {another}')
             another.pos.y = 16
@@ -1917,9 +1920,9 @@ fn option_expr_mut_struct() {
 fn assign_map_mut() {
     check(
         r"
-map = [2: 'hi']
+mut map = [2: 'hi']
 print('before {map[2]}')
-mut a = map[2]
+mut a = mut map[2]
 a = 'hello'
 print('after {map[2]}')
          ",
