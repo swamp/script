@@ -58,7 +58,6 @@ impl<'a> Resolver<'a> {
                 break;
             }
         }
-        warn!("could not find variable {variable_text}");
 
         None
     }

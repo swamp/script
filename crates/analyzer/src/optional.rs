@@ -24,7 +24,6 @@ impl<'a> Resolver<'a> {
         }
         let found_var = self.find_variable(source_and_implicit_target_variable)?;
 
-        info!(?resolved_var_type, "resolved_var_type");
         if let ResolvedType::Optional(inner_type) = resolved_var_type {
             self.push_block_scope("if_unwrap");
             let mut_node = if found_var.is_mutable() {
@@ -68,7 +67,6 @@ impl<'a> Resolver<'a> {
 
         if let ResolvedType::Optional(inner_type) = resolved_expr.resolution() {
             let debug_var_name = self.get_text(&target_variable.name);
-            info!(%debug_var_name, "looking up var:");
             /*
             let found_var = self.find_variable(target_variable)?;
             let mut_node = if found_var.is_mutable() {
