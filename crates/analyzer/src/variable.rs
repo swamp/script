@@ -11,6 +11,7 @@ use swamp_script_semantic::{
     ResolvedCompoundOperatorKind, ResolvedExpression, ResolvedNode, ResolvedType, ResolvedVariable,
     ResolvedVariableAssignment, ResolvedVariableCompoundAssignment, ResolvedVariableRef, Spanned,
 };
+use tracing::warn;
 
 impl<'a> Resolver<'a> {
     fn try_find_local_variable(&self, node: &ResolvedNode) -> Option<&ResolvedVariableRef> {
@@ -57,6 +58,7 @@ impl<'a> Resolver<'a> {
                 break;
             }
         }
+        warn!("could not find variable {variable_text}");
 
         None
     }
@@ -68,7 +70,10 @@ impl<'a> Resolver<'a> {
     ) -> Result<(ResolvedVariableRef, bool), ResolveError> {
         if let Some(existing_variable) = self.try_find_variable(&variable.name) {
             // Check type compatibility
-            if !&existing_variable.resolved_type.same_type(variable_type_ref) {
+            if !&existing_variable
+                .resolved_type
+                .assignable_type(variable_type_ref)
+            {
                 return Err(ResolveError::OverwriteVariableWithAnotherType(
                     self.to_node(&variable.name),
                 ));
@@ -305,7 +310,7 @@ impl<'a> Resolver<'a> {
             self.set_or_overwrite_variable_with_type(ast_variable, &expression_type)?;
 
         let assignment = ResolvedVariableAssignment {
-            variable_refs: vec![variable_ref],
+            variable_refs: variable_ref,
             expression: Box::from(converted_expression),
         };
 
@@ -326,7 +331,7 @@ impl<'a> Resolver<'a> {
             self.set_or_overwrite_variable_with_type(ast_variable, &expression_type)?;
 
         let assignment = ResolvedVariableAssignment {
-            variable_refs: vec![variable_ref],
+            variable_refs: variable_ref,
             expression: Box::from(converted_expression),
         };
 
@@ -345,48 +350,43 @@ impl<'a> Resolver<'a> {
         let converted_expression = self.resolve_expression(ast_expression)?;
         let expression_type = converted_expression.resolution();
 
-        let mut variable_refs = Vec::new();
-        let mut all_reassignment = true;
-
         if ast_variables.len() > 1 {
+            let mut variable_refs = Vec::new();
             if let ResolvedType::Tuple(tuple) = expression_type {
                 if ast_variables.len() > tuple.0.len() {
                     return Err(ResolveError::TooManyDestructureVariables);
                 }
                 for (variable_ref, tuple_type) in ast_variables.iter().zip(tuple.0.clone()) {
                     let (variable_ref, _is_reassignment) =
-                        self.set_or_overwrite_variable_with_type(&variable_ref, &tuple_type)?;
+                        self.set_or_overwrite_variable_with_type(variable_ref, &tuple_type)?;
                     variable_refs.push(variable_ref);
                 }
-                return Ok(ResolvedExpression::TupleDestructuring(
+                Ok(ResolvedExpression::TupleDestructuring(
                     variable_refs,
                     tuple,
                     Box::from(converted_expression),
-                ));
+                ))
             } else {
-                return Err(ResolveError::CanNotDestructure(
+                Err(ResolveError::CanNotDestructure(
                     self.to_node(&ast_variables[0].name).span,
-                ));
+                ))
             }
         } else {
             let ast_variable = &ast_variables[0];
+
             let (variable_ref, is_reassignment) =
-                self.set_or_overwrite_variable_with_type(&ast_variable, &expression_type)?;
-            variable_refs.push(variable_ref);
-            if !is_reassignment {
-                all_reassignment = false;
+                self.set_or_overwrite_variable_with_type(ast_variable, &expression_type)?;
+
+            let assignment = ResolvedVariableAssignment {
+                variable_refs: variable_ref,
+                expression: Box::from(converted_expression),
+            };
+
+            if is_reassignment {
+                Ok(ResolvedExpression::ReassignVariable(assignment))
+            } else {
+                Ok(ResolvedExpression::InitializeVariable(assignment))
             }
-        }
-
-        let assignment = ResolvedVariableAssignment {
-            variable_refs,
-            expression: Box::from(converted_expression),
-        };
-
-        if all_reassignment {
-            Ok(ResolvedExpression::ReassignVariable(assignment))
-        } else {
-            Ok(ResolvedExpression::InitializeVariable(assignment))
         }
     }
 }

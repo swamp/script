@@ -2557,3 +2557,32 @@ RangeAccess(VariableAccess(<1:1>), BinaryOp(FunctionCall(VariableAccess(<3:7>), 
 ",
     );
 }
+
+#[test_log::test]
+fn mut_expr() {
+    check(
+        r"
+mut a = mut array[1]
+         ",
+        r"
+
+VariableAssignment(mut <1:3> <5:1>, MutRef(IndexAccess(VariableAccess(<13:5>), Literal(Int(<19:1>)))))
+
+",
+    );
+}
+
+#[test_log::test]
+fn fail_mut_expr() {
+    check(
+        r"
+mut a = mut func()
+         ",
+        r"
+
+VariableAssignment(mut <1:3> <5:1>, MutRef(IndexAccess(VariableAccess(<13:5>), Literal(Int(<19:1>)))))
+
+
+",
+    );
+}

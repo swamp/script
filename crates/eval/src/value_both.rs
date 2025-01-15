@@ -16,7 +16,7 @@ pub enum VariableValue {
 }
 
 impl PartialEq for VariableValue {
-    fn eq(&self, other: &Self) -> bool {
+    fn eq(&self, other: &VariableValue) -> bool {
         match (self, other) {
             (Self::Reference(r1), Self::Value(other)) => r1.0.borrow().eq(other),
             (Self::Value(other), Self::Reference(r2)) => other.eq(&*r2.0.borrow()),

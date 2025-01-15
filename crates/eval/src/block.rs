@@ -84,6 +84,7 @@ impl BlockScopes {
     ) {
         if is_mutable {
             // TODO: Check that we are not overwriting an existing used variables (debug)
+
             self.current_block_scopes[relative_scope_index].set(
                 variable_index,
                 VariableValue::Reference(ValueReference(Rc::new(RefCell::new(value)))),
@@ -216,6 +217,42 @@ impl BlockScopes {
                 Ok(())
             }
             _ => Err(format!("Cannot assign to immutable variable: {variable_index:?}",).into()),
+        }
+    }
+
+    #[inline]
+    pub fn overwrite_existing_var_ref(
+        &mut self,
+        relative_scope_index: usize,
+        variable_index: usize,
+        new_value_ref: ValueRef,
+    ) -> Result<(), ExecuteError> {
+        let existing_var = &mut self.current_block_scopes[relative_scope_index].get(variable_index);
+
+        match existing_var {
+            VariableValue::Reference(_) => {
+                *existing_var = &VariableValue::Reference(ValueReference(new_value_ref));
+                Ok(())
+            }
+            _ => Err(format!("Cannot assign to immutable variable: {variable_index:?}",).into()),
+        }
+    }
+
+    #[inline]
+    pub fn overwrite_existing_var_mem(
+        &mut self,
+        variable: &ResolvedVariableRef,
+        variable_value: VariableValue,
+    ) -> Result<(), ExecuteError> {
+        match variable_value {
+            VariableValue::Reference(reference) => self.overwrite_existing_var_ref(
+                variable.scope_index,
+                variable.variable_index,
+                reference.0,
+            ),
+            VariableValue::Value(value) => {
+                self.overwrite_existing_var(variable.scope_index, variable.variable_index, value)
+            }
         }
     }
 

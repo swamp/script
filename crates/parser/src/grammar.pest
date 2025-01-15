@@ -151,13 +151,15 @@ const_def = {
     "const" ~ constant_identifier ~ "=" ~ expression
 }
 
+mut_expression = { mut_keyword? ~ logical }
+
 assignment_expression = {
     multi_var_assignment
     | single_lhs_assignment
 }
 
 multi_var_assignment = {
-    mut_keyword? ~ multi_variable_list ~ "=" ~ expression
+    mut_keyword? ~ multi_variable_list ~ "=" ~ mut_expression
 }
 
 multi_variable_list = {
@@ -165,7 +167,7 @@ multi_variable_list = {
 }
 
 single_lhs_assignment = {
-    mut_keyword? ~ postfix ~ (assign_op | compound_assign_op) ~ expression
+    mut_keyword? ~ postfix ~ (assign_op | compound_assign_op) ~ mut_expression
 }
 
 // Operators
@@ -211,7 +213,7 @@ method_or_field_suffix = {
 }
 
 function_call_args = {
-    "(" ~ (function_argument ~ ("," ~ " "* ~ function_argument)*)? ~ ")"
+    "(" ~ (mut_expression ~ ("," ~ " "* ~ mut_expression)*)? ~ ")"
 }
 
 
@@ -219,7 +221,7 @@ function_call_args = {
 member_call = { "." ~ identifier ~ function_call_args }
 
 function_call = {
-    "(" ~ (function_argument ~ ("," ~ " "* ~ function_argument)*)? ~ ")"
+    "(" ~ (mut_expression ~ ("," ~ " "* ~ mut_expression)*)? ~ ")"
 }
 
 static_member_reference = {
@@ -291,12 +293,6 @@ constant = { constant_identifier }
 argument_list = { expression ~ ("," ~ " "* ~ expression)* }  // PEST BUG: need explicit spaces after comma
 parenthesized = { "(" ~ expression ~ ")" }
 
-function_argument = {
-    mut_keyword? ~ expression
-}
-
-
-
 
 array_index = { "[" ~ expression ~ "]" }
 
@@ -337,7 +333,7 @@ block = { "{" ~ expression_in_block* ~ "}" }
 with_expr = { "with" ~ variable_binding_list ~ expression }
 
 variable_binding_list = { variable_binding ~ ("," ~ variable_binding)* ~ ","? }
-variable_binding = { variable_item ~ ("=" ~ function_argument)? }
+variable_binding = { variable_item ~ ("=" ~ mut_expression)? }
 
 // MATCH EXPRESSIONS ---------------------------------------------------------
 match_expr = { "match" ~ expression ~ "{" ~ match_arms ~ "}" }

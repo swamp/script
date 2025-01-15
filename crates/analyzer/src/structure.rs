@@ -47,7 +47,7 @@ impl<'a> Resolver<'a> {
                 // temp_var = StructType::default()
                 expressions.push(ResolvedExpression::InitializeVariable(
                     ResolvedVariableAssignment {
-                        variable_refs: vec![temp_var.clone()],
+                        variable_refs: temp_var.clone(),
                         expression: Box::new(ResolvedExpression::StaticCall(ResolvedStaticCall {
                             function: function.clone(),
                             arguments: vec![],

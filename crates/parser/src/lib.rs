@@ -1048,6 +1048,8 @@ impl AstParser {
                 Ok(Expression::UnaryOp(op, Box::new(expr)))
             }
 
+            Rule::mut_expression => self.parse_mut_expression(&pair),
+
             Rule::postfix => self.parse_postfix_expression(pair),
             _ => Err(self.create_error_pair(
                 SpecificError::UnexpectedExpressionType(Self::pair_to_rule(pair)),
@@ -2022,7 +2024,7 @@ impl AstParser {
 
         // Parse arguments
         for arg_pair in inner {
-            if arg_pair.as_rule() == Rule::function_argument {
+            if arg_pair.as_rule() == Rule::mut_expression {
                 //let mut arg_inner = Self::convert_into_iterator(&arg_pair).peekable();
 
                 let expr = self.parse_mut_expression(&arg_pair)?;
@@ -2054,7 +2056,7 @@ impl AstParser {
         // Parse arguments
         let mut args = Vec::new();
         for arg_pair in function_call_args_pair {
-            if arg_pair.as_rule() == Rule::function_argument {
+            if arg_pair.as_rule() == Rule::mut_expression {
                 let mut arg_inner = Self::convert_into_iterator(&arg_pair).peekable();
                 let has_mut = arg_inner
                     .peek()

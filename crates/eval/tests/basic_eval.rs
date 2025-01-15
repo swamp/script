@@ -4,6 +4,8 @@
  */
 use crate::util::{check, check_fail, check_value, eval, eval_string};
 use fixed32::Fp;
+use std::cell::RefCell;
+use std::rc::Rc;
 use swamp_script_core::prelude::Value;
 
 mod util;
@@ -836,7 +838,9 @@ fn eval2_map() {
 
     assert_eq!(
         x,
-        Value::Option(Some(Box::new(Value::String("hello".to_string()))))
+        Value::Option(Some(Box::new(Rc::new(RefCell::new(Value::String(
+            "hello".to_string()
+        ))))))
     );
 }
 
@@ -1728,5 +1732,202 @@ fn string_iterable_with_index() {
         3:l
         4:o
         ",
+    );
+}
+
+#[test_log::test]
+fn option_assign() {
+    check(
+        r"
+        map = [2: 'hello']
+        a = map[3]
+        if x = a? {
+            print('x: {x}')
+        } else {
+            print('was not found')
+        }
+         ",
+        r"
+
+was not found
+
+",
+    );
+}
+
+#[test_log::test]
+fn option_assign_found() {
+    check(
+        r"
+        map = [2: 'hello']
+        a = map[2]
+        if x = a? {
+            print('x: {x}')
+        } else {
+            print('was not found')
+        }
+         ",
+        r"
+
+x: hello
+
+",
+    );
+}
+
+#[test_log::test]
+fn option_assign_found_mut() {
+    check(
+        r"
+        mut map = [2: 'hello']
+        mut a = map[2]
+        if mut x = a? {
+            x = x + '-hi'
+            print('x: {x}')
+        } else {
+            print('was not found')
+        }
+        print('affected {map[2]}')
+         ",
+        r#"
+
+x: hello-hi
+affected Option("hello-hi")
+"#,
+    );
+}
+
+#[test_log::test]
+fn option_array_assign_found_mut() {
+    check(
+        r"
+        mut arr = ['hello', 'goodbye']
+        mut a = mut arr[1]
+        a = 'hi'
+        print('affected {arr[1]}')
+         ",
+        r#"
+
+x: hello-hi
+affected Option("hello-hi")
+"#,
+    );
+}
+
+#[test_log::test]
+fn option_var() {
+    check(
+        r"
+        map = [2: 'hello']
+        a = map[3]
+        if a? {
+            print('a: {a}')
+        } else {
+            print('not found')
+        }
+         ",
+        r"
+
+not found
+
+",
+    );
+}
+
+#[test_log::test]
+fn option_var_mut() {
+    check(
+        r"
+        map = [2: 'hello']
+        mut a = map[2]
+        if a? {
+            print('before: {a}')
+            a = a + ' goodbye'
+            print('after: {a}')
+        } else {
+            print('not found')
+        }
+        print('affected map: {map[2]}')
+         ",
+        r#"
+        
+before: hello
+after: hello goodbye
+affected map: Option("hello goodbye")
+"#,
+    );
+}
+
+#[test_log::test]
+fn option_expr_mut() {
+    check(
+        r"
+        map = [2: 'hello']
+        mut a = map[2]
+        if mut another = a? {
+            print('before: {another}')
+            another = another + ' goodbye'
+            print('after: {another}')
+        } else {
+            print('not found')
+        }
+         ",
+        r"
+        
+before: hello
+after: hello goodbye
+
+",
+    );
+}
+
+#[test_log::test]
+fn option_expr_mut_struct() {
+    check(
+        r"
+        struct Pos {
+            x: Int,
+            y: Int,
+        }
+        struct Player {
+            pos: Pos,
+        }
+        
+        map = [2: Player { pos: Pos { x: 10, y: -91 } } ]
+        mut a = map[2]
+        if mut another = a? {
+            print('before: {another}')
+            another.pos.y = 16
+            print('after: {another}')
+        } else {
+            print('not found')
+        }
+        print('affected map: {map[2]}')
+         ",
+        r"
+        
+    before: Player { pos: Pos { x: 10, y: -91 } }
+    after: Player { pos: Pos { x: 10, y: 16 } }
+    affected map: Option(Player { pos: Pos { x: 10, y: 16 } })
+",
+    );
+}
+
+#[test_log::test]
+fn assign_map_mut() {
+    check(
+        r"
+map = [2: 'hi']
+print('before {map[2]}')
+mut a = map[2]
+a = 'hello'
+print('after {map[2]}')
+         ",
+        r#"
+        
+before Option("hi")
+after Option("hello")
+        
+"#,
     );
 }

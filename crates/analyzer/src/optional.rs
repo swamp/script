@@ -5,14 +5,14 @@
 
 use crate::err::ResolveError;
 use crate::Resolver;
-use swamp_script_ast::{Expression, Variable};
+use swamp_script_ast::{Expression, Node, Variable};
 use swamp_script_semantic::{ResolvedExpression, ResolvedType, Spanned};
 use tracing::info;
 
 impl<'a> Resolver<'a> {
     pub(crate) fn handle_optional_unwrap_statement(
         &mut self,
-        var: &Variable,
+        source_and_implicit_target_variable: &Variable,
         expr: &Expression,
         true_expression: &Expression,
         maybe_else_expression: &Option<Box<Expression>>,
@@ -22,11 +22,21 @@ impl<'a> Resolver<'a> {
         if resolved_var_type == ResolvedType::Any {
             println!("problem");
         }
+        let found_var = self.find_variable(source_and_implicit_target_variable)?;
+
         info!(?resolved_var_type, "resolved_var_type");
         if let ResolvedType::Optional(inner_type) = resolved_var_type {
             self.push_block_scope("if_unwrap");
-            let resolved_var_ref =
-                self.create_local_variable(&var.name, &var.is_mutable, &inner_type)?;
+            let mut_node = if found_var.is_mutable() {
+                Some(Node::default())
+            } else {
+                None
+            };
+            let resolved_var_ref = self.create_local_variable(
+                &source_and_implicit_target_variable.name,
+                &mut_node,
+                &inner_type,
+            )?; // it inherits the mutable from the other variable
             let resolved_true = self.resolve_expression(true_expression)?;
             self.pop_block_scope("if_unwrap");
 
@@ -49,7 +59,7 @@ impl<'a> Resolver<'a> {
 
     pub(crate) fn handle_optional_assign_unwrap_statement(
         &mut self,
-        var: &Variable,
+        target_variable: &Variable,
         inner_expr: &Expression,
         statements: &Expression,
         maybe_else_statements: &Option<Box<Expression>>,
@@ -57,9 +67,23 @@ impl<'a> Resolver<'a> {
         let resolved_expr = self.resolve_expression(inner_expr)?;
 
         if let ResolvedType::Optional(inner_type) = resolved_expr.resolution() {
+            let debug_var_name = self.get_text(&target_variable.name);
+            info!(%debug_var_name, "looking up var:");
+            /*
+            let found_var = self.find_variable(target_variable)?;
+            let mut_node = if found_var.is_mutable() {
+                Some(Node::default())
+            } else {
+                None
+            };
+            */
             self.push_block_scope("if_assign_unwrap");
-            let resolved_var_ref =
-                self.create_local_variable(&var.name, &var.is_mutable, &inner_type)?;
+
+            let resolved_var_ref = self.create_local_variable(
+                &target_variable.name,
+                &target_variable.is_mutable,
+                &inner_type,
+            )?;
             let resolved_true = self.resolve_expression(statements)?;
             self.pop_block_scope("if_assign_unwrap");
 

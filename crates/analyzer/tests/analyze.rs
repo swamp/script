@@ -976,7 +976,7 @@ fn array_range_access_expr_exclusive() {
         fn some_fn() -> Int {
             1
         }
-        
+
         a = [2, 4]
         some_var = 0
         a[some_fn()+33..some_var]
@@ -1021,6 +1021,107 @@ fn string_iterable() {
          ",
         r#"
 
+
+"#,
+    );
+}
+
+#[test_log::test]
+fn option_assign() {
+    check(
+        r"
+        map = [2: 'hello']
+        a = map[3]
+        if x = a? {
+            //x
+        }
+         ",
+        r#"
+
+InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <9:3>, resolved_type: [Int:String], mutable_node: None, scope_index: 0, variable_index: 0 }], expression: Literal(Map(ResolvedMapType { key_type: Int, value_type: String }, [(Literal(IntLiteral(2, <16:1>)), InterpolatedString([Literal(<20:5>, "hello")]))])) })
+InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <36:1>, resolved_type: String?, mutable_node: None, scope_index: 0, variable_index: 1 }], expression: MapIndexAccess(ResolvedMapIndexLookup { map_type: [Int:String], item_type: String, map_type_ref: ResolvedMapType { key_type: Int, value_type: String }, index_expression: Literal(IntLiteral(3, <44:1>)), map_expression: VariableAccess(ResolvedVariable { name: <9:3>, resolved_type: [Int:String], mutable_node: None, scope_index: 0, variable_index: 0 }) }) })
+IfAssignExpression { variable: ResolvedVariable { name: <58:1>, resolved_type: String, mutable_node: None, scope_index: 1, variable_index: 0 }, optional_expr: VariableAccess(ResolvedVariable { name: <36:1>, resolved_type: String?, mutable_node: None, scope_index: 0, variable_index: 1 }), true_block: Block([]), false_block: None }
+
+"#,
+    );
+}
+
+#[test_log::test]
+fn option_assign_mut() {
+    check(
+        r"
+map = [2: 'hello']
+mut a = map[2]
+if another = a? {
+    print('before: {another}')
+    another = another + ' goodbye'
+    print('after: {another}')
+} else {
+    print('not found')
+}
+         ",
+        r#"
+
+InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <9:3>, resolved_type: [Int:String], mutable_node: None, scope_index: 0, variable_index: 0 }], expression: Literal(Map(ResolvedMapType { key_type: Int, value_type: String }, [(Literal(IntLiteral(2, <16:1>)), InterpolatedString([Literal(<20:5>, "hello")]))])) })
+InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <36:1>, resolved_type: String?, mutable_node: None, scope_index: 0, variable_index: 1 }], expression: MapIndexAccess(ResolvedMapIndexLookup { map_type: [Int:String], item_type: String, map_type_ref: ResolvedMapType { key_type: Int, value_type: String }, index_expression: Literal(IntLiteral(3, <44:1>)), map_expression: VariableAccess(ResolvedVariable { name: <9:3>, resolved_type: [Int:String], mutable_node: None, scope_index: 0, variable_index: 0 }) }) })
+IfAssignExpression { variable: ResolvedVariable { name: <58:1>, resolved_type: String, mutable_node: None, scope_index: 1, variable_index: 0 }, optional_expr: VariableAccess(ResolvedVariable { name: <36:1>, resolved_type: String?, mutable_node: None, scope_index: 0, variable_index: 1 }), true_block: Block([]), false_block: None }
+
+"#,
+    );
+}
+
+#[test_log::test]
+fn option_var() {
+    check(
+        r"
+        map = [2: 'hello']
+        a = map[3]
+        if a? {
+        }
+         ",
+        r#"
+
+InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <9:3>, resolved_type: [Int:String], mutable_node: None, scope_index: 0, variable_index: 0 }], expression: Literal(Map(ResolvedMapType { key_type: Int, value_type: String }, [(Literal(IntLiteral(2, <16:1>)), InterpolatedString([Literal(<20:5>, "hello")]))])) })
+InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <36:1>, resolved_type: String?, mutable_node: None, scope_index: 0, variable_index: 1 }], expression: MapIndexAccess(ResolvedMapIndexLookup { map_type: [Int:String], item_type: String, map_type_ref: ResolvedMapType { key_type: Int, value_type: String }, index_expression: Literal(IntLiteral(3, <44:1>)), map_expression: VariableAccess(ResolvedVariable { name: <9:3>, resolved_type: [Int:String], mutable_node: None, scope_index: 0, variable_index: 0 }) }) })
+IfOnlyVariable { variable: ResolvedVariable { name: <58:1>, resolved_type: String, mutable_node: None, scope_index: 1, variable_index: 0 }, optional_expr: VariableAccess(ResolvedVariable { name: <36:1>, resolved_type: String?, mutable_node: None, scope_index: 0, variable_index: 1 }), true_block: Block([]), false_block: None }
+
+"#,
+    );
+}
+
+#[test_log::test]
+fn option_var_mut() {
+    check(
+        r"
+        map = [2: 'hello']
+        mut a = map[3]
+        if a? {
+        }
+         ",
+        r#"
+
+
+InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <9:3>, resolved_type: [Int:String], mutable_node: None, scope_index: 0, variable_index: 0 }], expression: Literal(Map(ResolvedMapType { key_type: Int, value_type: String }, [(Literal(IntLiteral(2, <16:1>)), InterpolatedString([Literal(<20:5>, "hello")]))])) })
+InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <40:1>, resolved_type: String?, mutable_node: Some(<36:3>), scope_index: 0, variable_index: 1 }], expression: MapIndexAccess(ResolvedMapIndexLookup { map_type: [Int:String], item_type: String, map_type_ref: ResolvedMapType { key_type: Int, value_type: String }, index_expression: Literal(IntLiteral(3, <48:1>)), map_expression: VariableAccess(ResolvedVariable { name: <9:3>, resolved_type: [Int:String], mutable_node: None, scope_index: 0, variable_index: 0 }) }) })
+IfOnlyVariable { variable: ResolvedVariable { name: <62:1>, resolved_type: String, mutable_node: Some(<0:0>), scope_index: 1, variable_index: 0 }, optional_expr: VariableAccess(ResolvedVariable { name: <40:1>, resolved_type: String?, mutable_node: Some(<36:3>), scope_index: 0, variable_index: 1 }), true_block: Block([]), false_block: None }
+
+"#,
+    );
+}
+
+#[test_log::test]
+fn option_var_mut_simple() {
+    check(
+        r"
+map = [2: 'hello']
+mut a = map[3]
+
+         ",
+        r#"
+
+InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <9:3>, resolved_type: [Int:String], mutable_node: None, scope_index: 0, variable_index: 0 }], expression: Literal(Map(ResolvedMapType { key_type: Int, value_type: String }, [(Literal(IntLiteral(2, <16:1>)), InterpolatedString([Literal(<20:5>, "hello")]))])) })
+InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <40:1>, resolved_type: String?, mutable_node: Some(<36:3>), scope_index: 0, variable_index: 1 }], expression: MapIndexAccess(ResolvedMapIndexLookup { map_type: [Int:String], item_type: String, map_type_ref: ResolvedMapType { key_type: Int, value_type: String }, index_expression: Literal(IntLiteral(3, <48:1>)), map_expression: VariableAccess(ResolvedVariable { name: <9:3>, resolved_type: [Int:String], mutable_node: None, scope_index: 0, variable_index: 0 }) }) })
+IfOnlyVariable { variable: ResolvedVariable { name: <62:1>, resolved_type: String, mutable_node: None, scope_index: 1, variable_index: 0 }, optional_expr: VariableAccess(ResolvedVariable { name: <40:1>, resolved_type: String?, mutable_node: Some(<36:3>), scope_index: 0, variable_index: 1 }), true_block: Block([]), false_block: None }
 
 "#,
     );

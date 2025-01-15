@@ -21,6 +21,7 @@ use swamp_script_semantic::{
     ResolvedForPattern, ResolvedFunction, ResolvedNormalPattern, ResolvedPatternElement,
     ResolvedPostfixOperatorKind, ResolvedRangeMode, ResolvedStaticCall, ResolvedUnaryOperatorKind,
 };
+use tracing::info;
 
 pub mod err;
 
@@ -334,6 +335,7 @@ impl<'a, C> Interpreter<'a, C> {
         arguments: &[ResolvedExpression],
     ) -> Result<Value, ExecuteError> {
         let func_val = self.evaluate_expression(function_expression)?;
+        info!(%func_val, " function value ");
         let evaluated_args = self.evaluate_args(arguments)?;
 
         match &func_val {
@@ -395,51 +397,60 @@ impl<'a, C> Interpreter<'a, C> {
         Ok(result)
     }
 
+    fn evaluate_mut_expression(
+        &mut self,
+        expr: &ResolvedExpression,
+    ) -> Result<VariableValue, ExecuteError> {
+        let mem_value = match expr {
+            ResolvedExpression::MutVariableRef(var_ref) => {
+                let found_var = self
+                    .current_block_scopes
+                    .lookup_variable(&var_ref.variable_ref);
+                match found_var {
+                    VariableValue::Reference(_) => found_var.clone(),
+                    _ => {
+                        return Err(
+                            "Can only take mutable reference of mutable variable".to_string()
+                        )?;
+                    }
+                }
+            }
+
+            ResolvedExpression::MutStructFieldRef(base_expr, _type, access_chain) => {
+                VariableValue::Reference(ValueReference(
+                    self.evaluate_location(base_expr, access_chain)?.clone(),
+                ))
+            }
+
+            ResolvedExpression::MutArrayIndexRef(base_expr, _, access_chain) => {
+                VariableValue::Reference(ValueReference(
+                    self.evaluate_location(base_expr, access_chain)?.clone(),
+                ))
+            }
+
+            // If it is accessing a variable, we want the full access of it
+            ResolvedExpression::VariableAccess(variable_ref) => self
+                .current_block_scopes
+                .lookup_variable(variable_ref)
+                .clone(),
+
+            _ => {
+                let value = self.evaluate_expression(expr)?;
+                VariableValue::Value(value)
+            }
+        };
+
+        Ok(mem_value)
+    }
+
     fn evaluate_args(
         &mut self,
         args: &[ResolvedExpression],
     ) -> Result<Vec<VariableValue>, ExecuteError> {
         let mut evaluated = Vec::with_capacity(args.len());
 
-        for arg in args {
-            let mem_value = match arg {
-                ResolvedExpression::MutVariableRef(var_ref) => {
-                    let found_var = self
-                        .current_block_scopes
-                        .lookup_variable(&var_ref.variable_ref);
-                    match found_var {
-                        VariableValue::Reference(_) => found_var.clone(),
-                        _ => {
-                            return Err(
-                                "Can only take mutable reference of mutable variable".to_string()
-                            )?;
-                        }
-                    }
-                }
-
-                ResolvedExpression::MutStructFieldRef(base_expr, _type, access_chain) => {
-                    VariableValue::Reference(ValueReference(
-                        self.evaluate_location(base_expr, access_chain)?.clone(),
-                    ))
-                }
-
-                ResolvedExpression::MutArrayIndexRef(base_expr, _, access_chain) => {
-                    VariableValue::Reference(ValueReference(
-                        self.evaluate_location(base_expr, access_chain)?.clone(),
-                    ))
-                }
-
-                // If it is accessing a variable, we want the full access of it
-                ResolvedExpression::VariableAccess(variable_ref) => self
-                    .current_block_scopes
-                    .lookup_variable(variable_ref)
-                    .clone(),
-
-                expr => {
-                    let value = self.evaluate_expression(expr)?;
-                    VariableValue::Value(value)
-                }
-            };
+        for argument_expression in args {
+            let mem_value = self.evaluate_mut_expression(argument_expression)?;
             evaluated.push(mem_value);
         }
 
@@ -712,12 +723,8 @@ impl<'a, C> Interpreter<'a, C> {
                 match condition_value {
                     Value::Option(Some(inner_value)) => {
                         self.push_block_scope();
-                        self.current_block_scopes.initialize_var(
-                            variable.scope_index,
-                            variable.variable_index,
-                            *inner_value,
-                            variable.is_mutable(),
-                        );
+                        self.current_block_scopes
+                            .initialize_var_mut(variable, *inner_value);
 
                         let result = self.evaluate_expression_with_signal(true_block);
                         self.pop_block_scope();
@@ -748,7 +755,7 @@ impl<'a, C> Interpreter<'a, C> {
                         self.current_block_scopes.initialize_var(
                             variable.scope_index,
                             variable.variable_index,
-                            *inner_value,
+                            inner_value.borrow().clone(),
                             variable.is_mutable(),
                         );
 
@@ -981,34 +988,52 @@ impl<'a, C> Interpreter<'a, C> {
 
             // ==================== ASSIGNMENT ====================
             ResolvedExpression::InitializeVariable(var_assignment) => {
-                let new_value = self.evaluate_expression(&var_assignment.expression)?;
+                let target_var = &var_assignment.variable_refs;
 
-                // Initialize all variables (single or multiple)
-                for variable_ref in &var_assignment.variable_refs {
+                if target_var.is_mutable() {
+                    let value_or_ref = self.evaluate_mut_expression(&var_assignment.expression)?;
+                    match value_or_ref {
+                        VariableValue::Value(value) => {
+                            self.current_block_scopes.initialize_var(
+                                target_var.scope_index,
+                                target_var.variable_index,
+                                value.clone(),
+                                target_var.is_mutable(),
+                            );
+                            value
+                        }
+                        VariableValue::Reference(existing_value_ref) => {
+                            self.current_block_scopes
+                                .initialize_var_mut(target_var, existing_value_ref.0.clone());
+                            existing_value_ref.unref().clone()
+                        }
+                    }
+                } else {
+                    let new_value = self.evaluate_expression(&var_assignment.expression)?;
+
+                    // Initialize all variables (single or multiple)
+                    //                for variable_ref in &var_assignment.variable_refs {
                     self.current_block_scopes.initialize_var(
-                        variable_ref.scope_index,
-                        variable_ref.variable_index,
+                        target_var.scope_index,
+                        target_var.variable_index,
                         new_value.clone(),
-                        variable_ref.is_mutable(),
+                        target_var.is_mutable(),
                     );
-                }
+                    //              }
 
-                new_value
+                    new_value
+                }
             }
 
             ResolvedExpression::ReassignVariable(var_assignment) => {
-                let new_value = self.evaluate_expression(&var_assignment.expression)?;
+                let new_value = self.evaluate_mut_expression(&var_assignment.expression)?;
 
-                // Reassign all variables (single or multiple)
-                for variable_ref in &var_assignment.variable_refs {
-                    self.current_block_scopes.overwrite_existing_var(
-                        variable_ref.scope_index,
-                        variable_ref.variable_index,
-                        new_value.clone(),
-                    )?;
-                }
+                let variable_ref = &var_assignment.variable_refs;
+                self.current_block_scopes
+                    .overwrite_existing_var_mem(variable_ref, new_value.clone())?;
 
-                new_value
+                //new_value.into()
+                Value::Unit
             }
 
             ResolvedExpression::VariableCompoundAssignment(var_assignment) => {
@@ -1243,7 +1268,7 @@ impl<'a, C> Interpreter<'a, C> {
                         let x = seq_map.get(&index_val);
                         x.map_or_else(
                             || Value::Option(None),
-                            |v| Value::Option(Some(Box::from(v.borrow().clone()))),
+                            |v| Value::Option(Some(Box::from(v.clone()))),
                         )
                     } else {
                         return Err(ExecuteError::NotAMap);
@@ -1274,7 +1299,7 @@ impl<'a, C> Interpreter<'a, C> {
                         let x = seq_map.remove(&index_val);
                         x.map_or_else(
                             || Value::Option(None),
-                            |v| Value::Option(Some(Box::from(v.borrow().clone()))),
+                            |v| Value::Option(Some(Box::from(v))),
                         )
                     } else {
                         return Err(ExecuteError::NotAMap);
@@ -1493,12 +1518,8 @@ impl<'a, C> Interpreter<'a, C> {
                 match value {
                     Value::Option(Some(inner_value)) => {
                         self.push_block_scope();
-                        self.current_block_scopes.initialize_var(
-                            variable.scope_index,
-                            variable.variable_index,
-                            *inner_value,
-                            variable.is_mutable(),
-                        );
+                        self.current_block_scopes
+                            .initialize_var_mut(variable, *inner_value);
                         let result = self.evaluate_expression(true_block)?;
                         self.pop_block_scope();
                         result
@@ -1514,16 +1535,13 @@ impl<'a, C> Interpreter<'a, C> {
                 true_block,
                 false_block,
             } => {
+                if variable.is_mutable() {}
                 let value = self.evaluate_expression(optional_expr)?;
                 match value {
                     Value::Option(Some(inner_value)) => {
                         self.push_block_scope();
-                        self.current_block_scopes.initialize_var(
-                            variable.scope_index,
-                            variable.variable_index,
-                            *inner_value,
-                            variable.is_mutable(),
-                        );
+                        self.current_block_scopes
+                            .initialize_var_mut(variable, *inner_value);
                         let result = self.evaluate_expression(true_block)?;
                         self.pop_block_scope();
                         result
@@ -1563,7 +1581,7 @@ impl<'a, C> Interpreter<'a, C> {
                         Value::Option(_) => {
                             panic!("unnecessary wrap!, should be investigated");
                         }
-                        _ => Value::Option(Some(Box::from(v))),
+                        _ => Value::Option(Some(Box::from(Rc::new(RefCell::new(v))))),
                     }
                 }
             },
@@ -1575,7 +1593,7 @@ impl<'a, C> Interpreter<'a, C> {
                         None => self.evaluate_expression(default_expr)?,
                         Some(some_value) => {
                             // TODO: Verify type of value
-                            *some_value
+                            some_value.borrow().clone()
                         }
                     }
                 } else {
@@ -1626,7 +1644,7 @@ impl<'a, C> Interpreter<'a, C> {
                     let id_value = self.evaluate_expression(id_expression)?;
                     if let Some(found_id) = id_value.downcast_rust::<SparseValueId>() {
                         if let Some(found_value) = found.borrow_mut().get(&found_id.borrow()) {
-                            Value::Option(Some(Box::new(found_value.borrow().clone())))
+                            Value::Option(Some(Box::new(found_value.clone())))
                         } else {
                             Value::Option(None)
                         }
@@ -2255,7 +2273,7 @@ impl<'a, C> Interpreter<'a, C> {
     fn evaluate_unwrap_op(val: Value) -> Result<Value, ExecuteError> {
         match val {
             Value::Option(ref unwrapped_boxed_opt) => match unwrapped_boxed_opt {
-                Some(value) => Ok(*value.clone()),
+                Some(value) => Ok(value.borrow().clone()),
                 None => Ok(val),
             },
             _ => Err(ExecuteError::CanNotUnwrap),
@@ -2283,12 +2301,12 @@ impl<'a, C> Interpreter<'a, C> {
         &mut self,
         expr: &ResolvedExpression,
     ) -> Result<ValueRef, ExecuteError> {
+        info!(?expr, "mut_location");
         // TODO: We need support for more locations
         match expr {
-            ResolvedExpression::VariableAccess(var_ref) => Ok(self
-                .current_block_scopes
-                .lookup_mut_variable(var_ref)?
-                .clone()),
+            ResolvedExpression::VariableAccess(var_ref) => {
+                Ok(self.current_block_scopes.lookup_mut_variable(var_ref)?)
+            }
             ResolvedExpression::FieldAccess(base_expression, _type_ref, resolved_access) => {
                 //info!(?base_expression, "base expression for field access");
                 let start = self.evaluate_expression_mut_location_start(base_expression)?;
@@ -2299,6 +2317,7 @@ impl<'a, C> Interpreter<'a, C> {
                 let start = self.evaluate_expression_mut_location_start(base_expression)?;
                 self.get_location(start, resolved_access)
             }
+
             _ => Err(ExecuteError::NotMutLocationFound),
         }
     }

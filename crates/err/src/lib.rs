@@ -329,7 +329,7 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
         ResolveError::UnknownVariable(node) => {
             Report::build(Error, 105, "Unknown variable", &node.span)
         }
-        ResolveError::NotAnArray(_) => todo!(),
+        ResolveError::NotAnArray(span) =>   Report::build(Error, 5405, "was not an array", &span),
         ResolveError::ArrayIndexMustBeInt(_) => todo!(),
         ResolveError::OverwriteVariableWithAnotherType(node) => Report::build(Error, 144205, "overwrite variable with another type", &node.span),
         ResolveError::WrongNumberOfArguments(span, _expected, _encountered) => {

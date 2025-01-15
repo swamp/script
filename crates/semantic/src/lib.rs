@@ -422,6 +422,13 @@ impl ResolvedType {
         }
     }
 
+    pub fn assignable_type(&self, other: &ResolvedType) -> bool {
+        if let Self::Optional(inner_type) = self {
+            inner_type.same_type(other)
+        } else {
+            self.same_type(other)
+        }
+    }
     pub fn same_type(&self, other: &ResolvedType) -> bool {
         match (self, other) {
             (Self::Any, _) => true,
@@ -997,12 +1004,12 @@ pub struct ResolvedStructInstantiation {
 
 #[derive(Debug)]
 pub struct ResolvedVariableAssignment {
-    pub variable_refs: Vec<ResolvedVariableRef>, // Support single or multiple variables
+    pub variable_refs: ResolvedVariableRef,
     pub expression: Box<ResolvedExpression>,
 }
 impl Spanned for ResolvedVariableAssignment {
     fn span(&self) -> Span {
-        self.variable_refs[0].span()
+        self.variable_refs.span()
     }
 }
 
@@ -1253,19 +1260,20 @@ pub enum ResolvedExpression {
         Option<Box<ResolvedExpression>>,
     ),
 
+    // Optional If
     IfOnlyVariable {
         variable: ResolvedVariableRef,
         optional_expr: Box<ResolvedExpression>,
         true_block: Box<ResolvedExpression>,
         false_block: Option<Box<ResolvedExpression>>,
     },
-
     IfAssignExpression {
         variable: ResolvedVariableRef,
         optional_expr: Box<ResolvedExpression>,
         true_block: Box<ResolvedExpression>,
         false_block: Option<Box<ResolvedExpression>>,
     },
+
     TupleDestructuring(
         Vec<ResolvedVariableRef>,
         ResolvedTupleTypeRef,
@@ -1664,10 +1672,10 @@ impl ResolvedExpression {
 
             // Variable
             Self::InitializeVariable(variable_assignment) => {
-                variable_assignment.variable_refs[0].resolved_type.clone()
+                variable_assignment.variable_refs.resolved_type.clone()
             }
             Self::ReassignVariable(variable_assignments) => {
-                variable_assignments.variable_refs[0].resolved_type.clone()
+                variable_assignments.variable_refs.resolved_type.clone()
             }
             Self::VariableCompoundAssignment(var_compound_assignment) => {
                 var_compound_assignment.variable_ref.resolved_type.clone()
@@ -1675,7 +1683,7 @@ impl ResolvedExpression {
 
             // Assignments
             Self::ArrayAssignment(_, _, _) => todo!(),
-            Self::MapAssignment(_, _, _) => todo!(),
+            Self::MapAssignment(c, a, d) => ResolvedType::Unit,
             Self::StructFieldAssignment(_struct_field, _lookups, source_resolution) => {
                 source_resolution.resolution()
             }
@@ -1855,7 +1863,7 @@ impl Spanned for ResolvedExpression {
         match self {
             Self::VariableAccess(var_ref) => var_ref.span(),
             Self::ConstantAccess(constant_ref) => constant_ref.span(),
-            Self::FieldAccess(base, field, accesses) => {
+            Self::FieldAccess(base, _field, accesses) => {
                 let mut span = base.span();
                 for access in accesses {
                     span = span.merge(&access.span());

@@ -45,7 +45,7 @@ pub enum Value {
     #[default]
     Unit, // Means 'no value' ()
 
-    Option(Option<Box<Value>>),
+    Option(Option<Box<ValueRef>>),
 
     // Containers
     Array(ResolvedArrayTypeRef, Vec<ValueRef>),
@@ -515,7 +515,14 @@ impl Display for Value {
             Self::RustValue(_rust_type, rust_type_pointer) => {
                 write!(f, "{}", rust_type_pointer.borrow())
             }
-            Self::Option(_maybe_val) => write!(f, "Maybe"), // TODO: Fix this. It is recursing now
+            Self::Option(maybe_val) => {
+                let inner_str = if maybe_val.is_none() {
+                    "none"
+                } else {
+                    &*maybe_val.as_ref().unwrap().borrow().to_string()
+                };
+                write!(f, "Option({inner_str})")
+            } // TODO: Fix this. It is recursing now
         }
     }
 }
@@ -545,7 +552,7 @@ impl Hash for Value {
             Self::String(s) => s.hash(state),
             Self::Bool(b) => b.hash(state),
             Self::Unit => (),
-            Self::Option(o) => o.hash(state),
+            Self::Option(_wrapped) => {}
             Self::Array(_, _arr) => {}
             Self::Struct(type_ref, values) => {
                 type_ref.borrow().name().span.hash(state);

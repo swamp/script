@@ -35,7 +35,7 @@ use swamp_script_semantic::prelude::*;
 use swamp_script_source_map::SourceMap;
 
 use swamp_script_semantic::{ResolvedNormalPattern, ResolvedRangeMode};
-use tracing::error;
+use tracing::{error, info};
 
 #[derive(Debug)]
 pub struct ResolvedProgram {
@@ -764,6 +764,7 @@ impl<'a> Resolver<'a> {
             Expression::If(expression, true_expression, maybe_false_expression) => {
                 match &**expression {
                     Expression::PostfixOp(PostfixOperator::Unwrap(unwrap_node), expr) => {
+                        info!(?expr, "unwrap");
                         if let Expression::VariableAccess(var) = &**expr {
                             self.handle_optional_unwrap_statement(
                                 var,
@@ -775,14 +776,14 @@ impl<'a> Resolver<'a> {
                             Err(ResolveError::ExpectedVariable(self.to_node(unwrap_node)))?
                         }
                     }
-                    Expression::VariableAssignment(var, expr) => {
+                    Expression::VariableAssignment(target_variable, expr) => {
                         if let Expression::PostfixOp(
                             PostfixOperator::Unwrap(_unwrap_node),
                             inner_expr,
                         ) = &**expr
                         {
                             self.handle_optional_assign_unwrap_statement(
-                                var,
+                                target_variable,
                                 inner_expr,
                                 true_expression,
                                 maybe_false_expression,
