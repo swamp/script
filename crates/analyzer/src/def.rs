@@ -110,7 +110,7 @@ impl<'a> Resolver<'a> {
         let enum_type_str = self.get_text(enum_type_name).to_string();
         let parent_ref = self.shared.lookup.add_enum_type(enum_parent)?;
 
-        for variant_type in ast_variants {
+        for (container_index_usize, variant_type) in ast_variants.iter().enumerate() {
             let variant_name_node = match variant_type {
                 EnumVariantType::Simple(name) => name,
                 EnumVariantType::Tuple(name, _) => name,
@@ -136,6 +136,7 @@ impl<'a> Resolver<'a> {
                         variant_name: ResolvedLocalTypeIdentifier(self.to_node(variant_name_node)),
                         assigned_name: self.get_text(variant_name_node).to_string(),
                         enum_ref: parent_ref.clone(),
+                        container_index: container_index_usize as u8,
                     };
 
                     let resolved_tuple_type = ResolvedEnumVariantTupleType {
@@ -171,6 +172,7 @@ impl<'a> Resolver<'a> {
 
                     let common = CommonEnumVariantType {
                         number,
+                        container_index: container_index_usize as u8,
                         module_path: ResolvedModulePath(vec![]), // TODO:
                         variant_name: ResolvedLocalTypeIdentifier(self.to_node(variant_name_node)),
                         assigned_name: self.get_text(variant_name_node).to_string(),
@@ -199,6 +201,7 @@ impl<'a> Resolver<'a> {
                 name: ResolvedLocalTypeIdentifier(self.to_node(variant_name_node)),
                 assigned_name: self.get_text(variant_name_node).to_string(),
                 number: unique_variant_type_number,
+                container_index: container_index_usize as u8,
             };
 
             let variant_type_ref = self.shared.lookup.add_enum_variant(

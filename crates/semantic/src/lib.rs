@@ -2270,6 +2270,7 @@ pub type ResolvedEnumVariantStructTypeRef = Rc<ResolvedEnumVariantStructType>;
 #[derive(Debug, Eq, PartialEq)]
 pub struct CommonEnumVariantType {
     pub number: TypeNumber,
+    pub container_index: u8,
     pub module_path: ResolvedModulePath,
     pub variant_name: ResolvedLocalTypeIdentifier,
     pub assigned_name: String,
@@ -2347,6 +2348,7 @@ pub struct ResolvedEnumVariantType {
     pub name: ResolvedLocalTypeIdentifier,
     pub assigned_name: String,
     pub number: TypeNumber,
+    pub container_index: u8,
 }
 
 pub type ResolvedEnumVariantStructFieldTypeRef = Rc<ResolvedEnumVariantStructFieldType>;
@@ -2378,6 +2380,7 @@ impl ResolvedEnumVariantType {
         assigned_name: &str,
         data: ResolvedEnumVariantContainerType,
         number: TypeNumber,
+        container_index: u8,
     ) -> Self {
         Self {
             owner,
@@ -2385,6 +2388,7 @@ impl ResolvedEnumVariantType {
             name,
             assigned_name: assigned_name.to_string(),
             number,
+            container_index,
         }
     }
 
