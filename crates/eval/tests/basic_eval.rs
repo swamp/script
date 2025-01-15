@@ -9,7 +9,11 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use swamp_script_core::prelude::Value;
 use swamp_script_core::value::ValueRef;
-use swamp_script_semantic::{ResolvedAnonymousStructType, ResolvedNode, ResolvedStructType};
+use swamp_script_eval::quick_deserialize;
+use swamp_script_semantic::{
+    ResolvedAnonymousStructFieldType, ResolvedAnonymousStructType, ResolvedNode,
+    ResolvedStructType, ResolvedType,
+};
 
 mod util;
 
@@ -1945,6 +1949,10 @@ fn serialize_octets() {
     let size = v.quick_serialize(&mut buf);
     assert_eq!(size, 4);
     assert_eq!(buf[0], 2);
+
+    let (deserialized_value, deserialized_octet_size) = quick_deserialize(&ResolvedType::Int, &buf);
+    assert_eq!(deserialized_value, v);
+    assert_eq!(size, deserialized_octet_size);
 }
 
 #[allow(unused)]
@@ -1971,21 +1979,55 @@ fn serialize_struct_octets() {
     let b = Value::String("some string".to_string());
     let c = Value::Float(Fp::from(2.0));
 
+    let mut defined_fields = SeqMap::new();
+    defined_fields
+        .insert(
+            "a".to_string(),
+            ResolvedAnonymousStructFieldType {
+                identifier: None,
+                field_type: ResolvedType::Int,
+            },
+        )
+        .expect("");
+    defined_fields
+        .insert(
+            "b".to_string(),
+            ResolvedAnonymousStructFieldType {
+                identifier: None,
+                field_type: ResolvedType::String,
+            },
+        )
+        .expect("");
+    defined_fields
+        .insert(
+            "c".to_string(),
+            ResolvedAnonymousStructFieldType {
+                identifier: None,
+                field_type: ResolvedType::Float,
+            },
+        )
+        .expect("");
+
     let struct_type = ResolvedStructType {
         name: ResolvedNode::default(),
         assigned_name: "SomeStructType".to_string(),
-        anon_struct_type: ResolvedAnonymousStructType {
-            defined_fields: SeqMap::default(),
-        },
+        anon_struct_type: ResolvedAnonymousStructType { defined_fields },
         functions: SeqMap::default(),
     };
     let struct_type_ref = Rc::new(RefCell::new(struct_type));
 
     let fields = values_to_value_refs_owned(vec![a, b, c]);
-    let struct_value = Value::Struct(struct_type_ref, fields);
+    let struct_value = Value::Struct(struct_type_ref.clone(), fields);
 
     let mut buf = [0u8; 256];
     let size = struct_value.quick_serialize(&mut buf);
-
     assert_eq!(size, 21);
+
+    let complete_struct_type = ResolvedType::Struct(struct_type_ref);
+
+    let (deserialized_value, deserialized_octet_size) =
+        quick_deserialize(&complete_struct_type, &buf);
+    assert_eq!(size, deserialized_octet_size);
+
+    assert_eq!(struct_value.to_string(), deserialized_value.to_string());
 }

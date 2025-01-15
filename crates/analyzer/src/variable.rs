@@ -11,7 +11,6 @@ use swamp_script_semantic::{
     ResolvedCompoundOperatorKind, ResolvedExpression, ResolvedNode, ResolvedType, ResolvedVariable,
     ResolvedVariableAssignment, ResolvedVariableCompoundAssignment, ResolvedVariableRef, Spanned,
 };
-use tracing::warn;
 
 impl<'a> Resolver<'a> {
     fn try_find_local_variable(&self, node: &ResolvedNode) -> Option<&ResolvedVariableRef> {

@@ -7,7 +7,6 @@ use crate::err::ResolveError;
 use crate::Resolver;
 use swamp_script_ast::{Expression, Node, Variable};
 use swamp_script_semantic::{ResolvedExpression, ResolvedType, Spanned};
-use tracing::info;
 
 impl<'a> Resolver<'a> {
     pub(crate) fn handle_optional_unwrap_statement(
@@ -66,8 +65,8 @@ impl<'a> Resolver<'a> {
         let resolved_expr = self.resolve_expression(inner_expr)?;
 
         if let ResolvedType::Optional(inner_type) = resolved_expr.resolution() {
-            let debug_var_name = self.get_text(&target_variable.name);
             /*
+            let debug_var_name = self.get_text(&target_variable.name);
             let found_var = self.find_variable(target_variable)?;
             let mut_node = if found_var.is_mutable() {
                 Some(Node::default())

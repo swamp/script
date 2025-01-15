@@ -164,6 +164,10 @@ impl Value {
             }
             Self::Map(_map_ref, values) => {
                 let mut offset = 0;
+                let len: u16 = values.len() as u16;
+                let len_bytes = len.to_ne_bytes();
+                octets[offset..offset + len_bytes.len()].copy_from_slice(&len_bytes);
+                offset += len_bytes.len();
                 for (key, value_ref) in values {
                     offset += key.quick_serialize(&mut octets[offset..]);
                     offset += value_ref.borrow().quick_serialize(&mut octets[offset..]);
@@ -331,6 +335,7 @@ pub enum ValueError {
 }
 
 pub const SPARSE_TYPE_ID: TypeNumber = 999;
+pub const SPARSE_ID_TYPE_ID: TypeNumber = 998;
 
 // Iterators
 

@@ -69,6 +69,7 @@ pub const fn convert_span(without: &SpanWithoutFileId, file_id: FileId) -> Span 
 }
 
 pub const SPARSE_TYPE_ID: TypeNumber = 999;
+pub const SPARSE_ID_TYPE_ID: TypeNumber = 998;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum BlockScopeMode {

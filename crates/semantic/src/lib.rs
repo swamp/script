@@ -281,8 +281,7 @@ pub enum ResolvedType {
     Map(ResolvedMapTypeRef),
 
     Enum(ResolvedEnumTypeRef),
-    EnumVariant(ResolvedEnumVariantTypeRef),
-
+    //EnumVariant(ResolvedEnumVariantTypeRef),
     Generic(Box<ResolvedType>, Vec<ResolvedType>),
 
     Function(FunctionTypeSignature),
@@ -314,9 +313,9 @@ impl Debug for ResolvedType {
             ),
             Self::Generic(base, parameters) => write!(f, "{:?}<{:?}>", base, parameters),
             Self::Enum(enum_type_ref) => write!(f, "{:?}", enum_type_ref.assigned_name),
-            Self::EnumVariant(enum_type_variant) => {
-                write!(f, "{:?}", enum_type_variant.assigned_name)
-            }
+            //            Self::EnumVariant(enum_type_variant) => {
+            //              write!(f, "{:?}", enum_type_variant.assigned_name)
+            //        }
             Self::Function(function_type_signature) => {
                 write!(f, "{:?}", function_type_signature)
             }
@@ -342,11 +341,11 @@ impl Display for ResolvedType {
             Self::Map(map_ref) => write!(f, "[{}:{}]", map_ref.key_type, map_ref.value_type),
             Self::Generic(base_type, params) => write!(f, "{base_type}<{}>", comma(params)),
             Self::Enum(enum_type) => write!(f, "{}", enum_type.assigned_name),
-            Self::EnumVariant(variant) => write!(
-                f,
-                "{}::{}",
-                variant.owner.assigned_name, variant.assigned_name
-            ),
+            //Self::EnumVariant(variant) => write!(
+            //  f,
+            //"{}::{}",
+            //variant.owner.assigned_name, variant.assigned_name
+            //),
             Self::Function(signature) => write!(f, "function {signature}"),
             Self::Iterable(generating_type) => write!(f, "Iterable<{generating_type}>"),
             Self::Optional(base_type) => write!(f, "{base_type}?"),
@@ -377,7 +376,7 @@ impl Spanned for ResolvedType {
 
             // Enum Types
             Self::Enum(_type_ref) => todo!(),
-            Self::EnumVariant(_type_ref) => todo!(),
+            //Self::EnumVariant(_type_ref) => todo!(),
 
             // Function Types
             Self::Function(_signature) => todo!(),
@@ -452,7 +451,7 @@ impl ResolvedType {
             }
             (Self::Enum(_), Self::Enum(_)) => true,
             (Self::Iterable(a), Self::Iterable(b)) => a.same_type(b),
-            (Self::EnumVariant(a), Self::EnumVariant(b)) => a.owner.number == b.owner.number,
+            //(Self::EnumVariant(a), Self::EnumVariant(b)) => a.owner.number == b.owner.number,
             (Self::Optional(inner_type_a), Self::Optional(inner_type_b)) => {
                 inner_type_a.same_type(inner_type_b)
             }
