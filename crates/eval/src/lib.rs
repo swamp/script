@@ -1391,6 +1391,33 @@ impl<'a, C> Interpreter<'a, C> {
                 result
             }
 
+            ResolvedExpression::MutRustTypeIndexRef(
+                rust_type_expression,
+                _rust_type_ref,
+                _key_type,
+                id_expression,
+            ) => {
+                let resolved_sparse_value = self.evaluate_expression(rust_type_expression)?;
+                let sparse_value_map = resolved_sparse_value.downcast_rust::<SparseValueMap>();
+                if let Some(found) = sparse_value_map {
+                    let id_value = self.evaluate_expression(id_expression)?;
+                    if let Some(found_id) = id_value.downcast_rust::<SparseValueId>() {
+                        found.borrow_mut().get(&found_id.borrow()).map_or_else(
+                            || Value::Option(None),
+                            |found_value| Value::Option(Some(Box::new(found_value.clone()))),
+                        )
+                    } else {
+                        return Err(ExecuteError::Error(
+                            "not a SparseId, can not access".to_string(),
+                        ));
+                    }
+                } else {
+                    return Err(ExecuteError::Error(
+                        "not a SparseId, can not access".to_string(),
+                    ));
+                }
+            }
+
             // Operators
             ResolvedExpression::BinaryOp(binary_operator) => {
                 let left_val = self.evaluate_expression(&binary_operator.left)?;

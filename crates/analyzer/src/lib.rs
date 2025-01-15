@@ -1440,6 +1440,21 @@ impl<'a> Resolver<'a> {
                         )
                     }
 
+                    ResolvedType::Generic(base_type, type_parameters) => {
+                        if let ResolvedType::RustType(rust_type) = *base_type {
+                            let resolved_index_expr = self.resolve_expression(index_expr)?;
+                            let value_type = type_parameters[0].clone(); // HACK: TODO: Just assumes that it is a SparseMap for now.
+                            ResolvedExpression::MutRustTypeIndexRef(
+                                Box::from(resolved_base),
+                                rust_type,
+                                value_type,
+                                Box::from(resolved_index_expr),
+                            )
+                        } else {
+                            return Err(ResolveError::ExpectedMutableLocation(Span::dummy()));
+                        }
+                    }
+
                     _ => return Err(ResolveError::ExpectedMutableLocation(Span::dummy())),
                 }
             }

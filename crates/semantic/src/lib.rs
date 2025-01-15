@@ -1109,6 +1109,12 @@ pub enum ResolvedExpression {
         ResolvedMapTypeRef,
         Box<ResolvedExpression>,
     ),
+    MutRustTypeIndexRef(
+        Box<ResolvedExpression>,
+        ResolvedRustTypeRef,
+        ResolvedType,
+        Box<ResolvedExpression>,
+    ),
 
     Option(Option<Box<ResolvedExpression>>),
     NoneCoalesceOperator(Box<ResolvedExpression>, Box<ResolvedExpression>),
@@ -1364,6 +1370,9 @@ impl ResolvedExpression {
                 expr.collect_constant_dependencies(deps);
             }
             Self::MutMapIndexRef(expr, _resolved_type, _accesses) => {
+                expr.collect_constant_dependencies(deps);
+            }
+            Self::MutRustTypeIndexRef(expr, _resolved_type, _value_type, _accesses) => {
                 expr.collect_constant_dependencies(deps);
             }
             Self::Option(opt_expr) => {
@@ -1674,6 +1683,9 @@ impl ResolvedExpression {
             Self::MutVariableRef(mut_var_ref) => mut_var_ref.variable_ref.resolved_type.clone(),
             Self::MutStructFieldRef(_base_expr, resulting_type, _access_chain) => {
                 resulting_type.clone()
+            }
+            Self::MutRustTypeIndexRef(_, _rust_type, value_type, _x) => {
+                ResolvedType::Optional(Box::new(value_type.clone()))
             }
             Self::MutArrayIndexRef(_base, resolved_array_type_ref, _index) => {
                 resolved_array_type_ref.item_type.clone()
