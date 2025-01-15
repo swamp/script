@@ -283,9 +283,6 @@ impl<'a> Resolver<'a> {
                     )?;
                 }
 
-                // Constants must be resolved first, since they can be referenced in the function expressions
-                let constants = self.resolve_constants(&function_data.constants)?;
-
                 let statements =
                     self.resolve_statements_in_function(&function_data.body, &return_type)?;
                 self.scope.return_type = ResolvedType::Unit;
@@ -298,7 +295,6 @@ impl<'a> Resolver<'a> {
                     },
                     body: statements,
                     name: ResolvedLocalIdentifier(self.to_node(&function_data.declaration.name)),
-                    constants,
                 };
 
                 let function_name = self.get_text(&function_data.declaration.name).to_string();
@@ -458,9 +454,6 @@ impl<'a> Resolver<'a> {
                     )?;
                 }
 
-                // Constants needs to be resolved before the function expressions, since they can be accessed.
-                let constants = self.resolve_constants(&function_data.constants)?;
-
                 let statements =
                     self.resolve_statements_in_function(&function_data.body, &return_type)?;
 
@@ -472,7 +465,6 @@ impl<'a> Resolver<'a> {
                     },
                     body: statements,
                     name: ResolvedLocalIdentifier(self.to_node(&function_data.declaration.name)),
-                    constants,
                 };
 
                 let internal_ref = Rc::new(internal);

@@ -211,7 +211,7 @@ impl<'a> Resolver<'a> {
             }
         } else if !missing_fields.is_empty() {
             return Err(ResolveError::MissingFieldInStructInstantiation(
-                self.to_node(&node).span,
+                self.to_node(node).span,
                 missing_fields.to_vec(),
                 struct_to_instantiate.clone(),
             ));

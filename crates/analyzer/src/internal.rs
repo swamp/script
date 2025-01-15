@@ -256,6 +256,7 @@ impl<'a> Resolver<'a> {
         Ok((expr2, expr3))
     }
 
+    #[allow(clippy::too_many_lines)]
     fn resolve_float_member_call(
         &mut self,
         expr: ResolvedExpression,
@@ -496,7 +497,7 @@ impl<'a> Resolver<'a> {
                     let sparse_id_type = self
                         .shared
                         .lookup
-                        .get_rust_type(&vec!["std".to_string()], "SparseId")
+                        .get_rust_type(&["std".to_string()], "SparseId")
                         .expect("should have SparseId");
                     let key_type = ResolvedType::RustType(sparse_id_type);
                     let value_type = &parameters[0];

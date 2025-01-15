@@ -245,7 +245,7 @@ impl<'a> Resolver<'a> {
             ResolvedType::Int => {
                 if source_type != ResolvedType::Int {
                     return Err(ResolveError::IncompatibleTypes(
-                        resolved_compound_operator.node.span().clone(),
+                        resolved_compound_operator.node.span(),
                         source_type,
                     ));
                 }

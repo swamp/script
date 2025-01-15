@@ -137,6 +137,7 @@ impl<'a> NameLookup<'a> {
         )
     }
 
+    #[must_use]
     pub fn get_path(&self) -> Vec<String> {
         self.default_path.clone()
     }
@@ -223,7 +224,7 @@ impl<'a> NameLookup<'a> {
     ) -> Result<(), SemanticError> {
         self.own_namespace()
             .borrow_mut()
-            .add_struct_ref(struct_type.clone())
+            .add_struct_ref(struct_type)
     }
 
     pub(crate) fn add_external_function_declaration_link(

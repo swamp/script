@@ -104,7 +104,7 @@ impl ResolvedModules {
     }
 
     fn eval_ordered_constants(&self) -> Result<Vec<ResolvedConstantRef>, SemanticError> {
-        Self::topological_sort_constants(&*self.constants)
+        Self::topological_sort_constants(&self.constants)
     }
 
     pub fn topological_sort_constants(
@@ -113,7 +113,7 @@ impl ResolvedModules {
         let mut id_to_constant: SeqMap<ConstantId, ResolvedConstantRef> = SeqMap::new();
         for const_ref in constants {
             id_to_constant
-                .insert(const_ref.id.clone(), Rc::clone(const_ref))
+                .insert(const_ref.id, Rc::clone(const_ref))
                 .map_err(|_| SemanticError::DuplicateConstantId(const_ref.id))?;
         }
 
@@ -129,9 +129,9 @@ impl ResolvedModules {
             const_ref.expr.collect_constant_dependencies(&mut deps);
 
             for dep_id in &deps {
-                assert!(id_to_constant.contains_key(&dep_id));
+                assert!(id_to_constant.contains_key(dep_id));
 
-                if let Some(dependents) = adjacency.get_mut(&dep_id) {
+                if let Some(dependents) = adjacency.get_mut(dep_id) {
                     dependents.insert(const_ref.id);
                 } else {
                     let mut dependents = SeqSet::new();
@@ -215,7 +215,8 @@ impl ResolvedModules {
         self.modules.contains_key(module_path)
     }
 
+    #[must_use]
     pub fn get(&self, module_path: &[String]) -> Option<ResolvedModuleRef> {
-        self.modules.get(module_path).clone().cloned()
+        self.modules.get(module_path).cloned()
     }
 }

@@ -508,7 +508,6 @@ pub struct ResolvedInternalFunctionDefinition {
     pub body: ResolvedExpression,
     pub name: ResolvedLocalIdentifier,
     pub signature: FunctionTypeSignature,
-    pub constants: Vec<ResolvedConstantRef>,
 }
 
 impl Debug for ResolvedInternalFunctionDefinition {
@@ -1338,7 +1337,7 @@ impl ResolvedExpression {
     pub fn collect_constant_dependencies(&self, deps: &mut SeqSet<ConstantId>) {
         match self {
             Self::ConstantAccess(const_ref) => {
-                deps.insert(const_ref.id.clone());
+                deps.insert(const_ref.id);
             }
             Self::FieldAccess(expr, _, _accesses) => {
                 expr.collect_constant_dependencies(deps);
@@ -1479,7 +1478,7 @@ impl ResolvedExpression {
                     match part {
                         ResolvedStringPart::Literal(_, _) => {}
                         ResolvedStringPart::Interpolation(expr, _) => {
-                            expr.collect_constant_dependencies(deps)
+                            expr.collect_constant_dependencies(deps);
                         }
                     }
                 }

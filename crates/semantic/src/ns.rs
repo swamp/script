@@ -50,13 +50,13 @@ impl ResolvedModuleNamespace {
     #[must_use]
     pub fn new(path: &[String]) -> Self {
         Self {
-            structs: Default::default(),
-            build_in_rust_types: Default::default(),
-            enum_types: Default::default(),
-            enum_variant_types: Default::default(),
-            internal_functions: Default::default(),
-            external_function_declarations: Default::default(),
-            constants: Default::default(),
+            structs: SeqMap::default(),
+            build_in_rust_types: SeqMap::default(),
+            enum_types: SeqMap::default(),
+            enum_variant_types: SeqMap::default(),
+            internal_functions: SeqMap::default(),
+            external_function_declarations: SeqMap::default(),
+            constants: SeqMap::default(),
             path: path.to_vec(),
         }
     }

@@ -198,7 +198,9 @@ pub fn build_parse_error(err: &SpecificError, span: &Span) -> Builder<usize> {
         }
         SpecificError::ExpectedTypeIdentifier(_) => todo!(),
         SpecificError::ExpectedLocalTypeIdentifier(_) => todo!(),
-        SpecificError::UnexpectedRuleInParseScript(_) => todo!(),
+        SpecificError::UnexpectedRuleInParseScript(rule) => {
+            Report::build(Error, 1, &format!("unexpected type rule {rule}"), &span)
+        }
         SpecificError::ExpectedControlStatement(_) => todo!(),
         SpecificError::ExpectedStatement(_) => todo!(),
         SpecificError::ExpectedIfOrElse(_) => todo!(),
@@ -214,7 +216,9 @@ pub fn build_parse_error(err: &SpecificError, span: &Span) -> Builder<usize> {
         SpecificError::UnexpectedAccessType(_) => todo!(),
         SpecificError::UnknownAssignmentOperator(_) => todo!(),
         SpecificError::CompoundOperatorCanNotContainMut => todo!(),
-        SpecificError::InvalidAssignmentTarget => todo!(),
+        SpecificError::InvalidAssignmentTarget => {
+            Report::build(Error, 1, &format!("invalid assignment target"), &span)
+        }
         SpecificError::CompoundOperatorCanNotHaveMultipleVariables => todo!(),
         SpecificError::ExpectedExpressionAfterPrefixOperator => todo!(),
         SpecificError::UnknownOperator(_) => todo!(),

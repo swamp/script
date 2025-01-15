@@ -100,7 +100,7 @@ impl<'a> Resolver<'a> {
                         let sparse_id = self
                             .shared
                             .lookup
-                            .get_rust_type(&vec!["std".to_string()], "SparseId")
+                            .get_rust_type(&["std".to_string()], "SparseId")
                             .expect("SparseId is missing");
                         let contained_type = &generic_type_parameters[0];
                         let resolved_key = self.resolve_expression_expecting_type(

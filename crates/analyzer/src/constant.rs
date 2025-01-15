@@ -51,28 +51,6 @@ impl<'a> Resolver<'a> {
         Ok(ResolvedDefinition::Constant(node, constant_ref))
     }
 
-    pub(crate) fn resolve_constants(
-        &mut self,
-        ast_constants: &Vec<ConstantInfo>,
-    ) -> Result<Vec<ResolvedConstantRef>, ResolveError> {
-        let mut constants = Vec::new();
-        for constant in ast_constants {
-            let (constant_ref, name, _node) = self.resolve_constant(constant)?;
-
-            constants.push(constant_ref.clone());
-
-            let constants = &mut self
-                .scope
-                .block_scope_stack
-                .last_mut()
-                .expect("block scope should have at least one scope")
-                .constants;
-
-            constants.insert(name, constant_ref)?;
-        }
-        Ok(constants)
-    }
-
     pub(crate) fn resolve_constant_access(
         &self,
         constant_identifier: &ConstantIdentifier,
