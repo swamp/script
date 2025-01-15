@@ -274,7 +274,6 @@ pub struct FunctionDeclaration {
 pub struct FunctionWithBody {
     pub declaration: FunctionDeclaration,
     pub body: Expression,
-    pub constants: Vec<ConstantInfo>,
 }
 
 #[derive(Debug)]

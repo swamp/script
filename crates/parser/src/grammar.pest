@@ -27,7 +27,7 @@ trait_def = {
 
 
 impl_def = {
-    "impl" ~ type_identifier ~ "{" ~ impl_item* ~ "}"
+    "impl" ~ type_identifier ~ "{" ~ (impl_item)* ~ "}"
 }
 
 
@@ -327,9 +327,7 @@ identifier_pattern = { identifier }
 
 if_expr = { "if" ~ expression ~ expression ~ ("else" ~ (if_expr | expression))? }
 
-expression_in_block = { const_def | expression }
-
-block = { "{" ~ expression_in_block* ~ "}" }
+block = { "{" ~ expression* ~ "}" }
 with_expr = { "with" ~ variable_binding_list ~ expression }
 
 variable_binding_list = { variable_binding ~ ("," ~ variable_binding)* ~ ","? }

@@ -375,19 +375,15 @@ impl AstParser {
         format!("{:?}", rule.as_rule())
     }
 
-    fn parse_block(
-        &self,
-        block_pair: &Pair<Rule>,
-    ) -> Result<(Expression, Vec<ConstantInfo>), ParseError> {
+    fn parse_block(&self, block_pair: &Pair<Rule>) -> Result<Expression, ParseError> {
         if block_pair.as_rule() != Rule::block {
             return Err(self.create_error_pair(SpecificError::ExpectedBlock, block_pair));
         }
 
         let mut expressions = Vec::new();
-        let mut constants = Vec::new();
 
         for pair in Self::convert_into_iterator(block_pair) {
-            if pair.as_rule() != Rule::expression_in_block {
+            if pair.as_rule() != Rule::expression {
                 return Err(self.create_error_pair(
                     SpecificError::UnexpectedRuleInParseScript(format!(
                         "Expected expression_in_block, got: {:?}",
@@ -397,29 +393,26 @@ impl AstParser {
                 ));
             }
 
-            let inner = self.next_inner_pair(&pair)?;
-            match inner.as_rule() {
+            //let inner = self.next_inner_pair(&pair)?;
+            match pair.as_rule() {
                 Rule::expression => {
-                    let expr = self.parse_expression(&inner)?;
+                    let expr = self.parse_expression(&pair)?;
                     expressions.push(expr);
-                }
-                Rule::const_def => {
-                    constants.push(self.parse_const_info(&inner)?);
                 }
                 _ => {
                     return Err(self.create_error_pair(
                         SpecificError::UnexpectedRuleInParseScript(format!(
-                            "Unexpected rule in expression_in_block: {:?}",
-                            inner.as_rule()
+                            "Unexpected rule in parse_block: {:?}",
+                            pair.as_rule()
                         )),
-                        &inner,
+                        &pair,
                     ))
                 }
             }
         }
 
         let block_expr = Expression::Block(expressions);
-        Ok((block_expr, constants))
+        Ok(block_expr)
     }
 
     fn parse_with_expr(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
@@ -670,7 +663,7 @@ impl AstParser {
 
                 let signature = self.parse_function_signature(&signature_pair)?;
 
-                let (body, constants) = self.parse_block(&inner.next().ok_or_else(|| {
+                let body = self.parse_block(&inner.next().ok_or_else(|| {
                     self.create_error_pair(SpecificError::MissingFunctionBody, &function_pair)
                 })?)?;
 
@@ -678,7 +671,6 @@ impl AstParser {
                     FunctionWithBody {
                         declaration: signature,
                         body,
-                        constants,
                     },
                 )))
             }
@@ -876,12 +868,11 @@ impl AstParser {
         let signature = self.parse_member_signature(&signature_pair)?;
 
         let block_pair = Self::next_pair(&mut inner)?;
-        let (body, constants) = self.parse_block(&block_pair)?;
+        let body = self.parse_block(&block_pair)?;
 
         Ok(FunctionWithBody {
             declaration: signature,
             body,
-            constants,
         })
     }
 
@@ -1637,10 +1628,7 @@ impl AstParser {
             Rule::break_expr => Ok(Expression::Break(self.to_node(pair))),
             Rule::continue_expr => Ok(Expression::Continue(self.to_node(pair))),
             Rule::with_expr => self.parse_with_expr(pair),
-            Rule::block => {
-                let (expression, _constants) = self.parse_block(pair)?;
-                Ok(expression)
-            }
+            Rule::block => Ok(self.parse_block(pair)?),
             Rule::if_expr => self.parse_if_expression(pair),
             Rule::for_loop => self.parse_for_loop(pair),
             Rule::while_loop => self.parse_while_loop(pair),
@@ -2337,10 +2325,7 @@ impl AstParser {
 
                 // Handle both block and direct expression cases
                 let expr = match Self::next_pair(&mut arm_inner)? {
-                    block if block.as_rule() == Rule::block => {
-                        let (expression, _constants) = self.parse_block(&block)?; // TODO: Handle constants in arm-expressions
-                        expression
-                    }
+                    block if block.as_rule() == Rule::block => self.parse_block(&block)?,
                     expr => self.parse_expression(&expr)?,
                 };
 
