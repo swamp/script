@@ -45,7 +45,7 @@ fn serialize() {
         Rc::new(RefCell::new(Box::new(sparse_map))),
     );
 
-    let serialized_octet_size = sparse_map_val.quick_serialize(&mut buf);
+    let serialized_octet_size = sparse_map_val.quick_serialize(&mut buf, 0);
 
     assert_eq!(serialized_octet_size, 18);
 
@@ -53,7 +53,7 @@ fn serialize() {
         ResolvedType::Generic(Box::from(sparse_map_type), vec![ResolvedType::Int]);
 
     let (deserialized_value, deserialized_octet_size) =
-        quick_deserialize(&sparse_generic_type, &buf);
+        quick_deserialize(&sparse_generic_type, &buf, 0);
 
     assert_eq!(serialized_octet_size, deserialized_octet_size);
     info!(value=?deserialized_value, x=?sparse_map_val, "deserialized");

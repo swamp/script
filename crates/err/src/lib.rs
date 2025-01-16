@@ -173,6 +173,10 @@ pub fn build_parse_error(err: &SpecificError, span: &Span) -> Builder<usize> {
             &format!("General Parse Error: {}", general),
             &span,
         ),
+
+        SpecificError::MissingTypeName => {
+            Report::build(Error, 1, &format!("missing type name"), &span)
+        }
         SpecificError::UnknownEscapeCharacter(char) => Report::build(
             Error,
             1,

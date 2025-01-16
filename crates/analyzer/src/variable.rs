@@ -6,7 +6,7 @@
 use crate::err::ResolveError;
 use crate::{BlockScopeMode, Resolver};
 use std::rc::Rc;
-use swamp_script_ast::{CompoundOperator, Expression, Node, Variable};
+use swamp_script_ast::{CompoundOperator, Expression, Node, Type, Variable};
 use swamp_script_semantic::{
     ResolvedCompoundOperatorKind, ResolvedExpression, ResolvedNode, ResolvedType, ResolvedVariable,
     ResolvedVariableAssignment, ResolvedVariableCompoundAssignment, ResolvedVariableRef, Spanned,
@@ -160,6 +160,9 @@ impl<'a> Resolver<'a> {
             .expect("block scope should have at least one scope")
             .variables;
 
+        if *variable_type_ref == ResolvedType::Any {
+            println!("problem");
+        }
         assert_ne!(*variable_type_ref, ResolvedType::Any);
         let resolved_variable = ResolvedVariable {
             name: variable.clone(),
@@ -300,10 +303,21 @@ impl<'a> Resolver<'a> {
     pub(crate) fn resolve_variable_assignment(
         &mut self,
         ast_variable: &Variable,
+        coerce: &Option<Type>,
         ast_expression: &Expression,
     ) -> Result<ResolvedExpression, ResolveError> {
-        let converted_expression = self.resolve_expression(ast_expression)?;
-        let expression_type = converted_expression.resolution();
+        let maybe_required_type = if let Some(coerce_type_found) = coerce {
+            Some(self.resolve_type(coerce_type_found)?)
+        } else {
+            None
+        };
+        let converted_expression = self.resolve_expression_maybe_expecting_type(
+            ast_expression,
+            maybe_required_type.clone(),
+            true,
+        )?;
+        let expression_type =
+            converted_expression.resolution_maybe_expecting_type(maybe_required_type)?;
         let (variable_ref, is_reassignment) =
             self.set_or_overwrite_variable_with_type(ast_variable, &expression_type)?;
 

@@ -597,8 +597,8 @@ impl<'a> Resolver<'a> {
                 }
             }
 
-            Expression::VariableAssignment(variable_expression, source_expression) => {
-                self.resolve_variable_assignment(variable_expression, source_expression)?
+            Expression::VariableAssignment(variable_expression, coerce, source_expression) => {
+                self.resolve_variable_assignment(variable_expression, coerce, source_expression)?
             }
 
             Expression::MultiVariableAssignment(variables, source_expression) => {
@@ -772,7 +772,7 @@ impl<'a> Resolver<'a> {
                             Err(ResolveError::ExpectedVariable(self.to_node(unwrap_node)))?
                         }
                     }
-                    Expression::VariableAssignment(target_variable, expr) => {
+                    Expression::VariableAssignment(target_variable, coerce, expr) => {
                         if let Expression::PostfixOp(
                             PostfixOperator::Unwrap(_unwrap_node),
                             inner_expr,
@@ -936,7 +936,7 @@ impl<'a> Resolver<'a> {
         expression: &Expression,
     ) -> Result<ResolvedBooleanExpression, ResolveError> {
         let resolved_expression = self.resolve_expression(expression)?;
-        let expr_type = resolved_expression.resolution();
+        let expr_type = resolved_expression.resolution_expecting_type(&ResolvedType::Bool)?;
 
         let bool_expression = match expr_type {
             ResolvedType::Bool => resolved_expression,

@@ -1126,3 +1126,18 @@ IfOnlyVariable { variable: ResolvedVariable { name: <62:1>, resolved_type: Strin
 "#,
     );
 }
+
+#[test_log::test]
+fn var_assignment_coerce() {
+    check(
+        r"
+booster: Int? = none
+
+         ",
+        r"
+InitializeVariable(ResolvedVariableAssignment { variable_refs: ResolvedVariable { name: <1:7>, resolved_type: Int?, mutable_node: None, scope_index: 0, variable_index: 0 }, expression: Literal(NoneLiteral(<17:4>)) })
+
+
+",
+    );
+}

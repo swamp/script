@@ -16,6 +16,7 @@ use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
 use std::rc::Rc;
+use tracing::error;
 
 #[derive(Clone, Eq, PartialEq, Default)]
 pub struct ResolvedNode {
@@ -411,6 +412,7 @@ pub enum SemanticError {
     DuplicateConstName(String),
     CircularConstantDependency(Vec<ConstantId>),
     DuplicateConstantId(ConstantId),
+    IncompatibleTypes,
 }
 
 impl ResolvedType {
@@ -422,10 +424,12 @@ impl ResolvedType {
     }
 
     pub fn assignable_type(&self, other: &ResolvedType) -> bool {
-        if let Self::Optional(inner_type) = self {
+        if self.same_type(other) {
+            true
+        } else if let Self::Optional(inner_type) = self {
             inner_type.same_type(other)
         } else {
-            self.same_type(other)
+            false
         }
     }
     pub fn same_type(&self, other: &ResolvedType) -> bool {
@@ -1609,12 +1613,11 @@ impl ResolvedExpression {
                 }
             }
             Self::IfOnlyVariable {
-                optional_expr,
+                //optional_expr,
                 true_block,
                 false_block,
                 ..
             } => {
-                optional_expr.collect_constant_dependencies(deps);
                 true_block.collect_constant_dependencies(deps);
                 if let Some(false_block) = false_block {
                     false_block.collect_constant_dependencies(deps);
@@ -1643,6 +1646,42 @@ impl ResolvedExpression {
             | Self::IntMin(_, _)
             | Self::IntMax(_, _) => {}
             Self::IntToFloat(_) => {}
+        }
+    }
+
+    /// # Errors
+    ///
+    pub fn resolution_maybe_expecting_type(
+        &self,
+        expecting_type: Option<ResolvedType>,
+    ) -> Result<ResolvedType, SemanticError> {
+        expecting_type.map_or_else(
+            || Ok(self.resolution()),
+            |found_expecting_type| self.resolution_expecting_type(&found_expecting_type),
+        )
+    }
+
+    /// # Errors
+    ///
+    pub fn resolution_expecting_type(
+        &self,
+        expecting_type: &ResolvedType,
+    ) -> Result<ResolvedType, SemanticError> {
+        let detected_type = match self {
+            Self::Literal(literal) => match literal {
+                ResolvedLiteral::NoneLiteral(_) => expecting_type.clone(),
+
+                _ => self.resolution(),
+            },
+
+            _ => self.resolution(),
+        };
+
+        if detected_type.assignable_type(expecting_type) {
+            Ok(detected_type)
+        } else {
+            error!(?detected_type, ?expecting_type, "incompatible");
+            Err(SemanticError::IncompatibleTypes)
         }
     }
 
@@ -1797,7 +1836,7 @@ impl ResolvedExpression {
                 ResolvedLiteral::Map(map_type_ref, _data) => {
                     ResolvedType::Map(map_type_ref.clone())
                 }
-                ResolvedLiteral::NoneLiteral(_) => ResolvedType::Any,
+                ResolvedLiteral::NoneLiteral(_) => ResolvedType::Any, // TODO: MUST FIX THIS: panic!("none is not possible here"),
             },
 
             // Array member functions
