@@ -2586,3 +2586,17 @@ VariableAssignment(mut <1:3> <5:1>, MutRef(IndexAccess(VariableAccess(<13:5>), L
 ",
     );
 }
+
+#[test_log::test]
+fn assignment_coerce() {
+    check(
+        r"
+a:Int = some_func()
+         ",
+        r"
+
+VariableAssignment(<1:1>, Some(Int(<3:3>)), FunctionCall(VariableAccess(<9:9>), []))
+
+",
+    );
+}

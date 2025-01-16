@@ -167,8 +167,10 @@ multi_variable_list = {
 }
 
 single_lhs_assignment = {
-    mut_keyword? ~ postfix ~ (assign_op | compound_assign_op) ~ mut_expression
+    mut_keyword? ~ postfix ~ type_coerce? ~ (assign_op | compound_assign_op) ~ mut_expression
 }
+
+type_coerce = { ":" ~ type_name }
 
 // Operators
 assign_op = { "=" }

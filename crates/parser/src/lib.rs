@@ -17,6 +17,7 @@ use swamp_script_ast::{
     VariableBinding,
 };
 use swamp_script_ast::{Function, PostfixOperator};
+use tracing::info;
 
 pub struct ParseResult<'a> {
     #[allow(dead_code)]
@@ -90,6 +91,7 @@ pub enum SpecificError {
     InvalidUnicodeEscape,
     InvalidHexEscape,
     InvalidUtf8Sequence,
+    MissingTypeName,
 }
 
 #[derive(Debug)]
@@ -1171,6 +1173,26 @@ impl AstParser {
 
         let lhs_pair = Self::next_pair(&mut inner)?;
 
+        // Check for optional type coercion
+        let type_coercion = if let Some(peeked) = inner.peek() {
+            info!(rule=?peeked.as_rule(),"peeked rule");
+            if peeked.as_rule() == Rule::type_coerce {
+                let type_coerce_pair = inner.next().unwrap();
+                let mut type_inner = type_coerce_pair.clone().into_inner();
+                let type_name_pair = type_inner.next().ok_or_else(|| {
+                    self.create_error_pair(SpecificError::MissingTypeName, &type_coerce_pair)
+                })?;
+                info!(rule=?type_name_pair.as_rule(),"peeked rule");
+                Some(self.parse_type(type_name_pair)?)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        info!(?type_coercion, "type coercion");
+
         let op_pair = Self::next_pair(&mut inner)?;
         let operator_node = self.to_node(&op_pair);
 
@@ -1232,7 +1254,11 @@ impl AstParser {
                 // Single variable
                 let var = Variable::new(self.to_node(&vars[0]), is_mutable);
                 match compound_op {
-                    None => Ok(Expression::VariableAssignment(var, Box::new(rhs_expr))),
+                    None => Ok(Expression::VariableAssignment(
+                        var,
+                        type_coercion,
+                        Box::new(rhs_expr),
+                    )),
                     Some(op) => Ok(Expression::VariableCompoundAssignment(
                         var.name,
                         op,
@@ -1263,7 +1289,11 @@ impl AstParser {
                 Expression::VariableAccess(mut var) => {
                     var.is_mutable = is_mutable;
                     match compound_op {
-                        None => Ok(Expression::VariableAssignment(var, Box::new(rhs_expr))),
+                        None => Ok(Expression::VariableAssignment(
+                            var,
+                            type_coercion,
+                            Box::new(rhs_expr),
+                        )),
                         Some(op) => Ok(Expression::VariableCompoundAssignment(
                             var.name,
                             op,

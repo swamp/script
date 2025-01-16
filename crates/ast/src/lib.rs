@@ -368,7 +368,7 @@ pub enum Expression {
     RangeAccess(Box<Expression>, Box<Expression>, Box<Expression>, RangeMode),
 
     // Assignments
-    VariableAssignment(Variable, Box<Expression>),
+    VariableAssignment(Variable, Option<Type>, Box<Expression>),
     VariableCompoundAssignment(Node, CompoundOperator, Box<Expression>),
     MultiVariableAssignment(Vec<Variable>, Box<Expression>),
     IndexAssignment(Box<Expression>, Box<Expression>, Box<Expression>),
