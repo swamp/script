@@ -6,7 +6,7 @@
 use crate::err::ResolveError;
 use crate::{Resolver, SPARSE_TYPE_ID};
 use std::rc::Rc;
-use swamp_script_ast::{Expression, Node, QualifiedTypeIdentifier};
+use swamp_script_ast::{Expression, Function, Node, QualifiedTypeIdentifier};
 use swamp_script_semantic::Span;
 use swamp_script_semantic::{
     ResolvedExpression, ResolvedExternalFunctionCall, ResolvedExternalFunctionDefinitionRef,
@@ -63,9 +63,22 @@ impl<'a> Resolver<'a> {
         fn_parameters: &[ResolvedTypeForParameter],
         arguments: &[Expression],
     ) -> Result<Vec<ResolvedExpression>, ResolveError> {
-        let resolved_arguments = self.resolve_expressions(arguments)?;
+        if fn_parameters.len() != arguments.len() {
+            return Err(ResolveError::WrongNumberOfArguments(
+                span.clone(),
+                fn_parameters.len(),
+                arguments.len(),
+            ));
+        }
 
-        Self::verify_arguments(span, fn_parameters, &resolved_arguments)?;
+        let mut resolved_arguments = Vec::new();
+        for (fn_parameter, argument_expr) in fn_parameters.iter().zip(arguments) {
+            let resolved_argument =
+                self.resolve_expression(argument_expr, &fn_parameter.resolved_type)?;
+            resolved_arguments.push(resolved_argument);
+        }
+
+        //Self::verify_arguments(span, fn_parameters, &resolved_arguments)?;
 
         Ok(resolved_arguments)
     }
@@ -121,7 +134,7 @@ impl<'a> Resolver<'a> {
         function_expression: &Expression,
         ast_arguments: &[Expression],
     ) -> Result<ResolvedExpression, ResolveError> {
-        let function_expr = self.resolve_expression(function_expression)?;
+        let function_expr = self.resolve_expression(function_expression, &ResolvedType::Any)?;
         let resolution_type = function_expr.resolution();
 
         if let ResolvedType::Function(signature) = resolution_type {
@@ -223,7 +236,7 @@ impl<'a> Resolver<'a> {
         function_name: &Node,
         arguments: &[Expression],
     ) -> Result<ResolvedStaticCallGeneric, ResolveError> {
-        let resolved_arguments = self.resolve_expressions(arguments)?;
+        let resolved_arguments = self.resolve_expressions(&ResolvedType::Any, arguments)?;
         let resolved_generic_types = self.resolve_types(&type_name.generic_params)?;
 
         let struct_type_ref = self.find_struct_type(type_name)?;
@@ -316,9 +329,10 @@ impl<'a> Resolver<'a> {
             return Ok(found_internal);
         }
 
-        let resolved_expression = self.resolve_expression(ast_member_expression)?;
+        let resolved_expression =
+            self.resolve_expression(ast_member_expression, &ResolvedType::Any)?;
         let resolved_type = resolved_expression.resolution();
-        let resolved_arguments = self.resolve_expressions(ast_arguments)?;
+        let resolved_arguments = self.resolve_expressions(&ResolvedType::Any, ast_arguments)?;
         let field_or_member_name_str = self.get_text(ast_identifier).to_string();
 
         // the resolved expression must be a struct either way

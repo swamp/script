@@ -237,10 +237,9 @@ impl<'a> Resolver<'a> {
         source: &Expression,
     ) -> Result<ResolvedExpression, ResolveError> {
         let resolved_variable = self.find_variable_from_node(target)?;
-        let resolved_source = self.resolve_expression(source)?;
-        let source_type = resolved_source.resolution();
-
         let target_type = &resolved_variable.resolved_type;
+        let resolved_source = self.resolve_expression(source, target_type)?;
+        let source_type = resolved_source.resolution();
 
         let resolved_compound_operator = self.resolve_compound_operator(operator);
 
@@ -307,17 +306,13 @@ impl<'a> Resolver<'a> {
         ast_expression: &Expression,
     ) -> Result<ResolvedExpression, ResolveError> {
         let maybe_required_type = if let Some(coerce_type_found) = coerce {
-            Some(self.resolve_type(coerce_type_found)?)
+            self.resolve_type(coerce_type_found)?
         } else {
-            None
+            ResolvedType::Any
         };
-        let converted_expression = self.resolve_expression_maybe_expecting_type(
-            ast_expression,
-            maybe_required_type.clone(),
-            true,
-        )?;
+        let converted_expression = self.resolve_expression(ast_expression, &maybe_required_type)?;
         let expression_type =
-            converted_expression.resolution_maybe_expecting_type(maybe_required_type)?;
+            converted_expression.resolution_expecting_type(&maybe_required_type)?;
         let (variable_ref, is_reassignment) =
             self.set_or_overwrite_variable_with_type(ast_variable, &expression_type)?;
 
@@ -359,7 +354,7 @@ impl<'a> Resolver<'a> {
         ast_variables: &[Variable],
         ast_expression: &Expression,
     ) -> Result<ResolvedExpression, ResolveError> {
-        let converted_expression = self.resolve_expression(ast_expression)?;
+        let converted_expression = self.resolve_expression(ast_expression, &ResolvedType::Any)?;
         let expression_type = converted_expression.resolution();
 
         if ast_variables.len() > 1 {

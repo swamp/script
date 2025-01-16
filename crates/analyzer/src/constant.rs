@@ -8,6 +8,7 @@ use crate::Resolver;
 use swamp_script_ast::{ConstantIdentifier, ConstantInfo};
 use swamp_script_semantic::{
     ResolvedConstant, ResolvedConstantRef, ResolvedDefinition, ResolvedExpression, ResolvedNode,
+    ResolvedType,
 };
 
 impl<'a> Resolver<'a> {
@@ -16,7 +17,8 @@ impl<'a> Resolver<'a> {
         constant: &ConstantInfo,
     ) -> Result<(ResolvedConstantRef, String, ResolvedNode), ResolveError> {
         let (constant, name_node, name_text) = {
-            let resolved_expr = self.resolve_expression(&constant.expression)?;
+            let resolved_expr =
+                self.resolve_expression(&constant.expression, &ResolvedType::Any)?;
             let resolved_type = resolved_expr.resolution();
             let name_node = self.to_node(&constant.constant_identifier.0);
             let name_text = self.get_text_resolved(&name_node).to_string();

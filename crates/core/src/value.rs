@@ -77,7 +77,7 @@ pub enum Value {
     #[default]
     Unit, // Means 'no value' ()
 
-    Option(Option<Box<ValueRef>>),
+    Option(Option<ValueRef>),
 
     // Containers
     Array(ResolvedArrayTypeRef, Vec<ValueRef>),
@@ -122,18 +122,18 @@ impl Value {
     pub fn quick_serialize(&self, octets: &mut [u8], depth: usize) -> usize {
         match self {
             Self::Int(x) => {
-                let value_octets = x.to_ne_bytes();
+                let value_octets = x.to_le_bytes();
                 octets[..value_octets.len()].copy_from_slice(&value_octets);
                 value_octets.len()
             }
             Self::Float(fp) => {
-                let value_octets = fp.inner().to_ne_bytes();
+                let value_octets = fp.inner().to_le_bytes();
                 octets[..value_octets.len()].copy_from_slice(&value_octets);
                 value_octets.len()
             }
             Self::String(s) => {
                 let len = s.len() as u16;
-                let len_bytes = len.to_ne_bytes();
+                let len_bytes = len.to_le_bytes();
                 octets[..len_bytes.len()].copy_from_slice(&len_bytes);
                 let mut offset = len_bytes.len();
 
@@ -144,7 +144,7 @@ impl Value {
             }
 
             Self::Bool(b) => {
-                octets[0] = if *b { 1 } else { 0 };
+                octets[0] = u8::from(*b);
                 1
             }
 
@@ -166,7 +166,7 @@ impl Value {
                 let mut offset = 0;
 
                 let count: u16 = values.len() as u16;
-                let count_octets = count.to_ne_bytes();
+                let count_octets = count.to_le_bytes();
                 octets[offset..offset + 2].copy_from_slice(&count_octets);
                 offset += count_octets.len();
 
@@ -183,7 +183,7 @@ impl Value {
                 let mut offset = 0;
 
                 let count: u16 = values.len() as u16;
-                let count_octets = count.to_ne_bytes();
+                let count_octets = count.to_le_bytes();
                 octets[offset..offset + count_octets.len()].copy_from_slice(&count_octets);
                 offset += count_octets.len();
 
@@ -273,9 +273,7 @@ impl Clone for Value {
             Self::Unit => Self::Unit,
 
             Self::Option(opt) => {
-                let cloned_opt = opt
-                    .as_ref()
-                    .map(|boxed_val| Box::new((**boxed_val).clone()));
+                let cloned_opt = opt.as_ref().map(std::clone::Clone::clone);
                 Self::Option(cloned_opt)
             }
 

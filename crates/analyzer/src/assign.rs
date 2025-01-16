@@ -29,8 +29,7 @@ impl<'a> Resolver<'a> {
             field_index,
         ));
 
-        let source_expression =
-            self.resolve_expression_expecting_type(ast_source_expression, &field_type, true)?;
+        let source_expression = self.resolve_expression(ast_source_expression, &field_type)?;
 
         Ok(ResolvedExpression::StructFieldAssignment(
             Box::new(resolved_first_base_expression),
@@ -61,8 +60,7 @@ impl<'a> Resolver<'a> {
             field_index,
         ));
 
-        let source_expression =
-            self.resolve_expression_expecting_type(ast_source_expression, &field_type, true)?;
+        let source_expression = self.resolve_expression(ast_source_expression, &field_type)?;
 
         Ok(ResolvedExpression::FieldCompoundAssignment(
             Box::new(resolved_first_base_expression),

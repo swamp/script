@@ -845,9 +845,9 @@ fn eval2_map() {
 
     assert_eq!(
         x,
-        Value::Option(Some(Box::new(Rc::new(RefCell::new(Value::String(
+        Value::Option(Some(Rc::new(RefCell::new(Value::String(
             "hello".to_string()
-        ))))))
+        )))))
     );
 }
 
@@ -1946,11 +1946,12 @@ after Option("hello")
 fn serialize_octets() {
     let v = Value::Int(2);
     let mut buf = [0u8; 4];
-    let size = v.quick_serialize(&mut buf);
+    let size = v.quick_serialize(&mut buf, 0);
     assert_eq!(size, 4);
     assert_eq!(buf[0], 2);
 
-    let (deserialized_value, deserialized_octet_size) = quick_deserialize(&ResolvedType::Int, &buf);
+    let (deserialized_value, deserialized_octet_size) =
+        quick_deserialize(&ResolvedType::Int, &buf, 0);
     assert_eq!(deserialized_value, v);
     assert_eq!(size, deserialized_octet_size);
 }
@@ -2020,14 +2021,74 @@ fn serialize_struct_octets() {
     let struct_value = Value::Struct(struct_type_ref.clone(), fields);
 
     let mut buf = [0u8; 256];
-    let size = struct_value.quick_serialize(&mut buf);
+    let size = struct_value.quick_serialize(&mut buf, 0);
     assert_eq!(size, 21);
 
     let complete_struct_type = ResolvedType::Struct(struct_type_ref);
 
     let (deserialized_value, deserialized_octet_size) =
-        quick_deserialize(&complete_struct_type, &buf);
+        quick_deserialize(&complete_struct_type, &buf, 0);
     assert_eq!(size, deserialized_octet_size);
 
     assert_eq!(struct_value.to_string(), deserialized_value.to_string());
+}
+
+#[test_log::test]
+fn val_assign_coerce() {
+    let val = eval(
+        r"
+booster_value: Int? = if false 0 else none
+         ",
+    );
+
+    assert_eq!(val, Value::Option(None));
+}
+
+#[test_log::test]
+fn val_assign_coerce_2() {
+    let val = eval(
+        r"
+
+booster: Int? = 3
+
+         ",
+    );
+
+    assert_eq!(
+        val,
+        Value::Option(Option::from(Rc::new(RefCell::new(Value::Int(3)))))
+    );
+}
+
+#[test_log::test]
+fn val_assign_coerce_3() {
+    let val = eval(
+        r"
+
+booster: Int? = 3
+if booster? {
+    booster
+}
+         ",
+    );
+
+    assert_eq!(val, Value::Int(3));
+}
+
+#[test_log::test]
+fn val_assign_coerce_4() {
+    let val = eval(
+        r"
+
+booster: Int? = none
+if booster? {
+    booster
+} else {
+    booster
+}
+
+         ",
+    );
+
+    assert_eq!(val, Value::Option(None));
 }

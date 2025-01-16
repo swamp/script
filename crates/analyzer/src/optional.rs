@@ -16,7 +16,7 @@ impl<'a> Resolver<'a> {
         true_expression: &Expression,
         maybe_else_expression: &Option<Box<Expression>>,
     ) -> Result<ResolvedExpression, ResolveError> {
-        let resolved_var_expr = self.resolve_expression(expr)?;
+        let resolved_var_expr = self.resolve_expression(expr, &ResolvedType::Any)?;
         let resolved_var_type = resolved_var_expr.resolution();
         if resolved_var_type == ResolvedType::Any {
             println!("problem");
@@ -35,11 +35,13 @@ impl<'a> Resolver<'a> {
                 &mut_node,
                 &inner_type,
             )?; // it inherits the mutable from the other variable
-            let resolved_true = self.resolve_expression(true_expression)?;
+            let resolved_true = self.resolve_expression(true_expression, &ResolvedType::Any)?;
             self.pop_block_scope("if_unwrap");
 
             let resolved_false = if let Some(else_expression) = maybe_else_expression {
-                Some(Box::new(self.resolve_expression(else_expression)?))
+                Some(Box::new(
+                    self.resolve_expression(else_expression, &ResolvedType::Any)?,
+                ))
             } else {
                 None
             };
@@ -62,7 +64,7 @@ impl<'a> Resolver<'a> {
         statements: &Expression,
         maybe_else_statements: &Option<Box<Expression>>,
     ) -> Result<ResolvedExpression, ResolveError> {
-        let resolved_expr = self.resolve_expression(inner_expr)?;
+        let resolved_expr = self.resolve_expression(inner_expr, &ResolvedType::Any)?;
 
         if let ResolvedType::Optional(inner_type) = resolved_expr.resolution() {
             /*
@@ -81,11 +83,13 @@ impl<'a> Resolver<'a> {
                 &target_variable.is_mutable,
                 &inner_type,
             )?;
-            let resolved_true = self.resolve_expression(statements)?;
+            let resolved_true = self.resolve_expression(statements, &ResolvedType::Any)?;
             self.pop_block_scope("if_assign_unwrap");
 
             let resolved_false = if let Some(else_statements) = maybe_else_statements {
-                Some(Box::new(self.resolve_expression(else_statements)?))
+                Some(Box::new(
+                    self.resolve_expression(else_statements, &ResolvedType::Any)?,
+                ))
             } else {
                 None
             };

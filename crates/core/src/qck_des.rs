@@ -12,17 +12,17 @@ use swamp_script_semantic::{ResolvedEnumVariantContainerType, ResolvedRustType, 
 pub fn quick_deserialize(resolved_type: &ResolvedType, buf: &[u8], depth: usize) -> (Value, usize) {
     let (val, octet_size) = match resolved_type {
         ResolvedType::Int => {
-            let i = i32::from_ne_bytes(buf[0..4].try_into().expect("REASON"));
+            let i = i32::from_le_bytes(buf[0..4].try_into().expect("REASON"));
             (Value::Int(i), 4)
         }
 
         ResolvedType::Float => {
-            let i = i32::from_ne_bytes(buf[0..4].try_into().expect("couldn't convert to Fp"));
+            let i = i32::from_le_bytes(buf[0..4].try_into().expect("couldn't convert to Fp"));
             (Value::Float(Fp::from_raw(i)), 4)
         }
         ResolvedType::String => {
             let octet_len =
-                u16::from_ne_bytes(buf[0..2].try_into().expect("could not convert strlen"));
+                u16::from_le_bytes(buf[0..2].try_into().expect("could not convert strlen"));
             let str =
                 String::from_utf8(buf[2..2 + octet_len as usize].to_owned()).expect("utf8 error");
             (Value::String(str), (octet_len + 2) as usize)
@@ -31,7 +31,7 @@ pub fn quick_deserialize(resolved_type: &ResolvedType, buf: &[u8], depth: usize)
         ResolvedType::Unit => (Value::Unit, 0),
         ResolvedType::Array(array_type_ref) => {
             let mut offset = 0;
-            let count = u16::from_ne_bytes(
+            let count = u16::from_le_bytes(
                 buf[offset..offset + 2]
                     .try_into()
                     .expect("should work with u16"),
@@ -81,7 +81,7 @@ pub fn quick_deserialize(resolved_type: &ResolvedType, buf: &[u8], depth: usize)
         }
         ResolvedType::Map(map_type_ref) => {
             let mut offset = 0;
-            let count = u16::from_ne_bytes(
+            let count = u16::from_le_bytes(
                 buf[offset..offset + 2]
                     .try_into()
                     .expect("should work with u16"),
@@ -192,10 +192,7 @@ pub fn quick_deserialize(resolved_type: &ResolvedType, buf: &[u8], depth: usize)
             if has_some {
                 let (v, octet_size) = quick_deserialize(optional_type_ref, &buf[1..], depth + 1);
                 offset += octet_size;
-                (
-                    Value::Option(Some(Box::from(Rc::new(RefCell::new(v))))),
-                    offset,
-                )
+                (Value::Option(Some(Rc::new(RefCell::new(v)))), offset)
             } else {
                 (Value::Option(None), offset)
             }

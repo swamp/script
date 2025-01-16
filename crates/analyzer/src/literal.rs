@@ -9,7 +9,7 @@ use std::rc::Rc;
 use swamp_script_ast::{EnumVariantLiteral, Expression, Literal};
 use swamp_script_semantic::{
     Fp, ResolvedEnumLiteralData, ResolvedEnumVariantContainerType, ResolvedExpression,
-    ResolvedLiteral, ResolvedMapType, ResolvedTupleType, ResolvedTupleTypeRef,
+    ResolvedLiteral, ResolvedMapType, ResolvedTupleType, ResolvedTupleTypeRef, ResolvedType,
 };
 
 impl<'a> Resolver<'a> {
@@ -66,7 +66,7 @@ impl<'a> Resolver<'a> {
                     EnumVariantLiteral::Simple(_, _) => ResolvedEnumLiteralData::Nothing,
                     EnumVariantLiteral::Tuple(_node, _variant, expressions) => {
                         let resolved = self
-                            .resolve_expressions(expressions)
+                            .resolve_expressions(&ResolvedType::Any, expressions)
                             .expect("enum tuple expressions should resolve");
                         ResolvedEnumLiteralData::Tuple(resolved)
                     }
@@ -130,7 +130,7 @@ impl<'a> Resolver<'a> {
         &mut self,
         items: &[Expression],
     ) -> Result<(ResolvedTupleTypeRef, Vec<ResolvedExpression>), ResolveError> {
-        let expressions = self.resolve_expressions(items)?;
+        let expressions = self.resolve_expressions(&ResolvedType::Any, items)?;
         let mut tuple_types = Vec::new();
         for expr in &expressions {
             let item_type = expr.resolution();
@@ -154,8 +154,8 @@ impl<'a> Resolver<'a> {
 
         // Resolve first entry to determine map types
         let (first_key, first_value) = &entries[0];
-        let resolved_first_key = self.resolve_expression(first_key)?;
-        let resolved_first_value = self.resolve_expression(first_value)?;
+        let resolved_first_key = self.resolve_expression(first_key, &ResolvedType::Any)?;
+        let resolved_first_value = self.resolve_expression(first_value, &ResolvedType::Any)?;
         let key_type = resolved_first_key.resolution();
         let value_type = resolved_first_value.resolution();
 
@@ -164,8 +164,8 @@ impl<'a> Resolver<'a> {
         resolved_entries.push((resolved_first_key, resolved_first_value));
 
         for (key, value) in entries.iter().skip(1) {
-            let resolved_key = self.resolve_expression(key)?;
-            let resolved_value = self.resolve_expression(value)?;
+            let resolved_key = self.resolve_expression(key, &ResolvedType::Any)?;
+            let resolved_value = self.resolve_expression(value, &ResolvedType::Any)?;
 
             if !resolved_key.resolution().same_type(&key_type) {
                 return Err(ResolveError::MapKeyTypeMismatch {

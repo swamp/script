@@ -157,11 +157,8 @@ impl<'a> Resolver<'a> {
                 .get_index(&field_name)
                 .expect("field_name is checked earlier");
 
-            let resolved_expression = self.resolve_expression_expecting_type(
-                &field.expression,
-                &looked_up_field.field_type,
-                true,
-            )?;
+            let resolved_expression =
+                self.resolve_expression(&field.expression, &looked_up_field.field_type)?;
             /*
             let expression_type = resolved_expression.resolution();
 

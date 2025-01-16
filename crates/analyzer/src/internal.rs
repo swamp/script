@@ -18,7 +18,7 @@ impl<'a> Resolver<'a> {
         ast_member_function_name: &Node,
         ast_arguments: &[Expression],
     ) -> Result<Option<ResolvedExpression>, ResolveError> {
-        let resolved_expr = self.resolve_expression(source)?;
+        let resolved_expr = self.resolve_expression(source, &ResolvedType::Any)?;
 
         match resolved_expr.resolution() {
             ResolvedType::Array(_) => {
@@ -104,11 +104,7 @@ impl<'a> Resolver<'a> {
                     ));
                 }
 
-                let key_expr = self.resolve_expression_expecting_type(
-                    &ast_arguments[0],
-                    &map_type.key_type,
-                    true,
-                )?;
+                let key_expr = self.resolve_expression(&ast_arguments[0], &map_type.key_type)?;
 
                 ResolvedExpression::MapRemove(
                     Box::new(map_expr),
@@ -132,11 +128,7 @@ impl<'a> Resolver<'a> {
                     ));
                 }
 
-                let key_expr = self.resolve_expression_expecting_type(
-                    &ast_arguments[0],
-                    &map_type.key_type,
-                    false,
-                )?;
+                let key_expr = self.resolve_expression(&ast_arguments[0], &map_type.key_type)?;
 
                 ResolvedExpression::MapHas(Box::new(map_expr), Box::new(key_expr))
             }
@@ -212,8 +204,7 @@ impl<'a> Resolver<'a> {
                 1,
             ));
         }
-        let expr2 =
-            self.resolve_expression_expecting_type(&ast_arguments[0], &ResolvedType::Float, false)?;
+        let expr2 = self.resolve_expression(&ast_arguments[0], &ResolvedType::Float)?;
 
         Ok(expr2)
     }
@@ -230,8 +221,7 @@ impl<'a> Resolver<'a> {
                 1,
             ));
         }
-        let expr2 =
-            self.resolve_expression_expecting_type(&ast_arguments[0], &ResolvedType::Int, false)?;
+        let expr2 = self.resolve_expression(&ast_arguments[0], &ResolvedType::Int)?;
 
         Ok(expr2)
     }
@@ -248,10 +238,8 @@ impl<'a> Resolver<'a> {
                 2,
             ));
         }
-        let expr2 =
-            self.resolve_expression_expecting_type(&ast_arguments[0], &ResolvedType::Float, false)?;
-        let expr3 =
-            self.resolve_expression_expecting_type(&ast_arguments[1], &ResolvedType::Float, false)?;
+        let expr2 = self.resolve_expression(&ast_arguments[0], &ResolvedType::Float)?;
+        let expr3 = self.resolve_expression(&ast_arguments[1], &ResolvedType::Float)?;
 
         Ok((expr2, expr3))
     }
@@ -512,11 +500,7 @@ impl<'a> Resolver<'a> {
                                     1,
                                 ));
                             }
-                            let value = self.resolve_expression_expecting_type(
-                                &ast_arguments[0],
-                                value_type,
-                                false,
-                            )?;
+                            let value = self.resolve_expression(&ast_arguments[0], value_type)?;
                             return Ok(Some(ResolvedExpression::SparseAdd(
                                 Box::new(self_expression),
                                 Box::new(value),
@@ -531,12 +515,8 @@ impl<'a> Resolver<'a> {
                                     1,
                                 ));
                             }
-                            let sparse_slot_id_expression = self
-                                .resolve_expression_expecting_type(
-                                    &ast_arguments[0],
-                                    &key_type,
-                                    false,
-                                )?;
+                            let sparse_slot_id_expression =
+                                self.resolve_expression(&ast_arguments[0], &key_type)?;
                             return Ok(Some(ResolvedExpression::SparseRemove(
                                 Box::new(self_expression),
                                 Box::new(sparse_slot_id_expression),

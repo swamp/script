@@ -15,6 +15,15 @@ pub enum VariableValue {
     Reference(ValueReference),
 }
 
+impl VariableValue {
+    pub(crate) fn to_value(&self) -> Value {
+        match self {
+            VariableValue::Value(v) => v.clone(),
+            VariableValue::Reference(value_ref) => value_ref.0.borrow().clone(),
+        }
+    }
+}
+
 impl PartialEq for VariableValue {
     fn eq(&self, other: &VariableValue) -> bool {
         match (self, other) {

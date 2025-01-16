@@ -1141,3 +1141,33 @@ InitializeVariable(ResolvedVariableAssignment { variable_refs: ResolvedVariable 
 ",
     );
 }
+
+#[test_log::test]
+fn var_assignment_coerce_if() {
+    check(
+        r"
+booster: Int? = none
+if booster? {
+ true
+}
+         ",
+        r"
+InitializeVariable(ResolvedVariableAssignment { variable_refs: ResolvedVariable { name: <1:7>, resolved_type: Int?, mutable_node: None, scope_index: 0, variable_index: 0 }, expression: Literal(NoneLiteral(<17:4>)) })
+IfOnlyVariable { variable: ResolvedVariable { name: <25:7>, resolved_type: Int, mutable_node: None, scope_index: 1, variable_index: 0 }, optional_expr: VariableAccess(ResolvedVariable { name: <1:7>, resolved_type: Int?, mutable_node: None, scope_index: 0, variable_index: 0 }), true_block: Block([Literal(BoolLiteral(true, <37:4>))]), false_block: None }
+
+",
+    );
+}
+
+#[test_log::test]
+fn val_assign_coerce() {
+    check(
+        r"
+booster_value: Int? = if false 0 else none
+         ",
+        r"
+ InitializeVariable(ResolvedVariableAssignment { variable_refs: ResolvedVariable { name: <1:13>, resolved_type: Int?, mutable_node: None, scope_index: 0, variable_index: 0 }, expression: Option(Some(If(ResolvedBooleanExpression { expression: Literal(BoolLiteral(false, <26:5>)) }, Literal(IntLiteral(0, <32:1>)), Some(Literal(NoneLiteral(<39:4>)))))) })
+
+         ",
+    );
+}

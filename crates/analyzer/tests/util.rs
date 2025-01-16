@@ -11,7 +11,7 @@ use swamp_script_analyzer::Resolver;
 use swamp_script_parser::AstParser;
 use swamp_script_semantic::modules::{ResolvedModule, ResolvedModules};
 use swamp_script_semantic::ns::ResolvedModuleNamespace;
-use swamp_script_semantic::ResolvedProgramState;
+use swamp_script_semantic::{ResolvedProgramState, ResolvedType};
 use swamp_script_source_map::SourceMap;
 use tracing::warn;
 
@@ -42,7 +42,9 @@ fn internal_compile(script: &str) -> Result<ResolvedModule, ResolveError> {
 
     let expression = &program.expression;
     let maybe_resolved_expression = match expression {
-        Some(unwrapped_expression) => Some(resolver.resolve_expression(unwrapped_expression)?),
+        Some(unwrapped_expression) => {
+            Some(resolver.resolve_expression(unwrapped_expression, &ResolvedType::Any)?)
+        }
         None => None,
     };
 

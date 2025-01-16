@@ -27,11 +27,11 @@ impl QuickDeserialize for SparseValueId {
         let mut offset = 0;
 
         // Deserialize the index
-        let index = u16::from_ne_bytes(octets[offset..offset + 2].try_into().unwrap());
+        let index = u16::from_le_bytes(octets[offset..offset + 2].try_into().unwrap());
         offset += 2;
 
         // Deserialize the generation
-        let generation = u16::from_ne_bytes(octets[offset..offset + 2].try_into().unwrap());
+        let generation = u16::from_le_bytes(octets[offset..offset + 2].try_into().unwrap());
         offset += 2;
 
         let id = Id::new(index.into(), generation);
@@ -45,12 +45,12 @@ impl QuickSerialize for SparseValueId {
         let mut offset = 0;
 
         // Serialize the index
-        let index_octets = (self.0.index as u16).to_ne_bytes();
+        let index_octets = (self.0.index as u16).to_le_bytes();
         octets[offset..offset + index_octets.len()].copy_from_slice(&index_octets);
         offset += index_octets.len();
 
         // Serialize the generation
-        let generation_octets = self.0.generation.to_ne_bytes();
+        let generation_octets = self.0.generation.to_le_bytes();
         octets[offset..offset + generation_octets.len()].copy_from_slice(&generation_octets);
         offset += generation_octets.len();
 
@@ -83,17 +83,17 @@ impl QuickSerialize for SparseValueMap {
         let mut offset = 0;
 
         let count = self.sparse_slot.len() as u16;
-        let count_octets = count.to_ne_bytes();
+        let count_octets = count.to_le_bytes();
         octets[offset..offset + count_octets.len()].copy_from_slice(&count_octets);
         offset += count_octets.len();
 
         for (id, value) in self.sparse_slot.iter() {
             let short_index = id.index as u16;
-            let key_index_octets = short_index.to_ne_bytes();
+            let key_index_octets = short_index.to_le_bytes();
             octets[offset..offset + key_index_octets.len()].copy_from_slice(&key_index_octets);
             offset += key_index_octets.len();
 
-            let key_generation_octets = id.generation.to_ne_bytes();
+            let key_generation_octets = id.generation.to_le_bytes();
             octets[offset..offset + key_index_octets.len()].copy_from_slice(&key_generation_octets);
             offset += key_generation_octets.len();
 
@@ -113,7 +113,7 @@ impl SparseValueMap {
     ) -> (SparseValueMap, usize) {
         let mut sparse = SparseValueMap::new(key_type, value_item_type.clone());
         let mut offset = 0;
-        let count = u16::from_ne_bytes(
+        let count = u16::from_le_bytes(
             octets[offset..offset + 2]
                 .try_into()
                 .expect("could not convert to u16 count"),
@@ -121,14 +121,14 @@ impl SparseValueMap {
         offset += 2;
 
         for _i in 0..count {
-            let index = u16::from_ne_bytes(
+            let index = u16::from_le_bytes(
                 octets[offset..offset + 2]
                     .try_into()
                     .expect("could not convert to u16 index"),
             );
             offset += 2;
 
-            let generation = u16::from_ne_bytes(
+            let generation = u16::from_le_bytes(
                 octets[offset..offset + 2]
                     .try_into()
                     .expect("could not convert to u16 generation"),

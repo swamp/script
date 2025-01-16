@@ -433,10 +433,7 @@ impl<'a, C> Interpreter<'a, C> {
                 let option_val = {
                     if let Value::Map(_type_id, ref seq_map) = &*map_ref.borrow_mut() {
                         let x = seq_map.get(&key_val);
-                        x.map_or_else(
-                            || Value::Option(None),
-                            |v| Value::Option(Some(Box::from(v.clone()))),
-                        )
+                        x.map_or_else(|| Value::Option(None), |v| Value::Option(Some(v.clone())))
                     } else {
                         return Err(ExecuteError::NotAMap);
                     }
@@ -744,7 +741,7 @@ impl<'a, C> Interpreter<'a, C> {
                     Value::Option(Some(inner_value)) => {
                         self.push_block_scope();
                         self.current_block_scopes
-                            .initialize_var_mut(variable, *inner_value);
+                            .initialize_var_mut(variable, inner_value);
 
                         let result = self.evaluate_expression_with_signal(true_block);
                         self.pop_block_scope();
@@ -773,7 +770,7 @@ impl<'a, C> Interpreter<'a, C> {
                             Some(unwrapped_value) => {
                                 self.push_block_scope();
                                 self.current_block_scopes
-                                    .initialize_var_mut(variable, *unwrapped_value.clone());
+                                    .initialize_var_mut(variable, unwrapped_value);
                                 true
                             }
                         },
@@ -785,7 +782,7 @@ impl<'a, C> Interpreter<'a, C> {
                             Some(unwrapped_value) => {
                                 self.push_block_scope();
                                 self.current_block_scopes
-                                    .initialize_var_mut(variable, *unwrapped_value.clone());
+                                    .initialize_var_mut(variable, unwrapped_value.clone());
                                 true
                             }
                         },
@@ -1023,9 +1020,9 @@ impl<'a, C> Interpreter<'a, C> {
                     self.evaluate_mut_expression(&var_assignment.expression)?;
 
                 self.current_block_scopes
-                    .initialize_var_mem(target_var, source_value_or_reference)?;
+                    .initialize_var_mem(target_var, source_value_or_reference.clone())?;
 
-                Value::Unit
+                source_value_or_reference.to_value().clone()
             }
 
             ResolvedExpression::ReassignVariable(var_assignment) => {
@@ -1269,10 +1266,7 @@ impl<'a, C> Interpreter<'a, C> {
                 let result = {
                     if let Value::Map(_type_id, ref seq_map) = map_ref {
                         let x = seq_map.get(&index_val);
-                        x.map_or_else(
-                            || Value::Option(None),
-                            |v| Value::Option(Some(Box::from(v.clone()))),
-                        )
+                        x.map_or_else(|| Value::Option(None), |v| Value::Option(Some(v.clone())))
                     } else {
                         return Err(ExecuteError::NotAMap);
                     }
@@ -1300,10 +1294,7 @@ impl<'a, C> Interpreter<'a, C> {
                     let mut borrowed = map_ref.borrow_mut();
                     if let Value::Map(_type_id, ref mut seq_map) = &mut *borrowed {
                         let x = seq_map.remove(&index_val);
-                        x.map_or_else(
-                            || Value::Option(None),
-                            |v| Value::Option(Some(Box::from(v))),
-                        )
+                        x.map_or_else(|| Value::Option(None), |v| Value::Option(Some(v.clone())))
                     } else {
                         return Err(ExecuteError::NotAMap);
                     }
@@ -1380,10 +1371,7 @@ impl<'a, C> Interpreter<'a, C> {
                 let result = {
                     if let Value::Map(_type_id, ref seq_map) = map_ref {
                         let x = seq_map.get(&key_val);
-                        x.map_or_else(
-                            || Value::Option(None),
-                            |v| Value::Option(Some(Box::from(v.clone()))),
-                        )
+                        x.map_or_else(|| Value::Option(None), |v| Value::Option(Some(v.clone())))
                     } else {
                         return Err(ExecuteError::NotAMap);
                     }
@@ -1404,7 +1392,7 @@ impl<'a, C> Interpreter<'a, C> {
                     if let Some(found_id) = id_value.downcast_rust::<SparseValueId>() {
                         found.borrow_mut().get(&found_id.borrow()).map_or_else(
                             || Value::Option(None),
-                            |found_value| Value::Option(Some(Box::new(found_value.clone()))),
+                            |found_value| Value::Option(Some(found_value.clone())),
                         )
                     } else {
                         return Err(ExecuteError::Error(
@@ -1567,7 +1555,7 @@ impl<'a, C> Interpreter<'a, C> {
                     Value::Option(Some(inner_value)) => {
                         self.push_block_scope();
                         self.current_block_scopes
-                            .initialize_var_mut(variable, *inner_value);
+                            .initialize_var_mut(variable, inner_value.clone());
                         let result = self.evaluate_expression(true_block)?;
                         self.pop_block_scope();
                         result
@@ -1589,7 +1577,7 @@ impl<'a, C> Interpreter<'a, C> {
                     Value::Option(Some(inner_value)) => {
                         self.push_block_scope();
                         self.current_block_scopes
-                            .initialize_var_mut(variable, *inner_value);
+                            .initialize_var_mut(variable, inner_value.clone());
                         let result = self.evaluate_expression(true_block)?;
                         self.pop_block_scope();
                         result
@@ -1629,7 +1617,7 @@ impl<'a, C> Interpreter<'a, C> {
                         Value::Option(_) => {
                             panic!("unnecessary wrap!, should be investigated");
                         }
-                        _ => Value::Option(Some(Box::from(Rc::new(RefCell::new(v))))),
+                        _ => Value::Option(Some(Rc::new(RefCell::new(v)))),
                     }
                 }
             },
@@ -1692,7 +1680,7 @@ impl<'a, C> Interpreter<'a, C> {
                     let id_value = self.evaluate_expression(id_expression)?;
                     if let Some(found_id) = id_value.downcast_rust::<SparseValueId>() {
                         if let Some(found_value) = found.borrow_mut().get(&found_id.borrow()) {
-                            Value::Option(Some(Box::new(found_value.clone())))
+                            Value::Option(Some(found_value.clone()))
                         } else {
                             Value::Option(None)
                         }

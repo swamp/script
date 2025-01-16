@@ -33,6 +33,7 @@ use swamp_script_ast::{
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{ResolvedNormalPattern, ResolvedRangeMode};
 use swamp_script_source_map::SourceMap;
+use tracing::info;
 
 #[derive(Debug)]
 pub struct ResolvedProgram {
@@ -158,17 +159,20 @@ impl<'a> Resolver<'a> {
     fn resolve_normal_if_statement(
         &mut self,
         condition: &Expression,
+        expected_type: &ResolvedType,
         true_expression: &Expression,
         maybe_false_expression: &Option<Box<Expression>>,
     ) -> Result<ResolvedExpression, ResolveError> {
         let condition = self.resolve_bool_expression(condition)?;
 
         // For the true branch
-        let resolved_true = Box::new(self.resolve_expression(true_expression)?);
+        let resolved_true = Box::new(self.resolve_expression(true_expression, &expected_type)?);
 
         // For the else branch
         let else_statements = if let Some(false_expression) = maybe_false_expression {
-            Some(Box::new(self.resolve_expression(false_expression)?))
+            Some(Box::new(
+                self.resolve_expression(false_expression, &expected_type)?,
+            ))
         } else {
             None
         };
@@ -239,7 +243,7 @@ impl<'a> Resolver<'a> {
         expression: &Expression,
         return_type: &ResolvedType,
     ) -> Result<ResolvedExpression, ResolveError> {
-        let resolved_statement = self.resolve_expression(expression)?;
+        let resolved_statement = self.resolve_expression(expression, &return_type)?;
         let wrapped_expr = Self::check_and_wrap_return_value(resolved_statement, return_type)?;
 
         Ok(wrapped_expr)
@@ -283,13 +287,13 @@ impl<'a> Resolver<'a> {
         expr: ResolvedExpression,
         return_type: &ResolvedType,
     ) -> Result<ResolvedExpression, ResolveError> {
-        let expr_type = expr.resolution();
+        let expr_type = expr.resolution_expecting_type(return_type)?;
 
         // If return type is Unit, ignore the expression's type and return Unit
         // TODO: In future versions, always have a return statement
-        if matches!(return_type, ResolvedType::Unit) {
-            return Ok(expr);
-        }
+        // if matches!(return_type, ResolvedType::Unit) {
+        //   return Ok(expr);
+        //}
 
         if let ResolvedType::Optional(inner_type) = return_type {
             if return_type.same_type(&expr_type) {
@@ -366,21 +370,7 @@ impl<'a> Resolver<'a> {
         matches!(ast_expression, Expression::Literal(Literal::Array(items)) if items.is_empty())
     }
 
-    /// # Errors
-    ///
-    pub fn resolve_expression_maybe_expecting_type(
-        &mut self,
-        ast_expression: &Expression,
-        expected_type: Option<ResolvedType>,
-        allow_some: bool,
-    ) -> Result<ResolvedExpression, ResolveError> {
-        if let Some(found_type) = expected_type {
-            self.resolve_expression_expecting_type(ast_expression, &found_type, allow_some)
-        } else {
-            self.resolve_expression(ast_expression)
-        }
-    }
-
+    /*
     /// # Errors
     ///
     pub fn resolve_expression_expecting_type(
@@ -416,7 +406,7 @@ impl<'a> Resolver<'a> {
                 ))
             }
         }
-    }
+    } */
 
     /// # Errors
     ///
@@ -424,6 +414,7 @@ impl<'a> Resolver<'a> {
     pub fn resolve_expression(
         &mut self,
         ast_expression: &Expression,
+        expected_type: &ResolvedType,
     ) -> Result<ResolvedExpression, ResolveError> {
         let expression = match ast_expression {
             // Lookups
@@ -457,15 +448,17 @@ impl<'a> Resolver<'a> {
             // Assignments
             Expression::IndexAssignment(collection_expression, index_expression, source_expr) => {
                 let resolved_collection_expression =
-                    self.resolve_expression(collection_expression)?;
+                    self.resolve_expression(collection_expression, &ResolvedType::Any)?;
 
                 let collection_resolution = resolved_collection_expression.resolution();
 
-                let resolved_index_expression = self.resolve_expression(index_expression)?;
+                let resolved_index_expression =
+                    self.resolve_expression(index_expression, &ResolvedType::Any)?;
 
                 let index_resolution = resolved_index_expression.resolution();
 
-                let resolved_source_expression = self.resolve_expression(source_expr)?;
+                let resolved_source_expression =
+                    self.resolve_expression(source_expr, &ResolvedType::Any)?;
                 let resolved_source_expression_type = resolved_source_expression.resolution();
 
                 match collection_resolution {
@@ -527,7 +520,7 @@ impl<'a> Resolver<'a> {
                 source_expr,
             ) => {
                 let resolved_collection_expression =
-                    self.resolve_expression(collection_expression)?;
+                    self.resolve_expression(collection_expression, &ResolvedType::Any)?;
 
                 let collection_resolution = resolved_collection_expression.resolution();
 
@@ -536,18 +529,13 @@ impl<'a> Resolver<'a> {
                     RangeMode::Exclusive => ResolvedRangeMode::Exclusive,
                 };
 
-                let resolved_start_expression = self.resolve_expression_expecting_type(
-                    start_expression,
-                    &ResolvedType::Int,
-                    false,
-                )?;
-                let resolved_end_expression = self.resolve_expression_expecting_type(
-                    end_expression,
-                    &ResolvedType::Int,
-                    false,
-                )?;
+                let resolved_start_expression =
+                    self.resolve_expression(start_expression, &ResolvedType::Int)?;
+                let resolved_end_expression =
+                    self.resolve_expression(end_expression, &ResolvedType::Int)?;
 
-                let resolved_source_expression = self.resolve_expression(source_expr)?;
+                let resolved_source_expression =
+                    self.resolve_expression(source_expr, &ResolvedType::Any)?;
                 let resolved_source_expression_type = resolved_source_expression.resolution();
 
                 match &collection_resolution {
@@ -675,11 +663,11 @@ impl<'a> Resolver<'a> {
                 self.member_or_field_call(ast_member_expression, ast_identifier, ast_arguments)?
             }
             Expression::Block(expressions) => {
-                ResolvedExpression::Block(self.resolve_expressions(expressions)?)
+                ResolvedExpression::Block(self.resolve_expressions(&expected_type, expressions)?)
             }
 
             Expression::With(variable_bindings, expression) => {
-                self.resolve_with_expr(variable_bindings, expression)?
+                self.resolve_with_expr(expected_type, variable_bindings, expression)?
             }
 
             Expression::InterpolatedString(string_parts) => ResolvedExpression::InterpolatedString(
@@ -691,10 +679,8 @@ impl<'a> Resolver<'a> {
                 self.resolve_struct_instantiation(struct_identifier, fields, *has_rest)?
             }
             Expression::ExclusiveRange(min_value, max_value) => {
-                let min_expression =
-                    self.resolve_expression_expecting_type(min_value, &ResolvedType::Int, false)?;
-                let max_expression =
-                    self.resolve_expression_expecting_type(max_value, &ResolvedType::Int, false)?;
+                let min_expression = self.resolve_expression(min_value, &ResolvedType::Int)?;
+                let max_expression = self.resolve_expression(max_value, &ResolvedType::Int)?;
                 ResolvedExpression::ExclusiveRange(
                     Box::from(min_expression),
                     Box::from(max_expression),
@@ -702,10 +688,8 @@ impl<'a> Resolver<'a> {
             }
 
             Expression::InclusiveRange(min_value, max_value) => {
-                let min_expression =
-                    self.resolve_expression_expecting_type(min_value, &ResolvedType::Int, false)?;
-                let max_expression =
-                    self.resolve_expression_expecting_type(max_value, &ResolvedType::Int, false)?;
+                let min_expression = self.resolve_expression(min_value, &ResolvedType::Int)?;
+                let max_expression = self.resolve_expression(max_value, &ResolvedType::Int)?;
                 ResolvedExpression::InclusiveRange(
                     Box::from(min_expression),
                     Box::from(max_expression),
@@ -725,7 +709,7 @@ impl<'a> Resolver<'a> {
                     resolved_iterator.key_type.as_ref(),
                     &resolved_iterator.value_type,
                 )?;
-                let resolved_statements = self.resolve_expression(statements)?;
+                let resolved_statements = self.resolve_expression(statements, &expected_type)?;
                 self.pop_block_scope("for_loop");
 
                 ResolvedExpression::ForLoop(
@@ -737,14 +721,14 @@ impl<'a> Resolver<'a> {
             Expression::WhileLoop(expression, statements) => {
                 let condition = self.resolve_bool_expression(expression)?;
                 self.push_block_scope("while_loop");
-                let resolved_statements = self.resolve_expression(statements)?;
+                let resolved_statements = self.resolve_expression(statements, &expected_type)?;
                 self.pop_block_scope("while_loop");
 
                 ResolvedExpression::WhileLoop(condition, Box::from(resolved_statements))
             }
             Expression::Return(expr) => {
                 let wrapped_expr = if let Some(found_expr) = expr {
-                    let resolved_expr = self.resolve_expression(found_expr)?;
+                    let resolved_expr = self.resolve_expression(found_expr, &expected_type)?;
                     let return_type = self.current_function_return_type();
                     Some(Box::new(Self::check_and_wrap_return_value(
                         resolved_expr,
@@ -772,7 +756,7 @@ impl<'a> Resolver<'a> {
                             Err(ResolveError::ExpectedVariable(self.to_node(unwrap_node)))?
                         }
                     }
-                    Expression::VariableAssignment(target_variable, coerce, expr) => {
+                    Expression::VariableAssignment(target_variable, _coerce, expr) => {
                         if let Expression::PostfixOp(
                             PostfixOperator::Unwrap(_unwrap_node),
                             inner_expr,
@@ -787,6 +771,7 @@ impl<'a> Resolver<'a> {
                         } else {
                             self.resolve_normal_if_statement(
                                 expression,
+                                expected_type,
                                 true_expression,
                                 maybe_false_expression,
                             )?
@@ -794,6 +779,7 @@ impl<'a> Resolver<'a> {
                     }
                     _ => self.resolve_normal_if_statement(
                         expression,
+                        expected_type,
                         true_expression,
                         maybe_false_expression,
                     )?,
@@ -801,10 +787,10 @@ impl<'a> Resolver<'a> {
             }
 
             Expression::Match(expression, arms) => {
-                ResolvedExpression::Match(self.resolve_match(expression, arms)?)
+                ResolvedExpression::Match(self.resolve_match(expression, expected_type, arms)?)
             }
             Expression::Guard(guard_expressions, wildcard) => {
-                self.resolve_guard(guard_expressions, wildcard)?
+                self.resolve_guard(expected_type, guard_expressions, wildcard)?
             }
         };
 
@@ -816,7 +802,7 @@ impl<'a> Resolver<'a> {
         &mut self,
         struct_expression: &Expression,
     ) -> Result<(ResolvedStructTypeRef, ResolvedExpression), ResolveError> {
-        let resolved = self.resolve_expression(struct_expression)?;
+        let resolved = self.resolve_expression(struct_expression, &ResolvedType::Any)?;
 
         let resolved_type = resolved.resolution();
         match resolved_type {
@@ -830,7 +816,7 @@ impl<'a> Resolver<'a> {
         expression: &Expression,
         ast_member_function_name: &Node,
     ) -> Result<(ResolvedFunctionRef, ResolvedExpression), ResolveError> {
-        let resolved = self.resolve_expression(expression)?;
+        let resolved = self.resolve_expression(expression, &ResolvedType::Any)?;
 
         let resolved_type = resolved.resolution();
         match resolved_type {
@@ -935,7 +921,7 @@ impl<'a> Resolver<'a> {
         &mut self,
         expression: &Expression,
     ) -> Result<ResolvedBooleanExpression, ResolveError> {
-        let resolved_expression = self.resolve_expression(expression)?;
+        let resolved_expression = self.resolve_expression(expression, &ResolvedType::Bool)?;
         let expr_type = resolved_expression.resolution_expecting_type(&ResolvedType::Bool)?;
 
         let bool_expression = match expr_type {
@@ -959,7 +945,7 @@ impl<'a> Resolver<'a> {
         &mut self,
         expression: &Expression,
     ) -> Result<ResolvedIterator, ResolveError> {
-        let resolved_expression = self.resolve_expression(expression)?;
+        let resolved_expression = self.resolve_expression(expression, &ResolvedType::Any)?;
         let resolved_type = resolved_expression.resolution();
         let (key_type, value_type): (Option<ResolvedType>, ResolvedType) = match resolved_type {
             ResolvedType::Array(array_type) => {
@@ -1002,11 +988,12 @@ impl<'a> Resolver<'a> {
 
     fn resolve_expressions(
         &mut self,
+        expected_type: &ResolvedType,
         ast_expressions: &[Expression],
     ) -> Result<Vec<ResolvedExpression>, ResolveError> {
         let mut resolved_expressions = Vec::new();
         for expression in ast_expressions {
-            resolved_expressions.push(self.resolve_expression(expression)?);
+            resolved_expressions.push(self.resolve_expression(expression, expected_type)?);
         }
         Ok(resolved_expressions)
     }
@@ -1023,7 +1010,7 @@ impl<'a> Resolver<'a> {
                     processed_string.to_string(),
                 ),
                 StringPart::Interpolation(expression, format_specifier) => {
-                    let expr = self.resolve_expression(expression)?;
+                    let expr = self.resolve_expression(expression, &ResolvedType::Any)?;
                     let resolved_format_specifier = self.resolve_format_specifier(format_specifier);
                     ResolvedStringPart::Interpolation(expr, resolved_format_specifier)
                 }
@@ -1105,8 +1092,7 @@ impl<'a> Resolver<'a> {
         &mut self,
         usize_expression: &Expression,
     ) -> Result<ResolvedExpression, ResolveError> {
-        let lookup_expression =
-            self.resolve_expression_expecting_type(usize_expression, &ResolvedType::Int, false)?;
+        let lookup_expression = self.resolve_expression(usize_expression, &ResolvedType::Int)?;
         let lookup_resolution = lookup_expression.resolution();
 
         match &lookup_resolution {
@@ -1121,7 +1107,7 @@ impl<'a> Resolver<'a> {
         &mut self,
         items: &[Expression],
     ) -> Result<(ResolvedArrayTypeRef, Vec<ResolvedExpression>), ResolveError> {
-        let expressions = self.resolve_expressions(items)?;
+        let expressions = self.resolve_expressions(&ResolvedType::Any, items)?;
         let item_type = if expressions.is_empty() {
             ResolvedType::Any
         } else {
@@ -1195,7 +1181,9 @@ impl<'a> Resolver<'a> {
                 ResolvedEnumLiteralData::Nothing
             }
             EnumVariantLiteral::Tuple(_qualified_name, _variant_name, expressions) => {
-                ResolvedEnumLiteralData::Tuple(self.resolve_expressions(expressions)?)
+                ResolvedEnumLiteralData::Tuple(
+                    self.resolve_expressions(&ResolvedType::Any, expressions)?,
+                )
             }
             EnumVariantLiteral::Struct(_qualified_name, variant_name, field_expressions) => {
                 if let ResolvedEnumVariantContainerType::Struct(struct_ref) = &variant_ref.data {
@@ -1221,15 +1209,17 @@ impl<'a> Resolver<'a> {
     fn resolve_match(
         &mut self,
         expression: &Expression,
+        expected_type: &ResolvedType,
         arms: &Vec<MatchArm>,
     ) -> Result<ResolvedMatch, ResolveError> {
-        let resolved_expression = self.resolve_expression(expression)?;
+        let resolved_expression = self.resolve_expression(expression, &expected_type)?;
         let resolved_type = resolved_expression.resolution();
 
         let mut resolved_arms = Vec::new();
 
         for arm in arms {
-            let resolved_arm = self.resolve_arm(arm, &resolved_expression, &resolved_type)?;
+            let resolved_arm =
+                self.resolve_arm(arm, &resolved_expression, expected_type, &resolved_type)?;
             resolved_arms.push(resolved_arm);
         }
 
@@ -1243,12 +1233,13 @@ impl<'a> Resolver<'a> {
         &mut self,
         arm: &MatchArm,
         _expression: &ResolvedExpression,
+        expected_return_type: &ResolvedType,
         expected_condition_type: &ResolvedType,
     ) -> Result<ResolvedMatchArm, ResolveError> {
         let (resolved_pattern, scope_was_pushed) =
             self.resolve_pattern(&arm.pattern, expected_condition_type)?;
 
-        let resolved_expression = self.resolve_expression(&arm.expression)?;
+        let resolved_expression = self.resolve_expression(&arm.expression, expected_return_type)?;
         if scope_was_pushed {
             self.pop_block_scope("resolve_arm");
         }
@@ -1413,7 +1404,7 @@ impl<'a> Resolver<'a> {
                 ResolvedExpression::MutVariableRef(Rc::new(mut_var))
             }
             LocationExpression::IndexAccess(expression, index_expr) => {
-                let resolved_base = self.resolve_expression(expression)?;
+                let resolved_base = self.resolve_expression(expression, &ResolvedType::Any)?;
                 let resolved_type = resolved_base.resolution();
                 match resolved_type {
                     ResolvedType::Array(_) => {
@@ -1427,7 +1418,8 @@ impl<'a> Resolver<'a> {
                     }
 
                     ResolvedType::Map(map_type_ref) => {
-                        let resolved_index_expr = self.resolve_expression(index_expr)?;
+                        let resolved_index_expr =
+                            self.resolve_expression(index_expr, &ResolvedType::Any)?;
                         ResolvedExpression::MutMapIndexRef(
                             Box::from(resolved_base),
                             map_type_ref,
@@ -1437,7 +1429,8 @@ impl<'a> Resolver<'a> {
 
                     ResolvedType::Generic(base_type, type_parameters) => {
                         if let ResolvedType::RustType(rust_type) = *base_type {
-                            let resolved_index_expr = self.resolve_expression(index_expr)?;
+                            let resolved_index_expr =
+                                self.resolve_expression(index_expr, &ResolvedType::Any)?;
                             let value_type = type_parameters[0].clone(); // HACK: TODO: Just assumes that it is a SparseMap for now.
                             ResolvedExpression::MutRustTypeIndexRef(
                                 Box::from(resolved_base),
@@ -1465,12 +1458,13 @@ impl<'a> Resolver<'a> {
 
     fn resolve_with_expr(
         &mut self,
+        expected_type: &ResolvedType,
         variables: &[VariableBinding],
         expression: &Expression,
     ) -> Result<ResolvedExpression, ResolveError> {
         let mut variable_expressions = Vec::new();
         for variable in variables {
-            let var = self.resolve_expression(&variable.expression)?;
+            let var = self.resolve_expression(&variable.expression, &ResolvedType::Any)?;
             variable_expressions.push(var);
         }
 
@@ -1484,7 +1478,7 @@ impl<'a> Resolver<'a> {
             expressions.push(initialize_variable_expression);
         }
 
-        let resolved_expression = self.resolve_expression(expression)?;
+        let resolved_expression = self.resolve_expression(expression, &ResolvedType::Any)?;
         expressions.push(resolved_expression);
 
         let block_expression = ResolvedExpression::Block(expressions);
@@ -1495,20 +1489,18 @@ impl<'a> Resolver<'a> {
 
     fn resolve_guard(
         &mut self,
+        expected_type: &ResolvedType,
         guard_expressions: &Vec<GuardExpr>,
         wildcard: &Option<Box<Expression>>,
     ) -> Result<ResolvedExpression, ResolveError> {
-        let mut expecting_type = None;
+        let mut expecting_type = expected_type.clone();
         let mut guards = Vec::new();
         for guard in guard_expressions {
             let resolved_condition = self.resolve_bool_expression(&guard.condition)?;
-            let resolved_result = self.resolve_expression_maybe_expecting_type(
-                &guard.result,
-                expecting_type.clone(),
-                true,
-            )?;
-            if expecting_type.is_none() {
-                expecting_type = Some(resolved_result.resolution().clone());
+            let resolved_result =
+                self.resolve_expression(&guard.result, &expecting_type.clone())?;
+            if expecting_type == ResolvedType::Any {
+                expecting_type = resolved_result.resolution();
             }
 
             guards.push(ResolvedGuard {
@@ -1518,11 +1510,9 @@ impl<'a> Resolver<'a> {
         }
 
         let resolved_wildcard = if let Some(found_wildcard) = wildcard {
-            Some(Box::new(self.resolve_expression_maybe_expecting_type(
-                found_wildcard,
-                expecting_type,
-                true,
-            )?))
+            Some(Box::new(
+                self.resolve_expression(found_wildcard, &expecting_type)?,
+            ))
         } else {
             None
         };
@@ -1535,12 +1525,11 @@ impl<'a> Resolver<'a> {
         base_expr: &Expression,
         default_expr: &Expression,
     ) -> Result<(ResolvedExpression, ResolvedExpression), ResolveError> {
-        let expr = self.resolve_expression(base_expr)?;
+        let expr = self.resolve_expression(base_expr, &ResolvedType::Any)?;
         let resolved_type = expr.resolution();
 
         if let ResolvedType::Optional(found_type) = resolved_type {
-            let resolved_default_expr =
-                self.resolve_expression_expecting_type(default_expr, &found_type, true)?;
+            let resolved_default_expr = self.resolve_expression(default_expr, &found_type)?;
             Ok((expr, resolved_default_expr))
         } else {
             Err(ResolveError::NoneCoalesceNeedsOptionalType(expr.span()))
@@ -1550,20 +1539,26 @@ impl<'a> Resolver<'a> {
 
 fn wrap_in_some_if_optional(
     target_type: &ResolvedType,
-    resolved_value: ResolvedExpression,
+    resolved_expr: ResolvedExpression,
 ) -> ResolvedExpression {
     match target_type {
-        ResolvedType::Optional(_) => match resolved_value {
-            ResolvedExpression::Option(_) => resolved_value,
+        ResolvedType::Optional(_) => match resolved_expr {
+            ResolvedExpression::Option(_) => resolved_expr,
             _ => {
-                if let ResolvedExpression::Literal(ResolvedLiteral::NoneLiteral(_)) = resolved_value
+                if let ResolvedExpression::Literal(ResolvedLiteral::NoneLiteral(_)) = resolved_expr
                 {
-                    resolved_value
+                    resolved_expr
                 } else {
-                    ResolvedExpression::Option(Some(Box::new(resolved_value)))
+                    let resolved_type = resolved_expr.resolution();
+                    if let ResolvedType::Optional(found_type) = resolved_type {
+                        resolved_expr
+                    } else {
+                        info!(?resolved_expr, ?resolved_type, "WRAPPING");
+                        ResolvedExpression::Option(Some(Box::new(resolved_expr)))
+                    }
                 }
             }
         },
-        _ => resolved_value,
+        _ => resolved_expr,
     }
 }

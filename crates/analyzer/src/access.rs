@@ -30,7 +30,8 @@ impl<'a> Resolver<'a> {
 
             Expression::IndexAccess(source, index_expr) => {
                 let (resolved_type, base_expr) = self.collect_field_chain(source, access_chain)?;
-                let resolved_index_expr = self.resolve_expression(index_expr)?;
+                let resolved_index_expr =
+                    self.resolve_expression(index_expr, &ResolvedType::Any)?;
                 match resolved_type {
                     ResolvedType::Array(array_type_ref) => {
                         access_chain.push(ResolvedAccess::ArrayIndex(resolved_index_expr));
@@ -44,7 +45,7 @@ impl<'a> Resolver<'a> {
                 }
             }
             _ => {
-                let resolved_expr = self.resolve_expression(expr)?;
+                let resolved_expr = self.resolve_expression(expr, &ResolvedType::Any)?;
                 let resolved_type = resolved_expr.resolution();
                 Ok((resolved_type, resolved_expr))
             }
@@ -84,7 +85,7 @@ impl<'a> Resolver<'a> {
         expression: &Expression,
         key_expr: &Expression,
     ) -> Result<ResolvedExpression, ResolveError> {
-        let resolved_expr = self.resolve_expression(expression)?;
+        let resolved_expr = self.resolve_expression(expression, &ResolvedType::Any)?;
         let resolved_type = resolved_expr.resolution();
 
         let expr = match resolved_type {
@@ -103,11 +104,8 @@ impl<'a> Resolver<'a> {
                             .get_rust_type(&["std".to_string()], "SparseId")
                             .expect("SparseId is missing");
                         let contained_type = &generic_type_parameters[0];
-                        let resolved_key = self.resolve_expression_expecting_type(
-                            key_expr,
-                            &ResolvedType::RustType(sparse_id),
-                            false,
-                        )?;
+                        let resolved_key =
+                            self.resolve_expression(key_expr, &ResolvedType::RustType(sparse_id))?;
                         return Ok(ResolvedExpression::SparseAccess(
                             Box::new(resolved_expr),
                             Box::new(resolved_key),
@@ -139,7 +137,7 @@ impl<'a> Resolver<'a> {
         max: &Expression,
         mode: &RangeMode,
     ) -> Result<ResolvedExpression, ResolveError> {
-        let resolved_expr = self.resolve_expression(expression)?;
+        let resolved_expr = self.resolve_expression(expression, &ResolvedType::Any)?;
         let resolved_type = resolved_expr.resolution();
 
         let resolved_range_mode = match mode {
@@ -174,8 +172,10 @@ impl<'a> Resolver<'a> {
         map_type_ref: &ResolvedMapTypeRef,
         key_expression: &Expression,
     ) -> Result<ResolvedExpression, ResolveError> {
-        let resolved_key_expression = self.resolve_expression(key_expression)?;
-        let resolved_map_expression = self.resolve_expression(base_expression)?;
+        let resolved_key_expression =
+            self.resolve_expression(key_expression, &map_type_ref.key_type)?;
+        let resolved_map_expression =
+            self.resolve_expression(base_expression, &map_type_ref.value_type)?;
 
         Ok(ResolvedExpression::MapIndexAccess(ResolvedMapIndexLookup {
             map_type: ResolvedType::Map(map_type_ref.clone()),
@@ -191,9 +191,9 @@ impl<'a> Resolver<'a> {
         expression: &Expression,
         field_or_member_name: &Node,
     ) -> Result<ResolvedExpression, ResolveError> {
-        let resolved_expression = self.resolve_expression(expression)?;
-        let resolved_type = resolved_expression.resolution();
         let field_or_member_name_str = self.get_text(field_or_member_name).to_string();
+        let resolved_expression = self.resolve_expression(expression, &ResolvedType::Any)?;
+        let resolved_type = resolved_expression.resolution();
 
         if let ResolvedType::Struct(struct_type_ref) = resolved_type {
             let borrow_struct = struct_type_ref.borrow();
@@ -271,7 +271,7 @@ impl<'a> Resolver<'a> {
         let (resolved_last_type, resolved_base_expression) =
             self.collect_field_chain(base_expression, &mut access_chain)?;
 
-        let last_resolved_index = self.resolve_expression(last_index_expr)?;
+        let last_resolved_index = self.resolve_expression(last_index_expr, &ResolvedType::Any)?;
         let ResolvedType::Array(resolved_array_type_ref) = resolved_last_type else {
             return Err(ResolveError::NotAnArray(resolved_base_expression.span()));
         };
@@ -305,10 +305,8 @@ impl<'a> Resolver<'a> {
         min_expr: &Expression,
         max_expr: &Expression,
     ) -> Result<(ResolvedExpression, ResolvedExpression), ResolveError> {
-        let resolved_min =
-            self.resolve_expression_expecting_type(min_expr, &ResolvedType::Int, false)?;
-        let resolved_max =
-            self.resolve_expression_expecting_type(max_expr, &ResolvedType::Int, false)?;
+        let resolved_min = self.resolve_expression(min_expr, &ResolvedType::Int)?;
+        let resolved_max = self.resolve_expression(max_expr, &ResolvedType::Int)?;
 
         Ok((resolved_min, resolved_max))
     }
@@ -343,7 +341,7 @@ impl<'a> Resolver<'a> {
         max_expr: &Expression,
         mode: &ResolvedRangeMode,
     ) -> Result<ResolvedExpression, ResolveError> {
-        let base_expression = self.resolve_expression(base_expr)?;
+        let base_expression = self.resolve_expression(base_expr, &ResolvedType::String)?;
 
         let (resolved_min_expr, resolved_max_expr) =
             self.resolve_min_max_expr(min_expr, max_expr)?;

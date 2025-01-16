@@ -20,10 +20,10 @@ impl<'a> Resolver<'a> {
         ast_op: &BinaryOperator,
         ast_right: &Expression,
     ) -> Result<ResolvedBinaryOperator, ResolveError> {
-        let left = self.resolve_expression(ast_left)?;
+        let left = self.resolve_expression(ast_left, &ResolvedType::Any)?;
         let left_type = left.resolution();
 
-        let right = self.resolve_expression(ast_right)?;
+        let right = self.resolve_expression(ast_right, &ResolvedType::Any)?;
         let right_type = right.resolution();
 
         let (resolved_node, kind) = self.convert_binary_operator_kind(ast_op);
@@ -86,7 +86,7 @@ impl<'a> Resolver<'a> {
         ast_op: &UnaryOperator,
         ast_left: &Expression,
     ) -> Result<ResolvedUnaryOperator, ResolveError> {
-        let left = self.resolve_expression(ast_left)?;
+        let left = self.resolve_expression(ast_left, &ResolvedType::Any)?;
         let resolved_type = left.resolution();
 
         let (node, kind) = match ast_op {
@@ -107,7 +107,7 @@ impl<'a> Resolver<'a> {
         ast_op: &PostfixOperator,
         ast_left: &Expression,
     ) -> Result<ResolvedPostfixOperator, ResolveError> {
-        let left = self.resolve_expression(ast_left)?;
+        let left = self.resolve_expression(ast_left, &ResolvedType::Any)?;
         let resolved_type = left.resolution();
 
         let (resolved_node, resolved_op_kind) = match ast_op {
