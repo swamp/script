@@ -15,10 +15,10 @@ use swamp_script_semantic::{
     CommonEnumVariantType, FunctionTypeSignature, ResolvedAnonymousStructFieldType,
     ResolvedAnonymousStructType, ResolvedDefinition, ResolvedEnumType, ResolvedEnumTypeRef,
     ResolvedEnumVariantContainerType, ResolvedEnumVariantStructType, ResolvedEnumVariantTupleType,
-    ResolvedEnumVariantType, ResolvedEnumVariantTypeRef, ResolvedExternalFunctionDefinition,
-    ResolvedFunction, ResolvedInternalFunctionDefinition, ResolvedLocalIdentifier,
-    ResolvedLocalTypeIdentifier, ResolvedModulePath, ResolvedParameterNode, ResolvedStructType,
-    ResolvedStructTypeRef, ResolvedType, ResolvedTypeForParameter, ResolvedUse, ResolvedUseItem,
+    ResolvedEnumVariantType, ResolvedExternalFunctionDefinition, ResolvedFunction,
+    ResolvedInternalFunctionDefinition, ResolvedLocalIdentifier, ResolvedLocalTypeIdentifier,
+    ResolvedModulePath, ResolvedParameterNode, ResolvedStructType, ResolvedStructTypeRef,
+    ResolvedType, ResolvedTypeForParameter, ResolvedUse, ResolvedUseItem,
 };
 use tracing::info;
 
@@ -108,7 +108,7 @@ impl<'a> Resolver<'a> {
             variants: SeqMap::default(),
         };
 
-        let enum_type_str = self.get_text(enum_type_name).to_string();
+        //let enum_type_str = self.get_text(enum_type_name).to_string();
         let parent_ref = self.shared.lookup.add_enum_type(enum_parent)?;
 
         for (container_index_usize, variant_type) in ast_variants.iter().enumerate() {

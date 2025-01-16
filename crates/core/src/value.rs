@@ -44,7 +44,9 @@ pub trait QuickSerialize {
 }
 
 pub trait QuickDeserialize {
-    fn quick_deserialize(&mut self, _octets: &[u8]) -> usize;
+    fn quick_deserialize(octets: &[u8]) -> (Self, usize)
+    where
+        Self: Sized;
 }
 
 impl<'a, T: QuickSerialize + ?Sized> QuickSerialize for Ref<'a, T> {
@@ -100,11 +102,11 @@ pub enum Value {
 }
 
 #[allow(unused)]
-fn quick_serialize_values(values: &[Value], buffer: &mut [u8]) -> usize {
+fn quick_serialize_values(values: &[Value], buffer: &mut [u8], depth: usize) -> usize {
     let mut offset = 0;
 
     for value in values {
-        let bytes_written = value.quick_serialize(&mut buffer[offset..]);
+        let bytes_written = value.quick_serialize(&mut buffer[offset..], depth + 1);
         offset += bytes_written;
     }
 
@@ -117,7 +119,7 @@ impl Value {
     ///
     #[allow(clippy::too_many_lines)]
     #[inline]
-    pub fn quick_serialize(&self, octets: &mut [u8]) -> usize {
+    pub fn quick_serialize(&self, octets: &mut [u8], depth: usize) -> usize {
         match self {
             Self::Int(x) => {
                 let value_octets = x.to_ne_bytes();
@@ -154,35 +156,53 @@ impl Value {
                 }
                 Some(inner_value) => {
                     octets[0] = 1;
-                    let inner_size = inner_value.borrow().quick_serialize(&mut octets[1..]);
+                    let inner_size = inner_value
+                        .borrow()
+                        .quick_serialize(&mut octets[1..], depth + 1);
                     1 + inner_size
                 }
             },
             Self::Array(_array_ref, values) => {
                 let mut offset = 0;
+
+                let count: u16 = values.len() as u16;
+                let count_octets = count.to_ne_bytes();
+                octets[offset..offset + 2].copy_from_slice(&count_octets);
+                offset += count_octets.len();
+
                 for value in values {
-                    let size = value.borrow().quick_serialize(&mut octets[offset..]);
+                    let size = value
+                        .borrow()
+                        .quick_serialize(&mut octets[offset..], depth + 1);
+
                     offset += size;
                 }
                 offset
             }
             Self::Map(_map_ref, values) => {
                 let mut offset = 0;
-                let len: u16 = values.len() as u16;
-                let len_bytes = len.to_ne_bytes();
-                octets[offset..offset + len_bytes.len()].copy_from_slice(&len_bytes);
-                offset += len_bytes.len();
+
+                let count: u16 = values.len() as u16;
+                let count_octets = count.to_ne_bytes();
+                octets[offset..offset + count_octets.len()].copy_from_slice(&count_octets);
+                offset += count_octets.len();
+
                 for (key, value_ref) in values {
-                    offset += key.quick_serialize(&mut octets[offset..]);
-                    offset += value_ref.borrow().quick_serialize(&mut octets[offset..]);
+                    offset += key.quick_serialize(&mut octets[offset..], depth + 1);
+
+                    let value_val = value_ref.borrow();
+                    offset += value_val.quick_serialize(&mut octets[offset..], depth + 1);
                 }
+
                 offset
             }
 
             Self::Tuple(_tuple_type_ref, values) => {
                 let mut offset = 0;
                 for value in values {
-                    let size = value.borrow().quick_serialize(&mut octets[offset..]);
+                    let size = value
+                        .borrow()
+                        .quick_serialize(&mut octets[offset..], depth + 1);
                     offset += size;
                 }
                 offset
@@ -191,7 +211,9 @@ impl Value {
             Self::Struct(_struct_type, values) => {
                 let mut offset = 0;
                 for value in values {
-                    let size = value.borrow().quick_serialize(&mut octets[offset..]);
+                    let size = value
+                        .borrow()
+                        .quick_serialize(&mut octets[offset..], depth + 1);
                     offset += size;
                 }
                 offset
@@ -206,7 +228,7 @@ impl Value {
                 octets[offset] = enum_tuple_ref.common.container_index;
                 offset += 1;
                 for value in values {
-                    let size = value.quick_serialize(&mut octets[offset..]);
+                    let size = value.quick_serialize(&mut octets[offset..], depth + 1);
                     offset += size;
                 }
                 offset
@@ -216,7 +238,7 @@ impl Value {
                 octets[offset] = enum_struct_ref.common.container_index;
                 offset += 1;
                 for value in values {
-                    let size = value.quick_serialize(&mut octets[offset..]);
+                    let size = value.quick_serialize(&mut octets[offset..], depth + 1);
                     offset += size;
                 }
                 offset

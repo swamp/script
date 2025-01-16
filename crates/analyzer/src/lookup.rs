@@ -4,13 +4,11 @@
  */
 
 use crate::ResolveError;
-use std::cell::RefCell;
-use std::rc::Rc;
 use swamp_script_semantic::modules::ResolvedModules;
 use swamp_script_semantic::ns::ResolvedModuleNamespaceRef;
 use swamp_script_semantic::{
     ResolvedConstant, ResolvedConstantRef, ResolvedEnumType, ResolvedEnumTypeRef,
-    ResolvedEnumVariantType, ResolvedEnumVariantTypeRef, ResolvedExternalFunctionDefinitionRef,
+    ResolvedEnumVariantTypeRef, ResolvedExternalFunctionDefinitionRef,
     ResolvedInternalFunctionDefinition, ResolvedInternalFunctionDefinitionRef, ResolvedRustTypeRef,
     ResolvedStructType, ResolvedStructTypeRef, SemanticError,
 };

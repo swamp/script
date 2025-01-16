@@ -36,13 +36,13 @@ impl IndexAllocator {
     }
 
     pub fn reserve(&mut self, index: usize, generation: u16) {
-        if index > self.generations.len() + 1 {
-            let count = index - self.generations.len() - 1;
+        if index >= self.generations.len() {
+            let count = index - self.generations.len() + 1;
             for _i in 0..count {
                 self.generations.push(0);
             }
         }
-        self.generations.push(generation);
+        self.generations[index] = generation;
     }
 
     // Mark an index as removed, allowing it to be reused later with an incremented generation

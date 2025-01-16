@@ -22,12 +22,30 @@ impl Display for SparseValueId {
     }
 }
 
+impl QuickDeserialize for SparseValueId {
+    fn quick_deserialize(octets: &[u8]) -> (Self, usize) {
+        let mut offset = 0;
+
+        // Deserialize the index
+        let index = u16::from_ne_bytes(octets[offset..offset + 2].try_into().unwrap());
+        offset += 2;
+
+        // Deserialize the generation
+        let generation = u16::from_ne_bytes(octets[offset..offset + 2].try_into().unwrap());
+        offset += 2;
+
+        let id = Id::new(index.into(), generation);
+
+        (SparseValueId(id), offset)
+    }
+}
+
 impl QuickSerialize for SparseValueId {
     fn quick_serialize(&self, octets: &mut [u8]) -> usize {
         let mut offset = 0;
 
         // Serialize the index
-        let index_octets = self.0.index.to_ne_bytes();
+        let index_octets = (self.0.index as u16).to_ne_bytes();
         octets[offset..offset + index_octets.len()].copy_from_slice(&index_octets);
         offset += index_octets.len();
 
@@ -79,7 +97,7 @@ impl QuickSerialize for SparseValueMap {
             octets[offset..offset + key_index_octets.len()].copy_from_slice(&key_generation_octets);
             offset += key_generation_octets.len();
 
-            let value_size = value.borrow().quick_serialize(&mut octets[offset..]);
+            let value_size = value.borrow().quick_serialize(&mut octets[offset..], 0);
             offset += value_size;
         }
 
@@ -87,9 +105,13 @@ impl QuickSerialize for SparseValueMap {
     }
 }
 
-impl QuickDeserialize for SparseValueMap {
-    fn quick_deserialize(&mut self, octets: &[u8]) -> usize {
-        // self.clear();
+impl SparseValueMap {
+    pub fn quick_deserialize(
+        key_type: ResolvedRustTypeRef,
+        value_item_type: ResolvedType,
+        octets: &[u8],
+    ) -> (SparseValueMap, usize) {
+        let mut sparse = SparseValueMap::new(key_type, value_item_type.clone());
         let mut offset = 0;
         let count = u16::from_ne_bytes(
             octets[offset..offset + 2]
@@ -113,19 +135,21 @@ impl QuickDeserialize for SparseValueMap {
             );
             offset += 2;
 
-            let (value, octet_size) = quick_deserialize(&self.value_item_type, &octets[offset..]);
+            let (value, octet_size) =
+                quick_deserialize(&value_item_type.clone(), &octets[offset..], 0);
             offset += octet_size;
 
             let id = Id::new(index as usize, generation);
             let deserialized_value_ref = Rc::new(RefCell::new(value));
-            self.sparse_slot
+            sparse
+                .sparse_slot
                 .try_set(id, deserialized_value_ref)
                 .expect("could not insert into SparseValueMap");
 
-            self.id_generator.reserve(index as usize, generation);
+            sparse.id_generator.reserve(index as usize, generation);
         }
 
-        offset
+        (sparse, offset)
     }
 }
 
