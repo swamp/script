@@ -31,11 +31,8 @@ use swamp_script_ast::{
     LocationExpression, PostfixOperator, QualifiedIdentifier, RangeMode, SpanWithoutFileId,
 };
 use swamp_script_semantic::prelude::*;
-
-use swamp_script_source_map::SourceMap;
-
 use swamp_script_semantic::{ResolvedNormalPattern, ResolvedRangeMode};
-use tracing::{error, info};
+use swamp_script_source_map::SourceMap;
 
 #[derive(Debug)]
 pub struct ResolvedProgram {
@@ -413,7 +410,6 @@ impl<'a> Resolver<'a> {
             if resolved_type.same_type(expected_type) {
                 Ok(resolved_expr)
             } else {
-                error!(?resolved_expr, ?expected_type, "incompatible types");
                 Err(ResolveError::IncompatibleTypes(
                     resolved_expr.span(),
                     expected_type.clone(),
@@ -765,7 +761,6 @@ impl<'a> Resolver<'a> {
             Expression::If(expression, true_expression, maybe_false_expression) => {
                 match &**expression {
                     Expression::PostfixOp(PostfixOperator::Unwrap(unwrap_node), expr) => {
-                        info!(?expr, "unwrap");
                         if let Expression::VariableAccess(var) = &**expr {
                             self.handle_optional_unwrap_statement(
                                 var,
@@ -1056,7 +1051,6 @@ impl<'a> Resolver<'a> {
                         .get_external_function_declaration(&path, &name)
                         .map_or_else(
                             || {
-                                error!("unknown function {path:?} {name:?}");
                                 Err(ResolveError::UnknownFunction(
                                     self.to_node(&function_ref_node.name),
                                 ))
