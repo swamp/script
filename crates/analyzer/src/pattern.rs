@@ -23,19 +23,18 @@ impl<'a> Resolver<'a> {
             _ => Err(ResolveError::ExpectedEnumInPattern(self.to_node(ast_name)))?,
         };
 
-        let enum_name = &enum_type_ref.assigned_name;
         let variant_name = self.get_text(ast_name).to_string();
 
-        self.shared
-            .lookup
-            .get_enum_variant_type(&enum_type_ref.module_path, enum_name, &variant_name)
+        enum_type_ref
+            .borrow()
+            .get_variant(&variant_name)
             .map_or_else(
                 || {
                     Err(ResolveError::UnknownEnumVariantTypeInPattern(
                         self.to_node(ast_name),
                     ))
                 },
-                Ok,
+                |found_variant| Ok(found_variant.clone()),
             )
     }
 

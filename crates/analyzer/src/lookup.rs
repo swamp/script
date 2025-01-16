@@ -4,6 +4,7 @@
  */
 
 use crate::ResolveError;
+use std::cell::RefCell;
 use std::rc::Rc;
 use swamp_script_semantic::modules::ResolvedModules;
 use swamp_script_semantic::ns::ResolvedModuleNamespaceRef;
@@ -116,16 +117,17 @@ impl<'a> NameLookup<'a> {
         enum_type_name: &str,
         variant_name: &str,
     ) -> Option<ResolvedEnumVariantTypeRef> {
-        let namespace = self.get_namespace(path);
-        namespace.map_or_else(
-            || None,
-            |found_ns| {
-                found_ns
-                    .borrow()
-                    .get_enum_variant_type_str(enum_type_name, variant_name)
-                    .cloned()
-            },
-        )
+        let namespace = self.get_namespace(path)?;
+        let borrowed_namespace = namespace.borrow();
+        if let Some(found_enum) = &borrowed_namespace.get_enum(enum_type_name) {
+            found_enum
+                .borrow()
+                .variants
+                .get(&variant_name.to_string())
+                .cloned()
+        } else {
+            None
+        }
     }
 
     #[must_use]
@@ -174,27 +176,7 @@ impl<'a> NameLookup<'a> {
             .module_path
             .clone_from(&self.own_namespace().borrow().path);
 
-        let enum_type_ref = Rc::new(enum_type);
-
-        Ok(self
-            .own_namespace()
-            .borrow_mut()
-            .add_enum_type(enum_type_ref)?)
-    }
-
-    /// # Errors
-    ///
-    pub fn add_enum_variant(
-        &mut self,
-        enum_name: &str,
-        variant_name: &str,
-        variant_type: ResolvedEnumVariantType,
-    ) -> Result<ResolvedEnumVariantTypeRef, ResolveError> {
-        Ok(self.own_namespace().borrow_mut().add_enum_variant(
-            enum_name,
-            variant_name,
-            variant_type,
-        )?)
+        Ok(self.own_namespace().borrow_mut().add_enum_type(enum_type)?)
     }
 
     /// # Errors

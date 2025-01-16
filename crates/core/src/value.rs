@@ -43,6 +43,10 @@ pub trait QuickSerialize {
     }
 }
 
+pub trait QuickDeserialize {
+    fn quick_deserialize(&mut self, _octets: &[u8]) -> usize;
+}
+
 impl<'a, T: QuickSerialize + ?Sized> QuickSerialize for Ref<'a, T> {
     fn quick_serialize(&self, octets: &mut [u8]) -> usize {
         (**self).quick_serialize(octets)
@@ -635,14 +639,15 @@ impl Display for Value {
                     write!(
                         f,
                         "{:?}::{:?}",
-                        enum_name.common.enum_ref.name, enum_name.common.variant_name,
+                        enum_name.common.enum_ref.borrow().name,
+                        enum_name.common.variant_name,
                     )?;
                 } else {
                     write!(
                         f,
                         "{:?}::{:?}::{:?}",
                         enum_name.common.module_path,
-                        enum_name.common.enum_ref.name,
+                        enum_name.common.enum_ref.borrow().name,
                         enum_name.common.variant_name,
                     )?;
                 }
@@ -665,7 +670,7 @@ impl Display for Value {
                 write!(
                     f,
                     "{}::{} {{ ",
-                    struct_variant.common.enum_ref.assigned_name,
+                    struct_variant.common.enum_ref.borrow().assigned_name,
                     &struct_variant.common.assigned_name
                 )?;
 
@@ -679,7 +684,8 @@ impl Display for Value {
             Self::EnumVariantSimple(enum_variant_type_ref) => write!(
                 f,
                 "{}::{}",
-                &enum_variant_type_ref.owner.assigned_name, &enum_variant_type_ref.assigned_name,
+                &enum_variant_type_ref.owner.borrow().assigned_name,
+                &enum_variant_type_ref.assigned_name,
             ),
             Self::RustValue(_rust_type, rust_type_pointer) => {
                 write!(f, "{}", rust_type_pointer.borrow())

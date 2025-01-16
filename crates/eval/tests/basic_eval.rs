@@ -8,8 +8,8 @@ use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::rc::Rc;
 use swamp_script_core::prelude::Value;
+use swamp_script_core::qck_des::quick_deserialize;
 use swamp_script_core::value::ValueRef;
-use swamp_script_eval::quick_deserialize;
 use swamp_script_semantic::{
     ResolvedAnonymousStructFieldType, ResolvedAnonymousStructType, ResolvedNode,
     ResolvedStructType, ResolvedType,

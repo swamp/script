@@ -213,7 +213,7 @@ impl FunctionTypeSignature {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ResolvedRustType {
     pub type_name: String, // To identify the specific Rust type
     pub number: u32,       // For type comparison
@@ -312,7 +312,7 @@ impl Debug for ResolvedType {
                 map_type_ref.key_type, map_type_ref.value_type
             ),
             Self::Generic(base, parameters) => write!(f, "{:?}<{:?}>", base, parameters),
-            Self::Enum(enum_type_ref) => write!(f, "{:?}", enum_type_ref.assigned_name),
+            Self::Enum(enum_type_ref) => write!(f, "{:?}", enum_type_ref.borrow().assigned_name),
             //            Self::EnumVariant(enum_type_variant) => {
             //              write!(f, "{:?}", enum_type_variant.assigned_name)
             //        }
@@ -340,7 +340,7 @@ impl Display for ResolvedType {
             Self::Struct(struct_ref) => write!(f, "{}", struct_ref.borrow().assigned_name),
             Self::Map(map_ref) => write!(f, "[{}:{}]", map_ref.key_type, map_ref.value_type),
             Self::Generic(base_type, params) => write!(f, "{base_type}<{}>", comma(params)),
-            Self::Enum(enum_type) => write!(f, "{}", enum_type.assigned_name),
+            Self::Enum(enum_type) => write!(f, "{}", enum_type.borrow().assigned_name),
             //Self::EnumVariant(variant) => write!(
             //  f,
             //"{}::{}",
@@ -1246,7 +1246,7 @@ pub enum ResolvedExpression {
         Box<ResolvedExpression>,
         ResolvedType,
     ),
-    SparseNew(ResolvedRustTypeRef, ResolvedType),
+    SparseNew(Span, ResolvedRustTypeRef, ResolvedType, ResolvedType),
     SparseAccess(
         Box<ResolvedExpression>,
         Box<ResolvedExpression>,
@@ -1577,7 +1577,7 @@ impl ResolvedExpression {
                 expr1.collect_constant_dependencies(deps);
                 expr2.collect_constant_dependencies(deps);
             }
-            Self::SparseNew(_, _) => {}
+            Self::SparseNew(_, _, _, _) => {}
             Self::SparseAccess(expr, expr2, _) => {
                 expr.collect_constant_dependencies(deps);
                 expr2.collect_constant_dependencies(deps);
@@ -1809,7 +1809,9 @@ impl ResolvedExpression {
             // Sparse member functions
             Self::SparseAdd(_, _, return_type) => return_type.clone(),
             Self::SparseRemove(_, _, return_type) => return_type.clone(),
-            Self::SparseNew(_rust_type_ref, resolved_type) => resolved_type.clone(),
+            Self::SparseNew(_span, _rust_type_ref, _item_type, generic_type) => {
+                generic_type.clone()
+            }
             Self::SparseAccess(_sparse_expression, _key_expression, expected_type) => {
                 expected_type.clone()
             }
@@ -2015,9 +2017,7 @@ impl Spanned for ResolvedExpression {
             // Special Methods
             Self::SparseAdd(expr1, expr2, _) => expr1.span().merge(&expr2.span()),
             Self::SparseRemove(expr1, expr2, _) => expr1.span().merge(&expr2.span()),
-            Self::SparseNew(_rust_type_ref, _resolved_type) => {
-                todo!()
-            }
+            Self::SparseNew(span, _rust_type_ref, _resolved_type, _generic_type) => span.clone(),
             Self::ForLoop(_pattern, _iterator, statements) => statements.span(),
             Self::WhileLoop(_condition, _expression) => todo!(),
             Self::Return(_maybe_expr) => todo!(),
@@ -2307,7 +2307,7 @@ impl ResolvedTupleType {
     }
 }
 
-pub type ResolvedEnumTypeRef = Rc<ResolvedEnumType>;
+pub type ResolvedEnumTypeRef = Rc<RefCell<ResolvedEnumType>>;
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct ResolvedEnumType {
@@ -2315,6 +2315,8 @@ pub struct ResolvedEnumType {
     pub assigned_name: String,
     pub module_path: Vec<String>,
     pub number: TypeNumber,
+
+    pub variants: SeqMap<String, ResolvedEnumVariantTypeRef>,
 }
 
 impl ResolvedEnumType {
@@ -2329,11 +2331,20 @@ impl ResolvedEnumType {
             assigned_name: assigned_name.to_string(),
             module_path,
             number,
+            variants: SeqMap::new(),
         }
     }
 
     pub fn name(&self) -> &ResolvedLocalTypeIdentifier {
         &self.name
+    }
+
+    pub fn get_variant(&self, name: &str) -> Option<&ResolvedEnumVariantTypeRef> {
+        self.variants.get(&name.to_string())
+    }
+
+    pub fn get_variant_from_index(&self, index: usize) -> Option<&ResolvedEnumVariantTypeRef> {
+        Some(self.variants.values().collect::<Vec<_>>()[index])
     }
 }
 
@@ -2442,7 +2453,7 @@ pub struct ResolvedUse {
 #[derive(Debug)]
 pub enum ResolvedDefinition {
     StructType(ResolvedStructTypeRef),
-    EnumType(ResolvedEnumTypeRef, Vec<ResolvedEnumVariantTypeRef>),
+    EnumType(ResolvedEnumTypeRef),
     Function(),
     ExternalFunction(),
     ImplType(ResolvedType),

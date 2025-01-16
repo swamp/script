@@ -95,8 +95,8 @@ impl<'a> Resolver<'a> {
         &mut self,
         enum_type_name: &Node,
         ast_variants: &Vec<EnumVariantType>,
-    ) -> Result<(ResolvedEnumTypeRef, Vec<ResolvedEnumVariantTypeRef>), ResolveError> {
-        let mut resolved_variants = Vec::new();
+    ) -> Result<ResolvedEnumTypeRef, ResolveError> {
+        let mut resolved_variants = SeqMap::new();
 
         let parent_number = self.shared.state.allocate_number();
 
@@ -105,6 +105,7 @@ impl<'a> Resolver<'a> {
             assigned_name: self.get_text(enum_type_name).to_string(),
             module_path: self.shared.lookup.get_path(),
             number: parent_number,
+            variants: SeqMap::default(),
         };
 
         let enum_type_str = self.get_text(enum_type_name).to_string();
@@ -204,16 +205,11 @@ impl<'a> Resolver<'a> {
                 container_index: container_index_usize as u8,
             };
 
-            let variant_type_ref = self.shared.lookup.add_enum_variant(
-                &enum_type_str,
-                &variant_name_str,
-                variant_type,
-            )?;
-
-            resolved_variants.push(variant_type_ref);
+            resolved_variants.insert(variant_name_str, Rc::new(variant_type))?;
         }
 
-        Ok((parent_ref, resolved_variants))
+        parent_ref.borrow_mut().variants = resolved_variants;
+        Ok(parent_ref)
     }
 
     /// # Errors
@@ -345,8 +341,8 @@ impl<'a> Resolver<'a> {
                 ResolvedDefinition::StructType(self.resolve_struct_type_definition(ast_struct)?)
             }
             Definition::EnumDef(identifier, variants) => {
-                let (parent, variants) = self.resolve_enum_type_definition(identifier, variants)?;
-                ResolvedDefinition::EnumType(parent, variants)
+                let parent = self.resolve_enum_type_definition(identifier, variants)?;
+                ResolvedDefinition::EnumType(parent)
             }
             Definition::FunctionDef(function) => {
                 let resolved_return_type = self.resolve_return_type(function)?;

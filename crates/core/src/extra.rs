@@ -4,11 +4,12 @@
  */
 
 use crate::idx_gen::IndexAllocator;
-use crate::value::{to_rust_value, Value};
+use crate::qck_des::quick_deserialize;
+use crate::value::{to_rust_value, QuickDeserialize, Value};
 use crate::value::{QuickSerialize, ValueRef};
 use sparse_slot::{Id, SparseSlot};
 use std::cell::RefCell;
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use std::rc::Rc;
 use swamp_script_semantic::{ResolvedRustTypeRef, ResolvedType};
 
@@ -39,25 +40,89 @@ impl QuickSerialize for SparseValueId {
     }
 }
 
-#[derive(Debug)]
+#[derive()]
 pub struct SparseValueMap {
     pub sparse_slot: SparseSlot<Rc<RefCell<Value>>>,
     pub id_generator: IndexAllocator,
-    pub type_parameter: ResolvedType,
-    pub resolved_type: ResolvedType,
+    pub value_item_type: ResolvedType,
     pub rust_type_ref_for_id: ResolvedRustTypeRef,
+}
+
+impl Debug for SparseValueMap {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "SparseValueMap")?;
+
+        for (id, val) in self.sparse_slot.iter() {
+            writeln!(f, "  {id}: {}", val.borrow())?;
+        }
+
+        Ok(())
+    }
 }
 
 impl QuickSerialize for SparseValueMap {
     fn quick_serialize(&self, octets: &mut [u8]) -> usize {
         let mut offset = 0;
+
+        let count = self.sparse_slot.len() as u16;
+        let count_octets = count.to_ne_bytes();
+        octets[offset..offset + count_octets.len()].copy_from_slice(&count_octets);
+        offset += count_octets.len();
+
         for (id, value) in self.sparse_slot.iter() {
-            let value_octets = id.index.to_ne_bytes();
-            octets[offset..offset + value_octets.len()].copy_from_slice(&value_octets);
-            offset += value_octets.len();
+            let short_index = id.index as u16;
+            let key_index_octets = short_index.to_ne_bytes();
+            octets[offset..offset + key_index_octets.len()].copy_from_slice(&key_index_octets);
+            offset += key_index_octets.len();
+
+            let key_generation_octets = id.generation.to_ne_bytes();
+            octets[offset..offset + key_index_octets.len()].copy_from_slice(&key_generation_octets);
+            offset += key_generation_octets.len();
 
             let value_size = value.borrow().quick_serialize(&mut octets[offset..]);
             offset += value_size;
+        }
+
+        offset
+    }
+}
+
+impl QuickDeserialize for SparseValueMap {
+    fn quick_deserialize(&mut self, octets: &[u8]) -> usize {
+        // self.clear();
+        let mut offset = 0;
+        let count = u16::from_ne_bytes(
+            octets[offset..offset + 2]
+                .try_into()
+                .expect("could not convert to u16 count"),
+        );
+        offset += 2;
+
+        for _i in 0..count {
+            let index = u16::from_ne_bytes(
+                octets[offset..offset + 2]
+                    .try_into()
+                    .expect("could not convert to u16 index"),
+            );
+            offset += 2;
+
+            let generation = u16::from_ne_bytes(
+                octets[offset..offset + 2]
+                    .try_into()
+                    .expect("could not convert to u16 generation"),
+            );
+            offset += 2;
+
+            let (value, octet_size) = quick_deserialize(&self.value_item_type, &octets[offset..]);
+            offset += octet_size;
+
+            let id = Id::new(index as usize, generation);
+            let deserialized_value_ref = Rc::new(RefCell::new(value));
+            self.sparse_slot
+                .try_set(id, deserialized_value_ref)
+                .expect("could not insert into SparseValueMap");
+
+            self.id_generator.reserve(index as usize, generation);
         }
 
         offset
@@ -69,7 +134,7 @@ impl Display for SparseValueMap {
         write!(
             f,
             "Sparse<{:?}> len:{}",
-            self.type_parameter,
+            self.value_item_type,
             self.sparse_slot.len()
         )
     }
@@ -77,17 +142,16 @@ impl Display for SparseValueMap {
 
 impl SparseValueMap {
     #[must_use]
-    pub fn new(rust_type_ref_for_id: ResolvedRustTypeRef, resolved_type: ResolvedType) -> Self {
-        let type_parameter = match &resolved_type {
+    pub fn new(rust_type_ref_for_id: ResolvedRustTypeRef, value_item_type: ResolvedType) -> Self {
+        /* let type_parameter = match &resolved_type {
             ResolvedType::Generic(_, parameters) => parameters[0].clone(),
             _ => panic!("illegal sparse type. not generic"),
-        };
+        }; */
 
         Self {
             sparse_slot: SparseSlot::<Rc<RefCell<Value>>>::new(2048),
             id_generator: IndexAllocator::new(),
-            type_parameter,
-            resolved_type,
+            value_item_type,
             rust_type_ref_for_id,
         }
     }

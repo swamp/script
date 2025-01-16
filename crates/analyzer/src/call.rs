@@ -269,10 +269,10 @@ impl<'a> Resolver<'a> {
                     0,
                 ));
             }
-            let resolved_generic_types = self.resolve_types(&type_name.generic_params)?;
-            if resolved_generic_types.len() != 1 {
+            let resolved_generic_type_parameters = self.resolve_types(&type_name.generic_params)?;
+            if resolved_generic_type_parameters.len() != 1 {
                 return Err(ResolveError::WrongNumberOfTypeArguments(
-                    resolved_generic_types.len(),
+                    resolved_generic_type_parameters.len(),
                     1,
                 ));
             }
@@ -284,12 +284,18 @@ impl<'a> Resolver<'a> {
 
             let rust_type_base = ResolvedType::RustType(rust_type_ref.clone());
 
-            let resolved_type =
-                ResolvedType::Generic(Box::from(rust_type_base), resolved_generic_types);
+            let generic_specific_type = ResolvedType::Generic(
+                Box::from(rust_type_base),
+                resolved_generic_type_parameters.clone(),
+            );
+
+            let value_item_type = resolved_generic_type_parameters[0].clone();
 
             return Ok(Some(ResolvedExpression::SparseNew(
+                self.to_node(&type_name.name.0).span,
                 rust_type_ref,
-                resolved_type,
+                value_item_type,
+                generic_specific_type,
             )));
         }
 

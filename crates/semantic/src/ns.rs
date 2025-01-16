@@ -4,7 +4,7 @@
  */
 use crate::{
     ResolvedAnonymousStructFieldType, ResolvedAnonymousStructType, ResolvedConstantRef,
-    ResolvedEnumTypeRef, ResolvedEnumVariantType, ResolvedEnumVariantTypeRef,
+    ResolvedEnumType, ResolvedEnumTypeRef, ResolvedEnumVariantType, ResolvedEnumVariantTypeRef,
     ResolvedExternalFunctionDefinition, ResolvedExternalFunctionDefinitionRef,
     ResolvedInternalFunctionDefinition, ResolvedInternalFunctionDefinitionRef, ResolvedNode,
     ResolvedRustType, ResolvedRustTypeRef, ResolvedStructType, ResolvedStructTypeRef, ResolvedType,
@@ -30,8 +30,7 @@ pub struct ResolvedModuleNamespace {
 
     #[allow(unused)]
     enum_types: SeqMap<String, ResolvedEnumTypeRef>,
-    enum_variant_types: SeqMap<String, ResolvedEnumVariantTypeRef>,
-
+    //enum_variant_types: SeqMap<String, ResolvedEnumVariantTypeRef>,
     internal_functions: SeqMap<String, ResolvedInternalFunctionDefinitionRef>,
     external_function_declarations: SeqMap<String, ResolvedExternalFunctionDefinitionRef>,
 
@@ -53,7 +52,6 @@ impl ResolvedModuleNamespace {
             structs: SeqMap::default(),
             build_in_rust_types: SeqMap::default(),
             enum_types: SeqMap::default(),
-            enum_variant_types: SeqMap::default(),
             internal_functions: SeqMap::default(),
             external_function_declarations: SeqMap::default(),
             constants: SeqMap::default(),
@@ -146,30 +144,40 @@ impl ResolvedModuleNamespace {
 
     pub fn add_enum_type(
         &mut self,
-        enum_type_ref: ResolvedEnumTypeRef,
+        enum_type: ResolvedEnumType,
     ) -> Result<ResolvedEnumTypeRef, SemanticError> {
-        assert!(!enum_type_ref.module_path.is_empty());
+        let enum_type_ref = Rc::new(RefCell::new(enum_type));
+
+        assert!(!enum_type_ref.borrow().module_path.is_empty());
         self.enum_types
-            .insert(enum_type_ref.assigned_name.clone(), enum_type_ref.clone())
-            .map_err(|_| SemanticError::DuplicateEnumType(enum_type_ref.assigned_name.clone()))?;
+            .insert(
+                enum_type_ref.borrow().assigned_name.clone(),
+                enum_type_ref.clone(),
+            )
+            .map_err(|_| {
+                SemanticError::DuplicateEnumType(enum_type_ref.borrow().assigned_name.clone())
+            })?;
 
         Ok(enum_type_ref)
     }
 
     pub fn add_enum_variant(
         &mut self,
-        enum_type_name: &str,
-        enum_variant_name: &str,
+        enum_type_name: ResolvedEnumTypeRef,
         enum_variant: ResolvedEnumVariantType,
     ) -> Result<ResolvedEnumVariantTypeRef, SemanticError> {
         let enum_variant_ref = Rc::new(enum_variant);
-        let full_name = format!("{}::{}", enum_type_name, enum_variant_name);
-        self.enum_variant_types
-            .insert(full_name, enum_variant_ref.clone())
-            .map_err(|_| {
+        enum_type_name
+            .borrow_mut()
+            .variants
+            .insert(
+                enum_variant_ref.assigned_name.clone(),
+                enum_variant_ref.clone(),
+            )
+            .map_err(|_err| {
                 SemanticError::DuplicateEnumVariantType(
-                    enum_variant_name.to_string(),
-                    enum_variant_name.to_string(),
+                    enum_type_name.borrow().assigned_name.clone(),
+                    enum_variant_ref.assigned_name.clone(),
                 )
             })?;
 
@@ -213,17 +221,6 @@ impl ResolvedModuleNamespace {
 
     pub fn get_rust_type(&self, name: &str) -> Option<&ResolvedRustTypeRef> {
         self.build_in_rust_types.get(&name.to_string())
-    }
-
-    #[must_use]
-    pub fn get_enum_variant_type_str(
-        &self,
-        enum_name: &str,
-        enum_variant_name: &str,
-    ) -> Option<&ResolvedEnumVariantTypeRef> {
-        let complete_name = format!("{}::{}", enum_name, enum_variant_name);
-        let result = self.enum_variant_types.get(&complete_name);
-        result
     }
 
     #[must_use]
