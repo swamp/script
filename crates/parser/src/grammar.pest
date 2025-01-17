@@ -222,8 +222,16 @@ function_call_args = {
 
 member_call = { "." ~ identifier ~ function_call_args }
 
-function_call = {
-    "(" ~ (mut_expression ~ ("," ~ " "* ~ mut_expression)*)? ~ ")"
+// Added '$' so no WHITESPACE is allowed before this rule
+function_call = ${
+     "(" ~ (mut_expression ~ ("," ~ " "* ~ mut_expression)*)? ~ ")"
+/*
+!WHITESPACE ~
+"("
+    ~ (WHITESPACE* ~ mut_expression ~ (WHITESPACE* ~ "," ~ WHITESPACE* ~ mut_expression)*)?
+     ~ WHITESPACE* ~
+")"
+*/
 }
 
 static_member_reference = {
