@@ -12,7 +12,7 @@ use swamp_script_ast::prelude::*;
 use swamp_script_ast::Function;
 use swamp_script_parser::{AstParser, ParseError};
 use swamp_script_source_map::{FileId, SourceMap};
-use tracing::{debug, info, trace};
+use tracing::{debug, trace};
 
 pub struct ParseRoot {
     pub base_path: PathBuf,
@@ -183,10 +183,8 @@ impl DependencyParser {
                     parsed_module
                 } else {
                     if self.already_resolved_modules.contains(module_path_vec) {
-                        info!("a module that already has been resolved {path:?}");
                         continue;
                     } else {
-                        info!("a module we haven't seen before: {path:?}");
                         let (file_id, script) =
                             source_map.read_file_relative(module_path_vec.join("/").as_ref())?;
                         let parse_module = parse_root.parse(script, file_id)?;
@@ -207,10 +205,6 @@ impl DependencyParser {
                 .into_iter()
                 .filter(|import| !self.already_resolved_modules.contains(import))
                 .collect();
-
-            for import in &filtered_imports {
-                info!("..found use: {import:?}");
-            }
 
             self.import_scanned_modules
                 .insert(

@@ -11,7 +11,6 @@ use swamp_script_semantic::{
     ResolvedCompoundOperatorKind, ResolvedExpression, ResolvedNode, ResolvedType, ResolvedVariable,
     ResolvedVariableAssignment, ResolvedVariableCompoundAssignment, ResolvedVariableRef, Spanned,
 };
-use tracing::info;
 
 impl<'a> Resolver<'a> {
     fn try_find_local_variable(&self, node: &ResolvedNode) -> Option<&ResolvedVariableRef> {
@@ -306,8 +305,6 @@ impl<'a> Resolver<'a> {
         coerce: &Option<Type>,
         ast_expression: &Expression,
     ) -> Result<ResolvedExpression, ResolveError> {
-        let debug_text = self.get_text(&ast_variable.name);
-        info!(?debug_text, ?coerce, "setting variable");
         let maybe_required_type = if let Some(coerce_type_found) = coerce {
             self.resolve_type(coerce_type_found)?
         } else {

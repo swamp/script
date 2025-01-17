@@ -33,7 +33,7 @@ use swamp_script_ast::{
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{ResolvedNormalPattern, ResolvedRangeMode};
 use swamp_script_source_map::SourceMap;
-use tracing::{error, info};
+use tracing::error;
 
 #[derive(Debug)]
 pub struct ResolvedProgram {
@@ -1108,7 +1108,6 @@ impl<'a> Resolver<'a> {
     // The ast assumes it is something similar to a variable, but it can be a function reference as well.
     fn resolve_variable_like(&self, var_node: &Node) -> Result<ResolvedExpression, ResolveError> {
         let text = self.get_text(var_node);
-        info!(?text, "variable");
         self.shared
             .lookup
             .get_internal_function(&[], text)
@@ -1302,7 +1301,6 @@ impl<'a> Resolver<'a> {
         let (resolved_pattern, scope_was_pushed) =
             self.resolve_pattern(&arm.pattern, expected_condition_type)?;
 
-        info!(?expected_return_type, expr=?arm.expression, "expecting arm");
         let resolved_expression = self.resolve_expression(&arm.expression, expected_return_type)?;
         if scope_was_pushed {
             self.pop_block_scope("resolve_arm");
@@ -1563,10 +1561,8 @@ impl<'a> Resolver<'a> {
         for guard in guard_expressions {
             let resolved_condition = self.resolve_bool_expression(&guard.condition)?;
 
-            info!(?expecting_type, result=?guard.result, "guard arm");
             let resolved_result =
                 self.resolve_expression(&guard.result, &expecting_type.clone())?;
-            info!(?expecting_type, result=?guard.result, "guard arm");
 
             if expecting_type == ResolvedType::Any {
                 expecting_type = resolved_result.resolution();

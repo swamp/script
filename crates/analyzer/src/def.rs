@@ -20,7 +20,6 @@ use swamp_script_semantic::{
     ResolvedModulePath, ResolvedParameterNode, ResolvedStructType, ResolvedStructTypeRef,
     ResolvedType, ResolvedTypeForParameter, ResolvedUse, ResolvedUseItem,
 };
-use tracing::info;
 
 impl<'a> Resolver<'a> {
     fn resolve_use_definition(
@@ -279,7 +278,6 @@ impl<'a> Resolver<'a> {
                     )?;
                 }
 
-                info!(name=?function_data, "resolving func");
                 let statements =
                     self.resolve_statements_in_function(&function_data.body, &return_type)?;
                 self.scope.return_type = ResolvedType::Unit;
@@ -295,7 +293,6 @@ impl<'a> Resolver<'a> {
                 };
 
                 let function_name = self.get_text(&function_data.declaration.name).to_string();
-                info!(?function_name, "adding function");
                 let function_ref = self
                     .shared
                     .lookup

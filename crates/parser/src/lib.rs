@@ -17,7 +17,6 @@ use swamp_script_ast::{
     VariableBinding,
 };
 use swamp_script_ast::{Function, PostfixOperator};
-use tracing::info;
 
 pub struct ParseResult<'a> {
     #[allow(dead_code)]
@@ -1175,14 +1174,12 @@ impl AstParser {
 
         // Check for optional type coercion
         let type_coercion = if let Some(peeked) = inner.peek() {
-            info!(rule=?peeked.as_rule(),"peeked rule");
             if peeked.as_rule() == Rule::type_coerce {
                 let type_coerce_pair = inner.next().unwrap();
                 let mut type_inner = type_coerce_pair.clone().into_inner();
                 let type_name_pair = type_inner.next().ok_or_else(|| {
                     self.create_error_pair(SpecificError::MissingTypeName, &type_coerce_pair)
                 })?;
-                info!(rule=?type_name_pair.as_rule(),"peeked rule");
                 Some(self.parse_type(type_name_pair)?)
             } else {
                 None
@@ -1190,8 +1187,6 @@ impl AstParser {
         } else {
             None
         };
-
-        info!(?type_coercion, "type coercion");
 
         let op_pair = Self::next_pair(&mut inner)?;
         let operator_node = self.to_node(&op_pair);

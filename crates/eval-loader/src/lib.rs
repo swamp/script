@@ -12,7 +12,6 @@ use swamp_script_dep_loader::prelude::*;
 use swamp_script_semantic::modules::ResolvedModules;
 use swamp_script_semantic::prelude::*;
 use swamp_script_source_map::SourceMap;
-use tracing::info;
 
 pub fn resolve_to_new_module(
     state: &mut ResolvedProgramState,
@@ -41,8 +40,6 @@ pub fn resolve_to_existing_module(
         let mut name_lookup = NameLookup::new(path.clone(), &mut modules);
         let mut resolver = Resolver::new(state, &mut name_lookup, source_map, ast_module.file_id);
 
-        info!(?path, "analyzing");
-
         for ast_def in ast_module.ast_module.definitions() {
             let _resolved_def = resolver.resolve_definition(ast_def)?;
         }
@@ -68,8 +65,6 @@ pub fn resolve_program(
     for module_path in module_paths_in_order {
         if let Some(parse_module) = parsed_modules.get_parsed_module(module_path) {
             if let Some(_found_module) = modules.get(&*module_path.clone()) {
-                info!(?module_path, "this is an existing module");
-
                 let _maybe_expression = resolve_to_existing_module(
                     state,
                     modules,
@@ -78,7 +73,6 @@ pub fn resolve_program(
                     parse_module,
                 )?;
             } else {
-                info!(?module_path, "this is a new module");
                 resolve_to_new_module(state, modules, module_path, source_map, parse_module)?;
             }
         } else {
