@@ -1787,7 +1787,7 @@ fn option_assign_found_mut() {
     check(
         r"
         mut map = [2: 'hello']
-        mut a = map[2]
+        mut a = mut map[2]
         if mut x = a? {
             x = x + '-hi'
             print('x: {x}')
@@ -2086,6 +2086,19 @@ if booster? {
 } else {
     booster
 }
+
+         ",
+    );
+
+    assert_eq!(val, Value::Option(None));
+}
+
+#[test_log::test]
+fn val_assign_coerce_5() {
+    let val = eval(
+        r"
+
+booster: Int? = none
 
          ",
     );

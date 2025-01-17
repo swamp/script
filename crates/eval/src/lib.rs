@@ -940,7 +940,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
 
                 ResolvedLiteral::UnitLiteral(_) => Value::Unit,
-                ResolvedLiteral::Array(array_type, expressions) => {
+                ResolvedLiteral::Array(array_type, expressions, _node) => {
                     let values = self.evaluate_expressions(expressions)?;
                     Value::Array(array_type.clone(), convert_vec_to_rc_refcell(values))
                 }
@@ -1589,7 +1589,7 @@ impl<'a, C> Interpreter<'a, C> {
 
             ResolvedExpression::Match(resolved_match) => self.eval_match(resolved_match)?,
 
-            ResolvedExpression::Guard(guards, maybe_wildcard) => {
+            ResolvedExpression::Guard(guards, maybe_wildcard, _resolved_type) => {
                 self.eval_guard(guards, maybe_wildcard.as_deref())?
             }
 

@@ -391,7 +391,7 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
         ResolveError::UnknownTypeReference(x) => {
             Report::build(Error, 101, "Unknown type reference", &x.span)
         }
-        ResolveError::SemanticError(_) => todo!(),
+        ResolveError::SemanticError(a) => Report::build(Error, 141, &format!("semantic error {a:?}"), &Span::dummy()),
         ResolveError::SeqMapError(_) => todo!(),
         ResolveError::ExpectedMemberCall(_) => todo!(),
         ResolveError::CouldNotFindStaticMember(x, _y) => {

@@ -1198,7 +1198,11 @@ pub enum ResolvedExpression {
     },
 
     Match(ResolvedMatch),
-    Guard(Vec<ResolvedGuard>, Option<Box<ResolvedExpression>>),
+    Guard(
+        Vec<ResolvedGuard>,
+        Option<Box<ResolvedExpression>>,
+        ResolvedType,
+    ),
     LetVar(ResolvedVariableRef, Box<ResolvedExpression>),
     ArrayRemoveIndex(ResolvedVariableRef, Box<ResolvedExpression>),
     ArrayClear(ResolvedVariableRef),
@@ -1537,7 +1541,7 @@ impl ResolvedExpression {
                     .collect_constant_dependencies(deps);
             }
 
-            Self::Guard(guards, wildcard) => {
+            Self::Guard(guards, wildcard, _resolved_type) => {
                 for guard in guards {
                     guard
                         .condition
@@ -1667,17 +1671,8 @@ impl ResolvedExpression {
         &self,
         expecting_type: &ResolvedType,
     ) -> Result<ResolvedType, SemanticError> {
-        let detected_type = match self {
-            Self::Literal(literal) => match literal {
-                ResolvedLiteral::NoneLiteral(_) => expecting_type.clone(),
-
-                _ => self.resolution(),
-            },
-
-            _ => self.resolution(),
-        };
-
-        if detected_type.assignable_type(expecting_type) {
+        let detected_type = self.resolution();
+        if expecting_type.assignable_type(&detected_type) {
             Ok(detected_type)
         } else {
             error!(?detected_type, ?expecting_type, "incompatible");
@@ -1732,28 +1727,22 @@ impl ResolvedExpression {
             }
 
             // Variable
-            Self::InitializeVariable(variable_assignment) => {
-                variable_assignment.variable_refs.resolved_type.clone()
-            }
-            Self::ReassignVariable(variable_assignments) => {
-                variable_assignments.variable_refs.resolved_type.clone()
-            }
-            Self::VariableCompoundAssignment(var_compound_assignment) => {
-                var_compound_assignment.variable_ref.resolved_type.clone()
-            }
+            Self::InitializeVariable(_variable_assignment) => ResolvedType::Unit,
+            Self::ReassignVariable(_variable_assignments) => ResolvedType::Unit,
+            Self::VariableCompoundAssignment(_var_compound_assignment) => ResolvedType::Unit,
 
             // Assignments
-            Self::ArrayAssignment(_, _, _) => todo!(),
+            Self::ArrayAssignment(_, _, _) => ResolvedType::Unit,
             Self::MapAssignment(_c, _a, _d) => ResolvedType::Unit,
-            Self::StructFieldAssignment(_struct_field, _lookups, source_resolution) => {
-                source_resolution.resolution()
+            Self::StructFieldAssignment(_struct_field, _lookups, _source_resolution) => {
+                ResolvedType::Unit
             }
             Self::FieldCompoundAssignment(
                 _resolved_expression,
                 _access,
                 _op_,
-                source_resolution,
-            ) => source_resolution.resolution(),
+                _source_resolution,
+            ) => ResolvedType::Unit,
 
             Self::AssignArrayRange(
                 _base_expr,
@@ -1830,7 +1819,7 @@ impl ResolvedExpression {
                 ResolvedLiteral::TupleLiteral(tuple_type_ref, _data) => {
                     ResolvedType::Tuple(tuple_type_ref.clone())
                 }
-                ResolvedLiteral::Array(array_type_ref, _data) => {
+                ResolvedLiteral::Array(array_type_ref, _data, _node) => {
                     ResolvedType::Array(array_type_ref.clone())
                 }
                 ResolvedLiteral::Map(map_type_ref, _data) => {
@@ -1901,10 +1890,7 @@ impl ResolvedExpression {
             // Matching and comparing
             Self::Match(resolved_match) => resolved_match.arms[0].expression_type.clone(),
 
-            Self::Guard(guards, wildcard) => wildcard.as_ref().map_or_else(
-                || guards[0].result.resolution(),
-                |found_wildcard| found_wildcard.resolution(),
-            ),
+            Self::Guard(_guards, _wildcard, resolved_type) => resolved_type.clone(),
 
             Self::If(_, true_expr, _) => true_expr.resolution(),
 
@@ -2087,7 +2073,7 @@ pub enum ResolvedLiteral {
 
     EnumVariantLiteral(ResolvedEnumVariantTypeRef, ResolvedEnumLiteralData),
     TupleLiteral(ResolvedTupleTypeRef, Vec<ResolvedExpression>),
-    Array(ResolvedArrayTypeRef, Vec<ResolvedExpression>),
+    Array(ResolvedArrayTypeRef, Vec<ResolvedExpression>, ResolvedNode),
     Map(
         ResolvedMapTypeRef,
         Vec<(ResolvedExpression, ResolvedExpression)>,
@@ -2097,20 +2083,18 @@ pub enum ResolvedLiteral {
 impl Spanned for ResolvedLiteral {
     fn span(&self) -> Span {
         match self {
-            ResolvedLiteral::FloatLiteral(_v, node) => node.span.clone(),
-            ResolvedLiteral::UnitLiteral(_) => Span::dummy(), // TODO: UnitLiteral should have node
-            ResolvedLiteral::NoneLiteral(node) => node.span.clone(),
-            ResolvedLiteral::IntLiteral(_, node) => node.span.clone(),
-            ResolvedLiteral::StringLiteral(_, node) => node.span.clone(),
-            ResolvedLiteral::BoolLiteral(_, node) => node.span.clone(),
-            ResolvedLiteral::EnumVariantLiteral(variant_type_ref, _) => {
-                variant_type_ref.name.0.span.clone()
-            }
-            ResolvedLiteral::TupleLiteral(_tuple_type_ref, _tuples) => {
+            Self::FloatLiteral(_v, node) => node.span.clone(),
+            Self::UnitLiteral(_) => Span::dummy(), // TODO: UnitLiteral should have node
+            Self::NoneLiteral(node) => node.span.clone(),
+            Self::IntLiteral(_, node) => node.span.clone(),
+            Self::StringLiteral(_, node) => node.span.clone(),
+            Self::BoolLiteral(_, node) => node.span.clone(),
+            Self::EnumVariantLiteral(variant_type_ref, _) => variant_type_ref.name.0.span.clone(),
+            Self::TupleLiteral(_tuple_type_ref, _tuples) => {
                 todo!()
             }
-            ResolvedLiteral::Array(_, _) => todo!(),
-            ResolvedLiteral::Map(_, _) => todo!(),
+            Self::Array(_array_type_ref, _expressions, node) => node.span.clone(),
+            Self::Map(_, _) => todo!(),
         }
     }
 }

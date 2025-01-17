@@ -76,7 +76,7 @@ fn internal_compile(
 
     let maybe_resolved_expression = program
         .expression
-        .map(|expr| resolver.resolve_expression(&expr))
+        .map(|expr| resolver.resolve_expression(&expr, &ResolvedType::Any))
         .transpose()?;
 
     Ok((maybe_resolved_expression, source_map))

@@ -441,7 +441,7 @@ pub enum Literal {
     Bool(Node),
     EnumVariant(EnumVariantLiteral),
     Tuple(Vec<Expression>),
-    Array(Vec<Expression>),
+    Array(Vec<Expression>, Node),
     Map(Vec<(Expression, Expression)>),
     Unit(Node), // ()
     None(Node), // none

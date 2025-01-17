@@ -6,7 +6,7 @@
 use crate::err::ResolveError;
 use crate::{Resolver, SPARSE_TYPE_ID};
 use std::rc::Rc;
-use swamp_script_ast::{Expression, Function, Node, QualifiedTypeIdentifier};
+use swamp_script_ast::{Expression, Node, QualifiedTypeIdentifier};
 use swamp_script_semantic::Span;
 use swamp_script_semantic::{
     ResolvedExpression, ResolvedExternalFunctionCall, ResolvedExternalFunctionDefinitionRef,

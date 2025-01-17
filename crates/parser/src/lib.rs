@@ -1977,7 +1977,10 @@ impl AstParser {
         for element in Self::convert_into_iterator(pair) {
             elements.push(self.parse_expression(&element)?);
         }
-        Ok(Expression::Literal(Literal::Array(elements)))
+        Ok(Expression::Literal(Literal::Array(
+            elements,
+            self.to_node(pair),
+        )))
     }
 
     fn parse_map_literal(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {

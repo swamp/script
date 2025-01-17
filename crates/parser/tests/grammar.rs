@@ -2600,3 +2600,17 @@ VariableAssignment(<1:1>, Some(Int(<3:3>)), FunctionCall(VariableAccess(<9:9>), 
 ",
     );
 }
+
+#[test_log::test]
+fn assignment_coerce_if() {
+    check(
+        r"
+a:Int? = if true 0 else none
+         ",
+        r"
+
+VariableAssignment(<1:1>, Some(Optional(Int(<3:3>), <6:1>)), If(Literal(Bool(<13:4>)), Literal(Int(<18:1>)), Some(Literal(None(<25:4>)))))
+
+",
+    );
+}

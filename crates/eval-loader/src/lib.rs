@@ -48,7 +48,7 @@ pub fn resolve_to_existing_module(
         }
 
         let maybe_resolved_expression = if let Some(expr) = ast_module.ast_module.expression() {
-            Some(resolver.resolve_expression(expr)?)
+            Some(resolver.resolve_expression(expr, &ResolvedType::Any)?)
         } else {
             None
         };

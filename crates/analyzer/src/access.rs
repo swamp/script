@@ -175,7 +175,7 @@ impl<'a> Resolver<'a> {
         let resolved_key_expression =
             self.resolve_expression(key_expression, &map_type_ref.key_type)?;
         let resolved_map_expression =
-            self.resolve_expression(base_expression, &map_type_ref.value_type)?;
+            self.resolve_expression(base_expression, &ResolvedType::Any)?;
 
         Ok(ResolvedExpression::MapIndexAccess(ResolvedMapIndexLookup {
             map_type: ResolvedType::Map(map_type_ref.clone()),

@@ -279,6 +279,7 @@ impl<'a> Resolver<'a> {
                     )?;
                 }
 
+                info!(name=?function_data, "resolving func");
                 let statements =
                     self.resolve_statements_in_function(&function_data.body, &return_type)?;
                 self.scope.return_type = ResolvedType::Unit;

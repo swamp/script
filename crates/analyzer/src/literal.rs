@@ -16,6 +16,7 @@ impl<'a> Resolver<'a> {
     pub(crate) fn resolve_literal(
         &mut self,
         ast_literal: &Literal,
+        expected_type: &ResolvedType,
     ) -> Result<ResolvedLiteral, ResolveError> {
         let resolved_literal = match ast_literal {
             Literal::Int(int_node) => {
@@ -108,9 +109,24 @@ impl<'a> Resolver<'a> {
                 ResolvedLiteral::EnumVariantLiteral(variant_ref, resolved_data)
             }
 
-            Literal::Array(items) => {
-                let (array_type_ref, resolved_items) = self.resolve_array_type_helper(items)?;
-                ResolvedLiteral::Array(array_type_ref, resolved_items)
+            Literal::Array(items, node) => {
+                match expected_type {
+                    ResolvedType::Map(map_type_ref) => {
+                        //                        let (array_type_ref, resolved_items) = self.resolve_map_type_helper(node, items, expected_type)?;
+                        ResolvedLiteral::Map(map_type_ref.clone(), vec![])
+                    }
+                    ResolvedType::Array(_something) => {
+                        let (array_type_ref, resolved_items) =
+                            self.resolve_array_type_helper(node, items, expected_type)?;
+                        ResolvedLiteral::Array(array_type_ref, resolved_items, self.to_node(node))
+                    }
+                    _ => {
+                        return Err(ResolveError::IncompatibleTypes(
+                            self.to_node(node).span,
+                            expected_type.clone(),
+                        ))
+                    }
+                }
             }
 
             Literal::Map(entries) => self.resolve_map_literal(entries)?,

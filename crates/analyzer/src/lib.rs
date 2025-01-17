@@ -33,7 +33,7 @@ use swamp_script_ast::{
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{ResolvedNormalPattern, ResolvedRangeMode};
 use swamp_script_source_map::SourceMap;
-use tracing::info;
+use tracing::{error, info};
 
 #[derive(Debug)]
 pub struct ResolvedProgram {
@@ -244,9 +244,9 @@ impl<'a> Resolver<'a> {
         return_type: &ResolvedType,
     ) -> Result<ResolvedExpression, ResolveError> {
         let resolved_statement = self.resolve_expression(expression, &return_type)?;
-        let wrapped_expr = Self::check_and_wrap_return_value(resolved_statement, return_type)?;
+        //let wrapped_expr = Self::check_and_wrap_return_value(resolved_statement, return_type)?;
 
-        Ok(wrapped_expr)
+        Ok(resolved_statement)
     }
 
     fn resolve_maybe_type(
@@ -283,6 +283,7 @@ impl<'a> Resolver<'a> {
         }
     }
 
+    /*
     fn check_and_wrap_return_value(
         expr: ResolvedExpression,
         return_type: &ResolvedType,
@@ -318,6 +319,8 @@ impl<'a> Resolver<'a> {
         }
         Ok(expr)
     }
+
+     */
 
     fn current_function_return_type(&self) -> ResolvedType {
         self.scope.return_type.clone()
@@ -367,7 +370,7 @@ impl<'a> Resolver<'a> {
 
     #[must_use]
     pub fn is_empty_array_literal(ast_expression: &Expression) -> bool {
-        matches!(ast_expression, Expression::Literal(Literal::Array(items)) if items.is_empty())
+        matches!(ast_expression, Expression::Literal(Literal::Array(items, _node)) if items.is_empty())
     }
 
     /*
@@ -412,6 +415,35 @@ impl<'a> Resolver<'a> {
     ///
     #[allow(clippy::too_many_lines)]
     pub fn resolve_expression(
+        &mut self,
+        ast_expression: &Expression,
+        expected_type: &ResolvedType,
+    ) -> Result<ResolvedExpression, ResolveError> {
+        let expr = self.resolve_expression_internal(ast_expression, expected_type)?;
+        let encountered_type = expr.resolution_expecting_type(expected_type)?;
+        if expected_type.same_type(&encountered_type) {
+            return Ok(expr);
+        } else if !matches!(encountered_type, ResolvedType::Optional(_)) {
+            // If an optional is expected, we can wrap it
+            if let ResolvedType::Optional(expected_inner_type) = expected_type {
+                if encountered_type.same_type(&*expected_inner_type) {
+                    let wrapped = ResolvedExpression::Option(Option::from(Box::new(expr)));
+                    return Ok(wrapped);
+                }
+            }
+        }
+        error!(?expr, ?ast_expression, "expr");
+        error!(?expected_type, ?encountered_type, "incompatible types");
+        Err(ResolveError::IncompatibleTypes(
+            expr.span(),
+            expected_type.clone(),
+        ))
+    }
+
+    /// # Errors
+    ///
+    #[allow(clippy::too_many_lines)]
+    pub fn resolve_expression_internal(
         &mut self,
         ast_expression: &Expression,
         expected_type: &ResolvedType,
@@ -663,7 +695,7 @@ impl<'a> Resolver<'a> {
                 self.member_or_field_call(ast_member_expression, ast_identifier, ast_arguments)?
             }
             Expression::Block(expressions) => {
-                ResolvedExpression::Block(self.resolve_expressions(&expected_type, expressions)?)
+                ResolvedExpression::Block(self.resolve_block(&expected_type, expressions)?)
             }
 
             Expression::With(variable_bindings, expression) => {
@@ -697,7 +729,7 @@ impl<'a> Resolver<'a> {
             }
 
             Expression::Literal(literal) => {
-                ResolvedExpression::Literal(self.resolve_literal(literal)?)
+                ResolvedExpression::Literal(self.resolve_literal(literal, expected_type)?)
             }
 
             Expression::ForLoop(pattern, iteratable_expression, statements) => {
@@ -728,12 +760,9 @@ impl<'a> Resolver<'a> {
             }
             Expression::Return(expr) => {
                 let wrapped_expr = if let Some(found_expr) = expr {
-                    let resolved_expr = self.resolve_expression(found_expr, &expected_type)?;
                     let return_type = self.current_function_return_type();
-                    Some(Box::new(Self::check_and_wrap_return_value(
-                        resolved_expr,
-                        &return_type,
-                    )?))
+                    let resolved_expr = self.resolve_expression(found_expr, &return_type)?;
+                    Some(Box::new(resolved_expr))
                 } else {
                     None
                 };
@@ -878,9 +907,9 @@ impl<'a> Resolver<'a> {
                 String::new(),
                 ResolvedNode::new_unknown(),
             )),
-            ResolvedType::Array(array_type_ref) => {
-                ResolvedExpression::Literal(ResolvedLiteral::Array(array_type_ref.clone(), vec![]))
-            }
+            ResolvedType::Array(array_type_ref) => ResolvedExpression::Literal(
+                ResolvedLiteral::Array(array_type_ref.clone(), vec![], ResolvedNode::new_unknown()),
+            ),
             ResolvedType::Tuple(tuple_type_ref) => {
                 let mut expressions = Vec::new();
                 for resolved_type in &tuple_type_ref.0 {
@@ -998,6 +1027,29 @@ impl<'a> Resolver<'a> {
         Ok(resolved_expressions)
     }
 
+    fn resolve_block(
+        &mut self,
+        expected_type_for_last: &ResolvedType,
+        ast_expressions: &[Expression],
+    ) -> Result<Vec<ResolvedExpression>, ResolveError> {
+        if ast_expressions.is_empty() {
+            return Ok(vec![]);
+        }
+        let mut resolved_expressions = Vec::new();
+
+        // need special handling for the last expression
+        let (last, all_but_last) = ast_expressions
+            .split_last()
+            .ok_or_else(|| ResolveError::InternalError("all_but_last"))?;
+
+        for expression in all_but_last {
+            resolved_expressions.push(self.resolve_expression(expression, &ResolvedType::Any)?);
+        }
+        resolved_expressions.push(self.resolve_expression(last, expected_type_for_last)?);
+
+        Ok(resolved_expressions)
+    }
+
     fn resolve_interpolated_string(
         &mut self,
         string_parts: &[StringPart],
@@ -1056,6 +1108,7 @@ impl<'a> Resolver<'a> {
     // The ast assumes it is something similar to a variable, but it can be a function reference as well.
     fn resolve_variable_like(&self, var_node: &Node) -> Result<ResolvedExpression, ResolveError> {
         let text = self.get_text(var_node);
+        info!(?text, "variable");
         self.shared
             .lookup
             .get_internal_function(&[], text)
@@ -1105,11 +1158,20 @@ impl<'a> Resolver<'a> {
 
     fn resolve_array_type_helper(
         &mut self,
+        node: &Node,
         items: &[Expression],
+        expected_type: &ResolvedType,
     ) -> Result<(ResolvedArrayTypeRef, Vec<ResolvedExpression>), ResolveError> {
         let expressions = self.resolve_expressions(&ResolvedType::Any, items)?;
         let item_type = if expressions.is_empty() {
-            ResolvedType::Any
+            if let ResolvedType::Array(found) = expected_type {
+                found.item_type.clone()
+            } else {
+                return Err(ResolveError::IncompatibleTypes(
+                    self.to_node(node).span,
+                    expected_type.clone(),
+                ));
+            }
         } else {
             expressions[0].resolution()
         };
@@ -1208,11 +1270,12 @@ impl<'a> Resolver<'a> {
 
     fn resolve_match(
         &mut self,
-        expression: &Expression,
+        condition_expression: &Expression,
         expected_type: &ResolvedType,
         arms: &Vec<MatchArm>,
     ) -> Result<ResolvedMatch, ResolveError> {
-        let resolved_expression = self.resolve_expression(expression, &expected_type)?;
+        let resolved_expression =
+            self.resolve_expression(condition_expression, &ResolvedType::Any)?;
         let resolved_type = resolved_expression.resolution();
 
         let mut resolved_arms = Vec::new();
@@ -1239,6 +1302,7 @@ impl<'a> Resolver<'a> {
         let (resolved_pattern, scope_was_pushed) =
             self.resolve_pattern(&arm.pattern, expected_condition_type)?;
 
+        info!(?expected_return_type, expr=?arm.expression, "expecting arm");
         let resolved_expression = self.resolve_expression(&arm.expression, expected_return_type)?;
         if scope_was_pushed {
             self.pop_block_scope("resolve_arm");
@@ -1266,9 +1330,9 @@ impl<'a> Resolver<'a> {
         ast_literal: &Literal,
         expected_condition_type: &ResolvedType,
     ) -> Result<ResolvedNormalPattern, ResolveError> {
-        let resolved_literal = self.resolve_literal(ast_literal)?;
+        let resolved_literal = self.resolve_literal(ast_literal, expected_condition_type)?;
 
-        let resolved_literal_copy = self.resolve_literal(ast_literal)?;
+        let resolved_literal_copy = self.resolve_literal(ast_literal, &expected_condition_type)?;
         let resolved_literal_expr = ResolvedExpression::Literal(resolved_literal_copy);
         let span = resolved_literal_expr.span();
         let literal_type = resolved_literal_expr.resolution();
@@ -1463,6 +1527,7 @@ impl<'a> Resolver<'a> {
         expression: &Expression,
     ) -> Result<ResolvedExpression, ResolveError> {
         let mut variable_expressions = Vec::new();
+
         for variable in variables {
             let var = self.resolve_expression(&variable.expression, &ResolvedType::Any)?;
             variable_expressions.push(var);
@@ -1478,7 +1543,7 @@ impl<'a> Resolver<'a> {
             expressions.push(initialize_variable_expression);
         }
 
-        let resolved_expression = self.resolve_expression(expression, &ResolvedType::Any)?;
+        let resolved_expression = self.resolve_expression(expression, expected_type)?;
         expressions.push(resolved_expression);
 
         let block_expression = ResolvedExpression::Block(expressions);
@@ -1497,8 +1562,12 @@ impl<'a> Resolver<'a> {
         let mut guards = Vec::new();
         for guard in guard_expressions {
             let resolved_condition = self.resolve_bool_expression(&guard.condition)?;
+
+            info!(?expecting_type, result=?guard.result, "guard arm");
             let resolved_result =
                 self.resolve_expression(&guard.result, &expecting_type.clone())?;
+            info!(?expecting_type, result=?guard.result, "guard arm");
+
             if expecting_type == ResolvedType::Any {
                 expecting_type = resolved_result.resolution();
             }
@@ -1517,7 +1586,11 @@ impl<'a> Resolver<'a> {
             None
         };
 
-        Ok(ResolvedExpression::Guard(guards, resolved_wildcard))
+        Ok(ResolvedExpression::Guard(
+            guards,
+            resolved_wildcard,
+            expecting_type,
+        ))
     }
 
     fn resolve_none_coalesce_operator(
@@ -1534,31 +1607,5 @@ impl<'a> Resolver<'a> {
         } else {
             Err(ResolveError::NoneCoalesceNeedsOptionalType(expr.span()))
         }
-    }
-}
-
-fn wrap_in_some_if_optional(
-    target_type: &ResolvedType,
-    resolved_expr: ResolvedExpression,
-) -> ResolvedExpression {
-    match target_type {
-        ResolvedType::Optional(_) => match resolved_expr {
-            ResolvedExpression::Option(_) => resolved_expr,
-            _ => {
-                if let ResolvedExpression::Literal(ResolvedLiteral::NoneLiteral(_)) = resolved_expr
-                {
-                    resolved_expr
-                } else {
-                    let resolved_type = resolved_expr.resolution();
-                    if let ResolvedType::Optional(found_type) = resolved_type {
-                        resolved_expr
-                    } else {
-                        info!(?resolved_expr, ?resolved_type, "WRAPPING");
-                        ResolvedExpression::Option(Some(Box::new(resolved_expr)))
-                    }
-                }
-            }
-        },
-        _ => resolved_expr,
     }
 }

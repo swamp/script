@@ -1166,7 +1166,7 @@ fn val_assign_coerce() {
 booster_value: Int? = if false 0 else none
          ",
         r"
- InitializeVariable(ResolvedVariableAssignment { variable_refs: ResolvedVariable { name: <1:13>, resolved_type: Int?, mutable_node: None, scope_index: 0, variable_index: 0 }, expression: Option(Some(If(ResolvedBooleanExpression { expression: Literal(BoolLiteral(false, <26:5>)) }, Literal(IntLiteral(0, <32:1>)), Some(Literal(NoneLiteral(<39:4>)))))) })
+InitializeVariable(ResolvedVariableAssignment { variable_refs: ResolvedVariable { name: <1:13>, resolved_type: Int?, mutable_node: None, scope_index: 0, variable_index: 0 }, expression: If(ResolvedBooleanExpression { expression: Literal(BoolLiteral(false, <26:5>)) }, Literal(IntLiteral(0, <32:1>)), Some(Literal(NoneLiteral(<39:4>)))))) })
 
          ",
     );
