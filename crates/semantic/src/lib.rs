@@ -1242,6 +1242,9 @@ pub enum ResolvedExpression {
     // String built in
     StringLen(Box<ResolvedExpression>),
 
+    // Tuple built in
+    Tuple2FloatMagnitude(Box<ResolvedExpression>),
+
     // --- Special methods
     // TODO: Have a better interface for these "engine" member calls
     SparseAdd(
@@ -1581,6 +1584,10 @@ impl ResolvedExpression {
             Self::StringLen(expr) => {
                 expr.collect_constant_dependencies(deps);
             }
+
+            Self::Tuple2FloatMagnitude(expr) => {
+                expr.collect_constant_dependencies(deps);
+            }
             Self::SparseAdd(expr1, expr2, _) | Self::SparseRemove(expr1, expr2, _) => {
                 expr1.collect_constant_dependencies(deps);
                 expr2.collect_constant_dependencies(deps);
@@ -1871,6 +1878,7 @@ impl ResolvedExpression {
 
             // String
             Self::StringLen(_) => ResolvedType::Int,
+            Self::Tuple2FloatMagnitude(_) => ResolvedType::Float,
 
             // Loops
             Self::ForLoop(_pattern, _iterator_expr, expr) => expr.resolution(),

@@ -13,7 +13,7 @@ use std::fmt::{Debug, Display, Formatter};
 use std::rc::Rc;
 use swamp_script_semantic::{ResolvedRustTypeRef, ResolvedType};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct SparseValueId(pub Id);
 
 impl Display for SparseValueId {
@@ -58,7 +58,7 @@ impl QuickSerialize for SparseValueId {
     }
 }
 
-#[derive()]
+#[derive(Eq, PartialEq)]
 pub struct SparseValueMap {
     pub sparse_slot: SparseSlot<Rc<RefCell<Value>>>,
     pub id_generator: IndexAllocator,

@@ -24,16 +24,28 @@ pub type ValueRef = Rc<RefCell<Value>>;
 pub trait RustType: Any + Debug + Display + QuickSerialize {
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
+    fn eq_dyn(&self, other: &dyn RustType) -> bool;
 }
 
 // Blanket implementation
-impl<T: Any + Debug + Display + QuickSerialize> RustType for T {
+impl<T: Any + Debug + Display + QuickSerialize + PartialEq> RustType for T {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
+    }
+
+    fn eq_dyn(&self, other: &dyn RustType) -> bool {
+        // Check if `other` is the same concrete type as `self`
+        if let Some(other_t) = other.as_any().downcast_ref::<T>() {
+            // Now we can compare them using T's PartialEq
+            self == other_t
+        } else {
+            // Different concrete type => definitely not equal
+            false
+        }
     }
 }
 
@@ -565,7 +577,7 @@ impl Value {
         }
     }
 
-    pub fn new_rust_value<T: RustType + 'static>(
+    pub fn new_rust_value<T: RustType + 'static + PartialEq>(
         rust_type_ref: ResolvedRustTypeRef,
         value: T,
     ) -> Self {
@@ -573,7 +585,7 @@ impl Value {
         Self::RustValue(rust_type_ref, Rc::new(RefCell::new(boxed)))
     }
 
-    pub fn new_hidden_rust_struct<T: RustType + 'static>(
+    pub fn new_hidden_rust_struct<T: RustType + 'static + PartialEq>(
         struct_type: ResolvedStructTypeRef,
         rust_description: ResolvedRustTypeRef,
         value: T,

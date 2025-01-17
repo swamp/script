@@ -6,10 +6,10 @@
 use crate::err::ResolveError;
 use crate::{Resolver, SPARSE_TYPE_ID};
 use swamp_script_ast::{Expression, Node};
-use swamp_script_semantic::Span;
 use swamp_script_semantic::{
     ResolvedExpression, ResolvedMapTypeRef, ResolvedType, ResolvedVariableRef, Spanned,
 };
+use swamp_script_semantic::{ResolvedTupleTypeRef, Span};
 
 impl<'a> Resolver<'a> {
     pub(crate) fn check_for_internal_member_call(
@@ -68,6 +68,15 @@ impl<'a> Resolver<'a> {
                 )?;
                 return Ok(Some(resolved));
             }
+            ResolvedType::Tuple(tuple_type) => {
+                let found = self.resolve_tuple_member_call(
+                    tuple_type,
+                    resolved_expr,
+                    ast_member_function_name,
+                    ast_arguments,
+                )?;
+                return Ok(Some(found));
+            }
             _ => {
                 return self.check_for_internal_member_call_extra(
                     resolved_expr,
@@ -77,6 +86,50 @@ impl<'a> Resolver<'a> {
             }
         }
         Ok(None)
+    }
+
+    fn resolve_tuple_member_call(
+        &self,
+        tuple_type: ResolvedTupleTypeRef,
+        tuple_expr: ResolvedExpression,
+        ast_member_function_name: &Node,
+        arguments: &[Expression],
+    ) -> Result<ResolvedExpression, ResolveError> {
+        let resolved_node = self.to_node(ast_member_function_name);
+        if tuple_type.0.len() != 2 {
+            return Err(ResolveError::WrongNumberOfArguments(
+                resolved_node.span,
+                2,
+                tuple_type.0.len(),
+            ));
+        }
+
+        let member_function_name_str = self.get_text(ast_member_function_name);
+
+        let resolved_expr = match (&tuple_type.0[0], &tuple_type.0[1]) {
+            (ResolvedType::Float, ResolvedType::Float) => match member_function_name_str {
+                "magnitude" => {
+                    if !arguments.is_empty() {
+                        return Err(ResolveError::WrongNumberOfArguments(
+                            resolved_node.span,
+                            arguments.len(),
+                            0,
+                        ));
+                    }
+                    ResolvedExpression::Tuple2FloatMagnitude(Box::from(tuple_expr))
+                }
+                _ => return Err(ResolveError::UnknownMemberFunction(resolved_node)),
+            },
+            _ => {
+                return Err(ResolveError::WrongNumberOfArguments(
+                    resolved_node.span,
+                    99,
+                    tuple_type.0.len(),
+                ))
+            }
+        };
+
+        Ok(resolved_expr)
     }
 
     fn resolve_map_member_call(

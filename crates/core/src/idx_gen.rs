@@ -4,7 +4,7 @@
  */
 // TODO: Move to sparse-slot crate
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct IndexAllocator {
     // Stores the generation count for each index
     generations: Vec<u16>,

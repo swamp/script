@@ -21,6 +21,7 @@ use swamp_script_semantic::{
     ResolvedForPattern, ResolvedFunction, ResolvedNormalPattern, ResolvedPatternElement,
     ResolvedPostfixOperatorKind, ResolvedRangeMode, ResolvedStaticCall, ResolvedUnaryOperatorKind,
 };
+use tracing::error;
 
 pub mod err;
 
@@ -1912,6 +1913,36 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
+            ResolvedExpression::Tuple2FloatMagnitude(tuple_expr) => {
+                let value = self.evaluate_expression(tuple_expr)?;
+                if let Value::Tuple(_tuple_ref, values) = value {
+                    if values.len() != 2 {
+                        return Err(ExecuteError::Error("tuple2floatmagnitude".to_string()));
+                    }
+                    match (
+                        values[0].as_ref().borrow().clone(),
+                        values[1].as_ref().borrow().clone(),
+                    ) {
+                        (Value::Float(a), Value::Float(b)) => {
+                            let a_raw: i64 = a.inner() as i64;
+                            let b_raw: i64 = b.inner() as i64;
+
+                            let i64_magnitude = i64_sqrt(a_raw * a_raw + b_raw * b_raw);
+
+                            let new_fp = Fp::from_raw(
+                                i32::try_from(i64_magnitude).expect("wrong with i64_sqrt"),
+                            );
+                            Value::Float(new_fp)
+                        }
+                        _ => {
+                            return Err(ExecuteError::TypeError("Expected float tuple".to_string()))
+                        }
+                    }
+                } else {
+                    return Err(ExecuteError::TypeError("Expected float tuple".to_string()));
+                }
+            }
+
             ResolvedExpression::If(condition, consequences, optional_alternative) => {
                 let cond_value = self.evaluate_expression(&condition.expression)?;
                 if cond_value.is_truthy()? {
@@ -2188,6 +2219,13 @@ impl<'a, C> Interpreter<'a, C> {
             }
 
             // Float operations
+            (Value::Float(a), ResolvedBinaryOperatorKind::Equal, Value::Float(b)) => {
+                Value::Bool(a == b)
+            }
+            (Value::Float(a), ResolvedBinaryOperatorKind::NotEqual, Value::Float(b)) => {
+                Value::Bool(a != b)
+            }
+
             (Value::Float(a), ResolvedBinaryOperatorKind::Add, Value::Float(b)) => {
                 Value::Float(*a + *b)
             }
@@ -2229,6 +2267,30 @@ impl<'a, C> Interpreter<'a, C> {
             }
 
             // Comparison operations
+
+            // RustType
+            (
+                Value::RustValue(_, left),
+                ResolvedBinaryOperatorKind::Equal,
+                Value::RustValue(_, right),
+            ) => {
+                let left_borrow = left.borrow();
+                let right_borrow = right.borrow();
+                let equal = left_borrow.eq_dyn(&**right_borrow);
+                Value::Bool(equal)
+            }
+            (
+                Value::RustValue(_, left),
+                ResolvedBinaryOperatorKind::NotEqual,
+                Value::RustValue(_, right),
+            ) => {
+                let left_borrow = left.borrow();
+                let right_borrow = right.borrow();
+                let equal = left_borrow.eq_dyn(&**right_borrow);
+                Value::Bool(!equal)
+            }
+
+            // Int
             (Value::Int(a), ResolvedBinaryOperatorKind::Equal, Value::Int(b)) => {
                 Value::Bool(a == b)
             }
@@ -2263,6 +2325,19 @@ impl<'a, C> Interpreter<'a, C> {
                 Value::String(a.to_string() + &b)
             }
 
+            // Enum
+            (
+                Value::EnumVariantSimple(a),
+                ResolvedBinaryOperatorKind::Equal,
+                Value::EnumVariantSimple(b),
+            ) => Value::Bool(a == b),
+            (
+                Value::EnumVariantSimple(a),
+                ResolvedBinaryOperatorKind::NotEqual,
+                Value::EnumVariantSimple(b),
+            ) => Value::Bool(a != b),
+
+            // Bool
             (Value::Bool(a), ResolvedBinaryOperatorKind::Equal, Value::Bool(b)) => {
                 Value::Bool(a == b)
             }
@@ -2275,9 +2350,10 @@ impl<'a, C> Interpreter<'a, C> {
             }
 
             _ => {
+                error!(?op, "invalid binary operation!!");
                 return Err(
                     format!("Invalid binary operation {op:?} {left_val:?} {right_val:?}").into(),
-                )
+                );
             }
         };
 
@@ -2706,4 +2782,32 @@ impl<'a, C> Interpreter<'a, C> {
             Err(ExecuteError::ExpectedString)
         }
     }
+}
+
+#[inline]
+#[must_use]
+pub fn i64_sqrt(v: i64) -> i64 {
+    assert!(v >= 0, "negative numbers are undefined for sqrt() {v}");
+
+    if v == 0 {
+        return v;
+    }
+
+    const MAX_ITERATIONS: usize = 40;
+    const TOLERANCE: i64 = 2;
+
+    let mut guess = v / 2;
+
+    for _ in 0..MAX_ITERATIONS {
+        let next_guess = (guess + v / guess) / 2;
+
+        // Check if the change is within the tolerance level
+        if (next_guess - guess).abs() <= TOLERANCE {
+            return next_guess;
+        }
+
+        guess = next_guess;
+    }
+
+    guess // Return the last guess if convergence wasn't fully reached
 }
