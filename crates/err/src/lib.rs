@@ -449,7 +449,7 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
             Report::build(Error, 104, "No default() function", &resolved_type.span())
         },
         ResolveError::NoDefaultImplementedForStruct(_) => todo!(),
-        &ResolveError::ExpectedFunctionTypeForFunctionCall(_) => todo!(),
+        ResolveError::ExpectedFunctionTypeForFunctionCall(span) => Report::build(Error, 4404, "expected function type for function call", &span),
         &ResolveError::TypeDoNotSupportIndexAccess(_) => todo!(),
         ResolveError::ExpectedMutableLocation(span) =>  Report::build(Error, 104, "expected mutable location", &span),
 

@@ -274,6 +274,16 @@ impl<'a> Resolver<'a> {
                 }
                 Ok(ResolvedExpression::FloatFloor(Box::new(expr)))
             }
+            "sqrt" => {
+                if !ast_arguments.is_empty() {
+                    return Err(ResolveError::WrongNumberOfArguments(
+                        span,
+                        ast_arguments.len(),
+                        0,
+                    ));
+                }
+                Ok(ResolvedExpression::FloatSqrt(Box::new(expr)))
+            }
             "sign" => {
                 if !ast_arguments.is_empty() {
                     return Err(ResolveError::WrongNumberOfArguments(
