@@ -39,13 +39,10 @@ impl<T: Any + Debug + Display + QuickSerialize + PartialEq> RustType for T {
 
     fn eq_dyn(&self, other: &dyn RustType) -> bool {
         // Check if `other` is the same concrete type as `self`
-        if let Some(other_t) = other.as_any().downcast_ref::<T>() {
-            // Now we can compare them using T's PartialEq
-            self == other_t
-        } else {
-            // Different concrete type => definitely not equal
-            false
-        }
+        other
+            .as_any()
+            .downcast_ref::<T>()
+            .map_or(false, |other_t| self == other_t)
     }
 }
 
@@ -591,7 +588,7 @@ impl Value {
         value: T,
     ) -> Self {
         let rust_value = Rc::new(RefCell::new(Self::new_rust_value(rust_description, value)));
-        Value::Struct(struct_type, vec![rust_value])
+        Self::Struct(struct_type, vec![rust_value])
     }
 }
 

@@ -117,15 +117,19 @@ impl<'a> NameLookup<'a> {
     ) -> Option<ResolvedEnumVariantTypeRef> {
         let namespace = self.get_namespace(path)?;
         let borrowed_namespace = namespace.borrow();
-        if let Some(found_enum) = &borrowed_namespace.get_enum(enum_type_name) {
-            found_enum
-                .borrow()
-                .variants
-                .get(&variant_name.to_string())
-                .cloned()
-        } else {
-            None
-        }
+        borrowed_namespace
+            .get_enum(enum_type_name)
+            .as_ref()
+            .map_or_else(
+                || None,
+                |found_enum| {
+                    found_enum
+                        .borrow()
+                        .variants
+                        .get(&variant_name.to_string())
+                        .cloned()
+                },
+            )
     }
 
     #[must_use]

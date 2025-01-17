@@ -18,14 +18,14 @@ pub enum VariableValue {
 impl VariableValue {
     pub(crate) fn to_value(&self) -> Value {
         match self {
-            VariableValue::Value(v) => v.clone(),
-            VariableValue::Reference(value_ref) => value_ref.0.borrow().clone(),
+            Self::Value(v) => v.clone(),
+            Self::Reference(value_ref) => value_ref.0.borrow().clone(),
         }
     }
 }
 
 impl PartialEq for VariableValue {
-    fn eq(&self, other: &VariableValue) -> bool {
+    fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Reference(r1), Self::Value(other)) => r1.0.borrow().eq(other),
             (Self::Value(other), Self::Reference(r2)) => other.eq(&*r2.0.borrow()),
@@ -36,6 +36,7 @@ impl PartialEq for VariableValue {
 }
 
 impl VariableValue {
+    #[must_use]
     pub fn downcast_rust_mut_or_not<T: RustType + 'static>(&self) -> Option<Rc<RefCell<Box<T>>>> {
         match self {
             VariableValue::Value(v) => v.downcast_rust(),
@@ -43,6 +44,7 @@ impl VariableValue {
         }
     }
 
+    #[must_use]
     pub fn convert_to_string_if_needed(&self) -> String {
         match self {
             Self::Value(v) => v.convert_to_string_if_needed(),
@@ -50,6 +52,8 @@ impl VariableValue {
         }
     }
 
+    /// # Errors
+    ///
     pub fn into_iter(self) -> Result<Box<dyn Iterator<Item = Value>>, ValueError> {
         match self {
             Self::Value(v) => v.into_iter(),
@@ -57,6 +61,8 @@ impl VariableValue {
         }
     }
 
+    /// # Errors
+    ///
     pub fn into_iter_pairs(self) -> Result<Box<dyn Iterator<Item = (Value, Value)>>, ValueError> {
         match self {
             Self::Value(v) => v.into_iter_pairs(),
@@ -64,6 +70,8 @@ impl VariableValue {
         }
     }
 
+    /// # Errors
+    ///
     pub fn into_iter_pairs_mut(
         self,
     ) -> Result<Box<dyn Iterator<Item = (Value, ValueReference)>>, ValueError> {
@@ -75,6 +83,7 @@ impl VariableValue {
 }
 
 #[inline]
+#[must_use]
 pub fn convert_to_values(mem_values: &[VariableValue]) -> Option<Vec<Value>> {
     mem_values
         .iter()

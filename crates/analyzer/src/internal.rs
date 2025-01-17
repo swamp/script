@@ -70,7 +70,7 @@ impl<'a> Resolver<'a> {
             }
             ResolvedType::Tuple(tuple_type) => {
                 let found = self.resolve_tuple_member_call(
-                    tuple_type,
+                    &tuple_type,
                     resolved_expr,
                     ast_member_function_name,
                     ast_arguments,
@@ -90,7 +90,7 @@ impl<'a> Resolver<'a> {
 
     fn resolve_tuple_member_call(
         &self,
-        tuple_type: ResolvedTupleTypeRef,
+        tuple_type: &ResolvedTupleTypeRef,
         tuple_expr: ResolvedExpression,
         ast_member_function_name: &Node,
         arguments: &[Expression],

@@ -106,12 +106,15 @@ impl QuickSerialize for SparseValueMap {
 }
 
 impl SparseValueMap {
+    /// # Panics
+    ///
+    #[must_use]
     pub fn quick_deserialize(
         key_type: ResolvedRustTypeRef,
         value_item_type: ResolvedType,
         octets: &[u8],
-    ) -> (SparseValueMap, usize) {
-        let mut sparse = SparseValueMap::new(key_type, value_item_type.clone());
+    ) -> (Self, usize) {
+        let mut sparse = Self::new(key_type, value_item_type.clone());
         let mut offset = 0;
         let count = u16::from_le_bytes(
             octets[offset..offset + 2]
@@ -180,6 +183,8 @@ impl SparseValueMap {
         }
     }
 
+    /// # Panics
+    ///
     pub fn add(&mut self, v: Value) -> Value {
         // TODO: Check that value is of correct type parameter
         let (index, generation) = self.id_generator.create();
@@ -213,6 +218,7 @@ impl SparseValueMap {
     pub fn iter(&self) -> sparse_slot::Iter<'_, Rc<RefCell<Value>>> {
         self.sparse_slot.iter()
     }
+
     pub fn iter_mut(&mut self) -> sparse_slot::IterMut<'_, Rc<RefCell<Value>>> {
         self.sparse_slot.iter_mut()
     }

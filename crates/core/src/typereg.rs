@@ -19,15 +19,20 @@ pub struct TypeRegistry {
     next_type_number: RefCell<TypeNumber>,
 }
 
+impl Default for TypeRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TypeRegistry {
+    #[must_use]
     pub fn new() -> Self {
-        let registry = Self {
+        Self {
             array_types: RefCell::new(SeqMap::new()),
             struct_types: RefCell::new(SeqMap::new()),
             next_type_number: RefCell::new(0),
-        };
-
-        registry
+        }
     }
 
     pub fn allocate_type_number(&self) -> TypeNumber {
@@ -37,23 +42,23 @@ impl TypeRegistry {
     }
 
     // Primitive type getters
-    pub fn get_float_type(&self) -> ResolvedType {
+    pub const fn get_float_type(&self) -> ResolvedType {
         ResolvedType::Float
     }
 
-    pub fn get_int_type(&self) -> ResolvedType {
+    pub const fn get_int_type(&self) -> ResolvedType {
         ResolvedType::Int
     }
 
-    pub fn get_string_type(&self) -> ResolvedType {
+    pub const fn get_string_type(&self) -> ResolvedType {
         ResolvedType::String
     }
 
-    pub fn get_bool_type(&self) -> ResolvedType {
+    pub const fn get_bool_type(&self) -> ResolvedType {
         ResolvedType::Bool
     }
 
-    pub fn get_unit_type(&self) -> ResolvedType {
+    pub const fn get_unit_type(&self) -> ResolvedType {
         ResolvedType::Unit
     }
 

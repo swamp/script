@@ -41,7 +41,7 @@ impl<C: Display + Clone> Report<C> {
         }
     }
 
-    pub fn new(config: Builder<C>) -> Self {
+    pub const fn new(config: Builder<C>) -> Self {
         Self { config }
     }
 
@@ -86,7 +86,7 @@ impl<C: Display + Clone> Report<C> {
                 start: Pos { x: col, y: row },
                 character_count: primary_span.length as usize,
                 text: self.config.error_name.clone(),
-                color: Default::default(),
+                color: Color::default(),
             });
         }
 
@@ -143,7 +143,7 @@ impl<C: Display + Clone> Builder<C> {
         self
     }
 
-    pub fn build(self) -> Report<C> {
+    pub const fn build(self) -> Report<C> {
         Report::new(self)
     }
 }
@@ -167,43 +167,36 @@ pub fn show_parse_error(err: &SpecificError, span: &Span, source_map: &SourceMap
 #[must_use]
 pub fn build_parse_error(err: &SpecificError, span: &Span) -> Builder<usize> {
     match err {
-        SpecificError::General(general) => Report::build(
-            Error,
-            1,
-            &format!("General Parse Error: {}", general),
-            &span,
-        ),
-
-        SpecificError::MissingTypeName => {
-            Report::build(Error, 1, &format!("missing type name"), &span)
+        SpecificError::General(general) => {
+            Report::build(Error, 1, &format!("General Parse Error: {general}"), span)
         }
+
+        SpecificError::MissingTypeName => Report::build(Error, 1, "missing type name", span),
         SpecificError::UnknownEscapeCharacter(char) => Report::build(
             Error,
             1,
             &format!("Unknown escape character '{char}'"),
-            &span,
+            span,
         ),
         SpecificError::UnfinishedEscapeSequence => {
-            Report::build(Error, 1, &format!("Unfinished escape sequence"), &span)
+            Report::build(Error, 1, "Unfinished escape sequence", span)
         }
         SpecificError::InvalidUnicodeEscape => {
-            Report::build(Error, 1, &format!("invalid unicode escape sequence"), &span)
+            Report::build(Error, 1, "invalid unicode escape sequence", span)
         }
         SpecificError::InvalidHexEscape => {
-            Report::build(Error, 1, &format!("invalid hex escape sequence"), &span)
+            Report::build(Error, 1, "invalid hex escape sequence", span)
         }
         SpecificError::InvalidUtf8Sequence => {
-            Report::build(Error, 1, &format!("invalid utf-8 escape sequence"), &span)
+            Report::build(Error, 1, "invalid utf-8 escape sequence", span)
         }
         SpecificError::ExpectingTypeIdentifier => todo!(),
         SpecificError::ExpectingInnerPair => todo!(),
-        SpecificError::UnexpectedTypeRule => {
-            Report::build(Error, 1, &format!("unexpected type rule"), &span)
-        }
+        SpecificError::UnexpectedTypeRule => Report::build(Error, 1, "unexpected type rule", span),
         SpecificError::ExpectedTypeIdentifier(_) => todo!(),
         SpecificError::ExpectedLocalTypeIdentifier(_) => todo!(),
         SpecificError::UnexpectedRuleInParseScript(rule) => {
-            Report::build(Error, 1, &format!("unexpected type rule {rule}"), &span)
+            Report::build(Error, 1, &format!("unexpected type rule {rule}"), span)
         }
         SpecificError::ExpectedControlStatement(_) => todo!(),
         SpecificError::ExpectedStatement(_) => todo!(),
@@ -221,7 +214,7 @@ pub fn build_parse_error(err: &SpecificError, span: &Span) -> Builder<usize> {
         SpecificError::UnknownAssignmentOperator(_) => todo!(),
         SpecificError::CompoundOperatorCanNotContainMut => todo!(),
         SpecificError::InvalidAssignmentTarget => {
-            Report::build(Error, 1, &format!("invalid assignment target"), &span)
+            Report::build(Error, 1, "invalid assignment target", span)
         }
         SpecificError::CompoundOperatorCanNotHaveMultipleVariables => todo!(),
         SpecificError::ExpectedExpressionAfterPrefixOperator => todo!(),
@@ -273,37 +266,37 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
         ResolveError::TypeDoNotSupportRangeAccess(span) => Report::build(
             Error,
             4253,
-            &format!("type do not support range access"),
-            &span,
+            "type do not support range access",
+            span,
         ),
         ResolveError::NoneCoalesceNeedsOptionalType(span) => Report::build(
             Error,
             4243,
-            &format!("none coalesce `??` needs an optional type on the left hand side"),
-            &span,
+            "none coalesce `??` needs an optional type on the left hand side",
+            span,
         ),
         ResolveError::TooManyDestructureVariables => Report::build(
             Error,
             4203,
-            &format!("TooManyDestructureVariables"),
+            "TooManyDestructureVariables",
             &Span::default(),
         ),
         ResolveError::CanNotDestructure(span) => Report::build(
             Error,
             4203,
-            &format!("Can Not Destructure"),
-            &span,
+            "Can Not Destructure",
+            span,
         ),
         ResolveError::EmptyArrayCanOnlyBeMapOrArray => Report::build(
             Error,
             903,
-            &format!("EmptyArrayCanOnlyBeMapOrArray"),
+            "EmptyArrayCanOnlyBeMapOrArray",
             &Span::default(),
         ),
         ResolveError::UnknownConstant(constant_node) => Report::build(
             Error,
             903,
-            &format!("Unknown constant"),
+            "Unknown constant",
             &constant_node.span,
         ),
         ResolveError::NamespaceError(_) => todo!(),
@@ -327,8 +320,8 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
         ResolveError::MissingFieldInStructInstantiation(span, fields, _struct_type) => Report::build(
             Error,
             903,
-            &format!("missing fields in instantiation"),
-            &span,
+            "missing fields in instantiation",
+            span,
         ).with_note(&format!("fields: {fields:?}")
 
         ),
@@ -337,23 +330,23 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
         ResolveError::UnknownVariable(node) => {
             Report::build(Error, 105, "Unknown variable", &node.span)
         }
-        ResolveError::NotAnArray(span) =>   Report::build(Error, 5405, "was not an array", &span),
+        ResolveError::NotAnArray(span) =>   Report::build(Error, 5405, "was not an array", span),
         ResolveError::ArrayIndexMustBeInt(_) => todo!(),
-        ResolveError::OverwriteVariableWithAnotherType(node) => Report::build(Error, 144205, "overwrite variable with another type", &node.span),
+        ResolveError::OverwriteVariableWithAnotherType(node) => Report::build(Error, 14505, "overwrite variable with another type", &node.span),
         ResolveError::WrongNumberOfArguments(span, _expected, _encountered) => {
-            Report::build(Error, 105, "wrong number of arguments", &span)
+            Report::build(Error, 105, "wrong number of arguments", span)
         }
         ResolveError::IncompatibleArguments(span, a, b) =>   Report::build(
             Error,
             904,
-            &format!("Incompatible arguments"),
+            "Incompatible arguments",
             span,
-        )             .with_label("first_type", a.span().clone())
-            .with_label("second_type", b.span().clone()),
+        )             .with_label("first_type", a.span())
+            .with_label("second_type", b.span()),
         ResolveError::CanOnlyOverwriteVariableWithMut(node) =>  Report::build(
             Error,
             90423,
-            &format!("Variable needs to be mut to overwrite"),
+            "Variable needs to be mut to overwrite",
             &node.span,
         ),
         ResolveError::OverwriteVariableNotAllowedHere(_) => todo!(),
@@ -361,13 +354,13 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
         ResolveError::UnknownEnumVariantType(node) =>  Report::build(
             Error,
             903,
-            &format!("Unknown enum variant type"),
+            "Unknown enum variant type",
             &node.span,
         ),
         ResolveError::WasNotStructType(node) => Report::build(
             Error,
             903,
-            &format!("Not a struct type"),
+            "Not a struct type",
             &node.span,
         ),
         ResolveError::UnknownStructField(field_node) => Report::build(
@@ -386,7 +379,7 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
         ResolveError::ExpectedEnumInPattern(_) => todo!(),
         ResolveError::WrongEnumVariantContainer(_) => todo!(),
         ResolveError::VariableIsNotMutable(_) => todo!(),
-        ResolveError::ArgumentIsNotMutable(span) => Report::build(Error, 1401, "Argument is not mutable", &span),
+        ResolveError::ArgumentIsNotMutable(span) => Report::build(Error, 1401, "Argument is not mutable", span),
         ResolveError::WrongNumberOfTupleDeconstructVariables => todo!(),
         ResolveError::UnknownTypeReference(x) => {
             Report::build(Error, 101, "Unknown type reference", &x.span)
@@ -395,16 +388,16 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
         ResolveError::SeqMapError(_) => todo!(),
         ResolveError::ExpectedMemberCall(_) => todo!(),
         ResolveError::CouldNotFindStaticMember(x, _y) => {
-            Report::build(Error, 234101, "Could not find static member", &x.span)
+            Report::build(Error, 9101, "Could not find static member", &x.span)
         }
         ResolveError::TypeAliasNotAStruct(_) => todo!(),
         ResolveError::ModuleNotUnique => todo!(),
         ResolveError::ExpressionIsOfWrongFieldType(span, expected_type, encountered_type) => {
-            Report::build(Error, 234101, &format!("Field initialization expression is of wrong type. expected {expected_type}, encountered: {encountered_type}"), &span)
+            Report::build(Error, 23401, &format!("Field initialization expression is of wrong type. expected {expected_type}, encountered: {encountered_type}"), span)
         },
-        ResolveError::ExpectedOptional(span) => Report::build(Error, 234101, &format!("expected optional type"), &span),
+        ResolveError::ExpectedOptional(span) => Report::build(Error, 7801, "expected optional type", span),
         ResolveError::ExpectedVariable(node) => {
-            Report::build(Error, 234201, &format!("Expected variable"), &node.span)
+            Report::build(Error, 26201, "Expected variable", &node.span)
         },
         ResolveError::EmptyMapLiteral => todo!(),
         ResolveError::MapKeyTypeMismatch { .. } => todo!(),
@@ -415,9 +408,9 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
         ResolveError::UnknownIndexAwareCollection => todo!(),
         ResolveError::InvalidOperatorForArray(_) => todo!(),
         ResolveError::IncompatibleTypes(a, b) => {
-            Report::build(Error, 102, "Incompatible types", &a)
+            Report::build(Error, 102, "Incompatible types", a)
                 .with_label("first_type", a.clone())
-                .with_note(&format!("second_type {:?}", b))
+                .with_note(&format!("second_type {b:?}"))
         }
         ResolveError::ExpectedArray(_) => todo!(),
         ResolveError::UnknownMemberFunction(node) => {
@@ -431,11 +424,11 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
         ResolveError::TooManyTupleFields { .. } => todo!(),
         ResolveError::NotInFunction => todo!(),
         ResolveError::ExpectedBooleanExpression(span) => {
-            Report::build(Error, 102, "Expected a boolean expression", &span)
+            Report::build(Error, 102, "Expected a boolean expression", span)
         }
-        ResolveError::NotAnIterator(span) => Report::build(Error, 101, "Not an iterator", &span),
+        ResolveError::NotAnIterator(span) => Report::build(Error, 101, "Not an iterator", span),
         ResolveError::UnsupportedIteratorPairs => todo!(),
-        ResolveError::NeedStructForFieldLookup(span) => Report::build(Error, 12301, "need struct for field lookup", &span),
+        ResolveError::NeedStructForFieldLookup(span) => Report::build(Error, 12301, "need struct for field lookup", span),
         ResolveError::IntConversionError(_) => todo!(),
         ResolveError::FloatConversionError(_) => todo!(),
         ResolveError::BoolConversionError => todo!(),
@@ -449,9 +442,9 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
             Report::build(Error, 104, "No default() function", &resolved_type.span())
         },
         ResolveError::NoDefaultImplementedForStruct(_) => todo!(),
-        ResolveError::ExpectedFunctionTypeForFunctionCall(span) => Report::build(Error, 4404, "expected function type for function call", &span),
+        ResolveError::ExpectedFunctionTypeForFunctionCall(span) => Report::build(Error, 4404, "expected function type for function call", span),
         &ResolveError::TypeDoNotSupportIndexAccess(_) => todo!(),
-        ResolveError::ExpectedMutableLocation(span) =>  Report::build(Error, 104, "expected mutable location", &span),
+        ResolveError::ExpectedMutableLocation(span) =>  Report::build(Error, 104, "expected mutable location", span),
 
     }
 }

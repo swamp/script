@@ -11,21 +11,23 @@ use swamp_script_semantic::prelude::*;
 pub trait SwampExport: Sized {
     fn get_resolved_type(registry: &TypeRegistry) -> ResolvedType;
     fn to_swamp_value(&self, registry: &TypeRegistry) -> Value; // Added registry parameter
+    /// # Errors
+    ///
     fn from_swamp_value(value: &Value) -> Result<Self, String>;
 }
 impl SwampExport for Fp {
+    fn get_resolved_type(registry: &TypeRegistry) -> ResolvedType {
+        registry.get_float_type()
+    }
+
     fn to_swamp_value(&self, _registry: &TypeRegistry) -> Value {
         Value::Float(*self)
     }
-
     fn from_swamp_value(value: &Value) -> Result<Self, String> {
         match value {
             Value::Float(f) => Ok(*f),
             _ => Err("Expected Float value".to_string()),
         }
-    }
-    fn get_resolved_type(registry: &TypeRegistry) -> ResolvedType {
-        registry.get_float_type()
     }
 }
 // Primitive type implementations

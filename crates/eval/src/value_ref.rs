@@ -67,9 +67,13 @@ impl ValueReference {
         Ok(result)
     }
 
+    /// # Errors
+    ///
+    /// # Panics
+    ///
     pub fn into_iter_mut_pairs(
         self,
-    ) -> Result<Box<dyn Iterator<Item = (Value, ValueReference)>>, ValueError> {
+    ) -> Result<Box<dyn Iterator<Item = (Value, Self)>>, ValueError> {
         let inner = self.0.borrow();
         let result = match &*inner {
             Value::RustValue(ref rust_type_ref, ref _rust_value) => {
@@ -90,13 +94,12 @@ impl ValueReference {
                                         id_type_ref.clone(),
                                         Rc::new(RefCell::new(Box::new(SparseValueId(k)))),
                                     ),
-                                    ValueReference(v.clone()),
+                                    Self(v.clone()),
                                 )
                             })
                             .collect();
 
-                        Box::new(pairs.into_iter())
-                            as Box<dyn Iterator<Item = (Value, ValueReference)>>
+                        Box::new(pairs.into_iter()) as Box<dyn Iterator<Item = (Value, Self)>>
                     }
                     _ => return Err(ValueError::CanNotCoerceToIterator),
                 })
@@ -129,6 +132,7 @@ impl ValueReference {
         self.0.borrow()
     }
 
+    #[must_use]
     pub fn convert_to_string_if_needed(&self) -> String {
         self.0.borrow().convert_to_string_if_needed()
     }
@@ -144,12 +148,12 @@ impl Eq for ValueReference {}
 
 impl Hash for ValueReference {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.0.borrow().hash(state)
+        self.0.borrow().hash(state);
     }
 }
 
 impl Display for ValueReference {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0.borrow().to_string())
+        write!(f, "{}", self.0.borrow())
     }
 }

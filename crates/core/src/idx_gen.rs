@@ -45,6 +45,8 @@ impl IndexAllocator {
         self.generations[index] = generation;
     }
 
+    /// # Panics
+    ///
     // Mark an index as removed, allowing it to be reused later with an incremented generation
     #[allow(unused)]
     pub fn remove(&mut self, value: (usize, u16)) {

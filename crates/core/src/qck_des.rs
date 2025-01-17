@@ -7,8 +7,11 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use swamp_script_semantic::{ResolvedEnumVariantContainerType, ResolvedRustType, ResolvedType};
 
+/// # Panics
+///
 #[inline]
 #[allow(clippy::too_many_lines)]
+#[must_use]
 pub fn quick_deserialize(resolved_type: &ResolvedType, buf: &[u8], depth: usize) -> (Value, usize) {
     let (val, octet_size) = match resolved_type {
         ResolvedType::Int => {
@@ -94,11 +97,11 @@ pub fn quick_deserialize(resolved_type: &ResolvedType, buf: &[u8], depth: usize)
             let mut seq_map = SeqMap::new(); //SeqMap<Value, ValueRef>
             for _map_index in 0..count {
                 let (key_val, key_octet_size) =
-                    quick_deserialize(&key_type, &buf[offset..], depth + 1);
+                    quick_deserialize(key_type, &buf[offset..], depth + 1);
                 offset += key_octet_size;
 
                 let (value_val, value_octet_size) =
-                    quick_deserialize(&value_type, &buf[offset..], depth + 1);
+                    quick_deserialize(value_type, &buf[offset..], depth + 1);
                 offset += value_octet_size;
 
                 let value_ref = Rc::new(RefCell::new(value_val));
@@ -205,7 +208,7 @@ pub fn quick_deserialize(resolved_type: &ResolvedType, buf: &[u8], depth: usize)
                         number: SPARSE_ID_TYPE_ID, // TODO: FIX hardcoded number
                     });
 
-                    let (sparse_value_id, octet_size) = SparseValueId::quick_deserialize(&buf);
+                    let (sparse_value_id, octet_size) = SparseValueId::quick_deserialize(buf);
                     (
                         {
                             let boxed_sparse_value_id: Rc<RefCell<Box<dyn RustType>>> =

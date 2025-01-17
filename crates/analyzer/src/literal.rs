@@ -13,6 +13,7 @@ use swamp_script_semantic::{
 };
 
 impl<'a> Resolver<'a> {
+    #[allow(clippy::too_many_lines)]
     pub(crate) fn resolve_literal(
         &mut self,
         ast_literal: &Literal,

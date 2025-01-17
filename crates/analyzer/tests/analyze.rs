@@ -1019,10 +1019,10 @@ fn string_iterable() {
         for y in a {
         }
          ",
-        r#"
+        r"
 
 
-"#,
+",
     );
 }
 

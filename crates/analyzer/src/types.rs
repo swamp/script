@@ -14,6 +14,8 @@ use swamp_script_semantic::{
 };
 
 impl<'a> Resolver<'a> {
+    /// # Errors
+    ///
     pub fn resolve_map_type(
         &mut self,
         ast_key_type: &Type,
@@ -57,6 +59,8 @@ impl<'a> Resolver<'a> {
         Ok(resolved_type)
     }
 
+    /// # Errors
+    ///
     pub fn find_struct_type(
         &self,
         type_name: &QualifiedTypeIdentifier,
@@ -75,6 +79,8 @@ impl<'a> Resolver<'a> {
             )
     }
 
+    /// # Errors
+    ///
     pub fn resolve_array_type(
         &mut self,
         ast_type: &Type,
@@ -94,6 +100,8 @@ impl<'a> Resolver<'a> {
         Ok(rc_array)
     }
 
+    /// # Errors
+    ///
     pub fn resolve_type(&mut self, ast_type: &Type) -> Result<ResolvedType, ResolveError> {
         let resolved = match ast_type {
             Type::Any(_) => ResolvedType::Any,
