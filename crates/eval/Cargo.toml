@@ -1,6 +1,6 @@
 [package]
 name = "swamp-script-eval"
-version = "0.0.12"
+version = "0.0.13"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/swamp/script"
@@ -8,20 +8,20 @@ description = "interpreter for swamp script"
 
 [dependencies]
 tracing = "0.1.40"
-swamp-script-semantic = { path = "../semantic", version = "0.0.12" }
+swamp-script-semantic = { path = "../semantic", version = "0.0.13" }
 fixed32 = "0.0.17"
 seq-map = "0.0.13"
 seq-fmt = "0.0.1"
 
-swamp-script-core = { path = "../core", version = "0.0.12" }
-swamp-script-source-map = { path = "../source-map", version = "0.0.12" }
+swamp-script-core = { path = "../core", version = "0.0.13" }
+swamp-script-source-map = { path = "../source-map", version = "0.0.13" }
 squirrel-prng = "0.0.1"
 
 
 [dev-dependencies]
 test-log = { version = "0.2.16", features = ["trace", "log", "color"] }
 
-swamp-script-parser = { path = "../parser", version = "0.0.12" }
-swamp-script-analyzer = { path = "../analyzer", version = "0.0.12" }
+swamp-script-parser = { path = "../parser", version = "0.0.13" }
+swamp-script-analyzer = { path = "../analyzer", version = "0.0.13" }
 # swamp-script-eval-loader = { path = "../eval-loader", version = "0.0.7" }
 # swamp-script-std = { path = "../std", version = "0.0.7" }

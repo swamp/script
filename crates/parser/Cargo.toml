@@ -1,6 +1,6 @@
 [package]
 name = "swamp-script-parser"
-version = "0.0.12"
+version = "0.0.13"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/swamp/script"
@@ -12,7 +12,7 @@ pest = "2.7.15"
 pest_derive = "2.7.15"
 tracing = "0.1.40"
 
-swamp-script-ast = { path = "../ast", version = "0.0.12" }
+swamp-script-ast = { path = "../ast", version = "0.0.13" }
 
 [dev-dependencies]
 test-log = { version = "0.2.16", features = ["trace", "log", "color"] }
