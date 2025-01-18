@@ -338,6 +338,11 @@ impl<'a> Resolver<'a> {
         // the resolved expression must be a struct either way
         let expr = if let ResolvedType::Struct(struct_type_ref) = resolved_type {
             let borrow_struct = struct_type_ref.borrow();
+            info!(
+                ?borrow_struct,
+                ?field_or_member_name_str,
+                "looking up member"
+            );
             if let Some(found_function) = borrow_struct.functions.get(&field_or_member_name_str) {
                 let member_signature = found_function.signature();
                 if member_signature.first_parameter_is_self {
@@ -389,7 +394,10 @@ impl<'a> Resolver<'a> {
                     return Err(ResolveError::WasNotStructType(self.to_node(ast_identifier)));
                 }
             } else {
-                return Err(ResolveError::WasNotStructType(self.to_node(ast_identifier)));
+                return Err(ResolveError::CouldNotFindMember(
+                    self.to_node(ast_identifier),
+                    self.to_node(ast_identifier),
+                ));
             }
         } else {
             return Err(ResolveError::WasNotStructType(self.to_node(ast_identifier)));

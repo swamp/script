@@ -1171,3 +1171,39 @@ InitializeVariable(ResolvedVariableAssignment { variable_refs: ResolvedVariable 
          ",
     );
 }
+
+#[test_log::test]
+fn mutable_location_field_access() {
+    check(
+        r"
+struct Brain {
+    i: Int,
+}
+
+struct Enemy {
+    brain: Brain,
+}
+
+impl Brain {
+    fn think(mut self) {
+        self.i += 1
+    }
+}
+
+mut enemy = Enemy { brain: Brain { i: 0 } }
+
+want_to_attack = enemy.brain.think()
+
+         ",
+        r#"
+StructType(RefCell { value: struct "Brain" })
+StructType(RefCell { value: struct "Enemy" })
+ImplType(Brain)
+---
+InitializeVariable(ResolvedVariableAssignment { variable_refs: ResolvedVariable { name: <138:5>, resolved_type: Enemy, mutable_node: Some(<134:3>), scope_index: 0, variable_index: 0 }, expression: StructInstantiation(ResolvedStructInstantiation { source_order_expressions: [(0, StructInstantiation(ResolvedStructInstantiation { source_order_expressions: [(0, Literal(IntLiteral(0, <172:1>)))], struct_type_ref: RefCell { value: struct "Brain" } }))], struct_type_ref: RefCell { value: struct "Enemy" } }) })
+InitializeVariable(ResolvedVariableAssignment { variable_refs: ResolvedVariable { name: <179:14>, resolved_type: (), mutable_node: None, scope_index: 0, variable_index: 1 }, expression: MemberCall(ResolvedMemberCall { function: Internal(FunctionTypeSignature { first_parameter_is_self: true, parameters: [ResolvedTypeForParameter { name: "self", resolved_type: Brain, is_mutable: true, node: Some(ResolvedParameter) }], return_type: () }
+Block([FieldCompoundAssignment(VariableAccess(ResolvedVariable { name: <97:4>, resolved_type: Brain, mutable_node: Some(<93:3>), scope_index: 0, variable_index: 0 }), [FieldIndex(<118:1>, 0)], ResolvedCompoundOperator { node: <120:2>, kind: Add }, Literal(IntLiteral(1, <123:1>)))])), arguments: [], self_expression: FieldAccess(VariableAccess(ResolvedVariable { name: <138:5>, resolved_type: Enemy, mutable_node: Some(<134:3>), scope_index: 0, variable_index: 0 }), ResolvedStructTypeField { struct_type_ref: RefCell { value: struct "Enemy" }, field_name: ResolvedLocalIdentifier(<202:5>), resolved_type: Brain, index: 0 }, [FieldIndex(<202:5>, 0)]), self_is_mutable: true }) })
+
+         "#,
+    );
+}

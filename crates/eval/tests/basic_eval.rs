@@ -2105,3 +2105,31 @@ booster: Int? = none
 
     assert_eq!(val, Value::Option(None));
 }
+
+#[test_log::test]
+fn mutable_location_field_access() {
+    let v = eval(
+        r"
+struct Brain {
+    i: Int,
+}
+
+struct Enemy {
+    brain: Brain,
+}
+
+impl Brain {
+    fn think(mut self) {
+        self.i += 1
+    }
+}
+
+mut enemy = Enemy { brain: Brain { i: 0 } }
+
+want_to_attack = enemy.brain.think()
+enemy.brain.i
+         ",
+    );
+
+    assert_eq!(v, Value::Int(1));
+}

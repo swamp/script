@@ -16,7 +16,7 @@ use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
 use std::rc::Rc;
-use tracing::error;
+use tracing::{error, info};
 
 #[derive(Clone, Eq, PartialEq, Default)]
 pub struct ResolvedNode {
@@ -1355,8 +1355,10 @@ pub enum ResolvedExpression {
 impl ResolvedExpression {
     #[must_use]
     pub fn is_coerce_to_mutable(&self) -> bool {
+        info!(?self, "checking mutable");
         match self {
             Self::VariableAccess(var_access) => var_access.is_mutable(),
+            Self::FieldAccess(expr, ..) => expr.is_coerce_to_mutable(),
             _ => matches!(
                 self,
                 Self::MutArrayIndexRef(_, _, _)
