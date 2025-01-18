@@ -485,8 +485,31 @@ impl ResolvedType {
 }
 
 fn compare_struct_types(a: &ResolvedStructTypeRef, b: &ResolvedStructTypeRef) -> bool {
-    if !Rc::ptr_eq(a, b) {
+    let a_borrow = a.borrow();
+    let b_borrow = b.borrow();
+    if a_borrow.assigned_name != b_borrow.assigned_name {
         return false;
+    }
+
+    if a_borrow.anon_struct_type.defined_fields.len()
+        != b_borrow.anon_struct_type.defined_fields.len()
+    {
+        return false;
+    }
+
+    for ((a_name, a_type), (b_name, b_type)) in a_borrow
+        .anon_struct_type
+        .defined_fields
+        .iter()
+        .zip(b_borrow.anon_struct_type.defined_fields.clone())
+    {
+        if *a_name != b_name {
+            return false;
+        }
+
+        if !a_type.field_type.same_type(&b_type.field_type) {
+            return false;
+        }
     }
 
     true

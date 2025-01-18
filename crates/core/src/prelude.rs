@@ -4,6 +4,7 @@
  */
 
 pub use {
+    crate::cnv::{overwrite_struct, overwrite_value},
     crate::export::SwampExport,
     crate::qck_des::quick_deserialize,
     crate::typereg::TypeRegistry,

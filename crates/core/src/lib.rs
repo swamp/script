@@ -3,6 +3,7 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
+pub mod cnv;
 pub mod export;
 pub mod extra;
 pub mod idx_gen;
