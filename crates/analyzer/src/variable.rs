@@ -237,6 +237,9 @@ impl<'a> Resolver<'a> {
         source: &Expression,
     ) -> Result<ResolvedExpression, ResolveError> {
         let resolved_variable = self.find_variable_from_node(target)?;
+        if !resolved_variable.is_mutable() {
+            return Err(ResolveError::VariableIsNotMutable(self.to_node(target)))
+        }
         let target_type = &resolved_variable.resolved_type;
         let resolved_source = self.resolve_expression(source, target_type)?;
         let source_type = resolved_source.resolution();
