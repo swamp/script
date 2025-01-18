@@ -2133,3 +2133,46 @@ enemy.brain.i
 
     assert_eq!(v, Value::Int(1));
 }
+
+
+#[test_log::test]
+fn compound_op_mutable() {
+    let v = eval(
+        r"
+fn not_allowed(x : Int) {
+    x += 1
+}
+
+not_allowed(2)
+         ",
+    );
+
+    assert_eq!(v, Value::Int(1));
+}
+
+
+#[test_log::test]
+fn compound_op_in_member_mutable() {
+    let v = eval(
+        r"
+
+struct Something
+
+struct Position {
+    x: Int,
+    y: Int,
+}
+
+impl Something {
+    fn not_allowed( pos : Position) {
+        pos.y += 1
+    }
+}
+
+mut pos = Position { x: 10, y : 20 }
+Something::not_allowed(mut pos)
+         ",
+    );
+
+    assert_eq!(v, Value::Int(1));
+}
