@@ -25,13 +25,11 @@ impl QuickDeserialize for SparseValueId {
     fn quick_deserialize(octets: &[u8]) -> (Self, usize) {
         let mut offset = 0;
 
-        // Deserialize the index
         let index = u16::from_le_bytes(octets[offset..offset + 2].try_into().unwrap());
         offset += 2;
 
-        // Deserialize the generation
-        let generation = u16::from_le_bytes(octets[offset..offset + 2].try_into().unwrap());
-        offset += 2;
+        let generation = octets[offset];
+        offset += 1;
 
         let id = Id::new(index.into(), generation);
 
@@ -43,15 +41,12 @@ impl QuickSerialize for SparseValueId {
     fn quick_serialize(&self, octets: &mut [u8]) -> usize {
         let mut offset = 0;
 
-        // Serialize the index
         let index_octets = (self.0.index as u16).to_le_bytes();
         octets[offset..offset + index_octets.len()].copy_from_slice(&index_octets);
         offset += index_octets.len();
 
-        // Serialize the generation
-        let generation_octets = self.0.generation.to_le_bytes();
-        octets[offset..offset + generation_octets.len()].copy_from_slice(&generation_octets);
-        offset += generation_octets.len();
+        octets[offset] = self.0.generation;
+        offset += 1;
 
         offset
     }
@@ -92,9 +87,8 @@ impl QuickSerialize for SparseValueMap {
             octets[offset..offset + key_index_octets.len()].copy_from_slice(&key_index_octets);
             offset += key_index_octets.len();
 
-            let key_generation_octets = id.generation.to_le_bytes();
-            octets[offset..offset + key_index_octets.len()].copy_from_slice(&key_generation_octets);
-            offset += key_generation_octets.len();
+            octets[offset] = id.generation;
+            offset += 1;
 
             let value_size = value.borrow().quick_serialize(&mut octets[offset..], 0);
             offset += value_size;
@@ -130,12 +124,8 @@ impl SparseValueMap {
             );
             offset += 2;
 
-            let generation = u16::from_le_bytes(
-                octets[offset..offset + 2]
-                    .try_into()
-                    .expect("could not convert to u16 generation"),
-            );
-            offset += 2;
+            let generation = octets[offset];
+            offset += 1;
 
             let (value, octet_size) =
                 quick_deserialize(&value_item_type.clone(), &octets[offset..], 0);

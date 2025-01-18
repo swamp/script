@@ -7,7 +7,7 @@
 #[derive(Debug, PartialEq, Eq)]
 pub struct IndexAllocator {
     // Stores the generation count for each index
-    generations: Vec<u16>,
+    generations: Vec<u8>,
     // Freelist of available indices
     freelist: Vec<usize>,
 }
@@ -22,7 +22,7 @@ impl IndexAllocator {
     }
 
     // Create a new index or reuse one from the freelist, incrementing its generation
-    pub fn create(&mut self) -> (usize, u16) {
+    pub fn create(&mut self) -> (usize, u8) {
         if let Some(index) = self.freelist.pop() {
             // Reuse index from freelist, increment generation
             //self.generations[index] = self.generations[index].wrapping_add(1);
@@ -35,7 +35,7 @@ impl IndexAllocator {
         }
     }
 
-    pub fn reserve(&mut self, index: usize, generation: u16) {
+    pub fn reserve(&mut self, index: usize, generation: u8) {
         if index >= self.generations.len() {
             let count = index - self.generations.len() + 1;
             for _i in 0..count {
@@ -49,7 +49,7 @@ impl IndexAllocator {
     ///
     // Mark an index as removed, allowing it to be reused later with an incremented generation
     #[allow(unused)]
-    pub fn remove(&mut self, value: (usize, u16)) {
+    pub fn remove(&mut self, value: (usize, u8)) {
         assert!(value.0 < self.generations.len());
         // Push the index to freelist for reuse
         self.generations[value.0] = self.generations[value.0].wrapping_add(1);
