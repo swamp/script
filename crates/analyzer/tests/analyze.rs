@@ -1208,10 +1208,10 @@ Block([FieldCompoundAssignment(VariableAccess(ResolvedVariable { name: <97:4>, r
     );
 }
 
-
 #[test_log::test]
 fn compound_op_in_member_mutable() {
-    check_fail(r"
+    check_fail(
+        r"
 
 struct Something
 
@@ -1228,6 +1228,7 @@ impl Something {
 
 mut pos = Position { x: 10, y : 20 }
 Something::not_allowed(pos)
-         ", r"");
-
+         ",
+        r"",
+    );
 }

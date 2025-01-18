@@ -2134,7 +2134,6 @@ enemy.brain.i
     assert_eq!(v, Value::Int(1));
 }
 
-
 #[test_log::test]
 fn compound_op_mutable() {
     let v = eval(
@@ -2149,7 +2148,6 @@ not_allowed(2)
 
     assert_eq!(v, Value::Int(1));
 }
-
 
 #[test_log::test]
 fn compound_op_in_member_mutable() {
