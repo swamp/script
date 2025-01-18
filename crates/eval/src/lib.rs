@@ -1058,9 +1058,9 @@ impl<'a, C> Interpreter<'a, C> {
                 let new_value = Value::Int(new_result);
                 {
                     let mut mutated = current_value.borrow_mut();
-                    *mutated = new_value.clone();
+                    *mutated = new_value;
                 }
-                new_value
+                Value::Unit
             }
 
             ResolvedExpression::ArrayExtend(variable_ref, source_expression) => {
@@ -2631,8 +2631,8 @@ impl<'a, C> Interpreter<'a, C> {
         let value_ref = self.evaluate_location(start_expression, lookups)?;
 
         Self::apply_compound_operator(&mut value_ref.borrow_mut(), operator, &source)?;
-        let temp = value_ref.borrow();
-        Ok(temp.clone())
+        //let temp = value_ref.borrow();
+        Ok(Value::Unit)
     }
 
     #[inline(always)]
