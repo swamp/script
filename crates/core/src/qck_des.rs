@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
+ * Licensed under the MIT License. See LICENSE in the project root for license information.
+ */
 use crate::extra::{SparseValueId, SparseValueMap};
 use crate::prelude::Value;
 use crate::value::{QuickDeserialize, RustType, SPARSE_ID_TYPE_ID, SPARSE_TYPE_ID};

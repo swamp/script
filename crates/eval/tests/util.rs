@@ -2,7 +2,6 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-
 use std::path::Path;
 use swamp_script_analyzer::lookup::NameLookup;
 use swamp_script_analyzer::prelude::ResolveError;
