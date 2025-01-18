@@ -630,21 +630,23 @@ impl AstParser {
 
         let struct_name = self.expect_local_type_identifier_next(&mut inner)?;
 
-        let field_definitions = Self::next_pair(&mut inner)?;
+        let field_definitions_pair_result = Self::next_pair(&mut inner);
         let mut fields = Vec::new();
 
-        for field_def in Self::convert_into_iterator(&field_definitions) {
-            let mut field_parts = Self::convert_into_iterator(&field_def);
+        if let Ok(field_definitions) = field_definitions_pair_result {
+            for field_def in Self::convert_into_iterator(&field_definitions) {
+                let mut field_parts = Self::convert_into_iterator(&field_def);
 
-            let field_name = self.expect_field_name_next(&mut field_parts)?;
-            let field_type = self.parse_type(Self::next_pair(&mut field_parts)?)?;
+                let field_name = self.expect_field_name_next(&mut field_parts)?;
+                let field_type = self.parse_type(Self::next_pair(&mut field_parts)?)?;
 
-            let anonymous_struct_field = FieldType {
-                field_name,
-                field_type,
-            };
+                let anonymous_struct_field = FieldType {
+                    field_name,
+                    field_type,
+                };
 
-            fields.push(anonymous_struct_field);
+                fields.push(anonymous_struct_field);
+            }
         }
 
         let struct_def = StructType::new(struct_name, fields);

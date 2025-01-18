@@ -51,7 +51,7 @@ tuple_destructure = { "(" ~ identifier ~ ("," ~ " "* ~ identifier)* ~ ")" }  // 
 trailing_comma = _{ "," }
 
 
-struct_def = { "struct" ~ type_identifier ~ "{" ~ field_definitions? ~ trailing_comma? ~ "}" }
+struct_def = { "struct" ~ type_identifier ~ ( "{" ~ field_definitions? ~ trailing_comma? ~ "}" )? }
 
 // Update enum rules to handle variants properly
 enum_def = { "enum" ~ type_identifier ~ "{" ~ enum_variants? ~ "}" }
@@ -492,7 +492,7 @@ qualified_type_identifier = {
 
 module_segments = { (identifier ~ "::")+ }
 
-struct_instantiation = { qualified_type_identifier ~ "{" ~ struct_field_list ~ "}" }
+struct_instantiation = { qualified_type_identifier ~ "{" ~ struct_field_list? ~ "}" }
 
 struct_field_list = {
     (struct_field ~ ("," ~ struct_field)* ~ ","? ~ rest_fields?)
