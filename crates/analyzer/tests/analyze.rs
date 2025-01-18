@@ -1207,3 +1207,27 @@ Block([FieldCompoundAssignment(VariableAccess(ResolvedVariable { name: <97:4>, r
          "#,
     );
 }
+
+
+#[test_log::test]
+fn compound_op_in_member_mutable() {
+    check_fail(r"
+
+struct Something
+
+struct Position {
+    x: Int,
+    y: Int,
+}
+
+impl Something {
+    fn not_allowed( pos : Position) {
+        pos.y += 1
+    }
+}
+
+mut pos = Position { x: 10, y : 20 }
+Something::not_allowed(pos)
+         ", r"");
+
+}
