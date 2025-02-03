@@ -1,0 +1,9 @@
+[package]
+name = "swamp-script-source-map-lookup"
+version = "0.0.12"
+edition = "2021"
+
+[dependencies]
+swamp-script-semantic = { path = "../semantic", version = "0.0.12" }
+swamp-script-source-map = { path = "../source-map", version = "0.0.12" }
+swamp-script-core = { path = "../core", version = "0.0.12" }

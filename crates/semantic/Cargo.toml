@@ -1,0 +1,17 @@
+[package]
+name = "swamp-script-semantic"
+version = "0.0.12"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/swamp/script"
+description = "semantic types for swamp script"
+
+[dependencies]
+seq-map = "0.0.13"
+fixed32 = "0.0.17"
+seq-fmt = "0.0.1"
+seq-set = "0.0.2"
+tracing = "0.1.40"
+
+[dev-dependencies]
+test-log = { version = "0.2.16", features = ["trace", "log", "color"] }
