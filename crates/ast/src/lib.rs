@@ -390,8 +390,7 @@ pub enum ExpressionKind {
 
     // Literals
     StructLiteral(QualifiedTypeIdentifier, Vec<FieldExpression>, bool),
-    ExclusiveRange(Box<Expression>, Box<Expression>),
-    InclusiveRange(Box<Expression>, Box<Expression>),
+    Range(Box<Expression>, Box<Expression>, RangeMode),
     Literal(LiteralKind),
 }
 

@@ -367,6 +367,10 @@ impl<'a, C> Interpreter<'a, C> {
                         fields[index as usize].clone()
                     }
 
+                    ResolvedLocationAccessKind::ArrayRange(_, _) => todo!(),
+                    ResolvedLocationAccessKind::StringIndex(_) => todo!(),
+                    ResolvedLocationAccessKind::StringRange(_) => todo!(),
+
                     ResolvedLocationAccessKind::MapIndex(_map_type_ref, key_expr) => {
                         let key_expr_value = self.evaluate_expression(key_expr)?;
 
@@ -885,23 +889,12 @@ impl<'a, C> Interpreter<'a, C> {
                 )
             }
 
-            ResolvedExpressionKind::ExclusiveRange(start, end) => {
+            ResolvedExpressionKind::Range(start, end, range_mode) => {
                 let start_val = self.evaluate_expression(start)?;
                 let end_val = self.evaluate_expression(end)?;
                 match (start_val, end_val) {
                     (Value::Int(s), Value::Int(e)) => {
-                        Value::ExclusiveRange(Box::new(s), Box::new(e))
-                    }
-                    _ => Err(self.create_err(ExecuteErrorKind::RangeItemMustBeInt, &expr.node))?,
-                }
-            }
-
-            ResolvedExpressionKind::InclusiveRange(start, end) => {
-                let start_val = self.evaluate_expression(start)?;
-                let end_val = self.evaluate_expression(end)?;
-                match (start_val, end_val) {
-                    (Value::Int(s), Value::Int(e)) => {
-                        Value::InclusiveRange(Box::new(s), Box::new(e))
+                        Value::Range(Box::new(s), Box::new(e), range_mode.clone())
                     }
                     _ => Err(self.create_err(ExecuteErrorKind::RangeItemMustBeInt, &expr.node))?,
                 }

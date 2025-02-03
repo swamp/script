@@ -13,8 +13,8 @@ use std::str::Chars;
 use swamp_script_ast::{
     prelude::*, AssignmentOperatorKind, BinaryOperatorKind, CompoundOperator, CompoundOperatorKind,
     EnumVariantLiteral, ExpressionKind, FieldExpression, FieldName, FieldType, ForPattern, ForVar,
-    IterableExpression, PatternElement, QualifiedIdentifier, SpanWithoutFileId, TypeForParameter,
-    VariableBinding,
+    IterableExpression, PatternElement, QualifiedIdentifier, RangeMode, SpanWithoutFileId,
+    TypeForParameter, VariableBinding,
 };
 use swamp_script_ast::{Function, WhenBinding};
 use swamp_script_ast::{LiteralKind, MutableOrImmutableExpression};
@@ -287,7 +287,6 @@ impl AstParser {
 
     pub fn parse_module(&self, raw_script: &str) -> Result<Module, ParseError> {
         let result = Self::parse(Rule::program, raw_script)?;
-
 
         let mut pairs = result.pairs;
 
@@ -2472,11 +2471,28 @@ impl AstParser {
         let left = self.parse_comparison(&inner.next().unwrap())?;
         if let Some(op) = inner.next() {
             let right = self.parse_comparison(&inner.next().unwrap())?;
-            if op.as_rule() == Rule::exclusive_range_op {
-                return Ok(self.create_expr(
-                    ExpressionKind::ExclusiveRange(Box::new(left), Box::new(right)),
-                    pair,
-                ));
+            match op.as_rule() {
+                Rule::exclusive_range_op => {
+                    return Ok(self.create_expr(
+                        ExpressionKind::Range(
+                            Box::new(left),
+                            Box::new(right),
+                            RangeMode::Exclusive,
+                        ),
+                        pair,
+                    ));
+                }
+                Rule::inclusive_range_op => {
+                    return Ok(self.create_expr(
+                        ExpressionKind::Range(
+                            Box::new(left),
+                            Box::new(right),
+                            RangeMode::Inclusive,
+                        ),
+                        pair,
+                    ));
+                }
+                _ => {}
             }
             let operator = self.parse_binary_operator(&op)?; // inclusive_range_op or exclusive_range_op
             Ok(self.create_expr(

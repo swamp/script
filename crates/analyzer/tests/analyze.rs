@@ -327,8 +327,26 @@ for a in 0..3 {
         ",
         r"
 
-InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <5:1>, resolved_type: Int(ResolvedIntType), mutable_node: Some(<1:3>), scope_index: 0, variable_index: 0 }], expression: Literal(IntLiteral(0, <9:1>, ResolvedIntType)) })
-ForLoop(Single(ResolvedVariable { name: <15:1>, resolved_type: Int(ResolvedIntType), mutable_node: None, scope_index: 1, variable_index: 0 }), ResolvedIterator { key_type: None, value_type: Int(ResolvedIntType), resolved_expression: ExclusiveRange(ResolvedExclusiveRangeType, Literal(IntLiteral(0, <20:1>, ResolvedIntType)), Literal(IntLiteral(3, <23:1>, ResolvedIntType))) }, Block([VariableCompoundAssignment(ResolvedVariableCompoundAssignment { variable_ref: ResolvedVariable { name: <5:1>, resolved_type: Int(ResolvedIntType), mutable_node: Some(<1:3>), scope_index: 0, variable_index: 0 }, expression: VariableAccess(ResolvedVariable { name: <15:1>, resolved_type: Int(ResolvedIntType), mutable_node: None, scope_index: 1, variable_index: 0 }), compound_operator: ResolvedCompoundOperator { node: <33:2>, kind: Add } })]))
+..Int,VariableDefinition(ResolvedVariable { name: <5:1>, resolved_type: Int, mutable_node: Some(<1:3>), scope_index: 0, variable_index: 0 }, ResolvedMutOrImmutableExpression { expression_or_location: Expression(<9:1>Int,Literal(IntLiteral(0))), is_mutable: None })
+..(),ForLoop(Single(ResolvedVariable { name: <15:1>, resolved_type: Int, mutable_node: None, scope_index: 1, variable_index: 0 }), ResolvedIterable { key_type: None, value_type: Int, resolved_expression: ResolvedMutOrImmutableExpression { expression_or_location: Expression(<20:5>Iterable<Int>,ExclusiveRange(<20:1>Int,Literal(IntLiteral(0)), <23:1>Int,Literal(IntLiteral(3)))), is_mutable: None } }, <25:14>(),Block([<31:1>(),CompoundAssignment(ResolvedSingleMutLocationExpression(ResolvedSingleLocationExpression { kind: MutVariableRef, node: <31:1>, ty: Int, starting_variable: ResolvedVariable { name: <5:1>, resolved_type: Int, mutable_node: Some(<1:3>), scope_index: 0, variable_index: 0 }, access_chain: [] }), Add, <36:1>Int,VariableAccess(ResolvedVariable { name: <15:1>, resolved_type: Int, mutable_node: None, scope_index: 1, variable_index: 0 }))]))
+
+",
+    );
+}
+
+#[test_log::test]
+fn for_loop_inclusive() {
+    check(
+        r"
+mut c = 0
+for a in 0..=3 {
+    c += a
+}
+        ",
+        r"
+
+..Int,VariableDefinition(ResolvedVariable { name: <5:1>, resolved_type: Int, mutable_node: Some(<1:3>), scope_index: 0, variable_index: 0 }, ResolvedMutOrImmutableExpression { expression_or_location: Expression(<9:1>Int,Literal(IntLiteral(0))), is_mutable: None })
+..(),ForLoop(Single(ResolvedVariable { name: <15:1>, resolved_type: Int, mutable_node: None, scope_index: 1, variable_index: 0 }), ResolvedIterable { key_type: None, value_type: Int, resolved_expression: ResolvedMutOrImmutableExpression { expression_or_location: Expression(<20:6>Iterable<Int>,InclusiveRange(<20:1>Int,Literal(IntLiteral(0)), <24:1>Int,Literal(IntLiteral(3)))), is_mutable: None } }, <26:14>(),Block([<32:1>(),CompoundAssignment(ResolvedSingleMutLocationExpression(ResolvedSingleLocationExpression { kind: MutVariableRef, node: <32:1>, ty: Int, starting_variable: ResolvedVariable { name: <5:1>, resolved_type: Int, mutable_node: Some(<1:3>), scope_index: 0, variable_index: 0 }, access_chain: [] }), Add, <37:1>Int,VariableAccess(ResolvedVariable { name: <15:1>, resolved_type: Int, mutable_node: None, scope_index: 1, variable_index: 0 }))]))
 
 ",
     );
@@ -984,8 +1002,8 @@ fn array_range_access() {
          ",
         r"
 
-InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <9:3>, resolved_type: [Int], mutable_node: None, scope_index: 0, variable_index: 0 }], expression: Literal(Array(ResolvedArrayType { item_type: Int }, [Literal(IntLiteral(2, <16:1>)), Literal(IntLiteral(3, <19:1>)), Literal(IntLiteral(4, <22:1>)), Literal(IntLiteral(5, <25:1>)), Literal(IntLiteral(6, <28:1>))])) })
-ArrayRangeAccess(VariableAccess(ResolvedVariable { name: <9:3>, resolved_type: [Int], mutable_node: None, scope_index: 0, variable_index: 0 }), ResolvedArrayType { item_type: Int }, Literal(IntLiteral(3, <43:1>)), Literal(IntLiteral(4, <46:1>)), Exclusive)
+..(),VariableDefinition(ResolvedVariable { name: <9:3>, resolved_type: [Int], mutable_node: None, scope_index: 0, variable_index: 0 }, ResolvedMutOrImmutableExpression { expression_or_location: Expression(<15:15>[Int],Literal(Array(ResolvedArrayType { item_type: Int }, [<16:1>Int,Literal(IntLiteral(2)), <19:1>Int,Literal(IntLiteral(3)), <22:1>Int,Literal(IntLiteral(4)), <25:1>Int,Literal(IntLiteral(5)), <28:1>Int,Literal(IntLiteral(6))]))), is_mutable: None })
+..[Int],PostfixChain(<39:3>[Int],VariableAccess(ResolvedVariable { name: <9:3>, resolved_type: [Int], mutable_node: None, scope_index: 0, variable_index: 0 }), [ResolvedPostfix { node: <43:4>, ty: [Int], kind: ArrayRangeIndex(ResolvedArrayType { item_type: Int }, <43:4>Iterable<Int>,Range(<43:1>Int,Literal(IntLiteral(3)), <46:1>Int,Literal(IntLiteral(4)), Exclusive)) }])
 
 
 ",
@@ -1007,12 +1025,12 @@ fn array_range_access_expr_exclusive() {
         r"
 
 FunctionDef(Internal(FunctionTypeSignature { parameters: [], return_type: Int }
-ResolvedExpression { ty: Int, node: <29:25>, kind: Block([ResolvedExpression { ty: Int, node: <43:1>, kind: Literal(IntLiteral(1)) }]) }))
+<29:25>Int,Block([<43:1>Int,Literal(IntLiteral(1))])))
 ---
-..(),CreateVariable(ResolvedVariable { name: <64:1>, resolved_type: [Int], mutable_node: None, scope_index: 0, variable_index: 0 }, Immutable(ResolvedExpression { ty: [Int], node: <68:6>, kind: Literal(Array(ResolvedArrayType { item_type: Int }, [ResolvedExpression { ty: Int, node: <69:1>, kind: Literal(IntLiteral(2)) }, ResolvedExpression { ty: Int, node: <72:1>, kind: Literal(IntLiteral(4)) }])) }))
-..(),CreateVariable(ResolvedVariable { name: <83:8>, resolved_type: Int, mutable_node: None, scope_index: 0, variable_index: 1 }, Immutable(ResolvedExpression { ty: Int, node: <94:1>, kind: Literal(IntLiteral(0)) }))
-..[Int],ArrayRangeAccess(ResolvedExpression { ty: [Int], node: <104:1>, kind: VariableAccess(ResolvedVariable { name: <64:1>, resolved_type: [Int], mutable_node: None, scope_index: 0, variable_index: 0 }) }, ResolvedRange { min_expr: ResolvedExpression { ty: Int, node: <106:12>, kind: BinaryOp(ResolvedBinaryOperator { left: ResolvedExpression { ty: Int, node: <106:7>, kind: FunctionCall(FunctionTypeSignature { parameters: [], return_type: Int }, ResolvedExpression { ty: FunctionTypeSignature { parameters: [], return_type: Int }, node: <106:7>, kind: InternalFunctionAccess(FunctionTypeSignature { parameters: [], return_type: Int }
-
+..(),VariableDefinition(ResolvedVariable { name: <64:1>, resolved_type: [Int], mutable_node: None, scope_index: 0, variable_index: 0 }, ResolvedMutOrImmutableExpression { expression_or_location: Expression(<68:6>[Int],Literal(Array(ResolvedArrayType { item_type: Int }, [<69:1>Int,Literal(IntLiteral(2)), <72:1>Int,Literal(IntLiteral(4))]))), is_mutable: None })
+..(),VariableDefinition(ResolvedVariable { name: <83:8>, resolved_type: Int, mutable_node: None, scope_index: 0, variable_index: 1 }, ResolvedMutOrImmutableExpression { expression_or_location: Expression(<94:1>Int,Literal(IntLiteral(0))), is_mutable: None })
+..[Int],PostfixChain(<104:1>[Int],VariableAccess(ResolvedVariable { name: <64:1>, resolved_type: [Int], mutable_node: None, scope_index: 0, variable_index: 0 }), [ResolvedPostfix { node: <106:22>, ty: [Int], kind: ArrayRangeIndex(ResolvedArrayType { item_type: Int }, <106:22>Iterable<Int>,Range(<106:12>Int,BinaryOp(ResolvedBinaryOperator { left: <106:7>Int,PostfixChain(<106:7>function ()->Int,InternalFunctionAccess(FunctionTypeSignature { parameters: [], return_type: Int }
+<29:25>Int,Block([<43:1>Int,Literal(IntLiteral(1))])), [ResolvedPostfix { node: <113:2>, ty: Int, kind: FunctionCall([]) }]), right: <116:2>Int,Literal(IntLiteral(33)), kind: Add, node: <115:1> }), <120:8>Int,VariableAccess(ResolvedVariable { name: <83:8>, resolved_type: Int, mutable_node: None, scope_index: 0, variable_index: 1 }), Exclusive)) }])
 
 ",
     );
@@ -1027,8 +1045,8 @@ fn string_range_access() {
          ",
         r#"
 
-InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <9:1>, resolved_type: String, mutable_node: None, scope_index: 0, variable_index: 0 }], expression: InterpolatedString([Literal(<14:11>, "some string")]) })
-StringRangeAccess(VariableAccess(ResolvedVariable { name: <9:1>, resolved_type: String, mutable_node: None, scope_index: 0, variable_index: 0 }), Literal(IntLiteral(2, <37:1>)), Literal(IntLiteral(4, <40:1>)), Exclusive)
+..(),VariableDefinition(ResolvedVariable { name: <9:1>, resolved_type: String, mutable_node: None, scope_index: 0, variable_index: 0 }, ResolvedMutOrImmutableExpression { expression_or_location: Expression(<13:13>String,InterpolatedString([Literal(<14:11>, "some string")])), is_mutable: None })
+..String,PostfixChain(<35:1>String,VariableAccess(ResolvedVariable { name: <9:1>, resolved_type: String, mutable_node: None, scope_index: 0, variable_index: 0 }), [ResolvedPostfix { node: <37:4>, ty: String, kind: StringRangeIndex(ResolvedRange { min: <37:1>Int,Literal(IntLiteral(2)), max: <40:1>Int,Literal(IntLiteral(4)), mode: Exclusive }) }])
 
 "#,
     );

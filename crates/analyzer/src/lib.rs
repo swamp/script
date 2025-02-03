@@ -27,18 +27,25 @@ use swamp_script_ast::prelude::*;
 use swamp_script_ast::{
     CompoundOperator, CompoundOperatorKind, EnumVariantLiteral, ExpressionKind, ForPattern,
     Function, LiteralKind, MutableOrImmutableExpression, Postfix, PostfixChain,
-    QualifiedIdentifier, SpanWithoutFileId, WhenBinding,
+    QualifiedIdentifier, RangeMode, SpanWithoutFileId, WhenBinding,
 };
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
     ResolvedArgumentExpressionOrLocation, ResolvedLocationAccess, ResolvedLocationAccessKind,
     ResolvedMutOrImmutableExpression, ResolvedNormalPattern, ResolvedPostfix, ResolvedPostfixKind,
-    ResolvedSingleLocationExpression, ResolvedSingleLocationExpressionKind,
+    ResolvedRangeMode, ResolvedSingleLocationExpression, ResolvedSingleLocationExpressionKind,
     ResolvedSingleMutLocationExpression, ResolvedTypeWithMut, ResolvedWhenBinding,
 };
 use swamp_script_source_map::SourceMap;
 use tracing::error;
 use tracing::info;
+
+pub fn convert_range_mode(range_mode: &RangeMode) -> ResolvedRangeMode {
+    match range_mode {
+        RangeMode::Inclusive => ResolvedRangeMode::Inclusive,
+        RangeMode::Exclusive => ResolvedRangeMode::Exclusive,
+    }
+}
 
 #[derive(Eq, PartialEq, Debug)]
 pub enum LocationSide {
@@ -499,31 +506,13 @@ impl<'a> Resolver<'a> {
                 self.resolve_struct_instantiation(struct_identifier, fields, *has_rest)?
             }
 
-            ExpressionKind::ExclusiveRange(min_value, max_value) => {
-                let min_expression =
-                    self.resolve_expression(min_value, Some(&ResolvedType::Int))?;
-                let max_expression =
-                    self.resolve_expression(max_value, Some(&ResolvedType::Int))?;
-
+            ExpressionKind::Range(min_value, max_value, range_mode) => {
+                let range = self.resolve_range(min_value, max_value, range_mode)?;
                 self.create_expr(
-                    ResolvedExpressionKind::ExclusiveRange(
-                        Box::from(min_expression),
-                        Box::from(max_expression),
-                    ),
-                    ResolvedType::Iterable(Box::from(ResolvedType::Int)),
-                    &ast_expression.node,
-                )
-            }
-
-            ExpressionKind::InclusiveRange(min_value, max_value) => {
-                let min_expression =
-                    self.resolve_expression(min_value, Some(&ResolvedType::Int))?;
-                let max_expression =
-                    self.resolve_expression(max_value, Some(&ResolvedType::Int))?;
-                self.create_expr(
-                    ResolvedExpressionKind::InclusiveRange(
-                        Box::from(min_expression),
-                        Box::from(max_expression),
+                    ResolvedExpressionKind::Range(
+                        Box::from(range.min),
+                        Box::from(range.max),
+                        range.mode,
                     ),
                     ResolvedType::Iterable(Box::from(ResolvedType::Int)),
                     &ast_expression.node,
@@ -902,20 +891,67 @@ impl<'a> Resolver<'a> {
                 Postfix::Subscript(index_expr) => {
                     let collection_type = tv.resolved_type.clone();
                     match &collection_type {
-                        ResolvedType::Array(array_type_ref) => {
-                            let resolved_index_expr =
-                                self.resolve_expression(index_expr, Some(&ResolvedType::Int))?;
-                            self.add_postfix(
-                                &mut suffixes,
-                                ResolvedPostfixKind::ArrayIndex(
-                                    array_type_ref.clone(),
-                                    resolved_index_expr,
-                                ),
-                                array_type_ref.item_type.clone(),
-                                &index_expr.node,
-                            );
+                        ResolvedType::String => {
+                            if let ExpressionKind::Range(min, max, mode) = &index_expr.kind {
+                                let range = self.resolve_range(min, max, mode)?;
 
-                            tv.resolved_type = array_type_ref.item_type.clone();
+                                self.add_postfix(
+                                    &mut suffixes,
+                                    ResolvedPostfixKind::StringRangeIndex(range),
+                                    collection_type.clone(),
+                                    &index_expr.node,
+                                );
+
+                                tv.resolved_type = ResolvedType::String;
+                            } else {
+                                let resolved_index_expr =
+                                    self.resolve_expression(index_expr, Some(&ResolvedType::Int))?;
+                                self.add_postfix(
+                                    &mut suffixes,
+                                    ResolvedPostfixKind::StringIndex(resolved_index_expr),
+                                    ResolvedType::String,
+                                    &index_expr.node,
+                                );
+
+                                tv.resolved_type = ResolvedType::String;
+                            }
+
+                            tv.is_mutable = false;
+                        }
+
+                        ResolvedType::Array(array_type_ref) => {
+                            if let ExpressionKind::Range(min_expr, max_expr, mode) =
+                                &index_expr.kind
+                            {
+                                let range = self.resolve_range(min_expr, max_expr, mode)?;
+
+                                self.add_postfix(
+                                    &mut suffixes,
+                                    ResolvedPostfixKind::ArrayRangeIndex(
+                                        array_type_ref.clone(),
+                                        range,
+                                    ),
+                                    collection_type.clone(),
+                                    &index_expr.node,
+                                );
+
+                                tv.resolved_type = collection_type.clone();
+                            } else {
+                                let resolved_index_expr =
+                                    self.resolve_expression(index_expr, Some(&ResolvedType::Int))?;
+                                self.add_postfix(
+                                    &mut suffixes,
+                                    ResolvedPostfixKind::ArrayIndex(
+                                        array_type_ref.clone(),
+                                        resolved_index_expr,
+                                    ),
+                                    array_type_ref.item_type.clone(),
+                                    &index_expr.node,
+                                );
+
+                                tv.resolved_type = array_type_ref.item_type.clone();
+                            }
+
                             tv.is_mutable = false;
                         }
 
@@ -1892,6 +1928,7 @@ impl<'a> Resolver<'a> {
         vec.push(postfix)
     }
 
+    #[allow(clippy::too_many_lines)]
     fn resolve_chain_to_location(
         &mut self,
         chain: &PostfixChain,
@@ -1901,15 +1938,12 @@ impl<'a> Resolver<'a> {
         let mut items = Vec::new();
 
         let base_expr = self.resolve_expression(&chain.base, None)?;
-        let start_variable =
-            if let ResolvedExpressionKind::VariableAccess(found_variable) = base_expr.kind {
-                found_variable
-            } else {
-                return Err(self.create_err(
-                    ResolveErrorKind::NotValidLocationStartingPoint,
-                    &chain.base.node,
-                ));
-            };
+        let ResolvedExpressionKind::VariableAccess(start_variable) = base_expr.kind else {
+            return Err(self.create_err(
+                ResolveErrorKind::NotValidLocationStartingPoint,
+                &chain.base.node,
+            ));
+        };
 
         let mut ty = start_variable.resolved_type.clone();
         for (i, item) in chain.postfixes.iter().enumerate() {
@@ -1922,13 +1956,41 @@ impl<'a> Resolver<'a> {
                         &mut items,
                         ResolvedLocationAccessKind::FieldIndex(struct_type_ref.clone(), index),
                         return_type.clone(),
-                        &field_name_node,
+                        field_name_node,
                     );
 
                     ty = return_type.clone();
                 }
                 Postfix::Subscript(lookup_expr) => {
+                    let is_range = if let ExpressionKind::Range(min, max, mode) = &lookup_expr.kind
+                    {
+                        Some(self.resolve_range(min, max, mode)?)
+                    } else {
+                        None
+                    };
                     match &ty {
+                        ResolvedType::String => {
+                            if let Some(range) = is_range {
+                                self.add_location_item(
+                                    &mut items,
+                                    ResolvedLocationAccessKind::StringRange(range),
+                                    ResolvedType::String,
+                                    &lookup_expr.node,
+                                );
+                                ty = ResolvedType::String;
+                            } else {
+                                let index_expr =
+                                    self.resolve_expression(lookup_expr, Some(&ResolvedType::Int))?; // TODO: Support slice (range)
+                                self.add_location_item(
+                                    &mut items,
+                                    ResolvedLocationAccessKind::StringIndex(index_expr),
+                                    ResolvedType::String,
+                                    &lookup_expr.node,
+                                );
+                                ty = ResolvedType::String;
+                            }
+                        }
+
                         ResolvedType::Array(array_type) => {
                             let index_expr =
                                 self.resolve_expression(lookup_expr, Some(&ResolvedType::Int))?; // TODO: Support slice (range)
@@ -2016,26 +2078,26 @@ impl<'a> Resolver<'a> {
                             return Err(self.create_err(
                                 ResolveErrorKind::IllegalIndexInChain,
                                 &lookup_expr.node,
-                            ))
+                            ));
                         }
                     }
                 }
 
                 Postfix::MemberCall(node, _) => {
-                    return Err(self.create_err(ResolveErrorKind::CallsCanNotBePartOfChain, &node))
+                    return Err(self.create_err(ResolveErrorKind::CallsCanNotBePartOfChain, &node));
                 }
 
                 Postfix::FunctionCall(node, _) => {
-                    return Err(self.create_err(ResolveErrorKind::CallsCanNotBePartOfChain, &node))
+                    return Err(self.create_err(ResolveErrorKind::CallsCanNotBePartOfChain, &node));
                 }
                 Postfix::OptionUnwrap(node) => {
-                    return Err(self.create_err(ResolveErrorKind::UnwrapCanNotBePartOfChain, &node))
+                    return Err(self.create_err(ResolveErrorKind::UnwrapCanNotBePartOfChain, &node));
                 }
                 Postfix::NoneCoalesce(expr) => {
                     return Err(self.create_err(
                         ResolveErrorKind::NoneCoalesceCanNotBePartOfChain,
                         &expr.node,
-                    ))
+                    ));
                 }
             }
         }
@@ -2470,4 +2532,20 @@ impl<'a> Resolver<'a> {
 
         Ok(last_type)
     }
+
+    /*
+    pub fn resolve_range(&mut self, min_value: &Expression, max_value: &Expression, range_mode: &RangeMode) -> ResolvedRange {
+        let min_expression =
+            self.resolve_expression(min_value, Some(&ResolvedType::Int))?;
+        let max_expression =
+            self.resolve_expression(max_value, Some(&ResolvedType::Int))?;
+
+        ResolvedRange {
+            min: min_expression,
+            max: max_expression,
+            mode: convert_range_mode(range_mode),
+        }
+    }
+
+     */
 }

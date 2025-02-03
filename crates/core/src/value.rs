@@ -15,8 +15,8 @@ use swamp_script_semantic::{
     ResolvedArrayTypeRef, ResolvedEnumVariantSimpleTypeRef, ResolvedEnumVariantStructTypeRef,
     ResolvedEnumVariantTupleTypeRef, ResolvedExternalFunctionDefinitionRef,
     ResolvedFormatSpecifierKind, ResolvedInternalFunctionDefinitionRef, ResolvedMapTypeRef,
-    ResolvedPrecisionType, ResolvedRustTypeRef, ResolvedStructTypeRef, ResolvedTupleTypeRef,
-    TypeNumber,
+    ResolvedPrecisionType, ResolvedRangeMode, ResolvedRustTypeRef, ResolvedStructTypeRef,
+    ResolvedTupleTypeRef, TypeNumber,
 };
 use swamp_script_semantic::{ResolvedNode, Span};
 
@@ -100,8 +100,7 @@ pub enum Value {
     EnumVariantStruct(ResolvedEnumVariantStructTypeRef, Vec<ValueRef>),
 
     // Number generators
-    ExclusiveRange(Box<i32>, Box<i32>),
-    InclusiveRange(Box<i32>, Box<i32>),
+    Range(Box<i32>, Box<i32>, ResolvedRangeMode),
 
     // Higher order
     InternalFunction(ResolvedInternalFunctionDefinitionRef),
@@ -258,10 +257,7 @@ impl Value {
                 offset
             }
 
-            Self::ExclusiveRange(_, _) => {
-                todo!("range is not supported yet")
-            }
-            Self::InclusiveRange(_, _) => {
+            Self::Range(_, _, _) => {
                 todo!("range is not supported yet")
             }
 
@@ -323,12 +319,8 @@ impl Clone for Value {
                 Self::EnumVariantStruct(resolved_ref.clone(), vec_values.clone())
             }
 
-            Self::ExclusiveRange(start, end) => {
-                Self::ExclusiveRange(Box::new(**start), Box::new(**end))
-            }
-
-            Self::InclusiveRange(start, end) => {
-                Self::InclusiveRange(Box::new(**start), Box::new(**end))
+            Self::Range(start, end, range_mode) => {
+                Self::Range(Box::new(**start), Box::new(**end), range_mode.clone())
             }
 
             Self::InternalFunction(resolved_def_ref) => {
@@ -414,15 +406,13 @@ impl Value {
                 }
                 _ => Err(ValueError::NotSparseMap),
             },
-            Self::ExclusiveRange(start_val, max_val) => {
+            Self::Range(start_val, max_val, range_mode) => {
                 let start = *start_val;
                 let end = *max_val;
-                Ok(Box::new((start..end).map(Value::Int)))
-            }
-            Self::InclusiveRange(start_val, max_val) => {
-                let start = *start_val;
-                let end = *max_val;
-                Ok(Box::new((start..=end).map(Value::Int)))
+                match range_mode {
+                    ResolvedRangeMode::Exclusive => Ok(Box::new((start..end).map(Value::Int))),
+                    ResolvedRangeMode::Inclusive => Ok(Box::new((start..=end).map(Value::Int))),
+                }
             }
             _ => Err(ValueError::CanNotCoerceToIterator),
         }
@@ -696,8 +686,10 @@ impl Display for Value {
             }
             Self::InternalFunction(_reference) => write!(f, "<function>"), // TODO:
             Self::Unit => write!(f, "()"),
-            Self::ExclusiveRange(start, end) => write!(f, "{start}..{end}"),
-            Self::InclusiveRange(start, end) => write!(f, "{start}..={end}"),
+            Self::Range(start, end, range_mode) => match range_mode {
+                ResolvedRangeMode::Exclusive => write!(f, "{start}..{end}"),
+                ResolvedRangeMode::Inclusive => write!(f, "{start}..={end}"),
+            },
 
             Self::ExternalFunction(_) => write!(f, "<external>"), // TODO:
 
@@ -800,11 +792,7 @@ impl Hash for Value {
             Self::EnumVariantSimple(_) => (),
             Self::EnumVariantTuple(_, _fields) => todo!(),
             Self::EnumVariantStruct(_, _fields) => todo!(),
-            Self::ExclusiveRange(start, end) => {
-                start.hash(state);
-                end.hash(state);
-            }
-            Self::InclusiveRange(start, end) => {
+            Self::Range(start, end, _range_mode) => {
                 start.hash(state);
                 end.hash(state);
             }

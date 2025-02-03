@@ -780,9 +780,19 @@ pub struct ResolvedPostfix {
 }
 
 #[derive(Debug)]
+pub struct ResolvedRange {
+    pub min: ResolvedExpression,
+    pub max: ResolvedExpression,
+    pub mode: ResolvedRangeMode,
+}
+
+#[derive(Debug)]
 pub enum ResolvedPostfixKind {
     StructField(ResolvedStructTypeRef, usize),
     ArrayIndex(ResolvedArrayTypeRef, ResolvedExpression),
+    ArrayRangeIndex(ResolvedArrayTypeRef, ResolvedRange),
+    StringIndex(ResolvedExpression),
+    StringRangeIndex(ResolvedRange),
     MapIndex(ResolvedMapTypeRef, ResolvedExpression),
     RustTypeIndexRef(ResolvedRustTypeRef, ResolvedExpression),
     MemberCall(
@@ -841,6 +851,9 @@ pub enum ResolvedPostfixKind {
 pub enum ResolvedLocationAccessKind {
     FieldIndex(ResolvedStructTypeRef, usize),
     ArrayIndex(ResolvedArrayTypeRef, ResolvedExpression),
+    ArrayRange(ResolvedArrayTypeRef, ResolvedRange),
+    StringIndex(ResolvedExpression),
+    StringRange(ResolvedRange),
     MapIndex(ResolvedMapTypeRef, ResolvedExpression),
     MapIndexInsertIfNonExisting(ResolvedMapTypeRef, ResolvedExpression),
     RustTypeIndex(ResolvedRustTypeRef, ResolvedExpression),
@@ -939,13 +952,6 @@ impl Debug for ResolvedExpression {
 }
 
 #[derive(Debug)]
-pub struct ResolvedRange {
-    pub min_expr: ResolvedExpression,
-    pub max_expr: ResolvedExpression,
-    pub mode: ResolvedRangeMode,
-}
-
-#[derive(Debug)]
 pub struct ResolvedWhenBinding {
     pub variable: ResolvedVariableRef,
     pub expr: ResolvedMutOrImmutableExpression,
@@ -1012,8 +1018,11 @@ pub enum ResolvedExpressionKind {
     Tuple(Vec<ResolvedExpression>),
     Literal(ResolvedLiteral),
     Option(Option<Box<ResolvedExpression>>), // Wrapping an expression in `Some()`
-    ExclusiveRange(Box<ResolvedExpression>, Box<ResolvedExpression>),
-    InclusiveRange(Box<ResolvedExpression>, Box<ResolvedExpression>),
+    Range(
+        Box<ResolvedExpression>,
+        Box<ResolvedExpression>,
+        ResolvedRangeMode,
+    ),
 
     // Control
     ForLoop(

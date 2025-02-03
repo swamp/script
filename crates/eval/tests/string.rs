@@ -1,6 +1,6 @@
 mod util;
 
-use crate::util::{check, check_fail, check_value, eval, eval_string};
+use crate::util::check;
 
 #[test_log::test]
 fn string_iterable() {

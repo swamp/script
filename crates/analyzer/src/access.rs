@@ -63,15 +63,15 @@ impl<'a> Resolver<'a> {
         max_expr: &Expression,
         mode: &RangeMode,
     ) -> Result<ResolvedRange, ResolveError> {
-        let (min_expr, max_expr) = self.resolve_min_max_expr(min_expr, max_expr)?;
+        let (min, max) = self.resolve_min_max_expr(min_expr, max_expr)?;
 
         let resolved_range_mode = match mode {
             RangeMode::Inclusive => ResolvedRangeMode::Inclusive,
             RangeMode::Exclusive => ResolvedRangeMode::Exclusive,
         };
         Ok(ResolvedRange {
-            min_expr,
-            max_expr,
+            min,
+            max,
             mode: resolved_range_mode,
         })
     }
