@@ -59,6 +59,10 @@ impl ResolvedModuleNamespace {
         }
     }
 
+    pub fn structs(&self) -> &SeqMap<String, ResolvedStructTypeRef> {
+        &self.structs
+    }
+
     pub fn add_constant_ref(
         &mut self,
         constant_ref: ResolvedConstantRef,

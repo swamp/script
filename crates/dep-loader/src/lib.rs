@@ -176,6 +176,23 @@ fn get_all_import_paths(source_map: &SourceMap, parsed_module: &ParseModule) -> 
     imports
 }
 
+pub fn module_path_to_relative_swamp_file(module_path_vec: &[String]) -> PathBuf {
+    let mut path_buf = PathBuf::new();
+
+    path_buf.push(module_path_vec.join("/"));
+
+    path_buf.set_extension("swamp");
+
+    path_buf
+}
+
+pub fn module_path_to_relative_swamp_file_string(module_path_vec: &[String]) -> String {
+    module_path_to_relative_swamp_file(module_path_vec)
+        .to_str()
+        .unwrap()
+        .into()
+}
+
 impl DependencyParser {
     pub fn parse_all_dependant_modules(
         &mut self,
@@ -198,8 +215,9 @@ impl DependencyParser {
                     if self.already_resolved_modules.contains(module_path_vec) {
                         continue;
                     } else {
-                        let (file_id, script) =
-                            source_map.read_file_relative(module_path_vec.join("/").as_ref())?;
+                        let (file_id, script) = source_map.read_file_relative(
+                            &module_path_to_relative_swamp_file_string(module_path_vec),
+                        )?;
                         let parse_module = parse_root.parse(script, file_id)?;
 
                         self.already_parsed_modules

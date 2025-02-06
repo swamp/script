@@ -5,7 +5,8 @@
 pub use crate::{
     err::ConversionError,
     err::ExecuteError,
-    eval_constants, util_execute_function,
+    eval_constants, util_execute_expression, util_execute_function,
+    util_execute_member_function_mut,
     value_both::{convert_to_values, VariableValue},
     value_ref::ValueReference,
     Constants, ExternalFunctions, Interpreter,

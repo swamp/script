@@ -207,6 +207,48 @@ pub fn util_execute_function<C>(
     Ok(value)
 }
 
+pub fn util_execute_expression<C>(
+    externals: &ExternalFunctions<C>,
+    constants: &Constants,
+    expr: &ResolvedExpression,
+    context: &mut C,
+    debug_source_map: Option<&dyn SourceMapLookup>,
+) -> Result<Value, ExecuteError> {
+    let mut interpreter = Interpreter::<C>::new(externals, constants, context);
+    interpreter.debug_source_map = debug_source_map;
+    let value = interpreter.evaluate_expression(expr)?;
+    interpreter.current_block_scopes.clear();
+    interpreter.function_scope_stack.clear();
+    Ok(value)
+}
+
+pub fn util_execute_member_function_mut<C>(
+    externals: &ExternalFunctions<C>,
+    constants: &Constants,
+    fn_def: &ResolvedInternalFunctionDefinitionRef,
+    self_value_ref: ValueRef,
+    arguments: &[Value],
+    context: &mut C,
+    debug_source_map: Option<&dyn SourceMapLookup>,
+) -> Result<Value, ExecuteError> {
+    let mut complete_arguments = Vec::new();
+    complete_arguments.push(VariableValue::Reference(self_value_ref));
+    for arg in arguments {
+        complete_arguments.push(VariableValue::Value(arg.clone()));
+    }
+
+    let value = util_execute_function(
+        externals,
+        constants,
+        fn_def,
+        &complete_arguments,
+        context,
+        debug_source_map,
+    )?;
+
+    Ok(value)
+}
+
 pub struct Interpreter<'a, C> {
     function_scope_stack: Vec<FunctionScope>,
     current_block_scopes: BlockScopes,

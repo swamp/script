@@ -117,7 +117,7 @@ impl SourceMap {
         let mut path_buf = self.base_path.clone();
 
         path_buf.push(path);
-        path_buf.set_extension("swamp");
+        //path_buf.set_extension("swamp");
 
         let canon_path = path_buf.canonicalize().expect("can not canonicalize");
 

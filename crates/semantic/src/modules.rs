@@ -7,7 +7,6 @@ use crate::ns::{ResolvedModuleNamespace, ResolvedModuleNamespaceRef};
 use crate::ResolvedExpressionKind;
 use crate::{
     ConstantId, ResolvedConstant, ResolvedConstantRef, ResolvedDefinition, ResolvedExpression,
-    SemanticError,
 };
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -108,101 +107,6 @@ impl ResolvedModules {
 
         constant_ref
     }
-
-    pub fn finalize(&mut self) -> Result<(), SemanticError> {
-        Ok(())
-    }
-
-    /*
-    pub fn topological_sort_constants(
-        constants: &[ResolvedConstantRef],
-    ) -> Result<Vec<ResolvedConstantRef>, SemanticError> {
-        let mut id_to_constant: SeqMap<ConstantId, ResolvedConstantRef> = SeqMap::new();
-        for const_ref in constants {
-            id_to_constant
-                .insert(const_ref.id, Rc::clone(const_ref))
-                .map_err(|_| SemanticError::DuplicateConstantId(const_ref.id))?;
-        }
-
-        let mut adjacency: SeqMap<ConstantId, SeqSet<ConstantId>> = SeqMap::new();
-        let mut number_of_dependencies: SeqMap<ConstantId, usize> = SeqMap::new();
-
-        for const_ref in constants {
-            number_of_dependencies
-                .insert(const_ref.id, 0)
-                .map_err(|_| SemanticError::DuplicateConstantId(const_ref.id))?;
-
-            let mut deps = SeqSet::new();
-            //const_ref.expr.kind.collect_constant_dependencies(&mut deps);
-
-            for dep_id in &deps {
-                assert!(id_to_constant.contains_key(dep_id));
-
-                if let Some(dependents) = adjacency.get_mut(dep_id) {
-                    dependents.insert(const_ref.id);
-                } else {
-                    let mut dependents = SeqSet::new();
-                    dependents.insert(const_ref.id);
-                    adjacency
-                        .insert(*dep_id, dependents)
-                        .map_err(|_| SemanticError::DuplicateConstantId(const_ref.id))?;
-                }
-
-                let dependency_count = number_of_dependencies
-                    .get_mut(&const_ref.id)
-                    .expect("dependency count should have been inserted earlier");
-                *dependency_count += 1;
-            }
-        }
-
-        let mut queue: VecDeque<ConstantId> = number_of_dependencies
-            .iter()
-            .filter_map(|(id, &dependency_count)| {
-                if dependency_count == 0 {
-                    Some(*id)
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        let mut sorted_constants: Vec<ResolvedConstantRef> = Vec::new();
-
-        while let Some(current_id) = queue.pop_front() {
-            let current_const = id_to_constant
-                .get(&current_id)
-                .expect("should have a id to constant lookup");
-
-            sorted_constants.push(Rc::clone(current_const));
-
-            if let Some(dependents) = adjacency.get(&current_id) {
-                for dependent_id in dependents {
-                    let dependency_count = number_of_dependencies
-                        .get_mut(dependent_id)
-                        .expect("should have number of dependencies");
-                    assert!(*dependency_count > 0);
-                    *dependency_count -= 1;
-                    if *dependency_count == 0 {
-                        queue.push_back(*dependent_id);
-                    }
-                }
-            }
-        }
-
-        if sorted_constants.len() != constants.len() {
-            let unsorted_ids: Vec<ConstantId> = constants
-                .iter()
-                .map(|c| c.id)
-                .filter(|id| !sorted_constants.iter().any(|c| c.id == *id))
-                .collect();
-
-            return Err(SemanticError::CircularConstantDependency(unsorted_ids));
-        }
-
-        Ok(sorted_constants)
-    }
-
-     */
 
     pub fn add_empty_module(&mut self, module_path: &[String]) -> ResolvedModuleRef {
         let ns_ref = Rc::new(RefCell::new(ResolvedModuleNamespace::new(module_path)));
