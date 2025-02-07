@@ -123,8 +123,6 @@ fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError>
         output: vec![],
     };
 
-    modules.finalize()?;
-
     let mut constants = Constants::new();
 
     eval_constants(&externals, &mut constants, &modules, &mut context)?;
