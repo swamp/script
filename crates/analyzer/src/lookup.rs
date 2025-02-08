@@ -2,15 +2,15 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-
 use crate::ResolveError;
 use swamp_script_semantic::modules::ResolvedModules;
 use swamp_script_semantic::ns::ResolvedModuleNamespaceRef;
 use swamp_script_semantic::{
-    ResolvedConstant, ResolvedConstantRef, ResolvedEnumType, ResolvedEnumTypeRef,
-    ResolvedEnumVariantTypeRef, ResolvedExternalFunctionDefinitionRef,
-    ResolvedInternalFunctionDefinition, ResolvedInternalFunctionDefinitionRef, ResolvedRustTypeRef,
-    ResolvedStructType, ResolvedStructTypeRef, SemanticError,
+    ResolvedAliasType, ResolvedAliasTypeRef, ResolvedConstant, ResolvedConstantRef,
+    ResolvedEnumType, ResolvedEnumTypeRef, ResolvedEnumVariantTypeRef,
+    ResolvedExternalFunctionDefinitionRef, ResolvedInternalFunctionDefinition,
+    ResolvedInternalFunctionDefinitionRef, ResolvedRustTypeRef, ResolvedStructType,
+    ResolvedStructTypeRef, ResolvedType, SemanticError,
 };
 
 #[derive()]
@@ -84,9 +84,21 @@ impl<'a> NameLookup<'a> {
     #[must_use]
     pub fn get_struct(&self, path: &[String], name: &str) -> Option<ResolvedStructTypeRef> {
         let namespace = self.get_namespace(path);
+        namespace.map_or_else(|| None, |found_ns| found_ns.borrow().get_struct(name))
+    }
+
+    #[must_use]
+    pub fn get_alias(&self, path: &[String], name: &str) -> Option<ResolvedAliasTypeRef> {
+        let namespace = self.get_namespace(path);
+        namespace.map_or_else(|| None, |found_ns| found_ns.borrow().get_alias(name))
+    }
+
+    #[must_use]
+    pub fn get_alias_referred_type(&self, path: &[String], name: &str) -> Option<ResolvedType> {
+        let namespace = self.get_namespace(path);
         namespace.map_or_else(
             || None,
-            |found_ns| found_ns.borrow().get_struct(name).cloned(),
+            |found_ns| found_ns.borrow().get_alias_referred_type(name),
         )
     }
 
@@ -157,6 +169,13 @@ impl<'a> NameLookup<'a> {
             .own_namespace()
             .borrow_mut()
             .add_constant_ref(constant_ref)?)
+    }
+
+    pub fn add_alias(
+        &self,
+        alias_type: ResolvedAliasType,
+    ) -> Result<ResolvedAliasTypeRef, ResolveError> {
+        Ok(self.own_namespace().borrow_mut().add_alias(alias_type)?)
     }
 
     /// # Errors

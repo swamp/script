@@ -547,6 +547,15 @@ impl Value {
 
     /// # Errors
     ///
+    pub fn expect_enum_container_index(&self) -> Result<u8, ValueError> {
+        match self {
+            Self::EnumVariantSimple(v) => Ok(v.common.container_index),
+            _ => Err(ValueError::ConversionError("Expected enum value".into())),
+        }
+    }
+
+    /// # Errors
+    ///
     pub fn expect_float(&self) -> Result<Fp, ValueError> {
         match self {
             Self::Float(v) => Ok(*v),

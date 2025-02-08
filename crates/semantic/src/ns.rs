@@ -2,13 +2,14 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
+use crate::ResolvedAliasTypeRef;
 use crate::{
-    ResolvedAnonymousStructFieldType, ResolvedAnonymousStructType, ResolvedConstantRef,
-    ResolvedEnumType, ResolvedEnumTypeRef, ResolvedEnumVariantType, ResolvedEnumVariantTypeRef,
-    ResolvedExternalFunctionDefinition, ResolvedExternalFunctionDefinitionRef,
-    ResolvedInternalFunctionDefinition, ResolvedInternalFunctionDefinitionRef, ResolvedNode,
-    ResolvedRustType, ResolvedRustTypeRef, ResolvedStructType, ResolvedStructTypeRef, ResolvedType,
-    SemanticError,
+    ResolvedAliasType, ResolvedAnonymousStructFieldType, ResolvedAnonymousStructType,
+    ResolvedConstantRef, ResolvedEnumType, ResolvedEnumTypeRef, ResolvedEnumVariantType,
+    ResolvedEnumVariantTypeRef, ResolvedExternalFunctionDefinition,
+    ResolvedExternalFunctionDefinitionRef, ResolvedInternalFunctionDefinition,
+    ResolvedInternalFunctionDefinitionRef, ResolvedNode, ResolvedRustType, ResolvedRustTypeRef,
+    ResolvedStructType, ResolvedStructTypeRef, ResolvedType, SemanticError,
 };
 use seq_map::SeqMap;
 use std::cell::RefCell;
@@ -22,7 +23,7 @@ pub struct ResolvedModulePathStr(pub Vec<String>);
 pub struct ResolvedModuleNamespace {
     #[allow(unused)]
     structs: SeqMap<String, ResolvedStructTypeRef>,
-
+    aliases: SeqMap<String, ResolvedAliasTypeRef>,
     constants: SeqMap<String, ResolvedConstantRef>,
 
     #[allow(unused)]
@@ -50,6 +51,7 @@ impl ResolvedModuleNamespace {
     pub fn new(path: &[String]) -> Self {
         Self {
             structs: SeqMap::default(),
+            aliases: SeqMap::default(),
             build_in_rust_types: SeqMap::default(),
             enum_types: SeqMap::default(),
             internal_functions: SeqMap::default(),
@@ -74,6 +76,19 @@ impl ResolvedModuleNamespace {
             .map_err(|_| SemanticError::DuplicateConstName(name.to_string()))?;
 
         Ok(constant_ref)
+    }
+
+    pub fn add_alias(
+        &mut self,
+        alias_type: ResolvedAliasType,
+    ) -> Result<ResolvedAliasTypeRef, SemanticError> {
+        let name = alias_type.assigned_name.clone();
+        let alias_ref = Rc::new(alias_type);
+        self.aliases
+            .insert(name.clone(), alias_ref.clone())
+            .map_err(|_| SemanticError::DuplicateStructName(name))?;
+
+        Ok(alias_ref)
     }
 
     pub fn add_struct(
@@ -211,8 +226,36 @@ impl ResolvedModuleNamespace {
         Ok(())
     }
 
-    pub fn get_struct(&self, name: &str) -> Option<&ResolvedStructTypeRef> {
-        self.structs.get(&name.to_string())
+    pub fn get_struct(&self, name: &str) -> Option<ResolvedStructTypeRef> {
+        if let Some(found_alias) = self.aliases.get(&name.to_string()) {
+            let alias_type = found_alias.referenced_type.clone();
+            if let ResolvedType::Struct(found_data) = alias_type {
+                return Some(found_data);
+            }
+        }
+        self.structs.get(&name.to_string()).cloned()
+    }
+
+    pub fn get_alias(&self, name: &str) -> Option<ResolvedAliasTypeRef> {
+        if let Some(found_alias) = self.aliases.get(&name.to_string()) {
+            return Some(found_alias.clone());
+        }
+
+        None
+    }
+
+    pub fn get_alias_referred_type(&self, name: &str) -> Option<ResolvedType> {
+        if let Some(found_alias) = self.aliases.get(&name.to_string()) {
+            let alias_type = found_alias.referenced_type.clone();
+            return Some(alias_type);
+        }
+
+        None
+    }
+
+    pub fn fetch_struct(&self, name: &str) -> ResolvedStructTypeRef {
+        self.get_struct(name)
+            .expect(&format!("should have the struct {}", name))
     }
 
     pub fn get_enum(&self, name: &str) -> Option<&ResolvedEnumTypeRef> {

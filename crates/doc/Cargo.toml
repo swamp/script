@@ -1,0 +1,14 @@
+[package]
+name = "swamp-script-doc"
+version = "0.0.16"
+edition = "2021"
+
+[dependencies]
+swamp-script-semantic = { path = "../semantic", version = "0.0.12" }
+swamp-script-source-map = { path = "../source-map", version = "0.0.12" }
+
+[dev-dependencies]
+swamp-script-ast = { path = "../ast", version = "0.0.12" }
+swamp-script-analyzer = { path = "../analyzer", version = "0.0.12" }
+swamp-script-parser = { path = "../parser", version = "0.0.12" }
+tracing = "0.1.40"

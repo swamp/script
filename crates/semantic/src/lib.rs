@@ -19,6 +19,7 @@ use std::rc::Rc;
 #[derive(Clone, Eq, PartialEq, Default)]
 pub struct ResolvedNode {
     pub span: Span,
+    pub markdown_doc: Option<Span>,
 }
 
 impl Debug for ResolvedNode {
@@ -387,6 +388,7 @@ impl ResolvedNode {
                 offset: 0,
                 length: 0,
             },
+            markdown_doc: None,
         }
     }
 }
@@ -1158,6 +1160,14 @@ pub struct ResolvedConstant {
 }
 pub type ResolvedConstantRef = Rc<ResolvedConstant>;
 
+#[derive(Debug, Eq, PartialEq)]
+pub struct ResolvedAliasType {
+    pub name: ResolvedNode,
+    pub assigned_name: String,
+    pub referenced_type: ResolvedType,
+}
+pub type ResolvedAliasTypeRef = Rc<ResolvedAliasType>;
+
 #[derive(Eq, PartialEq)]
 pub struct ResolvedStructType {
     pub name: ResolvedNode,
@@ -1199,7 +1209,7 @@ impl ResolvedStructType {
         &self.name
     }
 
-    pub fn add_external_member_function(
+    pub fn add_external_member_function_changed(
         &mut self,
         external_func: ResolvedExternalFunctionDefinitionRef,
     ) -> Result<(), SeqMapError> {
@@ -1207,6 +1217,19 @@ impl ResolvedStructType {
         let func = ResolvedFunction::External(external_func);
         self.functions.insert(name, func.into())?;
         Ok(())
+    }
+
+    pub fn fetch_external_function_id(&self, function_name: &str) -> ExternalFunctionId {
+        let resolved_function_ref = self
+            .get_member_function(function_name)
+            .expect("must have external function");
+
+        match &**resolved_function_ref {
+            ResolvedFunction::Internal(_internal_fn) => {
+                panic!("expected external fn, but found internal")
+            }
+            ResolvedFunction::External(external_fn) => external_fn.id,
+        }
     }
 
     pub fn get_member_function(&self, function_name: &str) -> Option<&ResolvedFunctionRef> {
@@ -1440,14 +1463,21 @@ pub struct ResolvedUse {
 }
 
 #[derive(Debug)]
+pub struct ResolvedMod {
+    pub path: Vec<ResolvedNode>,
+}
+
+#[derive(Debug)]
 pub enum ResolvedDefinition {
     StructType(ResolvedStructTypeRef),
+    AliasType(ResolvedAliasTypeRef),
     EnumType(ResolvedEnumTypeRef),
     ImplType(ResolvedType),
     FunctionDef(ResolvedFunction),
     Alias(ResolvedType),
     Comment(ResolvedNode),
     Use(ResolvedUse),
+    Mod(ResolvedMod),
     Constant(ResolvedNode, ResolvedConstantRef),
 }
 

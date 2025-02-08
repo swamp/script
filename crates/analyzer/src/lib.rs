@@ -1563,6 +1563,7 @@ impl<'a> Resolver<'a> {
                 offset: node.span.offset,
                 length: node.span.length,
             },
+            markdown_doc: None,
         }
     }
 
@@ -1627,7 +1628,7 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    const fn resolve_format_specifier(
+    fn resolve_format_specifier(
         &self,
         ast_format_specifier: &Option<FormatSpecifier>,
     ) -> Option<ResolvedFormatSpecifier> {
