@@ -28,7 +28,10 @@ members = [
     # "crates/extra", # Not used yet
     "crates/err",
 
+
+    "crates/cli",
+
     "crates/source-map", # Move this later
     "crates/eira",
-    "crates/source-map-lookup", "crates/doc", # Move this later
+    "crates/source-map-lookup", "crates/doc", "crates/compile", # Move this later
 ]

@@ -4,6 +4,7 @@
  */
 pub mod prelude;
 
+use tracing::info;
 use pest::error::{Error, ErrorVariant, InputLocation};
 use pest::iterators::Pair;
 use pest::Parser;
@@ -848,14 +849,16 @@ impl AstParser {
     fn parse_impl_def(&self, pair: &Pair<Rule>) -> Result<Definition, ParseError> {
         let mut inner = Self::convert_into_iterator(pair);
         let type_name = self.expect_local_type_identifier_next(&mut inner)?;
+
         let mut functions = Vec::new();
 
         for item_pair in inner {
+            info!(name=?item_pair.as_str(), "parsing");
             if item_pair.as_rule() == Rule::impl_item {
                 let inner_item = self.next_inner_pair(&item_pair)?;
                 match inner_item.as_rule() {
                     Rule::external_member_function => {
-                        let signature = self.parse_member_signature(&inner_item)?;
+                        let signature = self.parse_external_member_function(&inner_item)?;
                         functions.push(Function::External(signature));
                     }
                     Rule::normal_member_function => {
@@ -872,6 +875,13 @@ impl AstParser {
         }
 
         Ok(Definition::ImplDef(type_name.0, functions))
+    }
+
+    fn parse_external_member_function(&self, pair: &Pair<Rule>) -> Result<FunctionDeclaration, ParseError> {
+        let mut inner = Self::convert_into_iterator(pair);
+
+        let signature_pair = Self::next_pair(&mut inner)?;
+        self.parse_member_signature(&signature_pair)
     }
 
     fn parse_member_signature(&self, pair: &Pair<Rule>) -> Result<FunctionDeclaration, ParseError> {

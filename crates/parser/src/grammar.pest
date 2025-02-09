@@ -232,7 +232,7 @@ impl_def = {
     "impl" ~ type_identifier ~ "{" ~ (impl_item)* ~ "}"
 }
 
-impl_item = { normal_member_function | external_member_function }
+impl_item = { external_member_function | normal_member_function }
 
 struct_def        = { "struct" ~ type_identifier ~ ("{" ~ field_definitions? ~ "}")? }
 
@@ -290,7 +290,7 @@ mod_def = {
     "mod" ~ import_path
 }
 
-import_path = { identifier ~ ("." ~ identifier)* }
+import_path = { identifier ~ ("::" ~ identifier)* }
 
 import_list = {
     import_item ~ (COMMA ~ import_item)* ~ TRAILING_COMMA

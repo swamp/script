@@ -100,6 +100,8 @@ pub fn check_doc(script: &str, expected_output: &str) {
             ResolvedDefinition::Comment(_) => {}
             ResolvedDefinition::Use(_) => {}
             ResolvedDefinition::Constant(_, _) => {}
+            ResolvedDefinition::AliasType(_) => {}
+            ResolvedDefinition::Mod(_) => {}
         }
     }
 

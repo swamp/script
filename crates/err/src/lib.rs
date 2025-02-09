@@ -10,6 +10,7 @@ use std::io;
 use std::io::{stderr, Write};
 use swamp_script_analyzer::err::ResolveErrorKind;
 use swamp_script_analyzer::prelude::ResolveError;
+use swamp_script_compile::ScriptResolveError;
 use swamp_script_eval::err::ExecuteErrorKind;
 use swamp_script_eval::prelude::ExecuteError;
 use swamp_script_parser::SpecificError;
@@ -162,6 +163,14 @@ pub fn show_execute_error(err: &ExecuteError, source_map: &SourceMap) {
 ///
 pub fn show_parse_error(err: &SpecificError, span: &Span, source_map: &SourceMap) {
     let builder = build_parse_error(err, span);
+    let report = builder.build();
+    report.print(source_map, stderr()).unwrap();
+}
+
+/// # Panics
+///
+pub fn show_script_resolve_error(err: &ScriptResolveError, source_map: &SourceMap) {
+    let builder = build_script_error(err, source_map);
     let report = builder.build();
     report.print(source_map, stderr()).unwrap();
 }
@@ -463,6 +472,15 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
         &swamp_script_analyzer::err::ResolveErrorKind::IllegalIndexInChain => Report::build(Error, 140, "illegal index in chain", span),
         &swamp_script_analyzer::err::ResolveErrorKind::CanNotNoneCoalesce => todo!(),
         &ResolveErrorKind::GuardCanNotHaveMultipleWildcards | &ResolveErrorKind::WildcardMustBeLastInGuard | &ResolveErrorKind::GuardMustHaveWildcard => todo!(),
+    }
+}
+
+#[must_use]
+pub fn build_script_error(err: &ScriptResolveError, source_map: &SourceMap) -> Builder<usize> {
+    match err {
+        ScriptResolveError::ResolveError(err) => build_resolve_error(err),
+        ScriptResolveError::DepLoaderError(err) => panic!("{}", format!("err: {:?}", err)),
+        ScriptResolveError::DependencyError(err) => panic!("{}", format!("err: {:?}", err)),
     }
 }
 

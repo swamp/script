@@ -6,7 +6,7 @@ pub mod prelude;
 
 use seq_map::SeqMap;
 use std::collections::HashSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::{env, io};
 use swamp_script_ast::prelude::*;
 use swamp_script_ast::Function;
@@ -14,9 +14,7 @@ use swamp_script_parser::{AstParser, ParseError};
 use swamp_script_source_map::{FileId, SourceMap};
 use tracing::{debug, trace};
 
-pub struct ParseRoot {
-    pub base_path: PathBuf,
-}
+pub struct ParseRoot;
 
 #[derive(Debug)]
 pub enum ParseRootError {
@@ -70,8 +68,8 @@ impl ParseModule {
 pub struct RelativePath(pub String);
 
 impl ParseRoot {
-    pub fn new(base_path: PathBuf) -> Self {
-        Self { base_path }
+    pub fn new() -> Self {
+        Self {}
     }
 
     pub fn parse(&self, contents: String, file_id: FileId) -> Result<ParseModule, ParseRootError> {
@@ -150,13 +148,16 @@ impl From<io::Error> for DependencyError {
     }
 }
 
-fn get_all_import_paths(source_map: &SourceMap, parsed_module: &ParseModule) -> Vec<Vec<String>> {
+pub const LOCAL_ROOT_PACKAGE_PATH: &str = "crate";
+
+fn get_all_local_paths(source_map: &SourceMap, parsed_module: &ParseModule) -> Vec<Vec<String>> {
     let mut imports = vec![];
 
     for def in parsed_module.ast_module.definitions() {
         match def {
-            Definition::Use(import) => {
+            Definition::Mod(import) => {
                 let mut sections = Vec::new();
+                sections.push(LOCAL_ROOT_PACKAGE_PATH.to_string());
                 for section_node in &import.module_path.0 {
                     let import_path = source_map
                         .get_span_source(
@@ -193,10 +194,17 @@ pub fn module_path_to_relative_swamp_file_string(module_path_vec: &[String]) -> 
         .into()
 }
 
+pub fn mount_name_from_path(path: &[String]) -> (&str, &[String]) {
+    if path[0] == "crate" {
+        ("crate", &path[1..])
+    } else {
+        ("registry", path)
+    }
+}
+
 impl DependencyParser {
-    pub fn parse_all_dependant_modules(
+    pub fn parse_local_modules(
         &mut self,
-        parse_root: ParseRoot,
         module_path: &[String],
         source_map: &mut SourceMap,
     ) -> Result<(), DependencyError> {
@@ -208,30 +216,30 @@ impl DependencyParser {
                 continue;
             }
 
+            let (mount_name, rel_path) = mount_name_from_path(&path);
+
             let parsed_module_to_scan =
                 if let Some(parsed_module) = self.already_parsed_modules.get(module_path_vec) {
                     parsed_module
+                } else if self.already_resolved_modules.contains(module_path_vec) {
+                    continue;
                 } else {
-                    if self.already_resolved_modules.contains(module_path_vec) {
-                        continue;
-                    } else {
-                        let (file_id, script) = source_map.read_file_relative(
-                            &module_path_to_relative_swamp_file_string(module_path_vec),
-                        )?;
-                        let parse_module = parse_root.parse(script, file_id)?;
+                    let (file_id, script) = source_map.read_file_relative(
+                        mount_name,
+                        &module_path_to_relative_swamp_file_string(rel_path),
+                    )?;
+                    let parse_module = ParseRoot.parse(script, file_id)?;
 
-                        self.already_parsed_modules
-                            .insert(path.clone(), parse_module)
-                            .expect("TODO: panic message");
+                    self.already_parsed_modules
+                        .insert(path.clone(), parse_module)
+                        .expect("TODO: panic message");
 
-                        self.already_parsed_modules
-                            .get(&path.clone())
-                            .expect("we just inserted it")
-                    }
+                    self.already_parsed_modules
+                        .get(&path.clone())
+                        .expect("we just inserted it")
                 };
 
-            let imports = get_all_import_paths(source_map, parsed_module_to_scan);
-
+            let imports = get_all_local_paths(source_map, parsed_module_to_scan);
             let filtered_imports: Vec<Vec<String>> = imports
                 .into_iter()
                 .filter(|import| !self.already_resolved_modules.contains(import))
@@ -327,22 +335,92 @@ impl From<DependencyError> for DepLoaderError {
     }
 }
 
+pub fn os_cache_path(project_name: &str, directory_name: &str) -> io::Result<PathBuf> {
+    if cfg!(target_os = "windows") {
+        match env::var("LOCALAPPDATA") {
+            Ok(app_data) => {
+                let mut path = PathBuf::from(app_data);
+                path.push(project_name);
+                path.push(directory_name);
+                Ok(path)
+            }
+            Err(err) => {
+                eprintln!("Error: LOCALAPPDATA environment variable not found.");
+                Err(io::Error::new(io::ErrorKind::Other, err.to_string()))
+            }
+        }
+    } else if cfg!(target_os = "macos") {
+        match env::var("HOME") {
+            Ok(home_dir) => {
+                let mut path = PathBuf::from(home_dir);
+                path.push("Library");
+                path.push("Caches");
+                path.push(project_name);
+                path.push(directory_name);
+                Ok(path)
+            }
+            Err(err) => {
+                eprintln!("Error: HOME environment variable not found.");
+                Err(io::Error::new(io::ErrorKind::Other, err.to_string()))
+            }
+        }
+    } else if cfg!(target_os = "linux") {
+        let xdg_cache_home = env::var("XDG_CACHE_HOME").ok();
+        let cache_dir = xdg_cache_home.as_deref().unwrap_or("$HOME/.cache");
+
+        match env::var("HOME") {
+            Ok(home_dir) => {
+                let mut path = PathBuf::from(cache_dir.replace("$HOME", &home_dir));
+                path.push(project_name);
+                path.push(directory_name);
+                Ok(path)
+            }
+            Err(err) => {
+                eprintln!("Error: HOME environment variable not found.");
+                Err(io::Error::new(io::ErrorKind::Other, err.to_string()))
+            }
+        }
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "unknown operating system",
+        ))
+    }
+}
+
+pub fn swamp_registry_path() -> io::Result<PathBuf> {
+    os_cache_path("swamp", "registry")
+}
+
+pub fn create_source_map(local_path: &Path) -> io::Result<SourceMap> {
+    let registry_path = swamp_registry_path()?;
+
+    let mut mounts = SeqMap::new();
+    mounts
+        .insert("crate".to_string(), local_path.to_path_buf())
+        .unwrap();
+
+    mounts
+        .insert("registry".to_string(), registry_path.to_path_buf())
+        .unwrap();
+
+    Ok(SourceMap::new(&mounts))
+}
+
 pub fn parse_dependant_modules_and_resolve(
-    base_path: PathBuf,
     module_path: Vec<String>,
     dependency_parser: &mut DependencyParser,
     source_map: &mut SourceMap,
 ) -> Result<Vec<Vec<String>>, DepLoaderError> {
     debug!(current_directory=?get_current_dir().expect("failed to get current directory"), "current directory");
-    let parse_root = ParseRoot::new(base_path);
-
-    dependency_parser.parse_all_dependant_modules(parse_root, &module_path, source_map)?;
+    dependency_parser.parse_local_modules(&module_path, source_map)?;
 
     let module_paths_in_order = dependency_parser.get_analysis_order()?;
 
     Ok(module_paths_in_order)
 }
 
+/*
 pub fn create_parsed_modules(
     script: &str,
     source_map: &mut SourceMap,
@@ -371,3 +449,5 @@ pub fn create_parsed_modules(
 
     Ok(graph)
 }
+
+ */
