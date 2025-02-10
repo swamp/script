@@ -7,6 +7,7 @@ use crate::err::{ResolveError, ResolveErrorKind};
 use crate::Resolver;
 use seq_map::SeqMap;
 use std::rc::Rc;
+use tracing::info;
 use swamp_script_ast::{
     AliasType, Definition, EnumVariantType, Function, LocalTypeIdentifier, Mod, Node,
     QualifiedTypeIdentifier, StructType, Use, UseItem,
@@ -244,7 +245,8 @@ impl<'a> Resolver<'a> {
         ast_struct: &StructType,
     ) -> Result<ResolvedStructTypeRef, ResolveError> {
         let mut resolved_fields = SeqMap::new();
-
+        let debug_str = self.get_text(&ast_struct.identifier.0).to_string();
+        info!(?debug_str, "struct type");
         for field_name_and_type in &ast_struct.fields {
             let resolved_type = self.resolve_type(&field_name_and_type.field_type)?;
             let name_string = self.get_text(&field_name_and_type.field_name.0).to_string();

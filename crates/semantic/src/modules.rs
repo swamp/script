@@ -19,6 +19,10 @@ pub struct ResolvedModules {
     pub constants: Vec<ResolvedConstantRef>,
 }
 
+impl ResolvedModules {
+
+}
+
 impl Default for ResolvedModules {
     fn default() -> Self {
         Self::new()
@@ -33,6 +37,8 @@ pub struct ResolvedModule {
 
 impl Debug for ResolvedModule {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "namespace: {:?}", self.namespace)?;
+        
         for resolved_def in &self.definitions {
             writeln!(f, "{resolved_def:?}")?;
         }
@@ -95,6 +101,13 @@ impl ResolvedModules {
         self.modules.insert(
             module.clone().borrow().namespace.borrow().path.clone(),
             module,
+        );
+    }
+
+    pub fn link_module(&mut self, module_path: &[String], referred_module: ResolvedModuleRef) {
+        self.modules.insert(
+            module_path.to_vec(),
+            referred_module,
         );
     }
 

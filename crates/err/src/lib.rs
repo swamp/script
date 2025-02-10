@@ -10,12 +10,40 @@ use std::io;
 use std::io::{stderr, Write};
 use swamp_script_analyzer::err::ResolveErrorKind;
 use swamp_script_analyzer::prelude::ResolveError;
-use swamp_script_compile::ScriptResolveError;
+use swamp_script_dep_loader::{DepLoaderError, DependencyError};
 use swamp_script_eval::err::ExecuteErrorKind;
 use swamp_script_eval::prelude::ExecuteError;
 use swamp_script_parser::SpecificError;
 use swamp_script_semantic::Span;
 use swamp_script_source_map::{FileId, SourceMap};
+
+
+
+#[derive(Debug)]
+pub enum ScriptResolveError {
+    ResolveError(ResolveError),
+    DepLoaderError(DepLoaderError),
+    DependencyError(DependencyError),
+}
+
+impl From<DependencyError> for ScriptResolveError {
+    fn from(err: DependencyError) -> Self {
+        Self::DependencyError(err)
+    }
+}
+
+impl From<ResolveError> for ScriptResolveError {
+    fn from(err: ResolveError) -> Self {
+        Self::ResolveError(err)
+    }
+}
+
+impl From<DepLoaderError> for ScriptResolveError {
+    fn from(err: DepLoaderError) -> Self {
+        Self::DepLoaderError(err)
+    }
+}
+
 
 pub struct SourceLinesWrap<'a> {
     pub file_id: FileId,

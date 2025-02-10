@@ -9,9 +9,9 @@ use std::io;
 use std::path::{Path, PathBuf};
 use swamp_script_analyzer::prelude::ResolveError;
 use swamp_script_analyzer::ResolvedProgram;
-use swamp_script_compile::{compile_and_analyze, ScriptResolveError};
+use swamp_script_compile::{compile_analyze_and_link_without_version, compile_and_analyze};
 use swamp_script_dep_loader::{create_source_map, DepLoaderError};
-use swamp_script_error_report::show_script_resolve_error;
+use swamp_script_error_report::{show_script_resolve_error, ScriptResolveError};
 use swamp_script_eval::err::ExecuteError;
 use swamp_script_parser::prelude::*;
 use tracing_subscriber::EnvFilter;
@@ -152,20 +152,21 @@ fn build(root_path: &Path, root_module: &str) -> Result<(), CliError> {
     let mut resolved_program = ResolvedProgram::new();
 
     // mangrove::render
-    let mangrove_render_result = compile_and_analyze(
-        &["mangrove-0.0.0".to_string(), "render".to_string()],
+    let mangrove_render_module_path = &["mangrove-0.0.0".to_string(), "render".to_string()];
+    compile_analyze_and_link_without_version(
+        mangrove_render_module_path,
         &mut resolved_program,
         &mut source_map,
-    );
+    )?;
 
-    match mangrove_render_result {
-        Ok(program) => {
-            eprintln!("{program:?}");
-        }
-        Err(err) => {
-            show_script_resolve_error(&err, &source_map);
-        }
-    }
+
+    // mangrove::collection
+    let mangrove_collection_module_path = &["mangrove-0.0.0".to_string(), "collection".to_string()];
+    compile_analyze_and_link_without_version(
+        mangrove_collection_module_path,
+        &mut resolved_program,
+        &mut source_map,
+    )?;
 
     let result = compile_and_analyze(
         &["crate".to_string(), root_module.to_string()],

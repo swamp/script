@@ -203,7 +203,8 @@ pub fn mount_name_from_path(path: &[String]) -> (&str, &[String]) {
 }
 
 impl DependencyParser {
-    pub fn parse_local_modules(
+
+     pub fn parse_local_modules(
         &mut self,
         module_path: &[String],
         source_map: &mut SourceMap,
@@ -407,7 +408,7 @@ pub fn create_source_map(local_path: &Path) -> io::Result<SourceMap> {
     Ok(SourceMap::new(&mounts))
 }
 
-pub fn parse_dependant_modules_and_resolve(
+pub fn parse_local_modules_and_get_order(
     module_path: Vec<String>,
     dependency_parser: &mut DependencyParser,
     source_map: &mut SourceMap,

@@ -2,39 +2,17 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
+use regex::Regex;
 use swamp_script_analyzer::prelude::ResolveError;
 use swamp_script_analyzer::prelude::ResolvedProgram;
 use swamp_script_dep_loader::{
-    parse_dependant_modules_and_resolve, DepLoaderError, DependencyError, DependencyParser,
+    parse_local_modules_and_get_order, DepLoaderError, DependencyError, DependencyParser,
     ParseModule,
 };
+use swamp_script_error_report::{show_script_resolve_error, ScriptResolveError};
 use swamp_script_eval_loader::resolve_program;
 use swamp_script_source_map::SourceMap;
-
-#[derive(Debug)]
-pub enum ScriptResolveError {
-    ResolveError(ResolveError),
-    DepLoaderError(DepLoaderError),
-    DependencyError(DependencyError),
-}
-
-impl From<DependencyError> for ScriptResolveError {
-    fn from(err: DependencyError) -> Self {
-        Self::DependencyError(err)
-    }
-}
-
-impl From<ResolveError> for ScriptResolveError {
-    fn from(err: ResolveError) -> Self {
-        Self::ResolveError(err)
-    }
-}
-
-impl From<DepLoaderError> for ScriptResolveError {
-    fn from(err: DepLoaderError) -> Self {
-        Self::DepLoaderError(err)
-    }
-}
+use tracing::info;
 
 pub fn compile_and_resolve(
     module_path: &[String],
@@ -44,7 +22,7 @@ pub fn compile_and_resolve(
     let mut dependency_parser = DependencyParser::new();
     dependency_parser.add_ast_module(module_path.to_vec(), parse_module);
 
-    let module_paths_in_order = parse_dependant_modules_and_resolve(
+    let module_paths_in_order = parse_local_modules_and_get_order(
         module_path.to_vec(),
         &mut dependency_parser,
         source_map,
@@ -69,7 +47,7 @@ pub fn compile_and_resolve_to_program(
 ) -> Result<(), ScriptResolveError> {
     let mut dependency_parser = DependencyParser::new();
 
-    let module_paths_in_order = parse_dependant_modules_and_resolve(
+    let module_paths_in_order = parse_local_modules_and_get_order(
         module_path.to_vec(),
         &mut dependency_parser,
         source_map,
@@ -86,10 +64,60 @@ pub fn compile_and_resolve_to_program(
     Ok(())
 }
 
+
+pub fn remove_version_from_package_name_regex(package_name_with_version: &str) -> String {
+    let re = Regex::new(r"-(?P<version>[0-9]+(?:\.[0-9]+)*(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?)?(?:\+.*)?$").unwrap();
+    re.replace(package_name_with_version, "").to_string()
+}
+
+
+pub fn compile_analyze_and_link_without_version(
+    root_module_path: &[String],
+    resolved_program: &mut ResolvedProgram,
+    source_map: &mut SourceMap,
+) -> Result<(), ScriptResolveError> {
+    let mangrove_render_result = compile_and_analyze(
+        root_module_path,
+        resolved_program,
+        source_map,
+    );
+
+    match mangrove_render_result {
+        Ok(program) => {
+            eprintln!("{program:?}");
+        }
+        Err(err) => {
+            show_script_resolve_error(&err, &source_map);
+            Err(err)?;
+        }
+    }
+    let mangrove_render_module = resolved_program.modules.get(root_module_path).unwrap();
+    info!(module=?mangrove_render_module.borrow(), "render module");
+
+    let first_part = remove_version_from_package_name_regex(&*root_module_path[0]);
+    let mut without_version_path: Vec<String> = root_module_path.to_vec();
+    without_version_path[0] = first_part;
+    
+    resolved_program.modules.link_module(&*without_version_path, mangrove_render_module);
+    Ok(())
+}
+
 /// # Errors
 ///
 pub fn compile_and_analyze(
     root_module_path: &[String],
+    resolved_program: &mut ResolvedProgram,
+    source_map: &mut SourceMap,
+) -> Result<(), ScriptResolveError> {
+    compile_and_resolve_to_program(root_module_path, resolved_program, source_map)
+}
+
+
+/// # Errors
+///
+pub fn compile_and_analyze_alias(
+    root_module_path: &[String],
+    start_alias: &str,
     resolved_program: &mut ResolvedProgram,
     source_map: &mut SourceMap,
 ) -> Result<(), ScriptResolveError> {

@@ -65,7 +65,7 @@ pub fn resolve_program(
 ) -> Result<(), ResolveError> {
     for module_path in module_paths_in_order {
         if let Some(parse_module) = parsed_modules.get_parsed_module(module_path) {
-            if let Some(_found_module) = modules.get(&*module_path.clone()) {
+            if let Some(_found_module) = modules.get(&module_path.clone()) {
                 let _maybe_expression = resolve_to_existing_module(
                     state,
                     modules,
