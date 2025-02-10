@@ -64,23 +64,21 @@ pub fn compile_and_resolve_to_program(
     Ok(())
 }
 
-
 pub fn remove_version_from_package_name_regex(package_name_with_version: &str) -> String {
-    let re = Regex::new(r"-(?P<version>[0-9]+(?:\.[0-9]+)*(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?)?(?:\+.*)?$").unwrap();
+    let re = Regex::new(
+        r"-(?P<version>[0-9]+(?:\.[0-9]+)*(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?)?(?:\+.*)?$",
+    )
+    .unwrap();
     re.replace(package_name_with_version, "").to_string()
 }
-
 
 pub fn compile_analyze_and_link_without_version(
     root_module_path: &[String],
     resolved_program: &mut ResolvedProgram,
     source_map: &mut SourceMap,
 ) -> Result<(), ScriptResolveError> {
-    let mangrove_render_result = compile_and_analyze(
-        root_module_path,
-        resolved_program,
-        source_map,
-    );
+    let mangrove_render_result =
+        compile_and_analyze(root_module_path, resolved_program, source_map);
 
     match mangrove_render_result {
         Ok(program) => {
@@ -97,8 +95,10 @@ pub fn compile_analyze_and_link_without_version(
     let first_part = remove_version_from_package_name_regex(&*root_module_path[0]);
     let mut without_version_path: Vec<String> = root_module_path.to_vec();
     without_version_path[0] = first_part;
-    
-    resolved_program.modules.link_module(&*without_version_path, mangrove_render_module);
+
+    resolved_program
+        .modules
+        .link_module(&*without_version_path, mangrove_render_module);
     Ok(())
 }
 
@@ -111,7 +111,6 @@ pub fn compile_and_analyze(
 ) -> Result<(), ScriptResolveError> {
     compile_and_resolve_to_program(root_module_path, resolved_program, source_map)
 }
-
 
 /// # Errors
 ///

@@ -2,7 +2,6 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use crate::ResolvedAliasTypeRef;
 use crate::{
     ResolvedAliasType, ResolvedAnonymousStructFieldType, ResolvedAnonymousStructType,
     ResolvedConstantRef, ResolvedEnumType, ResolvedEnumTypeRef, ResolvedEnumVariantType,
@@ -11,25 +10,25 @@ use crate::{
     ResolvedInternalFunctionDefinitionRef, ResolvedNode, ResolvedRustType, ResolvedRustTypeRef,
     ResolvedStructType, ResolvedStructTypeRef, ResolvedType, SemanticError,
 };
+use crate::{ResolvedAliasTypeRef, ResolvedParametricType, ResolvedParametricTypeRef};
 use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::fmt::Debug;
 use std::rc::Rc;
+use tracing::info;
 
 #[derive(Debug, Clone)]
 pub struct ResolvedModulePathStr(pub Vec<String>);
 
 #[derive(Debug)]
 pub struct ResolvedModuleNamespace {
-    #[allow(unused)]
     structs: SeqMap<String, ResolvedStructTypeRef>,
     aliases: SeqMap<String, ResolvedAliasTypeRef>,
     constants: SeqMap<String, ResolvedConstantRef>,
+    parametrics: SeqMap<String, ResolvedParametricTypeRef>,
 
-    #[allow(unused)]
     build_in_rust_types: SeqMap<String, ResolvedRustTypeRef>,
 
-    #[allow(unused)]
     enum_types: SeqMap<String, ResolvedEnumTypeRef>,
     //enum_variant_types: SeqMap<String, ResolvedEnumVariantTypeRef>,
     internal_functions: SeqMap<String, ResolvedInternalFunctionDefinitionRef>,
@@ -57,6 +56,7 @@ impl ResolvedModuleNamespace {
             internal_functions: SeqMap::default(),
             external_function_declarations: SeqMap::default(),
             constants: SeqMap::default(),
+            parametrics: SeqMap::default(),
             path: path.to_vec(),
         }
     }
@@ -104,6 +104,20 @@ impl ResolvedModuleNamespace {
         Ok(struct_ref)
     }
 
+    pub fn add_parametric(
+        &mut self,
+        parametric: ResolvedParametricType,
+    ) -> Result<ResolvedParametricTypeRef, SemanticError> {
+        let name = parametric.assigned_name();
+        info!(?name, "ADDING PARAMETRIC");
+        let parametric_ref = Rc::new(parametric);
+        self.parametrics
+            .insert(name.clone(), parametric_ref.clone())
+            .map_err(|_| SemanticError::DuplicateStructName(name))?;
+
+        Ok(parametric_ref)
+    }
+
     pub fn add_struct_ref(
         &mut self,
         struct_type_ref: ResolvedStructTypeRef,
@@ -111,6 +125,17 @@ impl ResolvedModuleNamespace {
         let name = struct_type_ref.borrow().assigned_name.clone();
         self.structs
             .insert(name.clone(), struct_type_ref)
+            .map_err(|_| SemanticError::DuplicateStructName(name))?;
+        Ok(())
+    }
+
+    pub fn add_parametric_ref(
+        &mut self,
+        parametric_ref: ResolvedParametricTypeRef,
+    ) -> Result<(), SemanticError> {
+        let name = parametric_ref.assigned_name().clone();
+        self.parametrics
+            .insert(name.clone(), parametric_ref)
             .map_err(|_| SemanticError::DuplicateStructName(name))?;
         Ok(())
     }
@@ -234,6 +259,10 @@ impl ResolvedModuleNamespace {
             }
         }
         self.structs.get(&name.to_string()).cloned()
+    }
+
+    pub fn get_parametric(&self, name: &str) -> Option<ResolvedParametricTypeRef> {
+        self.parametrics.get(&name.to_string()).cloned()
     }
 
     pub fn get_alias(&self, name: &str) -> Option<ResolvedAliasTypeRef> {

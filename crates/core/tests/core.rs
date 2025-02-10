@@ -50,7 +50,7 @@ fn serialize() {
     assert_eq!(serialized_octet_size, 18);
 
     let sparse_generic_type =
-        ResolvedType::Generic(Box::from(sparse_map_type), vec![ResolvedType::Int]);
+        ResolvedType::Concrete(Box::from(sparse_map_type), vec![ResolvedType::Int]);
 
     let (deserialized_value, deserialized_octet_size) =
         quick_deserialize(&sparse_generic_type, &buf, 0);

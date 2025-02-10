@@ -122,6 +122,7 @@ pub enum ResolveErrorKind {
     SelfNotCorrectType,
     IllegalIndexInChain,
     CanNotNoneCoalesce,
+    UnknownParametricType,
 }
 
 impl From<SemanticError> for ResolveError {

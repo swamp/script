@@ -44,23 +44,27 @@ impl<'a> Resolver<'a> {
     ) -> Result<ResolvedType, ResolveError> {
         let (path, text) = self.get_path(type_name_to_find);
 
-        let resolved_type =
-            if let Some(found) = self.shared.lookup.get_alias_referred_type(&path, &text) {
-                found
-            } else if let Some(found) = self.shared.lookup.get_struct(&path, &text) {
-                ResolvedType::Struct(found)
-            } else if let Some(found) = self.shared.lookup.get_enum(&path, &text) {
-                ResolvedType::Enum(found)
-            } else if let Some(found) = self.shared.lookup.get_rust_type(&path, &text) {
-                ResolvedType::RustType(found)
-            } else {
-                Err(self.create_err(
-                    ResolveErrorKind::UnknownTypeReference,
-                    &type_name_to_find.name.0,
-                ))?
-            };
+        if type_name_to_find.generic_params.is_empty() {
+            let resolved_type =
+                if let Some(found) = self.shared.lookup.get_alias_referred_type(&path, &text) {
+                    found
+                } else if let Some(found) = self.shared.lookup.get_struct(&path, &text) {
+                    ResolvedType::Struct(found)
+                } else if let Some(found) = self.shared.lookup.get_enum(&path, &text) {
+                    ResolvedType::Enum(found)
+                } else if let Some(found) = self.shared.lookup.get_rust_type(&path, &text) {
+                    ResolvedType::RustType(found)
+                } else {
+                    Err(self.create_err(
+                        ResolveErrorKind::UnknownTypeReference,
+                        &type_name_to_find.name.0,
+                    ))?
+                };
 
-        Ok(resolved_type)
+            Ok(resolved_type)
+        } else {
+            self.concretize(&type_name_to_find)
+        }
     }
 
     /// # Errors
@@ -127,9 +131,8 @@ impl<'a> Resolver<'a> {
             Type::Tuple(types) => {
                 ResolvedType::Tuple(ResolvedTupleType(self.resolve_types(types)?).into())
             }
-            Type::Generic(base_type, generic_types) => {
-                let base_type = self.resolve_type(base_type)?;
-                ResolvedType::Generic(Box::new(base_type), self.resolve_types(generic_types)?)
+            Type::Generic(type_identifier_with_params) => {
+                self.concretize(type_identifier_with_params)?
             }
             Type::Enum(_) => todo!(),
             Type::Named(ast_type_reference) => self.find_named_type(ast_type_reference)?,
@@ -177,5 +180,17 @@ impl<'a> Resolver<'a> {
         }
 
         Ok(vec)
+    }
+
+    fn concretize(
+        &self,
+        parameterize_definition: &QualifiedTypeIdentifier,
+    ) -> Result<ResolvedType, ResolveError> {
+        self.get_text(&parameterize_definition.name.0);
+        //self.shared
+        //  .lookup
+        //.get_parametric_definition(parameterize_definition);
+
+        Ok(ResolvedType::Unit)
     }
 }

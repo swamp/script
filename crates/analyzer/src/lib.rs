@@ -32,8 +32,9 @@ use swamp_script_ast::{
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
     ResolvedArgumentExpressionOrLocation, ResolvedLocationAccess, ResolvedLocationAccessKind,
-    ResolvedMutOrImmutableExpression, ResolvedNormalPattern, ResolvedPostfix, ResolvedPostfixKind,
-    ResolvedRangeMode, ResolvedSingleLocationExpression, ResolvedSingleLocationExpressionKind,
+    ResolvedMutOrImmutableExpression, ResolvedNormalPattern, ResolvedParametricType,
+    ResolvedParametricTypeRef, ResolvedPostfix, ResolvedPostfixKind, ResolvedRangeMode,
+    ResolvedSingleLocationExpression, ResolvedSingleLocationExpressionKind,
     ResolvedSingleMutLocationExpression, ResolvedTypeWithMut, ResolvedWhenBinding,
 };
 use swamp_script_source_map::SourceMap;
@@ -652,6 +653,26 @@ impl<'a> Resolver<'a> {
         Ok(struct_ref)
     }
 
+    fn get_parametric_type(
+        &self,
+        qualified_type_identifier: &QualifiedTypeIdentifier,
+    ) -> Result<ResolvedParametricTypeRef, ResolveError> {
+        let (path, name) = self.get_path(qualified_type_identifier);
+
+        let parametric_type_ref =
+            self.shared
+                .lookup
+                .get_parametric(&path, &name)
+                .ok_or_else(|| {
+                    self.create_err(
+                        ResolveErrorKind::UnknownParametricType,
+                        &qualified_type_identifier.name.0,
+                    )
+                })?;
+
+        Ok(parametric_type_ref)
+    }
+
     fn create_default_value_for_type(
         &mut self,
         node: &Node,
@@ -974,41 +995,42 @@ impl<'a> Resolver<'a> {
                             tv.is_mutable = false;
                         }
 
-                        ResolvedType::Generic(base, generic_type_parameters) => match &**base {
-                            ResolvedType::RustType(found_rust_type) => {
-                                if found_rust_type.number == SPARSE_TYPE_ID {
-                                    let sparse_id = self
-                                        .shared
-                                        .lookup
-                                        .get_rust_type(&["std".to_string()], "SparseId")
-                                        .expect("SparseId is missing");
-                                    let contained_type = &generic_type_parameters[0];
-                                    let resolved_key = self.resolve_expression(
-                                        index_expr,
-                                        Some(&ResolvedType::RustType(sparse_id)),
-                                    )?;
+                        ResolvedType::RustType(found_rust_type) => {
+                            if found_rust_type.number == SPARSE_TYPE_ID {
+                                /*
+                                let sparse_id = self
+                                    .shared
+                                    .lookup
+                                    .get_rust_type(&["std".to_string()], "SparseId")
+                                    .expect("SparseId is missing");
+                                let contained_type = &generic_type_parameters[0];
+                                let resolved_key = self.resolve_expression(
+                                    index_expr,
+                                    Some(&ResolvedType::RustType(sparse_id)),
+                                )?;
 
-                                    let return_type =
-                                        ResolvedType::Optional(Box::new(contained_type.clone()));
+                                let return_type =
+                                    ResolvedType::Optional(Box::new(contained_type.clone()));
 
-                                    self.add_postfix(
-                                        &mut suffixes,
-                                        ResolvedPostfixKind::RustTypeIndexRef(
-                                            found_rust_type.clone(),
-                                            resolved_key,
-                                        ),
-                                        return_type.clone(),
-                                        &index_expr.node,
-                                    );
+                                self.add_postfix(
+                                    &mut suffixes,
+                                    ResolvedPostfixKind::RustTypeIndexRef(
+                                        found_rust_type.clone(),
+                                        resolved_key,
+                                    ),
+                                    return_type.clone(),
+                                    &index_expr.node,
+                                );
 
-                                    tv.resolved_type = return_type;
-                                    tv.is_mutable = false;
-                                } else {
-                                    panic!("unknown generic type lookup")
-                                }
+                                tv.resolved_type = return_type;
+                                tv.is_mutable = false;
+
+                                 */
+                            } else {
+                                panic!("unknown generic type lookup")
                             }
-                            _ => panic!("not supported"),
-                        },
+                        }
+
                         _ => {
                             return Err(self.create_err(
                                 ResolveErrorKind::ExpectedArray(collection_type),
@@ -1130,7 +1152,8 @@ impl<'a> Resolver<'a> {
             ),
             ResolvedType::String => (Some(ResolvedType::Int), ResolvedType::String),
             ResolvedType::Iterable(item_type) => (None, *item_type.clone()),
-            ResolvedType::Generic(_base_type, params) => {
+            ResolvedType::RustType(_rust_type_ref) => {
+                /*
                 // TODO: HACK: We assume it is a container that iterates over the type parameters
                 // TODO: HACK: We assume that it is a sparse map
                 // TODO: HACK: Remove hardcoded number
@@ -1141,6 +1164,10 @@ impl<'a> Resolver<'a> {
                     .expect("SparseId was missing");
                 let rust_id_type = ResolvedType::RustType(rust_type_ref_for_id);
                 (Some(rust_id_type), params[0].clone())
+
+                 */
+                // TODO: FIX THIS
+                (None, ResolvedType::Unit)
             }
             _ => {
                 return Err(
@@ -2045,33 +2072,31 @@ impl<'a> Resolver<'a> {
                             ty = lookup_type;
                         }
 
-                        ResolvedType::Generic(collection_type, generic_params) => {
-                            if let ResolvedType::RustType(rust_type) = &**collection_type {
-                                let val_type = generic_params[0].clone();
-                                if rust_type.number == SPARSE_TYPE_ID {
-                                    let sparse_id_type = self
-                                        .shared
-                                        .lookup
-                                        .get_rust_type(&["std".to_string()], "SparseId")
-                                        .expect("should have SparseId");
+                        ResolvedType::RustType(rust_type) => {
+                            let val_type = ResolvedType::Unit; // TODO: generic_params[0].clone();
+                            if rust_type.number == SPARSE_TYPE_ID {
+                                let sparse_id_type = self
+                                    .shared
+                                    .lookup
+                                    .get_rust_type(&["std".to_string()], "SparseId")
+                                    .expect("should have SparseId");
 
-                                    let key_type = ResolvedType::RustType(sparse_id_type);
+                                let key_type = ResolvedType::RustType(sparse_id_type);
 
-                                    let key_expr = self
-                                        .resolve_expression(lookup_expr, Some(&key_type.clone()))?;
+                                let key_expr =
+                                    self.resolve_expression(lookup_expr, Some(&key_type.clone()))?;
 
-                                    self.add_location_item(
-                                        &mut items,
-                                        ResolvedLocationAccessKind::RustTypeIndex(
-                                            rust_type.clone(),
-                                            key_expr,
-                                        ),
-                                        key_type.clone(),
-                                        &lookup_expr.node,
-                                    );
+                                self.add_location_item(
+                                    &mut items,
+                                    ResolvedLocationAccessKind::RustTypeIndex(
+                                        rust_type.clone(),
+                                        key_expr,
+                                    ),
+                                    key_type.clone(),
+                                    &lookup_expr.node,
+                                );
 
-                                    ty = ResolvedType::Optional(Box::from(val_type.clone()));
-                                }
+                                ty = ResolvedType::Optional(Box::from(val_type.clone()));
                             }
                         }
 

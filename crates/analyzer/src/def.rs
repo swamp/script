@@ -2,12 +2,11 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-
 use crate::err::{ResolveError, ResolveErrorKind};
 use crate::Resolver;
 use seq_map::SeqMap;
+use std::cell::RefCell;
 use std::rc::Rc;
-use tracing::info;
 use swamp_script_ast::{
     AliasType, Definition, EnumVariantType, Function, LocalTypeIdentifier, Mod, Node,
     QualifiedTypeIdentifier, StructType, Use, UseItem,
@@ -19,9 +18,11 @@ use swamp_script_semantic::{
     ResolvedEnumVariantSimpleType, ResolvedEnumVariantSimpleTypeRef, ResolvedEnumVariantStructType,
     ResolvedEnumVariantTupleType, ResolvedEnumVariantType, ResolvedExternalFunctionDefinition,
     ResolvedFunction, ResolvedInternalFunctionDefinition, ResolvedLocalIdentifier,
-    ResolvedLocalTypeIdentifier, ResolvedMod, ResolvedParameterNode, ResolvedStructType,
-    ResolvedStructTypeRef, ResolvedType, ResolvedTypeForParameter, ResolvedUse, ResolvedUseItem,
+    ResolvedLocalTypeIdentifier, ResolvedMod, ResolvedParameterNode, ResolvedParametricType,
+    ResolvedStructType, ResolvedStructTypeRef, ResolvedType, ResolvedTypeForParameter,
+    ResolvedTypeParameterName, ResolvedUse, ResolvedUseItem,
 };
+use tracing::info;
 
 impl<'a> Resolver<'a> {
     fn resolve_use_definition(
@@ -51,12 +52,14 @@ impl<'a> Resolver<'a> {
                     let ident = ResolvedUseItem::Identifier(ident_resolved_node.clone());
                     let ident_text = self.get_text_resolved(&ident_resolved_node);
 
-                    lookup.get_internal_function(&path, ident_text).ok_or(
-                        self.create_err_resolved(
-                            ResolveErrorKind::UnknownTypeReference,
-                            &ident_resolved_node,
-                        ),
-                    )?;
+                    lookup
+                        .get_internal_function(&path, ident_text)
+                        .ok_or_else(|| {
+                            self.create_err_resolved(
+                                ResolveErrorKind::UnknownTypeReference,
+                                &ident_resolved_node,
+                            )
+                        })?;
                     if let Some(found_internal_function) =
                         lookup.get_internal_function(&path, ident_text)
                     {
@@ -79,11 +82,15 @@ impl<'a> Resolver<'a> {
                 UseItem::Type(node) => {
                     let ident_resolved_node = self.to_node(&node.0);
                     let ident_text = self.get_text_resolved(&ident_resolved_node);
+                    info!(?ident_text, "USING TYPE");
 
                     if let Some(found_struct) = lookup.get_struct(&path, ident_text) {
                         lookup.add_struct_link(found_struct)?;
                     } else if let Some(found_enum) = lookup.get_enum(&path, ident_text) {
                         lookup.add_enum_link(found_enum)?;
+                    } else if let Some(found_parametric) = lookup.get_parametric(&path, ident_text)
+                    {
+                        lookup.add_parametric_link(found_parametric)?;
                     } else {
                         return Err(self.create_err_resolved(
                             ResolveErrorKind::UnknownTypeReference,
@@ -243,7 +250,7 @@ impl<'a> Resolver<'a> {
     pub fn resolve_struct_type_definition(
         &mut self,
         ast_struct: &StructType,
-    ) -> Result<ResolvedStructTypeRef, ResolveError> {
+    ) -> Result<ResolvedDefinition, ResolveError> {
         let mut resolved_fields = SeqMap::new();
         let debug_str = self.get_text(&ast_struct.identifier.0).to_string();
         info!(?debug_str, "struct type");
@@ -278,9 +285,26 @@ impl<'a> Resolver<'a> {
             resolved_anon_struct,
         );
 
-        let resolved_struct_ref = self.shared.lookup.add_struct(resolved_struct)?;
+        if ast_struct.type_parameter_names.is_empty() {
+            let resolved_struct_ref = self.shared.lookup.add_struct(resolved_struct)?;
+            return Ok(ResolvedDefinition::StructType(resolved_struct_ref));
+        } else {
+            let mut names = Vec::new();
+            for local_type_identifier in &ast_struct.type_parameter_names {
+                let resolved_name = ResolvedTypeParameterName {
+                    resolved_node: self.to_node(&local_type_identifier.0),
+                };
 
-        Ok(resolved_struct_ref)
+                names.push(resolved_name);
+            }
+            let base_type = ResolvedType::Struct(Rc::new(RefCell::new(resolved_struct)));
+            let parametric_type = ResolvedParametricType {
+                base: base_type,
+                names,
+            };
+            let parametric_type_ref = self.shared.lookup.add_parametric(parametric_type)?;
+            Ok(ResolvedDefinition::ParametricType(parametric_type_ref))
+        }
     }
 
     fn resolve_function_definition(
@@ -362,8 +386,9 @@ impl<'a> Resolver<'a> {
     ) -> Result<ResolvedDefinition, ResolveError> {
         let resolved_def = match ast_def {
             Definition::StructDef(ref ast_struct) => {
-                ResolvedDefinition::StructType(self.resolve_struct_type_definition(ast_struct)?)
+                self.resolve_struct_type_definition(ast_struct)?
             }
+
             Definition::AliasDef(ref alias_def) => {
                 ResolvedDefinition::AliasType(self.resolve_alias_type_definition(alias_def)?)
             }

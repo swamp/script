@@ -63,13 +63,13 @@ impl<'a> Resolver<'a> {
 
     pub(crate) fn check_for_internal_static_call(
         &mut self,
-        type_name: &QualifiedTypeIdentifier,
+        qualified_type_reference: &QualifiedTypeIdentifier,
         function_name: &Node,
         arguments: &[MutableOrImmutableExpression],
     ) -> Result<Option<ResolvedExpression>, ResolveError> {
         let (type_name_text, function_name_text) = {
             (
-                self.get_text(&type_name.name.0).to_string(),
+                self.get_text(&qualified_type_reference.name.0).to_string(),
                 self.get_text(function_name),
             )
         };
@@ -81,7 +81,8 @@ impl<'a> Resolver<'a> {
                     function_name,
                 ));
             }
-            let resolved_generic_type_parameters = self.resolve_types(&type_name.generic_params)?;
+            let resolved_generic_type_parameters =
+                self.resolve_types(&qualified_type_reference.generic_params)?;
             if resolved_generic_type_parameters.len() != 1 {
                 return Err(self.create_err(
                     ResolveErrorKind::WrongNumberOfTypeArguments(
@@ -93,23 +94,18 @@ impl<'a> Resolver<'a> {
             }
 
             let rust_type_ref = Rc::new(ResolvedRustType {
-                type_name: type_name_text,
+                type_name: type_name_text.clone(),
                 number: SPARSE_TYPE_ID, // TODO: FIX hardcoded number
             });
 
-            let rust_type_base = ResolvedType::RustType(rust_type_ref.clone());
-
-            let generic_specific_type = ResolvedType::Generic(
-                Box::from(rust_type_base.clone()),
-                resolved_generic_type_parameters.clone(),
-            );
+            let concrete_sparse_type = ResolvedType::RustType(rust_type_ref.clone());
 
             let value_item_type = resolved_generic_type_parameters[0].clone();
 
             let expr = self.create_expr(
                 ResolvedExpressionKind::SparseNew(rust_type_ref, value_item_type),
-                generic_specific_type,
-                &type_name.name.0,
+                concrete_sparse_type,
+                &qualified_type_reference.name.0,
             );
 
             return Ok(Some(expr));

@@ -159,7 +159,6 @@ fn build(root_path: &Path, root_module: &str) -> Result<(), CliError> {
         &mut source_map,
     )?;
 
-
     // mangrove::collection
     let mangrove_collection_module_path = &["mangrove-0.0.0".to_string(), "collection".to_string()];
     compile_analyze_and_link_without_version(

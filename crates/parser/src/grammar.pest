@@ -229,17 +229,18 @@ trait_def = {
 }
 
 impl_def = {
-    "impl" ~ type_identifier ~ "{" ~ (impl_item)* ~ "}"
+    "impl" ~ type_identifier ~  generic_type_params? ~ "{" ~ (impl_item)* ~ "}"
 }
 
 impl_item = { external_member_function | normal_member_function }
 
-struct_def        = { "struct" ~ type_identifier ~ ("{" ~ field_definitions? ~ "}")? }
+generic_type_params  = { "<" ~ type_identifier ~ (COMMA ~ type_identifier)* ~ ">" }
 
-type_def = { "type" ~ type_identifier ~ "=" ~ type_name }
-
+struct_def        = { "struct" ~ type_identifier ~ generic_type_params? ~ ("{" ~ field_definitions? ~ "}")? }
 field_definitions = { (field_def ~ (COMMA ~ field_def)* ~ TRAILING_COMMA)? }
 field_def         = { field_label ~ type_name }
+
+type_def = { "type" ~ type_identifier ~ "=" ~ type_name }
 
 enum_def = { "enum" ~ type_identifier ~ "{" ~ enum_variants? ~ "}" }
 

@@ -203,8 +203,7 @@ pub fn mount_name_from_path(path: &[String]) -> (&str, &[String]) {
 }
 
 impl DependencyParser {
-
-     pub fn parse_local_modules(
+    pub fn parse_local_modules(
         &mut self,
         module_path: &[String],
         source_map: &mut SourceMap,

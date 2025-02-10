@@ -4,7 +4,6 @@
  */
 pub mod prelude;
 
-use tracing::info;
 use pest::error::{Error, ErrorVariant, InputLocation};
 use pest::iterators::Pair;
 use pest::Parser;
@@ -20,6 +19,7 @@ use swamp_script_ast::{
 use swamp_script_ast::{Function, WhenBinding};
 use swamp_script_ast::{LiteralKind, MutableOrImmutableExpression};
 use swamp_script_ast::{Postfix, PostfixChain};
+use tracing::info;
 
 pub struct ParseResult<'a> {
     #[allow(dead_code)]
@@ -700,10 +700,38 @@ impl AstParser {
         Ok(Definition::AliasDef(alias_type))
     }
 
+    fn parse_generic_type_params(
+        &self,
+        pair: &Pair<Rule>,
+    ) -> Result<Vec<LocalTypeIdentifier>, ParseError> {
+        assert_eq!(pair.as_rule(), Rule::generic_type_params);
+        let mut type_params = Vec::new();
+        for type_identifier_pair in Self::convert_into_iterator(pair) {
+            if type_identifier_pair.as_rule() == Rule::type_identifier {
+                type_params.push(self.parse_local_type_identifier(&type_identifier_pair)?);
+            } else {
+                panic!("internal error generic type params")
+            }
+        }
+        Ok(type_params)
+    }
+
     fn parse_struct_def(&self, pair: &Pair<Rule>) -> Result<Definition, ParseError> {
-        let mut inner = Self::convert_into_iterator(pair);
+        let mut inner = Self::convert_into_iterator(pair).peekable();
 
         let struct_name = self.expect_local_type_identifier_next(&mut inner)?;
+
+        let generic_params = if let Some(generic_params_pair) = inner.peek() {
+            // Peek to see if generic params exist
+            if generic_params_pair.as_rule() == Rule::generic_type_params {
+                let generic_params_pair = inner.next().unwrap(); // Consume the generic_type_params pair
+                self.parse_generic_type_params(&generic_params_pair)?
+            } else {
+                Vec::new()
+            }
+        } else {
+            Vec::new()
+        };
 
         let field_definitions_pair_result = Self::next_pair(&mut inner);
         let mut fields = Vec::new();
@@ -724,7 +752,7 @@ impl AstParser {
             }
         }
 
-        let struct_def = StructType::new(struct_name, fields);
+        let struct_def = StructType::new(struct_name, fields, generic_params);
 
         Ok(Definition::StructDef(struct_def))
     }
@@ -877,7 +905,10 @@ impl AstParser {
         Ok(Definition::ImplDef(type_name.0, functions))
     }
 
-    fn parse_external_member_function(&self, pair: &Pair<Rule>) -> Result<FunctionDeclaration, ParseError> {
+    fn parse_external_member_function(
+        &self,
+        pair: &Pair<Rule>,
+    ) -> Result<FunctionDeclaration, ParseError> {
         let mut inner = Self::convert_into_iterator(pair);
 
         let signature_pair = Self::next_pair(&mut inner)?;
@@ -2051,7 +2082,7 @@ impl AstParser {
                         for param in Self::convert_into_iterator(&generic_params) {
                             generic_types.push(self.parse_type(param)?);
                         }
-                        Ok(Type::Generic(Box::new(base_type), generic_types))
+                        todo!() //Ok(Type::Generic(Box::new(base_type), generic_types))
                     } else {
                         Ok(base_type)
                     }
@@ -2092,6 +2123,8 @@ impl AstParser {
             Rule::qualified_type_identifier => {
                 let qualified_id = self.parse_qualified_type_identifier(&pair)?;
 
+                /*
+                TODO:
                 // Check for generic parameters
                 let remaining_pairs = pair.into_inner();
                 for next_pair in remaining_pairs {
@@ -2101,11 +2134,13 @@ impl AstParser {
                             generic_types.push(self.parse_type(param)?);
                         }
                         return Ok(Type::Generic(
-                            Box::new(Type::Named(qualified_id)),
+                            *Box::new(qualified_id),
                             generic_types,
                         ));
                     }
                 }
+
+                 */
                 Ok(Type::Named(qualified_id))
             }
             Rule::tuple_type => {

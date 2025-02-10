@@ -537,67 +537,58 @@ impl<'a> Resolver<'a> {
         ast_arguments: &[&Expression],
     ) -> Result<Option<ResolvedPostfix>, ResolveError> {
         // TODO: Early out
-        if let ResolvedType::Generic(generic_type, parameters) = ty.clone() {
-            if let ResolvedType::RustType(rust_type_ref) = *generic_type {
-                if rust_type_ref.as_ref().number == SPARSE_TYPE_ID {
-                    if parameters.len() != 1 {
-                        return Err(self.create_err(
-                            ResolveErrorKind::WrongNumberOfTypeArguments(parameters.len(), 1),
-                            ast_member_function_name,
-                        ));
+        if let ResolvedType::RustType(rust_type_ref) = ty.clone() {
+            if rust_type_ref.as_ref().number == SPARSE_TYPE_ID {
+                let sparse_id_type = self
+                    .shared
+                    .lookup
+                    .get_rust_type(&["std".to_string()], "SparseId")
+                    .expect("should have SparseId");
+                let key_type = ResolvedType::RustType(sparse_id_type);
+                let value_type = ResolvedType::Unit; // TODO: store type in rusttype &parameters[0];
+                let function_name_str = self.get_text(ast_member_function_name);
+
+                // TODO: Remove hack
+                let (kind, resolved_type) = match function_name_str {
+                    "add" => {
+                        if ast_arguments.len() != 1 {
+                            return Err(self.create_err(
+                                ResolveErrorKind::WrongNumberOfTypeArguments(
+                                    ast_arguments.len(),
+                                    1,
+                                ),
+                                ast_member_function_name,
+                            ));
+                        }
+                        let value =
+                            self.resolve_immutable(&ast_arguments[0], &ResolvedType::Unit)?; // TODO: FIX THIS
+                        (ResolvedPostfixKind::SparseAdd(Box::new(value)), key_type)
                     }
-                    let sparse_id_type = self
-                        .shared
-                        .lookup
-                        .get_rust_type(&["std".to_string()], "SparseId")
-                        .expect("should have SparseId");
-                    let key_type = ResolvedType::RustType(sparse_id_type);
-                    let value_type = &parameters[0];
-                    let function_name_str = self.get_text(ast_member_function_name);
-
-                    // TODO: Remove hack
-                    let (kind, resolved_type) = match function_name_str {
-                        "add" => {
-                            if ast_arguments.len() != 1 {
-                                return Err(self.create_err(
-                                    ResolveErrorKind::WrongNumberOfTypeArguments(
-                                        parameters.len(),
-                                        1,
-                                    ),
-                                    ast_member_function_name,
-                                ));
-                            }
-                            let value = self.resolve_immutable(&ast_arguments[0], value_type)?;
-                            (ResolvedPostfixKind::SparseAdd(Box::new(value)), key_type)
+                    "remove" => {
+                        if ast_arguments.len() != 1 {
+                            return Err(self.create_err(
+                                ResolveErrorKind::WrongNumberOfTypeArguments(
+                                    ast_arguments.len(),
+                                    1,
+                                ),
+                                ast_member_function_name,
+                            ));
                         }
-                        "remove" => {
-                            if ast_arguments.len() != 1 {
-                                return Err(self.create_err(
-                                    ResolveErrorKind::WrongNumberOfTypeArguments(
-                                        parameters.len(),
-                                        1,
-                                    ),
-                                    ast_member_function_name,
-                                ));
-                            }
-                            let sparse_slot_id_expression =
-                                self.resolve_immutable(&ast_arguments[0], &key_type)?;
-                            (
-                                ResolvedPostfixKind::SparseRemove(Box::new(
-                                    sparse_slot_id_expression,
-                                )),
-                                ResolvedType::Unit, //ResolvedType::Optional(value_type),
-                            )
-                        }
-                        _ => return Ok(None),
-                    };
+                        let sparse_slot_id_expression =
+                            self.resolve_immutable(&ast_arguments[0], &key_type)?;
+                        (
+                            ResolvedPostfixKind::SparseRemove(Box::new(sparse_slot_id_expression)),
+                            ResolvedType::Unit, //ResolvedType::Optional(value_type),
+                        )
+                    }
+                    _ => return Ok(None),
+                };
 
-                    return Ok(Some(self.create_postfix(
-                        kind,
-                        &resolved_type,
-                        ast_member_function_name,
-                    )));
-                }
+                return Ok(Some(self.create_postfix(
+                    kind,
+                    &resolved_type,
+                    ast_member_function_name,
+                )));
             }
         }
 

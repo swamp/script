@@ -9,9 +9,10 @@ use swamp_script_semantic::{
     ResolvedAliasType, ResolvedAliasTypeRef, ResolvedConstant, ResolvedConstantRef,
     ResolvedEnumType, ResolvedEnumTypeRef, ResolvedEnumVariantTypeRef,
     ResolvedExternalFunctionDefinitionRef, ResolvedInternalFunctionDefinition,
-    ResolvedInternalFunctionDefinitionRef, ResolvedRustTypeRef, ResolvedStructType,
-    ResolvedStructTypeRef, ResolvedType, SemanticError,
+    ResolvedInternalFunctionDefinitionRef, ResolvedParametricType, ResolvedParametricTypeRef,
+    ResolvedRustTypeRef, ResolvedStructType, ResolvedStructTypeRef, ResolvedType, SemanticError,
 };
+use tracing::info;
 
 #[derive()]
 pub struct NameLookup<'a> {
@@ -85,6 +86,12 @@ impl<'a> NameLookup<'a> {
     pub fn get_struct(&self, path: &[String], name: &str) -> Option<ResolvedStructTypeRef> {
         let namespace = self.get_namespace(path);
         namespace.map_or_else(|| None, |found_ns| found_ns.borrow().get_struct(name))
+    }
+
+    #[must_use]
+    pub fn get_parametric(&self, path: &[String], name: &str) -> Option<ResolvedParametricTypeRef> {
+        let namespace = self.get_namespace(path);
+        namespace.map_or_else(|| None, |found_ns| found_ns.borrow().get_parametric(name))
     }
 
     #[must_use]
@@ -189,6 +196,18 @@ impl<'a> NameLookup<'a> {
 
     /// # Errors
     ///
+    pub fn add_parametric(
+        &self,
+        parametric_type: ResolvedParametricType,
+    ) -> Result<ResolvedParametricTypeRef, ResolveError> {
+        Ok(self
+            .own_namespace()
+            .borrow_mut()
+            .add_parametric(parametric_type)?)
+    }
+
+    /// # Errors
+    ///
     pub fn add_enum_type(
         &mut self,
         mut enum_type: ResolvedEnumType,
@@ -225,9 +244,20 @@ impl<'a> NameLookup<'a> {
         &self,
         struct_type: ResolvedStructTypeRef,
     ) -> Result<(), SemanticError> {
+        info!(?struct_type, "linking struct in own namespace");
         self.own_namespace()
             .borrow_mut()
             .add_struct_ref(struct_type)
+    }
+
+    pub(crate) fn add_parametric_link(
+        &self,
+        struct_type: ResolvedParametricTypeRef,
+    ) -> Result<(), SemanticError> {
+        info!(?struct_type, "linking parametric in own namespace");
+        self.own_namespace()
+            .borrow_mut()
+            .add_parametric_ref(struct_type)
     }
 
     pub(crate) fn add_external_function_declaration_link(

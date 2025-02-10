@@ -17,8 +17,6 @@ use swamp_script_parser::SpecificError;
 use swamp_script_semantic::Span;
 use swamp_script_source_map::{FileId, SourceMap};
 
-
-
 #[derive(Debug)]
 pub enum ScriptResolveError {
     ResolveError(ResolveError),
@@ -43,7 +41,6 @@ impl From<DepLoaderError> for ScriptResolveError {
         Self::DepLoaderError(err)
     }
 }
-
 
 pub struct SourceLinesWrap<'a> {
     pub file_id: FileId,
@@ -500,6 +497,7 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
         &swamp_script_analyzer::err::ResolveErrorKind::IllegalIndexInChain => Report::build(Error, 140, "illegal index in chain", span),
         &swamp_script_analyzer::err::ResolveErrorKind::CanNotNoneCoalesce => todo!(),
         &ResolveErrorKind::GuardCanNotHaveMultipleWildcards | &ResolveErrorKind::WildcardMustBeLastInGuard | &ResolveErrorKind::GuardMustHaveWildcard => todo!(),
+        &swamp_script_analyzer::err::ResolveErrorKind::UnknownParametricType => todo!(),
     }
 }
 

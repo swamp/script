@@ -7,9 +7,6 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use swamp_script_semantic::{ResolvedEnumVariantType, ResolvedRustType, ResolvedType};
 
-
-
-
 /// # Panics
 ///
 #[inline]
@@ -149,42 +146,7 @@ pub fn quick_deserialize(resolved_type: &ResolvedType, buf: &[u8], depth: usize)
 
             (val, offset)
         }
-        ResolvedType::Generic(base_type, type_parameters) => {
-            if let ResolvedType::RustType(found_rust_type) = &**base_type {
-                if found_rust_type.number == SPARSE_TYPE_ID {
-                    let sparse_type_id_rust_type = Rc::new(ResolvedRustType {
-                        type_name: "SparseId".to_string(),
-                        number: SPARSE_ID_TYPE_ID, // TODO: FIX hardcoded number
-                    });
 
-                    let value_type = &type_parameters[0];
-
-                    let (internal_map, sparse_value_map_octet_size) =
-                        SparseValueMap::quick_deserialize(
-                            sparse_type_id_rust_type,
-                            value_type.clone(),
-                            buf,
-                        );
-
-                    let wrapped_internal_map: Rc<RefCell<Box<dyn RustType>>> =
-                        Rc::new(RefCell::new(Box::new(internal_map)));
-
-                    let sparse_collection_rust_type = Rc::new(ResolvedRustType {
-                        type_name: "Sparse".to_string(),
-                        number: SPARSE_TYPE_ID, // TODO: FIX hardcoded number
-                    });
-
-                    (
-                        Value::RustValue(sparse_collection_rust_type, wrapped_internal_map),
-                        sparse_value_map_octet_size,
-                    )
-                } else {
-                    panic!("unknown generic type");
-                }
-            } else {
-                panic!("unknown generic type")
-            }
-        }
         ResolvedType::Function(_) => {
             panic!("can not serialize function")
         }
@@ -223,6 +185,43 @@ pub fn quick_deserialize(resolved_type: &ResolvedType, buf: &[u8], depth: usize)
                 }
                 _ => panic!("can not deserialize rust types {}", rust_type_ref.type_name),
             }
+
+            /*
+             if let ResolvedType::RustType(found_rust_type) = &**base_type {
+                if found_rust_type.number == SPARSE_TYPE_ID {
+                    let sparse_type_id_rust_type = Rc::new(ResolvedRustType {
+                        type_name: "SparseId".to_string(),
+                        number: SPARSE_ID_TYPE_ID, // TODO: FIX hardcoded number
+                    });
+
+                    let value_type = &type_parameters[0];
+
+                    let (internal_map, sparse_value_map_octet_size) =
+                        SparseValueMap::quick_deserialize(
+                            sparse_type_id_rust_type,
+                            value_type.clone(),
+                            buf,
+                        );
+
+                    let wrapped_internal_map: Rc<RefCell<Box<dyn RustType>>> =
+                        Rc::new(RefCell::new(Box::new(internal_map)));
+
+                    let sparse_collection_rust_type = Rc::new(ResolvedRustType {
+                        type_name: "Sparse".to_string(),
+                        number: SPARSE_TYPE_ID, // TODO: FIX hardcoded number
+                    });
+
+                    (
+                        Value::RustValue(sparse_collection_rust_type, wrapped_internal_map),
+                        sparse_value_map_octet_size,
+                    )
+                } else {
+                    panic!("unknown generic type");
+                }
+            } else {
+                panic!("unknown generic type")
+            }
+             */
         }
     };
 

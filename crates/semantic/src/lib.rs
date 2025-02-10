@@ -177,6 +177,28 @@ impl PartialEq for ResolvedTypeForParameter {
     }
 }
 
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub struct ResolvedTypeParameterName {
+    pub resolved_node: ResolvedNode,
+}
+
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub struct ResolvedParametricType {
+    pub base: ResolvedType,
+    pub names: Vec<ResolvedTypeParameterName>,
+}
+
+impl ResolvedParametricType {
+    pub fn assigned_name(&self) -> String {
+        match &self.base {
+            ResolvedType::Struct(struct_type) => struct_type.borrow().assigned_name.clone(),
+            _ => panic!("no assigned name"),
+        }
+    }
+}
+
+pub type ResolvedParametricTypeRef = Rc<ResolvedParametricType>;
+
 #[derive(Clone, Eq, PartialEq)]
 pub enum ResolvedType {
     // Primitives
@@ -193,7 +215,6 @@ pub enum ResolvedType {
     Map(ResolvedMapTypeRef),
 
     Enum(ResolvedEnumTypeRef),
-    Generic(Box<ResolvedType>, Vec<ResolvedType>),
 
     Function(FunctionTypeSignature),
     Iterable(Box<ResolvedType>),
@@ -213,14 +234,13 @@ impl Debug for ResolvedType {
             Self::Array(array_type_ref) => write!(f, "[{:?}]", array_type_ref.item_type),
             Self::Tuple(tuple_type_ref) => write!(f, "( {:?} )", tuple_type_ref.0),
             Self::Struct(struct_type_ref) => {
-                write!(f, "{}", struct_type_ref.borrow().assigned_name)
+                write!(f, "STRUCT{}", struct_type_ref.borrow().assigned_name)
             }
             Self::Map(map_type_ref) => write!(
                 f,
                 "[{:?}:{:?}]",
                 map_type_ref.key_type, map_type_ref.value_type
             ),
-            Self::Generic(base, parameters) => write!(f, "{base:?}<{parameters:?}>"),
             Self::Enum(enum_type_ref) => write!(f, "{:?}", enum_type_ref.borrow().assigned_name),
             //            Self::EnumVariant(enum_type_variant) => {
             //              write!(f, "{:?}", enum_type_variant.assigned_name)
@@ -247,7 +267,6 @@ impl Display for ResolvedType {
             Self::Tuple(tuple) => write!(f, "({})", comma(&tuple.0)),
             Self::Struct(struct_ref) => write!(f, "{}", struct_ref.borrow().assigned_name),
             Self::Map(map_ref) => write!(f, "[{}:{}]", map_ref.key_type, map_ref.value_type),
-            Self::Generic(base_type, params) => write!(f, "{base_type}<{}>", comma(params)),
             Self::Enum(enum_type) => write!(f, "{}", enum_type.borrow().assigned_name),
             //Self::EnumVariant(variant) => write!(
             //  f,
@@ -328,22 +347,6 @@ impl ResolvedType {
                 type_ref_a.number == type_ref_b.number
             }
 
-            (Self::Generic(base_a, params_a), Self::Generic(base_b, params_b)) => {
-                if !base_a.same_type(base_b) {
-                    return false;
-                }
-
-                if params_a.len() != params_b.len() {
-                    return false;
-                }
-
-                for (param_a, param_b) in params_a.iter().zip(params_b) {
-                    if !param_a.same_type(param_b) {
-                        return false;
-                    }
-                }
-                true
-            }
             _ => false,
         }
     }
@@ -1469,6 +1472,7 @@ pub struct ResolvedMod {
 
 #[derive(Debug)]
 pub enum ResolvedDefinition {
+    ParametricType(ResolvedParametricTypeRef),
     StructType(ResolvedStructTypeRef),
     AliasType(ResolvedAliasTypeRef),
     EnumType(ResolvedEnumTypeRef),

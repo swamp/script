@@ -173,12 +173,21 @@ pub struct AliasType {
 pub struct StructType {
     pub identifier: LocalTypeIdentifier,
     pub fields: Vec<FieldType>,
+    pub type_parameter_names: Vec<LocalTypeIdentifier>,
 }
 
 impl StructType {
     #[must_use]
-    pub const fn new(identifier: LocalTypeIdentifier, fields: Vec<FieldType>) -> Self {
-        Self { identifier, fields }
+    pub const fn new(
+        identifier: LocalTypeIdentifier,
+        fields: Vec<FieldType>,
+        type_parameter_names: Vec<LocalTypeIdentifier>,
+    ) -> Self {
+        Self {
+            identifier,
+            fields,
+            type_parameter_names,
+        }
     }
 }
 
@@ -482,7 +491,7 @@ pub enum Type {
     Bool(Node),
 
     // Composite
-    Generic(Box<Type>, Vec<Type>),
+    Generic(QualifiedTypeIdentifier),
     Struct(QualifiedTypeIdentifier),
     Array(Box<Type>),
     Map(Box<Type>, Box<Type>),
