@@ -38,8 +38,8 @@ impl<'a> Resolver<'a> {
         Ok(map_type_ref)
     }
 
-    fn find_named_type(
-        &self,
+    pub(crate) fn find_named_type(
+        &mut self,
         type_name_to_find: &QualifiedTypeIdentifier,
     ) -> Result<ResolvedType, ResolveError> {
         let (path, text) = self.get_path(type_name_to_find);
@@ -183,14 +183,27 @@ impl<'a> Resolver<'a> {
     }
 
     fn concretize(
-        &self,
+        &mut self,
         parameterize_definition: &QualifiedTypeIdentifier,
     ) -> Result<ResolvedType, ResolveError> {
-        self.get_text(&parameterize_definition.name.0);
-        //self.shared
-        //  .lookup
-        //.get_parametric_definition(parameterize_definition);
+        let base_name = self.get_text(&parameterize_definition.name.0);
+        let path = self.get_module_path(&parameterize_definition.module_path);
+        let type_generator = self
+            .shared
+            .lookup
+            .get_type_generator(&path, base_name)
+            .expect("unknown type generator");
 
-        Ok(ResolvedType::Unit)
+        let mut type_params = Vec::new();
+        for type_param in &parameterize_definition.generic_params {
+            type_params.push(self.resolve_type(type_param)?);
+        }
+
+        Ok(type_generator
+            .generate_type(
+                &mut self.shared.lookup.own_namespace().borrow_mut(),
+                type_params,
+            )
+            .expect("TODO: panic message"))
     }
 }

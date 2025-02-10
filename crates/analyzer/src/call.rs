@@ -74,43 +74,6 @@ impl<'a> Resolver<'a> {
             )
         };
 
-        if type_name_text == "Sparse" && function_name_text == "new" {
-            if !arguments.is_empty() {
-                return Err(self.create_err(
-                    ResolveErrorKind::WrongNumberOfArguments(arguments.len(), 0),
-                    function_name,
-                ));
-            }
-            let resolved_generic_type_parameters =
-                self.resolve_types(&qualified_type_reference.generic_params)?;
-            if resolved_generic_type_parameters.len() != 1 {
-                return Err(self.create_err(
-                    ResolveErrorKind::WrongNumberOfTypeArguments(
-                        resolved_generic_type_parameters.len(),
-                        1,
-                    ),
-                    function_name,
-                ));
-            }
-
-            let rust_type_ref = Rc::new(ResolvedRustType {
-                type_name: type_name_text.clone(),
-                number: SPARSE_TYPE_ID, // TODO: FIX hardcoded number
-            });
-
-            let concrete_sparse_type = ResolvedType::RustType(rust_type_ref.clone());
-
-            let value_item_type = resolved_generic_type_parameters[0].clone();
-
-            let expr = self.create_expr(
-                ResolvedExpressionKind::SparseNew(rust_type_ref, value_item_type),
-                concrete_sparse_type,
-                &qualified_type_reference.name.0,
-            );
-
-            return Ok(Some(expr));
-        }
-
         Ok(None)
     }
 

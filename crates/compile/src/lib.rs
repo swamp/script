@@ -3,16 +3,11 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use regex::Regex;
-use swamp_script_analyzer::prelude::ResolveError;
 use swamp_script_analyzer::prelude::ResolvedProgram;
-use swamp_script_dep_loader::{
-    parse_local_modules_and_get_order, DepLoaderError, DependencyError, DependencyParser,
-    ParseModule,
-};
+use swamp_script_dep_loader::{parse_local_modules_and_get_order, DependencyParser, ParseModule};
 use swamp_script_error_report::{show_script_resolve_error, ScriptResolveError};
 use swamp_script_eval_loader::resolve_program;
 use swamp_script_source_map::SourceMap;
-use tracing::info;
 
 pub fn compile_and_resolve(
     module_path: &[String],
@@ -90,15 +85,14 @@ pub fn compile_analyze_and_link_without_version(
         }
     }
     let mangrove_render_module = resolved_program.modules.get(root_module_path).unwrap();
-    info!(module=?mangrove_render_module.borrow(), "render module");
 
-    let first_part = remove_version_from_package_name_regex(&*root_module_path[0]);
+    let first_part = remove_version_from_package_name_regex(&root_module_path[0]);
     let mut without_version_path: Vec<String> = root_module_path.to_vec();
     without_version_path[0] = first_part;
 
     resolved_program
         .modules
-        .link_module(&*without_version_path, mangrove_render_module);
+        .link_module(&without_version_path, mangrove_render_module);
     Ok(())
 }
 

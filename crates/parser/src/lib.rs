@@ -881,7 +881,6 @@ impl AstParser {
         let mut functions = Vec::new();
 
         for item_pair in inner {
-            info!(name=?item_pair.as_str(), "parsing");
             if item_pair.as_rule() == Rule::impl_item {
                 let inner_item = self.next_inner_pair(&item_pair)?;
                 match inner_item.as_rule() {

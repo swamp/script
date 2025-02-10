@@ -183,21 +183,15 @@ pub struct ResolvedTypeParameterName {
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
-pub struct ResolvedParametricType {
-    pub base: ResolvedType,
-    pub names: Vec<ResolvedTypeParameterName>,
+pub enum IteratorYieldType {
+    Value(ResolvedType),
+    KeyValue(ResolvedType, ResolvedType),
 }
 
-impl ResolvedParametricType {
-    pub fn assigned_name(&self) -> String {
-        match &self.base {
-            ResolvedType::Struct(struct_type) => struct_type.borrow().assigned_name.clone(),
-            _ => panic!("no assigned name"),
-        }
-    }
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub struct IteratorTypeDetails {
+    pub yield_type: IteratorYieldType,
 }
-
-pub type ResolvedParametricTypeRef = Rc<ResolvedParametricType>;
 
 #[derive(Clone, Eq, PartialEq)]
 pub enum ResolvedType {
@@ -217,7 +211,9 @@ pub enum ResolvedType {
     Enum(ResolvedEnumTypeRef),
 
     Function(FunctionTypeSignature),
-    Iterable(Box<ResolvedType>),
+
+    Range, // Only integers for now
+    Iterator(Box<IteratorTypeDetails>),
 
     Optional(Box<ResolvedType>),
     RustType(ResolvedRustTypeRef),
@@ -248,9 +244,10 @@ impl Debug for ResolvedType {
             Self::Function(function_type_signature) => {
                 write!(f, "{:?}", function_type_signature)
             }
-            Self::Iterable(type_generated) => write!(f, "Iterable<{type_generated:?}>"),
+            Self::Iterator(type_generated) => write!(f, "Iterator<{type_generated:?}>"),
             Self::Optional(base_type) => write!(f, "{base_type:?}?"),
             Self::RustType(rust_type) => write!(f, "{:?}?", rust_type.type_name),
+            Self::Range => write!(f, "Range"),
         }
     }
 }
@@ -274,9 +271,10 @@ impl Display for ResolvedType {
             //variant.owner.assigned_name, variant.assigned_name
             //),
             Self::Function(signature) => write!(f, "function {signature}"),
-            Self::Iterable(generating_type) => write!(f, "Iterable<{generating_type}>"),
+            Self::Iterator(generating_type) => write!(f, "Iterator<{generating_type:?}>"),
             Self::Optional(base_type) => write!(f, "{base_type}?"),
             Self::RustType(rust_type) => write!(f, "RustType {}", rust_type.type_name),
+            Self::Range => write!(f, "Range"),
         }
     }
 }
@@ -338,7 +336,13 @@ impl ResolvedType {
                 a.0.iter().zip(b.0.iter()).all(|(a, b)| a.same_type(b))
             }
             (Self::Enum(_), Self::Enum(_)) => true,
-            (Self::Iterable(a), Self::Iterable(b)) => a.same_type(b),
+            (Self::Iterator(a), Self::Iterator(b)) => match (&a.yield_type, &b.yield_type) {
+                (IteratorYieldType::Value(va), IteratorYieldType::Value(vb)) => va.same_type(vb),
+                (IteratorYieldType::KeyValue(ka, va), IteratorYieldType::KeyValue(kb, vb)) => {
+                    va.same_type(vb) && ka.same_type(kb)
+                }
+                _ => false,
+            },
             //(Self::EnumVariant(a), Self::EnumVariant(b)) => a.owner.number == b.owner.number,
             (Self::Optional(inner_type_a), Self::Optional(inner_type_b)) => {
                 inner_type_a.same_type(inner_type_b)
@@ -1472,7 +1476,6 @@ pub struct ResolvedMod {
 
 #[derive(Debug)]
 pub enum ResolvedDefinition {
-    ParametricType(ResolvedParametricTypeRef),
     StructType(ResolvedStructTypeRef),
     AliasType(ResolvedAliasTypeRef),
     EnumType(ResolvedEnumTypeRef),

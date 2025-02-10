@@ -150,8 +150,11 @@ pub fn quick_deserialize(resolved_type: &ResolvedType, buf: &[u8], depth: usize)
         ResolvedType::Function(_) => {
             panic!("can not serialize function")
         }
-        ResolvedType::Iterable(_) => {
-            panic!("can not serialize iterables")
+        ResolvedType::Iterator(_) => {
+            panic!("can not serialize iterators")
+        }
+        ResolvedType::Range => {
+            panic!("can not serialize ranges")
         }
         ResolvedType::Optional(optional_type_ref) => {
             let mut offset = 0;

@@ -3,17 +3,27 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use clap::{Parser, Subcommand};
+use std::cell::RefCell;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::io;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use swamp_script_analyzer::prelude::ResolveError;
 use swamp_script_analyzer::ResolvedProgram;
 use swamp_script_compile::{compile_analyze_and_link_without_version, compile_and_analyze};
+use swamp_script_core::prelude::SeqMap;
 use swamp_script_dep_loader::{create_source_map, DepLoaderError};
 use swamp_script_error_report::{show_script_resolve_error, ScriptResolveError};
 use swamp_script_eval::err::ExecuteError;
 use swamp_script_parser::prelude::*;
+use swamp_script_semantic::ns::{ClosureTypeGenerator, ResolvedModuleNamespace};
+use swamp_script_semantic::{
+    FunctionTypeSignature, IteratorTypeDetails, IteratorYieldType, ResolvedAnonymousStructType,
+    ResolvedExternalFunctionDefinition, ResolvedExternalFunctionDefinitionRef, ResolvedFunction,
+    ResolvedNode, ResolvedRustType, ResolvedRustTypeRef, ResolvedStructType, ResolvedType,
+    ResolvedTypeForParameter,
+};
 use tracing_subscriber::EnvFilter;
 
 #[derive(Parser)]
@@ -147,6 +157,7 @@ impl From<ScriptResolveError> for CliError {
 
 pub struct CliContext;
 
+#[allow(clippy::too_many_lines)]
 fn build(root_path: &Path, root_module: &str) -> Result<(), CliError> {
     let mut source_map = create_source_map(root_path)?;
     let mut resolved_program = ResolvedProgram::new();
@@ -166,6 +177,150 @@ fn build(root_path: &Path, root_module: &str) -> Result<(), CliError> {
         &mut resolved_program,
         &mut source_map,
     )?;
+    {
+        let mangrove_collection_module_path_without_version =
+            &["mangrove".to_string(), "collection".to_string()];
+        let mut mangrove_collection_module = resolved_program
+            .modules
+            .get(mangrove_collection_module_path_without_version)
+            .unwrap();
+
+        let mut md = mangrove_collection_module.borrow_mut();
+        let mut ns = md.namespace.borrow_mut();
+        /*
+        let mut defined_fields = SeqMap::new();
+        let concretized_rust_type_ref = ResolvedRustType {
+            type_name: concretized_struct_name_in_namespace,
+            number: 9, // TODO: generate number
+        };
+
+        let sparse_map_type = ResolvedType::RustType(concretized_rust_type_ref.clone());
+
+        defined_fields.insert("_hidden_rust_type", ResolvedAnonymousStructFieldType {
+            identifier: None,
+            field_type: sparse_map_type,
+        } );*/
+
+        let closure_gen = ClosureTypeGenerator::new(
+            |ns: &mut ResolvedModuleNamespace, params: &[ResolvedType]| {
+                let concretized_struct_name_in_namespace =
+                    format!("Sparse<{}>", params[0].to_string());
+                if let Some(found_concrete_struct_type) =
+                    ns.get_struct(&concretized_struct_name_in_namespace)
+                {
+                    return Ok(ResolvedType::Struct(found_concrete_struct_type));
+                }
+
+                let value_type = &params[0];
+
+                let create_struct = ResolvedStructType {
+                    name: ResolvedNode::default(),
+                    assigned_name: concretized_struct_name_in_namespace,
+                    anon_struct_type: ResolvedAnonymousStructType {
+                        defined_fields: SeqMap::default(),
+                    },
+                    functions: SeqMap::default(),
+                };
+
+                let create_struct_ref = Rc::new(RefCell::new(create_struct));
+
+                let mut functions = SeqMap::new();
+
+                // ::new()
+                let external_def_new_fn = ResolvedExternalFunctionDefinition {
+                    name: None,
+                    assigned_name: "new".to_string(),
+                    signature: FunctionTypeSignature {
+                        parameters: vec![],
+                        return_type: Box::new(ResolvedType::Struct(create_struct_ref.clone())),
+                    },
+                    id: 0,
+                };
+                let external_func = Rc::new(ResolvedFunction::External(
+                    ResolvedExternalFunctionDefinitionRef::from(external_def_new_fn),
+                ));
+                functions.insert("new".to_string(), external_func).unwrap();
+
+                let rust_type_ref_for_id = ResolvedRustType {
+                    type_name: "SparseId".to_string(),
+                    number: 999,
+                };
+
+                let sparse_id_type =
+                    ResolvedType::RustType(ResolvedRustTypeRef::from(rust_type_ref_for_id.clone()));
+
+                // ::iter()
+                let external_iter_fn = ResolvedExternalFunctionDefinition {
+                    name: None,
+                    assigned_name: "iter".to_string(),
+                    signature: FunctionTypeSignature {
+                        parameters: vec![],
+                        return_type: Box::new(ResolvedType::Iterator(Box::from(
+                            IteratorTypeDetails {
+                                yield_type: IteratorYieldType::KeyValue(
+                                    sparse_id_type,
+                                    value_type.clone(),
+                                ),
+                            },
+                        ))),
+                    },
+                    id: 0,
+                };
+                let external_iter_func = Rc::new(ResolvedFunction::External(
+                    ResolvedExternalFunctionDefinitionRef::from(external_iter_fn),
+                ));
+                functions
+                    .insert("iter".to_string(), external_iter_func)
+                    .unwrap();
+
+                // ::subscript()
+                let external_subscript_mut_fn = ResolvedExternalFunctionDefinition {
+                    name: None,
+                    assigned_name: "subscript_mut".to_string(),
+                    signature: FunctionTypeSignature {
+                        parameters: vec![
+                            ResolvedTypeForParameter {
+                                name: "self".to_string(),
+                                resolved_type: Some(ResolvedType::Struct(
+                                    create_struct_ref.clone(),
+                                )),
+                                is_mutable: true,
+                                node: None,
+                            },
+                            ResolvedTypeForParameter {
+                                name: "index".to_string(),
+                                resolved_type: Some(ResolvedType::Int),
+                                is_mutable: false,
+                                node: None,
+                            },
+                            ResolvedTypeForParameter {
+                                name: "out".to_string(),
+                                resolved_type: Some(value_type.clone()),
+                                is_mutable: true,
+                                node: None,
+                            },
+                        ],
+                        return_type: Box::from(ResolvedType::Unit),
+                    },
+                    id: 0,
+                };
+
+                let external_subscript_mut_func = Rc::new(ResolvedFunction::External(
+                    ResolvedExternalFunctionDefinitionRef::from(external_subscript_mut_fn),
+                ));
+                functions
+                    .insert("subscript_mut".to_string(), external_subscript_mut_func)
+                    .unwrap();
+
+                create_struct_ref.borrow_mut().functions = functions;
+
+                Ok(ResolvedType::Struct(create_struct_ref))
+            },
+        );
+
+        ns.add_generator("Sparse", Rc::new(closure_gen))
+            .expect("TODO: panic message");
+    }
 
     let result = compile_and_analyze(
         &["crate".to_string(), root_module.to_string()],

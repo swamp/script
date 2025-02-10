@@ -2,6 +2,7 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
+use crate::ResolvedAliasTypeRef;
 use crate::{
     ResolvedAliasType, ResolvedAnonymousStructFieldType, ResolvedAnonymousStructType,
     ResolvedConstantRef, ResolvedEnumType, ResolvedEnumTypeRef, ResolvedEnumVariantType,
@@ -10,22 +11,61 @@ use crate::{
     ResolvedInternalFunctionDefinitionRef, ResolvedNode, ResolvedRustType, ResolvedRustTypeRef,
     ResolvedStructType, ResolvedStructTypeRef, ResolvedType, SemanticError,
 };
-use crate::{ResolvedAliasTypeRef, ResolvedParametricType, ResolvedParametricTypeRef};
 use seq_map::SeqMap;
 use std::cell::RefCell;
-use std::fmt::Debug;
+use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
-use tracing::info;
 
 #[derive(Debug, Clone)]
 pub struct ResolvedModulePathStr(pub Vec<String>);
+
+pub trait TypeGenerator: 'static + Debug {
+    fn generate_type(
+        &self,
+        namespace: &mut ResolvedModuleNamespace,
+        type_arguments: Vec<ResolvedType>,
+    ) -> Result<ResolvedType, SemanticError>;
+}
+
+pub struct ClosureTypeGenerator<F> {
+    generator_fn: F,
+}
+
+impl<F> ClosureTypeGenerator<F> {
+    pub fn new(generator_fn: F) -> Self {
+        ClosureTypeGenerator { generator_fn }
+    }
+}
+
+impl<F> Debug for ClosureTypeGenerator<F>
+where
+    F: Fn(&mut ResolvedModuleNamespace, &[ResolvedType]) -> Result<ResolvedType, SemanticError>,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "some debug")
+    }
+}
+
+impl<F> TypeGenerator for ClosureTypeGenerator<F>
+where
+    F: Fn(&mut ResolvedModuleNamespace, &[ResolvedType]) -> Result<ResolvedType, SemanticError>
+        + 'static, // Constraint on F: It must be a closure with the correct signature
+{
+    fn generate_type(
+        &self,
+        resolved_module_namespace: &mut ResolvedModuleNamespace,
+        type_arguments: Vec<ResolvedType>,
+    ) -> Result<ResolvedType, SemanticError> {
+        (self.generator_fn)(resolved_module_namespace, &type_arguments)
+    }
+}
 
 #[derive(Debug)]
 pub struct ResolvedModuleNamespace {
     structs: SeqMap<String, ResolvedStructTypeRef>,
     aliases: SeqMap<String, ResolvedAliasTypeRef>,
     constants: SeqMap<String, ResolvedConstantRef>,
-    parametrics: SeqMap<String, ResolvedParametricTypeRef>,
+    type_generators: SeqMap<String, Rc<dyn TypeGenerator>>,
 
     build_in_rust_types: SeqMap<String, ResolvedRustTypeRef>,
 
@@ -56,7 +96,7 @@ impl ResolvedModuleNamespace {
             internal_functions: SeqMap::default(),
             external_function_declarations: SeqMap::default(),
             constants: SeqMap::default(),
-            parametrics: SeqMap::default(),
+            type_generators: SeqMap::default(),
             path: path.to_vec(),
         }
     }
@@ -104,18 +144,15 @@ impl ResolvedModuleNamespace {
         Ok(struct_ref)
     }
 
-    pub fn add_parametric(
+    pub fn add_generator(
         &mut self,
-        parametric: ResolvedParametricType,
-    ) -> Result<ResolvedParametricTypeRef, SemanticError> {
-        let name = parametric.assigned_name();
-        info!(?name, "ADDING PARAMETRIC");
-        let parametric_ref = Rc::new(parametric);
-        self.parametrics
-            .insert(name.clone(), parametric_ref.clone())
-            .map_err(|_| SemanticError::DuplicateStructName(name))?;
-
-        Ok(parametric_ref)
+        name: &str,
+        generator: Rc<dyn TypeGenerator>,
+    ) -> Result<(), SemanticError> {
+        self.type_generators
+            .insert(name.to_string(), generator)
+            .map_err(|_| SemanticError::DuplicateStructName(name.to_string()))?;
+        Ok(())
     }
 
     pub fn add_struct_ref(
@@ -129,14 +166,14 @@ impl ResolvedModuleNamespace {
         Ok(())
     }
 
-    pub fn add_parametric_ref(
+    pub fn add_type_generator_ref(
         &mut self,
-        parametric_ref: ResolvedParametricTypeRef,
+        name: &str,
+        type_generator: Rc<dyn TypeGenerator>,
     ) -> Result<(), SemanticError> {
-        let name = parametric_ref.assigned_name().clone();
-        self.parametrics
-            .insert(name.clone(), parametric_ref)
-            .map_err(|_| SemanticError::DuplicateStructName(name))?;
+        self.type_generators
+            .insert(name.clone().parse().unwrap(), type_generator)
+            .map_err(|_| SemanticError::DuplicateStructName(name.to_string()))?;
         Ok(())
     }
 
@@ -261,10 +298,6 @@ impl ResolvedModuleNamespace {
         self.structs.get(&name.to_string()).cloned()
     }
 
-    pub fn get_parametric(&self, name: &str) -> Option<ResolvedParametricTypeRef> {
-        self.parametrics.get(&name.to_string()).cloned()
-    }
-
     pub fn get_alias(&self, name: &str) -> Option<ResolvedAliasTypeRef> {
         if let Some(found_alias) = self.aliases.get(&name.to_string()) {
             return Some(found_alias.clone());
@@ -313,6 +346,11 @@ impl ResolvedModuleNamespace {
         name: &str,
     ) -> Option<&ResolvedExternalFunctionDefinitionRef> {
         self.external_function_declarations.get(&name.to_string())
+    }
+
+    #[must_use]
+    pub fn get_type_generator(&self, name: &str) -> Option<Rc<dyn TypeGenerator>> {
+        self.type_generators.get(&name.to_string()).map(Rc::clone)
     }
 
     pub fn add_external_function_declaration(

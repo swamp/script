@@ -5,7 +5,6 @@
 use crate::err::{ResolveError, ResolveErrorKind};
 use crate::Resolver;
 use seq_map::SeqMap;
-use std::cell::RefCell;
 use std::rc::Rc;
 use swamp_script_ast::{
     AliasType, Definition, EnumVariantType, Function, LocalTypeIdentifier, Mod, Node,
@@ -18,11 +17,9 @@ use swamp_script_semantic::{
     ResolvedEnumVariantSimpleType, ResolvedEnumVariantSimpleTypeRef, ResolvedEnumVariantStructType,
     ResolvedEnumVariantTupleType, ResolvedEnumVariantType, ResolvedExternalFunctionDefinition,
     ResolvedFunction, ResolvedInternalFunctionDefinition, ResolvedLocalIdentifier,
-    ResolvedLocalTypeIdentifier, ResolvedMod, ResolvedParameterNode, ResolvedParametricType,
-    ResolvedStructType, ResolvedStructTypeRef, ResolvedType, ResolvedTypeForParameter,
-    ResolvedTypeParameterName, ResolvedUse, ResolvedUseItem,
+    ResolvedLocalTypeIdentifier, ResolvedMod, ResolvedParameterNode, ResolvedStructType,
+    ResolvedStructTypeRef, ResolvedType, ResolvedTypeForParameter, ResolvedUse, ResolvedUseItem,
 };
-use tracing::info;
 
 impl<'a> Resolver<'a> {
     fn resolve_use_definition(
@@ -82,15 +79,13 @@ impl<'a> Resolver<'a> {
                 UseItem::Type(node) => {
                     let ident_resolved_node = self.to_node(&node.0);
                     let ident_text = self.get_text_resolved(&ident_resolved_node);
-                    info!(?ident_text, "USING TYPE");
 
                     if let Some(found_struct) = lookup.get_struct(&path, ident_text) {
                         lookup.add_struct_link(found_struct)?;
                     } else if let Some(found_enum) = lookup.get_enum(&path, ident_text) {
                         lookup.add_enum_link(found_enum)?;
-                    } else if let Some(found_parametric) = lookup.get_parametric(&path, ident_text)
-                    {
-                        lookup.add_parametric_link(found_parametric)?;
+                    } else if let Some(found_gen) = lookup.get_type_generator(&path, ident_text) {
+                        lookup.add_type_generator_link(ident_text, found_gen)?;
                     } else {
                         return Err(self.create_err_resolved(
                             ResolveErrorKind::UnknownTypeReference,
@@ -253,7 +248,6 @@ impl<'a> Resolver<'a> {
     ) -> Result<ResolvedDefinition, ResolveError> {
         let mut resolved_fields = SeqMap::new();
         let debug_str = self.get_text(&ast_struct.identifier.0).to_string();
-        info!(?debug_str, "struct type");
         for field_name_and_type in &ast_struct.fields {
             let resolved_type = self.resolve_type(&field_name_and_type.field_type)?;
             let name_string = self.get_text(&field_name_and_type.field_name.0).to_string();
@@ -287,23 +281,9 @@ impl<'a> Resolver<'a> {
 
         if ast_struct.type_parameter_names.is_empty() {
             let resolved_struct_ref = self.shared.lookup.add_struct(resolved_struct)?;
-            return Ok(ResolvedDefinition::StructType(resolved_struct_ref));
+            Ok(ResolvedDefinition::StructType(resolved_struct_ref))
         } else {
-            let mut names = Vec::new();
-            for local_type_identifier in &ast_struct.type_parameter_names {
-                let resolved_name = ResolvedTypeParameterName {
-                    resolved_node: self.to_node(&local_type_identifier.0),
-                };
-
-                names.push(resolved_name);
-            }
-            let base_type = ResolvedType::Struct(Rc::new(RefCell::new(resolved_struct)));
-            let parametric_type = ResolvedParametricType {
-                base: base_type,
-                names,
-            };
-            let parametric_type_ref = self.shared.lookup.add_parametric(parametric_type)?;
-            Ok(ResolvedDefinition::ParametricType(parametric_type_ref))
+            todo!()
         }
     }
 

@@ -27,23 +27,31 @@ impl<'a> Resolver<'a> {
     }
 
     pub(crate) fn resolve_static_member_access(
-        &self,
-        struct_reference: &QualifiedTypeIdentifier,
+        &mut self,
+        named_type: &QualifiedTypeIdentifier,
         member_name_node: &Node,
     ) -> Result<ResolvedExpression, ResolveError> {
-        let struct_type = self.get_struct_type(struct_reference)?;
-        let member_name = self.get_text(member_name_node);
-        let binding = struct_type.borrow();
-        let member_function = binding
-            .functions
-            .get(&member_name.to_string())
-            .ok_or_else(|| {
-                self.create_err(ResolveErrorKind::UnknownMemberFunction, member_name_node)
-            })?;
+        let some_type = self.find_named_type(named_type)?;
+        if let ResolvedType::Struct(struct_type) = some_type {
+            let member_name = self.get_text(member_name_node);
+            let binding = struct_type.borrow();
+            let member_function =
+                binding
+                    .functions
+                    .get(&member_name.to_string())
+                    .ok_or_else(|| {
+                        self.create_err(ResolveErrorKind::UnknownMemberFunction, member_name_node)
+                    })?;
 
-        let expr = Self::convert_to_function_access(member_function);
+            let expr = Self::convert_to_function_access(member_function);
 
-        Ok(expr)
+            Ok(expr)
+        } else {
+            Err(self.create_err(
+                ResolveErrorKind::NotValidLocationStartingPoint,
+                &member_name_node,
+            ))
+        }
     }
 
     pub(crate) fn resolve_min_max_expr(

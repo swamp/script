@@ -31,11 +31,11 @@ use swamp_script_ast::{
 };
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
-    ResolvedArgumentExpressionOrLocation, ResolvedLocationAccess, ResolvedLocationAccessKind,
-    ResolvedMutOrImmutableExpression, ResolvedNormalPattern, ResolvedParametricType,
-    ResolvedParametricTypeRef, ResolvedPostfix, ResolvedPostfixKind, ResolvedRangeMode,
-    ResolvedSingleLocationExpression, ResolvedSingleLocationExpressionKind,
-    ResolvedSingleMutLocationExpression, ResolvedTypeWithMut, ResolvedWhenBinding,
+    IteratorYieldType, ResolvedArgumentExpressionOrLocation, ResolvedLocationAccess,
+    ResolvedLocationAccessKind, ResolvedMutOrImmutableExpression, ResolvedNormalPattern,
+    ResolvedPostfix, ResolvedPostfixKind, ResolvedRangeMode, ResolvedSingleLocationExpression,
+    ResolvedSingleLocationExpressionKind, ResolvedSingleMutLocationExpression, ResolvedTypeWithMut,
+    ResolvedWhenBinding,
 };
 use swamp_script_source_map::SourceMap;
 use tracing::error;
@@ -515,7 +515,7 @@ impl<'a> Resolver<'a> {
                         Box::from(range.max),
                         range.mode,
                     ),
-                    ResolvedType::Iterable(Box::from(ResolvedType::Int)),
+                    ResolvedType::Unit, // TODO: (Box::from(ResolvedType::Int)),
                     &ast_expression.node,
                 )
             }
@@ -651,26 +651,6 @@ impl<'a> Resolver<'a> {
         })?;
 
         Ok(struct_ref)
-    }
-
-    fn get_parametric_type(
-        &self,
-        qualified_type_identifier: &QualifiedTypeIdentifier,
-    ) -> Result<ResolvedParametricTypeRef, ResolveError> {
-        let (path, name) = self.get_path(qualified_type_identifier);
-
-        let parametric_type_ref =
-            self.shared
-                .lookup
-                .get_parametric(&path, &name)
-                .ok_or_else(|| {
-                    self.create_err(
-                        ResolveErrorKind::UnknownParametricType,
-                        &qualified_type_identifier.name.0,
-                    )
-                })?;
-
-        Ok(parametric_type_ref)
     }
 
     fn create_default_value_for_type(
@@ -995,6 +975,16 @@ impl<'a> Resolver<'a> {
                             tv.is_mutable = false;
                         }
 
+                        ResolvedType::Struct(resolved_struct_ref) => {
+                            let borrow = resolved_struct_ref.borrow();
+                            let subscript_fn =
+                                borrow.functions.get(&"subscript".to_string()).unwrap();
+                            let lookup_returns = &subscript_fn.signature().return_type;
+
+                            tv.resolved_type = *lookup_returns.clone();
+                            tv.is_mutable = false;
+                        }
+
                         ResolvedType::RustType(found_rust_type) => {
                             if found_rust_type.number == SPARSE_TYPE_ID {
                                 /*
@@ -1151,7 +1141,25 @@ impl<'a> Resolver<'a> {
                 map_type_ref.value_type.clone(),
             ),
             ResolvedType::String => (Some(ResolvedType::Int), ResolvedType::String),
-            ResolvedType::Iterable(item_type) => (None, *item_type.clone()),
+            //ResolvedType::Iterator(item_type) => (None, *item_type.clone()),
+            ResolvedType::Struct(resolved_struct_ref) => {
+                let borrow = resolved_struct_ref.borrow();
+                let x = borrow.functions.get(&"iter".to_string()).unwrap();
+                match &*x.signature().return_type {
+                    ResolvedType::Iterator(iterator_type) => match &iterator_type.yield_type {
+                        IteratorYieldType::Value(value_type) => (None, value_type.clone()),
+                        IteratorYieldType::KeyValue(key_type, value_type) => {
+                            (Some(key_type.clone()), value_type.clone())
+                        }
+                    },
+                    _ => {
+                        return Err(self.create_err(
+                            ResolveErrorKind::NotAnIterator,
+                            &expression.expression.node,
+                        ))
+                    }
+                }
+            }
             ResolvedType::RustType(_rust_type_ref) => {
                 /*
                 // TODO: HACK: We assume it is a container that iterates over the type parameters

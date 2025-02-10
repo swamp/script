@@ -89,7 +89,6 @@ pub fn check_doc(script: &str, expected_output: &str) {
                 }
                 ResolvedType::Map(_) => {}
                 ResolvedType::Enum(_) => {}
-                ResolvedType::Concrete(_, _) => {}
                 ResolvedType::Function(_) => {}
                 ResolvedType::Iterable(_) => {}
                 ResolvedType::Optional(_) => {}
