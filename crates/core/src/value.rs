@@ -694,7 +694,7 @@ impl Display for Value {
                 write!(f, " }}")
             }
             Self::InternalFunction(_reference) => write!(f, "<function>"), // TODO:
-            Self::Unit => write!(f, "()"),
+            Self::Unit => write!(f, "UNIT()"),
             Self::Range(start, end, range_mode) => match range_mode {
                 ResolvedRangeMode::Exclusive => write!(f, "{start}..{end}"),
                 ResolvedRangeMode::Inclusive => write!(f, "{start}..={end}"),

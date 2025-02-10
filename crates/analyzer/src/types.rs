@@ -173,7 +173,7 @@ impl<'a> Resolver<'a> {
         for x in type_for_parameters {
             vec.push(ResolvedTypeForParameter {
                 name: String::new(),
-                resolved_type: Some(self.resolve_type(&x.ast_type)?),
+                resolved_type: self.resolve_type(&x.ast_type)?,
                 is_mutable: x.is_mutable,
                 node: None,
             });
@@ -192,7 +192,12 @@ impl<'a> Resolver<'a> {
             .shared
             .lookup
             .get_type_generator(&path, base_name)
-            .expect("unknown type generator");
+            .ok_or_else(|| {
+                self.create_err(
+                    ResolveErrorKind::NotATypeGenerator,
+                    &parameterize_definition.name.0,
+                )
+            })?;
 
         let mut type_params = Vec::new();
         for type_param in &parameterize_definition.generic_params {
@@ -202,6 +207,7 @@ impl<'a> Resolver<'a> {
         Ok(type_generator
             .generate_type(
                 &mut self.shared.lookup.own_namespace().borrow_mut(),
+                self.shared.lookup.modules(),
                 type_params,
             )
             .expect("TODO: panic message"))

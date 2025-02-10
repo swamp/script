@@ -4,7 +4,7 @@
  */
 
 use crate::err::{ResolveError, ResolveErrorKind};
-use crate::{Resolver, SPARSE_TYPE_ID};
+use crate::Resolver;
 use swamp_script_ast::{Expression, Node};
 use swamp_script_semantic::{
     ResolvedArrayTypeRef, ResolvedMapTypeRef, ResolvedPostfix, ResolvedPostfixKind,
@@ -28,13 +28,13 @@ impl<'a> Resolver<'a> {
                     ast_member_function_name,
                     ast_arguments,
                 )?;
-                return Ok(Some(resolved));
+                Ok(Some(resolved))
             }
 
             ResolvedType::Map(map_type_ref) => {
                 //if let ResolvedExpressionKind::VariableAccess(var_ref) = resolved_expr {
                 let resolved = self.resolve_map_member_call(
-                    &map_type_ref,
+                    map_type_ref,
                     is_mutable,
                     ast_member_function_name,
                     ast_arguments,
@@ -60,17 +60,13 @@ impl<'a> Resolver<'a> {
             }
             ResolvedType::Tuple(tuple_type) => {
                 let found = self.resolve_tuple_member_call(
-                    &tuple_type,
+                    tuple_type,
                     ast_member_function_name,
                     ast_arguments,
                 )?;
                 Ok(Some(found))
             }
-            _ => self.check_for_internal_member_call_extra(
-                ty,
-                ast_member_function_name,
-                ast_arguments,
-            ),
+            _ => Ok(None),
         }
     }
     fn resolve_tuple_member_call(
@@ -123,10 +119,10 @@ impl<'a> Resolver<'a> {
     }
 
     fn check_mutable(&mut self, is_mutable: bool, node: &Node) -> Result<(), ResolveError> {
-        if !is_mutable {
-            Err(self.create_err(ResolveErrorKind::ExpectedMutableLocation, node))
-        } else {
+        if is_mutable {
             Ok(())
+        } else {
+            Err(self.create_err(ResolveErrorKind::ExpectedMutableLocation, node))
         }
     }
 
@@ -156,7 +152,7 @@ impl<'a> Resolver<'a> {
 
         let expr = match member_function_name_str {
             "remove" => {
-                self.check_mutable(is_mutable, &ast_member_function_name)?;
+                self.check_mutable(is_mutable, ast_member_function_name)?;
 
                 if ast_arguments.len() != 1 {
                     return Err(self.create_err(
@@ -166,7 +162,7 @@ impl<'a> Resolver<'a> {
                 }
 
                 let key_expr =
-                    self.resolve_expression(&ast_arguments[0], Some(&map_type.key_type))?;
+                    self.resolve_expression(ast_arguments[0], Some(&map_type.key_type))?;
 
                 self.create_postfix(
                     ResolvedPostfixKind::MapRemove(Box::new(key_expr), map_type.clone()),
@@ -184,7 +180,7 @@ impl<'a> Resolver<'a> {
                 }
 
                 let key_expr =
-                    self.resolve_expression(&ast_arguments[0], Some(&map_type.key_type))?;
+                    self.resolve_expression(ast_arguments[0], Some(&map_type.key_type))?;
 
                 self.create_postfix(
                     ResolvedPostfixKind::MapHas(Box::new(key_expr)),
@@ -212,7 +208,7 @@ impl<'a> Resolver<'a> {
         let member_function_name_str = self.get_text(ast_member_function_name);
         let resolved_postfix = match member_function_name_str {
             "remove" => {
-                self.check_mutable(is_mutable, &ast_member_function_name)?;
+                self.check_mutable(is_mutable, ast_member_function_name)?;
 
                 if ast_arguments.len() != 1 {
                     return Err(self.create_err(
@@ -220,7 +216,7 @@ impl<'a> Resolver<'a> {
                         ast_member_function_name,
                     ));
                 }
-                let index_expr = self.resolve_usize_index(&ast_arguments[0])?;
+                let index_expr = self.resolve_usize_index(ast_arguments[0])?;
 
                 self.create_postfix(
                     ResolvedPostfixKind::ArrayRemoveIndex(Box::new(index_expr)),
@@ -230,7 +226,7 @@ impl<'a> Resolver<'a> {
             }
 
             "clear" => {
-                self.check_mutable(is_mutable, &ast_member_function_name)?;
+                self.check_mutable(is_mutable, ast_member_function_name)?;
 
                 if !ast_arguments.is_empty() {
                     return Err(self.create_err(
@@ -248,7 +244,7 @@ impl<'a> Resolver<'a> {
             _ => {
                 return Err(self.create_err(
                     ResolveErrorKind::UnknownMemberFunction,
-                    &ast_member_function_name,
+                    ast_member_function_name,
                 ))
             }
         };
@@ -264,10 +260,10 @@ impl<'a> Resolver<'a> {
         if ast_arguments.len() != 1 {
             return Err(self.create_err(
                 ResolveErrorKind::WrongNumberOfArguments(ast_arguments.len(), 1),
-                &node,
+                node,
             ));
         }
-        let float_expression = { self.resolve_immutable(&ast_arguments[0], &ResolvedType::Float)? };
+        let float_expression = { self.resolve_immutable(ast_arguments[0], &ResolvedType::Float)? };
 
         Ok(float_expression)
     }
@@ -280,10 +276,10 @@ impl<'a> Resolver<'a> {
         if ast_arguments.len() != 1 {
             return Err(self.create_err(
                 ResolveErrorKind::WrongNumberOfArguments(ast_arguments.len(), 1),
-                &node,
+                node,
             ));
         }
-        let expr2 = self.resolve_immutable(&ast_arguments[0], &ResolvedType::Int)?;
+        let expr2 = self.resolve_immutable(ast_arguments[0], &ResolvedType::Int)?;
 
         Ok(expr2)
     }
@@ -296,11 +292,11 @@ impl<'a> Resolver<'a> {
         if ast_arguments.len() != 2 {
             return Err(self.create_err(
                 ResolveErrorKind::WrongNumberOfArguments(ast_arguments.len(), 2),
-                &node,
+                node,
             ));
         }
-        let expr2 = self.resolve_immutable(&ast_arguments[0], &ResolvedType::Float)?;
-        let expr3 = self.resolve_immutable(&ast_arguments[1], &ResolvedType::Float)?;
+        let expr2 = self.resolve_immutable(ast_arguments[0], &ResolvedType::Float)?;
+        let expr3 = self.resolve_immutable(ast_arguments[1], &ResolvedType::Float)?;
 
         Ok((expr2, expr3))
     }
@@ -320,7 +316,7 @@ impl<'a> Resolver<'a> {
                 if !ast_arguments.is_empty() {
                     return Err(self.create_err(
                         ResolveErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
-                        &ast_member_function_name,
+                        ast_member_function_name,
                     ));
                 }
                 ResolvedPostfixKind::FloatRound
@@ -329,7 +325,7 @@ impl<'a> Resolver<'a> {
                 if !ast_arguments.is_empty() {
                     return Err(self.create_err(
                         ResolveErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
-                        &ast_member_function_name,
+                        ast_member_function_name,
                     ));
                 }
                 resulting_type = &ResolvedType::Int;
@@ -339,7 +335,7 @@ impl<'a> Resolver<'a> {
                 if !ast_arguments.is_empty() {
                     return Err(self.create_err(
                         ResolveErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
-                        &ast_member_function_name,
+                        ast_member_function_name,
                     ));
                 }
                 ResolvedPostfixKind::FloatSqrt
@@ -348,7 +344,7 @@ impl<'a> Resolver<'a> {
                 if !ast_arguments.is_empty() {
                     return Err(self.create_err(
                         ResolveErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
-                        &ast_member_function_name,
+                        ast_member_function_name,
                     ));
                 }
                 ResolvedPostfixKind::FloatSign
@@ -357,7 +353,7 @@ impl<'a> Resolver<'a> {
                 if !ast_arguments.is_empty() {
                     return Err(self.create_err(
                         ResolveErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
-                        &ast_member_function_name,
+                        ast_member_function_name,
                     ));
                 }
                 ResolvedPostfixKind::FloatAbs
@@ -366,7 +362,7 @@ impl<'a> Resolver<'a> {
                 if !ast_arguments.is_empty() {
                     return Err(self.create_err(
                         ResolveErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
-                        &ast_member_function_name,
+                        ast_member_function_name,
                     ));
                 }
                 resulting_type = &ResolvedType::Int;
@@ -376,7 +372,7 @@ impl<'a> Resolver<'a> {
                 if !ast_arguments.is_empty() {
                     return Err(self.create_err(
                         ResolveErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
-                        &ast_member_function_name,
+                        ast_member_function_name,
                     ));
                 }
                 ResolvedPostfixKind::FloatCos
@@ -385,7 +381,7 @@ impl<'a> Resolver<'a> {
                 if !ast_arguments.is_empty() {
                     return Err(self.create_err(
                         ResolveErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
-                        &ast_member_function_name,
+                        ast_member_function_name,
                     ));
                 }
                 ResolvedPostfixKind::FloatSin
@@ -394,7 +390,7 @@ impl<'a> Resolver<'a> {
                 if !ast_arguments.is_empty() {
                     return Err(self.create_err(
                         ResolveErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
-                        &ast_member_function_name,
+                        ast_member_function_name,
                     ));
                 }
                 ResolvedPostfixKind::FloatAcos
@@ -403,7 +399,7 @@ impl<'a> Resolver<'a> {
                 if !ast_arguments.is_empty() {
                     return Err(self.create_err(
                         ResolveErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
-                        &ast_member_function_name,
+                        ast_member_function_name,
                     ));
                 }
                 ResolvedPostfixKind::FloatAsin
@@ -427,12 +423,12 @@ impl<'a> Resolver<'a> {
             _ => {
                 return Err(self.create_err(
                     ResolveErrorKind::UnknownMemberFunction,
-                    &ast_member_function_name,
+                    ast_member_function_name,
                 ))
             }
         };
 
-        Ok(self.create_postfix(kind, resulting_type, &ast_member_function_name))
+        Ok(self.create_postfix(kind, resulting_type, ast_member_function_name))
     }
 
     fn resolve_string_member_call(
@@ -441,7 +437,7 @@ impl<'a> Resolver<'a> {
         ast_arguments: &[&Expression],
     ) -> Result<ResolvedPostfix, ResolveError> {
         let function_name_str = self.get_text(ast_member_function_name);
-        let node = self.to_node(&ast_member_function_name);
+        let node = self.to_node(ast_member_function_name);
 
         match function_name_str {
             "len" => {
@@ -470,7 +466,7 @@ impl<'a> Resolver<'a> {
         ast_arguments: &[&Expression],
     ) -> Result<ResolvedPostfix, ResolveError> {
         let function_name_str = self.get_text(ast_member_function_name);
-        let node = self.to_node(&ast_member_function_name);
+        let node = self.to_node(ast_member_function_name);
 
         let (kind, resolved_type) = match function_name_str {
             "abs" => {
@@ -494,7 +490,7 @@ impl<'a> Resolver<'a> {
 
             "max" => {
                 let int_argument =
-                    self.resolve_single_int_expression(&ast_member_function_name, ast_arguments)?;
+                    self.resolve_single_int_expression(ast_member_function_name, ast_arguments)?;
                 (
                     ResolvedPostfixKind::IntMax(Box::from(int_argument)),
                     ResolvedType::Int,
@@ -522,7 +518,7 @@ impl<'a> Resolver<'a> {
             _ => {
                 return Err(self.create_err(
                     ResolveErrorKind::UnknownMemberFunction,
-                    &ast_member_function_name,
+                    ast_member_function_name,
                 ))
             }
         };
@@ -530,6 +526,7 @@ impl<'a> Resolver<'a> {
         Ok(self.create_postfix(kind, &resolved_type, ast_member_function_name))
     }
 
+    /*
     fn check_for_internal_member_call_extra(
         &mut self,
         ty: &ResolvedType,
@@ -594,4 +591,6 @@ impl<'a> Resolver<'a> {
 
         Ok(None)
     }
+
+     */
 }

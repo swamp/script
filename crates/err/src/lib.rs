@@ -492,17 +492,21 @@ pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
         ResolveErrorKind::ArgumentMustBeImmutable =>Report::build(Error, 109, "argument must be immutable", span),
         ResolveErrorKind::NotValidLocationItem =>Report::build(Error, 110, "not valid location item", span),
         ResolveErrorKind::ExpectedImmutableExpression =>Report::build(Error, 112, "expected immutable expression", span),
-        &swamp_script_analyzer::err::ResolveErrorKind::CallsCanNotBePartOfChain | &swamp_script_analyzer::err::ResolveErrorKind::UnwrapCanNotBePartOfChain | &swamp_script_analyzer::err::ResolveErrorKind::NoneCoalesceCanNotBePartOfChain => todo!(),
-        &swamp_script_analyzer::err::ResolveErrorKind::SelfNotCorrectType => todo!(),
-        &swamp_script_analyzer::err::ResolveErrorKind::IllegalIndexInChain => Report::build(Error, 140, "illegal index in chain", span),
-        &swamp_script_analyzer::err::ResolveErrorKind::CanNotNoneCoalesce => todo!(),
+        ResolveErrorKind::CallsCanNotBePartOfChain | ResolveErrorKind::UnwrapCanNotBePartOfChain | ResolveErrorKind::NoneCoalesceCanNotBePartOfChain => todo!(),
+        ResolveErrorKind::SelfNotCorrectType => todo!(),
+        ResolveErrorKind::IllegalIndexInChain => Report::build(Error, 140, "illegal index in chain", span),
+        ResolveErrorKind::CanNotNoneCoalesce => todo!(),
         &ResolveErrorKind::GuardCanNotHaveMultipleWildcards | &ResolveErrorKind::WildcardMustBeLastInGuard | &ResolveErrorKind::GuardMustHaveWildcard => todo!(),
-        &swamp_script_analyzer::err::ResolveErrorKind::UnknownParametricType => todo!(),
+        ResolveErrorKind::UnknownParametricType => todo!(),
+        ResolveErrorKind::NotAFunctionType => todo!(),
+        ResolveErrorKind::ExpectedMemberFunctionOrFunctionTypeField => Report::build(Error, 140, "ExpectedMemberFunctionOrFunctionTypeField", span),
+        &swamp_script_analyzer::err::ResolveErrorKind::UnknownModule => todo!(),
+        &swamp_script_analyzer::err::ResolveErrorKind::NotATypeGenerator => Report::build(Error, 140, "Not a type generator", span),
     }
 }
 
 #[must_use]
-pub fn build_script_error(err: &ScriptResolveError, source_map: &SourceMap) -> Builder<usize> {
+pub fn build_script_error(err: &ScriptResolveError, _source_map: &SourceMap) -> Builder<usize> {
     match err {
         ScriptResolveError::ResolveError(err) => build_resolve_error(err),
         ScriptResolveError::DepLoaderError(err) => panic!("{}", format!("err: {:?}", err)),

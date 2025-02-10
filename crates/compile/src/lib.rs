@@ -67,6 +67,10 @@ pub fn remove_version_from_package_name_regex(package_name_with_version: &str) -
     re.replace(package_name_with_version, "").to_string()
 }
 
+/// # Errors
+///
+/// # Panics
+///
 pub fn compile_analyze_and_link_without_version(
     root_module_path: &[String],
     resolved_program: &mut ResolvedProgram,
@@ -76,9 +80,7 @@ pub fn compile_analyze_and_link_without_version(
         compile_and_analyze(root_module_path, resolved_program, source_map);
 
     match mangrove_render_result {
-        Ok(program) => {
-            eprintln!("{program:?}");
-        }
+        Ok(..) => {}
         Err(err) => {
             show_script_resolve_error(&err, &source_map);
             Err(err)?;
@@ -100,17 +102,6 @@ pub fn compile_analyze_and_link_without_version(
 ///
 pub fn compile_and_analyze(
     root_module_path: &[String],
-    resolved_program: &mut ResolvedProgram,
-    source_map: &mut SourceMap,
-) -> Result<(), ScriptResolveError> {
-    compile_and_resolve_to_program(root_module_path, resolved_program, source_map)
-}
-
-/// # Errors
-///
-pub fn compile_and_analyze_alias(
-    root_module_path: &[String],
-    start_alias: &str,
     resolved_program: &mut ResolvedProgram,
     source_map: &mut SourceMap,
 ) -> Result<(), ScriptResolveError> {

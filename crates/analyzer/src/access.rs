@@ -47,10 +47,7 @@ impl<'a> Resolver<'a> {
 
             Ok(expr)
         } else {
-            Err(self.create_err(
-                ResolveErrorKind::NotValidLocationStartingPoint,
-                &member_name_node,
-            ))
+            Err(self.create_err(ResolveErrorKind::UnknownMemberFunction, member_name_node))
         }
     }
 

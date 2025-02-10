@@ -42,6 +42,12 @@ impl<'a> Resolver<'a> {
         let mut items = Vec::new();
         let lookup = &self.shared.lookup;
 
+        if use_definition.items.is_empty() {
+            let last_name = path.last().unwrap();
+            let ns = self.shared.lookup.get_namespace(&path).unwrap();
+            self.shared.lookup.add_namespace_link(last_name, ns)?;
+        }
+
         for ast_items in &use_definition.items {
             let resolved_item = match ast_items {
                 UseItem::Identifier(node) => {
@@ -49,14 +55,6 @@ impl<'a> Resolver<'a> {
                     let ident = ResolvedUseItem::Identifier(ident_resolved_node.clone());
                     let ident_text = self.get_text_resolved(&ident_resolved_node);
 
-                    lookup
-                        .get_internal_function(&path, ident_text)
-                        .ok_or_else(|| {
-                            self.create_err_resolved(
-                                ResolveErrorKind::UnknownTypeReference,
-                                &ident_resolved_node,
-                            )
-                        })?;
                     if let Some(found_internal_function) =
                         lookup.get_internal_function(&path, ident_text)
                     {
@@ -106,11 +104,25 @@ impl<'a> Resolver<'a> {
         mod_definition: &Mod,
     ) -> Result<ResolvedDefinition, ResolveError> {
         let mut nodes = Vec::new();
+        let mut path = Vec::new();
         for ast_node in &mod_definition.module_path.0 {
             nodes.push(self.to_node(ast_node));
+            path.push(self.get_text(ast_node).to_string());
         }
 
-        Ok(ResolvedDefinition::Mod(ResolvedMod { path: nodes }))
+        let lookup = &self.shared.lookup;
+
+        let mut nodes_copy = path.to_vec();
+        nodes_copy.insert(0, "crate".to_string());
+
+        if let Some(found_namespace) = lookup.get_namespace(&*nodes_copy) {
+            lookup.add_namespace_link(nodes_copy.last().unwrap(), found_namespace)?;
+
+            Ok(ResolvedDefinition::Mod(ResolvedMod { path: nodes }))
+        } else {
+            let first = &mod_definition.module_path.0[0];
+            Err(self.create_err(ResolveErrorKind::UnknownModule, &first))
+        }
     }
 
     fn resolve_enum_type_definition(
@@ -247,7 +259,6 @@ impl<'a> Resolver<'a> {
         ast_struct: &StructType,
     ) -> Result<ResolvedDefinition, ResolveError> {
         let mut resolved_fields = SeqMap::new();
-        let debug_str = self.get_text(&ast_struct.identifier.0).to_string();
         for field_name_and_type in &ast_struct.fields {
             let resolved_type = self.resolve_type(&field_name_and_type.field_type)?;
             let name_string = self.get_text(&field_name_and_type.field_name.0).to_string();
@@ -307,7 +318,7 @@ impl<'a> Resolver<'a> {
                     self.create_local_variable_resolved(
                         &param.node.as_ref().unwrap().name,
                         &param.node.as_ref().unwrap().is_mutable,
-                        &<std::option::Option<swamp_script_semantic::ResolvedType> as Clone>::clone(&param.resolved_type).unwrap().clone(),
+                        &param.resolved_type.clone(),
                     )?;
                 }
                 let function_name = self.get_text(&function_data.declaration.name).to_string();
@@ -351,7 +362,12 @@ impl<'a> Resolver<'a> {
                     id: external_function_id,
                 };
 
-                ResolvedFunction::External(Rc::new(external))
+                let function_ref = self
+                    .shared
+                    .lookup
+                    .add_external_function_declaration_ref(external)?;
+
+                ResolvedFunction::External(function_ref)
             }
         };
 
@@ -452,7 +468,7 @@ impl<'a> Resolver<'a> {
                     let resolved_type = ResolvedType::Struct(found_struct.clone());
                     parameters.push(ResolvedTypeForParameter {
                         name: self.get_text(&found_self.self_node).to_string(),
-                        resolved_type: Some(resolved_type),
+                        resolved_type,
                         is_mutable: found_self.is_mutable.is_some(),
                         node: Option::from(ResolvedParameterNode {
                             name: self.to_node(&found_self.self_node),
@@ -466,7 +482,7 @@ impl<'a> Resolver<'a> {
 
                     parameters.push(ResolvedTypeForParameter {
                         name: self.get_text(&param.variable.name).to_string(),
-                        resolved_type: Some(resolved_type),
+                        resolved_type,
                         is_mutable: param.variable.is_mutable.is_some(),
                         node: Option::from(ResolvedParameterNode {
                             name: self.to_node(&param.variable.name),
@@ -482,7 +498,7 @@ impl<'a> Resolver<'a> {
                     self.create_local_variable_resolved(
                         &param.node.as_ref().unwrap().name,
                         &param.node.as_ref().unwrap().is_mutable,
-                        &param.resolved_type.clone().unwrap(),
+                        &param.resolved_type.clone(),
                     )?;
                 }
 
@@ -510,7 +526,7 @@ impl<'a> Resolver<'a> {
                     let resolved_type = ResolvedType::Struct(found_struct.clone());
                     parameters.push(ResolvedTypeForParameter {
                         name: self.get_text(&found_self.self_node).to_string(),
-                        resolved_type: Some(resolved_type),
+                        resolved_type: resolved_type,
                         is_mutable: found_self.is_mutable.is_some(),
                         node: Option::from(ResolvedParameterNode {
                             name: self.to_node(&found_self.self_node),
@@ -525,7 +541,7 @@ impl<'a> Resolver<'a> {
 
                     parameters.push(ResolvedTypeForParameter {
                         name: self.get_text(&param.variable.name).to_string(),
-                        resolved_type: Some(resolved_type),
+                        resolved_type: resolved_type,
                         is_mutable: param.variable.is_mutable.is_some(),
                         node: Option::from(ResolvedParameterNode {
                             name: self.to_node(&param.variable.name),

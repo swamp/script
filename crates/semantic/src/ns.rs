@@ -2,6 +2,7 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
+use crate::modules::ResolvedModules;
 use crate::ResolvedAliasTypeRef;
 use crate::{
     ResolvedAliasType, ResolvedAnonymousStructFieldType, ResolvedAnonymousStructType,
@@ -23,6 +24,7 @@ pub trait TypeGenerator: 'static + Debug {
     fn generate_type(
         &self,
         namespace: &mut ResolvedModuleNamespace,
+        modules: &ResolvedModules,
         type_arguments: Vec<ResolvedType>,
     ) -> Result<ResolvedType, SemanticError>;
 }
@@ -39,7 +41,11 @@ impl<F> ClosureTypeGenerator<F> {
 
 impl<F> Debug for ClosureTypeGenerator<F>
 where
-    F: Fn(&mut ResolvedModuleNamespace, &[ResolvedType]) -> Result<ResolvedType, SemanticError>,
+    F: Fn(
+        &mut ResolvedModuleNamespace,
+        &ResolvedModules,
+        &[ResolvedType],
+    ) -> Result<ResolvedType, SemanticError>,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "some debug")
@@ -48,15 +54,20 @@ where
 
 impl<F> TypeGenerator for ClosureTypeGenerator<F>
 where
-    F: Fn(&mut ResolvedModuleNamespace, &[ResolvedType]) -> Result<ResolvedType, SemanticError>
+    F: Fn(
+            &mut ResolvedModuleNamespace,
+            &ResolvedModules,
+            &[ResolvedType],
+        ) -> Result<ResolvedType, SemanticError>
         + 'static, // Constraint on F: It must be a closure with the correct signature
 {
     fn generate_type(
         &self,
         resolved_module_namespace: &mut ResolvedModuleNamespace,
+        resolved_modules: &ResolvedModules,
         type_arguments: Vec<ResolvedType>,
     ) -> Result<ResolvedType, SemanticError> {
-        (self.generator_fn)(resolved_module_namespace, &type_arguments)
+        (self.generator_fn)(resolved_module_namespace, resolved_modules, &type_arguments)
     }
 }
 
@@ -73,6 +84,8 @@ pub struct ResolvedModuleNamespace {
     //enum_variant_types: SeqMap<String, ResolvedEnumVariantTypeRef>,
     internal_functions: SeqMap<String, ResolvedInternalFunctionDefinitionRef>,
     external_function_declarations: SeqMap<String, ResolvedExternalFunctionDefinitionRef>,
+
+    namespaces: SeqMap<String, ResolvedModuleNamespaceRef>,
 
     pub path: Vec<String>,
 }
@@ -97,6 +110,7 @@ impl ResolvedModuleNamespace {
             external_function_declarations: SeqMap::default(),
             constants: SeqMap::default(),
             type_generators: SeqMap::default(),
+            namespaces: SeqMap::default(),
             path: path.to_vec(),
         }
     }
@@ -172,7 +186,7 @@ impl ResolvedModuleNamespace {
         type_generator: Rc<dyn TypeGenerator>,
     ) -> Result<(), SemanticError> {
         self.type_generators
-            .insert(name.clone().parse().unwrap(), type_generator)
+            .insert(name.parse().unwrap(), type_generator)
             .map_err(|_| SemanticError::DuplicateStructName(name.to_string()))?;
         Ok(())
     }
@@ -341,6 +355,11 @@ impl ResolvedModuleNamespace {
     }
 
     #[must_use]
+    pub fn get_namespace_link(&self, name: &str) -> Option<ResolvedModuleNamespaceRef> {
+        self.namespaces.get(&name.to_string()).cloned()
+    }
+
+    #[must_use]
     pub fn get_external_function_declaration(
         &self,
         name: &str,
@@ -372,6 +391,17 @@ impl ResolvedModuleNamespace {
     ) -> Result<(), SemanticError> {
         self.external_function_declarations
             .insert(name.to_string(), decl_ref.clone())
+            .map_err(|_| SemanticError::DuplicateExternalFunction(name.to_string()))?;
+        Ok(())
+    }
+
+    pub fn add_namespace_link(
+        &mut self,
+        name: &str,
+        ns: ResolvedModuleNamespaceRef,
+    ) -> Result<(), SemanticError> {
+        self.namespaces
+            .insert(name.to_string(), ns)
             .map_err(|_| SemanticError::DuplicateExternalFunction(name.to_string()))?;
         Ok(())
     }

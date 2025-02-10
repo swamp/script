@@ -107,19 +107,9 @@ impl FunctionTypeSignature {
         }
 
         for (param, other_param) in self.parameters.iter().zip(other.parameters.clone()) {
-            // If either param.resolved_type or other_param.resolved_type is None,
-            // treat them as equal automatically. Otherwise compare them.
-            match (&param.resolved_type, &other_param.resolved_type) {
-                // If either is None, skip the check and continue
-                (None, _) | (_, None) => {}
-                // If both are Some, compare them
-                (Some(p_type), Some(o_type)) => {
-                    if !p_type.same_type(o_type) {
-                        return false;
-                    }
-                }
+            if !param.resolved_type.same_type(&other_param.resolved_type) {
+                return false;
             }
-
             if param.is_mutable != other_param.is_mutable {
                 return false;
             }
@@ -146,7 +136,7 @@ pub struct ResolvedTypeWithMut {
 #[derive(Debug, Clone)]
 pub struct ResolvedTypeForParameter {
     pub name: String,
-    pub resolved_type: Option<ResolvedType>,
+    pub resolved_type: ResolvedType,
     pub is_mutable: bool,
     pub node: Option<ResolvedParameterNode>,
 }
@@ -167,11 +157,7 @@ impl Eq for ResolvedTypeForParameter {}
 
 impl PartialEq for ResolvedTypeForParameter {
     fn eq(&self, other: &Self) -> bool {
-        // Compare resolved_type in a way that treats either None as automatically equal:
-        let types_equal = match (&self.resolved_type, &other.resolved_type) {
-            (None, _) | (_, None) => true,
-            (Some(t1), Some(t2)) => t1.same_type(t2),
-        };
+        let types_equal = self.resolved_type.same_type(&other.resolved_type);
 
         types_equal && (self.is_mutable == other.is_mutable)
     }
@@ -226,7 +212,7 @@ impl Debug for ResolvedType {
             Self::Float => write!(f, "Float"),
             Self::String => write!(f, "String"),
             Self::Bool => write!(f, "Bool"),
-            Self::Unit => write!(f, "()"),
+            Self::Unit => write!(f, "TUNIT()"),
             Self::Array(array_type_ref) => write!(f, "[{:?}]", array_type_ref.item_type),
             Self::Tuple(tuple_type_ref) => write!(f, "( {:?} )", tuple_type_ref.0),
             Self::Struct(struct_type_ref) => {
@@ -242,7 +228,7 @@ impl Debug for ResolvedType {
             //              write!(f, "{:?}", enum_type_variant.assigned_name)
             //        }
             Self::Function(function_type_signature) => {
-                write!(f, "{:?}", function_type_signature)
+                write!(f, "{function_type_signature:?}",)
             }
             Self::Iterator(type_generated) => write!(f, "Iterator<{type_generated:?}>"),
             Self::Optional(base_type) => write!(f, "{base_type:?}?"),
@@ -259,7 +245,7 @@ impl Display for ResolvedType {
             Self::Float => write!(f, "Float"),
             Self::String => write!(f, "String"),
             Self::Bool => write!(f, "Bool"),
-            Self::Unit => write!(f, "()"),
+            Self::Unit => write!(f, "SUNIT()"),
             Self::Array(array_ref) => write!(f, "[{}]", &array_ref.item_type.to_string()),
             Self::Tuple(tuple) => write!(f, "({})", comma(&tuple.0)),
             Self::Struct(struct_ref) => write!(f, "{}", struct_ref.borrow().assigned_name),

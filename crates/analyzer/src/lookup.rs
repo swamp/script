@@ -4,23 +4,23 @@
  */
 use crate::ResolveError;
 use std::rc::Rc;
-use swamp_script_ast::LocalTypeIdentifier;
 use swamp_script_semantic::modules::ResolvedModules;
 use swamp_script_semantic::ns::{ResolvedModuleNamespaceRef, TypeGenerator};
 use swamp_script_semantic::{
     ResolvedAliasType, ResolvedAliasTypeRef, ResolvedConstant, ResolvedConstantRef,
     ResolvedEnumType, ResolvedEnumTypeRef, ResolvedEnumVariantTypeRef,
-    ResolvedExternalFunctionDefinitionRef, ResolvedInternalFunctionDefinition,
-    ResolvedInternalFunctionDefinitionRef, ResolvedRustTypeRef, ResolvedStructType,
-    ResolvedStructTypeRef, ResolvedType, SemanticError,
+    ResolvedExternalFunctionDefinition, ResolvedExternalFunctionDefinitionRef,
+    ResolvedInternalFunctionDefinition, ResolvedInternalFunctionDefinitionRef, ResolvedRustTypeRef,
+    ResolvedStructType, ResolvedStructTypeRef, ResolvedType, SemanticError,
 };
-use tracing::info;
 
 #[derive()]
 pub struct NameLookup<'a> {
     default_path: Vec<String>,
     modules: &'a mut ResolvedModules,
 }
+
+impl<'a> NameLookup<'a> {}
 
 impl<'a> NameLookup<'a> {}
 
@@ -34,16 +34,28 @@ impl<'a> NameLookup<'a> {
             modules,
         }
     }
-    fn get_namespace(&self, path: &[String]) -> Option<ResolvedModuleNamespaceRef> {
+    pub(crate) fn get_namespace(&self, path: &[String]) -> Option<ResolvedModuleNamespaceRef> {
         let resolved_path = if path.is_empty() {
             self.default_path.clone()
         } else {
             path.to_vec()
         };
+
+        if path.len() == 1 {
+            let first = &path[0];
+            if let Some(found_alias) = self.get_namespace_link(first) {
+                return Some(found_alias);
+            }
+        }
+
         self.modules
             .modules
             .get(&resolved_path)
             .map(|module| module.borrow().namespace.clone())
+    }
+
+    pub(crate) fn get_namespace_link(&self, name: &str) -> Option<ResolvedModuleNamespaceRef> {
+        self.own_namespace().borrow().get_namespace_link(name)
     }
 
     pub fn own_namespace(&self) -> ResolvedModuleNamespaceRef {
@@ -53,6 +65,10 @@ impl<'a> NameLookup<'a> {
                 format!("could not find own namespace {:?}", self.default_path)
             )
         })
+    }
+
+    pub(crate) fn modules(&self) -> &ResolvedModules {
+        self.modules
     }
 
     #[must_use]
@@ -230,6 +246,28 @@ impl<'a> NameLookup<'a> {
             .add_internal_function(function_name, function)?)
     }
 
+    /// # Errors
+    ///
+    pub fn add_external_function_declaration_ref(
+        &mut self,
+        function: ResolvedExternalFunctionDefinition,
+    ) -> Result<ResolvedExternalFunctionDefinitionRef, ResolveError> {
+        Ok(self
+            .own_namespace()
+            .borrow_mut()
+            .add_external_function_declaration(&function.assigned_name.clone(), function)?)
+    }
+
+    pub(crate) fn add_namespace_link(
+        &self,
+        name: &str,
+        source_module_path: ResolvedModuleNamespaceRef,
+    ) -> Result<(), SemanticError> {
+        self.own_namespace()
+            .borrow_mut()
+            .add_namespace_link(name, source_module_path)
+    }
+
     pub(crate) fn add_enum_link(
         &self,
         _enum_type: ResolvedEnumTypeRef,
@@ -252,7 +290,6 @@ impl<'a> NameLookup<'a> {
         name: &str,
         generator_ref: Rc<dyn TypeGenerator>,
     ) -> Result<(), SemanticError> {
-        info!(?name, "linking generator in own namespace");
         self.own_namespace()
             .borrow_mut()
             .add_type_generator_ref(name, generator_ref)

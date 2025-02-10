@@ -18,11 +18,11 @@ use swamp_script_error_report::{show_script_resolve_error, ScriptResolveError};
 use swamp_script_eval::err::ExecuteError;
 use swamp_script_parser::prelude::*;
 use swamp_script_semantic::ns::{ClosureTypeGenerator, ResolvedModuleNamespace};
+use swamp_script_semantic::prelude::ResolvedModules;
 use swamp_script_semantic::{
     FunctionTypeSignature, IteratorTypeDetails, IteratorYieldType, ResolvedAnonymousStructType,
     ResolvedExternalFunctionDefinition, ResolvedExternalFunctionDefinitionRef, ResolvedFunction,
-    ResolvedNode, ResolvedRustType, ResolvedRustTypeRef, ResolvedStructType, ResolvedType,
-    ResolvedTypeForParameter,
+    ResolvedNode, ResolvedStructType, ResolvedType, ResolvedTypeForParameter,
 };
 use tracing_subscriber::EnvFilter;
 
@@ -63,26 +63,26 @@ fn main() -> Result<(), Box<dyn Error>> {
     init_logging();
     let cli = Cli::parse();
 
+    /*
     match &cli.command {
         Commands::Build { path, module } => {
             println!("Building swamp script at path: {}", path.display());
             // Call your build function here, passing the path
             if let Err(e) = build(path, module) {
                 eprintln!("Error during build: {}", e);
-                // Consider returning an error from main if build fails significantly
-                // return Err(e); // If build failure should halt the program
             }
         }
         Commands::Run { path } => {
             println!("Running swamp script at path: {}", path.display());
-            // Call your run function here, passing the path
             if let Err(e) = run(path) {
                 eprintln!("Error during run: {}", e);
-                // Consider returning an error from main if run fails significantly
-                // return Err(e); // If run failure should halt the program
             }
         }
     }
+
+     */
+
+    command(&cli.command)?;
 
     Ok(())
 }
@@ -162,6 +162,14 @@ fn build(root_path: &Path, root_module: &str) -> Result<(), CliError> {
     let mut source_map = create_source_map(root_path)?;
     let mut resolved_program = ResolvedProgram::new();
 
+    // std::
+    let mangrove_std_module_path = &["mangrove-0.0.0".to_string(), "std".to_string()];
+    compile_analyze_and_link_without_version(
+        mangrove_std_module_path,
+        &mut resolved_program,
+        &mut source_map,
+    )?;
+
     // mangrove::render
     let mangrove_render_module_path = &["mangrove-0.0.0".to_string(), "render".to_string()];
     compile_analyze_and_link_without_version(
@@ -202,7 +210,9 @@ fn build(root_path: &Path, root_module: &str) -> Result<(), CliError> {
         } );*/
 
         let closure_gen = ClosureTypeGenerator::new(
-            |ns: &mut ResolvedModuleNamespace, params: &[ResolvedType]| {
+            |ns: &mut ResolvedModuleNamespace,
+             modules: &ResolvedModules,
+             params: &[ResolvedType]| {
                 let concretized_struct_name_in_namespace =
                     format!("Sparse<{}>", params[0].to_string());
                 if let Some(found_concrete_struct_type) =
@@ -212,6 +222,7 @@ fn build(root_path: &Path, root_module: &str) -> Result<(), CliError> {
                 }
 
                 let value_type = &params[0];
+                let optional_value_type = ResolvedType::Optional(Box::from(value_type.clone()));
 
                 let create_struct = ResolvedStructType {
                     name: ResolvedNode::default(),
@@ -241,6 +252,18 @@ fn build(root_path: &Path, root_module: &str) -> Result<(), CliError> {
                 ));
                 functions.insert("new".to_string(), external_func).unwrap();
 
+                let collection_module = modules
+                    .get(&["mangrove".into(), "collection".into()])
+                    .unwrap();
+                let sparse_id_struct_type = collection_module
+                    .borrow()
+                    .namespace
+                    .borrow()
+                    .get_struct("SparseId")
+                    .unwrap();
+                let sparse_id_type = ResolvedType::Struct(sparse_id_struct_type);
+
+                /*
                 let rust_type_ref_for_id = ResolvedRustType {
                     type_name: "SparseId".to_string(),
                     number: 999,
@@ -248,6 +271,8 @@ fn build(root_path: &Path, root_module: &str) -> Result<(), CliError> {
 
                 let sparse_id_type =
                     ResolvedType::RustType(ResolvedRustTypeRef::from(rust_type_ref_for_id.clone()));
+
+                 */
 
                 // ::iter()
                 let external_iter_fn = ResolvedExternalFunctionDefinition {
@@ -258,7 +283,7 @@ fn build(root_path: &Path, root_module: &str) -> Result<(), CliError> {
                         return_type: Box::new(ResolvedType::Iterator(Box::from(
                             IteratorTypeDetails {
                                 yield_type: IteratorYieldType::KeyValue(
-                                    sparse_id_type,
+                                    sparse_id_type.clone(),
                                     value_type.clone(),
                                 ),
                             },
@@ -281,21 +306,19 @@ fn build(root_path: &Path, root_module: &str) -> Result<(), CliError> {
                         parameters: vec![
                             ResolvedTypeForParameter {
                                 name: "self".to_string(),
-                                resolved_type: Some(ResolvedType::Struct(
-                                    create_struct_ref.clone(),
-                                )),
+                                resolved_type: ResolvedType::Struct(create_struct_ref.clone()),
                                 is_mutable: true,
                                 node: None,
                             },
                             ResolvedTypeForParameter {
                                 name: "index".to_string(),
-                                resolved_type: Some(ResolvedType::Int),
+                                resolved_type: ResolvedType::Int,
                                 is_mutable: false,
                                 node: None,
                             },
                             ResolvedTypeForParameter {
                                 name: "out".to_string(),
-                                resolved_type: Some(value_type.clone()),
+                                resolved_type: optional_value_type.clone(),
                                 is_mutable: true,
                                 node: None,
                             },
@@ -304,13 +327,102 @@ fn build(root_path: &Path, root_module: &str) -> Result<(), CliError> {
                     },
                     id: 0,
                 };
-
                 let external_subscript_mut_func = Rc::new(ResolvedFunction::External(
                     ResolvedExternalFunctionDefinitionRef::from(external_subscript_mut_fn),
                 ));
                 functions
                     .insert("subscript_mut".to_string(), external_subscript_mut_func)
                     .unwrap();
+
+                // ::subscript()
+                let external_subscript_fn = ResolvedExternalFunctionDefinition {
+                    name: None,
+                    assigned_name: "subscript".to_string(),
+                    signature: FunctionTypeSignature {
+                        parameters: vec![
+                            ResolvedTypeForParameter {
+                                name: "self".to_string(),
+                                resolved_type: ResolvedType::Struct(create_struct_ref.clone()),
+                                is_mutable: true,
+                                node: None,
+                            },
+                            ResolvedTypeForParameter {
+                                name: "index".to_string(),
+                                resolved_type: ResolvedType::Int,
+                                is_mutable: false,
+                                node: None,
+                            },
+                        ],
+                        return_type: Box::from(optional_value_type.clone()),
+                    },
+                    id: 0,
+                };
+                let external_subscript_func = Rc::new(ResolvedFunction::External(
+                    ResolvedExternalFunctionDefinitionRef::from(external_subscript_fn),
+                ));
+                functions
+                    .insert("subscript".to_string(), external_subscript_func)
+                    .unwrap();
+
+                // ::remove()
+                let remove_fn_def = ResolvedExternalFunctionDefinition {
+                    name: None,
+                    assigned_name: "remove".to_string(),
+                    signature: FunctionTypeSignature {
+                        parameters: vec![
+                            ResolvedTypeForParameter {
+                                name: "self".to_string(),
+                                resolved_type: ResolvedType::Struct(create_struct_ref.clone()),
+                                is_mutable: true,
+                                node: None,
+                            },
+                            ResolvedTypeForParameter {
+                                name: "id".to_string(),
+                                resolved_type: sparse_id_type.clone(),
+                                is_mutable: false,
+                                node: None,
+                            },
+                        ],
+                        return_type: Box::from(optional_value_type),
+                    },
+                    id: 0,
+                };
+                let remove_fn_def_ref = Rc::new(ResolvedFunction::External(
+                    ResolvedExternalFunctionDefinitionRef::from(remove_fn_def),
+                ));
+                functions
+                    .insert("remove".to_string(), remove_fn_def_ref)
+                    .unwrap();
+
+                // ::add()
+                let add_fn_def = ResolvedExternalFunctionDefinition {
+                    name: None,
+                    assigned_name: "add".to_string(),
+                    signature: FunctionTypeSignature {
+                        parameters: vec![
+                            ResolvedTypeForParameter {
+                                name: "self".to_string(),
+                                resolved_type: ResolvedType::Struct(create_struct_ref.clone()),
+                                is_mutable: true,
+                                node: None,
+                            },
+                            ResolvedTypeForParameter {
+                                name: "value".to_string(),
+                                resolved_type: value_type.clone(),
+                                is_mutable: false,
+                                node: None,
+                            },
+                        ],
+                        return_type: Box::from(sparse_id_type.clone()),
+                    },
+                    id: 0,
+                };
+                let add_fn_def_ref = Rc::new(ResolvedFunction::External(
+                    ResolvedExternalFunctionDefinitionRef::from(add_fn_def),
+                ));
+                functions.insert("add".to_string(), add_fn_def_ref).unwrap();
+
+                // ------------------
 
                 create_struct_ref.borrow_mut().functions = functions;
 
@@ -329,7 +441,7 @@ fn build(root_path: &Path, root_module: &str) -> Result<(), CliError> {
     );
     match result {
         Ok(program) => {
-            eprintln!("{program:?}");
+            //eprintln!("{program:?}");
         }
         Err(err) => {
             show_script_resolve_error(&err, &source_map);
@@ -343,6 +455,6 @@ fn module_path() -> Vec<String> {
     vec!["main".to_string()]
 }
 
-fn run(path: &Path) -> Result<(), CliError> {
+fn run(_path: &Path) -> Result<(), CliError> {
     Ok(())
 }

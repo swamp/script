@@ -4,13 +4,11 @@
  */
 
 use crate::err::{ResolveError, ResolveErrorKind};
-use crate::{LocationSide, Resolver, SPARSE_TYPE_ID};
-use std::rc::Rc;
-use swamp_script_ast::{MutableOrImmutableExpression, Node, QualifiedTypeIdentifier};
+use crate::{LocationSide, Resolver};
+use swamp_script_ast::MutableOrImmutableExpression;
 use swamp_script_semantic::{
-    ResolvedArgumentExpressionOrLocation, ResolvedExpression, ResolvedExpressionKind,
-    ResolvedMutOrImmutableExpression, ResolvedNode, ResolvedRustType, ResolvedType,
-    ResolvedTypeForParameter,
+    ResolvedArgumentExpressionOrLocation, ResolvedMutOrImmutableExpression, ResolvedNode,
+    ResolvedType, ResolvedTypeForParameter,
 };
 
 impl<'a> Resolver<'a> {
@@ -22,15 +20,13 @@ impl<'a> Resolver<'a> {
         let mut_or_immutable = if fn_parameter.is_mutable {
             let mut_location = self.resolve_to_location(
                 &argument_expr.expression,
-                Some(fn_parameter.resolved_type.clone().unwrap()),
+                Some(fn_parameter.resolved_type.clone()),
                 LocationSide::Rhs,
             )?;
             ResolvedArgumentExpressionOrLocation::Location(mut_location)
         } else {
-            let resolved_expr = self.resolve_expression(
-                &argument_expr.expression,
-                fn_parameter.resolved_type.as_ref(),
-            )?;
+            let resolved_expr = self
+                .resolve_expression(&argument_expr.expression, Some(&fn_parameter.resolved_type))?;
             ResolvedArgumentExpressionOrLocation::Expression(resolved_expr)
         };
 
@@ -59,22 +55,6 @@ impl<'a> Resolver<'a> {
         //Self::verify_arguments(span, fn_parameters, &resolved_arguments)?;
 
         Ok(resolved_arguments)
-    }
-
-    pub(crate) fn check_for_internal_static_call(
-        &mut self,
-        qualified_type_reference: &QualifiedTypeIdentifier,
-        function_name: &Node,
-        arguments: &[MutableOrImmutableExpression],
-    ) -> Result<Option<ResolvedExpression>, ResolveError> {
-        let (type_name_text, function_name_text) = {
-            (
-                self.get_text(&qualified_type_reference.name.0).to_string(),
-                self.get_text(function_name),
-            )
-        };
-
-        Ok(None)
     }
 
     pub fn resolve_mut_or_immutable_expression(

@@ -1,6 +1,6 @@
-use crate::extra::{SparseValueId, SparseValueMap};
+use crate::extra::SparseValueId;
 use crate::prelude::Value;
-use crate::value::{QuickDeserialize, RustType, SPARSE_ID_TYPE_ID, SPARSE_TYPE_ID};
+use crate::value::{QuickDeserialize, RustType, SPARSE_ID_TYPE_ID};
 use fixed32::Fp;
 use seq_map::SeqMap;
 use std::cell::RefCell;

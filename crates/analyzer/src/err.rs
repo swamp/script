@@ -123,6 +123,10 @@ pub enum ResolveErrorKind {
     IllegalIndexInChain,
     CanNotNoneCoalesce,
     UnknownParametricType,
+    NotAFunctionType,
+    ExpectedMemberFunctionOrFunctionTypeField,
+    UnknownModule,
+    NotATypeGenerator,
 }
 
 impl From<SemanticError> for ResolveError {

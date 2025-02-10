@@ -41,6 +41,7 @@ use swamp_script_source_map::SourceMap;
 use tracing::error;
 use tracing::info;
 
+#[must_use]
 pub fn convert_range_mode(range_mode: &RangeMode) -> ResolvedRangeMode {
     match range_mode {
         RangeMode::Inclusive => ResolvedRangeMode::Inclusive,
@@ -318,7 +319,7 @@ impl<'a> Resolver<'a> {
             let param_type = self.resolve_type(&parameter.param_type)?;
             resolved_parameters.push(ResolvedTypeForParameter {
                 name: self.get_text(&parameter.variable.name).to_string(),
-                resolved_type: Some(param_type),
+                resolved_type: param_type,
                 is_mutable: parameter.variable.is_mutable.is_some(),
                 node: Some(ResolvedParameterNode {
                     is_mutable: self.to_node_option(&parameter.variable.is_mutable),
@@ -515,7 +516,7 @@ impl<'a> Resolver<'a> {
                         Box::from(range.max),
                         range.mode,
                     ),
-                    ResolvedType::Unit, // TODO: (Box::from(ResolvedType::Int)),
+                    ResolvedType::Range,
                     &ast_expression.node,
                 )
             }
@@ -762,7 +763,7 @@ impl<'a> Resolver<'a> {
             kind,
         };
 
-        vec.push(postfix)
+        vec.push(postfix);
     }
 
     pub fn resolve_struct_field(
@@ -798,18 +799,6 @@ impl<'a> Resolver<'a> {
         &mut self,
         chain: &PostfixChain,
     ) -> Result<ResolvedExpression, ResolveError> {
-        if let ExpressionKind::StaticMemberFunctionReference(
-            qualified_type_reference,
-            member_name,
-        ) = &chain.base.kind
-        {
-            if let Some(found_expr) =
-                self.check_for_internal_static_call(qualified_type_reference, member_name, &vec![])?
-            {
-                return Ok(found_expr);
-            }
-        }
-
         let (start, is_mutable) = self.resolve_expression_get_mutability(&chain.base, None)?;
 
         let mut tv = ResolvedTypeWithMut {
@@ -1140,6 +1129,7 @@ impl<'a> Resolver<'a> {
                 Some(map_type_ref.key_type.clone()),
                 map_type_ref.value_type.clone(),
             ),
+            ResolvedType::Range => (None, ResolvedType::Int),
             ResolvedType::String => (Some(ResolvedType::Int), ResolvedType::String),
             //ResolvedType::Iterator(item_type) => (None, *item_type.clone()),
             ResolvedType::Struct(resolved_struct_ref) => {
@@ -1210,11 +1200,11 @@ impl<'a> Resolver<'a> {
         ast_expressions: &[Expression],
     ) -> Result<(Vec<ResolvedExpression>, ResolvedType), ResolveError> {
         if ast_expressions.is_empty() {
-            if expected_type_for_last == Some(&ResolvedType::Unit) {
-                return Ok((vec![], ResolvedType::Unit));
+            return if expected_type_for_last == Some(&ResolvedType::Unit) {
+                Ok((vec![], ResolvedType::Unit))
             } else {
-                return Err(self.create_err(ResolveErrorKind::EmptyBlockWrongType, node));
-            }
+                Err(self.create_err(ResolveErrorKind::EmptyBlockWrongType, node))
+            };
         }
         let mut resolved_expressions = Vec::new();
 
@@ -1663,7 +1653,7 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn resolve_format_specifier(
+    const fn resolve_format_specifier(
         &self,
         ast_format_specifier: &Option<FormatSpecifier>,
     ) -> Option<ResolvedFormatSpecifier> {
@@ -1910,7 +1900,7 @@ impl<'a> Resolver<'a> {
             }
             ResolvedExpressionKind::VariableReassignment(found_var, Box::from(source_expr))
         } else {
-            let new_var = self.create_variable(&variable, &ty)?;
+            let new_var = self.create_variable(variable, &ty)?;
             ResolvedExpressionKind::VariableDefinition(new_var, Box::from(source_expr))
         };
 
@@ -1961,7 +1951,7 @@ impl<'a> Resolver<'a> {
             kind,
         };
 
-        vec.push(postfix)
+        vec.push(postfix);
     }
 
     #[allow(clippy::too_many_lines)]
@@ -2080,6 +2070,18 @@ impl<'a> Resolver<'a> {
                             ty = lookup_type;
                         }
 
+                        ResolvedType::Struct(resolved_struct_ref) => {
+                            let return_type = {
+                                let borrow = resolved_struct_ref.borrow();
+                                let subscript_fn =
+                                    borrow.functions.get(&"subscript_mut".to_string()).unwrap();
+                                &subscript_fn.signature().parameters[2].resolved_type.clone()
+                            };
+                            ty = return_type.clone();
+                            //tv.resolved_type = *lookup_returns.clone();
+                            //tv.is_mutable = false;
+                        }
+
                         ResolvedType::RustType(rust_type) => {
                             let val_type = ResolvedType::Unit; // TODO: generic_params[0].clone();
                             if rust_type.number == SPARSE_TYPE_ID {
@@ -2118,14 +2120,14 @@ impl<'a> Resolver<'a> {
                 }
 
                 Postfix::MemberCall(node, _) => {
-                    return Err(self.create_err(ResolveErrorKind::CallsCanNotBePartOfChain, &node));
+                    return Err(self.create_err(ResolveErrorKind::CallsCanNotBePartOfChain, node));
                 }
 
                 Postfix::FunctionCall(node, _) => {
-                    return Err(self.create_err(ResolveErrorKind::CallsCanNotBePartOfChain, &node));
+                    return Err(self.create_err(ResolveErrorKind::CallsCanNotBePartOfChain, node));
                 }
                 Postfix::OptionUnwrap(node) => {
-                    return Err(self.create_err(ResolveErrorKind::UnwrapCanNotBePartOfChain, &node));
+                    return Err(self.create_err(ResolveErrorKind::UnwrapCanNotBePartOfChain, node));
                 }
                 Postfix::NoneCoalesce(expr) => {
                     return Err(self.create_err(
@@ -2365,7 +2367,7 @@ impl<'a> Resolver<'a> {
             kind,
             ty,
             starting_variable: Rc::new(ResolvedVariable {
-                name: Default::default(),
+                name: ResolvedNode::default(),
                 resolved_type: ResolvedType::Int,
                 mutable_node: None,
                 scope_index: 0,
@@ -2428,9 +2430,9 @@ impl<'a> Resolver<'a> {
                 Box::from(tuple_resolved),
             );
 
-            Ok(self.create_expr(expr_kind, ResolvedType::Unit, &node))
+            Ok(self.create_expr(expr_kind, ResolvedType::Unit, node))
         } else {
-            Err(self.create_err(ResolveErrorKind::CanNotDestructure, &node))
+            Err(self.create_err(ResolveErrorKind::CanNotDestructure, node))
         }
     }
 
@@ -2448,7 +2450,6 @@ impl<'a> Resolver<'a> {
         if !self_type
             .resolved_type
             .clone()
-            .unwrap()
             .same_type(&ResolvedType::Struct(struct_type.clone()))
             || self_type.is_mutable && !is_mutable
         {
@@ -2458,7 +2459,7 @@ impl<'a> Resolver<'a> {
         }
 
         let resolved_arguments = self.resolve_and_verify_parameters(
-            &resolved_node,
+            resolved_node,
             &signature.parameters[1..],
             arguments,
         )?;
@@ -2495,7 +2496,7 @@ impl<'a> Resolver<'a> {
         suffixes.push(struct_field_postfix);
 
         let resolved_arguments =
-            self.resolve_and_verify_parameters(&resolved_node, &signature.parameters, arguments)?;
+            self.resolve_and_verify_parameters(resolved_node, &signature.parameters, arguments)?;
 
         let call_kind = ResolvedPostfixKind::FunctionCall(resolved_arguments);
 
@@ -2549,15 +2550,12 @@ impl<'a> Resolver<'a> {
                     arguments,
                 )?
             } else {
-                return Err(self.create_err(
-                    ResolveErrorKind::NotValidLocationStartingPoint,
-                    &member_name,
-                ));
+                return Err(self.create_err(ResolveErrorKind::NotAFunctionType, member_name));
             }
         } else {
             return Err(self.create_err(
-                ResolveErrorKind::NotValidLocationStartingPoint,
-                &member_name,
+                ResolveErrorKind::ExpectedMemberFunctionOrFunctionTypeField,
+                member_name,
             ));
         };
 
