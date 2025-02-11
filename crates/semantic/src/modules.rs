@@ -10,7 +10,7 @@ use crate::{
 };
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::fmt::{Debug, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use std::rc::Rc;
 
 #[derive(Debug)]
@@ -18,8 +18,6 @@ pub struct ResolvedModules {
     pub modules: HashMap<Vec<String>, ResolvedModuleRef>,
     pub constants: Vec<ResolvedConstantRef>,
 }
-
-impl ResolvedModules {}
 
 impl Default for ResolvedModules {
     fn default() -> Self {

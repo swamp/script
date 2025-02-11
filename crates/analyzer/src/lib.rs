@@ -20,6 +20,7 @@ pub mod variable;
 use crate::err::{ResolveError, ResolveErrorKind};
 use crate::lookup::NameLookup;
 use seq_map::SeqMap;
+use std::fmt::{Display, Formatter};
 use std::mem::take;
 use std::num::{ParseFloatError, ParseIntError};
 use std::rc::Rc;
@@ -2580,4 +2581,46 @@ impl<'a> Resolver<'a> {
     }
 
      */
+}
+
+pub struct ResolvedModulesDisplay<'a> {
+    pub resolved_modules: &'a ResolvedModules,
+    pub source_map: &'a dyn SourceMapLookup,
+}
+
+use swamp_script_core::prelude::SourceMapLookup;
+use yansi::Paint;
+
+impl Display for ResolvedModulesDisplay<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let sm = self.source_map;
+        let mods = self.resolved_modules;
+
+        for (name, module) in &mods.modules {
+            writeln!(f, "{:?}: ", name.green())?;
+
+            let mod_borrow = module.borrow();
+            let ns = &mod_borrow.namespace.borrow();
+            for (_struct_name, struct_type) in ns.structs() {
+                writeln!(f, "  {}:  ", struct_type.borrow().assigned_name.yellow())?;
+                for (field_name, field) in &struct_type.borrow().anon_struct_type.defined_fields {
+                    writeln!(
+                        f,
+                        "      {}:  {}",
+                        field_name.cyan(),
+                        field.field_type.magenta(),
+                    )?;
+                }
+
+                if !struct_type.borrow().functions.is_empty() {
+                    writeln!(f, "    {}", "functions".bright_red())?;
+                    for (func_name, func) in &struct_type.borrow().functions {
+                        writeln!(f, "      {}:  {}", func_name.cyan(), func.magenta(),)?;
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
 }

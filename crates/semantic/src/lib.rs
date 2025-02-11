@@ -94,7 +94,12 @@ pub struct FunctionTypeSignature {
 
 impl Display for FunctionTypeSignature {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        write!(f, "({})->{}", comma(&self.parameters), self.return_type)
+        write!(
+            f,
+            "({}) -> {}",
+            comma(&self.parameters),
+            self.return_type.bright_green()
+        )
     }
 }
 
@@ -141,14 +146,20 @@ pub struct ResolvedTypeForParameter {
     pub node: Option<ResolvedParameterNode>,
 }
 
+use yansi::Paint;
+
 impl Display for ResolvedTypeForParameter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         write!(
             f,
             "{}{}: {:?}",
-            if self.is_mutable { "mut " } else { "" },
-            self.name,
-            self.resolved_type
+            if self.is_mutable {
+                "mut ".red()
+            } else {
+                "".white()
+            },
+            self.name.bright_green(),
+            self.resolved_type.bright_cyan(),
         )
     }
 }
@@ -212,11 +223,11 @@ impl Debug for ResolvedType {
             Self::Float => write!(f, "Float"),
             Self::String => write!(f, "String"),
             Self::Bool => write!(f, "Bool"),
-            Self::Unit => write!(f, "TUNIT()"),
+            Self::Unit => write!(f, "()"),
             Self::Array(array_type_ref) => write!(f, "[{:?}]", array_type_ref.item_type),
-            Self::Tuple(tuple_type_ref) => write!(f, "( {:?} )", tuple_type_ref.0),
+            Self::Tuple(tuple_type_ref) => write!(f, "({:?})", tuple_type_ref.0.bright_magenta()),
             Self::Struct(struct_type_ref) => {
-                write!(f, "STRUCT{}", struct_type_ref.borrow().assigned_name)
+                write!(f, "{}", struct_type_ref.borrow().assigned_name)
             }
             Self::Map(map_type_ref) => write!(
                 f,
@@ -241,13 +252,15 @@ impl Debug for ResolvedType {
 impl Display for ResolvedType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         match self {
-            Self::Int => write!(f, "Int"),
-            Self::Float => write!(f, "Float"),
-            Self::String => write!(f, "String"),
-            Self::Bool => write!(f, "Bool"),
-            Self::Unit => write!(f, "SUNIT()"),
-            Self::Array(array_ref) => write!(f, "[{}]", &array_ref.item_type.to_string()),
-            Self::Tuple(tuple) => write!(f, "({})", comma(&tuple.0)),
+            Self::Int => write!(f, "{}", "Int".white()),
+            Self::Float => write!(f, "{}", "Float".white()),
+            Self::String => write!(f, "{}", "String".white()),
+            Self::Bool => write!(f, "{}", "Bool".white()),
+            Self::Unit => write!(f, "{}", "()".white()),
+            Self::Array(array_ref) => {
+                write!(f, "[{}]", &array_ref.item_type.to_string().bright_yellow())
+            }
+            Self::Tuple(tuple) => write!(f, "({})", comma(&tuple.0).bright_magenta()),
             Self::Struct(struct_ref) => write!(f, "{}", struct_ref.borrow().assigned_name),
             Self::Map(map_ref) => write!(f, "[{}:{}]", map_ref.key_type, map_ref.value_type),
             Self::Enum(enum_type) => write!(f, "{}", enum_type.borrow().assigned_name),
@@ -258,7 +271,7 @@ impl Display for ResolvedType {
             //),
             Self::Function(signature) => write!(f, "function {signature}"),
             Self::Iterator(generating_type) => write!(f, "Iterator<{generating_type:?}>"),
-            Self::Optional(base_type) => write!(f, "{base_type}?"),
+            Self::Optional(base_type) => write!(f, "{}?", base_type.yellow()),
             Self::RustType(rust_type) => write!(f, "RustType {}", rust_type.type_name),
             Self::Range => write!(f, "Range"),
         }
@@ -640,6 +653,17 @@ pub type ResolvedFunctionRef = Rc<ResolvedFunction>;
 pub enum ResolvedFunction {
     Internal(ResolvedInternalFunctionDefinitionRef),
     External(ResolvedExternalFunctionDefinitionRef),
+}
+
+impl Display for ResolvedFunction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Internal(int) => write!(f, "")?,
+            Self::External(_) => write!(f, "external ")?,
+        };
+
+        write!(f, "{}", self.signature())
+    }
 }
 
 impl ResolvedFunction {

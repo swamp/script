@@ -10,7 +10,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use swamp_script_analyzer::prelude::ResolveError;
-use swamp_script_analyzer::ResolvedProgram;
+use swamp_script_analyzer::{ResolvedModulesDisplay, ResolvedProgram};
 use swamp_script_compile::{compile_analyze_and_link_without_version, compile_and_analyze};
 use swamp_script_core::prelude::SeqMap;
 use swamp_script_dep_loader::{create_source_map, DepLoaderError};
@@ -24,6 +24,7 @@ use swamp_script_semantic::{
     ResolvedExternalFunctionDefinition, ResolvedExternalFunctionDefinitionRef, ResolvedFunction,
     ResolvedNode, ResolvedStructType, ResolvedType, ResolvedTypeForParameter,
 };
+use swamp_script_source_map_lookup::SourceMapWrapper;
 use tracing_subscriber::EnvFilter;
 
 #[derive(Parser)]
@@ -55,7 +56,7 @@ enum Commands {
 fn init_logging() {
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
-        .with_writer(std::io::stderr)
+        .with_writer(io::stderr)
         .init();
 }
 
@@ -188,33 +189,19 @@ fn build(root_path: &Path, root_module: &str) -> Result<(), CliError> {
     {
         let mangrove_collection_module_path_without_version =
             &["mangrove".to_string(), "collection".to_string()];
-        let mut mangrove_collection_module = resolved_program
+        let mangrove_collection_module = resolved_program
             .modules
             .get(mangrove_collection_module_path_without_version)
             .unwrap();
 
-        let mut md = mangrove_collection_module.borrow_mut();
+        let md = mangrove_collection_module.borrow_mut();
         let mut ns = md.namespace.borrow_mut();
-        /*
-        let mut defined_fields = SeqMap::new();
-        let concretized_rust_type_ref = ResolvedRustType {
-            type_name: concretized_struct_name_in_namespace,
-            number: 9, // TODO: generate number
-        };
-
-        let sparse_map_type = ResolvedType::RustType(concretized_rust_type_ref.clone());
-
-        defined_fields.insert("_hidden_rust_type", ResolvedAnonymousStructFieldType {
-            identifier: None,
-            field_type: sparse_map_type,
-        } );*/
 
         let closure_gen = ClosureTypeGenerator::new(
             |ns: &mut ResolvedModuleNamespace,
              modules: &ResolvedModules,
              params: &[ResolvedType]| {
-                let concretized_struct_name_in_namespace =
-                    format!("Sparse<{}>", params[0].to_string());
+                let concretized_struct_name_in_namespace = format!("Sparse<{}>", params[0]);
                 if let Some(found_concrete_struct_type) =
                     ns.get_struct(&concretized_struct_name_in_namespace)
                 {
@@ -262,17 +249,6 @@ fn build(root_path: &Path, root_module: &str) -> Result<(), CliError> {
                     .get_struct("SparseId")
                     .unwrap();
                 let sparse_id_type = ResolvedType::Struct(sparse_id_struct_type);
-
-                /*
-                let rust_type_ref_for_id = ResolvedRustType {
-                    type_name: "SparseId".to_string(),
-                    number: 999,
-                };
-
-                let sparse_id_type =
-                    ResolvedType::RustType(ResolvedRustTypeRef::from(rust_type_ref_for_id.clone()));
-
-                 */
 
                 // ::iter()
                 let external_iter_fn = ResolvedExternalFunctionDefinition {
@@ -413,7 +389,7 @@ fn build(root_path: &Path, root_module: &str) -> Result<(), CliError> {
                                 node: None,
                             },
                         ],
-                        return_type: Box::from(sparse_id_type.clone()),
+                        return_type: Box::from(sparse_id_type),
                     },
                     id: 0,
                 };
@@ -439,20 +415,24 @@ fn build(root_path: &Path, root_module: &str) -> Result<(), CliError> {
         &mut resolved_program,
         &mut source_map,
     );
+
+    let lookup = SourceMapWrapper { source_map };
     match result {
-        Ok(program) => {
-            //eprintln!("{program:?}");
+        Ok(()) => {
+            eprintln!(
+                "{}",
+                ResolvedModulesDisplay {
+                    resolved_modules: &resolved_program.modules,
+                    source_map: &lookup
+                }
+            );
         }
         Err(err) => {
-            show_script_resolve_error(&err, &source_map);
+            show_script_resolve_error(&err, &lookup.source_map);
         }
     }
 
     Ok(())
-}
-
-fn module_path() -> Vec<String> {
-    vec!["main".to_string()]
 }
 
 fn run(_path: &Path) -> Result<(), CliError> {
