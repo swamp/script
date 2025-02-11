@@ -1,4 +1,4 @@
-use swamp_script_semantic::{FunctionTypeSignature, ResolvedStructTypeRef, ResolvedType};
+use swamp_script_semantic::{FunctionTypeSignature, StructTypeRef, Type};
 use swamp_script_source_map::SourceMap;
 
 pub fn span(name: &str, class: &str) -> String {
@@ -14,7 +14,7 @@ pub fn signature(function_type_signature: &FunctionTypeSignature) -> String {
     }
     s += ")";
 
-    if ResolvedType::Unit != *function_type_signature.return_type {
+    if Type::Unit != *function_type_signature.return_type {
         s += "->";
         s += &span(
             &function_type_signature.return_type.to_string(),
@@ -32,7 +32,7 @@ pub fn code(inner: &str) -> String {
     )
 }
 
-pub fn generate_html_doc(struct_ref: &ResolvedStructTypeRef, source_map: &SourceMap) -> String {
+pub fn generate_html_doc(struct_ref: &StructTypeRef, source_map: &SourceMap) -> String {
     let mut s = "".to_string();
 
     for (name, func) in &struct_ref.borrow().functions {

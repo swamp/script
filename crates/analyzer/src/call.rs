@@ -7,27 +7,26 @@ use crate::err::{ResolveError, ResolveErrorKind};
 use crate::{LocationSide, Resolver};
 use swamp_script_ast::MutableOrImmutableExpression;
 use swamp_script_semantic::{
-    ResolvedArgumentExpressionOrLocation, ResolvedMutOrImmutableExpression, ResolvedNode,
-    ResolvedType, ResolvedTypeForParameter,
+    ArgumentExpressionOrLocation, MutOrImmutableExpression, Node, Type, TypeForParameter,
 };
 
 impl<'a> Resolver<'a> {
     pub fn resolve_argument(
         &mut self,
-        fn_parameter: &ResolvedTypeForParameter,
+        fn_parameter: &TypeForParameter,
         argument_expr: &MutableOrImmutableExpression,
-    ) -> Result<ResolvedArgumentExpressionOrLocation, ResolveError> {
+    ) -> Result<ArgumentExpressionOrLocation, ResolveError> {
         let mut_or_immutable = if fn_parameter.is_mutable {
             let mut_location = self.resolve_to_location(
                 &argument_expr.expression,
                 Some(fn_parameter.resolved_type.clone()),
                 LocationSide::Rhs,
             )?;
-            ResolvedArgumentExpressionOrLocation::Location(mut_location)
+            ArgumentExpressionOrLocation::Location(mut_location)
         } else {
             let resolved_expr = self
                 .resolve_expression(&argument_expr.expression, Some(&fn_parameter.resolved_type))?;
-            ResolvedArgumentExpressionOrLocation::Expression(resolved_expr)
+            ArgumentExpressionOrLocation::Expression(resolved_expr)
         };
 
         Ok(mut_or_immutable)
@@ -35,10 +34,10 @@ impl<'a> Resolver<'a> {
 
     pub fn resolve_and_verify_parameters(
         &mut self,
-        node: &ResolvedNode,
-        fn_parameters: &[ResolvedTypeForParameter],
+        node: &Node,
+        fn_parameters: &[TypeForParameter],
         arguments: &[MutableOrImmutableExpression],
-    ) -> Result<Vec<ResolvedArgumentExpressionOrLocation>, ResolveError> {
+    ) -> Result<Vec<ArgumentExpressionOrLocation>, ResolveError> {
         if fn_parameters.len() != arguments.len() {
             return Err(self.create_err_resolved(
                 ResolveErrorKind::WrongNumberOfArguments(fn_parameters.len(), arguments.len()),
@@ -60,23 +59,23 @@ impl<'a> Resolver<'a> {
     pub fn resolve_mut_or_immutable_expression(
         &mut self,
         expr: &MutableOrImmutableExpression,
-        expected_type: Option<&ResolvedType>,
+        expected_type: Option<&Type>,
         location_side: LocationSide,
-    ) -> Result<ResolvedMutOrImmutableExpression, ResolveError> {
+    ) -> Result<MutOrImmutableExpression, ResolveError> {
         let is_mutable = self.to_node_option(&expr.is_mutable);
         let expression_or_location = if is_mutable.is_some() {
-            ResolvedArgumentExpressionOrLocation::Location(self.resolve_to_location(
+            ArgumentExpressionOrLocation::Location(self.resolve_to_location(
                 &expr.expression,
                 expected_type.cloned(),
                 location_side,
             )?)
         } else {
-            ResolvedArgumentExpressionOrLocation::Expression(
+            ArgumentExpressionOrLocation::Expression(
                 self.resolve_expression(&expr.expression, expected_type)?,
             )
         };
 
-        Ok(ResolvedMutOrImmutableExpression {
+        Ok(MutOrImmutableExpression {
             expression_or_location,
             is_mutable,
         })

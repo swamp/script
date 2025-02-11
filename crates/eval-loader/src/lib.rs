@@ -10,18 +10,18 @@ use swamp_script_analyzer::err::ResolveErrorKind;
 use swamp_script_analyzer::lookup::NameLookup;
 use swamp_script_analyzer::prelude::*;
 use swamp_script_dep_loader::prelude::*;
-use swamp_script_semantic::modules::ResolvedModules;
+use swamp_script_semantic::modules::Modules;
 use swamp_script_semantic::prelude::*;
 use swamp_script_source_map::SourceMap;
 
 pub fn resolve_to_new_module(
-    state: &mut ResolvedProgramState,
-    modules: &mut ResolvedModules,
+    state: &mut ProgramState,
+    modules: &mut Modules,
     module_path: &[String],
     source_map: &SourceMap,
     ast_module: &ParseModule,
 ) -> Result<(), ResolveError> {
-    let resolved_module = ResolvedModule::new(module_path);
+    let resolved_module = Module::new(module_path);
     let resolved_module_ref = Rc::new(RefCell::new(resolved_module));
     modules.add(resolved_module_ref);
 
@@ -31,12 +31,12 @@ pub fn resolve_to_new_module(
 }
 
 pub fn resolve_to_existing_module(
-    state: &mut ResolvedProgramState,
-    mut modules: &mut ResolvedModules,
+    state: &mut ProgramState,
+    mut modules: &mut Modules,
     path: Vec<String>,
     source_map: &SourceMap,
     ast_module: &ParseModule,
-) -> Result<Option<ResolvedExpression>, ResolveError> {
+) -> Result<Option<Expression>, ResolveError> {
     let statements = {
         let mut name_lookup = NameLookup::new(path.clone(), &mut modules);
         let mut resolver = Resolver::new(state, &mut name_lookup, source_map, ast_module.file_id);
@@ -57,8 +57,8 @@ pub fn resolve_to_existing_module(
 }
 
 pub fn resolve_program(
-    state: &mut ResolvedProgramState,
-    modules: &mut ResolvedModules,
+    state: &mut ProgramState,
+    modules: &mut Modules,
     source_map: &SourceMap,
     module_paths_in_order: &[Vec<String>],
     parsed_modules: &DependencyParser,
@@ -79,7 +79,7 @@ pub fn resolve_program(
         } else {
             return Err(ResolveError {
                 kind: ResolveErrorKind::CanNotFindModule(module_path.clone()),
-                node: ResolvedNode::default(),
+                node: Node::default(),
             });
         }
     }

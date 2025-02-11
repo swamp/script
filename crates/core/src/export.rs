@@ -9,14 +9,14 @@ use fixed32::Fp;
 use swamp_script_semantic::prelude::*;
 
 pub trait SwampExport: Sized {
-    fn get_resolved_type(registry: &TypeRegistry) -> ResolvedType;
+    fn get_resolved_type(registry: &TypeRegistry) -> Type;
     fn to_swamp_value(&self, registry: &TypeRegistry) -> Value; // Added registry parameter
     /// # Errors
     ///
     fn from_swamp_value(value: &Value) -> Result<Self, String>;
 }
 impl SwampExport for Fp {
-    fn get_resolved_type(registry: &TypeRegistry) -> ResolvedType {
+    fn get_resolved_type(registry: &TypeRegistry) -> Type {
         registry.get_float_type()
     }
 
@@ -32,7 +32,7 @@ impl SwampExport for Fp {
 }
 // Primitive type implementations
 impl SwampExport for i32 {
-    fn get_resolved_type(registry: &TypeRegistry) -> ResolvedType {
+    fn get_resolved_type(registry: &TypeRegistry) -> Type {
         registry.get_int_type()
     }
 
@@ -49,7 +49,7 @@ impl SwampExport for i32 {
 }
 
 impl SwampExport for String {
-    fn get_resolved_type(registry: &TypeRegistry) -> ResolvedType {
+    fn get_resolved_type(registry: &TypeRegistry) -> Type {
         registry.get_string_type()
     }
 
@@ -66,7 +66,7 @@ impl SwampExport for String {
 }
 
 impl SwampExport for bool {
-    fn get_resolved_type(registry: &TypeRegistry) -> ResolvedType {
+    fn get_resolved_type(registry: &TypeRegistry) -> Type {
         registry.get_bool_type()
     }
 

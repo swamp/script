@@ -7,7 +7,7 @@ use crate::prelude::ValueReference;
 use std::cell::RefCell;
 use std::rc::Rc;
 use swamp_script_core::prelude::{Value, ValueError, ValueRef};
-use swamp_script_core::value::RustType;
+use swamp_script_core::value::AnyRustType;
 
 #[derive(Debug, Clone)]
 pub enum VariableValue {
@@ -37,7 +37,9 @@ impl PartialEq for VariableValue {
 
 impl VariableValue {
     #[must_use]
-    pub fn downcast_rust_mut_or_not<T: RustType + 'static>(&self) -> Option<Rc<RefCell<Box<T>>>> {
+    pub fn downcast_rust_mut_or_not<T: AnyRustType + 'static>(
+        &self,
+    ) -> Option<Rc<RefCell<Box<T>>>> {
         match self {
             VariableValue::Value(v) => v.downcast_rust(),
             VariableValue::Reference(r) => ValueReference(r.clone()).downcast_rust_mut(),

@@ -1,5 +1,5 @@
 use swamp_script_core::prelude::SourceMapLookup;
-use swamp_script_semantic::{ResolvedNode, Span};
+use swamp_script_semantic::{Node, Span};
 use swamp_script_source_map::SourceMap;
 
 #[derive(Debug)]
@@ -8,7 +8,7 @@ pub struct SourceMapWrapper {
 }
 
 impl SourceMapLookup for SourceMapWrapper {
-    fn get_text(&self, resolved_node: &ResolvedNode) -> &str {
+    fn get_text(&self, resolved_node: &Node) -> &str {
         self.source_map.get_span_source(
             resolved_node.span.file_id,
             resolved_node.span.offset as usize,

@@ -5,16 +5,16 @@
 
 pub fn new_hidden_rust_type<T: RustType + 'static>(
     name: &str,
-    rust_description: ResolvedRustTypeRef,
+    rust_description: RustTypeRef,
     value: T,
-    namespace: &mut ResolvedModuleNamespace,
-) -> Result<(Self, ResolvedStructTypeRef), SemanticError> {
-    let struct_type = namespace.util_insert_struct_type(name, &[("hidden", ResolvedType::Any)])?;
+    namespace: &mut ModuleNamespace,
+) -> Result<(Self, StructTypeRef), SemanticError> {
+    let struct_type = namespace.util_insert_struct_type(name, &[("hidden", Type::Any)])?;
     let struct_value = Self::new_hidden_rust_struct(
         struct_type.clone(),
         rust_description,
         value,
-        ResolvedType::Struct(struct_type.clone()),
+        Type::Struct(struct_type.clone()),
     );
     Ok((struct_value, struct_type))
 }

@@ -10,20 +10,20 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use swamp_script_analyzer::prelude::ResolveError;
-use swamp_script_analyzer::ResolvedProgram;
+use swamp_script_analyzer::Program;
 use swamp_script_compile::{compile_analyze_and_link_without_version, compile_and_analyze};
 use swamp_script_core::prelude::SeqMap;
 use swamp_script_dep_loader::{create_source_map, DepLoaderError};
 use swamp_script_error_report::{show_script_resolve_error, ScriptResolveError};
 use swamp_script_eval::err::ExecuteError;
 use swamp_script_parser::prelude::*;
-use swamp_script_pretty_print::ResolvedModulesDisplay;
-use swamp_script_semantic::ns::{ClosureTypeGenerator, ResolvedModuleNamespace};
-use swamp_script_semantic::prelude::ResolvedModules;
+use swamp_script_pretty_print::ModulesDisplay;
+use swamp_script_semantic::ns::{ClosureTypeGenerator, ModuleNamespace};
+use swamp_script_semantic::prelude::Modules;
 use swamp_script_semantic::{
-    FunctionTypeSignature, IteratorTypeDetails, IteratorYieldType, ResolvedAnonymousStructType,
-    ResolvedExternalFunctionDefinition, ResolvedExternalFunctionDefinitionRef, ResolvedFunction,
-    ResolvedNode, ResolvedStructType, ResolvedType, ResolvedTypeForParameter,
+    AnonymousStructType, ExternalFunctionDefinition, ExternalFunctionDefinitionRef, Function,
+    FunctionTypeSignature, IteratorTypeDetails, IteratorYieldType, Node, StructType, Type,
+    TypeForParameter,
 };
 use swamp_script_source_map_lookup::SourceMapWrapper;
 use tracing_subscriber::EnvFilter;
@@ -162,7 +162,7 @@ pub struct CliContext;
 #[allow(clippy::too_many_lines)]
 fn build(root_path: &Path, root_module: &str) -> Result<(), CliError> {
     let mut source_map = create_source_map(root_path)?;
-    let mut resolved_program = ResolvedProgram::new();
+    let mut resolved_program = Program::new();
 
     // std::
     let mangrove_std_module_path = &["mangrove-0.0.0".to_string(), "std".to_string()];
@@ -199,23 +199,21 @@ fn build(root_path: &Path, root_module: &str) -> Result<(), CliError> {
         let mut ns = md.namespace.borrow_mut();
 
         let closure_gen = ClosureTypeGenerator::new(
-            |ns: &mut ResolvedModuleNamespace,
-             modules: &ResolvedModules,
-             params: &[ResolvedType]| {
+            |ns: &mut ModuleNamespace, modules: &Modules, params: &[Type]| {
                 let concretized_struct_name_in_namespace = format!("Sparse<{}>", params[0]);
                 if let Some(found_concrete_struct_type) =
                     ns.get_struct(&concretized_struct_name_in_namespace)
                 {
-                    return Ok(ResolvedType::Struct(found_concrete_struct_type));
+                    return Ok(Type::Struct(found_concrete_struct_type));
                 }
 
                 let value_type = &params[0];
-                let optional_value_type = ResolvedType::Optional(Box::from(value_type.clone()));
+                let optional_value_type = Type::Optional(Box::from(value_type.clone()));
 
-                let create_struct = ResolvedStructType {
-                    name: ResolvedNode::default(),
+                let create_struct = StructType {
+                    name: Node::default(),
                     assigned_name: concretized_struct_name_in_namespace,
-                    anon_struct_type: ResolvedAnonymousStructType {
+                    anon_struct_type: AnonymousStructType {
                         defined_fields: SeqMap::default(),
                     },
                     functions: SeqMap::default(),
@@ -226,17 +224,17 @@ fn build(root_path: &Path, root_module: &str) -> Result<(), CliError> {
                 let mut functions = SeqMap::new();
 
                 // ::new()
-                let external_def_new_fn = ResolvedExternalFunctionDefinition {
+                let external_def_new_fn = ExternalFunctionDefinition {
                     name: None,
                     assigned_name: "new".to_string(),
                     signature: FunctionTypeSignature {
                         parameters: vec![],
-                        return_type: Box::new(ResolvedType::Struct(create_struct_ref.clone())),
+                        return_type: Box::new(Type::Struct(create_struct_ref.clone())),
                     },
                     id: 0,
                 };
-                let external_func = Rc::new(ResolvedFunction::External(
-                    ResolvedExternalFunctionDefinitionRef::from(external_def_new_fn),
+                let external_func = Rc::new(Function::External(
+                    ExternalFunctionDefinitionRef::from(external_def_new_fn),
                 ));
                 functions.insert("new".to_string(), external_func).unwrap();
 
@@ -249,83 +247,81 @@ fn build(root_path: &Path, root_module: &str) -> Result<(), CliError> {
                     .borrow()
                     .get_struct("SparseId")
                     .unwrap();
-                let sparse_id_type = ResolvedType::Struct(sparse_id_struct_type);
+                let sparse_id_type = Type::Struct(sparse_id_struct_type);
 
                 // ::iter()
-                let external_iter_fn = ResolvedExternalFunctionDefinition {
+                let external_iter_fn = ExternalFunctionDefinition {
                     name: None,
                     assigned_name: "iter".to_string(),
                     signature: FunctionTypeSignature {
                         parameters: vec![],
-                        return_type: Box::new(ResolvedType::Iterator(Box::from(
-                            IteratorTypeDetails {
-                                yield_type: IteratorYieldType::KeyValue(
-                                    sparse_id_type.clone(),
-                                    value_type.clone(),
-                                ),
-                            },
-                        ))),
+                        return_type: Box::new(Type::Iterator(Box::from(IteratorTypeDetails {
+                            yield_type: IteratorYieldType::KeyValue(
+                                sparse_id_type.clone(),
+                                value_type.clone(),
+                            ),
+                        }))),
                     },
                     id: 0,
                 };
-                let external_iter_func = Rc::new(ResolvedFunction::External(
-                    ResolvedExternalFunctionDefinitionRef::from(external_iter_fn),
+                let external_iter_func = Rc::new(Function::External(
+                    ExternalFunctionDefinitionRef::from(external_iter_fn),
                 ));
                 functions
                     .insert("iter".to_string(), external_iter_func)
                     .unwrap();
 
                 // ::subscript()
-                let external_subscript_mut_fn = ResolvedExternalFunctionDefinition {
+                let external_subscript_mut_fn = ExternalFunctionDefinition {
                     name: None,
                     assigned_name: "subscript_mut".to_string(),
                     signature: FunctionTypeSignature {
                         parameters: vec![
-                            ResolvedTypeForParameter {
+                            TypeForParameter {
                                 name: "self".to_string(),
-                                resolved_type: ResolvedType::Struct(create_struct_ref.clone()),
+                                resolved_type: Type::Struct(create_struct_ref.clone()),
                                 is_mutable: true,
                                 node: None,
                             },
-                            ResolvedTypeForParameter {
+                            TypeForParameter {
                                 name: "index".to_string(),
-                                resolved_type: ResolvedType::Int,
+                                resolved_type: Type::Int,
                                 is_mutable: false,
                                 node: None,
                             },
-                            ResolvedTypeForParameter {
+                            TypeForParameter {
                                 name: "out".to_string(),
                                 resolved_type: optional_value_type.clone(),
                                 is_mutable: true,
                                 node: None,
                             },
                         ],
-                        return_type: Box::from(ResolvedType::Unit),
+                        return_type: Box::from(Type::Unit),
                     },
                     id: 0,
                 };
-                let external_subscript_mut_func = Rc::new(ResolvedFunction::External(
-                    ResolvedExternalFunctionDefinitionRef::from(external_subscript_mut_fn),
+                let external_subscript_mut_func = Rc::new(Function::External(
+                    ExternalFunctionDefinitionRef::from(external_subscript_mut_fn),
                 ));
                 functions
                     .insert("subscript_mut".to_string(), external_subscript_mut_func)
                     .unwrap();
 
                 // ::subscript()
-                let external_subscript_fn = ResolvedExternalFunctionDefinition {
+                let external_subscript_fn = ExternalFunctionDefinition {
                     name: None,
                     assigned_name: "subscript".to_string(),
                     signature: FunctionTypeSignature {
                         parameters: vec![
-                            ResolvedTypeForParameter {
+                            TypeForParameter {
                                 name: "self".to_string(),
-                                resolved_type: ResolvedType::Struct(create_struct_ref.clone()),
+                                resolved_type: Type::Struct(create_struct_ref.clone()),
                                 is_mutable: true,
                                 node: None,
                             },
-                            ResolvedTypeForParameter {
+                            TypeForParameter {
                                 name: "index".to_string(),
-                                resolved_type: ResolvedType::Int,
+                                resolved_type: Type::Int,
                                 is_mutable: false,
                                 node: None,
                             },
@@ -334,26 +330,26 @@ fn build(root_path: &Path, root_module: &str) -> Result<(), CliError> {
                     },
                     id: 0,
                 };
-                let external_subscript_func = Rc::new(ResolvedFunction::External(
-                    ResolvedExternalFunctionDefinitionRef::from(external_subscript_fn),
+                let external_subscript_func = Rc::new(Function::External(
+                    ExternalFunctionDefinitionRef::from(external_subscript_fn),
                 ));
                 functions
                     .insert("subscript".to_string(), external_subscript_func)
                     .unwrap();
 
                 // ::remove()
-                let remove_fn_def = ResolvedExternalFunctionDefinition {
+                let remove_fn_def = ExternalFunctionDefinition {
                     name: None,
                     assigned_name: "remove".to_string(),
                     signature: FunctionTypeSignature {
                         parameters: vec![
-                            ResolvedTypeForParameter {
+                            TypeForParameter {
                                 name: "self".to_string(),
-                                resolved_type: ResolvedType::Struct(create_struct_ref.clone()),
+                                resolved_type: Type::Struct(create_struct_ref.clone()),
                                 is_mutable: true,
                                 node: None,
                             },
-                            ResolvedTypeForParameter {
+                            TypeForParameter {
                                 name: "id".to_string(),
                                 resolved_type: sparse_id_type.clone(),
                                 is_mutable: false,
@@ -364,26 +360,26 @@ fn build(root_path: &Path, root_module: &str) -> Result<(), CliError> {
                     },
                     id: 0,
                 };
-                let remove_fn_def_ref = Rc::new(ResolvedFunction::External(
-                    ResolvedExternalFunctionDefinitionRef::from(remove_fn_def),
+                let remove_fn_def_ref = Rc::new(Function::External(
+                    ExternalFunctionDefinitionRef::from(remove_fn_def),
                 ));
                 functions
                     .insert("remove".to_string(), remove_fn_def_ref)
                     .unwrap();
 
                 // ::add()
-                let add_fn_def = ResolvedExternalFunctionDefinition {
+                let add_fn_def = ExternalFunctionDefinition {
                     name: None,
                     assigned_name: "add".to_string(),
                     signature: FunctionTypeSignature {
                         parameters: vec![
-                            ResolvedTypeForParameter {
+                            TypeForParameter {
                                 name: "self".to_string(),
-                                resolved_type: ResolvedType::Struct(create_struct_ref.clone()),
+                                resolved_type: Type::Struct(create_struct_ref.clone()),
                                 is_mutable: true,
                                 node: None,
                             },
-                            ResolvedTypeForParameter {
+                            TypeForParameter {
                                 name: "value".to_string(),
                                 resolved_type: value_type.clone(),
                                 is_mutable: false,
@@ -394,8 +390,8 @@ fn build(root_path: &Path, root_module: &str) -> Result<(), CliError> {
                     },
                     id: 0,
                 };
-                let add_fn_def_ref = Rc::new(ResolvedFunction::External(
-                    ResolvedExternalFunctionDefinitionRef::from(add_fn_def),
+                let add_fn_def_ref = Rc::new(Function::External(
+                    ExternalFunctionDefinitionRef::from(add_fn_def),
                 ));
                 functions.insert("add".to_string(), add_fn_def_ref).unwrap();
 
@@ -403,7 +399,7 @@ fn build(root_path: &Path, root_module: &str) -> Result<(), CliError> {
 
                 create_struct_ref.borrow_mut().functions = functions;
 
-                Ok(ResolvedType::Struct(create_struct_ref))
+                Ok(Type::Struct(create_struct_ref))
             },
         );
 
@@ -422,7 +418,7 @@ fn build(root_path: &Path, root_module: &str) -> Result<(), CliError> {
         Ok(()) => {
             eprintln!(
                 "{}",
-                ResolvedModulesDisplay {
+                ModulesDisplay {
                     resolved_modules: &resolved_program.modules,
                     source_map: &lookup
                 }

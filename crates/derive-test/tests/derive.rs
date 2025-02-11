@@ -21,7 +21,7 @@ fn to_resolved_type() {
 
     let resolved = TestStruct::get_resolved_type(&registry);
 
-    if let ResolvedType::Struct(def) = resolved {
+    if let Type::Struct(def) = resolved {
         let d = def.borrow();
         assert_eq!(d.name.text, "TestStruct");
         assert_eq!(d.number, 1);
@@ -195,7 +195,7 @@ fn test_enum_definition() {
 
     let resolved_type = ExampleEnum::get_resolved_type(&registry);
 
-    if let ResolvedType::Enum(_enum_type) = resolved_type {
+    if let Type::Enum(_enum_type) = resolved_type {
         let struct_variant = ExampleEnum::Struct { x: 42, y: -7 };
         let struct_value = struct_variant.to_swamp_value(&registry);
 
@@ -206,11 +206,11 @@ fn test_enum_definition() {
 
             assert!(matches!(
                 fields.get(&IdentifierName("x".to_string())).unwrap(),
-                ResolvedType::Int(_)
+                Type::Int(_)
             ));
             assert!(matches!(
                 fields.get(&IdentifierName("y".to_string())).unwrap(),
-                ResolvedType::Int(_)
+                Type::Int(_)
             ));
         }
 
@@ -222,9 +222,9 @@ fn test_enum_definition() {
             let fields = &tuple_type.fields_in_order;
             assert_eq!(fields.len(), 3);
 
-            assert!(matches!(fields[0], ResolvedType::Int(_)));
-            assert!(matches!(fields[1], ResolvedType::Float(_)));
-            assert!(matches!(fields[2], ResolvedType::Bool(_)));
+            assert!(matches!(fields[0], Type::Int(_)));
+            assert!(matches!(fields[1], Type::Float(_)));
+            assert!(matches!(fields[2], Type::Bool(_)));
         }
 
         let simple_variant = ExampleEnum::Single;
@@ -234,7 +234,7 @@ fn test_enum_definition() {
             assert_eq!(variant_type.name.text, "Single");
             assert!(matches!(
                 variant_type.data,
-                ResolvedEnumVariantContainerType::Nothing
+                EnumVariantContainerType::Nothing
             ));
         }
     } else {

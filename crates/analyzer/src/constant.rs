@@ -6,22 +6,19 @@
 use crate::err::{ResolveError, ResolveErrorKind};
 use crate::Resolver;
 use swamp_script_ast::{ConstantIdentifier, ConstantInfo};
-use swamp_script_semantic::{
-    ResolvedConstant, ResolvedConstantRef, ResolvedDefinition, ResolvedExpression,
-    ResolvedExpressionKind, ResolvedNode,
-};
+use swamp_script_semantic::{Constant, ConstantRef, Definition, Expression, ExpressionKind, Node};
 
 impl<'a> Resolver<'a> {
     fn resolve_constant(
         &mut self,
         constant: &ConstantInfo,
-    ) -> Result<(ResolvedConstantRef, String, ResolvedNode), ResolveError> {
+    ) -> Result<(ConstantRef, String, Node), ResolveError> {
         let (constant, name_node, name_text) = {
             let resolved_expr = self.resolve_expression(&constant.expression, None)?;
             let resolved_type = resolved_expr.ty.clone();
             let name_node = self.to_node(&constant.constant_identifier.0);
             let name_text = self.get_text_resolved(&name_node).to_string();
-            let constant = ResolvedConstant {
+            let constant = Constant {
                 name: name_node.clone(),
                 assigned_name: name_text.to_string(),
                 id: 0xffff,
@@ -39,7 +36,7 @@ impl<'a> Resolver<'a> {
     pub(crate) fn resolve_constant_definition(
         &mut self,
         constant: &ConstantInfo,
-    ) -> Result<ResolvedDefinition, ResolveError> {
+    ) -> Result<Definition, ResolveError> {
         let (constant_ref, name, node) = self.resolve_constant(constant)?;
 
         self.global
@@ -55,19 +52,19 @@ impl<'a> Resolver<'a> {
                 )
             })?;
 
-        Ok(ResolvedDefinition::Constant(node, constant_ref))
+        Ok(Definition::Constant(node, constant_ref))
     }
 
     pub(crate) fn resolve_constant_access(
         &self,
         constant_identifier: &ConstantIdentifier,
-    ) -> Result<ResolvedExpression, ResolveError> {
+    ) -> Result<Expression, ResolveError> {
         self.try_find_constant(constant_identifier).map_or_else(
             || Err(self.create_err(ResolveErrorKind::UnknownConstant, &constant_identifier.0)),
             |constant_ref| {
                 let ty = constant_ref.resolved_type.clone();
                 Ok(self.create_expr(
-                    ResolvedExpressionKind::ConstantAccess(constant_ref),
+                    ExpressionKind::ConstantAccess(constant_ref),
                     ty,
                     &constant_identifier.0,
                 ))
@@ -78,7 +75,7 @@ impl<'a> Resolver<'a> {
     pub fn try_find_constant(
         &self,
         constant_identifier: &ConstantIdentifier,
-    ) -> Option<ResolvedConstantRef> {
+    ) -> Option<ConstantRef> {
         let constant_name = self.get_text(&constant_identifier.0);
         for scope in self.scope.block_scope_stack.iter().rev() {
             if let Some(value) = scope.constants.get(&constant_name.to_string()) {

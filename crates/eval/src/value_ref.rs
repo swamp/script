@@ -10,7 +10,7 @@ use std::rc::Rc;
 use swamp_script_core::extra::{SparseValueId, SparseValueMap};
 use swamp_script_core::prelude::{Value, ValueError};
 use swamp_script_core::value::ValueRef;
-use swamp_script_core::value::{RustType, SPARSE_TYPE_ID};
+use swamp_script_core::value::{AnyRustType, SPARSE_TYPE_ID};
 use tracing::info;
 
 #[derive(Debug, Clone)]
@@ -109,7 +109,7 @@ impl ValueReference {
         Ok(result)
     }
     #[must_use]
-    pub fn downcast_rust_mut<T: RustType + 'static>(&self) -> Option<Rc<RefCell<Box<T>>>> {
+    pub fn downcast_rust_mut<T: AnyRustType + 'static>(&self) -> Option<Rc<RefCell<Box<T>>>> {
         match &*self.0.borrow() {
             Value::RustValue(_rust_type_ref, rc) => {
                 let type_matches = {

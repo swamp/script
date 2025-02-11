@@ -5,21 +5,20 @@
 
 use crate::err::{ResolveError, ResolveErrorKind};
 use crate::Resolver;
-use swamp_script_ast::{GuardClause, Node, NormalPattern, Pattern, PatternElement};
+
 use swamp_script_semantic::{
-    ResolvedEnumVariantType, ResolvedEnumVariantTypeRef, ResolvedNormalPattern, ResolvedPattern,
-    ResolvedPatternElement, ResolvedType,
+    EnumVariantType, EnumVariantTypeRef, NormalPattern, Pattern, PatternElement, Type,
 };
 use tracing::info;
 
 impl<'a> Resolver<'a> {
     fn find_variant_in_pattern(
         &self,
-        expression_type: &ResolvedType,
-        ast_name: &Node,
-    ) -> Result<ResolvedEnumVariantTypeRef, ResolveError> {
+        expression_type: &Type,
+        ast_name: &swamp_script_ast::Node,
+    ) -> Result<EnumVariantTypeRef, ResolveError> {
         let enum_type_ref = match expression_type {
-            ResolvedType::Enum(enum_type_ref) => enum_type_ref,
+            Type::Enum(enum_type_ref) => enum_type_ref,
             _ => Err(self.create_err(ResolveErrorKind::ExpectedEnumInPattern, ast_name))?,
         };
 
@@ -41,28 +40,27 @@ impl<'a> Resolver<'a> {
 
     pub(crate) fn resolve_pattern(
         &mut self,
-        ast_pattern: &Pattern,
-        expected_condition_type: &ResolvedType,
-    ) -> Result<(ResolvedPattern, bool), ResolveError> {
+        ast_pattern: &swamp_script_ast::Pattern,
+        expected_condition_type: &Type,
+    ) -> Result<(Pattern, bool), ResolveError> {
         match ast_pattern {
-            Pattern::Wildcard(node) => Ok((ResolvedPattern::Wildcard(self.to_node(node)), false)),
-            Pattern::NormalPattern(node, normal_pattern, maybe_guard) => {
+            swamp_script_ast::Pattern::Wildcard(node) => {
+                Ok((Pattern::Wildcard(self.to_node(node)), false))
+            }
+            swamp_script_ast::Pattern::NormalPattern(node, normal_pattern, maybe_guard) => {
                 let (normal_pattern, was_pushed) =
                     self.resolve_normal_pattern(node, normal_pattern, expected_condition_type)?;
                 let resolved_guard = if let Some(guard_clause) = maybe_guard {
                     match guard_clause {
-                        GuardClause::Wildcard(_) => None,
-                        GuardClause::Expression(clause_expr) => {
+                        swamp_script_ast::GuardClause::Wildcard(_) => None,
+                        swamp_script_ast::GuardClause::Expression(clause_expr) => {
                             Some(self.resolve_bool_expression(&clause_expr)?)
                         }
                     }
                 } else {
                     None
                 };
-                Ok((
-                    ResolvedPattern::Normal(normal_pattern, resolved_guard),
-                    was_pushed,
-                ))
+                Ok((Pattern::Normal(normal_pattern, resolved_guard), was_pushed))
             }
         }
     }
@@ -70,44 +68,43 @@ impl<'a> Resolver<'a> {
     #[allow(clippy::too_many_lines)]
     pub(crate) fn resolve_normal_pattern(
         &mut self,
-        node: &Node,
-        ast_normal_pattern: &NormalPattern,
-        expected_condition_type: &ResolvedType,
-    ) -> Result<(ResolvedNormalPattern, bool), ResolveError> {
+        node: &swamp_script_ast::Node,
+        ast_normal_pattern: &swamp_script_ast::NormalPattern,
+        expected_condition_type: &Type,
+    ) -> Result<(NormalPattern, bool), ResolveError> {
         match ast_normal_pattern {
-            NormalPattern::PatternList(elements) => {
+            swamp_script_ast::NormalPattern::PatternList(elements) => {
                 let mut resolved_elements = Vec::new();
                 let mut scope_is_pushed = false;
                 for element in elements {
                     match element {
-                        PatternElement::Variable(var) => {
+                        swamp_script_ast::PatternElement::Variable(var) => {
                             if !scope_is_pushed {
                                 self.push_block_scope("pattern_list one variable");
                                 scope_is_pushed = true;
                             }
                             let variable_ref =
                                 self.create_local_variable(var, &None, expected_condition_type)?;
-                            resolved_elements.push(ResolvedPatternElement::Variable(variable_ref));
+                            resolved_elements.push(PatternElement::Variable(variable_ref));
                         }
-                        PatternElement::Expression(expr) => {
+                        swamp_script_ast::PatternElement::Expression(expr) => {
                             return Err(self.create_err(
                                 ResolveErrorKind::ExpressionsNotAllowedInLetPattern,
                                 &expr.node,
                             ));
                         }
-                        PatternElement::Wildcard(node) => {
-                            resolved_elements
-                                .push(ResolvedPatternElement::Wildcard(self.to_node(node)));
+                        swamp_script_ast::PatternElement::Wildcard(node) => {
+                            resolved_elements.push(PatternElement::Wildcard(self.to_node(node)));
                         }
                     }
                 }
                 Ok((
-                    ResolvedNormalPattern::PatternList(resolved_elements),
+                    NormalPattern::PatternList(resolved_elements),
                     scope_is_pushed,
                 ))
             }
 
-            NormalPattern::EnumPattern(variant_name, maybe_elements) => {
+            swamp_script_ast::NormalPattern::EnumPattern(variant_name, maybe_elements) => {
                 let mut scope_was_pushed = false;
                 let enum_variant_type_ref =
                     self.find_variant_in_pattern(expected_condition_type, variant_name)?;
@@ -115,7 +112,7 @@ impl<'a> Resolver<'a> {
                 if let Some(elements) = maybe_elements {
                     let mut resolved_elements = Vec::new();
                     match &*enum_variant_type_ref {
-                        ResolvedEnumVariantType::Tuple(tuple_type) => {
+                        EnumVariantType::Tuple(tuple_type) => {
                             // For tuples, elements must be in order but can be partial
                             if elements.len() > tuple_type.fields_in_order.len() {
                                 return Err(self.create_err(
@@ -137,19 +134,18 @@ impl<'a> Resolver<'a> {
                                 elements.iter().zip(&tuple_type.fields_in_order)
                             {
                                 match element {
-                                    PatternElement::Variable(var) => {
+                                    swamp_script_ast::PatternElement::Variable(var) => {
                                         info!(?var, "ENUM TUPLE found variable to handle");
                                         let variable_ref =
                                             self.create_local_variable(var, &None, field_type)?;
                                         resolved_elements
-                                            .push(ResolvedPatternElement::Variable(variable_ref));
+                                            .push(PatternElement::Variable(variable_ref));
                                     }
-                                    PatternElement::Wildcard(node) => {
-                                        resolved_elements.push(ResolvedPatternElement::Wildcard(
-                                            self.to_node(node),
-                                        ));
+                                    swamp_script_ast::PatternElement::Wildcard(node) => {
+                                        resolved_elements
+                                            .push(PatternElement::Wildcard(self.to_node(node)));
                                     }
-                                    PatternElement::Expression(expr) => {
+                                    swamp_script_ast::PatternElement::Expression(expr) => {
                                         return Err(self.create_err(
                                             ResolveErrorKind::ExpressionsNotAllowedInLetPattern,
                                             &expr.node,
@@ -158,7 +154,7 @@ impl<'a> Resolver<'a> {
                                 }
                             }
                         }
-                        ResolvedEnumVariantType::Struct(struct_type) => {
+                        EnumVariantType::Struct(struct_type) => {
                             if !scope_was_pushed {
                                 self.push_block_scope("enum struct");
                                 scope_was_pushed = true;
@@ -166,7 +162,7 @@ impl<'a> Resolver<'a> {
                             // For structs, can match any subset of fields in any order
                             for element in elements {
                                 match element {
-                                    PatternElement::Variable(var) => {
+                                    swamp_script_ast::PatternElement::Variable(var) => {
                                         let var_name_str = self.get_text(var).to_string();
                                         // Check if the field exists
                                         let field_index = struct_type
@@ -192,18 +188,17 @@ impl<'a> Resolver<'a> {
                                         )?;
 
                                         resolved_elements.push(
-                                            ResolvedPatternElement::VariableWithFieldIndex(
+                                            PatternElement::VariableWithFieldIndex(
                                                 variable_ref,
                                                 field_index,
                                             ),
                                         );
                                     }
-                                    PatternElement::Wildcard(node) => {
-                                        resolved_elements.push(ResolvedPatternElement::Wildcard(
-                                            self.to_node(node),
-                                        ));
+                                    swamp_script_ast::PatternElement::Wildcard(node) => {
+                                        resolved_elements
+                                            .push(PatternElement::Wildcard(self.to_node(node)));
                                     }
-                                    PatternElement::Expression(expr) => {
+                                    swamp_script_ast::PatternElement::Expression(expr) => {
                                         return Err(self.create_err(
                                             ResolveErrorKind::ExpressionsNotAllowedInLetPattern,
                                             &expr.node,
@@ -212,7 +207,7 @@ impl<'a> Resolver<'a> {
                                 }
                             }
                         }
-                        ResolvedEnumVariantType::Nothing(_) => {
+                        EnumVariantType::Nothing(_) => {
                             if !elements.is_empty() {
                                 return Err(self.create_err(
                                     ResolveErrorKind::EnumVariantHasNoFields,
@@ -223,21 +218,18 @@ impl<'a> Resolver<'a> {
                     }
 
                     Ok((
-                        ResolvedNormalPattern::EnumPattern(
-                            enum_variant_type_ref,
-                            Some(resolved_elements),
-                        ),
+                        NormalPattern::EnumPattern(enum_variant_type_ref, Some(resolved_elements)),
                         scope_was_pushed,
                     ))
                 } else {
                     Ok((
-                        ResolvedNormalPattern::EnumPattern(enum_variant_type_ref, None),
+                        NormalPattern::EnumPattern(enum_variant_type_ref, None),
                         false,
                     ))
                 }
             }
 
-            NormalPattern::Literal(ast_literal) => Ok((
+            swamp_script_ast::NormalPattern::Literal(ast_literal) => Ok((
                 self.resolve_pattern_literal(node, ast_literal, expected_condition_type)?,
                 false,
             )),

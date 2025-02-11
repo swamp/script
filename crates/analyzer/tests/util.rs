@@ -10,19 +10,19 @@ use swamp_script_analyzer::prelude::ResolveError;
 use swamp_script_analyzer::Resolver;
 use swamp_script_error_report::show_error;
 use swamp_script_parser::AstParser;
-use swamp_script_semantic::modules::{ResolvedModule, ResolvedModules};
-use swamp_script_semantic::ns::ResolvedModuleNamespace;
-use swamp_script_semantic::ResolvedProgramState;
+use swamp_script_semantic::modules::{Module, Modules};
+use swamp_script_semantic::ns::ModuleNamespace;
+use swamp_script_semantic::ProgramState;
 use swamp_script_source_map::SourceMap;
 use tracing::warn;
 
-fn internal_compile(script: &str) -> Result<ResolvedModule, ResolveError> {
+fn internal_compile(script: &str) -> Result<Module, ResolveError> {
     let parser = AstParser {};
 
     let program = parser.parse_module(script).expect("Failed to parse script");
 
-    let mut state = ResolvedProgramState::new();
-    let mut modules = ResolvedModules::new();
+    let mut state = ProgramState::new();
+    let mut modules = Modules::new();
 
     let mut source_map = SourceMap::new(Path::new("tests/fixtures/"));
     let file_id = 0xffff;
@@ -56,9 +56,9 @@ fn internal_compile(script: &str) -> Result<ResolvedModule, ResolveError> {
         None => None,
     };
 
-    let ns_ref = Rc::new(RefCell::new(ResolvedModuleNamespace::new(&[])));
+    let ns_ref = Rc::new(RefCell::new(ModuleNamespace::new(&[])));
 
-    let resolved_module = ResolvedModule {
+    let resolved_module = Module {
         definitions: resolved_definitions,
         expression: maybe_resolved_expression,
         namespace: ns_ref,

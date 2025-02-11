@@ -6,11 +6,10 @@
 use crate::err::{ResolveError, ResolveErrorKind};
 use crate::Resolver;
 use std::rc::Rc;
-use swamp_script_ast::{QualifiedTypeIdentifier, Type, TypeForParameter};
+
 use swamp_script_semantic::{
-    FunctionTypeSignature, ResolvedArrayType, ResolvedArrayTypeRef, ResolvedMapType,
-    ResolvedMapTypeRef, ResolvedStructTypeRef, ResolvedTupleType, ResolvedType,
-    ResolvedTypeForParameter,
+    ArrayType, ArrayTypeRef, FunctionTypeSignature, MapType, MapTypeRef, StructTypeRef, TupleType,
+    Type, TypeForParameter,
 };
 
 impl<'a> Resolver<'a> {
@@ -18,15 +17,15 @@ impl<'a> Resolver<'a> {
     ///
     pub fn resolve_map_type(
         &mut self,
-        ast_key_type: &Type,
-        ast_value_type: &Type,
-    ) -> Result<ResolvedMapTypeRef, ResolveError> {
+        ast_key_type: &swamp_script_ast::Type,
+        ast_value_type: &swamp_script_ast::Type,
+    ) -> Result<MapTypeRef, ResolveError> {
         // TODO: Check for an existing map type with exact same type
 
         let key_type = self.resolve_type(ast_key_type)?;
         let value_type = self.resolve_type(ast_value_type)?;
 
-        let original_map_type = ResolvedMapType {
+        let original_map_type = MapType {
             key_type,
             value_type,
         };
@@ -40,8 +39,8 @@ impl<'a> Resolver<'a> {
 
     pub(crate) fn find_named_type(
         &mut self,
-        type_name_to_find: &QualifiedTypeIdentifier,
-    ) -> Result<ResolvedType, ResolveError> {
+        type_name_to_find: &swamp_script_ast::QualifiedTypeIdentifier,
+    ) -> Result<Type, ResolveError> {
         let (path, text) = self.get_path(type_name_to_find);
 
         if type_name_to_find.generic_params.is_empty() {
@@ -49,11 +48,11 @@ impl<'a> Resolver<'a> {
                 if let Some(found) = self.shared.lookup.get_alias_referred_type(&path, &text) {
                     found
                 } else if let Some(found) = self.shared.lookup.get_struct(&path, &text) {
-                    ResolvedType::Struct(found)
+                    Type::Struct(found)
                 } else if let Some(found) = self.shared.lookup.get_enum(&path, &text) {
-                    ResolvedType::Enum(found)
+                    Type::Enum(found)
                 } else if let Some(found) = self.shared.lookup.get_rust_type(&path, &text) {
-                    ResolvedType::RustType(found)
+                    Type::RustType(found)
                 } else {
                     Err(self.create_err(
                         ResolveErrorKind::UnknownTypeReference,
@@ -71,8 +70,8 @@ impl<'a> Resolver<'a> {
     ///
     pub fn find_struct_type(
         &self,
-        type_name: &QualifiedTypeIdentifier,
-    ) -> Result<ResolvedStructTypeRef, ResolveError> {
+        type_name: &swamp_script_ast::QualifiedTypeIdentifier,
+    ) -> Result<StructTypeRef, ResolveError> {
         let (path, name_string) = self.get_path(type_name);
 
         self.shared
@@ -94,13 +93,13 @@ impl<'a> Resolver<'a> {
     ///
     pub fn resolve_array_type(
         &mut self,
-        ast_type: &Type,
-    ) -> Result<ResolvedArrayTypeRef, ResolveError> {
+        ast_type: &swamp_script_ast::Type,
+    ) -> Result<ArrayTypeRef, ResolveError> {
         // TODO: Check for an existing array type with exact same type
 
         let resolved_type = self.resolve_type(ast_type)?;
 
-        let original_array_type = ResolvedArrayType {
+        let original_array_type = ArrayType {
             item_type: resolved_type,
         };
 
@@ -113,38 +112,45 @@ impl<'a> Resolver<'a> {
 
     /// # Errors
     ///
-    pub fn resolve_type(&mut self, ast_type: &Type) -> Result<ResolvedType, ResolveError> {
+    pub fn resolve_type(
+        &mut self,
+        ast_type: &swamp_script_ast::Type,
+    ) -> Result<Type, ResolveError> {
         let resolved = match ast_type {
-            Type::Int(_) => ResolvedType::Int,
-            Type::Float(_) => ResolvedType::Float,
-            Type::String(_) => ResolvedType::String,
-            Type::Bool(_) => ResolvedType::Bool,
-            Type::Unit(_) => ResolvedType::Unit,
-            Type::Struct(ast_struct) => {
+            swamp_script_ast::Type::Int(_) => Type::Int,
+            swamp_script_ast::Type::Float(_) => Type::Float,
+            swamp_script_ast::Type::String(_) => Type::String,
+            swamp_script_ast::Type::Bool(_) => Type::Bool,
+            swamp_script_ast::Type::Unit(_) => Type::Unit,
+            swamp_script_ast::Type::Struct(ast_struct) => {
                 let struct_ref = self.get_struct_type(ast_struct)?;
-                ResolvedType::Struct(struct_ref)
+                Type::Struct(struct_ref)
             }
-            Type::Array(ast_type) => ResolvedType::Array(self.resolve_array_type(ast_type)?),
-            Type::Map(key_type, value_type) => {
-                ResolvedType::Map(self.resolve_map_type(key_type, value_type)?)
+            swamp_script_ast::Type::Array(ast_type) => {
+                Type::Array(self.resolve_array_type(ast_type)?)
             }
-            Type::Tuple(types) => {
-                ResolvedType::Tuple(ResolvedTupleType(self.resolve_types(types)?).into())
+            swamp_script_ast::Type::Map(key_type, value_type) => {
+                Type::Map(self.resolve_map_type(key_type, value_type)?)
             }
-            Type::Generic(type_identifier_with_params) => {
+            swamp_script_ast::Type::Tuple(types) => {
+                Type::Tuple(TupleType(self.resolve_types(types)?).into())
+            }
+            swamp_script_ast::Type::Generic(type_identifier_with_params) => {
                 self.concretize(type_identifier_with_params)?
             }
-            Type::Enum(_) => todo!(),
-            Type::Named(ast_type_reference) => self.find_named_type(ast_type_reference)?,
-            Type::Optional(inner_type_ast, _node) => {
-                let inner_resolved_type = self.resolve_type(inner_type_ast)?;
-                ResolvedType::Optional(Box::from(inner_resolved_type))
+            swamp_script_ast::Type::Enum(_) => todo!(),
+            swamp_script_ast::Type::Named(ast_type_reference) => {
+                self.find_named_type(ast_type_reference)?
             }
-            Type::Function(parameters, return_type) => {
+            swamp_script_ast::Type::Optional(inner_type_ast, _node) => {
+                let inner_resolved_type = self.resolve_type(inner_type_ast)?;
+                Type::Optional(Box::from(inner_resolved_type))
+            }
+            swamp_script_ast::Type::Function(parameters, return_type) => {
                 let parameter_types = self.resolve_param_types(parameters)?;
 
                 let resolved_return_type = self.resolve_type(return_type)?;
-                ResolvedType::Function(FunctionTypeSignature {
+                Type::Function(FunctionTypeSignature {
                     parameters: parameter_types,
                     return_type: Box::new(resolved_return_type),
                 })
@@ -156,8 +162,8 @@ impl<'a> Resolver<'a> {
 
     pub(crate) fn resolve_types(
         &mut self,
-        types: &[Type],
-    ) -> Result<Vec<ResolvedType>, ResolveError> {
+        types: &[swamp_script_ast::Type],
+    ) -> Result<Vec<Type>, ResolveError> {
         let mut resolved_types = Vec::new();
         for some_type in types {
             resolved_types.push(self.resolve_type(some_type)?);
@@ -167,11 +173,11 @@ impl<'a> Resolver<'a> {
 
     fn resolve_param_types(
         &mut self,
-        type_for_parameters: &Vec<TypeForParameter>,
-    ) -> Result<Vec<ResolvedTypeForParameter>, ResolveError> {
+        type_for_parameters: &Vec<swamp_script_ast::TypeForParameter>,
+    ) -> Result<Vec<TypeForParameter>, ResolveError> {
         let mut vec = Vec::new();
         for x in type_for_parameters {
-            vec.push(ResolvedTypeForParameter {
+            vec.push(TypeForParameter {
                 name: String::new(),
                 resolved_type: self.resolve_type(&x.ast_type)?,
                 is_mutable: x.is_mutable,
@@ -184,8 +190,8 @@ impl<'a> Resolver<'a> {
 
     fn concretize(
         &mut self,
-        parameterize_definition: &QualifiedTypeIdentifier,
-    ) -> Result<ResolvedType, ResolveError> {
+        parameterize_definition: &swamp_script_ast::QualifiedTypeIdentifier,
+    ) -> Result<Type, ResolveError> {
         let base_name = self.get_text(&parameterize_definition.name.0);
         let path = self.get_module_path(&parameterize_definition.module_path);
         let type_generator = self

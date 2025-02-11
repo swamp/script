@@ -4,27 +4,27 @@ use std::rc::Rc;
 use swamp_script_core::extra::SparseValueMap;
 use swamp_script_core::qck_des::quick_deserialize;
 use swamp_script_core::value::{Value, SPARSE_ID_TYPE_ID, SPARSE_TYPE_ID};
-use swamp_script_semantic::ResolvedRustType;
-use swamp_script_semantic::ResolvedType;
+use swamp_script_semantic::RustType;
+use swamp_script_semantic::Type;
 use tracing::info;
 
 #[test_log::test]
 fn serialize() {
     let mut buf = [0u8; 256];
 
-    let id = ResolvedRustType {
+    let id = RustType {
         number: SPARSE_ID_TYPE_ID,
         type_name: "SparseId".to_string(),
     };
 
-    let sparse_map_rust_type = ResolvedRustType {
+    let sparse_map_rust_type = RustType {
         number: SPARSE_TYPE_ID,
         type_name: "Sparse".to_string(),
     };
 
-    let sparse_map_type = ResolvedType::RustType(sparse_map_rust_type.clone().into());
+    let sparse_map_type = Type::RustType(sparse_map_rust_type.clone().into());
 
-    let value_type = ResolvedType::Int;
+    let value_type = Type::Int;
 
     let mut sparse_map = SparseValueMap::new(id.into(), value_type);
 
@@ -49,8 +49,7 @@ fn serialize() {
 
     assert_eq!(serialized_octet_size, 18);
 
-    let sparse_generic_type =
-        ResolvedType::Concrete(Box::from(sparse_map_type), vec![ResolvedType::Int]);
+    let sparse_generic_type = Type::Concrete(Box::from(sparse_map_type), vec![Type::Int]);
 
     let (deserialized_value, deserialized_octet_size) =
         quick_deserialize(&sparse_generic_type, &buf, 0);

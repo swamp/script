@@ -4,20 +4,18 @@
  */
 use crate::ResolveError;
 use std::rc::Rc;
-use swamp_script_semantic::modules::ResolvedModules;
-use swamp_script_semantic::ns::{ResolvedModuleNamespaceRef, TypeGenerator};
+use swamp_script_semantic::modules::Modules;
+use swamp_script_semantic::ns::{ModuleNamespaceRef, TypeGenerator};
 use swamp_script_semantic::{
-    ResolvedAliasType, ResolvedAliasTypeRef, ResolvedConstant, ResolvedConstantRef,
-    ResolvedEnumType, ResolvedEnumTypeRef, ResolvedEnumVariantTypeRef,
-    ResolvedExternalFunctionDefinition, ResolvedExternalFunctionDefinitionRef,
-    ResolvedInternalFunctionDefinition, ResolvedInternalFunctionDefinitionRef, ResolvedRustTypeRef,
-    ResolvedStructType, ResolvedStructTypeRef, ResolvedType, SemanticError,
+    AliasType, AliasTypeRef, Constant, ConstantRef, EnumType, EnumTypeRef, EnumVariantTypeRef,
+    ExternalFunctionDefinition, ExternalFunctionDefinitionRef, InternalFunctionDefinition,
+    InternalFunctionDefinitionRef, RustTypeRef, SemanticError, StructType, StructTypeRef, Type,
 };
 
 #[derive()]
 pub struct NameLookup<'a> {
     default_path: Vec<String>,
-    modules: &'a mut ResolvedModules,
+    modules: &'a mut Modules,
 }
 
 impl<'a> NameLookup<'a> {}
@@ -27,14 +25,14 @@ impl<'a> NameLookup<'a> {}
 impl<'a> NameLookup<'a> {
     /// # Panics
     ///
-    pub fn new(default_path: Vec<String>, modules: &'a mut ResolvedModules) -> Self {
+    pub fn new(default_path: Vec<String>, modules: &'a mut Modules) -> Self {
         assert!(!default_path.is_empty(), "own path must exist");
         Self {
             default_path,
             modules,
         }
     }
-    pub(crate) fn get_namespace(&self, path: &[String]) -> Option<ResolvedModuleNamespaceRef> {
+    pub(crate) fn get_namespace(&self, path: &[String]) -> Option<ModuleNamespaceRef> {
         let resolved_path = if path.is_empty() {
             self.default_path.clone()
         } else {
@@ -54,11 +52,11 @@ impl<'a> NameLookup<'a> {
             .map(|module| module.borrow().namespace.clone())
     }
 
-    pub(crate) fn get_namespace_link(&self, name: &str) -> Option<ResolvedModuleNamespaceRef> {
+    pub(crate) fn get_namespace_link(&self, name: &str) -> Option<ModuleNamespaceRef> {
         self.own_namespace().borrow().get_namespace_link(name)
     }
 
-    pub fn own_namespace(&self) -> ResolvedModuleNamespaceRef {
+    pub fn own_namespace(&self) -> ModuleNamespaceRef {
         self.get_namespace(&[]).unwrap_or_else(|| {
             panic!(
                 "{}",
@@ -67,7 +65,7 @@ impl<'a> NameLookup<'a> {
         })
     }
 
-    pub(crate) fn modules(&self) -> &ResolvedModules {
+    pub(crate) fn modules(&self) -> &Modules {
         self.modules
     }
 
@@ -76,7 +74,7 @@ impl<'a> NameLookup<'a> {
         &self,
         path: &[String],
         name: &str,
-    ) -> Option<ResolvedInternalFunctionDefinitionRef> {
+    ) -> Option<InternalFunctionDefinitionRef> {
         let namespace = self.get_namespace(path);
         namespace.map_or_else(
             || None,
@@ -89,7 +87,7 @@ impl<'a> NameLookup<'a> {
         &self,
         path: &[String],
         name: &str,
-    ) -> Option<ResolvedExternalFunctionDefinitionRef> {
+    ) -> Option<ExternalFunctionDefinitionRef> {
         let namespace = self.get_namespace(path);
         namespace.map_or_else(
             || None,
@@ -115,19 +113,19 @@ impl<'a> NameLookup<'a> {
     }
 
     #[must_use]
-    pub fn get_struct(&self, path: &[String], name: &str) -> Option<ResolvedStructTypeRef> {
+    pub fn get_struct(&self, path: &[String], name: &str) -> Option<StructTypeRef> {
         let namespace = self.get_namespace(path);
         namespace.map_or_else(|| None, |found_ns| found_ns.borrow().get_struct(name))
     }
 
     #[must_use]
-    pub fn get_alias(&self, path: &[String], name: &str) -> Option<ResolvedAliasTypeRef> {
+    pub fn get_alias(&self, path: &[String], name: &str) -> Option<AliasTypeRef> {
         let namespace = self.get_namespace(path);
         namespace.map_or_else(|| None, |found_ns| found_ns.borrow().get_alias(name))
     }
 
     #[must_use]
-    pub fn get_alias_referred_type(&self, path: &[String], name: &str) -> Option<ResolvedType> {
+    pub fn get_alias_referred_type(&self, path: &[String], name: &str) -> Option<Type> {
         let namespace = self.get_namespace(path);
         namespace.map_or_else(
             || None,
@@ -136,7 +134,7 @@ impl<'a> NameLookup<'a> {
     }
 
     #[must_use]
-    pub fn get_enum(&self, path: &[String], name: &str) -> Option<ResolvedEnumTypeRef> {
+    pub fn get_enum(&self, path: &[String], name: &str) -> Option<EnumTypeRef> {
         let namespace = self.get_namespace(path);
         namespace.map_or_else(
             || None,
@@ -145,7 +143,7 @@ impl<'a> NameLookup<'a> {
     }
 
     #[must_use]
-    pub fn get_constant(&self, path: &[String], name: &str) -> Option<ResolvedConstantRef> {
+    pub fn get_constant(&self, path: &[String], name: &str) -> Option<ConstantRef> {
         let namespace = self.get_namespace(path);
         namespace.map_or_else(
             || None,
@@ -159,7 +157,7 @@ impl<'a> NameLookup<'a> {
         path: &[String],
         enum_type_name: &str,
         variant_name: &str,
-    ) -> Option<ResolvedEnumVariantTypeRef> {
+    ) -> Option<EnumVariantTypeRef> {
         let namespace = self.get_namespace(path)?;
         let borrowed_namespace = namespace.borrow();
         borrowed_namespace
@@ -178,7 +176,7 @@ impl<'a> NameLookup<'a> {
     }
 
     #[must_use]
-    pub fn get_rust_type(&self, path: &[String], name: &str) -> Option<ResolvedRustTypeRef> {
+    pub fn get_rust_type(&self, path: &[String], name: &str) -> Option<RustTypeRef> {
         let namespace = self.get_namespace(path);
         namespace.map_or_else(
             || None,
@@ -193,10 +191,7 @@ impl<'a> NameLookup<'a> {
 
     /// # Errors
     ///
-    pub fn add_constant(
-        &mut self,
-        constant: ResolvedConstant,
-    ) -> Result<ResolvedConstantRef, ResolveError> {
+    pub fn add_constant(&mut self, constant: Constant) -> Result<ConstantRef, ResolveError> {
         let constant_ref = self.modules.add_constant(constant);
         Ok(self
             .own_namespace()
@@ -204,28 +199,19 @@ impl<'a> NameLookup<'a> {
             .add_constant_ref(constant_ref)?)
     }
 
-    pub fn add_alias(
-        &self,
-        alias_type: ResolvedAliasType,
-    ) -> Result<ResolvedAliasTypeRef, ResolveError> {
+    pub fn add_alias(&self, alias_type: AliasType) -> Result<AliasTypeRef, ResolveError> {
         Ok(self.own_namespace().borrow_mut().add_alias(alias_type)?)
     }
 
     /// # Errors
     ///
-    pub fn add_struct(
-        &self,
-        struct_type: ResolvedStructType,
-    ) -> Result<ResolvedStructTypeRef, ResolveError> {
+    pub fn add_struct(&self, struct_type: StructType) -> Result<StructTypeRef, ResolveError> {
         Ok(self.own_namespace().borrow_mut().add_struct(struct_type)?)
     }
 
     /// # Errors
     ///
-    pub fn add_enum_type(
-        &mut self,
-        mut enum_type: ResolvedEnumType,
-    ) -> Result<ResolvedEnumTypeRef, ResolveError> {
+    pub fn add_enum_type(&mut self, mut enum_type: EnumType) -> Result<EnumTypeRef, ResolveError> {
         enum_type
             .module_path
             .clone_from(&self.own_namespace().borrow().path);
@@ -238,8 +224,8 @@ impl<'a> NameLookup<'a> {
     pub fn add_internal_function_ref(
         &mut self,
         function_name: &str,
-        function: ResolvedInternalFunctionDefinition,
-    ) -> Result<ResolvedInternalFunctionDefinitionRef, ResolveError> {
+        function: InternalFunctionDefinition,
+    ) -> Result<InternalFunctionDefinitionRef, ResolveError> {
         Ok(self
             .own_namespace()
             .borrow_mut()
@@ -250,8 +236,8 @@ impl<'a> NameLookup<'a> {
     ///
     pub fn add_external_function_declaration_ref(
         &mut self,
-        function: ResolvedExternalFunctionDefinition,
-    ) -> Result<ResolvedExternalFunctionDefinitionRef, ResolveError> {
+        function: ExternalFunctionDefinition,
+    ) -> Result<ExternalFunctionDefinitionRef, ResolveError> {
         Ok(self
             .own_namespace()
             .borrow_mut()
@@ -261,25 +247,19 @@ impl<'a> NameLookup<'a> {
     pub(crate) fn add_namespace_link(
         &self,
         name: &str,
-        source_module_path: ResolvedModuleNamespaceRef,
+        source_module_path: ModuleNamespaceRef,
     ) -> Result<(), SemanticError> {
         self.own_namespace()
             .borrow_mut()
             .add_namespace_link(name, source_module_path)
     }
 
-    pub(crate) fn add_enum_link(
-        &self,
-        _enum_type: ResolvedEnumTypeRef,
-    ) -> Result<(), SemanticError> {
+    pub(crate) fn add_enum_link(&self, _enum_type: EnumTypeRef) -> Result<(), SemanticError> {
         //self.namespace.borrow_mut().add_enum_type()
         todo!()
     }
 
-    pub(crate) fn add_struct_link(
-        &self,
-        struct_type: ResolvedStructTypeRef,
-    ) -> Result<(), SemanticError> {
+    pub(crate) fn add_struct_link(&self, struct_type: StructTypeRef) -> Result<(), SemanticError> {
         self.own_namespace()
             .borrow_mut()
             .add_struct_ref(struct_type)
@@ -298,7 +278,7 @@ impl<'a> NameLookup<'a> {
     pub(crate) fn add_external_function_declaration_link(
         &self,
         name: &str,
-        external_fn_def: ResolvedExternalFunctionDefinitionRef,
+        external_fn_def: ExternalFunctionDefinitionRef,
     ) -> Result<(), SemanticError> {
         self.own_namespace()
             .borrow_mut()
@@ -308,7 +288,7 @@ impl<'a> NameLookup<'a> {
     pub(crate) fn add_internal_function_link(
         &self,
         name: &str,
-        internal_fn: ResolvedInternalFunctionDefinitionRef,
+        internal_fn: InternalFunctionDefinitionRef,
     ) -> Result<(), SemanticError> {
         self.own_namespace()
             .borrow_mut()

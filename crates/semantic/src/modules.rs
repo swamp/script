@@ -3,35 +3,33 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use crate::ns::{ResolvedModuleNamespace, ResolvedModuleNamespaceRef};
-use crate::ResolvedExpressionKind;
-use crate::{
-    ConstantId, ResolvedConstant, ResolvedConstantRef, ResolvedDefinition, ResolvedExpression,
-};
+use crate::ns::{ModuleNamespace, ModuleNamespaceRef};
+use crate::ExpressionKind;
+use crate::{Constant, ConstantId, ConstantRef, Definition, Expression};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
 
 #[derive(Debug)]
-pub struct ResolvedModules {
-    pub modules: HashMap<Vec<String>, ResolvedModuleRef>,
-    pub constants: Vec<ResolvedConstantRef>,
+pub struct Modules {
+    pub modules: HashMap<Vec<String>, ModuleRef>,
+    pub constants: Vec<ConstantRef>,
 }
 
-impl Default for ResolvedModules {
+impl Default for Modules {
     fn default() -> Self {
         Self::new()
     }
 }
 
-pub struct ResolvedModule {
-    pub definitions: Vec<ResolvedDefinition>,
-    pub expression: Option<ResolvedExpression>,
-    pub namespace: ResolvedModuleNamespaceRef,
+pub struct Module {
+    pub definitions: Vec<Definition>,
+    pub expression: Option<Expression>,
+    pub namespace: ModuleNamespaceRef,
 }
 
-impl Debug for ResolvedModule {
+impl Debug for Module {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "namespace: {:?}", self.namespace)?;
 
@@ -55,10 +53,10 @@ impl Debug for ResolvedModule {
 ///
 pub fn pretty_print(
     f: &mut Formatter<'_>,
-    resolved_expression: &ResolvedExpression,
+    resolved_expression: &Expression,
     tabs: usize,
 ) -> std::fmt::Result {
-    if let ResolvedExpressionKind::Block(expressions) = &resolved_expression.kind {
+    if let ExpressionKind::Block(expressions) = &resolved_expression.kind {
         for internal_expr in expressions {
             pretty_print(f, internal_expr, tabs + 1)?;
         }
@@ -73,11 +71,11 @@ pub fn pretty_print(
     }
 }
 
-pub type ResolvedModuleRef = Rc<RefCell<ResolvedModule>>;
+pub type ModuleRef = Rc<RefCell<Module>>;
 
-impl ResolvedModule {
+impl Module {
     pub fn new(module_path: &[String]) -> Self {
-        let ns_ref = Rc::new(RefCell::new(ResolvedModuleNamespace::new(module_path)));
+        let ns_ref = Rc::new(RefCell::new(ModuleNamespace::new(module_path)));
         Self {
             definitions: Vec::new(),
             namespace: ns_ref,
@@ -86,25 +84,25 @@ impl ResolvedModule {
     }
 }
 
-impl ResolvedModules {
+impl Modules {
     pub fn new() -> Self {
         Self {
             modules: HashMap::new(),
             constants: Vec::new(),
         }
     }
-    pub fn add(&mut self, module: ResolvedModuleRef) {
+    pub fn add(&mut self, module: ModuleRef) {
         self.modules.insert(
             module.clone().borrow().namespace.borrow().path.clone(),
             module,
         );
     }
 
-    pub fn link_module(&mut self, module_path: &[String], referred_module: ResolvedModuleRef) {
+    pub fn link_module(&mut self, module_path: &[String], referred_module: ModuleRef) {
         self.modules.insert(module_path.to_vec(), referred_module);
     }
 
-    pub fn add_constant(&mut self, resolved_constant: ResolvedConstant) -> ResolvedConstantRef {
+    pub fn add_constant(&mut self, resolved_constant: Constant) -> ConstantRef {
         let id = self.constants.len();
         let mut copy = resolved_constant;
         copy.id = id as ConstantId;
@@ -114,9 +112,9 @@ impl ResolvedModules {
         constant_ref
     }
 
-    pub fn add_empty_module(&mut self, module_path: &[String]) -> ResolvedModuleRef {
-        let ns_ref = Rc::new(RefCell::new(ResolvedModuleNamespace::new(module_path)));
-        let module = ResolvedModule {
+    pub fn add_empty_module(&mut self, module_path: &[String]) -> ModuleRef {
+        let ns_ref = Rc::new(RefCell::new(ModuleNamespace::new(module_path)));
+        let module = Module {
             definitions: vec![],
             expression: None,
             namespace: ns_ref,
@@ -135,7 +133,7 @@ impl ResolvedModules {
     }
 
     #[must_use]
-    pub fn get(&self, module_path: &[String]) -> Option<ResolvedModuleRef> {
+    pub fn get(&self, module_path: &[String]) -> Option<ModuleRef> {
         self.modules.get(module_path).cloned()
     }
 }

@@ -5,23 +5,20 @@
 
 use crate::err::{ResolveError, ResolveErrorKind};
 use crate::Resolver;
-use swamp_script_ast::{Expression, Node};
-use swamp_script_semantic::{
-    ResolvedArrayTypeRef, ResolvedMapTypeRef, ResolvedPostfix, ResolvedPostfixKind,
-    ResolvedTupleTypeRef,
-};
-use swamp_script_semantic::{ResolvedExpression, ResolvedType};
+
+use swamp_script_semantic::{ArrayTypeRef, MapTypeRef, Postfix, PostfixKind, TupleTypeRef};
+use swamp_script_semantic::{Expression, Type};
 
 impl<'a> Resolver<'a> {
     pub(crate) fn check_for_internal_member_call(
         &mut self,
-        ty: &ResolvedType,
+        ty: &Type,
         is_mutable: bool,
-        ast_member_function_name: &Node,
-        ast_arguments: &[&Expression],
-    ) -> Result<Option<ResolvedPostfix>, ResolveError> {
+        ast_member_function_name: &swamp_script_ast::Node,
+        ast_arguments: &[&swamp_script_ast::Expression],
+    ) -> Result<Option<Postfix>, ResolveError> {
         match &ty {
-            ResolvedType::Array(array_type_ref) => {
+            Type::Array(array_type_ref) => {
                 let resolved = self.resolve_array_member_call(
                     array_type_ref,
                     is_mutable,
@@ -31,8 +28,8 @@ impl<'a> Resolver<'a> {
                 Ok(Some(resolved))
             }
 
-            ResolvedType::Map(map_type_ref) => {
-                //if let ResolvedExpressionKind::VariableAccess(var_ref) = resolved_expr {
+            Type::Map(map_type_ref) => {
+                //if let ExpressionKind::VariableAccess(var_ref) = resolved_expr {
                 let resolved = self.resolve_map_member_call(
                     map_type_ref,
                     is_mutable,
@@ -43,22 +40,22 @@ impl<'a> Resolver<'a> {
                 //}
             }
 
-            ResolvedType::Float => {
+            Type::Float => {
                 let resolved =
                     self.resolve_float_member_call(ast_member_function_name, ast_arguments)?;
                 Ok(Some(resolved))
             }
-            ResolvedType::Int => {
+            Type::Int => {
                 let resolved =
                     self.resolve_int_member_call(ast_member_function_name, ast_arguments)?;
                 Ok(Some(resolved))
             }
-            ResolvedType::String => {
+            Type::String => {
                 let resolved =
                     self.resolve_string_member_call(ast_member_function_name, ast_arguments)?;
                 Ok(Some(resolved))
             }
-            ResolvedType::Tuple(tuple_type) => {
+            Type::Tuple(tuple_type) => {
                 let found = self.resolve_tuple_member_call(
                     tuple_type,
                     ast_member_function_name,
@@ -71,10 +68,10 @@ impl<'a> Resolver<'a> {
     }
     fn resolve_tuple_member_call(
         &mut self,
-        tuple_type: &ResolvedTupleTypeRef,
-        ast_member_function_name: &Node,
-        arguments: &[&Expression],
-    ) -> Result<ResolvedPostfix, ResolveError> {
+        tuple_type: &TupleTypeRef,
+        ast_member_function_name: &swamp_script_ast::Node,
+        arguments: &[&swamp_script_ast::Expression],
+    ) -> Result<Postfix, ResolveError> {
         //let resolved_node = self.to_node(ast_member_function_name);
         if tuple_type.0.len() != 2 {
             return Err(self.create_err(
@@ -86,7 +83,7 @@ impl<'a> Resolver<'a> {
         let member_function_name_str = self.get_text(ast_member_function_name);
 
         let resolved_expr = match (&tuple_type.0[0], &tuple_type.0[1]) {
-            (ResolvedType::Float, ResolvedType::Float) => match member_function_name_str {
+            (Type::Float, Type::Float) => match member_function_name_str {
                 "magnitude" => {
                     if !arguments.is_empty() {
                         return Err(self.create_err(
@@ -95,8 +92,8 @@ impl<'a> Resolver<'a> {
                         ));
                     }
                     self.create_postfix(
-                        ResolvedPostfixKind::Tuple2FloatMagnitude,
-                        &ResolvedType::Float,
+                        PostfixKind::Tuple2FloatMagnitude,
+                        &Type::Float,
                         ast_member_function_name,
                     )
                 }
@@ -118,7 +115,11 @@ impl<'a> Resolver<'a> {
         Ok(resolved_expr)
     }
 
-    fn check_mutable(&mut self, is_mutable: bool, node: &Node) -> Result<(), ResolveError> {
+    fn check_mutable(
+        &mut self,
+        is_mutable: bool,
+        node: &swamp_script_ast::Node,
+    ) -> Result<(), ResolveError> {
         if is_mutable {
             Ok(())
         } else {
@@ -128,13 +129,13 @@ impl<'a> Resolver<'a> {
 
     fn create_postfix(
         &mut self,
-        kind: ResolvedPostfixKind,
-        ty: &ResolvedType,
-        node: &Node,
-    ) -> ResolvedPostfix {
+        kind: PostfixKind,
+        ty: &Type,
+        node: &swamp_script_ast::Node,
+    ) -> Postfix {
         let resolved_node = self.to_node(node);
 
-        ResolvedPostfix {
+        Postfix {
             node: resolved_node,
             ty: ty.clone(),
             kind,
@@ -143,11 +144,11 @@ impl<'a> Resolver<'a> {
 
     fn resolve_map_member_call(
         &mut self,
-        map_type: &ResolvedMapTypeRef,
+        map_type: &MapTypeRef,
         is_mutable: bool,
-        ast_member_function_name: &Node,
-        ast_arguments: &[&Expression],
-    ) -> Result<ResolvedPostfix, ResolveError> {
+        ast_member_function_name: &swamp_script_ast::Node,
+        ast_arguments: &[&swamp_script_ast::Expression],
+    ) -> Result<Postfix, ResolveError> {
         let member_function_name_str = self.get_text(ast_member_function_name);
 
         let expr = match member_function_name_str {
@@ -165,8 +166,8 @@ impl<'a> Resolver<'a> {
                     self.resolve_expression(ast_arguments[0], Some(&map_type.key_type))?;
 
                 self.create_postfix(
-                    ResolvedPostfixKind::MapRemove(Box::new(key_expr), map_type.clone()),
-                    &ResolvedType::Unit,
+                    PostfixKind::MapRemove(Box::new(key_expr), map_type.clone()),
+                    &Type::Unit,
                     ast_member_function_name,
                 )
             }
@@ -183,8 +184,8 @@ impl<'a> Resolver<'a> {
                     self.resolve_expression(ast_arguments[0], Some(&map_type.key_type))?;
 
                 self.create_postfix(
-                    ResolvedPostfixKind::MapHas(Box::new(key_expr)),
-                    &ResolvedType::Bool,
+                    PostfixKind::MapHas(Box::new(key_expr)),
+                    &Type::Bool,
                     ast_member_function_name,
                 )
             }
@@ -200,11 +201,11 @@ impl<'a> Resolver<'a> {
 
     fn resolve_array_member_call(
         &mut self,
-        _array_type_ref: &ResolvedArrayTypeRef,
+        _array_type_ref: &ArrayTypeRef,
         is_mutable: bool,
-        ast_member_function_name: &Node,
-        ast_arguments: &[&Expression],
-    ) -> Result<ResolvedPostfix, ResolveError> {
+        ast_member_function_name: &swamp_script_ast::Node,
+        ast_arguments: &[&swamp_script_ast::Expression],
+    ) -> Result<Postfix, ResolveError> {
         let member_function_name_str = self.get_text(ast_member_function_name);
         let resolved_postfix = match member_function_name_str {
             "remove" => {
@@ -219,8 +220,8 @@ impl<'a> Resolver<'a> {
                 let index_expr = self.resolve_usize_index(ast_arguments[0])?;
 
                 self.create_postfix(
-                    ResolvedPostfixKind::ArrayRemoveIndex(Box::new(index_expr)),
-                    &ResolvedType::Unit,
+                    PostfixKind::ArrayRemoveIndex(Box::new(index_expr)),
+                    &Type::Unit,
                     ast_member_function_name,
                 )
             }
@@ -236,8 +237,8 @@ impl<'a> Resolver<'a> {
                 }
 
                 self.create_postfix(
-                    ResolvedPostfixKind::ArrayClear,
-                    &ResolvedType::Unit,
+                    PostfixKind::ArrayClear,
+                    &Type::Unit,
                     ast_member_function_name,
                 )
             }
@@ -254,49 +255,49 @@ impl<'a> Resolver<'a> {
 
     fn resolve_single_float_expression(
         &mut self,
-        node: &Node,
-        ast_arguments: &[&Expression],
-    ) -> Result<ResolvedExpression, ResolveError> {
+        node: &swamp_script_ast::Node,
+        ast_arguments: &[&swamp_script_ast::Expression],
+    ) -> Result<Expression, ResolveError> {
         if ast_arguments.len() != 1 {
             return Err(self.create_err(
                 ResolveErrorKind::WrongNumberOfArguments(ast_arguments.len(), 1),
                 node,
             ));
         }
-        let float_expression = { self.resolve_immutable(ast_arguments[0], &ResolvedType::Float)? };
+        let float_expression = { self.resolve_immutable(ast_arguments[0], &Type::Float)? };
 
         Ok(float_expression)
     }
 
     fn resolve_single_int_expression(
         &mut self,
-        node: &Node,
-        ast_arguments: &[&Expression],
-    ) -> Result<ResolvedExpression, ResolveError> {
+        node: &swamp_script_ast::Node,
+        ast_arguments: &[&swamp_script_ast::Expression],
+    ) -> Result<Expression, ResolveError> {
         if ast_arguments.len() != 1 {
             return Err(self.create_err(
                 ResolveErrorKind::WrongNumberOfArguments(ast_arguments.len(), 1),
                 node,
             ));
         }
-        let expr2 = self.resolve_immutable(ast_arguments[0], &ResolvedType::Int)?;
+        let expr2 = self.resolve_immutable(ast_arguments[0], &Type::Int)?;
 
         Ok(expr2)
     }
 
     fn resolve_two_float_expressions(
         &mut self,
-        node: &Node,
-        ast_arguments: &[&Expression],
-    ) -> Result<(ResolvedExpression, ResolvedExpression), ResolveError> {
+        node: &swamp_script_ast::Node,
+        ast_arguments: &[&swamp_script_ast::Expression],
+    ) -> Result<(Expression, Expression), ResolveError> {
         if ast_arguments.len() != 2 {
             return Err(self.create_err(
                 ResolveErrorKind::WrongNumberOfArguments(ast_arguments.len(), 2),
                 node,
             ));
         }
-        let expr2 = self.resolve_immutable(ast_arguments[0], &ResolvedType::Float)?;
-        let expr3 = self.resolve_immutable(ast_arguments[1], &ResolvedType::Float)?;
+        let expr2 = self.resolve_immutable(ast_arguments[0], &Type::Float)?;
+        let expr3 = self.resolve_immutable(ast_arguments[1], &Type::Float)?;
 
         Ok((expr2, expr3))
     }
@@ -304,13 +305,13 @@ impl<'a> Resolver<'a> {
     #[allow(clippy::too_many_lines)]
     fn resolve_float_member_call(
         &mut self,
-        ast_member_function_name: &Node,
-        ast_arguments: &[&Expression],
-    ) -> Result<ResolvedPostfix, ResolveError> {
+        ast_member_function_name: &swamp_script_ast::Node,
+        ast_arguments: &[&swamp_script_ast::Expression],
+    ) -> Result<Postfix, ResolveError> {
         let function_name_str = self.get_text(ast_member_function_name);
         let node = ast_member_function_name;
 
-        let mut resulting_type = &ResolvedType::Float;
+        let mut resulting_type = &Type::Float;
         let kind = match function_name_str {
             "round" => {
                 if !ast_arguments.is_empty() {
@@ -319,7 +320,7 @@ impl<'a> Resolver<'a> {
                         ast_member_function_name,
                     ));
                 }
-                ResolvedPostfixKind::FloatRound
+                PostfixKind::FloatRound
             }
             "floor" => {
                 if !ast_arguments.is_empty() {
@@ -328,8 +329,8 @@ impl<'a> Resolver<'a> {
                         ast_member_function_name,
                     ));
                 }
-                resulting_type = &ResolvedType::Int;
-                ResolvedPostfixKind::FloatFloor
+                resulting_type = &Type::Int;
+                PostfixKind::FloatFloor
             }
             "sqrt" => {
                 if !ast_arguments.is_empty() {
@@ -338,7 +339,7 @@ impl<'a> Resolver<'a> {
                         ast_member_function_name,
                     ));
                 }
-                ResolvedPostfixKind::FloatSqrt
+                PostfixKind::FloatSqrt
             }
             "sign" => {
                 if !ast_arguments.is_empty() {
@@ -347,7 +348,7 @@ impl<'a> Resolver<'a> {
                         ast_member_function_name,
                     ));
                 }
-                ResolvedPostfixKind::FloatSign
+                PostfixKind::FloatSign
             }
             "abs" => {
                 if !ast_arguments.is_empty() {
@@ -356,7 +357,7 @@ impl<'a> Resolver<'a> {
                         ast_member_function_name,
                     ));
                 }
-                ResolvedPostfixKind::FloatAbs
+                PostfixKind::FloatAbs
             }
             "rnd" => {
                 if !ast_arguments.is_empty() {
@@ -365,8 +366,8 @@ impl<'a> Resolver<'a> {
                         ast_member_function_name,
                     ));
                 }
-                resulting_type = &ResolvedType::Int;
-                ResolvedPostfixKind::FloatRnd
+                resulting_type = &Type::Int;
+                PostfixKind::FloatRnd
             }
             "cos" => {
                 if !ast_arguments.is_empty() {
@@ -375,7 +376,7 @@ impl<'a> Resolver<'a> {
                         ast_member_function_name,
                     ));
                 }
-                ResolvedPostfixKind::FloatCos
+                PostfixKind::FloatCos
             }
             "sin" => {
                 if !ast_arguments.is_empty() {
@@ -384,7 +385,7 @@ impl<'a> Resolver<'a> {
                         ast_member_function_name,
                     ));
                 }
-                ResolvedPostfixKind::FloatSin
+                PostfixKind::FloatSin
             }
             "acos" => {
                 if !ast_arguments.is_empty() {
@@ -393,7 +394,7 @@ impl<'a> Resolver<'a> {
                         ast_member_function_name,
                     ));
                 }
-                ResolvedPostfixKind::FloatAcos
+                PostfixKind::FloatAcos
             }
             "asin" => {
                 if !ast_arguments.is_empty() {
@@ -402,23 +403,23 @@ impl<'a> Resolver<'a> {
                         ast_member_function_name,
                     ));
                 }
-                ResolvedPostfixKind::FloatAsin
+                PostfixKind::FloatAsin
             }
             "atan2" => {
                 let float_argument = self.resolve_single_float_expression(node, ast_arguments)?;
-                ResolvedPostfixKind::FloatAtan2(Box::new(float_argument))
+                PostfixKind::FloatAtan2(Box::new(float_argument))
             }
             "min" => {
                 let float_argument = self.resolve_single_float_expression(node, ast_arguments)?;
-                ResolvedPostfixKind::FloatMin(Box::new(float_argument))
+                PostfixKind::FloatMin(Box::new(float_argument))
             }
             "max" => {
                 let float_argument = self.resolve_single_float_expression(node, ast_arguments)?;
-                ResolvedPostfixKind::FloatMax(Box::new(float_argument))
+                PostfixKind::FloatMax(Box::new(float_argument))
             }
             "clamp" => {
                 let (min, max) = self.resolve_two_float_expressions(node, ast_arguments)?;
-                ResolvedPostfixKind::FloatClamp(Box::new(min), Box::new(max))
+                PostfixKind::FloatClamp(Box::new(min), Box::new(max))
             }
             _ => {
                 return Err(self.create_err(
@@ -433,9 +434,9 @@ impl<'a> Resolver<'a> {
 
     fn resolve_string_member_call(
         &mut self,
-        ast_member_function_name: &Node,
-        ast_arguments: &[&Expression],
-    ) -> Result<ResolvedPostfix, ResolveError> {
+        ast_member_function_name: &swamp_script_ast::Node,
+        ast_arguments: &[&swamp_script_ast::Expression],
+    ) -> Result<Postfix, ResolveError> {
         let function_name_str = self.get_text(ast_member_function_name);
         let node = self.to_node(ast_member_function_name);
 
@@ -448,8 +449,8 @@ impl<'a> Resolver<'a> {
                     ));
                 }
                 Ok(self.create_postfix(
-                    ResolvedPostfixKind::StringLen,
-                    &ResolvedType::Int,
+                    PostfixKind::StringLen,
+                    &Type::Int,
                     ast_member_function_name,
                 ))
             }
@@ -462,9 +463,9 @@ impl<'a> Resolver<'a> {
 
     fn resolve_int_member_call(
         &mut self,
-        ast_member_function_name: &Node,
-        ast_arguments: &[&Expression],
-    ) -> Result<ResolvedPostfix, ResolveError> {
+        ast_member_function_name: &swamp_script_ast::Node,
+        ast_arguments: &[&swamp_script_ast::Expression],
+    ) -> Result<Postfix, ResolveError> {
         let function_name_str = self.get_text(ast_member_function_name);
         let node = self.to_node(ast_member_function_name);
 
@@ -476,7 +477,7 @@ impl<'a> Resolver<'a> {
                         &node,
                     ));
                 }
-                (ResolvedPostfixKind::IntAbs, ResolvedType::Int)
+                (PostfixKind::IntAbs, Type::Int)
             }
             "rnd" => {
                 if !ast_arguments.is_empty() {
@@ -485,25 +486,19 @@ impl<'a> Resolver<'a> {
                         &node,
                     ));
                 }
-                (ResolvedPostfixKind::IntRnd, ResolvedType::Int)
+                (PostfixKind::IntRnd, Type::Int)
             }
 
             "max" => {
                 let int_argument =
                     self.resolve_single_int_expression(ast_member_function_name, ast_arguments)?;
-                (
-                    ResolvedPostfixKind::IntMax(Box::from(int_argument)),
-                    ResolvedType::Int,
-                )
+                (PostfixKind::IntMax(Box::from(int_argument)), Type::Int)
             }
 
             "min" => {
                 let int_argument =
                     self.resolve_single_int_expression(ast_member_function_name, ast_arguments)?;
-                (
-                    ResolvedPostfixKind::IntMin(Box::from(int_argument)),
-                    ResolvedType::Int,
-                )
+                (PostfixKind::IntMin(Box::from(int_argument)), Type::Int)
             }
 
             "to_float" => {
@@ -513,7 +508,7 @@ impl<'a> Resolver<'a> {
                         &node,
                     ));
                 }
-                (ResolvedPostfixKind::IntToFloat, ResolvedType::Float)
+                (PostfixKind::IntToFloat, Type::Float)
             }
             _ => {
                 return Err(self.create_err(
@@ -529,20 +524,20 @@ impl<'a> Resolver<'a> {
     /*
     fn check_for_internal_member_call_extra(
         &mut self,
-        ty: &ResolvedType,
+        ty: &Type,
         ast_member_function_name: &Node,
         ast_arguments: &[&Expression],
-    ) -> Result<Option<ResolvedPostfix>, ResolveError> {
+    ) -> Result<Option<Postfix>, ResolveError> {
         // TODO: Early out
-        if let ResolvedType::RustType(rust_type_ref) = ty.clone() {
+        if let Type::RustType(rust_type_ref) = ty.clone() {
             if rust_type_ref.as_ref().number == SPARSE_TYPE_ID {
                 let sparse_id_type = self
                     .shared
                     .lookup
                     .get_rust_type(&["std".to_string()], "SparseId")
                     .expect("should have SparseId");
-                let key_type = ResolvedType::RustType(sparse_id_type);
-                let value_type = ResolvedType::Unit; // TODO: store type in rusttype &parameters[0];
+                let key_type = Type::RustType(sparse_id_type);
+                let value_type = Type::Unit; // TODO: store type in rusttype &parameters[0];
                 let function_name_str = self.get_text(ast_member_function_name);
 
                 // TODO: Remove hack
@@ -558,8 +553,8 @@ impl<'a> Resolver<'a> {
                             ));
                         }
                         let value =
-                            self.resolve_immutable(&ast_arguments[0], &ResolvedType::Unit)?; // TODO: FIX THIS
-                        (ResolvedPostfixKind::SparseAdd(Box::new(value)), key_type)
+                            self.resolve_immutable(&ast_arguments[0], &Type::Unit)?; // TODO: FIX THIS
+                        (PostfixKind::SparseAdd(Box::new(value)), key_type)
                     }
                     "remove" => {
                         if ast_arguments.len() != 1 {
@@ -574,8 +569,8 @@ impl<'a> Resolver<'a> {
                         let sparse_slot_id_expression =
                             self.resolve_immutable(&ast_arguments[0], &key_type)?;
                         (
-                            ResolvedPostfixKind::SparseRemove(Box::new(sparse_slot_id_expression)),
-                            ResolvedType::Unit, //ResolvedType::Optional(value_type),
+                            PostfixKind::SparseRemove(Box::new(sparse_slot_id_expression)),
+                            Type::Unit, //Type::Optional(value_type),
                         )
                     }
                     _ => return Ok(None),

@@ -10,7 +10,7 @@ fn sparse_map_create() {
 
     sparse = Sparse<Int>::new()
     ",
-        "Sparse<Int(ResolvedIntType)> len:0",
+        "Sparse<Int(IntType)> len:0",
     );
 }
 
@@ -42,7 +42,7 @@ fn sparse_map_remove() {
 
     sparse.remove(sparse_id)
     ",
-        "Sparse<Int(ResolvedIntType)> len:0",
+        "Sparse<Int(IntType)> len:0",
     );
 }
 
@@ -63,7 +63,7 @@ fn sparse_map_iterate() {
     }
     ",
         "\
-    Sparse<Int(ResolvedIntType)> len:2
+    Sparse<Int(IntType)> len:2
     id:0:0
     2
     3
@@ -141,7 +141,7 @@ fn sparse_map_iterate_pairs() {
     }
     ",
         "\
-    Sparse<Int(ResolvedIntType)> len:2
+    Sparse<Int(IntType)> len:2
     id:0:0
     id:0:0
     2

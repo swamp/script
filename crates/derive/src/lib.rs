@@ -33,7 +33,7 @@ pub fn derive_swamp_export(input: TokenStream) -> TokenStream {
     let expanded = quote! {
         impl SwampExport for #name {
 
-            fn get_resolved_type(registry: &TypeRegistry) -> ResolvedType {
+            fn get_resolved_type(registry: &TypeRegistry) -> Type {
                 let fields = vec![
                     #((stringify!(#field_names), <#field_types>::get_resolved_type(registry))),*
                 ];
@@ -46,7 +46,7 @@ pub fn derive_swamp_export(input: TokenStream) -> TokenStream {
 
                 let resolved_type = Self::get_resolved_type(registry);
                 match &resolved_type {
-                    ResolvedType::Struct(struct_type) => {
+                    Type::Struct(struct_type) => {
                         Value::Struct(struct_type.clone(), values, resolved_type)
                     },
                     _ => unreachable!("get_resolved_type returned non-struct type")
@@ -168,12 +168,12 @@ pub fn swamp_fn(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     })
                 }
 
-                pub fn get_definition(&self, registry: &TypeRegistry) -> ResolvedExternalFunctionDefinition {
-                    ResolvedExternalFunctionDefinition {
+                pub fn get_definition(&self, registry: &TypeRegistry) -> ExternalFunctionDefinition {
+                    ExternalFunctionDefinition {
                         name: LocalIdentifier::from_str(self.name),
-                        signature: ResolvedFunctionSignature {
+                        signature: FunctionSignature {
                             parameters: vec![
-                                #(ResolvedParameter {
+                                #(Parameter {
                                     name: stringify!(#patterns).to_string(),
                                     resolved_type: <#types>::get_resolved_type(registry),
                                     ast_parameter: Parameter::default(),
@@ -206,9 +206,9 @@ pub fn derive_swamp_export_enum(input: TokenStream) -> TokenStream {
                     syn::Fields::Unit => {
                         quote! {
                             #name::#variant_name => {
-                                let variant_type = ResolvedEnumVariantType {
+                                let variant_type = EnumVariantType {
                                     owner: enum_type.clone(),
-                                    data: ResolvedEnumVariantContainerType::Nothing,
+                                    data: EnumVariantContainerType::Nothing,
                                     name: LocalTypeIdentifier::from_str(stringify!(#variant_name)),
                                     number: #variant_index as TypeNumber,
                                 };
@@ -257,7 +257,7 @@ pub fn derive_swamp_export_enum(input: TokenStream) -> TokenStream {
                                     enum_ref: enum_type.clone(),
                                 };
 
-                                let variant_struct = Rc::new(ResolvedEnumVariantStructType {
+                                let variant_struct = Rc::new(EnumVariantStructType {
                                     common,
                                     fields,
                                     ast_struct: AnonymousStruct::default(),
@@ -312,7 +312,7 @@ pub fn derive_swamp_export_enum(input: TokenStream) -> TokenStream {
                                     enum_ref: enum_type.clone(),
                                 };
 
-                                let variant_tuple = Rc::new(ResolvedEnumVariantTupleType {
+                                let variant_tuple = Rc::new(EnumVariantTupleType {
                                     common,
                                     fields_in_order,
                                 });
@@ -330,18 +330,18 @@ pub fn derive_swamp_export_enum(input: TokenStream) -> TokenStream {
 
             quote! {
                 impl SwampExport for #name {
-                    fn get_resolved_type(registry: &TypeRegistry) -> ResolvedType {
-                        let enum_type = Rc::new(ResolvedEnumType {
+                    fn get_resolved_type(registry: &TypeRegistry) -> Type {
+                        let enum_type = Rc::new(EnumType {
                             name: LocalTypeIdentifier::from_str(stringify!(#name)),
                             number: registry.allocate_type_number(),
                             module_path: ModulePath(vec![]),
                         });
-                        ResolvedType::Enum(enum_type)
+                        Type::Enum(enum_type)
                     }
 
                     fn to_swamp_value(&self, registry: &TypeRegistry) -> Value {
                         let enum_type = match Self::get_resolved_type(registry) {
-                            ResolvedType::Enum(t) => t,
+                            Type::Enum(t) => t,
                             _ => unreachable!(),
                         };
 

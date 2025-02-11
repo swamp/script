@@ -10,19 +10,19 @@ use swamp_script_analyzer::prelude::ResolveError;
 use swamp_script_analyzer::Resolver;
 use swamp_script_doc::generate_html_doc;
 use swamp_script_parser::AstParser;
-use swamp_script_semantic::modules::{ResolvedModule, ResolvedModules};
-use swamp_script_semantic::ns::ResolvedModuleNamespace;
-use swamp_script_semantic::{ResolvedDefinition, ResolvedProgramState, ResolvedType};
+use swamp_script_semantic::modules::{Module, Modules};
+use swamp_script_semantic::ns::ModuleNamespace;
+use swamp_script_semantic::{Definition, ProgramState, Type};
 use swamp_script_source_map::SourceMap;
 use tracing::warn;
 
-fn internal_compile(script: &str) -> Result<(SourceMap, ResolvedModule), ResolveError> {
+fn internal_compile(script: &str) -> Result<(SourceMap, Module), ResolveError> {
     let parser = AstParser {};
 
     let program = parser.parse_module(script).expect("Failed to parse script");
 
-    let mut state = ResolvedProgramState::new();
-    let mut modules = ResolvedModules::new();
+    let mut state = ProgramState::new();
+    let mut modules = Modules::new();
 
     let mut source_map = SourceMap::new(Path::new("tests/fixtures/"));
     let file_id = 0xffff;
@@ -55,9 +55,9 @@ fn internal_compile(script: &str) -> Result<(SourceMap, ResolvedModule), Resolve
         None => None,
     };
 
-    let ns_ref = Rc::new(RefCell::new(ResolvedModuleNamespace::new(&[])));
+    let ns_ref = Rc::new(RefCell::new(ModuleNamespace::new(&[])));
 
-    let resolved_module = ResolvedModule {
+    let resolved_module = Module {
         definitions: resolved_definitions,
         expression: maybe_resolved_expression,
         namespace: ns_ref,
@@ -74,33 +74,33 @@ pub fn check_doc(script: &str, expected_output: &str) {
 
     for def in resolved_module.definitions {
         match def {
-            ResolvedDefinition::StructType(_) => {}
-            ResolvedDefinition::EnumType(_) => {}
-            ResolvedDefinition::ImplType(x) => match &x {
-                ResolvedType::Int => {}
-                ResolvedType::Float => {}
-                ResolvedType::String => {}
-                ResolvedType::Bool => {}
-                ResolvedType::Unit => {}
-                ResolvedType::Array(_) => {}
-                ResolvedType::Tuple(_) => {}
-                ResolvedType::Struct(struct_type) => {
+            Definition::StructType(_) => {}
+            Definition::EnumType(_) => {}
+            Definition::ImplType(x) => match &x {
+                Type::Int => {}
+                Type::Float => {}
+                Type::String => {}
+                Type::Bool => {}
+                Type::Unit => {}
+                Type::Array(_) => {}
+                Type::Tuple(_) => {}
+                Type::Struct(struct_type) => {
                     formatted_output += &*generate_html_doc(struct_type, &source_map);
                 }
-                ResolvedType::Map(_) => {}
-                ResolvedType::Enum(_) => {}
-                ResolvedType::Function(_) => {}
-                ResolvedType::Iterable(_) => {}
-                ResolvedType::Optional(_) => {}
-                ResolvedType::RustType(_) => {}
+                Type::Map(_) => {}
+                Type::Enum(_) => {}
+                Type::Function(_) => {}
+                Type::Iterable(_) => {}
+                Type::Optional(_) => {}
+                Type::RustType(_) => {}
             },
-            ResolvedDefinition::FunctionDef(_) => {}
-            ResolvedDefinition::Alias(_) => {}
-            ResolvedDefinition::Comment(_) => {}
-            ResolvedDefinition::Use(_) => {}
-            ResolvedDefinition::Constant(_, _) => {}
-            ResolvedDefinition::AliasType(_) => {}
-            ResolvedDefinition::Mod(_) => {}
+            Definition::FunctionDef(_) => {}
+            Definition::Alias(_) => {}
+            Definition::Comment(_) => {}
+            Definition::Use(_) => {}
+            Definition::Constant(_, _) => {}
+            Definition::AliasType(_) => {}
+            Definition::Mod(_) => {}
         }
     }
 
