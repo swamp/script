@@ -231,12 +231,7 @@ impl ModulesDisplay<'_> {
             ExpressionKind::StructInstantiation(_) => {
                 write!(f, "StructInstantiation()")
             }
-            ExpressionKind::Array(_) => {
-                write!(f, "Array()")
-            }
-            ExpressionKind::Tuple(_) => {
-                write!(f, "Tuple()")
-            }
+
             ExpressionKind::Literal(basic_literal) => self.show_basic_literal(f, basic_literal),
             ExpressionKind::Option(_) => {
                 write!(f, "Option()")
@@ -522,7 +517,7 @@ impl ModulesDisplay<'_> {
     pub fn show_signature(
         &self,
         f: &mut Formatter,
-        function_type_signature: &FunctionTypeSignature,
+        function_type_signature: &Signature,
     ) -> std::fmt::Result {
         write!(f, "{}", "(".bright_green())?;
 

@@ -8,8 +8,8 @@ use crate::Resolver;
 use std::rc::Rc;
 
 use swamp_script_semantic::{
-    ArrayType, ArrayTypeRef, FunctionTypeSignature, MapType, MapTypeRef, StructTypeRef, TupleType,
-    Type, TypeForParameter,
+    ArrayType, ArrayTypeRef, MapType, MapTypeRef, Signature, StructTypeRef, TupleType, Type,
+    TypeForParameter,
 };
 
 impl<'a> Resolver<'a> {
@@ -143,7 +143,7 @@ impl<'a> Resolver<'a> {
                 let parameter_types = self.analyze_param_types(parameters)?;
 
                 let resolved_return_type = self.analyze_type(return_type)?;
-                Type::Function(FunctionTypeSignature {
+                Type::Function(Signature {
                     parameters: parameter_types,
                     return_type: Box::new(resolved_return_type),
                 })

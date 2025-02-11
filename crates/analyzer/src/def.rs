@@ -11,9 +11,8 @@ use swamp_script_semantic::{
     AliasType, AliasTypeRef, AnonymousStructFieldType, AnonymousStructType, Definition, EnumType,
     EnumTypeRef, EnumVariantCommon, EnumVariantSimpleType, EnumVariantSimpleTypeRef,
     EnumVariantStructType, EnumVariantTupleType, EnumVariantType, ExternalFunctionDefinition,
-    Function, FunctionTypeSignature, InternalFunctionDefinition, LocalIdentifier,
-    LocalTypeIdentifier, Mod, ParameterNode, StructType, StructTypeRef, Type, TypeForParameter,
-    Use, UseItem,
+    Function, InternalFunctionDefinition, LocalIdentifier, LocalTypeIdentifier, Mod, ParameterNode,
+    Signature, StructType, StructTypeRef, Type, TypeForParameter, Use, UseItem,
 };
 
 impl<'a> Resolver<'a> {
@@ -321,7 +320,7 @@ impl<'a> Resolver<'a> {
                 self.scope.return_type = Type::Unit;
 
                 let internal = InternalFunctionDefinition {
-                    signature: FunctionTypeSignature {
+                    signature: Signature {
                         parameters,
                         return_type: Box::new(return_type),
                     },
@@ -348,7 +347,7 @@ impl<'a> Resolver<'a> {
 
                 let external = ExternalFunctionDefinition {
                     assigned_name: self.get_text(&ast_signature.name).to_string(),
-                    signature: FunctionTypeSignature {
+                    signature: Signature {
                         parameters,
                         return_type: Box::new(return_type),
                     },
@@ -502,7 +501,7 @@ impl<'a> Resolver<'a> {
                     self.analyze_statements_in_function(&function_data.body, &return_type)?;
 
                 let internal = InternalFunctionDefinition {
-                    signature: FunctionTypeSignature {
+                    signature: Signature {
                         parameters,
                         return_type: Box::new(return_type),
                     },
@@ -551,7 +550,7 @@ impl<'a> Resolver<'a> {
                 let external = ExternalFunctionDefinition {
                     assigned_name: self.get_text(&signature.name).to_string(),
                     name: Some(self.to_node(&signature.name)),
-                    signature: FunctionTypeSignature {
+                    signature: Signature {
                         parameters,
                         return_type: Box::new(return_type),
                     },

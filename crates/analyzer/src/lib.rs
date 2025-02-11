@@ -2406,7 +2406,7 @@ impl<'a> Resolver<'a> {
         struct_type: &StructTypeRef,
         field: &AnonymousStructFieldType,
         index: usize,
-        signature: &FunctionTypeSignature,
+        signature: &Signature,
         arguments: &[swamp_script_ast::MutableOrImmutableExpression],
     ) -> Result<Vec<Postfix>, Error> {
         let mut suffixes = Vec::new();

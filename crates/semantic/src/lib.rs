@@ -88,19 +88,20 @@ impl ParameterNode {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct FunctionTypeSignature {
+pub struct Signature {
     pub parameters: Vec<TypeForParameter>,
     pub return_type: Box<Type>,
 }
 
-impl Display for FunctionTypeSignature {
+impl Display for Signature {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(f, "({}) -> {}", comma(&self.parameters), self.return_type)
     }
 }
 
-impl FunctionTypeSignature {
-    pub fn same_type(&self, other: &FunctionTypeSignature) -> bool {
+impl Signature {
+    #[must_use]
+    pub fn same_type(&self, other: &Signature) -> bool {
         if self.parameters.len() != other.parameters.len()
             || !self.return_type.same_type(&other.return_type)
         {
@@ -196,7 +197,7 @@ pub enum Type {
     Map(MapTypeRef),
     Enum(EnumTypeRef),
 
-    Function(FunctionTypeSignature),
+    Function(Signature),
 
     Range, // Only integers for now
     Iterator(Box<IteratorTypeDetails>),
@@ -253,11 +254,6 @@ impl Display for Type {
             Self::Struct(struct_ref) => write!(f, "{}", struct_ref.borrow().assigned_name),
             Self::Map(map_ref) => write!(f, "[{}:{}]", map_ref.key_type, map_ref.value_type),
             Self::Enum(enum_type) => write!(f, "{}", enum_type.borrow().assigned_name),
-            //Self::EnumVariant(variant) => write!(
-            //  f,
-            //"{}::{}",
-            //variant.owner.assigned_name, variant.assigned_name
-            //),
             Self::Function(signature) => write!(f, "function {signature}"),
             Self::Iterator(generating_type) => write!(f, "Iterator<{generating_type:?}>"),
             Self::Optional(base_type) => write!(f, "{base_type}?"),
@@ -395,7 +391,7 @@ pub struct LocalIdentifier(pub Node);
 pub struct InternalFunctionDefinition {
     pub body: Expression,
     pub name: LocalIdentifier,
-    pub signature: FunctionTypeSignature,
+    pub signature: Signature,
 }
 
 impl Debug for InternalFunctionDefinition {
@@ -421,7 +417,7 @@ pub type ConstantId = u32;
 pub struct ExternalFunctionDefinition {
     pub name: Option<Node>,
     pub assigned_name: String,
-    pub signature: FunctionTypeSignature,
+    pub signature: Signature,
     pub id: ExternalFunctionId,
 }
 
@@ -459,13 +455,6 @@ impl Variable {
 }
 
 pub type VariableRef = Rc<Variable>;
-
-#[derive(Debug)]
-pub struct MutVariable {
-    pub variable_ref: VariableRef,
-}
-
-//type MutVariableRef = Rc<MutVariable>;
 
 #[derive(Debug)]
 pub enum BinaryOperatorKind {
@@ -542,29 +531,6 @@ pub fn comma_seq<K: Clone + Hash + Eq + Display, V: Display>(values: &SeqMap<K, 
     result
 }
 
-pub fn comma_seq_nl<K: Clone + Hash + Eq + Display, V: Display>(
-    values: &SeqMap<K, V>,
-    prefix: &str,
-) -> String {
-    let mut result = String::new();
-    for (key, value) in values.iter() {
-        result.push_str(format!("{}{}: {}\n", prefix, key, value).as_str());
-    }
-    result
-}
-
-pub fn comma_tuple_ref<K: Display, V: Display>(values: &[(&K, &V)]) -> String {
-    let mut result = String::new();
-
-    for (i, (key, value)) in values.iter().enumerate() {
-        if i > 0 {
-            result.push_str(", ");
-        }
-        result.push_str(format!("{key}: {value}").as_str());
-    }
-    result
-}
-
 #[derive(Debug)]
 pub struct MemberCall {
     pub function: FunctionRef,
@@ -589,15 +555,6 @@ impl Display for AnonymousStructFieldType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         write!(f, "{:?}:{}", self.identifier, self.field_type)
     }
-}
-
-#[derive(Debug)]
-pub struct MapIndexLookup {
-    pub map_type: Type,
-    pub item_type: Type,
-    pub map_type_ref: MapTypeRef,
-    pub index_expression: Box<Expression>,
-    pub map_expression: Box<Expression>,
 }
 
 #[derive(Debug)]
@@ -674,7 +631,7 @@ impl Function {
     }
 
     #[must_use]
-    pub fn signature(&self) -> &FunctionTypeSignature {
+    pub fn signature(&self) -> &Signature {
         match self {
             Self::Internal(internal) => &internal.signature,
             Self::External(external) => &external.signature,
@@ -751,13 +708,7 @@ pub struct CompoundOperator {
     pub kind: CompoundOperatorKind,
 }
 
-#[derive(Debug)]
-pub struct VariableCompoundAssignment {
-    pub variable_ref: VariableRef, // compound only support single variable
-    pub expression: Box<Expression>,
-    pub compound_operator: CompoundOperator,
-}
-
+#[must_use]
 pub fn create_rust_type(name: &str, type_number: TypeNumber) -> RustTypeRef {
     let rust_type = RustType {
         type_name: name.to_string(),
@@ -996,7 +947,7 @@ pub enum ExpressionKind {
 
     // For calls from returned function values
     FunctionCall(
-        FunctionTypeSignature,
+        Signature,
         Box<Expression>,
         Vec<ArgumentExpressionOrLocation>,
     ),
@@ -1008,9 +959,8 @@ pub enum ExpressionKind {
     VariableDefinition(VariableRef, Box<MutOrImmutableExpression>), // First time assignment
     VariableReassignment(VariableRef, Box<MutOrImmutableExpression>),
 
-    StructInstantiation(StructInstantiation),
-    Array(ArrayInstantiation),
-    Tuple(Vec<Expression>),
+    StructInstantiation(StructInstantiation), // TODO: Should move to Literal
+
     Literal(Literal),
     Option(Option<Box<Expression>>), // Wrapping an expression in `Some()`
     Range(Box<Expression>, Box<Expression>, RangeMode),
@@ -1052,9 +1002,6 @@ pub enum ExpressionKind {
     // Sparse Built in
     SparseNew(RustTypeRef, Type), // item type
 }
-
-#[derive(Debug)]
-pub struct StringConst(pub Node);
 
 #[derive(Debug)]
 pub enum Literal {
@@ -1208,7 +1155,7 @@ impl StructType {
     }
 }
 
-pub type OptionTypeRef = Rc<crate::OptionType>;
+pub type OptionTypeRef = Rc<OptionType>;
 
 #[derive(Debug)]
 pub struct OptionType {

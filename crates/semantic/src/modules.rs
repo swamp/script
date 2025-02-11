@@ -6,14 +6,14 @@
 use crate::ns::{ModuleNamespace, ModuleNamespaceRef};
 use crate::ExpressionKind;
 use crate::{Constant, ConstantId, ConstantRef, Definition, Expression};
+use seq_map::SeqMap;
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
 
 #[derive(Debug)]
 pub struct Modules {
-    pub modules: HashMap<Vec<String>, ModuleRef>,
+    pub modules: SeqMap<Vec<String>, ModuleRef>,
     pub constants: Vec<ConstantRef>,
 }
 
@@ -87,7 +87,7 @@ impl Module {
 impl Modules {
     pub fn new() -> Self {
         Self {
-            modules: HashMap::new(),
+            modules: SeqMap::new(),
             constants: Vec::new(),
         }
     }
@@ -129,11 +129,11 @@ impl Modules {
 
     #[must_use]
     pub fn contains_key(&self, module_path: &[String]) -> bool {
-        self.modules.contains_key(module_path)
+        self.modules.contains_key(&module_path.to_vec())
     }
 
     #[must_use]
     pub fn get(&self, module_path: &[String]) -> Option<ModuleRef> {
-        self.modules.get(module_path).cloned()
+        self.modules.get(&module_path.to_vec()).cloned()
     }
 }

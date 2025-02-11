@@ -22,8 +22,7 @@ use swamp_script_semantic::ns::{ClosureTypeGenerator, ModuleNamespace};
 use swamp_script_semantic::prelude::Modules;
 use swamp_script_semantic::{
     AnonymousStructType, ExternalFunctionDefinition, ExternalFunctionDefinitionRef, Function,
-    FunctionTypeSignature, IteratorTypeDetails, IteratorYieldType, Node, StructType, Type,
-    TypeForParameter,
+    IteratorTypeDetails, IteratorYieldType, Node, Signature, StructType, Type, TypeForParameter,
 };
 use swamp_script_source_map_lookup::SourceMapWrapper;
 use tracing_subscriber::EnvFilter;
@@ -63,26 +62,8 @@ fn init_logging() {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     init_logging();
+
     let cli = Cli::parse();
-
-    /*
-    match &cli.command {
-        Commands::Build { path, module } => {
-            println!("Building swamp script at path: {}", path.display());
-            // Call your build function here, passing the path
-            if let Err(e) = build(path, module) {
-                eprintln!("Error during build: {}", e);
-            }
-        }
-        Commands::Run { path } => {
-            println!("Running swamp script at path: {}", path.display());
-            if let Err(e) = run(path) {
-                eprintln!("Error during run: {}", e);
-            }
-        }
-    }
-
-     */
 
     command(&cli.command)?;
 
@@ -227,7 +208,7 @@ fn build(root_path: &Path, root_module: &str) -> Result<(), CliError> {
                 let external_def_new_fn = ExternalFunctionDefinition {
                     name: None,
                     assigned_name: "new".to_string(),
-                    signature: FunctionTypeSignature {
+                    signature: Signature {
                         parameters: vec![],
                         return_type: Box::new(Type::Struct(create_struct_ref.clone())),
                     },
@@ -253,7 +234,7 @@ fn build(root_path: &Path, root_module: &str) -> Result<(), CliError> {
                 let external_iter_fn = ExternalFunctionDefinition {
                     name: None,
                     assigned_name: "iter".to_string(),
-                    signature: FunctionTypeSignature {
+                    signature: Signature {
                         parameters: vec![],
                         return_type: Box::new(Type::Iterator(Box::from(IteratorTypeDetails {
                             yield_type: IteratorYieldType::KeyValue(
@@ -275,7 +256,7 @@ fn build(root_path: &Path, root_module: &str) -> Result<(), CliError> {
                 let external_subscript_mut_fn = ExternalFunctionDefinition {
                     name: None,
                     assigned_name: "subscript_mut".to_string(),
-                    signature: FunctionTypeSignature {
+                    signature: Signature {
                         parameters: vec![
                             TypeForParameter {
                                 name: "self".to_string(),
@@ -311,7 +292,7 @@ fn build(root_path: &Path, root_module: &str) -> Result<(), CliError> {
                 let external_subscript_fn = ExternalFunctionDefinition {
                     name: None,
                     assigned_name: "subscript".to_string(),
-                    signature: FunctionTypeSignature {
+                    signature: Signature {
                         parameters: vec![
                             TypeForParameter {
                                 name: "self".to_string(),
@@ -341,7 +322,7 @@ fn build(root_path: &Path, root_module: &str) -> Result<(), CliError> {
                 let remove_fn_def = ExternalFunctionDefinition {
                     name: None,
                     assigned_name: "remove".to_string(),
-                    signature: FunctionTypeSignature {
+                    signature: Signature {
                         parameters: vec![
                             TypeForParameter {
                                 name: "self".to_string(),
@@ -371,7 +352,7 @@ fn build(root_path: &Path, root_module: &str) -> Result<(), CliError> {
                 let add_fn_def = ExternalFunctionDefinition {
                     name: None,
                     assigned_name: "add".to_string(),
-                    signature: FunctionTypeSignature {
+                    signature: Signature {
                         parameters: vec![
                             TypeForParameter {
                                 name: "self".to_string(),

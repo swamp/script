@@ -15,9 +15,6 @@ use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
 
-#[derive(Debug, Clone)]
-pub struct ModulePathStr(pub Vec<String>);
-
 pub trait TypeGenerator: 'static + Debug {
     fn generate_type(
         &self,
@@ -80,12 +77,6 @@ pub struct ModuleNamespace {
 }
 
 pub type ModuleNamespaceRef = Rc<RefCell<ModuleNamespace>>;
-
-pub struct UtilParameter {
-    pub name: String, // Not used,
-    pub is_mutable: bool,
-    pub _type: Type,
-}
 
 impl ModuleNamespace {
     #[must_use]

@@ -8,7 +8,7 @@ use crate::prelude::{ValueReference, VariableValue};
 use err::ExecuteError;
 use seq_map::SeqMap;
 use std::fmt::Debug;
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 use swamp_script_core::extra::{SparseValueId, SparseValueMap};
 use swamp_script_core::prelude::ValueError;
 use swamp_script_core::value::ValueRef;
@@ -93,8 +93,7 @@ struct FunctionScope {
 
 #[derive(Debug, Default)]
 pub struct ExternalFunctions<C> {
-    //    external_functions: HashMap<String, EvalExternalFunctionRef<C>>,
-    external_functions_by_id: HashMap<ExternalFunctionId, EvalExternalFunctionRef<C>>,
+    external_functions_by_id: SeqMap<ExternalFunctionId, EvalExternalFunctionRef<C>>,
 }
 
 #[derive(Debug)]
@@ -133,7 +132,7 @@ impl<C> ExternalFunctions<C> {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            external_functions_by_id: HashMap::new(),
+            external_functions_by_id: SeqMap::new(),
         }
     }
 
@@ -886,18 +885,6 @@ impl<'a, C> Interpreter<'a, C> {
             // Constructing
             ExpressionKind::Literal(lit) => self.evaluate_literal(&expr.node, lit)?,
 
-            ExpressionKind::Array(array_instantiation) => {
-                let mut values = Vec::new();
-                for element in &array_instantiation.expressions {
-                    values.push(self.evaluate_expression(element)?);
-                }
-
-                Value::Array(
-                    array_instantiation.array_type_ref.clone(),
-                    convert_vec_to_rc_refcell(values),
-                )
-            }
-
             ExpressionKind::StructInstantiation(struct_instantiation) => {
                 // Evaluate all field expressions and validate types
                 let mut field_values =
@@ -1145,8 +1132,6 @@ impl<'a, C> Interpreter<'a, C> {
                 Value::ExternalFunction(fetch_function.clone())
             }
 
-            //ExpressionKind::MutMemberCall(_, _) => todo!(),
-            ExpressionKind::Tuple(_) => todo!(),
             ExpressionKind::Option(inner) => match inner {
                 None => Value::Option(None),
                 Some(expression) => {

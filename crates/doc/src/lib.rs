@@ -1,11 +1,11 @@
-use swamp_script_semantic::{FunctionTypeSignature, StructTypeRef, Type};
+use swamp_script_semantic::{Signature, StructTypeRef, Type};
 use swamp_script_source_map::SourceMap;
 
 pub fn span(name: &str, class: &str) -> String {
     format!(r#"  <span class="{}">{}</span>"#, class, name).to_string()
 }
 
-pub fn signature(function_type_signature: &FunctionTypeSignature) -> String {
+pub fn signature(function_type_signature: &Signature) -> String {
     let mut s = "(".to_string();
     for f in &function_type_signature.parameters {
         s += &span(&f.name, "parameter_name");

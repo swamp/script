@@ -14,8 +14,8 @@ use swamp_script_eval::{eval_constants, eval_module, Constants, ExternalFunction
 use swamp_script_parser::AstParser;
 use swamp_script_semantic::modules::Modules;
 use swamp_script_semantic::{
-    Expression, ExternalFunctionDefinition, ExternalFunctionId, FunctionTypeSignature,
-    ProgramState, SemanticError, Type, TypeForParameter,
+    Expression, ExternalFunctionDefinition, ExternalFunctionId, ProgramState, SemanticError,
+    Signature, Type, TypeForParameter,
 };
 use swamp_script_source_map::SourceMap;
 use swamp_script_source_map_lookup::SourceMapWrapper;
@@ -95,7 +95,7 @@ fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError>
     let external_print = ExternalFunctionDefinition {
         name: None,
         assigned_name: "print".to_string(),
-        signature: FunctionTypeSignature {
+        signature: Signature {
             parameters: vec![TypeForParameter {
                 name: String::new(),
                 resolved_type: Type::String,
