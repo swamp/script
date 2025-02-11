@@ -12,7 +12,6 @@ pub struct ResolvedModulesDisplay<'a> {
 
 impl Display for ResolvedModulesDisplay<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let sm = self.source_map;
         let mods = self.resolved_modules;
 
         for (name, module) in &mods.modules {
@@ -274,8 +273,12 @@ impl ResolvedModulesDisplay<'_> {
             ResolvedExpressionKind::Continue => {
                 write!(f, "Continue")
             }
-            ResolvedExpressionKind::Block(_) => {
-                write!(f, "Block()")
+            ResolvedExpressionKind::Block(expressions) => {
+                for expression in expressions {
+                    self.show_expression(f, expression)?;
+                    writeln!(f)?;
+                }
+                Ok(())
             }
             ResolvedExpressionKind::Match(_) => {
                 write!(f, "Match()")
@@ -316,6 +319,9 @@ impl ResolvedModulesDisplay<'_> {
     }
 
     fn show_variable(&self, f: &mut Formatter, var: &ResolvedVariableRef) -> std::fmt::Result {
+        if var.name.span.file_id == 0 {
+            return Ok(());
+        }
         write!(f, "{}", self.source_map.get_text(&var.name))
     }
 
@@ -343,17 +349,17 @@ impl ResolvedModulesDisplay<'_> {
             ResolvedLiteral::EnumVariantLiteral(variant, data) => {
                 write!(f, "{:?}::{:?}", variant.blue(), data.green())
             }
-            ResolvedLiteral::TupleLiteral(a, expressions) => {
+            ResolvedLiteral::TupleLiteral(_tuple_type, expressions) => {
                 write!(f, "(")?;
                 self.show_expressions(f, expressions)?;
                 write!(f, ")")
             }
-            ResolvedLiteral::Array(a, expressions) => {
+            ResolvedLiteral::Array(_array_type, expressions) => {
                 write!(f, "[")?;
                 self.show_expressions(f, expressions)?;
                 write!(f, "]")
             }
-            ResolvedLiteral::Map(a, tuple_expressions) => {
+            ResolvedLiteral::Map(_map_type, tuple_expressions) => {
                 for (key, value) in tuple_expressions {
                     self.show_expression(f, key)?;
                     write!(f, "{}", ":".bright_blue())?;
@@ -384,16 +390,25 @@ impl ResolvedModulesDisplay<'_> {
     }
 
     fn show_postfix(&self, f: &mut Formatter, postfix: &ResolvedPostfix) -> std::fmt::Result {
-        match postfix.kind {
-            ResolvedPostfixKind::StructField(_, _) => todo!(),
+        match &postfix.kind {
+            ResolvedPostfixKind::StructField(struct_type, field) => {
+                let name = struct_type
+                    .borrow()
+                    .anon_struct_type
+                    .defined_fields
+                    .keys()
+                    .collect::<Vec<_>>()[*field]
+                    .clone();
+                write!(f, ".{}", name.bright_blue())
+            }
             ResolvedPostfixKind::ArrayIndex(_, _) => todo!(),
             ResolvedPostfixKind::ArrayRangeIndex(_, _) => todo!(),
             ResolvedPostfixKind::StringIndex(_) => todo!(),
             ResolvedPostfixKind::StringRangeIndex(_) => todo!(),
             ResolvedPostfixKind::MapIndex(_, _) => todo!(),
             ResolvedPostfixKind::RustTypeIndexRef(_, _) => todo!(),
-            ResolvedPostfixKind::MemberCall(_, _) => todo!(),
-            ResolvedPostfixKind::FunctionCall(_) => todo!(),
+            ResolvedPostfixKind::MemberCall(_function_ref, b) => write!(f, "membercall {b:?}"),
+            ResolvedPostfixKind::FunctionCall(call) => write!(f, "call: {call:?}"),
             ResolvedPostfixKind::OptionUnwrap => todo!(),
             ResolvedPostfixKind::NoneCoalesce(_) => todo!(),
             ResolvedPostfixKind::SparseAdd(_) => todo!(),
@@ -414,7 +429,7 @@ impl ResolvedModulesDisplay<'_> {
             ResolvedPostfixKind::FloatRound => {
                 write!(f, ".round()")
             }
-            ResolvedPostfixKind::FloatFloor => todo!(),
+            ResolvedPostfixKind::FloatFloor => write!(f, ".floor()"),
             ResolvedPostfixKind::FloatSign => todo!(),
             ResolvedPostfixKind::FloatAbs => todo!(),
             ResolvedPostfixKind::FloatRnd => todo!(),
@@ -428,7 +443,7 @@ impl ResolvedModulesDisplay<'_> {
             ResolvedPostfixKind::FloatMin(_) => todo!(),
             ResolvedPostfixKind::FloatMax(_) => todo!(),
             ResolvedPostfixKind::StringLen => todo!(),
-            ResolvedPostfixKind::Tuple2FloatMagnitude => todo!(),
+            ResolvedPostfixKind::Tuple2FloatMagnitude => write!(f, ".magnitude()"),
         }
     }
 

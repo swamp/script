@@ -33,5 +33,5 @@ members = [
 
     "crates/source-map", # Move this later
     "crates/eira",
-    "crates/source-map-lookup", "crates/doc", "crates/compile", # Move this later
+    "crates/source-map-lookup", "crates/doc", "crates/compile", "crates/pretty-print", # Move this later
 ]

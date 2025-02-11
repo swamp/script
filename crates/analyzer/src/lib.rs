@@ -20,7 +20,6 @@ pub mod variable;
 use crate::err::{ResolveError, ResolveErrorKind};
 use crate::lookup::NameLookup;
 use seq_map::SeqMap;
-use std::fmt::{Display, Formatter};
 use std::mem::take;
 use std::num::{ParseFloatError, ParseIntError};
 use std::rc::Rc;

@@ -647,7 +647,7 @@ pub enum ResolvedFunction {
 impl Display for ResolvedFunction {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Internal(int) => write!(f, "")?,
+            Self::Internal(_int) => write!(f, "")?,
             Self::External(_) => write!(f, "external ")?,
         };
 
