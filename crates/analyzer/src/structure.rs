@@ -95,13 +95,13 @@ impl<'a> Resolver<'a> {
 
         let ty = temp_var.resolved_type.clone();
         let access_variable =
-            self.create_expr(ExpressionKind::VariableAccess(temp_var), ty.clone(), &node);
+            self.create_expr(ExpressionKind::VariableAccess(temp_var), ty.clone(), node);
 
         expressions.push(access_variable); // make sure the block returns the overwritten temp_var
 
         self.pop_block_scope("struct instantiation");
 
-        let block = self.create_expr(ExpressionKind::Block(expressions), ty, &node);
+        let block = self.create_expr(ExpressionKind::Block(expressions), ty, node);
         Ok(block)
     }
 
@@ -125,7 +125,7 @@ impl<'a> Resolver<'a> {
                     .get_index(&missing_field_name)
                     .expect("should have been verified earlier");
 
-                let expression = self.create_default_value_for_type(&node, &field.field_type)?; // expression is usually a literal
+                let expression = self.create_default_value_for_type(node, &field.field_type)?; // expression is usually a literal
 
                 source_order_expressions.push((field_index, expression));
             }
@@ -139,7 +139,7 @@ impl<'a> Resolver<'a> {
                 struct_type_ref: struct_to_instantiate,
             }),
             ty,
-            &node,
+            node,
         ))
     }
 

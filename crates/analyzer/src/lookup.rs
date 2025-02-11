@@ -56,6 +56,7 @@ impl<'a> NameLookup<'a> {
         self.own_namespace().borrow().get_namespace_link(name)
     }
 
+    #[must_use]
     pub fn own_namespace(&self) -> ModuleNamespaceRef {
         self.get_namespace(&[]).unwrap_or_else(|| {
             panic!(
@@ -254,7 +255,7 @@ impl<'a> NameLookup<'a> {
             .add_namespace_link(name, source_module_path)
     }
 
-    pub(crate) fn add_enum_link(&self, _enum_type: EnumTypeRef) -> Result<(), SemanticError> {
+    pub(crate) fn add_enum_link(&self, _enum_type: &EnumTypeRef) -> Result<(), SemanticError> {
         //self.namespace.borrow_mut().add_enum_type()
         todo!()
     }

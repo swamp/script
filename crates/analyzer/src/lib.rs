@@ -480,7 +480,7 @@ impl<'a> Resolver<'a> {
                     self.analyze_block(&ast_expression.node, expected_type, expressions)?;
                 self.create_expr(
                     ExpressionKind::Block(block),
-                    resulting_type.clone(),
+                    resulting_type,
                     &ast_expression.node,
                 )
             }
@@ -752,7 +752,7 @@ impl<'a> Resolver<'a> {
         field_name: &swamp_script_ast::Node,
         tv: Type,
     ) -> Result<(StructTypeRef, usize, Type), Error> {
-        let field_name_str = self.get_text(&field_name).to_string();
+        let field_name_str = self.get_text(field_name).to_string();
 
         if let Type::Struct(struct_type) = &tv {
             if let Some(found_field) = struct_type
@@ -1294,7 +1294,7 @@ impl<'a> Resolver<'a> {
                     Ok(self.create_expr(
                         ExpressionKind::InternalFunctionAccess(found_internal_function.clone()),
                         Type::Function(found_internal_function.signature.clone()),
-                        &var_node,
+                        var_node,
                     ))
                 },
             )
@@ -1793,9 +1793,9 @@ impl<'a> Resolver<'a> {
                 }
                 swamp_script_ast::GuardClause::Expression(clause_expr) => {
                     if found_wildcard.is_some() {
-                        return Err(self.create_err(ErrorKind::WildcardMustBeLastInGuard, &node));
+                        return Err(self.create_err(ErrorKind::WildcardMustBeLastInGuard, node));
                     }
-                    Some(self.analyze_bool_expression(&clause_expr)?)
+                    Some(self.analyze_bool_expression(clause_expr)?)
                 }
             };
 
@@ -2225,6 +2225,7 @@ impl<'a> Resolver<'a> {
         Ok(expr)
     }
 
+    #[must_use]
     pub fn create_mut_single_location_expr(
         &self,
         kind: SingleLocationExpressionKind,
@@ -2235,7 +2236,7 @@ impl<'a> Resolver<'a> {
             kind,
             ty,
             starting_variable: Rc::new(Variable {
-                name: Default::default(),
+                name: Node::default(),
                 resolved_type: Type::Int,
                 mutable_node: None,
                 scope_index: 0,
@@ -2256,7 +2257,7 @@ impl<'a> Resolver<'a> {
             kind,
             ty,
             starting_variable: Rc::new(Variable {
-                name: Default::default(),
+                name: Node::default(),
                 resolved_type: Type::Int,
                 mutable_node: None,
                 scope_index: 0,
@@ -2277,7 +2278,7 @@ impl<'a> Resolver<'a> {
             kind,
             ty,
             starting_variable: Rc::new(Variable {
-                name: Default::default(),
+                name: Node::default(),
                 resolved_type: Type::Int,
                 mutable_node: None,
                 scope_index: 0,
@@ -2347,7 +2348,7 @@ impl<'a> Resolver<'a> {
         let mut variable_refs = Vec::new();
         if let Type::Tuple(tuple) = tuple_expr_type.clone() {
             if target_ast_variables.len() > tuple.0.len() {
-                return Err(self.create_err(ErrorKind::TooManyDestructureVariables, &node));
+                return Err(self.create_err(ErrorKind::TooManyDestructureVariables, node));
             }
             for (variable_ref, tuple_type) in target_ast_variables.iter().zip(tuple.0.clone()) {
                 let (variable_ref, _is_reassignment) =

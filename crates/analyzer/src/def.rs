@@ -76,7 +76,7 @@ impl<'a> Resolver<'a> {
                     if let Some(found_struct) = lookup.get_struct(&path, ident_text) {
                         lookup.add_struct_link(found_struct)?;
                     } else if let Some(found_enum) = lookup.get_enum(&path, ident_text) {
-                        lookup.add_enum_link(found_enum)?;
+                        lookup.add_enum_link(&found_enum)?;
                     } else if let Some(found_gen) = lookup.get_type_generator(&path, ident_text) {
                         lookup.add_type_generator_link(ident_text, found_gen)?;
                     } else {
@@ -107,10 +107,10 @@ impl<'a> Resolver<'a> {
 
         let lookup = &self.shared.lookup;
 
-        let mut nodes_copy = path.to_vec();
+        let mut nodes_copy = path.clone();
         nodes_copy.insert(0, "crate".to_string());
 
-        if let Some(found_namespace) = lookup.get_namespace(&*nodes_copy) {
+        if let Some(found_namespace) = lookup.get_namespace(&nodes_copy) {
             lookup.add_namespace_link(nodes_copy.last().unwrap(), found_namespace)?;
 
             Ok(Definition::Mod(Mod { path: nodes }))
@@ -123,7 +123,7 @@ impl<'a> Resolver<'a> {
     fn analyze_enum_type_definition(
         &mut self,
         enum_type_name: &swamp_script_ast::Node,
-        ast_variants: &Vec<swamp_script_ast::EnumVariantType>,
+        ast_variants: &[swamp_script_ast::EnumVariantType],
     ) -> Result<EnumTypeRef, Error> {
         let mut resolved_variants = SeqMap::new();
 
@@ -185,7 +185,7 @@ impl<'a> Resolver<'a> {
                 ) => {
                     let mut fields = SeqMap::new();
 
-                    for (_index, field_with_type) in ast_struct_fields.fields.iter().enumerate() {
+                    for field_with_type in &ast_struct_fields.fields {
                         // TODO: Check the index
                         let resolved_type = self.analyze_type(&field_with_type.field_type)?;
                         let field_name_str =
@@ -522,7 +522,7 @@ impl<'a> Resolver<'a> {
                     let resolved_type = Type::Struct(found_struct.clone());
                     parameters.push(TypeForParameter {
                         name: self.get_text(&found_self.self_node).to_string(),
-                        resolved_type: resolved_type,
+                        resolved_type,
                         is_mutable: found_self.is_mutable.is_some(),
                         node: Option::from(ParameterNode {
                             name: self.to_node(&found_self.self_node),
@@ -537,7 +537,7 @@ impl<'a> Resolver<'a> {
 
                     parameters.push(TypeForParameter {
                         name: self.get_text(&param.variable.name).to_string(),
-                        resolved_type: resolved_type,
+                        resolved_type,
                         is_mutable: param.variable.is_mutable.is_some(),
                         node: Option::from(ParameterNode {
                             name: self.to_node(&param.variable.name),

@@ -69,6 +69,7 @@ impl<'a> Resolver<'a> {
         )
     }
 
+    #[must_use]
     pub fn try_find_constant(
         &self,
         constant_identifier: &ConstantIdentifier,
@@ -80,6 +81,6 @@ impl<'a> Resolver<'a> {
             }
         }
 
-        self.shared.lookup.get_constant(&vec![], constant_name)
+        self.shared.lookup.get_constant(&[], constant_name)
     }
 }

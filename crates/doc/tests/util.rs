@@ -27,7 +27,7 @@ fn internal_compile(script: &str) -> Result<(SourceMap, Module), Error> {
     let mut source_map = SourceMap::new(Path::new("tests/fixtures/"));
     let file_id = 0xffff;
 
-    source_map.add_manual(file_id, Path::new("some_path/main"), script);
+    source_map.add_manual(file_id, "crate", Path::new("some_path/main"), script);
     let resolved_path_str = vec!["test".to_string()];
     let _own_module = modules.add_empty_module(&resolved_path_str);
 
@@ -37,7 +37,7 @@ fn internal_compile(script: &str) -> Result<(SourceMap, Module), Error> {
 
     let mut resolved_definitions = Vec::new();
     for definition in &program.definitions {
-        let resolved_definition = resolver.resolve_definition(definition)?;
+        let resolved_definition = resolver.analyze_definition(definition)?;
         resolved_definitions.push(resolved_definition);
     }
 
