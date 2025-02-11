@@ -27,6 +27,7 @@ fn standard() {
 
     s.add_manual(
         0,
+        "crate",
         "test.swamp".as_ref(),
         r"hello, world!
      asdfjisafd",

@@ -3,9 +3,10 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
+use seq_map::SeqMap;
 use std::path::Path;
 use swamp_script_analyzer::lookup::NameLookup;
-use swamp_script_analyzer::prelude::ResolveError;
+use swamp_script_analyzer::prelude::Error;
 use swamp_script_analyzer::Resolver;
 use swamp_script_core::prelude::Value;
 use swamp_script_eval::prelude::{ExecuteError, VariableValue};
@@ -23,12 +24,12 @@ use swamp_script_source_map_lookup::SourceMapWrapper;
 #[allow(dead_code)]
 pub enum EvalTestError {
     ExecuteError(ExecuteError),
-    ResolveError(ResolveError),
+    ResolveError(Error),
     String(String),
 }
 
-impl From<ResolveError> for EvalTestError {
-    fn from(e: ResolveError) -> Self {
+impl From<Error> for EvalTestError {
+    fn from(e: Error) -> Self {
         Self::ResolveError(e)
     }
 }
@@ -49,18 +50,22 @@ fn internal_compile(
     script: &str,
     target_namespace: &[String],
     modules: &mut Modules,
-) -> Result<(Option<Expression>, SourceMap), ResolveError> {
+) -> Result<(Option<Expression>, SourceMap), Error> {
     let parser = AstParser {};
 
     let program = parser.parse_module(script).expect("Failed to parse script");
 
     let mut state = ProgramState::new();
     // let modules = Modules::new();
+    let mut mount_maps = SeqMap::new();
+    mount_maps
+        .insert("crate".to_string(), Path::new(".").to_path_buf())
+        .unwrap();
 
-    let mut source_map = SourceMap::new(Path::new("tests/fixtures/"));
+    let mut source_map = SourceMap::new(&mount_maps);
     let file_id = 0xffff;
 
-    source_map.add_manual(file_id, Path::new("some_path/main"), script);
+    source_map.add_manual(file_id, "crate", Path::new("some_path/main"), script);
     // let resolved_path_str = vec!["test".to_string()];
     // let own_module = modules.add_empty_module(&resolved_path_str);
 
@@ -70,13 +75,13 @@ fn internal_compile(
 
     //let mut resolved_definitions = Vec::new();
     for definition in &program.definitions {
-        resolver.resolve_definition(definition)?;
+        resolver.analyze_definition(definition)?;
         //  resolved_definitions.push(resolved_definition);
     }
 
     let maybe_resolved_expression = program
         .expression
-        .map(|expr| resolver.resolve_expression(&expr, None))
+        .map(|expr| resolver.analyze_expression(&expr, None))
         .transpose()?;
 
     Ok((maybe_resolved_expression, source_map))
@@ -93,7 +98,7 @@ fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError>
         signature: FunctionTypeSignature {
             parameters: vec![TypeForParameter {
                 name: String::new(),
-                resolved_type: None,
+                resolved_type: Type::String,
                 is_mutable: false,
                 node: None,
             }],

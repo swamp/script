@@ -2,7 +2,7 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use crate::err::{ResolveError, ResolveErrorKind};
+use crate::err::{Error, ErrorKind};
 use crate::Resolver;
 use seq_set::SeqSet;
 
@@ -14,13 +14,13 @@ use swamp_script_semantic::{
 };
 
 impl<'a> Resolver<'a> {
-    fn resolve_struct_init_calling_default(
+    fn analyze_struct_init_calling_default(
         &mut self,
         function: &FunctionRef,
         struct_to_instantiate: StructTypeRef,
         source_order_expressions: Vec<(usize, Node, Expression)>,
         node: &swamp_script_ast::Node,
-    ) -> Result<Expression, ResolveError> {
+    ) -> Result<Expression, Error> {
         let mut expressions = Vec::new();
 
         self.push_block_scope("struct_instantiation");
@@ -105,13 +105,13 @@ impl<'a> Resolver<'a> {
         Ok(block)
     }
 
-    fn resolve_struct_init_field_by_field(
+    fn analyze_struct_init_field_by_field(
         &mut self,
         struct_to_instantiate: StructTypeRef,
         mut source_order_expressions: Vec<(usize, Expression)>,
         missing_fields: SeqSet<String>,
         node: &swamp_script_ast::Node,
-    ) -> Result<Expression, ResolveError> {
+    ) -> Result<Expression, Error> {
         {
             let borrowed_anon_type = &struct_to_instantiate.borrow().anon_struct_type;
 
@@ -143,16 +143,16 @@ impl<'a> Resolver<'a> {
         ))
     }
 
-    pub(crate) fn resolve_struct_instantiation(
+    pub(crate) fn analyze_struct_instantiation(
         &mut self,
         qualified_type_identifier: &swamp_script_ast::QualifiedTypeIdentifier,
         ast_fields: &Vec<swamp_script_ast::FieldExpression>,
         has_rest: bool,
-    ) -> Result<Expression, ResolveError> {
+    ) -> Result<Expression, Error> {
         let struct_to_instantiate = self.get_struct_type(qualified_type_identifier)?;
 
         let (source_order_expressions, missing_fields) = self
-            .resolve_anon_struct_instantiation_helper(
+            .analyze_anon_struct_instantiation_helper(
                 &struct_to_instantiate.borrow().anon_struct_type,
                 ast_fields,
             )?;
@@ -164,7 +164,7 @@ impl<'a> Resolver<'a> {
                 .functions
                 .get(&"default".to_string())
             {
-                self.resolve_struct_init_calling_default(
+                self.analyze_struct_init_calling_default(
                     function,
                     struct_to_instantiate,
                     source_order_expressions,
@@ -175,7 +175,7 @@ impl<'a> Resolver<'a> {
                     .into_iter()
                     .map(|(a, _b, c)| (a, c))
                     .collect::<Vec<_>>();
-                self.resolve_struct_init_field_by_field(
+                self.analyze_struct_init_field_by_field(
                     struct_to_instantiate,
                     mapped,
                     missing_fields,
@@ -200,7 +200,7 @@ impl<'a> Resolver<'a> {
         } else {
             let node = qualified_type_identifier.name.0.clone();
             Err(self.create_err(
-                ResolveErrorKind::MissingFieldInStructInstantiation(
+                ErrorKind::MissingFieldInStructInstantiation(
                     missing_fields.to_vec(),
                     struct_to_instantiate.borrow().anon_struct_type.clone(),
                 ),
@@ -209,11 +209,11 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn resolve_anon_struct_instantiation_helper(
+    fn analyze_anon_struct_instantiation_helper(
         &mut self,
         struct_to_instantiate: &AnonymousStructType,
         ast_fields: &Vec<swamp_script_ast::FieldExpression>,
-    ) -> Result<(Vec<(usize, Node, Expression)>, SeqSet<String>), ResolveError> {
+    ) -> Result<(Vec<(usize, Node, Expression)>, SeqSet<String>), Error> {
         let mut missing_fields: SeqSet<String> = struct_to_instantiate
             .defined_fields
             .keys()
@@ -233,11 +233,11 @@ impl<'a> Resolver<'a> {
                     .contains_key(&field_name)
                 {
                     Err(self.create_err(
-                        ResolveErrorKind::DuplicateFieldInStructInstantiation(field_name),
+                        ErrorKind::DuplicateFieldInStructInstantiation(field_name),
                         &field.field_name.0,
                     ))
                 } else {
-                    Err(self.create_err(ResolveErrorKind::UnknownStructField, &field.field_name.0))
+                    Err(self.create_err(ErrorKind::UnknownStructField, &field.field_name.0))
                 };
             }
 
@@ -252,7 +252,7 @@ impl<'a> Resolver<'a> {
                 .expect("field_name is checked earlier");
 
             let resolved_expression =
-                self.resolve_expression(&field.expression, Some(&looked_up_field.field_type))?;
+                self.analyze_expression(&field.expression, Some(&looked_up_field.field_type))?;
 
             source_order_expressions.push((
                 field_index_in_definition,
@@ -264,15 +264,15 @@ impl<'a> Resolver<'a> {
         Ok((source_order_expressions, missing_fields))
     }
 
-    pub(crate) fn resolve_anon_struct_instantiation(
+    pub(crate) fn analyze_anon_struct_instantiation(
         &mut self,
         node: &swamp_script_ast::Node,
         struct_to_instantiate: &AnonymousStructType,
         ast_fields: &Vec<swamp_script_ast::FieldExpression>,
         allow_rest: bool,
-    ) -> Result<Vec<(usize, Expression)>, ResolveError> {
+    ) -> Result<Vec<(usize, Expression)>, Error> {
         let (source_order_expressions, missing_fields) =
-            self.resolve_anon_struct_instantiation_helper(struct_to_instantiate, ast_fields)?;
+            self.analyze_anon_struct_instantiation_helper(struct_to_instantiate, ast_fields)?;
 
         let mut mapped: Vec<(usize, Expression)> = source_order_expressions
             .into_iter()
@@ -300,7 +300,7 @@ impl<'a> Resolver<'a> {
             }
         } else if !missing_fields.is_empty() {
             return Err(self.create_err(
-                ResolveErrorKind::MissingFieldInStructInstantiation(
+                ErrorKind::MissingFieldInStructInstantiation(
                     missing_fields.to_vec(),
                     struct_to_instantiate.clone(),
                 ),

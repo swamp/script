@@ -4,12 +4,12 @@
  */
 use clap::{Parser, Subcommand};
 use std::cell::RefCell;
-use std::error::Error;
+
 use std::fmt::{Display, Formatter};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use swamp_script_analyzer::prelude::ResolveError;
+use swamp_script_analyzer::prelude::Error;
 use swamp_script_analyzer::Program;
 use swamp_script_compile::{compile_analyze_and_link_without_version, compile_and_analyze};
 use swamp_script_core::prelude::SeqMap;
@@ -61,7 +61,7 @@ fn init_logging() {
         .init();
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     init_logging();
     let cli = Cli::parse();
 
@@ -100,7 +100,7 @@ fn command(command: &Commands) -> Result<(), CliError> {
 pub enum CliError {
     IoError(io::Error),
     ParseError(ParseError),
-    ResolveError(ResolveError),
+    ResolveError(Error),
     ScriptResolveError(ScriptResolveError),
     ExecuteError(ExecuteError),
     DepLoaderError(DepLoaderError),
@@ -113,7 +113,7 @@ impl Display for CliError {
     }
 }
 
-impl Error for CliError {}
+impl std::error::Error for CliError {}
 
 impl From<io::Error> for CliError {
     fn from(value: io::Error) -> Self {
@@ -127,8 +127,8 @@ impl From<ExecuteError> for CliError {
     }
 }
 
-impl From<ResolveError> for CliError {
-    fn from(value: ResolveError) -> Self {
+impl From<Error> for CliError {
+    fn from(value: Error) -> Self {
         Self::ResolveError(value)
     }
 }

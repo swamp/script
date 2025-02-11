@@ -2,11 +2,12 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
+use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::path::Path;
 use std::rc::Rc;
 use swamp_script_analyzer::lookup::NameLookup;
-use swamp_script_analyzer::prelude::ResolveError;
+use swamp_script_analyzer::prelude::Error;
 use swamp_script_analyzer::Resolver;
 use swamp_script_error_report::show_error;
 use swamp_script_parser::AstParser;
@@ -16,7 +17,7 @@ use swamp_script_semantic::ProgramState;
 use swamp_script_source_map::SourceMap;
 use tracing::warn;
 
-fn internal_compile(script: &str) -> Result<Module, ResolveError> {
+fn internal_compile(script: &str) -> Result<Module, Error> {
     let parser = AstParser {};
 
     let program = parser.parse_module(script).expect("Failed to parse script");
@@ -24,10 +25,15 @@ fn internal_compile(script: &str) -> Result<Module, ResolveError> {
     let mut state = ProgramState::new();
     let mut modules = Modules::new();
 
-    let mut source_map = SourceMap::new(Path::new("tests/fixtures/"));
+    let mut mount_maps = SeqMap::new();
+    mount_maps
+        .insert("crate".to_string(), Path::new(".").to_path_buf())
+        .unwrap();
+
+    let mut source_map = SourceMap::new(&mount_maps);
     let file_id = 0xffff;
 
-    source_map.add_manual(file_id, Path::new("some_path/main"), script);
+    source_map.add_manual(file_id, "crate", Path::new("some_path/main"), script);
     let resolved_path_str = vec!["test".to_string()];
     let _own_module = modules.add_empty_module(&resolved_path_str);
 
@@ -37,14 +43,14 @@ fn internal_compile(script: &str) -> Result<Module, ResolveError> {
 
     let mut resolved_definitions = Vec::new();
     for definition in &program.definitions {
-        let resolved_definition = resolver.resolve_definition(definition)?;
+        let resolved_definition = resolver.analyze_definition(definition)?;
         resolved_definitions.push(resolved_definition);
     }
 
     let expression = &program.expression;
     let maybe_resolved_expression = match expression {
         Some(unwrapped_expression) => {
-            let result = resolver.resolve_expression(unwrapped_expression, None);
+            let result = resolver.analyze_expression(unwrapped_expression, None);
             if let Ok(expression) = result {
                 Some(expression)
             } else {

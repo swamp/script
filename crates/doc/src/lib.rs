@@ -10,7 +10,7 @@ pub fn signature(function_type_signature: &FunctionTypeSignature) -> String {
     for f in &function_type_signature.parameters {
         s += &span(&f.name, "parameter_name");
         s += &span(": ", "separator");
-        s += &span(&*f.resolved_type.as_ref().unwrap().to_string(), "type_name");
+        s += &span(&f.resolved_type.to_string(), "type_name");
     }
     s += ")";
 

@@ -2,7 +2,7 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use crate::ResolveError;
+use crate::Error;
 use std::rc::Rc;
 use swamp_script_semantic::modules::Modules;
 use swamp_script_semantic::ns::{ModuleNamespaceRef, TypeGenerator};
@@ -191,7 +191,7 @@ impl<'a> NameLookup<'a> {
 
     /// # Errors
     ///
-    pub fn add_constant(&mut self, constant: Constant) -> Result<ConstantRef, ResolveError> {
+    pub fn add_constant(&mut self, constant: Constant) -> Result<ConstantRef, Error> {
         let constant_ref = self.modules.add_constant(constant);
         Ok(self
             .own_namespace()
@@ -199,19 +199,19 @@ impl<'a> NameLookup<'a> {
             .add_constant_ref(constant_ref)?)
     }
 
-    pub fn add_alias(&self, alias_type: AliasType) -> Result<AliasTypeRef, ResolveError> {
+    pub fn add_alias(&self, alias_type: AliasType) -> Result<AliasTypeRef, Error> {
         Ok(self.own_namespace().borrow_mut().add_alias(alias_type)?)
     }
 
     /// # Errors
     ///
-    pub fn add_struct(&self, struct_type: StructType) -> Result<StructTypeRef, ResolveError> {
+    pub fn add_struct(&self, struct_type: StructType) -> Result<StructTypeRef, Error> {
         Ok(self.own_namespace().borrow_mut().add_struct(struct_type)?)
     }
 
     /// # Errors
     ///
-    pub fn add_enum_type(&mut self, mut enum_type: EnumType) -> Result<EnumTypeRef, ResolveError> {
+    pub fn add_enum_type(&mut self, mut enum_type: EnumType) -> Result<EnumTypeRef, Error> {
         enum_type
             .module_path
             .clone_from(&self.own_namespace().borrow().path);
@@ -225,7 +225,7 @@ impl<'a> NameLookup<'a> {
         &mut self,
         function_name: &str,
         function: InternalFunctionDefinition,
-    ) -> Result<InternalFunctionDefinitionRef, ResolveError> {
+    ) -> Result<InternalFunctionDefinitionRef, Error> {
         Ok(self
             .own_namespace()
             .borrow_mut()
@@ -237,7 +237,7 @@ impl<'a> NameLookup<'a> {
     pub fn add_external_function_declaration_ref(
         &mut self,
         function: ExternalFunctionDefinition,
-    ) -> Result<ExternalFunctionDefinitionRef, ResolveError> {
+    ) -> Result<ExternalFunctionDefinitionRef, Error> {
         Ok(self
             .own_namespace()
             .borrow_mut()

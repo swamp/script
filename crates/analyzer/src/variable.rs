@@ -2,7 +2,7 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use crate::err::{ResolveError, ResolveErrorKind};
+use crate::err::{Error, ErrorKind};
 use crate::{BlockScopeMode, Resolver};
 use std::rc::Rc;
 
@@ -28,9 +28,9 @@ impl<'a> Resolver<'a> {
     pub(crate) fn find_variable(
         &self,
         variable: &swamp_script_ast::Variable,
-    ) -> Result<VariableRef, ResolveError> {
+    ) -> Result<VariableRef, Error> {
         self.try_find_variable(&variable.name).map_or_else(
-            || Err(self.create_err(ResolveErrorKind::UnknownVariable, &variable.name)),
+            || Err(self.create_err(ErrorKind::UnknownVariable, &variable.name)),
             Ok,
         )
     }
@@ -54,25 +54,23 @@ impl<'a> Resolver<'a> {
         &mut self,
         variable: &swamp_script_ast::Variable,
         variable_type_ref: &Type,
-    ) -> Result<(VariableRef, bool), ResolveError> {
+    ) -> Result<(VariableRef, bool), Error> {
         if let Some(existing_variable) = self.try_find_variable(&variable.name) {
             // Check type compatibility
             if !&existing_variable
                 .resolved_type
                 .assignable_type(variable_type_ref)
             {
-                return Err(self.create_err(
-                    ResolveErrorKind::OverwriteVariableWithAnotherType,
-                    &variable.name,
-                ));
+                return Err(
+                    self.create_err(ErrorKind::OverwriteVariableWithAnotherType, &variable.name)
+                );
             }
 
             // For reassignment, check if the EXISTING variable is mutable
             if !existing_variable.is_mutable() {
-                return Err(self.create_err(
-                    ResolveErrorKind::CanOnlyOverwriteVariableWithMut,
-                    &variable.name,
-                ));
+                return Err(
+                    self.create_err(ErrorKind::CanOnlyOverwriteVariableWithMut, &variable.name)
+                );
             }
 
             return Ok((existing_variable, true));
@@ -115,7 +113,7 @@ impl<'a> Resolver<'a> {
         variable: &swamp_script_ast::Node,
         is_mutable: &Option<swamp_script_ast::Node>,
         variable_type_ref: &Type,
-    ) -> Result<VariableRef, ResolveError> {
+    ) -> Result<VariableRef, Error> {
         if variable_type_ref == &Type::Unit {
             error!("serious");
         }
@@ -131,7 +129,7 @@ impl<'a> Resolver<'a> {
         &mut self,
         variable: &swamp_script_ast::Variable,
         variable_type_ref: &Type,
-    ) -> Result<VariableRef, ResolveError> {
+    ) -> Result<VariableRef, Error> {
         self.create_local_variable(&variable.name, &variable.is_mutable, variable_type_ref)
     }
 
@@ -140,10 +138,11 @@ impl<'a> Resolver<'a> {
         variable: &Node,
         is_mutable: &Option<Node>,
         variable_type_ref: &Type,
-    ) -> Result<VariableRef, ResolveError> {
+    ) -> Result<VariableRef, Error> {
         if let Some(_existing_variable) = self.try_find_local_variable(variable) {
-            return Err(self
-                .create_err_resolved(ResolveErrorKind::OverwriteVariableNotAllowedHere, variable));
+            return Err(
+                self.create_err_resolved(ErrorKind::OverwriteVariableNotAllowedHere, variable)
+            );
         }
         let variable_str = self.get_text_resolved(variable).to_string();
 
@@ -178,7 +177,7 @@ impl<'a> Resolver<'a> {
         variable_str: &str,
         is_mutable: bool,
         variable_type_ref: &Type,
-    ) -> Result<VariableRef, ResolveError> {
+    ) -> Result<VariableRef, Error> {
         let scope_index = self.scope.block_scope_stack.len() - 1;
 
         let variables = &mut self
@@ -213,7 +212,7 @@ impl<'a> Resolver<'a> {
         &mut self,
         ast_variable: &swamp_script_ast::Variable,
         converted_expression: MutOrImmutableExpression,
-    ) -> Result<Expression, ResolveError> {
+    ) -> Result<Expression, Error> {
         let expression_type = converted_expression.ty().clone();
         let (variable_ref, _is_reassignment) =
             self.set_or_overwrite_variable_with_type(ast_variable, &expression_type)?;

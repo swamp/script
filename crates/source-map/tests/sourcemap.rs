@@ -3,15 +3,23 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
+use seq_map::SeqMap;
 use std::io;
 use std::path::Path;
 use swamp_script_source_map::SourceMap;
 
 #[test_log::test]
 fn test() -> io::Result<()> {
-    let mut sources = SourceMap::new(Path::new("tests/fixtures"));
+    let mut mount_maps = SeqMap::new();
+    mount_maps
+        .insert(
+            "crate".to_string(),
+            Path::new("tests/fixtures").to_path_buf(),
+        )
+        .unwrap();
 
-    let (x, _script) = sources.read_file_relative("first/world.swamp")?;
+    let mut sources = SourceMap::new(&mount_maps);
+    let (x, _script) = sources.read_file_relative("crate", "first/world.swamp")?;
     assert_eq!(x, 1);
 
     let rocket_offset = 83;

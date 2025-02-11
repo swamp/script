@@ -11,12 +11,12 @@ use swamp_script_semantic::{
 };
 
 #[derive(Debug)]
-pub struct ResolveError {
+pub struct Error {
     pub node: Node,
-    pub kind: ResolveErrorKind,
+    pub kind: ErrorKind,
 }
 #[derive(Debug)]
-pub enum ResolveErrorKind {
+pub enum ErrorKind {
     GuardCanNotHaveMultipleWildcards,
     WildcardMustBeLastInGuard,
     GuardMustHaveWildcard,
@@ -119,11 +119,11 @@ pub enum ResolveErrorKind {
     NotATypeGenerator,
 }
 
-impl From<SemanticError> for ResolveError {
+impl From<SemanticError> for Error {
     fn from(value: SemanticError) -> Self {
         Self {
             node: Default::default(),
-            kind: ResolveErrorKind::SemanticError(value),
+            kind: ErrorKind::SemanticError(value),
         }
     }
 }

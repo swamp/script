@@ -6,7 +6,7 @@ pub mod prelude;
 
 use std::cell::RefCell;
 use std::rc::Rc;
-use swamp_script_analyzer::err::ResolveErrorKind;
+use swamp_script_analyzer::err::ErrorKind;
 use swamp_script_analyzer::lookup::NameLookup;
 use swamp_script_analyzer::prelude::*;
 use swamp_script_dep_loader::prelude::*;
@@ -20,7 +20,7 @@ pub fn resolve_to_new_module(
     module_path: &[String],
     source_map: &SourceMap,
     ast_module: &ParseModule,
-) -> Result<(), ResolveError> {
+) -> Result<(), Error> {
     let resolved_module = Module::new(module_path);
     let resolved_module_ref = Rc::new(RefCell::new(resolved_module));
     modules.add(resolved_module_ref);
@@ -36,17 +36,17 @@ pub fn resolve_to_existing_module(
     path: Vec<String>,
     source_map: &SourceMap,
     ast_module: &ParseModule,
-) -> Result<Option<Expression>, ResolveError> {
+) -> Result<Option<Expression>, Error> {
     let statements = {
         let mut name_lookup = NameLookup::new(path.clone(), &mut modules);
         let mut resolver = Resolver::new(state, &mut name_lookup, source_map, ast_module.file_id);
 
         for ast_def in ast_module.ast_module.definitions() {
-            let _resolved_def = resolver.resolve_definition(ast_def)?;
+            let _resolved_def = resolver.analyze_definition(ast_def)?;
         }
 
         let maybe_resolved_expression = if let Some(expr) = ast_module.ast_module.expression() {
-            Some(resolver.resolve_expression(expr, None)?)
+            Some(resolver.analyze_expression(expr, None)?)
         } else {
             None
         };
@@ -62,7 +62,7 @@ pub fn resolve_program(
     source_map: &SourceMap,
     module_paths_in_order: &[Vec<String>],
     parsed_modules: &DependencyParser,
-) -> Result<(), ResolveError> {
+) -> Result<(), Error> {
     for module_path in module_paths_in_order {
         if let Some(parse_module) = parsed_modules.get_parsed_module(module_path) {
             if let Some(_found_module) = modules.get(&module_path.clone()) {
@@ -77,8 +77,8 @@ pub fn resolve_program(
                 resolve_to_new_module(state, modules, module_path, source_map, parse_module)?;
             }
         } else {
-            return Err(ResolveError {
-                kind: ResolveErrorKind::CanNotFindModule(module_path.clone()),
+            return Err(Error {
+                kind: ErrorKind::CanNotFindModule(module_path.clone()),
                 node: Node::default(),
             });
         }
