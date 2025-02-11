@@ -55,6 +55,7 @@ impl Span {
     }
 
     // Helper method to get the end position
+    #[must_use]
     pub fn end(&self) -> u32 {
         self.offset + self.length as u32
     }
@@ -93,7 +94,7 @@ pub struct FunctionTypeSignature {
 }
 
 impl Display for FunctionTypeSignature {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(f, "({}) -> {}", comma(&self.parameters), self.return_type)
     }
 }
@@ -142,7 +143,7 @@ pub struct ResolvedTypeForParameter {
 }
 
 impl Display for ResolvedTypeForParameter {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(
             f,
             "{}{}: {:?}",
@@ -188,12 +189,11 @@ pub enum ResolvedType {
     Bool,
     Unit,
 
-    // Containers
+    // Composite Types
     Array(ResolvedArrayTypeRef),
     Tuple(ResolvedTupleTypeRef),
     Struct(ResolvedStructTypeRef),
     Map(ResolvedMapTypeRef),
-
     Enum(ResolvedEnumTypeRef),
 
     Function(FunctionTypeSignature),
@@ -239,13 +239,13 @@ impl Debug for ResolvedType {
 }
 
 impl Display for ResolvedType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         match self {
-            Self::Int => write!(f, "{}", "Int"),
-            Self::Float => write!(f, "{}", "Float"),
-            Self::String => write!(f, "{}", "String"),
-            Self::Bool => write!(f, "{}", "Bool"),
-            Self::Unit => write!(f, "{}", "()"),
+            Self::Int => write!(f, "Int"),
+            Self::Float => write!(f, "Float"),
+            Self::String => write!(f, "String"),
+            Self::Bool => write!(f, "Bool"),
+            Self::Unit => write!(f, "()"),
             Self::Array(array_ref) => {
                 write!(f, "[{}]", &array_ref.item_type.to_string())
             }
@@ -260,7 +260,7 @@ impl Display for ResolvedType {
             //),
             Self::Function(signature) => write!(f, "function {signature}"),
             Self::Iterator(generating_type) => write!(f, "Iterator<{generating_type:?}>"),
-            Self::Optional(base_type) => write!(f, "{}?", base_type),
+            Self::Optional(base_type) => write!(f, "{base_type}?"),
             Self::RustType(rust_type) => write!(f, "RustType {}", rust_type.type_name),
             Self::Range => write!(f, "Range"),
         }
@@ -555,11 +555,12 @@ pub fn comma_seq_nl<K: Clone + Hash + Eq + Display, V: Display>(
 
 pub fn comma_tuple_ref<K: Display, V: Display>(values: &[(&K, &V)]) -> String {
     let mut result = String::new();
+
     for (i, (key, value)) in values.iter().enumerate() {
         if i > 0 {
             result.push_str(", ");
         }
-        result.push_str(format!("{}: {}", key, value).as_str());
+        result.push_str(format!("{key}: {value}").as_str());
     }
     result
 }
