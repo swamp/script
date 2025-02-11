@@ -81,7 +81,7 @@ pub struct ResolvedModuleNamespace {
     build_in_rust_types: SeqMap<String, ResolvedRustTypeRef>,
 
     enum_types: SeqMap<String, ResolvedEnumTypeRef>,
-    //enum_variant_types: SeqMap<String, ResolvedEnumVariantTypeRef>,
+
     internal_functions: SeqMap<String, ResolvedInternalFunctionDefinitionRef>,
     external_function_declarations: SeqMap<String, ResolvedExternalFunctionDefinitionRef>,
 
@@ -115,8 +115,43 @@ impl ResolvedModuleNamespace {
         }
     }
 
-    pub fn structs(&self) -> &SeqMap<String, ResolvedStructTypeRef> {
+    #[must_use]
+    pub const fn structs(&self) -> &SeqMap<String, ResolvedStructTypeRef> {
         &self.structs
+    }
+
+    #[must_use]
+    pub const fn constants(&self) -> &SeqMap<String, ResolvedConstantRef> {
+        &self.constants
+    }
+
+    #[must_use]
+    pub const fn aliases(&self) -> &SeqMap<String, ResolvedAliasTypeRef> {
+        &self.aliases
+    }
+
+    #[must_use]
+    pub const fn namespaces(&self) -> &SeqMap<String, ResolvedModuleNamespaceRef> {
+        &self.namespaces
+    }
+
+    #[must_use]
+    pub const fn enums(&self) -> &SeqMap<String, ResolvedEnumTypeRef> {
+        &self.enum_types
+    }
+
+    #[must_use]
+    pub const fn internal_functions(
+        &self,
+    ) -> &SeqMap<String, ResolvedInternalFunctionDefinitionRef> {
+        &self.internal_functions
+    }
+
+    #[must_use]
+    pub const fn external_function_declarations(
+        &self,
+    ) -> &SeqMap<String, ResolvedExternalFunctionDefinitionRef> {
+        &self.external_function_declarations
     }
 
     pub fn add_constant_ref(
@@ -223,6 +258,8 @@ impl ResolvedModuleNamespace {
         self.add_struct(resolved_struct_type)
     }
 
+    /// # Errors
+    ///
     pub fn add_built_in_rust_type(
         &mut self,
         rust_type: ResolvedRustType,

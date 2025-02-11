@@ -10,13 +10,14 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use swamp_script_analyzer::prelude::ResolveError;
-use swamp_script_analyzer::{ResolvedModulesDisplay, ResolvedProgram};
+use swamp_script_analyzer::ResolvedProgram;
 use swamp_script_compile::{compile_analyze_and_link_without_version, compile_and_analyze};
 use swamp_script_core::prelude::SeqMap;
 use swamp_script_dep_loader::{create_source_map, DepLoaderError};
 use swamp_script_error_report::{show_script_resolve_error, ScriptResolveError};
 use swamp_script_eval::err::ExecuteError;
 use swamp_script_parser::prelude::*;
+use swamp_script_pretty_print::ResolvedModulesDisplay;
 use swamp_script_semantic::ns::{ClosureTypeGenerator, ResolvedModuleNamespace};
 use swamp_script_semantic::prelude::ResolvedModules;
 use swamp_script_semantic::{
