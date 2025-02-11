@@ -170,7 +170,7 @@ impl<'a> Resolver<'a> {
         self.scope.block_scope_stack = take(&mut self.global.block_scope_stack);
     }
 
-    fn analyze_normal_if_statement(
+    fn analyze_if_expression(
         &mut self,
         condition: &swamp_script_ast::Expression,
         expected_type: Option<&Type>,
@@ -178,18 +178,20 @@ impl<'a> Resolver<'a> {
         maybe_false_expression: &Option<Box<swamp_script_ast::Expression>>,
     ) -> Result<Expression, Error> {
         let resolved_condition = self.analyze_bool_expression(condition)?;
-
+        self.push_block_scope("if-true");
         let true_expr = self.analyze_expression(true_expression, expected_type)?;
+        self.pop_block_scope("if-true");
         let if_result_type = true_expr.ty.clone();
         // For the true branch
         let resolved_true = Box::new(true_expr);
 
         // For the else branch
         let else_statements = if let Some(false_expression) = maybe_false_expression {
-            Some(Box::new(self.analyze_expression(
-                false_expression,
-                Some(&if_result_type),
-            )?))
+            self.push_block_scope("if-false");
+            let else_expr =
+                Box::new(self.analyze_expression(false_expression, Some(&if_result_type))?);
+            self.pop_block_scope("if-false");
+            Some(else_expr)
         } else {
             None
         };
@@ -592,7 +594,7 @@ impl<'a> Resolver<'a> {
                 expression,
                 true_expression,
                 maybe_false_expression,
-            ) => self.analyze_normal_if_statement(
+            ) => self.analyze_if_expression(
                 expression,
                 expected_type,
                 true_expression,

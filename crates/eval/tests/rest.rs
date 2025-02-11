@@ -25,7 +25,7 @@ fn struct_fill_rest() {
         ..
     }
 
-    print(a)
+    print('{a}')
     ",
         "
     SpriteParams { rotate: -1, i: 3.30 }

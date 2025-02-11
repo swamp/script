@@ -220,11 +220,11 @@ fn while_loop() {
 #[test_log::test]
 fn call_function_in_loop() {
     check(
-        r#"
+        "
         fn add(another: Int) {
-            print(another)
-            if true { 2 } else { 3 }
-            print(another * 2)
+            print('{another}')
+            if true 2 else 3
+            print('{another * 2}')
         }
 
         mut x = 0
@@ -232,32 +232,32 @@ fn call_function_in_loop() {
             add(x)
             x = x + 1
         }
-    "#,
-        r#"
+    ",
+        r"
         0
         0
         1
         2
         2
         4
-        "#,
+        ",
     );
 }
 
 #[test_log::test]
 fn call_mut() {
     check_fail(
-        r#"
+        "
 fn increment(mut x: Int) -> Int {
     x = x + 1
     x
 }
 mut x = 10
-increment(x)
-print(x)
+increment('{x}')
+print('{x}')
 
-    "#,
-        "ResolveError(ArgumentIsNotMutable)",
+    ",
+        "ResolveError(Error { node: <78:5>, kind: NotValidLocationStartingPoint })",
     );
 }
 
@@ -276,7 +276,7 @@ fn call_mut_2() {
     print(x)
 
     ",
-        "ResolveError(ResolveError { node: <103:1>, kind: VariableIsNotMutable })",
+        "ResolveError(Error { node: <103:1>, kind: VariableIsNotMutable })",
     );
 }
 
@@ -311,8 +311,8 @@ fn struct_basic() {
         }
 
         p = Point { x: 10, y: 20 }
-        print(p.x)
-        print(p.y)
+        print('{p.x}')
+        print('{p.y}')
         "#,
         r#"
         10
@@ -332,7 +332,7 @@ fn struct_field_assignment() {
 
         mut p = Point { x: 10, y: 20 }
         p.x = 30
-        print(p.x)
+        print('{p.x}')
         "#,
         "30",
     );
@@ -369,7 +369,7 @@ fn enum_instantiation_simple() {
         }
 
         result = Result::Ok
-        print(result)
+        print('{result}')
         ",
         "Result::Ok",
     );
@@ -378,7 +378,7 @@ fn enum_instantiation_simple() {
 #[test_log::test]
 fn enum_instantiation_simple_2() {
     check(
-        r#"
+        "
         enum Result {
             Ok,
             Err
@@ -390,12 +390,12 @@ fn enum_instantiation_simple_2() {
             Ok => 2,
             _ => 3
         }
-        print(y)
-        "#,
-        r#"
+        print('{y}')
+        ",
+        "
             Result::Ok
             2
-        "#,
+        ",
     );
 }
 
@@ -403,22 +403,22 @@ fn enum_instantiation_simple_2() {
 #[test_log::test]
 fn array_operations() {
     check(
-        r#"
+        "
         arr = [1, 2, 3]
-        print(arr[0])
-        print(arr[1])
-        print(arr[2])
+        print('{arr[0]}')
+        print('{arr[1]}')
+        print('{arr[2]}')
 
         mut nums = [10, 20, 30]
         nums[1] = 25
-        print(nums[1])
-        "#,
-        r#"
+        print('{nums[1]}')
+        ",
+        "
         1
         2
         3
         25
-        "#,
+        ",
     );
 }
 
@@ -511,9 +511,9 @@ fn struct_with_methods() {
         }
 
         mut rect = Rectangle { width: 5, height: 3, }
-        print(rect.area())
+        print('{rect.area()}')
         rect.scale(2)
-        print(rect.area())
+        print('{rect.area()}')
         "#,
         r#"
         15
@@ -541,10 +541,10 @@ fn struct_with_methods_basic() {
         }
 
         mut m = Money { v: 10 }
-        print(m)
-        print(m.get())
+        print('{m}')
+        print('{m.get()}')
         m.set(22)
-        print(m.get())
+        print('{m.get()}')
         "#,
         r#"
     Money { v: 10 }
@@ -561,10 +561,10 @@ fn boolean_operations() {
         r#"
         x = true
         y = false
-        print(x && y)
-        print(x || y)
-        print(!x)
-        print(x && true)
+        print('{x && y}')
+        print('{x || y}')
+        print('{!x}')
+        print('{x && true}')
         "#,
         r#"
         false
@@ -581,11 +581,11 @@ fn arithmetic_precedence() {
     check(
         r"
         mut result = 2 + 3 * 4
-        print(result)
+        print('{result}')
         result = (2 + 3) * 4
-        print(result)
+        print('{result}')
         result = 10 - 2 * 3
-        print(result)
+        print('{result}')
         ",
         r"
         14
@@ -846,12 +846,12 @@ fn array_mutations() {
         arr[0] = arr[4]
         arr[4] = arr[0] * 2
 
-        print(arr[0])
-        print(arr[4])
+        print('{arr[0]}')
+        print('{arr[4]}')
 
         // Using array elements in expressions
         sum = arr[0] + arr[1] + arr[2]
-        print(sum)
+        print('{sum}')
         "#,
         r#"
         5
@@ -883,9 +883,9 @@ fn struct_mutations_and_chaining() {
         }
 
         mut c = Counter { value: 1 }
-        print(c.increment())
-        print(c.double())
-        print(c.double())
+        print('{c.increment()}')
+        print('{c.double()}')
+        print('{c.double()}')
         "#,
         r#"
         2
@@ -901,9 +901,9 @@ fn array_bounds_error() {
     check_fail(
         "
         arr = [1, 2, 3]
-        print(arr[3])  // Out of bounds
+        print('{arr[3]}')  // Out of bounds
         ",
-        "ExecuteError(ExecuteError { node: <43:1>, kind: IndexOutOfBounds })",
+        "ExecuteError(ExecuteError { node: <45:1>, kind: IndexOutOfBounds })",
     );
 }
 

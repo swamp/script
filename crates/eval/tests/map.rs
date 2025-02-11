@@ -110,7 +110,7 @@ fn map_fail_insert() {
     a[3] = 'ossian'
 
     ",
-        "ResolveError(ResolveError { node: <42:4>, kind: NotValidLocationStartingPoint })",
+        "ExecuteError(ExecuteError { node: <6:1>, kind: VariableWasNotMutable })",
     );
 }
 

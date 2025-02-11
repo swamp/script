@@ -8,7 +8,8 @@ use crate::prelude::{ValueReference, VariableValue};
 use err::ExecuteError;
 use seq_map::SeqMap;
 use std::fmt::Debug;
-use std::{cell::RefCell, rc::Rc};
+use std::io::Write;
+use std::{cell::RefCell, io, rc::Rc};
 use swamp_script_core::extra::{SparseValueId, SparseValueMap};
 use swamp_script_core::prelude::ValueError;
 use swamp_script_core::value::ValueRef;
@@ -756,8 +757,8 @@ impl<'a, C> Interpreter<'a, C> {
     fn debug_expr(&self, expr: &Expression) {
         if let Some(debug_source_map) = self.debug_source_map {
             let source_line = debug_source_map.get_text(&expr.node);
-            eprintln!("{:?}:\n  {}", expr.kind, source_line);
-            //io::stderr().flush().expect("Failed to flush stdout");
+            eprintln!("EVAL: {:?}:\n  {}", expr.kind, source_line);
+            io::stderr().flush().expect("Failed to flush stdout");
         }
     }
 
