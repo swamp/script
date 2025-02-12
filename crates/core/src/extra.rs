@@ -58,7 +58,7 @@ impl QuickSerialize for SparseValueId {
     }
 }
 
-#[derive(Eq, PartialEq)]
+#[derive()]
 pub struct SparseValueMap {
     pub sparse_slot: SparseSlot<Rc<RefCell<Value>>>,
     pub id_generator: IndexAllocator,

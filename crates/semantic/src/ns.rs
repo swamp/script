@@ -15,6 +15,8 @@ use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
 
+pub type TypeGeneratorRef = Rc<dyn TypeGenerator>;
+
 pub trait TypeGenerator: 'static + Debug {
     fn generate_type(
         &self,
@@ -222,6 +224,7 @@ impl ModuleNamespace {
             assigned_name: name.to_string(),
             anon_struct_type,
             functions: SeqMap::default(),
+            creator: None,
         };
 
         self.add_struct(_struct_type)

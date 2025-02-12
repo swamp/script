@@ -114,10 +114,10 @@ impl<'a> Resolver<'a> {
         is_mutable: &Option<swamp_script_ast::Node>,
         variable_type_ref: &Type,
     ) -> Result<VariableRef, Error> {
-        if variable_type_ref == &Type::Unit {
-            error!("serious");
-        }
-        assert_ne!(*variable_type_ref, Type::Unit);
+        assert!(
+            !matches!(*variable_type_ref, Type::Unit),
+            "Assertion failed: resolved_type should NOT be Type::Unit, but it was."
+        );
         self.create_local_variable_resolved(
             &self.to_node(variable),
             &self.to_node_option(is_mutable),

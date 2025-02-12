@@ -1168,7 +1168,7 @@ impl<'a> Resolver<'a> {
         ast_expressions: &[swamp_script_ast::Expression],
     ) -> Result<(Vec<Expression>, Type), Error> {
         if ast_expressions.is_empty() {
-            return if expected_type_for_last == Some(&Type::Unit) {
+            return if let Some(Type::Unit) = expected_type_for_last {
                 Ok((vec![], Type::Unit))
             } else {
                 Err(self.create_err(ErrorKind::EmptyBlockWrongType, node))
@@ -1804,7 +1804,7 @@ impl<'a> Resolver<'a> {
             let resolved_result =
                 self.analyze_expression(&guard.result, expecting_type.as_ref())?;
             let ty = resolved_result.ty.clone();
-            if expecting_type == None {
+            if let None = expecting_type {
                 expecting_type = Some(ty);
             }
 
@@ -1880,7 +1880,11 @@ impl<'a> Resolver<'a> {
             self.create_local_variable(&var.name, &var.is_mutable, &resolved_source.ty())?;
 
         let resolved_type = resolved_source.ty().clone();
-        assert_ne!(resolved_type, Type::Unit);
+        assert!(
+            !matches!(resolved_type, Type::Unit),
+            "Assertion failed: resolved_type should NOT be Type::Unit, but it was."
+        );
+
         let kind = ExpressionKind::VariableDefinition(var_ref, Box::from(resolved_source));
 
         let resolved_expr = self.create_expr(kind, resolved_type, &var.name);
@@ -2213,9 +2217,11 @@ impl<'a> Resolver<'a> {
             self.analyze_to_location(target_location, None, LocationSide::Lhs)?;
 
         let ty = resolved_location.ty.clone();
-        if ty == Type::Unit {
-            error!(?ast_source_expression, "unit problem");
-        }
+        assert!(
+            !matches!(ty, Type::Unit),
+            "Assertion failed: resolved_type should NOT be Type::Unit, but it was."
+        );
+
         let source_expr = self.analyze_expression(ast_source_expression, Some(&ty))?;
 
         let mut_location = SingleMutLocationExpression(resolved_location);
@@ -2245,68 +2251,6 @@ impl<'a> Resolver<'a> {
                 variable_index: 0,
             }),
             node: self.to_node(ast_node),
-            access_chain: vec![],
-        })
-    }
-
-    pub fn create_single_location_expr(
-        &self,
-        kind: SingleLocationExpressionKind,
-        ty: Type,
-        ast_node: &swamp_script_ast::Node,
-    ) -> SingleLocationExpression {
-        SingleLocationExpression {
-            kind,
-            ty,
-            starting_variable: Rc::new(Variable {
-                name: Node::default(),
-                resolved_type: Type::Int,
-                mutable_node: None,
-                scope_index: 0,
-                variable_index: 0,
-            }),
-            node: self.to_node(ast_node),
-            access_chain: vec![],
-        }
-    }
-
-    pub fn create_single_location_expr_resolved(
-        &self,
-        kind: SingleLocationExpressionKind,
-        ty: Type,
-        node: &Node,
-    ) -> SingleLocationExpression {
-        SingleLocationExpression {
-            kind,
-            ty,
-            starting_variable: Rc::new(Variable {
-                name: Node::default(),
-                resolved_type: Type::Int,
-                mutable_node: None,
-                scope_index: 0,
-                variable_index: 0,
-            }),
-            node: node.clone(),
-            access_chain: vec![],
-        }
-    }
-    pub fn create_mut_single_location_expr_resolved(
-        &self,
-        kind: SingleLocationExpressionKind,
-        ty: Type,
-        node: &Node,
-    ) -> SingleMutLocationExpression {
-        SingleMutLocationExpression(SingleLocationExpression {
-            kind,
-            ty,
-            starting_variable: Rc::new(Variable {
-                name: Node::default(),
-                resolved_type: Type::Int,
-                mutable_node: None,
-                scope_index: 0,
-                variable_index: 0,
-            }),
-            node: node.clone(),
             access_chain: vec![],
         })
     }

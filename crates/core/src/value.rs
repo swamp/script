@@ -6,6 +6,7 @@ use crate::extra::{SparseValueId, SparseValueMap};
 use core::any::Any;
 use fixed32::Fp;
 use seq_map::SeqMap;
+use std::any::TypeId;
 use std::cell::Ref;
 use std::cell::RefCell;
 use std::fmt::{Debug, Display};
@@ -23,11 +24,11 @@ pub type ValueRef = Rc<RefCell<Value>>;
 pub trait AnyRustType: Any + Debug + Display + QuickSerialize {
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
-    fn eq_dyn(&self, other: &dyn AnyRustType) -> bool;
+    fn eq_dyn_ptr(&self, other: &dyn AnyRustType) -> bool;
 }
 
 // Blanket implementation
-impl<T: Any + Debug + Display + QuickSerialize + PartialEq> AnyRustType for T {
+impl<T: Any + Debug + Display + QuickSerialize> AnyRustType for T {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -36,12 +37,11 @@ impl<T: Any + Debug + Display + QuickSerialize + PartialEq> AnyRustType for T {
         self
     }
 
-    fn eq_dyn(&self, other: &dyn AnyRustType) -> bool {
-        // Check if `other` is the same concrete type as `self`
-        other
-            .as_any()
-            .downcast_ref::<T>()
-            .map_or(false, |other_t| self == other_t)
+    fn eq_dyn_ptr(&self, other: &dyn AnyRustType) -> bool {
+        // UNSAFE: Directly compare pointers
+        let self_ptr = self as *const dyn AnyRustType;
+        let other_ptr = other as *const dyn AnyRustType;
+        unsafe { self_ptr == other_ptr }
     }
 }
 

@@ -34,6 +34,7 @@ mut a = mut map['hi']
 print('a : {a}')
     ",
         "
+    z : Option(2)
     a : Option(2)
     ",
     );
@@ -136,20 +137,20 @@ fn map_insert_wrong_type() {
     a[3] = 5.5
 
     ",
-        "ResolveError(ResolveError { node: <53:3>, kind: IncompatibleTypes(String, Float) })",
+        "ResolveError(Error { node: <53:3>, kind: IncompatibleTypes(String, Float) })",
     );
 }
 
 #[test_log::test]
 fn map_fail_overwrite() {
-    check(
+    check_value(
         "
 
     mut a = [2: 'hello', -1: 'world']
     a[-1] = 'ossian'
-
+    a[-1] ?? 'wrong'
     ",
-        "ExecuteError(ExecuteError { node: <44:5>, kind: MapKeyAlreadyExists })",
+        Value::String("ossian".into()),
     );
 }
 

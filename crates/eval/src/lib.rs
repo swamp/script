@@ -1694,7 +1694,13 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            _ => todo!(),
+            _ => todo!(
+                "{}",
+                format!(
+                    "internal postfix should have been handled earlier {:?}",
+                    resolved_postfix.kind
+                )
+            ),
         };
 
         Ok(val)
@@ -1799,6 +1805,10 @@ impl<'a, C> Interpreter<'a, C> {
                     let key_val = self.evaluate_expression(key_expr)?;
 
                     val_ref = Rc::new(RefCell::new(Value::Option(seq_map.get(&key_val).cloned())));
+                }
+
+                PostfixKind::StringRangeIndex(..) => {
+                    todo!("string range index")
                 }
                 PostfixKind::RustTypeIndexRef(_rust_type_ref, map_expr) => {
                     let key_expr_value = self.evaluate_expression(map_expr)?;
@@ -2258,10 +2268,14 @@ impl<'a, C> Interpreter<'a, C> {
             // Comparison operations
 
             // RustType
-            (Value::RustValue(_, left), BinaryOperatorKind::Equal, Value::RustValue(_, right)) => {
+            (
+                Value::RustValue(left_type, left),
+                BinaryOperatorKind::Equal,
+                Value::RustValue(_, right),
+            ) => {
                 let left_borrow = left.borrow();
                 let right_borrow = right.borrow();
-                let equal = left_borrow.eq_dyn(&**right_borrow);
+                let equal = left_borrow.eq_dyn_ptr(&**right_borrow);
                 Value::Bool(equal)
             }
             (
@@ -2271,7 +2285,7 @@ impl<'a, C> Interpreter<'a, C> {
             ) => {
                 let left_borrow = left.borrow();
                 let right_borrow = right.borrow();
-                let equal = left_borrow.eq_dyn(&**right_borrow);
+                let equal = left_borrow.eq_dyn_ptr(&**right_borrow);
                 Value::Bool(!equal)
             }
 
@@ -2293,12 +2307,12 @@ impl<'a, C> Interpreter<'a, C> {
                 Value::EnumVariantSimple(a),
                 BinaryOperatorKind::Equal,
                 Value::EnumVariantSimple(b),
-            ) => Value::Bool(a == b),
+            ) => Value::Bool(a.common.number == b.common.number),
             (
                 Value::EnumVariantSimple(a),
                 BinaryOperatorKind::NotEqual,
                 Value::EnumVariantSimple(b),
-            ) => Value::Bool(a != b),
+            ) => Value::Bool(a.common.number != b.common.number),
 
             // Bool
             (Value::Bool(a), BinaryOperatorKind::Equal, Value::Bool(b)) => Value::Bool(a == b),

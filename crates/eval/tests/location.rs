@@ -69,11 +69,11 @@ fn field_chain_problem_output() {
         
         mut s = SomeStruct { something: 3, inner: Inner { v : 4 } }
         
-        print(s)
+        print('{s}')
         
         s.inner.v = 5
         
-        print(s)
+        print('{s}')
     ",
         "
         SomeStruct { something: 3, inner: Inner { v: 4 } }
@@ -99,11 +99,11 @@ fn field_chain_array_problem_output() {
 
     mut arr = [ s ]
 
-    print(arr)
+    print('{arr}')
 
     arr[0].inner.v = 5
 
-    print(arr)
+    print('{arr}')
     ",
         r#"
             [SomeStruct { something: 3, inner: Inner { v: 4 } }]

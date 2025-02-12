@@ -639,7 +639,7 @@ fn struct_instantiation_rest() {
         b: Float,
     }
 
-    print(Test { b: 2.4, .. })
+    print('{Test { b: 2.4, .. } }')
 
     ",
         "Test { a: 0, b: 2.40 }",
@@ -658,7 +658,7 @@ fn struct_instantiation_missing_fail() {
     print(Test { b: 2.4 })
 
     ",
-        r#"ResolveError(ResolveError { node: <70:4>, kind: MissingFieldInStructInstantiation(["a"], a: Some(<27:1>):Int, b: Some(<43:1>):Float) })"#,
+        r#"ResolveError(Error { node: <70:4>, kind: MissingFieldInStructInstantiation(["a"], a: Some(<27:1>):Int, b: Some(<43:1>):Float) })"#,
     );
 }
 
@@ -843,7 +843,7 @@ fn not_allowed(x : Int) {
 
 not_allowed(2)
          ",
-        "ResolveError(ResolveError { node: <31:1>, kind: VariableIsNotMutable })",
+        "ResolveError(Error { node: <31:1>, kind: VariableIsNotMutable })",
     );
 }
 

@@ -476,7 +476,7 @@ fn optional_field_mut() {
 
     mut s = SomeStruct { some_field: 2 }
     s.some_field = 3
-    print(s)
+    print('{s}')
 
     mut x = 0
     when a = s.some_field {

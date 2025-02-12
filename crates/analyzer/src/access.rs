@@ -93,7 +93,7 @@ impl<'a> Resolver<'a> {
         Ok(self.create_expr_resolved(
             ExpressionKind::ArrayRangeAccess(Box::from(base_expression), Box::from(range)),
             Type::Array(array_type_ref.clone()),
-            &node,
+            node,
         ))
     }
 

@@ -68,9 +68,9 @@ fn function_call() {
         }
 
         a = add(5, 3)
-        print(a)
+        print('{a}')
         b = add(a, 2)
-        print(b)
+        print('{b}')
     "#,
         r#"
 8
@@ -151,12 +151,12 @@ fn print_if() {
 #[test_log::test]
 fn print_range() {
     check(
-        r#"
+        "
         for x in 1..10 {
-            print(x)
+            print('{x}')
         }
-    "#,
-        r#"
+    ",
+        "
         1
         2
         3
@@ -166,7 +166,7 @@ fn print_range() {
         7
         8
         9
-        "#,
+        ",
     );
 }
 
@@ -175,7 +175,7 @@ fn print_x() {
     check(
         r#"
         x = 10
-        print(x)
+        print('{x}')
     "#,
         "10",
     );
@@ -385,7 +385,7 @@ fn enum_instantiation_simple_2() {
         }
 
         result = Result::Ok
-        print(result)
+        print('{result}')
         y = match result {
             Ok => 2,
             _ => 3
@@ -646,7 +646,7 @@ fn complex_match_patterns() {
             Rectangle width, height => width * height
         }
 
-        print(result)
+        print('{result}')
         ",
         "200",
     );
@@ -667,10 +667,10 @@ fn nested_types() {
         container = Container::Pair { first: p1, second: p2 }
 
         match container {
-            Single p => print(p.x + p.y),
+            Single p => print('{p.x + p.y}'),
             Pair first, second => {
-                print(first.x + second.x)
-                print(first.y + second.y)
+                print('{first.x + second.x}')
+                print('{first.y + second.y}')
             }
         }
         ",
@@ -765,10 +765,10 @@ fn complex_boolean_logic() {
             (x > 0 && y > 0) || (x < 0 && y < 0)
         }
 
-        print(check(1, 2))    // true
-        print(check(-1, -2))  // true
-        print(check(1, -2))   // false
-        print(check(0, 0))    // false
+        print('{check(1, 2)}')    // true
+        print('{check(-1, -2)}')  // true
+        print('{check(1, -2)}')   // false
+        print('{check(0, 0)}')    // false
         "#,
         r#"
         true
@@ -958,7 +958,7 @@ fn complex_control_flow() {
             }
         }
 
-        print(result)
+        print('{result}')
         "#,
         r#"
 
@@ -1000,7 +1000,7 @@ fn mut_in_loop() {
             }
         }
 
-        print(result)
+        print('{result}')
         "#,
         "10",
     );
@@ -1147,7 +1147,7 @@ fn test_nested_scopes() {
 #[test_log::test]
 fn test_match_with_refs() {
     check(
-        r#"
+        "
         enum State {
             Running { count: Int },
             Stopped
@@ -1165,8 +1165,8 @@ fn test_match_with_refs() {
         }
 
         increment_if_running(mut state)
-        print(state)
-        "#,
+        print('{state}')
+        ",
         "State::Running { count: 2 }",
     );
 }

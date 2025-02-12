@@ -6,6 +6,7 @@ pub mod modules;
 pub mod ns;
 pub mod prelude;
 
+use crate::ns::{TypeGenerator, TypeGeneratorRef};
 pub use fixed32::Fp;
 use seq_fmt::comma;
 use seq_map::{SeqMap, SeqMapError};
@@ -87,7 +88,7 @@ impl ParameterNode {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Signature {
     pub parameters: Vec<TypeForParameter>,
     pub return_type: Box<Type>,
@@ -170,18 +171,18 @@ pub struct TypeParameterName {
     pub resolved_node: Node,
 }
 
-#[derive(Clone, Eq, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub enum IteratorYieldType {
     Value(Type),
     KeyValue(Type, Type),
 }
 
-#[derive(Clone, Eq, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct IteratorTypeDetails {
     pub yield_type: IteratorYieldType,
 }
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone)]
 pub enum Type {
     // Primitives
     Int,
@@ -544,7 +545,7 @@ pub struct StructTypeField {
     pub index: usize,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct AnonymousStructFieldType {
     pub identifier: Option<Node>,
 
@@ -1071,7 +1072,7 @@ pub struct Constant {
 }
 pub type ConstantRef = Rc<Constant>;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug)]
 pub struct AliasType {
     pub name: Node,
     pub assigned_name: String,
@@ -1079,14 +1080,17 @@ pub struct AliasType {
 }
 pub type AliasTypeRef = Rc<AliasType>;
 
-#[derive(Eq, PartialEq)]
+pub struct TypeCreator {
+    pub type_arguments: Vec<Type>,
+    pub type_generator: TypeGeneratorRef,
+}
+
 pub struct StructType {
     pub name: Node,
     pub assigned_name: String,
     pub anon_struct_type: AnonymousStructType,
-
-    //
     pub functions: SeqMap<String, FunctionRef>,
+    pub creator: Option<TypeCreator>,
 }
 
 impl Debug for StructType {
@@ -1103,6 +1107,7 @@ impl StructType {
             name,
             assigned_name: assigned_name.to_string(),
             functions: SeqMap::default(),
+            creator: None,
         }
     }
 
@@ -1168,14 +1173,14 @@ pub fn same_array_ref(a: &ArrayTypeRef, b: &ArrayTypeRef) -> bool {
     Rc::ptr_eq(a, b)
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug)]
 pub struct ArrayType {
     pub item_type: Type,
 }
 
 pub type MapTypeRef = Rc<MapType>;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug)]
 pub struct MapType {
     pub key_type: Type,
     pub value_type: Type,
@@ -1183,7 +1188,7 @@ pub struct MapType {
 
 pub type EnumVariantStructTypeRef = Rc<EnumVariantStructType>;
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone)]
 pub struct AnonymousStructType {
     pub defined_fields: SeqMap<String, AnonymousStructFieldType>,
 }
@@ -1194,7 +1199,7 @@ impl Debug for AnonymousStructType {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug)]
 pub struct EnumVariantStructType {
     pub common: EnumVariantCommon,
     pub anon_struct: AnonymousStructType,
@@ -1202,7 +1207,7 @@ pub struct EnumVariantStructType {
 
 pub type EnumVariantTupleTypeRef = Rc<EnumVariantTupleType>;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug)]
 pub struct EnumVariantTupleType {
     pub common: EnumVariantCommon,
     pub fields_in_order: Vec<Type>,
@@ -1210,7 +1215,7 @@ pub struct EnumVariantTupleType {
 
 pub type TupleTypeRef = Rc<TupleType>;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug)]
 pub struct TupleType(pub Vec<Type>);
 
 impl TupleType {
@@ -1221,7 +1226,7 @@ impl TupleType {
 
 pub type EnumTypeRef = Rc<RefCell<EnumType>>;
 
-#[derive(Eq, PartialEq)]
+#[derive()]
 pub struct EnumType {
     pub name: LocalTypeIdentifier,
     pub assigned_name: String,
@@ -1278,7 +1283,7 @@ impl EnumType {
 
 pub type EnumVariantTypeRef = Rc<EnumVariantType>;
 
-#[derive(Eq, PartialEq, Clone)]
+#[derive(Clone)]
 pub struct EnumVariantCommon {
     pub name: LocalTypeIdentifier,
     pub assigned_name: String,
@@ -1312,7 +1317,7 @@ pub struct EnumVariantStructFieldType {
 
 pub type EnumVariantTupleFieldTypeRef = Rc<EnumVariantTupleFieldType>;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug)]
 pub struct EnumVariantTupleFieldType {
     pub name: LocalIdentifier,
     pub enum_variant: EnumVariantTypeRef,
@@ -1321,14 +1326,14 @@ pub struct EnumVariantTupleFieldType {
     pub field_index: usize,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct EnumVariantSimpleType {
     pub common: EnumVariantCommon,
 }
 
 pub type EnumVariantSimpleTypeRef = Rc<EnumVariantSimpleType>;
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone)]
 pub enum EnumVariantType {
     Struct(EnumVariantStructTypeRef),
     Tuple(EnumVariantTupleTypeRef),
