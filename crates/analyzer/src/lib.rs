@@ -2350,7 +2350,7 @@ impl<'a> Resolver<'a> {
         &mut self,
         resolved_node: &Node,
         struct_type: &StructTypeRef,
-        field: &AnonymousStructFieldType,
+        field: &StructTypeField,
         index: usize,
         signature: &Signature,
         arguments: &[swamp_script_ast::MutableOrImmutableExpression],

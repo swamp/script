@@ -173,29 +173,12 @@ impl ModulesDisplay<'_> {
                 write!(f, "{}", a.assigned_name.magenta())
             }
             ExpressionKind::VariableAccess(var) => self.show_variable(f, var),
-            ExpressionKind::FieldAccess(_, _) => {
-                write!(f, "FieldAccess()")
-            }
-            ExpressionKind::ArrayAccess(_, _, _) => {
-                write!(f, "ArrayAccess()")
-            }
-            ExpressionKind::MapIndexAccess(_, _, _) => {
-                write!(f, "MapIndexAccess()")
-            }
-            ExpressionKind::StringRangeAccess(_, _) => {
-                write!(f, "StringRangeAccess()")
-            }
-            ExpressionKind::ArrayRangeAccess(_, _) => {
-                write!(f, "ArrayRangeAccess()")
-            }
+
             ExpressionKind::InternalFunctionAccess(_) => {
                 write!(f, "InternalFunctionAccess()")
             }
             ExpressionKind::ExternalFunctionAccess(_) => {
                 write!(f, "ExternalFunctionAccess()")
-            }
-            ExpressionKind::MapAssignment(_, _, _) => {
-                write!(f, "MapAssignment()")
             }
             ExpressionKind::BinaryOp(_) => {
                 write!(f, "BinaryOp()")
@@ -212,12 +195,6 @@ impl ModulesDisplay<'_> {
             }
             ExpressionKind::CoerceOptionToBool(_) => {
                 write!(f, "CoerceOptionToBool()")
-            }
-            ExpressionKind::FunctionCall(_, _, _) => {
-                write!(f, "FunctionCall()")
-            }
-            ExpressionKind::MemberCall(_) => {
-                write!(f, "MemberCall()")
             }
             ExpressionKind::InterpolatedString(_) => {
                 write!(f, "InterpolatedString()")
@@ -291,7 +268,7 @@ impl ModulesDisplay<'_> {
             ExpressionKind::ArrayPush(_, _) => {
                 write!(f, "ArrayPush()")
             }
-            ExpressionKind::SparseNew(_, _) => {
+            ExpressionKind::RustValueInstantiation(_, _) => {
                 write!(f, "SparseNew()")
             }
         };

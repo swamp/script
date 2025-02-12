@@ -79,37 +79,4 @@ impl<'a> Resolver<'a> {
             mode: resolved_range_mode,
         })
     }
-
-    /// # Errors
-    ///
-    pub fn analyze_array_range_access(
-        &mut self,
-        base_expression: Expression,
-        array_type_ref: &ArrayTypeRef,
-        range: Range,
-    ) -> Result<Expression, Error> {
-        let node = &base_expression.node.clone();
-
-        Ok(self.create_expr_resolved(
-            ExpressionKind::ArrayRangeAccess(Box::from(base_expression), Box::from(range)),
-            Type::Array(array_type_ref.clone()),
-            node,
-        ))
-    }
-
-    /// # Errors
-    ///
-    pub fn analyze_string_range_access(
-        &mut self,
-        base_expr: Expression,
-        range: Range,
-    ) -> Result<Expression, Error> {
-        let ty = base_expr.ty.clone();
-        let node = base_expr.node.clone();
-        Ok(self.create_expr_resolved(
-            ExpressionKind::StringRangeAccess(Box::from(base_expr), Box::from(range)),
-            ty,
-            &node,
-        ))
-    }
 }

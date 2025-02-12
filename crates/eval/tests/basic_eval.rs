@@ -10,9 +10,7 @@ use std::rc::Rc;
 use swamp_script_core::prelude::Value;
 use swamp_script_core::qck_des::quick_deserialize;
 use swamp_script_eval::values_to_value_refs_owned;
-use swamp_script_semantic::{
-    AnonymousStructFieldType, AnonymousStructType, Node, StructType, Type,
-};
+use swamp_script_semantic::{AnonymousStructType, Node, StructType, StructTypeField, Type};
 
 mod util;
 
@@ -711,7 +709,7 @@ fn serialize_struct_octets() {
     defined_fields
         .insert(
             "a".to_string(),
-            AnonymousStructFieldType {
+            StructTypeField {
                 identifier: None,
                 field_type: Type::Int,
             },
@@ -720,7 +718,7 @@ fn serialize_struct_octets() {
     defined_fields
         .insert(
             "b".to_string(),
-            AnonymousStructFieldType {
+            StructTypeField {
                 identifier: None,
                 field_type: Type::String,
             },
@@ -729,7 +727,7 @@ fn serialize_struct_octets() {
     defined_fields
         .insert(
             "c".to_string(),
-            AnonymousStructFieldType {
+            StructTypeField {
                 identifier: None,
                 field_type: Type::Float,
             },

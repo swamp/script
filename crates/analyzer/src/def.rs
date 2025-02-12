@@ -8,11 +8,11 @@ use seq_map::SeqMap;
 use std::rc::Rc;
 
 use swamp_script_semantic::{
-    AliasType, AliasTypeRef, AnonymousStructFieldType, AnonymousStructType, Definition, EnumType,
-    EnumTypeRef, EnumVariantCommon, EnumVariantSimpleType, EnumVariantSimpleTypeRef,
-    EnumVariantStructType, EnumVariantTupleType, EnumVariantType, ExternalFunctionDefinition,
-    Function, InternalFunctionDefinition, LocalIdentifier, LocalTypeIdentifier, Mod, ParameterNode,
-    Signature, StructType, StructTypeRef, Type, TypeForParameter, Use, UseItem,
+    AliasType, AliasTypeRef, AnonymousStructType, Definition, EnumType, EnumTypeRef,
+    EnumVariantCommon, EnumVariantSimpleType, EnumVariantSimpleTypeRef, EnumVariantStructType,
+    EnumVariantTupleType, EnumVariantType, ExternalFunctionDefinition, Function,
+    InternalFunctionDefinition, LocalIdentifier, LocalTypeIdentifier, Mod, ParameterNode,
+    Signature, StructType, StructTypeField, StructTypeRef, Type, TypeForParameter, Use, UseItem,
 };
 
 impl<'a> Resolver<'a> {
@@ -190,7 +190,7 @@ impl<'a> Resolver<'a> {
                         let field_name_str =
                             self.get_text(&field_with_type.field_name.0).to_string();
 
-                        let resolved_field = AnonymousStructFieldType {
+                        let resolved_field = StructTypeField {
                             identifier: Some(self.to_node(&field_with_type.field_name.0)),
                             field_type: resolved_type,
                         };
@@ -256,7 +256,7 @@ impl<'a> Resolver<'a> {
             let resolved_type = self.analyze_type(&field_name_and_type.field_type)?;
             let name_string = self.get_text(&field_name_and_type.field_name.0).to_string();
 
-            let field_type = AnonymousStructFieldType {
+            let field_type = StructTypeField {
                 identifier: Some(self.to_node(&field_name_and_type.field_name.0)),
                 field_type: resolved_type,
             };

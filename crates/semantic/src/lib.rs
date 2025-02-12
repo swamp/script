@@ -538,21 +538,13 @@ pub struct MemberCall {
     pub arguments: Vec<ArgumentExpressionOrLocation>,
 }
 
-#[derive(Debug)]
-pub struct StructTypeField {
-    pub struct_type_ref: StructTypeRef,
-    pub field_name: Node,
-    pub index: usize,
-}
-
 #[derive(Debug, Clone)]
-pub struct AnonymousStructFieldType {
+pub struct StructTypeField {
     pub identifier: Option<Node>,
-
     pub field_type: Type,
 }
 
-impl Display for AnonymousStructFieldType {
+impl Display for StructTypeField {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         write!(f, "{:?}:{}", self.identifier, self.field_type)
     }
@@ -913,47 +905,22 @@ pub enum ExpressionKind {
     // Access Lookup values
     ConstantAccess(ConstantRef),
     VariableAccess(VariableRef),
-    FieldAccess(Box<Expression>, StructTypeField),
-    ArrayAccess(
-        Box<Expression>,
-        ArrayTypeRef,
-        Box<Expression>, // int index lookup
-    ), // Read from an array: arr[3]
-    MapIndexAccess(Box<Expression>, MapTypeRef, Box<Expression>),
-    StringRangeAccess(Box<Expression>, Box<Range>),
-    ArrayRangeAccess(Box<Expression>, Box<Range>),
 
     // ----
     InternalFunctionAccess(InternalFunctionDefinitionRef),
     ExternalFunctionAccess(ExternalFunctionDefinitionRef),
 
-    // Adding to a collection
-    MapAssignment(
-        Box<SingleMutLocationExpression>,
-        Box<Expression>,
-        Box<Expression>,
-    ), // Motivation: Can not use location since adding is more complex
+    PostfixChain(Box<Expression>, Vec<Postfix>),
 
     // Operators
     BinaryOp(BinaryOperator),
     UnaryOp(UnaryOperator),
-    PostfixChain(Box<Expression>, Vec<Postfix>),
 
     // Conversion
     // the `?` operator. unwraps the value, unless it is none
     //NoneCoalesceOperator(Box<Expression>, Box<Expression>),
     CoerceOptionToBool(Box<Expression>),
 
-    // Calls
-
-    // For calls from returned function values
-    FunctionCall(
-        Signature,
-        Box<Expression>,
-        Vec<ArgumentExpressionOrLocation>,
-    ),
-
-    MemberCall(MemberCall),
     InterpolatedString(Vec<StringPart>),
 
     // Constructing
@@ -1000,8 +967,8 @@ pub enum ExpressionKind {
     ArrayExtend(SingleMutLocationExpression, Box<Expression>), // Extends an array with another array
     ArrayPush(SingleMutLocationExpression, Box<Expression>),   // Adds an item to an array
 
-    // Sparse Built in
-    SparseNew(RustTypeRef, Type), // item type
+    // To create rust types
+    RustValueInstantiation(RustTypeRef, Type), // type parameter (item type)
 }
 
 #[derive(Debug)]
@@ -1080,17 +1047,20 @@ pub struct AliasType {
 }
 pub type AliasTypeRef = Rc<AliasType>;
 
+/*
 pub struct TypeCreator {
-    pub type_arguments: Vec<Type>,
-    pub type_generator: TypeGeneratorRef,
+    pub arguments: Vec<Type>,
+    pub generator_id: usize,
 }
+
+ */
 
 pub struct StructType {
     pub name: Node,
     pub assigned_name: String,
     pub anon_struct_type: AnonymousStructType,
     pub functions: SeqMap<String, FunctionRef>,
-    pub creator: Option<TypeCreator>,
+    //pub creator: Option<TypeCreator>,
 }
 
 impl Debug for StructType {
@@ -1107,7 +1077,6 @@ impl StructType {
             name,
             assigned_name: assigned_name.to_string(),
             functions: SeqMap::default(),
-            creator: None,
         }
     }
 
@@ -1190,7 +1159,7 @@ pub type EnumVariantStructTypeRef = Rc<EnumVariantStructType>;
 
 #[derive(Clone)]
 pub struct AnonymousStructType {
-    pub defined_fields: SeqMap<String, AnonymousStructFieldType>,
+    pub defined_fields: SeqMap<String, StructTypeField>,
 }
 
 impl Debug for AnonymousStructType {

@@ -982,6 +982,7 @@ impl<'a, C> Interpreter<'a, C> {
                 Value::Unit
             }
 
+            /*
             ExpressionKind::MapAssignment(map, index, value) => {
                 let map_val = self.evaluate_location(&map.0)?;
                 let index_val = self.evaluate_expression(index)?;
@@ -1000,6 +1001,7 @@ impl<'a, C> Interpreter<'a, C> {
                 Value::Unit
             }
 
+             */
             // ------------- LOOKUP ---------------------
             ExpressionKind::ConstantAccess(constant) => {
                 self.constants.lookup_constant_value(constant.id).clone()
@@ -1042,6 +1044,7 @@ impl<'a, C> Interpreter<'a, C> {
                 self.evaluate_unary_op(&expr.node, &unary_operator.kind, left_val)?
             }
 
+            /*
             // Calling
             ExpressionKind::FunctionCall(_signature, expr, arguments) => {
                 self.evaluate_function_call(expr, arguments)?
@@ -1092,6 +1095,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
+             */
             ExpressionKind::Block(statements) => {
                 self.evaluate_block(statements)?.try_into().unwrap() // TODO: Error handling
             }
@@ -1147,7 +1151,10 @@ impl<'a, C> Interpreter<'a, C> {
             },
 
             // --------------- SPECIAL FUNCTIONS
-            ExpressionKind::SparseNew(sparse_id_rust_type_ref, resolved_value_item_type) => {
+            ExpressionKind::RustValueInstantiation(
+                sparse_id_rust_type_ref,
+                resolved_value_item_type,
+            ) => {
                 let sparse_value_map = SparseValueMap::new(
                     sparse_id_rust_type_ref.clone(),
                     resolved_value_item_type.clone(),
@@ -1243,44 +1250,46 @@ impl<'a, C> Interpreter<'a, C> {
             ExpressionKind::VariableAccess(variable_ref) => {
                 self.current_block_scopes.lookup_var_value(variable_ref)
             }
-            ExpressionKind::FieldAccess(expr, struct_field) => {
-                let resolved_expr = self.evaluate_expression(expr)?;
-                let (_struct_type, values) = resolved_expr
-                    .expect_struct()
-                    .map_err(|_| self.create_err(ExecuteErrorKind::ExpectedStruct, &expr.node))?;
-                let x = values[struct_field.index].borrow().clone();
-                x
-            }
+            /*
+                    ExpressionKind::FieldAccess(expr, struct_field) => {
+                        let resolved_expr = self.evaluate_expression(expr)?;
+                        let (_struct_type, values) = resolved_expr
+                            .expect_struct()
+                            .map_err(|_| self.create_err(ExecuteErrorKind::ExpectedStruct, &expr.node))?;
+                        let x = values[struct_field.index].borrow().clone();
+                        x
+                    }
+                    ExpressionKind::ArrayAccess(expr, _array, index_expr) => {
+                        let resolved_expr = self.evaluate_expression(expr)?;
+                        let (_array_type, values) = resolved_expr
+                            .expect_array()
+                            .map_err(|_| self.create_err(ExecuteErrorKind::ExpectedArray, &expr.node))?;
 
-            ExpressionKind::ArrayAccess(expr, _array, index_expr) => {
-                let resolved_expr = self.evaluate_expression(expr)?;
-                let (_array_type, values) = resolved_expr
-                    .expect_array()
-                    .map_err(|_| self.create_err(ExecuteErrorKind::ExpectedArray, &expr.node))?;
+                        let index = self
+                            .evaluate_expression(index_expr)?
+                            .expect_int()
+                            .map_err(|_| self.create_err(ExecuteErrorKind::ExpectedInt, &expr.node))?
+                            as usize;
 
-                let index = self
-                    .evaluate_expression(index_expr)?
-                    .expect_int()
-                    .map_err(|_| self.create_err(ExecuteErrorKind::ExpectedInt, &expr.node))?
-                    as usize;
+                        let x = values[index].borrow().clone();
+                        x
+                    }
+            */
 
-                let x = values[index].borrow().clone();
-                x
-            }
+                    /*
+                    ExpressionKind::MapIndexAccess(expr, _map_type_ref, key_expr) => {
+                        let resolved_expr = self.evaluate_expression(expr)?;
+                        let (_map_type, seq_map) = resolved_expr
+                            .expect_map()
+                            .map_err(|_| self.create_err(ExecuteErrorKind::ExpectedMap, &expr.node))?;
 
-            ExpressionKind::MapIndexAccess(expr, _map_type_ref, key_expr) => {
-                let resolved_expr = self.evaluate_expression(expr)?;
-                let (_map_type, seq_map) = resolved_expr
-                    .expect_map()
-                    .map_err(|_| self.create_err(ExecuteErrorKind::ExpectedMap, &expr.node))?;
+                        let key_val = self.evaluate_expression(key_expr)?;
 
-                let key_val = self.evaluate_expression(key_expr)?;
+                        let value_val_maybe = seq_map.get(&key_val);
+                        Value::Option(value_val_maybe.cloned())
+                    }
 
-                let value_val_maybe = seq_map.get(&key_val);
-                Value::Option(value_val_maybe.cloned())
-            }
-            ExpressionKind::StringRangeAccess(_, _) => todo!(),
-            ExpressionKind::ArrayRangeAccess(_, _) => todo!(),
+                     */
             ExpressionKind::PostfixChain(start, parts) => {
                 let value_ref = self.eval_chain(&expr.node, start, parts)?;
                 let x = value_ref.borrow().clone();

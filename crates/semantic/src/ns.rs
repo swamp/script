@@ -5,10 +5,10 @@
 use crate::modules::Modules;
 use crate::AliasTypeRef;
 use crate::{
-    AliasType, AnonymousStructFieldType, AnonymousStructType, ConstantRef, EnumType, EnumTypeRef,
-    EnumVariantType, EnumVariantTypeRef, ExternalFunctionDefinition, ExternalFunctionDefinitionRef,
+    AliasType, AnonymousStructType, ConstantRef, EnumType, EnumTypeRef, EnumVariantType,
+    EnumVariantTypeRef, ExternalFunctionDefinition, ExternalFunctionDefinitionRef,
     InternalFunctionDefinition, InternalFunctionDefinitionRef, Node, RustType, RustTypeRef,
-    SemanticError, StructType, StructTypeRef, Type,
+    SemanticError, StructType, StructTypeField, StructTypeRef, Type,
 };
 use seq_map::SeqMap;
 use std::cell::RefCell;
@@ -205,7 +205,7 @@ impl ModuleNamespace {
         let mut _fields = SeqMap::new();
 
         for (_index, (field_name, field_type)) in fields.iter().enumerate() {
-            let af = AnonymousStructFieldType {
+            let af = StructTypeField {
                 identifier: None,
                 field_type: field_type.clone(),
             };
@@ -224,7 +224,6 @@ impl ModuleNamespace {
             assigned_name: name.to_string(),
             anon_struct_type,
             functions: SeqMap::default(),
-            creator: None,
         };
 
         self.add_struct(_struct_type)
