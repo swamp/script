@@ -2879,3 +2879,58 @@ AliasDef(AliasType { identifier: LocalTypeIdentifier(<6:1>), referenced_type: Ge
 ",
     );
 }
+
+#[test_log::test]
+fn enum_generic() {
+    check(
+        "
+enum Something<T, Something> {
+    First(Int),
+    Second { field: T},
+}
+
+         ",
+        "
+
+EnumDef(LocalTypeIdentifierWithOptionalTypeParams { name: <6:9>, parameter_names: [<16:1>, <19:9>] }, [Tuple(<36:5>, [Int(<42:3>)]), Struct(<52:6>, AnonymousStructType { fields: [FieldType { field_name: FieldName(<61:5>), field_type: Named(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<68:1>), module_path: None, generic_params: [] }) }] })])
+
+",
+    );
+}
+
+#[test_log::test]
+fn struct_generic() {
+    check(
+        "
+struct Something<T> {
+    field: Int,
+    another: T,
+}
+
+         ",
+        "
+
+StructDef(StructType { identifier: LocalTypeIdentifierWithOptionalTypeParams { name: <8:9>, parameter_names: [<18:1>] }, fields: [FieldType { field_name: FieldName(<27:5>), field_type: Int(<34:3>) }, FieldType { field_name: FieldName(<43:7>), field_type: Named(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<52:1>), module_path: None, generic_params: [] }) }] })
+
+",
+    );
+}
+
+#[test_log::test]
+fn impl_generic() {
+    check(
+        "
+impl Something<T> {
+    fn test(a: T) -> T {
+        a
+    }
+}
+
+         ",
+        "
+
+ImplDef(LocalTypeIdentifierWithOptionalTypeParams { name: <6:9>, parameter_names: [<16:1>] }, [Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <28:4>, params: [Parameter { variable: <33:1>, param_type: Named(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<36:1>), module_path: None, generic_params: [] }) }], self_parameter: None, return_type: Some(Named(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<42:1>), module_path: None, generic_params: [] })) }, body: <44:17>Block([<54:1>IdentifierReference(<54:1>)]) })])
+
+",
+    );
+}

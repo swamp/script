@@ -121,7 +121,7 @@ impl<'a> Resolver<'a> {
 
     fn analyze_enum_type_definition(
         &mut self,
-        enum_type_name: &swamp_script_ast::Node,
+        enum_type_name: &swamp_script_ast::LocalTypeIdentifierWithOptionalTypeParams,
         ast_variants: &[swamp_script_ast::EnumVariantType],
     ) -> Result<EnumTypeRef, Error> {
         let mut resolved_variants = SeqMap::new();
@@ -129,8 +129,8 @@ impl<'a> Resolver<'a> {
         let parent_number = self.shared.state.allocate_number();
 
         let enum_parent = EnumType {
-            name: LocalTypeIdentifier(self.to_node(enum_type_name)),
-            assigned_name: self.get_text(enum_type_name).to_string(),
+            name: LocalTypeIdentifier(self.to_node(&enum_type_name.name)),
+            assigned_name: self.get_text(&enum_type_name.name).to_string(),
             module_path: self.shared.lookup.get_path(),
             number: parent_number,
             variants: SeqMap::default(),
@@ -275,15 +275,15 @@ impl<'a> Resolver<'a> {
             defined_fields: resolved_fields,
         };
 
-        let struct_name_str = self.get_text(&ast_struct.identifier.0).to_string();
+        let struct_name_str = self.get_text(&ast_struct.identifier.name).to_string();
 
         let resolved_struct = StructType::new(
-            self.to_node(&ast_struct.identifier.0),
+            self.to_node(&ast_struct.identifier.name),
             &struct_name_str,
             resolved_anon_struct,
         );
 
-        if ast_struct.type_parameter_names.is_empty() {
+        if ast_struct.identifier.parameter_names.is_empty() {
             let resolved_struct_ref = self.shared.lookup.add_struct(resolved_struct)?;
             Ok(Definition::StructType(resolved_struct_ref))
         } else {
@@ -412,11 +412,11 @@ impl<'a> Resolver<'a> {
 
     fn analyze_impl_definition(
         &mut self,
-        attached_to_type: &swamp_script_ast::Node,
+        attached_to_type: &swamp_script_ast::LocalTypeIdentifierWithOptionalTypeParams,
         functions: &Vec<swamp_script_ast::Function>,
     ) -> Result<Type, Error> {
         let fake_qualified_type_name = swamp_script_ast::QualifiedTypeIdentifier {
-            name: swamp_script_ast::LocalTypeIdentifier(attached_to_type.clone()),
+            name: swamp_script_ast::LocalTypeIdentifier(attached_to_type.name.clone()),
             module_path: None,
             generic_params: vec![],
         };
@@ -443,7 +443,9 @@ impl<'a> Resolver<'a> {
                 .borrow_mut()
                 .functions
                 .insert(function_name_str, resolved_function_ref)
-                .map_err(|_| self.create_err(ErrorKind::DuplicateFieldName, attached_to_type))?;
+                .map_err(|_| {
+                    self.create_err(ErrorKind::DuplicateFieldName, &attached_to_type.name)
+                })?;
             self.stop_function();
         }
 

@@ -13,8 +13,9 @@ use std::str::Chars;
 use swamp_script_ast::{
     prelude::*, AliasType, AssignmentOperatorKind, BinaryOperatorKind, CompoundOperator,
     CompoundOperatorKind, EnumVariantLiteral, ExpressionKind, FieldExpression, FieldName,
-    FieldType, ForPattern, ForVar, IterableExpression, PatternElement, QualifiedIdentifier,
-    RangeMode, SpanWithoutFileId, TypeForParameter, VariableBinding,
+    FieldType, ForPattern, ForVar, IterableExpression, LocalTypeIdentifierWithOptionalTypeParams,
+    PatternElement, QualifiedIdentifier, RangeMode, SpanWithoutFileId, TypeForParameter,
+    VariableBinding,
 };
 use swamp_script_ast::{Function, WhenBinding};
 use swamp_script_ast::{LiteralKind, MutableOrImmutableExpression};
@@ -699,15 +700,12 @@ impl AstParser {
         Ok(Definition::AliasDef(alias_type))
     }
 
-    fn parse_generic_type_params(
-        &self,
-        pair: &Pair<Rule>,
-    ) -> Result<Vec<LocalTypeIdentifier>, ParseError> {
+    fn parse_generic_type_params(&self, pair: &Pair<Rule>) -> Result<Vec<Node>, ParseError> {
         assert_eq!(pair.as_rule(), Rule::generic_type_params);
         let mut type_params = Vec::new();
         for type_identifier_pair in Self::convert_into_iterator(pair) {
             if type_identifier_pair.as_rule() == Rule::type_identifier {
-                type_params.push(self.parse_local_type_identifier(&type_identifier_pair)?);
+                type_params.push(self.parse_local_type_identifier_node(&type_identifier_pair)?);
             } else {
                 panic!("internal error generic type params")
             }
@@ -715,12 +713,16 @@ impl AstParser {
         Ok(type_params)
     }
 
-    fn parse_struct_def(&self, pair: &Pair<Rule>) -> Result<Definition, ParseError> {
-        let mut inner = Self::convert_into_iterator(pair).peekable();
+    fn parse_local_type_identifier_with_optional_params(
+        &self,
+        pair: &Pair<Rule>,
+    ) -> Result<LocalTypeIdentifierWithOptionalTypeParams, ParseError> {
+        assert_eq!(pair.as_rule(), Rule::type_identifier_optional_type_params);
 
-        let struct_name = self.expect_local_type_identifier_next(&mut inner)?;
+        let mut inner = pair.clone().into_inner();
+        let name = self.expect_local_type_identifier_next(&mut inner)?;
 
-        let generic_params = if let Some(generic_params_pair) = inner.peek() {
+        let parameter_names = if let Some(generic_params_pair) = inner.peek() {
             // Peek to see if generic params exist
             if generic_params_pair.as_rule() == Rule::generic_type_params {
                 let generic_params_pair = inner.next().unwrap(); // Consume the generic_type_params pair
@@ -731,6 +733,18 @@ impl AstParser {
         } else {
             Vec::new()
         };
+
+        Ok(LocalTypeIdentifierWithOptionalTypeParams {
+            name: name.0,
+            parameter_names,
+        })
+    }
+
+    fn parse_struct_def(&self, pair: &Pair<Rule>) -> Result<Definition, ParseError> {
+        let mut inner = Self::convert_into_iterator(pair).peekable();
+
+        let name_with_optional_type_params =
+            self.parse_local_type_identifier_with_optional_params(&inner.next().unwrap())?;
 
         let field_definitions_pair_result = Self::next_pair(&mut inner);
         let mut fields = Vec::new();
@@ -751,7 +765,7 @@ impl AstParser {
             }
         }
 
-        let struct_def = StructType::new(struct_name, fields, generic_params);
+        let struct_def = StructType::new(name_with_optional_type_params, fields);
 
         Ok(Definition::StructDef(struct_def))
     }
@@ -875,7 +889,8 @@ impl AstParser {
 
     fn parse_impl_def(&self, pair: &Pair<Rule>) -> Result<Definition, ParseError> {
         let mut inner = Self::convert_into_iterator(pair);
-        let type_name = self.expect_local_type_identifier_next(&mut inner)?;
+        let name_with_optional_type_params =
+            self.parse_local_type_identifier_with_optional_params(&inner.next().unwrap())?;
 
         let mut functions = Vec::new();
 
@@ -900,7 +915,10 @@ impl AstParser {
             }
         }
 
-        Ok(Definition::ImplDef(type_name.0, functions))
+        Ok(Definition::ImplDef(
+            name_with_optional_type_params,
+            functions,
+        ))
     }
 
     fn parse_external_member_function(
@@ -2187,7 +2205,6 @@ impl AstParser {
         }
     }
 
-    #[allow(unused)] // TODO: Use this again
     fn parse_local_type_identifier(
         &self,
         pair: &Pair<Rule>,
@@ -2201,25 +2218,22 @@ impl AstParser {
         Ok(LocalTypeIdentifier::new(self.to_node(pair)))
     }
 
-    fn parse_local_type_identifier_next<'a>(
-        &self,
-        pairs: &mut impl Iterator<Item = Pair<'a, Rule>>,
-    ) -> Result<LocalTypeIdentifier, ParseError> {
-        let pair = Self::next_pair(pairs)?;
+    fn parse_local_type_identifier_node(&self, pair: &Pair<Rule>) -> Result<Node, ParseError> {
         if pair.as_rule() != Rule::type_identifier {
             return Err(self.create_error_pair(
-                SpecificError::ExpectedLocalTypeIdentifier(Self::pair_to_rule(&pair)),
-                &pair,
+                SpecificError::ExpectedTypeIdentifier(format!("{:?}", pair.as_rule())),
+                pair,
             ));
         }
-        Ok(LocalTypeIdentifier::new(self.to_node(&pair)))
+        Ok(self.to_node(pair))
     }
 
     fn parse_enum_def(&self, pair: &Pair<Rule>) -> Result<Definition, ParseError> {
         let mut inner = Self::convert_into_iterator(pair);
 
+        let name_with_optional_type_params =
+            self.parse_local_type_identifier_with_optional_params(&inner.next().unwrap())?;
         // Parse enum name
-        let name = self.parse_local_type_identifier_next(&mut inner)?;
         let mut variants = Vec::new();
 
         // Parse enum variants if present
@@ -2236,7 +2250,10 @@ impl AstParser {
             }
         }
 
-        Ok(Definition::EnumDef(name.0, variants))
+        Ok(Definition::EnumDef(
+            name_with_optional_type_params,
+            variants,
+        ))
     }
 
     fn parse_enum_variant(&self, pair: &Pair<Rule>) -> Result<EnumVariantType, ParseError> {
