@@ -955,7 +955,7 @@ impl<'a> Resolver<'a> {
                             tv.is_mutable = false;
                         }
 
-                        Type::RustType(found_rust_type) => {
+                        Type::External(found_rust_type) => {
                             if found_rust_type.number == SPARSE_TYPE_ID {
                                 /*
                                 let sparse_id = self
@@ -1122,7 +1122,7 @@ impl<'a> Resolver<'a> {
                     }
                 }
             }
-            Type::RustType(_rust_type_ref) => {
+            Type::External(_rust_type_ref) => {
                 /*
                 // TODO: HACK: We assume it is a container that iterates over the type parameters
                 // TODO: HACK: We assume that it is a sparse map
@@ -2029,7 +2029,7 @@ impl<'a> Resolver<'a> {
                             //tv.is_mutable = false;
                         }
 
-                        Type::RustType(rust_type) => {
+                        Type::External(rust_type) => {
                             let val_type = Type::Unit; // TODO: generic_params[0].clone();
                             if rust_type.number == SPARSE_TYPE_ID {
                                 let sparse_id_type = self
@@ -2038,7 +2038,7 @@ impl<'a> Resolver<'a> {
                                     .get_rust_type(&["std".to_string()], "SparseId")
                                     .expect("should have SparseId");
 
-                                let key_type = Type::RustType(sparse_id_type);
+                                let key_type = Type::External(sparse_id_type);
 
                                 let key_expr =
                                     self.analyze_expression(lookup_expr, Some(&key_type.clone()))?;

@@ -6,8 +6,8 @@ use crate::modules::Modules;
 use crate::AliasTypeRef;
 use crate::{
     AliasType, AnonymousStructType, ConstantRef, EnumType, EnumTypeRef, EnumVariantType,
-    EnumVariantTypeRef, ExternalFunctionDefinition, ExternalFunctionDefinitionRef,
-    InternalFunctionDefinition, InternalFunctionDefinitionRef, Node, RustType, RustTypeRef,
+    EnumVariantTypeRef, ExternalFunctionDefinition, ExternalFunctionDefinitionRef, ExternalType,
+    ExternalTypeRef, InternalFunctionDefinition, InternalFunctionDefinitionRef, Node,
     SemanticError, StructType, StructTypeField, StructTypeRef, Type,
 };
 use seq_map::SeqMap;
@@ -66,7 +66,7 @@ pub struct ModuleNamespace {
     constants: SeqMap<String, ConstantRef>,
     type_generators: SeqMap<String, Rc<dyn TypeGenerator>>,
 
-    build_in_rust_types: SeqMap<String, RustTypeRef>,
+    build_in_rust_types: SeqMap<String, ExternalTypeRef>,
 
     enum_types: SeqMap<String, EnumTypeRef>,
 
@@ -233,8 +233,8 @@ impl ModuleNamespace {
     ///
     pub fn add_built_in_rust_type(
         &mut self,
-        rust_type: RustType,
-    ) -> Result<RustTypeRef, SemanticError> {
+        rust_type: ExternalType,
+    ) -> Result<ExternalTypeRef, SemanticError> {
         let rust_type_ref = Rc::new(rust_type);
         self.build_in_rust_types
             .insert(rust_type_ref.type_name.clone(), rust_type_ref.clone())
@@ -347,7 +347,7 @@ impl ModuleNamespace {
         self.constants.get(&name.to_string())
     }
 
-    pub fn get_rust_type(&self, name: &str) -> Option<&RustTypeRef> {
+    pub fn get_rust_type(&self, name: &str) -> Option<&ExternalTypeRef> {
         self.build_in_rust_types.get(&name.to_string())
     }
 

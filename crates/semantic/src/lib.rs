@@ -6,7 +6,6 @@ pub mod modules;
 pub mod ns;
 pub mod prelude;
 
-use crate::ns::{TypeGenerator, TypeGeneratorRef};
 pub use fixed32::Fp;
 use seq_fmt::comma;
 use seq_map::{SeqMap, SeqMapError};
@@ -123,12 +122,12 @@ impl Signature {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct RustType {
+pub struct ExternalType {
     pub type_name: String, // To identify the specific Rust type
     pub number: u32,       // For type comparison
 }
 
-pub type RustTypeRef = Rc<RustType>;
+pub type ExternalTypeRef = Rc<ExternalType>;
 
 #[derive(Debug, Clone)]
 pub struct TypeWithMut {
@@ -204,7 +203,7 @@ pub enum Type {
     Iterator(Box<IteratorTypeDetails>),
 
     Optional(Box<Type>),
-    RustType(RustTypeRef),
+    External(ExternalTypeRef),
 }
 
 impl Debug for Type {
@@ -234,7 +233,7 @@ impl Debug for Type {
             }
             Self::Iterator(type_generated) => write!(f, "Iterator<{type_generated:?}>"),
             Self::Optional(base_type) => write!(f, "{base_type:?}?"),
-            Self::RustType(rust_type) => write!(f, "{:?}?", rust_type.type_name),
+            Self::External(rust_type) => write!(f, "{:?}?", rust_type.type_name),
             Self::Range => write!(f, "Range"),
         }
     }
@@ -258,7 +257,7 @@ impl Display for Type {
             Self::Function(signature) => write!(f, "function {signature}"),
             Self::Iterator(generating_type) => write!(f, "Iterator<{generating_type:?}>"),
             Self::Optional(base_type) => write!(f, "{base_type}?"),
-            Self::RustType(rust_type) => write!(f, "RustType {}", rust_type.type_name),
+            Self::External(rust_type) => write!(f, "RustType {}", rust_type.type_name),
             Self::Range => write!(f, "Range"),
         }
     }
@@ -332,7 +331,7 @@ impl Type {
             (Self::Optional(inner_type_a), Self::Optional(inner_type_b)) => {
                 inner_type_a.same_type(inner_type_b)
             }
-            (Self::RustType(type_ref_a), Self::RustType(type_ref_b)) => {
+            (Self::External(type_ref_a), Self::External(type_ref_b)) => {
                 type_ref_a.number == type_ref_b.number
             }
 
@@ -702,8 +701,8 @@ pub struct CompoundOperator {
 }
 
 #[must_use]
-pub fn create_rust_type(name: &str, type_number: TypeNumber) -> RustTypeRef {
-    let rust_type = RustType {
+pub fn create_rust_type(name: &str, type_number: TypeNumber) -> ExternalTypeRef {
+    let rust_type = ExternalType {
         type_name: name.to_string(),
         number: type_number,
     };
@@ -744,7 +743,7 @@ pub enum PostfixKind {
     StringIndex(Expression),
     StringRangeIndex(Range),
     MapIndex(MapTypeRef, Expression),
-    RustTypeIndexRef(RustTypeRef, Expression),
+    RustTypeIndexRef(ExternalTypeRef, Expression),
     MemberCall(FunctionRef, Vec<ArgumentExpressionOrLocation>),
     FunctionCall(Vec<ArgumentExpressionOrLocation>),
     OptionUnwrap, // ? operator
@@ -803,7 +802,7 @@ pub enum LocationAccessKind {
     StringRange(Range),
     MapIndex(MapTypeRef, Expression),
     MapIndexInsertIfNonExisting(MapTypeRef, Expression),
-    RustTypeIndex(RustTypeRef, Expression),
+    RustTypeIndex(ExternalTypeRef, Expression),
 }
 
 #[derive(Debug)]
@@ -832,7 +831,7 @@ pub enum SingleLocationExpressionKind {
     MutStructFieldRef(StructTypeRef, usize),
     MutArrayIndexRef(ArrayTypeRef),
     MutMapIndexRef(MapTypeRef),
-    MutRustTypeIndexRef(RustTypeRef),
+    MutRustTypeIndexRef(ExternalTypeRef),
 }
 
 #[derive(Debug)]
@@ -968,7 +967,7 @@ pub enum ExpressionKind {
     ArrayPush(SingleMutLocationExpression, Box<Expression>),   // Adds an item to an array
 
     // To create rust types
-    RustValueInstantiation(RustTypeRef, Type), // type parameter (item type)
+    RustValueInstantiation(ExternalTypeRef, Type), // type parameter (item type)
 }
 
 #[derive(Debug)]

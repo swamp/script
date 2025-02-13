@@ -170,12 +170,18 @@ type_name       = { base_type ~ optional_marker? }
 optional_marker = { "?" }
 base_type       = {
     built_in_type
+  | external_type
   | qualified_type_identifier
   | function_type
   | map_type
   | array_type
   | tuple_type
   | unit_type
+}
+
+external_type = { "External<\"" ~ external_type_name ~ "\">" }
+external_type_name = {
+    ASCII_ALPHANUMERIC ~ (ASCII_ALPHANUMERIC | "_" | "<" | ">" | ":" | "." | " ") *
 }
 
 built_in_type = { "Int" | "Float" | "String" | "Bool" }

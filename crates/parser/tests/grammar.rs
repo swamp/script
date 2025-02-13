@@ -2861,3 +2861,21 @@ AliasDef(AliasType { identifier: LocalTypeIdentifier(<6:1>), referenced_type: Ge
 ",
     );
 }
+
+#[test_log::test]
+fn external_type() {
+    check(
+        r#"
+struct Something {
+    field: Int,
+    another: External<"SparseValueMap">,
+}
+
+         "#,
+        "
+
+AliasDef(AliasType { identifier: LocalTypeIdentifier(<6:1>), referenced_type: Generic(Named(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<29:13>), module_path: Some(ModulePath([<10:17>])), generic_params: [Float(<43:5>)] }), [Float(<43:5>)]) })
+
+",
+    );
+}

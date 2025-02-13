@@ -501,6 +501,8 @@ pub enum Type {
     Function(Vec<TypeForParameter>, Box<Type>),
 
     Named(QualifiedTypeIdentifier),
+
+    External(Node),
 }
 
 #[derive(Debug)]

@@ -6,7 +6,6 @@ use crate::extra::{SparseValueId, SparseValueMap};
 use core::any::Any;
 use fixed32::Fp;
 use seq_map::SeqMap;
-use std::any::TypeId;
 use std::cell::Ref;
 use std::cell::RefCell;
 use std::fmt::{Debug, Display};
@@ -14,8 +13,9 @@ use std::hash::Hash;
 use std::rc::Rc;
 use swamp_script_semantic::{
     ArrayTypeRef, EnumVariantSimpleTypeRef, EnumVariantStructTypeRef, EnumVariantTupleTypeRef,
-    ExternalFunctionDefinitionRef, FormatSpecifierKind, InternalFunctionDefinitionRef, MapTypeRef,
-    PrecisionType, RangeMode, RustTypeRef, StructTypeRef, TupleTypeRef, TypeNumber,
+    ExternalFunctionDefinitionRef, ExternalTypeRef, FormatSpecifierKind,
+    InternalFunctionDefinitionRef, MapTypeRef, PrecisionType, RangeMode, StructTypeRef,
+    TupleTypeRef, TypeNumber,
 };
 use swamp_script_semantic::{Node, Span};
 
@@ -38,10 +38,9 @@ impl<T: Any + Debug + Display + QuickSerialize> AnyRustType for T {
     }
 
     fn eq_dyn_ptr(&self, other: &dyn AnyRustType) -> bool {
-        // UNSAFE: Directly compare pointers
         let self_ptr = self as *const dyn AnyRustType;
         let other_ptr = other as *const dyn AnyRustType;
-        unsafe { self_ptr == other_ptr }
+        std::ptr::addr_eq(self_ptr, other_ptr)
     }
 }
 
@@ -105,7 +104,7 @@ pub enum Value {
     ExternalFunction(ExternalFunctionDefinitionRef),
 
     // Other
-    RustValue(RustTypeRef, Rc<RefCell<Box<dyn AnyRustType>>>),
+    RustValue(ExternalTypeRef, Rc<RefCell<Box<dyn AnyRustType>>>),
 }
 
 #[allow(unused)]
@@ -345,7 +344,7 @@ fn deep_clone_valref(val_ref: &ValueRef) -> ValueRef {
     Rc::new(RefCell::new(cloned_value))
 }
 
-pub fn to_rust_value<T: AnyRustType + 'static>(type_ref: RustTypeRef, value: T) -> Value {
+pub fn to_rust_value<T: AnyRustType + 'static>(type_ref: ExternalTypeRef, value: T) -> Value {
     Value::RustValue(
         type_ref,
         Rc::new(RefCell::new(Box::new(value) as Box<dyn AnyRustType>)),
@@ -611,7 +610,7 @@ impl Value {
     }
 
     pub fn new_rust_value<T: AnyRustType + 'static + PartialEq>(
-        rust_type_ref: RustTypeRef,
+        rust_type_ref: ExternalTypeRef,
         value: T,
     ) -> Self {
         let boxed = Box::new(Box::new(value)) as Box<dyn AnyRustType>;
@@ -620,7 +619,7 @@ impl Value {
 
     pub fn new_hidden_rust_struct<T: AnyRustType + 'static + PartialEq>(
         struct_type: StructTypeRef,
-        rust_description: RustTypeRef,
+        rust_description: ExternalTypeRef,
         value: T,
     ) -> Self {
         let rust_value = Rc::new(RefCell::new(Self::new_rust_value(rust_description, value)));

@@ -6,7 +6,7 @@
 pub mod collections;
 pub mod prelude;
 
-use swamp_script_semantic::{modules::Module, RustType, TypeNumber};
+use swamp_script_semantic::{modules::Module, ExternalType, TypeNumber};
 pub const SPARSE_TYPE_ID: TypeNumber = 999;
 pub const SPARSE_ID_TYPE_ID: TypeNumber = 998;
 
@@ -17,7 +17,7 @@ pub fn create_std_module() -> Module {
     {
         let mut borrowed_namespace = std_module.namespace.borrow_mut();
 
-        let sparse_rust_type = RustType {
+        let sparse_rust_type = ExternalType {
             type_name: "Sparse".to_string(),
             number: SPARSE_TYPE_ID,
         };
@@ -25,7 +25,7 @@ pub fn create_std_module() -> Module {
             .add_built_in_rust_type(sparse_rust_type)
             .expect("could not register Sparse type");
 
-        let rust_type_ref_for_id = RustType {
+        let rust_type_ref_for_id = ExternalType {
             type_name: "SparseId".to_string(),
             number: SPARSE_ID_TYPE_ID,
         };

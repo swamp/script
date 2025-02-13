@@ -6,7 +6,7 @@ use crate::err::{Error, ErrorKind};
 use crate::Resolver;
 
 use swamp_script_semantic::{
-    ArrayTypeRef, Expression, ExpressionKind, Function, FunctionRef, Range, RangeMode, Type,
+    Expression, ExpressionKind, Function, FunctionRef, Range, RangeMode, Type,
 };
 
 impl<'a> Resolver<'a> {

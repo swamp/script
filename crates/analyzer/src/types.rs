@@ -8,8 +8,8 @@ use crate::Resolver;
 use std::rc::Rc;
 
 use swamp_script_semantic::{
-    ArrayType, ArrayTypeRef, MapType, MapTypeRef, Signature, StructTypeRef, TupleType, Type,
-    TypeForParameter,
+    ArrayType, ArrayTypeRef, ExternalType, ExternalTypeRef, MapType, MapTypeRef, Signature,
+    StructTypeRef, TupleType, Type, TypeForParameter,
 };
 
 impl<'a> Resolver<'a> {
@@ -53,7 +53,7 @@ impl<'a> Resolver<'a> {
             } else if let Some(found) = self.shared.lookup.get_enum(&path, &text) {
                 Type::Enum(found)
             } else if let Some(found) = self.shared.lookup.get_rust_type(&path, &text) {
-                Type::RustType(found)
+                Type::External(found)
             } else {
                 Err(self.create_err(ErrorKind::UnknownTypeReference, &type_name_to_find.name.0))?
             };
@@ -124,6 +124,14 @@ impl<'a> Resolver<'a> {
             }
             swamp_script_ast::Type::Map(key_type, value_type) => {
                 Type::Map(self.analyze_map_type(key_type, value_type)?)
+            }
+            swamp_script_ast::Type::External(node) => {
+                // TODO: Fix this. Generate unique number
+                let external = ExternalType {
+                    type_name: self.get_text(node).to_string(),
+                    number: 0,
+                };
+                Type::External(ExternalTypeRef::from(external))
             }
             swamp_script_ast::Type::Tuple(types) => {
                 Type::Tuple(TupleType(self.analyze_types(types)?).into())

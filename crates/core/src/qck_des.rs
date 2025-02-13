@@ -5,7 +5,7 @@ use fixed32::Fp;
 use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::rc::Rc;
-use swamp_script_semantic::{EnumVariantType, RustType, Type};
+use swamp_script_semantic::{EnumVariantType, ExternalType, Type};
 
 /// # Panics
 ///
@@ -168,10 +168,10 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
                 (Value::Option(None), offset)
             }
         }
-        Type::RustType(rust_type_ref) => {
+        Type::External(rust_type_ref) => {
             match rust_type_ref.number {
                 SPARSE_ID_TYPE_ID => {
-                    let sparse_id_rust_type = Rc::new(RustType {
+                    let sparse_id_rust_type = Rc::new(ExternalType {
                         type_name: "SparseId".to_string(),
                         number: SPARSE_ID_TYPE_ID, // TODO: FIX hardcoded number
                     });

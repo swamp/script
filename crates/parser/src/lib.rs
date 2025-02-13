@@ -2114,6 +2114,10 @@ impl AstParser {
 
                 Ok(Type::Function(param_types, Box::new(return_type)))
             }
+            Rule::external_type => {
+                let inner = self.next_inner_pair(&pair)?;
+                Ok(Type::External(self.to_node(&inner)))
+            }
             Rule::built_in_type => {
                 let mut inner = pair.clone().into_inner();
                 self.parse_type_from_str(&mut inner, &pair)

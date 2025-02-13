@@ -31,7 +31,7 @@ pub struct Module {
 
 impl Debug for Module {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "namespace: {:?}", self.namespace)?;
+        //writeln!(f, "namespace: {:?}", self.namespace)?;
 
         for resolved_def in &self.definitions {
             writeln!(f, "{resolved_def:?}")?;

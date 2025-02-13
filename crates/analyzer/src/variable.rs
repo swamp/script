@@ -9,7 +9,6 @@ use std::rc::Rc;
 use swamp_script_semantic::{
     Expression, ExpressionKind, MutOrImmutableExpression, Node, Type, Variable, VariableRef,
 };
-use tracing::error;
 
 impl<'a> Resolver<'a> {
     fn try_find_local_variable(&self, node: &Node) -> Option<&VariableRef> {

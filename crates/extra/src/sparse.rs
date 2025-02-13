@@ -5,9 +5,9 @@ use swamp_script_semantic::modules::Modules;
 use swamp_script_semantic::ns::{ClosureTypeGenerator, ModuleNamespace, TypeGenerator};
 use swamp_script_semantic::{
     AnonymousStructType, Expression, ExpressionKind, ExternalFunctionDefinition,
-    ExternalFunctionDefinitionRef, Function, InternalFunctionDefinition,
-    InternalFunctionDefinitionRef, IteratorTypeDetails, IteratorYieldType, LocalIdentifier, Node,
-    Postfix, PostfixKind, RustType, RustTypeRef, Signature, StructType, StructTypeField, Type,
+    ExternalFunctionDefinitionRef, ExternalType, ExternalTypeRef, Function,
+    InternalFunctionDefinition, InternalFunctionDefinitionRef, IteratorTypeDetails,
+    IteratorYieldType, LocalIdentifier, Node, Signature, StructType, StructTypeField, Type,
     TypeForParameter,
 };
 
@@ -27,13 +27,13 @@ pub fn sparse_type_generator() -> Rc<dyn TypeGenerator> {
 
             let value_type = &params[0];
             let optional_value_type = Type::Optional(Box::from(value_type.clone()));
-            let sparse_map_rust_type = RustType {
+            let sparse_map_rust_type = ExternalType {
                 type_name: "SparseMap".to_string(),
                 number: 999,
             };
 
-            let sparse_map_rust_type_ref = RustTypeRef::from(sparse_map_rust_type);
-            let sparse_map_type = Type::RustType(sparse_map_rust_type_ref.clone());
+            let sparse_map_rust_type_ref = ExternalTypeRef::from(sparse_map_rust_type);
+            let sparse_map_type = Type::External(sparse_map_rust_type_ref.clone());
             let mut fields = SeqMap::new();
 
             let hidden_field = StructTypeField {
@@ -62,7 +62,7 @@ pub fn sparse_type_generator() -> Rc<dyn TypeGenerator> {
 
             let mut functions = SeqMap::new();
 
-            let ext_sparse_new_reference = Expression {
+            let _ext_sparse_new_reference = Expression {
                 ty: create_struct_type.clone(),
                 node: Node::default(),
                 kind: ExpressionKind::ExternalFunctionAccess(ext_sparse_new_fn.clone()),

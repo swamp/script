@@ -92,7 +92,7 @@ pub fn check_doc(script: &str, expected_output: &str) {
                 Type::Function(_) => {}
                 Type::Iterable(_) => {}
                 Type::Optional(_) => {}
-                Type::RustType(_) => {}
+                Type::External(_) => {}
             },
             Definition::FunctionDef(_) => {}
             Definition::Alias(_) => {}

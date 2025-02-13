@@ -4,7 +4,7 @@ use std::rc::Rc;
 use swamp_script_core::extra::SparseValueMap;
 use swamp_script_core::qck_des::quick_deserialize;
 use swamp_script_core::value::{Value, SPARSE_ID_TYPE_ID, SPARSE_TYPE_ID};
-use swamp_script_semantic::RustType;
+use swamp_script_semantic::ExternalType;
 use swamp_script_semantic::Type;
 use tracing::info;
 
@@ -12,17 +12,17 @@ use tracing::info;
 fn serialize() {
     let mut buf = [0u8; 256];
 
-    let id = RustType {
+    let id = ExternalType {
         number: SPARSE_ID_TYPE_ID,
         type_name: "SparseId".to_string(),
     };
 
-    let sparse_map_rust_type = RustType {
+    let sparse_map_rust_type = ExternalType {
         number: SPARSE_TYPE_ID,
         type_name: "Sparse".to_string(),
     };
 
-    let sparse_map_type = Type::RustType(sparse_map_rust_type.clone().into());
+    let sparse_map_type = Type::External(sparse_map_rust_type.clone().into());
 
     let value_type = Type::Int;
 

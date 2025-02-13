@@ -8,8 +8,9 @@ use swamp_script_semantic::modules::Modules;
 use swamp_script_semantic::ns::{ModuleNamespaceRef, TypeGenerator};
 use swamp_script_semantic::{
     AliasType, AliasTypeRef, Constant, ConstantRef, EnumType, EnumTypeRef, EnumVariantTypeRef,
-    ExternalFunctionDefinition, ExternalFunctionDefinitionRef, InternalFunctionDefinition,
-    InternalFunctionDefinitionRef, RustTypeRef, SemanticError, StructType, StructTypeRef, Type,
+    ExternalFunctionDefinition, ExternalFunctionDefinitionRef, ExternalTypeRef,
+    InternalFunctionDefinition, InternalFunctionDefinitionRef, SemanticError, StructType,
+    StructTypeRef, Type,
 };
 
 #[derive()]
@@ -177,7 +178,7 @@ impl<'a> NameLookup<'a> {
     }
 
     #[must_use]
-    pub fn get_rust_type(&self, path: &[String], name: &str) -> Option<RustTypeRef> {
+    pub fn get_rust_type(&self, path: &[String], name: &str) -> Option<ExternalTypeRef> {
         let namespace = self.get_namespace(path);
         namespace.map_or_else(
             || None,

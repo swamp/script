@@ -949,6 +949,7 @@ fn guard_single() {
         a = 3
 
         | a > 2 -> 'hello'
+        | _ -> 'fallback'
 
          ",
         r#"
@@ -1325,6 +1326,21 @@ fn map_assign() {
         r#"
 ..[Int:String],VariableDefinition(Variable { name: <9:1>, resolved_type: [Int:String], mutable_node: Some(<5:3>), scope_index: 0, variable_index: 0 }, MutOrImmutableExpression { expression_or_location: Expression(<13:27>[Int:String],Literal(Map(MapType { key_type: Int, value_type: String }, [(<14:1>Int,Literal(IntLiteral(2)), <16:7>String,InterpolatedString([Literal(<17:5>, "hello")])), (<25:2>Int,UnaryOp(UnaryOperator { left: <26:1>Int,Literal(IntLiteral(1)), kind: Negate, node: <25:1> }), <32:7>String,InterpolatedString([Literal(<33:5>, "world")]))]))), is_mutable: None })
 ..(),MapAssignment(SingleMutLocationExpression(SingleLocationExpression { kind: MutVariableRef, node: <45:1>, ty: [Int:String], starting_variable: Variable { name: <9:1>, resolved_type: [Int:String], mutable_node: Some(<5:3>), scope_index: 0, variable_index: 0 }, access_chain: [] }), <47:1>Int,Literal(IntLiteral(3)), <52:8>String,InterpolatedString([Literal(<53:6>, "ossian")]))
+"#,
+    );
+}
+
+#[test_log::test]
+fn external_type() {
+    check(
+        r#"
+    struct Test {
+        field: External<"RustType">,
+    }
+
+    "#,
+        r#"
+StructType(RefCell { value: struct "Test" })
 "#,
     );
 }
