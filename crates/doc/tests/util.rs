@@ -2,6 +2,8 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
+use modules::modules::{Module, Modules};
+use modules::ns::ModuleNamespace;
 use std::cell::RefCell;
 use std::path::Path;
 use std::rc::Rc;
@@ -10,8 +12,6 @@ use swamp_script_analyzer::prelude::Error;
 use swamp_script_analyzer::Resolver;
 use swamp_script_doc::generate_html_doc;
 use swamp_script_parser::AstParser;
-use swamp_script_semantic::modules::{Module, Modules};
-use swamp_script_semantic::ns::ModuleNamespace;
 use swamp_script_semantic::{Definition, ProgramState, Type};
 use swamp_script_source_map::SourceMap;
 use tracing::warn;

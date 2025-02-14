@@ -2,8 +2,6 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-pub mod modules;
-pub mod ns;
 pub mod prelude;
 
 pub use fixed32::Fp;
@@ -168,6 +166,7 @@ impl PartialEq for TypeForParameter {
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct TypeParameterName {
     pub resolved_node: Node,
+    pub assigned_name: String,
 }
 
 #[derive(Clone, Debug)]
@@ -204,6 +203,8 @@ pub enum Type {
 
     Optional(Box<Type>),
     External(ExternalTypeRef),
+
+    GenericTypeParameter(usize, usize), // TODO: a bit off to have an unresolved type here, but it simplifies a lot.
 }
 
 impl Debug for Type {
@@ -235,6 +236,7 @@ impl Debug for Type {
             Self::Optional(base_type) => write!(f, "{base_type:?}?"),
             Self::External(rust_type) => write!(f, "{:?}?", rust_type.type_name),
             Self::Range => write!(f, "Range"),
+            &Type::GenericTypeParameter(_, _) => todo!(),
         }
     }
 }
@@ -259,6 +261,7 @@ impl Display for Type {
             Self::Optional(base_type) => write!(f, "{base_type}?"),
             Self::External(rust_type) => write!(f, "RustType {}", rust_type.type_name),
             Self::Range => write!(f, "Range"),
+            Self::GenericTypeParameter(scope, index) => write!(f, "Generic({scope}:{index})"),
         }
     }
 }
@@ -281,6 +284,8 @@ pub enum SemanticError {
     IncompatibleTypes,
     WasNotImmutable,
     WasNotMutable,
+    UnknownGeneric,
+    UnknownLookupModule,
 }
 
 impl Type {
@@ -1059,7 +1064,6 @@ pub struct StructType {
     pub assigned_name: String,
     pub anon_struct_type: AnonymousStructType,
     pub functions: SeqMap<String, FunctionRef>,
-    //pub creator: Option<TypeCreator>,
 }
 
 impl Debug for StructType {
@@ -1071,7 +1075,6 @@ impl Debug for StructType {
 impl StructType {
     pub fn new(name: Node, assigned_name: &str, anon_struct_type: AnonymousStructType) -> Self {
         Self {
-            //defined_in_module,
             anon_struct_type,
             name,
             assigned_name: assigned_name.to_string(),
@@ -1350,6 +1353,7 @@ pub struct Mod {
 #[derive(Debug)]
 pub enum Definition {
     StructType(StructTypeRef),
+    GenericType, // TODO: Remove this
     AliasType(AliasTypeRef),
     EnumType(EnumTypeRef),
     ImplType(Type),

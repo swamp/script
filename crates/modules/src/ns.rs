@@ -2,69 +2,35 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use crate::modules::Modules;
-use crate::AliasTypeRef;
-use crate::{
-    AliasType, AnonymousStructType, ConstantRef, EnumType, EnumTypeRef, EnumVariantType,
-    EnumVariantTypeRef, ExternalFunctionDefinition, ExternalFunctionDefinitionRef, ExternalType,
-    ExternalTypeRef, InternalFunctionDefinition, InternalFunctionDefinitionRef, Node,
-    SemanticError, StructType, StructTypeField, StructTypeRef, Type,
-};
 use seq_map::SeqMap;
 use std::cell::RefCell;
-use std::fmt::{Debug, Formatter};
+use std::fmt::Debug;
 use std::rc::Rc;
+use swamp_script_semantic::{
+    AliasType, AliasTypeRef, AnonymousStructType, ConstantRef, EnumType, EnumTypeRef,
+    EnumVariantType, EnumVariantTypeRef, ExternalFunctionDefinition, ExternalFunctionDefinitionRef,
+    ExternalType, ExternalTypeRef, InternalFunctionDefinition, InternalFunctionDefinitionRef, Node,
+    SemanticError, StructType, StructTypeField, StructTypeRef, Type, TypeParameterName,
+};
 
-pub type TypeGeneratorRef = Rc<dyn TypeGenerator>;
-
-pub trait TypeGenerator: 'static + Debug {
-    fn generate_type(
-        &self,
-        namespace: &mut ModuleNamespace,
-        modules: &Modules,
-        type_arguments: Vec<Type>,
-    ) -> Result<Type, SemanticError>;
+#[derive(Debug, Clone)]
+pub enum GenericAwareType {
+    Struct(StructTypeRef),
 }
 
-pub struct ClosureTypeGenerator<F> {
-    generator_fn: F,
+#[derive(Debug)]
+pub struct GenericType {
+    pub type_parameters: SeqMap<String, TypeParameterName>,
+    pub base_type: GenericAwareType,
 }
-
-impl<F> ClosureTypeGenerator<F> {
-    pub fn new(generator_fn: F) -> Self {
-        ClosureTypeGenerator { generator_fn }
-    }
-}
-
-impl<F> Debug for ClosureTypeGenerator<F>
-where
-    F: Fn(&mut ModuleNamespace, &Modules, &[Type]) -> Result<Type, SemanticError>,
-{
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "some debug")
-    }
-}
-
-impl<F> TypeGenerator for ClosureTypeGenerator<F>
-where
-    F: Fn(&mut ModuleNamespace, &Modules, &[Type]) -> Result<Type, SemanticError> + 'static, // Constraint on F: It must be a closure with the correct signature
-{
-    fn generate_type(
-        &self,
-        _module_namespace: &mut ModuleNamespace,
-        _modules: &Modules,
-        type_arguments: Vec<Type>,
-    ) -> Result<Type, SemanticError> {
-        (self.generator_fn)(_module_namespace, _modules, &type_arguments)
-    }
-}
+pub type GenericTypeRef = Rc<GenericType>;
 
 #[derive(Debug)]
 pub struct ModuleNamespace {
     structs: SeqMap<String, StructTypeRef>,
     aliases: SeqMap<String, AliasTypeRef>,
     constants: SeqMap<String, ConstantRef>,
-    type_generators: SeqMap<String, Rc<dyn TypeGenerator>>,
+    generics: SeqMap<String, GenericTypeRef>,
 
     build_in_rust_types: SeqMap<String, ExternalTypeRef>,
 
@@ -86,12 +52,12 @@ impl ModuleNamespace {
         Self {
             structs: SeqMap::default(),
             aliases: SeqMap::default(),
+            generics: SeqMap::default(),
             build_in_rust_types: SeqMap::default(),
             enum_types: SeqMap::default(),
             internal_functions: SeqMap::default(),
             external_function_declarations: SeqMap::default(),
             constants: SeqMap::default(),
-            type_generators: SeqMap::default(),
             namespaces: SeqMap::default(),
             path: path.to_vec(),
         }
@@ -167,33 +133,11 @@ impl ModuleNamespace {
         Ok(struct_ref)
     }
 
-    pub fn add_generator(
-        &mut self,
-        name: &str,
-        generator: Rc<dyn TypeGenerator>,
-    ) -> Result<(), SemanticError> {
-        self.type_generators
-            .insert(name.to_string(), generator)
-            .map_err(|_| SemanticError::DuplicateStructName(name.to_string()))?;
-        Ok(())
-    }
-
     pub fn add_struct_ref(&mut self, struct_type_ref: StructTypeRef) -> Result<(), SemanticError> {
         let name = struct_type_ref.borrow().assigned_name.clone();
         self.structs
             .insert(name.clone(), struct_type_ref)
             .map_err(|_| SemanticError::DuplicateStructName(name))?;
-        Ok(())
-    }
-
-    pub fn add_type_generator_ref(
-        &mut self,
-        name: &str,
-        type_generator: Rc<dyn TypeGenerator>,
-    ) -> Result<(), SemanticError> {
-        self.type_generators
-            .insert(name.parse().unwrap(), type_generator)
-            .map_err(|_| SemanticError::DuplicateStructName(name.to_string()))?;
         Ok(())
     }
 
@@ -325,6 +269,14 @@ impl ModuleNamespace {
         None
     }
 
+    pub fn get_generic(&self, name: &str) -> Option<GenericTypeRef> {
+        if let Some(found_generic) = self.generics.get(&name.to_string()) {
+            return Some(found_generic.clone());
+        }
+
+        None
+    }
+
     pub fn get_alias_referred_type(&self, name: &str) -> Option<Type> {
         if let Some(found_alias) = self.aliases.get(&name.to_string()) {
             let alias_type = found_alias.referenced_type.clone();
@@ -369,11 +321,6 @@ impl ModuleNamespace {
         self.external_function_declarations.get(&name.to_string())
     }
 
-    #[must_use]
-    pub fn get_type_generator(&self, name: &str) -> Option<Rc<dyn TypeGenerator>> {
-        self.type_generators.get(&name.to_string()).map(Rc::clone)
-    }
-
     pub fn add_external_function_declaration(
         &mut self,
         name: &str,
@@ -406,5 +353,25 @@ impl ModuleNamespace {
             .insert(name.to_string(), ns)
             .map_err(|_| SemanticError::DuplicateExternalFunction(name.to_string()))?;
         Ok(())
+    }
+
+    pub fn add_generic(
+        &mut self,
+        name: &str,
+        generic_type: GenericTypeRef,
+    ) -> Result<(), SemanticError> {
+        self.generics
+            .insert(name.to_string(), generic_type)
+            .map_err(|_| SemanticError::DuplicateStructName(name.to_string()))
+    }
+
+    pub fn add_generic_link(
+        &mut self,
+        name: &str,
+        generic_type: GenericTypeRef,
+    ) -> Result<(), SemanticError> {
+        self.generics
+            .insert(name.to_string(), generic_type)
+            .map_err(|_| SemanticError::DuplicateStructName(name.to_string()))
     }
 }

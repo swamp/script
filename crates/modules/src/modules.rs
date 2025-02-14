@@ -4,12 +4,13 @@
  */
 
 use crate::ns::{ModuleNamespace, ModuleNamespaceRef};
-use crate::ExpressionKind;
-use crate::{Constant, ConstantId, ConstantRef, Definition, Expression};
 use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
+use swamp_script_semantic::{
+    Constant, ConstantId, ConstantRef, Definition, Expression, ExpressionKind,
+};
 
 #[derive(Debug)]
 pub struct Modules {

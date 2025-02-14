@@ -13,7 +13,6 @@ use swamp_script_compile::{compile_analyze_and_link_without_version, compile_and
 use swamp_script_dep_loader::{create_source_map, DepLoaderError};
 use swamp_script_error_report::{show_script_resolve_error, ScriptResolveError};
 use swamp_script_eval::err::ExecuteError;
-use swamp_script_extra::sparse::sparse_type_generator;
 use swamp_script_parser::prelude::*;
 use swamp_script_pretty_print::ModulesDisplay;
 use swamp_script_source_map_lookup::SourceMapWrapper;
@@ -170,11 +169,6 @@ fn build(root_path: &Path, root_module: &str) -> Result<(), CliError> {
 
         let md = mangrove_collection_module.borrow_mut();
         let mut ns = md.namespace.borrow_mut();
-
-        let closure_gen = sparse_type_generator();
-
-        ns.add_generator("Sparse", closure_gen)
-            .expect("TODO: panic message");
     }
 
     let result = compile_and_analyze(

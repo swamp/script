@@ -3,21 +3,94 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use crate::Error;
+use seq_map::SeqMap;
 use std::rc::Rc;
-use swamp_script_semantic::modules::Modules;
-use swamp_script_semantic::ns::{ModuleNamespaceRef, TypeGenerator};
+use swamp_script_ast::{LocalTypeIdentifier, ModulePath};
+use swamp_script_modules::modules::Modules;
+use swamp_script_modules::ns::{GenericAwareType, GenericType, GenericTypeRef, ModuleNamespaceRef};
 use swamp_script_semantic::{
     AliasType, AliasTypeRef, Constant, ConstantRef, EnumType, EnumTypeRef, EnumVariantTypeRef,
     ExternalFunctionDefinition, ExternalFunctionDefinitionRef, ExternalTypeRef,
     InternalFunctionDefinition, InternalFunctionDefinitionRef, SemanticError, StructType,
-    StructTypeRef, Type,
+    StructTypeRef, Type, TypeParameterName,
 };
+use tracing::info;
+
+#[derive(Debug)]
+pub struct TypeParameter {
+    pub ty: Type,
+    pub debug_name: String,
+}
+
+#[derive(Debug)]
+pub struct TypeParameterScope {
+    pub type_parameters: Vec<TypeParameter>,
+}
+
+#[derive(Debug)]
+pub struct TypeParameterNameScope {
+    pub type_parameters: SeqMap<String, TypeParameterName>,
+}
 
 #[derive()]
 pub struct NameLookup<'a> {
     default_path: Vec<String>,
+    pub type_parameter_scope_stack: Vec<TypeParameterScope>,
     modules: &'a mut Modules,
+    pub type_parameter_names_stack: Vec<TypeParameterNameScope>,
 }
+
+impl<'a> NameLookup<'a> {
+    pub(crate) fn get_specialized_type(
+        &self,
+        path: &Option<ModulePath>,
+        name: &LocalTypeIdentifier,
+        parameters: &[Type],
+    ) -> Option<Type> {
+        todo!()
+    }
+
+    pub fn add_specialized_type(
+        &self,
+        path: &Option<ModulePath>,
+        name: &LocalTypeIdentifier,
+        parameters: &[Type],
+        ty: Type,
+    ) {
+        todo!()
+    }
+}
+
+impl<'a> NameLookup<'a> {}
+
+impl<'a> NameLookup<'a> {
+    pub(crate) fn get_type_parameter_reference(&self, name: &str) -> Option<(usize, usize)> {
+        for scope_index in (0..self.type_parameter_names_stack.len()).rev() {
+            let scope = &self.type_parameter_names_stack[scope_index];
+            for (param_index, (key_name, type_param_name)) in
+                scope.type_parameters.iter().enumerate()
+            {
+                if key_name == name {
+                    return Some((scope_index, param_index));
+                }
+            }
+        }
+
+        None
+    }
+}
+
+impl<'a> NameLookup<'a> {
+    pub(crate) fn lookup_type_parameter(&self, scope: usize, index: usize) -> &TypeParameter {
+        &self
+            .type_parameter_scope_stack
+            .get(scope)
+            .unwrap()
+            .type_parameters[index]
+    }
+}
+
+impl<'a> NameLookup<'a> {}
 
 impl<'a> NameLookup<'a> {}
 
@@ -31,17 +104,24 @@ impl<'a> NameLookup<'a> {
         Self {
             default_path,
             modules,
+            type_parameter_scope_stack: vec![],
+            type_parameter_names_stack: vec![],
         }
     }
-    pub(crate) fn get_namespace(&self, path: &[String]) -> Option<ModuleNamespaceRef> {
-        let resolved_path = if path.is_empty() {
+
+    pub fn get_full_path(&self, path: &[String]) -> Vec<String> {
+        if path.is_empty() {
             self.default_path.clone()
         } else {
             path.to_vec()
-        };
+        }
+    }
 
-        if path.len() == 1 {
-            let first = &path[0];
+    pub(crate) fn get_namespace(&self, path_or_empty: &[String]) -> Option<ModuleNamespaceRef> {
+        let resolved_path = self.get_full_path(path_or_empty);
+
+        if path_or_empty.len() == 1 {
+            let first = &path_or_empty[0];
             if let Some(found_alias) = self.get_namespace_link(first) {
                 return Some(found_alias);
             }
@@ -102,6 +182,7 @@ impl<'a> NameLookup<'a> {
         )
     }
 
+    /*
     pub(crate) fn get_type_generator(
         &self,
         path: &[String],
@@ -112,6 +193,36 @@ impl<'a> NameLookup<'a> {
             || None,
             |found_ns| found_ns.borrow().get_type_generator(name),
         )
+    }
+
+     */
+
+    /*
+    pub fn get_type_parameter(&self, name: &str) -> Option<Type> {
+        self.type_parameter_scope_stack
+            .iter()
+            .rev()
+            .find_map(|scope| scope.type_parameters.get(&name.to_string()))
+            .cloned()
+    }
+
+     */
+
+    pub fn push_type_parameter_scope(
+        &mut self,
+        parameter_name_to_analyzed_type: Vec<TypeParameter>,
+    ) {
+        for ty in &parameter_name_to_analyzed_type {
+            info!(?ty, "pushing scope!")
+        }
+        self.type_parameter_scope_stack.push(TypeParameterScope {
+            type_parameters: parameter_name_to_analyzed_type,
+        });
+    }
+
+    /// Pops the most recent type parameter scope off the stack.
+    pub fn pop_type_parameter_scope(&mut self) -> Option<TypeParameterScope> {
+        self.type_parameter_scope_stack.pop()
     }
 
     #[must_use]
@@ -213,6 +324,31 @@ impl<'a> NameLookup<'a> {
 
     /// # Errors
     ///
+    pub fn add_generic(
+        &mut self,
+        name: &str,
+        parameter_names: SeqMap<String, TypeParameterName>,
+        inner_type: GenericAwareType,
+    ) -> Result<(), SemanticError> {
+        let generic_type = GenericType {
+            type_parameters: parameter_names,
+            base_type: inner_type,
+        };
+
+        Ok(self
+            .own_namespace()
+            .borrow_mut()
+            .add_generic(name, GenericTypeRef::from(generic_type))?)
+    }
+
+    #[must_use]
+    pub fn get_generic(&self, path: &[String], name: &str) -> Option<GenericTypeRef> {
+        let namespace = self.get_namespace(path);
+        namespace.map_or_else(|| None, |found_ns| found_ns.borrow().get_generic(name))
+    }
+
+    /// # Errors
+    ///
     pub fn add_enum_type(&mut self, mut enum_type: EnumType) -> Result<EnumTypeRef, Error> {
         enum_type
             .module_path
@@ -267,14 +403,14 @@ impl<'a> NameLookup<'a> {
             .add_struct_ref(struct_type)
     }
 
-    pub(crate) fn add_type_generator_link(
-        &self,
+    pub(crate) fn add_generic_link(
+        &mut self,
         name: &str,
-        generator_ref: Rc<dyn TypeGenerator>,
+        generic_type: GenericTypeRef,
     ) -> Result<(), SemanticError> {
         self.own_namespace()
             .borrow_mut()
-            .add_type_generator_ref(name, generator_ref)
+            .add_generic_link(name, generic_type)
     }
 
     pub(crate) fn add_external_function_declaration_link(

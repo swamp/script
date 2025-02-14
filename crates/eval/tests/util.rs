@@ -3,6 +3,7 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
+use modules::modules::Modules;
 use seq_map::SeqMap;
 use std::path::Path;
 use swamp_script_analyzer::lookup::NameLookup;
@@ -12,7 +13,6 @@ use swamp_script_core::prelude::Value;
 use swamp_script_eval::prelude::{ExecuteError, VariableValue};
 use swamp_script_eval::{eval_constants, eval_module, Constants, ExternalFunctions};
 use swamp_script_parser::AstParser;
-use swamp_script_semantic::modules::Modules;
 use swamp_script_semantic::{
     Expression, ExternalFunctionDefinition, ExternalFunctionId, ProgramState, SemanticError,
     Signature, Type, TypeForParameter,
@@ -129,7 +129,7 @@ fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError>
 
     let mut constants = Constants::new();
 
-    eval_constants(&externals, &mut constants, &modules, &mut context)?;
+    eval_constants(&externals, &mut constants, &modules.constants, &mut context)?;
     let lookup = SourceMapWrapper { source_map };
 
     let value = eval_module(

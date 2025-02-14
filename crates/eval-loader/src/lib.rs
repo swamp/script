@@ -10,7 +10,7 @@ use swamp_script_analyzer::err::ErrorKind;
 use swamp_script_analyzer::lookup::NameLookup;
 use swamp_script_analyzer::prelude::*;
 use swamp_script_dep_loader::prelude::*;
-use swamp_script_semantic::modules::Modules;
+use swamp_script_modules::modules::{Module, Modules};
 use swamp_script_semantic::prelude::*;
 use swamp_script_source_map::SourceMap;
 

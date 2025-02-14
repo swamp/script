@@ -24,6 +24,7 @@ use std::mem::take;
 use std::num::{ParseFloatError, ParseIntError};
 use std::rc::Rc;
 
+use swamp_script_modules::modules::Modules;
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
     ArgumentExpressionOrLocation, IteratorYieldType, LocationAccess, LocationAccessKind,

@@ -511,6 +511,7 @@ pub fn build_resolve_error(err: &Error) -> Builder<usize> {
         ErrorKind::ExpectedMemberFunctionOrFunctionTypeField => Report::build(Kind::Error, 140, "ExpectedMemberFunctionOrFunctionTypeField", span),
         &swamp_script_analyzer::err::ErrorKind::UnknownModule => todo!(),
         &swamp_script_analyzer::err::ErrorKind::NotATypeGenerator => Report::build(Kind::Error, 140, "Not a type generator", span),
+        &swamp_script_analyzer::err::ErrorKind::ExpectedStruct => todo!(),
     }
 }
 

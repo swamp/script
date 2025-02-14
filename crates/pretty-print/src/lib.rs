@@ -1,6 +1,8 @@
 use seq_map::SeqMap;
 use std::fmt::{Display, Formatter};
 use swamp_script_core::prelude::SourceMapLookup;
+use swamp_script_modules::modules::Modules;
+use swamp_script_modules::ns::ModuleNamespaceRef;
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{Postfix, PostfixKind};
 use yansi::Paint;
@@ -436,6 +438,9 @@ impl ModulesDisplay<'_> {
             Type::Optional(base_type) => write!(f, "{}?", base_type.yellow()),
             Type::External(rust_type) => write!(f, "RustType {}", rust_type.type_name),
             Type::Range => write!(f, "Range"),
+            Type::GenericTypeParameter(scope, index) => {
+                write!(f, "GenericTypeParameter({scope}:{index})")
+            }
         }
     }
 

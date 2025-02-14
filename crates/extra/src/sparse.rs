@@ -1,8 +1,6 @@
 use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::rc::Rc;
-use swamp_script_semantic::modules::Modules;
-use swamp_script_semantic::ns::{ClosureTypeGenerator, ModuleNamespace, TypeGenerator};
 use swamp_script_semantic::{
     AnonymousStructType, Expression, ExpressionKind, ExternalFunctionDefinition,
     ExternalFunctionDefinitionRef, ExternalType, ExternalTypeRef, Function,
@@ -11,6 +9,7 @@ use swamp_script_semantic::{
     TypeForParameter,
 };
 
+/*
 /// # Panics
 /// if sparse types are not present.
 #[allow(clippy::too_many_lines, clippy::module_name_repetitions)]
@@ -258,3 +257,5 @@ pub fn sparse_type_generator() -> Rc<dyn TypeGenerator> {
 
     Rc::new(closure_gen)
 }
+
+ */

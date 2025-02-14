@@ -34,7 +34,7 @@ impl Debug for Node {
 }
 
 /// Identifiers ================
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct QualifiedTypeIdentifier {
     pub name: LocalTypeIdentifier,
     pub module_path: Option<ModulePath>,
@@ -132,7 +132,7 @@ impl ConstantIdentifier {
     }
 }
 
-#[derive(Debug, Eq, Hash, PartialEq)]
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
 pub struct FieldName(pub Node);
 
 #[derive(Debug, Eq, Hash, PartialEq, Clone)]
@@ -175,7 +175,7 @@ pub struct AliasType {
     pub referenced_type: Type,
 }
 
-#[derive(Debug, Eq, PartialEq, Default)]
+#[derive(Debug, Clone, Eq, PartialEq, Default)]
 pub struct StructType {
     pub identifier: LocalTypeIdentifierWithOptionalTypeParams,
     pub fields: Vec<FieldType>,
@@ -445,7 +445,7 @@ pub struct FieldExpression {
     pub expression: Expression,
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct FieldType {
     pub field_name: FieldName,
     pub field_type: Type,
@@ -478,13 +478,13 @@ pub enum EnumVariantType {
     Struct(Node, AnonymousStructType),
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeForParameter {
     pub ast_type: Type,
     pub is_mutable: bool,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Type {
     // Primitives
     Unit(Node),

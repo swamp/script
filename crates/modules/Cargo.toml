@@ -1,9 +1,8 @@
 [package]
-name = "swamp-script-extra"
+name = "swamp-script-modules"
 version = "0.0.12"
 edition = "2021"
 
 [dependencies]
 swamp-script-semantic = { path = "../semantic", version = "0.0.12" }
 seq-map = "0.0.13"
-swamp-script-modules = { path = "../modules", version = "0.0.12"}

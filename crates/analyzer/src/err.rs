@@ -117,6 +117,7 @@ pub enum ErrorKind {
     ExpectedMemberFunctionOrFunctionTypeField,
     UnknownModule,
     NotATypeGenerator,
+    ExpectedStruct,
 }
 
 impl From<SemanticError> for Error {

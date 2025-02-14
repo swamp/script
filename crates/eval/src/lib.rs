@@ -16,7 +16,6 @@ use swamp_script_core::value::ValueRef;
 use swamp_script_core::value::{
     convert_vec_to_rc_refcell, format_value, to_rust_value, SourceMapLookup, Value,
 };
-use swamp_script_semantic::modules::Modules;
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{same_array_ref, Postfix};
 use swamp_script_semantic::{
@@ -175,10 +174,10 @@ pub fn eval_module<C>(
 pub fn eval_constants<C>(
     externals: &ExternalFunctions<C>,
     constants: &mut Constants,
-    modules: &Modules,
+    constant_refs: &Vec<ConstantRef>,
     context: &mut C,
 ) -> Result<(), ExecuteError> {
-    for constant in &modules.constants {
+    for constant in constant_refs {
         let mut interpreter = Interpreter::<C>::new(externals, constants, context);
         let value = interpreter.evaluate_expression(&constant.expr)?;
         constants.set(constant.id, value);
@@ -2278,7 +2277,7 @@ impl<'a, C> Interpreter<'a, C> {
 
             // RustType
             (
-                Value::RustValue(left_type, left),
+                Value::RustValue(_left_type, left),
                 BinaryOperatorKind::Equal,
                 Value::RustValue(_, right),
             ) => {

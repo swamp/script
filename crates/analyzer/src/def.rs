@@ -3,21 +3,23 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use crate::err::{Error, ErrorKind};
+use crate::lookup::TypeParameterNameScope;
 use crate::Resolver;
 use seq_map::SeqMap;
 use std::rc::Rc;
-
+use swamp_script_modules::ns::GenericAwareType;
 use swamp_script_semantic::{
     AliasType, AliasTypeRef, AnonymousStructType, Definition, EnumType, EnumTypeRef,
     EnumVariantCommon, EnumVariantSimpleType, EnumVariantSimpleTypeRef, EnumVariantStructType,
     EnumVariantTupleType, EnumVariantType, ExternalFunctionDefinition, Function,
     InternalFunctionDefinition, LocalIdentifier, LocalTypeIdentifier, Mod, ParameterNode,
-    Signature, StructType, StructTypeField, StructTypeRef, Type, TypeForParameter, Use, UseItem,
+    Signature, StructType, StructTypeField, StructTypeRef, Type, TypeForParameter,
+    TypeParameterName, Use, UseItem,
 };
 
 impl<'a> Resolver<'a> {
     fn analyze_use_definition(
-        &self,
+        &mut self,
         use_definition: &swamp_script_ast::Use,
     ) -> Result<Definition, Error> {
         let mut nodes = Vec::new();
@@ -34,7 +36,6 @@ impl<'a> Resolver<'a> {
             .collect();
 
         let mut items = Vec::new();
-        let lookup = &self.shared.lookup;
 
         if use_definition.items.is_empty() {
             let last_name = path.last().unwrap();
@@ -47,17 +48,23 @@ impl<'a> Resolver<'a> {
                 swamp_script_ast::UseItem::Identifier(node) => {
                     let ident_resolved_node = self.to_node(&node.0);
                     let ident = UseItem::Identifier(ident_resolved_node.clone());
-                    let ident_text = self.get_text_resolved(&ident_resolved_node);
+                    let ident_text = self.get_text_resolved(&ident_resolved_node).to_string();
 
-                    if let Some(found_internal_function) =
-                        lookup.get_internal_function(&path, ident_text)
+                    if let Some(found_internal_function) = self
+                        .shared
+                        .lookup
+                        .get_internal_function(&path, &*ident_text)
                     {
-                        lookup.add_internal_function_link(ident_text, found_internal_function)?;
-                    } else if let Some(found_external_function_def) =
-                        lookup.get_external_function_declaration(&path, ident_text)
+                        self.shared
+                            .lookup
+                            .add_internal_function_link(&*ident_text, found_internal_function)?;
+                    } else if let Some(found_external_function_def) = self
+                        .shared
+                        .lookup
+                        .get_external_function_declaration(&path, &*ident_text)
                     {
-                        lookup.add_external_function_declaration_link(
-                            ident_text,
+                        self.shared.lookup.add_external_function_declaration_link(
+                            &*ident_text,
                             found_external_function_def,
                         )?;
                     } else {
@@ -70,14 +77,20 @@ impl<'a> Resolver<'a> {
                 }
                 swamp_script_ast::UseItem::Type(node) => {
                     let ident_resolved_node = self.to_node(&node.0);
-                    let ident_text = self.get_text_resolved(&ident_resolved_node);
-
-                    if let Some(found_struct) = lookup.get_struct(&path, ident_text) {
-                        lookup.add_struct_link(found_struct)?;
-                    } else if let Some(found_enum) = lookup.get_enum(&path, ident_text) {
-                        lookup.add_enum_link(&found_enum)?;
-                    } else if let Some(found_gen) = lookup.get_type_generator(&path, ident_text) {
-                        lookup.add_type_generator_link(ident_text, found_gen)?;
+                    let ident_text = self.get_text_resolved(&ident_resolved_node).to_string();
+                    let maybe_generic = { self.shared.lookup.get_generic(&path, &*ident_text) };
+                    if let Some(found_generic_type) = maybe_generic {
+                        self.shared
+                            .lookup
+                            .add_generic_link(&*ident_text, found_generic_type.clone())?
+                    } else if let Some(found_struct) =
+                        self.shared.lookup.get_struct(&path, &*ident_text)
+                    {
+                        self.shared.lookup.add_struct_link(found_struct)?;
+                    } else if let Some(found_enum) =
+                        self.shared.lookup.get_enum(&path, &*ident_text)
+                    {
+                        self.shared.lookup.add_enum_link(&found_enum)?;
                     } else {
                         return Err(self.create_err_resolved(
                             ErrorKind::UnknownTypeReference,
@@ -245,13 +258,13 @@ impl<'a> Resolver<'a> {
         Ok(resolved_alias_ref)
     }
 
-    /// # Errors
-    ///
-    pub fn analyze_struct_type_definition(
+    pub fn analyze_struct_type(
         &mut self,
+        assigned_name: &str,
         ast_struct: &swamp_script_ast::StructType,
-    ) -> Result<Definition, Error> {
+    ) -> Result<StructTypeRef, Error> {
         let mut resolved_fields = SeqMap::new();
+
         for field_name_and_type in &ast_struct.fields {
             let resolved_type = self.analyze_type(&field_name_and_type.field_type)?;
             let name_string = self.get_text(&field_name_and_type.field_name.0).to_string();
@@ -275,20 +288,65 @@ impl<'a> Resolver<'a> {
             defined_fields: resolved_fields,
         };
 
-        let struct_name_str = self.get_text(&ast_struct.identifier.name).to_string();
-
         let resolved_struct = StructType::new(
             self.to_node(&ast_struct.identifier.name),
-            &struct_name_str,
+            assigned_name,
             resolved_anon_struct,
         );
 
-        if ast_struct.identifier.parameter_names.is_empty() {
-            let resolved_struct_ref = self.shared.lookup.add_struct(resolved_struct)?;
-            Ok(Definition::StructType(resolved_struct_ref))
+        let resolved_struct_ref = self.shared.lookup.add_struct(resolved_struct)?;
+        Ok(resolved_struct_ref)
+    }
+
+    /// # Errors
+    ///
+    pub fn analyze_struct_type_definition(
+        &mut self,
+        ast_struct: &swamp_script_ast::StructType,
+    ) -> Result<Definition, Error> {
+        let struct_name_str = self.get_text(&ast_struct.identifier.name).to_string();
+
+        let parameter_names = if ast_struct.identifier.parameter_names.is_empty() {
+            SeqMap::new()
         } else {
-            todo!()
+            let mut parameter_names = SeqMap::new();
+            for name in &ast_struct.identifier.parameter_names {
+                let assigned_name = self.get_text(name).to_string();
+                parameter_names
+                    .insert(
+                        assigned_name.clone(),
+                        TypeParameterName {
+                            resolved_node: self.to_node(name),
+                            assigned_name,
+                        },
+                    )
+                    .expect("TODO: panic message");
+            }
+            let type_scope = TypeParameterNameScope {
+                type_parameters: parameter_names.clone(),
+            };
+            self.shared
+                .lookup
+                .type_parameter_names_stack
+                .push(type_scope);
+
+            parameter_names
+        };
+
+        let struct_name_str = self.get_text(&ast_struct.identifier.name).to_string();
+        let resolved_struct_ref = self.analyze_struct_type(&*struct_name_str, ast_struct)?;
+
+        if !parameter_names.is_empty() {
+            self.shared.lookup.add_generic(
+                &struct_name_str,
+                parameter_names,
+                GenericAwareType::Struct(resolved_struct_ref.clone()),
+            )?;
+
+            return Ok(Definition::GenericType);
         }
+
+        Ok(Definition::StructType(resolved_struct_ref))
     }
 
     fn analyze_function_definition(
