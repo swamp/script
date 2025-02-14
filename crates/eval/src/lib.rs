@@ -149,7 +149,8 @@ impl<C> ExternalFunctions<C> {
         let external_func_ref = Rc::new(RefCell::new(external_func));
 
         self.external_functions_by_id
-            .insert(function_id, external_func_ref.clone());
+            .insert(function_id, external_func_ref.clone())
+            .expect("todo");
 
         Ok(())
     }
@@ -327,6 +328,7 @@ impl<'a, C> Interpreter<'a, C> {
 
         Ok(())
     }
+    /*
     fn evaluate_function_call(
         &mut self,
         function_expression: &Expression,
@@ -372,6 +374,8 @@ impl<'a, C> Interpreter<'a, C> {
             )),
         }
     }
+
+     */
 
     fn evaluate_location_chain(
         &mut self,

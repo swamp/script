@@ -203,8 +203,6 @@ pub enum Type {
 
     Optional(Box<Type>),
     External(ExternalTypeRef),
-
-    GenericTypeParameter(usize, usize), // TODO: a bit off to have an unresolved type here, but it simplifies a lot.
 }
 
 impl Debug for Type {
@@ -236,9 +234,6 @@ impl Debug for Type {
             Self::Optional(base_type) => write!(f, "{base_type:?}?"),
             Self::External(rust_type) => write!(f, "{:?}?", rust_type.type_name),
             Self::Range => write!(f, "Range"),
-            Self::GenericTypeParameter(scope, index) => {
-                write!(f, "GenericTypeParameter({scope}:{index})")
-            }
         }
     }
 }
@@ -263,7 +258,6 @@ impl Display for Type {
             Self::Optional(base_type) => write!(f, "{base_type}?"),
             Self::External(rust_type) => write!(f, "RustType {}", rust_type.type_name),
             Self::Range => write!(f, "Range"),
-            Self::GenericTypeParameter(scope, index) => write!(f, "Generic({scope}:{index})"),
         }
     }
 }

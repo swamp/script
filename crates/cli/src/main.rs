@@ -160,15 +160,15 @@ fn build(root_path: &Path, root_module: &str) -> Result<(), CliError> {
         &mut source_map,
     )?;
     {
-        let mangrove_collection_module_path_without_version =
-            &["mangrove".to_string(), "collection".to_string()];
-        let mangrove_collection_module = resolved_program
-            .modules
-            .get(mangrove_collection_module_path_without_version)
-            .unwrap();
+        //let mangrove_collection_module_path_without_version =
+        //  &["mangrove".to_string(), "collection".to_string()];
+        //let mangrove_collection_module = resolved_program
+        //  .modules
+        //.get(mangrove_collection_module_path_without_version)
+        //.unwrap();
 
-        let md = mangrove_collection_module.borrow_mut();
-        let mut ns = md.namespace.borrow_mut();
+        //let md = mangrove_collection_module.borrow_mut();
+        //let mut ns = md.namespace.borrow_mut();
     }
 
     let result = compile_and_analyze(

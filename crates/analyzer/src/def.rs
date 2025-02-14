@@ -3,7 +3,6 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use crate::err::{Error, ErrorKind};
-use crate::lookup::TypeParameterNameScope;
 use crate::Resolver;
 use seq_map::SeqMap;
 use std::rc::Rc;
@@ -306,9 +305,7 @@ impl<'a> Resolver<'a> {
     ) -> Result<Definition, Error> {
         let struct_name_str = self.get_text(&ast_struct.identifier.name).to_string();
 
-        let parameter_names = if ast_struct.identifier.parameter_names.is_empty() {
-            SeqMap::new()
-        } else {
+        if !ast_struct.identifier.parameter_names.is_empty() {
             let mut parameter_names = SeqMap::new();
             for name in &ast_struct.identifier.parameter_names {
                 let assigned_name = self.get_text(name).to_string();
@@ -322,29 +319,19 @@ impl<'a> Resolver<'a> {
                     )
                     .expect("TODO: panic message");
             }
-            let type_scope = TypeParameterNameScope {
-                type_parameters: parameter_names.clone(),
-            };
-            self.shared
-                .lookup
-                .type_parameter_names_stack
-                .push(type_scope);
 
-            parameter_names
-        };
-
-        let struct_name_str = self.get_text(&ast_struct.identifier.name).to_string();
-        let resolved_struct_ref = self.analyze_struct_type(&*struct_name_str, ast_struct)?;
-
-        if !parameter_names.is_empty() {
             self.shared.lookup.add_generic(
                 &struct_name_str,
                 parameter_names,
-                GenericAwareType::Struct(resolved_struct_ref.clone()),
+                GenericAwareType::Struct(ast_struct.clone()),
+                self.shared.file_id,
             )?;
 
             return Ok(Definition::GenericType);
         }
+
+        let struct_name_str = self.get_text(&ast_struct.identifier.name).to_string();
+        let resolved_struct_ref = self.analyze_struct_type(&*struct_name_str, ast_struct)?;
 
         Ok(Definition::StructType(resolved_struct_ref))
     }
@@ -473,13 +460,7 @@ impl<'a> Resolver<'a> {
         attached_to_type: &swamp_script_ast::LocalTypeIdentifierWithOptionalTypeParams,
         functions: &Vec<swamp_script_ast::Function>,
     ) -> Result<Type, Error> {
-        let fake_qualified_type_name = swamp_script_ast::QualifiedTypeIdentifier {
-            name: swamp_script_ast::LocalTypeIdentifier(attached_to_type.name.clone()),
-            module_path: None,
-            generic_params: vec![],
-        };
-
-        let found_struct = self.find_struct_type(&fake_qualified_type_name)?;
+        let (found_struct, _is_generic) = self.find_local_impl_target(&attached_to_type)?;
 
         for function in functions {
             let new_return_type = self.analyze_return_type(function)?;

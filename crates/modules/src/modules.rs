@@ -93,14 +93,18 @@ impl Modules {
         }
     }
     pub fn add(&mut self, module: ModuleRef) {
-        self.modules.insert(
-            module.clone().borrow().namespace.borrow().path.clone(),
-            module,
-        );
+        self.modules
+            .insert(
+                module.clone().borrow().namespace.borrow().path.clone(),
+                module,
+            )
+            .expect("todo");
     }
 
     pub fn link_module(&mut self, module_path: &[String], referred_module: ModuleRef) {
-        self.modules.insert(module_path.to_vec(), referred_module);
+        self.modules
+            .insert(module_path.to_vec(), referred_module)
+            .expect("todo");
     }
 
     pub fn add_constant(&mut self, resolved_constant: Constant) -> ConstantRef {
@@ -123,7 +127,8 @@ impl Modules {
         let module_ref = Rc::new(RefCell::new(module));
 
         self.modules
-            .insert(Vec::from(module_path), module_ref.clone());
+            .insert(Vec::from(module_path), module_ref.clone())
+            .expect("todo");
 
         module_ref
     }

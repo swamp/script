@@ -5,5 +5,7 @@ edition = "2021"
 
 [dependencies]
 swamp-script-semantic = { path = "../semantic", version = "0.0.12" }
+swamp-script-ast = { path = "../ast", version = "0.0.12"}
 seq-map = "0.0.13"
 seq-fmt = "0.0.1"
+tracing = "0.1.40"

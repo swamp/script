@@ -244,6 +244,22 @@ impl<'a> Resolver<'a> {
         (path, self.get_text(&ident.name.0).to_string())
     }
 
+    fn get_full_path(
+        &self,
+        ident: &swamp_script_ast::QualifiedTypeIdentifier,
+    ) -> (Vec<String>, String) {
+        let path = ident.module_path.as_ref().map_or_else(
+            || self.shared.lookup.default_path.clone(),
+            |found_path| {
+                let mut v = Vec::new();
+                for p in &found_path.0 {
+                    v.push(self.get_text(p).to_string());
+                }
+                v
+            },
+        );
+        (path, self.get_text(&ident.name.0).to_string())
+    }
     fn analyze_return_type(
         &mut self,
         function: &swamp_script_ast::Function,

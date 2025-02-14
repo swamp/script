@@ -1,3 +1,4 @@
+/*
 use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -9,7 +10,6 @@ use swamp_script_semantic::{
     TypeForParameter,
 };
 
-/*
 /// # Panics
 /// if sparse types are not present.
 #[allow(clippy::too_many_lines, clippy::module_name_repetitions)]

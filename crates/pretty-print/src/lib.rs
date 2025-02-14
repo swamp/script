@@ -438,9 +438,6 @@ impl ModulesDisplay<'_> {
             Type::Optional(base_type) => write!(f, "{}?", base_type.yellow()),
             Type::External(rust_type) => write!(f, "RustType {}", rust_type.type_name),
             Type::Range => write!(f, "Range"),
-            Type::GenericTypeParameter(scope, index) => {
-                write!(f, "GenericTypeParameter({scope}:{index})")
-            }
         }
     }
 

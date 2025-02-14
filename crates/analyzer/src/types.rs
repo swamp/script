@@ -6,13 +6,11 @@ use crate::err::{Error, ErrorKind};
 use crate::lookup::TypeParameter;
 use crate::Resolver;
 use seq_map::SeqMap;
-use std::cell::RefCell;
 use std::rc::Rc;
-use swamp_script_modules::ns::{GenericAwareType, ModuleNamespace};
+use swamp_script_modules::ns::{GenericAwareType, GenericTypeRef, ModuleNamespace};
 use swamp_script_semantic::{
-    AnonymousStructType, ArrayType, ArrayTypeRef, ExternalType, ExternalTypeRef, MapType,
-    MapTypeRef, Node, Signature, StructType, StructTypeField, StructTypeRef, TupleType, Type,
-    TypeForParameter,
+    ArrayType, ArrayTypeRef, ExternalType, ExternalTypeRef, MapType, MapTypeRef, Signature,
+    StructTypeRef, TupleType, Type, TypeForParameter,
 };
 use tracing::info;
 
@@ -45,12 +43,13 @@ impl<'a> Resolver<'a> {
         &mut self,
         type_name_to_find: &swamp_script_ast::QualifiedTypeIdentifier,
     ) -> Result<Type, Error> {
-        let (path, text) = self.get_path(type_name_to_find);
+        let (path, text) = self.get_full_path(type_name_to_find);
+        info!(?text, ?path, "looking for named type");
         if type_name_to_find.generic_params.is_empty() {
-            let resolved_type = if let Some((scope_index, index)) =
-                self.shared.lookup.get_type_parameter_reference(&text)
+            let resolved_type = if let Some(found_type_param) =
+                self.shared.lookup.get_type_parameter(&text)
             {
-                Type::GenericTypeParameter(scope_index, index)
+                found_type_param.ty.clone()
             } else if let Some(found) = self.shared.lookup.get_alias_referred_type(&path, &text) {
                 found
             } else if let Some(found) = self.shared.lookup.get_struct(&path, &text) {
@@ -65,8 +64,41 @@ impl<'a> Resolver<'a> {
 
             Ok(resolved_type)
         } else {
+            /*
+            let (base_type, params) = self.create_type_parameters(type_name_to_find)?;
+            let first_name = params.iter().next().unwrap().0.clone();
+            let resolved_type = if let Some((scope_index, index)) =
+                self.shared.lookup.get_type_parameter_reference(&first_name) {
+                if let Some(found_generic) = self.shared.lookup.get_generic(&path, &*text) {
+                    Ok(Refound_generic)
+                } else {
+                    Err(self.create_err(ErrorKind::NotAGeneric, &type_name_to_find.name.0))
+                }
+            } else {
+
+             */
             self.specialize(type_name_to_find)
+            //}
         }
+    }
+
+    pub fn find_local_impl_target(
+        &mut self,
+        type_name: &swamp_script_ast::LocalTypeIdentifierWithOptionalTypeParams,
+    ) -> Result<(StructTypeRef, bool), Error> {
+        let name_string = self.get_text(&type_name.name).to_string();
+
+        self.shared
+            .lookup
+            .get_struct(&[], &name_string)
+            .map_or_else(
+                || {
+                    let resolved_node = self.to_node(&type_name.name);
+                    Err(self
+                        .create_err_resolved(ErrorKind::UnknownStructTypeReference, &resolved_node))
+                },
+                |x| Ok((x, false)),
+            )
     }
 
     /// # Errors
@@ -202,6 +234,7 @@ impl<'a> Resolver<'a> {
         Ok(vec)
     }
 
+    /*
     pub fn specialize_struct_type(
         &mut self,
         name: &str,
@@ -251,13 +284,13 @@ impl<'a> Resolver<'a> {
         Ok(Rc::new(RefCell::new(new_struct)))
     }
 
-    fn specialize(
+     */
+
+    fn create_type_parameters(
         &mut self,
         parameterize_definition: &swamp_script_ast::QualifiedTypeIdentifier,
-    ) -> Result<Type, Error> {
-        info!(?parameterize_definition, "SPECIALIZE");
-
-        let (found_type_parameters, found_base_type) = {
+    ) -> Result<GenericTypeRef, Error> {
+        let found_generic = {
             let path = self.get_module_path(&parameterize_definition.module_path);
             let base_name = self.get_text(&parameterize_definition.name.0).to_string();
 
@@ -270,37 +303,51 @@ impl<'a> Resolver<'a> {
                     ))
                 }
             };
-            (
-                found_generic.type_parameters.clone(),
-                found_generic.base_type.clone(),
-            )
+
+            found_generic
         };
 
-        if found_type_parameters.len() != parameterize_definition.generic_params.len() {
+        Ok(found_generic)
+    }
+
+    fn specialize(
+        &mut self,
+        parameterize_definition: &swamp_script_ast::QualifiedTypeIdentifier,
+    ) -> Result<Type, Error> {
+        let found_generic = self.create_type_parameters(parameterize_definition)?;
+
+        if found_generic.type_parameters.len() != parameterize_definition.generic_params.len() {
             return Err(self.create_err(
                 ErrorKind::WrongNumberOfTypeArguments(0, 0),
                 &parameterize_definition.name.0,
             ));
         }
 
-        let mut type_params = Vec::new();
-        for ((_key, type_param_name), ast_type) in found_type_parameters
+        let mut type_params = SeqMap::new();
+        for ((key, type_param_name), ast_type) in found_generic
+            .type_parameters
             .iter()
             .zip(&parameterize_definition.generic_params)
         {
-            type_params.push(TypeParameter {
-                ty: self.analyze_type(ast_type)?,
-                debug_name: type_param_name.assigned_name.clone(),
-            });
+            type_params
+                .insert(
+                    key.to_string(),
+                    TypeParameter {
+                        ty: self.analyze_type(ast_type)?,
+                        debug_name: type_param_name.assigned_name.clone(),
+                    },
+                )
+                .expect("todo");
         }
 
         let types_vec: Vec<_> = type_params
             .iter()
-            .map(|type_parameter| type_parameter.ty.clone())
+            .map(|(_key, type_parameter)| type_parameter.ty.clone())
             .collect();
 
         let base_name = self.get_text(&parameterize_definition.name.0).to_string();
         let specialized_name = ModuleNamespace::get_specialized_name(&base_name, &types_vec);
+        info!(?specialized_name, "SPECIALIZE");
 
         if let Some(specialized_type) = self.shared.lookup.get_specialized_type(
             &self.get_module_path(&parameterize_definition.module_path),
@@ -311,14 +358,25 @@ impl<'a> Resolver<'a> {
             Ok(specialized_type)
         } else {
             self.shared.lookup.push_type_parameter_scope(type_params);
+            let stored_file_id = self.shared.file_id;
+            let stored_default_path = self.shared.lookup.default_path.clone();
+            self.shared.file_id = found_generic.file_id;
+            self.shared
+                .lookup
+                .default_path
+                .clone_from(&found_generic.defined_in_path.clone());
+            info!(path=?self.shared.lookup.default_path, "generic was in path");
 
-            let GenericAwareType::Struct(base_ast_type) = &found_base_type;
+            let GenericAwareType::Struct(base_ast_type) = &found_generic.base_type;
 
             let analyzed_base_type = self
-                .specialize_struct_type(&specialized_name, base_ast_type)
+                .analyze_struct_type(&specialized_name, base_ast_type)
                 .expect("TODO: handle panic message");
             info!(?specialized_name, "inserted specialized generic");
+
             self.shared.lookup.pop_type_parameter_scope();
+            self.shared.file_id = stored_file_id;
+            self.shared.lookup.default_path = stored_default_path;
 
             let created_type = Type::Struct(analyzed_base_type);
             self.shared

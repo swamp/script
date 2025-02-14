@@ -4,8 +4,6 @@
  */
 use crate::Error;
 use seq_map::SeqMap;
-use std::rc::Rc;
-use swamp_script_ast::{LocalTypeIdentifier, ModulePath};
 use swamp_script_modules::modules::Modules;
 use swamp_script_modules::ns::{GenericAwareType, GenericType, GenericTypeRef, ModuleNamespaceRef};
 use swamp_script_semantic::{
@@ -14,6 +12,7 @@ use swamp_script_semantic::{
     InternalFunctionDefinition, InternalFunctionDefinitionRef, SemanticError, StructType,
     StructTypeRef, Type, TypeParameterName,
 };
+use swamp_script_source_map::FileId;
 use tracing::info;
 
 #[derive(Debug)]
@@ -24,23 +23,30 @@ pub struct TypeParameter {
 
 #[derive(Debug)]
 pub struct TypeParameterScope {
-    pub type_parameters: Vec<TypeParameter>,
-}
-
-#[derive(Debug)]
-pub struct TypeParameterNameScope {
-    pub type_parameters: SeqMap<String, TypeParameterName>,
+    pub type_parameters: SeqMap<String, TypeParameter>,
 }
 
 #[derive()]
 pub struct NameLookup<'a> {
-    default_path: Vec<String>,
+    pub default_path: Vec<String>,
     pub type_parameter_scope_stack: Vec<TypeParameterScope>,
     modules: &'a mut Modules,
-    pub type_parameter_names_stack: Vec<TypeParameterNameScope>,
+    //pub type_parameter_names_stack: Vec<TypeParameterNameScope>,
 }
 
 impl<'a> NameLookup<'a> {
+    pub(crate) fn get_type_parameter(&self, name: &str) -> Option<&TypeParameter> {
+        for scope in self.type_parameter_scope_stack.iter().rev() {
+            if let Some(found) = scope.type_parameters.get(&name.to_string()) {
+                return Some(found);
+            }
+        }
+        None
+    }
+}
+
+impl<'a> NameLookup<'a> {
+    /*
     pub(crate) fn get_type_parameter_reference(&self, name: &str) -> Option<(usize, usize)> {
         for scope_index in (0..self.type_parameter_names_stack.len()).rev() {
             let scope = &self.type_parameter_names_stack[scope_index];
@@ -55,17 +61,11 @@ impl<'a> NameLookup<'a> {
 
         None
     }
+
+     */
 }
 
-impl<'a> NameLookup<'a> {
-    pub(crate) fn lookup_type_parameter(&self, scope: usize, index: usize) -> &TypeParameter {
-        &self
-            .type_parameter_scope_stack
-            .get(scope)
-            .unwrap()
-            .type_parameters[index]
-    }
-}
+impl<'a> NameLookup<'a> {}
 
 impl<'a> NameLookup<'a> {}
 
@@ -82,7 +82,6 @@ impl<'a> NameLookup<'a> {
             default_path,
             modules,
             type_parameter_scope_stack: vec![],
-            type_parameter_names_stack: vec![],
         }
     }
 
@@ -122,10 +121,6 @@ impl<'a> NameLookup<'a> {
                 format!("could not find own namespace {:?}", self.default_path)
             )
         })
-    }
-
-    pub(crate) fn modules(&self) -> &Modules {
-        self.modules
     }
 
     #[must_use]
@@ -200,7 +195,7 @@ impl<'a> NameLookup<'a> {
 
     pub fn push_type_parameter_scope(
         &mut self,
-        parameter_name_to_analyzed_type: Vec<TypeParameter>,
+        parameter_name_to_analyzed_type: SeqMap<String, TypeParameter>,
     ) {
         for ty in &parameter_name_to_analyzed_type {
             info!(?ty, "pushing scope!")
@@ -319,10 +314,13 @@ impl<'a> NameLookup<'a> {
         name: &str,
         parameter_names: SeqMap<String, TypeParameterName>,
         inner_type: GenericAwareType,
+        file_id: FileId,
     ) -> Result<(), SemanticError> {
         let generic_type = GenericType {
             type_parameters: parameter_names,
             base_type: inner_type,
+            file_id,
+            defined_in_path: self.default_path.clone(),
         };
 
         Ok(self
@@ -334,7 +332,16 @@ impl<'a> NameLookup<'a> {
     #[must_use]
     pub fn get_generic(&self, path: &[String], name: &str) -> Option<GenericTypeRef> {
         let namespace = self.get_namespace(path);
-        namespace.map_or_else(|| None, |found_ns| found_ns.borrow().get_generic(name))
+        namespace.map_or_else(
+            || None,
+            |found_ns| {
+                if let Some(found_generic) = found_ns.borrow().get_generic(name) {
+                    Some(found_generic)
+                } else {
+                    None
+                }
+            },
+        )
     }
 
     pub fn add_specialized_type(

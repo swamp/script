@@ -10,19 +10,23 @@ use std::rc::Rc;
 use swamp_script_semantic::{
     AliasType, AliasTypeRef, AnonymousStructType, ConstantRef, EnumType, EnumTypeRef,
     EnumVariantType, EnumVariantTypeRef, ExternalFunctionDefinition, ExternalFunctionDefinitionRef,
-    ExternalType, ExternalTypeRef, InternalFunctionDefinition, InternalFunctionDefinitionRef, Node,
-    SemanticError, StructType, StructTypeField, StructTypeRef, Type, TypeParameterName,
+    ExternalType, ExternalTypeRef, FileId, InternalFunctionDefinition,
+    InternalFunctionDefinitionRef, Node, SemanticError, StructType, StructTypeField, StructTypeRef,
+    Type, TypeParameterName,
 };
+use tracing::info;
 
 #[derive(Debug, Clone)]
 pub enum GenericAwareType {
-    Struct(StructTypeRef),
+    Struct(swamp_script_ast::StructType),
 }
 
 #[derive(Debug)]
 pub struct GenericType {
     pub type_parameters: SeqMap<String, TypeParameterName>,
     pub base_type: GenericAwareType,
+    pub file_id: FileId,
+    pub defined_in_path: Vec<String>,
 }
 pub type GenericTypeRef = Rc<GenericType>;
 
@@ -119,6 +123,7 @@ impl ModuleNamespace {
     pub fn add_alias(&mut self, alias_type: AliasType) -> Result<AliasTypeRef, SemanticError> {
         let name = alias_type.assigned_name.clone();
         let alias_ref = Rc::new(alias_type);
+        info!(?name, path=?self.path,  "adding alias");
         self.aliases
             .insert(name.clone(), alias_ref.clone())
             .map_err(|_| SemanticError::DuplicateStructName(name))?;
@@ -265,7 +270,9 @@ impl ModuleNamespace {
     }
 
     pub fn get_specialized_name(name: &str, parameters: &[Type]) -> String {
-        format!("{name}<{}>", comma(parameters))
+        let name = format!("{name}<{}>", comma(parameters));
+        info!(name, "found name");
+        name
     }
 
     #[must_use]
