@@ -8,7 +8,7 @@ use crate::Resolver;
 use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::rc::Rc;
-use swamp_script_modules::ns::GenericAwareType;
+use swamp_script_modules::ns::{GenericAwareType, ModuleNamespace};
 use swamp_script_semantic::{
     AnonymousStructType, ArrayType, ArrayTypeRef, ExternalType, ExternalTypeRef, MapType,
     MapTypeRef, Node, Signature, StructType, StructTypeField, StructTypeRef, TupleType, Type,
@@ -299,18 +299,12 @@ impl<'a> Resolver<'a> {
             .map(|type_parameter| type_parameter.ty.clone())
             .collect();
 
-        let types_to_string: Vec<_> = types_vec
-            .iter()
-            .map(std::string::ToString::to_string)
-            .collect();
-
         let base_name = self.get_text(&parameterize_definition.name.0).to_string();
-
-        let specialized_name = format!("{}<{}>", base_name, types_to_string.join(","));
+        let specialized_name = ModuleNamespace::get_specialized_name(&base_name, &types_vec);
 
         if let Some(specialized_type) = self.shared.lookup.get_specialized_type(
-            &parameterize_definition.module_path,
-            &parameterize_definition.name,
+            &self.get_module_path(&parameterize_definition.module_path),
+            &base_name,
             &types_vec,
         ) {
             info!(specialized_name, "fetching type from cache");
@@ -327,12 +321,15 @@ impl<'a> Resolver<'a> {
             self.shared.lookup.pop_type_parameter_scope();
 
             let created_type = Type::Struct(analyzed_base_type);
-            self.shared.lookup.add_specialized_type(
-                &parameterize_definition.module_path,
-                &parameterize_definition.name,
-                &types_vec,
-                created_type.clone(),
-            );
+            self.shared
+                .lookup
+                .add_specialized_type(
+                    &self.get_module_path(&parameterize_definition.module_path),
+                    &base_name,
+                    &types_vec,
+                    created_type.clone(),
+                )
+                .expect("TODO: panic message");
             Ok(created_type)
         }
     }

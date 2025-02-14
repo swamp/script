@@ -41,29 +41,6 @@ pub struct NameLookup<'a> {
 }
 
 impl<'a> NameLookup<'a> {
-    pub(crate) fn get_specialized_type(
-        &self,
-        path: &Option<ModulePath>,
-        name: &LocalTypeIdentifier,
-        parameters: &[Type],
-    ) -> Option<Type> {
-        todo!()
-    }
-
-    pub fn add_specialized_type(
-        &self,
-        path: &Option<ModulePath>,
-        name: &LocalTypeIdentifier,
-        parameters: &[Type],
-        ty: Type,
-    ) {
-        todo!()
-    }
-}
-
-impl<'a> NameLookup<'a> {}
-
-impl<'a> NameLookup<'a> {
     pub(crate) fn get_type_parameter_reference(&self, name: &str) -> Option<(usize, usize)> {
         for scope_index in (0..self.type_parameter_names_stack.len()).rev() {
             let scope = &self.type_parameter_names_stack[scope_index];
@@ -179,6 +156,19 @@ impl<'a> NameLookup<'a> {
                     .get_external_function_declaration(name)
                     .cloned()
             },
+        )
+    }
+
+    pub(crate) fn get_specialized_type(
+        &self,
+        path: &[String],
+        name: &str,
+        parameters: &[Type],
+    ) -> Option<Type> {
+        let namespace = self.get_namespace(path);
+        namespace.map_or_else(
+            || None,
+            |found_ns| found_ns.borrow().get_specialized_type(name, parameters),
         )
     }
 
@@ -345,6 +335,24 @@ impl<'a> NameLookup<'a> {
     pub fn get_generic(&self, path: &[String], name: &str) -> Option<GenericTypeRef> {
         let namespace = self.get_namespace(path);
         namespace.map_or_else(|| None, |found_ns| found_ns.borrow().get_generic(name))
+    }
+
+    pub fn add_specialized_type(
+        &self,
+        path: &[String],
+        name: &str,
+        parameters: &[Type],
+        ty: Type,
+    ) -> Result<(), SemanticError> {
+        let namespace = self.get_namespace(path);
+        namespace.map_or_else(
+            || Ok(()),
+            |found_ns| {
+                Ok(found_ns
+                    .borrow_mut()
+                    .add_specialized_type(name, parameters, ty)?)
+            },
+        )
     }
 
     /// # Errors

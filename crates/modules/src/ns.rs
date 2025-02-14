@@ -2,6 +2,7 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
+use seq_fmt::comma;
 use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::fmt::Debug;
@@ -31,6 +32,7 @@ pub struct ModuleNamespace {
     aliases: SeqMap<String, AliasTypeRef>,
     constants: SeqMap<String, ConstantRef>,
     generics: SeqMap<String, GenericTypeRef>,
+    specialized_types: SeqMap<String, Type>,
 
     build_in_rust_types: SeqMap<String, ExternalTypeRef>,
 
@@ -53,6 +55,7 @@ impl ModuleNamespace {
             structs: SeqMap::default(),
             aliases: SeqMap::default(),
             generics: SeqMap::default(),
+            specialized_types: SeqMap::default(),
             build_in_rust_types: SeqMap::default(),
             enum_types: SeqMap::default(),
             internal_functions: SeqMap::default(),
@@ -261,6 +264,20 @@ impl ModuleNamespace {
         self.structs.get(&name.to_string()).cloned()
     }
 
+    pub fn get_specialized_name(name: &str, parameters: &[Type]) -> String {
+        format!("{name}<{}>", comma(parameters))
+    }
+
+    #[must_use]
+    pub fn get_specialized_type(&self, name: &str, parameters: &[Type]) -> Option<Type> {
+        let parameter_strings = Self::get_specialized_name(name, parameters);
+        if let Some(found_specialized) = self.specialized_types.get(&parameter_strings) {
+            return Some(found_specialized.clone());
+        }
+
+        None
+    }
+
     pub fn get_alias(&self, name: &str) -> Option<AliasTypeRef> {
         if let Some(found_alias) = self.aliases.get(&name.to_string()) {
             return Some(found_alias.clone());
@@ -331,6 +348,20 @@ impl ModuleNamespace {
             .insert(name.to_string(), decl_ref.clone())
             .map_err(|_| SemanticError::DuplicateExternalFunction(name.to_string()))?;
         Ok(decl_ref)
+    }
+
+    #[must_use]
+    pub fn add_specialized_type(
+        &mut self,
+        name: &str,
+        parameters: &[Type],
+        ty: Type,
+    ) -> Result<(), SemanticError> {
+        let parameter_strings = Self::get_specialized_name(name, parameters);
+        self.specialized_types
+            .insert(parameter_strings, ty)
+            .expect("todo");
+        Ok(())
     }
 
     pub fn add_external_function_declaration_link(
