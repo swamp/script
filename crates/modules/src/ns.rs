@@ -25,10 +25,11 @@ pub enum GenericAwareType {
 pub struct GenericType {
     pub type_parameters: SeqMap<String, TypeParameterName>,
     pub base_type: GenericAwareType,
+    pub ast_functions: SeqMap<String, swamp_script_ast::Function>,
     pub file_id: FileId,
     pub defined_in_path: Vec<String>,
 }
-pub type GenericTypeRef = Rc<GenericType>;
+pub type GenericTypeRef = Rc<RefCell<GenericType>>;
 
 #[derive(Debug)]
 pub struct ModuleNamespace {
@@ -36,7 +37,6 @@ pub struct ModuleNamespace {
     aliases: SeqMap<String, AliasTypeRef>,
     constants: SeqMap<String, ConstantRef>,
     generics: SeqMap<String, GenericTypeRef>,
-    specialized_types: SeqMap<String, Type>,
 
     build_in_rust_types: SeqMap<String, ExternalTypeRef>,
 
@@ -59,7 +59,6 @@ impl ModuleNamespace {
             structs: SeqMap::default(),
             aliases: SeqMap::default(),
             generics: SeqMap::default(),
-            specialized_types: SeqMap::default(),
             build_in_rust_types: SeqMap::default(),
             enum_types: SeqMap::default(),
             internal_functions: SeqMap::default(),
@@ -269,20 +268,10 @@ impl ModuleNamespace {
         self.structs.get(&name.to_string()).cloned()
     }
 
-    pub fn get_specialized_name(name: &str, parameters: &[Type]) -> String {
+    pub fn get_monomorphization_name(name: &str, parameters: &[Type]) -> String {
         let name = format!("{name}<{}>", comma(parameters));
         info!(name, "found name");
         name
-    }
-
-    #[must_use]
-    pub fn get_specialized_type(&self, name: &str, parameters: &[Type]) -> Option<Type> {
-        let parameter_strings = Self::get_specialized_name(name, parameters);
-        if let Some(found_specialized) = self.specialized_types.get(&parameter_strings) {
-            return Some(found_specialized.clone());
-        }
-
-        None
     }
 
     pub fn get_alias(&self, name: &str) -> Option<AliasTypeRef> {
@@ -355,20 +344,6 @@ impl ModuleNamespace {
             .insert(name.to_string(), decl_ref.clone())
             .map_err(|_| SemanticError::DuplicateExternalFunction(name.to_string()))?;
         Ok(decl_ref)
-    }
-
-    #[must_use]
-    pub fn add_specialized_type(
-        &mut self,
-        name: &str,
-        parameters: &[Type],
-        ty: Type,
-    ) -> Result<(), SemanticError> {
-        let parameter_strings = Self::get_specialized_name(name, parameters);
-        self.specialized_types
-            .insert(parameter_strings, ty)
-            .expect("todo");
-        Ok(())
     }
 
     pub fn add_external_function_declaration_link(

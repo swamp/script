@@ -139,9 +139,7 @@ impl<'a> Resolver<'a> {
         variable_type_ref: &Type,
     ) -> Result<VariableRef, Error> {
         if let Some(_existing_variable) = self.try_find_local_variable(variable) {
-            return Err(
-                self.create_err_resolved(ErrorKind::OverwriteVariableNotAllowedHere, variable)
-            );
+            return Err(self.create_err_resolved(ErrorKind::UnknownVariable, variable));
         }
         let variable_str = self.get_text_resolved(variable).to_string();
 

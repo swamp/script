@@ -400,7 +400,12 @@ pub fn build_resolve_error(err: &Error) -> Builder<usize> {
             "Variable needs to be mut to overwrite",
             span,
         ),
-        ErrorKind::OverwriteVariableNotAllowedHere => todo!(),
+        ErrorKind::OverwriteVariableNotAllowedHere =>Report::build(
+            Kind::Error,
+            90423,
+            "OverwriteVariableNotAllowedHere",
+            span,
+        ),
         ErrorKind::NotNamedStruct(_) => todo!(),
         ErrorKind::UnknownEnumVariantType => Report::build(
             Kind::Error,

@@ -5,7 +5,7 @@
 pub use crate::{
     comma_seq, AliasType, AliasTypeRef, AnonymousStructType, ArrayItem, ArrayItemRef, ArrayType,
     ArrayTypeRef, BinaryOperator, BooleanExpression, CompoundOperator, CompoundOperatorKind,
-    Constant, ConstantRef, Definition, EnumLiteralData, EnumType, EnumTypeRef, EnumVariantCommon,
+    Constant, ConstantRef, EnumLiteralData, EnumType, EnumTypeRef, EnumVariantCommon,
     EnumVariantSimpleType, EnumVariantStructFieldType, EnumVariantStructType,
     EnumVariantTupleFieldType, EnumVariantTupleType, EnumVariantType, EnumVariantTypeRef,
     Expression, ExpressionKind, ExternalFunctionCall, ExternalFunctionDefinition,

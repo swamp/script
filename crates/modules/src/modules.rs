@@ -8,9 +8,7 @@ use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
-use swamp_script_semantic::{
-    Constant, ConstantId, ConstantRef, Definition, Expression, ExpressionKind,
-};
+use swamp_script_semantic::{Constant, ConstantId, ConstantRef, Expression, ExpressionKind};
 
 #[derive(Debug)]
 pub struct Modules {
@@ -25,22 +23,14 @@ impl Default for Modules {
 }
 
 pub struct Module {
-    pub definitions: Vec<Definition>,
+    //    pub definitions: Vec<Definition>,
     pub expression: Option<Expression>,
     pub namespace: ModuleNamespaceRef,
 }
 
 impl Debug for Module {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        //writeln!(f, "namespace: {:?}", self.namespace)?;
-
-        for resolved_def in &self.definitions {
-            writeln!(f, "{resolved_def:?}")?;
-        }
-
-        if !self.definitions.is_empty() && self.expression.is_some() {
-            writeln!(f, "---\n")?;
-        }
+        writeln!(f, " {:?}", self.namespace)?;
 
         if let Some(resolved_expression) = &self.expression {
             pretty_print(f, resolved_expression, 0)?;
@@ -78,7 +68,6 @@ impl Module {
     pub fn new(module_path: &[String]) -> Self {
         let ns_ref = Rc::new(RefCell::new(ModuleNamespace::new(module_path)));
         Self {
-            definitions: Vec::new(),
             namespace: ns_ref,
             expression: None,
         }
@@ -120,7 +109,6 @@ impl Modules {
     pub fn add_empty_module(&mut self, module_path: &[String]) -> ModuleRef {
         let ns_ref = Rc::new(RefCell::new(ModuleNamespace::new(module_path)));
         let module = Module {
-            definitions: vec![],
             expression: None,
             namespace: ns_ref,
         };

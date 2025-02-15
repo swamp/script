@@ -6,11 +6,12 @@ use crate::err::{Error, ErrorKind};
 use crate::lookup::TypeParameter;
 use crate::Resolver;
 use seq_map::SeqMap;
+use std::cell::RefCell;
 use std::rc::Rc;
 use swamp_script_modules::ns::{GenericAwareType, GenericTypeRef, ModuleNamespace};
 use swamp_script_semantic::{
-    ArrayType, ArrayTypeRef, ExternalType, ExternalTypeRef, MapType, MapTypeRef, Signature,
-    StructTypeRef, TupleType, Type, TypeForParameter,
+    ArrayType, ArrayTypeRef, ExternalType, ExternalTypeRef, Function, MapType, MapTypeRef,
+    Signature, StructTypeRef, TupleType, Type, TypeForParameter,
 };
 use tracing::info;
 
@@ -77,7 +78,7 @@ impl<'a> Resolver<'a> {
             } else {
 
              */
-            self.specialize(type_name_to_find)
+            self.monomorphize(type_name_to_find)
             //}
         }
     }
@@ -108,7 +109,7 @@ impl<'a> Resolver<'a> {
         type_name: &swamp_script_ast::QualifiedTypeIdentifier,
     ) -> Result<StructTypeRef, Error> {
         if !type_name.generic_params.is_empty() {
-            let ty = self.specialize(type_name)?;
+            let ty = self.monomorphize(type_name)?;
             return if let Type::Struct(struct_ref) = ty {
                 Ok(struct_ref)
             } else {
@@ -182,7 +183,7 @@ impl<'a> Resolver<'a> {
                 Type::Tuple(TupleType(self.analyze_types(types)?).into())
             }
             swamp_script_ast::Type::Generic(type_identifier_with_params) => {
-                self.specialize(type_identifier_with_params)?
+                self.monomorphize(type_identifier_with_params)?
             }
             swamp_script_ast::Type::Enum(_) => todo!(),
             swamp_script_ast::Type::Named(ast_type_reference) => {
@@ -310,11 +311,12 @@ impl<'a> Resolver<'a> {
         Ok(found_generic)
     }
 
-    fn specialize(
+    fn monomorphize(
         &mut self,
         parameterize_definition: &swamp_script_ast::QualifiedTypeIdentifier,
     ) -> Result<Type, Error> {
-        let found_generic = self.create_type_parameters(parameterize_definition)?;
+        let found_generic_ref = self.create_type_parameters(parameterize_definition)?;
+        let found_generic = found_generic_ref.borrow();
 
         if found_generic.type_parameters.len() != parameterize_definition.generic_params.len() {
             return Err(self.create_err(
@@ -346,16 +348,17 @@ impl<'a> Resolver<'a> {
             .collect();
 
         let base_name = self.get_text(&parameterize_definition.name.0).to_string();
-        let specialized_name = ModuleNamespace::get_specialized_name(&base_name, &types_vec);
-        info!(?specialized_name, "SPECIALIZE");
+        let monomorphization_name =
+            ModuleNamespace::get_monomorphization_name(&base_name, &types_vec);
+        info!(?monomorphization_name, "------ MONOMORPHIZE");
 
-        if let Some(specialized_type) = self.shared.lookup.get_specialized_type(
-            &self.get_module_path(&parameterize_definition.module_path),
-            &base_name,
-            &types_vec,
-        ) {
-            info!(specialized_name, "fetching type from cache");
-            Ok(specialized_type)
+        if let Some(monomorphized_struct_ref) = self
+            .shared
+            .lookup
+            .get_struct(&found_generic.defined_in_path, &monomorphization_name)
+        {
+            info!(monomorphization_name, "fetching type from cache");
+            Ok(Type::Struct(monomorphized_struct_ref))
         } else {
             self.shared.lookup.push_type_parameter_scope(type_params);
             let stored_file_id = self.shared.file_id;
@@ -367,27 +370,37 @@ impl<'a> Resolver<'a> {
                 .clone_from(&found_generic.defined_in_path.clone());
             info!(path=?self.shared.lookup.default_path, "generic was in path");
 
+            // Struct ------------------
             let GenericAwareType::Struct(base_ast_type) = &found_generic.base_type;
-
             let analyzed_base_type = self
-                .analyze_struct_type(&specialized_name, base_ast_type)
+                .analyze_struct_type(&monomorphization_name, base_ast_type)
                 .expect("TODO: handle panic message");
-            info!(?specialized_name, "inserted specialized generic");
+            info!(?monomorphization_name, "inserted monomorphized type");
 
+            let analyzed_base_type_ref = self
+                .shared
+                .lookup
+                .add_generated_struct(&self.shared.lookup.default_path, analyzed_base_type)
+                .expect("TODO: panic message");
+
+            let created_type = Type::Struct(analyzed_base_type_ref.clone());
+
+            // Functions ------------------
+            let mut analyzed_functions = SeqMap::new();
+            for (name, func) in &found_generic.ast_functions {
+                let analyzed_func = self.analyze_impl_func(func, &created_type)?;
+                analyzed_functions
+                    .insert(name.to_string(), Rc::new(analyzed_func))
+                    .expect("todo");
+            }
+
+            analyzed_base_type_ref.borrow_mut().functions = analyzed_functions;
+
+            // Pop the stack
             self.shared.lookup.pop_type_parameter_scope();
             self.shared.file_id = stored_file_id;
             self.shared.lookup.default_path = stored_default_path;
 
-            let created_type = Type::Struct(analyzed_base_type);
-            self.shared
-                .lookup
-                .add_specialized_type(
-                    &self.get_module_path(&parameterize_definition.module_path),
-                    &base_name,
-                    &types_vec,
-                    created_type.clone(),
-                )
-                .expect("TODO: panic message");
             Ok(created_type)
         }
     }

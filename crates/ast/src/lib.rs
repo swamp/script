@@ -122,7 +122,7 @@ impl LocalIdentifier {
     }
 }
 
-#[derive(PartialEq, Eq, Hash, Debug)]
+#[derive(PartialEq, Eq, Hash, Debug, Clone)]
 pub struct ConstantIdentifier(pub Node);
 
 impl ConstantIdentifier {
@@ -211,17 +211,16 @@ pub enum Definition {
     Mod(Mod),
 
     // Other
-    Comment(Node),
     Constant(ConstantInfo),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ForVar {
     pub identifier: Node,
     pub is_mut: Option<Node>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ForPattern {
     Single(ForVar),
     Pair(ForVar, ForVar),
@@ -237,7 +236,7 @@ impl ForPattern {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct IterableExpression {
     pub expression: Box<MutableOrImmutableExpression>,
 }
@@ -248,13 +247,13 @@ pub struct Variable {
     pub is_mutable: Option<Node>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VariableBinding {
     pub variable: Variable,
     pub expression: MutableOrImmutableExpression,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WhenBinding {
     pub variable: Variable,
     pub expression: Option<MutableOrImmutableExpression>,
@@ -279,13 +278,13 @@ impl Debug for Variable {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Parameter {
     pub variable: Variable,
     pub param_type: Type,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FunctionDeclaration {
     pub name: Node,
     pub params: Vec<Parameter>,
@@ -293,19 +292,29 @@ pub struct FunctionDeclaration {
     pub return_type: Option<Type>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FunctionWithBody {
     pub declaration: FunctionDeclaration,
     pub body: Expression,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Function {
     Internal(FunctionWithBody),
     External(FunctionDeclaration),
 }
 
-#[derive(Debug)]
+impl Function {
+    #[must_use]
+    pub const fn name(&self) -> &Node {
+        match self {
+            Self::Internal(internal) => &internal.declaration.name,
+            Self::External(external) => &external.name,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct SelfParameter {
     pub is_mutable: Option<Node>,
     pub self_node: Node,
@@ -317,7 +326,7 @@ pub enum AssignmentOperatorKind {
     Assign, // =
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CompoundOperatorKind {
     Add,    // +=
     Sub,    // -=
@@ -326,24 +335,25 @@ pub enum CompoundOperatorKind {
     Modulo, // %=
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CompoundOperator {
     pub node: Node,
     pub kind: CompoundOperatorKind,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum RangeMode {
     Inclusive,
     Exclusive,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MutableOrImmutableExpression {
     pub is_mutable: Option<Node>,
     pub expression: Expression,
 }
 
+#[derive(Clone)]
 pub struct Expression {
     pub kind: ExpressionKind,
     pub node: Node,
@@ -355,7 +365,7 @@ impl Debug for Expression {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Postfix {
     FieldAccess(Node),
     Subscript(Expression),
@@ -365,14 +375,14 @@ pub enum Postfix {
     NoneCoalesce(Expression), // ??-postfix
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PostfixChain {
     pub base: Box<Expression>,
     pub postfixes: Vec<Postfix>,
 }
 
 /// Expressions are things that "converts" to a value when evaluated.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ExpressionKind {
     // Access
     PostfixChain(PostfixChain),
@@ -419,14 +429,14 @@ pub enum ExpressionKind {
     Literal(LiteralKind),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MatchArm {
     pub pattern: Pattern,
     pub expression: Expression,
 }
 
 // Are constructed by themselves
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum LiteralKind {
     Int,
     Float,
@@ -439,7 +449,7 @@ pub enum LiteralKind {
     None, // none
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FieldExpression {
     pub field_name: FieldName,
     pub expression: Expression,
@@ -451,7 +461,7 @@ pub struct FieldType {
     pub field_type: Type,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum EnumVariantLiteral {
     Simple(QualifiedTypeIdentifier, LocalTypeIdentifier),
     Tuple(
@@ -508,14 +518,14 @@ pub enum Type {
     External(Node),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BinaryOperator {
     pub kind: BinaryOperatorKind,
     pub node: Node,
 }
 
 // Takes a left and right side expression
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum BinaryOperatorKind {
     Add,
     Subtract,
@@ -534,53 +544,53 @@ pub enum BinaryOperatorKind {
 }
 
 // Only takes one expression argument
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum UnaryOperator {
     Not(Node),
     Negate(Node),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct GuardExpr {
     pub clause: GuardClause,
     pub result: Expression,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum GuardClause {
     Wildcard(Node),
     Expression(Expression),
 }
 
 // Patterns are used in matching and destructuring
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Pattern {
     Wildcard(Node),
     NormalPattern(Node, NormalPattern, Option<GuardClause>),
 }
 
 // Patterns are used in matching and destructuring
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum NormalPattern {
     PatternList(Vec<PatternElement>),
     EnumPattern(Node, Option<Vec<PatternElement>>),
     Literal(LiteralKind),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum PatternElement {
     Variable(Node),
     Expression(Expression),
     Wildcard(Node),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum StringPart {
     Literal(Node, String),
     Interpolation(Box<Expression>, Option<FormatSpecifier>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum FormatSpecifier {
     LowerHex(Node),                      // :x
     UpperHex(Node),                      // :X
@@ -589,7 +599,7 @@ pub enum FormatSpecifier {
     Precision(u32, Node, PrecisionType), // :..2f or :..5s
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum PrecisionType {
     Float(Node),
     String(Node),

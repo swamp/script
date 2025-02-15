@@ -302,6 +302,17 @@ impl Type {
         }
     }
     pub fn same_type(&self, other: &Type) -> bool {
+        if let Self::Struct(some_struct) = other {
+            if some_struct.borrow().assigned_name == "Value" {
+                return true;
+            }
+        }
+
+        if let Self::Struct(some_struct) = self {
+            if some_struct.borrow().assigned_name == "Value" {
+                return true;
+            }
+        }
         match (self, other) {
             (Self::Function(a), Self::Function(b)) => a.same_type(b),
             (Self::Int, Self::Int) => true,
@@ -1335,17 +1346,7 @@ pub enum UseItem {
     TypeIdentifier(Node),
 }
 
-#[derive(Debug)]
-pub struct Use {
-    pub path: Vec<Node>,
-    pub items: Vec<UseItem>,
-}
-
-#[derive(Debug)]
-pub struct Mod {
-    pub path: Vec<Node>,
-}
-
+/*
 #[derive(Debug)]
 pub enum Definition {
     StructType(StructTypeRef),
@@ -1360,6 +1361,7 @@ pub enum Definition {
     Mod(Mod),
     Constant(Node, ConstantRef),
 }
+*/
 
 // Mutable part
 #[derive(Debug)]

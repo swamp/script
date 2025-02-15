@@ -4,6 +4,8 @@
  */
 use crate::Error;
 use seq_map::SeqMap;
+use std::cell::RefCell;
+use std::rc::Rc;
 use swamp_script_modules::modules::Modules;
 use swamp_script_modules::ns::{GenericAwareType, GenericType, GenericTypeRef, ModuleNamespaceRef};
 use swamp_script_semantic::{
@@ -154,19 +156,6 @@ impl<'a> NameLookup<'a> {
         )
     }
 
-    pub(crate) fn get_specialized_type(
-        &self,
-        path: &[String],
-        name: &str,
-        parameters: &[Type],
-    ) -> Option<Type> {
-        let namespace = self.get_namespace(path);
-        namespace.map_or_else(
-            || None,
-            |found_ns| found_ns.borrow().get_specialized_type(name, parameters),
-        )
-    }
-
     /*
     pub(crate) fn get_type_generator(
         &self,
@@ -212,6 +201,7 @@ impl<'a> NameLookup<'a> {
 
     #[must_use]
     pub fn get_struct(&self, path: &[String], name: &str) -> Option<StructTypeRef> {
+        info!(?path, ?name, "looking for existing struct");
         let namespace = self.get_namespace(path);
         namespace.map_or_else(|| None, |found_ns| found_ns.borrow().get_struct(name))
     }
@@ -309,6 +299,22 @@ impl<'a> NameLookup<'a> {
 
     /// # Errors
     ///
+    pub fn add_generated_struct(
+        &self,
+        path: &[String],
+        struct_type: StructType,
+    ) -> Result<StructTypeRef, Error> {
+        info!(?path, name=?struct_type.assigned_name, "inserting generated struct");
+        let namespace = self.get_namespace(path);
+        if let Some(found_namespace) = namespace {
+            Ok(found_namespace.borrow_mut().add_struct(struct_type)?)
+        } else {
+            Err(SemanticError::ResolveNotStruct)?
+        }
+    }
+
+    /// # Errors
+    ///
     pub fn add_generic(
         &mut self,
         name: &str,
@@ -319,14 +325,14 @@ impl<'a> NameLookup<'a> {
         let generic_type = GenericType {
             type_parameters: parameter_names,
             base_type: inner_type,
+            ast_functions: SeqMap::default(),
             file_id,
             defined_in_path: self.default_path.clone(),
         };
 
-        Ok(self
-            .own_namespace()
+        self.own_namespace()
             .borrow_mut()
-            .add_generic(name, GenericTypeRef::from(generic_type))?)
+            .add_generic(name, Rc::new(RefCell::new(generic_type)))
     }
 
     #[must_use]
@@ -340,24 +346,6 @@ impl<'a> NameLookup<'a> {
                 } else {
                     None
                 }
-            },
-        )
-    }
-
-    pub fn add_specialized_type(
-        &self,
-        path: &[String],
-        name: &str,
-        parameters: &[Type],
-        ty: Type,
-    ) -> Result<(), SemanticError> {
-        let namespace = self.get_namespace(path);
-        namespace.map_or_else(
-            || Ok(()),
-            |found_ns| {
-                Ok(found_ns
-                    .borrow_mut()
-                    .add_specialized_type(name, parameters, ty)?)
             },
         )
     }

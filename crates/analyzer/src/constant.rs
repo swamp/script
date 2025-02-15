@@ -6,7 +6,7 @@
 use crate::err::{Error, ErrorKind};
 use crate::Resolver;
 use swamp_script_ast::{ConstantIdentifier, ConstantInfo};
-use swamp_script_semantic::{Constant, ConstantRef, Definition, Expression, ExpressionKind, Node};
+use swamp_script_semantic::{Constant, ConstantRef, Expression, ExpressionKind, Node};
 
 impl<'a> Resolver<'a> {
     fn analyze_constant(
@@ -36,8 +36,8 @@ impl<'a> Resolver<'a> {
     pub(crate) fn analyze_constant_definition(
         &mut self,
         constant: &ConstantInfo,
-    ) -> Result<Definition, Error> {
-        let (constant_ref, name, node) = self.analyze_constant(constant)?;
+    ) -> Result<(), Error> {
+        let (constant_ref, name, _node) = self.analyze_constant(constant)?;
 
         self.global
             .block_scope_stack
@@ -49,7 +49,7 @@ impl<'a> Resolver<'a> {
                 self.create_err(ErrorKind::DuplicateFieldName, &constant.expression.node)
             })?;
 
-        Ok(Definition::Constant(node, constant_ref))
+        Ok(())
     }
 
     pub(crate) fn analyze_constant_access(

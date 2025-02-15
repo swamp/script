@@ -22,9 +22,11 @@ use crate::lookup::NameLookup;
 use seq_map::SeqMap;
 use std::mem::take;
 use std::num::{ParseFloatError, ParseIntError};
+use std::process::id;
 use std::rc::Rc;
 
 use swamp_script_modules::modules::Modules;
+use swamp_script_modules::ns::ModuleNamespace;
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
     ArgumentExpressionOrLocation, IteratorYieldType, LocationAccess, LocationAccessKind,
@@ -230,7 +232,22 @@ impl<'a> Resolver<'a> {
         )
     }
 
-    fn get_path(&self, ident: &swamp_script_ast::QualifiedTypeIdentifier) -> (Vec<String>, String) {
+    fn get_path(
+        &mut self,
+        ident: &swamp_script_ast::QualifiedTypeIdentifier,
+    ) -> (Vec<String>, String) {
+        let name = self.get_text(&ident.name.0).to_string();
+        let complete_name = if ident.generic_params.is_empty() {
+            name
+        } else {
+            let mut types = Vec::new();
+            for ty in &ident.generic_params {
+                let analyzed_type = self.analyze_type(ty).expect("todo");
+                types.push(analyzed_type);
+            }
+            ModuleNamespace::get_monomorphization_name(&name, &types)
+        };
+
         let path = ident
             .module_path
             .as_ref()
@@ -241,7 +258,7 @@ impl<'a> Resolver<'a> {
                 }
                 v
             });
-        (path, self.get_text(&ident.name.0).to_string())
+        (path, complete_name)
     }
 
     fn get_full_path(
@@ -277,7 +294,7 @@ impl<'a> Resolver<'a> {
         Ok(resolved_return_type)
     }
 
-    fn analyze_statements_in_function(
+    fn analyze_function_body_expression(
         &mut self,
         expression: &swamp_script_ast::Expression,
         return_type: &Type,
@@ -655,7 +672,7 @@ impl<'a> Resolver<'a> {
     }
 
     fn get_struct_type(
-        &self,
+        &mut self,
         qualified_type_identifier: &swamp_script_ast::QualifiedTypeIdentifier,
     ) -> Result<StructTypeRef, Error> {
         //   let namespace = self.get_namespace(qualified_type_identifier)?;
