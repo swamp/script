@@ -181,6 +181,9 @@ pub fn module_path_to_relative_swamp_file(module_path_vec: &[String]) -> PathBuf
     let mut path_buf = PathBuf::new();
 
     path_buf.push(module_path_vec.join("/"));
+    if module_path_vec.len() == 1 {
+        path_buf.push("lib"); // lib is default if the path only contains the package root
+    }
 
     path_buf.set_extension("swamp");
 

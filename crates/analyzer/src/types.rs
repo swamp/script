@@ -6,12 +6,11 @@ use crate::err::{Error, ErrorKind};
 use crate::lookup::TypeParameter;
 use crate::Resolver;
 use seq_map::SeqMap;
-use std::cell::RefCell;
 use std::rc::Rc;
 use swamp_script_modules::ns::{GenericAwareType, GenericTypeRef, ModuleNamespace};
 use swamp_script_semantic::{
-    ArrayType, ArrayTypeRef, ExternalType, ExternalTypeRef, Function, MapType, MapTypeRef,
-    Signature, StructTypeRef, TupleType, Type, TypeForParameter,
+    ArrayType, ArrayTypeRef, ExternalType, ExternalTypeRef, MapType, MapTypeRef, Signature,
+    StructTypeRef, TupleType, Type, TypeForParameter,
 };
 use tracing::info;
 
@@ -156,10 +155,6 @@ impl<'a> Resolver<'a> {
     ///
     pub fn analyze_type(&mut self, ast_type: &swamp_script_ast::Type) -> Result<Type, Error> {
         let resolved = match ast_type {
-            swamp_script_ast::Type::Int(_) => Type::Int,
-            swamp_script_ast::Type::Float(_) => Type::Float,
-            swamp_script_ast::Type::String(_) => Type::String,
-            swamp_script_ast::Type::Bool(_) => Type::Bool,
             swamp_script_ast::Type::Unit(_) => Type::Unit,
             swamp_script_ast::Type::Struct(ast_struct) => {
                 let struct_ref = self.get_struct_type(ast_struct)?;

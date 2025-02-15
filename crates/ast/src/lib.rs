@@ -427,6 +427,9 @@ pub enum ExpressionKind {
     StructLiteral(QualifiedTypeIdentifier, Vec<FieldExpression>, bool),
     Range(Box<Expression>, Box<Expression>, RangeMode),
     Literal(LiteralKind),
+
+    // Other
+    IntrinsicCall(Node, Vec<MutableOrImmutableExpression>),
 }
 
 #[derive(Debug, Clone)]
@@ -498,10 +501,6 @@ pub struct TypeForParameter {
 pub enum Type {
     // Primitives
     Unit(Node),
-    Int(Node),
-    Float(Node),
-    String(Node),
-    Bool(Node),
 
     // Composite
     Generic(QualifiedTypeIdentifier),

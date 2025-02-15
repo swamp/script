@@ -14,6 +14,7 @@ use swamp_script_semantic::{Constant, ConstantId, ConstantRef, Expression, Expre
 pub struct Modules {
     pub modules: SeqMap<Vec<String>, ModuleRef>,
     pub constants: Vec<ConstantRef>,
+    pub auto_use: Vec<ModuleNamespaceRef>,
 }
 
 impl Default for Modules {
@@ -79,6 +80,7 @@ impl Modules {
         Self {
             modules: SeqMap::new(),
             constants: Vec::new(),
+            auto_use: Vec::new(),
         }
     }
     pub fn add(&mut self, module: ModuleRef) {

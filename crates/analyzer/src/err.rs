@@ -119,6 +119,7 @@ pub enum ErrorKind {
     NotATypeGenerator,
     ExpectedStruct,
     NotAGeneric,
+    UnknownIntrinsic,
 }
 
 impl From<SemanticError> for Error {

@@ -22,15 +22,15 @@ use crate::lookup::NameLookup;
 use seq_map::SeqMap;
 use std::mem::take;
 use std::num::{ParseFloatError, ParseIntError};
-use std::process::id;
 use std::rc::Rc;
 
+use swamp_script_ast::MutableOrImmutableExpression;
 use swamp_script_modules::modules::Modules;
-use swamp_script_modules::ns::ModuleNamespace;
+use swamp_script_modules::ns::{ModuleNamespace, ModuleNamespaceRef};
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
-    ArgumentExpressionOrLocation, IteratorYieldType, LocationAccess, LocationAccessKind,
-    MutOrImmutableExpression, NormalPattern, Postfix, PostfixKind, RangeMode,
+    ArgumentExpressionOrLocation, IntrinsicFunction, IteratorYieldType, LocationAccess,
+    LocationAccessKind, MutOrImmutableExpression, NormalPattern, Postfix, PostfixKind, RangeMode,
     SingleLocationExpression, SingleLocationExpressionKind, SingleMutLocationExpression,
     TypeWithMut, WhenBinding,
 };
@@ -53,9 +53,24 @@ pub enum LocationSide {
 }
 
 #[derive(Debug)]
+pub struct AutoUseModules {
+    pub modules: Vec<ModuleNamespaceRef>,
+}
+
+#[derive(Debug)]
 pub struct Program {
     pub state: ProgramState,
     pub modules: Modules,
+    pub auto_use_modules: AutoUseModules,
+}
+
+impl Program {
+    pub fn add_auto_use(&mut self, path: &[String]) {
+        let module = self.modules.get(path).unwrap();
+        self.auto_use_modules
+            .modules
+            .push(module.borrow().namespace.clone());
+    }
 }
 
 impl Default for Program {
@@ -70,6 +85,9 @@ impl Program {
         Self {
             state: ProgramState::new(),
             modules: Modules::new(),
+            auto_use_modules: AutoUseModules {
+                modules: Vec::new(),
+            },
         }
     }
 }
@@ -139,7 +157,7 @@ impl FunctionScopeState {
 }
 
 pub struct Resolver<'a> {
-    shared: SharedState<'a>,
+    pub shared: SharedState<'a>,
     scope: FunctionScopeState,
     global: FunctionScopeState,
 }
@@ -647,6 +665,9 @@ impl<'a> Resolver<'a> {
             swamp_script_ast::ExpressionKind::Guard(guard_expressions) => {
                 self.analyze_guard(&ast_expression.node, expected_type, guard_expressions)?
             }
+            swamp_script_ast::ExpressionKind::IntrinsicCall(intrinsic_name, arguments) => {
+                self.analyze_intrinsic_call(&ast_expression.node, intrinsic_name, arguments)?
+            }
         };
 
         //info!(ty=%expression.ty, kind=?expression.kind,  "resolved expression");
@@ -843,20 +864,7 @@ impl<'a> Resolver<'a> {
                     // keep previous `is_mutable`
                 }
                 swamp_script_ast::Postfix::MemberCall(member_name, ast_arguments) => {
-                    let dereference = ast_arguments
-                        .iter()
-                        .map(|x| &x.expression)
-                        .collect::<Vec<_>>();
-                    if let Some(found_internal) = self.check_for_internal_member_call(
-                        &tv.resolved_type,
-                        tv.is_mutable,
-                        member_name,
-                        &dereference,
-                    )? {
-                        tv.resolved_type = found_internal.ty.clone();
-                        tv.is_mutable = false;
-                        suffixes.push(found_internal);
-                    } else if let Type::Struct(struct_type) = &tv.resolved_type.clone() {
+                    if let Type::Struct(struct_type) = &tv.resolved_type.clone() {
                         let return_type = self.analyze_postfix_member_call(
                             struct_type,
                             tv.is_mutable,
@@ -2378,6 +2386,29 @@ impl<'a> Resolver<'a> {
         };
 
         Ok(postfix)
+    }
+
+    fn analyze_intrinsic_call(
+        &mut self,
+        expr_node: &swamp_script_ast::Node,
+        intrinsic_function_name: &swamp_script_ast::Node,
+        arguments: &[MutableOrImmutableExpression],
+    ) -> Result<Expression, Error> {
+        let mut analyzed_arguments = Vec::new();
+        for argument in arguments {
+            let analyzed_expr = self.analyze_expression(&argument.expression, None)?;
+            analyzed_arguments.push(analyzed_expr);
+        }
+
+        let intrinsic_call = IntrinsicFunction::try_from(self.get_text(intrinsic_function_name))?;
+
+        let ffi = self.core_value_type();
+
+        Ok(self.create_expr(
+            ExpressionKind::IntrinsicCall(intrinsic_call, analyzed_arguments),
+            ffi,
+            expr_node,
+        ))
     }
 
     fn analyze_postfix_field_call(

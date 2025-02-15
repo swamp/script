@@ -3,11 +3,14 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
+/*
 use crate::err::{Error, ErrorKind};
 use crate::Resolver;
 
 use swamp_script_semantic::{ArrayTypeRef, MapTypeRef, Postfix, PostfixKind, TupleTypeRef};
 use swamp_script_semantic::{Expression, Type};
+
+
 
 impl<'a> Resolver<'a> {
     pub(crate) fn check_for_internal_member_call(
@@ -581,3 +584,6 @@ impl<'a> Resolver<'a> {
 
      */
 }
+
+
+ */

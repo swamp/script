@@ -182,7 +182,7 @@ pub struct IteratorTypeDetails {
 
 #[derive(Clone)]
 pub enum Type {
-    // Primitives
+    // build in Primitives
     Int,
     Float,
     String,
@@ -208,11 +208,11 @@ pub enum Type {
 impl Debug for Type {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Unit => write!(f, "()"),
             Self::Int => write!(f, "Int"),
             Self::Float => write!(f, "Float"),
-            Self::String => write!(f, "String"),
             Self::Bool => write!(f, "Bool"),
-            Self::Unit => write!(f, "()"),
+            Self::String => write!(f, "String"),
             Self::Array(array_type_ref) => write!(f, "[{:?}]", array_type_ref.item_type),
             Self::Tuple(tuple_type_ref) => write!(f, "({:?})", tuple_type_ref.0),
             Self::Struct(struct_type_ref) => {
@@ -243,8 +243,8 @@ impl Display for Type {
         match self {
             Self::Int => write!(f, "Int"),
             Self::Float => write!(f, "Float"),
-            Self::String => write!(f, "String"),
             Self::Bool => write!(f, "Bool"),
+            Self::String => write!(f, "String"),
             Self::Unit => write!(f, "()"),
             Self::Array(array_ref) => {
                 write!(f, "[{}]", &array_ref.item_type.to_string())
@@ -282,6 +282,7 @@ pub enum SemanticError {
     WasNotMutable,
     UnknownGeneric,
     UnknownLookupModule,
+    UnknownIntrinsic,
 }
 
 impl Type {
@@ -315,10 +316,6 @@ impl Type {
         }
         match (self, other) {
             (Self::Function(a), Self::Function(b)) => a.same_type(b),
-            (Self::Int, Self::Int) => true,
-            (Self::Float, Self::Float) => true,
-            (Self::String, Self::String) => true,
-            (Self::Bool, Self::Bool) => true,
             (Self::Unit, Self::Unit) => true,
             (Self::Array(_), Self::Array(_)) => true,
             (Self::Map(a), Self::Map(b)) => {
@@ -912,6 +909,28 @@ pub struct WhenBinding {
 }
 
 #[derive(Debug)]
+pub enum IntrinsicFunction {
+    FloatFloor,
+    FloatSqrt,
+    FloatRound,
+}
+
+impl TryFrom<&str> for IntrinsicFunction {
+    type Error = SemanticError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        let x = match value {
+            "float_floor" => Self::FloatFloor,
+            "float_sqrt" => Self::FloatSqrt,
+            "float_round" => Self::FloatRound,
+            _ => return Err(SemanticError::UnknownIntrinsic),
+        };
+
+        Ok(x)
+    }
+}
+
+#[derive(Debug)]
 pub enum ExpressionKind {
     // Access Lookup values
     ConstantAccess(ConstantRef),
@@ -980,6 +999,7 @@ pub enum ExpressionKind {
 
     // To create rust types
     RustValueInstantiation(ExternalTypeRef, Type), // type parameter (item type)
+    IntrinsicCall(IntrinsicFunction, Vec<Expression>),
 }
 
 #[derive(Debug)]

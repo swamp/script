@@ -273,6 +273,9 @@ impl ModulesDisplay<'_> {
             ExpressionKind::RustValueInstantiation(_, _) => {
                 write!(f, "SparseNew()")
             }
+            ExpressionKind::IntrinsicCall(intrinsic_func, arguments) => {
+                write!(f, "intrinsic {intrinsic_func:?} {arguments:?}")
+            }
         };
 
         result

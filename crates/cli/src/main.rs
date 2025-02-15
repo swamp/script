@@ -136,8 +136,18 @@ fn build(root_path: &Path, root_module: &str) -> Result<(), CliError> {
     let mut source_map = create_source_map(root_path)?;
     let mut resolved_program = Program::new();
 
+    // core::
+    let mangrove_core_module_path = &["core-0.0.0".to_string()];
+    compile_analyze_and_link_without_version(
+        mangrove_core_module_path,
+        &mut resolved_program,
+        &mut source_map,
+    )?;
+
+    resolved_program.add_auto_use(mangrove_core_module_path);
+
     // std::
-    let mangrove_std_module_path = &["mangrove-0.0.0".to_string(), "std".to_string()];
+    let mangrove_std_module_path = &["std-0.0.0".to_string()];
     compile_analyze_and_link_without_version(
         mangrove_std_module_path,
         &mut resolved_program,

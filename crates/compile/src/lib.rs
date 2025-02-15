@@ -26,6 +26,7 @@ pub fn compile_and_resolve(
     let mut resolved_program = Program::new();
     resolve_program(
         &mut resolved_program.state,
+        &resolved_program.auto_use_modules,
         &mut resolved_program.modules,
         source_map,
         &module_paths_in_order,
@@ -50,6 +51,7 @@ pub fn compile_and_resolve_to_program(
 
     resolve_program(
         &mut resolved_program.state,
+        &resolved_program.auto_use_modules,
         &mut resolved_program.modules,
         source_map,
         &module_paths_in_order,
@@ -82,7 +84,7 @@ pub fn compile_analyze_and_link_without_version(
     match mangrove_render_result {
         Ok(..) => {}
         Err(err) => {
-            show_script_resolve_error(&err, &source_map);
+            show_script_resolve_error(&err, source_map);
             Err(err)?;
         }
     }
@@ -95,6 +97,7 @@ pub fn compile_analyze_and_link_without_version(
     resolved_program
         .modules
         .link_module(&without_version_path, mangrove_render_module);
+
     Ok(())
 }
 

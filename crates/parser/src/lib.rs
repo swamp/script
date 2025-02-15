@@ -222,6 +222,7 @@ impl AstParser {
         Ok(LocalTypeIdentifier::new(self.to_node(&pair)))
     }
 
+    /*
     fn expect_qualified_type_identifier_next<'a>(
         &self,
         inner_pairs: &mut impl Iterator<Item = Pair<'a, Rule>>,
@@ -247,6 +248,8 @@ impl AstParser {
             )),
         }
     }
+
+     */
 
     fn convert_into_iterator<'a>(pair: &'a Pair<'a, Rule>) -> impl Iterator<Item = Pair<'a, Rule>> {
         pair.clone().into_inner()
@@ -1638,6 +1641,7 @@ impl AstParser {
         let sub = &Self::right_alternative(pair2)?;
         match sub.as_rule() {
             Rule::static_member_reference => self.parse_static_member_reference(sub),
+            Rule::intrinsic_call => self.parse_intrinsic_call(sub),
             Rule::enum_literal => {
                 Ok(self.create_expr(ExpressionKind::Literal(self.parse_enum_literal(sub)?), sub))
             }
@@ -2071,11 +2075,7 @@ impl AstParser {
         match pair.as_rule() {
             Rule::type_name => {
                 let mut inner = pair.clone().into_inner();
-                let base_type = if let Some(inner_pair) = inner.next() {
-                    self.parse_type(inner_pair)?
-                } else {
-                    self.parse_type_from_str(&mut inner, &pair)?
-                };
+                let base_type = self.parse_type(inner.next().unwrap())?;
 
                 let optional_marker = inner
                     .find(|p| p.as_rule() == Rule::optional_marker)
@@ -2136,10 +2136,6 @@ impl AstParser {
                 let inner = self.next_inner_pair(&pair)?;
                 Ok(Type::External(self.to_node(&inner)))
             }
-            Rule::built_in_type => {
-                let mut inner = pair.clone().into_inner();
-                self.parse_type_from_str(&mut inner, &pair)
-            }
             Rule::qualified_type_identifier => {
                 let qualified_id = self.parse_qualified_type_identifier(&pair)?;
 
@@ -2185,23 +2181,6 @@ impl AstParser {
             }
 
             _ => Err(self.create_error_pair(SpecificError::UnexpectedTypeRule, &pair)),
-        }
-    }
-
-    fn parse_type_from_str<'a>(
-        &self,
-        mut iterator: &mut impl Iterator<Item = Pair<'a, Rule>>,
-        pair: &Pair<Rule>,
-    ) -> Result<Type, ParseError> {
-        let node = self.to_node(pair);
-        match pair.as_str() {
-            "Int" => Ok(Type::Int(node)),
-            "Float" => Ok(Type::Float(node)),
-            "String" => Ok(Type::String(node)),
-            "Bool" => Ok(Type::Bool(node)),
-            _ => Ok(Type::Named(
-                self.expect_qualified_type_identifier_next(&mut iterator)?,
-            )),
         }
     }
 
@@ -2608,6 +2587,15 @@ impl AstParser {
                 pair,
             );
         }
+        Ok(expr)
+    }
+
+    fn parse_intrinsic_call(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
+        let mut inner = pair.clone().into_inner();
+        let name = self.expect_identifier_next(&mut inner)?;
+
+        let args = self.parse_function_call_arguments(&inner.next().unwrap())?;
+        let expr = self.create_expr(ExpressionKind::IntrinsicCall(name.0, args), &pair);
         Ok(expr)
     }
 }

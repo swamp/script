@@ -17,7 +17,7 @@ use swamp_script_core::value::{
     convert_vec_to_rc_refcell, format_value, to_rust_value, SourceMapLookup, Value,
 };
 use swamp_script_semantic::prelude::*;
-use swamp_script_semantic::{same_array_ref, Postfix};
+use swamp_script_semantic::{same_array_ref, IntrinsicFunction, Postfix};
 use swamp_script_semantic::{
     same_struct_ref, BinaryOperatorKind, CompoundOperatorKind, ConstantId, ForPattern, Function,
     MutOrImmutableExpression, NormalPattern, PatternElement, PostfixKind, SingleLocationExpression,
@@ -1298,6 +1298,9 @@ impl<'a, C> Interpreter<'a, C> {
                 let x = value_ref.borrow().clone();
                 x
             }
+            ExpressionKind::IntrinsicCall(name, arguments) => {
+                self.eval_intrinsic(&expr.node, name, arguments)?
+            }
         };
 
         self.depth -= 1;
@@ -2536,6 +2539,39 @@ impl<'a, C> Interpreter<'a, C> {
             node: node.clone(),
             kind,
         }
+    }
+
+    fn eval_intrinsic(
+        &mut self,
+        node: &Node,
+        intrinsic_func: &IntrinsicFunction,
+        expressions: &[Expression],
+    ) -> Result<Value, ExecuteError> {
+        let values = self.evaluate_expressions(expressions)?;
+        let v = match intrinsic_func {
+            IntrinsicFunction::FloatFloor => {
+                if let Value::Float(x) = values[0] {
+                    Value::Int(x.into())
+                } else {
+                    return Err(self.create_err(ExecuteErrorKind::InvalidIntrinsic, node));
+                }
+            }
+            IntrinsicFunction::FloatSqrt => {
+                if let Value::Float(fp) = values[0] {
+                    Value::Float(fp.sqrt())
+                } else {
+                    return Err(self.create_err(ExecuteErrorKind::InvalidIntrinsic, node));
+                }
+            }
+            IntrinsicFunction::FloatRound => {
+                if let Value::Float(fp) = values[0] {
+                    Value::Float(fp.round())
+                } else {
+                    return Err(self.create_err(ExecuteErrorKind::InvalidIntrinsic, node));
+                }
+            }
+        };
+        Ok(v)
     }
 }
 

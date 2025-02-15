@@ -26,7 +26,7 @@ impl<'a> Resolver<'a> {
                 Literal::IntLiteral(Self::str_to_int(node_text).map_err(|int_conversion_err| {
                     self.create_err(ErrorKind::IntConversionError(int_conversion_err), ast_node)
                 })?),
-                Type::Int,
+                self.int_type(),
             ),
             swamp_script_ast::LiteralKind::Float => {
                 let float = Self::str_to_float(node_text).map_err(|float_conversion_err| {
@@ -35,11 +35,11 @@ impl<'a> Resolver<'a> {
                         ast_node,
                     )
                 })?;
-                (Literal::FloatLiteral(Fp::from(float)), Type::Float)
+                (Literal::FloatLiteral(Fp::from(float)), self.float_type())
             }
             swamp_script_ast::LiteralKind::String(processed_string) => (
                 Literal::StringLiteral(processed_string.to_string()),
-                Type::String,
+                self.string_type(),
             ),
             swamp_script_ast::LiteralKind::Bool => {
                 let bool_val = if node_text == "false" {
@@ -49,7 +49,7 @@ impl<'a> Resolver<'a> {
                 } else {
                     return Err(self.create_err(ErrorKind::BoolConversionError, ast_node));
                 };
-                (Literal::BoolLiteral(bool_val), Type::Bool)
+                (Literal::BoolLiteral(bool_val), self.bool_type())
             }
             swamp_script_ast::LiteralKind::EnumVariant(ref enum_literal) => {
                 let (enum_name, variant_name) = match enum_literal {
@@ -274,5 +274,58 @@ impl<'a> Resolver<'a> {
             node: resolved_node.clone(),
             kind,
         }
+    }
+
+    pub fn get_swamp_path(relative_path: &[String]) -> Vec<String> {
+        let mut path = vec!["swamp-0.0.0".into()];
+        path.extend_from_slice(relative_path);
+        path
+    }
+    #[must_use]
+    pub fn get_core_path() -> Vec<String> {
+        vec!["core-0.0.0".to_string()]
+    }
+    pub fn core_value_type(&self) -> Type {
+        Type::Struct(
+            self.shared
+                .lookup
+                .get_struct(&Self::get_core_path(), "Value")
+                .expect("core must exist"),
+        )
+    }
+    pub fn bool_type(&self) -> Type {
+        Type::Struct(
+            self.shared
+                .lookup
+                .get_struct(&Self::get_core_path(), "Bool")
+                .expect("core must exist"),
+        )
+    }
+
+    pub fn int_type(&self) -> Type {
+        Type::Struct(
+            self.shared
+                .lookup
+                .get_struct(&Self::get_core_path(), "Int")
+                .expect("core must exist"),
+        )
+    }
+
+    pub fn float_type(&self) -> Type {
+        Type::Struct(
+            self.shared
+                .lookup
+                .get_struct(&Self::get_core_path(), "Float")
+                .expect("core must exist"),
+        )
+    }
+
+    fn string_type(&self) -> Type {
+        Type::Struct(
+            self.shared
+                .lookup
+                .get_struct(&Self::get_core_path(), "String")
+                .expect("core must exist"),
+        )
     }
 }

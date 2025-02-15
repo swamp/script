@@ -514,10 +514,11 @@ pub fn build_resolve_error(err: &Error) -> Builder<usize> {
         ErrorKind::UnknownParametricType => todo!(),
         ErrorKind::NotAFunctionType => todo!(),
         ErrorKind::ExpectedMemberFunctionOrFunctionTypeField => Report::build(Kind::Error, 140, "ExpectedMemberFunctionOrFunctionTypeField", span),
-        &swamp_script_analyzer::err::ErrorKind::UnknownModule => todo!(),
-        &swamp_script_analyzer::err::ErrorKind::NotATypeGenerator => Report::build(Kind::Error, 140, "Not a type generator", span),
-        &swamp_script_analyzer::err::ErrorKind::ExpectedStruct => todo!(),
-        &swamp_script_analyzer::err::ErrorKind::NotAGeneric => todo!(),
+        ErrorKind::UnknownModule => todo!(),
+        ErrorKind::NotATypeGenerator => Report::build(Kind::Error, 140, "Not a type generator", span),
+        ErrorKind::ExpectedStruct => todo!(),
+        ErrorKind::NotAGeneric => todo!(),
+        ErrorKind::UnknownIntrinsic => Report::build(Kind::Error, 140, "unknown intrinsic", span),
     }
 }
 
@@ -577,5 +578,6 @@ pub fn build_execute_error(err: &ExecuteError) -> Builder<usize> {
         &ExecuteErrorKind::DivideByZero | &ExecuteErrorKind::MapKeyAlreadyExists => todo!(),
         &swamp_script_eval::err::ExecuteErrorKind::MustHaveGuardArmThatMatches => todo!(),
         ExecuteErrorKind::CouldNotConvertFromSignal => todo!(),
+        &swamp_script_eval::err::ExecuteErrorKind::InvalidIntrinsic => todo!(),
     }
 }
