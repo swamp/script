@@ -6,6 +6,7 @@ use crate::err::{Error, ErrorKind};
 use crate::Resolver;
 use seq_map::SeqMap;
 use std::rc::Rc;
+use swamp_script_ast::Node;
 use swamp_script_modules::ns::GenericAwareType;
 use swamp_script_semantic::{
     AliasType, AliasTypeRef, AnonymousStructType, EnumType, EnumTypeRef, EnumVariantCommon,
@@ -471,7 +472,22 @@ impl<'a> Resolver<'a> {
         }
 
         let (found_struct, _is_generic) = self.find_local_impl_target(attached_to_type)?;
+        let function_refs: Vec<&swamp_script_ast::Function> = functions.iter().collect();
+        self.analyze_impl_functions_to_struct(
+            &attached_to_type.name,
+            found_struct,
+            &function_refs,
+        )?;
 
+        Ok(())
+    }
+
+    pub fn analyze_impl_functions_to_struct(
+        &mut self,
+        node: &Node,
+        found_struct: StructTypeRef,
+        functions: &[&swamp_script_ast::Function],
+    ) -> Result<(), Error> {
         for function in functions {
             let new_return_type = self.analyze_return_type(function)?;
             self.start_function(new_return_type);
@@ -495,9 +511,7 @@ impl<'a> Resolver<'a> {
                 .borrow_mut()
                 .functions
                 .insert(function_name_str, resolved_function_ref)
-                .map_err(|_| {
-                    self.create_err(ErrorKind::DuplicateFieldName, &attached_to_type.name)
-                })?;
+                .map_err(|_| self.create_err(ErrorKind::DuplicateFieldName, &node))?;
         }
 
         Ok(())

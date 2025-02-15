@@ -386,15 +386,15 @@ impl<'a> Resolver<'a> {
             let created_type = Type::Struct(analyzed_base_type_ref.clone());
 
             // Functions ------------------
-            let mut analyzed_functions = SeqMap::new();
-            for (name, func) in &found_generic.ast_functions {
-                let analyzed_func = self.analyze_impl_func(func, &created_type)?;
-                analyzed_functions
-                    .insert(name.to_string(), Rc::new(analyzed_func))
-                    .expect("todo");
-            }
 
-            analyzed_base_type_ref.borrow_mut().functions = analyzed_functions;
+            let functions: Vec<&swamp_script_ast::Function> =
+                found_generic.ast_functions.values().collect::<Vec<_>>();
+
+            self.analyze_impl_functions_to_struct(
+                &parameterize_definition.name.0,
+                analyzed_base_type_ref,
+                &functions,
+            )?;
 
             // Pop the stack
             self.shared.lookup.pop_type_parameter_scope();
