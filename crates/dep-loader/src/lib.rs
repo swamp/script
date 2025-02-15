@@ -35,12 +35,12 @@ impl From<ParseError> for ParseRootError {
 }
 
 #[derive(Debug)]
-pub struct ParseModule {
+pub struct ParsedAstModule {
     pub ast_module: swamp_script_ast::Module,
     pub file_id: FileId,
 }
 
-impl ParseModule {
+impl ParsedAstModule {
     // TODO: HACK: declare_external_function() should be removed
     pub fn declare_external_function(
         &mut self,
@@ -72,12 +72,16 @@ impl ParseRoot {
         Self {}
     }
 
-    pub fn parse(&self, contents: String, file_id: FileId) -> Result<ParseModule, ParseRootError> {
+    pub fn parse(
+        &self,
+        contents: String,
+        file_id: FileId,
+    ) -> Result<ParsedAstModule, ParseRootError> {
         let parser = AstParser {};
 
         let ast_program = parser.parse_module(&*contents)?;
 
-        Ok(ParseModule {
+        Ok(ParsedAstModule {
             ast_module: ast_program,
             file_id,
         })
@@ -95,7 +99,7 @@ pub struct ModuleInfo {
 
 pub struct DependencyParser {
     pub import_scanned_modules: SeqMap<Vec<String>, ModuleInfo>,
-    already_parsed_modules: SeqMap<Vec<String>, ParseModule>,
+    already_parsed_modules: SeqMap<Vec<String>, ParsedAstModule>,
     pub already_resolved_modules: HashSet<Vec<String>>,
 }
 
@@ -118,7 +122,7 @@ impl DependencyParser {
         self.already_resolved_modules.insert(module_path);
     }
 
-    pub fn add_ast_module(&mut self, module_path: Vec<String>, parsed_module: ParseModule) {
+    pub fn add_ast_module(&mut self, module_path: Vec<String>, parsed_module: ParsedAstModule) {
         debug!(
             "Adding ast module parsed outside of graph resolver {:?}",
             module_path
@@ -150,7 +154,10 @@ impl From<io::Error> for DependencyError {
 
 pub const LOCAL_ROOT_PACKAGE_PATH: &str = "crate";
 
-fn get_all_local_paths(source_map: &SourceMap, parsed_module: &ParseModule) -> Vec<Vec<String>> {
+fn get_all_local_paths(
+    source_map: &SourceMap,
+    parsed_module: &ParsedAstModule,
+) -> Vec<Vec<String>> {
     let mut imports = vec![];
 
     for def in parsed_module.ast_module.definitions() {
@@ -265,11 +272,11 @@ impl DependencyParser {
         Ok(())
     }
 
-    pub fn get_parsed_module(&self, path: &[String]) -> Option<&ParseModule> {
+    pub fn get_parsed_module(&self, path: &[String]) -> Option<&ParsedAstModule> {
         self.already_parsed_modules.get(&path.to_vec())
     }
 
-    pub fn get_parsed_module_mut(&mut self, path: &[String]) -> Option<&mut ParseModule> {
+    pub fn get_parsed_module_mut(&mut self, path: &[String]) -> Option<&mut ParsedAstModule> {
         self.already_parsed_modules.get_mut(&path.to_vec())
     }
 
@@ -404,7 +411,7 @@ pub fn create_source_map(local_path: &Path) -> io::Result<SourceMap> {
         .unwrap();
 
     mounts
-        .insert("registry".to_string(), registry_path.to_path_buf())
+        .insert("registry".to_string(), registry_path)
         .unwrap();
 
     Ok(SourceMap::new(&mounts))

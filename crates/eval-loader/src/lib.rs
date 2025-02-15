@@ -21,7 +21,7 @@ pub fn resolve_to_new_module(
     modules: &mut Modules,
     module_path: &[String],
     source_map: &SourceMap,
-    ast_module: &ParseModule,
+    ast_module: &ParsedAstModule,
 ) -> Result<(), Error> {
     let resolved_module = Module::new(module_path);
     let resolved_module_ref = Rc::new(RefCell::new(resolved_module));
@@ -43,9 +43,9 @@ pub fn resolve_to_existing_module(
     state: &mut ProgramState,
     auto_use_modules: &AutoUseModules,
     modules: &mut Modules,
-    path: Vec<String>,
+    path: &[String],
     source_map: &SourceMap,
-    ast_module: &ParseModule,
+    ast_module: &ParsedAstModule,
 ) -> Result<Option<Expression>, Error> {
     let statements = {
         let mut name_lookup = NameLookup::new(path.clone(), modules);
@@ -77,7 +77,38 @@ pub fn resolve_to_existing_module(
     Ok(statements)
 }
 
-pub fn resolve_program(
+pub fn analyze_module(
+    state: &mut ProgramState,
+    auto_use: &AutoUseModules,
+    modules: &mut Modules,
+    source_map: &SourceMap,
+    module_path: &[String],
+    ast_module: &ParsedAstModule,
+) -> Result<(), Error> {
+    if let Some(_found_module) = modules.get(&module_path.clone()) {
+        let _ = resolve_to_existing_module(
+            state,
+            auto_use,
+            modules,
+            module_path.clone(),
+            source_map,
+            ast_module,
+        )?;
+    } else {
+        resolve_to_new_module(
+            state,
+            auto_use,
+            modules,
+            module_path,
+            source_map,
+            ast_module,
+        )?;
+    }
+
+    Ok(())
+}
+
+pub fn analyze_modules_in_order(
     state: &mut ProgramState,
     auto_use: &AutoUseModules,
     modules: &mut Modules,
@@ -87,25 +118,14 @@ pub fn resolve_program(
 ) -> Result<(), Error> {
     for module_path in module_paths_in_order {
         if let Some(parse_module) = parsed_modules.get_parsed_module(module_path) {
-            if let Some(_found_module) = modules.get(&module_path.clone()) {
-                let _maybe_expression = resolve_to_existing_module(
-                    state,
-                    auto_use,
-                    modules,
-                    module_path.clone(),
-                    source_map,
-                    parse_module,
-                )?;
-            } else {
-                resolve_to_new_module(
-                    state,
-                    auto_use,
-                    modules,
-                    module_path,
-                    source_map,
-                    parse_module,
-                )?;
-            }
+            analyze_module(
+                state,
+                auto_use,
+                modules,
+                source_map,
+                module_path,
+                parse_module,
+            )?;
         } else {
             return Err(Error {
                 kind: ErrorKind::CanNotFindModule(module_path.clone()),

@@ -4,5 +4,5 @@
  */
 pub use crate::{
     module_path_to_relative_swamp_file, module_path_to_relative_swamp_file_string,
-    parse_local_modules_and_get_order, DepLoaderError, DependencyParser, ParseModule,
+    parse_local_modules_and_get_order, DepLoaderError, DependencyParser, ParsedAstModule,
 };

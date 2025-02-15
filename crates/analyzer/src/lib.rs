@@ -989,6 +989,7 @@ impl<'a> Resolver<'a> {
 
                         Type::Struct(resolved_struct_ref) => {
                             let borrow = resolved_struct_ref.borrow();
+                            let subscript_fn = self.find_struct_function(resolved_struct_ref, "subscript").unwrap();
                             let subscript_fn =
                                 borrow.functions.get(&"subscript".to_string()).unwrap();
                             let lookup_returns = &subscript_fn.signature().return_type;
@@ -2517,4 +2518,7 @@ impl<'a> Resolver<'a> {
     }
 
      */
+    fn find_struct_function(&self, p0: &StructTypeRef, p1: &str) -> _ {
+        self.shared.lookup.
+    }
 }

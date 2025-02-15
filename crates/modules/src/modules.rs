@@ -8,13 +8,16 @@ use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
-use swamp_script_semantic::{Constant, ConstantId, ConstantRef, Expression, ExpressionKind};
+use swamp_script_semantic::{
+    AssociatedImpls, Constant, ConstantId, ConstantRef, Expression, ExpressionKind,
+};
 
 #[derive(Debug)]
 pub struct Modules {
     pub modules: SeqMap<Vec<String>, ModuleRef>,
     pub constants: Vec<ConstantRef>,
     pub auto_use: Vec<ModuleNamespaceRef>,
+    pub associated_functions: AssociatedImpls,
 }
 
 impl Default for Modules {
@@ -81,6 +84,7 @@ impl Modules {
             modules: SeqMap::new(),
             constants: Vec::new(),
             auto_use: Vec::new(),
+            associated_functions: AssociatedImpls::new(),
         }
     }
     pub fn add(&mut self, module: ModuleRef) {

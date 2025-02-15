@@ -67,21 +67,13 @@ impl<'a> NameLookup<'a> {
      */
 }
 
-impl<'a> NameLookup<'a> {}
-
-impl<'a> NameLookup<'a> {}
-
-impl<'a> NameLookup<'a> {}
-
-impl<'a> NameLookup<'a> {}
-
 impl<'a> NameLookup<'a> {
     /// # Panics
     ///
-    pub fn new(default_path: Vec<String>, modules: &'a mut Modules) -> Self {
+    pub fn new(default_path: &[String], modules: &'a mut Modules) -> Self {
         assert!(!default_path.is_empty(), "own path must exist");
         Self {
-            default_path,
+            default_path: default_path.to_vec(),
             modules,
             type_parameter_scope_stack: vec![],
         }

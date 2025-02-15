@@ -1097,12 +1097,22 @@ pub struct TypeCreator {
 
  */
 
+#[derive(Debug)]
 pub struct Impl {
     pub functions: SeqMap<String, FunctionRef>,
 }
 
+#[derive(Debug)]
 pub struct AssociatedImpls {
     pub functions: SeqMap<TypeNumber, Impl>,
+}
+
+impl AssociatedImpls {
+    pub fn new() -> AssociatedImpls {
+        Self {
+            functions: SeqMap::default(),
+        }
+    }
 }
 
 impl AssociatedImpls {
