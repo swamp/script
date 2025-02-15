@@ -174,7 +174,6 @@ impl ModuleNamespace {
             name: Node::default(),
             assigned_name: name.to_string(),
             anon_struct_type,
-            functions: SeqMap::default(),
         };
 
         self.add_struct(_struct_type)

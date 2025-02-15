@@ -63,15 +63,6 @@ impl ModulesDisplay<'_> {
             )?;
         }
 
-        if !struct_type.functions.is_empty() {
-            writeln!(f, "    {}", "functions".bright_red())?;
-            for (func_name, func) in &struct_type.functions {
-                write!(f, "      {}:  ", func_name.cyan())?;
-                self.show_function(f, func)?;
-                writeln!(f)?;
-            }
-        }
-
         Ok(())
     }
 

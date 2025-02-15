@@ -6,7 +6,7 @@ pub mod prelude;
 
 pub use fixed32::Fp;
 use seq_fmt::comma;
-use seq_map::{SeqMap, SeqMapError};
+use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::cmp::PartialEq;
 use std::fmt;
@@ -203,6 +203,17 @@ pub enum Type {
 
     Optional(Box<Type>),
     External(ExternalTypeRef),
+}
+
+impl Type {
+    pub(crate) fn type_number(&self) -> TypeNumber {
+        match self {
+            Self::Int => 0,
+            Self::Float => 1,
+            Self::Struct(struct_type) => 0,
+            _ => 0xffff,
+        }
+    }
 }
 
 impl Debug for Type {
@@ -1086,11 +1097,58 @@ pub struct TypeCreator {
 
  */
 
+pub struct Impl {
+    pub functions: SeqMap<String, FunctionRef>,
+}
+
+pub struct AssociatedImpls {
+    pub functions: SeqMap<TypeNumber, Impl>,
+}
+
+impl AssociatedImpls {
+    pub fn get_member_function(&self, ty: &Type, function_name: &str) -> Option<&FunctionRef> {
+        let maybe_found_impl = self.functions.get(&ty.type_number());
+        if let Some(found_impl) = maybe_found_impl {
+            if let Some(func) = found_impl.functions.get(&function_name.to_string()) {
+                return Some(func);
+            }
+        }
+        None
+    }
+
+    pub fn get_internal_member_function(
+        &self,
+        ty: &Type,
+        function_name: &str,
+    ) -> Option<InternalFunctionDefinitionRef> {
+        if let Some(func) = self.get_member_function(ty, function_name) {
+            match &**func {
+                Function::Internal(fn_def) => Some(fn_def.clone()),
+                _ => None,
+            };
+        }
+        None
+    }
+
+    pub fn fetch_external_function_id(
+        &self,
+        ty: &Type,
+        function_name: &str,
+    ) -> Option<ExternalFunctionId> {
+        if let Some(func) = self.get_member_function(ty, function_name) {
+            match &**func {
+                Function::External(fn_def) => Some(fn_def.clone()),
+                _ => None,
+            };
+        }
+        None
+    }
+}
+
 pub struct StructType {
     pub name: Node,
     pub assigned_name: String,
     pub anon_struct_type: AnonymousStructType,
-    pub functions: SeqMap<String, FunctionRef>,
 }
 
 impl Debug for StructType {
@@ -1105,7 +1163,6 @@ impl StructType {
             anon_struct_type,
             name,
             assigned_name: assigned_name.to_string(),
-            functions: SeqMap::default(),
         }
     }
 
@@ -1117,44 +1174,6 @@ impl StructType {
 
     pub fn name(&self) -> &Node {
         &self.name
-    }
-
-    pub fn add_external_member_function_changed(
-        &mut self,
-        external_func: ExternalFunctionDefinitionRef,
-    ) -> Result<(), SeqMapError> {
-        let name = external_func.assigned_name.clone();
-        let func = Function::External(external_func);
-        self.functions.insert(name, func.into())?;
-        Ok(())
-    }
-
-    pub fn fetch_external_function_id(&self, function_name: &str) -> ExternalFunctionId {
-        let resolved_function_ref = self
-            .get_member_function(function_name)
-            .expect("must have external function");
-
-        match &**resolved_function_ref {
-            Function::Internal(_internal_fn) => {
-                panic!("expected external fn, but found internal")
-            }
-            Function::External(external_fn) => external_fn.id,
-        }
-    }
-
-    pub fn get_member_function(&self, function_name: &str) -> Option<&FunctionRef> {
-        self.functions.get(&function_name.to_string())
-    }
-
-    pub fn get_internal_member_function(
-        &self,
-        function_name: &str,
-    ) -> Option<InternalFunctionDefinitionRef> {
-        let func = self.functions.get(&function_name.to_string())?;
-        match &**func {
-            Function::Internal(fn_def) => Some(fn_def.clone()),
-            _ => None,
-        }
     }
 }
 
