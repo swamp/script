@@ -457,6 +457,29 @@ impl Debug for ExternalFunctionDefinition {
 
 pub type ExternalFunctionDefinitionRef = Rc<crate::ExternalFunctionDefinition>;
 
+//#[derive(Debug)]
+pub struct IntrinsicFunctionDefinition {
+    pub name: String,
+    pub signature: Signature,
+    pub intrinsic: IntrinsicFunction,
+}
+
+impl Debug for IntrinsicFunctionDefinition {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}\n{:?}", self.intrinsic, self.signature)
+    }
+}
+
+impl PartialEq<Self> for IntrinsicFunctionDefinition {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+
+impl Eq for IntrinsicFunctionDefinition {}
+
+pub type IntrinsicFunctionDefinitionRef = Rc<IntrinsicFunctionDefinition>;
+
 #[derive(Debug)]
 pub struct Variable {
     pub name: Node,
@@ -763,9 +786,12 @@ pub enum PostfixKind {
     StringIndex(Expression),
     StringRangeIndex(Range),
     MapIndex(MapTypeRef, Expression),
-    RustTypeIndexRef(ExternalTypeRef, Expression),
+
+    RustTypeIndexRef(ExternalTypeRef, Expression), // TODO: Remove this
+
     MemberCall(FunctionRef, Vec<ArgumentExpressionOrLocation>),
     FunctionCall(Vec<ArgumentExpressionOrLocation>),
+
     OptionUnwrap, // ? operator
     NoneCoalesce(Expression),
 
@@ -774,43 +800,6 @@ pub enum PostfixKind {
     SparseAdd(Box<Expression>),
     SparseRemove(Box<Expression>),
     SparseAccess(Box<Expression>),
-
-    ArrayRemoveIndex(Box<Expression>),
-    ArrayClear,
-
-    // Map built in
-    MapRemove(Box<Expression>, MapTypeRef),
-    MapHas(Box<Expression>),
-
-    // Integer built in
-    IntAbs,
-    IntRnd,
-    IntToFloat,
-    IntClamp(Box<Expression>, Box<Expression>),
-    IntMin(Box<Expression>),
-    IntMax(Box<Expression>),
-
-    // Float built in
-    FloatRound,
-    FloatFloor,
-    FloatSign,
-    FloatAbs,
-    FloatRnd,
-    FloatCos,
-    FloatSin,
-    FloatAcos,
-    FloatAsin,
-    FloatAtan2(Box<Expression>),
-    FloatSqrt,
-    FloatClamp(Box<Expression>, Box<Expression>),
-    FloatMin(Box<Expression>),
-    FloatMax(Box<Expression>),
-
-    // String built in
-    StringLen,
-
-    // Tuple built in
-    Tuple2FloatMagnitude,
 }
 
 #[derive(Debug)]
@@ -946,8 +935,6 @@ pub enum ExpressionKind {
     // Access Lookup values
     ConstantAccess(ConstantRef),
     VariableAccess(VariableRef),
-
-    // ----
     InternalFunctionAccess(InternalFunctionDefinitionRef),
     ExternalFunctionAccess(ExternalFunctionDefinitionRef),
 
@@ -965,12 +952,11 @@ pub enum ExpressionKind {
     InterpolatedString(Vec<StringPart>),
 
     // Constructing
-    VariableDefinition(VariableRef, Box<MutOrImmutableExpression>), // First time assignment
-    VariableReassignment(VariableRef, Box<MutOrImmutableExpression>),
 
+    // Literals
     StructInstantiation(StructInstantiation), // TODO: Should move to Literal
-
     Literal(Literal),
+
     Option(Option<Box<Expression>>), // Wrapping an expression in `Some()`
     Range(Box<Expression>, Box<Expression>, RangeMode),
 
@@ -987,11 +973,12 @@ pub enum ExpressionKind {
     Match(Match),
     Guard(Vec<Guard>),
     If(BooleanExpression, Box<Expression>, Option<Box<Expression>>),
-
     When(Vec<WhenBinding>, Box<Expression>, Option<Box<Expression>>),
 
+    // Variable definition and assignment
+    VariableDefinition(VariableRef, Box<MutOrImmutableExpression>), // First time assignment
+    VariableReassignment(VariableRef, Box<MutOrImmutableExpression>),
     TupleDestructuring(Vec<VariableRef>, TupleTypeRef, Box<Expression>),
-
     Assignment(Box<SingleMutLocationExpression>, Box<Expression>),
     AssignmentSlice(Box<SliceLocationExpression>, Box<Expression>),
     CompoundAssignment(
@@ -1005,12 +992,12 @@ pub enum ExpressionKind {
     // --------------------------------------------------------------------
 
     // array built in
-    ArrayExtend(SingleMutLocationExpression, Box<Expression>), // Extends an array with another array
-    ArrayPush(SingleMutLocationExpression, Box<Expression>),   // Adds an item to an array
+    ArrayExtend(SingleMutLocationExpression, Box<Expression>), // Extends an array with another array. TODO: probably intrinsic
+    ArrayPush(SingleMutLocationExpression, Box<Expression>), // Adds an item to an array TODO: probably intrinsic
 
     // To create rust types
-    RustValueInstantiation(ExternalTypeRef, Type), // type parameter (item type)
-    IntrinsicCall(IntrinsicFunction, Vec<Expression>),
+    RustValueInstantiation(ExternalTypeRef, Type), // type parameter (item type) // TODO: Remove this
+    IntrinsicCall(IntrinsicFunction, Vec<ArgumentExpressionOrLocation>),
 }
 
 #[derive(Debug)]
@@ -1107,7 +1094,14 @@ pub struct AssociatedImpls {
     pub functions: SeqMap<TypeNumber, Impl>,
 }
 
+impl Default for AssociatedImpls {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AssociatedImpls {
+    #[must_use]
     pub fn new() -> AssociatedImpls {
         Self {
             functions: SeqMap::default(),
@@ -1116,6 +1110,7 @@ impl AssociatedImpls {
 }
 
 impl AssociatedImpls {
+    #[must_use]
     pub fn get_member_function(&self, ty: &Type, function_name: &str) -> Option<&FunctionRef> {
         let maybe_found_impl = self.functions.get(&ty.type_number());
         if let Some(found_impl) = maybe_found_impl {
@@ -1126,6 +1121,7 @@ impl AssociatedImpls {
         None
     }
 
+    #[must_use]
     pub fn get_internal_member_function(
         &self,
         ty: &Type,
@@ -1134,12 +1130,13 @@ impl AssociatedImpls {
         if let Some(func) = self.get_member_function(ty, function_name) {
             match &**func {
                 Function::Internal(fn_def) => Some(fn_def.clone()),
-                _ => None,
+                Function::External(_) => None,
             };
         }
         None
     }
 
+    #[must_use]
     pub fn fetch_external_function_id(
         &self,
         ty: &Type,
@@ -1148,7 +1145,7 @@ impl AssociatedImpls {
         if let Some(func) = self.get_member_function(ty, function_name) {
             match &**func {
                 Function::External(fn_def) => Some(fn_def.clone()),
-                _ => None,
+                Function::Internal(_) => None,
             };
         }
         None
@@ -1168,6 +1165,7 @@ impl Debug for StructType {
 }
 
 impl StructType {
+    #[must_use]
     pub fn new(name: Node, assigned_name: &str, anon_struct_type: AnonymousStructType) -> Self {
         Self {
             anon_struct_type,
@@ -1182,6 +1180,7 @@ impl StructType {
             .get_index(&field_name.to_string())
     }
 
+    #[must_use]
     pub fn name(&self) -> &Node {
         &self.name
     }
@@ -1196,6 +1195,7 @@ pub struct OptionType {
 
 pub type ArrayTypeRef = Rc<ArrayType>;
 
+#[must_use]
 pub fn same_array_ref(a: &ArrayTypeRef, b: &ArrayTypeRef) -> bool {
     Rc::ptr_eq(a, b)
 }

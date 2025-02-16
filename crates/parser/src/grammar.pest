@@ -409,7 +409,6 @@ parenthesized = { "(" ~ expression ~ ")" }
 
 term = {
     static_member_reference
-  | intrinsic_call
   | static_function_reference
   | enum_literal
   | parenthesized
@@ -420,8 +419,6 @@ term = {
   | struct_literal
   | interpolated_string
 }
-
-intrinsic_call = { "__intrinsic" ~ identifier ~ function_call_args }
 
 identifier_reference = { identifier }
 // variable or function

@@ -543,7 +543,7 @@ impl<'a, C> Interpreter<'a, C> {
         Ok(var_value)
     }
 
-    fn evaluate_args(
+    fn evaluate_arguments(
         &mut self,
         args: &[ArgumentExpressionOrLocation],
     ) -> Result<Vec<VariableValue>, ExecuteError> {
@@ -1375,6 +1375,290 @@ impl<'a, C> Interpreter<'a, C> {
         Ok(v)
     }
 
+    /*
+    fn eval_intrinsic_extra() {
+                   PostfixKind::ArrayRemoveIndex(usize_index_expression) => {
+                       let index_val = self.evaluate_expression(usize_index_expression)?;
+                       let Value::Int(index) = index_val else {
+                           return Err(self.create_err(ExecuteErrorKind::ArgumentIsNotMutable, node));
+                       };
+
+                       if let Value::Array(_type_id, ref mut vector) = &mut *value_ref.borrow_mut() {
+                           vector.remove(index as usize);
+                       } else {
+                           Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, node))?;
+                       }
+
+                       value_ref.borrow().clone()
+                   }
+
+                        PostfixKind::ArrayClear => {
+                       if let Value::Array(_type_id, ref mut vector) = &mut *value_ref.borrow_mut() {
+                           vector.clear();
+                       } else {
+                           Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, node))?;
+                       }
+                       Value::Unit
+                   }
+
+                   PostfixKind::MapHas(index_expr) => {
+                       let index_val = self.evaluate_expression(index_expr)?;
+
+                       if let Value::Map(_type_id, ref seq_map) = value_ref.borrow().clone() {
+                           let has_key = seq_map.contains_key(&index_val);
+                           Value::Bool(has_key)
+                       } else {
+                           return Err(self.create_err(ExecuteErrorKind::NotAMap, node));
+                       }
+                   }
+
+                   PostfixKind::MapRemove(index_expr, _map_type_ref) => {
+                       let index_val = self.evaluate_expression(&index_expr)?;
+
+                       let result = {
+                           let mut borrowed = value_ref.borrow_mut();
+                           if let Value::Map(_type_id, ref mut seq_map) = &mut *borrowed {
+                               let x = seq_map.remove(&index_val);
+                               x.map_or_else(|| Value::Option(None), |v| Value::Option(Some(v.clone())))
+                           } else {
+                               return Err(self.create_err(ExecuteErrorKind::NotAMap, node));
+                           }
+                       };
+                       result
+                   }
+
+                        PostfixKind::FloatRound => {
+                       if let Value::Float(f) = value_ref.borrow().clone() {
+                           Value::Int(f.round().into())
+                       } else {
+                           return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
+                       }
+                   }
+                   PostfixKind::FloatFloor => {
+                       if let Value::Float(f) = value_ref.borrow().clone() {
+                           Value::Int(f.floor().into())
+                       } else {
+                           return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
+                       }
+                   }
+
+                   PostfixKind::FloatSign => {
+                       if let Value::Float(f) = value_ref.borrow().clone() {
+                           let signum = if f.inner() < 0 {
+                               -1
+                           } else if f.inner() > 0 {
+                               1
+                           } else {
+                               0
+                           };
+                           Value::Float(Fp::from(signum as i16))
+                       } else {
+                           return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
+                       }
+                   }
+                   PostfixKind::FloatAbs => {
+                       if let Value::Float(f) = value_ref.borrow().clone() {
+                           Value::Float(f.abs())
+                       } else {
+                           return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
+                       }
+                   }
+
+                   PostfixKind::FloatCos => {
+                       if let Value::Float(f) = value_ref.borrow().clone() {
+                           Value::Float(f.cos())
+                       } else {
+                           return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
+                       }
+                   }
+
+                   PostfixKind::FloatAcos => {
+                       if let Value::Float(f) = value_ref.borrow().clone() {
+                           Value::Float(f.acos())
+                       } else {
+                           return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
+                       }
+                   }
+
+                   PostfixKind::FloatSin => {
+                       if let Value::Float(f) = value_ref.borrow().clone() {
+                           Value::Float(f.sin())
+                       } else {
+                           return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
+                       }
+                   }
+
+                   PostfixKind::FloatAsin => {
+                       if let Value::Float(f) = value_ref.borrow().clone() {
+                           Value::Float(f.asin())
+                       } else {
+                           return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
+                       }
+                   }
+
+                   PostfixKind::FloatSqrt => {
+                       if let Value::Float(f) = value_ref.borrow().clone() {
+                           Value::Float(f.sqrt())
+                       } else {
+                           return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
+                       }
+                   }
+
+                   PostfixKind::FloatMin(min) => {
+                       let min_value = self.evaluate_expression(min)?;
+                       if let (Value::Float(f), Value::Float(min_f)) =
+                           (value_ref.borrow().clone(), min_value)
+                       {
+                           Value::Float(f.min(min_f))
+                       } else {
+                           return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
+                       }
+                   }
+
+                   PostfixKind::FloatMax(max) => {
+                       let max_value = self.evaluate_expression(max)?;
+                       if let (Value::Float(f), Value::Float(max_f)) =
+                           (value_ref.borrow().clone(), max_value)
+                       {
+                           Value::Float(f.max(max_f))
+                       } else {
+                           return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
+                       }
+                   }
+
+                   PostfixKind::FloatAtan2(x) => {
+                       let x_value = self.evaluate_expression(x)?;
+                       if let (Value::Float(_y_f), Value::Float(_x_f)) =
+                           (value_ref.borrow().clone(), x_value)
+                       {
+                           Value::Float(Fp::from(-9999)) //y_f.atan2(x_f)) // TODO: Implement atan2
+                       } else {
+                           return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
+                       }
+                   }
+
+                   PostfixKind::FloatClamp(min, max) => {
+                       let min_value = self.evaluate_expression(min)?;
+                       let max_value = self.evaluate_expression(max)?;
+                       if let (Value::Float(f), Value::Float(min_f), Value::Float(max_f)) =
+                           (value_ref.borrow().clone(), min_value, max_value)
+                       {
+                           Value::Float(f.clamp(min_f, max_f))
+                       } else {
+                           return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
+                       }
+                   }
+
+                   PostfixKind::FloatRnd => {
+                       if let Value::Float(f) = value_ref.borrow().clone() {
+                           let new_raw = squirrel_prng::squirrel_noise5(f.inner() as u32, 0);
+                           Value::Int(new_raw as i32)
+                       } else {
+                           return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
+                       }
+                   }
+
+                   PostfixKind::IntAbs => {
+                       if let Value::Int(i) = value_ref.borrow().clone() {
+                           Value::Int(i.abs())
+                       } else {
+                           return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
+                       }
+                   }
+
+                   PostfixKind::IntClamp(min, max) => {
+                       let min_value = self.evaluate_expression(min)?;
+                       let max_value = self.evaluate_expression(max)?;
+                       if let (Value::Int(i), Value::Int(min_i), Value::Int(max_i)) =
+                           (value_ref.borrow().clone(), min_value, max_value)
+                       {
+                           Value::Int(i.clamp(min_i, max_i))
+                       } else {
+                           return Err(self.create_err(ExecuteErrorKind::ExpectedInt, node));
+                       }
+                   }
+
+                   PostfixKind::IntMin(max) => {
+                       let max_value = self.evaluate_expression(max)?;
+                       if let (Value::Int(i), Value::Int(min_i)) = (value_ref.borrow().clone(), max_value)
+                       {
+                           Value::Int(i.min(min_i))
+                       } else {
+                           return Err(self.create_err(ExecuteErrorKind::ExpectedInt, node));
+                       }
+                   }
+
+                   PostfixKind::IntMax(max) => {
+                       let max_value = self.evaluate_expression(max)?;
+                       if let (Value::Int(i), Value::Int(max_i)) = (value_ref.borrow().clone(), max_value)
+                       {
+                           Value::Int(i.max(max_i))
+                       } else {
+                           return Err(self.create_err(ExecuteErrorKind::ExpectedInt, node));
+                       }
+                   }
+
+                   PostfixKind::IntRnd => {
+                       if let Value::Int(i) = value_ref.borrow().clone() {
+                           Value::Int(squirrel_prng::squirrel_noise5(i as u32, 0) as i32)
+                       } else {
+                           return Err(self.create_err(ExecuteErrorKind::ExpectedInt, node));
+                       }
+                   }
+
+                   PostfixKind::IntToFloat => {
+                       if let Value::Int(i) = value_ref.borrow().clone() {
+                           Value::Float(Fp::from(i as i16))
+                       } else {
+                           return Err(self.create_err(ExecuteErrorKind::ExpectedInt, node));
+                       }
+                   }
+
+                   PostfixKind::StringLen => {
+                       if let Value::String(s) = value_ref.borrow().clone() {
+                           Value::Int(s.len().try_into().expect("string len overflow"))
+                       } else {
+                           return Err(self.create_err(ExecuteErrorKind::ExpectedString, node));
+                       }
+                   }
+
+                   PostfixKind::Tuple2FloatMagnitude => {
+                       if let Value::Tuple(_tuple_ref, values) = value_ref.borrow().clone() {
+                           if values.len() != 2 {
+                               return Err(self.create_err(
+                                   ExecuteErrorKind::WrongNumberOfArguments(2, values.len()),
+                                   &node,
+                               ));
+                           }
+                           match (
+                               values[0].as_ref().borrow().clone(),
+                               values[1].as_ref().borrow().clone(),
+                           ) {
+                               (Value::Float(a), Value::Float(b)) => {
+                                   let a_raw: i64 = a.inner() as i64;
+                                   let b_raw: i64 = b.inner() as i64;
+
+                                   let i64_magnitude = i64_sqrt(a_raw * a_raw + b_raw * b_raw);
+
+                                   let new_fp = Fp::from_raw(
+                                       i32::try_from(i64_magnitude).expect("wrong with i64_sqrt"),
+                                   );
+                                   Value::Float(new_fp)
+                               }
+                               _ => {
+                                   return Err(
+                                       self.create_err(ExecuteErrorKind::ExpectedTwoFloatTuple, node)
+                                   );
+                               }
+                           }
+                       } else {
+                           return Err(self.create_err(ExecuteErrorKind::ExpectedTwoFloatTuple, node));
+                       }
+                   }
+
+        }
+        */
+
     #[allow(clippy::too_many_lines)]
     fn eval_internal_postfix(
         &mut self,
@@ -1383,56 +1667,6 @@ impl<'a, C> Interpreter<'a, C> {
     ) -> Result<Value, ExecuteError> {
         let node = &resolved_postfix.node;
         let val = match &resolved_postfix.kind {
-            PostfixKind::ArrayRemoveIndex(usize_index_expression) => {
-                let index_val = self.evaluate_expression(usize_index_expression)?;
-                let Value::Int(index) = index_val else {
-                    return Err(self.create_err(ExecuteErrorKind::ArgumentIsNotMutable, node));
-                };
-
-                if let Value::Array(_type_id, ref mut vector) = &mut *value_ref.borrow_mut() {
-                    vector.remove(index as usize);
-                } else {
-                    Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, node))?;
-                }
-
-                value_ref.borrow().clone()
-            }
-
-            PostfixKind::ArrayClear => {
-                if let Value::Array(_type_id, ref mut vector) = &mut *value_ref.borrow_mut() {
-                    vector.clear();
-                } else {
-                    Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, node))?;
-                }
-                Value::Unit
-            }
-
-            PostfixKind::MapHas(index_expr) => {
-                let index_val = self.evaluate_expression(index_expr)?;
-
-                if let Value::Map(_type_id, ref seq_map) = value_ref.borrow().clone() {
-                    let has_key = seq_map.contains_key(&index_val);
-                    Value::Bool(has_key)
-                } else {
-                    return Err(self.create_err(ExecuteErrorKind::NotAMap, node));
-                }
-            }
-
-            PostfixKind::MapRemove(index_expr, _map_type_ref) => {
-                let index_val = self.evaluate_expression(&index_expr)?;
-
-                let result = {
-                    let mut borrowed = value_ref.borrow_mut();
-                    if let Value::Map(_type_id, ref mut seq_map) = &mut *borrowed {
-                        let x = seq_map.remove(&index_val);
-                        x.map_or_else(|| Value::Option(None), |v| Value::Option(Some(v.clone())))
-                    } else {
-                        return Err(self.create_err(ExecuteErrorKind::NotAMap, node));
-                    }
-                };
-                result
-            }
-
             PostfixKind::SparseAdd(value_expression) => {
                 let borrowed = value_ref.borrow();
 
@@ -1477,235 +1711,6 @@ impl<'a, C> Interpreter<'a, C> {
                     }
                 } else {
                     return Err(self.create_err(ExecuteErrorKind::NotSparseId, node));
-                }
-            }
-
-            PostfixKind::FloatRound => {
-                if let Value::Float(f) = value_ref.borrow().clone() {
-                    Value::Int(f.round().into())
-                } else {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
-                }
-            }
-            PostfixKind::FloatFloor => {
-                if let Value::Float(f) = value_ref.borrow().clone() {
-                    Value::Int(f.floor().into())
-                } else {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
-                }
-            }
-
-            PostfixKind::FloatSign => {
-                if let Value::Float(f) = value_ref.borrow().clone() {
-                    let signum = if f.inner() < 0 {
-                        -1
-                    } else if f.inner() > 0 {
-                        1
-                    } else {
-                        0
-                    };
-                    Value::Float(Fp::from(signum as i16))
-                } else {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
-                }
-            }
-            PostfixKind::FloatAbs => {
-                if let Value::Float(f) = value_ref.borrow().clone() {
-                    Value::Float(f.abs())
-                } else {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
-                }
-            }
-
-            PostfixKind::FloatCos => {
-                if let Value::Float(f) = value_ref.borrow().clone() {
-                    Value::Float(f.cos())
-                } else {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
-                }
-            }
-
-            PostfixKind::FloatAcos => {
-                if let Value::Float(f) = value_ref.borrow().clone() {
-                    Value::Float(f.acos())
-                } else {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
-                }
-            }
-
-            PostfixKind::FloatSin => {
-                if let Value::Float(f) = value_ref.borrow().clone() {
-                    Value::Float(f.sin())
-                } else {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
-                }
-            }
-
-            PostfixKind::FloatAsin => {
-                if let Value::Float(f) = value_ref.borrow().clone() {
-                    Value::Float(f.asin())
-                } else {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
-                }
-            }
-
-            PostfixKind::FloatSqrt => {
-                if let Value::Float(f) = value_ref.borrow().clone() {
-                    Value::Float(f.sqrt())
-                } else {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
-                }
-            }
-
-            PostfixKind::FloatMin(min) => {
-                let min_value = self.evaluate_expression(min)?;
-                if let (Value::Float(f), Value::Float(min_f)) =
-                    (value_ref.borrow().clone(), min_value)
-                {
-                    Value::Float(f.min(min_f))
-                } else {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
-                }
-            }
-
-            PostfixKind::FloatMax(max) => {
-                let max_value = self.evaluate_expression(max)?;
-                if let (Value::Float(f), Value::Float(max_f)) =
-                    (value_ref.borrow().clone(), max_value)
-                {
-                    Value::Float(f.max(max_f))
-                } else {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
-                }
-            }
-
-            PostfixKind::FloatAtan2(x) => {
-                let x_value = self.evaluate_expression(x)?;
-                if let (Value::Float(_y_f), Value::Float(_x_f)) =
-                    (value_ref.borrow().clone(), x_value)
-                {
-                    Value::Float(Fp::from(-9999)) //y_f.atan2(x_f)) // TODO: Implement atan2
-                } else {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
-                }
-            }
-
-            PostfixKind::FloatClamp(min, max) => {
-                let min_value = self.evaluate_expression(min)?;
-                let max_value = self.evaluate_expression(max)?;
-                if let (Value::Float(f), Value::Float(min_f), Value::Float(max_f)) =
-                    (value_ref.borrow().clone(), min_value, max_value)
-                {
-                    Value::Float(f.clamp(min_f, max_f))
-                } else {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
-                }
-            }
-
-            PostfixKind::FloatRnd => {
-                if let Value::Float(f) = value_ref.borrow().clone() {
-                    let new_raw = squirrel_prng::squirrel_noise5(f.inner() as u32, 0);
-                    Value::Int(new_raw as i32)
-                } else {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
-                }
-            }
-
-            PostfixKind::IntAbs => {
-                if let Value::Int(i) = value_ref.borrow().clone() {
-                    Value::Int(i.abs())
-                } else {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
-                }
-            }
-
-            PostfixKind::IntClamp(min, max) => {
-                let min_value = self.evaluate_expression(min)?;
-                let max_value = self.evaluate_expression(max)?;
-                if let (Value::Int(i), Value::Int(min_i), Value::Int(max_i)) =
-                    (value_ref.borrow().clone(), min_value, max_value)
-                {
-                    Value::Int(i.clamp(min_i, max_i))
-                } else {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedInt, node));
-                }
-            }
-
-            PostfixKind::IntMin(max) => {
-                let max_value = self.evaluate_expression(max)?;
-                if let (Value::Int(i), Value::Int(min_i)) = (value_ref.borrow().clone(), max_value)
-                {
-                    Value::Int(i.min(min_i))
-                } else {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedInt, node));
-                }
-            }
-
-            PostfixKind::IntMax(max) => {
-                let max_value = self.evaluate_expression(max)?;
-                if let (Value::Int(i), Value::Int(max_i)) = (value_ref.borrow().clone(), max_value)
-                {
-                    Value::Int(i.max(max_i))
-                } else {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedInt, node));
-                }
-            }
-
-            PostfixKind::IntRnd => {
-                if let Value::Int(i) = value_ref.borrow().clone() {
-                    Value::Int(squirrel_prng::squirrel_noise5(i as u32, 0) as i32)
-                } else {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedInt, node));
-                }
-            }
-
-            PostfixKind::IntToFloat => {
-                if let Value::Int(i) = value_ref.borrow().clone() {
-                    Value::Float(Fp::from(i as i16))
-                } else {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedInt, node));
-                }
-            }
-
-            PostfixKind::StringLen => {
-                if let Value::String(s) = value_ref.borrow().clone() {
-                    Value::Int(s.len().try_into().expect("string len overflow"))
-                } else {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedString, node));
-                }
-            }
-
-            PostfixKind::Tuple2FloatMagnitude => {
-                if let Value::Tuple(_tuple_ref, values) = value_ref.borrow().clone() {
-                    if values.len() != 2 {
-                        return Err(self.create_err(
-                            ExecuteErrorKind::WrongNumberOfArguments(2, values.len()),
-                            &node,
-                        ));
-                    }
-                    match (
-                        values[0].as_ref().borrow().clone(),
-                        values[1].as_ref().borrow().clone(),
-                    ) {
-                        (Value::Float(a), Value::Float(b)) => {
-                            let a_raw: i64 = a.inner() as i64;
-                            let b_raw: i64 = b.inner() as i64;
-
-                            let i64_magnitude = i64_sqrt(a_raw * a_raw + b_raw * b_raw);
-
-                            let new_fp = Fp::from_raw(
-                                i32::try_from(i64_magnitude).expect("wrong with i64_sqrt"),
-                            );
-                            Value::Float(new_fp)
-                        }
-                        _ => {
-                            return Err(
-                                self.create_err(ExecuteErrorKind::ExpectedTwoFloatTuple, node)
-                            );
-                        }
-                    }
-                } else {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedTwoFloatTuple, node));
                 }
             }
 
@@ -1916,7 +1921,7 @@ impl<'a, C> Interpreter<'a, C> {
             panic!("wrong number of arguments")
         }
 
-        let resolved_arguments = self.evaluate_args(&arguments)?;
+        let resolved_arguments = self.evaluate_arguments(&arguments)?;
 
         let result_val = match &resolved_fn {
             Function::Internal(internal_function) => {
@@ -1964,7 +1969,7 @@ impl<'a, C> Interpreter<'a, C> {
 
         let mut member_call_arguments = Vec::new();
         member_call_arguments.push(self_var_value); // Add self as first argument
-        member_call_arguments.extend(self.evaluate_args(&arguments)?);
+        member_call_arguments.extend(self.evaluate_arguments(&arguments)?);
 
         // Check total number of parameters (including self)
         if member_call_arguments.len() != parameters.len() {
@@ -2545,26 +2550,27 @@ impl<'a, C> Interpreter<'a, C> {
         &mut self,
         node: &Node,
         intrinsic_func: &IntrinsicFunction,
-        expressions: &[Expression],
+        arguments: &[ArgumentExpressionOrLocation],
     ) -> Result<Value, ExecuteError> {
-        let values = self.evaluate_expressions(expressions)?;
+        let values = self.evaluate_arguments(arguments)?;
+        let self_value = values[0].to_value();
         let v = match intrinsic_func {
             IntrinsicFunction::FloatFloor => {
-                if let Value::Float(x) = values[0] {
+                if let Value::Float(x) = self_value {
                     Value::Int(x.into())
                 } else {
                     return Err(self.create_err(ExecuteErrorKind::InvalidIntrinsic, node));
                 }
             }
             IntrinsicFunction::FloatSqrt => {
-                if let Value::Float(fp) = values[0] {
+                if let Value::Float(fp) = self_value {
                     Value::Float(fp.sqrt())
                 } else {
                     return Err(self.create_err(ExecuteErrorKind::InvalidIntrinsic, node));
                 }
             }
             IntrinsicFunction::FloatRound => {
-                if let Value::Float(fp) = values[0] {
+                if let Value::Float(fp) = self_value {
                     Value::Float(fp.round())
                 } else {
                     return Err(self.create_err(ExecuteErrorKind::InvalidIntrinsic, node));

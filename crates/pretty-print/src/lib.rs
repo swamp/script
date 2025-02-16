@@ -360,36 +360,6 @@ impl ModulesDisplay<'_> {
             PostfixKind::SparseAdd(_) => todo!(),
             PostfixKind::SparseRemove(_) => todo!(),
             PostfixKind::SparseAccess(_) => todo!(),
-            PostfixKind::ArrayRemoveIndex(_) => todo!(),
-            PostfixKind::ArrayClear => todo!(),
-            PostfixKind::MapRemove(_, _) => todo!(),
-            PostfixKind::MapHas(_) => todo!(),
-            PostfixKind::IntAbs => todo!(),
-            PostfixKind::IntRnd => todo!(),
-            PostfixKind::IntToFloat => {
-                write!(f, ".to_float()")
-            }
-            PostfixKind::IntClamp(_, _) => todo!(),
-            PostfixKind::IntMin(_) => todo!(),
-            PostfixKind::IntMax(_) => todo!(),
-            PostfixKind::FloatRound => {
-                write!(f, ".round()")
-            }
-            PostfixKind::FloatFloor => write!(f, ".floor()"),
-            PostfixKind::FloatSign => todo!(),
-            PostfixKind::FloatAbs => todo!(),
-            PostfixKind::FloatRnd => todo!(),
-            PostfixKind::FloatCos => todo!(),
-            PostfixKind::FloatSin => todo!(),
-            PostfixKind::FloatAcos => todo!(),
-            PostfixKind::FloatAsin => todo!(),
-            PostfixKind::FloatAtan2(_) => todo!(),
-            PostfixKind::FloatSqrt => todo!(),
-            PostfixKind::FloatClamp(_, _) => todo!(),
-            PostfixKind::FloatMin(_) => todo!(),
-            PostfixKind::FloatMax(_) => todo!(),
-            PostfixKind::StringLen => todo!(),
-            PostfixKind::Tuple2FloatMagnitude => write!(f, ".magnitude()"),
         }
     }
 

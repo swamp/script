@@ -1641,7 +1641,6 @@ impl AstParser {
         let sub = &Self::right_alternative(pair2)?;
         match sub.as_rule() {
             Rule::static_member_reference => self.parse_static_member_reference(sub),
-            Rule::intrinsic_call => self.parse_intrinsic_call(sub),
             Rule::enum_literal => {
                 Ok(self.create_expr(ExpressionKind::Literal(self.parse_enum_literal(sub)?), sub))
             }
@@ -2587,15 +2586,6 @@ impl AstParser {
                 pair,
             );
         }
-        Ok(expr)
-    }
-
-    fn parse_intrinsic_call(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
-        let mut inner = pair.clone().into_inner();
-        let name = self.expect_identifier_next(&mut inner)?;
-
-        let args = self.parse_function_call_arguments(&inner.next().unwrap())?;
-        let expr = self.create_expr(ExpressionKind::IntrinsicCall(name.0, args), &pair);
         Ok(expr)
     }
 }

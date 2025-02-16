@@ -24,13 +24,12 @@ use std::mem::take;
 use std::num::{ParseFloatError, ParseIntError};
 use std::rc::Rc;
 
-use swamp_script_ast::MutableOrImmutableExpression;
 use swamp_script_modules::modules::Modules;
 use swamp_script_modules::ns::{ModuleNamespace, ModuleNamespaceRef};
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
-    ArgumentExpressionOrLocation, IntrinsicFunction, IteratorYieldType, LocationAccess,
-    LocationAccessKind, MutOrImmutableExpression, NormalPattern, Postfix, PostfixKind, RangeMode,
+    ArgumentExpressionOrLocation, IteratorYieldType, LocationAccess, LocationAccessKind,
+    MutOrImmutableExpression, NormalPattern, Postfix, PostfixKind, RangeMode,
     SingleLocationExpression, SingleLocationExpressionKind, SingleMutLocationExpression,
     TypeWithMut, WhenBinding,
 };
@@ -471,6 +470,41 @@ impl<'a> Resolver<'a> {
         let expression = match &ast_expression.kind {
             // Lookups
             swamp_script_ast::ExpressionKind::PostfixChain(postfix_chain) => {
+                match postfix_chain.base.kind {
+                    swamp_script_ast::ExpressionKind::IdentifierReference(identifier) => {
+                        let text = self.get_text(&identifier.name);
+                        if let Some(check_intrinsic) =
+                            self.shared.lookup.get_intrinsic_function(text)
+                        {
+                            if postfix_chain.postfixes.len() == 1 {
+                                if let swamp_script_ast::Postfix::FunctionCall(x, arguments) =
+                                    &postfix_chain.postfixes[0]
+                                {
+                                    let analyzed_arguments = self.analyze_and_verify_parameters(
+                                        &self.to_node(&identifier.name),
+                                        &check_intrinsic.signature.parameters,
+                                        &arguments,
+                                    )?;
+                                    return Ok(self.create_expr(
+                                        ExpressionKind::IntrinsicCall(
+                                            check_intrinsic.intrinsic.clone(),
+                                            analyzed_arguments,
+                                        ),
+                                        *check_intrinsic.signature.return_type.clone(),
+                                        &identifier.name,
+                                    ));
+                                }
+                            } else {
+                                return Err(self.create_err(
+                                    ErrorKind::UnknownIntrinsic,
+                                    &ast_expression.node,
+                                ));
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+
                 self.analyze_postfix_chain(postfix_chain)?
             }
 
@@ -496,10 +530,6 @@ impl<'a> Resolver<'a> {
 
             swamp_script_ast::ExpressionKind::ConstantReference(constant_identifier) => {
                 self.analyze_constant_access(constant_identifier)?
-            }
-
-            swamp_script_ast::ExpressionKind::FunctionReference(qualified_identifier) => {
-                self.analyze_function_access(qualified_identifier)?
             }
 
             swamp_script_ast::ExpressionKind::Assignment(location, source) => {
@@ -664,9 +694,6 @@ impl<'a> Resolver<'a> {
             }
             swamp_script_ast::ExpressionKind::Guard(guard_expressions) => {
                 self.analyze_guard(&ast_expression.node, expected_type, guard_expressions)?
-            }
-            swamp_script_ast::ExpressionKind::IntrinsicCall(intrinsic_name, arguments) => {
-                self.analyze_intrinsic_call(&ast_expression.node, intrinsic_name, arguments)?
             }
         };
 
@@ -989,7 +1016,9 @@ impl<'a> Resolver<'a> {
 
                         Type::Struct(resolved_struct_ref) => {
                             let borrow = resolved_struct_ref.borrow();
-                            let subscript_fn = self.find_struct_function(resolved_struct_ref, "subscript").unwrap();
+                            let subscript_fn = self
+                                .find_struct_function(resolved_struct_ref, "subscript")
+                                .unwrap();
                             let subscript_fn =
                                 borrow.functions.get(&"subscript".to_string()).unwrap();
                             let lookup_returns = &subscript_fn.signature().return_type;
@@ -1254,47 +1283,54 @@ impl<'a> Resolver<'a> {
         Ok(resolved_parts)
     }
 
+    /*
     fn analyze_function_access(
         &self,
         function_ref_node: &swamp_script_ast::QualifiedIdentifier,
     ) -> Result<Expression, Error> {
         let path = self.get_module_path(&function_ref_node.module_path);
         let name = self.get_text(&function_ref_node.name).to_string();
-        self.shared
+
+        if let Some(intrinsic_function) = self.shared.lookup.get_intrinsic_function(&path, &name)
+        {
+            let return_type = *intrinsic_function.signature.return_type.clone();
+            let expr = self.create_expr(
+                ExpressionKind::InternalFunctionAccess(intrinsic_function.clone()),
+                return_type,
+                &function_ref_node.name,
+            );
+            return Ok(expr);
+        }
+
+        if let Some(internal_function_ref) = self.shared.lookup.get_internal_function(&path, &name)
+        {
+            let return_type = *internal_function_ref.signature.return_type.clone();
+            let expr = self.create_expr(
+                ExpressionKind::InternalFunctionAccess(internal_function_ref.clone()),
+                return_type,
+                &function_ref_node.name,
+            );
+            return Ok(expr);
+        }
+
+        if let Some(external_function_ref) = self
+            .shared
             .lookup
-            .get_internal_function(&path, &name)
-            .map_or_else(
-                || {
-                    self.shared
-                        .lookup
-                        .get_external_function_declaration(&path, &name)
-                        .map_or_else(
-                            || {
-                                Err(self.create_err(
-                                    ErrorKind::UnknownFunction,
-                                    &function_ref_node.name,
-                                ))
-                            },
-                            |external_function_ref| {
-                                Ok(self.create_expr(
-                                    ExpressionKind::ExternalFunctionAccess(
-                                        external_function_ref.clone(),
-                                    ),
-                                    *external_function_ref.signature.return_type.clone(),
-                                    &function_ref_node.name,
-                                ))
-                            },
-                        )
-                },
-                |function_ref| {
-                    Ok(self.create_expr(
-                        ExpressionKind::InternalFunctionAccess(function_ref.clone()),
-                        *function_ref.signature.return_type.clone(),
-                        &function_ref_node.name,
-                    ))
-                },
-            )
+            .get_external_function_declaration(&path, &name)
+        {
+            let return_type = *external_function_ref.signature.return_type.clone();
+            let expr = self.create_expr(
+                ExpressionKind::ExternalFunctionAccess(external_function_ref.clone()),
+                return_type,
+                &function_ref_node.name,
+            );
+            return Ok(expr);
+        }
+
+        Err(self.create_err(ErrorKind::UnknownFunction, &function_ref_node.name))
     }
+
+     */
 
     // The ast assumes it is something similar to a variable, but it can be a function reference as well.
     fn analyze_identifier_reference(
@@ -2389,29 +2425,6 @@ impl<'a> Resolver<'a> {
         Ok(postfix)
     }
 
-    fn analyze_intrinsic_call(
-        &mut self,
-        expr_node: &swamp_script_ast::Node,
-        intrinsic_function_name: &swamp_script_ast::Node,
-        arguments: &[MutableOrImmutableExpression],
-    ) -> Result<Expression, Error> {
-        let mut analyzed_arguments = Vec::new();
-        for argument in arguments {
-            let analyzed_expr = self.analyze_expression(&argument.expression, None)?;
-            analyzed_arguments.push(analyzed_expr);
-        }
-
-        let intrinsic_call = IntrinsicFunction::try_from(self.get_text(intrinsic_function_name))?;
-
-        let ffi = self.core_value_type();
-
-        Ok(self.create_expr(
-            ExpressionKind::IntrinsicCall(intrinsic_call, analyzed_arguments),
-            ffi,
-            expr_node,
-        ))
-    }
-
     fn analyze_postfix_field_call(
         &mut self,
         resolved_node: &Node,
@@ -2518,7 +2531,8 @@ impl<'a> Resolver<'a> {
     }
 
      */
-    fn find_struct_function(&self, p0: &StructTypeRef, p1: &str) -> _ {
-        self.shared.lookup.
+    fn find_struct_function(&self, p0: &StructTypeRef, p1: &str) -> Result<(), Error> {
+        //self.shared.lookup.
+        Ok(())
     }
 }

@@ -11,8 +11,8 @@ use swamp_script_modules::ns::{GenericAwareType, GenericType, GenericTypeRef, Mo
 use swamp_script_semantic::{
     AliasType, AliasTypeRef, Constant, ConstantRef, EnumType, EnumTypeRef, EnumVariantTypeRef,
     ExternalFunctionDefinition, ExternalFunctionDefinitionRef, ExternalTypeRef,
-    InternalFunctionDefinition, InternalFunctionDefinitionRef, SemanticError, StructType,
-    StructTypeRef, Type, TypeParameterName,
+    InternalFunctionDefinition, InternalFunctionDefinitionRef, IntrinsicFunctionDefinitionRef,
+    SemanticError, StructType, StructTypeRef, Type, TypeParameterName,
 };
 use swamp_script_source_map::FileId;
 use tracing::info;
@@ -34,6 +34,16 @@ pub struct NameLookup<'a> {
     pub type_parameter_scope_stack: Vec<TypeParameterScope>,
     modules: &'a mut Modules,
     //pub type_parameter_names_stack: Vec<TypeParameterNameScope>,
+}
+
+impl<'a> NameLookup<'a> {
+    pub(crate) fn get_intrinsic_function(
+        &self,
+        intrinsic_fn_name: &str,
+    ) -> Option<&IntrinsicFunctionDefinitionRef> {
+        let ns_borrow = self.own_namespace().borrow();
+        ns_borrow.get_intrinsic_function(intrinsic_fn_name)
+    }
 }
 
 impl<'a> NameLookup<'a> {

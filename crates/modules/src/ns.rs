@@ -11,8 +11,9 @@ use swamp_script_semantic::{
     AliasType, AliasTypeRef, AnonymousStructType, ConstantRef, EnumType, EnumTypeRef,
     EnumVariantType, EnumVariantTypeRef, ExternalFunctionDefinition, ExternalFunctionDefinitionRef,
     ExternalType, ExternalTypeRef, FileId, InternalFunctionDefinition,
-    InternalFunctionDefinitionRef, Node, SemanticError, StructType, StructTypeField, StructTypeRef,
-    Type, TypeParameterName,
+    InternalFunctionDefinitionRef, IntrinsicFunction, IntrinsicFunctionDefinition,
+    IntrinsicFunctionDefinitionRef, Node, SemanticError, StructType, StructTypeField,
+    StructTypeRef, Type, TypeParameterName,
 };
 use tracing::info;
 
@@ -43,6 +44,7 @@ pub struct ModuleNamespace {
     enum_types: SeqMap<String, EnumTypeRef>,
 
     internal_functions: SeqMap<String, InternalFunctionDefinitionRef>,
+    intrinsic_functions: SeqMap<String, IntrinsicFunctionDefinitionRef>,
     external_function_declarations: SeqMap<String, ExternalFunctionDefinitionRef>,
 
     namespaces: SeqMap<String, ModuleNamespaceRef>,
@@ -62,6 +64,7 @@ impl ModuleNamespace {
             build_in_rust_types: SeqMap::default(),
             enum_types: SeqMap::default(),
             internal_functions: SeqMap::default(),
+            intrinsic_functions: SeqMap::default(),
             external_function_declarations: SeqMap::default(),
             constants: SeqMap::default(),
             namespaces: SeqMap::default(),
@@ -318,6 +321,11 @@ impl ModuleNamespace {
     #[must_use]
     pub fn get_internal_function(&self, name: &str) -> Option<&InternalFunctionDefinitionRef> {
         self.internal_functions.get(&name.to_string())
+    }
+
+    #[must_use]
+    pub fn get_intrinsic_function(&self, name: &str) -> Option<&IntrinsicFunctionDefinitionRef> {
+        self.intrinsic_functions.get(&name.to_string())
     }
 
     #[must_use]

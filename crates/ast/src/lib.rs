@@ -390,7 +390,6 @@ pub enum ExpressionKind {
     // References
     IdentifierReference(Variable),
     ConstantReference(ConstantIdentifier),
-    FunctionReference(QualifiedIdentifier),
     StaticMemberFunctionReference(QualifiedTypeIdentifier, Node),
 
     // Assignments
@@ -427,9 +426,6 @@ pub enum ExpressionKind {
     StructLiteral(QualifiedTypeIdentifier, Vec<FieldExpression>, bool),
     Range(Box<Expression>, Box<Expression>, RangeMode),
     Literal(LiteralKind),
-
-    // Other
-    IntrinsicCall(Node, Vec<MutableOrImmutableExpression>),
 }
 
 #[derive(Debug, Clone)]
