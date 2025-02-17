@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use crate::ns::{ModuleNamespace, ModuleNamespaceRef};
+use crate::symtbl::{SymbolTable, SymbolTableRef};
 use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
@@ -16,9 +16,11 @@ use swamp_script_semantic::{
 pub struct Modules {
     pub modules: SeqMap<Vec<String>, ModuleRef>,
     pub constants: Vec<ConstantRef>,
-    pub auto_use: Vec<ModuleNamespaceRef>,
+    pub auto_use: Vec<SymbolTableRef>,
     pub associated_functions: AssociatedImpls,
 }
+
+
 
 impl Default for Modules {
     fn default() -> Self {
@@ -26,10 +28,33 @@ impl Default for Modules {
     }
 }
 
+type NamespacePath = Vec<String>;
+
+#[derive(Debug)]
+pub struct Namespace {
+    pub path: NamespacePath,
+    pub symbol_table: SymbolTable,
+}
+
+impl Namespace {
+    pub fn new(path: NamespacePath) -> Self {
+        Self {
+            path,
+            symbol_table: SymbolTable::default(),
+        }
+    }
+}
+
+
+#[derive(Debug)]
+pub struct NamespaceRegistry {
+    pub namespaces: SeqMap<NamespacePath, Namespace>,
+}
+
+
 pub struct Module {
-    //    pub definitions: Vec<Definition>,
     pub expression: Option<Expression>,
-    pub namespace: ModuleNamespaceRef,
+    pub namespace: Namespace,
 }
 
 impl Debug for Module {
@@ -66,13 +91,12 @@ pub fn pretty_print(
     }
 }
 
-pub type ModuleRef = Rc<RefCell<Module>>;
+pub type ModuleRef = Rc<Module>;
 
 impl Module {
     pub fn new(module_path: &[String]) -> Self {
-        let ns_ref = Rc::new(RefCell::new(ModuleNamespace::new(module_path)));
         Self {
-            namespace: ns_ref,
+            namespace: Namespace::new(NamespacePath::from(module_path)),
             expression: None,
         }
     }
@@ -90,7 +114,7 @@ impl Modules {
     pub fn add(&mut self, module: ModuleRef) {
         self.modules
             .insert(
-                module.clone().borrow().namespace.borrow().path.clone(),
+                module.clone().namespace.path.clone(),
                 module,
             )
             .expect("todo");
@@ -112,20 +136,6 @@ impl Modules {
         constant_ref
     }
 
-    pub fn add_empty_module(&mut self, module_path: &[String]) -> ModuleRef {
-        let ns_ref = Rc::new(RefCell::new(ModuleNamespace::new(module_path)));
-        let module = Module {
-            expression: None,
-            namespace: ns_ref,
-        };
-        let module_ref = Rc::new(RefCell::new(module));
-
-        self.modules
-            .insert(Vec::from(module_path), module_ref.clone())
-            .expect("todo");
-
-        module_ref
-    }
 
     #[must_use]
     pub fn contains_key(&self, module_path: &[String]) -> bool {

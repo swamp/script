@@ -70,7 +70,6 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
             let mut values = Vec::new();
             let mut offset = 0;
             for struct_field_type in struct_type_ref
-                .borrow()
                 .anon_struct_type
                 .defined_fields
                 .values()

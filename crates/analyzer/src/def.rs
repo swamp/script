@@ -6,8 +6,8 @@ use crate::err::{Error, ErrorKind};
 use crate::Resolver;
 use seq_map::SeqMap;
 use std::rc::Rc;
-use swamp_script_ast::Node;
-use swamp_script_modules::ns::GenericAwareType;
+use swamp_script_ast::{Node, QualifiedTypeIdentifier};
+use swamp_script_modules::symtbl::GenericAwareType;
 use swamp_script_semantic::{
     AliasType, AliasTypeRef, AnonymousStructType, EnumType, EnumTypeRef, EnumVariantCommon,
     EnumVariantSimpleType, EnumVariantSimpleTypeRef, EnumVariantStructType, EnumVariantTupleType,
@@ -36,11 +36,12 @@ impl<'a> Resolver<'a> {
             .collect();
 
         let mut items = Vec::new();
-
+        let found_module = self.shared.modules.get(&path).unwrap();
         if use_definition.items.is_empty() {
             let last_name = path.last().unwrap();
-            let ns = self.shared.lookup.get_namespace(&path).unwrap();
-            self.shared.lookup.add_namespace_link(last_name, ns)?;
+            self.shared
+                .lookup_table
+                .add_module_link(last_name, found_module)?;
         }
 
         for ast_items in &use_definition.items {
@@ -49,27 +50,15 @@ impl<'a> Resolver<'a> {
                     let ident_resolved_node = self.to_node(&node.0);
                     let ident = UseItem::Identifier(ident_resolved_node.clone());
                     let ident_text = self.get_text_resolved(&ident_resolved_node).to_string();
-
-                    if let Some(found_internal_function) = self
-                        .shared
-                        .lookup
-                        .get_internal_function(&path, &*ident_text)
+                    if let Some(found_symbol) =
+                        found_module.namespace.symbol_table.get_symbol(&ident_text)
                     {
                         self.shared
-                            .lookup
-                            .add_internal_function_link(&*ident_text, found_internal_function)?;
-                    } else if let Some(found_external_function_def) = self
-                        .shared
-                        .lookup
-                        .get_external_function_declaration(&path, &*ident_text)
-                    {
-                        self.shared.lookup.add_external_function_declaration_link(
-                            &*ident_text,
-                            found_external_function_def,
-                        )?;
+                            .lookup_table
+                            .add_symbol(&*ident_text, found_symbol.clone())?;
                     } else {
                         return Err(self.create_err_resolved(
-                            ErrorKind::UnknownFunction,
+                            ErrorKind::UnknownTypeReference,
                             &ident_resolved_node,
                         ));
                     }
@@ -78,19 +67,12 @@ impl<'a> Resolver<'a> {
                 swamp_script_ast::UseItem::Type(node) => {
                     let ident_resolved_node = self.to_node(&node.0);
                     let ident_text = self.get_text_resolved(&ident_resolved_node).to_string();
-                    let maybe_generic = { self.shared.lookup.get_generic(&path, &*ident_text) };
-                    if let Some(found_generic_type) = maybe_generic {
+                    if let Some(found_symbol) =
+                        found_module.namespace.symbol_table.get_symbol(&ident_text)
+                    {
                         self.shared
-                            .lookup
-                            .add_generic_link(&*ident_text, found_generic_type.clone())?
-                    } else if let Some(found_struct) =
-                        self.shared.lookup.get_struct(&path, &*ident_text)
-                    {
-                        self.shared.lookup.add_struct_link(found_struct)?;
-                    } else if let Some(found_enum) =
-                        self.shared.lookup.get_enum(&path, &*ident_text)
-                    {
-                        self.shared.lookup.add_enum_link(&found_enum)?;
+                            .lookup_table
+                            .add_symbol(&ident_text, found_symbol.clone())?;
                     } else {
                         return Err(self.create_err_resolved(
                             ErrorKind::UnknownTypeReference,
@@ -106,7 +88,10 @@ impl<'a> Resolver<'a> {
         Ok(())
     }
 
-    fn analyze_mod_definition(&self, mod_definition: &swamp_script_ast::Mod) -> Result<(), Error> {
+    fn analyze_mod_definition(
+        &mut self,
+        mod_definition: &swamp_script_ast::Mod,
+    ) -> Result<(), Error> {
         let mut nodes = Vec::new();
         let mut path = Vec::new();
         for ast_node in &mod_definition.module_path.0 {
@@ -114,14 +99,13 @@ impl<'a> Resolver<'a> {
             path.push(self.get_text(ast_node).to_string());
         }
 
-        let lookup = &self.shared.lookup;
-
         let mut nodes_copy = path.clone();
         nodes_copy.insert(0, "crate".to_string());
 
-        if let Some(found_namespace) = lookup.get_namespace(&nodes_copy) {
-            lookup.add_namespace_link(nodes_copy.last().unwrap(), found_namespace)?;
-
+        if let Some(found_namespace) = self.shared.modules.get(&nodes_copy) {
+            self.shared
+                .lookup_table
+                .add_module_link(nodes_copy.last().unwrap(), found_namespace)?;
             Ok(())
         } else {
             let first = &mod_definition.module_path.0[0];
@@ -141,12 +125,11 @@ impl<'a> Resolver<'a> {
         let enum_parent = EnumType {
             name: LocalTypeIdentifier(self.to_node(&enum_type_name.name)),
             assigned_name: self.get_text(&enum_type_name.name).to_string(),
-            module_path: self.shared.lookup.get_path(),
             number: parent_number,
             variants: SeqMap::default(),
         };
 
-        let parent_ref = self.shared.lookup.add_enum_type(enum_parent)?;
+        let parent_ref = self.shared.definition_table.add_enum_type(enum_parent)?;
 
         for (container_index_usize, ast_variant_type) in ast_variants.iter().enumerate() {
             let variant_name_node = match ast_variant_type {
@@ -247,10 +230,13 @@ impl<'a> Resolver<'a> {
         let resolved_alias = AliasType {
             name: self.to_node(&ast_alias.identifier.0),
             assigned_name: alias_name_str,
-            referenced_type: resolved_type,
+            referenced_type: Rc::new(resolved_type),
         };
 
-        let resolved_alias_ref = self.shared.lookup.add_alias(resolved_alias)?;
+        let resolved_alias_ref = self.shared.definition_table.add_alias(resolved_alias)?;
+        self.shared
+            .lookup_table
+            .add_alias_link(resolved_alias_ref.clone())?;
 
         Ok(resolved_alias_ref)
     }
@@ -317,7 +303,7 @@ impl<'a> Resolver<'a> {
                     .expect("TODO: panic message");
             }
 
-            self.shared.lookup.add_generic(
+            self.shared.definition_table.add_generic(
                 &struct_name_str,
                 parameter_names,
                 GenericAwareType::Struct(ast_struct.clone()),
@@ -329,7 +315,7 @@ impl<'a> Resolver<'a> {
 
         let struct_name_str = self.get_text(&ast_struct.identifier.name).to_string();
         let resolved_struct_ref = self.analyze_struct_type(&*struct_name_str, ast_struct)?;
-        let _ = self.shared.lookup.add_struct(resolved_struct_ref)?;
+        let _ = self.shared.definition_table.add_struct(resolved_struct_ref)?;
 
         Ok(())
     }
@@ -373,8 +359,13 @@ impl<'a> Resolver<'a> {
 
                 let function_ref = self
                     .shared
-                    .lookup
-                    .add_internal_function_ref(&function_name, internal)?;
+                    .definition_table
+                    .add_internal_function(&function_name, internal)?;
+
+                self.shared
+                    .lookup_table
+                    .add_internal_function_link(&function_name, function_ref.clone())?;
+
                 Function::Internal(function_ref)
             }
             swamp_script_ast::Function::External(ast_signature) => {
@@ -400,8 +391,12 @@ impl<'a> Resolver<'a> {
 
                 let function_ref = self
                     .shared
-                    .lookup
-                    .add_external_function_declaration_ref(external)?;
+                    .definition_table
+                    .add_external_function_declaration(external)?;
+
+                self.shared
+                    .lookup_table
+                    .add_external_function_declaration_link(function_ref.clone())?;
 
                 Function::External(function_ref)
             }
@@ -471,21 +466,23 @@ impl<'a> Resolver<'a> {
             );
         }
 
-        let (found_struct, _is_generic) = self.find_local_impl_target(attached_to_type)?;
+        let qualified = swamp_script_ast::QualifiedTypeIdentifier {
+            name: swamp_script_ast::LocalTypeIdentifier(attached_to_type.name.clone()),
+            module_path: None,
+            generic_params: vec![],
+        };
+
+        let type_to_attach_to = self.find_named_type(&qualified)?;
         let function_refs: Vec<&swamp_script_ast::Function> = functions.iter().collect();
-        self.analyze_impl_functions_to_struct(
-            &attached_to_type.name,
-            found_struct,
-            &function_refs,
-        )?;
+        self.analyze_impl_functions(&attached_to_type.name, &type_to_attach_to, &function_refs)?;
 
         Ok(())
     }
 
-    pub fn analyze_impl_functions_to_struct(
+    pub fn analyze_impl_functions(
         &mut self,
         node: &Node,
-        found_struct: StructTypeRef,
+        found_type: &Type,
         functions: &[&swamp_script_ast::Function],
     ) -> Result<(), Error> {
         for function in functions {
@@ -501,17 +498,17 @@ impl<'a> Resolver<'a> {
 
             let function_name_str = self.get_text(&function_name.name).to_string();
 
-            let resolved_function =
-                self.analyze_impl_func(function, &Type::Struct(found_struct.clone()))?;
+            let resolved_function = self.analyze_impl_func(function, &found_type)?;
+
             let resolved_function_ref = Rc::new(resolved_function);
 
             self.stop_function();
 
-            found_struct
-                .borrow_mut()
-                .functions
-                .insert(function_name_str, resolved_function_ref)
-                .map_err(|_| self.create_err(ErrorKind::DuplicateFieldName, &node))?;
+            self.shared.modules.associated_functions.add_member_function(
+                found_type,
+                &function_name_str,
+                resolved_function_ref,
+            )?;
         }
 
         Ok(())

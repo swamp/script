@@ -1,8 +1,7 @@
 use seq_map::SeqMap;
 use std::fmt::{Display, Formatter};
 use swamp_script_core::prelude::SourceMapLookup;
-use swamp_script_modules::modules::Modules;
-use swamp_script_modules::ns::ModuleNamespaceRef;
+use swamp_script_modules::modules::{ModuleRef, Modules};
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{Postfix, PostfixKind};
 use yansi::Paint;
@@ -20,8 +19,9 @@ impl Display for ModulesDisplay<'_> {
             writeln!(f, "{}", "===================".green())?;
             writeln!(f, "{:?}: ", name.green())?;
 
-            let mod_borrow = module.borrow();
-            let ns = &mod_borrow.namespace.borrow();
+            /*
+            let mod_borrow = module;
+            let ns = &mod_borrow.namespace;
             self.show_constants(f, ns.constants())?;
             self.show_aliases(f, ns.aliases())?;
             self.show_namespace_links(f, ns.namespaces())?;
@@ -30,6 +30,8 @@ impl Display for ModulesDisplay<'_> {
             self.show_enums(f, ns.enums())?;
             self.show_internal_functions(f, ns.internal_functions())?;
             self.show_external_function_declarations(f, ns.external_function_declarations())?;
+            
+             */
         }
 
         Ok(())
@@ -45,8 +47,8 @@ impl ModulesDisplay<'_> {
         structs: &SeqMap<String, StructTypeRef>,
     ) -> std::fmt::Result {
         for (_struct_name, struct_type) in structs {
-            writeln!(f, "  {}:  ", struct_type.borrow().assigned_name.yellow())?;
-            self.show_struct(f, &struct_type.borrow())?;
+            writeln!(f, "  {}:  ", struct_type.assigned_name.yellow())?;
+            self.show_struct(f, &struct_type)?;
         }
         Ok(())
     }
@@ -126,11 +128,11 @@ impl ModulesDisplay<'_> {
     pub fn show_namespace_links(
         &self,
         f: &mut Formatter<'_>,
-        aliases: &SeqMap<String, ModuleNamespaceRef>,
+        aliases: &SeqMap<String, ModuleRef>,
     ) -> std::fmt::Result {
         for (link_name, namespace) in aliases {
             write!(f, "  {} ===>  ", link_name.yellow())?;
-            self.show_namespace_basic_info(f, namespace)?;
+            self.show_module_basic_info(f, namespace)?;
             writeln!(f)?;
         }
         Ok(())
@@ -151,12 +153,12 @@ impl ModulesDisplay<'_> {
 
     /// # Errors
     ///
-    pub fn show_namespace_basic_info(
+    pub fn show_module_basic_info(
         &self,
         f: &mut Formatter<'_>,
-        ns: &ModuleNamespaceRef,
+        ns: &ModuleRef,
     ) -> std::fmt::Result {
-        self.show_module_path(f, &ns.borrow().path)
+        self.show_module_path(f, &ns.namespace.path)
     }
 
     #[allow(clippy::too_many_lines)]
@@ -339,7 +341,6 @@ impl ModulesDisplay<'_> {
         match &postfix.kind {
             PostfixKind::StructField(struct_type, field) => {
                 let name = struct_type
-                    .borrow()
                     .anon_struct_type
                     .defined_fields
                     .keys()
@@ -387,7 +388,7 @@ impl ModulesDisplay<'_> {
                 write!(f, ")")
             }
 
-            Type::Struct(struct_ref) => write!(f, "{}", struct_ref.borrow().assigned_name),
+            Type::Struct(struct_ref) => write!(f, "{}", struct_ref.assigned_name),
             Type::Map(map_ref) => {
                 write!(f, "[{}:{}]", map_ref.key_type, map_ref.value_type)
             }

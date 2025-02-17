@@ -48,8 +48,7 @@ pub fn resolve_to_existing_module(
     ast_module: &ParsedAstModule,
 ) -> Result<Option<Expression>, Error> {
     let statements = {
-        let mut name_lookup = NameLookup::new(path.clone(), modules);
-        let mut resolver = Resolver::new(state, &mut name_lookup, source_map, ast_module.file_id);
+        let mut resolver = Resolver::new(state, modules, source_map, ast_module.file_id);
 
         if !auto_use_modules.modules.is_empty() {
             let target_module = resolver.shared.lookup.own_namespace();

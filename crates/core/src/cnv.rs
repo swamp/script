@@ -25,11 +25,10 @@ pub fn overwrite_struct(
     source_struct: StructTypeRef,
     source_values: Vec<ValueRef>,
 ) {
-    let borrowed_source_struct_type = source_struct.borrow();
+    let borrowed_source_struct_type = source_struct;
     let source_anon_type = &borrowed_source_struct_type.anon_struct_type;
 
     for ((field_name, target_field_type), target_field_value) in target_struct_type_ref
-        .borrow()
         .anon_struct_type
         .defined_fields
         .iter()

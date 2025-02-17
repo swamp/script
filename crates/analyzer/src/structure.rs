@@ -113,7 +113,7 @@ impl<'a> Resolver<'a> {
         node: &swamp_script_ast::Node,
     ) -> Result<Expression, Error> {
         {
-            let borrowed_anon_type = &struct_to_instantiate.borrow().anon_struct_type;
+            let borrowed_anon_type = &struct_to_instantiate.anon_struct_type;
 
             for missing_field_name in missing_fields {
                 let field = borrowed_anon_type
@@ -153,15 +153,12 @@ impl<'a> Resolver<'a> {
 
         let (source_order_expressions, missing_fields) = self
             .analyze_anon_struct_instantiation_helper(
-                &struct_to_instantiate.borrow().anon_struct_type,
+                &struct_to_instantiate.anon_struct_type,
                 ast_fields,
             )?;
 
         if has_rest {
-            if let Some(function) = struct_to_instantiate
-                .clone()
-                .borrow()
-                .functions
+            if let Some(function) = self.shared.lookup.get_member_function("default")
                 .get(&"default".to_string())
             {
                 self.analyze_struct_init_calling_default(
@@ -202,7 +199,7 @@ impl<'a> Resolver<'a> {
             Err(self.create_err(
                 ErrorKind::MissingFieldInStructInstantiation(
                     missing_fields.to_vec(),
-                    struct_to_instantiate.borrow().anon_struct_type.clone(),
+                    struct_to_instantiate.anon_struct_type.clone(),
                 ),
                 &node,
             ))

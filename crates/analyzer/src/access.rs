@@ -25,25 +25,17 @@ impl<'a> Resolver<'a> {
         }
     }
 
+    
+    
     pub(crate) fn analyze_static_member_access(
         &mut self,
         named_type: &swamp_script_ast::QualifiedTypeIdentifier,
         member_name_node: &swamp_script_ast::Node,
     ) -> Result<Expression, Error> {
         let some_type = self.find_named_type(named_type)?;
-        if let Type::Struct(struct_type) = some_type {
-            let member_name = self.get_text(member_name_node);
-            let binding = struct_type.borrow();
-            let member_function =
-                binding
-                    .functions
-                    .get(&member_name.to_string())
-                    .ok_or_else(|| {
-                        self.create_err(ErrorKind::UnknownMemberFunction, member_name_node)
-                    })?;
-
+        let member_name = self.get_text(member_name_node);
+        if let Some(member_function) = self.shared.lookup.get_member_function(some_type, member_name) {
             let expr = Self::convert_to_function_access(member_function);
-
             Ok(expr)
         } else {
             Err(self.create_err(ErrorKind::UnknownMemberFunction, member_name_node))

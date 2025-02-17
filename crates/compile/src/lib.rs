@@ -11,7 +11,7 @@ use swamp_script_dep_loader::{
 use swamp_script_error_report::{show_script_resolve_error, ScriptResolveError};
 use swamp_script_eval_loader::analyze_modules_in_order;
 use swamp_script_modules::modules::{Module, ModuleRef};
-use swamp_script_modules::ns::ModuleNamespace;
+use swamp_script_modules::symtbl::SymbolTable;
 use swamp_script_parser::Rule::program;
 use swamp_script_semantic::{AliasType, Node, Type};
 use swamp_script_source_map::SourceMap;

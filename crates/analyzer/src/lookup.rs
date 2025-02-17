@@ -2,20 +2,17 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
+/*
 use crate::Error;
 use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::rc::Rc;
 use swamp_script_modules::modules::Modules;
-use swamp_script_modules::ns::{GenericAwareType, GenericType, GenericTypeRef, ModuleNamespaceRef};
-use swamp_script_semantic::{
-    AliasType, AliasTypeRef, Constant, ConstantRef, EnumType, EnumTypeRef, EnumVariantTypeRef,
-    ExternalFunctionDefinition, ExternalFunctionDefinitionRef, ExternalTypeRef,
-    InternalFunctionDefinition, InternalFunctionDefinitionRef, IntrinsicFunctionDefinitionRef,
-    SemanticError, StructType, StructTypeRef, Type, TypeParameterName,
-};
+use swamp_script_modules::symtbl::{GenericAwareType, GenericType, GenericTypeRef, SymbolTableRef};
+use swamp_script_semantic::{AliasType, AliasTypeRef, Constant, ConstantRef, EnumType, EnumTypeRef, EnumVariantTypeRef, ExternalFunctionDefinition, ExternalFunctionDefinitionRef, ExternalTypeRef, FunctionRef, InternalFunctionDefinition, InternalFunctionDefinitionRef, IntrinsicFunctionDefinitionRef, SemanticError, StructType, StructTypeRef, Type, TypeParameterName};
 use swamp_script_source_map::FileId;
 use tracing::info;
+use swamp_script_ast::Function;
 
 #[derive(Debug)]
 pub struct TypeParameter {
@@ -31,9 +28,22 @@ pub struct TypeParameterScope {
 #[derive()]
 pub struct NameLookup<'a> {
     pub default_path: Vec<String>,
-    pub type_parameter_scope_stack: Vec<TypeParameterScope>,
-    modules: &'a mut Modules,
-    //pub type_parameter_names_stack: Vec<TypeParameterNameScope>,
+}
+
+impl<'a> NameLookup<'a> {
+
+}
+
+impl<'a> NameLookup<'a> {
+    pub(crate) fn add_member_function(&mut self, ty: &Type, name: &str, func: FunctionRef) -> Result<(), Error> {
+        Ok(self.modules.associated_functions.add_member_function(ty, name, func)?)
+    }
+}
+
+impl<'a> NameLookup<'a> {
+    pub(crate) fn get_member_function(&self, ty: Type, name: &str) -> Option<&FunctionRef> {
+        self.modules.associated_functions.get_member_function(&ty, name)
+    }
 }
 
 impl<'a> NameLookup<'a> {
@@ -97,7 +107,7 @@ impl<'a> NameLookup<'a> {
         }
     }
 
-    pub(crate) fn get_namespace(&self, path_or_empty: &[String]) -> Option<ModuleNamespaceRef> {
+    pub(crate) fn get_namespace(&self, path_or_empty: &[String]) -> Option<SymbolTableRef> {
         let resolved_path = self.get_full_path(path_or_empty);
 
         if path_or_empty.len() == 1 {
@@ -113,12 +123,12 @@ impl<'a> NameLookup<'a> {
             .map(|module| module.borrow().namespace.clone())
     }
 
-    pub(crate) fn get_namespace_link(&self, name: &str) -> Option<ModuleNamespaceRef> {
+    pub(crate) fn get_namespace_link(&self, name: &str) -> Option<SymbolTableRef> {
         self.own_namespace().borrow().get_namespace_link(name)
     }
 
     #[must_use]
-    pub fn own_namespace(&self) -> ModuleNamespaceRef {
+    pub fn own_namespace(&self) -> SymbolTableRef {
         self.get_namespace(&[]).unwrap_or_else(|| {
             panic!(
                 "{}",
@@ -206,6 +216,11 @@ impl<'a> NameLookup<'a> {
         info!(?path, ?name, "looking for existing struct");
         let namespace = self.get_namespace(path);
         namespace.map_or_else(|| None, |found_ns| found_ns.borrow().get_struct(name))
+    }
+
+    pub(crate) fn get_type(&self, path: &Vec<String>, name: &String) -> Option<Type> {
+        let namespace = self.get_namespace(path);
+        namespace.map_or_else(|| None, |found_ns| found_ns.borrow().get_type(name))
     }
 
     #[must_use]
@@ -390,11 +405,11 @@ impl<'a> NameLookup<'a> {
     pub(crate) fn add_namespace_link(
         &self,
         name: &str,
-        source_module_path: ModuleNamespaceRef,
+        source_module_path: SymbolTableRef,
     ) -> Result<(), SemanticError> {
         self.own_namespace()
             .borrow_mut()
-            .add_namespace_link(name, source_module_path)
+            .add_module_link(name, source_module_path)
     }
 
     pub(crate) fn add_enum_link(&self, _enum_type: &EnumTypeRef) -> Result<(), SemanticError> {
@@ -438,3 +453,6 @@ impl<'a> NameLookup<'a> {
             .add_internal_function_link(name, internal_fn)
     }
 }
+
+
+ */

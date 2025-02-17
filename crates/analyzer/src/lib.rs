@@ -18,14 +18,14 @@ pub mod types;
 pub mod variable;
 
 use crate::err::{Error, ErrorKind};
-use crate::lookup::NameLookup;
+use crate::lookup::{TypeParameterScope};
 use seq_map::SeqMap;
 use std::mem::take;
 use std::num::{ParseFloatError, ParseIntError};
 use std::rc::Rc;
 
-use swamp_script_modules::modules::Modules;
-use swamp_script_modules::ns::{ModuleNamespace, ModuleNamespaceRef};
+use swamp_script_modules::modules::{Module, Modules, NamespaceRegistry};
+use swamp_script_modules::symtbl::{FuncDef, Symbol, SymbolTable, SymbolTableRef};
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
     ArgumentExpressionOrLocation, IteratorYieldType, LocationAccess, LocationAccessKind,
@@ -53,7 +53,7 @@ pub enum LocationSide {
 
 #[derive(Debug)]
 pub struct AutoUseModules {
-    pub modules: Vec<ModuleNamespaceRef>,
+    pub modules: Vec<SymbolTableRef>,
 }
 
 #[derive(Debug)]
@@ -64,11 +64,15 @@ pub struct Program {
 }
 
 impl Program {
+
     pub fn add_auto_use(&mut self, path: &[String]) {
+        /*
         let module = self.modules.get(path).unwrap();
         self.auto_use_modules
             .modules
             .push(module.borrow().namespace.clone());
+
+         */
     }
 }
 
@@ -135,7 +139,11 @@ impl BlockScope {
 
 pub struct SharedState<'a> {
     pub state: &'a mut ProgramState,
-    pub lookup: &'a mut NameLookup<'a>,
+    //pub lookup: &'a mut NameLookup<'a>,
+    pub lookup_table: SymbolTable,
+    pub definition_table: SymbolTable,
+    pub type_parameter_scope_stack: Vec<TypeParameterScope>,
+    pub modules: &'a Modules,
     pub source_map: &'a SourceMap,
     pub file_id: FileId,
 }
@@ -164,13 +172,16 @@ pub struct Resolver<'a> {
 impl<'a> Resolver<'a> {
     pub fn new(
         state: &'a mut ProgramState,
-        lookup: &'a mut NameLookup<'a>,
+        modules: &'a mut Modules,
         source_map: &'a SourceMap,
         file_id: FileId,
     ) -> Self {
         let shared = SharedState {
             state,
-            lookup,
+            lookup_table: SymbolTable::default(),
+            definition_table: SymbolTable::default(),
+            type_parameter_scope_stack: vec![],
+            modules,
             source_map,
             file_id,
         };
@@ -262,7 +273,7 @@ impl<'a> Resolver<'a> {
                 let analyzed_type = self.analyze_type(ty).expect("todo");
                 types.push(analyzed_type);
             }
-            ModuleNamespace::get_monomorphization_name(&name, &types)
+            SymbolTable::get_monomorphization_name(&name, &types)
         };
 
         let path = ident
@@ -737,6 +748,24 @@ impl<'a> Resolver<'a> {
         Ok(struct_ref)
     }
 
+    fn get_type(
+        &mut self,
+        qualified_type_identifier: &swamp_script_ast::QualifiedTypeIdentifier,
+    ) -> Result<StructTypeRef, Error> {
+        //   let namespace = self.get_namespace(qualified_type_identifier)?;
+
+        let (path, name) = self.get_path(qualified_type_identifier);
+
+        let struct_ref = self.shared.lookup.get_type(&path, &name).ok_or_else(|| {
+            self.create_err(
+                ErrorKind::UnknownStructTypeReference,
+                &qualified_type_identifier.name.0,
+            )
+        })?;
+
+        Ok(struct_ref)
+    }
+
     fn create_default_value_for_type(
         &mut self,
         node: &swamp_script_ast::Node,
@@ -781,8 +810,7 @@ impl<'a> Resolver<'a> {
         struct_ref_borrow: &StructTypeRef,
     ) -> Result<ExpressionKind, Error> {
         if let Some(function) = struct_ref_borrow
-            .borrow()
-            .functions
+               .functions
             .get(&"default".to_string())
         {
             let kind = match &**function {
@@ -840,13 +868,11 @@ impl<'a> Resolver<'a> {
 
         if let Type::Struct(struct_type) = &tv {
             if let Some(found_field) = struct_type
-                .borrow()
                 .anon_struct_type
                 .defined_fields
                 .get(&field_name_str)
             {
                 let index = struct_type
-                    .borrow()
                     .anon_struct_type
                     .defined_fields
                     .get_index(&field_name_str)
@@ -1178,7 +1204,7 @@ impl<'a> Resolver<'a> {
             Type::String => (Some(Type::Int), Type::String),
             //Type::Iterator(item_type) => (None, *item_type.clone()),
             Type::Struct(resolved_struct_ref) => {
-                let borrow = resolved_struct_ref.borrow();
+                let borrow = resolved_struct_ref;
                 let x = borrow.functions.get(&"iter".to_string()).unwrap();
                 match &*x.signature().return_type {
                     Type::Iterator(iterator_type) => match &iterator_type.yield_type {
@@ -1338,47 +1364,47 @@ impl<'a> Resolver<'a> {
         var_node: &swamp_script_ast::Node,
     ) -> Result<Expression, Error> {
         let text = self.get_text(var_node);
-        self.shared
-            .lookup
-            .get_internal_function(&[], text)
-            .map_or_else(
-                || {
-                    self.shared
-                        .lookup
-                        .get_external_function_declaration(&[], text)
-                        .map_or_else(
-                            || {
-                                self.try_find_variable(var_node).map_or_else(
-                                    || Err(self.create_err(ErrorKind::UnknownVariable, var_node)),
-                                    |variable_ref| {
-                                        let deref = self.create_expr(
-                                            ExpressionKind::VariableAccess(variable_ref.clone()),
-                                            variable_ref.resolved_type.clone(),
-                                            var_node,
-                                        );
-                                        Ok(deref)
-                                    },
-                                )
-                            },
-                            |found_external_function| {
-                                Ok(self.create_expr(
-                                    ExpressionKind::ExternalFunctionAccess(
-                                        found_external_function.clone(),
-                                    ),
-                                    Type::Function(found_external_function.signature.clone()),
-                                    &var_node,
-                                ))
-                            },
+        if let Some(found_symbol) = self.shared.lookup_table.get_symbol(text) {
+            let expr = match found_symbol {
+                Symbol::FunctionDefinition(func) => match func {
+                    FuncDef::External(found_external_function) => {
+                        self.create_expr(
+                            ExpressionKind::ExternalFunctionAccess(
+                                found_external_function.clone(),
+                            ),
+                            Type::Function(found_external_function.signature.clone()),
+                            &var_node,
                         )
+                    }
+                    FuncDef::Internal(found_internal_function) => {
+                        self.create_expr(
+                            ExpressionKind::InternalFunctionAccess(found_internal_function.clone()),
+                            Type::Function(found_internal_function.signature.clone()),
+                            var_node,
+                        )
+                    }
+                    _ => {
+                        return Err(self.create_err(ErrorKind::UnknownVariable, var_node));
+                    },
                 },
-                |found_internal_function| {
-                    Ok(self.create_expr(
-                        ExpressionKind::InternalFunctionAccess(found_internal_function.clone()),
-                        Type::Function(found_internal_function.signature.clone()),
-                        var_node,
-                    ))
-                },
-            )
+
+        
+                
+                _ =>{
+                    return Err(self.create_err(ErrorKind::UnknownVariable, var_node));
+                }
+            };
+            return Ok(expr)
+        } else {
+            let variable_ref = self.scope
+            self.create_expr(
+                ExpressionKind::VariableAccess(variable_ref.clone()),
+                variable_ref.resolved_type.clone(),
+                var_node,
+            );
+        }
+
+    
     }
 
     fn analyze_usize_index(
@@ -2098,7 +2124,7 @@ impl<'a> Resolver<'a> {
 
                         Type::Struct(resolved_struct_ref) => {
                             let return_type = {
-                                let borrow = resolved_struct_ref.borrow();
+                                let borrow = resolved_struct_ref;
                                 let subscript_fn =
                                     borrow.functions.get(&"subscript_mut".to_string()).unwrap();
                                 &subscript_fn.signature().parameters[2].resolved_type.clone()
@@ -2472,7 +2498,7 @@ impl<'a> Resolver<'a> {
         let field_name_str = self.get_text(member_name).to_string();
 
         let resolved_node = self.to_node(member_name);
-        let binding = struct_type.borrow();
+        let binding= struct_type;
         let postfixes = if let Some(found_function_member) = binding.functions.get(&field_name_str)
         {
             let postfix = self.analyze_postfix_member_func_call(

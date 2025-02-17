@@ -205,6 +205,8 @@ pub enum Type {
     External(ExternalTypeRef),
 }
 
+pub type TypeRef = Rc<Type>;
+
 impl Type {
     pub(crate) fn type_number(&self) -> TypeNumber {
         match self {
@@ -227,7 +229,7 @@ impl Debug for Type {
             Self::Array(array_type_ref) => write!(f, "[{:?}]", array_type_ref.item_type),
             Self::Tuple(tuple_type_ref) => write!(f, "({:?})", tuple_type_ref.0),
             Self::Struct(struct_type_ref) => {
-                write!(f, "{}", struct_type_ref.borrow().assigned_name)
+                write!(f, "{}", struct_type_ref.assigned_name)
             }
             Self::Map(map_type_ref) => write!(
                 f,
@@ -261,7 +263,7 @@ impl Display for Type {
                 write!(f, "[{}]", &array_ref.item_type.to_string())
             }
             Self::Tuple(tuple) => write!(f, "({})", comma(&tuple.0)),
-            Self::Struct(struct_ref) => write!(f, "{}", struct_ref.borrow().assigned_name),
+            Self::Struct(struct_ref) => write!(f, "{}", struct_ref.assigned_name),
             Self::Map(map_ref) => write!(f, "[{}:{}]", map_ref.key_type, map_ref.value_type),
             Self::Enum(enum_type) => write!(f, "{}", enum_type.borrow().assigned_name),
             Self::Function(signature) => write!(f, "function {signature}"),
@@ -294,6 +296,10 @@ pub enum SemanticError {
     UnknownGeneric,
     UnknownLookupModule,
     UnknownIntrinsic,
+    UnknownImplOnType,
+    DuplicateSymbolName,
+    DuplicateNamespaceLink(String),
+    DuplicateGenericType(String),
 }
 
 impl Type {
@@ -315,13 +321,13 @@ impl Type {
     }
     pub fn same_type(&self, other: &Type) -> bool {
         if let Self::Struct(some_struct) = other {
-            if some_struct.borrow().assigned_name == "Value" {
+            if some_struct.assigned_name == "Value" {
                 return true;
             }
         }
 
         if let Self::Struct(some_struct) = self {
-            if some_struct.borrow().assigned_name == "Value" {
+            if some_struct.assigned_name == "Value" {
                 return true;
             }
         }
@@ -361,8 +367,8 @@ impl Type {
 }
 
 fn compare_struct_types(a: &StructTypeRef, b: &StructTypeRef) -> bool {
-    let a_borrow = a.borrow();
-    let b_borrow = b.borrow();
+    let a_borrow = a;
+    let b_borrow = b;
     if a_borrow.assigned_name != b_borrow.assigned_name {
         return false;
     }
@@ -1047,7 +1053,7 @@ impl Display for ForPattern {
 #[derive(Debug, Eq, PartialEq)]
 pub struct ModulePathItem(pub Node);
 
-pub type StructTypeRef = Rc<RefCell<StructType>>;
+pub type StructTypeRef = Rc<StructType>;
 
 pub fn same_struct_ref(a: &StructTypeRef, b: &StructTypeRef) -> bool {
     Rc::ptr_eq(a, b)
@@ -1072,7 +1078,7 @@ pub type ConstantRef = Rc<Constant>;
 pub struct AliasType {
     pub name: Node,
     pub assigned_name: String,
-    pub referenced_type: Type,
+    pub referenced_type: TypeRef,
 }
 pub type AliasTypeRef = Rc<AliasType>;
 
@@ -1093,6 +1099,8 @@ pub struct Impl {
 pub struct AssociatedImpls {
     pub functions: SeqMap<TypeNumber, Impl>,
 }
+
+impl AssociatedImpls {}
 
 impl Default for AssociatedImpls {
     fn default() -> Self {
@@ -1119,6 +1127,24 @@ impl AssociatedImpls {
             }
         }
         None
+    }
+
+    pub fn add_member_function(
+        &mut self,
+        ty: &Type,
+        name: &str,
+        func: FunctionRef,
+    ) -> Result<(), SemanticError> {
+        let maybe_found_impl = self.functions.get_mut(&ty.type_number());
+        if let Some(mut found_impl) = maybe_found_impl {
+            found_impl
+                .functions
+                .insert(name.to_string(), func)
+                .expect("todo");
+            Ok(())
+        } else {
+            Err(SemanticError::UnknownImplOnType)
+        }
     }
 
     #[must_use]
@@ -1257,7 +1283,6 @@ pub type EnumTypeRef = Rc<RefCell<EnumType>>;
 pub struct EnumType {
     pub name: LocalTypeIdentifier,
     pub assigned_name: String,
-    pub module_path: Vec<String>,
     pub number: TypeNumber,
 
     pub variants: SeqMap<String, EnumVariantTypeRef>,
@@ -1282,13 +1307,11 @@ impl EnumType {
     pub fn new(
         name: LocalTypeIdentifier,
         assigned_name: &str,
-        module_path: Vec<String>,
         number: TypeNumber,
     ) -> Self {
         Self {
             name,
             assigned_name: assigned_name.to_string(),
-            module_path,
             number,
             variants: SeqMap::new(),
         }

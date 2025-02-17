@@ -672,10 +672,9 @@ impl Display for Value {
                 write!(f, ")")
             }
             Self::Struct(struct_type_ref, fields_in_strict_order) => {
-                write!(f, "{} {{ ", struct_type_ref.borrow().assigned_name)?;
+                write!(f, "{} {{ ", struct_type_ref.assigned_name)?;
 
                 let fields = struct_type_ref
-                    .borrow()
                     .anon_struct_type
                     .defined_fields
                     .keys()
@@ -788,7 +787,7 @@ impl Hash for Value {
             Self::Option(_wrapped) => {}
             Self::Array(_, _arr) => {}
             Self::Struct(type_ref, values) => {
-                type_ref.borrow().name().span.hash(state);
+                type_ref.name().span.hash(state);
                 for v in values {
                     v.borrow().hash(state);
                 }

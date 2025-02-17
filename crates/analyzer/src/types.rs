@@ -7,7 +7,9 @@ use crate::lookup::TypeParameter;
 use crate::Resolver;
 use seq_map::SeqMap;
 use std::rc::Rc;
-use swamp_script_modules::ns::{GenericAwareType, GenericTypeRef, ModuleNamespace};
+use swamp_script_ast::QualifiedTypeIdentifier;
+use swamp_script_modules::modules::ModuleRef;
+use swamp_script_modules::symtbl::{GenericAwareType, GenericTypeRef, SymbolTable};
 use swamp_script_semantic::{
     ArrayType, ArrayTypeRef, ExternalType, ExternalTypeRef, MapType, MapTypeRef, Signature,
     StructTypeRef, TupleType, Type, TypeForParameter,
@@ -43,26 +45,14 @@ impl<'a> Resolver<'a> {
         &mut self,
         type_name_to_find: &swamp_script_ast::QualifiedTypeIdentifier,
     ) -> Result<Type, Error> {
-        let (path, text) = self.get_full_path(type_name_to_find);
-        info!(?text, ?path, "looking for named type");
+        let (module, text) = self.get_module(type_name_to_find)?;
+        info!(?text, ?module, "looking for named type");
         if type_name_to_find.generic_params.is_empty() {
-            let resolved_type = if let Some(found_type_param) =
-                self.shared.lookup.get_type_parameter(&text)
-            {
-                found_type_param.ty.clone()
-            } else if let Some(found) = self.shared.lookup.get_alias_referred_type(&path, &text) {
-                found
-            } else if let Some(found) = self.shared.lookup.get_struct(&path, &text) {
-                Type::Struct(found)
-            } else if let Some(found) = self.shared.lookup.get_enum(&path, &text) {
-                Type::Enum(found)
-            } else if let Some(found) = self.shared.lookup.get_rust_type(&path, &text) {
-                Type::External(found)
+            if let Some(found) = module.namespace.symbol_table.get_type(&*text) {
+                Ok(*found.clone())
             } else {
-                Err(self.create_err(ErrorKind::UnknownTypeReference, &type_name_to_find.name.0))?
-            };
-
-            Ok(resolved_type)
+                Err(self.create_err(ErrorKind::UnknownSymbol, &type_name_to_find.name.0))
+            }
         } else {
             /*
             let (base_type, params) = self.create_type_parameters(type_name_to_find)?;
@@ -80,25 +70,6 @@ impl<'a> Resolver<'a> {
             self.monomorphize(type_name_to_find)
             //}
         }
-    }
-
-    pub fn find_local_impl_target(
-        &mut self,
-        type_name: &swamp_script_ast::LocalTypeIdentifierWithOptionalTypeParams,
-    ) -> Result<(StructTypeRef, bool), Error> {
-        let name_string = self.get_text(&type_name.name).to_string();
-
-        self.shared
-            .lookup
-            .get_struct(&[], &name_string)
-            .map_or_else(
-                || {
-                    let resolved_node = self.to_node(&type_name.name);
-                    Err(self
-                        .create_err_resolved(ErrorKind::UnknownStructTypeReference, &resolved_node))
-                },
-                |x| Ok((x, false)),
-            )
     }
 
     /// # Errors
@@ -343,8 +314,7 @@ impl<'a> Resolver<'a> {
             .collect();
 
         let base_name = self.get_text(&parameterize_definition.name.0).to_string();
-        let monomorphization_name =
-            ModuleNamespace::get_monomorphization_name(&base_name, &types_vec);
+        let monomorphization_name = SymbolTable::get_monomorphization_name(&base_name, &types_vec);
         info!(?monomorphization_name, "------ MONOMORPHIZE");
 
         if let Some(monomorphized_struct_ref) = self
@@ -385,7 +355,7 @@ impl<'a> Resolver<'a> {
             let functions: Vec<&swamp_script_ast::Function> =
                 found_generic.ast_functions.values().collect::<Vec<_>>();
 
-            self.analyze_impl_functions_to_struct(
+            self.analyze_impl_functions(
                 &parameterize_definition.name.0,
                 analyzed_base_type_ref,
                 &functions,
@@ -397,6 +367,19 @@ impl<'a> Resolver<'a> {
             self.shared.lookup.default_path = stored_default_path;
 
             Ok(created_type)
+        }
+    }
+
+    fn get_module(
+        &mut self,
+        qualified_type_identifier: &QualifiedTypeIdentifier,
+    ) -> Result<(ModuleRef, String), Error> {
+        let (path, name) = self.get_path(qualified_type_identifier);
+
+        if let Some(found_mod) = self.shared.modules.get(&*path) {
+            Ok((found_mod, name))
+        } else {
+            Err(self.create_err(ErrorKind::UnknownModule, &qualified_type_identifier.name.0))
         }
     }
 }

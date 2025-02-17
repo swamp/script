@@ -120,6 +120,7 @@ pub enum ErrorKind {
     ExpectedStruct,
     NotAGeneric,
     UnknownIntrinsic,
+    UnknownSymbol,
 }
 
 impl From<SemanticError> for Error {
