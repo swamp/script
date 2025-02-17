@@ -7,7 +7,7 @@ use crate::Resolver;
 use seq_map::SeqMap;
 use std::rc::Rc;
 use swamp_script_ast::Node;
-use swamp_script_modules::symtbl::GenericAwareType;
+use swamp_script_modules::symtbl::{GenericAwareType, GenericType};
 use swamp_script_semantic::{
     AliasType, AliasTypeRef, AnonymousStructType, EnumType, EnumTypeRef, EnumVariantCommon,
     EnumVariantSimpleType, EnumVariantSimpleTypeRef, EnumVariantStructType, EnumVariantTupleType,
@@ -41,7 +41,7 @@ impl<'a> Resolver<'a> {
             let last_name = path.last().unwrap();
             self.shared
                 .lookup_table
-                .add_module_link(last_name, found_module)?;
+                .add_module_link(last_name, found_module.clone())?;
         }
 
         for ast_items in &use_definition.items {
@@ -303,12 +303,17 @@ impl<'a> Resolver<'a> {
                     .expect("TODO: panic message");
             }
 
-            self.shared.definition_table.add_generic(
-                &struct_name_str,
-                parameter_names,
-                GenericAwareType::Struct(ast_struct.clone()),
-                self.shared.file_id,
-            )?;
+            let generic_type = GenericType {
+                type_parameters: parameter_names,
+                base_type: GenericAwareType::Struct(ast_struct.clone()),
+                ast_functions: Default::default(),
+                file_id: 0,
+                defined_in_path: vec![],
+            };
+
+            self.shared
+                .definition_table
+                .add_generic(&struct_name_str, generic_type)?;
 
             return Ok(());
         }
@@ -451,7 +456,7 @@ impl<'a> Resolver<'a> {
     ) -> Result<(), Error> {
         if !attached_to_type.parameter_names.is_empty() {
             let name = self.get_text(&attached_to_type.name);
-            return self.shared.lookup.get_generic(&[], name).map_or_else(
+            return self.shared.lookup_table.get_generic(name).map_or_else(
                 || Err(self.create_err(ErrorKind::NotAGeneric, &attached_to_type.name)),
                 |found_generic| {
                     info!(name, "inserting functions into generic");
@@ -507,10 +512,11 @@ impl<'a> Resolver<'a> {
 
             self.stop_function();
 
-            self.shared
-                .modules
-                .associated_functions
-                .add_member_function(found_type, &function_name_str, resolved_function_ref)?;
+            self.shared.associated_impls.add_member_function(
+                found_type,
+                &function_name_str,
+                resolved_function_ref,
+            )?;
         }
 
         Ok(())

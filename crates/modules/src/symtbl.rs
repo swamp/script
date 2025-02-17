@@ -8,7 +8,13 @@ use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::fmt::Debug;
 use std::rc::Rc;
-use swamp_script_semantic::{AliasType, AliasTypeRef, AnonymousStructType, Constant, ConstantRef, EnumType, EnumTypeRef, EnumVariantType, EnumVariantTypeRef, ExternalFunctionDefinition, ExternalFunctionDefinitionRef, ExternalType, ExternalTypeRef, FileId, InternalFunctionDefinition, InternalFunctionDefinitionRef, IntrinsicFunctionDefinition, IntrinsicFunctionDefinitionRef, Node, SemanticError, StructType, StructTypeField, StructTypeRef, Type, TypeParameterName};
+use swamp_script_semantic::{
+    AliasType, AliasTypeRef, AnonymousStructType, Constant, ConstantRef, EnumType, EnumTypeRef,
+    EnumVariantType, EnumVariantTypeRef, ExternalFunctionDefinition, ExternalFunctionDefinitionRef,
+    ExternalType, ExternalTypeRef, FileId, InternalFunctionDefinition,
+    InternalFunctionDefinitionRef, IntrinsicFunctionDefinition, IntrinsicFunctionDefinitionRef,
+    Node, SemanticError, StructType, StructTypeField, StructTypeRef, Type, TypeParameterName,
+};
 use tracing::info;
 
 #[derive(Debug, Clone)]
@@ -63,14 +69,12 @@ namespaces: SeqMap<String, ModuleNamespaceRef>,
 
  */
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SymbolTable {
     symbols: SeqMap<String, Symbol>,
 }
 
-impl SymbolTable {
- 
-}
+impl SymbolTable {}
 
 impl SymbolTable {}
 
@@ -324,18 +328,16 @@ impl SymbolTable {
         enum_type_name: &str,
         variant_name: &str,
     ) -> Option<EnumVariantTypeRef> {
-            self.get_enum(enum_type_name)
-            .as_ref()
-            .map_or_else(
-                || None,
-                |found_enum| {
-                    found_enum
-                        .borrow()
-                        .variants
-                        .get(&variant_name.to_string())
-                        .cloned()
-                },
-            )
+        self.get_enum(enum_type_name).as_ref().map_or_else(
+            || None,
+            |found_enum| {
+                found_enum
+                    .borrow()
+                    .variants
+                    .get(&variant_name.to_string())
+                    .cloned()
+            },
+        )
     }
 
     pub fn get_external_type(&self, name: &str) -> Option<&ExternalTypeRef> {
@@ -436,10 +438,11 @@ impl SymbolTable {
     pub fn add_generic(
         &mut self,
         name: &str,
-        generic_type: GenericTypeRef,
-    ) -> Result<(), SemanticError> {
-        self.insert_symbol(name, Symbol::Generic(generic_type))
+        generic_type: GenericType,
+    ) -> Result<GenericTypeRef, SemanticError> {
+        let generic_ref = Rc::new(RefCell::new(generic_type));
+        self.insert_symbol(name, Symbol::Generic(generic_ref.clone()))
             .map_err(|_| SemanticError::DuplicateGenericType(name.to_string()))?;
-        Ok(())
+        Ok(generic_ref)
     }
 }

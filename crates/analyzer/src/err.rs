@@ -96,7 +96,7 @@ pub enum ErrorKind {
     WasNotFieldMutRef,
     UnknownFunction,
     NoDefaultImplemented(Type),
-    NoDefaultImplementedForStruct(StructTypeRef),
+    NoDefaultImplementedForType(Type),
     UnknownConstant,
     ExpectedFunctionTypeForFunctionCall,
     TypeDoNotSupportIndexAccess,
@@ -121,6 +121,8 @@ pub enum ErrorKind {
     NotAGeneric,
     UnknownIntrinsic,
     UnknownSymbol,
+    UnknownEnumType,
+    WrongTypeParameters,
 }
 
 impl From<SemanticError> for Error {

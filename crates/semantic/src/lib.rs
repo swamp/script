@@ -464,6 +464,7 @@ impl Debug for ExternalFunctionDefinition {
 pub type ExternalFunctionDefinitionRef = Rc<crate::ExternalFunctionDefinition>;
 
 //#[derive(Debug)]
+#[derive(Clone)]
 pub struct IntrinsicFunctionDefinition {
     pub name: String,
     pub signature: Signature,
@@ -914,7 +915,7 @@ pub struct WhenBinding {
     pub expr: MutOrImmutableExpression,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum IntrinsicFunction {
     FloatFloor,
     FloatSqrt,
@@ -1304,11 +1305,7 @@ impl Debug for EnumType {
 
 impl EnumType {
     #[must_use]
-    pub fn new(
-        name: LocalTypeIdentifier,
-        assigned_name: &str,
-        number: TypeNumber,
-    ) -> Self {
+    pub fn new(name: LocalTypeIdentifier, assigned_name: &str, number: TypeNumber) -> Self {
         Self {
             name,
             assigned_name: assigned_name.to_string(),

@@ -6,6 +6,7 @@ use crate::err::{Error, ErrorKind};
 use crate::Resolver;
 use std::rc::Rc;
 
+use swamp_script_ast::QualifiedTypeIdentifier;
 use swamp_script_semantic::{
     EnumLiteralData, EnumVariantType, Expression, Fp, Literal, MapType, MapTypeRef, Node,
     TupleType, TupleTypeRef, Type,
@@ -35,7 +36,7 @@ impl<'a> Resolver<'a> {
                         ast_node,
                     )
                 })?;
-                (Literal::FloatLiteral(Fp::from(float)),Type::Float)
+                (Literal::FloatLiteral(Fp::from(float)), Type::Float)
             }
             swamp_script_ast::LiteralKind::String(processed_string) => (
                 Literal::StringLiteral(processed_string.to_string()),
@@ -64,63 +65,78 @@ impl<'a> Resolver<'a> {
                     }
                 };
 
-                let enum_type_ref = self.analyze_enum_ref(enum_name)?;
-                let enum_type = Type::Enum(enum_type_ref);
+                let (path, name) = self.get_path(enum_name);
+                if let Some(module) = self.shared.modules.get(&*path) {
+                    if let Some(enum_type_ref) = module.namespace.symbol_table.get_enum(&*name) {
+                        let enum_type = Type::Enum(enum_type_ref.clone());
 
-                // Handle enum variant literals in patterns
-                let variant_ref = self.analyze_enum_variant_ref(enum_name, variant_name)?;
+                        // Handle enum variant literals in patterns
+                        let variant_ref = self.analyze_enum_variant_ref(enum_name, variant_name)?;
 
-                let resolved_data = match enum_literal {
-                    swamp_script_ast::EnumVariantLiteral::Simple(_, _) => EnumLiteralData::Nothing,
-                    swamp_script_ast::EnumVariantLiteral::Tuple(_node, _variant, expressions) => {
-                        let resolved = self
-                            .analyze_expressions(None, expressions)
-                            .expect("enum tuple expressions should resolve");
-                        EnumLiteralData::Tuple(resolved)
-                    }
-                    swamp_script_ast::EnumVariantLiteral::Struct(
-                        _qualified_type_identifier,
-                        variant,
-                        anonym_struct_field_and_expressions,
-                    ) => {
-                        if let EnumVariantType::Struct(resolved_variant_struct_ref) = &*variant_ref
-                        {
-                            if anonym_struct_field_and_expressions.len()
-                                != resolved_variant_struct_ref.anon_struct.defined_fields.len()
-                            {
-                                return Err(self.create_err(
-                                    ErrorKind::WrongNumberOfArguments(
-                                        anonym_struct_field_and_expressions.len(),
-                                        resolved_variant_struct_ref
+                        let resolved_data = match enum_literal {
+                            swamp_script_ast::EnumVariantLiteral::Simple(_, _) => {
+                                EnumLiteralData::Nothing
+                            }
+                            swamp_script_ast::EnumVariantLiteral::Tuple(
+                                _node,
+                                _variant,
+                                expressions,
+                            ) => {
+                                let resolved = self
+                                    .analyze_expressions(None, expressions)
+                                    .expect("enum tuple expressions should resolve");
+                                EnumLiteralData::Tuple(resolved)
+                            }
+                            swamp_script_ast::EnumVariantLiteral::Struct(
+                                _qualified_type_identifier,
+                                variant,
+                                anonym_struct_field_and_expressions,
+                            ) => {
+                                if let EnumVariantType::Struct(resolved_variant_struct_ref) =
+                                    &*variant_ref
+                                {
+                                    if anonym_struct_field_and_expressions.len()
+                                        != resolved_variant_struct_ref
                                             .anon_struct
                                             .defined_fields
-                                            .len(),
-                                    ),
-                                    &variant.0,
-                                ));
+                                            .len()
+                                    {
+                                        return Err(self.create_err(
+                                            ErrorKind::WrongNumberOfArguments(
+                                                anonym_struct_field_and_expressions.len(),
+                                                resolved_variant_struct_ref
+                                                    .anon_struct
+                                                    .defined_fields
+                                                    .len(),
+                                            ),
+                                            &variant.0,
+                                        ));
+                                    }
+
+                                    let resolved = self.analyze_anon_struct_instantiation(
+                                        &variant.0.clone(),
+                                        &resolved_variant_struct_ref.anon_struct,
+                                        anonym_struct_field_and_expressions,
+                                        false,
+                                    )?;
+
+                                    EnumLiteralData::Struct(resolved)
+                                } else {
+                                    return Err(self.create_err(
+                                        ErrorKind::WrongEnumVariantContainer(variant_ref.clone()),
+                                        &variant.0,
+                                    ));
+                                }
                             }
+                        };
 
-                            let resolved = self.analyze_anon_struct_instantiation(
-                                &variant.0.clone(),
-                                &resolved_variant_struct_ref.anon_struct,
-                                anonym_struct_field_and_expressions,
-                                false,
-                            )?;
-
-                            EnumLiteralData::Struct(resolved)
-                        } else {
-                            return Err(self.create_err(
-                                ErrorKind::WrongEnumVariantContainer(variant_ref.clone()),
-                                &variant.0,
-                            ));
-                        }
+                        return Ok((
+                            Literal::EnumVariantLiteral(variant_ref, resolved_data),
+                            enum_type,
+                        ));
                     }
-                };
-
-                (
-                    Literal::EnumVariantLiteral(variant_ref, resolved_data),
-                    enum_type,
-                )
+                }
+                return Err(self.create_err(ErrorKind::UnknownEnumType, &ast_node));
             }
 
             swamp_script_ast::LiteralKind::Array(items) => {

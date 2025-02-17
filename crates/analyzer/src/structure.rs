@@ -34,7 +34,8 @@ impl<'a> Resolver<'a> {
         // temp_var = StructType::default()
         let return_type = *function.signature().return_type.clone();
 
-        let default_call_kind = self.create_default_static_call(node, &struct_to_instantiate)?;
+        let default_call_kind =
+            self.create_default_static_call(node, &Type::Struct(struct_to_instantiate.clone()))?;
 
         let static_call = self.create_expr(default_call_kind, return_type, node);
 
@@ -143,7 +144,7 @@ impl<'a> Resolver<'a> {
         ))
     }
 
-    pub(crate) fn analyze_struct_instantiation(
+    pub(crate) fn analyze_struct_literal(
         &mut self,
         qualified_type_identifier: &swamp_script_ast::QualifiedTypeIdentifier,
         ast_fields: &Vec<swamp_script_ast::FieldExpression>,
@@ -158,13 +159,14 @@ impl<'a> Resolver<'a> {
             )?;
 
         if has_rest {
-            let maybe_default = { self
-                .shared
-                .associated_impls
-                .get_member_function(&Type::Struct(struct_to_instantiate.clone()), "default").cloned() };
-            
-            if let Some(function) =  maybe_default
-            {
+            let maybe_default = {
+                self.shared
+                    .associated_impls
+                    .get_member_function(&Type::Struct(struct_to_instantiate.clone()), "default")
+                    .cloned()
+            };
+
+            if let Some(function) = maybe_default {
                 self.analyze_struct_init_calling_default(
                     &function,
                     struct_to_instantiate,

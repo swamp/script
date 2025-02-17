@@ -16,10 +16,7 @@ pub struct Modules {
     pub modules: SeqMap<Vec<String>, ModuleRef>,
     pub constants: Vec<ConstantRef>,
     pub auto_use: Vec<SymbolTableRef>,
-
 }
-
-
 
 impl Default for Modules {
     fn default() -> Self {
@@ -44,12 +41,10 @@ impl Namespace {
     }
 }
 
-
 #[derive(Debug)]
 pub struct NamespaceRegistry {
     pub namespaces: SeqMap<NamespacePath, Namespace>,
 }
-
 
 pub struct Module {
     pub expression: Option<Expression>,
@@ -111,10 +106,7 @@ impl Modules {
     }
     pub fn add(&mut self, module: ModuleRef) {
         self.modules
-            .insert(
-                module.clone().namespace.path.clone(),
-                module,
-            )
+            .insert(module.clone().namespace.path.clone(), module)
             .expect("todo");
     }
 
@@ -133,7 +125,6 @@ impl Modules {
 
         constant_ref
     }
-
 
     #[must_use]
     pub fn contains_key(&self, module_path: &[String]) -> bool {

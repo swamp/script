@@ -18,13 +18,13 @@ pub mod types;
 pub mod variable;
 
 use crate::err::{Error, ErrorKind};
-use seq_map::SeqMap;
+use crate::lookup::TypeParameterStack;
+use seq_fmt::comma;
+use seq_map::{SeqMap, SeqMapError};
 use std::mem::take;
 use std::num::{ParseFloatError, ParseIntError};
 use std::rc::Rc;
-
-use crate::lookup::TypeParameterScope;
-use swamp_script_modules::modules::{Module, Modules, NamespaceRegistry};
+use swamp_script_modules::modules::{Modules, NamespaceRegistry};
 use swamp_script_modules::symtbl::{FuncDef, Symbol, SymbolTable, SymbolTableRef};
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
@@ -130,17 +130,58 @@ impl BlockScope {
         Self {
             mode: BlockScopeMode::Open,
             variables: SeqMap::new(),
-            constants: SeqMap::new(),
         }
+    }
+}
+
+pub struct MonomorphizationCache {
+    pub cache: SeqMap<String, Type>,
+}
+
+impl MonomorphizationCache {
+    pub fn new() -> Self {
+        Self {
+            cache: SeqMap::default(),
+        }
+    }
+
+    pub fn complete_name(path: &[String], base_name: &str, argument_types: &[Type]) -> String {
+        format!(
+            "{}::{}<{}>",
+            path.join("::"),
+            base_name,
+            comma(argument_types)
+        )
+    }
+    pub fn add(
+        &mut self,
+        path: &[String],
+        name: &str,
+        ty: Type,
+        argument_type: &[Type],
+    ) -> Result<(), SeqMapError> {
+        let name = Self::complete_name(path, name, argument_type);
+        self.cache.insert(name, ty)
+    }
+
+    pub fn get(
+        &mut self,
+        path: &[String],
+        base_name: &str,
+        argument_type: &[Type],
+    ) -> Option<&Type> {
+        let name = Self::complete_name(path, base_name, argument_type);
+        self.cache.get(&name)
     }
 }
 
 pub struct SharedState<'a> {
     pub state: &'a mut ProgramState,
-    pub associated_impls: AssociatedImpls,
+    pub associated_impls: &'a mut AssociatedImpls,
     pub lookup_table: SymbolTable,
+    pub monomorphization_cache: MonomorphizationCache,
     pub definition_table: SymbolTable,
-    pub type_parameter_scope_stack: Vec<TypeParameterScope>,
+    pub type_parameter_scope_stack: TypeParameterStack,
     pub modules: &'a Modules,
     pub source_map: &'a SourceMap,
     pub file_id: FileId,
@@ -171,7 +212,7 @@ impl<'a> Resolver<'a> {
     pub fn new(
         state: &'a mut ProgramState,
         modules: &'a mut Modules,
-        associated_functions: &'a mut AssociatedImpls,
+        associated_impls: &'a mut AssociatedImpls,
         source_map: &'a SourceMap,
         file_id: FileId,
     ) -> Self {
@@ -179,9 +220,10 @@ impl<'a> Resolver<'a> {
             state,
             lookup_table: SymbolTable::default(),
             definition_table: SymbolTable::default(),
-            type_parameter_scope_stack: vec![],
+            type_parameter_scope_stack: TypeParameterStack::new(),
+            monomorphization_cache: MonomorphizationCache::new(),
             modules,
-            associated_functions,
+            associated_impls,
             source_map,
             file_id,
         };
@@ -465,12 +507,15 @@ impl<'a> Resolver<'a> {
         let expression = match &ast_expression.kind {
             // Lookups
             swamp_script_ast::ExpressionKind::PostfixChain(postfix_chain) => {
-                match postfix_chain.base.kind {
+                match &postfix_chain.base.kind {
                     swamp_script_ast::ExpressionKind::IdentifierReference(identifier) => {
-                        let text = self.get_text(&identifier.name);
-                        if let Some(check_intrinsic) =
-                            self.shared.lookup_table.get_intrinsic_function(text)
-                        {
+                        let text = self.get_text(&identifier.name).to_string();
+                        let maybe = self
+                            .shared
+                            .lookup_table
+                            .get_intrinsic_function(&*text)
+                            .cloned();
+                        if let Some(check_intrinsic) = maybe {
                             if postfix_chain.postfixes.len() == 1 {
                                 if let swamp_script_ast::Postfix::FunctionCall(x, arguments) =
                                     &postfix_chain.postfixes[0]
@@ -585,7 +630,7 @@ impl<'a> Resolver<'a> {
                 struct_identifier,
                 fields,
                 has_rest,
-            ) => self.analyze_struct_instantiation(struct_identifier, fields, *has_rest)?,
+            ) => self.analyze_struct_literal(struct_identifier, fields, *has_rest)?,
 
             swamp_script_ast::ExpressionKind::Range(min_value, max_value, range_mode) => {
                 let range = self.analyze_range(min_value, max_value, range_mode)?;
@@ -721,15 +766,16 @@ impl<'a> Resolver<'a> {
         //   let namespace = self.get_namespace(qualified_type_identifier)?;
 
         let (path, name) = self.get_path(qualified_type_identifier);
+        if let Some(module) = self.shared.modules.get(&*path) {
+            if let Some(found_struct) = module.namespace.symbol_table.get_struct(&name) {
+                return Ok(found_struct.clone());
+            }
+        }
 
-        let struct_ref = self.shared.lookup.get_struct(&path, &name).ok_or_else(|| {
-            self.create_err(
-                ErrorKind::UnknownStructTypeReference,
-                &qualified_type_identifier.name.0,
-            )
-        })?;
-
-        Ok(struct_ref)
+        Err(self.create_err(
+            ErrorKind::UnknownStructTypeReference,
+            &qualified_type_identifier.name.0,
+        ))
     }
 
     fn get_type(
@@ -776,7 +822,9 @@ impl<'a> Resolver<'a> {
             }
             Type::Optional(_optional_type) => ExpressionKind::Literal(Literal::NoneLiteral),
 
-            Type::Struct(struct_ref) => self.create_default_static_call(node, struct_ref)?,
+            Type::Struct(struct_ref) => {
+                self.create_default_static_call(node, &Type::Struct(struct_ref.clone()))?
+            }
             _ => {
                 return Err(
                     self.create_err(ErrorKind::NoDefaultImplemented(field_type.clone()), node)
@@ -791,9 +839,13 @@ impl<'a> Resolver<'a> {
     fn create_default_static_call(
         &mut self,
         node: &swamp_script_ast::Node,
-        struct_ref_borrow: &StructTypeRef,
+        ty: &Type,
     ) -> Result<ExpressionKind, Error> {
-        if let Some(function) = struct_ref_borrow.functions.get(&"default".to_string()) {
+        if let Some(function) = self
+            .shared
+            .associated_impls
+            .get_member_function(ty, "default")
+        {
             let kind = match &**function {
                 Function::Internal(internal_function) => {
                     ExpressionKind::InternalFunctionAccess(internal_function.clone())
@@ -816,10 +868,7 @@ impl<'a> Resolver<'a> {
 
             Ok(kind)
         } else {
-            Err(self.create_err(
-                ErrorKind::NoDefaultImplementedForStruct(struct_ref_borrow.clone()),
-                node,
-            ))
+            Err(self.create_err(ErrorKind::NoDefaultImplementedForType(ty.clone()), node))
         }
     }
 
@@ -1026,8 +1075,14 @@ impl<'a> Resolver<'a> {
                             let subscript_fn = self
                                 .find_struct_function(resolved_struct_ref, "subscript")
                                 .unwrap();
-                            let subscript_fn =
-                                borrow.functions.get(&"subscript".to_string()).unwrap();
+                            let subscript_fn = self
+                                .shared
+                                .associated_impls
+                                .get_member_function(
+                                    &Type::Struct(resolved_struct_ref.clone()),
+                                    "subscript",
+                                )
+                                .unwrap();
                             let lookup_returns = &subscript_fn.signature().return_type;
 
                             tv.resolved_type = *lookup_returns.clone();
@@ -1185,8 +1240,11 @@ impl<'a> Resolver<'a> {
             Type::String => (Some(Type::Int), Type::String),
             //Type::Iterator(item_type) => (None, *item_type.clone()),
             Type::Struct(resolved_struct_ref) => {
-                let borrow = resolved_struct_ref;
-                let x = borrow.functions.get(&"iter".to_string()).unwrap();
+                let x = self
+                    .shared
+                    .associated_impls
+                    .get_member_function(&Type::Struct(resolved_struct_ref.clone()), "iter")
+                    .unwrap();
                 match &*x.signature().return_type {
                     Type::Iterator(iterator_type) => match &iterator_type.yield_type {
                         IteratorYieldType::Value(value_type) => (None, value_type.clone()),
@@ -1432,7 +1490,6 @@ impl<'a> Resolver<'a> {
         self.scope.block_scope_stack.push(BlockScope {
             mode: BlockScopeMode::Open,
             variables: SeqMap::default(),
-            constants: SeqMap::default(),
         });
     }
 
@@ -1444,7 +1501,6 @@ impl<'a> Resolver<'a> {
         self.scope.block_scope_stack.push(BlockScope {
             mode: BlockScopeMode::Closed,
             variables: SeqMap::default(),
-            constants: SeqMap::default(),
         });
     }
 
@@ -2075,9 +2131,14 @@ impl<'a> Resolver<'a> {
 
                         Type::Struct(resolved_struct_ref) => {
                             let return_type = {
-                                let borrow = resolved_struct_ref;
-                                let subscript_fn =
-                                    borrow.functions.get(&"subscript_mut".to_string()).unwrap();
+                                let subscript_fn = self
+                                    .shared
+                                    .associated_impls
+                                    .get_member_function(
+                                        &Type::Struct(resolved_struct_ref.clone()),
+                                        "subscript_mut",
+                                    )
+                                    .unwrap();
                                 &subscript_fn.signature().parameters[2].resolved_type.clone()
                             };
                             ty = return_type.clone();
@@ -2087,27 +2148,30 @@ impl<'a> Resolver<'a> {
 
                         Type::External(rust_type) => {
                             let val_type = Type::Unit; // TODO: generic_params[0].clone();
-                            if rust_type.number == SPARSE_TYPE_ID {
-                                let sparse_id_type = self
-                                    .shared
-                                    .lookup
-                                    .get_rust_type(&["std".to_string()], "SparseId")
-                                    .expect("should have SparseId");
+                                                       /*
+                                                       if rust_type.number == SPARSE_TYPE_ID {
+                                                           let sparse_id_type = self
+                                                               .shared
+                                                               .lookup_table
+                                                               .get_rust_type(&["std".to_string()], "SparseId")
+                                                               .expect("should have SparseId");
 
-                                let key_type = Type::External(sparse_id_type);
+                                                           let key_type = Type::External(sparse_id_type);
 
-                                let key_expr =
-                                    self.analyze_expression(lookup_expr, Some(&key_type.clone()))?;
+                                                           let key_expr =
+                                                               self.analyze_expression(lookup_expr, Some(&key_type.clone()))?;
 
-                                self.add_location_item(
-                                    &mut items,
-                                    LocationAccessKind::RustTypeIndex(rust_type.clone(), key_expr),
-                                    key_type.clone(),
-                                    &lookup_expr.node,
-                                );
+                                                           self.add_location_item(
+                                                               &mut items,
+                                                               LocationAccessKind::RustTypeIndex(rust_type.clone(), key_expr),
+                                                               key_type.clone(),
+                                                               &lookup_expr.node,
+                                                           );
 
-                                ty = Type::Optional(Box::from(val_type.clone()));
-                            }
+                                                           ty = Type::Optional(Box::from(val_type.clone()));
+                                                       }
+
+                                                        */
                         }
 
                         _ => {
@@ -2450,11 +2514,16 @@ impl<'a> Resolver<'a> {
 
         let resolved_node = self.to_node(member_name);
         let binding = struct_type;
-        let postfixes = if let Some(found_function_member) = binding.functions.get(&field_name_str)
-        {
+        let maybe = self
+            .shared
+            .associated_impls
+            .get_member_function(&Type::Struct(struct_type.clone()), &field_name_str)
+            .cloned();
+
+        let postfixes = if let Some(found_function_member) = maybe {
             let postfix = self.analyze_postfix_member_func_call(
                 &resolved_node,
-                found_function_member,
+                &found_function_member,
                 struct_type,
                 is_mutable,
                 arguments,

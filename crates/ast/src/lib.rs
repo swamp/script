@@ -499,8 +499,8 @@ pub enum Type {
     Unit(Node),
 
     // Composite
-    Generic(QualifiedTypeIdentifier),
-    Struct(QualifiedTypeIdentifier),
+    //Generic(QualifiedTypeIdentifier),
+    //Struct(QualifiedTypeIdentifier),
     Array(Box<Type>),
     Map(Box<Type>, Box<Type>),
     Tuple(Vec<Type>),

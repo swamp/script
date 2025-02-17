@@ -7,7 +7,6 @@ pub mod prelude;
 use std::cell::RefCell;
 use std::rc::Rc;
 use swamp_script_analyzer::err::ErrorKind;
-use swamp_script_analyzer::lookup::NameLookup;
 use swamp_script_analyzer::prelude::*;
 use swamp_script_analyzer::AutoUseModules;
 use swamp_script_dep_loader::prelude::*;

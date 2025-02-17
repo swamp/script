@@ -4,6 +4,7 @@
  */
 use seq_map::SeqMap;
 use swamp_script_semantic::Type;
+use tracing::info;
 
 #[derive(Debug)]
 pub struct TypeParameter {
@@ -14,6 +15,41 @@ pub struct TypeParameter {
 #[derive(Debug)]
 pub struct TypeParameterScope {
     pub type_parameters: SeqMap<String, TypeParameter>,
+}
+
+pub struct TypeParameterStack {
+    pub type_parameter_scope_stack: Vec<TypeParameterScope>,
+}
+
+impl Default for TypeParameterStack {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl TypeParameterStack {
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            type_parameter_scope_stack: Vec::new(),
+        }
+    }
+    pub fn push_type_parameters(
+        &mut self,
+        parameter_name_to_analyzed_type: SeqMap<String, TypeParameter>,
+    ) {
+        for ty in &parameter_name_to_analyzed_type {
+            info!(?ty, "pushing scope!")
+        }
+        self.type_parameter_scope_stack.push(TypeParameterScope {
+            type_parameters: parameter_name_to_analyzed_type,
+        });
+    }
+
+    /// Pops the most recent type parameter scope off the stack.
+    pub fn pop_type_parameters(&mut self) -> Option<TypeParameterScope> {
+        self.type_parameter_scope_stack.pop()
+    }
 }
 
 /*
@@ -197,22 +233,6 @@ impl<'a> NameLookup<'a> {
 
      */
 
-    pub fn push_type_parameter_scope(
-        &mut self,
-        parameter_name_to_analyzed_type: SeqMap<String, TypeParameter>,
-    ) {
-        for ty in &parameter_name_to_analyzed_type {
-            info!(?ty, "pushing scope!")
-        }
-        self.type_parameter_scope_stack.push(TypeParameterScope {
-            type_parameters: parameter_name_to_analyzed_type,
-        });
-    }
-
-    /// Pops the most recent type parameter scope off the stack.
-    pub fn pop_type_parameter_scope(&mut self) -> Option<TypeParameterScope> {
-        self.type_parameter_scope_stack.pop()
-    }
 
     #[must_use]
     pub fn get_struct(&self, path: &[String], name: &str) -> Option<StructTypeRef> {
