@@ -5,7 +5,6 @@
 
 use crate::symtbl::{SymbolTable, SymbolTableRef};
 use seq_map::SeqMap;
-use std::cell::RefCell;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
 use swamp_script_semantic::{
@@ -17,7 +16,7 @@ pub struct Modules {
     pub modules: SeqMap<Vec<String>, ModuleRef>,
     pub constants: Vec<ConstantRef>,
     pub auto_use: Vec<SymbolTableRef>,
-    pub associated_functions: AssociatedImpls,
+
 }
 
 
@@ -108,7 +107,6 @@ impl Modules {
             modules: SeqMap::new(),
             constants: Vec::new(),
             auto_use: Vec::new(),
-            associated_functions: AssociatedImpls::new(),
         }
     }
     pub fn add(&mut self, module: ModuleRef) {

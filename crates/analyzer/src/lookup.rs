@@ -2,17 +2,8 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-/*
-use crate::Error;
 use seq_map::SeqMap;
-use std::cell::RefCell;
-use std::rc::Rc;
-use swamp_script_modules::modules::Modules;
-use swamp_script_modules::symtbl::{GenericAwareType, GenericType, GenericTypeRef, SymbolTableRef};
-use swamp_script_semantic::{AliasType, AliasTypeRef, Constant, ConstantRef, EnumType, EnumTypeRef, EnumVariantTypeRef, ExternalFunctionDefinition, ExternalFunctionDefinitionRef, ExternalTypeRef, FunctionRef, InternalFunctionDefinition, InternalFunctionDefinitionRef, IntrinsicFunctionDefinitionRef, SemanticError, StructType, StructTypeRef, Type, TypeParameterName};
-use swamp_script_source_map::FileId;
-use tracing::info;
-use swamp_script_ast::Function;
+use swamp_script_semantic::Type;
 
 #[derive(Debug)]
 pub struct TypeParameter {
@@ -24,6 +15,18 @@ pub struct TypeParameter {
 pub struct TypeParameterScope {
     pub type_parameters: SeqMap<String, TypeParameter>,
 }
+
+/*
+use crate::Error;
+use seq_map::SeqMap;
+use std::cell::RefCell;
+use std::rc::Rc;
+use swamp_script_modules::modules::Modules;
+use swamp_script_modules::symtbl::{GenericAwareType, GenericType, GenericTypeRef, SymbolTableRef};
+use swamp_script_semantic::{AliasType, AliasTypeRef, Constant, ConstantRef, EnumType, EnumTypeRef, EnumVariantTypeRef, ExternalFunctionDefinition, ExternalFunctionDefinitionRef, ExternalTypeRef, FunctionRef, InternalFunctionDefinition, InternalFunctionDefinitionRef, IntrinsicFunctionDefinitionRef, SemanticError, StructType, StructTypeRef, Type, TypeParameterName};
+use swamp_script_source_map::FileId;
+use tracing::info;
+use swamp_script_ast::Function;
 
 #[derive()]
 pub struct NameLookup<'a> {

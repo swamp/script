@@ -158,11 +158,15 @@ impl<'a> Resolver<'a> {
             )?;
 
         if has_rest {
-            if let Some(function) = self.shared.lookup.get_member_function("default")
-                .get(&"default".to_string())
+            let maybe_default = { self
+                .shared
+                .associated_impls
+                .get_member_function(&Type::Struct(struct_to_instantiate.clone()), "default").cloned() };
+            
+            if let Some(function) =  maybe_default
             {
                 self.analyze_struct_init_calling_default(
-                    function,
+                    &function,
                     struct_to_instantiate,
                     source_order_expressions,
                     &qualified_type_identifier.name.0,

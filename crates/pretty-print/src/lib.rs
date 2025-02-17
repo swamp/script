@@ -15,7 +15,7 @@ impl Display for ModulesDisplay<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mods = self.resolved_modules;
 
-        for (name, module) in &mods.modules {
+        for (name, _module) in &mods.modules {
             writeln!(f, "{}", "===================".green())?;
             writeln!(f, "{:?}: ", name.green())?;
 
@@ -30,7 +30,7 @@ impl Display for ModulesDisplay<'_> {
             self.show_enums(f, ns.enums())?;
             self.show_internal_functions(f, ns.internal_functions())?;
             self.show_external_function_declarations(f, ns.external_function_declarations())?;
-            
+
              */
         }
 

@@ -8,14 +8,7 @@ use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::fmt::Debug;
 use std::rc::Rc;
-use swamp_script_semantic::{
-    AliasType, AliasTypeRef, AnonymousStructType, ConstantRef, EnumType, EnumTypeRef,
-    EnumVariantType, EnumVariantTypeRef, ExternalFunctionDefinition, ExternalFunctionDefinitionRef,
-    ExternalType, ExternalTypeRef, FileId, InternalFunctionDefinition,
-    InternalFunctionDefinitionRef, IntrinsicFunction, IntrinsicFunctionDefinition,
-    IntrinsicFunctionDefinitionRef, Node, SemanticError, StructType, StructTypeField,
-    StructTypeRef, Type, TypeParameterName, TypeRef,
-};
+use swamp_script_semantic::{AliasType, AliasTypeRef, AnonymousStructType, Constant, ConstantRef, EnumType, EnumTypeRef, EnumVariantType, EnumVariantTypeRef, ExternalFunctionDefinition, ExternalFunctionDefinitionRef, ExternalType, ExternalTypeRef, FileId, InternalFunctionDefinition, InternalFunctionDefinitionRef, IntrinsicFunctionDefinition, IntrinsicFunctionDefinitionRef, Node, SemanticError, StructType, StructTypeField, StructTypeRef, Type, TypeParameterName};
 use tracing::info;
 
 #[derive(Debug, Clone)]
@@ -42,7 +35,7 @@ pub enum FuncDef {
 
 #[derive(Clone, Debug)]
 pub enum Symbol {
-    Type(TypeRef),
+    Type(Type),
     Module(ModuleRef),
     Constant(ConstantRef),
     FunctionDefinition(FuncDef),
@@ -75,6 +68,10 @@ pub struct SymbolTable {
     symbols: SeqMap<String, Symbol>,
 }
 
+impl SymbolTable {
+ 
+}
+
 impl SymbolTable {}
 
 pub type SymbolTableRef = Rc<RefCell<SymbolTable>>;
@@ -93,9 +90,17 @@ impl SymbolTable {
         }
     }
 
+    pub fn add_constant(&mut self, constant: Constant) -> Result<ConstantRef, SemanticError> {
+        let constant_ref = Rc::new(constant);
+
+        self.add_constant_link(constant_ref.clone())?;
+
+        Ok(constant_ref)
+    }
+
     /// # Errors
     ///
-    pub fn add_constant_ref(&mut self, constant_ref: ConstantRef) -> Result<(), SemanticError> {
+    pub fn add_constant_link(&mut self, constant_ref: ConstantRef) -> Result<(), SemanticError> {
         let name = constant_ref.assigned_name.clone();
 
         self.symbols
@@ -137,10 +142,7 @@ impl SymbolTable {
     pub fn add_struct_link(&mut self, struct_type_ref: StructTypeRef) -> Result<(), SemanticError> {
         let name = struct_type_ref.assigned_name.clone();
         self.symbols
-            .insert(
-                name.clone(),
-                Symbol::Type(TypeRef::from(Type::Struct(struct_type_ref))),
-            )
+            .insert(name.clone(), Symbol::Type(Type::Struct(struct_type_ref)))
             .map_err(|_| SemanticError::DuplicateStructName(name))?;
         Ok(())
     }
@@ -201,11 +203,10 @@ impl SymbolTable {
         let enum_type_ref = Rc::new(RefCell::new(enum_type));
 
         let ty = Type::Enum(enum_type_ref.clone());
-        let ty_ref = Rc::new(ty);
         self.symbols
             .insert(
                 enum_type_ref.borrow().assigned_name.clone(),
-                Symbol::Type(ty_ref),
+                Symbol::Type(ty),
             )
             .map_err(|_| {
                 SemanticError::DuplicateEnumType(enum_type_ref.borrow().assigned_name.clone())
@@ -276,7 +277,7 @@ impl SymbolTable {
             .map_err(|_| SemanticError::DuplicateSymbolName)
     }
 
-    pub fn get_type(&self, name: &str) -> Option<&TypeRef> {
+    pub fn get_type(&self, name: &str) -> Option<&Type> {
         if let Some(found_symbol) = self.get_symbol(name) {
             if let Symbol::Alias(alias_ref) = found_symbol {
                 return Some(&alias_ref.referenced_type);
@@ -304,21 +305,41 @@ impl SymbolTable {
     }
 
     pub fn get_struct(&self, name: &str) -> Option<&StructTypeRef> {
-        match self.get_type(name)?.as_ref() {
+        match self.get_type(name)? {
             Type::Struct(ref struct_ref) => Some(struct_ref),
             _ => None,
         }
     }
 
     pub fn get_enum(&self, name: &str) -> Option<&EnumTypeRef> {
-        match self.get_type(name)?.as_ref() {
+        match self.get_type(name)? {
             Type::Enum(ref enum_type) => Some(enum_type),
             _ => None,
         }
     }
 
+    #[must_use]
+    pub fn get_enum_variant_type(
+        &self,
+        enum_type_name: &str,
+        variant_name: &str,
+    ) -> Option<EnumVariantTypeRef> {
+            self.get_enum(enum_type_name)
+            .as_ref()
+            .map_or_else(
+                || None,
+                |found_enum| {
+                    found_enum
+                        .borrow()
+                        .variants
+                        .get(&variant_name.to_string())
+                        .cloned()
+                },
+            )
+    }
+
     pub fn get_external_type(&self, name: &str) -> Option<&ExternalTypeRef> {
-        match self.get_type(name)?.as_ref() {
+        match self.get_type(name)? {
             Type::External(ref ext_type) => Some(ext_type),
             _ => None,
         }

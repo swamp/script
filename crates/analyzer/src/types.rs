@@ -3,7 +3,6 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use crate::err::{Error, ErrorKind};
-use crate::lookup::TypeParameter;
 use crate::Resolver;
 use seq_map::SeqMap;
 use std::rc::Rc;
@@ -15,6 +14,7 @@ use swamp_script_semantic::{
     StructTypeRef, TupleType, Type, TypeForParameter,
 };
 use tracing::info;
+use crate::lookup::TypeParameter;
 
 impl<'a> Resolver<'a> {
     /// # Errors

@@ -6,14 +6,14 @@ use crate::err::{Error, ErrorKind};
 use crate::Resolver;
 use seq_map::SeqMap;
 use std::rc::Rc;
-use swamp_script_ast::{Node, QualifiedTypeIdentifier};
+use swamp_script_ast::Node;
 use swamp_script_modules::symtbl::GenericAwareType;
 use swamp_script_semantic::{
     AliasType, AliasTypeRef, AnonymousStructType, EnumType, EnumTypeRef, EnumVariantCommon,
     EnumVariantSimpleType, EnumVariantSimpleTypeRef, EnumVariantStructType, EnumVariantTupleType,
     EnumVariantType, ExternalFunctionDefinition, Function, InternalFunctionDefinition,
     LocalIdentifier, LocalTypeIdentifier, ParameterNode, Signature, StructType, StructTypeField,
-    StructTypeRef, Type, TypeForParameter, TypeParameterName, UseItem,
+    Type, TypeForParameter, TypeParameterName, UseItem,
 };
 use tracing::info;
 
@@ -230,7 +230,7 @@ impl<'a> Resolver<'a> {
         let resolved_alias = AliasType {
             name: self.to_node(&ast_alias.identifier.0),
             assigned_name: alias_name_str,
-            referenced_type: Rc::new(resolved_type),
+            referenced_type: resolved_type,
         };
 
         let resolved_alias_ref = self.shared.definition_table.add_alias(resolved_alias)?;
@@ -315,7 +315,10 @@ impl<'a> Resolver<'a> {
 
         let struct_name_str = self.get_text(&ast_struct.identifier.name).to_string();
         let resolved_struct_ref = self.analyze_struct_type(&*struct_name_str, ast_struct)?;
-        let _ = self.shared.definition_table.add_struct(resolved_struct_ref)?;
+        let _ = self
+            .shared
+            .definition_table
+            .add_struct(resolved_struct_ref)?;
 
         Ok(())
     }
@@ -481,7 +484,7 @@ impl<'a> Resolver<'a> {
 
     pub fn analyze_impl_functions(
         &mut self,
-        node: &Node,
+        _node: &Node,
         found_type: &Type,
         functions: &[&swamp_script_ast::Function],
     ) -> Result<(), Error> {
@@ -504,11 +507,10 @@ impl<'a> Resolver<'a> {
 
             self.stop_function();
 
-            self.shared.modules.associated_functions.add_member_function(
-                found_type,
-                &function_name_str,
-                resolved_function_ref,
-            )?;
+            self.shared
+                .modules
+                .associated_functions
+                .add_member_function(found_type, &function_name_str, resolved_function_ref)?;
         }
 
         Ok(())

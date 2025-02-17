@@ -6,8 +6,7 @@
 pub mod collections;
 pub mod prelude;
 
-use swamp_script_modules::modules::Module;
-use swamp_script_semantic::{ExternalType, TypeNumber};
+use swamp_script_semantic::{TypeNumber};
 pub const SPARSE_TYPE_ID: TypeNumber = 999;
 pub const SPARSE_ID_TYPE_ID: TypeNumber = 998;
 

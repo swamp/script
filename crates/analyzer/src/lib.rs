@@ -18,18 +18,18 @@ pub mod types;
 pub mod variable;
 
 use crate::err::{Error, ErrorKind};
-use crate::lookup::{TypeParameterScope};
 use seq_map::SeqMap;
 use std::mem::take;
 use std::num::{ParseFloatError, ParseIntError};
 use std::rc::Rc;
 
+use crate::lookup::TypeParameterScope;
 use swamp_script_modules::modules::{Module, Modules, NamespaceRegistry};
 use swamp_script_modules::symtbl::{FuncDef, Symbol, SymbolTable, SymbolTableRef};
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
-    ArgumentExpressionOrLocation, IteratorYieldType, LocationAccess, LocationAccessKind,
-    MutOrImmutableExpression, NormalPattern, Postfix, PostfixKind, RangeMode,
+    ArgumentExpressionOrLocation, AssociatedImpls, IteratorYieldType, LocationAccess,
+    LocationAccessKind, MutOrImmutableExpression, NormalPattern, Postfix, PostfixKind, RangeMode,
     SingleLocationExpression, SingleLocationExpressionKind, SingleMutLocationExpression,
     TypeWithMut, WhenBinding,
 };
@@ -64,7 +64,6 @@ pub struct Program {
 }
 
 impl Program {
-
     pub fn add_auto_use(&mut self, path: &[String]) {
         /*
         let module = self.modules.get(path).unwrap();
@@ -117,7 +116,6 @@ pub enum BlockScopeMode {
 pub struct BlockScope {
     mode: BlockScopeMode,
     variables: SeqMap<String, VariableRef>,
-    constants: SeqMap<String, ConstantRef>,
 }
 
 impl Default for BlockScope {
@@ -139,7 +137,7 @@ impl BlockScope {
 
 pub struct SharedState<'a> {
     pub state: &'a mut ProgramState,
-    //pub lookup: &'a mut NameLookup<'a>,
+    pub associated_impls: AssociatedImpls,
     pub lookup_table: SymbolTable,
     pub definition_table: SymbolTable,
     pub type_parameter_scope_stack: Vec<TypeParameterScope>,
@@ -173,6 +171,7 @@ impl<'a> Resolver<'a> {
     pub fn new(
         state: &'a mut ProgramState,
         modules: &'a mut Modules,
+        associated_functions: &'a mut AssociatedImpls,
         source_map: &'a SourceMap,
         file_id: FileId,
     ) -> Self {
@@ -182,6 +181,7 @@ impl<'a> Resolver<'a> {
             definition_table: SymbolTable::default(),
             type_parameter_scope_stack: vec![],
             modules,
+            associated_functions,
             source_map,
             file_id,
         };
@@ -289,22 +289,6 @@ impl<'a> Resolver<'a> {
         (path, complete_name)
     }
 
-    fn get_full_path(
-        &self,
-        ident: &swamp_script_ast::QualifiedTypeIdentifier,
-    ) -> (Vec<String>, String) {
-        let path = ident.module_path.as_ref().map_or_else(
-            || self.shared.lookup.default_path.clone(),
-            |found_path| {
-                let mut v = Vec::new();
-                for p in &found_path.0 {
-                    v.push(self.get_text(p).to_string());
-                }
-                v
-            },
-        );
-        (path, self.get_text(&ident.name.0).to_string())
-    }
     fn analyze_return_type(
         &mut self,
         function: &swamp_script_ast::Function,
@@ -485,7 +469,7 @@ impl<'a> Resolver<'a> {
                     swamp_script_ast::ExpressionKind::IdentifierReference(identifier) => {
                         let text = self.get_text(&identifier.name);
                         if let Some(check_intrinsic) =
-                            self.shared.lookup.get_intrinsic_function(text)
+                            self.shared.lookup_table.get_intrinsic_function(text)
                         {
                             if postfix_chain.postfixes.len() == 1 {
                                 if let swamp_script_ast::Postfix::FunctionCall(x, arguments) =
@@ -751,19 +735,19 @@ impl<'a> Resolver<'a> {
     fn get_type(
         &mut self,
         qualified_type_identifier: &swamp_script_ast::QualifiedTypeIdentifier,
-    ) -> Result<StructTypeRef, Error> {
-        //   let namespace = self.get_namespace(qualified_type_identifier)?;
-
+    ) -> Result<Type, Error> {
         let (path, name) = self.get_path(qualified_type_identifier);
 
-        let struct_ref = self.shared.lookup.get_type(&path, &name).ok_or_else(|| {
-            self.create_err(
-                ErrorKind::UnknownStructTypeReference,
-                &qualified_type_identifier.name.0,
-            )
-        })?;
+        if let Some(module) = self.shared.modules.get(&*path) {
+            if let Some(type_ref) = module.namespace.symbol_table.get_type(&*name) {
+                return Ok(type_ref.clone());
+            }
+        }
 
-        Ok(struct_ref)
+        Err(self.create_err(
+            ErrorKind::UnknownTypeReference,
+            &qualified_type_identifier.name.0,
+        ))
     }
 
     fn create_default_value_for_type(
@@ -809,10 +793,7 @@ impl<'a> Resolver<'a> {
         node: &swamp_script_ast::Node,
         struct_ref_borrow: &StructTypeRef,
     ) -> Result<ExpressionKind, Error> {
-        if let Some(function) = struct_ref_borrow
-               .functions
-            .get(&"default".to_string())
-        {
+        if let Some(function) = struct_ref_borrow.functions.get(&"default".to_string()) {
             let kind = match &**function {
                 Function::Internal(internal_function) => {
                     ExpressionKind::InternalFunctionAccess(internal_function.clone())
@@ -1041,7 +1022,7 @@ impl<'a> Resolver<'a> {
                         }
 
                         Type::Struct(resolved_struct_ref) => {
-                            let borrow = resolved_struct_ref.borrow();
+                            let borrow = resolved_struct_ref;
                             let subscript_fn = self
                                 .find_struct_function(resolved_struct_ref, "subscript")
                                 .unwrap();
@@ -1367,44 +1348,37 @@ impl<'a> Resolver<'a> {
         if let Some(found_symbol) = self.shared.lookup_table.get_symbol(text) {
             let expr = match found_symbol {
                 Symbol::FunctionDefinition(func) => match func {
-                    FuncDef::External(found_external_function) => {
-                        self.create_expr(
-                            ExpressionKind::ExternalFunctionAccess(
-                                found_external_function.clone(),
-                            ),
-                            Type::Function(found_external_function.signature.clone()),
-                            &var_node,
-                        )
-                    }
-                    FuncDef::Internal(found_internal_function) => {
-                        self.create_expr(
-                            ExpressionKind::InternalFunctionAccess(found_internal_function.clone()),
-                            Type::Function(found_internal_function.signature.clone()),
-                            var_node,
-                        )
-                    }
+                    FuncDef::External(found_external_function) => self.create_expr(
+                        ExpressionKind::ExternalFunctionAccess(found_external_function.clone()),
+                        Type::Function(found_external_function.signature.clone()),
+                        &var_node,
+                    ),
+                    FuncDef::Internal(found_internal_function) => self.create_expr(
+                        ExpressionKind::InternalFunctionAccess(found_internal_function.clone()),
+                        Type::Function(found_internal_function.signature.clone()),
+                        var_node,
+                    ),
                     _ => {
                         return Err(self.create_err(ErrorKind::UnknownVariable, var_node));
-                    },
+                    }
                 },
 
-        
-                
-                _ =>{
+                _ => {
                     return Err(self.create_err(ErrorKind::UnknownVariable, var_node));
                 }
             };
-            return Ok(expr)
-        } else {
-            let variable_ref = self.scope
-            self.create_expr(
+            return Ok(expr);
+        }
+
+        if let Some(variable_ref) = self.try_find_variable(&var_node) {
+            Ok(self.create_expr(
                 ExpressionKind::VariableAccess(variable_ref.clone()),
                 variable_ref.resolved_type.clone(),
                 var_node,
-            );
+            ))
+        } else {
+            Err(self.create_err(ErrorKind::UnknownVariable, var_node))
         }
-
-    
     }
 
     fn analyze_usize_index(
@@ -1494,22 +1468,6 @@ impl<'a> Resolver<'a> {
                 },
                 Ok,
             )
-    }
-
-    fn analyze_enum_ref(
-        &self,
-        qualified_type_identifier: &swamp_script_ast::QualifiedTypeIdentifier,
-    ) -> Result<EnumTypeRef, Error> {
-        //let variant_name_string = self.get_text(&qualified_type_identifier.name.0).to_string();
-        self.get_enum_type(qualified_type_identifier).map_or_else(
-            || {
-                Err(self.create_err(
-                    ErrorKind::UnknownEnumVariantType,
-                    &qualified_type_identifier.name.0,
-                ))
-            },
-            Ok,
-        )
     }
 
     #[allow(unused)]
@@ -1671,23 +1629,16 @@ impl<'a> Resolver<'a> {
         variant_name: &str,
     ) -> Option<EnumVariantTypeRef> {
         let path = self.get_module_path(&qualified_type_identifier.module_path);
+        if let Some(module) = self.shared.modules.get(&*path) {
+            let enum_name = self.get_text(&qualified_type_identifier.name.0).to_string();
 
-        let enum_name = self.get_text(&qualified_type_identifier.name.0).to_string();
-
-        self.shared
-            .lookup
-            .get_enum_variant_type(&path, &enum_name, variant_name)
-    }
-
-    fn get_enum_type(
-        &self,
-        qualified_type_identifier: &swamp_script_ast::QualifiedTypeIdentifier,
-    ) -> Option<EnumTypeRef> {
-        let path = self.get_module_path(&qualified_type_identifier.module_path);
-
-        let enum_name = self.get_text(&qualified_type_identifier.name.0).to_string();
-
-        self.shared.lookup.get_enum(&path, &enum_name)
+            module
+                .namespace
+                .symbol_table
+                .get_enum_variant_type(&enum_name, variant_name)
+        } else {
+            None
+        }
     }
 
     const fn analyze_compound_operator(
@@ -2498,7 +2449,7 @@ impl<'a> Resolver<'a> {
         let field_name_str = self.get_text(member_name).to_string();
 
         let resolved_node = self.to_node(member_name);
-        let binding= struct_type;
+        let binding = struct_type;
         let postfixes = if let Some(found_function_member) = binding.functions.get(&field_name_str)
         {
             let postfix = self.analyze_postfix_member_func_call(

@@ -25,8 +25,6 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    
-    
     pub(crate) fn analyze_static_member_access(
         &mut self,
         named_type: &swamp_script_ast::QualifiedTypeIdentifier,
@@ -34,7 +32,11 @@ impl<'a> Resolver<'a> {
     ) -> Result<Expression, Error> {
         let some_type = self.find_named_type(named_type)?;
         let member_name = self.get_text(member_name_node);
-        if let Some(member_function) = self.shared.lookup.get_member_function(some_type, member_name) {
+        if let Some(member_function) = self
+            .shared
+            .associated_impls
+            .get_member_function(&some_type, member_name)
+        {
             let expr = Self::convert_to_function_access(member_function);
             Ok(expr)
         } else {

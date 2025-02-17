@@ -205,14 +205,14 @@ pub enum Type {
     External(ExternalTypeRef),
 }
 
-pub type TypeRef = Rc<Type>;
+//pub type TypeRef = Rc<Type>;
 
 impl Type {
     pub(crate) fn type_number(&self) -> TypeNumber {
         match self {
             Self::Int => 0,
             Self::Float => 1,
-            Self::Struct(struct_type) => 0,
+            Self::Struct(_struct_type) => 0,
             _ => 0xffff,
         }
     }
@@ -1078,7 +1078,7 @@ pub type ConstantRef = Rc<Constant>;
 pub struct AliasType {
     pub name: Node,
     pub assigned_name: String,
-    pub referenced_type: TypeRef,
+    pub referenced_type: Type,
 }
 pub type AliasTypeRef = Rc<AliasType>;
 
@@ -1136,7 +1136,7 @@ impl AssociatedImpls {
         func: FunctionRef,
     ) -> Result<(), SemanticError> {
         let maybe_found_impl = self.functions.get_mut(&ty.type_number());
-        if let Some(mut found_impl) = maybe_found_impl {
+        if let Some(found_impl) = maybe_found_impl {
             found_impl
                 .functions
                 .insert(name.to_string(), func)
