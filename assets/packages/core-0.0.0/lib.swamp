@@ -1,0 +1,31 @@
+impl Bool {
+  fn default() -> Bool {
+    false
+  }
+}
+
+impl Float {
+  fn floor(self) -> Int {
+     float_floor(self)
+  }
+
+  fn round(self) -> Int {
+     float_round(self)
+  }
+
+  fn sqrt(self) -> Float {
+     float_sqrt(self)
+  }
+}
+
+impl Int {
+  fn default() -> Int {
+    0
+  }
+}
+
+impl String {
+  fn default() -> String {
+    ""
+  }
+}
