@@ -79,20 +79,29 @@ impl QualifiedTypeIdentifier {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct QualifiedIdentifier {
-    pub name: Node,
+    pub name: LocalIdentifier,
     pub module_path: Option<ModulePath>,
+    pub generic_params: Vec<Type>,
 }
 
 impl QualifiedIdentifier {
     #[must_use]
-    pub fn new(name: Node, module_path: Vec<Node>) -> Self {
+    pub fn new_with_generics(
+        name: LocalIdentifier,
+        module_path: Vec<Node>,
+        generic_params: Vec<Type>,
+    ) -> Self {
         let module_path = if module_path.is_empty() {
             None
         } else {
             Some(ModulePath(module_path))
         };
 
-        Self { name, module_path }
+        Self {
+            name,
+            module_path,
+            generic_params,
+        }
     }
 }
 
@@ -112,7 +121,7 @@ pub struct LocalTypeIdentifierWithOptionalTypeParams {
     pub parameter_names: Vec<Node>,
 }
 
-#[derive(PartialEq, Eq, Hash, Debug)]
+#[derive(PartialEq, Eq, Hash, Debug, Clone)]
 pub struct LocalIdentifier(pub Node);
 
 impl LocalIdentifier {
@@ -391,6 +400,7 @@ pub enum ExpressionKind {
     IdentifierReference(Variable),
     ConstantReference(ConstantIdentifier),
     StaticMemberFunctionReference(QualifiedTypeIdentifier, Node),
+    StaticFunctionReference(QualifiedIdentifier),
 
     // Assignments
     VariableDefinition(Variable, Option<Type>, Box<MutableOrImmutableExpression>),

@@ -21,6 +21,8 @@ pub struct TypeParameterStack {
     pub type_parameter_scope_stack: Vec<TypeParameterScope>,
 }
 
+impl TypeParameterStack {}
+
 impl Default for TypeParameterStack {
     fn default() -> Self {
         Self::new()
@@ -39,11 +41,20 @@ impl TypeParameterStack {
         parameter_name_to_analyzed_type: SeqMap<String, TypeParameter>,
     ) {
         for ty in &parameter_name_to_analyzed_type {
-            info!(?ty, "pushing scope!")
+            info!(?ty, "pushing scope!");
         }
         self.type_parameter_scope_stack.push(TypeParameterScope {
             type_parameters: parameter_name_to_analyzed_type,
         });
+    }
+
+    pub(crate) fn get(&self, type_name: &str) -> Option<Type> {
+        for scope in self.type_parameter_scope_stack.iter().rev() {
+            if let Some(found_type) = scope.type_parameters.get(&type_name.to_string()) {
+                return Some(found_type.ty.clone());
+            }
+        }
+        None
     }
 
     /// Pops the most recent type parameter scope off the stack.

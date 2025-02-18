@@ -4,6 +4,7 @@
  */
 use crate::err::{Error, ErrorKind};
 use crate::Analyzer;
+use swamp_script_modules::symtbl::FuncDef;
 
 use swamp_script_semantic::{
     Expression, ExpressionKind, Function, FunctionRef, Range, RangeMode, Type,
@@ -30,7 +31,7 @@ impl<'a> Analyzer<'a> {
         named_type: &swamp_script_ast::QualifiedTypeIdentifier,
         member_name_node: &swamp_script_ast::Node,
     ) -> Result<Expression, Error> {
-        let some_type = self.find_named_type(named_type)?;
+        let some_type = self.get_type(named_type)?;
         let member_name = self.get_text(member_name_node);
         self.shared
             .state
@@ -43,6 +44,49 @@ impl<'a> Analyzer<'a> {
                     Ok(expr)
                 },
             )
+    }
+
+    pub(crate) fn analyze_static_function_access(
+        &mut self,
+        qualified_func_name: &swamp_script_ast::QualifiedIdentifier,
+    ) -> Result<Expression, Error> {
+        let path = self.get_module_path(&qualified_func_name.module_path);
+        let function_name = self.get_text(&qualified_func_name.name.0);
+
+        if let Some(found_table) = self.shared.get_symbol_table(&path) {
+            if let Some(found_func) = found_table.get_intrinsic_function(function_name) {
+                let kind = ExpressionKind::IntrinsicFunctionAccess(found_func.clone());
+                return Ok(self.create_expr(
+                    kind,
+                    *found_func.signature.return_type.clone(),
+                    &qualified_func_name.name.0,
+                ));
+            }
+
+            if let Some(found_func) = found_table.get_function(function_name) {
+                let (kind, return_type) = match found_func {
+                    FuncDef::Internal(internal_fn) => (
+                        ExpressionKind::InternalFunctionAccess(internal_fn.clone()),
+                        &internal_fn.signature.return_type,
+                    ),
+                    FuncDef::External(external_fn) => (
+                        ExpressionKind::ExternalFunctionAccess(external_fn.clone()),
+                        &external_fn.signature.return_type,
+                    ),
+                    FuncDef::Intrinsic(_) => {
+                        return Err(self
+                            .create_err(ErrorKind::UnknownFunction, &qualified_func_name.name.0));
+                    }
+                };
+
+                return Ok(self.create_expr(
+                    kind,
+                    *return_type.clone(),
+                    &qualified_func_name.name.0,
+                ));
+            }
+        }
+        Err(self.create_err(ErrorKind::UnknownFunction, &qualified_func_name.name.0))
     }
 
     pub(crate) fn analyze_min_max_expr(

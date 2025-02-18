@@ -956,6 +956,7 @@ pub enum ExpressionKind {
     // Access Lookup values
     ConstantAccess(ConstantRef),
     VariableAccess(VariableRef),
+    IntrinsicFunctionAccess(IntrinsicFunctionDefinitionRef),
     InternalFunctionAccess(InternalFunctionDefinitionRef),
     ExternalFunctionAccess(ExternalFunctionDefinitionRef),
 
@@ -1446,7 +1447,7 @@ pub enum Definition {
 }
 */
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MonomorphizationCache {
     pub cache: SeqMap<String, Type>,
 }
@@ -1477,12 +1478,11 @@ impl MonomorphizationCache {
         self.cache.insert(name, ty)
     }
 
-    pub fn get(
-        &mut self,
-        path: &[String],
-        base_name: &str,
-        argument_type: &[Type],
-    ) -> Option<&Type> {
+    pub fn is_empty(&self) -> bool {
+        self.cache.is_empty()
+    }
+
+    pub fn get(&self, path: &[String], base_name: &str, argument_type: &[Type]) -> Option<&Type> {
         let name = Self::complete_name(path, base_name, argument_type);
         self.cache.get(&name)
     }

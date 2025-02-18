@@ -39,7 +39,7 @@ impl<'a> Analyzer<'a> {
         Ok(map_type_ref)
     }
 
-    pub(crate) fn find_named_type(
+    pub(crate) fn get_type(
         &mut self,
         type_name_to_find: &swamp_script_ast::QualifiedTypeIdentifier,
     ) -> Result<Type, Error> {
@@ -47,6 +47,11 @@ impl<'a> Analyzer<'a> {
         //info!(?text, ?module, "looking for named type");
         if type_name_to_find.generic_params.is_empty() {
             let (path, name) = self.get_path(type_name_to_find);
+            if path.is_empty() {
+                if let Some(found_type) = self.shared.type_parameter_scope_stack.get(&name) {
+                    return Ok(found_type);
+                }
+            }
             let symbol_table = self.shared.get_symbol_table(&path);
             symbol_table.map_or_else(
                 || Err(self.create_err(ErrorKind::UnknownSymbol, &type_name_to_find.name.0)),
@@ -164,7 +169,7 @@ impl<'a> Analyzer<'a> {
              */
             swamp_script_ast::Type::Enum(_) => todo!(),
             swamp_script_ast::Type::Named(ast_type_reference) => {
-                self.find_named_type(ast_type_reference)?
+                self.get_type(ast_type_reference)?
             }
             swamp_script_ast::Type::Optional(inner_type_ast, _node) => {
                 let inner_resolved_type = self.analyze_type(inner_type_ast)?;
@@ -264,39 +269,29 @@ impl<'a> Analyzer<'a> {
 
      */
 
-    fn create_type_parameters(
-        &mut self,
+    fn get_generic(
+        &self,
         parameterize_definition: &swamp_script_ast::QualifiedTypeIdentifier,
-    ) -> Result<GenericTypeRef, Error> {
-        let _found_generic = {
-            let path = self.get_module_path(&parameterize_definition.module_path);
-            let base_name = self.get_text(&parameterize_definition.name.0).to_string();
-            if let Some(module) = self.shared.modules.get(&path) {
-                let found_generic = match module.namespace.symbol_table.get_generic(&base_name) {
-                    Some(generic) => generic,
-                    None => {
-                        return Err(self.create_err(
-                            ErrorKind::UnknownTypeReference,
-                            &parameterize_definition.name.0,
-                        ))
-                    }
-                };
-
-                return Ok(found_generic.clone());
-            }
-        };
-
-        Err(self.create_err(
-            ErrorKind::WrongTypeParameters,
-            &parameterize_definition.name.0,
-        ))
+    ) -> Result<(SymbolTable, GenericTypeRef, Vec<String>), Error> {
+        let (canonical_path, _name) = self.get_canonical_path_and_name(parameterize_definition)?;
+        let (symbol_table, base_name) = self.get_symbol_table_and_name(parameterize_definition)?;
+        symbol_table.get_generic(&base_name).map_or_else(
+            || {
+                Err(self.create_err(
+                    ErrorKind::UnknownTypeReference,
+                    &parameterize_definition.name.0,
+                ))
+            },
+            |generic| Ok((symbol_table.clone(), generic.clone(), canonical_path)),
+        )
     }
 
-    fn monomorphize(
+    pub fn monomorphize(
         &mut self,
         parameterize_definition: &swamp_script_ast::QualifiedTypeIdentifier,
     ) -> Result<Type, Error> {
-        let found_generic_ref = self.create_type_parameters(parameterize_definition)?;
+        let (symbol_table_generic_is_in, found_generic_ref, canonical_path) =
+            self.get_generic(parameterize_definition)?;
         let found_generic = found_generic_ref.borrow();
 
         if found_generic.type_parameters.len() != parameterize_definition.generic_params.len() {
@@ -331,17 +326,13 @@ impl<'a> Analyzer<'a> {
         let base_name = self.get_text(&parameterize_definition.name.0).to_string();
         let monomorphization_name = SymbolTable::get_monomorphization_name(&base_name, &types_vec);
         info!(?monomorphization_name, "------ MONOMORPHIZE");
-        let module_that_owns_generic = self
-            .shared
-            .modules
-            .get(&found_generic.defined_in_path)
-            .unwrap();
 
-        if let Some(monomorphized_struct_ref) = self.shared.state.monomorphization_cache.get(
-            &found_generic.defined_in_path,
-            &base_name,
-            &types_vec,
-        ) {
+        if let Some(monomorphized_struct_ref) =
+            self.shared
+                .state
+                .monomorphization_cache
+                .get(&canonical_path, &base_name, &types_vec)
+        {
             info!(monomorphization_name, "fetching type from cache");
             Ok(monomorphized_struct_ref.clone())
         } else {
@@ -353,7 +344,7 @@ impl<'a> Analyzer<'a> {
             self.shared.file_id = found_generic.file_id;
             self.shared
                 .lookup_table
-                .clone_from(&module_that_owns_generic.namespace.symbol_table);
+                .clone_from(&symbol_table_generic_is_in);
 
             // Struct ------------------
             let GenericAwareType::Struct(base_ast_type) = &found_generic.base_type;
@@ -368,7 +359,7 @@ impl<'a> Analyzer<'a> {
                 .state
                 .monomorphization_cache
                 .add(
-                    &found_generic.defined_in_path,
+                    &canonical_path,
                     &base_name,
                     created_type.clone(),
                     &types_vec,

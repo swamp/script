@@ -310,14 +310,18 @@ impl<'a> Analyzer<'a> {
             let generic_type = GenericType {
                 type_parameters: parameter_names,
                 base_type: GenericAwareType::Struct(ast_struct.clone()),
-                ast_functions: Default::default(),
-                file_id: 0,
-                defined_in_path: vec![],
+                ast_functions: SeqMap::default(),
+                file_id: self.shared.file_id,
             };
 
-            self.shared
+            let generic_type_ref = self
+                .shared
                 .definition_table
                 .add_generic(&struct_name_str, generic_type)?;
+
+            self.shared
+                .lookup_table
+                .add_generic_link(&struct_name_str, generic_type_ref)?;
 
             return Ok(());
         }
@@ -486,7 +490,7 @@ impl<'a> Analyzer<'a> {
             generic_params: vec![],
         };
 
-        let type_to_attach_to = self.find_named_type(&qualified)?;
+        let type_to_attach_to = self.get_type(&qualified)?;
         let function_refs: Vec<&swamp_script_ast::Function> = functions.iter().collect();
         self.analyze_impl_functions(&attached_to_type.name, &type_to_attach_to, &function_refs)?;
 
@@ -512,7 +516,7 @@ impl<'a> Analyzer<'a> {
 
             let function_name_str = self.get_text(&function_name.name).to_string();
 
-            let resolved_function = self.analyze_impl_func(function, &found_type)?;
+            let resolved_function = self.analyze_impl_func(function, found_type)?;
 
             let resolved_function_ref = Rc::new(resolved_function);
 

@@ -115,6 +115,9 @@ pub fn pretty_print_symbol(
         Symbol::Generic(generic_type_ref) => {
             write!(f, "{generic_type_ref:?}")
         }
+        Symbol::PackageVersion(version) => {
+            write!(f, "version {version}")
+        }
     }
 }
 

@@ -5,24 +5,27 @@
 use seq_map::SeqMap;
 use std::fmt::{Debug, Formatter};
 use std::path::Path;
+use std::rc::Rc;
 use swamp_script_analyzer::prelude::Error;
 use swamp_script_analyzer::Analyzer;
-use swamp_script_core::add_intrinsic_types;
+use swamp_script_core::{add_intrinsic_functions, add_intrinsic_types};
 use swamp_script_error_report::show_error;
-use swamp_script_modules::modules::{pretty_print, pretty_print_symbol_table, Modules};
+use swamp_script_modules::modules::{pretty_print, pretty_print_symbol_table, Module, Modules};
 use swamp_script_modules::symtbl::SymbolTable;
 use swamp_script_parser::AstParser;
-use swamp_script_semantic::{Expression, ProgramState};
+use swamp_script_semantic::{Expression, MonomorphizationCache, ProgramState};
 use swamp_script_source_map::SourceMap;
 use tracing::warn;
 
-fn internal_compile(script: &str) -> Result<(SymbolTable, Option<Expression>), Error> {
-    let parser = AstParser {};
+fn internal_compile(
+    script: &str,
+) -> Result<(SymbolTable, MonomorphizationCache, Option<Expression>), Error> {
+    let parser = AstParser;
 
     let program = parser.parse_module(script).expect("Failed to parse script");
 
     let mut state = ProgramState::new();
-    let modules = Modules::new();
+    let mut modules = Modules::new();
 
     let mut mount_maps = SeqMap::new();
     mount_maps
@@ -32,19 +35,32 @@ fn internal_compile(script: &str) -> Result<(SymbolTable, Option<Expression>), E
     let mut source_map = SourceMap::new(&mount_maps);
     let file_id = 0xffff;
 
+    let canonical_path = ["some_path".to_string(), "main".to_string()];
     source_map.add_manual(file_id, "crate", Path::new("some_path/main"), script);
 
     let mut intrinsic_types_symbol_table = SymbolTable::new();
+    let canonical_core_path = ["core-0.0.0".to_string()];
     add_intrinsic_types(&mut intrinsic_types_symbol_table);
+    add_intrinsic_functions(&mut intrinsic_types_symbol_table);
 
-    let mut analyzer = Analyzer::new(&mut state, &modules, &source_map, file_id);
+    let core_module = Module::new(&canonical_core_path, intrinsic_types_symbol_table, None);
+    let core_module_ref = Rc::new(core_module);
+    modules.add(core_module_ref.clone());
 
-    for (name, symbol) in intrinsic_types_symbol_table.symbols() {
+    let mut analyzer = Analyzer::new(&mut state, &modules, &source_map, &canonical_path, file_id);
+
+    for (name, symbol) in core_module_ref.namespace.symbol_table.symbols() {
         analyzer
             .shared
             .lookup_table
             .add_symbol(name, symbol.clone())?;
     }
+
+    analyzer
+        .shared
+        .lookup_table
+        .add_package_version("core", "0.0.0")
+        .expect("should work");
 
     let mut resolved_definitions = Vec::new();
     for definition in &program.definitions {
@@ -75,7 +91,11 @@ fn internal_compile(script: &str) -> Result<(SymbolTable, Option<Expression>), E
         None => None,
     };
 
-    Ok((analyzer.shared.definition_table, maybe_resolved_expression))
+    Ok((
+        analyzer.shared.definition_table,
+        analyzer.shared.state.monomorphization_cache.clone(),
+        maybe_resolved_expression,
+    ))
 }
 
 /// # Panics
@@ -109,7 +129,8 @@ impl<'a> Debug for FormatSymbolTable<'a> {
 /// # Panics
 /// Intentionally panics if output is not the same as the `expected_output`
 pub fn check(script: &str, expected_output: &str) {
-    let (symbol_table, expression) = internal_compile(script).expect("should work");
+    let (symbol_table, monomorphization_cache, expression) =
+        internal_compile(script).expect("should work");
 
     let mut formatted_output = String::new();
 
@@ -120,8 +141,17 @@ pub fn check(script: &str, expected_output: &str) {
         formatted_output += &*format!("{format_symbol_table:?}");
     }
 
+    if !monomorphization_cache.is_empty() {
+        if !formatted_output.is_empty() {
+            formatted_output += "---\n";
+        }
+        for (name, ty) in monomorphization_cache.cache {
+            formatted_output += &*format!("{name} ==> {ty:?}\n");
+        }
+    }
+
     if let Some(expr) = expression {
-        if !symbol_table.is_empty() {
+        if !formatted_output.is_empty() {
             formatted_output += "---\n";
         }
 

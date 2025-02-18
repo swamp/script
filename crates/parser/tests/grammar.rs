@@ -2910,7 +2910,7 @@ struct Something<T> {
          ",
         "
 
-StructDef(StructType { identifier: LocalTypeIdentifierWithOptionalTypeParams { name: <8:9>, parameter_names: [<18:1>] }, fields: [FieldType { field_name: FieldName(<27:5>), field_type: Int(<34:3>) }, FieldType { field_name: FieldName(<43:7>), field_type: Named(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<52:1>), module_path: None, generic_params: [] }) }] })
+StructDef(StructType { identifier: LocalTypeIdentifierWithOptionalTypeParams { name: <8:9>, parameter_names: [<18:1>] }, fields: [FieldType { field_name: FieldName(<27:5>), field_type: Named(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<34:3>), module_path: None, generic_params: [] }) }, FieldType { field_name: FieldName(<43:7>), field_type: Named(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<52:1>), module_path: None, generic_params: [] }) }] })
 
 ",
     );

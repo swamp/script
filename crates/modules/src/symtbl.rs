@@ -12,8 +12,8 @@ use swamp_script_semantic::{
     AliasType, AliasTypeRef, AnonymousStructType, Constant, ConstantRef, EnumType, EnumTypeRef,
     EnumVariantType, EnumVariantTypeRef, ExternalFunctionDefinition, ExternalFunctionDefinitionRef,
     ExternalType, ExternalTypeRef, FileId, InternalFunctionDefinition,
-    InternalFunctionDefinitionRef, IntrinsicFunctionDefinitionRef, Node, SemanticError, StructType,
-    StructTypeField, StructTypeRef, Type, TypeParameterName,
+    InternalFunctionDefinitionRef, IntrinsicFunctionDefinition, IntrinsicFunctionDefinitionRef,
+    Node, SemanticError, StructType, StructTypeField, StructTypeRef, Type, TypeParameterName,
 };
 use tracing::info;
 
@@ -28,8 +28,8 @@ pub struct GenericType {
     pub base_type: GenericAwareType,
     pub ast_functions: SeqMap<String, swamp_script_ast::Function>,
     pub file_id: FileId,
-    pub defined_in_path: Vec<String>,
 }
+
 pub type GenericTypeRef = Rc<RefCell<GenericType>>;
 
 #[derive(Debug, Clone)]
@@ -43,6 +43,7 @@ pub enum FuncDef {
 pub enum Symbol {
     Type(Type),
     Module(ModuleRef),
+    PackageVersion(String),
     Constant(ConstantRef),
     FunctionDefinition(FuncDef),
     Alias(AliasTypeRef),
@@ -281,6 +282,20 @@ impl SymbolTable {
         Ok(())
     }
 
+    pub fn add_intrinsic_function(
+        &mut self,
+        function: IntrinsicFunctionDefinition,
+    ) -> Result<IntrinsicFunctionDefinitionRef, SemanticError> {
+        let function_ref = Rc::new(function);
+        self.symbols
+            .insert(
+                function_ref.name.clone(),
+                Symbol::FunctionDefinition(FuncDef::Intrinsic(function_ref.clone())),
+            )
+            .expect("todo: add seqmap error handling");
+        Ok(function_ref)
+    }
+
     pub fn get_symbol(&self, name: &str) -> Option<&Symbol> {
         self.symbols.get(&name.to_string())
     }
@@ -371,6 +386,14 @@ impl SymbolTable {
         }
     }
 
+    #[must_use]
+    pub fn get_package_version(&self, name: &str) -> Option<String> {
+        match self.get_symbol(name)? {
+            Symbol::PackageVersion(ref name) => Some(name.to_string()),
+            _ => None,
+        }
+    }
+
     // Functions
 
     #[must_use]
@@ -445,14 +468,29 @@ impl SymbolTable {
         Ok(())
     }
 
+    pub fn add_package_version(&mut self, name: &str, version: &str) -> Result<(), SemanticError> {
+        self.insert_symbol(name, Symbol::PackageVersion(version.to_string()))
+            .map_err(|_| SemanticError::DuplicateNamespaceLink(name.to_string()))?;
+        Ok(())
+    }
+
     pub fn add_generic(
         &mut self,
         name: &str,
         generic_type: GenericType,
     ) -> Result<GenericTypeRef, SemanticError> {
         let generic_ref = Rc::new(RefCell::new(generic_type));
-        self.insert_symbol(name, Symbol::Generic(generic_ref.clone()))
-            .map_err(|_| SemanticError::DuplicateGenericType(name.to_string()))?;
+        self.add_generic_link(name, generic_ref.clone())?;
         Ok(generic_ref)
+    }
+
+    pub fn add_generic_link(
+        &mut self,
+        name: &str,
+        generic_ref: GenericTypeRef,
+    ) -> Result<(), SemanticError> {
+        self.insert_symbol(name, Symbol::Generic(generic_ref))
+            .map_err(|_| SemanticError::DuplicateGenericType(name.to_string()))?;
+        Ok(())
     }
 }

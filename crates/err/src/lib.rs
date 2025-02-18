@@ -514,7 +514,7 @@ pub fn build_resolve_error(err: &Error) -> Builder<usize> {
         ErrorKind::UnknownParametricType => todo!(),
         ErrorKind::NotAFunctionType => todo!(),
         ErrorKind::ExpectedMemberFunctionOrFunctionTypeField => Report::build(Kind::Error, 140, "ExpectedMemberFunctionOrFunctionTypeField", span),
-        ErrorKind::UnknownModule => todo!(),
+        ErrorKind::UnknownModule => Report::build(Kind::Error, 140, "Unknown module", span),
         ErrorKind::NotATypeGenerator => Report::build(Kind::Error, 140, "Not a type generator", span),
         ErrorKind::ExpectedStruct => todo!(),
         ErrorKind::NotAGeneric => todo!(),

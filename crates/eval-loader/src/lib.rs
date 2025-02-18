@@ -23,8 +23,14 @@ pub fn resolve_to_new_module(
     source_map: &SourceMap,
     ast_module: &ParsedAstModule,
 ) -> Result<ModuleRef, Error> {
-    let (analyzed_symbol_table, expression) =
-        analyze_module(state, auto_use_modules, modules, source_map, ast_module)?;
+    let (analyzed_symbol_table, expression) = analyze_module(
+        state,
+        auto_use_modules,
+        modules,
+        source_map,
+        module_path,
+        ast_module,
+    )?;
 
     let resolved_module = Module::new(module_path, analyzed_symbol_table, expression);
     let resolved_module_ref = Rc::new(resolved_module);
@@ -39,9 +45,16 @@ pub fn analyze_module(
     auto_use_modules: &AutoUseModules,
     modules: &mut Modules,
     source_map: &SourceMap,
+    canonical_path: &[String],
     ast_module: &ParsedAstModule,
 ) -> Result<(SymbolTable, Option<Expression>), Error> {
-    let mut resolver = Analyzer::new(state, modules, source_map, ast_module.file_id);
+    let mut resolver = Analyzer::new(
+        state,
+        modules,
+        source_map,
+        canonical_path,
+        ast_module.file_id,
+    );
     if !auto_use_modules.modules.is_empty() {
         let target = &mut resolver.shared.lookup_table;
         for symbol_table in &auto_use_modules.modules {
@@ -77,7 +90,14 @@ pub fn analyze_modules_in_order(
 ) -> Result<(), Error> {
     for module_path in module_paths_in_order {
         if let Some(parse_module) = parsed_modules.get_parsed_module(module_path) {
-            analyze_module(state, auto_use, modules, source_map, parse_module)?;
+            analyze_module(
+                state,
+                auto_use,
+                modules,
+                source_map,
+                module_path,
+                parse_module,
+            )?;
         } else {
             return Err(Error {
                 kind: ErrorKind::CanNotFindModule(module_path.clone()),

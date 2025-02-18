@@ -1304,6 +1304,7 @@ impl<'a, C> Interpreter<'a, C> {
             ExpressionKind::IntrinsicCall(name, arguments) => {
                 self.eval_intrinsic(&expr.node, name, arguments)?
             }
+            &swamp_script_semantic::ExpressionKind::IntrinsicFunctionAccess(_) => todo!(),
         };
 
         self.depth -= 1;

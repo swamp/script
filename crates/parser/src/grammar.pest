@@ -205,7 +205,7 @@ function_params = {
     =============================================================
 */
 qualified_identifier      = {
-    module_segments ~ identifier
+    module_segments ~ identifier ~ generic_params?
 }
 qualified_type_identifier = {
     module_segments? ~ type_identifier ~ generic_params?

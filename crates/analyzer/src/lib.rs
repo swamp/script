@@ -27,14 +27,14 @@ use swamp_script_modules::modules::Modules;
 use swamp_script_modules::symtbl::{FuncDef, Symbol, SymbolTable, SymbolTableRef};
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
-    ArgumentExpressionOrLocation, IteratorYieldType, LocationAccess, LocationAccessKind,
-    MutOrImmutableExpression, NormalPattern, Postfix, PostfixKind, RangeMode,
-    SingleLocationExpression, SingleLocationExpressionKind, SingleMutLocationExpression,
-    TypeWithMut, WhenBinding,
+    ArgumentExpressionOrLocation, IntrinsicFunctionDefinitionRef, IteratorYieldType,
+    LocationAccess, LocationAccessKind, MutOrImmutableExpression, NormalPattern, Postfix,
+    PostfixKind, RangeMode, SingleLocationExpression, SingleLocationExpressionKind,
+    SingleMutLocationExpression, TypeWithMut, WhenBinding,
 };
 use swamp_script_source_map::SourceMap;
-use tracing::error;
 use tracing::info;
+use tracing::{error, Instrument};
 
 #[must_use]
 pub fn convert_range_mode(range_mode: &RangeMode) -> RangeMode {
@@ -141,6 +141,7 @@ pub struct SharedState<'a> {
     pub modules: &'a Modules,
     pub source_map: &'a SourceMap,
     pub file_id: FileId,
+    pub current_path: Vec<String>,
 }
 
 impl<'a> SharedState<'a> {
@@ -148,6 +149,18 @@ impl<'a> SharedState<'a> {
         if path.is_empty() {
             return Some(&self.lookup_table);
         }
+        let resolved_path = {
+            self.lookup_table.get_package_version(&path[0]).map_or_else(
+                || path.to_vec(),
+                |found_version| {
+                    let mut new_path = path.to_vec();
+                    let complete_name = format!("{}-{found_version}", path[0]);
+                    info!(path=?path[0], found_version, complete_name, "switched out version");
+                    new_path[0] = complete_name;
+                    new_path
+                },
+            )
+        };
 
         if path.len() == 1 {
             if let Some(module_ref) = self.lookup_table.get_module_link(&path[0]) {
@@ -155,7 +168,7 @@ impl<'a> SharedState<'a> {
             }
         }
 
-        if let Some(x) = self.modules.get(path) {
+        if let Some(x) = self.modules.get(&resolved_path) {
             return Some(&x.namespace.symbol_table);
         }
 
@@ -192,11 +205,14 @@ pub struct Analyzer<'a> {
     global: FunctionScopeState,
 }
 
+type Version = String;
+
 impl<'a> Analyzer<'a> {
     pub fn new(
         state: &'a mut ProgramState,
         modules: &'a Modules,
         source_map: &'a SourceMap,
+        current_path: &[String],
         file_id: FileId,
     ) -> Self {
         let shared = SharedState {
@@ -206,6 +222,7 @@ impl<'a> Analyzer<'a> {
             type_parameter_scope_stack: TypeParameterStack::new(),
             modules,
             source_map,
+            current_path: current_path.to_vec(),
             file_id,
         };
         Self {
@@ -488,42 +505,47 @@ impl<'a> Analyzer<'a> {
         let expression = match &ast_expression.kind {
             // Lookups
             swamp_script_ast::ExpressionKind::PostfixChain(postfix_chain) => {
-                match &postfix_chain.base.kind {
-                    swamp_script_ast::ExpressionKind::IdentifierReference(identifier) => {
-                        let text = self.get_text(&identifier.name).to_string();
-                        let maybe = self
-                            .shared
-                            .lookup_table
-                            .get_intrinsic_function(&*text)
-                            .cloned();
-                        if let Some(check_intrinsic) = maybe {
-                            if postfix_chain.postfixes.len() == 1 {
-                                if let swamp_script_ast::Postfix::FunctionCall(x, arguments) =
-                                    &postfix_chain.postfixes[0]
-                                {
-                                    let analyzed_arguments = self.analyze_and_verify_parameters(
-                                        &self.to_node(&identifier.name),
-                                        &check_intrinsic.signature.parameters,
-                                        &arguments,
-                                    )?;
-                                    return Ok(self.create_expr(
-                                        ExpressionKind::IntrinsicCall(
-                                            check_intrinsic.intrinsic.clone(),
-                                            analyzed_arguments,
-                                        ),
-                                        *check_intrinsic.signature.return_type.clone(),
-                                        &identifier.name,
-                                    ));
-                                }
-                            } else {
-                                return Err(self.create_err(
-                                    ErrorKind::UnknownIntrinsic,
-                                    &ast_expression.node,
+                if let swamp_script_ast::ExpressionKind::StaticFunctionReference(
+                    qualified_func_name,
+                ) = &postfix_chain.base.kind
+                {
+                    let path = self.get_module_path(&qualified_func_name.module_path);
+                    let function_name = self.get_text(&qualified_func_name.name.0);
+
+                    let maybe_intrinsic: Option<IntrinsicFunctionDefinitionRef> = {
+                        self.shared.get_symbol_table(&path).map_or_else(
+                            || None,
+                            |found_table| {
+                                found_table.get_intrinsic_function(function_name).cloned()
+                            },
+                        )
+                    };
+
+                    if let Some(check_intrinsic) = maybe_intrinsic {
+                        if postfix_chain.postfixes.len() == 1 {
+                            if let swamp_script_ast::Postfix::FunctionCall(x, arguments) =
+                                &postfix_chain.postfixes[0]
+                            {
+                                let analyzed_arguments = self.analyze_and_verify_parameters(
+                                    &self.to_node(&qualified_func_name.name.0),
+                                    &check_intrinsic.signature.parameters,
+                                    arguments,
+                                )?;
+                                return Ok(self.create_expr(
+                                    ExpressionKind::IntrinsicCall(
+                                        check_intrinsic.intrinsic.clone(),
+                                        analyzed_arguments,
+                                    ),
+                                    *check_intrinsic.signature.return_type.clone(),
+                                    &qualified_func_name.name.0,
                                 ));
                             }
+                        } else {
+                            return Err(
+                                self.create_err(ErrorKind::UnknownIntrinsic, &ast_expression.node)
+                            );
                         }
                     }
-                    _ => {}
                 }
 
                 self.analyze_postfix_chain(postfix_chain)?
@@ -548,6 +570,9 @@ impl<'a> Analyzer<'a> {
                 type_identifier,
                 member_name,
             ) => self.analyze_static_member_access(type_identifier, member_name)?,
+            swamp_script_ast::ExpressionKind::StaticFunctionReference(qualified_identifier) => {
+                self.analyze_static_function_access(qualified_identifier)?
+            }
 
             swamp_script_ast::ExpressionKind::ConstantReference(constant_identifier) => {
                 self.analyze_constant_access(constant_identifier)?
@@ -612,7 +637,6 @@ impl<'a> Analyzer<'a> {
                 fields,
                 has_rest,
             ) => self.analyze_struct_literal(struct_identifier, fields, *has_rest)?,
-
             swamp_script_ast::ExpressionKind::Range(min_value, max_value, range_mode) => {
                 let range = self.analyze_range(min_value, max_value, range_mode)?;
                 self.create_expr(
@@ -703,7 +727,6 @@ impl<'a> Analyzer<'a> {
                 true_expression,
                 maybe_false_expression,
             )?,
-
             swamp_script_ast::ExpressionKind::Match(expression, arms) => {
                 let (match_expr, return_type) =
                     self.analyze_match(expression, expected_type, arms)?;
@@ -745,36 +768,14 @@ impl<'a> Analyzer<'a> {
         qualified_type_identifier: &swamp_script_ast::QualifiedTypeIdentifier,
     ) -> Result<StructTypeRef, Error> {
         //   let namespace = self.get_namespace(qualified_type_identifier)?;
-
-        let (path, name) = self.get_path(qualified_type_identifier);
-        if let Some(module) = self.shared.modules.get(&*path) {
-            if let Some(found_struct) = module.namespace.symbol_table.get_struct(&name) {
-                return Ok(found_struct.clone());
-            }
+        if let Type::Struct(struct_type) = self.get_type(qualified_type_identifier)? {
+            Ok(struct_type)
+        } else {
+            Err(self.create_err(
+                ErrorKind::UnknownStructTypeReference,
+                &qualified_type_identifier.name.0,
+            ))
         }
-
-        Err(self.create_err(
-            ErrorKind::UnknownStructTypeReference,
-            &qualified_type_identifier.name.0,
-        ))
-    }
-
-    fn get_type(
-        &mut self,
-        qualified_type_identifier: &swamp_script_ast::QualifiedTypeIdentifier,
-    ) -> Result<Type, Error> {
-        let (path, name) = self.get_path(qualified_type_identifier);
-
-        if let Some(module) = self.shared.modules.get(&*path) {
-            if let Some(type_ref) = module.namespace.symbol_table.get_type(&*name) {
-                return Ok(type_ref.clone());
-            }
-        }
-
-        Err(self.create_err(
-            ErrorKind::UnknownTypeReference,
-            &qualified_type_identifier.name.0,
-        ))
     }
 
     fn create_default_value_for_type(

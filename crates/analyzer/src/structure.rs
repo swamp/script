@@ -150,10 +150,7 @@ impl<'a> Analyzer<'a> {
         ast_fields: &Vec<swamp_script_ast::FieldExpression>,
         has_rest: bool,
     ) -> Result<Expression, Error> {
-        let struct_to_instantiate = {
-            let (symbol_table, name) = self.get_symbol_table_and_name(qualified_type_identifier)?;
-            symbol_table.get_struct(&name).unwrap().clone()
-        };
+        let struct_to_instantiate = self.get_struct_type(qualified_type_identifier)?;
 
         let (source_order_expressions, missing_fields) = self
             .analyze_anon_struct_instantiation_helper(
@@ -330,5 +327,19 @@ impl<'a> Analyzer<'a> {
             || Err(self.create_err(ErrorKind::UnknownModule, &type_identifier.name.0)),
             |symbol_table| Ok((symbol_table, name)),
         )
+    }
+    pub(crate) fn get_canonical_path_and_name(
+        &self,
+        type_identifier: &swamp_script_ast::QualifiedTypeIdentifier,
+    ) -> Result<(Vec<String>, String), Error> {
+        let path = self.get_module_path(&type_identifier.module_path);
+        let name = self.get_text(&type_identifier.name.0).to_string();
+        let path_to_return = if path.is_empty() {
+            self.shared.current_path.clone()
+        } else {
+            path
+        };
+
+        Ok((path_to_return, name))
     }
 }
