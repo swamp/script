@@ -130,6 +130,9 @@ impl<'a> Analyzer<'a> {
         };
 
         let parent_ref = self.shared.definition_table.add_enum_type(enum_parent)?;
+        self.shared
+            .lookup_table
+            .add_enum_type_link(parent_ref.clone())?;
 
         for (container_index_usize, ast_variant_type) in ast_variants.iter().enumerate() {
             let variant_name_node = match ast_variant_type {
@@ -217,6 +220,7 @@ impl<'a> Analyzer<'a> {
         }
 
         parent_ref.borrow_mut().variants = resolved_variants;
+
         Ok(parent_ref)
     }
 

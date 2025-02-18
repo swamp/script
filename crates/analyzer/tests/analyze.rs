@@ -97,9 +97,9 @@ fn struct_def() {
         ",
         r#"
 
-StructType(RefCell { value: StructType { name: <16:9>, assigned_name: "Something", anon_struct_type: AnonymousStructType { defined_fields: SeqMap("a": AnonymousStructFieldType { identifier: Some(<40:1>), field_type: Int(IntType) }, "b": AnonymousStructFieldType { identifier: Some(<60:1>), field_type: Int(IntType) }) }, functions: SeqMap() } })
+Something: Something { a: Int, b: Int, }
 ---
-StructInstantiation(StructInstantiation { source_order_expressions: [(1, Literal(IntLiteral(3, <102:1>, IntType))), (0, Literal(IntLiteral(4, <108:1>, IntType)))], struct_type_ref: RefCell { value: StructType { name: <16:9>, assigned_name: "Something", anon_struct_type: AnonymousStructType { defined_fields: SeqMap("a": AnonymousStructFieldType { identifier: Some(<40:1>), field_type: Int(IntType) }, "b": AnonymousStructFieldType { identifier: Some(<60:1>), field_type: Int(IntType) }) }, functions: SeqMap() } } })
+Something,StructInstantiation(StructInstantiation { source_order_expressions: [(1, <102:1>Int,Literal(IntLiteral(3))), (0, <108:1>Int,Literal(IntLiteral(4)))], struct_type_ref: struct "Something" })
 
 "#,
     );
@@ -116,9 +116,8 @@ add(2, 3)
         ",
         r#"
 
-FunctionDef(Internal(InternalFunctionDefinition { body: Block([BinaryOp(BinaryOperator { left: VariableAccess(Variable { name: <8:1>, resolved_type: Int(IntType), mutable_node: None, scope_index: 0, variable_index: 0 }), right: VariableAccess(Variable { name: <16:1>, resolved_type: Int(IntType), mutable_node: None, scope_index: 0, variable_index: 1 }), kind: Add, node: <38:1>, resolved_type: Int(IntType) })]), name: LocalIdentifier(<4:3>), signature: FunctionTypeSignature { first_parameter_is_self: false, parameters: [TypeForParameter { name: "a", resolved_type: Int(IntType), is_mutable: false, node: Some(Parameter) }, TypeForParameter { name: "b", resolved_type: Int(IntType), is_mutable: false, node: Some(Parameter) }], return_type: Int(IntType) }, constants: [] }))
----
-FunctionCall(FunctionTypeSignature { first_parameter_is_self: false, parameters: [TypeForParameter { name: "a", resolved_type: Int(IntType), is_mutable: false, node: Some(Parameter) }, TypeForParameter { name: "b", resolved_type: Int(IntType), is_mutable: false, node: Some(Parameter) }], return_type: Int(IntType) }, InternalFunctionAccess(InternalFunctionDefinition { body: Block([BinaryOp(BinaryOperator { left: VariableAccess(Variable { name: <8:1>, resolved_type: Int(IntType), mutable_node: None, scope_index: 0, variable_index: 0 }), right: VariableAccess(Variable { name: <16:1>, resolved_type: Int(IntType), mutable_node: None, scope_index: 0, variable_index: 1 }), kind: Add, node: <38:1>, resolved_type: Int(IntType) })]), name: LocalIdentifier(<4:3>), signature: FunctionTypeSignature { first_parameter_is_self: false, parameters: [TypeForParameter { name: "a", resolved_type: Int(IntType), is_mutable: false, node: Some(Parameter) }, TypeForParameter { name: "b", resolved_type: Int(IntType), is_mutable: false, node: Some(Parameter) }], return_type: Int(IntType) }, constants: [] }), [Literal(IntLiteral(2, <47:1>, IntType)), Literal(IntLiteral(3, <50:1>, IntType))])
+add: Internal(Signature { parameters: [TypeForParameter { name: "a", resolved_type: Int, is_mutable: false, node: Some(Parameter) }, TypeForParameter { name: "b", resolved_type: Int, is_mutable: false, node: Some(Parameter) }], return_type: Int }
+<31:11>Int,Block([<37:4>Int,BinaryOp(BinaryOperator { left: <37:1>Int,VariableAccess(Variable { name: <8:1>, resolved_type: Int, mutable_node: None, scope_index: 0, variable_index: 0 }), right: <39:1>Int,VariableAccess(Variable { name: <16:1>, resolved_type: Int, mutable_node: None, scope_index: 0, variable_index: 1 }), kind: Add, node: <38:1> })]))
 
 "#,
     );
@@ -202,7 +201,7 @@ a = 3
         ",
         r"
 
-InitializeVariable(VariableAssignment { variable_refs: [Variable { name: <1:1>, resolved_type: Int(IntType), mutable_node: None, scope_index: 0, variable_index: 0 }], expression: Literal(IntLiteral(3, <5:1>, IntType)) })
+(),VariableDefinition(Variable { name: <1:1>, resolved_type: Int, mutable_node: None, scope_index: 0, variable_index: 0 }, MutOrImmutableExpression { expression_or_location: Expression(<5:1>Int,Literal(IntLiteral(3))), is_mutable: None })
 
 ",
     );
@@ -247,8 +246,8 @@ b[3]
         "#,
         r#"
 
-..[Int:String],VariableDefinition(Variable { name: <1:1>, resolved_type: [Int:String], mutable_node: None, scope_index: 0, variable_index: 0 }, MutOrImmutableExpression { expression_or_location: Expression(<5:28>[Int:String],Literal(Map(MapType { key_type: Int, value_type: String }, [(<6:1>Int,Literal(IntLiteral(2)), <9:11>String,Literal(StringLiteral("something"))), (<22:1>Int,Literal(IntLiteral(3)), <25:7>String,Literal(StringLiteral("other")))]))), is_mutable: None })
-..String?,PostfixChain(Variable(Variable { name: <1:1>, resolved_type: [Int:String], mutable_node: None, scope_index: 0, variable_index: 0 }), [Postfix { node: <36:1>, ty: String?, kind: MapIndex(MapType { key_type: Int, value_type: String }, <36:1>Int,Literal(IntLiteral(3))) }])
+..(),VariableDefinition(Variable { name: <1:1>, resolved_type: [Int:String], mutable_node: None, scope_index: 0, variable_index: 0 }, MutOrImmutableExpression { expression_or_location: Expression(<5:28>[Int:String],Literal(Map(MapType { key_type: Int, value_type: String }, [(<6:1>Int,Literal(IntLiteral(2)), <9:11>String,Literal(StringLiteral("something"))), (<22:1>Int,Literal(IntLiteral(3)), <25:7>String,Literal(StringLiteral("other")))]))), is_mutable: None })
+..String?,PostfixChain(<34:1>[Int:String],VariableAccess(Variable { name: <1:1>, resolved_type: [Int:String], mutable_node: None, scope_index: 0, variable_index: 0 }), [Postfix { node: <36:1>, ty: String?, kind: MapIndex(MapType { key_type: Int, value_type: String }, <36:1>Int,Literal(IntLiteral(3))) }])
 
 "#,
     );
@@ -295,7 +294,7 @@ if 2 {
 }
         ",
         r"
-ExpectedBooleanExpression(<4:1 (65535)>)
+Error { node: <4:1>, kind: IncompatibleTypes(Bool, Int) }
 ",
     );
 }
@@ -311,7 +310,7 @@ if true {
 }
         ",
         r"
-Int,If(BooleanExpression { expression: Expression { ty: Bool, node: <4:4>, kind: Literal(BoolLiteral(true)) } }, Expression { ty: Int, node: <9:6>, kind: Block([Expression { ty: Int, node: <12:1>, kind: Literal(IntLiteral(5)) }]) }, Some(Expression { ty: Int, node: <21:6>, kind: Block([Expression { ty: Int, node: <24:1>, kind: Literal(IntLiteral(6)) }]) }))
+Int,If(BooleanExpression { expression: <4:4>Bool,Literal(BoolLiteral(true)) }, <9:6>Int,Block([<12:1>Int,Literal(IntLiteral(5))]), Some(<21:6>Int,Block([<24:1>Int,Literal(IntLiteral(6))])))
 
 ",
     );
@@ -329,7 +328,7 @@ for a in 0..3 {
         r"
 
 ..Int,VariableDefinition(Variable { name: <5:1>, resolved_type: Int, mutable_node: Some(<1:3>), scope_index: 0, variable_index: 0 }, MutOrImmutableExpression { expression_or_location: Expression(<9:1>Int,Literal(IntLiteral(0))), is_mutable: None })
-..(),ForLoop(Single(Variable { name: <15:1>, resolved_type: Int, mutable_node: None, scope_index: 1, variable_index: 0 }), Iterable { key_type: None, value_type: Int, resolved_expression: MutOrImmutableExpression { expression_or_location: Expression(<20:5>Iterable<Int>,ExclusiveRange(<20:1>Int,Literal(IntLiteral(0)), <23:1>Int,Literal(IntLiteral(3)))), is_mutable: None } }, <25:14>(),Block([<31:1>(),CompoundAssignment(SingleMutLocationExpression(SingleLocationExpression { kind: MutVariableRef, node: <31:1>, ty: Int, starting_variable: Variable { name: <5:1>, resolved_type: Int, mutable_node: Some(<1:3>), scope_index: 0, variable_index: 0 }, access_chain: [] }), Add, <36:1>Int,VariableAccess(Variable { name: <15:1>, resolved_type: Int, mutable_node: None, scope_index: 1, variable_index: 0 }))]))
+..(),ForLoop(Single(Variable { name: <15:1>, resolved_type: Int, mutable_node: None, scope_index: 1, variable_index: 0 }), Iterable { key_type: None, value_type: Int, resolved_expression: MutOrImmutableExpression { expression_or_location: Expression(<20:5>Range,Range(<20:1>Int,Literal(IntLiteral(0)), <23:1>Int,Literal(IntLiteral(3)), Exclusive)), is_mutable: None } }, <25:14>(),Block([<31:1>(),CompoundAssignment(SingleMutLocationExpression(SingleLocationExpression { kind: MutVariableRef, node: <31:1>, ty: Int, starting_variable: Variable { name: <5:1>, resolved_type: Int, mutable_node: Some(<1:3>), scope_index: 0, variable_index: 0 }, access_chain: [] }), Add, <36:1>Int,VariableAccess(Variable { name: <15:1>, resolved_type: Int, mutable_node: None, scope_index: 1, variable_index: 0 }))]))
 
 ",
     );
@@ -483,10 +482,10 @@ match game_state {
         ",
         r#"
 
-EnumType(EnumType { name: LocalTypeIdentifier(<6:9>), assigned_name: "GameState", module_path: ["test"], number: 1 }, [EnumVariantType { owner: EnumType { name: LocalTypeIdentifier(<6:9>), assigned_name: "GameState", module_path: ["test"], number: 1 }, data: Nothing, name: LocalTypeIdentifier(<22:7>), assigned_name: "Playing", number: 0 }, EnumVariantType { owner: EnumType { name: LocalTypeIdentifier(<6:9>), assigned_name: "GameState", module_path: ["test"], number: 1 }, data: Struct(EnumVariantStructType { common: CommonEnumVariantType { number: 2, module_path: ModulePath([]), variant_name: LocalTypeIdentifier(<35:6>), assigned_name: "Paused", enum_ref: EnumType { name: LocalTypeIdentifier(<6:9>), assigned_name: "GameState", module_path: ["test"], number: 1 } }, anon_struct: AnonymousStructType { defined_fields: SeqMap("time": AnonymousStructFieldType { identifier: Some(<44:4>), field_type: Int(IntType) }) } }), name: LocalTypeIdentifier(<35:6>), assigned_name: "Paused", number: 2 }, EnumVariantType { owner: EnumType { name: LocalTypeIdentifier(<6:9>), assigned_name: "GameState", module_path: ["test"], number: 1 }, data: Nothing, name: LocalTypeIdentifier(<61:8>), assigned_name: "GameOver", number: 0 }])
+GameState: "GameState"Playing: , Paused: { EnumVariantStructType { common: <3>GameState::Paused, anon_struct: time: Some(<44:4>):Int } }, GameOver: , }
 ---
-InitializeVariable(VariableAssignment { variable_refs: [Variable { name: <74:10>, resolved_type: Enum(EnumType { name: LocalTypeIdentifier(<6:9>), assigned_name: "GameState", module_path: ["test"], number: 1 }), mutable_node: None, scope_index: 0, variable_index: 0 }], expression: Literal(EnumVariantLiteral(EnumVariantType { owner: EnumType { name: LocalTypeIdentifier(<6:9>), assigned_name: "GameState", module_path: ["test"], number: 1 }, data: Struct(EnumVariantStructType { common: CommonEnumVariantType { number: 2, module_path: ModulePath([]), variant_name: LocalTypeIdentifier(<35:6>), assigned_name: "Paused", enum_ref: EnumType { name: LocalTypeIdentifier(<6:9>), assigned_name: "GameState", module_path: ["test"], number: 1 } }, anon_struct: AnonymousStructType { defined_fields: SeqMap("time": AnonymousStructFieldType { identifier: Some(<44:4>), field_type: Int(IntType) }) } }), name: LocalTypeIdentifier(<35:6>), assigned_name: "Paused", number: 2 }, Nothing)) })
-Match(Match { arms: [MatchArm { pattern: EnumPattern(EnumVariantType { owner: EnumType { name: LocalTypeIdentifier(<6:9>), assigned_name: "GameState", module_path: ["test"], number: 1 }, data: Nothing, name: LocalTypeIdentifier(<22:7>), assigned_name: "Playing", number: 0 }, None), expression: Literal(IntLiteral(1, <140:1>, IntType)), expression_type: Int(IntType) }, MatchArm { pattern: EnumPattern(EnumVariantType { owner: EnumType { name: LocalTypeIdentifier(<6:9>), assigned_name: "GameState", module_path: ["test"], number: 1 }, data: Struct(EnumVariantStructType { common: CommonEnumVariantType { number: 2, module_path: ModulePath([]), variant_name: LocalTypeIdentifier(<35:6>), assigned_name: "Paused", enum_ref: EnumType { name: LocalTypeIdentifier(<6:9>), assigned_name: "GameState", module_path: ["test"], number: 1 } }, anon_struct: AnonymousStructType { defined_fields: SeqMap("time": AnonymousStructFieldType { identifier: Some(<44:4>), field_type: Int(IntType) }) } }), name: LocalTypeIdentifier(<35:6>), assigned_name: "Paused", number: 2 }, Some([VariableWithFieldIndex(Variable { name: <154:4>, resolved_type: Int(IntType), mutable_node: None, scope_index: 1, variable_index: 0 }, 0)])), expression: Literal(IntLiteral(2, <162:1>, IntType)), expression_type: Int(IntType) }, MatchArm { pattern: EnumPattern(EnumVariantType { owner: EnumType { name: LocalTypeIdentifier(<6:9>), assigned_name: "GameState", module_path: ["test"], number: 1 }, data: Nothing, name: LocalTypeIdentifier(<61:8>), assigned_name: "GameOver", number: 0 }, None), expression: Literal(IntLiteral(3, <181:1>, IntType)), expression_type: Int(IntType) }, MatchArm { pattern: PatternList([Wildcard(<188:1>)]), expression: UnaryOp(UnaryOperator { left: Literal(IntLiteral(1, <194:1>, IntType)), kind: Negate, resolved_type: Int(IntType), node: <193:1> }), expression_type: Int(IntType) }], expression: VariableAccess(Variable { name: <74:10>, resolved_type: Enum(EnumType { name: LocalTypeIdentifier(<6:9>), assigned_name: "GameState", module_path: ["test"], number: 1 }), mutable_node: None, scope_index: 0, variable_index: 0 }) })
+..(),VariableDefinition(Variable { name: <74:10>, resolved_type: "GameState"Playing: , Paused: { EnumVariantStructType { common: <3>GameState::Paused, anon_struct: time: Some(<44:4>):Int } }, GameOver: , }, mutable_node: None, scope_index: 0, variable_index: 0 }, MutOrImmutableExpression { expression_or_location: Expression(<87:19>GameState,Literal(EnumVariantLiteral({ EnumVariantStructType { common: <3>GameState::Paused, anon_struct: time: Some(<44:4>):Int } }, ))), is_mutable: None })
+..Int,Match(Match { arms: [MatchArm { pattern: Normal(EnumPattern(, None), None), expression: <140:1>Int,Literal(IntLiteral(1)), expression_type: Int }, MatchArm { pattern: Normal(EnumPattern({ EnumVariantStructType { common: <3>GameState::Paused, anon_struct: time: Some(<44:4>):Int } }, Some([VariableWithFieldIndex(Variable { name: <154:4>, resolved_type: Int, mutable_node: None, scope_index: 1, variable_index: 0 }, 0)])), None), expression: <162:1>Int,Literal(IntLiteral(2)), expression_type: Int }, MatchArm { pattern: Normal(EnumPattern(, None), None), expression: <181:1>Int,Literal(IntLiteral(3)), expression_type: Int }, MatchArm { pattern: Wildcard(<188:1>), expression: <193:3>Int,UnaryOp(UnaryOperator { left: <194:1>Int,Literal(IntLiteral(1)), kind: Negate, node: <193:1> }), expression_type: Int }], expression: <112:10>GameState,VariableAccess(Variable { name: <74:10>, resolved_type: "GameState"Playing: , Paused: { EnumVariantStructType { common: <3>GameState::Paused, anon_struct: time: Some(<44:4>):Int } }, GameOver: , }, mutable_node: None, scope_index: 0, variable_index: 0 }) })
 
 "#,
     );
@@ -1179,9 +1178,7 @@ booster: Int? = none
 
          ",
         r"
-Int?,CreateVariable(Variable { name: <1:7>, resolved_type: Int?, mutable_node: None, scope_index: 0, variable_index: 0 }, Immutable(Expression { ty: Int?, node: <17:4>, kind: Literal(NoneLiteral) }))
-
-
+Int?,VariableDefinition(Variable { name: <1:7>, resolved_type: Int?, mutable_node: None, scope_index: 0, variable_index: 0 }, MutOrImmutableExpression { expression_or_location: Expression(<17:4>Int?,Literal(NoneLiteral)), is_mutable: None })
 
 ",
     );
@@ -1229,7 +1226,7 @@ fn val_assign_coerce() {
 booster_value: Int? = if false 0 else none
          ",
         r"
-Int?,CreateVariable(Variable { name: <1:13>, resolved_type: Int?, mutable_node: None, scope_index: 0, variable_index: 0 }, Immutable(Expression { ty: Int?, node: <26:5>, kind: If(BooleanExpression { expression: Expression { ty: Bool, node: <26:5>, kind: Literal(BoolLiteral(false)) } }, Expression { ty: Int?, node: <32:1>, kind: Option(Some(Expression { ty: Int, node: <32:1>, kind: Literal(IntLiteral(0)) })) }, Some(Expression { ty: Int?, node: <39:4>, kind: Literal(NoneLiteral) })) }))
+Int?,VariableDefinition(Variable { name: <1:13>, resolved_type: Int?, mutable_node: None, scope_index: 0, variable_index: 0 }, MutOrImmutableExpression { expression_or_location: Expression(<26:5>Int?,If(BooleanExpression { expression: <26:5>Bool,Literal(BoolLiteral(false)) }, <32:1>Int?,Option(Some(<32:1>Int,Literal(IntLiteral(0)))), Some(<39:4>Int?,Literal(NoneLiteral)))), is_mutable: None })
 
          ",
     );
@@ -1326,7 +1323,7 @@ fn map_assign() {
     ",
         r#"
 ..[Int:String],VariableDefinition(Variable { name: <9:1>, resolved_type: [Int:String], mutable_node: Some(<5:3>), scope_index: 0, variable_index: 0 }, MutOrImmutableExpression { expression_or_location: Expression(<13:27>[Int:String],Literal(Map(MapType { key_type: Int, value_type: String }, [(<14:1>Int,Literal(IntLiteral(2)), <16:7>String,InterpolatedString([Literal(<17:5>, "hello")])), (<25:2>Int,UnaryOp(UnaryOperator { left: <26:1>Int,Literal(IntLiteral(1)), kind: Negate, node: <25:1> }), <32:7>String,InterpolatedString([Literal(<33:5>, "world")]))]))), is_mutable: None })
-..(),MapAssignment(SingleMutLocationExpression(SingleLocationExpression { kind: MutVariableRef, node: <45:1>, ty: [Int:String], starting_variable: Variable { name: <9:1>, resolved_type: [Int:String], mutable_node: Some(<5:3>), scope_index: 0, variable_index: 0 }, access_chain: [] }), <47:1>Int,Literal(IntLiteral(3)), <52:8>String,InterpolatedString([Literal(<53:6>, "ossian")]))
+..(),Assignment(SingleMutLocationExpression(SingleLocationExpression { kind: MutVariableRef, node: <45:1>, ty: String, starting_variable: Variable { name: <9:1>, resolved_type: [Int:String], mutable_node: Some(<5:3>), scope_index: 0, variable_index: 0 }, access_chain: [LocationAccess { node: <47:1>, ty: String, kind: MapIndexInsertIfNonExisting(MapType { key_type: Int, value_type: String }, <47:1>Int,Literal(IntLiteral(3))) }] }), <52:8>String,InterpolatedString([Literal(<53:6>, "ossian")]))
 "#,
     );
 }
@@ -1340,8 +1337,8 @@ fn external_type() {
     }
 
     "#,
-        r#"
-StructType(RefCell { value: struct "Test" })
-"#,
+        r"
+Test: Test { field: RustType RustType, }
+",
     );
 }

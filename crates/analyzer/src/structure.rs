@@ -17,7 +17,7 @@ impl<'a> Analyzer<'a> {
     fn analyze_struct_init_calling_default(
         &mut self,
         function: &FunctionRef,
-        struct_to_instantiate: StructTypeRef,
+        struct_to_instantiate: &StructTypeRef,
         source_order_expressions: Vec<(usize, Node, Expression)>,
         node: &swamp_script_ast::Node,
     ) -> Result<Expression, Error> {
@@ -173,7 +173,7 @@ impl<'a> Analyzer<'a> {
             if let Some(function) = maybe_default {
                 self.analyze_struct_init_calling_default(
                     &function,
-                    struct_to_instantiate.clone(),
+                    &struct_to_instantiate,
                     source_order_expressions,
                     &qualified_type_identifier.name.0,
                 )
@@ -318,7 +318,7 @@ impl<'a> Analyzer<'a> {
         Ok(mapped)
     }
 
-    fn get_symbol_table_and_name(
+    pub(crate) fn get_symbol_table_and_name(
         &self,
         type_identifier: &swamp_script_ast::QualifiedTypeIdentifier,
     ) -> Result<(&SymbolTable, String), Error> {

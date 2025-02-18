@@ -15,17 +15,15 @@ impl<'a> Analyzer<'a> {
         let name_node = self.to_node(&constant.constant_identifier.0);
         let name_text = self.get_text_resolved(&name_node).to_string();
         let constant = Constant {
-            name: name_node.clone(),
-            assigned_name: name_text.to_string(),
+            name: name_node,
+            assigned_name: name_text,
             id: 0xffff,
             expr: resolved_expr,
             resolved_type,
         };
 
         let const_ref = self.shared.definition_table.add_constant(constant)?;
-        self.shared
-            .lookup_table
-            .add_constant_link(const_ref.clone())?;
+        self.shared.lookup_table.add_constant_link(const_ref)?;
 
         Ok(())
     }
@@ -34,7 +32,7 @@ impl<'a> Analyzer<'a> {
         &mut self,
         constant: &ConstantInfo,
     ) -> Result<(), Error> {
-        Ok(self.analyze_constant(constant)?)
+        self.analyze_constant(constant)
     }
 
     pub(crate) fn analyze_constant_access(

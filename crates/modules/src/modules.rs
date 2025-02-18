@@ -3,6 +3,7 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
+use crate::symtbl::Symbol;
 use crate::symtbl::{SymbolTable, SymbolTableRef};
 use seq_map::SeqMap;
 use std::fmt::{Debug, Formatter};
@@ -83,6 +84,52 @@ pub fn pretty_print(
             tab_str, resolved_expression.ty, resolved_expression.kind
         )
     }
+}
+
+pub fn pretty_print_symbol(
+    f: &mut Formatter<'_>,
+    name: &str,
+    symbol: &Symbol,
+    tabs: usize,
+) -> std::fmt::Result {
+    let tab_str = "..".repeat(tabs);
+
+    write!(f, "{}{}: ", tab_str, name)?;
+
+    match symbol {
+        Symbol::Type(ty) => {
+            write!(f, "{ty:?}")
+        }
+        Symbol::Module(module_ref) => {
+            write!(f, "{module_ref:?}")
+        }
+        Symbol::Constant(constant_ref) => {
+            write!(f, "{constant_ref:?}")
+        }
+        Symbol::FunctionDefinition(func_def) => {
+            write!(f, "{func_def:?}")
+        }
+        Symbol::Alias(alias_type_ref) => {
+            write!(f, "{alias_type_ref:?}")
+        }
+        Symbol::Generic(generic_type_ref) => {
+            write!(f, "{generic_type_ref:?}")
+        }
+    }
+}
+
+/// # Errors
+///
+pub fn pretty_print_symbol_table(
+    f: &mut Formatter<'_>,
+    symbol_table: &SymbolTable,
+    tabs: usize,
+) -> std::fmt::Result {
+    for (name, symbol) in symbol_table.symbols() {
+        pretty_print_symbol(f, name, symbol, tabs)?;
+        writeln!(f)?;
+    }
+    Ok(())
 }
 
 impl Module {

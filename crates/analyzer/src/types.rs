@@ -7,8 +7,6 @@ use crate::lookup::TypeParameter;
 use crate::Analyzer;
 use seq_map::SeqMap;
 use std::rc::Rc;
-use swamp_script_ast::QualifiedTypeIdentifier;
-use swamp_script_modules::modules::ModuleRef;
 use swamp_script_modules::symtbl::{GenericAwareType, GenericTypeRef, SymbolTable};
 use swamp_script_semantic::{
     ArrayType, ArrayTypeRef, ExternalType, ExternalTypeRef, MapType, MapTypeRef, Signature,
@@ -48,17 +46,14 @@ impl<'a> Analyzer<'a> {
         //let (module, text) = self.get_module(type_name_to_find)?;
         //info!(?text, ?module, "looking for named type");
         if type_name_to_find.generic_params.is_empty() {
-            let (path, name) = self.get_path(&type_name_to_find);
-            let symbol_table = self.shared.get_symbol_table(&*path);
-            if let Some(found_table) = symbol_table {
-                if let Some(found) = found_table.get_type(&*name) {
-                    Ok(found.clone())
-                } else {
-                    Err(self.create_err(ErrorKind::UnknownSymbol, &type_name_to_find.name.0))
-                }
-            } else {
-                Err(self.create_err(ErrorKind::UnknownSymbol, &type_name_to_find.name.0))
-            }
+            let (path, name) = self.get_path(type_name_to_find);
+            let symbol_table = self.shared.get_symbol_table(&path);
+            symbol_table.map_or_else(
+                || Err(self.create_err(ErrorKind::UnknownSymbol, &type_name_to_find.name.0)),
+                |found_table| {
+                    found_table.get_type(&name).map_or_else(|| Err(self.create_err(ErrorKind::UnknownSymbol, &type_name_to_find.name.0)), |found| Ok(found.clone()))
+                },
+            )
         } else {
             /*
             let (base_type, params) = self.create_type_parameters(type_name_to_find)?;
@@ -276,8 +271,8 @@ impl<'a> Analyzer<'a> {
         let _found_generic = {
             let path = self.get_module_path(&parameterize_definition.module_path);
             let base_name = self.get_text(&parameterize_definition.name.0).to_string();
-            if let Some(module) = self.shared.modules.get(&*path) {
-                let found_generic = match module.namespace.symbol_table.get_generic(&*base_name) {
+            if let Some(module) = self.shared.modules.get(&path) {
+                let found_generic = match module.namespace.symbol_table.get_generic(&base_name) {
                     Some(generic) => generic,
                     None => {
                         return Err(self.create_err(
@@ -343,9 +338,9 @@ impl<'a> Analyzer<'a> {
             .unwrap();
 
         if let Some(monomorphized_struct_ref) = self.shared.state.monomorphization_cache.get(
-            &*found_generic.defined_in_path,
-            &*base_name,
-            &*types_vec,
+            &found_generic.defined_in_path,
+            &base_name,
+            &types_vec,
         ) {
             info!(monomorphization_name, "fetching type from cache");
             Ok(monomorphized_struct_ref.clone())
@@ -373,10 +368,10 @@ impl<'a> Analyzer<'a> {
                 .state
                 .monomorphization_cache
                 .add(
-                    &*found_generic.defined_in_path,
-                    &*base_name,
+                    &found_generic.defined_in_path,
+                    &base_name,
                     created_type.clone(),
-                    &*types_vec,
+                    &types_vec,
                 )
                 .expect("TODO: panic message");
 
@@ -397,19 +392,6 @@ impl<'a> Analyzer<'a> {
             self.shared.lookup_table = saved_lookup_table;
 
             Ok(created_type)
-        }
-    }
-
-    fn get_module(
-        &mut self,
-        qualified_type_identifier: &QualifiedTypeIdentifier,
-    ) -> Result<(ModuleRef, String), Error> {
-        let (path, name) = self.get_path(qualified_type_identifier);
-
-        if let Some(found_mod) = self.shared.modules.get(&*path) {
-            Ok((found_mod.clone(), name))
-        } else {
-            Err(self.create_err(ErrorKind::UnknownModule, &qualified_type_identifier.name.0))
         }
     }
 }

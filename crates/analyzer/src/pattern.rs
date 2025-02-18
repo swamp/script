@@ -49,7 +49,7 @@ impl<'a> Analyzer<'a> {
                     match guard_clause {
                         swamp_script_ast::GuardClause::Wildcard(_) => None,
                         swamp_script_ast::GuardClause::Expression(clause_expr) => {
-                            Some(self.analyze_bool_expression(&clause_expr)?)
+                            Some(self.analyze_bool_expression(clause_expr)?)
                         }
                     }
                 } else {
@@ -205,7 +205,7 @@ impl<'a> Analyzer<'a> {
                         EnumVariantType::Nothing(_) => {
                             if !elements.is_empty() {
                                 return Err(self
-                                    .create_err(ErrorKind::EnumVariantHasNoFields, &variant_name));
+                                    .create_err(ErrorKind::EnumVariantHasNoFields, variant_name));
                             }
                         }
                     }

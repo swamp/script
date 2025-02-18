@@ -229,17 +229,25 @@ impl Debug for Type {
             Self::Array(array_type_ref) => write!(f, "[{:?}]", array_type_ref.item_type),
             Self::Tuple(tuple_type_ref) => write!(f, "({:?})", tuple_type_ref.0),
             Self::Struct(struct_type_ref) => {
-                write!(f, "{}", struct_type_ref.assigned_name)
+                write!(f, "{} {{ ", struct_type_ref.assigned_name)?;
+                for (name, field) in &struct_type_ref.anon_struct_type.defined_fields {
+                    write!(f, "{name}: {}, ", field.field_type)?;
+                }
+                write!(f, "}}")
             }
             Self::Map(map_type_ref) => write!(
                 f,
                 "[{:?}:{:?}]",
                 map_type_ref.key_type, map_type_ref.value_type
             ),
-            Self::Enum(enum_type_ref) => write!(f, "{:?}", enum_type_ref.borrow().assigned_name),
-            //            Self::EnumVariant(enum_type_variant) => {
-            //              write!(f, "{:?}", enum_type_variant.assigned_name)
-            //        }
+            Self::Enum(enum_type_ref) => {
+                write!(f, "{:?}", enum_type_ref.borrow().assigned_name)?;
+
+                for (name, variant) in &enum_type_ref.borrow().variants {
+                    write!(f, "{name}: {variant:?}, ")?;
+                }
+                write!(f, "}}")
+            }
             Self::Function(function_type_signature) => {
                 write!(f, "{function_type_signature:?}",)
             }

@@ -9,10 +9,10 @@ use swamp_script_analyzer::prelude::Error;
 use swamp_script_analyzer::Analyzer;
 use swamp_script_core::add_intrinsic_types;
 use swamp_script_error_report::show_error;
-use swamp_script_modules::modules::{pretty_print, Module, Modules};
+use swamp_script_modules::modules::{pretty_print, pretty_print_symbol_table, Modules};
 use swamp_script_modules::symtbl::SymbolTable;
 use swamp_script_parser::AstParser;
-use swamp_script_semantic::{Expression, ExpressionKind, ProgramState};
+use swamp_script_semantic::{Expression, ProgramState};
 use swamp_script_source_map::SourceMap;
 use tracing::warn;
 
@@ -55,7 +55,7 @@ fn internal_compile(script: &str) -> Result<(SymbolTable, Option<Expression>), E
             }
             Err(err) => {
                 show_error(&err, &source_map);
-                return Err(err)?;
+                Err(err)?;
             }
         }
     }
@@ -96,6 +96,16 @@ impl Debug for FormatExpression {
     }
 }
 
+pub struct FormatSymbolTable<'a> {
+    pub symbol_table: &'a SymbolTable,
+}
+
+impl<'a> Debug for FormatSymbolTable<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        pretty_print_symbol_table(f, self.symbol_table, 0)
+    }
+}
+
 /// # Panics
 /// Intentionally panics if output is not the same as the `expected_output`
 pub fn check(script: &str, expected_output: &str) {
@@ -104,9 +114,17 @@ pub fn check(script: &str, expected_output: &str) {
     let mut formatted_output = String::new();
 
     if !symbol_table.is_empty() {
-        formatted_output += &*format!("{symbol_table:?}");
+        let format_symbol_table = FormatSymbolTable {
+            symbol_table: &symbol_table,
+        };
+        formatted_output += &*format!("{format_symbol_table:?}");
     }
+
     if let Some(expr) = expression {
+        if !symbol_table.is_empty() {
+            formatted_output += "---\n";
+        }
+
         let format_expr = FormatExpression { expression: expr };
         formatted_output += &*format!("{format_expr:?}");
     }

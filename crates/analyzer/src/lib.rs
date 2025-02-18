@@ -145,7 +145,6 @@ pub struct SharedState<'a> {
 
 impl<'a> SharedState<'a> {
     pub fn get_symbol_table(&'a self, path: &[String]) -> Option<&'a SymbolTable> {
-        info!(?path, "get_symbol_table");
         if path.is_empty() {
             return Some(&self.lookup_table);
         }
@@ -1496,15 +1495,6 @@ impl<'a> Analyzer<'a> {
     ) -> Result<EnumVariantTypeRef, Error> {
         let variant_name_string = self.get_text(&variant_name.0).to_string();
         self.get_enum_variant_type(qualified_type_identifier, &variant_name_string)
-            .map_or_else(
-                || {
-                    Err(self.create_err(
-                        ErrorKind::UnknownEnumVariantType,
-                        &qualified_type_identifier.name.0,
-                    ))
-                },
-                Ok,
-            )
     }
 
     #[allow(unused)]
@@ -1664,18 +1654,17 @@ impl<'a> Analyzer<'a> {
         &self,
         qualified_type_identifier: &swamp_script_ast::QualifiedTypeIdentifier,
         variant_name: &str,
-    ) -> Option<EnumVariantTypeRef> {
-        let path = self.get_module_path(&qualified_type_identifier.module_path);
-        if let Some(module) = self.shared.modules.get(&*path) {
-            let enum_name = self.get_text(&qualified_type_identifier.name.0).to_string();
-
-            module
-                .namespace
-                .symbol_table
-                .get_enum_variant_type(&enum_name, variant_name)
-        } else {
-            None
-        }
+    ) -> Result<EnumVariantTypeRef, Error> {
+        let (symbol_table, enum_name) =
+            self.get_symbol_table_and_name(&qualified_type_identifier)?;
+        Ok(symbol_table
+            .get_enum_variant_type(&*enum_name, variant_name)
+            .ok_or_else(|| {
+                self.create_err(
+                    ErrorKind::UnknownEnumVariantType,
+                    &qualified_type_identifier.name.0,
+                )
+            })?)
     }
 
     const fn analyze_compound_operator(

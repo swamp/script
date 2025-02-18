@@ -211,7 +211,11 @@ impl SymbolTable {
 
     pub fn add_enum_type(&mut self, enum_type: EnumType) -> Result<EnumTypeRef, SemanticError> {
         let enum_type_ref = Rc::new(RefCell::new(enum_type));
+        self.add_enum_type_link(enum_type_ref.clone())?;
+        Ok(enum_type_ref)
+    }
 
+    pub fn add_enum_type_link(&mut self, enum_type_ref: EnumTypeRef) -> Result<(), SemanticError> {
         let ty = Type::Enum(enum_type_ref.clone());
         self.symbols
             .insert(
@@ -222,7 +226,7 @@ impl SymbolTable {
                 SemanticError::DuplicateEnumType(enum_type_ref.borrow().assigned_name.clone())
             })?;
 
-        Ok(enum_type_ref)
+        Ok(())
     }
 
     pub fn add_enum_variant(

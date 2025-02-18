@@ -32,17 +32,17 @@ impl<'a> Analyzer<'a> {
     ) -> Result<Expression, Error> {
         let some_type = self.find_named_type(named_type)?;
         let member_name = self.get_text(member_name_node);
-        if let Some(member_function) = self
-            .shared
+        self.shared
             .state
             .associated_impls
             .get_member_function(&some_type, member_name)
-        {
-            let expr = Self::convert_to_function_access(member_function);
-            Ok(expr)
-        } else {
-            Err(self.create_err(ErrorKind::UnknownMemberFunction, member_name_node))
-        }
+            .map_or_else(
+                || Err(self.create_err(ErrorKind::UnknownMemberFunction, member_name_node)),
+                |member_function| {
+                    let expr = Self::convert_to_function_access(member_function);
+                    Ok(expr)
+                },
+            )
     }
 
     pub(crate) fn analyze_min_max_expr(
@@ -56,6 +56,8 @@ impl<'a> Analyzer<'a> {
         Ok((resolved_min, resolved_max))
     }
 
+    /// # Errors
+    ///
     pub fn analyze_range(
         &mut self,
         min_expr: &swamp_script_ast::Expression,
