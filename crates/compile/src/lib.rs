@@ -4,16 +4,12 @@
  */
 use regex::Regex;
 use std::path::Path;
-use swamp_script_analyzer::prelude::{Error, Program};
+use swamp_script_analyzer::prelude::Program;
 use swamp_script_dep_loader::{
     create_source_map, parse_local_modules_and_get_order, DependencyParser, ParsedAstModule,
 };
 use swamp_script_error_report::{show_script_resolve_error, ScriptResolveError};
 use swamp_script_eval_loader::analyze_modules_in_order;
-use swamp_script_modules::modules::{Module, ModuleRef};
-use swamp_script_modules::symtbl::SymbolTable;
-use swamp_script_parser::Rule::program;
-use swamp_script_semantic::{AliasType, Node, Type};
 use swamp_script_source_map::SourceMap;
 
 pub fn bootstrap(root_path: &Path) -> Result<Program, ScriptResolveError> {
@@ -34,8 +30,6 @@ pub fn bootstrap(root_path: &Path) -> Result<Program, ScriptResolveError> {
         .get(swamp_core_module_path)
         .unwrap();
 
-    let mut core_ns = core_module.borrow_mut().namespace.borrow_mut();
-
     // core::
 
     compile_analyze_and_link_without_version(
@@ -44,7 +38,7 @@ pub fn bootstrap(root_path: &Path) -> Result<Program, ScriptResolveError> {
         &mut source_map,
     )?;
 
-    resolved_program.add_auto_use(swamp_core_module_path);
+    //resolved_program.add_auto_use(swamp_core_module_path);
 
     // std::
     let mangrove_std_module_path = &["std-0.0.0".to_string()];
@@ -144,7 +138,7 @@ pub fn compile_analyze_and_link_without_version(
 
     resolved_program
         .modules
-        .link_module(&without_version_path, mangrove_render_module);
+        .link_module(&without_version_path, mangrove_render_module.clone());
 
     Ok(())
 }

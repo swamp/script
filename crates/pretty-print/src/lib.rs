@@ -269,6 +269,9 @@ impl ModulesDisplay<'_> {
             ExpressionKind::IntrinsicCall(intrinsic_func, arguments) => {
                 write!(f, "intrinsic {intrinsic_func:?} {arguments:?}")
             }
+            ExpressionKind::IntrinsicFunctionAccess(intrinsic_func_def) => {
+                write!(f, "intrinsic_access {intrinsic_func_def:?}")
+            }
         };
 
         result
