@@ -217,58 +217,6 @@ impl<'a> Analyzer<'a> {
         Ok(vec)
     }
 
-    /*
-    pub fn specialize_struct_type(
-        &mut self,
-        name: &str,
-        struct_type: &StructTypeRef,
-    ) -> Result<StructTypeRef, Error> {
-        let mut new_fields = SeqMap::new();
-        let borrow = struct_type.as_ref().borrow();
-        let fields = &borrow.anon_struct_type.defined_fields;
-
-        for (name, field) in fields {
-            let result_type = if let Type::GenericTypeParameter(scope, index) = field.field_type {
-                let found_type_param = self
-                    .shared
-                    .lookup
-                    .lookup_type_parameter(scope, index)
-                    .clone();
-                info!(
-                    ?found_type_param,
-                    "cool, I found a generic type reference, replacing it"
-                );
-                found_type_param.ty.clone()
-            } else {
-                field.field_type.clone()
-            };
-            new_fields
-                .insert(
-                    name.clone(),
-                    StructTypeField {
-                        identifier: field.identifier.clone(),
-                        field_type: result_type,
-                    },
-                )
-                .unwrap();
-        }
-
-        let new_struct = StructType {
-            name: Node::new_unknown(),
-            assigned_name: name.to_string(),
-            anon_struct_type: AnonymousStructType {
-                defined_fields: new_fields,
-            },
-            functions: SeqMap::default(),
-        };
-
-        info!(?name, "specialized done");
-
-        Ok(Rc::new(RefCell::new(new_struct)))
-    }
-
-     */
-
     fn get_generic(
         &self,
         parameterize_definition: &swamp_script_ast::QualifiedTypeIdentifier,

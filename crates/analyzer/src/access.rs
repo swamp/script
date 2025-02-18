@@ -46,6 +46,55 @@ impl<'a> Analyzer<'a> {
             )
     }
 
+    /*
+    fn analyze_function_access(
+        &self,
+        function_ref_node: &swamp_script_ast::QualifiedIdentifier,
+    ) -> Result<Expression, Error> {
+        let path = self.get_module_path(&function_ref_node.module_path);
+        let name = self.get_text(&function_ref_node.name).to_string();
+
+        if let Some(intrinsic_function) = self.shared.lookup.get_intrinsic_function(&path, &name)
+        {
+            let return_type = *intrinsic_function.signature.return_type.clone();
+            let expr = self.create_expr(
+                ExpressionKind::InternalFunctionAccess(intrinsic_function.clone()),
+                return_type,
+                &function_ref_node.name,
+            );
+            return Ok(expr);
+        }
+
+        if let Some(internal_function_ref) = self.shared.lookup.get_internal_function(&path, &name)
+        {
+            let return_type = *internal_function_ref.signature.return_type.clone();
+            let expr = self.create_expr(
+                ExpressionKind::InternalFunctionAccess(internal_function_ref.clone()),
+                return_type,
+                &function_ref_node.name,
+            );
+            return Ok(expr);
+        }
+
+        if let Some(external_function_ref) = self
+            .shared
+            .lookup
+            .get_external_function_declaration(&path, &name)
+        {
+            let return_type = *external_function_ref.signature.return_type.clone();
+            let expr = self.create_expr(
+                ExpressionKind::ExternalFunctionAccess(external_function_ref.clone()),
+                return_type,
+                &function_ref_node.name,
+            );
+            return Ok(expr);
+        }
+
+        Err(self.create_err(ErrorKind::UnknownFunction, &function_ref_node.name))
+    }
+
+     */
+
     pub(crate) fn analyze_static_function_access(
         &mut self,
         qualified_func_name: &swamp_script_ast::QualifiedIdentifier,
