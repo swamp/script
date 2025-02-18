@@ -7,10 +7,12 @@ use std::cell::{Ref, RefCell};
 use std::fmt::{Display, Formatter};
 use std::hash::Hash;
 use std::rc::Rc;
-use swamp_script_core::extra::{SparseValueId, SparseValueMap};
-use swamp_script_core::prelude::{Value, ValueError};
-use swamp_script_core::value::ValueRef;
-use swamp_script_core::value::{AnyRustType, SPARSE_TYPE_ID};
+use swamp_script_core_extra::extra::SparseValueId;
+use swamp_script_core_extra::extra::SparseValueMap;
+use swamp_script_core_extra::value::AnyRustType;
+use swamp_script_core_extra::value::Value;
+use swamp_script_core_extra::value::ValueError;
+use swamp_script_core_extra::value::ValueRef;
 use tracing::info;
 
 #[derive(Debug, Clone)]

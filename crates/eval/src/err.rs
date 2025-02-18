@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use swamp_script_core::value::ValueError;
+use swamp_script_core_extra::value::ValueError;
 use swamp_script_semantic::{ExternalFunctionId, Node};
 
 #[derive(Debug, PartialEq, Eq)]

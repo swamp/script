@@ -10,12 +10,15 @@ use seq_map::SeqMap;
 use std::fmt::Debug;
 use std::io::Write;
 use std::{cell::RefCell, io, rc::Rc};
-use swamp_script_core::extra::{SparseValueId, SparseValueMap};
-use swamp_script_core::prelude::ValueError;
-use swamp_script_core::value::ValueRef;
-use swamp_script_core::value::{
-    convert_vec_to_rc_refcell, format_value, to_rust_value, SourceMapLookup, Value,
-};
+use swamp_script_core_extra::extra::SparseValueId;
+use swamp_script_core_extra::extra::SparseValueMap;
+use swamp_script_core_extra::value::convert_vec_to_rc_refcell;
+use swamp_script_core_extra::value::format_value;
+use swamp_script_core_extra::value::to_rust_value;
+use swamp_script_core_extra::value::SourceMapLookup;
+use swamp_script_core_extra::value::Value;
+use swamp_script_core_extra::value::ValueError;
+use swamp_script_core_extra::value::ValueRef;
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{same_array_ref, IntrinsicFunction, Postfix};
 use swamp_script_semantic::{

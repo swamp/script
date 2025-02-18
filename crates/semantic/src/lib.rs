@@ -332,8 +332,14 @@ impl Type {
             }
         }
         match (self, other) {
-            (Self::Function(a), Self::Function(b)) => a.same_type(b),
+            (Self::String, Self::String) => true,
+            (Self::Int, Self::Int) => true,
+            (Self::Float, Self::Float) => true,
+            (Self::Bool, Self::Bool) => true,
+
             (Self::Unit, Self::Unit) => true,
+
+            (Self::Function(a), Self::Function(b)) => a.same_type(b),
             (Self::Array(_), Self::Array(_)) => true,
             (Self::Map(a), Self::Map(b)) => {
                 a.key_type.same_type(&b.key_type) && a.value_type.same_type(&b.value_type)

@@ -1,6 +1,6 @@
 use seq_map::SeqMap;
 use std::fmt::{Display, Formatter};
-use swamp_script_core::prelude::SourceMapLookup;
+use swamp_script_core_extra::prelude::SourceMapLookup;
 use swamp_script_modules::modules::{ModuleRef, Modules};
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{Postfix, PostfixKind};

@@ -1,9 +1,9 @@
 use sparse_slot::Id;
 use std::cell::RefCell;
 use std::rc::Rc;
-use swamp_script_core::extra::SparseValueMap;
-use swamp_script_core::qck_des::quick_deserialize;
-use swamp_script_core::value::{Value, SPARSE_ID_TYPE_ID, SPARSE_TYPE_ID};
+use swamp_script_core_extra::extra::SparseValueMap;
+use swamp_script_core_extra::prelude::Value;
+use swamp_script_core_extra::value::{SPARSE_ID_TYPE_ID, SPARSE_TYPE_ID};
 use swamp_script_semantic::ExternalType;
 use swamp_script_semantic::Type;
 use tracing::info;

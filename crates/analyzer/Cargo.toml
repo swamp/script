@@ -18,6 +18,7 @@ swamp-script-source-map = { path = "../source-map", version = "0.0.12" }
 swamp-script-modules = { path = "../modules", version = "0.0.12"}
 
 [dev-dependencies]
+swamp-script-core = { path = "../core", version = "0.0.12"}
 swamp-script-parser = { path = "../parser", version = "0.0.12" }
 test-log = { version = "0.2.16", features = ["trace", "log", "color"] }
 swamp-script-error-report = { path = "../err", version = "0.0.12" }

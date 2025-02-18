@@ -319,11 +319,13 @@ impl<'a> Analyzer<'a> {
         }
 
         let struct_name_str = self.get_text(&ast_struct.identifier.name).to_string();
-        let resolved_struct_ref = self.analyze_struct_type(&*struct_name_str, ast_struct)?;
-        let _ = self
+        let analyzed_struct_ref = self.analyze_struct_type(&struct_name_str, ast_struct)?;
+        let struct_ref = self
             .shared
             .definition_table
-            .add_struct(resolved_struct_ref)?;
+            .add_struct(analyzed_struct_ref)?;
+
+        self.shared.lookup_table.add_struct_link(struct_ref)?;
 
         Ok(())
     }

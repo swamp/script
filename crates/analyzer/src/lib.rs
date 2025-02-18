@@ -145,6 +145,7 @@ pub struct SharedState<'a> {
 
 impl<'a> SharedState<'a> {
     pub fn get_symbol_table(&'a self, path: &[String]) -> Option<&'a SymbolTable> {
+        info!(?path, "get_symbol_table");
         if path.is_empty() {
             return Some(&self.lookup_table);
         }

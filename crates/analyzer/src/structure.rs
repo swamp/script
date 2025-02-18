@@ -5,7 +5,7 @@
 use crate::err::{Error, ErrorKind};
 use crate::Analyzer;
 use seq_set::SeqSet;
-
+use swamp_script_modules::symtbl::SymbolTable;
 use swamp_script_semantic::{
     AnonymousStructType, ArgumentExpressionOrLocation, Expression, ExpressionKind, FunctionRef,
     LocationAccess, LocationAccessKind, MutOrImmutableExpression, Node, SingleLocationExpression,
@@ -150,7 +150,10 @@ impl<'a> Analyzer<'a> {
         ast_fields: &Vec<swamp_script_ast::FieldExpression>,
         has_rest: bool,
     ) -> Result<Expression, Error> {
-        let struct_to_instantiate = self.get_struct_type(qualified_type_identifier)?;
+        let struct_to_instantiate = {
+            let (symbol_table, name) = self.get_symbol_table_and_name(qualified_type_identifier)?;
+            symbol_table.get_struct(&name).unwrap().clone()
+        };
 
         let (source_order_expressions, missing_fields) = self
             .analyze_anon_struct_instantiation_helper(
@@ -170,7 +173,7 @@ impl<'a> Analyzer<'a> {
             if let Some(function) = maybe_default {
                 self.analyze_struct_init_calling_default(
                     &function,
-                    struct_to_instantiate,
+                    struct_to_instantiate.clone(),
                     source_order_expressions,
                     &qualified_type_identifier.name.0,
                 )
@@ -180,7 +183,7 @@ impl<'a> Analyzer<'a> {
                     .map(|(a, _b, c)| (a, c))
                     .collect::<Vec<_>>();
                 self.analyze_struct_init_field_by_field(
-                    struct_to_instantiate,
+                    struct_to_instantiate.clone(),
                     mapped,
                     missing_fields,
                     &qualified_type_identifier.name.0,
@@ -196,7 +199,7 @@ impl<'a> Analyzer<'a> {
             Ok(self.create_expr(
                 ExpressionKind::StructInstantiation(StructInstantiation {
                     source_order_expressions: mapped,
-                    struct_type_ref: struct_to_instantiate,
+                    struct_type_ref: struct_to_instantiate.clone(),
                 }),
                 ty,
                 &node,
@@ -313,5 +316,19 @@ impl<'a> Analyzer<'a> {
         }
 
         Ok(mapped)
+    }
+
+    fn get_symbol_table_and_name(
+        &self,
+        type_identifier: &swamp_script_ast::QualifiedTypeIdentifier,
+    ) -> Result<(&SymbolTable, String), Error> {
+        let path = self.get_module_path(&type_identifier.module_path);
+        let name = self.get_text(&type_identifier.name.0).to_string();
+
+        let maybe_symbol_table = self.shared.get_symbol_table(&path);
+        maybe_symbol_table.map_or_else(
+            || Err(self.create_err(ErrorKind::UnknownModule, &type_identifier.name.0)),
+            |symbol_table| Ok((symbol_table, name)),
+        )
     }
 }

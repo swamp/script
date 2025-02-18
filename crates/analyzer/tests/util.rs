@@ -7,6 +7,7 @@ use std::fmt::{Debug, Formatter};
 use std::path::Path;
 use swamp_script_analyzer::prelude::Error;
 use swamp_script_analyzer::Analyzer;
+use swamp_script_core::add_intrinsic_types;
 use swamp_script_error_report::show_error;
 use swamp_script_modules::modules::{pretty_print, Module, Modules};
 use swamp_script_modules::symtbl::SymbolTable;
@@ -33,7 +34,17 @@ fn internal_compile(script: &str) -> Result<(SymbolTable, Option<Expression>), E
 
     source_map.add_manual(file_id, "crate", Path::new("some_path/main"), script);
 
+    let mut intrinsic_types_symbol_table = SymbolTable::new();
+    add_intrinsic_types(&mut intrinsic_types_symbol_table);
+
     let mut analyzer = Analyzer::new(&mut state, &modules, &source_map, file_id);
+
+    for (name, symbol) in intrinsic_types_symbol_table.symbols() {
+        analyzer
+            .shared
+            .lookup_table
+            .add_symbol(name, symbol.clone())?;
+    }
 
     let mut resolved_definitions = Vec::new();
     for definition in &program.definitions {

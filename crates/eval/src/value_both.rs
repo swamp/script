@@ -6,8 +6,10 @@
 use crate::prelude::ValueReference;
 use std::cell::RefCell;
 use std::rc::Rc;
-use swamp_script_core::prelude::{Value, ValueError, ValueRef};
-use swamp_script_core::value::AnyRustType;
+use swamp_script_core_extra::value::AnyRustType;
+use swamp_script_core_extra::value::Value;
+use swamp_script_core_extra::value::ValueError;
+use swamp_script_core_extra::value::ValueRef;
 
 #[derive(Debug, Clone)]
 pub enum VariableValue {
