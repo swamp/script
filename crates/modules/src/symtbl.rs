@@ -12,8 +12,8 @@ use swamp_script_semantic::{
     AliasType, AliasTypeRef, AnonymousStructType, Constant, ConstantRef, EnumType, EnumTypeRef,
     EnumVariantType, EnumVariantTypeRef, ExternalFunctionDefinition, ExternalFunctionDefinitionRef,
     ExternalType, ExternalTypeRef, FileId, InternalFunctionDefinition,
-    InternalFunctionDefinitionRef, IntrinsicFunctionDefinition, IntrinsicFunctionDefinitionRef,
-    Node, SemanticError, StructType, StructTypeField, StructTypeRef, Type, TypeParameterName,
+    InternalFunctionDefinitionRef, IntrinsicFunctionDefinitionRef, Node, SemanticError, StructType,
+    StructTypeField, StructTypeRef, Type, TypeParameterName,
 };
 use tracing::info;
 
@@ -74,11 +74,7 @@ pub struct SymbolTable {
     symbols: SeqMap<String, Symbol>,
 }
 
-impl SymbolTable {}
-
-impl SymbolTable {}
-
-pub type SymbolTableRef = Rc<RefCell<SymbolTable>>;
+pub type SymbolTableRef = Rc<SymbolTable>;
 
 impl Default for SymbolTable {
     fn default() -> Self {
@@ -92,6 +88,16 @@ impl SymbolTable {
         Self {
             symbols: SeqMap::default(),
         }
+    }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.symbols.is_empty()
+    }
+
+    #[must_use]
+    pub const fn symbols(&self) -> &SeqMap<String, Symbol> {
+        &self.symbols
     }
 
     pub fn add_constant(&mut self, constant: Constant) -> Result<ConstantRef, SemanticError> {

@@ -6,7 +6,7 @@ pub mod prelude;
 
 pub use fixed32::Fp;
 use seq_fmt::comma;
-use seq_map::SeqMap;
+use seq_map::{SeqMap, SeqMapError};
 use std::cell::RefCell;
 use std::cmp::PartialEq;
 use std::fmt;
@@ -1432,20 +1432,73 @@ pub enum Definition {
 }
 */
 
+#[derive(Debug)]
+pub struct MonomorphizationCache {
+    pub cache: SeqMap<String, Type>,
+}
+
+impl MonomorphizationCache {
+    pub fn new() -> Self {
+        Self {
+            cache: SeqMap::default(),
+        }
+    }
+
+    pub fn complete_name(path: &[String], base_name: &str, argument_types: &[Type]) -> String {
+        format!(
+            "{}::{}<{}>",
+            path.join("::"),
+            base_name,
+            comma(argument_types)
+        )
+    }
+    pub fn add(
+        &mut self,
+        path: &[String],
+        name: &str,
+        ty: Type,
+        argument_type: &[Type],
+    ) -> Result<(), SeqMapError> {
+        let name = Self::complete_name(path, name, argument_type);
+        self.cache.insert(name, ty)
+    }
+
+    pub fn get(
+        &mut self,
+        path: &[String],
+        base_name: &str,
+        argument_type: &[Type],
+    ) -> Option<&Type> {
+        let name = Self::complete_name(path, base_name, argument_type);
+        self.cache.get(&name)
+    }
+}
+
 // Mutable part
 #[derive(Debug)]
 pub struct ProgramState {
     pub array_types: Vec<ArrayTypeRef>,
     pub number: TypeNumber,
     pub external_function_number: ExternalFunctionId,
+    pub monomorphization_cache: MonomorphizationCache,
+    pub associated_impls: AssociatedImpls,
+}
+
+impl Default for ProgramState {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ProgramState {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             array_types: Vec::new(),
             number: 0,
             external_function_number: 0,
+            monomorphization_cache: MonomorphizationCache::new(),
+            associated_impls: AssociatedImpls::new(),
         }
     }
 

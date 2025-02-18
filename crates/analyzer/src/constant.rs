@@ -4,11 +4,11 @@
  */
 
 use crate::err::{Error, ErrorKind};
-use crate::Resolver;
+use crate::Analyzer;
 use swamp_script_ast::{ConstantIdentifier, ConstantInfo};
 use swamp_script_semantic::{Constant, ConstantRef, Expression, ExpressionKind};
 
-impl<'a> Resolver<'a> {
+impl<'a> Analyzer<'a> {
     fn analyze_constant(&mut self, constant: &ConstantInfo) -> Result<(), Error> {
         let resolved_expr = self.analyze_expression(&constant.expression, None)?;
         let resolved_type = resolved_expr.ty.clone();

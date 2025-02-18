@@ -19,17 +19,16 @@ pub mod variable;
 
 use crate::err::{Error, ErrorKind};
 use crate::lookup::TypeParameterStack;
-use seq_fmt::comma;
-use seq_map::{SeqMap, SeqMapError};
+use seq_map::SeqMap;
 use std::mem::take;
 use std::num::{ParseFloatError, ParseIntError};
 use std::rc::Rc;
-use swamp_script_modules::modules::{Modules, NamespaceRegistry};
+use swamp_script_modules::modules::Modules;
 use swamp_script_modules::symtbl::{FuncDef, Symbol, SymbolTable, SymbolTableRef};
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
-    ArgumentExpressionOrLocation, AssociatedImpls, IteratorYieldType, LocationAccess,
-    LocationAccessKind, MutOrImmutableExpression, NormalPattern, Postfix, PostfixKind, RangeMode,
+    ArgumentExpressionOrLocation, IteratorYieldType, LocationAccess, LocationAccessKind,
+    MutOrImmutableExpression, NormalPattern, Postfix, PostfixKind, RangeMode,
     SingleLocationExpression, SingleLocationExpressionKind, SingleMutLocationExpression,
     TypeWithMut, WhenBinding,
 };
@@ -134,57 +133,42 @@ impl BlockScope {
     }
 }
 
-pub struct MonomorphizationCache {
-    pub cache: SeqMap<String, Type>,
-}
-
-impl MonomorphizationCache {
-    pub fn new() -> Self {
-        Self {
-            cache: SeqMap::default(),
-        }
-    }
-
-    pub fn complete_name(path: &[String], base_name: &str, argument_types: &[Type]) -> String {
-        format!(
-            "{}::{}<{}>",
-            path.join("::"),
-            base_name,
-            comma(argument_types)
-        )
-    }
-    pub fn add(
-        &mut self,
-        path: &[String],
-        name: &str,
-        ty: Type,
-        argument_type: &[Type],
-    ) -> Result<(), SeqMapError> {
-        let name = Self::complete_name(path, name, argument_type);
-        self.cache.insert(name, ty)
-    }
-
-    pub fn get(
-        &mut self,
-        path: &[String],
-        base_name: &str,
-        argument_type: &[Type],
-    ) -> Option<&Type> {
-        let name = Self::complete_name(path, base_name, argument_type);
-        self.cache.get(&name)
-    }
-}
-
 pub struct SharedState<'a> {
     pub state: &'a mut ProgramState,
-    pub associated_impls: &'a mut AssociatedImpls,
     pub lookup_table: SymbolTable,
-    pub monomorphization_cache: MonomorphizationCache,
     pub definition_table: SymbolTable,
     pub type_parameter_scope_stack: TypeParameterStack,
     pub modules: &'a Modules,
     pub source_map: &'a SourceMap,
     pub file_id: FileId,
+}
+
+impl<'a> SharedState<'a> {
+    pub fn get_symbol_table(&'a self, path: &[String]) -> Option<&'a SymbolTable> {
+        if path.is_empty() {
+            return Some(&self.lookup_table);
+        }
+
+        if path.len() == 1 {
+            if let Some(module_ref) = self.lookup_table.get_module_link(&path[0]) {
+                return Some(&module_ref.namespace.symbol_table);
+            }
+        }
+
+        if let Some(x) = self.modules.get(path) {
+            return Some(&x.namespace.symbol_table);
+        }
+
+        None
+    }
+
+    pub fn get_optional_symbol_table(&self, maybe_path: Option<&[String]>) -> Option<&SymbolTable> {
+        if let Some(path) = maybe_path {
+            self.get_symbol_table(path)
+        } else {
+            Some(&self.lookup_table)
+        }
+    }
 }
 
 pub struct FunctionScopeState {
@@ -202,17 +186,16 @@ impl FunctionScopeState {
     }
 }
 
-pub struct Resolver<'a> {
+pub struct Analyzer<'a> {
     pub shared: SharedState<'a>,
     scope: FunctionScopeState,
     global: FunctionScopeState,
 }
 
-impl<'a> Resolver<'a> {
+impl<'a> Analyzer<'a> {
     pub fn new(
         state: &'a mut ProgramState,
-        modules: &'a mut Modules,
-        associated_impls: &'a mut AssociatedImpls,
+        modules: &'a Modules,
         source_map: &'a SourceMap,
         file_id: FileId,
     ) -> Self {
@@ -221,9 +204,7 @@ impl<'a> Resolver<'a> {
             lookup_table: SymbolTable::default(),
             definition_table: SymbolTable::default(),
             type_parameter_scope_stack: TypeParameterStack::new(),
-            monomorphization_cache: MonomorphizationCache::new(),
             modules,
-            associated_impls,
             source_map,
             file_id,
         };
@@ -843,6 +824,7 @@ impl<'a> Resolver<'a> {
     ) -> Result<ExpressionKind, Error> {
         if let Some(function) = self
             .shared
+            .state
             .associated_impls
             .get_member_function(ty, "default")
         {
@@ -1071,12 +1053,9 @@ impl<'a> Resolver<'a> {
                         }
 
                         Type::Struct(resolved_struct_ref) => {
-                            let borrow = resolved_struct_ref;
-                            let subscript_fn = self
-                                .find_struct_function(resolved_struct_ref, "subscript")
-                                .unwrap();
                             let subscript_fn = self
                                 .shared
+                                .state
                                 .associated_impls
                                 .get_member_function(
                                     &Type::Struct(resolved_struct_ref.clone()),
@@ -1242,6 +1221,7 @@ impl<'a> Resolver<'a> {
             Type::Struct(resolved_struct_ref) => {
                 let x = self
                     .shared
+                    .state
                     .associated_impls
                     .get_member_function(&Type::Struct(resolved_struct_ref.clone()), "iter")
                     .unwrap();
@@ -2133,6 +2113,7 @@ impl<'a> Resolver<'a> {
                             let return_type = {
                                 let subscript_fn = self
                                     .shared
+                                    .state
                                     .associated_impls
                                     .get_member_function(
                                         &Type::Struct(resolved_struct_ref.clone()),
@@ -2516,6 +2497,7 @@ impl<'a> Resolver<'a> {
         let binding = struct_type;
         let maybe = self
             .shared
+            .state
             .associated_impls
             .get_member_function(&Type::Struct(struct_type.clone()), &field_name_str)
             .cloned();

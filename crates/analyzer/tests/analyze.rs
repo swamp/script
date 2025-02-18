@@ -24,7 +24,8 @@ fn fail_compound_unknown_variable() {
     check_fail(
         "a += 3",
         r"
-UnknownVariable(<0:1>)",
+error[105]: Unknown variable
+  --> some_path/main:1:1",
     );
 }
 
@@ -60,8 +61,8 @@ fn array_push() {
         a += 3
         ",
         r"
-InitializeVariable(VariableAssignment { variable_refs: [Variable { name: <13:1>, resolved_type: Array(ArrayType { item_type: Int(IntType) }), mutable_node: Some(<9:3>), scope_index: 0, variable_index: 0 }], expression: Literal(Array(ArrayType { item_type: Int(IntType) }, [Literal(IntLiteral(1, <18:1>, IntType))])) })
-ArrayPush(Variable { name: <13:1>, resolved_type: Array(ArrayType { item_type: Int(IntType) }), mutable_node: Some(<9:3>), scope_index: 0, variable_index: 0 }, Literal(IntLiteral(3, <34:1>, IntType)))
+<13:1>[Int],VariableDefinition(Variable { name: <13:1>, resolved_type: [Int], mutable_node: Some(<9:3>), scope_index: 0, variable_index: 0 }, MutOrImmutableExpression { expression_or_location: Expression(<17:3>[Int],Literal(Array(ArrayType { item_type: Int }, [<18:1>Int,Literal(IntLiteral(1))]))), is_mutable: None })
+<29:1>(),CompoundAssignment(SingleMutLocationExpression(SingleLocationExpression { kind: MutVariableRef, node: <29:1>, ty: [Int], starting_variable: Variable { name: <13:1>, resolved_type: [Int], mutable_node: Some(<9:3>), scope_index: 0, variable_index: 0 }, access_chain: [] }), Add, <34:1>Int,Literal(IntLiteral(3)))
 
 ",
     );
@@ -77,7 +78,7 @@ fn array_extend() {
         r"
 
 ..[Int],VariableDefinition(Variable { name: <13:1>, resolved_type: [Int], mutable_node: Some(<9:3>), scope_index: 0, variable_index: 0 }, MutOrImmutableExpression { expression_or_location: Expression(<17:3>[Int],Literal(Array(ArrayType { item_type: Int }, [<18:1>Int,Literal(IntLiteral(1))]))), is_mutable: None })
-..(),CompoundAssignment(SingleMutLocationExpression(SingleLocationExpression { kind: MutVariableRef, node: <29:1>, ty: [Int], starting_variable: Variable { name: <13:1>, resolved_type: [Int], mutable_node: Some(<9:3>), scope_index: 0, variable_index: 0 }, access_chain: [] }), Add, <34:9>[Int],Literal(Array(ArrayType { item_type: Int }, [<35:1>Int,Literal(IntLiteral(3)), <38:1>Int,Literal(IntLiteral(4)), <41:1>Int,Literal(IntLiteral(5))])))
+..(),ArrayExtend(SingleMutLocationExpression(SingleLocationExpression { kind: MutVariableRef, node: <29:1>, ty: [Int], starting_variable: Variable { name: <13:1>, resolved_type: [Int], mutable_node: Some(<9:3>), scope_index: 0, variable_index: 0 }, access_chain: [] }), <34:9>[Int],Literal(Array(ArrayType { item_type: Int }, [<35:1>Int,Literal(IntLiteral(3)), <38:1>Int,Literal(IntLiteral(4)), <41:1>Int,Literal(IntLiteral(5))])))
 
 ",
     );

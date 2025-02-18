@@ -4,14 +4,14 @@
  */
 
 use crate::err::{Error, ErrorKind};
-use crate::Resolver;
+use crate::Analyzer;
 
 use swamp_script_semantic::{
     EnumVariantType, EnumVariantTypeRef, NormalPattern, Pattern, PatternElement, Type,
 };
 use tracing::info;
 
-impl<'a> Resolver<'a> {
+impl<'a> Analyzer<'a> {
     fn find_variant_in_pattern(
         &self,
         expression_type: &Type,

@@ -3,13 +3,13 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use crate::err::{Error, ErrorKind};
-use crate::Resolver;
+use crate::Analyzer;
 
 use swamp_script_semantic::{
     Expression, ExpressionKind, Function, FunctionRef, Range, RangeMode, Type,
 };
 
-impl<'a> Resolver<'a> {
+impl<'a> Analyzer<'a> {
     fn convert_to_function_access(function: &FunctionRef) -> Expression {
         match &**function {
             Function::Internal(x) => Expression {
@@ -34,6 +34,7 @@ impl<'a> Resolver<'a> {
         let member_name = self.get_text(member_name_node);
         if let Some(member_function) = self
             .shared
+            .state
             .associated_impls
             .get_member_function(&some_type, member_name)
         {

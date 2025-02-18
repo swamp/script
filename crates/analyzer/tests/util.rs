@@ -2,28 +2,26 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use modules::modules::{Module, Modules};
-use modules::ns::ModuleNamespace;
 use seq_map::SeqMap;
-use std::cell::RefCell;
+use std::fmt::{Debug, Formatter};
 use std::path::Path;
-use std::rc::Rc;
-use swamp_script_analyzer::lookup::NameLookup;
 use swamp_script_analyzer::prelude::Error;
-use swamp_script_analyzer::Resolver;
+use swamp_script_analyzer::Analyzer;
 use swamp_script_error_report::show_error;
+use swamp_script_modules::modules::{pretty_print, Module, Modules};
+use swamp_script_modules::symtbl::SymbolTable;
 use swamp_script_parser::AstParser;
-use swamp_script_semantic::ProgramState;
+use swamp_script_semantic::{Expression, ExpressionKind, ProgramState};
 use swamp_script_source_map::SourceMap;
 use tracing::warn;
 
-fn internal_compile(script: &str) -> Result<Module, Error> {
+fn internal_compile(script: &str) -> Result<(SymbolTable, Option<Expression>), Error> {
     let parser = AstParser {};
 
     let program = parser.parse_module(script).expect("Failed to parse script");
 
     let mut state = ProgramState::new();
-    let mut modules = Modules::new();
+    let modules = Modules::new();
 
     let mut mount_maps = SeqMap::new();
     mount_maps
@@ -34,23 +32,27 @@ fn internal_compile(script: &str) -> Result<Module, Error> {
     let file_id = 0xffff;
 
     source_map.add_manual(file_id, "crate", Path::new("some_path/main"), script);
-    let resolved_path_str = vec!["test".to_string()];
-    let _own_module = modules.add_empty_module(&resolved_path_str);
 
-    let mut name_lookup = NameLookup::new(resolved_path_str, &mut modules);
-
-    let mut resolver = Resolver::new(&mut state, &mut name_lookup, &source_map, file_id);
+    let mut analyzer = Analyzer::new(&mut state, &modules, &source_map, file_id);
 
     let mut resolved_definitions = Vec::new();
     for definition in &program.definitions {
-        let resolved_definition = resolver.analyze_definition(definition)?;
-        resolved_definitions.push(resolved_definition);
+        let result = analyzer.analyze_definition(definition);
+        match result {
+            Ok(analyzed_definition) => {
+                resolved_definitions.push(analyzed_definition);
+            }
+            Err(err) => {
+                show_error(&err, &source_map);
+                return Err(err)?;
+            }
+        }
     }
 
     let expression = &program.expression;
     let maybe_resolved_expression = match expression {
         Some(unwrapped_expression) => {
-            let result = resolver.analyze_expression(unwrapped_expression, None);
+            let result = analyzer.analyze_expression(unwrapped_expression, None);
             if let Ok(expression) = result {
                 Some(expression)
             } else {
@@ -62,15 +64,7 @@ fn internal_compile(script: &str) -> Result<Module, Error> {
         None => None,
     };
 
-    let ns_ref = Rc::new(RefCell::new(ModuleNamespace::new(&[])));
-
-    let resolved_module = Module {
-        definitions: resolved_definitions,
-        expression: maybe_resolved_expression,
-        namespace: ns_ref,
-    };
-
-    Ok(resolved_module)
+    Ok((analyzer.shared.definition_table, maybe_resolved_expression))
 }
 
 /// # Panics
@@ -81,12 +75,30 @@ pub fn check_fail(script: &str, expected_error_message: &str) {
     assert_eq!(format!("{error:?}"), expected_error_message.trim());
 }
 
+pub struct FormatExpression {
+    pub expression: Expression,
+}
+
+impl Debug for FormatExpression {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        pretty_print(f, &self.expression, 0)
+    }
+}
+
 /// # Panics
 /// Intentionally panics if output is not the same as the `expected_output`
 pub fn check(script: &str, expected_output: &str) {
-    let resolved_module = internal_compile(script).expect("should work to analyze");
+    let (symbol_table, expression) = internal_compile(script).expect("should work");
 
-    let formatted_output = format!("{resolved_module:?}");
+    let mut formatted_output = String::new();
+
+    if !symbol_table.is_empty() {
+        formatted_output += &*format!("{symbol_table:?}");
+    }
+    if let Some(expr) = expression {
+        let format_expr = FormatExpression { expression: expr };
+        formatted_output += &*format!("{format_expr:?}");
+    }
 
     let actual = formatted_output
         .lines()

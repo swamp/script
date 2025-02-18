@@ -4,14 +4,14 @@
  */
 
 use crate::err::{Error, ErrorKind};
-use crate::Resolver;
+use crate::Analyzer;
 
 use swamp_script_semantic::{
     BinaryOperator, BinaryOperatorKind, Type, UnaryOperator, UnaryOperatorKind,
 };
 use tracing::debug;
 
-impl<'a> Resolver<'a> {
+impl<'a> Analyzer<'a> {
     pub(crate) fn analyze_binary_op(
         &mut self,
         ast_left: &swamp_script_ast::Expression,

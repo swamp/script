@@ -4,13 +4,13 @@
  */
 
 use crate::err::{Error, ErrorKind};
-use crate::{LocationSide, Resolver};
+use crate::{Analyzer, LocationSide};
 use swamp_script_ast::MutableOrImmutableExpression;
 use swamp_script_semantic::{
     ArgumentExpressionOrLocation, MutOrImmutableExpression, Node, Type, TypeForParameter,
 };
 
-impl<'a> Resolver<'a> {
+impl<'a> Analyzer<'a> {
     pub fn analyze_argument(
         &mut self,
         fn_parameter: &TypeForParameter,

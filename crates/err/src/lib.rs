@@ -519,6 +519,7 @@ pub fn build_resolve_error(err: &Error) -> Builder<usize> {
         ErrorKind::ExpectedStruct => todo!(),
         ErrorKind::NotAGeneric => todo!(),
         ErrorKind::UnknownIntrinsic => Report::build(Kind::Error, 140, "unknown intrinsic", span),
+       ErrorKind::UnknownSymbol | &swamp_script_analyzer::err::ErrorKind::UnknownEnumType | &swamp_script_analyzer::err::ErrorKind::WrongTypeParameters => Report::build(Kind::Error, 140, "some error", span),
     }
 }
 

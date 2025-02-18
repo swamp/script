@@ -2208,10 +2208,10 @@ Use(Use { module_path: ModulePath([<5:8>, <14:9>, <24:5>]), assigned_path: ["gam
 fn mod_statement_3_items() {
     check(
         "
-mod gameplay.something.other
+mod gameplay::something::other
 ",
         "
-Mod(Mod { module_path: ModulePath([<5:8>, <14:9>, <24:5>]) })
+Mod(Mod { module_path: ModulePath([<5:8>, <15:9>, <26:5>]) })
 ",
     );
 }

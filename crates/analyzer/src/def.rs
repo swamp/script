@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use crate::err::{Error, ErrorKind};
-use crate::Resolver;
+use crate::Analyzer;
 use seq_map::SeqMap;
 use std::rc::Rc;
 use swamp_script_ast::Node;
@@ -17,7 +17,7 @@ use swamp_script_semantic::{
 };
 use tracing::info;
 
-impl<'a> Resolver<'a> {
+impl<'a> Analyzer<'a> {
     fn analyze_use_definition(
         &mut self,
         use_definition: &swamp_script_ast::Use,
@@ -105,7 +105,7 @@ impl<'a> Resolver<'a> {
         if let Some(found_namespace) = self.shared.modules.get(&nodes_copy) {
             self.shared
                 .lookup_table
-                .add_module_link(nodes_copy.last().unwrap(), found_namespace)?;
+                .add_module_link(nodes_copy.last().unwrap(), found_namespace.clone())?;
             Ok(())
         } else {
             let first = &mod_definition.module_path.0[0];
@@ -512,7 +512,7 @@ impl<'a> Resolver<'a> {
 
             self.stop_function();
 
-            self.shared.associated_impls.add_member_function(
+            self.shared.state.associated_impls.add_member_function(
                 found_type,
                 &function_name_str,
                 resolved_function_ref,

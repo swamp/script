@@ -3,17 +3,15 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use crate::err::{Error, ErrorKind};
-use crate::Resolver;
+use crate::Analyzer;
 use std::rc::Rc;
-
-use swamp_script_ast::QualifiedTypeIdentifier;
 use swamp_script_semantic::{
     EnumLiteralData, EnumVariantType, Expression, Fp, Literal, MapType, MapTypeRef, Node,
     TupleType, TupleTypeRef, Type,
 };
 use tracing::error;
 
-impl<'a> Resolver<'a> {
+impl<'a> Analyzer<'a> {
     #[allow(clippy::too_many_lines)]
     pub(crate) fn analyze_literal(
         &mut self,

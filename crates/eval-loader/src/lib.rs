@@ -4,13 +4,14 @@
  */
 pub mod prelude;
 
-use std::cell::RefCell;
 use std::rc::Rc;
 use swamp_script_analyzer::err::ErrorKind;
 use swamp_script_analyzer::prelude::*;
 use swamp_script_analyzer::AutoUseModules;
 use swamp_script_dep_loader::prelude::*;
+use swamp_script_modules::modules::ModuleRef;
 use swamp_script_modules::modules::{Module, Modules};
+use swamp_script_modules::symtbl::SymbolTable;
 use swamp_script_semantic::prelude::*;
 use swamp_script_source_map::SourceMap;
 
@@ -21,45 +22,36 @@ pub fn resolve_to_new_module(
     module_path: &[String],
     source_map: &SourceMap,
     ast_module: &ParsedAstModule,
-) -> Result<(), Error> {
-    let resolved_module = Module::new(module_path);
-    let resolved_module_ref = Rc::new(RefCell::new(resolved_module));
-    modules.add(resolved_module_ref);
+) -> Result<ModuleRef, Error> {
+    let (analyzed_symbol_table, expression) =
+        analyze_module(state, auto_use_modules, modules, source_map, ast_module)?;
 
-    resolve_to_existing_module(
-        state,
-        auto_use_modules,
-        modules,
-        module_path.to_vec(),
-        source_map,
-        ast_module,
-    )?;
+    let resolved_module = Module::new(module_path, analyzed_symbol_table, expression);
+    let resolved_module_ref = Rc::new(resolved_module);
 
-    Ok(())
+    modules.add(resolved_module_ref.clone());
+
+    Ok(resolved_module_ref)
 }
 
-pub fn resolve_to_existing_module(
+pub fn analyze_module(
     state: &mut ProgramState,
     auto_use_modules: &AutoUseModules,
     modules: &mut Modules,
-    path: &[String],
     source_map: &SourceMap,
     ast_module: &ParsedAstModule,
-) -> Result<Option<Expression>, Error> {
-    let statements = {
-        let mut resolver = Resolver::new(state, modules, source_map, ast_module.file_id);
-
-        if !auto_use_modules.modules.is_empty() {
-            let target_module = resolver.shared.lookup.own_namespace();
-            for namespace in &auto_use_modules.modules {
-                for (_name, struct_type) in namespace.borrow().structs() {
-                    target_module
-                        .borrow_mut()
-                        .add_struct_ref(struct_type.clone())?;
-                }
+) -> Result<(SymbolTable, Option<Expression>), Error> {
+    let mut resolver = Analyzer::new(state, modules, source_map, ast_module.file_id);
+    if !auto_use_modules.modules.is_empty() {
+        let target = &mut resolver.shared.lookup_table;
+        for symbol_table in &auto_use_modules.modules {
+            for (name, symbol) in symbol_table.symbols() {
+                target.add_symbol(name, symbol.clone())?
             }
         }
+    }
 
+    let statements = {
         for ast_def in ast_module.ast_module.definitions() {
             resolver.analyze_definition(ast_def)?;
         }
@@ -72,38 +64,7 @@ pub fn resolve_to_existing_module(
         maybe_resolved_expression
     };
 
-    Ok(statements)
-}
-
-pub fn analyze_module(
-    state: &mut ProgramState,
-    auto_use: &AutoUseModules,
-    modules: &mut Modules,
-    source_map: &SourceMap,
-    module_path: &[String],
-    ast_module: &ParsedAstModule,
-) -> Result<(), Error> {
-    if let Some(_found_module) = modules.get(&module_path.clone()) {
-        let _ = resolve_to_existing_module(
-            state,
-            auto_use,
-            modules,
-            module_path.clone(),
-            source_map,
-            ast_module,
-        )?;
-    } else {
-        resolve_to_new_module(
-            state,
-            auto_use,
-            modules,
-            module_path,
-            source_map,
-            ast_module,
-        )?;
-    }
-
-    Ok(())
+    Ok((resolver.shared.definition_table, statements))
 }
 
 pub fn analyze_modules_in_order(
@@ -116,14 +77,7 @@ pub fn analyze_modules_in_order(
 ) -> Result<(), Error> {
     for module_path in module_paths_in_order {
         if let Some(parse_module) = parsed_modules.get_parsed_module(module_path) {
-            analyze_module(
-                state,
-                auto_use,
-                modules,
-                source_map,
-                module_path,
-                parse_module,
-            )?;
+            analyze_module(state, auto_use, modules, source_map, parse_module)?;
         } else {
             return Err(Error {
                 kind: ErrorKind::CanNotFindModule(module_path.clone()),

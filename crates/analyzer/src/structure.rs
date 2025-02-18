@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use crate::err::{Error, ErrorKind};
-use crate::Resolver;
+use crate::Analyzer;
 use seq_set::SeqSet;
 
 use swamp_script_semantic::{
@@ -13,7 +13,7 @@ use swamp_script_semantic::{
     Type,
 };
 
-impl<'a> Resolver<'a> {
+impl<'a> Analyzer<'a> {
     fn analyze_struct_init_calling_default(
         &mut self,
         function: &FunctionRef,
@@ -161,6 +161,7 @@ impl<'a> Resolver<'a> {
         if has_rest {
             let maybe_default = {
                 self.shared
+                    .state
                     .associated_impls
                     .get_member_function(&Type::Struct(struct_to_instantiate.clone()), "default")
                     .cloned()

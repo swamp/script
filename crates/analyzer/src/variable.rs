@@ -3,14 +3,14 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use crate::err::{Error, ErrorKind};
-use crate::{BlockScopeMode, Resolver};
+use crate::{Analyzer, BlockScopeMode};
 use std::rc::Rc;
 
 use swamp_script_semantic::{
     Expression, ExpressionKind, MutOrImmutableExpression, Node, Type, Variable, VariableRef,
 };
 
-impl<'a> Resolver<'a> {
+impl<'a> Analyzer<'a> {
     fn try_find_local_variable(&self, node: &Node) -> Option<&VariableRef> {
         let current_scope = self
             .scope

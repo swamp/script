@@ -7,9 +7,7 @@ use crate::symtbl::{SymbolTable, SymbolTableRef};
 use seq_map::SeqMap;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
-use swamp_script_semantic::{
-    AssociatedImpls, Constant, ConstantId, ConstantRef, Expression, ExpressionKind,
-};
+use swamp_script_semantic::{Constant, ConstantId, ConstantRef, Expression, ExpressionKind};
 
 #[derive(Debug)]
 pub struct Modules {
@@ -29,14 +27,14 @@ type NamespacePath = Vec<String>;
 #[derive(Debug)]
 pub struct Namespace {
     pub path: NamespacePath,
-    pub symbol_table: SymbolTable,
+    pub symbol_table: SymbolTableRef,
 }
 
 impl Namespace {
-    pub fn new(path: NamespacePath) -> Self {
+    pub fn new(path: NamespacePath, symbol_table: SymbolTable) -> Self {
         Self {
             path,
-            symbol_table: SymbolTable::default(),
+            symbol_table: Rc::new(symbol_table),
         }
     }
 }
@@ -63,6 +61,8 @@ impl Debug for Module {
     }
 }
 
+pub type ModuleRef = Rc<Module>;
+
 /// # Errors
 ///
 pub fn pretty_print(
@@ -85,13 +85,16 @@ pub fn pretty_print(
     }
 }
 
-pub type ModuleRef = Rc<Module>;
-
 impl Module {
-    pub fn new(module_path: &[String]) -> Self {
+    #[must_use]
+    pub fn new(
+        module_path: &[String],
+        symbol_table: SymbolTable,
+        expression: Option<Expression>,
+    ) -> Self {
         Self {
-            namespace: Namespace::new(NamespacePath::from(module_path)),
-            expression: None,
+            namespace: Namespace::new(NamespacePath::from(module_path), symbol_table),
+            expression,
         }
     }
 }
@@ -132,7 +135,7 @@ impl Modules {
     }
 
     #[must_use]
-    pub fn get(&self, module_path: &[String]) -> Option<ModuleRef> {
-        self.modules.get(&module_path.to_vec()).cloned()
+    pub fn get(&self, module_path: &[String]) -> Option<&ModuleRef> {
+        self.modules.get(&module_path.to_vec())
     }
 }
