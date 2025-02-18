@@ -36,5 +36,5 @@ members = [
     "crates/source-map-lookup", # Move this later
     "crates/doc",
     "crates/compile",
-    "crates/pretty-print", "crates/modules",
+    "crates/pretty-print", "crates/core-extra",
 ]
