@@ -4,49 +4,119 @@
  */
 use regex::Regex;
 use std::path::Path;
-use swamp_script_analyzer::prelude::Program;
+use std::rc::Rc;
+use std::str::FromStr;
+use swamp_script_analyzer::prelude::{Error, Program};
+use swamp_script_analyzer::Analyzer;
 use swamp_script_dep_loader::{
-    create_source_map, parse_local_modules_and_get_order, DependencyParser, ParsedAstModule,
+    create_source_map, parse_local_modules_and_get_order, parse_single_module, DependencyParser,
+    ParsedAstModule,
 };
-use swamp_script_error_report::{show_script_resolve_error, ScriptResolveError};
+use swamp_script_error_report::{show_error, show_script_resolve_error, ScriptResolveError};
 use swamp_script_eval_loader::analyze_modules_in_order;
-use swamp_script_source_map::SourceMap;
+use swamp_script_modules::modules::Modules;
+use swamp_script_modules::symtbl::SymbolTable;
+use swamp_script_semantic::ProgramState;
+use swamp_script_source_map::{FileId, SourceMap};
+use tiny_ver::TinyVersion;
+use tracing::trace;
 
-pub fn bootstrap(root_path: &Path) -> Result<Program, ScriptResolveError> {
-    let mut source_map = create_source_map(root_path).unwrap();
-    let mut resolved_program = Program::new();
+const COMPILER_VERSION: &str = "0.0.0";
 
-    let swamp_core_module_path = &["core-0.0.0".to_string()];
-    let mut dependency_parser = DependencyParser::new();
+pub fn analyze_ast_module_skip_expression(
+    analyzer: &mut Analyzer,
+    parsed_ast_module: ParsedAstModule,
+) -> Result<(), Error> {
+    for definition in &parsed_ast_module.ast_module.definitions {
+        analyzer.analyze_definition(definition)?;
+    }
+    Ok(())
+}
 
-    let module_paths_in_order = parse_local_modules_and_get_order(
-        swamp_core_module_path.to_vec(),
-        &mut dependency_parser,
-        &mut source_map,
-    )?;
+pub fn analyze_single_module(
+    state: &mut ProgramState,
+    default_symbol_table: SymbolTable,
+    modules: &Modules,
+    parsed_ast_module: ParsedAstModule,
+    source_map: &SourceMap,
+    versioned_module_path: &[String],
+) -> Result<SymbolTable, Error> {
+    let mut analyzer = Analyzer::new(
+        state,
+        modules,
+        source_map,
+        versioned_module_path,
+        parsed_ast_module.file_id,
+    );
 
-    let core_module = resolved_program
-        .modules
-        .get(swamp_core_module_path)
+    analyzer.shared.lookup_table = default_symbol_table;
+
+    analyze_ast_module_skip_expression(&mut analyzer, parsed_ast_module)?;
+
+    Ok(analyzer.shared.definition_table)
+}
+
+/// Bootstraps the core and ffi modules and creates a default symbol table
+///
+/// # Panics
+/// In theory it can panic, but should be safe.
+pub fn bootstrap_modules(
+    packages_root_path: &Path,
+) -> Result<(Modules, SymbolTable), ScriptResolveError> {
+    let compiler_version = TinyVersion::from_str(COMPILER_VERSION).unwrap();
+    trace!(?compiler_version, "booting up compiler");
+
+    let mut modules = Modules::new();
+
+    let mut core_module = swamp_script_core::create_module(&compiler_version);
+
+    let mut default_symbol_table = SymbolTable::new();
+
+    // Prelude for the core module
+    // Expose the basic primitive types, like `Int`, `String`, `Float`, `Bool`
+    // so they can be references without a `use core::{Int, String, Float, Bool}` statement.
+    default_symbol_table
+        .extend_basic_from(&core_module.namespace.symbol_table)
         .unwrap();
 
-    // core::
+    let mut source_map = create_source_map(packages_root_path).unwrap();
+    let core_ast_module = parse_single_module(&mut source_map, &core_module.namespace.path)?;
 
-    compile_analyze_and_link_without_version(
-        swamp_core_module_path,
-        &mut resolved_program,
-        &mut source_map,
+    let mut state = ProgramState::new();
+
+    let core_analyzed_symbol_table = analyze_single_module(
+        &mut state,
+        default_symbol_table.clone(),
+        &modules,
+        core_ast_module,
+        &source_map,
+        &core_module.namespace.path,
     )?;
 
-    //resolved_program.add_auto_use(swamp_core_module_path);
+    core_module.namespace.symbol_table = Rc::new(core_analyzed_symbol_table);
 
-    // std::
-    let mangrove_std_module_path = &["std-0.0.0".to_string()];
-    compile_analyze_and_link_without_version(
-        mangrove_std_module_path,
-        &mut resolved_program,
-        &mut source_map,
-    )?;
+    // core module is done, so add it read only to the modules
+    modules.add(Rc::new(core_module));
+
+    // Add `core` module without the version number, so they can be referenced from code
+    default_symbol_table
+        .add_package_version(swamp_script_core::PACKAGE_NAME, compiler_version.clone())
+        .expect("should work");
+
+    let ffi_module = swamp_script_ffi::create_module(&compiler_version);
+    let ffi_module_ref = Rc::new(ffi_module);
+    modules.add(ffi_module_ref.clone());
+
+    // Add `ffi` module without the version number, so they can be referenced from code
+    default_symbol_table
+        .add_package_version(swamp_script_ffi::PACKAGE_NAME, compiler_version)
+        .expect("should work");
+
+    Ok((modules, default_symbol_table))
+}
+
+pub fn init(root_path: &Path) -> Result<Program, ScriptResolveError> {
+    let mut resolved_program = Program::new();
 
     Ok(resolved_program)
 }

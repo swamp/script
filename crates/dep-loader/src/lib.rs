@@ -212,6 +212,24 @@ pub fn mount_name_from_path(path: &[String]) -> (&str, &[String]) {
     }
 }
 
+/// Parses just a single module. Any `mod` keywords in this file will be ignored. So this
+/// is mainly for internal use.
+pub fn parse_single_module(
+    source_map: &mut SourceMap,
+    module_path: &[String],
+) -> Result<ParsedAstModule, DependencyError> {
+    let (mount_name, relative_file_path) = mount_name_from_path(&module_path);
+
+    let (file_id, script) = source_map.read_file_relative(
+        mount_name,
+        &module_path_to_relative_swamp_file_string(relative_file_path),
+    )?;
+
+    let parse_module = ParseRoot.parse(script, file_id)?;
+
+    Ok(parse_module)
+}
+
 impl DependencyParser {
     pub fn parse_local_modules(
         &mut self,
@@ -226,22 +244,16 @@ impl DependencyParser {
                 continue;
             }
 
-            let (mount_name, rel_path) = mount_name_from_path(&path);
-
             let parsed_module_to_scan =
                 if let Some(parsed_module) = self.already_parsed_modules.get(module_path_vec) {
                     parsed_module
                 } else if self.already_resolved_modules.contains(module_path_vec) {
                     continue;
                 } else {
-                    let (file_id, script) = source_map.read_file_relative(
-                        mount_name,
-                        &module_path_to_relative_swamp_file_string(rel_path),
-                    )?;
-                    let parse_module = ParseRoot.parse(script, file_id)?;
+                    let parsed_ast_module = parse_single_module(source_map, &*path)?;
 
                     self.already_parsed_modules
-                        .insert(path.clone(), parse_module)
+                        .insert(path.clone(), parsed_ast_module)
                         .expect("TODO: panic message");
 
                     self.already_parsed_modules

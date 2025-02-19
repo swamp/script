@@ -39,14 +39,6 @@ fn internal_compile(
     source_map.add_manual(file_id, "crate", Path::new("some_path/main"), script);
 
     let compiler_version = "0.0.0".parse::<TinyVersion>().unwrap();
-    let core_module = swamp_script_core::create_module(&compiler_version);
-    let core_module_ref = Rc::new(core_module);
-    modules.add(core_module_ref.clone());
-
-    let ffi_module = swamp_script_ffi::create_module(&compiler_version);
-    let ffi_module_ref = Rc::new(ffi_module);
-    modules.add(ffi_module_ref.clone());
-
     let mut analyzer = Analyzer::new(&mut state, &modules, &source_map, &canonical_path, file_id);
     analyzer
         .shared
@@ -65,13 +57,10 @@ fn internal_compile(
         .add_package_version(swamp_script_ffi::PACKAGE_NAME, compiler_version)
         .expect("should work");
 
-    let mut resolved_definitions = Vec::new();
     for definition in &program.definitions {
         let result = analyzer.analyze_definition(definition);
         match result {
-            Ok(analyzed_definition) => {
-                resolved_definitions.push(analyzed_definition);
-            }
+            Ok(analyzed_definition) => {}
             Err(err) => {
                 show_error(&err, &source_map);
                 Err(err)?;

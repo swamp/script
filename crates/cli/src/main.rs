@@ -8,14 +8,11 @@ use std::fmt::{Display, Formatter};
 use std::io;
 use std::path::{Path, PathBuf};
 use swamp_script_analyzer::prelude::Error;
-use swamp_script_analyzer::Program;
-use swamp_script_compile::{compile_analyze_and_link_without_version, compile_and_analyze};
-use swamp_script_dep_loader::{create_source_map, DepLoaderError};
-use swamp_script_error_report::{show_script_resolve_error, ScriptResolveError};
+use swamp_script_compile::bootstrap_modules;
+use swamp_script_dep_loader::DepLoaderError;
+use swamp_script_error_report::ScriptResolveError;
 use swamp_script_eval::err::ExecuteError;
 use swamp_script_parser::prelude::*;
-use swamp_script_pretty_print::ModulesDisplay;
-use swamp_script_source_map_lookup::SourceMapWrapper;
 use tracing_subscriber::EnvFilter;
 
 #[derive(Parser)]
@@ -132,7 +129,11 @@ impl From<ScriptResolveError> for CliError {
 pub struct CliContext;
 
 #[allow(clippy::too_many_lines)]
-fn build(root_path: &Path, root_module: &str) -> Result<(), CliError> {
+fn build(packages_root_path: &Path, local_module_name: &str) -> Result<(), CliError> {
+    let (_modules, _default_symbol_table) = bootstrap_modules(packages_root_path)?;
+
+    Ok(())
+
     /*
        // mangrove::render
        let mangrove_render_module_path = &["mangrove-0.0.0".to_string(), "render".to_string()];
@@ -185,7 +186,6 @@ fn build(root_path: &Path, root_module: &str) -> Result<(), CliError> {
            }
        }
     */
-    Ok(())
 }
 
 fn run(_path: &Path) -> Result<(), CliError> {
