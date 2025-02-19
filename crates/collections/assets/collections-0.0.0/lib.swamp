@@ -1,0 +1,170 @@
+/// A type alias representing an opaque handle to an external SparseValueMap object.
+///
+/// This type is used internally by the `Sparse<T>` struct to manage sparse data.
+type SparseValueMap = External<"SparseValueMap">
+
+/// A type alias representing an opaque handle to an external iterator for SparseValueMap.
+///
+/// This type is used to iterate over the values stored within a `SparseValueMap`.
+//type SparseValueMapIterator = External<"SparseValueMapIterator">
+
+/// Represents a unique identifier for a value stored within a `SparseValueMap`.
+///
+/// `SparseId`s are returned when adding values to a `SparseValueMap` and are used to retrieve them later.
+struct SparseId {
+  internal: External<"SparseId">,
+}
+
+/// A sparse data structure that efficiently stores values of type `T`.
+///
+/// `Sparse<T>` is designed for scenarios where you have a potentially large address space
+/// but only a small number of values are actually stored. It uses an external `SparseValueMap`
+/// to manage the underlying sparse storage, providing efficient addition and retrieval of values.
+///
+/// # Type Parameters
+///
+/// * `T`: The type of values to be stored in the sparse structure.
+struct Sparse<T> {
+  internal: SparseValueMap,
+}
+
+/// Creates a new, empty `SparseValueMap`.
+///
+/// This external function allocates and initializes a new `SparseValueMap` object
+/// in the native library. The returned `SparseValueMap` handle can then be used
+/// with other `sparse_value_map_*` functions.
+///
+/// # Returns
+///
+/// A new `SparseValueMap` handle.
+external fn sparse_value_map_new() -> SparseValueMap
+
+/// Adds a value to the `SparseValueMap` and returns a `SparseId` for the added value.
+///
+/// The provided `value` is stored within the `map`, and a unique `SparseId` is generated
+/// to identify and retrieve this value later. The `value` is passed as an `ffi::Value`,
+/// which is a type used for interacting with external functions and representing data
+/// across the FFI boundary.
+///
+/// # Parameters
+///
+/// * `map`: The `SparseValueMap` to add the value to.
+/// * `value`: The value to be added, wrapped as an `ffi::Value`.
+///
+/// # Returns
+///
+/// A `SparseId` that uniquely identifies the added value within the `map`.
+external fn sparse_value_map_add(map: SparseValueMap, value: ffi::Value) -> SparseId
+
+/// Retrieves a value from the `SparseValueMap` based on its `SparseId`.
+///
+/// Given a `SparseId`, this function attempts to retrieve the associated value from the `map`.
+/// If a value is found for the given `id`, it is returned as an `ffi::Value?`. If no value
+/// is associated with the `id` (e.g., the `id` is invalid or the value was removed), `none` is returned.
+///
+/// # Parameters
+///
+/// * `map`: The `SparseValueMap` to retrieve the value from.
+/// * `id`: The `SparseId` of the value to retrieve.
+///
+/// # Returns
+///
+/// The value associated with the `SparseId`, wrapped as an `ffi::Value?`, or `none` if no value is found.
+external fn sparse_value_map_get(map: SparseValueMap, id: SparseId) -> ffi::Value?
+
+/// Obtains an iterator for the `SparseValueMap`.
+///
+/// This function initializes an iterator that can be used to traverse the values within the `map`.
+///
+/// # Parameters
+///
+/// * `map`: The `SparseValueMap` to create an iterator for.
+///
+external fn sparse_value_map_iter(map: SparseValueMap) -> ffi::Value?
+
+/// Advances the `SparseValueMap` iterator to the next element and retrieves the value.
+///
+/// This function is used in conjunction with `sparse_value_map_iter` to iterate through the values
+/// in the `SparseValueMap`. It advances the iterator and, if a next value exists, returns it as `ffi::Value?`.
+/// If there are no more values in the map, it returns `none`, indicating the end of the iteration.
+///
+/// # Parameters
+///
+/// * `map`: The `SparseValueMap` for which the iteration is ongoing.
+///
+/// # Returns
+///
+/// The next value in the iteration, wrapped as `ffi::Value?`, or `none` if the iteration is complete.
+external fn sparse_value_map_iter_next(map: SparseValueMap) -> ffi::Value?
+
+/// Advances a mutable iterator for `SparseValueMap` and retrieves the next value for potential in-place modification.
+///
+/// This function provides mutable iteration over the `SparseValueMap`. It attempts to advance the iterator
+/// and place the next value into the provided mutable `value` parameter.  The function returns a `Bool`
+/// indicating whether a next value was successfully retrieved and placed in `value`.
+///
+/// # Parameters
+///
+/// * `map`: The `SparseValueMap` for mutable iteration.
+/// * `mut value`: A mutable `ffi::Value` where the next value will be placed if found.
+///
+/// # Returns
+///
+/// `Bool`: `true` if a next value was successfully retrieved and placed in `value`, `false` otherwise (end of iteration or error).
+external fn sparse_value_map_iter_next_mut(map: SparseValueMap, mut value: ffi::Value) -> Bool
+
+impl Sparse<T> {
+  /// Creates a new, empty `Sparse<T>` instance.
+  ///
+  /// This function initializes a new `Sparse<T>` object with an empty internal `SparseValueMap`.
+  ///
+  /// # Returns
+  ///
+  /// A new `Sparse<T>` instance, ready to store values.
+  fn new() -> Sparse<T> {
+    Sparse<T> {
+      internal: sparse_value_map_new(),
+    }
+  }
+
+  /// Adds a value to the `Sparse<T>`.
+  ///
+  /// The provided `value` is added to the sparse structure, and a `SparseId` is returned,
+  /// which can be used to retrieve the value later.
+  ///
+  /// # Parameters
+  ///
+  /// * `value`: The value of type `T` to be added to the sparse structure.
+  ///
+  /// # Returns
+  ///
+  /// A `SparseId` that uniquely identifies the added value.
+  fn add(mut self, value: T) -> SparseId {
+    sparse_value_map_add(self.internal, value)
+  }
+
+  /// Retrieves a value from the `Sparse<T>` based on its `SparseId`.
+  ///
+  /// Given a `SparseId`, this method attempts to retrieve the associated value from the sparse structure.
+  ///
+  /// # Parameters
+  ///
+  /// * `id`: The `SparseId` of the value to retrieve.
+  ///
+  /// # Returns
+  ///
+  /// `?T`: `Some(value)` if a value is found for the given `id`, `none` otherwise.
+  fn get(self, id: SparseId) -> T? {
+    sparse_value_map_get(self.internal, id)
+  }
+
+/*
+  fn iter(self) -> Iterator<T> {
+    sparse_value_map_iter(self.internal)
+  }
+
+  fn iter_mut(self) -> MutIterator<T> {
+    sparse_value_map_iter_mut(self.internal)
+  }
+*/
+}

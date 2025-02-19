@@ -9,3 +9,4 @@ swamp-script-ast = { path = "../ast", version = "0.0.12"}
 seq-map = "0.0.13"
 seq-fmt = "0.0.1"
 tracing = "0.1.40"
+tiny-ver = "0.1.2"

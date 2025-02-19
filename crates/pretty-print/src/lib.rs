@@ -404,7 +404,7 @@ impl ModulesDisplay<'_> {
             Type::Function(signature) => write!(f, "function {signature}"),
             Type::Iterator(generating_type) => write!(f, "Iterator<{generating_type:?}>"),
             Type::Optional(base_type) => write!(f, "{}?", base_type.yellow()),
-            Type::External(rust_type) => write!(f, "RustType {}", rust_type.type_name),
+            Type::External(external_type) => write!(f, "External {}", external_type.type_name),
             Type::Range => write!(f, "Range"),
         }
     }

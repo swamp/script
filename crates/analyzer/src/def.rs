@@ -503,6 +503,8 @@ impl<'a> Analyzer<'a> {
         found_type: &Type,
         functions: &[&swamp_script_ast::Function],
     ) -> Result<(), Error> {
+        self.shared.state.associated_impls.prepare(found_type);
+
         for function in functions {
             let new_return_type = self.analyze_return_type(function)?;
             self.start_function(new_return_type);

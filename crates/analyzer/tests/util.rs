@@ -8,13 +8,13 @@ use std::path::Path;
 use std::rc::Rc;
 use swamp_script_analyzer::prelude::Error;
 use swamp_script_analyzer::Analyzer;
-use swamp_script_core::{add_intrinsic_functions, add_intrinsic_types};
 use swamp_script_error_report::show_error;
-use swamp_script_modules::modules::{pretty_print, pretty_print_symbol_table, Module, Modules};
+use swamp_script_modules::modules::{pretty_print, pretty_print_symbol_table, Modules};
 use swamp_script_modules::symtbl::SymbolTable;
 use swamp_script_parser::AstParser;
 use swamp_script_semantic::{Expression, MonomorphizationCache, ProgramState};
 use swamp_script_source_map::SourceMap;
+use tiny_ver::TinyVersion;
 use tracing::warn;
 
 fn internal_compile(
@@ -38,28 +38,31 @@ fn internal_compile(
     let canonical_path = ["some_path".to_string(), "main".to_string()];
     source_map.add_manual(file_id, "crate", Path::new("some_path/main"), script);
 
-    let mut intrinsic_types_symbol_table = SymbolTable::new();
-    let canonical_core_path = ["core-0.0.0".to_string()];
-    add_intrinsic_types(&mut intrinsic_types_symbol_table);
-    add_intrinsic_functions(&mut intrinsic_types_symbol_table);
-
-    let core_module = Module::new(&canonical_core_path, intrinsic_types_symbol_table, None);
+    let compiler_version = "0.0.0".parse::<TinyVersion>().unwrap();
+    let core_module = swamp_script_core::create_module(&compiler_version);
     let core_module_ref = Rc::new(core_module);
     modules.add(core_module_ref.clone());
 
-    let mut analyzer = Analyzer::new(&mut state, &modules, &source_map, &canonical_path, file_id);
+    let ffi_module = swamp_script_ffi::create_module(&compiler_version);
+    let ffi_module_ref = Rc::new(ffi_module);
+    modules.add(ffi_module_ref.clone());
 
-    for (name, symbol) in core_module_ref.namespace.symbol_table.symbols() {
-        analyzer
-            .shared
-            .lookup_table
-            .add_symbol(name, symbol.clone())?;
-    }
+    let mut analyzer = Analyzer::new(&mut state, &modules, &source_map, &canonical_path, file_id);
+    analyzer
+        .shared
+        .lookup_table
+        .extend_basic_from(&core_module_ref.namespace.symbol_table)?;
 
     analyzer
         .shared
         .lookup_table
-        .add_package_version("core", "0.0.0")
+        .add_package_version(swamp_script_core::PACKAGE_NAME, compiler_version.clone())
+        .expect("should work");
+
+    analyzer
+        .shared
+        .lookup_table
+        .add_package_version(swamp_script_ffi::PACKAGE_NAME, compiler_version)
         .expect("should work");
 
     let mut resolved_definitions = Vec::new();

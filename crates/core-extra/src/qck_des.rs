@@ -1,4 +1,3 @@
-use crate::extra::SparseValueId;
 use crate::prelude::Value;
 use crate::value::{AnyRustType, QuickDeserialize, SPARSE_ID_TYPE_ID};
 use fixed32::Fp;

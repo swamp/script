@@ -85,13 +85,19 @@ impl ParameterNode {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Signature {
     pub parameters: Vec<TypeForParameter>,
     pub return_type: Box<Type>,
 }
 
 impl Display for Signature {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "({}) -> {}", comma(&self.parameters), self.return_type)
+    }
+}
+
+impl Debug for Signature {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(f, "({}) -> {}", comma(&self.parameters), self.return_type)
     }
@@ -119,6 +125,8 @@ impl Signature {
     }
 }
 
+pub const TYPE_NUMBER_FFI_VALUE: u32 = u32::MAX; // TODO: HACK
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ExternalType {
     pub type_name: String, // To identify the specific Rust type
@@ -133,7 +141,7 @@ pub struct TypeWithMut {
     pub is_mutable: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct TypeForParameter {
     pub name: String,
     pub resolved_type: Type,
@@ -153,6 +161,17 @@ impl Display for TypeForParameter {
     }
 }
 
+impl Debug for TypeForParameter {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(
+            f,
+            "{}{}: {:?}",
+            if self.is_mutable { "mut " } else { "" },
+            self.name,
+            self.resolved_type,
+        )
+    }
+}
 impl Eq for TypeForParameter {}
 
 impl PartialEq for TypeForParameter {
@@ -253,7 +272,11 @@ impl Debug for Type {
             }
             Self::Iterator(type_generated) => write!(f, "Iterator<{type_generated:?}>"),
             Self::Optional(base_type) => write!(f, "{base_type:?}?"),
-            Self::External(rust_type) => write!(f, "{:?}?", rust_type.type_name),
+            Self::External(external_type) => write!(
+                f,
+                "External({}<0x{:04X}>)",
+                external_type.type_name, external_type.number
+            ),
             Self::Range => write!(f, "Range"),
         }
     }
@@ -277,7 +300,7 @@ impl Display for Type {
             Self::Function(signature) => write!(f, "function {signature}"),
             Self::Iterator(generating_type) => write!(f, "Iterator<{generating_type:?}>"),
             Self::Optional(base_type) => write!(f, "{base_type}?"),
-            Self::External(rust_type) => write!(f, "RustType {}", rust_type.type_name),
+            Self::External(external_type) => write!(f, "ExternalType<{}>", external_type.type_name),
             Self::Range => write!(f, "Range"),
         }
     }
@@ -328,17 +351,18 @@ impl Type {
         }
     }
     pub fn same_type(&self, other: &Type) -> bool {
-        if let Self::Struct(some_struct) = other {
-            if some_struct.assigned_name == "Value" {
+        if let Self::External(some_struct) = other {
+            if some_struct.number == TYPE_NUMBER_FFI_VALUE {
                 return true;
             }
         }
 
-        if let Self::Struct(some_struct) = self {
-            if some_struct.assigned_name == "Value" {
+        if let Self::External(some_struct) = self {
+            if some_struct.number == TYPE_NUMBER_FFI_VALUE {
                 return true;
             }
         }
+
         match (self, other) {
             (Self::String, Self::String) => true,
             (Self::Int, Self::Int) => true,
@@ -1134,6 +1158,16 @@ impl AssociatedImpls {
 }
 
 impl AssociatedImpls {
+    pub fn prepare(&mut self, ty: &Type) {
+        self.functions
+            .insert(
+                ty.type_number(),
+                Impl {
+                    functions: SeqMap::default(),
+                },
+            )
+            .expect("should work");
+    }
     #[must_use]
     pub fn get_member_function(&self, ty: &Type, function_name: &str) -> Option<&FunctionRef> {
         let maybe_found_impl = self.functions.get(&ty.type_number());

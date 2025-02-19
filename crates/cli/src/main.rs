@@ -133,55 +133,58 @@ pub struct CliContext;
 
 #[allow(clippy::too_many_lines)]
 fn build(root_path: &Path, root_module: &str) -> Result<(), CliError> {
-    // mangrove::render
-    let mangrove_render_module_path = &["mangrove-0.0.0".to_string(), "render".to_string()];
-    compile_analyze_and_link_without_version(
-        mangrove_render_module_path,
-        &mut resolved_program,
-        &mut source_map,
-    )?;
+    /*
+       // mangrove::render
+       let mangrove_render_module_path = &["mangrove-0.0.0".to_string(), "render".to_string()];
+       compile_analyze_and_link_without_version(
+           mangrove_render_module_path,
+           &mut resolved_program,
+           &mut source_map,
+       )?;
 
-    // mangrove::collection
-    let mangrove_collection_module_path = &["mangrove-0.0.0".to_string(), "collection".to_string()];
-    compile_analyze_and_link_without_version(
-        mangrove_collection_module_path,
-        &mut resolved_program,
-        &mut source_map,
-    )?;
-    {
-        //let mangrove_collection_module_path_without_version =
-        //  &["mangrove".to_string(), "collection".to_string()];
-        //let mangrove_collection_module = resolved_program
-        //  .modules
-        //.get(mangrove_collection_module_path_without_version)
-        //.unwrap();
+       // mangrove::collection
+       let mangrove_collection_module_path = &["mangrove-0.0.0".to_string(), "collection".to_string()];
+       compile_analyze_and_link_without_version(
+           mangrove_collection_module_path,
+           &mut resolved_program,
+           &mut source_map,
+       )?;
 
-        //let md = mangrove_collection_module.borrow_mut();
-        //let mut ns = md.namespace.borrow_mut();
-    }
 
-    let result = compile_and_analyze(
-        &["crate".to_string(), root_module.to_string()],
-        &mut resolved_program,
-        &mut source_map,
-    );
+       {
+           //let mangrove_collection_module_path_without_version =
+           //  &["mangrove".to_string(), "collection".to_string()];
+           //let mangrove_collection_module = resolved_program
+           //  .modules
+           //.get(mangrove_collection_module_path_without_version)
+           //.unwrap();
 
-    let lookup = SourceMapWrapper { source_map };
-    match result {
-        Ok(()) => {
-            eprintln!(
-                "{}",
-                ModulesDisplay {
-                    resolved_modules: &resolved_program.modules,
-                    source_map: &lookup
-                }
-            );
-        }
-        Err(err) => {
-            show_script_resolve_error(&err, &lookup.source_map);
-        }
-    }
+           //let md = mangrove_collection_module.borrow_mut();
+           //let mut ns = md.namespace.borrow_mut();
+       }
 
+       let result = compile_and_analyze(
+           &["crate".to_string(), root_module.to_string()],
+           &mut resolved_program,
+           &mut source_map,
+       );
+
+       let lookup = SourceMapWrapper { source_map };
+       match result {
+           Ok(()) => {
+               eprintln!(
+                   "{}",
+                   ModulesDisplay {
+                       resolved_modules: &resolved_program.modules,
+                       source_map: &lookup
+                   }
+               );
+           }
+           Err(err) => {
+               show_script_resolve_error(&err, &lookup.source_map);
+           }
+       }
+    */
     Ok(())
 }
 

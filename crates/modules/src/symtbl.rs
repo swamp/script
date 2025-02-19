@@ -15,6 +15,7 @@ use swamp_script_semantic::{
     InternalFunctionDefinitionRef, IntrinsicFunctionDefinition, IntrinsicFunctionDefinitionRef,
     Node, SemanticError, StructType, StructTypeField, StructTypeRef, Type, TypeParameterName,
 };
+use tiny_ver::TinyVersion;
 use tracing::info;
 
 #[derive(Debug, Clone)]
@@ -43,11 +44,18 @@ pub enum FuncDef {
 pub enum Symbol {
     Type(Type),
     Module(ModuleRef),
-    PackageVersion(String),
+    PackageVersion(TinyVersion),
     Constant(ConstantRef),
     FunctionDefinition(FuncDef),
     Alias(AliasTypeRef),
     Generic(GenericTypeRef),
+}
+
+impl Symbol {
+    #[must_use]
+    pub const fn is_basic_type(&self) -> bool {
+        matches!(self, Self::Type(..) | Self::Alias(..))
+    }
 }
 
 /*
@@ -101,6 +109,28 @@ impl SymbolTable {
         &self.symbols
     }
 
+    /// # Errors
+    ///
+    pub fn extend_from(&mut self, symbol_table: &Self) -> Result<(), SemanticError> {
+        for (name, symbol) in symbol_table.symbols() {
+            self.add_symbol(name, symbol.clone())?;
+        }
+        Ok(())
+    }
+
+    /// # Errors
+    ///
+    pub fn extend_basic_from(&mut self, symbol_table: &Self) -> Result<(), SemanticError> {
+        for (name, symbol) in symbol_table.symbols() {
+            if symbol.is_basic_type() {
+                self.add_symbol(name, symbol.clone())?;
+            }
+        }
+        Ok(())
+    }
+
+    /// # Errors
+    ///
     pub fn add_constant(&mut self, constant: Constant) -> Result<ConstantRef, SemanticError> {
         let constant_ref = Rc::new(constant);
 
@@ -468,8 +498,12 @@ impl SymbolTable {
         Ok(())
     }
 
-    pub fn add_package_version(&mut self, name: &str, version: &str) -> Result<(), SemanticError> {
-        self.insert_symbol(name, Symbol::PackageVersion(version.to_string()))
+    pub fn add_package_version(
+        &mut self,
+        name: &str,
+        version: TinyVersion,
+    ) -> Result<(), SemanticError> {
+        self.insert_symbol(name, Symbol::PackageVersion(version))
             .map_err(|_| SemanticError::DuplicateNamespaceLink(name.to_string()))?;
         Ok(())
     }

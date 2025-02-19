@@ -30,7 +30,7 @@ swamp-script-source-map-lookup = { path = "../source-map-lookup", version = "0.0
 swamp-script-error-report = { path = "../err", version = "0.0.12" }
 swamp-script-pretty-print = { path = "../pretty-print", version = "0.0.12"}
 
-swamp-script-extra = { path = "../extra", version = "0.0.12"}
+swamp-script-collections = { path = "../collections", version = "0.0.12"}
 
 # Runner
 swamp-script-eval = { path = "../eval", version = "0.0.12" }

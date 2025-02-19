@@ -16,6 +16,9 @@ impl Float {
   fn sqrt(self) -> Float {
      float_sqrt(self)
   }
+    fn default() -> Float {
+      0.0
+    }
 }
 
 impl Int {
