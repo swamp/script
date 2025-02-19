@@ -24,6 +24,11 @@ pub trait AnyRustType: Any + Debug + Display + QuickSerialize {
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
     fn eq_dyn_ptr(&self, other: &dyn AnyRustType) -> bool;
+
+    fn iter(&self) -> Box<dyn Iterator<Item = Value>>;
+    fn iter_pairs(&self) -> Box<dyn Iterator<Item = (Value, Value)>>;
+    fn iter_mut(&mut self) -> Box<dyn Iterator<Item = ValueRef>>;
+    fn iter_mut_pairs(&mut self) -> Box<dyn Iterator<Item = (Value, ValueRef)>>;
 }
 
 // Blanket implementation
@@ -40,6 +45,21 @@ impl<T: Any + Debug + Display + QuickSerialize> AnyRustType for T {
         let self_ptr = self as *const dyn AnyRustType;
         let other_ptr = other as *const dyn AnyRustType;
         std::ptr::addr_eq(self_ptr, other_ptr)
+    }
+
+    fn iter(&self) -> Box<dyn Iterator<Item = Value>> {
+        todo!()
+    }
+
+    fn iter_pairs(&self) -> Box<dyn Iterator<Item = (Value, Value)>> {
+        todo!()
+    }
+
+    fn iter_mut(&mut self) -> Box<dyn Iterator<Item = ValueRef>> {
+        todo!()
+    }
+    fn iter_mut_pairs(&mut self) -> Box<dyn Iterator<Item = (Value, ValueRef)>> {
+        todo!()
     }
 }
 
@@ -387,7 +407,9 @@ impl Value {
             Self::Map(_, seq_map) => Ok(Box::new(
                 seq_map.into_values().map(|item| item.borrow().clone()),
             )),
-            Self::RustValue(ref rust_type_ref, _) => match rust_type_ref.number {
+            Self::RustValue(ref rust_type_ref, rust_any_type) => {
+                Ok(rust_any_type.clone().borrow().iter())
+                /*match rust_type_ref.number {
                 SPARSE_TYPE_ID => {
                     let sparse_map = self
                         .downcast_rust::<SparseValueMap>()
@@ -401,7 +423,8 @@ impl Value {
                     Ok(Box::new(values.into_iter()))
                 }
                 _ => Err(ValueError::NotSparseMap),
-            },
+                */
+            }
             Self::Range(start_val, max_val, range_mode) => {
                 let start = *start_val;
                 let end = *max_val;
@@ -446,7 +469,9 @@ impl Value {
                     .into_iter();
                 Box::new(iter) as Box<dyn Iterator<Item = (Self, Self)> + 'static>
             }
-            Self::RustValue(ref rust_type_ref, ref _rust_value) => {
+            Self::RustValue(ref rust_type_ref, ref rust_value) => {
+                Ok(rust_value.borrow().iter_pairs())?
+                /*
                 Box::new(match rust_type_ref.number {
                     SPARSE_TYPE_ID => {
                         let sparse_map = self
@@ -474,6 +499,8 @@ impl Value {
 
                     _ => return Err(ValueError::NotSparseMap),
                 })
+
+                 */
             }
             _ => return Err(ValueError::NotAnIterator),
         };

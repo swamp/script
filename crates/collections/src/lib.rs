@@ -22,4 +22,5 @@ pub fn new_hidden_rust_type<T: RustType + 'static>(
 
 
  */
+pub mod extra;
 pub mod sparse;

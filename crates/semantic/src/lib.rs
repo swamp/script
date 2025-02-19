@@ -839,12 +839,6 @@ pub enum PostfixKind {
 
     OptionUnwrap, // ? operator
     NoneCoalesce(Expression),
-
-    // --- sparse built in
-    // TODO: Have a better interface for these "engine" member calls
-    SparseAdd(Box<Expression>),
-    SparseRemove(Box<Expression>),
-    SparseAccess(Box<Expression>),
 }
 
 #[derive(Debug)]

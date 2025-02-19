@@ -2,7 +2,7 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-
+/*
 use crate::idx_gen::IndexAllocator;
 use crate::qck_des::quick_deserialize;
 use crate::value::{to_rust_value, QuickDeserialize, Value};
@@ -231,3 +231,6 @@ impl SparseValueMap {
         self.sparse_slot.iter().map(|(_id, v)| v.clone()).collect()
     }
 }
+
+
+ */

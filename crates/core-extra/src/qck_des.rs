@@ -163,6 +163,9 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
             }
         }
         Type::External(rust_type_ref) => {
+            //external_creator.create(rust_type_ref.type_name)
+            (Value::Unit, 0)
+            /*
             match rust_type_ref.number {
                 SPARSE_ID_TYPE_ID => {
                     let sparse_id_rust_type = Rc::new(ExternalType {
@@ -182,7 +185,7 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
                 }
                 _ => panic!("can not deserialize rust types {}", rust_type_ref.type_name),
             }
-
+            */
             /*
              if let Type::RustType(found_rust_type) = &**base_type {
                 if found_rust_type.number == SPARSE_TYPE_ID {

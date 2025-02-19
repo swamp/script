@@ -361,9 +361,6 @@ impl ModulesDisplay<'_> {
             PostfixKind::FunctionCall(call) => write!(f, "call: {call:?}"),
             PostfixKind::OptionUnwrap => todo!(),
             PostfixKind::NoneCoalesce(_) => todo!(),
-            PostfixKind::SparseAdd(_) => todo!(),
-            PostfixKind::SparseRemove(_) => todo!(),
-            PostfixKind::SparseAccess(_) => todo!(),
         }
     }
 

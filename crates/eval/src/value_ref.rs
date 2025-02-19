@@ -7,8 +7,6 @@ use std::cell::{Ref, RefCell};
 use std::fmt::{Display, Formatter};
 use std::hash::Hash;
 use std::rc::Rc;
-use swamp_script_core_extra::extra::SparseValueId;
-use swamp_script_core_extra::extra::SparseValueMap;
 use swamp_script_core_extra::value::AnyRustType;
 use swamp_script_core_extra::value::Value;
 use swamp_script_core_extra::value::ValueError;
@@ -29,7 +27,9 @@ impl ValueReference {
     pub(crate) fn into_iter_mut(self) -> Result<Box<dyn Iterator<Item = ValueRef>>, ValueError> {
         let inner = self.0.borrow();
         let result = match &*inner {
-            Value::RustValue(ref rust_type_ref, ref _rust_value) => {
+            Value::RustValue(ref rust_type_ref, ref rust_value) => {
+                rust_value.borrow_mut().iter_mut()
+                /*
                 Box::new(match rust_type_ref.number {
                     SPARSE_TYPE_ID => {
                         let sparse_map = inner
@@ -48,6 +48,8 @@ impl ValueReference {
                     }
                     _ => return Err(ValueError::CanNotCoerceToIterator),
                 })
+
+                 */
             }
             Value::Map(ref _type_ref, seq_map) => {
                 // Clone each Rc<RefCell<Value>> and collect into a Vec
@@ -78,7 +80,10 @@ impl ValueReference {
     ) -> Result<Box<dyn Iterator<Item = (Value, Self)>>, ValueError> {
         let inner = self.0.borrow();
         let result = match &*inner {
-            Value::RustValue(ref rust_type_ref, ref _rust_value) => {
+            Value::RustValue(ref rust_type_ref, ref rust_value) => {
+                //rust_value.borrow_mut().iter_mut_pairs()
+                todo!()
+                /*
                 Box::new(match rust_type_ref.number {
                     SPARSE_TYPE_ID => {
                         let sparse_map = inner
@@ -102,12 +107,12 @@ impl ValueReference {
                             .collect();
 
                         Box::new(pairs.into_iter()) as Box<dyn Iterator<Item = (Value, Self)>>
-                    }
-                    _ => return Err(ValueError::CanNotCoerceToIterator),
-                })
+
+                 */
             }
-            _ => todo!(),
+            _ => return Err(ValueError::CanNotCoerceToIterator),
         };
+
         Ok(result)
     }
     #[must_use]

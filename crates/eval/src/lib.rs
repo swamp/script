@@ -10,8 +10,6 @@ use seq_map::SeqMap;
 use std::fmt::Debug;
 use std::io::Write;
 use std::{cell::RefCell, io, rc::Rc};
-use swamp_script_core_extra::extra::SparseValueId;
-use swamp_script_core_extra::extra::SparseValueMap;
 use swamp_script_core_extra::value::convert_vec_to_rc_refcell;
 use swamp_script_core_extra::value::format_value;
 use swamp_script_core_extra::value::to_rust_value;
@@ -458,6 +456,7 @@ impl<'a, C> Interpreter<'a, C> {
 
                     LocationAccessKind::RustTypeIndex(_rust_type_ref, key_expr) => {
                         let key_expr_value = self.evaluate_expression(key_expr)?;
+                        /*
                         if let Some(found_sparse_id) =
                             key_expr_value.downcast_rust::<SparseValueId>()
                         {
@@ -472,6 +471,8 @@ impl<'a, C> Interpreter<'a, C> {
                         } else {
                             return Err(self.create_err(ExecuteErrorKind::ExpectedArray, node))?;
                         }
+                         */
+                        todo!()
                     }
                 }
             };
@@ -1161,11 +1162,15 @@ impl<'a, C> Interpreter<'a, C> {
                 sparse_id_rust_type_ref,
                 resolved_value_item_type,
             ) => {
+                /*
                 let sparse_value_map = SparseValueMap::new(
                     sparse_id_rust_type_ref.clone(),
                     resolved_value_item_type.clone(),
                 );
                 to_rust_value(sparse_id_rust_type_ref.clone(), sparse_value_map)
+
+                 */
+                todo!()
             }
 
             ExpressionKind::CoerceOptionToBool(expression) => {
@@ -1664,73 +1669,6 @@ impl<'a, C> Interpreter<'a, C> {
         */
 
     #[allow(clippy::too_many_lines)]
-    fn eval_internal_postfix(
-        &mut self,
-        value_ref: &ValueRef,
-        resolved_postfix: &Postfix,
-    ) -> Result<Value, ExecuteError> {
-        let node = &resolved_postfix.node;
-        let val = match &resolved_postfix.kind {
-            PostfixKind::SparseAdd(value_expression) => {
-                let borrowed = value_ref.borrow();
-
-                let sparse_value_map = borrowed.downcast_rust::<SparseValueMap>();
-                if let Some(found) = sparse_value_map {
-                    let resolved_value = self.evaluate_expression(value_expression)?;
-                    let id_value = found.borrow_mut().add(resolved_value);
-
-                    id_value
-                } else {
-                    return Err(self.create_err(ExecuteErrorKind::NotSparseValue, node));
-                }
-            }
-
-            PostfixKind::SparseRemove(id_expression) => {
-                let borrowed = value_ref.borrow();
-
-                let sparse_value_map = borrowed.downcast_rust::<SparseValueMap>();
-                if let Some(found) = sparse_value_map {
-                    let id_value = self.evaluate_expression(id_expression)?;
-                    if let Some(found_id) = id_value.downcast_rust::<SparseValueId>() {
-                        found.borrow_mut().remove(&found_id.borrow());
-                    } else {
-                        return Err(self.create_err(ExecuteErrorKind::NotSparseValue, node));
-                    }
-                }
-
-                Value::Unit
-            }
-            PostfixKind::SparseAccess(id_expression) => {
-                let sparse_value_map = value_ref.borrow_mut().downcast_rust::<SparseValueMap>();
-                if let Some(found) = sparse_value_map {
-                    let id_value = self.evaluate_expression(id_expression)?;
-                    if let Some(found_id) = id_value.downcast_rust::<SparseValueId>() {
-                        if let Some(found_value) = found.borrow_mut().get(&found_id.borrow()) {
-                            Value::Option(Some(found_value.clone()))
-                        } else {
-                            Value::Option(None)
-                        }
-                    } else {
-                        return Err(self.create_err(ExecuteErrorKind::NotSparseId, node));
-                    }
-                } else {
-                    return Err(self.create_err(ExecuteErrorKind::NotSparseId, node));
-                }
-            }
-
-            _ => todo!(
-                "{}",
-                format!(
-                    "internal postfix should have been handled earlier {:?}",
-                    resolved_postfix.kind
-                )
-            ),
-        };
-
-        Ok(val)
-    }
-
-    #[allow(clippy::too_many_lines)]
     fn eval_chain(
         &mut self,
         node: &Node,
@@ -1836,6 +1774,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
                 PostfixKind::RustTypeIndexRef(_rust_type_ref, map_expr) => {
                     let key_expr_value = self.evaluate_expression(map_expr)?;
+                    /*
                     val_ref = {
                         if let Some(found_sparse_id) =
                             key_expr_value.downcast_rust::<SparseValueId>()
@@ -1853,6 +1792,9 @@ impl<'a, C> Interpreter<'a, C> {
                             panic!("todo");
                         }
                     };
+
+                     */
+                    todo!()
                 }
                 PostfixKind::MemberCall(function_ref, arguments) => {
                     let val =
@@ -1890,8 +1832,7 @@ impl<'a, C> Interpreter<'a, C> {
                     is_uncertain = true;
                 }
                 _ => {
-                    val_ref = Rc::new(RefCell::new(self.eval_internal_postfix(&val_ref, part)?));
-                    is_mutable = false;
+                    return Err(self.create_err(ExecuteErrorKind::ExpectedOptional, &part.node));
                 }
             }
         }
