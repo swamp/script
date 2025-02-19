@@ -23,11 +23,12 @@ members = [
 
     # Core and Std
     "crates/core",
+    "crates/ffi",
     "crates/std",
+    "crates/collections", # Not used yet
 
-    "crates/extra", # Not used yet
+
     "crates/err",
-
 
     "crates/cli",
 
@@ -36,5 +37,5 @@ members = [
     "crates/source-map-lookup", # Move this later
     "crates/doc",
     "crates/compile",
-    "crates/pretty-print", "crates/core-extra",
+    "crates/pretty-print", "crates/core-extra", "crates/ffi",
 ]
