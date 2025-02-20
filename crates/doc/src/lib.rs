@@ -14,7 +14,7 @@ pub fn signature(function_type_signature: &Signature) -> String {
     }
     s += ")";
 
-    if Type::Unit != *function_type_signature.return_type {
+    if let Type::Unit = *function_type_signature.return_type {
         s += "->";
         s += &span(
             &function_type_signature.return_type.to_string(),
@@ -32,19 +32,6 @@ pub fn code(inner: &str) -> String {
     )
 }
 
-pub fn generate_html_doc(struct_ref: &StructTypeRef, source_map: &SourceMap) -> String {
-    let mut s = "".to_string();
-
-    for (name, func) in &struct_ref.borrow().functions {
-        s += &*format!("## {}\n {}", name, code(&*signature(func.signature())));
-        if let Some(markdown_text) = func.as_ref().node().markdown_doc {
-            s += source_map.get_span_source(
-                markdown_text.file_id,
-                markdown_text.offset as usize,
-                markdown_text.length as usize,
-            );
-        }
-    }
-
-    s
+pub fn generate_html_doc(_struct_ref: &StructTypeRef, _source_map: &SourceMap) -> String {
+    todo!()
 }
