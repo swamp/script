@@ -5,8 +5,9 @@
 
 use eira::{Color, Kind, Pos, PosSpan, SourceLines};
 use std::fmt::Display;
-use std::io;
 use std::io::{stderr, Write};
+use std::path::{Path, PathBuf};
+use std::{env, io};
 use swamp_script_analyzer::err::ErrorKind;
 use swamp_script_analyzer::prelude::Error;
 use swamp_script_dep_loader::{DepLoaderError, DependencyError};
@@ -84,10 +85,10 @@ impl<C: Display + Clone> Report<C> {
         let primary_span = &self.config.primary_span;
         let (row, col) =
             source_map.get_span_location_utf8(primary_span.file_id, primary_span.offset as usize);
-        let filename = source_map.fetch_relative_filename(primary_span.file_id);
+        let filename = source_map.get_relative_path_to(primary_span.file_id)?;
 
         eira::FileSpanMessage::write(
-            filename,
+            filename.to_str().unwrap(),
             &PosSpan {
                 pos: Pos { x: col, y: row },
                 length: primary_span.length as usize,

@@ -7,3 +7,4 @@ edition = "2021"
 swamp-script-modules = { path = "../modules" }
 swamp-script-semantic = { path = "../semantic"}
 tiny-ver = "0.1.2"
+regex = "1.11.1"

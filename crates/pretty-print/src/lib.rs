@@ -2,9 +2,127 @@ use seq_map::SeqMap;
 use std::fmt::{Display, Formatter};
 use swamp_script_core_extra::prelude::SourceMapLookup;
 use swamp_script_modules::modules::{ModuleRef, Modules};
+use swamp_script_modules::symtbl::{FuncDef, Symbol, SymbolTable};
 use swamp_script_semantic::prelude::*;
-use swamp_script_semantic::{Postfix, PostfixKind};
-use yansi::Paint;
+use swamp_script_semantic::{AssociatedImpls, Postfix, PostfixKind};
+use yansi::{Color, Paint};
+
+pub struct SourceMapDisplay<'a> {
+    pub source_map: &'a dyn SourceMapLookup,
+}
+
+impl<'a> SourceMapDisplay<'a> {}
+
+impl SourceMapDisplay<'_> {
+    const fn get_color_from_symbol(symbol: &Symbol) -> Color {
+        match symbol {
+            Symbol::Type(_) => Color::BrightYellow,
+            Symbol::Module(_) => Color::BrightGreen,
+            Symbol::PackageVersion(_) => Color::BrightMagenta,
+            Symbol::Constant(_) => Color::BrightCyan,
+            Symbol::FunctionDefinition(_) => Color::Cyan,
+            Symbol::Alias(_) => Color::Red,
+            Symbol::Generic(_) => Color::Magenta,
+        }
+    }
+
+    pub(crate) fn show_impls(
+        &self,
+        f: &mut Formatter,
+        impls: &AssociatedImpls,
+        tabs: usize,
+    ) -> std::fmt::Result {
+        writeln!(f)?;
+        let tab_str = "..".repeat(tabs);
+        let tab_str_indent = "..".repeat(tabs + 1);
+        for (type_number, associated_impl) in &impls.functions {
+            writeln!(f, "{tab_str}{type_number}: ")?;
+
+            for (name, associated_fn) in &associated_impl.functions {
+                write!(f, "{}{}:", tab_str_indent, name.blue())?;
+
+                self.show_function(f, associated_fn)?;
+                writeln!(f)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn pretty_print_symbol(
+        &self,
+        f: &mut Formatter<'_>,
+        name: &str,
+        symbol: &Symbol,
+        tabs: usize,
+    ) -> std::fmt::Result {
+        let tab_str = "..".repeat(tabs);
+
+        let color = Self::get_color_from_symbol(symbol);
+        write!(f, "{tab_str}{}: ", name.paint(color))?;
+
+        match symbol {
+            Symbol::Type(ty) => self.show_type(f, ty, tabs + 1),
+            Symbol::Module(module_ref) => {
+                write!(f, "{module_ref:?}")
+            }
+            Symbol::Constant(constant_ref) => self.show_constant(f, constant_ref),
+            Symbol::FunctionDefinition(func_def) => match func_def {
+                FuncDef::Internal(internal_fn) => self.show_internal_function(f, internal_fn),
+                FuncDef::Intrinsic(intrinsic_fn) => write!(f, "intrinsic {intrinsic_fn:?}"),
+                FuncDef::External(external_fn) => {
+                    self.show_external_function_declaration(f, external_fn)
+                }
+            },
+            Symbol::Alias(alias_type_ref) => self.show_alias(f, alias_type_ref),
+            Symbol::Generic(generic_type_ref) => {
+                write!(f, "{generic_type_ref:?}")
+            }
+            Symbol::PackageVersion(version) => {
+                write!(f, "version {version}")
+            }
+        }
+    }
+
+    /// # Errors
+    ///
+    pub fn pretty_print_symbol_table(
+        &self,
+        f: &mut Formatter<'_>,
+        symbol_table: &SymbolTable,
+        tabs: usize,
+    ) -> std::fmt::Result {
+        writeln!(f)?;
+        for (name, symbol) in symbol_table.symbols() {
+            self.pretty_print_symbol(f, name, symbol, tabs)?;
+            writeln!(f)?;
+        }
+        Ok(())
+    }
+}
+
+pub struct SymbolTableDisplay<'a> {
+    pub symbol_table: &'a SymbolTable,
+    pub source_map: &'a SourceMapDisplay<'a>,
+}
+
+impl Display for SymbolTableDisplay<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        self.source_map
+            .pretty_print_symbol_table(f, self.symbol_table, 0)
+    }
+}
+
+pub struct ImplsDisplay<'a> {
+    pub all_impls: &'a AssociatedImpls,
+    pub source_map: &'a SourceMapDisplay<'a>,
+}
+
+impl Display for ImplsDisplay<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        self.source_map.show_impls(f, self.all_impls, 0)
+    }
+}
 
 pub struct ModulesDisplay<'a> {
     pub resolved_modules: &'a Modules,
@@ -38,7 +156,7 @@ impl Display for ModulesDisplay<'_> {
     }
 }
 
-impl ModulesDisplay<'_> {
+impl SourceMapDisplay<'_> {
     /// # Errors
     ///
     pub fn show_structs(
@@ -118,7 +236,7 @@ impl ModulesDisplay<'_> {
     pub fn show_alias(&self, f: &mut Formatter<'_>, alias: &AliasTypeRef) -> std::fmt::Result {
         write!(f, "{} ==> ", alias.assigned_name.blue(),)?;
 
-        self.show_type(f, &alias.referenced_type)?;
+        self.show_type(f, &alias.referenced_type, 0)?;
 
         Ok(())
     }
@@ -334,7 +452,7 @@ impl ModulesDisplay<'_> {
         }
 
         if !expressions.is_empty() {
-            writeln!(f, "")?;
+            writeln!(f)?;
         }
 
         Ok(())
@@ -364,7 +482,11 @@ impl ModulesDisplay<'_> {
         }
     }
 
-    fn show_type(&self, f: &mut Formatter, resolved_type: &Type) -> std::fmt::Result {
+    fn show_type(&self, f: &mut Formatter, resolved_type: &Type, tabs: usize) -> std::fmt::Result {
+        let tab_str = "..".repeat(tabs);
+
+        write!(f, "{}", tab_str)?;
+
         match resolved_type {
             Type::Int => write!(f, "{}", "Int".bright_blue()),
             Type::Float => write!(f, "{}", "Float".bright_blue()),
@@ -373,7 +495,7 @@ impl ModulesDisplay<'_> {
             Type::Unit => write!(f, "{}", "()".bright_blue()),
             Type::Array(array_type) => {
                 write!(f, "[")?;
-                self.show_type(f, &array_type.item_type)?;
+                self.show_type(f, &array_type.item_type, tabs + 1)?;
                 write!(f, "]")
             }
 
@@ -383,7 +505,7 @@ impl ModulesDisplay<'_> {
                     if index > 0 {
                         write!(f, "{}", ", ".bright_black())?;
                     }
-                    self.show_type(f, item_type)?;
+                    self.show_type(f, item_type, tabs + 1)?;
                 }
                 write!(f, ")")
             }
@@ -471,7 +593,7 @@ impl ModulesDisplay<'_> {
 
         write!(f, " {} ", "->".bright_green())?;
 
-        self.show_type(f, &function_type_signature.return_type)
+        self.show_type(f, &function_type_signature.return_type, 0)
     }
 
     pub fn show_internal_function(

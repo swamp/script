@@ -20,7 +20,7 @@ impl<'a> Analyzer<'a> {
             let mut_location = self.analyze_to_location(
                 &argument_expr.expression,
                 Some(fn_parameter.resolved_type.clone()),
-                LocationSide::Rhs,
+                &LocationSide::Rhs,
             )?;
             ArgumentExpressionOrLocation::Location(mut_location)
         } else {
@@ -60,7 +60,7 @@ impl<'a> Analyzer<'a> {
         &mut self,
         expr: &MutableOrImmutableExpression,
         expected_type: Option<&Type>,
-        location_side: LocationSide,
+        location_side: &LocationSide,
     ) -> Result<MutOrImmutableExpression, Error> {
         let is_mutable = self.to_node_option(&expr.is_mutable);
         let expression_or_location = if is_mutable.is_some() {

@@ -12,7 +12,7 @@ use swamp_script_ast::prelude::*;
 use swamp_script_ast::Function;
 use swamp_script_parser::{AstParser, ParseError};
 use swamp_script_source_map::{FileId, SourceMap};
-use tracing::debug;
+use tracing::{debug, trace};
 
 pub struct ParseRoot;
 
@@ -412,21 +412,6 @@ pub fn os_cache_path(project_name: &str, directory_name: &str) -> io::Result<Pat
 
 pub fn swamp_registry_path() -> io::Result<PathBuf> {
     os_cache_path("swamp", "registry")
-}
-
-pub fn create_source_map(local_path: &Path) -> io::Result<SourceMap> {
-    let registry_path = swamp_registry_path()?;
-
-    let mut mounts = SeqMap::new();
-    mounts
-        .insert("crate".to_string(), local_path.to_path_buf())
-        .unwrap();
-
-    mounts
-        .insert("registry".to_string(), registry_path)
-        .unwrap();
-
-    Ok(SourceMap::new(&mounts))
 }
 
 pub fn parse_local_modules_and_get_order(

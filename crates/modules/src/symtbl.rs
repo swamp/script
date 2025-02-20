@@ -190,39 +190,6 @@ impl SymbolTable {
 
     /// # Errors
     ///
-    pub fn add_generated_struct(
-        &mut self,
-        name: &str,
-        fields: &[(&str, Type)],
-    ) -> Result<StructTypeRef, SemanticError> {
-        let mut new_fields = SeqMap::new();
-
-        for (_index, (field_name, field_type)) in fields.iter().enumerate() {
-            let af = StructTypeField {
-                identifier: None,
-                field_type: field_type.clone(),
-            };
-
-            new_fields
-                .insert((*field_name).to_string(), af)
-                .map_err(|_| SemanticError::DuplicateFieldName((*field_name).to_string()))?;
-        }
-
-        let anon_struct_type = AnonymousStructType {
-            defined_fields: new_fields,
-        };
-
-        let struct_type = StructType {
-            name: Node::default(),
-            assigned_name: name.to_string(),
-            anon_struct_type,
-        };
-
-        self.add_struct(struct_type)
-    }
-
-    /// # Errors
-    ///
     pub fn add_built_in_rust_type(
         &mut self,
         rust_type: ExternalType,

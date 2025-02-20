@@ -8,11 +8,16 @@ use std::fmt::{Display, Formatter};
 use std::io;
 use std::path::{Path, PathBuf};
 use swamp_script_analyzer::prelude::Error;
-use swamp_script_compile::bootstrap_modules;
-use swamp_script_dep_loader::DepLoaderError;
-use swamp_script_error_report::ScriptResolveError;
+use swamp_script_compile::{bootstrap_modules, create_registry_source_map};
+use swamp_script_dep_loader::{swamp_registry_path, DepLoaderError};
+use swamp_script_error_report::{show_script_resolve_error, ScriptResolveError};
 use swamp_script_eval::err::ExecuteError;
 use swamp_script_parser::prelude::*;
+use swamp_script_pretty_print::{
+    ImplsDisplay, ModulesDisplay, SourceMapDisplay, SymbolTableDisplay,
+};
+use swamp_script_source_map_lookup::SourceMapWrapper;
+use tracing::info;
 use tracing_subscriber::EnvFilter;
 
 #[derive(Parser)]
@@ -129,8 +134,53 @@ impl From<ScriptResolveError> for CliError {
 pub struct CliContext;
 
 #[allow(clippy::too_many_lines)]
-fn build(packages_root_path: &Path, local_module_name: &str) -> Result<(), CliError> {
-    let (_modules, _default_symbol_table) = bootstrap_modules(packages_root_path)?;
+fn build(_local_path: &Path, _local_module_name: &str) -> Result<(), CliError> {
+    let registry_path = swamp_registry_path()?;
+
+    let mut source_map = create_registry_source_map(&registry_path)?;
+    let bootstrap_result = bootstrap_modules(&mut source_map);
+
+    match bootstrap_result {
+        Err(err) => {
+            show_script_resolve_error(&err, &source_map);
+            Err(err)?;
+        }
+        Ok(bootstrap) => {
+            info!(?bootstrap, "bootstrap worked");
+            let source_map_lookup = SourceMapWrapper { source_map };
+            let pretty_printer = SourceMapDisplay {
+                source_map: &source_map_lookup,
+            };
+
+            let symbol_table_display = SymbolTableDisplay {
+                symbol_table: &bootstrap.default_symbol_table,
+                source_map: &pretty_printer,
+            };
+
+            info!(%symbol_table_display, "default symbol table");
+
+            let core_module_symbol_table = &bootstrap
+                .modules
+                .get(&bootstrap.core_module_path)
+                .unwrap()
+                .namespace
+                .symbol_table;
+
+            let core_module_symbol_table_display = SymbolTableDisplay {
+                symbol_table: core_module_symbol_table,
+                source_map: &pretty_printer,
+            };
+
+            info!(%core_module_symbol_table_display, "core symbol table");
+
+            let all_impls_display = ImplsDisplay {
+                all_impls: &bootstrap.state.associated_impls,
+                source_map: &pretty_printer,
+            };
+
+            info!(%all_impls_display, "all impls");
+        }
+    }
 
     Ok(())
 

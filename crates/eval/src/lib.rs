@@ -2521,6 +2521,28 @@ impl<'a, C> Interpreter<'a, C> {
                     return Err(self.create_err(ExecuteErrorKind::InvalidIntrinsic, node));
                 }
             }
+            IntrinsicFunction::FloatSign => todo!(),
+            IntrinsicFunction::FloatAbs => todo!(),
+            IntrinsicFunction::FloatRnd => todo!(),
+            IntrinsicFunction::FloatCos => todo!(),
+            IntrinsicFunction::FloatSin => todo!(),
+            IntrinsicFunction::FloatAcos => todo!(),
+            IntrinsicFunction::FloatAsin => todo!(),
+            IntrinsicFunction::FloatAtan2 => todo!(),
+            IntrinsicFunction::FloatMin => todo!(),
+            IntrinsicFunction::FloatMax => todo!(),
+            IntrinsicFunction::FloatClamp => todo!(),
+            IntrinsicFunction::IntAbs => todo!(),
+            IntrinsicFunction::IntRnd => todo!(),
+            IntrinsicFunction::IntMax => todo!(),
+            IntrinsicFunction::IntMin => todo!(),
+            IntrinsicFunction::IntToFloat => todo!(),
+            IntrinsicFunction::StringLen => todo!(),
+            IntrinsicFunction::ArrayRemove => todo!(),
+            IntrinsicFunction::ArrayClear => todo!(),
+            IntrinsicFunction::MapHas => todo!(),
+            IntrinsicFunction::MapRemove => todo!(),
+            IntrinsicFunction::Float2Magnitude => todo!(),
         };
         Ok(v)
     }

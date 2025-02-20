@@ -13,6 +13,7 @@ use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
 use std::rc::Rc;
+use tracing::{info, trace};
 
 #[derive(Clone, Eq, PartialEq, Default)]
 pub struct Node {
@@ -231,8 +232,10 @@ impl Type {
         match self {
             Self::Int => 0,
             Self::Float => 1,
-            Self::Struct(_struct_type) => 0,
-            _ => 0xffff,
+            Self::Bool => 2,
+            Self::String => 3,
+            Self::Struct(struct_type) => struct_type.number,
+            _ => todo!(),
         }
     }
 }
@@ -949,9 +952,72 @@ pub struct WhenBinding {
 
 #[derive(Debug, Clone)]
 pub enum IntrinsicFunction {
+    FloatRound,
     FloatFloor,
     FloatSqrt,
-    FloatRound,
+    FloatSign,
+    FloatAbs,
+    FloatRnd,
+    FloatCos,
+    FloatSin,
+    FloatAcos,
+    FloatAsin,
+    FloatAtan2,
+    FloatMin,
+    FloatMax,
+    FloatClamp,
+
+    // Int
+    IntAbs,
+    IntRnd,
+    IntMax,
+    IntMin,
+    IntToFloat,
+
+    // String
+    StringLen,
+
+    // Array
+    ArrayRemove,
+    ArrayClear,
+
+    // Map
+    MapHas,
+    MapRemove,
+
+    Float2Magnitude,
+}
+
+impl fmt::Display for IntrinsicFunction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::FloatRound => write!(f, "float_round"),
+            Self::FloatFloor => write!(f, "float_floor"),
+            Self::FloatSqrt => write!(f, "float_sqrt"),
+            Self::FloatSign => write!(f, "float_sign"),
+            Self::FloatAbs => write!(f, "float_abs"),
+            Self::FloatRnd => write!(f, "float_rnd"),
+            Self::FloatCos => write!(f, "float_cos"),
+            Self::FloatSin => write!(f, "float_sin"),
+            Self::FloatAcos => write!(f, "float_acos"),
+            Self::FloatAsin => write!(f, "float_asin"),
+            Self::FloatAtan2 => write!(f, "float_atan2"),
+            Self::FloatMin => write!(f, "float_min"),
+            Self::FloatMax => write!(f, "float_max"),
+            Self::FloatClamp => write!(f, "float_clamp"),
+            Self::IntAbs => write!(f, "int_abs"),
+            Self::IntRnd => write!(f, "int_rnd"),
+            Self::IntMax => write!(f, "int_max"),
+            Self::IntMin => write!(f, "int_min"),
+            Self::IntToFloat => write!(f, "int_to_float"),
+            Self::StringLen => write!(f, "string_len"),
+            Self::ArrayRemove => write!(f, "array_remove"),
+            Self::ArrayClear => write!(f, "array_clear"),
+            Self::MapHas => write!(f, "map_has"),
+            Self::MapRemove => write!(f, "map_remove"),
+            Self::Float2Magnitude => write!(f, "float2_magnitude"),
+        }
+    }
 }
 
 impl TryFrom<&str> for IntrinsicFunction {
@@ -1153,6 +1219,8 @@ impl AssociatedImpls {
 
 impl AssociatedImpls {
     pub fn prepare(&mut self, ty: &Type) {
+        let type_id = ty.type_number();
+        trace!(?type_id, ?ty, "preparing standard `impl` for type");
         self.functions
             .insert(
                 ty.type_number(),
@@ -1226,6 +1294,7 @@ pub struct StructType {
     pub name: Node,
     pub assigned_name: String,
     pub anon_struct_type: AnonymousStructType,
+    pub number: TypeNumber,
 }
 
 impl Debug for StructType {
@@ -1236,9 +1305,15 @@ impl Debug for StructType {
 
 impl StructType {
     #[must_use]
-    pub fn new(name: Node, assigned_name: &str, anon_struct_type: AnonymousStructType) -> Self {
+    pub fn new(
+        name: Node,
+        assigned_name: &str,
+        type_number: TypeNumber,
+        anon_struct_type: AnonymousStructType,
+    ) -> Self {
         Self {
             anon_struct_type,
+            number: type_number,
             name,
             assigned_name: assigned_name.to_string(),
         }
@@ -1316,6 +1391,7 @@ pub type TupleTypeRef = Rc<TupleType>;
 pub struct TupleType(pub Vec<Type>);
 
 impl TupleType {
+    #[must_use]
     pub fn new(types: Vec<Type>) -> Self {
         Self(types)
     }

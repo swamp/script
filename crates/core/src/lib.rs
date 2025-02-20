@@ -6,6 +6,7 @@ use swamp_script_semantic::{
     AliasType, IntrinsicFunction, IntrinsicFunctionDefinition, Signature, TypeForParameter,
 };
 use tiny_ver::TinyVersion;
+
 pub const PACKAGE_NAME: &str = "core";
 fn add_intrinsic_types(core_ns: &mut SymbolTable) {
     let int_alias = AliasType {
@@ -49,21 +50,55 @@ fn add_intrinsic_functions(core_ns: &mut SymbolTable) {
         return_type: Box::new(Type::Float),
     };
 
-    core_ns
-        .add_intrinsic_function(IntrinsicFunctionDefinition {
-            name: "float_round".into(),
-            intrinsic: IntrinsicFunction::FloatRound,
-            signature: float_to_float.clone(),
-        })
-        .unwrap();
+    let float_to_int = Signature {
+        parameters: [TypeForParameter {
+            name: "self".into(),
+            resolved_type: Type::Float,
+            is_mutable: false,
+            node: None,
+        }]
+        .into(),
+        return_type: Box::new(Type::Int),
+    };
 
-    core_ns
-        .add_intrinsic_function(IntrinsicFunctionDefinition {
-            name: "float_floor".into(),
-            intrinsic: IntrinsicFunction::FloatFloor,
-            signature: float_to_float,
-        })
-        .unwrap();
+    let float_to_float_functions = [
+        IntrinsicFunction::FloatFloor,
+        IntrinsicFunction::FloatSqrt,
+        IntrinsicFunction::FloatSign,
+        IntrinsicFunction::FloatAbs,
+        IntrinsicFunction::FloatRnd,
+        IntrinsicFunction::FloatCos,
+        IntrinsicFunction::FloatSin,
+        IntrinsicFunction::FloatAcos,
+        IntrinsicFunction::FloatAsin,
+        IntrinsicFunction::FloatMin,
+        IntrinsicFunction::FloatMax,
+    ];
+    for intrinsic_fn in float_to_float_functions {
+        let name = intrinsic_fn.to_string();
+        core_ns
+            .add_intrinsic_function(IntrinsicFunctionDefinition {
+                name,
+                intrinsic: intrinsic_fn,
+                signature: float_to_float.clone(),
+            })
+            .unwrap();
+    }
+
+    let float_to_int_functions = [IntrinsicFunction::FloatRound];
+    for intrinsic_fn in float_to_int_functions {
+        let name = intrinsic_fn.to_string();
+        core_ns
+            .add_intrinsic_function(IntrinsicFunctionDefinition {
+                name,
+                intrinsic: intrinsic_fn,
+                signature: float_to_int.clone(),
+            })
+            .unwrap();
+    }
+
+    //    IntrinsicFunction::FloatClamp,
+    //         IntrinsicFunction::FloatAtan2,
 }
 
 /// # Panics

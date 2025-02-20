@@ -7,7 +7,8 @@ use pathdiff::diff_paths;
 use seq_map::SeqMap;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
-use std::{fs, io};
+use std::{env, fs, io};
+use tracing::info;
 
 pub mod prelude;
 
@@ -32,33 +33,60 @@ pub struct SourceMap {
 pub struct RelativePath(pub String);
 
 impl SourceMap {
-    pub fn new(mounts: &SeqMap<String, PathBuf>) -> Self {
+    /// # Errors
+    ///
+    pub fn new(mounts: &SeqMap<String, PathBuf>) -> io::Result<Self> {
         let mut canonical_mounts = SeqMap::new();
         for (mount_name, base_path) in mounts {
-            let canon_path = base_path
-                .canonicalize()
-                .unwrap_or_else(|_| panic!("can not canonicalize {base_path:?}"));
+            let canon_path = base_path.canonicalize().map_err(|_| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("could not canonicalize {base_path:?}"),
+                )
+            })?;
+
+            if !canon_path.is_dir() {
+                return Err(io::Error::new(
+                    ErrorKind::NotFound,
+                    format!("{canon_path:?} is not a directory"),
+                ));
+            }
             canonical_mounts
                 .insert(mount_name.clone(), canon_path)
-                .unwrap();
+                .map_err(|_| {
+                    io::Error::new(io::ErrorKind::InvalidData, "could not insert mount")
+                })?;
         }
-        Self {
+        Ok(Self {
             mounts: canonical_mounts,
             cache: SeqMap::new(),
             next_file_id: 1,
-        }
+        })
     }
 
+    /// # Errors
+    ///
+    pub fn add_mount(&mut self, name: &str, path: &Path) -> io::Result<()> {
+        if !path.is_dir() {
+            return Err(io::Error::new(
+                ErrorKind::NotFound,
+                format!("{path:?} is not a directory"),
+            ));
+        }
+        self.mounts
+            .insert(name.to_string(), path.to_path_buf())
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "could not insert mount"))
+    }
+
+    #[must_use]
     pub fn base_path(&self, name: &str) -> &Path {
-        &self.mounts.get(&name.to_string()).unwrap()
+        self.mounts.get(&name.to_string()).unwrap()
     }
 
     pub fn read_file(&mut self, path: &Path, mount_name: &str) -> io::Result<(FileId, String)> {
         let found_base_path = self.base_path(mount_name);
-        let relative_path = diff_paths(path, &found_base_path).expect(&format!(
-            "could not find relative path {:?} {:?}",
-            path, found_base_path
-        ));
+        let relative_path = diff_paths(path, found_base_path)
+            .unwrap_or_else(|| panic!("could not find relative path {path:?} {found_base_path:?}"));
 
         let contents = fs::read_to_string(path)?;
 
@@ -141,7 +169,7 @@ impl SourceMap {
 
     fn to_file_system_path(&self, mount_name: &str, relative_path: &str) -> io::Result<PathBuf> {
         let base_path = self.base_path(mount_name).to_path_buf();
-        let mut path_buf = base_path.clone();
+        let mut path_buf = base_path;
 
         path_buf.push(relative_path);
         //path_buf.set_extension("swamp");
@@ -149,10 +177,7 @@ impl SourceMap {
         path_buf.canonicalize().map_err(|_| {
             io::Error::new(
                 ErrorKind::Other,
-                format!(
-                    "path is wrong mount:{} relative:{}",
-                    mount_name, relative_path
-                ),
+                format!("path is wrong mount:{mount_name} relative:{relative_path}",),
             )
         })
     }
@@ -170,6 +195,7 @@ impl SourceMap {
         offsets.into_boxed_slice()
     }
 
+    #[must_use]
     pub fn get_span_source(&self, file_id: FileId, offset: usize, length: usize) -> &str {
         self.cache.get(&file_id).map_or_else(
             || {
@@ -192,6 +218,7 @@ impl SourceMap {
         Some(&file_info.contents[start_offset..end_offset - 1])
     }
 
+    #[must_use]
     pub fn get_span_location_utf8(&self, file_id: FileId, offset: usize) -> (usize, usize) {
         let file_info = self.cache.get(&file_id).expect("Invalid file_id in span");
 
@@ -217,6 +244,7 @@ impl SourceMap {
         (line_idx + 1, column_character_offset + 1)
     }
 
+    #[must_use]
     pub fn fetch_relative_filename(&self, file_id: FileId) -> &str {
         self.cache
             .get(&file_id)
@@ -224,5 +252,48 @@ impl SourceMap {
             .relative_path
             .to_str()
             .unwrap()
+    }
+    pub fn minimal_relative_path(target: &Path) -> io::Result<PathBuf> {
+        let current_dir = env::current_dir()?;
+        let target = target.canonicalize()?;
+
+        let current_dir_components = current_dir.components().collect::<Vec<_>>();
+        let target_components = target.components().collect::<Vec<_>>();
+
+        let mut common_prefix_len = 0;
+        for i in 0..std::cmp::min(current_dir_components.len(), target_components.len()) {
+            if current_dir_components[i] == target_components[i] {
+                common_prefix_len += 1;
+            } else {
+                break;
+            }
+        }
+
+        let mut relative_path = PathBuf::new();
+
+        for _ in 0..(current_dir_components.len() - common_prefix_len) {
+            relative_path.push("..");
+        }
+
+        for component in &target_components[common_prefix_len..] {
+            relative_path.push(component);
+        }
+
+        info!(
+            ?current_dir,
+            ?target,
+            ?relative_path,
+            "minimal relative path"
+        );
+
+        Ok(relative_path)
+    }
+    pub fn get_relative_path_to(&self, file_id: FileId) -> io::Result<PathBuf> {
+        let file_info = self.cache.get(&file_id).unwrap();
+        let mount_path = self.mounts.get(&file_info.mount_name).unwrap();
+
+        let absolute_path = mount_path.join(&file_info.relative_path);
+
+        Self::minimal_relative_path(&absolute_path)
     }
 }

@@ -125,6 +125,7 @@ pub struct SharedState<'a> {
 }
 
 impl<'a> SharedState<'a> {
+    #[must_use]
     pub fn get_symbol_table(&'a self, path: &[String]) -> Option<&'a SymbolTable> {
         if path.is_empty() {
             return Some(&self.lookup_table);
@@ -763,36 +764,37 @@ impl<'a> Analyzer<'a> {
         node: &swamp_script_ast::Node,
         ty: &Type,
     ) -> Result<ExpressionKind, Error> {
-        if let Some(function) = self
-            .shared
+        self.shared
             .state
             .associated_impls
             .get_member_function(ty, "default")
-        {
-            let kind = match &**function {
-                Function::Internal(internal_function) => {
-                    ExpressionKind::InternalFunctionAccess(internal_function.clone())
-                }
-                Function::External(external_function) => {
-                    ExpressionKind::ExternalFunctionAccess(external_function.clone())
-                }
-            };
+            .map_or_else(
+                || Err(self.create_err(ErrorKind::NoDefaultImplementedForType(ty.clone()), node)),
+                |function| {
+                    let kind = match &**function {
+                        Function::Internal(internal_function) => {
+                            ExpressionKind::InternalFunctionAccess(internal_function.clone())
+                        }
+                        Function::External(external_function) => {
+                            ExpressionKind::ExternalFunctionAccess(external_function.clone())
+                        }
+                    };
 
-            let base_expr =
-                self.create_expr(kind, Type::Function(function.signature().clone()), node);
+                    let base_expr =
+                        self.create_expr(kind, Type::Function(function.signature().clone()), node);
 
-            let empty_call_postfix = Postfix {
-                node: self.to_node(node),
-                ty: *function.signature().return_type.clone(),
-                kind: PostfixKind::FunctionCall(vec![]),
-            };
+                    let empty_call_postfix = Postfix {
+                        node: self.to_node(node),
+                        ty: *function.signature().return_type.clone(),
+                        kind: PostfixKind::FunctionCall(vec![]),
+                    };
 
-            let kind = ExpressionKind::PostfixChain(Box::new(base_expr), vec![empty_call_postfix]);
+                    let kind =
+                        ExpressionKind::PostfixChain(Box::new(base_expr), vec![empty_call_postfix]);
 
-            Ok(kind)
-        } else {
-            Err(self.create_err(ErrorKind::NoDefaultImplementedForType(ty.clone()), node))
-        }
+                    Ok(kind)
+                },
+            )
     }
 
     fn add_postfix(
@@ -813,9 +815,9 @@ impl<'a> Analyzer<'a> {
     }
 
     pub fn analyze_struct_field(
-        &mut self,
+        &self,
         field_name: &swamp_script_ast::Node,
-        tv: Type,
+        tv: &Type,
     ) -> Result<(StructTypeRef, usize, Type), Error> {
         let field_name_str = self.get_text(field_name).to_string();
 
@@ -858,7 +860,7 @@ impl<'a> Analyzer<'a> {
             match item {
                 swamp_script_ast::Postfix::FieldAccess(field_name) => {
                     let (struct_type_ref, index, return_type) =
-                        self.analyze_struct_field(&field_name.clone(), tv.resolved_type)?;
+                        self.analyze_struct_field(&field_name.clone(), &tv.resolved_type)?;
                     self.add_postfix(
                         &mut suffixes,
                         PostfixKind::StructField(struct_type_ref.clone(), index),
@@ -1141,12 +1143,12 @@ impl<'a> Analyzer<'a> {
             let resolved_node = self.to_node(&force_mut.unwrap());
             MutOrImmutableExpression {
                 expression_or_location: ArgumentExpressionOrLocation::Location(
-                    self.analyze_to_location(&expression.expression, None, LocationSide::Rhs)?,
+                    self.analyze_to_location(&expression.expression, None, &LocationSide::Rhs)?,
                 ),
                 is_mutable: Some(resolved_node),
             }
         } else {
-            self.analyze_mut_or_immutable_expression(expression, None, LocationSide::Rhs)?
+            self.analyze_mut_or_immutable_expression(expression, None, &LocationSide::Rhs)?
         };
 
         let resolved_type = &resolved_expression.ty().clone();
@@ -1288,9 +1290,11 @@ impl<'a> Analyzer<'a> {
                         Type::Function(found_internal_function.signature.clone()),
                         var_node,
                     ),
-                    _ => {
-                        return Err(self.create_err(ErrorKind::UnknownVariable, var_node));
-                    }
+                    FuncDef::Intrinsic(found_intrinsic_function) => self.create_expr(
+                        ExpressionKind::IntrinsicFunctionAccess(found_intrinsic_function.clone()),
+                        Type::Function(found_intrinsic_function.signature.clone()),
+                        var_node,
+                    ),
                 },
 
                 _ => {
@@ -1530,9 +1534,9 @@ impl<'a> Analyzer<'a> {
         variant_name: &str,
     ) -> Result<EnumVariantTypeRef, Error> {
         let (symbol_table, enum_name) =
-            self.get_symbol_table_and_name(&qualified_type_identifier)?;
+            self.get_symbol_table_and_name(qualified_type_identifier)?;
         Ok(symbol_table
-            .get_enum_variant_type(&*enum_name, variant_name)
+            .get_enum_variant_type(&enum_name, variant_name)
             .ok_or_else(|| {
                 self.create_err(
                     ErrorKind::UnknownEnumVariantType,
@@ -1626,7 +1630,7 @@ impl<'a> Analyzer<'a> {
             let var = self.analyze_mut_or_immutable_expression(
                 &variable.expression,
                 None,
-                LocationSide::Rhs,
+                &LocationSide::Rhs,
             )?;
             variable_expressions.push(var);
         }
@@ -1663,7 +1667,7 @@ impl<'a> Analyzer<'a> {
         let mut bindings = Vec::new();
         for variable_binding in variables {
             let mut_expr = if let Some(found_expr) = &variable_binding.expression {
-                self.analyze_mut_or_immutable_expression(found_expr, None, LocationSide::Rhs)?
+                self.analyze_mut_or_immutable_expression(found_expr, None, &LocationSide::Rhs)?
             } else {
                 let same_var = self.find_variable(&variable_binding.variable)?;
 
@@ -1743,7 +1747,7 @@ impl<'a> Analyzer<'a> {
                 swamp_script_ast::GuardClause::Wildcard(x) => {
                     if found_wildcard.is_some() {
                         return Err(
-                            self.create_err(ErrorKind::GuardCanNotHaveMultipleWildcards, &node)
+                            self.create_err(ErrorKind::GuardCanNotHaveMultipleWildcards, node)
                         );
                     }
                     found_wildcard = Some(x);
@@ -1771,7 +1775,7 @@ impl<'a> Analyzer<'a> {
         }
 
         if found_wildcard.is_none() {
-            return Err(self.create_err(ErrorKind::GuardMustHaveWildcard, &node));
+            return Err(self.create_err(ErrorKind::GuardMustHaveWildcard, node));
         }
 
         let kind = ExpressionKind::Guard(guards);
@@ -1791,7 +1795,7 @@ impl<'a> Analyzer<'a> {
         source_expression: &swamp_script_ast::MutableOrImmutableExpression,
     ) -> Result<Expression, Error> {
         let source_expr =
-            self.analyze_mut_or_immutable_expression(source_expression, None, LocationSide::Rhs)?;
+            self.analyze_mut_or_immutable_expression(source_expression, None, &LocationSide::Rhs)?;
         let ty = source_expr.ty().clone();
 
         let maybe_found_variable = self.try_find_variable(&variable.name);
@@ -1830,11 +1834,11 @@ impl<'a> Analyzer<'a> {
         let resolved_source = self.analyze_mut_or_immutable_expression(
             source_expression,
             ty.as_ref(),
-            LocationSide::Rhs,
+            &LocationSide::Rhs,
         )?;
 
         let var_ref =
-            self.create_local_variable(&var.name, &var.is_mutable, &resolved_source.ty())?;
+            self.create_local_variable(&var.name, &var.is_mutable, resolved_source.ty())?;
 
         let resolved_type = resolved_source.ty().clone();
         assert!(
@@ -1871,7 +1875,7 @@ impl<'a> Analyzer<'a> {
         &mut self,
         chain: &swamp_script_ast::PostfixChain,
         expected_type: Option<Type>,
-        location_side: LocationSide,
+        location_side: &LocationSide,
     ) -> Result<SingleLocationExpression, Error> {
         let mut items = Vec::new();
 
@@ -1886,7 +1890,7 @@ impl<'a> Analyzer<'a> {
                 swamp_script_ast::Postfix::FieldAccess(field_name_node) => {
                     //let field_name_resolved = self.to_node(field_name_node)
                     let (struct_type_ref, index, return_type) =
-                        self.analyze_struct_field(field_name_node, ty)?;
+                        self.analyze_struct_field(field_name_node, &ty)?;
                     self.add_location_item(
                         &mut items,
                         LocationAccessKind::FieldIndex(struct_type_ref.clone(), index),
@@ -1945,7 +1949,7 @@ impl<'a> Analyzer<'a> {
                                 Some(&map_type.key_type.clone()),
                             )?;
                             let is_last = i == chain.postfixes.len() - 1;
-                            let allow_auto_insert = is_last && location_side == LocationSide::Lhs;
+                            let allow_auto_insert = is_last && *location_side == LocationSide::Lhs;
                             let (kind, lookup_type) = if allow_auto_insert {
                                 // If this is the last postfix in the chain, then it is a "bare" access and auto-insert is allowed
                                 // the type is `value_type` since this lookup is safe. we can create a memory location if there wasn't one
@@ -2069,12 +2073,12 @@ impl<'a> Analyzer<'a> {
         &mut self,
         expr: &swamp_script_ast::Expression,
         expected_type: Option<Type>,
-        location_type: LocationSide,
+        location_type: &LocationSide,
     ) -> Result<SingleLocationExpression, Error> {
         //let resolved_expr = self.analyze_expression(expr, Some(&expected_type))?;
         match &expr.kind {
             swamp_script_ast::ExpressionKind::PostfixChain(chain) => {
-                self.analyze_chain_to_location(chain, expected_type, location_type)
+                self.analyze_chain_to_location(chain, expected_type, &location_type)
             }
             swamp_script_ast::ExpressionKind::IdentifierReference(variable) => {
                 let var = self.find_variable(variable)?;
@@ -2111,7 +2115,7 @@ impl<'a> Analyzer<'a> {
                     let target_location = SingleMutLocationExpression(self.analyze_to_location(
                         target_expression,
                         Some(target_type.clone()),
-                        LocationSide::Rhs,
+                        &LocationSide::Rhs,
                     )?);
                     let resolved_source = self.analyze_expression(source, Some(source_type))?;
                     return Ok(Option::from(ExpressionKind::ArrayPush(
@@ -2123,7 +2127,7 @@ impl<'a> Analyzer<'a> {
                     let target_location = SingleMutLocationExpression(self.analyze_to_location(
                         target_expression,
                         Some(target_type.clone()),
-                        LocationSide::Rhs,
+                        &LocationSide::Rhs,
                     )?);
                     let resolved_source = self.analyze_expression(source, Some(source_type))?;
                     return Ok(Option::from(ExpressionKind::ArrayExtend(
@@ -2150,7 +2154,7 @@ impl<'a> Analyzer<'a> {
         let resolved_location = SingleMutLocationExpression(self.analyze_to_location(
             target_expression,
             Some(source_expr.ty.clone()),
-            LocationSide::Rhs,
+            &LocationSide::Rhs,
         )?);
 
         let kind = if let Some(found_special) = self.check_special_assignment_compound(
@@ -2180,7 +2184,7 @@ impl<'a> Analyzer<'a> {
         ast_source_expression: &swamp_script_ast::Expression,
     ) -> Result<Expression, Error> {
         let resolved_location =
-            self.analyze_to_location(target_location, None, LocationSide::Lhs)?;
+            self.analyze_to_location(target_location, None, &LocationSide::Lhs)?;
 
         let ty = resolved_location.ty.clone();
         assert!(
@@ -2199,6 +2203,7 @@ impl<'a> Analyzer<'a> {
         Ok(expr)
     }
 
+    #[must_use]
     pub fn create_expr(
         &self,
         kind: ExpressionKind,
@@ -2213,6 +2218,7 @@ impl<'a> Analyzer<'a> {
         }
     }
 
+    #[must_use]
     pub fn create_expr_resolved(
         &self,
         kind: ExpressionKind,

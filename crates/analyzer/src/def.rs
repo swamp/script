@@ -55,7 +55,7 @@ impl<'a> Analyzer<'a> {
                     {
                         self.shared
                             .lookup_table
-                            .add_symbol(&*ident_text, found_symbol.clone())?;
+                            .add_symbol(&ident_text, found_symbol.clone())?;
                     } else {
                         return Err(self.create_err_resolved(
                             ErrorKind::UnknownTypeReference,
@@ -92,10 +92,8 @@ impl<'a> Analyzer<'a> {
         &mut self,
         mod_definition: &swamp_script_ast::Mod,
     ) -> Result<(), Error> {
-        let mut nodes = Vec::new();
         let mut path = Vec::new();
         for ast_node in &mod_definition.module_path.0 {
-            nodes.push(self.to_node(ast_node));
             path.push(self.get_text(ast_node).to_string());
         }
 
@@ -275,9 +273,11 @@ impl<'a> Analyzer<'a> {
             defined_fields: resolved_fields,
         };
 
+        let unique_id = self.shared.state.allocate_number();
         let resolved_struct = StructType::new(
             self.to_node(&ast_struct.identifier.name),
             assigned_name,
+            unique_id,
             resolved_anon_struct,
         );
 

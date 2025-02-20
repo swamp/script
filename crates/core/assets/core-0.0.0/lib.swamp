@@ -5,7 +5,7 @@ impl Bool {
 }
 
 impl Float {
-  fn floor(self) -> Int {
+  fn floor(self) -> Float {
      float_floor(self)
   }
 

@@ -96,7 +96,7 @@ impl<'a> Analyzer<'a> {
      */
 
     pub(crate) fn analyze_static_function_access(
-        &mut self,
+        &self,
         qualified_func_name: &swamp_script_ast::QualifiedIdentifier,
     ) -> Result<Expression, Error> {
         let path = self.get_module_path(&qualified_func_name.module_path);

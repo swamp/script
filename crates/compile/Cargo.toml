@@ -30,3 +30,4 @@ swamp-script-source-map-lookup = { path = "../source-map-lookup", version = "0.0
 tracing = "0.1.40"
 regex = "1.11.1"
 tiny-ver = "0.1.2"
+seq-map = "0.0.13"

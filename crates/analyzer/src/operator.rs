@@ -24,7 +24,7 @@ impl<'a> Analyzer<'a> {
         let right = self.analyze_expression(ast_right, None)?;
         let right_type = right.ty.clone();
 
-        let kind = self.convert_binary_operator_kind(ast_op);
+        let kind = Self::convert_binary_operator_kind(ast_op);
         let node = self.to_node(&ast_op.node);
 
         match (&kind, &left_type, &right_type) {
@@ -116,7 +116,6 @@ impl<'a> Analyzer<'a> {
     }
 
     const fn convert_binary_operator_kind(
-        &self,
         binary_operator: &swamp_script_ast::BinaryOperator,
     ) -> BinaryOperatorKind {
         match binary_operator.kind {

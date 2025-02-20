@@ -3,14 +3,15 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use regex::Regex;
+use seq_map::SeqMap;
+use std::io;
 use std::path::Path;
 use std::rc::Rc;
 use std::str::FromStr;
 use swamp_script_analyzer::prelude::{Error, Program};
 use swamp_script_analyzer::Analyzer;
 use swamp_script_dep_loader::{
-    create_source_map, parse_local_modules_and_get_order, parse_single_module, DependencyParser,
-    ParsedAstModule,
+    parse_local_modules_and_get_order, parse_single_module, DependencyParser, ParsedAstModule,
 };
 use swamp_script_error_report::{show_error, show_script_resolve_error, ScriptResolveError};
 use swamp_script_eval_loader::analyze_modules_in_order;
@@ -25,7 +26,7 @@ const COMPILER_VERSION: &str = "0.0.0";
 
 pub fn analyze_ast_module_skip_expression(
     analyzer: &mut Analyzer,
-    parsed_ast_module: ParsedAstModule,
+    parsed_ast_module: &ParsedAstModule,
 ) -> Result<(), Error> {
     for definition in &parsed_ast_module.ast_module.definitions {
         analyzer.analyze_definition(definition)?;
@@ -37,7 +38,7 @@ pub fn analyze_single_module(
     state: &mut ProgramState,
     default_symbol_table: SymbolTable,
     modules: &Modules,
-    parsed_ast_module: ParsedAstModule,
+    parsed_ast_module: &ParsedAstModule,
     source_map: &SourceMap,
     versioned_module_path: &[String],
 ) -> Result<SymbolTable, Error> {
@@ -51,20 +52,58 @@ pub fn analyze_single_module(
 
     analyzer.shared.lookup_table = default_symbol_table;
 
+    trace!(lookup_table=?analyzer.shared.lookup_table, "analyzer lookup_table");
+
     analyze_ast_module_skip_expression(&mut analyzer, parsed_ast_module)?;
 
     Ok(analyzer.shared.definition_table)
 }
 
+pub fn create_source_map(registry_path: &Path, local_path: &Path) -> io::Result<SourceMap> {
+    trace!(?registry_path, ?local_path, "mounting source map");
+
+    let mut mounts = SeqMap::new();
+    mounts
+        .insert("crate".to_string(), local_path.to_path_buf())
+        .unwrap();
+
+    mounts
+        .insert("registry".to_string(), registry_path.to_path_buf())
+        .unwrap();
+
+    SourceMap::new(&mounts)
+}
+
+pub fn create_registry_source_map(registry_path: &Path) -> io::Result<SourceMap> {
+    trace!(?registry_path, "mounting registry path source map");
+
+    let mut mounts = SeqMap::new();
+    mounts
+        .insert("registry".to_string(), registry_path.to_path_buf())
+        .unwrap();
+
+    SourceMap::new(&mounts)
+}
+
+#[derive(Debug)]
+pub struct BootstrapResult {
+    pub modules: Modules,
+    pub default_symbol_table: SymbolTable,
+    pub state: ProgramState,
+    pub core_module_path: Vec<String>,
+}
+
 /// Bootstraps the core and ffi modules and creates a default symbol table
+///
+/// # Errors
 ///
 /// # Panics
 /// In theory it can panic, but should be safe.
 pub fn bootstrap_modules(
-    packages_root_path: &Path,
-) -> Result<(Modules, SymbolTable), ScriptResolveError> {
+    source_map: &mut SourceMap,
+) -> Result<BootstrapResult, ScriptResolveError> {
     let compiler_version = TinyVersion::from_str(COMPILER_VERSION).unwrap();
-    trace!(?compiler_version, "booting up compiler");
+    trace!(%compiler_version, "booting up compiler");
 
     let mut modules = Modules::new();
 
@@ -79,24 +118,27 @@ pub fn bootstrap_modules(
         .extend_basic_from(&core_module.namespace.symbol_table)
         .unwrap();
 
-    let mut source_map = create_source_map(packages_root_path).unwrap();
-    let core_ast_module = parse_single_module(&mut source_map, &core_module.namespace.path)?;
+    let core_ast_module = parse_single_module(source_map, &core_module.namespace.path)?;
 
     let mut state = ProgramState::new();
 
+    let core_symbol_table = core_module.namespace.symbol_table.as_ref().clone();
+    trace!(?core_symbol_table, "core symbol table");
+
     let core_analyzed_symbol_table = analyze_single_module(
         &mut state,
-        default_symbol_table.clone(),
+        core_symbol_table,
         &modules,
-        core_ast_module,
-        &source_map,
+        &core_ast_module,
+        source_map,
         &core_module.namespace.path,
     )?;
 
     core_module.namespace.symbol_table = Rc::new(core_analyzed_symbol_table);
 
     // core module is done, so add it read only to the modules
-    modules.add(Rc::new(core_module));
+    let core_module_ref = Rc::new(core_module);
+    modules.add(core_module_ref.clone());
 
     // Add `core` module without the version number, so they can be referenced from code
     default_symbol_table
@@ -112,11 +154,17 @@ pub fn bootstrap_modules(
         .add_package_version(swamp_script_ffi::PACKAGE_NAME, compiler_version)
         .expect("should work");
 
-    Ok((modules, default_symbol_table))
+    let result = BootstrapResult {
+        modules,
+        default_symbol_table,
+        state,
+        core_module_path: core_module_ref.namespace.path.clone(),
+    };
+    Ok(result)
 }
 
-pub fn init(root_path: &Path) -> Result<Program, ScriptResolveError> {
-    let mut resolved_program = Program::new();
+pub fn init(_root_path: &Path) -> Result<Program, ScriptResolveError> {
+    let resolved_program = Program::new();
 
     Ok(resolved_program)
 }
