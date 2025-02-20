@@ -11,7 +11,6 @@ use swamp_script_analyzer::prelude::Error;
 use swamp_script_compile::{bootstrap_modules, create_registry_source_map};
 use swamp_script_dep_loader::{swamp_registry_path, DepLoaderError};
 use swamp_script_error_report::{show_script_resolve_error, ScriptResolveError};
-use swamp_script_eval::err::ExecuteError;
 use swamp_script_parser::prelude::*;
 use swamp_script_pretty_print::{ImplsDisplay, SourceMapDisplay, SymbolTableDisplay};
 use swamp_script_source_map_lookup::SourceMapWrapper;
@@ -74,7 +73,6 @@ pub enum CliError {
     ParseError(ParseError),
     ResolveError(Error),
     ScriptResolveError(ScriptResolveError),
-    ExecuteError(ExecuteError),
     DepLoaderError(DepLoaderError),
     Other(String),
 }
@@ -90,12 +88,6 @@ impl std::error::Error for CliError {}
 impl From<io::Error> for CliError {
     fn from(value: io::Error) -> Self {
         Self::IoError(value)
-    }
-}
-
-impl From<ExecuteError> for CliError {
-    fn from(value: ExecuteError) -> Self {
-        Self::ExecuteError(value)
     }
 }
 
