@@ -13,9 +13,7 @@ use swamp_script_dep_loader::{swamp_registry_path, DepLoaderError};
 use swamp_script_error_report::{show_script_resolve_error, ScriptResolveError};
 use swamp_script_eval::err::ExecuteError;
 use swamp_script_parser::prelude::*;
-use swamp_script_pretty_print::{
-    ImplsDisplay, ModulesDisplay, SourceMapDisplay, SymbolTableDisplay,
-};
+use swamp_script_pretty_print::{ImplsDisplay, SourceMapDisplay, SymbolTableDisplay};
 use swamp_script_source_map_lookup::SourceMapWrapper;
 use tracing::info;
 use tracing_subscriber::EnvFilter;

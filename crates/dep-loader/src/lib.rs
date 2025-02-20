@@ -6,13 +6,13 @@ pub mod prelude;
 
 use seq_map::SeqMap;
 use std::collections::HashSet;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::{env, io};
 use swamp_script_ast::prelude::*;
 use swamp_script_ast::Function;
 use swamp_script_parser::{AstParser, ParseError};
 use swamp_script_source_map::{FileId, SourceMap};
-use tracing::{debug, trace};
+use tracing::debug;
 
 pub struct ParseRoot;
 
