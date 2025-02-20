@@ -10,7 +10,7 @@ members = [
     "crates/analyzer",
 
     # Evaluator
-    "crates/eval",
+    #"crates/eval",
     # "crates/examples",
 
     # API tools
