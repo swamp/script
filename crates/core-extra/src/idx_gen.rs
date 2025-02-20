@@ -14,7 +14,7 @@ pub struct IndexAllocator {
 
 impl IndexAllocator {
     // Create a new allocator
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             generations: Vec::new(),
             freelist: Vec::new(),

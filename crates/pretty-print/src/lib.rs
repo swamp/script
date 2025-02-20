@@ -528,7 +528,7 @@ impl SourceMapDisplay<'_> {
         }
     }
 
-    pub(crate) fn show_external_function_declaration(
+    pub fn show_external_function_declaration(
         &self,
         f: &mut Formatter,
         external_function: &ExternalFunctionDefinition,
@@ -536,7 +536,7 @@ impl SourceMapDisplay<'_> {
         self.show_signature(f, &external_function.signature)
     }
 
-    pub(crate) fn show_external_function_declarations(
+    pub fn show_external_function_declarations(
         &self,
         f: &mut Formatter,
         external_functions: &SeqMap<String, ExternalFunctionDefinitionRef>,
@@ -606,7 +606,7 @@ impl SourceMapDisplay<'_> {
         self.show_expression(f, &internal_func.body)
     }
 
-    pub(crate) fn show_internal_functions(
+    pub fn show_internal_functions(
         &self,
         f: &mut Formatter,
         internal_functions: &SeqMap<String, InternalFunctionDefinitionRef>,
@@ -625,7 +625,7 @@ impl SourceMapDisplay<'_> {
         }
     }
 
-    pub(crate) fn show_enums(
+    pub fn show_enums(
         &self,
         f: &mut Formatter,
         enums: &SeqMap<String, EnumTypeRef>,
