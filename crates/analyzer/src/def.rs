@@ -430,11 +430,11 @@ impl<'a> Analyzer<'a> {
         ast_def: &swamp_script_ast::Definition,
     ) -> Result<(), Error> {
         match ast_def {
-            swamp_script_ast::Definition::StructDef(ref ast_struct) => {
+            swamp_script_ast::Definition::StructDef(ast_struct) => {
                 self.analyze_struct_type_definition(ast_struct)?;
             }
 
-            swamp_script_ast::Definition::AliasDef(ref alias_def) => {
+            swamp_script_ast::Definition::AliasDef(alias_def) => {
                 self.analyze_alias_type_definition(alias_def)?;
             }
             swamp_script_ast::Definition::EnumDef(identifier, variants) => {

@@ -372,7 +372,7 @@ impl AstParser {
             segments.push(self.to_node(&pair));
         }
 
-        let items = if let Some(import_list) = inner.next() {
+        let items = match inner.next() { Some(import_list) => {
             let mut imported_items = Vec::new();
             for list_item in import_list.into_inner() {
                 let item = Self::next_pair(&mut list_item.into_inner())?;
@@ -395,9 +395,9 @@ impl AstParser {
             }
 
             imported_items
-        } else {
+        } _ => {
             Vec::new()
-        };
+        }};
 
         Ok(Definition::Use(Use {
             module_path: ModulePath(segments),
@@ -515,15 +515,15 @@ impl AstParser {
 
         let variable = self.parse_variable_item(&inner.next().expect("variable missing"))?;
 
-        let expression = if let Some(expr_pair) = inner.next() {
+        let expression = match inner.next() { Some(expr_pair) => {
             self.parse_mutable_or_immutable_expression(&expr_pair)?
-        } else {
+        } _ => {
             MutableOrImmutableExpression {
                 expression: self
                     .create_expr(ExpressionKind::IdentifierReference(variable.clone()), pair),
                 is_mutable: None,
             }
-        };
+        }};
 
         Ok(VariableBinding {
             variable,
@@ -536,11 +536,11 @@ impl AstParser {
 
         let variable = self.parse_variable_item(&inner.next().expect("variable missing"))?;
 
-        let expression = if let Some(expr_pair) = inner.next() {
+        let expression = match inner.next() { Some(expr_pair) => {
             Some(self.parse_mutable_or_immutable_expression(&expr_pair)?)
-        } else {
+        } _ => {
             None
-        };
+        }};
 
         Ok(WhenBinding {
             variable,
@@ -1745,15 +1745,15 @@ impl AstParser {
                         }
                     };
 
-                    let format = if let Some(fmt) = Self::convert_into_iterator(&part_pair).nth(1) {
+                    let format = match Self::convert_into_iterator(&part_pair).nth(1) { Some(fmt) => {
                         if fmt.as_rule() == Rule::format_specifier {
                             Some(self.parse_format_specifier(&fmt)?)
                         } else {
                             None
                         }
-                    } else {
+                    } _ => {
                         None
-                    };
+                    }};
 
                     parts.push(StringPart::Interpolation(Box::new(expr), format));
                 }
@@ -1810,7 +1810,7 @@ impl AstParser {
         let variant_type_identifier = LocalTypeIdentifier::new(self.to_node(&variant_pair));
 
         // Parse fields if they exist
-        let enum_variant_literal = if let Some(fields_pair) = inner.next() {
+        let enum_variant_literal = match inner.next() { Some(fields_pair) => {
             match fields_pair.as_rule() {
                 Rule::struct_fields_lit => {
                     let mut fields = Vec::new();
@@ -1843,9 +1843,9 @@ impl AstParser {
                     );
                 }
             }
-        } else {
+        } _ => {
             EnumVariantLiteral::Simple(enum_type, variant_type_identifier)
-        };
+        }};
 
         Ok(LiteralKind::EnumVariant(enum_variant_literal))
     }

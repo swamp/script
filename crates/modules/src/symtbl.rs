@@ -325,21 +325,21 @@ impl SymbolTable {
 
     pub fn get_generic(&self, name: &str) -> Option<&GenericTypeRef> {
         match self.get_symbol(name)? {
-            Symbol::Generic(ref generic) => Some(generic),
+            Symbol::Generic(generic) => Some(generic),
             _ => None,
         }
     }
 
     pub fn get_struct(&self, name: &str) -> Option<&StructTypeRef> {
         match self.get_type(name)? {
-            Type::Struct(ref struct_ref) => Some(struct_ref),
+            Type::Struct(struct_ref) => Some(struct_ref),
             _ => None,
         }
     }
 
     pub fn get_enum(&self, name: &str) -> Option<&EnumTypeRef> {
         match self.get_type(name)? {
-            Type::Enum(ref enum_type) => Some(enum_type),
+            Type::Enum(enum_type) => Some(enum_type),
             _ => None,
         }
     }
@@ -364,21 +364,21 @@ impl SymbolTable {
 
     pub fn get_external_type(&self, name: &str) -> Option<&ExternalTypeRef> {
         match self.get_type(name)? {
-            Type::External(ref ext_type) => Some(ext_type),
+            Type::External(ext_type) => Some(ext_type),
             _ => None,
         }
     }
 
     pub fn get_constant(&self, name: &str) -> Option<&ConstantRef> {
         match self.get_symbol(name)? {
-            Symbol::Constant(ref constant) => Some(constant),
+            Symbol::Constant(constant) => Some(constant),
             _ => None,
         }
     }
     #[must_use]
     pub fn get_module_link(&self, name: &str) -> Option<&ModuleRef> {
         match self.get_symbol(name)? {
-            Symbol::Module(ref module_ref) => Some(module_ref),
+            Symbol::Module(module_ref) => Some(module_ref),
             _ => None,
         }
     }
@@ -386,7 +386,7 @@ impl SymbolTable {
     #[must_use]
     pub fn get_package_version(&self, name: &str) -> Option<String> {
         match self.get_symbol(name)? {
-            Symbol::PackageVersion(ref name) => Some(name.to_string()),
+            Symbol::PackageVersion(name) => Some(name.to_string()),
             _ => None,
         }
     }
@@ -396,7 +396,7 @@ impl SymbolTable {
     #[must_use]
     pub fn get_function(&self, name: &str) -> Option<&FuncDef> {
         match self.get_symbol(name)? {
-            Symbol::FunctionDefinition(ref func_def) => Some(func_def),
+            Symbol::FunctionDefinition(func_def) => Some(func_def),
             _ => None,
         }
     }
@@ -404,7 +404,7 @@ impl SymbolTable {
     #[must_use]
     pub fn get_internal_function(&self, name: &str) -> Option<&InternalFunctionDefinitionRef> {
         match self.get_function(name)? {
-            FuncDef::Internal(ref internal_fn) => Some(internal_fn),
+            FuncDef::Internal(internal_fn) => Some(internal_fn),
             _ => None,
         }
     }
@@ -412,7 +412,7 @@ impl SymbolTable {
     #[must_use]
     pub fn get_intrinsic_function(&self, name: &str) -> Option<&IntrinsicFunctionDefinitionRef> {
         match self.get_function(name)? {
-            FuncDef::Intrinsic(ref intrinsic_fn) => Some(intrinsic_fn),
+            FuncDef::Intrinsic(intrinsic_fn) => Some(intrinsic_fn),
             _ => None,
         }
     }
@@ -423,7 +423,7 @@ impl SymbolTable {
         name: &str,
     ) -> Option<&ExternalFunctionDefinitionRef> {
         match self.get_function(name)? {
-            FuncDef::External(ref external_def) => Some(external_def),
+            FuncDef::External(external_def) => Some(external_def),
             _ => None,
         }
     }
