@@ -1,10 +1,9 @@
 use crate::prelude::Value;
-use crate::value::{AnyRustType, QuickDeserialize, SPARSE_ID_TYPE_ID};
 use fixed32::Fp;
 use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::rc::Rc;
-use swamp_script_semantic::{EnumVariantType, ExternalType, Type};
+use swamp_script_semantic::{EnumVariantType, Type};
 
 /// # Panics
 ///
@@ -162,7 +161,7 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
                 (Value::Option(None), offset)
             }
         }
-        Type::External(rust_type_ref) => {
+        Type::External(_rust_type_ref) => {
             //external_creator.create(rust_type_ref.type_name)
             (Value::Unit, 0)
             /*

@@ -2,8 +2,8 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use crate::err::{Error, ErrorKind};
 use crate::Analyzer;
+use crate::err::{Error, ErrorKind};
 use std::rc::Rc;
 use swamp_script_semantic::{
     EnumLiteralData, EnumVariantType, Expression, Fp, Literal, MapType, MapTypeRef, Node,
@@ -148,7 +148,7 @@ impl<'a> Analyzer<'a> {
                                 return Err(self.create_err(
                                     ErrorKind::EmptyArrayCanOnlyBeMapOrArray,
                                     ast_node,
-                                ))
+                                ));
                             }
                         }
                     } else {

@@ -5,8 +5,8 @@
 use seq_map::SeqMap;
 use std::fmt::{Debug, Formatter};
 use std::path::Path;
-use swamp_script_analyzer::prelude::Error;
 use swamp_script_analyzer::Analyzer;
+use swamp_script_analyzer::prelude::Error;
 use swamp_script_error_report::show_error;
 use swamp_script_modules::modules::Modules;
 use swamp_script_modules::symtbl::SymbolTable;
@@ -19,7 +19,6 @@ use tracing::warn;
 fn internal_compile(
     script: &str,
 ) -> Result<(SymbolTable, MonomorphizationCache, Option<Expression>), Error> {
-
     let parser = AstParser;
 
     let program = parser.parse_module(script).expect("Failed to parse script");
@@ -62,7 +61,6 @@ fn internal_compile(
                 Err(err)?;
             }
         }
-
     }
 
     let expression = &program.expression;
@@ -85,7 +83,6 @@ fn internal_compile(
         analyzer.shared.state.monomorphization_cache.clone(),
         maybe_resolved_expression,
     ))
-
 }
 
 /// # Panics
@@ -141,7 +138,7 @@ pub fn check(script: &str, expected_output: &str) {
         }
 
         let format_expr = FormatExpression { expression: expr };
-//        formatted_output += &*format!("{format_expr:?}");
+        //        formatted_output += &*format!("{format_expr:?}");
     }
 
     let actual = formatted_output

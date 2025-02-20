@@ -1,7 +1,7 @@
 use std::rc::Rc;
 use swamp_script_modules::modules::Module;
 use swamp_script_modules::symtbl::{Symbol, SymbolTable};
-use swamp_script_semantic::{ExternalType, Type, TYPE_NUMBER_FFI_VALUE};
+use swamp_script_semantic::{ExternalType, TYPE_NUMBER_FFI_VALUE, Type};
 use tiny_ver::TinyVersion;
 
 pub const PACKAGE_NAME: &str = "ffi";

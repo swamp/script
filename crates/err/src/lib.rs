@@ -6,7 +6,7 @@
 use eira::{Color, Kind, Pos, PosSpan, SourceLines};
 use std::fmt::Display;
 use std::io;
-use std::io::{stderr, Write};
+use std::io::{Write, stderr};
 use swamp_script_analyzer::err::ErrorKind;
 use swamp_script_analyzer::prelude::Error;
 use swamp_script_dep_loader::{DepLoaderError, DependencyError};
@@ -306,83 +306,63 @@ pub fn show_error(err: &Error, source_map: &SourceMap) {
 pub fn build_resolve_error(err: &Error) -> Builder<usize> {
     let span = &err.node.span;
     match &err.kind {
-        ErrorKind::TypeDoNotSupportRangeAccess => Report::build(
-            Kind::Error,
-            4253,
-            "type do not support range access",
-            span,
-        ),
+        ErrorKind::TypeDoNotSupportRangeAccess => {
+            Report::build(Kind::Error, 4253, "type do not support range access", span)
+        }
         ErrorKind::NoneCoalesceNeedsOptionalType => Report::build(
             Kind::Error,
             4243,
             "none coalesce `??` needs an optional type on the left hand side",
             span,
         ),
-        ErrorKind::TooManyDestructureVariables => Report::build(
-            Kind::Error,
-            4203,
-            "TooManyDestructureVariables",
-            span,
-        ),
-        ErrorKind::CanNotDestructure => Report::build(
-            Kind::Error,
-            4203,
-            "Can Not Destructure",
-            span,
-        ),
+        ErrorKind::TooManyDestructureVariables => {
+            Report::build(Kind::Error, 4203, "TooManyDestructureVariables", span)
+        }
+        ErrorKind::CanNotDestructure => {
+            Report::build(Kind::Error, 4203, "Can Not Destructure", span)
+        }
         ErrorKind::EmptyArrayCanOnlyBeMapOrArray => Report::build(
             Kind::Error,
             903,
             "EmptyArrayCanOnlyBeMapOrArray",
             &Span::default(),
         ),
-        ErrorKind::UnknownConstant => Report::build(
-            Kind::Error,
-            903,
-            "Unknown constant",
-            span,
-        ),
+        ErrorKind::UnknownConstant => Report::build(Kind::Error, 903, "Unknown constant", span),
         ErrorKind::CanNotFindModule(x) => Report::build(
             Kind::Error,
             902,
             &format!("Can not find module {x:?}"),
             &Span::default(),
         ),
-        ErrorKind::UnknownStructTypeReference => Report::build(
-            Kind::Error,
-            105,
-            "Unknown Struct Type Reference",
-            span,
-        ),
+        ErrorKind::UnknownStructTypeReference => {
+            Report::build(Kind::Error, 105, "Unknown Struct Type Reference", span)
+        }
         ErrorKind::UnknownLocalStructTypeReference(_) => todo!(),
         ErrorKind::DuplicateFieldName => todo!(),
         ErrorKind::Unknown(_) => todo!(),
         ErrorKind::UnknownImplTargetTypeReference(_) => todo!(),
         ErrorKind::WrongFieldCountInStructInstantiation(_, _) => todo!(),
-        ErrorKind::MissingFieldInStructInstantiation(fields, _struct_type) => Report::build(
-            Kind::Error,
-            903,
-            "missing fields in instantiation",
-            span,
-        ).with_note(&format!("fields: {fields:?}")
-        ),
+        ErrorKind::MissingFieldInStructInstantiation(fields, _struct_type) => {
+            Report::build(Kind::Error, 903, "missing fields in instantiation", span)
+                .with_note(&format!("fields: {fields:?}"))
+        }
         ErrorKind::ExpectedFunctionExpression => todo!(),
         ErrorKind::CouldNotFindMember(_, _) => todo!(),
-        ErrorKind::UnknownVariable => {
-            Report::build(Kind::Error, 105, "Unknown variable", span)
-        }
+        ErrorKind::UnknownVariable => Report::build(Kind::Error, 105, "Unknown variable", span),
         ErrorKind::NotAnArray => Report::build(Kind::Error, 5405, "was not an array", span),
         ErrorKind::ArrayIndexMustBeInt(_) => todo!(),
-        ErrorKind::OverwriteVariableWithAnotherType => Report::build(Kind::Error, 14505, "overwrite variable with another type", span),
+        ErrorKind::OverwriteVariableWithAnotherType => Report::build(
+            Kind::Error,
+            14505,
+            "overwrite variable with another type",
+            span,
+        ),
         ErrorKind::WrongNumberOfArguments(_expected, _encountered) => {
             Report::build(Kind::Error, 105, "wrong number of arguments", span)
         }
-        ErrorKind::IncompatibleArguments(_a, _b) => Report::build(
-            Kind::Error,
-            904,
-            "Incompatible arguments",
-            span,
-        )
+        ErrorKind::IncompatibleArguments(_a, _b) => {
+            Report::build(Kind::Error, 904, "Incompatible arguments", span)
+        }
         //    .with_label("first_type", a.to_string())
         //.with_label("second_type", b.to_string())
         ,
@@ -392,30 +372,17 @@ pub fn build_resolve_error(err: &Error) -> Builder<usize> {
             "Variable needs to be mut to overwrite",
             span,
         ),
-        ErrorKind::OverwriteVariableNotAllowedHere =>Report::build(
-            Kind::Error,
-            90423,
-            "OverwriteVariableNotAllowedHere",
-            span,
-        ),
+        ErrorKind::OverwriteVariableNotAllowedHere => {
+            Report::build(Kind::Error, 90423, "OverwriteVariableNotAllowedHere", span)
+        }
         ErrorKind::NotNamedStruct(_) => todo!(),
-        ErrorKind::UnknownEnumVariantType => Report::build(
-            Kind::Error,
-            903,
-            "Unknown enum variant type", span,
-        ),
-        ErrorKind::WasNotStructType => Report::build(
-            Kind::Error,
-            903,
-            "Not a struct type",
-            span,
-        ),
-        ErrorKind::UnknownStructField => Report::build(
-            Kind::Error,
-            106,
-            "Unknown Struct Field Reference",
-            span,
-        ),
+        ErrorKind::UnknownEnumVariantType => {
+            Report::build(Kind::Error, 903, "Unknown enum variant type", span)
+        }
+        ErrorKind::WasNotStructType => Report::build(Kind::Error, 903, "Not a struct type", span),
+        ErrorKind::UnknownStructField => {
+            Report::build(Kind::Error, 106, "Unknown Struct Field Reference", span)
+        }
         ErrorKind::MustBeEnumType(_) => todo!(),
         ErrorKind::UnknownEnumVariantTypeInPattern => Report::build(
             Kind::Error,
@@ -425,13 +392,22 @@ pub fn build_resolve_error(err: &Error) -> Builder<usize> {
         ),
         ErrorKind::ExpectedEnumInPattern => todo!(),
         ErrorKind::WrongEnumVariantContainer(_) => todo!(),
-        ErrorKind::VariableIsNotMutable =>  Report::build(Kind::Error, 75301, "Variable is not mutable", span),
-        ErrorKind::ArgumentIsNotMutable => Report::build(Kind::Error, 1401, "Argument is not mutable", span),
+        ErrorKind::VariableIsNotMutable => {
+            Report::build(Kind::Error, 75301, "Variable is not mutable", span)
+        }
+        ErrorKind::ArgumentIsNotMutable => {
+            Report::build(Kind::Error, 1401, "Argument is not mutable", span)
+        }
         ErrorKind::WrongNumberOfTupleDeconstructVariables => todo!(),
         ErrorKind::UnknownTypeReference => {
             Report::build(Kind::Error, 101, "Unknown type reference", span)
         }
-        ErrorKind::SemanticError(a) => Report::build(Kind::Error, 141, &format!("semantic error {a:?}"), &Span::dummy()),
+        ErrorKind::SemanticError(a) => Report::build(
+            Kind::Error,
+            141,
+            &format!("semantic error {a:?}"),
+            &Span::dummy(),
+        ),
         ErrorKind::SeqMapError(_) => todo!(),
         ErrorKind::ExpectedMemberCall => todo!(),
         ErrorKind::CouldNotFindStaticMember(x, _y) => {
@@ -440,12 +416,19 @@ pub fn build_resolve_error(err: &Error) -> Builder<usize> {
         ErrorKind::TypeAliasNotAStruct => todo!(),
         ErrorKind::ModuleNotUnique => todo!(),
         ErrorKind::ExpressionIsOfWrongFieldType(span, expected_type, encountered_type) => {
-            Report::build(Kind::Error, 23401, &format!("Field initialization expression is of wrong type. expected {expected_type}, encountered: {encountered_type}"), span)
+            Report::build(
+                Kind::Error,
+                23401,
+                &format!(
+                    "Field initialization expression is of wrong type. expected {expected_type}, encountered: {encountered_type}"
+                ),
+                span,
+            )
         }
-        ErrorKind::ExpectedOptional => Report::build(Kind::Error, 7801, "expected optional type", span),
-        ErrorKind::ExpectedVariable => {
-            Report::build(Kind::Error, 26201, "Expected variable", span)
+        ErrorKind::ExpectedOptional => {
+            Report::build(Kind::Error, 7801, "expected optional type", span)
         }
+        ErrorKind::ExpectedVariable => Report::build(Kind::Error, 26201, "Expected variable", span),
         ErrorKind::EmptyMapLiteral => todo!(),
         ErrorKind::MapKeyTypeMismatch { .. } => todo!(),
         ErrorKind::MapValueTypeMismatch { .. } => todo!(),
@@ -474,44 +457,80 @@ pub fn build_resolve_error(err: &Error) -> Builder<usize> {
         }
         ErrorKind::NotAnIterator => Report::build(Kind::Error, 101, "Not an iterator", span),
         ErrorKind::UnsupportedIteratorPairs => todo!(),
-        ErrorKind::NeedStructForFieldLookup => Report::build(Kind::Error, 12301, "need struct for field lookup", span),
+        ErrorKind::NeedStructForFieldLookup => {
+            Report::build(Kind::Error, 12301, "need struct for field lookup", span)
+        }
         ErrorKind::IntConversionError(_) => todo!(),
         ErrorKind::FloatConversionError(_) => todo!(),
         ErrorKind::BoolConversionError => todo!(),
         ErrorKind::DuplicateFieldInStructInstantiation(_) => todo!(),
         ErrorKind::InternalError(_) => todo!(),
         ErrorKind::WasNotFieldMutRef => todo!(),
-        ErrorKind::UnknownFunction => {
-            Report::build(Kind::Error, 1026, "Unknown function", span)
-        }
+        ErrorKind::UnknownFunction => Report::build(Kind::Error, 1026, "Unknown function", span),
         ErrorKind::NoDefaultImplemented(_resolved_type) => {
             Report::build(Kind::Error, 104, "No default() function", span)
         }
         ErrorKind::NoDefaultImplementedForType(_) => todo!(),
-        ErrorKind::ExpectedFunctionTypeForFunctionCall => Report::build(Kind::Error, 4404, "expected function type for function call", span),
+        ErrorKind::ExpectedFunctionTypeForFunctionCall => Report::build(
+            Kind::Error,
+            4404,
+            "expected function type for function call",
+            span,
+        ),
         &ErrorKind::TypeDoNotSupportIndexAccess => todo!(),
-        ErrorKind::ExpectedMutableLocation => Report::build(Kind::Error, 104, "expected mutable location", span),
-        ErrorKind::GuardHasNoType =>Report::build(Kind::Error, 105, "guard has no type", span),
-        ErrorKind::EmptyBlockWrongType =>Report::build(Kind::Error, 106, "empty block wrong type", span),
-        ErrorKind::NoneNeedsExpectedTypeHint =>Report::build(Kind::Error, 107, "None needs expected type hint", span),
-        ErrorKind::NotValidLocationStartingPoint =>Report::build(Kind::Error, 108, "not valid location starting point", span),
-        ErrorKind::ArgumentMustBeImmutable =>Report::build(Kind::Error, 109, "argument must be immutable", span),
-        ErrorKind::NotValidLocationItem =>Report::build(Kind::Error, 110, "not valid location item", span),
-        ErrorKind::ExpectedImmutableExpression =>Report::build(Kind::Error, 112, "expected immutable expression", span),
-        ErrorKind::CallsCanNotBePartOfChain | ErrorKind::UnwrapCanNotBePartOfChain | ErrorKind::NoneCoalesceCanNotBePartOfChain => todo!(),
+        ErrorKind::ExpectedMutableLocation => {
+            Report::build(Kind::Error, 104, "expected mutable location", span)
+        }
+        ErrorKind::GuardHasNoType => Report::build(Kind::Error, 105, "guard has no type", span),
+        ErrorKind::EmptyBlockWrongType => {
+            Report::build(Kind::Error, 106, "empty block wrong type", span)
+        }
+        ErrorKind::NoneNeedsExpectedTypeHint => {
+            Report::build(Kind::Error, 107, "None needs expected type hint", span)
+        }
+        ErrorKind::NotValidLocationStartingPoint => {
+            Report::build(Kind::Error, 108, "not valid location starting point", span)
+        }
+        ErrorKind::ArgumentMustBeImmutable => {
+            Report::build(Kind::Error, 109, "argument must be immutable", span)
+        }
+        ErrorKind::NotValidLocationItem => {
+            Report::build(Kind::Error, 110, "not valid location item", span)
+        }
+        ErrorKind::ExpectedImmutableExpression => {
+            Report::build(Kind::Error, 112, "expected immutable expression", span)
+        }
+        ErrorKind::CallsCanNotBePartOfChain
+        | ErrorKind::UnwrapCanNotBePartOfChain
+        | ErrorKind::NoneCoalesceCanNotBePartOfChain => todo!(),
         ErrorKind::SelfNotCorrectType => todo!(),
-        ErrorKind::IllegalIndexInChain => Report::build(Kind::Error, 140, "illegal index in chain", span),
+        ErrorKind::IllegalIndexInChain => {
+            Report::build(Kind::Error, 140, "illegal index in chain", span)
+        }
         ErrorKind::CanNotNoneCoalesce => todo!(),
-        &ErrorKind::GuardCanNotHaveMultipleWildcards | &ErrorKind::WildcardMustBeLastInGuard | &ErrorKind::GuardMustHaveWildcard => todo!(),
+        &ErrorKind::GuardCanNotHaveMultipleWildcards
+        | &ErrorKind::WildcardMustBeLastInGuard
+        | &ErrorKind::GuardMustHaveWildcard => todo!(),
         ErrorKind::UnknownParametricType => todo!(),
         ErrorKind::NotAFunctionType => todo!(),
-        ErrorKind::ExpectedMemberFunctionOrFunctionTypeField => Report::build(Kind::Error, 140, "ExpectedMemberFunctionOrFunctionTypeField", span),
+        ErrorKind::ExpectedMemberFunctionOrFunctionTypeField => Report::build(
+            Kind::Error,
+            140,
+            "ExpectedMemberFunctionOrFunctionTypeField",
+            span,
+        ),
         ErrorKind::UnknownModule => Report::build(Kind::Error, 140, "Unknown module", span),
-        ErrorKind::NotATypeGenerator => Report::build(Kind::Error, 140, "Not a type generator", span),
+        ErrorKind::NotATypeGenerator => {
+            Report::build(Kind::Error, 140, "Not a type generator", span)
+        }
         ErrorKind::ExpectedStruct => todo!(),
         ErrorKind::NotAGeneric => Report::build(Kind::Error, 140, "unknown generic", span),
         ErrorKind::UnknownIntrinsic => Report::build(Kind::Error, 140, "unknown intrinsic", span),
-       ErrorKind::UnknownSymbol | &swamp_script_analyzer::err::ErrorKind::UnknownEnumType | &swamp_script_analyzer::err::ErrorKind::WrongTypeParameters => Report::build(Kind::Error, 140, "some error", span),
+        ErrorKind::UnknownSymbol
+        | &swamp_script_analyzer::err::ErrorKind::UnknownEnumType
+        | &swamp_script_analyzer::err::ErrorKind::WrongTypeParameters => {
+            Report::build(Kind::Error, 140, "some error", span)
+        }
     }
 }
 

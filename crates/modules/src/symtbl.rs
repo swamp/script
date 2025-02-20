@@ -9,11 +9,11 @@ use std::cell::RefCell;
 use std::fmt::Debug;
 use std::rc::Rc;
 use swamp_script_semantic::{
-    AliasType, AliasTypeRef, AnonymousStructType, Constant, ConstantRef, EnumType, EnumTypeRef,
-    EnumVariantType, EnumVariantTypeRef, ExternalFunctionDefinition, ExternalFunctionDefinitionRef,
-    ExternalType, ExternalTypeRef, FileId, InternalFunctionDefinition,
-    InternalFunctionDefinitionRef, IntrinsicFunctionDefinition, IntrinsicFunctionDefinitionRef,
-    Node, SemanticError, StructType, StructTypeField, StructTypeRef, Type, TypeParameterName,
+    AliasType, AliasTypeRef, Constant, ConstantRef, EnumType, EnumTypeRef, EnumVariantType,
+    EnumVariantTypeRef, ExternalFunctionDefinition, ExternalFunctionDefinitionRef, ExternalType,
+    ExternalTypeRef, FileId, InternalFunctionDefinition, InternalFunctionDefinitionRef,
+    IntrinsicFunctionDefinition, IntrinsicFunctionDefinitionRef, SemanticError, StructType,
+    StructTypeRef, Type, TypeParameterName,
 };
 use tiny_ver::TinyVersion;
 use tracing::info;

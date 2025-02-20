@@ -5,9 +5,9 @@
 pub mod prelude;
 
 use std::rc::Rc;
+use swamp_script_analyzer::AutoUseModules;
 use swamp_script_analyzer::err::ErrorKind;
 use swamp_script_analyzer::prelude::*;
-use swamp_script_analyzer::AutoUseModules;
 use swamp_script_dep_loader::prelude::*;
 use swamp_script_modules::modules::ModuleRef;
 use swamp_script_modules::modules::{Module, Modules};

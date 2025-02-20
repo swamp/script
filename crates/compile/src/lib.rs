@@ -8,22 +8,24 @@ use std::io;
 use std::path::Path;
 use std::rc::Rc;
 use std::str::FromStr;
-use swamp_script_analyzer::prelude::{Error, Program};
 use swamp_script_analyzer::Analyzer;
+use swamp_script_analyzer::prelude::{Error, Program};
 use swamp_script_dep_loader::{
-    parse_local_modules_and_get_order, parse_single_module, DependencyParser, ParsedAstModule,
+    DependencyParser, ParsedAstModule, parse_local_modules_and_get_order, parse_single_module,
 };
-use swamp_script_error_report::{show_error, show_script_resolve_error, ScriptResolveError};
+use swamp_script_error_report::{ScriptResolveError, show_script_resolve_error};
 use swamp_script_eval_loader::analyze_modules_in_order;
 use swamp_script_modules::modules::Modules;
 use swamp_script_modules::symtbl::SymbolTable;
 use swamp_script_semantic::ProgramState;
-use swamp_script_source_map::{FileId, SourceMap};
+use swamp_script_source_map::SourceMap;
 use tiny_ver::TinyVersion;
 use tracing::trace;
 
 const COMPILER_VERSION: &str = "0.0.0";
 
+/// # Errors
+///
 pub fn analyze_ast_module_skip_expression(
     analyzer: &mut Analyzer,
     parsed_ast_module: &ParsedAstModule,

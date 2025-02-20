@@ -4,18 +4,18 @@
  */
 pub mod prelude;
 
+use pest::Parser;
 use pest::error::{Error, ErrorVariant, InputLocation};
 use pest::iterators::Pair;
-use pest::Parser;
 use pest_derive::Parser;
 use std::iter::Peekable;
 use std::str::Chars;
 use swamp_script_ast::{
-    prelude::*, AliasType, AssignmentOperatorKind, BinaryOperatorKind, CompoundOperator,
-    CompoundOperatorKind, EnumVariantLiteral, ExpressionKind, FieldExpression, FieldName,
-    FieldType, ForPattern, ForVar, IterableExpression, LocalTypeIdentifierWithOptionalTypeParams,
-    PatternElement, QualifiedIdentifier, RangeMode, SpanWithoutFileId, TypeForParameter,
-    VariableBinding,
+    AliasType, AssignmentOperatorKind, BinaryOperatorKind, CompoundOperator, CompoundOperatorKind,
+    EnumVariantLiteral, ExpressionKind, FieldExpression, FieldName, FieldType, ForPattern, ForVar,
+    IterableExpression, LocalTypeIdentifierWithOptionalTypeParams, PatternElement,
+    QualifiedIdentifier, RangeMode, SpanWithoutFileId, TypeForParameter, VariableBinding,
+    prelude::*,
 };
 use swamp_script_ast::{Function, WhenBinding};
 use swamp_script_ast::{LiteralKind, MutableOrImmutableExpression};
@@ -372,32 +372,33 @@ impl AstParser {
             segments.push(self.to_node(&pair));
         }
 
-        let items = match inner.next() { Some(import_list) => {
-            let mut imported_items = Vec::new();
-            for list_item in import_list.into_inner() {
-                let item = Self::next_pair(&mut list_item.into_inner())?;
+        let items = match inner.next() {
+            Some(import_list) => {
+                let mut imported_items = Vec::new();
+                for list_item in import_list.into_inner() {
+                    let item = Self::next_pair(&mut list_item.into_inner())?;
 
-                let import_item = match item.as_rule() {
-                    Rule::identifier => {
-                        UseItem::Identifier(LocalIdentifier::new(self.to_node(&item)))
-                    }
-                    Rule::type_identifier => {
-                        UseItem::Type(LocalTypeIdentifier::new(self.to_node(&item)))
-                    }
-                    _ => {
-                        return Err(
-                            self.create_error_pair(SpecificError::ExpectedIdentifier, &item)
-                        );
-                    }
-                };
+                    let import_item = match item.as_rule() {
+                        Rule::identifier => {
+                            UseItem::Identifier(LocalIdentifier::new(self.to_node(&item)))
+                        }
+                        Rule::type_identifier => {
+                            UseItem::Type(LocalTypeIdentifier::new(self.to_node(&item)))
+                        }
+                        _ => {
+                            return Err(
+                                self.create_error_pair(SpecificError::ExpectedIdentifier, &item)
+                            );
+                        }
+                    };
 
-                imported_items.push(import_item);
+                    imported_items.push(import_item);
+                }
+
+                imported_items
             }
-
-            imported_items
-        } _ => {
-            Vec::new()
-        }};
+            _ => Vec::new(),
+        };
 
         Ok(Definition::Use(Use {
             module_path: ModulePath(segments),
@@ -453,7 +454,7 @@ impl AstParser {
                             pair.as_rule()
                         )),
                         &pair,
-                    ))
+                    ));
                 }
             }
         }
@@ -515,15 +516,14 @@ impl AstParser {
 
         let variable = self.parse_variable_item(&inner.next().expect("variable missing"))?;
 
-        let expression = match inner.next() { Some(expr_pair) => {
-            self.parse_mutable_or_immutable_expression(&expr_pair)?
-        } _ => {
-            MutableOrImmutableExpression {
+        let expression = match inner.next() {
+            Some(expr_pair) => self.parse_mutable_or_immutable_expression(&expr_pair)?,
+            _ => MutableOrImmutableExpression {
                 expression: self
                     .create_expr(ExpressionKind::IdentifierReference(variable.clone()), pair),
                 is_mutable: None,
-            }
-        }};
+            },
+        };
 
         Ok(VariableBinding {
             variable,
@@ -536,11 +536,10 @@ impl AstParser {
 
         let variable = self.parse_variable_item(&inner.next().expect("variable missing"))?;
 
-        let expression = match inner.next() { Some(expr_pair) => {
-            Some(self.parse_mutable_or_immutable_expression(&expr_pair)?)
-        } _ => {
-            None
-        }};
+        let expression = match inner.next() {
+            Some(expr_pair) => Some(self.parse_mutable_or_immutable_expression(&expr_pair)?),
+            _ => None,
+        };
 
         Ok(WhenBinding {
             variable,
@@ -912,7 +911,7 @@ impl AstParser {
                     _ => {
                         return Err(
                             self.create_error_pair(SpecificError::ExpectedImplItem, &inner_item)
-                        )
+                        );
                     }
                 }
             }
@@ -1089,7 +1088,9 @@ impl AstParser {
                 )
             }
             _ => {
-                return Err(self.create_error_pair(SpecificError::InvalidForPattern, &inner_pattern))
+                return Err(
+                    self.create_error_pair(SpecificError::InvalidForPattern, &inner_pattern)
+                );
             }
         };
 
@@ -1291,7 +1292,7 @@ impl AstParser {
                 return Err(Self::to_err(
                     SpecificError::UnknownAssignmentOperator("strange".to_string()),
                     &sub,
-                ))
+                ));
             }
         };
 
@@ -1646,7 +1647,7 @@ impl AstParser {
                     _ => {
                         return Err(
                             self.create_error_pair(SpecificError::ExpectedFieldOrRest, &field_pair)
-                        )
+                        );
                     }
                 }
             }
@@ -1741,19 +1742,20 @@ impl AstParser {
                             return Err(self.create_error_pair(
                                 SpecificError::ExpectedExpressionInInterpolation,
                                 &inner,
-                            ))
+                            ));
                         }
                     };
 
-                    let format = match Self::convert_into_iterator(&part_pair).nth(1) { Some(fmt) => {
-                        if fmt.as_rule() == Rule::format_specifier {
-                            Some(self.parse_format_specifier(&fmt)?)
-                        } else {
-                            None
+                    let format = match Self::convert_into_iterator(&part_pair).nth(1) {
+                        Some(fmt) => {
+                            if fmt.as_rule() == Rule::format_specifier {
+                                Some(self.parse_format_specifier(&fmt)?)
+                            } else {
+                                None
+                            }
                         }
-                    } _ => {
-                        None
-                    }};
+                        _ => None,
+                    };
 
                     parts.push(StringPart::Interpolation(Box::new(expr), format));
                 }
@@ -1761,7 +1763,7 @@ impl AstParser {
                     return Err(self.create_error_pair(
                         SpecificError::UnexpectedRuleInInterpolation,
                         &part_pair,
-                    ))
+                    ));
                 }
             }
         }
@@ -1786,7 +1788,7 @@ impl AstParser {
                     _ => {
                         return Err(
                             self.create_error_pair(SpecificError::InvalidPrecisionType, pair)
-                        )?
+                        )?;
                     }
                 };
                 Ok(FormatSpecifier::Precision(
@@ -1810,8 +1812,8 @@ impl AstParser {
         let variant_type_identifier = LocalTypeIdentifier::new(self.to_node(&variant_pair));
 
         // Parse fields if they exist
-        let enum_variant_literal = match inner.next() { Some(fields_pair) => {
-            match fields_pair.as_rule() {
+        let enum_variant_literal = match inner.next() {
+            Some(fields_pair) => match fields_pair.as_rule() {
                 Rule::struct_fields_lit => {
                     let mut fields = Vec::new();
                     for field in Self::convert_into_iterator(&fields_pair) {
@@ -1842,10 +1844,9 @@ impl AstParser {
                         self.create_error_pair(SpecificError::UnexpectedVariantField, &fields_pair)
                     );
                 }
-            }
-        } _ => {
-            EnumVariantLiteral::Simple(enum_type, variant_type_identifier)
-        }};
+            },
+            _ => EnumVariantLiteral::Simple(enum_type, variant_type_identifier),
+        };
 
         Ok(LiteralKind::EnumVariant(enum_variant_literal))
     }
@@ -2325,7 +2326,7 @@ impl AstParser {
                 return Err(self.create_error_pair(
                     SpecificError::UnknownEnumVariant(Self::pair_to_rule(pair)),
                     pair,
-                ))
+                ));
             }
         };
 
@@ -2405,7 +2406,7 @@ impl AstParser {
                 return Err(Self::to_err(
                     SpecificError::UnknownExpr("guard_clause".to_string()),
                     &pair,
-                ))?
+                ))?;
             }
         };
 

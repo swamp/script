@@ -35,6 +35,6 @@ fn standard() {
     );
 
     report.print(&s, stderr()).expect("print should work");
-    
+
      */
 }

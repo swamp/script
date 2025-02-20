@@ -407,8 +407,9 @@ impl Value {
             Self::Map(_, seq_map) => Ok(Box::new(
                 seq_map.into_values().map(|item| item.borrow().clone()),
             )),
-            Self::RustValue(ref rust_type_ref, rust_any_type) => {
-                let x = Ok(rust_any_type.clone().borrow().iter()); x
+            Self::RustValue(ref _rust_type_ref, rust_any_type) => {
+                let x = Ok(rust_any_type.clone().borrow().iter());
+                x
                 /*match rust_type_ref.number {
                 SPARSE_TYPE_ID => {
                     let sparse_map = self
@@ -469,7 +470,7 @@ impl Value {
                     .into_iter();
                 Box::new(iter) as Box<dyn Iterator<Item = (Self, Self)> + 'static>
             }
-            Self::RustValue(ref rust_type_ref, ref rust_value) => {
+            Self::RustValue(ref _rust_type_ref, ref rust_value) => {
                 Ok(rust_value.borrow().iter_pairs())?
                 /*
                 Box::new(match rust_type_ref.number {

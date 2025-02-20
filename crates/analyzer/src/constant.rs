@@ -3,8 +3,8 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use crate::err::{Error, ErrorKind};
 use crate::Analyzer;
+use crate::err::{Error, ErrorKind};
 use swamp_script_ast::{ConstantIdentifier, ConstantInfo};
 use swamp_script_semantic::{Constant, ConstantRef, Expression, ExpressionKind};
 

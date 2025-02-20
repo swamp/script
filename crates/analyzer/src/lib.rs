@@ -751,7 +751,7 @@ impl<'a> Analyzer<'a> {
             _ => {
                 return Err(
                     self.create_err(ErrorKind::NoDefaultImplemented(field_type.clone()), node)
-                )
+                );
             }
         };
 
@@ -1125,7 +1125,7 @@ impl<'a> Analyzer<'a> {
                 &expression.node,
             ),
             _ => {
-                return Err(self.create_err(ErrorKind::ExpectedBooleanExpression, &expression.node))
+                return Err(self.create_err(ErrorKind::ExpectedBooleanExpression, &expression.node));
             }
         };
 
@@ -1178,7 +1178,7 @@ impl<'a> Analyzer<'a> {
                     _ => {
                         return Err(
                             self.create_err(ErrorKind::NotAnIterator, &expression.expression.node)
-                        )
+                        );
                     }
                 }
             }
@@ -1998,30 +1998,31 @@ impl<'a> Analyzer<'a> {
 
                         Type::External(_external_type) => {
                             let _val_type = Type::Unit; // TODO: generic_params[0].clone();
-                                                        /*
-                                                        if rust_type.number == SPARSE_TYPE_ID {
-                                                            let sparse_id_type = self
-                                                                .shared
-                                                                .lookup_table
-                                                                .get_rust_type(&["std".to_string()], "SparseId")
-                                                                .expect("should have SparseId");
 
-                                                            let key_type = Type::External(sparse_id_type);
+                            /*
+                            if rust_type.number == SPARSE_TYPE_ID {
+                                let sparse_id_type = self
+                                    .shared
+                                    .lookup_table
+                                    .get_rust_type(&["std".to_string()], "SparseId")
+                                    .expect("should have SparseId");
 
-                                                            let key_expr =
-                                                                self.analyze_expression(lookup_expr, Some(&key_type.clone()))?;
+                                let key_type = Type::External(sparse_id_type);
 
-                                                            self.add_location_item(
-                                                                &mut items,
-                                                                LocationAccessKind::RustTypeIndex(rust_type.clone(), key_expr),
-                                                                key_type.clone(),
-                                                                &lookup_expr.node,
-                                                            );
+                                let key_expr =
+                                    self.analyze_expression(lookup_expr, Some(&key_type.clone()))?;
 
-                                                            ty = Type::Optional(Box::from(val_type.clone()));
-                                                        }
+                                self.add_location_item(
+                                    &mut items,
+                                    LocationAccessKind::RustTypeIndex(rust_type.clone(), key_expr),
+                                    key_type.clone(),
+                                    &lookup_expr.node,
+                                );
 
-                                                         */
+                                ty = Type::Optional(Box::from(val_type.clone()));
+                            }
+
+                             */
                         }
 
                         _ => {

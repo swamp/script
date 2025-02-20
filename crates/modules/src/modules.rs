@@ -3,12 +3,11 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use crate::symtbl::Symbol;
 use crate::symtbl::{SymbolTable, SymbolTableRef};
 use seq_map::SeqMap;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
-use swamp_script_semantic::{Constant, ConstantId, ConstantRef, Expression, ExpressionKind};
+use swamp_script_semantic::{Constant, ConstantId, ConstantRef, Expression};
 
 #[derive(Debug)]
 pub struct Modules {

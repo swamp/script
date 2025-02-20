@@ -13,7 +13,7 @@ use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
 use std::rc::Rc;
-use tracing::{info, trace};
+use tracing::trace;
 
 #[derive(Clone, Eq, PartialEq, Default)]
 pub struct Node {
