@@ -11,7 +11,7 @@ pub struct SourceMapDisplay<'a> {
     pub source_map: &'a dyn SourceMapLookup,
 }
 
-impl<'a> SourceMapDisplay<'a> {}
+impl SourceMapDisplay<'_> {}
 
 impl SourceMapDisplay<'_> {
     const fn get_color_from_symbol(symbol: &Symbol) -> Color {

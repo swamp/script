@@ -14,7 +14,7 @@ use swamp_script_semantic::{
 };
 use tracing::info;
 
-impl<'a> Analyzer<'a> {
+impl Analyzer<'_> {
     /// # Errors
     ///
     pub fn analyze_map_type(

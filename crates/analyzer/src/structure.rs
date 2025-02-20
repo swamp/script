@@ -13,7 +13,7 @@ use swamp_script_semantic::{
     Type,
 };
 
-impl<'a> Analyzer<'a> {
+impl Analyzer<'_> {
     fn analyze_struct_init_calling_default(
         &mut self,
         function: &FunctionRef,
@@ -319,7 +319,7 @@ impl<'a> Analyzer<'a> {
         &self,
         type_identifier: &swamp_script_ast::QualifiedTypeIdentifier,
     ) -> Result<(&SymbolTable, String), Error> {
-        let path = self.get_module_path(&type_identifier.module_path);
+        let path = self.get_module_path(type_identifier.module_path.as_ref());
         let name = self.get_text(&type_identifier.name.0).to_string();
 
         let maybe_symbol_table = self.shared.get_symbol_table(&path);
@@ -332,7 +332,7 @@ impl<'a> Analyzer<'a> {
         &self,
         type_identifier: &swamp_script_ast::QualifiedTypeIdentifier,
     ) -> Result<(Vec<String>, String), Error> {
-        let path = self.get_module_path(&type_identifier.module_path);
+        let path = self.get_module_path(type_identifier.module_path.as_ref());
         let name = self.get_text(&type_identifier.name.0).to_string();
         let path_to_return = if path.is_empty() {
             self.shared.current_path.clone()

@@ -17,7 +17,7 @@ use swamp_script_semantic::{
 };
 use tracing::info;
 
-impl<'a> Analyzer<'a> {
+impl Analyzer<'_> {
     fn analyze_use_definition(
         &mut self,
         use_definition: &swamp_script_ast::Use,
@@ -35,7 +35,6 @@ impl<'a> Analyzer<'a> {
             })
             .collect();
 
-        let mut items = Vec::new();
         let found_module = self.shared.modules.get(&path).unwrap();
         if use_definition.items.is_empty() {
             let last_name = path.last().unwrap();
@@ -45,7 +44,7 @@ impl<'a> Analyzer<'a> {
         }
 
         for ast_items in &use_definition.items {
-            let resolved_item = match ast_items {
+            match ast_items {
                 swamp_script_ast::UseItem::Identifier(node) => {
                     let ident_resolved_node = self.to_node(&node.0);
                     let ident = UseItem::Identifier(ident_resolved_node.clone());
@@ -82,7 +81,6 @@ impl<'a> Analyzer<'a> {
                     UseItem::TypeIdentifier(self.to_node(&node.0))
                 }
             };
-            items.push(resolved_item);
         }
 
         Ok(())
@@ -107,7 +105,7 @@ impl<'a> Analyzer<'a> {
             Ok(())
         } else {
             let first = &mod_definition.module_path.0[0];
-            Err(self.create_err(ErrorKind::UnknownModule, &first))
+            Err(self.create_err(ErrorKind::UnknownModule, first))
         }
     }
 
@@ -357,7 +355,7 @@ impl<'a> Analyzer<'a> {
                 for param in &parameters {
                     self.create_local_variable_resolved(
                         &param.node.as_ref().unwrap().name,
-                        &param.node.as_ref().unwrap().is_mutable,
+                        param.node.as_ref().unwrap().is_mutable.as_ref(),
                         &param.resolved_type.clone(),
                     )?;
                 }
@@ -550,7 +548,7 @@ impl<'a> Analyzer<'a> {
                         is_mutable: found_self.is_mutable.is_some(),
                         node: Option::from(ParameterNode {
                             name: self.to_node(&found_self.self_node),
-                            is_mutable: self.to_node_option(&found_self.is_mutable),
+                            is_mutable: self.to_node_option(Option::from(&found_self.is_mutable)),
                         }),
                     });
                 }
@@ -563,18 +561,19 @@ impl<'a> Analyzer<'a> {
                         is_mutable: param.variable.is_mutable.is_some(),
                         node: Option::from(ParameterNode {
                             name: self.to_node(&param.variable.name),
-                            is_mutable: self.to_node_option(&param.variable.is_mutable),
+                            is_mutable: self
+                                .to_node_option(Option::from(&param.variable.is_mutable)),
                         }),
                     });
                 }
 
                 let return_type =
-                    self.analyze_maybe_type(&function_data.declaration.return_type)?;
+                    self.analyze_maybe_type(Option::from(&function_data.declaration.return_type))?;
 
                 for param in &parameters {
                     self.create_local_variable_resolved(
                         &param.node.as_ref().unwrap().name,
-                        &param.node.as_ref().unwrap().is_mutable,
+                        param.node.as_ref().unwrap().is_mutable.as_ref(),
                         &param.resolved_type.clone(),
                     )?;
                 }
@@ -606,7 +605,7 @@ impl<'a> Analyzer<'a> {
                         is_mutable: found_self.is_mutable.is_some(),
                         node: Option::from(ParameterNode {
                             name: self.to_node(&found_self.self_node),
-                            is_mutable: self.to_node_option(&found_self.is_mutable),
+                            is_mutable: self.to_node_option(Option::from(&found_self.is_mutable)),
                         }),
                     });
                 }
@@ -621,12 +620,13 @@ impl<'a> Analyzer<'a> {
                         is_mutable: param.variable.is_mutable.is_some(),
                         node: Option::from(ParameterNode {
                             name: self.to_node(&param.variable.name),
-                            is_mutable: self.to_node_option(&param.variable.is_mutable),
+                            is_mutable: self
+                                .to_node_option(Option::from(&param.variable.is_mutable)),
                         }),
                     });
                 }
 
-                let return_type = self.analyze_maybe_type(&signature.return_type)?;
+                let return_type = self.analyze_maybe_type(Option::from(&signature.return_type))?;
 
                 let external = ExternalFunctionDefinition {
                     assigned_name: self.get_text(&signature.name).to_string(),

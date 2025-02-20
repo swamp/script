@@ -10,7 +10,7 @@ use swamp_script_semantic::{
     ArgumentExpressionOrLocation, MutOrImmutableExpression, Node, Type, TypeForParameter,
 };
 
-impl<'a> Analyzer<'a> {
+impl Analyzer<'_> {
     pub fn analyze_argument(
         &mut self,
         fn_parameter: &TypeForParameter,
@@ -62,7 +62,7 @@ impl<'a> Analyzer<'a> {
         expected_type: Option<&Type>,
         location_side: &LocationSide,
     ) -> Result<MutOrImmutableExpression, Error> {
-        let is_mutable = self.to_node_option(&expr.is_mutable);
+        let is_mutable = self.to_node_option(Option::from(&expr.is_mutable));
         let expression_or_location = if is_mutable.is_some() {
             ArgumentExpressionOrLocation::Location(self.analyze_to_location(
                 &expr.expression,

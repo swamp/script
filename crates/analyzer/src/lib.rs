@@ -217,7 +217,7 @@ impl<'a> Analyzer<'a> {
         condition: &swamp_script_ast::Expression,
         expected_type: Option<&Type>,
         true_expression: &swamp_script_ast::Expression,
-        maybe_false_expression: &Option<Box<swamp_script_ast::Expression>>,
+        maybe_false_expression: Option<&swamp_script_ast::Expression>,
     ) -> Result<Expression, Error> {
         let resolved_condition = self.analyze_bool_expression(condition)?;
         self.push_block_scope("if-true");
@@ -330,7 +330,7 @@ impl<'a> Analyzer<'a> {
 
     fn analyze_maybe_type(
         &mut self,
-        maybe_type: &Option<swamp_script_ast::Type>,
+        maybe_type: Option<&swamp_script_ast::Type>,
     ) -> Result<Type, Error> {
         let found_type = match maybe_type {
             None => Type::Unit,
@@ -347,16 +347,25 @@ impl<'a> Analyzer<'a> {
     ) -> Result<ForPattern, Error> {
         match pattern {
             swamp_script_ast::ForPattern::Single(var) => {
-                let variable_ref =
-                    self.create_local_variable(&var.identifier, &var.is_mut, value_type)?;
+                let variable_ref = self.create_local_variable(
+                    &var.identifier,
+                    Option::from(&var.is_mut),
+                    value_type,
+                )?;
                 Ok(ForPattern::Single(variable_ref))
             }
             swamp_script_ast::ForPattern::Pair(first, second) => {
                 let found_key = key_type.unwrap();
-                let first_var_ref =
-                    self.create_local_variable(&first.identifier, &first.is_mut, found_key)?;
-                let second_var_ref =
-                    self.create_local_variable(&second.identifier, &second.is_mut, value_type)?;
+                let first_var_ref = self.create_local_variable(
+                    &first.identifier,
+                    Option::from(&first.is_mut),
+                    found_key,
+                )?;
+                let second_var_ref = self.create_local_variable(
+                    &second.identifier,
+                    Option::from(&second.is_mut),
+                    value_type,
+                )?;
                 Ok(ForPattern::Pair(first_var_ref, second_var_ref))
             }
         }
@@ -378,7 +387,7 @@ impl<'a> Analyzer<'a> {
                 resolved_type: param_type,
                 is_mutable: parameter.variable.is_mutable.is_some(),
                 node: Some(ParameterNode {
-                    is_mutable: self.to_node_option(&parameter.variable.is_mutable),
+                    is_mutable: self.to_node_option(Option::from(&parameter.variable.is_mutable)),
                     name: self.to_node(&parameter.variable.name),
                 }),
             });
@@ -467,7 +476,7 @@ impl<'a> Analyzer<'a> {
                     qualified_func_name,
                 ) = &postfix_chain.base.kind
                 {
-                    let path = self.get_module_path(&qualified_func_name.module_path);
+                    let path = self.get_module_path(qualified_func_name.module_path.as_ref());
                     let function_name = self.get_text(&qualified_func_name.name.0);
 
                     let maybe_intrinsic: Option<IntrinsicFunctionDefinitionRef> = {
@@ -516,7 +525,11 @@ impl<'a> Analyzer<'a> {
                 variable,
                 coerce_type,
                 source_expression,
-            ) => self.analyze_create_variable(variable, coerce_type, source_expression)?,
+            ) => self.analyze_create_variable(
+                variable,
+                Option::from(coerce_type),
+                source_expression,
+            )?,
             swamp_script_ast::ExpressionKind::VariableAssignment(variable, source_expression) => {
                 self.analyze_variable_assignment(variable, source_expression)?
             }
@@ -577,9 +590,13 @@ impl<'a> Analyzer<'a> {
                 self.analyze_with_expr(expected_type, variable_bindings, expression)?
             }
 
-            swamp_script_ast::ExpressionKind::When(variable_bindings, true_expr, else_expr) => {
-                self.analyze_when_expr(expected_type, variable_bindings, true_expr, else_expr)?
-            }
+            swamp_script_ast::ExpressionKind::When(variable_bindings, true_expr, else_expr) => self
+                .analyze_when_expr(
+                    expected_type,
+                    variable_bindings,
+                    true_expr,
+                    else_expr.as_deref(),
+                )?,
 
             swamp_script_ast::ExpressionKind::InterpolatedString(string_parts) => {
                 let kind = ExpressionKind::InterpolatedString(
@@ -683,7 +700,7 @@ impl<'a> Analyzer<'a> {
                 expression,
                 expected_type,
                 true_expression,
-                maybe_false_expression,
+                maybe_false_expression.as_deref(),
             )?,
             swamp_script_ast::ExpressionKind::Match(expression, arms) => {
                 let (match_expr, return_type) =
@@ -902,7 +919,7 @@ impl<'a> Analyzer<'a> {
                             &mut suffixes,
                             PostfixKind::FunctionCall(resolved_arguments),
                             *signature.return_type.clone(),
-                            &node,
+                            node,
                         );
 
                         tv.resolved_type = *signature.return_type.clone();
@@ -1228,7 +1245,7 @@ impl<'a> Analyzer<'a> {
         ast_expressions: &[swamp_script_ast::Expression],
     ) -> Result<(Vec<Expression>, Type), Error> {
         if ast_expressions.is_empty() {
-            return if let Some(Type::Unit) = expected_type_for_last {
+            return if matches!(expected_type_for_last, Some(Type::Unit)) {
                 Ok((vec![], Type::Unit))
             } else {
                 Err(self.create_err(ErrorKind::EmptyBlockWrongType, node))
@@ -1260,7 +1277,8 @@ impl<'a> Analyzer<'a> {
                 }
                 swamp_script_ast::StringPart::Interpolation(expression, format_specifier) => {
                     let expr = self.analyze_expression(expression, None)?;
-                    let resolved_format_specifier = self.analyze_format_specifier(format_specifier);
+                    let resolved_format_specifier =
+                        self.analyze_format_specifier(format_specifier.as_ref());
                     StringPart::Interpolation(expr, resolved_format_specifier)
                 }
             };
@@ -1518,7 +1536,7 @@ impl<'a> Analyzer<'a> {
         }
     }
 
-    fn get_module_path(&self, module_path: &Option<swamp_script_ast::ModulePath>) -> Vec<String> {
+    fn get_module_path(&self, module_path: Option<&swamp_script_ast::ModulePath>) -> Vec<String> {
         module_path.as_ref().map_or_else(Vec::new, |found| {
             let mut strings = Vec::new();
             for path_item in &found.0 {
@@ -1535,14 +1553,14 @@ impl<'a> Analyzer<'a> {
     ) -> Result<EnumVariantTypeRef, Error> {
         let (symbol_table, enum_name) =
             self.get_symbol_table_and_name(qualified_type_identifier)?;
-        Ok(symbol_table
+        symbol_table
             .get_enum_variant_type(&enum_name, variant_name)
             .ok_or_else(|| {
                 self.create_err(
                     ErrorKind::UnknownEnumVariantType,
                     &qualified_type_identifier.name.0,
                 )
-            })?)
+            })
     }
 
     const fn analyze_compound_operator(
@@ -1564,7 +1582,7 @@ impl<'a> Analyzer<'a> {
         }
     }
 
-    const fn to_node_option(&self, maybe_node: &Option<swamp_script_ast::Node>) -> Option<Node> {
+    const fn to_node_option(&self, maybe_node: Option<&swamp_script_ast::Node>) -> Option<Node> {
         match maybe_node {
             None => None,
             Some(node) => Some(self.to_node(node)),
@@ -1573,7 +1591,7 @@ impl<'a> Analyzer<'a> {
 
     const fn analyze_format_specifier(
         &self,
-        ast_format_specifier: &Option<swamp_script_ast::FormatSpecifier>,
+        ast_format_specifier: Option<&swamp_script_ast::FormatSpecifier>,
     ) -> Option<FormatSpecifier> {
         let f = match ast_format_specifier {
             None => return None,
@@ -1661,7 +1679,7 @@ impl<'a> Analyzer<'a> {
         expected_type: Option<&Type>,
         variables: &[swamp_script_ast::WhenBinding],
         true_expr: &swamp_script_ast::Expression,
-        else_expr: &Option<Box<swamp_script_ast::Expression>>,
+        else_expr: Option<&swamp_script_ast::Expression>,
     ) -> Result<Expression, Error> {
         self.push_block_scope("when");
         let mut bindings = Vec::new();
@@ -1822,7 +1840,7 @@ impl<'a> Analyzer<'a> {
     fn analyze_create_variable(
         &mut self,
         var: &swamp_script_ast::Variable,
-        coerce_type: &Option<swamp_script_ast::Type>,
+        coerce_type: Option<&swamp_script_ast::Type>,
         source_expression: &swamp_script_ast::MutableOrImmutableExpression,
     ) -> Result<Expression, Error> {
         let ty = if let Some(found_ast_type) = coerce_type {
@@ -1837,8 +1855,11 @@ impl<'a> Analyzer<'a> {
             &LocationSide::Rhs,
         )?;
 
-        let var_ref =
-            self.create_local_variable(&var.name, &var.is_mutable, resolved_source.ty())?;
+        let var_ref = self.create_local_variable(
+            &var.name,
+            Option::from(&var.is_mutable),
+            resolved_source.ty(),
+        )?;
 
         let resolved_type = resolved_source.ty().clone();
         assert!(
@@ -1862,7 +1883,7 @@ impl<'a> Analyzer<'a> {
     ) {
         let resolved_node = self.to_node(ast_node);
         let postfix = LocationAccess {
-            node: resolved_node.clone(),
+            node: resolved_node,
             ty,
             kind,
         };
@@ -2063,7 +2084,7 @@ impl<'a> Analyzer<'a> {
         let location = SingleLocationExpression {
             kind: SingleLocationExpressionKind::MutVariableRef,
             node: self.to_node(&chain.base.node),
-            ty: ty,
+            ty,
             starting_variable: start_variable,
             access_chain: items,
         };
@@ -2079,7 +2100,7 @@ impl<'a> Analyzer<'a> {
         //let resolved_expr = self.analyze_expression(expr, Some(&expected_type))?;
         match &expr.kind {
             swamp_script_ast::ExpressionKind::PostfixChain(chain) => {
-                self.analyze_chain_to_location(chain, expected_type, &location_type)
+                self.analyze_chain_to_location(chain, expected_type, location_type)
             }
             swamp_script_ast::ExpressionKind::IdentifierReference(variable) => {
                 let var = self.find_variable(variable)?;

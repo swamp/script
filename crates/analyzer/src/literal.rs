@@ -11,7 +11,7 @@ use swamp_script_semantic::{
 };
 use tracing::error;
 
-impl<'a> Analyzer<'a> {
+impl Analyzer<'_> {
     #[allow(clippy::too_many_lines)]
     pub(crate) fn analyze_literal(
         &mut self,

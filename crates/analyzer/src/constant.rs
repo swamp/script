@@ -8,7 +8,7 @@ use crate::err::{Error, ErrorKind};
 use swamp_script_ast::{ConstantIdentifier, ConstantInfo};
 use swamp_script_semantic::{Constant, ConstantRef, Expression, ExpressionKind};
 
-impl<'a> Analyzer<'a> {
+impl Analyzer<'_> {
     fn analyze_constant(&mut self, constant: &ConstantInfo) -> Result<(), Error> {
         let resolved_expr = self.analyze_expression(&constant.expression, None)?;
         let resolved_type = resolved_expr.ty.clone();

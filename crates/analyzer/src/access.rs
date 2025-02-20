@@ -10,7 +10,7 @@ use swamp_script_semantic::{
     Expression, ExpressionKind, Function, FunctionRef, Range, RangeMode, Type,
 };
 
-impl<'a> Analyzer<'a> {
+impl Analyzer<'_> {
     fn convert_to_function_access(function: &FunctionRef) -> Expression {
         match &**function {
             Function::Internal(x) => Expression {
@@ -99,7 +99,7 @@ impl<'a> Analyzer<'a> {
         &self,
         qualified_func_name: &swamp_script_ast::QualifiedIdentifier,
     ) -> Result<Expression, Error> {
-        let path = self.get_module_path(&qualified_func_name.module_path);
+        let path = self.get_module_path(qualified_func_name.module_path.as_ref());
         let function_name = self.get_text(&qualified_func_name.name.0);
 
         if let Some(found_table) = self.shared.get_symbol_table(&path) {

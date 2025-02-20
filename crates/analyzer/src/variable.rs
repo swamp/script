@@ -10,7 +10,7 @@ use swamp_script_semantic::{
     Expression, ExpressionKind, MutOrImmutableExpression, Node, Type, Variable, VariableRef,
 };
 
-impl<'a> Analyzer<'a> {
+impl Analyzer<'_> {
     fn try_find_local_variable(&self, node: &Node) -> Option<&VariableRef> {
         let current_scope = self
             .scope
@@ -78,7 +78,7 @@ impl<'a> Analyzer<'a> {
         // For first assignment, create new variable with the mutability from the assignment
         let scope_index = self.scope.block_scope_stack.len() - 1;
         let name = self.to_node(&variable.name);
-        let mutable_node = self.to_node_option(&variable.is_mutable);
+        let mutable_node = self.to_node_option(Option::from(&variable.is_mutable));
         let variable_name_str = self.get_text_resolved(&name).to_string();
 
         let variables = &mut self
@@ -110,7 +110,7 @@ impl<'a> Analyzer<'a> {
     pub(crate) fn create_local_variable(
         &mut self,
         variable: &swamp_script_ast::Node,
-        is_mutable: &Option<swamp_script_ast::Node>,
+        is_mutable: Option<&swamp_script_ast::Node>,
         variable_type_ref: &Type,
     ) -> Result<VariableRef, Error> {
         assert!(
@@ -119,7 +119,7 @@ impl<'a> Analyzer<'a> {
         );
         self.create_local_variable_resolved(
             &self.to_node(variable),
-            &self.to_node_option(is_mutable),
+            Option::from(&self.to_node_option(is_mutable)),
             variable_type_ref,
         )
     }
@@ -129,13 +129,17 @@ impl<'a> Analyzer<'a> {
         variable: &swamp_script_ast::Variable,
         variable_type_ref: &Type,
     ) -> Result<VariableRef, Error> {
-        self.create_local_variable(&variable.name, &variable.is_mutable, variable_type_ref)
+        self.create_local_variable(
+            &variable.name,
+            Option::from(&variable.is_mutable),
+            variable_type_ref,
+        )
     }
 
     pub(crate) fn create_local_variable_resolved(
         &mut self,
         variable: &Node,
-        is_mutable: &Option<Node>,
+        is_mutable: Option<&Node>,
         variable_type_ref: &Type,
     ) -> Result<VariableRef, Error> {
         if let Some(_existing_variable) = self.try_find_local_variable(variable) {
@@ -155,7 +159,7 @@ impl<'a> Analyzer<'a> {
         let resolved_variable = Variable {
             name: variable.clone(),
             resolved_type: variable_type_ref.clone(),
-            mutable_node: is_mutable.clone(),
+            mutable_node: is_mutable.clone().cloned(),
             scope_index,
             variable_index: variables.len(),
         };
