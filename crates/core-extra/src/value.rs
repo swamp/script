@@ -408,7 +408,7 @@ impl Value {
                 seq_map.into_values().map(|item| item.borrow().clone()),
             )),
             Self::RustValue(ref rust_type_ref, rust_any_type) => {
-                Ok(rust_any_type.clone().borrow().iter())
+                let x = Ok(rust_any_type.clone().borrow().iter()); x
                 /*match rust_type_ref.number {
                 SPARSE_TYPE_ID => {
                     let sparse_map = self
