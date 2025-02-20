@@ -14,8 +14,8 @@ members = [
     # "crates/examples",
 
     # API tools
-    "crates/derive",
-    "crates/derive-test",
+    #"crates/derive",
+    #"crates/derive-test",
 
     "crates/dep-loader",
     "crates/swamp-script",
