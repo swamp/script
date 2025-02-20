@@ -24,3 +24,5 @@ swamp-script-ffi = { path = "../ffi", version = "0.0.12"}
 swamp-script-parser = { path = "../parser", version = "0.0.12" }
 test-log = { version = "0.2.16", features = ["trace", "log", "color"] }
 swamp-script-error-report = { path = "../err", version = "0.0.12" }
+swamp-script-compile = { path = "../compile", version = "0.0.12"}
+swamp-script-dep-loader = { path = "../dep-loader", version = "0.0.12"}

@@ -5,16 +5,18 @@
 use seq_map::SeqMap;
 use std::fmt::{Debug, Formatter};
 use std::path::Path;
-use swamp_script_analyzer::Analyzer;
+use test_log::tracing_subscriber::registry;
 use swamp_script_analyzer::prelude::Error;
+use swamp_script_analyzer::Analyzer;
+use swamp_script_compile::bootstrap_modules;
 use swamp_script_error_report::show_error;
 use swamp_script_modules::modules::Modules;
 use swamp_script_modules::symtbl::SymbolTable;
 use swamp_script_parser::AstParser;
 use swamp_script_semantic::{Expression, MonomorphizationCache, ProgramState};
 use swamp_script_source_map::SourceMap;
-use tiny_ver::TinyVersion;
 use tracing::warn;
+use swamp_script_dep_loader::swamp_registry_path;
 
 fn internal_compile(
     script: &str,
@@ -23,10 +25,8 @@ fn internal_compile(
 
     let program = parser.parse_module(script).expect("Failed to parse script");
 
-    let mut state = ProgramState::new();
-    let mut modules = Modules::new();
-
     let mut mount_maps = SeqMap::new();
+    
     mount_maps
         .insert("crate".to_string(), Path::new(".").to_path_buf())
         .unwrap();
@@ -37,25 +37,26 @@ fn internal_compile(
     let canonical_path = ["some_path".to_string(), "main".to_string()];
     source_map.add_manual(file_id, "crate", Path::new("some_path/main"), script);
 
-    let compiler_version = "0.0.0".parse::<TinyVersion>().unwrap();
-    let mut analyzer = Analyzer::new(&mut state, &modules, &source_map, &canonical_path, file_id);
 
-    analyzer
-        .shared
-        .lookup_table
-        .add_package_version(swamp_script_core::PACKAGE_NAME, compiler_version.clone())
-        .expect("should work");
+    let registry_path = swamp_registry_path().unwrap();
+    source_map.add_mount("registry" , &registry_path).unwrap();
 
-    analyzer
-        .shared
-        .lookup_table
-        .add_package_version(swamp_script_ffi::PACKAGE_NAME, compiler_version)
-        .expect("should work");
+    let mut bootstrap_result = bootstrap_modules(&mut source_map).unwrap();
+
+    let mut analyzer = Analyzer::new(
+        &mut bootstrap_result.state,
+        &bootstrap_result.modules,
+        &source_map,
+        &canonical_path,
+        file_id,
+    );
+
+    analyzer.shared.lookup_table = bootstrap_result.default_symbol_table;
 
     for definition in &program.definitions {
         let result = analyzer.analyze_definition(definition);
         match result {
-            Ok(analyzed_definition) => {}
+            Ok(_analyzed_definition) => {}
             Err(err) => {
                 show_error(&err, &source_map);
                 Err(err)?;
@@ -93,6 +94,7 @@ pub fn check_fail(script: &str, expected_error_message: &str) {
     assert_eq!(format!("{error:?}"), expected_error_message.trim());
 }
 
+#[derive(Debug)]
 pub struct FormatExpression {
     pub expression: Expression,
 }
@@ -138,7 +140,7 @@ pub fn check(script: &str, expected_output: &str) {
         }
 
         let format_expr = FormatExpression { expression: expr };
-        //        formatted_output += &*format!("{format_expr:?}");
+                formatted_output += &*format!("{format_expr:?}");
     }
 
     let actual = formatted_output
