@@ -10,8 +10,6 @@ use std::io::{stderr, Write};
 use swamp_script_analyzer::err::ErrorKind;
 use swamp_script_analyzer::prelude::Error;
 use swamp_script_dep_loader::{DepLoaderError, DependencyError};
-use swamp_script_eval::err::ExecuteErrorKind;
-use swamp_script_eval::prelude::ExecuteError;
 use swamp_script_parser::SpecificError;
 use swamp_script_semantic::Span;
 use swamp_script_source_map::{FileId, SourceMap};
@@ -176,12 +174,6 @@ impl<C: Display + Clone> Builder<C> {
 }
 
 /// # Panics
-///
-pub fn show_execute_error(err: &ExecuteError, source_map: &SourceMap) {
-    let builder = build_execute_error(err);
-    let report = builder.build();
-    report.print(source_map, stderr()).unwrap();
-}
 
 /// # Panics
 ///
@@ -531,7 +523,7 @@ pub fn build_script_error(err: &ScriptResolveError, _source_map: &SourceMap) -> 
         ScriptResolveError::DependencyError(err) => panic!("{}", format!("err: {:?}", err)),
     }
 }
-
+/*
 #[must_use]
 pub fn build_execute_error(err: &ExecuteError) -> Builder<usize> {
     let span = &err.node.span;
@@ -582,3 +574,12 @@ pub fn build_execute_error(err: &ExecuteError) -> Builder<usize> {
         &swamp_script_eval::err::ExecuteErrorKind::InvalidIntrinsic => todo!(),
     }
 }
+
+///
+pub fn show_execute_error(err: &ExecuteError, source_map: &SourceMap) {
+    let builder = build_execute_error(err);
+    let report = builder.build();
+    report.print(source_map, stderr()).unwrap();
+}
+
+*/

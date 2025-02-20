@@ -10,7 +10,6 @@ repository = "https://github.com/swamp/script"
 swamp-script-semantic = { path = "../semantic", version = "0.0.12" }
 swamp-script-source-map = { path = "../source-map", version = "0.0.12" }
 
-swamp-script-eval = { path = "../eval", version = "0.0.12" }
 swamp-script-analyzer = { path = "../analyzer", version = "0.0.12" }
 swamp-script-parser = { path = "../parser", version = "0.0.12" }
 swamp-script-eval-loader = { path = "../eval-loader", version = "0.0.12" }

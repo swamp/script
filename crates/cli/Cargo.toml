@@ -33,7 +33,6 @@ swamp-script-pretty-print = { path = "../pretty-print", version = "0.0.12"}
 swamp-script-collections = { path = "../collections", version = "0.0.12"}
 
 # Runner
-swamp-script-eval = { path = "../eval", version = "0.0.12" }
 swamp-script-eval-loader = { path = "../eval-loader", version = "0.0.12" }
 swamp-script-core = { path = "../core", version = "0.0.12" }
 swamp-script-compile = { path = "../compile", version = "0.0.12" }
