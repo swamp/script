@@ -7,7 +7,7 @@ use crate::lookup::TypeParameter;
 use crate::Analyzer;
 use seq_map::SeqMap;
 use std::rc::Rc;
-use swamp_script_modules::symtbl::{ParameterizedType, GenericTypeRef, SymbolTable};
+use swamp_script_modules::symtbl::{GenericTypeRef, ParameterizedType, SymbolTable};
 use swamp_script_semantic::{
     ArrayType, ArrayTypeRef, ExternalType, ExternalTypeRef, MapType, MapTypeRef, Signature,
     TupleType, Type, TypeForParameter,

@@ -7,7 +7,7 @@ use crate::Analyzer;
 use seq_map::SeqMap;
 use std::rc::Rc;
 use swamp_script_ast::Node;
-use swamp_script_modules::symtbl::{ParameterizedType, GenericType};
+use swamp_script_modules::symtbl::{GenericType, ParameterizedType};
 use swamp_script_semantic::{
     AliasType, AliasTypeRef, AnonymousStructType, EnumType, EnumTypeRef, EnumVariantCommon,
     EnumVariantSimpleType, EnumVariantSimpleTypeRef, EnumVariantStructType, EnumVariantTupleType,

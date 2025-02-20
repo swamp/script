@@ -5,8 +5,8 @@
 
 use eira::{Color, Kind, Pos, PosSpan, SourceLines};
 use std::fmt::Display;
-use std::io::{stderr, Write};
 use std::io;
+use std::io::{stderr, Write};
 use swamp_script_analyzer::err::ErrorKind;
 use swamp_script_analyzer::prelude::Error;
 use swamp_script_dep_loader::{DepLoaderError, DependencyError};

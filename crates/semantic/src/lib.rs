@@ -211,9 +211,10 @@ pub enum Type {
 
     // Composite Types
     Array(ArrayTypeRef),
+    Map(MapTypeRef),
+
     Tuple(TupleTypeRef),
     Struct(StructTypeRef),
-    Map(MapTypeRef),
     Enum(EnumTypeRef),
 
     Function(Signature),

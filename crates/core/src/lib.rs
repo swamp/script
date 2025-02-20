@@ -38,7 +38,6 @@ fn add_intrinsic_types(core_ns: &mut SymbolTable) {
     core_ns.add_alias(bool_alias).unwrap();
 }
 
-
 #[allow(clippy::too_many_lines)]
 fn add_intrinsic_functions(core_ns: &mut SymbolTable) {
     add_intrinsic_float_functions(core_ns);
@@ -55,7 +54,7 @@ fn add_intrinsic_string_functions(core_ns: &mut SymbolTable) {
             is_mutable: false,
             node: None,
         }]
-            .into(),
+        .into(),
         return_type: Box::new(Type::Int),
     };
 
@@ -85,7 +84,7 @@ fn add_intrinsic_int_functions(core_ns: &mut SymbolTable) {
         .into(),
         return_type: Box::new(Type::Int),
     };
-    
+
     let int_to_int_functions = [IntrinsicFunction::IntAbs, IntrinsicFunction::IntRnd];
 
     for intrinsic_fn in int_to_int_functions {
