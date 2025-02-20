@@ -19,14 +19,14 @@ use tiny_ver::TinyVersion;
 use tracing::info;
 
 #[derive(Debug, Clone)]
-pub enum GenericAwareType {
+pub enum ParameterizedType {
     Struct(swamp_script_ast::StructType),
 }
 
 #[derive(Debug)]
 pub struct GenericType {
     pub type_parameters: SeqMap<String, TypeParameterName>,
-    pub base_type: GenericAwareType,
+    pub base_type: ParameterizedType,
     pub ast_functions: SeqMap<String, swamp_script_ast::Function>,
     pub file_id: FileId,
 }

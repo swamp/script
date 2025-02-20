@@ -38,7 +38,120 @@ fn add_intrinsic_types(core_ns: &mut SymbolTable) {
     core_ns.add_alias(bool_alias).unwrap();
 }
 
+
+#[allow(clippy::too_many_lines)]
 fn add_intrinsic_functions(core_ns: &mut SymbolTable) {
+    add_intrinsic_float_functions(core_ns);
+    add_intrinsic_int_functions(core_ns);
+    add_intrinsic_string_functions(core_ns);
+}
+
+#[allow(clippy::too_many_lines)]
+fn add_intrinsic_string_functions(core_ns: &mut SymbolTable) {
+    let string_to_int = Signature {
+        parameters: [TypeForParameter {
+            name: "self".into(),
+            resolved_type: Type::String,
+            is_mutable: false,
+            node: None,
+        }]
+            .into(),
+        return_type: Box::new(Type::Int),
+    };
+
+    let string_to_int_functions = [IntrinsicFunction::StringLen];
+
+    for intrinsic_fn in string_to_int_functions {
+        let name = intrinsic_fn.to_string();
+        core_ns
+            .add_intrinsic_function(IntrinsicFunctionDefinition {
+                name,
+                intrinsic: intrinsic_fn,
+                signature: string_to_int.clone(),
+            })
+            .unwrap();
+    }
+}
+
+#[allow(clippy::too_many_lines)]
+fn add_intrinsic_int_functions(core_ns: &mut SymbolTable) {
+    let int_to_int = Signature {
+        parameters: [TypeForParameter {
+            name: "self".into(),
+            resolved_type: Type::Int,
+            is_mutable: false,
+            node: None,
+        }]
+        .into(),
+        return_type: Box::new(Type::Int),
+    };
+    
+    let int_to_int_functions = [IntrinsicFunction::IntAbs, IntrinsicFunction::IntRnd];
+
+    for intrinsic_fn in int_to_int_functions {
+        let name = intrinsic_fn.to_string();
+        core_ns
+            .add_intrinsic_function(IntrinsicFunctionDefinition {
+                name,
+                intrinsic: intrinsic_fn,
+                signature: int_to_int.clone(),
+            })
+            .unwrap();
+    }
+
+    let int_int_to_int = Signature {
+        parameters: [
+            TypeForParameter {
+                name: "self".into(),
+                resolved_type: Type::Int,
+                is_mutable: false,
+                node: None,
+            },
+            TypeForParameter {
+                name: "b".into(),
+                resolved_type: Type::Int,
+                is_mutable: false,
+                node: None,
+            },
+        ]
+        .into(),
+        return_type: Box::new(Type::Int),
+    };
+    let int_int_to_int_functions = [IntrinsicFunction::IntMax, IntrinsicFunction::IntMin];
+
+    for intrinsic_fn in int_int_to_int_functions {
+        let name = intrinsic_fn.to_string();
+        core_ns
+            .add_intrinsic_function(IntrinsicFunctionDefinition {
+                name,
+                intrinsic: intrinsic_fn,
+                signature: int_int_to_int.clone(),
+            })
+            .unwrap();
+    }
+
+    let int_to_float = Signature {
+        parameters: [TypeForParameter {
+            name: "self".into(),
+            resolved_type: Type::Int,
+            is_mutable: false,
+            node: None,
+        }]
+        .into(),
+        return_type: Box::new(Type::Float),
+    };
+
+    core_ns
+        .add_intrinsic_function(IntrinsicFunctionDefinition {
+            name: IntrinsicFunction::IntToFloat.to_string(),
+            intrinsic: IntrinsicFunction::IntToFloat,
+            signature: int_to_float.clone(),
+        })
+        .unwrap();
+}
+
+#[allow(clippy::too_many_lines)]
+fn add_intrinsic_float_functions(core_ns: &mut SymbolTable) {
     let float_to_float = Signature {
         parameters: [TypeForParameter {
             name: "self".into(),
@@ -71,8 +184,6 @@ fn add_intrinsic_functions(core_ns: &mut SymbolTable) {
         IntrinsicFunction::FloatSin,
         IntrinsicFunction::FloatAcos,
         IntrinsicFunction::FloatAsin,
-        IntrinsicFunction::FloatMin,
-        IntrinsicFunction::FloatMax,
     ];
     for intrinsic_fn in float_to_float_functions {
         let name = intrinsic_fn.to_string();
@@ -97,8 +208,74 @@ fn add_intrinsic_functions(core_ns: &mut SymbolTable) {
             .unwrap();
     }
 
-    //    IntrinsicFunction::FloatClamp,
-    //         IntrinsicFunction::FloatAtan2,
+    let float_float_to_float = Signature {
+        parameters: [
+            TypeForParameter {
+                name: "self".into(),
+                resolved_type: Type::Float,
+                is_mutable: false,
+                node: None,
+            },
+            TypeForParameter {
+                name: "other".into(),
+                resolved_type: Type::Float,
+                is_mutable: false,
+                node: None,
+            },
+        ]
+        .into(),
+        return_type: Box::new(Type::Float),
+    };
+
+    let float_float_to_float_functions = [
+        IntrinsicFunction::FloatAtan2,
+        IntrinsicFunction::FloatMin,
+        IntrinsicFunction::FloatMax,
+        IntrinsicFunction::Float2Magnitude,
+    ];
+    for intrinsic_fn in float_float_to_float_functions {
+        let name = intrinsic_fn.to_string();
+        core_ns
+            .add_intrinsic_function(IntrinsicFunctionDefinition {
+                name,
+                intrinsic: intrinsic_fn,
+                signature: float_float_to_float.clone(),
+            })
+            .unwrap();
+    }
+
+    let float_float_float_to_float = Signature {
+        parameters: [
+            TypeForParameter {
+                name: "self".into(),
+                resolved_type: Type::Float,
+                is_mutable: false,
+                node: None,
+            },
+            TypeForParameter {
+                name: "a".into(),
+                resolved_type: Type::Float,
+                is_mutable: false,
+                node: None,
+            },
+            TypeForParameter {
+                name: "b".into(),
+                resolved_type: Type::Float,
+                is_mutable: false,
+                node: None,
+            },
+        ]
+        .into(),
+        return_type: Box::new(Type::Float),
+    };
+
+    core_ns
+        .add_intrinsic_function(IntrinsicFunctionDefinition {
+            name: IntrinsicFunction::FloatClamp.to_string(),
+            intrinsic: IntrinsicFunction::FloatClamp,
+            signature: float_float_float_to_float.clone(),
+        })
+        .unwrap();
 }
 
 /// # Panics

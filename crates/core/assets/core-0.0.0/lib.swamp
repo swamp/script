@@ -5,30 +5,128 @@ impl Bool {
 }
 
 impl Float {
-  fn floor(self) -> Float {
-     float_floor(self)
-  }
-
-  fn round(self) -> Int {
-     float_round(self)
-  }
-
-  fn sqrt(self) -> Float {
-     float_sqrt(self)
-  }
     fn default() -> Float {
-      0.0
+        0.0
     }
+
+    fn floor(self) -> Float {
+        float_floor(self)
+    }
+
+    fn round(self) -> Int {
+        float_round(self)
+    }
+
+    fn sqrt(self) -> Float {
+        float_sqrt(self)
+    }
+
+    fn sign(self) -> Float {
+        float_sign(self)
+    }
+
+    fn abs(self) -> Float {
+        float_abs(self)
+    }
+
+    fn rnd(self) -> Float { // Or whatever return type is appropriate
+        float_rnd(self)
+    }
+
+    fn cos(self) -> Float {
+        float_cos(self)
+    }
+
+    fn sin(self) -> Float {
+        float_sin(self)
+    }
+
+    fn acos(self) -> Float {
+        float_acos(self)
+    }
+
+    fn asin(self) -> Float {
+        float_asin(self)
+    }
+
+    fn atan2(self, x: Float) -> Float {
+        float_atan2(self, x)
+    }
+
+    fn min(self, x: Float) -> Float {
+        float_min(self, x)
+    }
+
+    fn max(self, x: Float) -> Float {
+        float_max(self, x)
+    }
+
+    fn clamp(self, min: Float, max: Float) -> Float {
+        float_clamp(self, min, max)
+    }
+
 }
 
 impl Int {
-  fn default() -> Int {
-    0
-  }
+    fn default() -> Int {
+        0
+    }
+
+    fn abs(self) -> Int {
+        int_abs(self)
+    }
+
+    fn rnd(self) -> Int {
+        int_rnd(self)
+    }
+
+    fn max(self, x: Int) -> Int {
+        int_max(self, x)
+    }
+
+    fn min(self, x: Int) -> Int {
+        int_min(self, x)
+    }
+
+    fn to_float(self) -> Float {
+        int_to_float(self)
+    }
 }
 
 impl String {
-  fn default() -> String {
-    ""
-  }
+    fn default() -> String {
+        ""
+    }
+
+    fn len(s: String) -> Int {
+        string_len(s)
+    }
+}
+
+struct Vec<T> // not really a struct, just to get things going
+
+impl Vec<T> {
+    fn remove(self, index: Int) -> T? {
+        array_remove(self, index)
+    }
+
+    fn clear(self) {
+        array_clear(self)
+    }
+}
+
+struct Map<K, V> // not really a struct, just to get things going
+
+impl Map<K, V> {
+    fn has(self, key: K) -> Bool {
+        map_has(map, key)
+    }
+
+    fn remove_key(self, key: K) -> V? {
+        map_remove(map, key)
+    }
+}
+
+fn magnitude(x: Float, y: Float) -> Float {
+    float2_magnitude(x, y)
 }

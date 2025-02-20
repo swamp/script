@@ -6,8 +6,7 @@
 use eira::{Color, Kind, Pos, PosSpan, SourceLines};
 use std::fmt::Display;
 use std::io::{stderr, Write};
-use std::path::{Path, PathBuf};
-use std::{env, io};
+use std::io;
 use swamp_script_analyzer::err::ErrorKind;
 use swamp_script_analyzer::prelude::Error;
 use swamp_script_dep_loader::{DepLoaderError, DependencyError};
@@ -518,7 +517,7 @@ pub fn build_resolve_error(err: &Error) -> Builder<usize> {
         ErrorKind::UnknownModule => Report::build(Kind::Error, 140, "Unknown module", span),
         ErrorKind::NotATypeGenerator => Report::build(Kind::Error, 140, "Not a type generator", span),
         ErrorKind::ExpectedStruct => todo!(),
-        ErrorKind::NotAGeneric => todo!(),
+        ErrorKind::NotAGeneric => Report::build(Kind::Error, 140, "unknown generic", span),
         ErrorKind::UnknownIntrinsic => Report::build(Kind::Error, 140, "unknown intrinsic", span),
        ErrorKind::UnknownSymbol | &swamp_script_analyzer::err::ErrorKind::UnknownEnumType | &swamp_script_analyzer::err::ErrorKind::WrongTypeParameters => Report::build(Kind::Error, 140, "some error", span),
     }

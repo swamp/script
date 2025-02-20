@@ -7,7 +7,7 @@ use crate::lookup::TypeParameter;
 use crate::Analyzer;
 use seq_map::SeqMap;
 use std::rc::Rc;
-use swamp_script_modules::symtbl::{GenericAwareType, GenericTypeRef, SymbolTable};
+use swamp_script_modules::symtbl::{ParameterizedType, GenericTypeRef, SymbolTable};
 use swamp_script_semantic::{
     ArrayType, ArrayTypeRef, ExternalType, ExternalTypeRef, MapType, MapTypeRef, Signature,
     TupleType, Type, TypeForParameter,
@@ -295,7 +295,7 @@ impl<'a> Analyzer<'a> {
                 .clone_from(&symbol_table_generic_is_in);
 
             // Struct ------------------
-            let GenericAwareType::Struct(base_ast_type) = &found_generic.base_type;
+            let ParameterizedType::Struct(base_ast_type) = &found_generic.base_type;
             let analyzed_base_type = self
                 .analyze_struct_type(&monomorphization_name, base_ast_type)
                 .expect("TODO: handle panic message");
