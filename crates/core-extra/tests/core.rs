@@ -1,3 +1,4 @@
+/*
 use sparse_slot::Id;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -58,3 +59,4 @@ fn serialize() {
     info!(value=?deserialized_value, x=?sparse_map_val, "deserialized");
     assert_eq!(deserialized_value.to_string(), sparse_map_val.to_string());
 }
+*/

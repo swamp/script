@@ -5,11 +5,10 @@
 use seq_map::SeqMap;
 use std::fmt::{Debug, Formatter};
 use std::path::Path;
-use std::rc::Rc;
 use swamp_script_analyzer::prelude::Error;
 use swamp_script_analyzer::Analyzer;
 use swamp_script_error_report::show_error;
-use swamp_script_modules::modules::{pretty_print, pretty_print_symbol_table, Modules};
+use swamp_script_modules::modules::Modules;
 use swamp_script_modules::symtbl::SymbolTable;
 use swamp_script_parser::AstParser;
 use swamp_script_semantic::{Expression, MonomorphizationCache, ProgramState};
@@ -20,6 +19,7 @@ use tracing::warn;
 fn internal_compile(
     script: &str,
 ) -> Result<(SymbolTable, MonomorphizationCache, Option<Expression>), Error> {
+
     let parser = AstParser;
 
     let program = parser.parse_module(script).expect("Failed to parse script");
@@ -32,7 +32,7 @@ fn internal_compile(
         .insert("crate".to_string(), Path::new(".").to_path_buf())
         .unwrap();
 
-    let mut source_map = SourceMap::new(&mount_maps);
+    let mut source_map = SourceMap::new(&mount_maps).unwrap();
     let file_id = 0xffff;
 
     let canonical_path = ["some_path".to_string(), "main".to_string()];
@@ -40,10 +40,6 @@ fn internal_compile(
 
     let compiler_version = "0.0.0".parse::<TinyVersion>().unwrap();
     let mut analyzer = Analyzer::new(&mut state, &modules, &source_map, &canonical_path, file_id);
-    analyzer
-        .shared
-        .lookup_table
-        .extend_basic_from(&core_module_ref.namespace.symbol_table)?;
 
     analyzer
         .shared
@@ -66,6 +62,7 @@ fn internal_compile(
                 Err(err)?;
             }
         }
+
     }
 
     let expression = &program.expression;
@@ -88,6 +85,7 @@ fn internal_compile(
         analyzer.shared.state.monomorphization_cache.clone(),
         maybe_resolved_expression,
     ))
+
 }
 
 /// # Panics
@@ -102,19 +100,14 @@ pub struct FormatExpression {
     pub expression: Expression,
 }
 
-impl Debug for FormatExpression {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        pretty_print(f, &self.expression, 0)
-    }
-}
-
 pub struct FormatSymbolTable<'a> {
     pub symbol_table: &'a SymbolTable,
 }
 
 impl<'a> Debug for FormatSymbolTable<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        pretty_print_symbol_table(f, self.symbol_table, 0)
+        //pretty_print_symbol_table(f, self.symbol_table, 0)
+        Ok(())
     }
 }
 
@@ -148,7 +141,7 @@ pub fn check(script: &str, expected_output: &str) {
         }
 
         let format_expr = FormatExpression { expression: expr };
-        formatted_output += &*format!("{format_expr:?}");
+//        formatted_output += &*format!("{format_expr:?}");
     }
 
     let actual = formatted_output

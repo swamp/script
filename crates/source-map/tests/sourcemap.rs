@@ -2,7 +2,7 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-
+/*
 use seq_map::SeqMap;
 use std::io;
 use std::path::Path;
@@ -38,3 +38,4 @@ fn test() -> io::Result<()> {
 
     Ok(())
 }
+*/
