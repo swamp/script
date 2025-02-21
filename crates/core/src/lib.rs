@@ -1,10 +1,11 @@
+use std::rc::Rc;
 use swamp_script_modules::modules::Module;
-use swamp_script_modules::symtbl::SymbolTable;
-use swamp_script_semantic::Node;
+use swamp_script_modules::symtbl::{Symbol, SymbolTable};
 use swamp_script_semantic::Type;
 use swamp_script_semantic::{
     AliasType, IntrinsicFunction, IntrinsicFunctionDefinition, Signature, TypeForParameter,
 };
+use swamp_script_semantic::{ExternalType, Node, TYPE_NUMBER_FFI_VALUE};
 use tiny_ver::TinyVersion;
 
 pub const PACKAGE_NAME: &str = "core";
@@ -36,6 +37,13 @@ fn add_intrinsic_types(core_ns: &mut SymbolTable) {
         referenced_type: Type::Bool,
     };
     core_ns.add_alias(bool_alias).unwrap();
+
+    let value_type = ExternalType {
+        type_name: "Value".to_string(),
+        number: TYPE_NUMBER_FFI_VALUE,
+    };
+    let value_type = Symbol::Type(Type::External(Rc::new(value_type)));
+    core_ns.add_symbol("Value", value_type).unwrap();
 }
 
 #[allow(clippy::too_many_lines)]
@@ -43,6 +51,29 @@ fn add_intrinsic_functions(core_ns: &mut SymbolTable) {
     add_intrinsic_float_functions(core_ns);
     add_intrinsic_int_functions(core_ns);
     add_intrinsic_string_functions(core_ns);
+    let value_type = core_ns.get_type("Value").unwrap().clone();
+    add_intrinsic_vec_functions(core_ns, &value_type);
+}
+
+#[allow(clippy::too_many_lines)]
+fn add_intrinsic_vec_functions(core_ns: &mut SymbolTable, value_type: &Type) {
+    let unit_to_value = Signature {
+        parameters: [].into(),
+        return_type: Box::new(value_type.clone()),
+    };
+
+    let unit_to_value_functions = [IntrinsicFunction::VecCreate];
+
+    for intrinsic_fn in unit_to_value_functions {
+        let name = intrinsic_fn.to_string();
+        core_ns
+            .add_intrinsic_function(IntrinsicFunctionDefinition {
+                name,
+                intrinsic: intrinsic_fn,
+                signature: unit_to_value.clone(),
+            })
+            .unwrap();
+    }
 }
 
 #[allow(clippy::too_many_lines)]

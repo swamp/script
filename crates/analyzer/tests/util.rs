@@ -5,28 +5,38 @@
 use seq_map::SeqMap;
 use std::fmt::{Debug, Formatter};
 use std::path::Path;
-use test_log::tracing_subscriber::registry;
-use swamp_script_analyzer::prelude::Error;
 use swamp_script_analyzer::Analyzer;
+use swamp_script_analyzer::prelude::Error;
 use swamp_script_compile::bootstrap_modules;
+use swamp_script_dep_loader::swamp_registry_path;
 use swamp_script_error_report::show_error;
 use swamp_script_modules::modules::Modules;
 use swamp_script_modules::symtbl::SymbolTable;
 use swamp_script_parser::AstParser;
+use swamp_script_pretty_print::{ExpressionDisplay, SourceMapDisplay, SymbolTableDisplay};
 use swamp_script_semantic::{Expression, MonomorphizationCache, ProgramState};
 use swamp_script_source_map::SourceMap;
+use swamp_script_source_map_lookup::SourceMapWrapper;
+use test_log::tracing_subscriber::registry;
 use tracing::warn;
-use swamp_script_dep_loader::swamp_registry_path;
 
 fn internal_compile(
     script: &str,
-) -> Result<(SymbolTable, MonomorphizationCache, Option<Expression>), Error> {
+) -> Result<
+    (
+        SymbolTable,
+        MonomorphizationCache,
+        Option<Expression>,
+        SourceMap,
+    ),
+    Error,
+> {
     let parser = AstParser;
 
     let program = parser.parse_module(script).expect("Failed to parse script");
 
     let mut mount_maps = SeqMap::new();
-    
+
     mount_maps
         .insert("crate".to_string(), Path::new(".").to_path_buf())
         .unwrap();
@@ -37,9 +47,8 @@ fn internal_compile(
     let canonical_path = ["some_path".to_string(), "main".to_string()];
     source_map.add_manual(file_id, "crate", Path::new("some_path/main"), script);
 
-
     let registry_path = swamp_registry_path().unwrap();
-    source_map.add_mount("registry" , &registry_path).unwrap();
+    source_map.add_mount("registry", &registry_path).unwrap();
 
     let mut bootstrap_result = bootstrap_modules(&mut source_map).unwrap();
 
@@ -83,6 +92,7 @@ fn internal_compile(
         analyzer.shared.definition_table,
         analyzer.shared.state.monomorphization_cache.clone(),
         maybe_resolved_expression,
+        source_map,
     ))
 }
 
@@ -94,35 +104,25 @@ pub fn check_fail(script: &str, expected_error_message: &str) {
     assert_eq!(format!("{error:?}"), expected_error_message.trim());
 }
 
-#[derive(Debug)]
-pub struct FormatExpression {
-    pub expression: Expression,
-}
-
-pub struct FormatSymbolTable<'a> {
-    pub symbol_table: &'a SymbolTable,
-}
-
-impl<'a> Debug for FormatSymbolTable<'a> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        //pretty_print_symbol_table(f, self.symbol_table, 0)
-        Ok(())
-    }
-}
-
 /// # Panics
 /// Intentionally panics if output is not the same as the `expected_output`
 pub fn check(script: &str, expected_output: &str) {
-    let (symbol_table, monomorphization_cache, expression) =
+    let (symbol_table, monomorphization_cache, expression, source_map) =
         internal_compile(script).expect("should work");
 
     let mut formatted_output = String::new();
 
+    let source_map_display = SourceMapDisplay {
+        source_map: &SourceMapWrapper { source_map },
+    };
+
     if !symbol_table.is_empty() {
-        let format_symbol_table = FormatSymbolTable {
+        let mut format_symbol_table = SymbolTableDisplay {
             symbol_table: &symbol_table,
+            source_map_display: &source_map_display,
         };
-        formatted_output += &*format!("{format_symbol_table:?}");
+        SourceMapDisplay::<'_>::set_color(false);
+        formatted_output += &*format_symbol_table.to_string();
     }
 
     if !monomorphization_cache.is_empty() {
@@ -139,8 +139,12 @@ pub fn check(script: &str, expected_output: &str) {
             formatted_output += "---\n";
         }
 
-        let format_expr = FormatExpression { expression: expr };
-                formatted_output += &*format!("{format_expr:?}");
+        let format_expr = ExpressionDisplay {
+            expression: &expr,
+            source_map_display: &source_map_display,
+        };
+        formatted_output += &*format_expr.to_string();
+        formatted_output += "\n";
     }
 
     let actual = formatted_output

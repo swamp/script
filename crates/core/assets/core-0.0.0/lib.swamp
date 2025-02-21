@@ -254,10 +254,8 @@ impl String {
     }
 }
 
-/*
 
 struct Vec<T> {
-    handle: External<"VecImplementation">,
 }
 
 impl Vec<T> {
@@ -265,9 +263,7 @@ impl Vec<T> {
     ///
     /// Uses intrinsic function `vec_create` to add the value.
     fn new() -> Vec<T> {
-        Vec<T> {
-            handle: vec_create()
-        }
+        vec_create()
     }
 
     /// Adds an element at the end of the vector.
@@ -390,7 +386,7 @@ impl Map<K, V> {
         map_remove(map, key)
     }
 }
-*/
+
 
 /// Calculates the magnitude of a 2D vector.
 ///

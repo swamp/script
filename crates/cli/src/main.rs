@@ -144,7 +144,7 @@ fn build(_local_path: &Path, _local_module_name: &str) -> Result<(), CliError> {
 
             let symbol_table_display = SymbolTableDisplay {
                 symbol_table: &bootstrap.default_symbol_table,
-                source_map: &pretty_printer,
+                source_map_display: &pretty_printer,
             };
 
             info!(%symbol_table_display, "default symbol table");
@@ -158,7 +158,7 @@ fn build(_local_path: &Path, _local_module_name: &str) -> Result<(), CliError> {
 
             let core_module_symbol_table_display = SymbolTableDisplay {
                 symbol_table: core_module_symbol_table,
-                source_map: &pretty_printer,
+                source_map_display: &pretty_printer,
             };
 
             info!(%core_module_symbol_table_display, "core symbol table");

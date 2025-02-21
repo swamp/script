@@ -224,6 +224,8 @@ pub enum Type {
 
     Optional(Box<Type>),
     External(ExternalTypeRef),
+
+    TypeParameterName(String),
 }
 
 //pub type TypeRef = Rc<Type>;
@@ -282,6 +284,7 @@ impl Debug for Type {
                 external_type.type_name, external_type.number
             ),
             Self::Range => write!(f, "Range"),
+            Self::TypeParameterName(name) => write!(f, "type referencing a type parameter {name}"),
         }
     }
 }
@@ -306,6 +309,7 @@ impl Display for Type {
             Self::Optional(base_type) => write!(f, "{base_type}?"),
             Self::External(external_type) => write!(f, "ExternalType<{}>", external_type.type_name),
             Self::Range => write!(f, "Range"),
+            Self::TypeParameterName(name) => write!(f, "typeRefL{name}"),
         }
     }
 }
@@ -978,9 +982,10 @@ pub enum IntrinsicFunction {
     // String
     StringLen,
 
-    // Array
-    ArrayRemove,
-    ArrayClear,
+    // Vec
+    VecRemove,
+    VecClear,
+    VecCreate,
 
     // Map
     MapHas,
@@ -991,33 +996,36 @@ pub enum IntrinsicFunction {
 
 impl fmt::Display for IntrinsicFunction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::FloatRound => write!(f, "float_round"),
-            Self::FloatFloor => write!(f, "float_floor"),
-            Self::FloatSqrt => write!(f, "float_sqrt"),
-            Self::FloatSign => write!(f, "float_sign"),
-            Self::FloatAbs => write!(f, "float_abs"),
-            Self::FloatRnd => write!(f, "float_rnd"),
-            Self::FloatCos => write!(f, "float_cos"),
-            Self::FloatSin => write!(f, "float_sin"),
-            Self::FloatAcos => write!(f, "float_acos"),
-            Self::FloatAsin => write!(f, "float_asin"),
-            Self::FloatAtan2 => write!(f, "float_atan2"),
-            Self::FloatMin => write!(f, "float_min"),
-            Self::FloatMax => write!(f, "float_max"),
-            Self::FloatClamp => write!(f, "float_clamp"),
-            Self::IntAbs => write!(f, "int_abs"),
-            Self::IntRnd => write!(f, "int_rnd"),
-            Self::IntMax => write!(f, "int_max"),
-            Self::IntMin => write!(f, "int_min"),
-            Self::IntToFloat => write!(f, "int_to_float"),
-            Self::StringLen => write!(f, "string_len"),
-            Self::ArrayRemove => write!(f, "array_remove"),
-            Self::ArrayClear => write!(f, "array_clear"),
-            Self::MapHas => write!(f, "map_has"),
-            Self::MapRemove => write!(f, "map_remove"),
-            Self::Float2Magnitude => write!(f, "float2_magnitude"),
-        }
+        let name = match self {
+            Self::FloatRound => "float_round",
+            Self::FloatFloor => "float_floor",
+            Self::FloatSqrt => "float_sqrt",
+            Self::FloatSign => "float_sign",
+            Self::FloatAbs => "float_abs",
+            Self::FloatRnd => "float_rnd",
+            Self::FloatCos => "float_cos",
+            Self::FloatSin => "float_sin",
+            Self::FloatAcos => "float_acos",
+            Self::FloatAsin => "float_asin",
+            Self::FloatAtan2 => "float_atan2",
+            Self::FloatMin => "float_min",
+            Self::FloatMax => "float_max",
+            Self::FloatClamp => "float_clamp",
+            Self::IntAbs => "int_abs",
+            Self::IntRnd => "int_rnd",
+            Self::IntMax => "int_max",
+            Self::IntMin => "int_min",
+            Self::IntToFloat => "int_to_float",
+            Self::StringLen => "string_len",
+            Self::VecRemove => "vec_remove",
+            Self::VecClear => "vec_clear",
+            Self::VecCreate => "vec_create",
+            Self::MapHas => "map_has",
+            Self::MapRemove => "map_remove",
+            Self::Float2Magnitude => "float2_magnitude",
+        };
+
+        write!(f, "{name}")
     }
 }
 
@@ -1614,7 +1622,7 @@ impl ProgramState {
     pub fn new() -> Self {
         Self {
             array_types: Vec::new(),
-            number: 0,
+            number: 16,
             external_function_number: 0,
             monomorphization_cache: MonomorphizationCache::new(),
             associated_impls: AssociatedImpls::new(),

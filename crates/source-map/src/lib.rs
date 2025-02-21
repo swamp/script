@@ -80,9 +80,12 @@ impl SourceMap {
 
     #[must_use]
     pub fn base_path(&self, name: &str) -> &Path {
-        self.mounts.get(&name.to_string()).map_or_else(|| {
-            panic!("could not find path {name}");
-        }, |found| found)
+        self.mounts.get(&name.to_string()).map_or_else(
+            || {
+                panic!("could not find path {name}");
+            },
+            |found| found,
+        )
     }
 
     pub fn read_file(&mut self, path: &Path, mount_name: &str) -> io::Result<(FileId, String)> {

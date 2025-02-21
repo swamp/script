@@ -6,14 +6,7 @@ use tiny_ver::TinyVersion;
 
 pub const PACKAGE_NAME: &str = "ffi";
 
-fn add_intrinsic_types(ffi_ns: &mut SymbolTable) {
-    let ffi_value_type = ExternalType {
-        type_name: "ffi::Value".to_string(),
-        number: TYPE_NUMBER_FFI_VALUE,
-    };
-    let ffi_value_type = Symbol::Type(Type::External(Rc::new(ffi_value_type)));
-    ffi_ns.add_symbol("Value", ffi_value_type).unwrap();
-}
+fn add_intrinsic_types(ffi_ns: &mut SymbolTable) {}
 
 /// # Panics
 /// if `versioned_name` is wrong

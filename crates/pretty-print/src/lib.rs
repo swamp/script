@@ -4,16 +4,24 @@ use swamp_script_core_extra::prelude::SourceMapLookup;
 use swamp_script_modules::modules::{ModuleRef, Modules};
 use swamp_script_modules::symtbl::{FuncDef, Symbol, SymbolTable};
 use swamp_script_semantic::prelude::*;
-use swamp_script_semantic::{AssociatedImpls, Postfix, PostfixKind};
+use swamp_script_semantic::{
+    ArgumentExpressionOrLocation, AssociatedImpls, MutOrImmutableExpression, Postfix, PostfixKind,
+    SingleLocationExpression,
+};
 use yansi::{Color, Paint};
 
 pub struct SourceMapDisplay<'a> {
     pub source_map: &'a dyn SourceMapLookup,
 }
 
-impl SourceMapDisplay<'_> {}
-
 impl SourceMapDisplay<'_> {
+    pub fn set_color(on: bool) {
+        if on {
+            yansi::enable();
+        } else {
+            yansi::disable();
+        }
+    }
     const fn get_color_from_symbol(symbol: &Symbol) -> Color {
         match symbol {
             Symbol::Type(_) => Color::BrightYellow,
@@ -33,15 +41,15 @@ impl SourceMapDisplay<'_> {
         tabs: usize,
     ) -> std::fmt::Result {
         writeln!(f)?;
-        let tab_str = "..".repeat(tabs);
-        let tab_str_indent = "..".repeat(tabs + 1);
+        Self::new_line_and_tab(f, tabs)?;
         for (type_number, associated_impl) in &impls.functions {
-            writeln!(f, "{tab_str}{type_number}: ")?;
+            writeln!(f, "{type_number}: ")?;
 
             for (name, associated_fn) in &associated_impl.functions {
-                write!(f, "{}{}:", tab_str_indent, name.blue())?;
+                Self::new_line_and_tab(f, tabs + 1)?;
+                write!(f, "{}:", name.blue())?;
 
-                self.show_function(f, associated_fn)?;
+                self.show_function(f, associated_fn, tabs + 1)?;
                 writeln!(f)?;
             }
         }
@@ -66,12 +74,12 @@ impl SourceMapDisplay<'_> {
             Symbol::Module(module_ref) => {
                 write!(f, "{module_ref:?}")
             }
-            Symbol::Constant(constant_ref) => self.show_constant(f, constant_ref),
+            Symbol::Constant(constant_ref) => self.show_constant(f, constant_ref, tabs),
             Symbol::FunctionDefinition(func_def) => match func_def {
-                FuncDef::Internal(internal_fn) => self.show_internal_function(f, internal_fn),
+                FuncDef::Internal(internal_fn) => self.show_internal_function(f, internal_fn, tabs),
                 FuncDef::Intrinsic(intrinsic_fn) => write!(f, "intrinsic {intrinsic_fn:?}"),
                 FuncDef::External(external_fn) => {
-                    self.show_external_function_declaration(f, external_fn)
+                    self.show_external_function_declaration(f, external_fn, tabs)
                 }
             },
             Symbol::Alias(alias_type_ref) => self.show_alias(f, alias_type_ref),
@@ -103,13 +111,25 @@ impl SourceMapDisplay<'_> {
 
 pub struct SymbolTableDisplay<'a> {
     pub symbol_table: &'a SymbolTable,
-    pub source_map: &'a SourceMapDisplay<'a>,
+    pub source_map_display: &'a SourceMapDisplay<'a>,
 }
 
 impl Display for SymbolTableDisplay<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        self.source_map
+        self.source_map_display
             .pretty_print_symbol_table(f, self.symbol_table, 0)
+    }
+}
+
+pub struct ExpressionDisplay<'a> {
+    pub expression: &'a Expression,
+    pub source_map_display: &'a SourceMapDisplay<'a>,
+}
+
+impl Display for ExpressionDisplay<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        self.source_map_display
+            .show_expression(f, self.expression, 0)
     }
 }
 
@@ -166,7 +186,7 @@ impl SourceMapDisplay<'_> {
     ) -> std::fmt::Result {
         for (_struct_name, struct_type) in structs {
             writeln!(f, "  {}:  ", struct_type.assigned_name.yellow())?;
-            self.show_struct(f, &struct_type)?;
+            self.show_struct(f, struct_type)?;
         }
         Ok(())
     }
@@ -192,10 +212,11 @@ impl SourceMapDisplay<'_> {
         &self,
         f: &mut Formatter<'_>,
         constants: &SeqMap<String, ConstantRef>,
+        tabs: usize,
     ) -> std::fmt::Result {
         for (_constant_name, constant) in constants {
             //            writeln!(f, "  {}:  ", constant.assigned_name.yellow())?;
-            self.show_constant(f, constant)?;
+            self.show_constant(f, constant, tabs)?;
             writeln!(f)?;
         }
         Ok(())
@@ -203,7 +224,12 @@ impl SourceMapDisplay<'_> {
 
     /// # Errors
     ///
-    pub fn show_constant(&self, f: &mut Formatter<'_>, constant: &ConstantRef) -> std::fmt::Result {
+    pub fn show_constant(
+        &self,
+        f: &mut Formatter<'_>,
+        constant: &ConstantRef,
+        tabs: usize,
+    ) -> std::fmt::Result {
         write!(
             f,
             "{}: {} = ",
@@ -211,7 +237,7 @@ impl SourceMapDisplay<'_> {
             constant.resolved_type.bright_yellow()
         )?;
 
-        self.show_expression(f, &constant.expr)?;
+        self.show_expression(f, &constant.expr, tabs)?;
 
         Ok(())
     }
@@ -279,16 +305,38 @@ impl SourceMapDisplay<'_> {
         self.show_module_path(f, &ns.namespace.path)
     }
 
+    fn show_mut_or_not_expression(
+        &self,
+        f: &mut Formatter,
+        mut_expr: &MutOrImmutableExpression,
+        tabs: usize,
+    ) -> std::fmt::Result {
+        if mut_expr.is_mutable.is_some() {
+            write!(f, "{}", "mut".red())?;
+        }
+
+        self.show_argument(f, &mut_expr.expression_or_location, tabs)
+    }
+
     #[allow(clippy::too_many_lines)]
-    fn show_expression(&self, f: &mut Formatter, expr: &Expression) -> std::fmt::Result {
-        let result = match &expr.kind {
+    fn show_expression(
+        &self,
+        f: &mut Formatter,
+        expr: &Expression,
+        tabs: usize,
+    ) -> std::fmt::Result {
+        match &expr.kind {
             ExpressionKind::ConstantAccess(a) => {
                 write!(f, "{}", a.assigned_name.magenta())
             }
             ExpressionKind::VariableAccess(var) => self.show_variable(f, var),
 
-            ExpressionKind::InternalFunctionAccess(_) => {
-                write!(f, "InternalFunctionAccess()")
+            ExpressionKind::InternalFunctionAccess(internal_function) => {
+                write!(
+                    f,
+                    "fn:{}",
+                    self.source_map.get_text(&internal_function.name.0)
+                )
             }
             ExpressionKind::ExternalFunctionAccess(_) => {
                 write!(f, "ExternalFunctionAccess()")
@@ -300,9 +348,10 @@ impl SourceMapDisplay<'_> {
                 write!(f, "UnaryOp()")
             }
             ExpressionKind::PostfixChain(base_expr, postfixes) => {
-                self.show_expression(f, base_expr)?;
+                self.show_expression(f, base_expr, tabs)?;
                 for postfix in postfixes {
-                    self.show_postfix(f, postfix)?;
+                    write!(f, " . ")?;
+                    self.show_postfix(f, postfix, tabs)?;
                 }
                 Ok(())
             }
@@ -312,17 +361,20 @@ impl SourceMapDisplay<'_> {
             ExpressionKind::InterpolatedString(_) => {
                 write!(f, "InterpolatedString()")
             }
-            ExpressionKind::VariableDefinition(_, _) => {
-                write!(f, "VariableDefinition()")
+            ExpressionKind::VariableDefinition(a, b) => {
+                write!(f, "let {}=", self.source_map.get_text(&a.name).green())?;
+                self.show_mut_or_not_expression(f, b, tabs)
             }
             ExpressionKind::VariableReassignment(_, _) => {
                 write!(f, "VariableReassignment()")
             }
-            ExpressionKind::StructInstantiation(_) => {
+            ExpressionKind::StructInstantiation(_struct_literal) => {
                 write!(f, "StructInstantiation()")
             }
 
-            ExpressionKind::Literal(basic_literal) => self.show_basic_literal(f, basic_literal),
+            ExpressionKind::Literal(basic_literal) => {
+                self.show_basic_literal(f, basic_literal, tabs)
+            }
             ExpressionKind::Option(_) => {
                 write!(f, "Option()")
             }
@@ -346,8 +398,8 @@ impl SourceMapDisplay<'_> {
             }
             ExpressionKind::Block(expressions) => {
                 for expression in expressions {
-                    self.show_expression(f, expression)?;
-                    writeln!(f)?;
+                    Self::new_line_and_tab(f, tabs + 1)?;
+                    self.show_expression(f, expression, tabs + 1)?;
                 }
                 Ok(())
             }
@@ -390,9 +442,7 @@ impl SourceMapDisplay<'_> {
             ExpressionKind::IntrinsicFunctionAccess(intrinsic_func_def) => {
                 write!(f, "intrinsic_access {intrinsic_func_def:?}")
             }
-        };
-
-        result
+        }
     }
 
     fn show_variable(&self, f: &mut Formatter, var: &VariableRef) -> std::fmt::Result {
@@ -402,19 +452,24 @@ impl SourceMapDisplay<'_> {
         write!(f, "{}", self.source_map.get_text(&var.name))
     }
 
-    fn show_basic_literal(&self, f: &mut Formatter, basic_literal: &Literal) -> std::fmt::Result {
+    fn show_basic_literal(
+        &self,
+        f: &mut Formatter,
+        basic_literal: &Literal,
+        tabs: usize,
+    ) -> std::fmt::Result {
         match basic_literal {
             Literal::FloatLiteral(fp) => {
-                write!(f, "{}", fp.bright_magenta())
+                write!(f, "{}f", fp.bright_magenta())
             }
             Literal::NoneLiteral => {
                 write!(f, "{}", "none".green())
             }
             Literal::IntLiteral(i) => {
-                write!(f, "{}", i.bright_cyan())
+                write!(f, "{}i", i.bright_cyan())
             }
             Literal::StringLiteral(s) => {
-                write!(f, "{}", s.bright_red())
+                write!(f, "'{}'", s.bright_red())
             }
             Literal::BoolLiteral(b) => {
                 write!(f, "{}", b.bright_white())
@@ -424,31 +479,37 @@ impl SourceMapDisplay<'_> {
             }
             Literal::TupleLiteral(_tuple_type, expressions) => {
                 write!(f, "(")?;
-                self.show_expressions(f, expressions)?;
+                self.show_expressions(f, expressions, tabs + 1)?;
                 write!(f, ")")
             }
             Literal::Array(_array_type, expressions) => {
                 write!(f, "[")?;
-                self.show_expressions(f, expressions)?;
+                self.show_expressions(f, expressions, tabs + 1)?;
                 write!(f, "]")
             }
             Literal::Map(_map_type, tuple_expressions) => {
+                write!(f, "[|")?;
                 for (key, value) in tuple_expressions {
-                    self.show_expression(f, key)?;
+                    self.show_expression(f, key, tabs + 1)?;
                     write!(f, "{}", ":".bright_blue())?;
-                    self.show_expression(f, value)?;
+                    self.show_expression(f, value, tabs + 1)?;
                 }
-                Ok(())
+                write!(f, "|]")
             }
         }
     }
 
-    fn show_expressions(&self, f: &mut Formatter, expressions: &[Expression]) -> std::fmt::Result {
+    fn show_expressions(
+        &self,
+        f: &mut Formatter,
+        expressions: &[Expression],
+        tabs: usize,
+    ) -> std::fmt::Result {
         for (i, expr) in expressions.iter().enumerate() {
             if i > 0 {
                 writeln!(f, ", ")?;
             }
-            self.show_expression(f, expr)?;
+            self.show_expression(f, expr, tabs + 1)?;
         }
 
         if !expressions.is_empty() {
@@ -458,7 +519,7 @@ impl SourceMapDisplay<'_> {
         Ok(())
     }
 
-    fn show_postfix(&self, f: &mut Formatter, postfix: &Postfix) -> std::fmt::Result {
+    fn show_postfix(&self, f: &mut Formatter, postfix: &Postfix, tabs: usize) -> std::fmt::Result {
         match &postfix.kind {
             PostfixKind::StructField(struct_type, field) => {
                 let name = struct_type
@@ -476,17 +537,17 @@ impl SourceMapDisplay<'_> {
             PostfixKind::MapIndex(_, _) => todo!(),
             PostfixKind::RustTypeIndexRef(_, _) => todo!(),
             PostfixKind::MemberCall(_function_ref, b) => write!(f, "membercall {b:?}"),
-            PostfixKind::FunctionCall(call) => write!(f, "call: {call:?}"),
+            PostfixKind::FunctionCall(arguments) => {
+                write!(f, "[call:")?;
+                self.show_arguments(f, arguments, tabs + 1)?;
+                write!(f, "]")
+            }
             PostfixKind::OptionUnwrap => todo!(),
             PostfixKind::NoneCoalesce(_) => todo!(),
         }
     }
 
     fn show_type(&self, f: &mut Formatter, resolved_type: &Type, tabs: usize) -> std::fmt::Result {
-        let tab_str = "..".repeat(tabs);
-
-        write!(f, "{}", tab_str)?;
-
         match resolved_type {
             Type::Int => write!(f, "{}", "Int".bright_blue()),
             Type::Float => write!(f, "{}", "Float".bright_blue()),
@@ -525,6 +586,7 @@ impl SourceMapDisplay<'_> {
             Type::Optional(base_type) => write!(f, "{}?", base_type.yellow()),
             Type::External(external_type) => write!(f, "External {}", external_type.type_name),
             Type::Range => write!(f, "Range"),
+            Type::TypeParameterName(name) => write!(f, "TypeRef {name}"),
         }
     }
 
@@ -532,18 +594,20 @@ impl SourceMapDisplay<'_> {
         &self,
         f: &mut Formatter,
         external_function: &ExternalFunctionDefinition,
+        tabs: usize,
     ) -> std::fmt::Result {
-        self.show_signature(f, &external_function.signature)
+        self.show_signature(f, &external_function.signature, tabs)
     }
 
     pub fn show_external_function_declarations(
         &self,
         f: &mut Formatter,
         external_functions: &SeqMap<String, ExternalFunctionDefinitionRef>,
+        tabs: usize,
     ) -> std::fmt::Result {
         for (_name, func) in external_functions {
             write!(f, "{}", func.assigned_name)?;
-            self.show_external_function_declaration(f, func)?;
+            self.show_external_function_declaration(f, func, tabs)?;
             writeln!(f)?;
         }
         Ok(())
@@ -570,6 +634,7 @@ impl SourceMapDisplay<'_> {
         &self,
         f: &mut Formatter,
         parameter_types: &[TypeForParameter],
+        tabs: usize,
     ) -> std::fmt::Result {
         for (index, parameter_type) in parameter_types.iter().enumerate() {
             if index > 0 {
@@ -584,44 +649,56 @@ impl SourceMapDisplay<'_> {
         &self,
         f: &mut Formatter,
         function_type_signature: &Signature,
+        tabs: usize,
     ) -> std::fmt::Result {
         write!(f, "{}", "(".bright_green())?;
 
-        self.show_type_parameters(f, &function_type_signature.parameters)?;
+        self.show_type_parameters(f, &function_type_signature.parameters, tabs)?;
 
         write!(f, "{}", ")".bright_green())?;
 
         write!(f, " {} ", "->".bright_green())?;
 
-        self.show_type(f, &function_type_signature.return_type, 0)
+        self.show_type(f, &function_type_signature.return_type, tabs)
+    }
+
+    pub fn new_line_and_tab(f: &mut Formatter, tabs: usize) -> std::fmt::Result {
+        let tab_str = "..".repeat(tabs);
+        writeln!(f)?;
+        write!(f, "{}", tab_str)
     }
 
     pub fn show_internal_function(
         &self,
         f: &mut Formatter,
         internal_func: &InternalFunctionDefinition,
+        tabs: usize,
     ) -> std::fmt::Result {
-        self.show_signature(f, &internal_func.signature)?;
-        writeln!(f)?;
-        self.show_expression(f, &internal_func.body)
+        self.show_signature(f, &internal_func.signature, tabs)?;
+        Self::new_line_and_tab(f, tabs)?;
+        self.show_expression(f, &internal_func.body, tabs)
     }
 
     pub fn show_internal_functions(
         &self,
         f: &mut Formatter,
         internal_functions: &SeqMap<String, InternalFunctionDefinitionRef>,
+        tabs: usize,
     ) -> std::fmt::Result {
         for (_name, func) in internal_functions {
             write!(f, "{}", self.source_map.get_text(&func.name.0).bright_red())?;
-            self.show_internal_function(f, func)?;
+            Self::new_line_and_tab(f, tabs + 1)?;
+            self.show_internal_function(f, func, tabs + 1)?;
         }
         Ok(())
     }
 
-    fn show_function(&self, f: &mut Formatter, func: &Function) -> std::fmt::Result {
+    fn show_function(&self, f: &mut Formatter, func: &Function, tabs: usize) -> std::fmt::Result {
         match func {
-            Function::Internal(internal) => self.show_internal_function(f, internal),
-            Function::External(external) => self.show_external_function_declaration(f, external),
+            Function::Internal(internal) => self.show_internal_function(f, internal, tabs),
+            Function::External(external) => {
+                self.show_external_function_declaration(f, external, tabs)
+            }
         }
     }
 
@@ -634,5 +711,36 @@ impl SourceMapDisplay<'_> {
             write!(f, "{}", &enum_type.borrow().assigned_name.bright_red())?;
         }
         Ok(())
+    }
+
+    fn show_arguments(
+        &self,
+        f: &mut Formatter,
+        arguments: &Vec<ArgumentExpressionOrLocation>,
+        tabs: usize,
+    ) -> std::fmt::Result {
+        for arg in arguments {
+            self.show_argument(f, arg, tabs)?;
+        }
+
+        Ok(())
+    }
+
+    fn show_argument(
+        &self,
+        f: &mut Formatter,
+        arg: &ArgumentExpressionOrLocation,
+        tabs: usize,
+    ) -> std::fmt::Result {
+        match arg {
+            ArgumentExpressionOrLocation::Expression(expression) => {
+                self.show_expression(f, expression, tabs)
+            }
+            ArgumentExpressionOrLocation::Location(location) => self.show_location(location),
+        }
+    }
+
+    fn show_location(&self, location: &SingleLocationExpression) -> std::fmt::Result {
+        todo!()
     }
 }

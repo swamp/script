@@ -4,6 +4,7 @@
  */
 use crate::Analyzer;
 use crate::err::{Error, ErrorKind};
+use crate::lookup::TypeParameter;
 use seq_map::SeqMap;
 use std::rc::Rc;
 use swamp_script_ast::Node;
@@ -13,7 +14,7 @@ use swamp_script_semantic::{
     EnumVariantSimpleType, EnumVariantSimpleTypeRef, EnumVariantStructType, EnumVariantTupleType,
     EnumVariantType, ExternalFunctionDefinition, Function, InternalFunctionDefinition,
     LocalIdentifier, LocalTypeIdentifier, ParameterNode, Signature, StructType, StructTypeField,
-    Type, TypeForParameter, TypeParameterName, UseItem,
+    StructTypeRef, Type, TypeForParameter, TypeParameterName, UseItem,
 };
 use tracing::info;
 
@@ -282,6 +283,51 @@ impl Analyzer<'_> {
         Ok(resolved_struct)
     }
 
+    pub fn monomorphize_struct(
+        &mut self,
+        assigned_name: &str,
+        generic_struct: &StructTypeRef,
+    ) -> Result<StructType, Error> {
+        let mut resolved_fields = SeqMap::new();
+
+        for (name_string, field) in &generic_struct.anon_struct_type.defined_fields {
+            let resolved_type = match &field.field_type {
+                Type::TypeParameterName(name) => {
+                    self.shared.type_parameter_scope_stack.get(&*name).unwrap()
+                }
+                _ => field.field_type.clone(),
+            };
+
+            let field_type = StructTypeField {
+                identifier: field.identifier.clone(),
+                field_type: resolved_type,
+            };
+
+            resolved_fields
+                .insert(name_string.clone(), field_type)
+                .map_err(|_| {
+                    self.create_err_resolved(
+                        ErrorKind::DuplicateFieldName,
+                        &field.identifier.clone().unwrap().clone(),
+                    )
+                })?;
+        }
+
+        let resolved_anon_struct = AnonymousStructType {
+            defined_fields: resolved_fields,
+        };
+
+        let unique_id = self.shared.state.allocate_number();
+        let resolved_struct = StructType::new(
+            generic_struct.name.clone(),
+            assigned_name,
+            unique_id,
+            resolved_anon_struct,
+        );
+
+        Ok(resolved_struct)
+    }
+
     /// # Errors
     ///
     pub fn analyze_struct_type_definition(
@@ -292,6 +338,7 @@ impl Analyzer<'_> {
 
         if !ast_struct.identifier.parameter_names.is_empty() {
             let mut parameter_names = SeqMap::new();
+            let mut type_parameters = SeqMap::new();
             for name in &ast_struct.identifier.parameter_names {
                 let assigned_name = self.get_text(name).to_string();
                 parameter_names
@@ -299,29 +346,22 @@ impl Analyzer<'_> {
                         assigned_name.clone(),
                         TypeParameterName {
                             resolved_node: self.to_node(name),
-                            assigned_name,
+                            assigned_name: assigned_name.clone(),
                         },
                     )
                     .expect("TODO: panic message");
+
+                type_parameters
+                    .insert(
+                        assigned_name.clone(),
+                        Type::TypeParameterName(assigned_name.clone()),
+                    )
+                    .unwrap();
             }
 
-            let generic_type = GenericType {
-                type_parameters: parameter_names,
-                base_type: ParameterizedType::Struct(ast_struct.clone()),
-                ast_functions: SeqMap::default(),
-                file_id: self.shared.file_id,
-            };
-
-            let generic_type_ref = self
-                .shared
-                .definition_table
-                .add_generic(&struct_name_str, generic_type)?;
-
             self.shared
-                .lookup_table
-                .add_generic_link(&struct_name_str, generic_type_ref)?;
-
-            return Ok(());
+                .type_parameter_scope_stack
+                .push_type_parameters(type_parameters);
         }
 
         let struct_name_str = self.get_text(&ast_struct.identifier.name).to_string();
@@ -332,6 +372,25 @@ impl Analyzer<'_> {
             .add_struct(analyzed_struct_ref)?;
 
         self.shared.lookup_table.add_struct_link(struct_ref)?;
+
+        /*
+                   let generic_type = GenericType {
+               type_parameters: parameter_names,
+               base_type: ParameterizedType::Struct(ast_struct.clone()),
+               ast_functions: SeqMap::default(),
+               file_id: self.shared.file_id,
+           };
+
+           let generic_type_ref = self
+               .shared
+               .definition_table
+               .add_generic(&struct_name_str, generic_type)?;
+
+           self.shared
+               .lookup_table
+               .add_generic_link(&struct_name_str, generic_type_ref)?;
+
+        */
 
         Ok(())
     }
@@ -462,6 +521,7 @@ impl Analyzer<'_> {
         attached_to_type: &swamp_script_ast::LocalTypeIdentifierWithOptionalTypeParams,
         functions: &Vec<swamp_script_ast::Function>,
     ) -> Result<(), Error> {
+        /*
         if !attached_to_type.parameter_names.is_empty() {
             let name = self.get_text(&attached_to_type.name);
             return self.shared.lookup_table.get_generic(name).map_or_else(
@@ -481,6 +541,8 @@ impl Analyzer<'_> {
                 },
             );
         }
+
+         */
 
         let qualified = swamp_script_ast::QualifiedTypeIdentifier {
             name: swamp_script_ast::LocalTypeIdentifier(attached_to_type.name.clone()),

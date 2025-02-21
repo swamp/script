@@ -256,19 +256,13 @@ impl Analyzer<'_> {
             .zip(&parameterize_definition.generic_params)
         {
             type_params
-                .insert(
-                    key.to_string(),
-                    TypeParameter {
-                        ty: self.analyze_type(ast_type)?,
-                        debug_name: type_param_name.assigned_name.clone(),
-                    },
-                )
+                .insert(key.to_string(), self.analyze_type(ast_type)?)
                 .expect("todo");
         }
 
         let types_vec: Vec<_> = type_params
             .iter()
-            .map(|(_key, type_parameter)| type_parameter.ty.clone())
+            .map(|(_key, type_parameter)| type_parameter.clone())
             .collect();
 
         let base_name = self.get_text(&parameterize_definition.name.0).to_string();
@@ -289,15 +283,11 @@ impl Analyzer<'_> {
                 .push_type_parameters(type_params);
             let stored_file_id = self.shared.file_id;
             let saved_lookup_table = self.shared.lookup_table.clone();
-            self.shared.file_id = found_generic.file_id;
-            self.shared
-                .lookup_table
-                .clone_from(&symbol_table_generic_is_in);
 
             // Struct ------------------
-            let ParameterizedType::Struct(base_ast_type) = &found_generic.base_type;
+            let ParameterizedType::Struct(generic_struct_ref) = &found_generic.base_type;
             let analyzed_base_type = self
-                .analyze_struct_type(&monomorphization_name, base_ast_type)
+                .monomorphize_struct(&monomorphization_name, generic_struct_ref)
                 .expect("TODO: handle panic message");
             info!(?monomorphization_name, "inserted monomorphized type");
 
@@ -315,20 +305,20 @@ impl Analyzer<'_> {
                 .expect("TODO: panic message");
 
             // Functions ------------------
+            /*
+                       let functions: Vec<&swamp_script_ast::Function> =
+                           found_generic.ast_functions.values().collect::<Vec<_>>();
 
-            let functions: Vec<&swamp_script_ast::Function> =
-                found_generic.ast_functions.values().collect::<Vec<_>>();
+                       self.analyze_impl_functions(
+                           &parameterize_definition.name.0,
+                           &created_type,
+                           &functions,
+                       )?;
 
-            self.analyze_impl_functions(
-                &parameterize_definition.name.0,
-                &created_type,
-                &functions,
-            )?;
 
+            */
             // Pop the stack
             self.shared.type_parameter_scope_stack.pop_type_parameters();
-            self.shared.file_id = stored_file_id;
-            self.shared.lookup_table = saved_lookup_table;
 
             Ok(created_type)
         }

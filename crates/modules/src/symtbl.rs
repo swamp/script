@@ -20,15 +20,13 @@ use tracing::info;
 
 #[derive(Debug, Clone)]
 pub enum ParameterizedType {
-    Struct(swamp_script_ast::StructType),
+    Struct(StructTypeRef),
 }
 
 #[derive(Debug)]
 pub struct GenericType {
     pub type_parameters: SeqMap<String, TypeParameterName>,
     pub base_type: ParameterizedType,
-    pub ast_functions: SeqMap<String, swamp_script_ast::Function>,
-    pub file_id: FileId,
 }
 
 pub type GenericTypeRef = Rc<RefCell<GenericType>>;

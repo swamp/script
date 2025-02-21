@@ -14,7 +14,7 @@ pub struct TypeParameter {
 
 #[derive(Debug)]
 pub struct TypeParameterScope {
-    pub type_parameters: SeqMap<String, TypeParameter>,
+    pub type_parameters: SeqMap<String, Type>,
 }
 
 pub struct TypeParameterStack {
@@ -36,10 +36,7 @@ impl TypeParameterStack {
             type_parameter_scope_stack: Vec::new(),
         }
     }
-    pub fn push_type_parameters(
-        &mut self,
-        parameter_name_to_analyzed_type: SeqMap<String, TypeParameter>,
-    ) {
+    pub fn push_type_parameters(&mut self, parameter_name_to_analyzed_type: SeqMap<String, Type>) {
         for ty in &parameter_name_to_analyzed_type {
             info!(?ty, "pushing scope!");
         }
@@ -51,7 +48,7 @@ impl TypeParameterStack {
     pub(crate) fn get(&self, type_name: &str) -> Option<Type> {
         for scope in self.type_parameter_scope_stack.iter().rev() {
             if let Some(found_type) = scope.type_parameters.get(&type_name.to_string()) {
-                return Some(found_type.ty.clone());
+                return Some(found_type.clone());
             }
         }
         None
