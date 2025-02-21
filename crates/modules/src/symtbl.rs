@@ -7,16 +7,35 @@ use seq_fmt::comma;
 use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::fmt::Debug;
+use std::fs::File;
 use std::rc::Rc;
 use swamp_script_semantic::{
     AliasType, AliasTypeRef, Constant, ConstantRef, EnumType, EnumTypeRef, EnumVariantType,
     EnumVariantTypeRef, ExternalFunctionDefinition, ExternalFunctionDefinitionRef, ExternalType,
-    ExternalTypeRef, FileId, GenericType, GenericTypeRef, InternalFunctionDefinition,
-    InternalFunctionDefinitionRef, IntrinsicFunctionDefinition, IntrinsicFunctionDefinitionRef,
-    SemanticError, StructType, StructTypeRef, Type, TypeParameterName,
+    ExternalTypeRef, FileId, InternalFunctionDefinition, InternalFunctionDefinitionRef,
+    IntrinsicFunctionDefinition, IntrinsicFunctionDefinitionRef, SemanticError, StructType,
+    StructTypeRef, Type, TypeNumber, TypeParameterName,
 };
 use tiny_ver::TinyVersion;
 use tracing::info;
+
+#[derive(Debug, Clone)]
+pub enum ParameterizedType {
+    Struct(swamp_script_ast::StructType),
+    Enum(Vec<swamp_script_ast::EnumVariantType>),
+}
+
+#[derive(Debug)]
+pub struct GenericType {
+    pub type_parameters: SeqMap<String, TypeParameterName>,
+    pub base_type: ParameterizedType,
+    pub stored_lookup_table: SymbolTable, // Needed for later monomorphization
+    pub type_id: TypeNumber,
+    pub ast_functions: Vec<swamp_script_ast::Function>,
+    pub file_id: FileId,
+}
+
+pub type GenericTypeRef = Rc<RefCell<GenericType>>;
 
 #[derive(Debug, Clone)]
 pub enum FuncDef {

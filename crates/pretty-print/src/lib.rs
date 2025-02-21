@@ -586,8 +586,6 @@ impl SourceMapDisplay<'_> {
             Type::Optional(base_type) => write!(f, "{}?", base_type.yellow()),
             Type::External(external_type) => write!(f, "External {}", external_type.type_name),
             Type::Range => write!(f, "Range"),
-            Type::TypeParameterName(name) => write!(f, "TypeRef {name}"),
-            &swamp_script_semantic::Type::Generic(_, _) => todo!(),
         }
     }
 

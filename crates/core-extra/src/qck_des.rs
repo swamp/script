@@ -149,9 +149,6 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
         Type::Range => {
             panic!("can not serialize ranges")
         }
-        Type::TypeParameterName(..) => {
-            panic!("can not serialize type references")
-        }
         Type::Optional(optional_type_ref) => {
             let mut offset = 0;
             let has_some = buf[0] != 0;
@@ -225,7 +222,6 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
             }
              */
         }
-        &swamp_script_semantic::Type::Generic(_, _) => todo!(),
     };
 
     (val, octet_size)

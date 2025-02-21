@@ -4,14 +4,13 @@
  */
 use crate::Analyzer;
 use crate::err::{Error, ErrorKind};
-use crate::lookup::TypeParameter;
 use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::rc::Rc;
-use swamp_script_modules::symtbl::SymbolTable;
+use swamp_script_modules::symtbl::{GenericTypeRef, ParameterizedType, SymbolTable};
 use swamp_script_semantic::{
-    ArrayType, ArrayTypeRef, EnumTypeRef, ExternalType, ExternalTypeRef, GenericTypeRef, MapType,
-    MapTypeRef, ParameterizedType, Signature, TupleType, Type, TypeForParameter,
+    ArrayType, ArrayTypeRef, EnumTypeRef, ExternalType, ExternalTypeRef, MapType, MapTypeRef,
+    Signature, TupleType, Type, TypeForParameter,
 };
 use tracing::info;
 
@@ -274,14 +273,24 @@ impl Analyzer<'_> {
                 .type_parameter_scope_stack
                 .push_type_parameters(type_params);
 
+            let saved_file_id = self.shared.file_id;
+            self.shared.file_id = found_generic.file_id;
+
+            let saved_lookup_table = self.shared.lookup_table.clone();
+            self.shared.lookup_table = found_generic.stored_lookup_table.clone();
+
             let monomorphized_type = match &found_generic.base_type {
                 ParameterizedType::Struct(generic_struct_ref) => {
                     let analyzed_base_type = self
-                        .monomorphize_struct(&monomorphization_name, generic_struct_ref)
+                        .monomorphize_struct(
+                            &monomorphization_name,
+                            generic_struct_ref,
+                            &found_generic.ast_functions,
+                        )
                         .expect("TODO: handle panic message");
                     info!(?monomorphization_name, "inserted monomorphized type");
 
-                    Type::Struct(Rc::new(analyzed_base_type))
+                    Type::Struct(analyzed_base_type)
                 }
 
                 ParameterizedType::Enum(generic_emum_ref) => {
@@ -320,6 +329,8 @@ impl Analyzer<'_> {
             */
             // Pop the stack
             self.shared.type_parameter_scope_stack.pop_type_parameters();
+            self.shared.file_id = saved_file_id;
+            self.shared.lookup_table = saved_lookup_table;
 
             Ok(monomorphized_type)
         }

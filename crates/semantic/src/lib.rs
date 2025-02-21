@@ -189,39 +189,6 @@ pub struct TypeParameterName {
     pub assigned_name: String,
 }
 
-#[derive(Debug, Clone)]
-pub enum ParameterizedType {
-    Struct(StructTypeRef),
-    Enum(EnumTypeRef),
-}
-
-impl ParameterizedType {}
-
-impl ParameterizedType {
-    pub(crate) fn type_number(&self) -> TypeNumber {
-        match self {
-            Self::Struct(struct_ref) => struct_ref.number,
-            Self::Enum(enum_ref) => enum_ref.borrow().number,
-        }
-    }
-
-    #[must_use]
-    pub fn ty(&self) -> Type {
-        match self {
-            Self::Struct(struct_ref) => Type::Struct(struct_ref.clone()),
-            Self::Enum(enum_ref) => Type::Enum(enum_ref.clone()),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct GenericType {
-    pub type_parameters: SeqMap<String, TypeParameterName>,
-    pub base_type: ParameterizedType,
-}
-
-pub type GenericTypeRef = Rc<RefCell<GenericType>>;
-
 #[derive(Clone, Debug)]
 pub enum IteratorYieldType {
     Value(Type),
@@ -257,15 +224,12 @@ pub enum Type {
 
     Optional(Box<Type>),
     External(ExternalTypeRef),
-
-    TypeParameterName(String),
-    Generic(ParameterizedType, Vec<Type>),
 }
 
 //pub type TypeRef = Rc<Type>;
 
 impl Type {
-    pub(crate) fn type_number(&self) -> TypeNumber {
+    pub fn type_number(&self) -> TypeNumber {
         match self {
             Self::Int => 0,
             Self::Float => 1,
@@ -318,8 +282,6 @@ impl Debug for Type {
                 external_type.type_name, external_type.number
             ),
             Self::Range => write!(f, "Range"),
-            Self::TypeParameterName(name) => write!(f, "type referencing a type parameter {name}"),
-            &Type::Generic(_, _) => todo!(),
         }
     }
 }
@@ -344,8 +306,6 @@ impl Display for Type {
             Self::Optional(base_type) => write!(f, "{base_type}?"),
             Self::External(external_type) => write!(f, "ExternalType<{}>", external_type.type_name),
             Self::Range => write!(f, "Range"),
-            Self::TypeParameterName(name) => write!(f, "typeRefL{name}"),
-            &Type::Generic(_, _) => todo!(),
         }
     }
 }
@@ -1263,12 +1223,11 @@ impl AssociatedImpls {
 }
 
 impl AssociatedImpls {
-    pub fn prepare(&mut self, ty: &Type) {
-        let type_id = ty.type_number();
-        trace!(?type_id, ?ty, "preparing standard `impl` for type");
+    pub fn prepare(&mut self, type_id: TypeNumber) {
+        trace!(?type_id, ?type_id, "preparing standard `impl` for type");
         self.functions
             .insert(
-                ty.type_number(),
+                type_id,
                 Impl {
                     functions: SeqMap::default(),
                 },

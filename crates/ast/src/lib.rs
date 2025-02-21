@@ -485,12 +485,12 @@ pub enum EnumVariantLiteral {
     ),
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct AnonymousStructType {
     pub fields: Vec<FieldType>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum EnumVariantType {
     Simple(Node),
     Tuple(Node, Vec<Type>),
