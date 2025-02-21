@@ -9,7 +9,7 @@ use swamp_script_analyzer::Analyzer;
 use swamp_script_analyzer::prelude::Error;
 use swamp_script_compile::bootstrap_modules;
 use swamp_script_dep_loader::swamp_registry_path;
-use swamp_script_error_report::show_error;
+use swamp_script_error_report::{ScriptResolveError, show_error, show_script_resolve_error};
 use swamp_script_modules::modules::Modules;
 use swamp_script_modules::symtbl::SymbolTable;
 use swamp_script_parser::AstParser;
@@ -29,7 +29,7 @@ fn internal_compile(
         Option<Expression>,
         SourceMap,
     ),
-    Error,
+    ScriptResolveError,
 > {
     let parser = AstParser;
 
@@ -50,7 +50,9 @@ fn internal_compile(
     let registry_path = swamp_registry_path().unwrap();
     source_map.add_mount("registry", &registry_path).unwrap();
 
-    let mut bootstrap_result = bootstrap_modules(&mut source_map).unwrap();
+    let mut bootstrap_result = bootstrap_modules(&mut source_map).inspect_err(|err| {
+        show_script_resolve_error(err, &source_map, Path::new(""));
+    })?;
 
     let mut analyzer = Analyzer::new(
         &mut bootstrap_result.state,
@@ -59,6 +61,7 @@ fn internal_compile(
         &canonical_path,
         file_id,
     );
+    let current_dir = Path::new("");
 
     analyzer.shared.lookup_table = bootstrap_result.default_symbol_table;
 
@@ -67,7 +70,7 @@ fn internal_compile(
         match result {
             Ok(_analyzed_definition) => {}
             Err(err) => {
-                show_error(&err, &source_map);
+                show_error(&err, &source_map, current_dir);
                 Err(err)?;
             }
         }
@@ -81,7 +84,7 @@ fn internal_compile(
                 Some(expression)
             } else {
                 let err = result.err().unwrap();
-                show_error(&err, &source_map);
+                show_error(&err, &source_map, current_dir);
                 return Err(err)?;
             }
         }

@@ -55,7 +55,12 @@ impl TypeParameterStack {
     }
 
     /// Pops the most recent type parameter scope off the stack.
-    pub fn pop_type_parameters(&mut self) -> Option<TypeParameterScope> {
-        self.type_parameter_scope_stack.pop()
+    pub fn pop_type_parameters(&mut self) -> TypeParameterScope {
+        let found_scope = self.type_parameter_scope_stack.pop().unwrap();
+        for ty in &found_scope.type_parameters {
+            info!(?ty, "popping scope!");
+        }
+
+        found_scope
     }
 }

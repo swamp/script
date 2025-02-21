@@ -6,11 +6,12 @@ use crate::Analyzer;
 use crate::err::{Error, ErrorKind};
 use crate::lookup::TypeParameter;
 use seq_map::SeqMap;
+use std::cell::RefCell;
 use std::rc::Rc;
-use swamp_script_modules::symtbl::{GenericTypeRef, ParameterizedType, SymbolTable};
+use swamp_script_modules::symtbl::SymbolTable;
 use swamp_script_semantic::{
-    ArrayType, ArrayTypeRef, ExternalType, ExternalTypeRef, MapType, MapTypeRef, Signature,
-    TupleType, Type, TypeForParameter,
+    ArrayType, ArrayTypeRef, EnumTypeRef, ExternalType, ExternalTypeRef, GenericTypeRef, MapType,
+    MapTypeRef, ParameterizedType, Signature, TupleType, Type, TypeForParameter,
 };
 use tracing::info;
 
@@ -45,9 +46,11 @@ impl Analyzer<'_> {
     ) -> Result<Type, Error> {
         //let (module, text) = self.get_module(type_name_to_find)?;
         //info!(?text, ?module, "looking for named type");
+
         if type_name_to_find.generic_params.is_empty() {
             let (path, name) = self.get_path(type_name_to_find);
             if path.is_empty() {
+                info!(?name, "checking");
                 if let Some(found_type) = self.shared.type_parameter_scope_stack.get(&name) {
                     return Ok(found_type);
                 }
@@ -60,19 +63,8 @@ impl Analyzer<'_> {
                 },
             )
         } else {
-            /*
-            let (base_type, params) = self.create_type_parameters(type_name_to_find)?;
-            let first_name = params.iter().next().unwrap().0.clone();
-            let resolved_type = if let Some((scope_index, index)) =
-                self.shared.lookup.get_type_parameter_reference(&first_name) {
-                if let Some(found_generic) = self.shared.lookup.get_generic(&path, &*text) {
-                    Ok(Refound_generic)
-                } else {
-                    Err(self.create_err(ErrorKind::NotAGeneric, &type_name_to_find.name.0))
-                }
-            } else {
+            // TODO: If it is a generic type,with type parameter names, just return the generic type
 
-             */
             self.monomorphize(type_name_to_find)
             //}
         }
@@ -281,17 +273,26 @@ impl Analyzer<'_> {
             self.shared
                 .type_parameter_scope_stack
                 .push_type_parameters(type_params);
-            let stored_file_id = self.shared.file_id;
-            let saved_lookup_table = self.shared.lookup_table.clone();
 
-            // Struct ------------------
-            let ParameterizedType::Struct(generic_struct_ref) = &found_generic.base_type;
-            let analyzed_base_type = self
-                .monomorphize_struct(&monomorphization_name, generic_struct_ref)
-                .expect("TODO: handle panic message");
-            info!(?monomorphization_name, "inserted monomorphized type");
+            let monomorphized_type = match &found_generic.base_type {
+                ParameterizedType::Struct(generic_struct_ref) => {
+                    let analyzed_base_type = self
+                        .monomorphize_struct(&monomorphization_name, generic_struct_ref)
+                        .expect("TODO: handle panic message");
+                    info!(?monomorphization_name, "inserted monomorphized type");
 
-            let created_type = Type::Struct(Rc::new(analyzed_base_type));
+                    Type::Struct(Rc::new(analyzed_base_type))
+                }
+
+                ParameterizedType::Enum(generic_emum_ref) => {
+                    let analyzed_base_type = self
+                        .monomorphize_enum(&monomorphization_name, generic_emum_ref)
+                        .expect("TODO: handle panic message");
+                    info!(?monomorphization_name, "inserted monomorphized type");
+
+                    Type::Enum(Rc::new(RefCell::new(analyzed_base_type)))
+                }
+            };
 
             self.shared
                 .state
@@ -299,7 +300,7 @@ impl Analyzer<'_> {
                 .add(
                     &canonical_path,
                     &base_name,
-                    created_type.clone(),
+                    monomorphized_type.clone(),
                     &types_vec,
                 )
                 .expect("TODO: panic message");
@@ -320,7 +321,7 @@ impl Analyzer<'_> {
             // Pop the stack
             self.shared.type_parameter_scope_stack.pop_type_parameters();
 
-            Ok(created_type)
+            Ok(monomorphized_type)
         }
     }
 }

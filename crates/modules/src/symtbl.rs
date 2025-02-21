@@ -11,25 +11,12 @@ use std::rc::Rc;
 use swamp_script_semantic::{
     AliasType, AliasTypeRef, Constant, ConstantRef, EnumType, EnumTypeRef, EnumVariantType,
     EnumVariantTypeRef, ExternalFunctionDefinition, ExternalFunctionDefinitionRef, ExternalType,
-    ExternalTypeRef, FileId, InternalFunctionDefinition, InternalFunctionDefinitionRef,
-    IntrinsicFunctionDefinition, IntrinsicFunctionDefinitionRef, SemanticError, StructType,
-    StructTypeRef, Type, TypeParameterName,
+    ExternalTypeRef, FileId, GenericType, GenericTypeRef, InternalFunctionDefinition,
+    InternalFunctionDefinitionRef, IntrinsicFunctionDefinition, IntrinsicFunctionDefinitionRef,
+    SemanticError, StructType, StructTypeRef, Type, TypeParameterName,
 };
 use tiny_ver::TinyVersion;
 use tracing::info;
-
-#[derive(Debug, Clone)]
-pub enum ParameterizedType {
-    Struct(StructTypeRef),
-}
-
-#[derive(Debug)]
-pub struct GenericType {
-    pub type_parameters: SeqMap<String, TypeParameterName>,
-    pub base_type: ParameterizedType,
-}
-
-pub type GenericTypeRef = Rc<RefCell<GenericType>>;
 
 #[derive(Debug, Clone)]
 pub enum FuncDef {

@@ -246,7 +246,7 @@ pub fn compile_analyze_and_link_without_version(
     match mangrove_render_result {
         Ok(..) => {}
         Err(err) => {
-            show_script_resolve_error(&err, source_map);
+            show_script_resolve_error(&err, source_map, &Path::new(""));
             Err(err)?;
         }
     }

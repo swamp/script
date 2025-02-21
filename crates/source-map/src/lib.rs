@@ -259,9 +259,8 @@ impl SourceMap {
             .to_str()
             .unwrap()
     }
-    pub fn minimal_relative_path(target: &Path) -> io::Result<PathBuf> {
-        let current_dir = env::current_dir()?;
-        let target = target.canonicalize()?;
+    pub fn minimal_relative_path(target: &Path, current_dir: &Path) -> io::Result<PathBuf> {
+        //let target = target.canonicalize()?;
 
         let current_dir_components = current_dir.components().collect::<Vec<_>>();
         let target_components = target.components().collect::<Vec<_>>();
@@ -294,12 +293,12 @@ impl SourceMap {
 
         Ok(relative_path)
     }
-    pub fn get_relative_path_to(&self, file_id: FileId) -> io::Result<PathBuf> {
+    pub fn get_relative_path_to(&self, file_id: FileId, current_dir: &Path) -> io::Result<PathBuf> {
         let file_info = self.cache.get(&file_id).unwrap();
         let mount_path = self.mounts.get(&file_info.mount_name).unwrap();
 
         let absolute_path = mount_path.join(&file_info.relative_path);
 
-        Self::minimal_relative_path(&absolute_path)
+        Self::minimal_relative_path(&absolute_path, current_dir)
     }
 }

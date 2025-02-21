@@ -225,6 +225,7 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
             }
              */
         }
+        &swamp_script_semantic::Type::Generic(_, _) => todo!(),
     };
 
     (val, octet_size)

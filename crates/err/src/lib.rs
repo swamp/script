@@ -7,6 +7,7 @@ use eira::{Color, Kind, Pos, PosSpan, SourceLines};
 use std::fmt::Display;
 use std::io;
 use std::io::{Write, stderr};
+use std::path::Path;
 use swamp_script_analyzer::err::ErrorKind;
 use swamp_script_analyzer::prelude::Error;
 use swamp_script_dep_loader::{DepLoaderError, DependencyError};
@@ -72,7 +73,12 @@ impl<C: Display + Clone> Report<C> {
 
     /// # Errors
     ///
-    pub fn print(&self, source_map: &SourceMap, mut writer: impl Write) -> io::Result<()> {
+    pub fn print(
+        &self,
+        source_map: &SourceMap,
+        current_dir: &Path,
+        mut writer: impl Write,
+    ) -> io::Result<()> {
         let header = eira::Header {
             header_kind: self.config.kind,
             code: self.config.error_code.clone(),
@@ -82,7 +88,7 @@ impl<C: Display + Clone> Report<C> {
         let primary_span = &self.config.primary_span;
         let (row, col) =
             source_map.get_span_location_utf8(primary_span.file_id, primary_span.offset as usize);
-        let filename = source_map.get_relative_path_to(primary_span.file_id)?;
+        let filename = source_map.get_relative_path_to(primary_span.file_id, current_dir)?;
 
         eira::FileSpanMessage::write(
             filename.to_str().unwrap(),
@@ -177,18 +183,27 @@ impl<C: Display + Clone> Builder<C> {
 
 /// # Panics
 ///
-pub fn show_parse_error(err: &SpecificError, span: &Span, source_map: &SourceMap) {
+pub fn show_parse_error(
+    err: &SpecificError,
+    span: &Span,
+    source_map: &SourceMap,
+    current_dir: &Path,
+) {
     let builder = build_parse_error(err, span);
     let report = builder.build();
-    report.print(source_map, stderr()).unwrap();
+    report.print(source_map, current_dir, stderr()).unwrap();
 }
 
 /// # Panics
 ///
-pub fn show_script_resolve_error(err: &ScriptResolveError, source_map: &SourceMap) {
+pub fn show_script_resolve_error(
+    err: &ScriptResolveError,
+    source_map: &SourceMap,
+    current_dir: &Path,
+) {
     let builder = build_script_error(err, source_map);
     let report = builder.build();
-    report.print(source_map, stderr()).unwrap();
+    report.print(source_map, current_dir, stderr()).unwrap();
 }
 
 #[must_use]
@@ -295,10 +310,10 @@ pub fn build_parse_error(err: &SpecificError, span: &Span) -> Builder<usize> {
 
 /// # Panics
 ///
-pub fn show_error(err: &Error, source_map: &SourceMap) {
+pub fn show_error(err: &Error, source_map: &SourceMap, current_dir: &Path) {
     let builder = build_resolve_error(err);
     let report = builder.build();
-    report.print(source_map, stderr()).unwrap();
+    report.print(source_map, current_dir, stderr()).unwrap();
 }
 
 #[must_use]
