@@ -273,7 +273,7 @@ impl Vec<T> {
     ///
     /// Uses intrinsic function `vec_push` to add the value.
     fn push(mut self, value: T) {
-        vec_push(self.handle, value)
+        vec_push(self, value)
     }
 
     /// Gets an element at the specified index
@@ -286,7 +286,7 @@ impl Vec<T> {
     ///
     /// Uses intrinsic function `vec_subscript` to fetch the value.
     fn subscript(self, index: Int) -> T {
-        vec_subscript(self.handle, index)
+        vec_subscript(self, index)
     }
 
     /// Gets a mutable element at the specified index
@@ -300,7 +300,7 @@ impl Vec<T> {
     ///
     /// Uses intrinsic function `vec_subscript_mut` to fetch the mutable value.
     fn subscript_mut(mut self, index: Int, mut out_value: T) {
-        vec_subscript_mut(self.handle, index, mut out_value)
+        vec_subscript_mut(self, index, mut out_value)
     }
 
     /// Removes an element at a specific index.
@@ -314,14 +314,14 @@ impl Vec<T> {
     /// # Returns
     /// An optional value of type `T` representing the removed element.
     fn remove(self, index: Int) -> T? {
-        vec_remove(self.handle, index)
+        vec_remove(self, index)
     }
 
     /// Clears all elements.
     ///
     /// Uses intrinsic function `vec_clear` to remove all elements from the vector.
     fn clear(self) {
-        vec_clear(self.handle)
+        vec_clear(self)
     }
 }
 

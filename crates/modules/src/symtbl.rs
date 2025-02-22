@@ -29,6 +29,7 @@ pub enum ParameterizedType {
 pub struct GenericType {
     pub type_parameters: SeqMap<String, TypeParameterName>,
     pub base_type: ParameterizedType,
+    pub canonical_path: Vec<String>, // Needed for checking and adding to monomorphization cache
     pub stored_lookup_table: SymbolTable, // Needed for later monomorphization
     pub type_id: TypeNumber,
     pub ast_functions: Vec<swamp_script_ast::Function>,

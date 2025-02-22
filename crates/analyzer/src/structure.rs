@@ -5,6 +5,7 @@
 use crate::Analyzer;
 use crate::err::{Error, ErrorKind};
 use seq_set::SeqSet;
+use tracing::info;
 use swamp_script_modules::symtbl::SymbolTable;
 use swamp_script_semantic::{
     AnonymousStructType, ArgumentExpressionOrLocation, Expression, ExpressionKind, FunctionRef,
@@ -321,6 +322,7 @@ impl Analyzer<'_> {
     ) -> Result<(&SymbolTable, String), Error> {
         let path = self.get_module_path(type_identifier.module_path.as_ref());
         let name = self.get_text(&type_identifier.name.0).to_string();
+        info!(?path, ?name, "get symbol table");
 
         let maybe_symbol_table = self.shared.get_symbol_table(&path);
         maybe_symbol_table.map_or_else(

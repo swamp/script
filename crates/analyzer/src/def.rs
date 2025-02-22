@@ -2,13 +2,13 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use crate::Analyzer;
 use crate::err::{Error, ErrorKind};
+use crate::Analyzer;
 use seq_map::SeqMap;
 use std::any::Any;
 use std::cell::RefCell;
 use std::rc::Rc;
-use swamp_script_modules::symtbl::{GenericType, ParameterizedType};
+use swamp_script_modules::symtbl::{GenericType, ParameterizedType, SymbolTable};
 use swamp_script_semantic::{
     AliasType, AliasTypeRef, AnonymousStructType, EnumType, EnumTypeRef, EnumVariantCommon,
     EnumVariantSimpleType, EnumVariantSimpleTypeRef, EnumVariantStructType, EnumVariantTupleType,
@@ -291,12 +291,7 @@ impl Analyzer<'_> {
     ) -> Result<StructTypeRef, Error> {
         let struct_type = self.analyze_struct_type(assigned_name, generic_ast_struct)?;
         let struct_type_ref = Rc::new(struct_type);
-        let monomorphized_type = Type::Struct(struct_type_ref.clone());
 
-        self.analyze_impl_functions(
-            &monomorphized_type,
-            functions.iter().collect::<Vec<_>>().as_slice(),
-        )?;
 
         Ok(struct_type_ref)
     }
@@ -333,8 +328,9 @@ impl Analyzer<'_> {
         let generic_type = GenericType {
             type_parameters: parameter_names,
             base_type: ParameterizedType::Struct(ast_struct.clone()),
-            stored_lookup_table: self.shared.lookup_table.clone(),
+            stored_lookup_table: SymbolTable::new(),
             ast_functions: Vec::new(),
+            canonical_path: self.shared.current_path.clone(),
             type_id,
             file_id: self.shared.file_id,
         };
@@ -347,7 +343,10 @@ impl Analyzer<'_> {
 
         self.shared
             .lookup_table
-            .add_generic_link(&struct_name_str, generic_type_ref)?;
+            .add_generic_link(&struct_name_str, generic_type_ref.clone())?;
+
+        // Must save lookup table after `add_generic` so it includes itself
+        generic_type_ref.borrow_mut().stored_lookup_table = self.shared.lookup_table.clone();
 
         Ok(())
     }

@@ -2,8 +2,8 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use crate::Analyzer;
 use crate::err::{Error, ErrorKind};
+use crate::Analyzer;
 use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -211,8 +211,7 @@ impl Analyzer<'_> {
     fn get_generic(
         &self,
         parameterize_definition: &swamp_script_ast::QualifiedTypeIdentifier,
-    ) -> Result<(SymbolTable, GenericTypeRef, Vec<String>), Error> {
-        let (canonical_path, _name) = self.get_canonical_path_and_name(parameterize_definition)?;
+    ) -> Result<&GenericTypeRef, Error> {
         let (symbol_table, base_name) = self.get_symbol_table_and_name(parameterize_definition)?;
         symbol_table.get_generic(&base_name).map_or_else(
             || {
@@ -221,7 +220,7 @@ impl Analyzer<'_> {
                     &parameterize_definition.name.0,
                 ))
             },
-            |generic| Ok((symbol_table.clone(), generic.clone(), canonical_path)),
+            |generic| Ok(generic),
         )
     }
 
@@ -229,8 +228,7 @@ impl Analyzer<'_> {
         &mut self,
         parameterize_definition: &swamp_script_ast::QualifiedTypeIdentifier,
     ) -> Result<Type, Error> {
-        let (symbol_table_generic_is_in, found_generic_ref, canonical_path) =
-            self.get_generic(parameterize_definition)?;
+        let found_generic_ref = self.get_generic(parameterize_definition)?.clone();
         let found_generic = found_generic_ref.borrow();
 
         if found_generic.type_parameters.len() != parameterize_definition.generic_params.len() {
@@ -260,12 +258,11 @@ impl Analyzer<'_> {
         let monomorphization_name = SymbolTable::get_monomorphization_name(&base_name, &types_vec);
         info!(?monomorphization_name, "------ MONOMORPHIZE");
 
-        if let Some(monomorphized_struct_ref) =
-            self.shared
-                .state
-                .monomorphization_cache
-                .get(&canonical_path, &base_name, &types_vec)
-        {
+        if let Some(monomorphized_struct_ref) = self.shared.state.monomorphization_cache.get(
+            &found_generic.canonical_path,
+            &base_name,
+            &types_vec,
+        ) {
             info!(monomorphization_name, "fetching type from cache");
             Ok(monomorphized_struct_ref.clone())
         } else {
@@ -278,16 +275,15 @@ impl Analyzer<'_> {
 
             let saved_lookup_table = self.shared.lookup_table.clone();
             self.shared.lookup_table = found_generic.stored_lookup_table.clone();
+            //            info!(table=?self.shared.lookup_table, "lookup table set for monomorphization");
 
             let monomorphized_type = match &found_generic.base_type {
                 ParameterizedType::Struct(generic_struct_ref) => {
-                    let analyzed_base_type = self
-                        .monomorphize_struct(
-                            &monomorphization_name,
-                            generic_struct_ref,
-                            &found_generic.ast_functions,
-                        )
-                        .expect("TODO: handle panic message");
+                    let analyzed_base_type = self.monomorphize_struct(
+                        &monomorphization_name,
+                        generic_struct_ref,
+                        &found_generic.ast_functions,
+                    )?;
                     info!(?monomorphization_name, "inserted monomorphized type");
 
                     Type::Struct(analyzed_base_type)
@@ -307,7 +303,7 @@ impl Analyzer<'_> {
                 .state
                 .monomorphization_cache
                 .add(
-                    &canonical_path,
+                    &found_generic.canonical_path,
                     &base_name,
                     monomorphized_type.clone(),
                     &types_vec,
@@ -315,18 +311,16 @@ impl Analyzer<'_> {
                 .expect("TODO: panic message");
 
             // Functions ------------------
-            /*
-                       let functions: Vec<&swamp_script_ast::Function> =
-                           found_generic.ast_functions.values().collect::<Vec<_>>();
+            // Functions must be monomorphized after the struct, to avoid recursion
+            self.analyze_impl_functions(
+                &monomorphized_type,
+                found_generic
+                    .ast_functions
+                    .iter()
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+            )?;
 
-                       self.analyze_impl_functions(
-                           &parameterize_definition.name.0,
-                           &created_type,
-                           &functions,
-                       )?;
-
-
-            */
             // Pop the stack
             self.shared.type_parameter_scope_stack.pop_type_parameters();
             self.shared.file_id = saved_file_id;

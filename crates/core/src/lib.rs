@@ -74,6 +74,164 @@ fn add_intrinsic_vec_functions(core_ns: &mut SymbolTable, value_type: &Type) {
             })
             .unwrap();
     }
+
+    let self_value_to_unit = Signature {
+        parameters: [
+            TypeForParameter {
+                name: "self".to_string(),
+                resolved_type: value_type.clone(),
+                is_mutable: false,
+                node: None,
+            },
+            TypeForParameter {
+                name: "v".to_string(),
+                resolved_type: value_type.clone(),
+                is_mutable: false,
+                node: None,
+            },
+        ]
+        .into(),
+        return_type: Box::new(Type::Unit),
+    };
+
+    let self_value_to_unit_functions = [IntrinsicFunction::VecPush];
+
+    for intrinsic_fn in self_value_to_unit_functions {
+        let name = intrinsic_fn.to_string();
+        core_ns
+            .add_intrinsic_function(IntrinsicFunctionDefinition {
+                name,
+                intrinsic: intrinsic_fn,
+                signature: self_value_to_unit.clone(),
+            })
+            .unwrap();
+    }
+
+    let self_int_to_value = Signature {
+        parameters: [
+            TypeForParameter {
+                name: "self".to_string(),
+                resolved_type: value_type.clone(),
+                is_mutable: false,
+                node: None,
+            },
+            TypeForParameter {
+                name: "i".to_string(),
+                resolved_type: Type::Int,
+                is_mutable: false,
+                node: None,
+            },
+        ]
+        .into(),
+        return_type: Box::new(value_type.clone()),
+    };
+
+    let self_int_to_value_functions = [IntrinsicFunction::VecSubscript];
+
+    for intrinsic_fn in self_int_to_value_functions {
+        let name = intrinsic_fn.to_string();
+        core_ns
+            .add_intrinsic_function(IntrinsicFunctionDefinition {
+                name,
+                intrinsic: intrinsic_fn,
+                signature: self_int_to_value.clone(),
+            })
+            .unwrap();
+    }
+
+    let self_int_value_mut_to_unit = Signature {
+        parameters: [
+            TypeForParameter {
+                name: "self".to_string(),
+                resolved_type: value_type.clone(),
+                is_mutable: false,
+                node: None,
+            },
+            TypeForParameter {
+                name: "i".to_string(),
+                resolved_type: Type::Int,
+                is_mutable: false,
+                node: None,
+            },
+            TypeForParameter {
+                name: "v".to_string(),
+                resolved_type: value_type.clone(),
+                is_mutable: true,
+                node: None,
+            },
+        ]
+        .into(),
+        return_type: Box::new(value_type.clone()),
+    };
+
+    let self_int_value_mut_to_unit_functions = [IntrinsicFunction::VecSubscriptMut];
+
+    for intrinsic_fn in self_int_value_mut_to_unit_functions {
+        let name = intrinsic_fn.to_string();
+        core_ns
+            .add_intrinsic_function(IntrinsicFunctionDefinition {
+                name,
+                intrinsic: intrinsic_fn,
+                signature: self_int_value_mut_to_unit.clone(),
+            })
+            .unwrap();
+    }
+
+    let self_int_to_optional_value = Signature {
+        parameters: [
+            TypeForParameter {
+                name: "self".to_string(),
+                resolved_type: value_type.clone(),
+                is_mutable: false,
+                node: None,
+            },
+            TypeForParameter {
+                name: "i".to_string(),
+                resolved_type: Type::Int,
+                is_mutable: false,
+                node: None,
+            },
+        ]
+        .into(),
+        return_type: Box::new(Type::Optional(Box::new(value_type.clone()))),
+    };
+
+    let self_int_to_optional_value_functions = [IntrinsicFunction::VecRemove];
+
+    for intrinsic_fn in self_int_to_optional_value_functions {
+        let name = intrinsic_fn.to_string();
+        core_ns
+            .add_intrinsic_function(IntrinsicFunctionDefinition {
+                name,
+                intrinsic: intrinsic_fn,
+                signature: self_int_to_optional_value.clone(),
+            })
+            .unwrap();
+    }
+
+    let self_to_unit = Signature {
+        parameters: [TypeForParameter {
+            name: "self".to_string(),
+            resolved_type: value_type.clone(),
+            is_mutable: false,
+            node: None,
+        }]
+        .into(),
+        return_type: Box::new(Type::Unit),
+    };
+
+    let self_to_unit_functions = [IntrinsicFunction::VecClear];
+
+    for intrinsic_fn in self_to_unit_functions {
+        let name = intrinsic_fn.to_string();
+        core_ns
+            .add_intrinsic_function(IntrinsicFunctionDefinition {
+                name,
+                intrinsic: intrinsic_fn,
+                signature: self_to_unit.clone(),
+            })
+            .unwrap();
+    }
 }
 
 #[allow(clippy::too_many_lines)]

@@ -979,6 +979,7 @@ pub enum IntrinsicFunction {
     StringLen,
 
     // Vec
+    VecPush,
     VecRemove,
     VecClear,
     VecCreate,
@@ -988,11 +989,14 @@ pub enum IntrinsicFunction {
     MapRemove,
 
     Float2Magnitude,
+    VecSubscript,
+    VecSubscriptMut,
 }
 
 impl fmt::Display for IntrinsicFunction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let name = match self {
+            // Float
             Self::FloatRound => "float_round",
             Self::FloatFloor => "float_floor",
             Self::FloatSqrt => "float_sqrt",
@@ -1007,17 +1011,30 @@ impl fmt::Display for IntrinsicFunction {
             Self::FloatMin => "float_min",
             Self::FloatMax => "float_max",
             Self::FloatClamp => "float_clamp",
+
+            // Int
             Self::IntAbs => "int_abs",
             Self::IntRnd => "int_rnd",
             Self::IntMax => "int_max",
             Self::IntMin => "int_min",
             Self::IntToFloat => "int_to_float",
+
+            // String
             Self::StringLen => "string_len",
+
+            // Vec
+            Self::VecPush => "vec_push",
             Self::VecRemove => "vec_remove",
             Self::VecClear => "vec_clear",
             Self::VecCreate => "vec_create",
+            Self::VecSubscriptMut => "vec_subscript_mut",
+            Self::VecSubscript => "vec_subscript",
+
+            // Map
             Self::MapHas => "map_has",
             Self::MapRemove => "map_remove",
+            
+            // Other
             Self::Float2Magnitude => "float2_magnitude",
         };
 
