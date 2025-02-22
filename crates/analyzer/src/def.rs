@@ -2,8 +2,8 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use crate::err::{Error, ErrorKind};
 use crate::Analyzer;
+use crate::err::{Error, ErrorKind};
 use seq_map::SeqMap;
 use std::any::Any;
 use std::cell::RefCell;
@@ -291,7 +291,6 @@ impl Analyzer<'_> {
     ) -> Result<StructTypeRef, Error> {
         let struct_type = self.analyze_struct_type(assigned_name, generic_ast_struct)?;
         let struct_type_ref = Rc::new(struct_type);
-
 
         Ok(struct_type_ref)
     }

@@ -1184,19 +1184,16 @@ impl<'a> Analyzer<'a> {
                     .state
                     .associated_impls
                     .get_member_function(&Type::Struct(resolved_struct_ref.clone()), "iter")
-                    .unwrap();
+                    .expect("todo: missing iter() associated function");
                 match &*x.signature().return_type {
-                    Type::Iterator(iterator_type) => match &iterator_type.yield_type {
-                        IteratorYieldType::Value(value_type) => (None, value_type.clone()),
-                        IteratorYieldType::KeyValue(key_type, value_type) => {
-                            (Some(key_type.clone()), value_type.clone())
+                    Type::Tuple(tuple_ref) => {
+                        if tuple_ref.0.len() == 2 {
+                            (Some(tuple_ref.0[0].clone()), tuple_ref.0[1].clone())
+                        } else {
+                            panic!("wrong iter")
                         }
-                    },
-                    _ => {
-                        return Err(
-                            self.create_err(ErrorKind::NotAnIterator, &expression.expression.node)
-                        );
                     }
+                    a => (None, a.clone()),
                 }
             }
             Type::External(_rust_type_ref) => {

@@ -143,9 +143,6 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
         Type::Function(_) => {
             panic!("can not serialize function")
         }
-        Type::Iterator(_) => {
-            panic!("can not serialize iterators")
-        }
         Type::Range => {
             panic!("can not serialize ranges")
         }

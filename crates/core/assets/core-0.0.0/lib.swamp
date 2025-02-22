@@ -266,6 +266,14 @@ impl Vec<T> {
         vec_create()
     }
 
+    fn iter(self) -> (Int, T) {
+        vec_iter(self)
+    }
+
+    fn iter_mut(self) -> (Int, T) {
+        vec_iter_mut(self)
+    }
+
     /// Adds an element at the end of the vector.
     ///
     /// # Parameters
@@ -325,8 +333,25 @@ impl Vec<T> {
     }
 }
 
+
+/*
+// Iterator should be traits
+struct IteratorPair<K, V>
+impl MutIterator<K, V> {
+    fn next(mut self, mut out_value: T?) {
+    }
+}
+struct Iterator<T>
+
+struct MutIterator<T>
+
+impl MutIterator<T> {
+    fn next(mut self, mut out_value: T?) {
+    }
+}
+*/
+
 struct Map<K, V> {
-    handle: External<"MapImplementation">,
 }
 
 impl Map<K, V> {
@@ -337,6 +362,14 @@ impl Map<K, V> {
         Map<K, V> {
             handle: map_create()
         }
+    }
+
+    fn iter(self) -> (K, V) {
+        map_iter(self)
+    }
+
+    fn iter_mut(self) -> (K, V) {
+        map_iter_mut(self)
     }
 
     /// Gets an element with the specified key

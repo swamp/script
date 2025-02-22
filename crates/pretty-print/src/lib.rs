@@ -582,7 +582,6 @@ impl SourceMapDisplay<'_> {
             //variant.owner.assigned_name, variant.assigned_name
             //),
             Type::Function(signature) => write!(f, "function {signature}"),
-            Type::Iterator(generating_type) => write!(f, "Iterator<{generating_type:?}>"),
             Type::Optional(base_type) => write!(f, "{}?", base_type.yellow()),
             Type::External(external_type) => write!(f, "External {}", external_type.type_name),
             Type::Range => write!(f, "Range"),

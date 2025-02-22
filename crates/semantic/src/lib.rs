@@ -220,7 +220,6 @@ pub enum Type {
     Function(Signature),
 
     Range, // Only integers for now
-    Iterator(Box<IteratorTypeDetails>),
 
     Optional(Box<Type>),
     External(ExternalTypeRef),
@@ -274,7 +273,6 @@ impl Debug for Type {
             Self::Function(function_type_signature) => {
                 write!(f, "{function_type_signature:?}",)
             }
-            Self::Iterator(type_generated) => write!(f, "Iterator<{type_generated:?}>"),
             Self::Optional(base_type) => write!(f, "{base_type:?}?"),
             Self::External(external_type) => write!(
                 f,
@@ -302,7 +300,6 @@ impl Display for Type {
             Self::Map(map_ref) => write!(f, "[{}:{}]", map_ref.key_type, map_ref.value_type),
             Self::Enum(enum_type) => write!(f, "{}", enum_type.borrow().assigned_name),
             Self::Function(signature) => write!(f, "function {signature}"),
-            Self::Iterator(generating_type) => write!(f, "Iterator<{generating_type:?}>"),
             Self::Optional(base_type) => write!(f, "{base_type}?"),
             Self::External(external_type) => write!(f, "ExternalType<{}>", external_type.type_name),
             Self::Range => write!(f, "Range"),
@@ -388,14 +385,6 @@ impl Type {
                 a.0.iter().zip(b.0.iter()).all(|(a, b)| a.same_type(b))
             }
             (Self::Enum(_), Self::Enum(_)) => true,
-            (Self::Iterator(a), Self::Iterator(b)) => match (&a.yield_type, &b.yield_type) {
-                (IteratorYieldType::Value(va), IteratorYieldType::Value(vb)) => va.same_type(vb),
-                (IteratorYieldType::KeyValue(ka, va), IteratorYieldType::KeyValue(kb, vb)) => {
-                    va.same_type(vb) && ka.same_type(kb)
-                }
-                _ => false,
-            },
-            //(Self::EnumVariant(a), Self::EnumVariant(b)) => a.owner.number == b.owner.number,
             (Self::Optional(inner_type_a), Self::Optional(inner_type_b)) => {
                 inner_type_a.same_type(inner_type_b)
             }
@@ -991,6 +980,8 @@ pub enum IntrinsicFunction {
     Float2Magnitude,
     VecSubscript,
     VecSubscriptMut,
+    VecIter,
+    VecIterMut,
 }
 
 impl fmt::Display for IntrinsicFunction {
@@ -1029,11 +1020,13 @@ impl fmt::Display for IntrinsicFunction {
             Self::VecCreate => "vec_create",
             Self::VecSubscriptMut => "vec_subscript_mut",
             Self::VecSubscript => "vec_subscript",
+            Self::VecIter => "vec_iter",
+            Self::VecIterMut => "vec_iter_mut",
 
             // Map
             Self::MapHas => "map_has",
             Self::MapRemove => "map_remove",
-            
+
             // Other
             Self::Float2Magnitude => "float2_magnitude",
         };

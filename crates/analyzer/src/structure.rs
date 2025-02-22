@@ -5,7 +5,6 @@
 use crate::Analyzer;
 use crate::err::{Error, ErrorKind};
 use seq_set::SeqSet;
-use tracing::info;
 use swamp_script_modules::symtbl::SymbolTable;
 use swamp_script_semantic::{
     AnonymousStructType, ArgumentExpressionOrLocation, Expression, ExpressionKind, FunctionRef,
@@ -13,6 +12,7 @@ use swamp_script_semantic::{
     SingleLocationExpressionKind, SingleMutLocationExpression, StructInstantiation, StructTypeRef,
     Type,
 };
+use tracing::info;
 
 impl Analyzer<'_> {
     fn analyze_struct_init_calling_default(
