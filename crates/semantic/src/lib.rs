@@ -198,6 +198,21 @@ pub enum ParameterizedType {
     Parameterized(Box<Type>),
 }
 
+impl ParameterizedType {
+    pub(crate) fn same_type(&self, other: &ParameterizedType) -> bool {
+        match (self, other) {
+            (ParameterizedType::Struct(a), ParameterizedType::Struct(b)) => a.number == b.number,
+            (ParameterizedType::Enum(a), ParameterizedType::Enum(b)) => {
+                a.0.borrow().number == b.0.borrow().number
+            }
+            (ParameterizedType::Parameterized(a), ParameterizedType::Parameterized(b)) => {
+                a.same_type(b)
+            }
+            _ => false,
+        }
+    }
+}
+
 #[derive(Clone, Hash, Eq, PartialEq)]
 pub struct TypeVariable {
     pub name: String,
@@ -291,7 +306,10 @@ impl Display for Type {
             Self::Optional(base_type) => write!(f, "{base_type}?"),
             Self::External(external_type) => write!(f, "ExternalType<{}>", external_type.type_name),
             Self::Range => write!(f, "Range"),
-            _ => todo!(),
+            Self::Slice(_) => write!(f, "Slice"),
+            Self::SlicePair(_, _) => write!(f, "SlicePair"),
+            Self::Parameterized(_, _) => write!(f, "Parameterized"),
+            Self::Variable(_) => write!(f, "Var"),
         }
     }
 }
@@ -354,12 +372,23 @@ impl Type {
         }
 
         match (self, other) {
+            // Intrinsic Types
             (Self::String, Self::String) => true,
             (Self::Int, Self::Int) => true,
             (Self::Float, Self::Float) => true,
             (Self::Bool, Self::Bool) => true,
-
             (Self::Unit, Self::Unit) => true,
+
+            // Parameterized Intrinsic
+            (Self::Slice(a), Self::Slice(b)) => a.same_type(b),
+            (Self::SlicePair(a1, a2), Self::SlicePair(b1, b2)) => {
+                a1.same_type(b1) && a2.same_type(b2)
+            }
+
+            (
+                Self::Parameterized(a_base, a_parameters),
+                Self::Parameterized(b_base, b_parameters),
+            ) => a_base.same_type(b_base) && same_types(a_parameters, b_parameters),
 
             (Self::Function(a), Self::Function(b)) => a.same_type(b),
             (Self::Struct(a), Self::Struct(b)) => compare_struct_types(a, b),
@@ -380,6 +409,20 @@ impl Type {
             _ => false,
         }
     }
+}
+
+pub fn same_types(a: &[Type], b: &[Type]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+
+    for (a, b) in a.iter().zip(b) {
+        if !a.same_type(b) {
+            return false;
+        }
+    }
+
+    true
 }
 
 fn compare_struct_types(a: &StructTypeRef, b: &StructTypeRef) -> bool {
@@ -953,6 +996,7 @@ pub enum IntrinsicFunction {
     StringLen,
 
     // Vec
+    VecFromSlice,
     VecPush,
     VecRemove,
     VecClear,
@@ -999,6 +1043,7 @@ impl fmt::Display for IntrinsicFunction {
             Self::StringLen => "string_len",
 
             // Vec
+            Self::VecFromSlice => "vec_from_slice",
             Self::VecPush => "vec_push",
             Self::VecRemove => "vec_remove",
             Self::VecClear => "vec_clear",

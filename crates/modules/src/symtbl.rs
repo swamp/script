@@ -14,7 +14,7 @@ use swamp_script_semantic::{
     EnumVariantTypeRef, ExternalFunctionDefinition, ExternalFunctionDefinitionRef, ExternalType,
     ExternalTypeRef, HashableEnumTypeRef, InternalFunctionDefinition,
     InternalFunctionDefinitionRef, IntrinsicFunctionDefinition, IntrinsicFunctionDefinitionRef,
-    SemanticError, StructType, StructTypeRef, Type, TypeNumber, TypeParameterName,
+    SemanticError, StructType, StructTypeRef, Type,
 };
 use tiny_ver::TinyVersion;
 use tracing::info;

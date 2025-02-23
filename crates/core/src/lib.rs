@@ -2,7 +2,6 @@ use std::rc::Rc;
 use swamp_script_modules::modules::Module;
 use swamp_script_modules::symtbl::{GeneratorKind, Symbol, SymbolTable, TypeGenerator};
 use swamp_script_semantic::Type;
-use swamp_script_semantic::Type::Int;
 use swamp_script_semantic::{
     AliasType, IntrinsicFunction, IntrinsicFunctionDefinition, Signature, TypeForParameter,
 };
@@ -263,6 +262,28 @@ fn add_intrinsic_vec_functions(core_ns: &mut SymbolTable, value_type: &Type) {
                 name,
                 intrinsic: intrinsic_fn,
                 signature: self_to_value.clone(),
+            })
+            .unwrap();
+    }
+
+    let slice_to_self = Signature {
+        parameters: [TypeForParameter {
+            name: "slice".to_string(),
+            resolved_type: Type::Slice(Box::from(value_type.clone())),
+            is_mutable: false,
+            node: None,
+        }]
+        .into(),
+        return_type: Box::new(value_type.clone()),
+    };
+    let slice_to_self_functions = [IntrinsicFunction::VecFromSlice];
+    for intrinsic_fn in slice_to_self_functions {
+        let name = intrinsic_fn.to_string();
+        core_ns
+            .add_intrinsic_function(IntrinsicFunctionDefinition {
+                name,
+                intrinsic: intrinsic_fn,
+                signature: slice_to_self.clone(),
             })
             .unwrap();
     }

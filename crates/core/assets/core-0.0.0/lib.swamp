@@ -368,9 +368,7 @@ impl Map<K, V> {
     ///
     /// Uses intrinsic function `map_create` to create the Map value.
     fn new() -> Map<K, V> {
-        Map<K, V> {
-            handle: map_create()
-        }
+            map_create()
     }
 
     fn iter(self) -> (K, V) {
