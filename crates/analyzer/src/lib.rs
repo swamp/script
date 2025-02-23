@@ -17,7 +17,7 @@ pub mod types;
 pub mod variable;
 
 use crate::err::{Error, ErrorKind};
-use crate::lookup::TypeParameterStack;
+use crate::lookup::TypeVariableStack;
 use seq_map::SeqMap;
 use std::mem::take;
 use std::num::{ParseFloatError, ParseIntError};
@@ -117,7 +117,7 @@ pub struct SharedState<'a> {
     pub state: &'a mut ProgramState,
     pub lookup_table: SymbolTable,
     pub definition_table: SymbolTable,
-    pub type_parameter_scope_stack: TypeParameterStack,
+    pub type_variables_stack: TypeVariableStack,
     pub modules: &'a Modules,
     pub source_map: &'a SourceMap,
     pub file_id: FileId,
@@ -190,7 +190,7 @@ impl<'a> Analyzer<'a> {
             state,
             lookup_table: SymbolTable::default(),
             definition_table: SymbolTable::default(),
-            type_parameter_scope_stack: TypeParameterStack::new(),
+            type_variables_stack: TypeVariableStack::new(),
             modules,
             source_map,
             current_path: current_path.to_vec(),
@@ -276,16 +276,7 @@ impl<'a> Analyzer<'a> {
         ident: &swamp_script_ast::QualifiedTypeIdentifier,
     ) -> (Vec<String>, String) {
         let name = self.get_text(&ident.name.0).to_string();
-        let complete_name = if ident.generic_params.is_empty() {
-            name
-        } else {
-            let mut types = Vec::new();
-            for ty in &ident.generic_params {
-                let analyzed_type = self.analyze_type(ty).expect("todo");
-                types.push(analyzed_type);
-            }
-            SymbolTable::get_monomorphization_name(&name, &types)
-        };
+        let complete_name = { name };
 
         let path = ident
             .module_path
@@ -726,7 +717,7 @@ impl<'a> Analyzer<'a> {
         qualified_type_identifier: &swamp_script_ast::QualifiedTypeIdentifier,
     ) -> Result<StructTypeRef, Error> {
         //   let namespace = self.get_namespace(qualified_type_identifier)?;
-        if let Type::Struct(struct_type) = self.get_type(qualified_type_identifier)? {
+        if let Type::Struct(struct_type) = self.analyze_named_type(qualified_type_identifier)? {
             Ok(struct_type)
         } else {
             Err(self.create_err(
@@ -746,9 +737,6 @@ impl<'a> Analyzer<'a> {
             Type::Int => ExpressionKind::Literal(Literal::IntLiteral(0)),
             Type::Float => ExpressionKind::Literal(Literal::FloatLiteral(Fp::zero())),
             Type::String => ExpressionKind::Literal(Literal::StringLiteral(String::new())),
-            Type::Array(array_type_ref) => {
-                ExpressionKind::Literal(Literal::Array(array_type_ref.clone(), vec![]))
-            }
             Type::Tuple(tuple_type_ref) => {
                 let mut expressions = Vec::new();
                 for resolved_type in &tuple_type_ref.0 {
@@ -756,9 +744,6 @@ impl<'a> Analyzer<'a> {
                     expressions.push(expr);
                 }
                 ExpressionKind::Literal(Literal::TupleLiteral(tuple_type_ref.clone(), expressions))
-            }
-            Type::Map(map_type_ref) => {
-                ExpressionKind::Literal(Literal::Map(map_type_ref.clone(), vec![]))
             }
             Type::Optional(_optional_type) => ExpressionKind::Literal(Literal::NoneLiteral),
 
@@ -960,6 +945,7 @@ impl<'a> Analyzer<'a> {
                             tv.is_mutable = false;
                         }
 
+                        /* TODO: FIX
                         Type::Array(array_type_ref) => {
                             if let swamp_script_ast::ExpressionKind::Range(
                                 min_expr,
@@ -1011,7 +997,7 @@ impl<'a> Analyzer<'a> {
                             tv.resolved_type = return_type;
                             tv.is_mutable = false;
                         }
-
+                        */
                         Type::Struct(resolved_struct_ref) => {
                             let subscript_fn = self
                                 .shared
@@ -1170,11 +1156,6 @@ impl<'a> Analyzer<'a> {
 
         let resolved_type = &resolved_expression.ty().clone();
         let (key_type, value_type): (Option<Type>, Type) = match resolved_type {
-            Type::Array(array_type) => (Some(Type::Int), array_type.item_type.clone()),
-            Type::Map(map_type_ref) => (
-                Some(map_type_ref.key_type.clone()),
-                map_type_ref.value_type.clone(),
-            ),
             Type::Range => (None, Type::Int),
             Type::String => (Some(Type::Int), Type::String),
             //Type::Iterator(item_type) => (None, *item_type.clone()),
@@ -1341,11 +1322,15 @@ impl<'a> Analyzer<'a> {
         let item_type = if expressions.is_empty() {
             if let Some(found_expected_type) = expected_type {
                 info!(?found_expected_type, "found array type");
+                /*
                 if let Type::Array(found) = found_expected_type {
                     found.item_type.clone()
                 } else {
                     return Err(self.create_err(ErrorKind::NotAnArray, node));
                 }
+
+                 */
+                Type::Unit
             } else {
                 return Err(self.create_err(ErrorKind::NotAnArray, node));
             }
@@ -1948,6 +1933,7 @@ impl<'a> Analyzer<'a> {
                                 ty = Type::String;
                             }
                         }
+                        /*
 
                         Type::Array(array_type) => {
                             let index_expr =
@@ -1961,6 +1947,9 @@ impl<'a> Analyzer<'a> {
                             ty = array_type.item_type.clone();
                         }
 
+                         */
+
+                        /*
                         Type::Map(map_type) => {
                             let key_expr = self.analyze_expression(
                                 lookup_expr,
@@ -1996,6 +1985,7 @@ impl<'a> Analyzer<'a> {
                             ty = lookup_type;
                         }
 
+                         */
                         Type::Struct(resolved_struct_ref) => {
                             let return_type = {
                                 let subscript_fn = self
@@ -2127,6 +2117,7 @@ impl<'a> Analyzer<'a> {
         source_type: &Type,
     ) -> Result<Option<ExpressionKind>, Error> {
         match &target_type {
+            /*
             Type::Array(array_type) => {
                 if *op == CompoundOperatorKind::Add && source_type.same_type(&array_type.item_type)
                 {
@@ -2155,6 +2146,8 @@ impl<'a> Analyzer<'a> {
                     )));
                 }
             }
+
+             */
             _ => {}
         }
 

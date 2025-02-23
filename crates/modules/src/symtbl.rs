@@ -12,37 +12,30 @@ use std::rc::Rc;
 use swamp_script_semantic::{
     AliasType, AliasTypeRef, Constant, ConstantRef, EnumType, EnumTypeRef, EnumVariantType,
     EnumVariantTypeRef, ExternalFunctionDefinition, ExternalFunctionDefinitionRef, ExternalType,
-    ExternalTypeRef, FileId, InternalFunctionDefinition, InternalFunctionDefinitionRef,
-    IntrinsicFunctionDefinition, IntrinsicFunctionDefinitionRef, SemanticError, StructType,
-    StructTypeRef, Type, TypeNumber, TypeParameterName,
+    ExternalTypeRef, HashableEnumTypeRef, InternalFunctionDefinition,
+    InternalFunctionDefinitionRef, IntrinsicFunctionDefinition, IntrinsicFunctionDefinitionRef,
+    SemanticError, StructType, StructTypeRef, Type, TypeNumber, TypeParameterName,
 };
 use tiny_ver::TinyVersion;
 use tracing::info;
-
-#[derive(Debug, Clone)]
-pub enum ParameterizedType {
-    Struct(swamp_script_ast::StructType),
-    Enum(Vec<swamp_script_ast::EnumVariantType>),
-}
-
-#[derive(Debug)]
-pub struct GenericType {
-    pub type_parameters: SeqMap<String, TypeParameterName>,
-    pub base_type: ParameterizedType,
-    pub canonical_path: Vec<String>, // Needed for checking and adding to monomorphization cache
-    pub stored_lookup_table: SymbolTable, // Needed for later monomorphization
-    pub type_id: TypeNumber,
-    pub ast_functions: Vec<swamp_script_ast::Function>,
-    pub file_id: FileId,
-}
-
-pub type GenericTypeRef = Rc<RefCell<GenericType>>;
 
 #[derive(Debug, Clone)]
 pub enum FuncDef {
     Internal(InternalFunctionDefinitionRef),
     Intrinsic(IntrinsicFunctionDefinitionRef),
     External(ExternalFunctionDefinitionRef),
+}
+
+#[derive(Clone, Debug)]
+pub enum GeneratorKind {
+    Slice,
+    SlicePair,
+}
+
+#[derive(Clone, Debug)]
+pub struct TypeGenerator {
+    pub kind: GeneratorKind,
+    pub arity: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -53,7 +46,7 @@ pub enum Symbol {
     Constant(ConstantRef),
     FunctionDefinition(FuncDef),
     Alias(AliasTypeRef),
-    Generic(GenericTypeRef),
+    TypeGenerator(TypeGenerator),
 }
 
 impl Symbol {
@@ -62,26 +55,6 @@ impl Symbol {
         matches!(self, Self::Type(..) | Self::Alias(..))
     }
 }
-
-/*
-structs: SeqMap<String, StructTypeRef>,
-aliases: SeqMap<String, AliasTypeRef>,
-generics: SeqMap<String, GenericTypeRef>,
-build_in_rust_types: SeqMap<String, ExternalTypeRef>,
-enum_types: SeqMap<String, EnumTypeRef>,
-
-constants: SeqMap<String, ConstantRef>,
-
-
-
-
-internal_functions: SeqMap<String, InternalFunctionDefinitionRef>,
-intrinsic_functions: SeqMap<String, IntrinsicFunctionDefinitionRef>,
-external_function_declarations: SeqMap<String, ExternalFunctionDefinitionRef>,
-
-namespaces: SeqMap<String, ModuleNamespaceRef>,
-
- */
 
 #[derive(Debug, Clone)]
 pub struct SymbolTable {
@@ -180,6 +153,7 @@ impl SymbolTable {
     pub fn add_struct(&mut self, struct_type: StructType) -> Result<StructTypeRef, SemanticError> {
         let struct_ref = Rc::new(struct_type);
         self.add_struct_link(struct_ref.clone())?;
+        info!(?struct_ref, "added struct");
         Ok(struct_ref)
     }
 
@@ -219,7 +193,7 @@ impl SymbolTable {
     }
 
     pub fn add_enum_type_link(&mut self, enum_type_ref: EnumTypeRef) -> Result<(), SemanticError> {
-        let ty = Type::Enum(enum_type_ref.clone());
+        let ty = Type::Enum(HashableEnumTypeRef(enum_type_ref.clone()));
         self.symbols
             .insert(
                 enum_type_ref.borrow().assigned_name.clone(),
@@ -328,13 +302,6 @@ impl SymbolTable {
         name
     }
 
-    pub fn get_generic(&self, name: &str) -> Option<&GenericTypeRef> {
-        match self.get_symbol(name)? {
-            Symbol::Generic(generic) => Some(generic),
-            _ => None,
-        }
-    }
-
     pub fn get_struct(&self, name: &str) -> Option<&StructTypeRef> {
         match self.get_type(name)? {
             Type::Struct(struct_ref) => Some(struct_ref),
@@ -344,7 +311,7 @@ impl SymbolTable {
 
     pub fn get_enum(&self, name: &str) -> Option<&EnumTypeRef> {
         match self.get_type(name)? {
-            Type::Enum(enum_type) => Some(enum_type),
+            Type::Enum(enum_type) => Some(&enum_type.0),
             _ => None,
         }
     }
@@ -480,22 +447,12 @@ impl SymbolTable {
         Ok(())
     }
 
-    pub fn add_generic(
+    pub fn add_type_generator(
         &mut self,
         name: &str,
-        generic_type: GenericType,
-    ) -> Result<GenericTypeRef, SemanticError> {
-        let generic_ref = Rc::new(RefCell::new(generic_type));
-        self.add_generic_link(name, generic_ref.clone())?;
-        Ok(generic_ref)
-    }
-
-    pub fn add_generic_link(
-        &mut self,
-        name: &str,
-        generic_ref: GenericTypeRef,
+        type_generator: TypeGenerator,
     ) -> Result<(), SemanticError> {
-        self.insert_symbol(name, Symbol::Generic(generic_ref))
+        self.insert_symbol(name, Symbol::TypeGenerator(type_generator))
             .map_err(|_| SemanticError::DuplicateGenericType(name.to_string()))?;
         Ok(())
     }

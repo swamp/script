@@ -11,11 +11,11 @@ use std::cell::RefCell;
 use std::cmp::PartialEq;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
-use std::hash::Hash;
+use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 use tracing::trace;
 
-#[derive(Clone, Eq, PartialEq, Default)]
+#[derive(Clone, Hash, Eq, PartialEq, Default)]
 pub struct Node {
     pub span: Span,
     pub markdown_doc: Option<Span>,
@@ -66,7 +66,7 @@ impl Debug for Span {
     }
 }
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Hash, Eq, PartialEq)]
 pub struct ParameterNode {
     pub name: Node,
     pub is_mutable: Option<Node>,
@@ -86,7 +86,7 @@ impl ParameterNode {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Hash, Eq, PartialEq)]
 pub struct Signature {
     pub parameters: Vec<TypeForParameter>,
     pub return_type: Box<Type>,
@@ -128,7 +128,7 @@ impl Signature {
 
 pub const TYPE_NUMBER_FFI_VALUE: u32 = u32::MAX; // TODO: HACK
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct ExternalType {
     pub type_name: String, // To identify the specific Rust type
     pub number: u32,       // For type comparison
@@ -142,7 +142,7 @@ pub struct TypeWithMut {
     pub is_mutable: bool,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Hash, Eq, PartialEq)]
 pub struct TypeForParameter {
     pub name: String,
     pub resolved_type: Type,
@@ -173,15 +173,6 @@ impl Debug for TypeForParameter {
         )
     }
 }
-impl Eq for TypeForParameter {}
-
-impl PartialEq for TypeForParameter {
-    fn eq(&self, other: &Self) -> bool {
-        let types_equal = self.resolved_type.same_type(&other.resolved_type);
-
-        types_equal && (self.is_mutable == other.is_mutable)
-    }
-}
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct TypeParameterName {
@@ -200,45 +191,48 @@ pub struct IteratorTypeDetails {
     pub yield_type: IteratorYieldType,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub enum ParameterizedType {
+    Struct(StructTypeRef),
+    Enum(HashableEnumTypeRef),
+    Parameterized(Box<Type>),
+}
+
+#[derive(Clone, Hash, Eq, PartialEq)]
+pub struct TypeVariable {
+    pub name: String,
+    pub number: TypeNumber,
+}
+
+#[derive(Clone, Hash, Eq, PartialEq)]
 pub enum Type {
-    // build in Primitives
+    // built-in Primitives
     Int,
     Float,
     String,
     Bool,
     Unit,
 
-    // Composite Types
-    Array(ArrayTypeRef),
-    Map(MapTypeRef),
-
     Tuple(TupleTypeRef),
     Struct(StructTypeRef),
-    Enum(EnumTypeRef),
+    Enum(HashableEnumTypeRef),
 
     Function(Signature),
 
     Range, // Only integers for now
 
     Optional(Box<Type>),
+
+    Slice(Box<Type>),
+    SlicePair(Box<Type>, Box<Type>),
+    Parameterized(ParameterizedType, Vec<Type>),
+
+    Variable(TypeVariable),
+
     External(ExternalTypeRef),
 }
 
 //pub type TypeRef = Rc<Type>;
-
-impl Type {
-    pub fn type_number(&self) -> TypeNumber {
-        match self {
-            Self::Int => 0,
-            Self::Float => 1,
-            Self::Bool => 2,
-            Self::String => 3,
-            Self::Struct(struct_type) => struct_type.number,
-            _ => todo!(),
-        }
-    }
-}
 
 impl Debug for Type {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -248,7 +242,6 @@ impl Debug for Type {
             Self::Float => write!(f, "Float"),
             Self::Bool => write!(f, "Bool"),
             Self::String => write!(f, "String"),
-            Self::Array(array_type_ref) => write!(f, "[{:?}]", array_type_ref.item_type),
             Self::Tuple(tuple_type_ref) => write!(f, "({:?})", tuple_type_ref.0),
             Self::Struct(struct_type_ref) => {
                 write!(f, "{} {{ ", struct_type_ref.assigned_name)?;
@@ -257,15 +250,10 @@ impl Debug for Type {
                 }
                 write!(f, "}}")
             }
-            Self::Map(map_type_ref) => write!(
-                f,
-                "[{:?}:{:?}]",
-                map_type_ref.key_type, map_type_ref.value_type
-            ),
             Self::Enum(enum_type_ref) => {
-                write!(f, "{:?}", enum_type_ref.borrow().assigned_name)?;
+                write!(f, "{:?}", enum_type_ref.0.borrow().assigned_name)?;
 
-                for (name, variant) in &enum_type_ref.borrow().variants {
+                for (name, variant) in &enum_type_ref.0.borrow().variants {
                     write!(f, "{name}: {variant:?}, ")?;
                 }
                 write!(f, "}}")
@@ -280,6 +268,10 @@ impl Debug for Type {
                 external_type.type_name, external_type.number
             ),
             Self::Range => write!(f, "Range"),
+            Self::Slice(_) => write!(f, "Slice"),
+            Self::SlicePair(_, _) => write!(f, "SlicePair"),
+            Self::Parameterized(_, _) => write!(f, "Parameterized"),
+            Self::Variable(_) => write!(f, "Variable"),
         }
     }
 }
@@ -292,17 +284,14 @@ impl Display for Type {
             Self::Bool => write!(f, "Bool"),
             Self::String => write!(f, "String"),
             Self::Unit => write!(f, "()"),
-            Self::Array(array_ref) => {
-                write!(f, "[{}]", &array_ref.item_type.to_string())
-            }
             Self::Tuple(tuple) => write!(f, "({})", comma(&tuple.0)),
             Self::Struct(struct_ref) => write!(f, "{}", struct_ref.assigned_name),
-            Self::Map(map_ref) => write!(f, "[{}:{}]", map_ref.key_type, map_ref.value_type),
-            Self::Enum(enum_type) => write!(f, "{}", enum_type.borrow().assigned_name),
+            Self::Enum(enum_type) => write!(f, "{}", enum_type.0.borrow().assigned_name),
             Self::Function(signature) => write!(f, "function {signature}"),
             Self::Optional(base_type) => write!(f, "{base_type}?"),
             Self::External(external_type) => write!(f, "ExternalType<{}>", external_type.type_name),
             Self::Range => write!(f, "Range"),
+            _ => todo!(),
         }
     }
 }
@@ -373,10 +362,6 @@ impl Type {
             (Self::Unit, Self::Unit) => true,
 
             (Self::Function(a), Self::Function(b)) => a.same_type(b),
-            (Self::Array(_), Self::Array(_)) => true,
-            (Self::Map(a), Self::Map(b)) => {
-                a.key_type.same_type(&b.key_type) && a.value_type.same_type(&b.value_type)
-            }
             (Self::Struct(a), Self::Struct(b)) => compare_struct_types(a, b),
             (Self::Tuple(a), Self::Tuple(b)) => {
                 if a.0.len() != b.0.len() {
@@ -618,7 +603,7 @@ pub struct MemberCall {
     pub arguments: Vec<ArgumentExpressionOrLocation>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Hash, Clone, Eq, PartialEq)]
 pub struct StructTypeField {
     pub identifier: Option<Node>,
     pub field_type: Type,
@@ -1176,7 +1161,7 @@ pub fn same_struct_ref(a: &StructTypeRef, b: &StructTypeRef) -> bool {
 
 pub type TypeNumber = u32;
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Hash, Clone, Eq, PartialEq)]
 pub struct LocalTypeIdentifier(pub Node);
 
 #[derive(Debug)]
@@ -1212,7 +1197,7 @@ pub struct Impl {
 
 #[derive(Debug)]
 pub struct AssociatedImpls {
-    pub functions: SeqMap<TypeNumber, Impl>,
+    pub functions: SeqMap<Type, Impl>,
 }
 
 impl AssociatedImpls {}
@@ -1233,11 +1218,11 @@ impl AssociatedImpls {
 }
 
 impl AssociatedImpls {
-    pub fn prepare(&mut self, type_id: TypeNumber) {
-        trace!(?type_id, ?type_id, "preparing standard `impl` for type");
+    pub fn prepare(&mut self, ty: &Type) {
+        trace!(?ty, "preparing standard `impl` for type");
         self.functions
             .insert(
-                type_id,
+                ty.clone(),
                 Impl {
                     functions: SeqMap::default(),
                 },
@@ -1246,7 +1231,7 @@ impl AssociatedImpls {
     }
     #[must_use]
     pub fn get_member_function(&self, ty: &Type, function_name: &str) -> Option<&FunctionRef> {
-        let maybe_found_impl = self.functions.get(&ty.type_number());
+        let maybe_found_impl = self.functions.get(&ty);
         if let Some(found_impl) = maybe_found_impl {
             if let Some(func) = found_impl.functions.get(&function_name.to_string()) {
                 return Some(func);
@@ -1261,7 +1246,7 @@ impl AssociatedImpls {
         name: &str,
         func: FunctionRef,
     ) -> Result<(), SemanticError> {
-        let maybe_found_impl = self.functions.get_mut(&ty.type_number());
+        let maybe_found_impl = self.functions.get_mut(&ty);
         if let Some(found_impl) = maybe_found_impl {
             found_impl
                 .functions
@@ -1304,6 +1289,7 @@ impl AssociatedImpls {
     }
 }
 
+#[derive(Hash, Eq, PartialEq)]
 pub struct StructType {
     pub name: Node,
     pub assigned_name: String,
@@ -1374,7 +1360,7 @@ pub struct MapType {
 
 pub type EnumVariantStructTypeRef = Rc<EnumVariantStructType>;
 
-#[derive(Clone)]
+#[derive(Clone, Hash, Eq, PartialEq)]
 pub struct AnonymousStructType {
     pub defined_fields: SeqMap<String, StructTypeField>,
 }
@@ -1385,7 +1371,7 @@ impl Debug for AnonymousStructType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Hash, Eq, PartialEq)]
 pub struct EnumVariantStructType {
     pub common: EnumVariantCommon,
     pub anon_struct: AnonymousStructType,
@@ -1393,7 +1379,7 @@ pub struct EnumVariantStructType {
 
 pub type EnumVariantTupleTypeRef = Rc<EnumVariantTupleType>;
 
-#[derive(Debug)]
+#[derive(Debug, Hash, Eq, PartialEq)]
 pub struct EnumVariantTupleType {
     pub common: EnumVariantCommon,
     pub fields_in_order: Vec<Type>,
@@ -1401,7 +1387,7 @@ pub struct EnumVariantTupleType {
 
 pub type TupleTypeRef = Rc<TupleType>;
 
-#[derive(Debug)]
+#[derive(Debug, Hash, Eq, PartialEq)]
 pub struct TupleType(pub Vec<Type>);
 
 impl TupleType {
@@ -1413,7 +1399,16 @@ impl TupleType {
 
 pub type EnumTypeRef = Rc<RefCell<EnumType>>;
 
-#[derive()]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct HashableEnumTypeRef(pub Rc<RefCell<EnumType>>);
+
+impl Hash for HashableEnumTypeRef {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write_u32(self.0.borrow().number)
+    }
+}
+
+#[derive(Hash, Eq, PartialEq)]
 pub struct EnumType {
     pub name: LocalTypeIdentifier,
     pub assigned_name: String,
@@ -1463,13 +1458,20 @@ impl EnumType {
 
 pub type EnumVariantTypeRef = Rc<EnumVariantType>;
 
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct EnumVariantCommon {
     pub name: LocalTypeIdentifier,
     pub assigned_name: String,
     pub number: TypeNumber,
     pub container_index: u8,
     pub owner: EnumTypeRef,
+}
+
+impl Hash for EnumVariantCommon {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write_u8(self.container_index);
+        state.write_u32(self.owner.borrow().number);
+    }
 }
 
 impl Debug for EnumVariantCommon {
@@ -1506,14 +1508,14 @@ pub struct EnumVariantTupleFieldType {
     pub field_index: usize,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub struct EnumVariantSimpleType {
     pub common: EnumVariantCommon,
 }
 
 pub type EnumVariantSimpleTypeRef = Rc<EnumVariantSimpleType>;
 
-#[derive(Clone)]
+#[derive(Clone, Hash, Eq, PartialEq)]
 pub enum EnumVariantType {
     Struct(EnumVariantStructTypeRef),
     Tuple(EnumVariantTupleTypeRef),

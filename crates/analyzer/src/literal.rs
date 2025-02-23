@@ -6,8 +6,8 @@ use crate::Analyzer;
 use crate::err::{Error, ErrorKind};
 use std::rc::Rc;
 use swamp_script_semantic::{
-    EnumLiteralData, EnumVariantType, Expression, Fp, Literal, MapType, MapTypeRef, Node,
-    TupleType, TupleTypeRef, Type,
+    EnumLiteralData, EnumVariantType, Expression, Fp, HashableEnumTypeRef, Literal, MapType,
+    MapTypeRef, Node, TupleType, TupleTypeRef, Type,
 };
 use tracing::error;
 
@@ -65,7 +65,7 @@ impl Analyzer<'_> {
 
                 let (symbol_table, name) = self.get_symbol_table_and_name(enum_name)?;
                 if let Some(enum_type_ref) = symbol_table.get_enum(&name) {
-                    let enum_type = Type::Enum(enum_type_ref.clone());
+                    let enum_type = Type::Enum(HashableEnumTypeRef(enum_type_ref.clone()));
 
                     // Handle enum variant literals in patterns
                     let variant_ref = self.analyze_enum_variant_ref(enum_name, variant_name)?;
@@ -136,6 +136,7 @@ impl Analyzer<'_> {
                 if items.is_empty() {
                     if let Some(found_expected_type) = expected_type {
                         match found_expected_type {
+                            /* TODO: FIX
                             Type::Map(map_type_ref) => (
                                 Literal::Map(map_type_ref.clone(), vec![]),
                                 found_expected_type.clone(),
@@ -144,6 +145,8 @@ impl Analyzer<'_> {
                                 Literal::Array(array_type_ref.clone(), vec![]),
                                 found_expected_type.clone(),
                             ),
+
+                             */
                             _ => {
                                 return Err(self.create_err(
                                     ErrorKind::EmptyArrayCanOnlyBeMapOrArray,
@@ -161,7 +164,7 @@ impl Analyzer<'_> {
                         self.analyze_array_type_helper(ast_node, items, expected_type)?;
                     (
                         Literal::Array(array_type_ref.clone(), resolved_items),
-                        Type::Array(array_type_ref),
+                        Type::Unit, //Type::Array(array_type_ref),
                     )
                 }
             }
@@ -169,7 +172,10 @@ impl Analyzer<'_> {
             swamp_script_ast::LiteralKind::Map(entries) => {
                 let (map_literal, map_type_ref) = self.analyze_map_literal(ast_node, entries)?;
 
-                (map_literal, Type::Map(map_type_ref))
+                (
+                    map_literal,
+                    Type::Unit, //Type::Map(map_type_ref)
+                )
             }
 
             swamp_script_ast::LiteralKind::Tuple(expressions) => {

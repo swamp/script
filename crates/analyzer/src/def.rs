@@ -5,18 +5,14 @@
 use crate::Analyzer;
 use crate::err::{Error, ErrorKind};
 use seq_map::SeqMap;
-use std::any::Any;
-use std::cell::RefCell;
 use std::rc::Rc;
-use swamp_script_modules::symtbl::{GenericType, ParameterizedType, SymbolTable};
 use swamp_script_semantic::{
     AliasType, AliasTypeRef, AnonymousStructType, EnumType, EnumTypeRef, EnumVariantCommon,
     EnumVariantSimpleType, EnumVariantSimpleTypeRef, EnumVariantStructType, EnumVariantTupleType,
     EnumVariantType, ExternalFunctionDefinition, Function, InternalFunctionDefinition,
     LocalIdentifier, LocalTypeIdentifier, ParameterNode, Signature, StructType, StructTypeField,
-    StructTypeRef, Type, TypeForParameter, TypeNumber, TypeParameterName, UseItem,
+    StructTypeRef, Type, TypeForParameter, TypeVariable, UseItem,
 };
-use tracing::info;
 
 impl Analyzer<'_> {
     fn analyze_use_definition(
@@ -303,6 +299,7 @@ impl Analyzer<'_> {
         todo!()
     }
 
+    /*
     pub fn store_generic_struct(
         &mut self,
         ast_struct: &swamp_script_ast::StructType,
@@ -350,21 +347,43 @@ impl Analyzer<'_> {
         Ok(())
     }
 
+     */
+
+    /// # Panics
+    ///
+    pub fn push_type_variables(&mut self, ast_nodes: &[swamp_script_ast::Node]) {
+        let mut types = SeqMap::new();
+        for ast_node in ast_nodes {
+            let name = self.get_text(ast_node).to_string();
+            let number = self.shared.state.allocate_number();
+            types
+                .insert(
+                    name.to_string(),
+                    Type::Variable(TypeVariable { name, number }),
+                )
+                .unwrap();
+        }
+
+        self.shared.type_variables_stack.push(types);
+    }
+
     /// # Errors
     ///
     pub fn analyze_struct_type_definition(
         &mut self,
         ast_struct: &swamp_script_ast::StructType,
     ) -> Result<(), Error> {
-        let is_generic_type = !ast_struct.identifier.parameter_names.is_empty();
-        if is_generic_type {
-            self.store_generic_struct(ast_struct);
-
-            return Ok(());
+        let is_parameterized = !ast_struct.identifier.parameter_names.is_empty();
+        if is_parameterized {
+            self.push_type_variables(&ast_struct.identifier.parameter_names);
         }
 
         let struct_name_str = self.get_text(&ast_struct.identifier.name).to_string();
         let analyzed_struct_ref = self.analyze_struct_type(&struct_name_str, ast_struct)?;
+
+        if is_parameterized {
+            self.shared.type_variables_stack.pop();
+        }
 
         let struct_ref = self
             .shared
@@ -497,45 +516,29 @@ impl Analyzer<'_> {
         Ok(())
     }
 
-    fn copy_impl_functions_to_generic(
-        &mut self,
-        attached_to_type: &swamp_script_ast::LocalTypeIdentifierWithOptionalTypeParams,
-        functions: &Vec<swamp_script_ast::Function>,
-    ) -> Result<(), Error> {
-        let name = self.get_text(&attached_to_type.name);
-        self.shared.lookup_table.get_generic(name).map_or_else(
-            || Err(self.create_err(ErrorKind::NotAGeneric, &attached_to_type.name)),
-            |found_generic| {
-                info!(name, "inserting functions into generic");
-                for func in functions {
-                    let func_name_str = self.get_text(func.name()).to_string();
-                    info!(func_name_str, "inserting function into generic");
-                    found_generic.borrow_mut().ast_functions.push(func.clone())
-                }
-                Ok(())
-            },
-        )
-    }
-
     fn analyze_impl_definition(
         &mut self,
         attached_to_type: &swamp_script_ast::LocalTypeIdentifierWithOptionalTypeParams,
         functions: &Vec<swamp_script_ast::Function>,
     ) -> Result<(), Error> {
-        if !attached_to_type.parameter_names.is_empty() {
-            return self.copy_impl_functions_to_generic(attached_to_type, functions);
-        }
-
         let qualified = swamp_script_ast::QualifiedTypeIdentifier {
             name: swamp_script_ast::LocalTypeIdentifier(attached_to_type.name.clone()),
             module_path: None,
             generic_params: vec![],
         };
 
-        let type_to_attach_to = self.get_type(&qualified)?;
+        let is_parameterized = !attached_to_type.parameter_names.is_empty();
 
+        if is_parameterized {
+            self.push_type_variables(&attached_to_type.parameter_names);
+        }
+        let type_to_attach_to = self.analyze_named_type(&qualified)?;
         let function_refs: Vec<&swamp_script_ast::Function> = functions.iter().collect();
         self.analyze_impl_functions(&type_to_attach_to, &function_refs)?;
+
+        if is_parameterized {
+            self.shared.type_variables_stack.pop();
+        }
 
         Ok(())
     }
@@ -548,7 +551,7 @@ impl Analyzer<'_> {
         self.shared
             .state
             .associated_impls
-            .prepare(type_to_attach_to.type_number());
+            .prepare(type_to_attach_to);
 
         for function in functions {
             let new_return_type = self.analyze_return_type(function)?;

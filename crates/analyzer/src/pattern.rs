@@ -24,6 +24,7 @@ impl Analyzer<'_> {
         let variant_name = self.get_text(ast_name).to_string();
 
         enum_type_ref
+            .0
             .borrow()
             .get_variant(&variant_name)
             .map_or_else(

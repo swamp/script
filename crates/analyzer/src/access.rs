@@ -31,7 +31,7 @@ impl Analyzer<'_> {
         named_type: &swamp_script_ast::QualifiedTypeIdentifier,
         member_name_node: &swamp_script_ast::Node,
     ) -> Result<Expression, Error> {
-        let some_type = self.get_type(named_type)?;
+        let some_type = self.analyze_named_type(named_type)?;
         let member_name = self.get_text(member_name_node);
         self.shared
             .state

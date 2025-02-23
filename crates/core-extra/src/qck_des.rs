@@ -30,6 +30,7 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
         }
         Type::Bool => (Value::Bool(buf[0] != 0), 1),
         Type::Unit => (Value::Unit, 0),
+        /*
         Type::Array(array_type_ref) => {
             let mut offset = 0;
             let count = u16::from_le_bytes(
@@ -53,6 +54,8 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
 
             (Value::Array(array_type_ref.clone(), values), offset)
         }
+
+         */
         Type::Tuple(tuple_type_ref) => {
             let mut offset = 0;
             let mut values = Vec::new();
@@ -75,6 +78,7 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
             }
             (Value::Struct(struct_type_ref.clone(), values), offset)
         }
+        /*
         Type::Map(map_type_ref) => {
             let mut offset = 0;
             let count = u16::from_le_bytes(
@@ -105,13 +109,15 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
             }
             (Value::Map(map_type_ref.clone(), seq_map), offset)
         }
+
+         */
         Type::Enum(enum_type) => {
             let mut offset = 0;
             let enum_lookup_index = buf[offset];
             offset += 1;
             assert!(enum_lookup_index < 8);
 
-            let borrowed_enum = enum_type.borrow();
+            let borrowed_enum = enum_type.0.borrow();
 
             let variant_type = borrowed_enum
                 .get_variant_from_index(enum_lookup_index as usize)
@@ -144,6 +150,18 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
             panic!("can not serialize function")
         }
         Type::Range => {
+            panic!("can not serialize ranges")
+        }
+        Type::Slice(..) => {
+            panic!("can not serialize ranges")
+        }
+        Type::SlicePair(..) => {
+            panic!("can not serialize ranges")
+        }
+        Type::Parameterized(..) => {
+            panic!("can not serialize ranges")
+        }
+        Type::Variable(..) => {
             panic!("can not serialize ranges")
         }
         Type::Optional(optional_type_ref) => {

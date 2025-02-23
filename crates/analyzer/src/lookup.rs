@@ -13,41 +13,41 @@ pub struct TypeParameter {
 }
 
 #[derive(Debug)]
-pub struct TypeParameterScope {
-    pub type_parameters: SeqMap<String, Type>,
+pub struct TypeVariableScope {
+    pub type_variables: SeqMap<String, Type>,
 }
 
-pub struct TypeParameterStack {
-    pub type_parameter_scope_stack: Vec<TypeParameterScope>,
+pub struct TypeVariableStack {
+    pub type_variable_scopes: Vec<TypeVariableScope>,
 }
 
-impl TypeParameterStack {}
+impl TypeVariableStack {}
 
-impl Default for TypeParameterStack {
+impl Default for TypeVariableStack {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl TypeParameterStack {
+impl TypeVariableStack {
     #[must_use]
     pub const fn new() -> Self {
         Self {
-            type_parameter_scope_stack: Vec::new(),
+            type_variable_scopes: Vec::new(),
         }
     }
-    pub fn push_type_parameters(&mut self, parameter_name_to_analyzed_type: SeqMap<String, Type>) {
+    pub fn push(&mut self, parameter_name_to_analyzed_type: SeqMap<String, Type>) {
         for ty in &parameter_name_to_analyzed_type {
             info!(?ty, "pushing scope!");
         }
-        self.type_parameter_scope_stack.push(TypeParameterScope {
-            type_parameters: parameter_name_to_analyzed_type,
+        self.type_variable_scopes.push(TypeVariableScope {
+            type_variables: parameter_name_to_analyzed_type,
         });
     }
 
     pub(crate) fn get(&self, type_name: &str) -> Option<Type> {
-        for scope in self.type_parameter_scope_stack.iter().rev() {
-            if let Some(found_type) = scope.type_parameters.get(&type_name.to_string()) {
+        for scope in self.type_variable_scopes.iter().rev() {
+            if let Some(found_type) = scope.type_variables.get(&type_name.to_string()) {
                 return Some(found_type.clone());
             }
         }
@@ -55,9 +55,9 @@ impl TypeParameterStack {
     }
 
     /// Pops the most recent type parameter scope off the stack.
-    pub fn pop_type_parameters(&mut self) -> TypeParameterScope {
-        let found_scope = self.type_parameter_scope_stack.pop().unwrap();
-        for ty in &found_scope.type_parameters {
+    pub fn pop(&mut self) -> TypeVariableScope {
+        let found_scope = self.type_variable_scopes.pop().unwrap();
+        for ty in &found_scope.type_variables {
             info!(?ty, "popping scope!");
         }
 

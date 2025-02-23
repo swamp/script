@@ -30,7 +30,7 @@ impl SourceMapDisplay<'_> {
             Symbol::Constant(_) => Color::BrightCyan,
             Symbol::FunctionDefinition(_) => Color::Cyan,
             Symbol::Alias(_) => Color::Red,
-            Symbol::Generic(_) => Color::Magenta,
+            &swamp_script_modules::symtbl::Symbol::TypeGenerator(_) => todo!(),
         }
     }
 
@@ -74,6 +74,9 @@ impl SourceMapDisplay<'_> {
             Symbol::Module(module_ref) => {
                 write!(f, "{module_ref:?}")
             }
+            Symbol::TypeGenerator(type_generator) => {
+                write!(f, "{type_generator:?}")
+            }
             Symbol::Constant(constant_ref) => self.show_constant(f, constant_ref, tabs),
             Symbol::FunctionDefinition(func_def) => match func_def {
                 FuncDef::Internal(internal_fn) => self.show_internal_function(f, internal_fn, tabs),
@@ -83,9 +86,6 @@ impl SourceMapDisplay<'_> {
                 }
             },
             Symbol::Alias(alias_type_ref) => self.show_alias(f, alias_type_ref),
-            Symbol::Generic(generic_type_ref) => {
-                write!(f, "{generic_type_ref:?}")
-            }
             Symbol::PackageVersion(version) => {
                 write!(f, "version {version}")
             }
@@ -554,11 +554,6 @@ impl SourceMapDisplay<'_> {
             Type::String => write!(f, "{}", "String".bright_blue()),
             Type::Bool => write!(f, "{}", "Bool".bright_blue()),
             Type::Unit => write!(f, "{}", "()".bright_blue()),
-            Type::Array(array_type) => {
-                write!(f, "[")?;
-                self.show_type(f, &array_type.item_type, tabs + 1)?;
-                write!(f, "]")
-            }
 
             Type::Tuple(tuple_type) => {
                 write!(f, "(")?;
@@ -572,10 +567,8 @@ impl SourceMapDisplay<'_> {
             }
 
             Type::Struct(struct_ref) => write!(f, "{}", struct_ref.assigned_name),
-            Type::Map(map_ref) => {
-                write!(f, "[{}:{}]", map_ref.key_type, map_ref.value_type)
-            }
-            Type::Enum(enum_type) => write!(f, "{}", enum_type.borrow().assigned_name),
+
+            Type::Enum(enum_type) => write!(f, "{}", enum_type.0.borrow().assigned_name),
             //Type::EnumVariant(variant) => write!(
             //  f,
             //"{}::{}",
@@ -585,6 +578,7 @@ impl SourceMapDisplay<'_> {
             Type::Optional(base_type) => write!(f, "{}?", base_type.yellow()),
             Type::External(external_type) => write!(f, "External {}", external_type.type_name),
             Type::Range => write!(f, "Range"),
+            _ => todo!(),
         }
     }
 

@@ -1,6 +1,6 @@
 use std::rc::Rc;
 use swamp_script_modules::modules::Module;
-use swamp_script_modules::symtbl::{Symbol, SymbolTable};
+use swamp_script_modules::symtbl::{GeneratorKind, Symbol, SymbolTable, TypeGenerator};
 use swamp_script_semantic::Type;
 use swamp_script_semantic::Type::Int;
 use swamp_script_semantic::{
@@ -45,6 +45,15 @@ fn add_intrinsic_types(core_ns: &mut SymbolTable) {
     };
     let value_type = Symbol::Type(Type::External(Rc::new(value_type)));
     core_ns.add_symbol("Value", value_type).unwrap();
+
+    let slice_type_generator = TypeGenerator {
+        kind: GeneratorKind::Slice,
+        arity: 1,
+    };
+
+    core_ns
+        .add_type_generator("Slice", slice_type_generator)
+        .unwrap();
 }
 
 #[allow(clippy::too_many_lines)]
