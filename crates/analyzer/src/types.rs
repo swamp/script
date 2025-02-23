@@ -48,7 +48,6 @@ impl Analyzer<'_> {
 
         let (path, name) = self.get_path(type_name_to_find);
         if path.is_empty() {
-            info!(?name, "checking potential type variable");
             if let Some(found_type) = self.shared.type_variables_stack.get(&name) {
                 return Ok(found_type);
             }

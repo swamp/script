@@ -1003,6 +1003,8 @@ pub enum IntrinsicFunction {
     VecCreate,
 
     // Map
+    MapCreate,
+    MapFromSlice,
     MapHas,
     MapRemove,
 
@@ -1011,6 +1013,10 @@ pub enum IntrinsicFunction {
     VecSubscriptMut,
     VecIter,
     VecIterMut,
+    MapIter,
+    MapIterMut,
+    MapSubscript,
+    MapSubscriptMut,
 }
 
 impl fmt::Display for IntrinsicFunction {
@@ -1054,8 +1060,14 @@ impl fmt::Display for IntrinsicFunction {
             Self::VecIterMut => "vec_iter_mut",
 
             // Map
+            Self::MapCreate => "map_create",
+            Self::MapFromSlice => "map_from_slice",
             Self::MapHas => "map_has",
             Self::MapRemove => "map_remove",
+            Self::MapSubscriptMut => "map_subscript_mut",
+            Self::MapSubscript => "map_subscript",
+            Self::MapIter => "map_iter",
+            Self::MapIterMut => "map_iter_mut",
 
             // Other
             Self::Float2Magnitude => "float2_magnitude",

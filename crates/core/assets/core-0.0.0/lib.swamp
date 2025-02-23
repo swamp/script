@@ -368,7 +368,7 @@ impl Map<K, V> {
     ///
     /// Uses intrinsic function `map_create` to create the Map value.
     fn new() -> Map<K, V> {
-            map_create()
+        map_create()
     }
 
     fn iter(self) -> (K, V) {
@@ -385,8 +385,8 @@ impl Map<K, V> {
     /// - `key`: The key of the element to get
     ///
     /// Uses intrinsic function `map_subscript` to fetch the value.
-    fn subscript(self, key: K) -> T? {
-        map_subscript(self.handle, index)
+    fn subscript(self, key: K) -> K? {
+        map_subscript(self, key)
     }
 
     /// Gets a mutable element with the specified key
@@ -396,8 +396,8 @@ impl Map<K, V> {
     /// - `out_value`: The value to modify
     ///
     /// Uses intrinsic function `map_subscript_mut` to fetch the mutable value.
-    fn subscript_mut(mut self, key: K, mut out_value: T?) {
-        map_subscript_mut(self.handle, key, mut out_value)
+    fn subscript_mut(mut self, key: K, mut out_value: V?) {
+        map_subscript_mut(self, key, mut out_value)
     }
 
     /// Checks if the map contains a key.
@@ -410,7 +410,7 @@ impl Map<K, V> {
     /// # Returns
     /// A `Bool` indicating the presence of the key.
     fn has(self, key: K) -> Bool {
-        map_has(map, key)
+        map_has(self, key)
     }
 
     /// Removes a key-value pair.
@@ -423,7 +423,7 @@ impl Map<K, V> {
     /// # Returns
     /// An optional value of type `V` associated with the removed key.
     fn remove_key(self, key: K) -> V? {
-        map_remove(map, key)
+        map_remove(self, key)
     }
 }
 
