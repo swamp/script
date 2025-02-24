@@ -17,6 +17,20 @@ pub struct TypeVariableScope {
     pub type_variables: SeqMap<String, Type>,
 }
 
+impl TypeVariableScope {}
+
+impl TypeVariableScope {
+    pub fn new(scope: SeqMap<String, Type>) -> Self {
+        Self {
+            type_variables: scope,
+        }
+    }
+
+    pub(crate) fn variables(&self) -> Vec<Type> {
+        self.type_variables.values().map(|ty| ty.clone()).collect()
+    }
+}
+
 pub struct TypeVariableStack {
     pub type_variable_scopes: Vec<TypeVariableScope>,
 }

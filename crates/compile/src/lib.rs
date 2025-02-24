@@ -54,7 +54,7 @@ pub fn analyze_single_module(
 
     analyzer.shared.lookup_table = default_symbol_table;
 
-    trace!(lookup_table=?analyzer.shared.lookup_table, "analyzer lookup_table");
+    //    trace!(lookup_table=?analyzer.shared.lookup_table, "analyzer lookup_table");
 
     analyze_ast_module_skip_expression(&mut analyzer, parsed_ast_module)?;
 
@@ -125,7 +125,6 @@ pub fn bootstrap_modules(
     let mut state = ProgramState::new();
 
     let core_symbol_table = core_module.namespace.symbol_table.as_ref().clone();
-    trace!(?core_symbol_table, "core symbol table");
 
     let core_analyzed_symbol_table = analyze_single_module(
         &mut state,

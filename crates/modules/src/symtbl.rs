@@ -7,14 +7,13 @@ use seq_fmt::comma;
 use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::fmt::Debug;
-use std::fs::File;
 use std::rc::Rc;
 use swamp_script_semantic::{
     AliasType, AliasTypeRef, Constant, ConstantRef, EnumType, EnumTypeRef, EnumVariantType,
     EnumVariantTypeRef, ExternalFunctionDefinition, ExternalFunctionDefinitionRef, ExternalType,
     ExternalTypeRef, HashableEnumTypeRef, InternalFunctionDefinition,
     InternalFunctionDefinitionRef, IntrinsicFunctionDefinition, IntrinsicFunctionDefinitionRef,
-    SemanticError, StructType, StructTypeRef, Type,
+    ParameterizedType, SemanticError, StructType, StructTypeRef, Type,
 };
 use tiny_ver::TinyVersion;
 use tracing::info;
@@ -163,6 +162,35 @@ impl SymbolTable {
         let name = struct_type_ref.assigned_name.clone();
         self.symbols
             .insert(name.clone(), Symbol::Type(Type::Struct(struct_type_ref)))
+            .map_err(|_| SemanticError::DuplicateStructName(name))?;
+        Ok(())
+    }
+
+    pub fn add_parameterized(
+        &mut self,
+        parameterized_type: ParameterizedType,
+    ) -> Result<(), SemanticError> {
+        //let struct_ref = Rc::new(parameterized_type);
+        self.add_parameterized_link(parameterized_type)?;
+        //info!(?struct_ref, "added struct");
+        Ok(())
+    }
+
+    /// # Errors
+    ///
+    pub fn add_parameterized_link(
+        &mut self,
+        parameterized_type: ParameterizedType,
+    ) -> Result<(), SemanticError> {
+        let name = parameterized_type.name();
+
+        //        info!(name, ?parameterized_type, "stored parameterized link");
+
+        self.symbols
+            .insert(
+                name.clone(),
+                Symbol::Type(Type::Parameterized(parameterized_type)),
+            )
             .map_err(|_| SemanticError::DuplicateStructName(name))?;
         Ok(())
     }

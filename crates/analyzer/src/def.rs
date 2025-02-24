@@ -4,14 +4,16 @@
  */
 use crate::Analyzer;
 use crate::err::{Error, ErrorKind};
+use crate::lookup::TypeVariableScope;
 use seq_map::SeqMap;
 use std::rc::Rc;
 use swamp_script_semantic::{
     AliasType, AliasTypeRef, AnonymousStructType, EnumType, EnumTypeRef, EnumVariantCommon,
     EnumVariantSimpleType, EnumVariantSimpleTypeRef, EnumVariantStructType, EnumVariantTupleType,
     EnumVariantType, ExternalFunctionDefinition, Function, InternalFunctionDefinition,
-    LocalIdentifier, LocalTypeIdentifier, ParameterNode, Signature, StructType, StructTypeField,
-    StructTypeRef, Type, TypeForParameter, TypeVariable, UseItem,
+    LocalIdentifier, LocalTypeIdentifier, ParameterNode, ParameterizedType, ParameterizedTypeKind,
+    Signature, StructType, StructTypeField, StructTypeRef, Type, TypeForParameter, TypeVariable,
+    UseItem,
 };
 
 impl Analyzer<'_> {
@@ -279,26 +281,6 @@ impl Analyzer<'_> {
         Ok(resolved_struct)
     }
 
-    pub fn monomorphize_struct(
-        &mut self,
-        assigned_name: &str,
-        generic_ast_struct: &swamp_script_ast::StructType,
-        functions: &[swamp_script_ast::Function],
-    ) -> Result<StructTypeRef, Error> {
-        let struct_type = self.analyze_struct_type(assigned_name, generic_ast_struct)?;
-        let struct_type_ref = Rc::new(struct_type);
-
-        Ok(struct_type_ref)
-    }
-
-    pub(crate) fn monomorphize_enum(
-        &self,
-        assigned_name: &str,
-        variants: &[swamp_script_ast::EnumVariantType],
-    ) -> Result<EnumType, Error> {
-        todo!()
-    }
-
     /*
     pub fn store_generic_struct(
         &mut self,
@@ -364,7 +346,9 @@ impl Analyzer<'_> {
                 .unwrap();
         }
 
-        self.shared.type_variables_stack.push(types);
+        let type_variables = TypeVariableScope::new(types);
+
+        self.shared.type_variables = Some(type_variables);
     }
 
     /// # Errors
@@ -382,15 +366,34 @@ impl Analyzer<'_> {
         let analyzed_struct_ref = self.analyze_struct_type(&struct_name_str, ast_struct)?;
 
         if is_parameterized {
-            self.shared.type_variables_stack.pop();
+            let x = if let Some(x) = &self.shared.type_variables {
+                x.variables()
+            } else {
+                panic!()
+            };
+
+            let parameterized = ParameterizedType {
+                base: ParameterizedTypeKind::Struct(StructTypeRef::from(analyzed_struct_ref)),
+                parameters: x,
+            };
+
+            self.shared
+                .definition_table
+                .add_parameterized(parameterized.clone())?;
+
+            self.shared
+                .lookup_table
+                .add_parameterized_link(parameterized)?;
+
+            self.shared.type_variables = None;
+        } else {
+            let struct_ref = self
+                .shared
+                .definition_table
+                .add_struct(analyzed_struct_ref)?;
+
+            self.shared.lookup_table.add_struct_link(struct_ref)?;
         }
-
-        let struct_ref = self
-            .shared
-            .definition_table
-            .add_struct(analyzed_struct_ref)?;
-
-        self.shared.lookup_table.add_struct_link(struct_ref)?;
 
         Ok(())
     }
@@ -537,7 +540,7 @@ impl Analyzer<'_> {
         self.analyze_impl_functions(&type_to_attach_to, &function_refs)?;
 
         if is_parameterized {
-            self.shared.type_variables_stack.pop();
+            self.shared.type_variables = None;
         }
 
         Ok(())

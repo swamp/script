@@ -13,7 +13,6 @@ use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
-use tracing::trace;
 
 #[derive(Clone, Hash, Eq, PartialEq, Default)]
 pub struct Node {
@@ -192,28 +191,47 @@ pub struct IteratorTypeDetails {
 }
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
-pub enum ParameterizedType {
+pub enum ParameterizedTypeKind {
     Struct(StructTypeRef),
     Enum(HashableEnumTypeRef),
-    Parameterized(Box<Type>),
+    Parameterized(Box<ParameterizedType>),
 }
 
-impl ParameterizedType {
-    pub(crate) fn same_type(&self, other: &ParameterizedType) -> bool {
+impl ParameterizedTypeKind {
+    pub(crate) fn same_type(&self, other: &Self) -> bool {
         match (self, other) {
-            (ParameterizedType::Struct(a), ParameterizedType::Struct(b)) => a.number == b.number,
-            (ParameterizedType::Enum(a), ParameterizedType::Enum(b)) => {
-                a.0.borrow().number == b.0.borrow().number
-            }
-            (ParameterizedType::Parameterized(a), ParameterizedType::Parameterized(b)) => {
-                a.same_type(b)
-            }
+            (Self::Struct(a), Self::Struct(b)) => a.number == b.number,
+            (Self::Enum(a), Self::Enum(b)) => a.0.borrow().number == b.0.borrow().number,
+            (Self::Parameterized(a), Self::Parameterized(b)) => a.same_type(b),
             _ => false,
         }
     }
+
+    pub fn name(&self) -> String {
+        match self {
+            Self::Struct(struct_type_ref) => struct_type_ref.assigned_name.clone(),
+            Self::Enum(enum_type_ref) => enum_type_ref.0.borrow().assigned_name.clone(),
+            Self::Parameterized(inner) => inner.base.name(),
+        }
+    }
+}
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub struct ParameterizedType {
+    pub base: ParameterizedTypeKind,
+    pub parameters: Vec<Type>,
 }
 
-#[derive(Clone, Hash, Eq, PartialEq)]
+impl ParameterizedType {
+    pub(crate) fn same_type(&self, other: &Self) -> bool {
+        self.base.same_type(&other.base) && same_types(&self.parameters, &other.parameters)
+    }
+
+    pub fn name(&self) -> String {
+        self.base.name()
+    }
+}
+
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct TypeVariable {
     pub name: String,
     pub number: TypeNumber,
@@ -240,13 +258,19 @@ pub enum Type {
 
     Slice(Box<Type>),
     SlicePair(Box<Type>, Box<Type>),
-    Parameterized(ParameterizedType, Vec<Type>),
+    Parameterized(ParameterizedType),
 
     Variable(TypeVariable),
 
     External(ExternalTypeRef),
 }
 
+impl Type {
+    #[must_use]
+    pub const fn is_concrete(&self) -> bool {
+        !matches!(self, Self::Parameterized(..))
+    }
+}
 //pub type TypeRef = Rc<Type>;
 
 impl Debug for Type {
@@ -285,8 +309,8 @@ impl Debug for Type {
             Self::Range => write!(f, "Range"),
             Self::Slice(_) => write!(f, "Slice"),
             Self::SlicePair(_, _) => write!(f, "SlicePair"),
-            Self::Parameterized(_, _) => write!(f, "Parameterized"),
-            Self::Variable(_) => write!(f, "Variable"),
+            Self::Parameterized(ty) => write!(f, "Parameterized {ty:?}"),
+            Self::Variable(var) => write!(f, "Variable {var:?}"),
         }
     }
 }
@@ -308,7 +332,7 @@ impl Display for Type {
             Self::Range => write!(f, "Range"),
             Self::Slice(_) => write!(f, "Slice"),
             Self::SlicePair(_, _) => write!(f, "SlicePair"),
-            Self::Parameterized(_, _) => write!(f, "Parameterized"),
+            Self::Parameterized(_) => write!(f, "Parameterized"),
             Self::Variable(_) => write!(f, "Var"),
         }
     }
@@ -339,6 +363,8 @@ pub enum SemanticError {
     DuplicateSymbolName,
     DuplicateNamespaceLink(String),
     DuplicateGenericType(String),
+    UnknownTypeVariable,
+    WrongParameterCount,
 }
 
 impl Type {
@@ -385,10 +411,7 @@ impl Type {
                 a1.same_type(b1) && a2.same_type(b2)
             }
 
-            (
-                Self::Parameterized(a_base, a_parameters),
-                Self::Parameterized(b_base, b_parameters),
-            ) => a_base.same_type(b_base) && same_types(a_parameters, b_parameters),
+            (Self::Parameterized(a), Self::Parameterized(b)) => a.same_type(b),
 
             (Self::Function(a), Self::Function(b)) => a.same_type(b),
             (Self::Struct(a), Self::Struct(b)) => compare_struct_types(a, b),
@@ -1276,7 +1299,6 @@ impl AssociatedImpls {
 
 impl AssociatedImpls {
     pub fn prepare(&mut self, ty: &Type) {
-        trace!(?ty, "preparing standard `impl` for type");
         self.functions
             .insert(
                 ty.clone(),

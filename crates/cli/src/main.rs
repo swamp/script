@@ -5,8 +5,8 @@
 use clap::{Parser, Subcommand};
 
 use std::fmt::{Display, Formatter};
-use std::io;
 use std::path::{Path, PathBuf};
+use std::{env, io};
 use swamp_script_analyzer::prelude::Error;
 use swamp_script_compile::{bootstrap_modules, create_registry_source_map};
 use swamp_script_dep_loader::{DepLoaderError, swamp_registry_path};
@@ -132,7 +132,7 @@ fn build(_local_path: &Path, _local_module_name: &str) -> Result<(), CliError> {
 
     match bootstrap_result {
         Err(err) => {
-            show_script_resolve_error(&err, &source_map);
+            show_script_resolve_error(&err, &source_map, &env::current_dir().unwrap());
             Err(err)?;
         }
         Ok(bootstrap) => {
@@ -161,6 +161,7 @@ fn build(_local_path: &Path, _local_module_name: &str) -> Result<(), CliError> {
                 source_map_display: &pretty_printer,
             };
 
+            /*
             info!(%core_module_symbol_table_display, "core symbol table");
 
             let all_impls_display = ImplsDisplay {
@@ -169,6 +170,8 @@ fn build(_local_path: &Path, _local_module_name: &str) -> Result<(), CliError> {
             };
 
             info!(%all_impls_display, "all impls");
+
+             */
         }
     }
 

@@ -4,15 +4,12 @@
  */
 use crate::Analyzer;
 use crate::err::{Error, ErrorKind};
-use seq_map::SeqMap;
-use std::cell::RefCell;
 use std::rc::Rc;
-use swamp_script_modules::symtbl::{GeneratorKind, Symbol, SymbolTable};
+use swamp_script_modules::symtbl::{GeneratorKind, Symbol};
 use swamp_script_semantic::{
-    ArrayType, ArrayTypeRef, EnumTypeRef, ExternalType, ExternalTypeRef, MapType, MapTypeRef,
-    ParameterizedType, Signature, TupleType, Type, TypeForParameter,
+    ArrayType, ArrayTypeRef, ExternalType, ExternalTypeRef, MapType, MapTypeRef, Signature,
+    TupleType, Type, TypeForParameter,
 };
-use tracing::info;
 
 impl Analyzer<'_> {
     /// # Errors
@@ -48,8 +45,10 @@ impl Analyzer<'_> {
 
         let (path, name) = self.get_path(type_name_to_find);
         if path.is_empty() {
-            if let Some(found_type) = self.shared.type_variables_stack.get(&name) {
-                return Ok(found_type);
+            if let Some(found_scope) = &self.shared.type_variables {
+                if let Some(found_type) = found_scope.type_variables.get(&name) {
+                    return Ok(found_type.clone());
+                }
             }
         }
         let symbol = {
@@ -65,7 +64,7 @@ impl Analyzer<'_> {
                 .clone()
         };
 
-        let is_parameterized = !type_name_to_find.generic_params.is_empty();
+        //let is_parameterized = !type_name_to_find.generic_params.is_empty();
 
         let mut analyzed_types = Vec::new();
 
@@ -77,19 +76,36 @@ impl Analyzer<'_> {
 
         let result_type = match symbol {
             Symbol::Type(base_type) => {
-                let checked_base_type: ParameterizedType = match base_type {
-                    Type::Struct(struct_ref) => ParameterizedType::Struct(struct_ref),
-                    Type::Enum(enum_ref) => ParameterizedType::Enum(enum_ref),
-                    Type::Parameterized(_, _) => {
-                        ParameterizedType::Parameterized(Box::new(base_type.clone()))
-                    }
-                    _ => {
-                        return Err(
-                            self.create_err(ErrorKind::NotAGeneric, &type_name_to_find.name.0)
-                        );
-                    }
-                };
-                Type::Parameterized(checked_base_type, analyzed_types)
+                /*
+                if is_parameterized {
+                    info!(?base_type, ?name, "parameterized");
+
+                    let kind: ParameterizedTypeKind = match base_type {
+                        Type::Struct(struct_ref) => ParameterizedTypeKind::Struct(struct_ref),
+                        Type::Enum(enum_ref) => ParameterizedTypeKind::Enum(enum_ref),
+                        Type::Parameterized(inner) => {
+                            ParameterizedTypeKind::Parameterized(Box::new(inner))
+                        }
+                        _ => {
+                            return Err(
+                                self.create_err(ErrorKind::NotAGeneric, &type_name_to_find.name.0)
+                            );
+                        }
+                    };
+
+                    let parameterized_type = ParameterizedType {
+                        base: kind,
+                        parameters: vec![],
+                    };
+                    let result_type = Type::Parameterized(parameterized_type);
+                    info!(?result_type, "parameterized resolution");
+                    result_type
+                } else {
+                    info!(?name, "base_type");
+                    base_type
+                }
+                                 */
+                base_type
             }
             Symbol::Alias(alias_type) => alias_type.referenced_type.clone(),
             Symbol::TypeGenerator(generator) => {
@@ -179,10 +195,10 @@ impl Analyzer<'_> {
             }
 
              */
-            swamp_script_ast::Type::Array(ast_type) => {
+            swamp_script_ast::Type::Array(_ast_type) => {
                 todo!() //Type::Array(self.analyze_array_type(ast_type)?)
             }
-            swamp_script_ast::Type::Map(key_type, value_type) => {
+            swamp_script_ast::Type::Map(_key_type, _value_type) => {
                 todo!() //Type::Map(self.analyze_map_type(key_type, value_type)?)
             }
             swamp_script_ast::Type::External(node) => {

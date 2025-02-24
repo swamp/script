@@ -7,6 +7,7 @@ pub mod call;
 pub mod constant;
 pub mod def;
 pub mod err;
+mod instantiate;
 pub mod literal;
 pub mod lookup;
 pub mod operator;
@@ -17,7 +18,8 @@ pub mod types;
 pub mod variable;
 
 use crate::err::{Error, ErrorKind};
-use crate::lookup::TypeVariableStack;
+use crate::instantiate::Instantiator;
+use crate::lookup::TypeVariableScope;
 use seq_map::SeqMap;
 use std::mem::take;
 use std::num::{ParseFloatError, ParseIntError};
@@ -26,8 +28,8 @@ use swamp_script_modules::modules::Modules;
 use swamp_script_modules::symtbl::{FuncDef, Symbol, SymbolTable, SymbolTableRef};
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
-    ArgumentExpressionOrLocation, IntrinsicFunctionDefinitionRef, IteratorYieldType,
-    LocationAccess, LocationAccessKind, MutOrImmutableExpression, NormalPattern, Postfix,
+    ArgumentExpressionOrLocation, IntrinsicFunctionDefinitionRef, LocationAccess,
+    LocationAccessKind, MutOrImmutableExpression, NormalPattern, ParameterizedTypeKind, Postfix,
     PostfixKind, RangeMode, SingleLocationExpression, SingleLocationExpressionKind,
     SingleMutLocationExpression, TypeWithMut, WhenBinding,
 };
@@ -117,7 +119,7 @@ pub struct SharedState<'a> {
     pub state: &'a mut ProgramState,
     pub lookup_table: SymbolTable,
     pub definition_table: SymbolTable,
-    pub type_variables_stack: TypeVariableStack,
+    pub type_variables: Option<TypeVariableScope>,
     pub modules: &'a Modules,
     pub source_map: &'a SourceMap,
     pub file_id: FileId,
@@ -190,7 +192,7 @@ impl<'a> Analyzer<'a> {
             state,
             lookup_table: SymbolTable::default(),
             definition_table: SymbolTable::default(),
-            type_variables_stack: TypeVariableStack::new(),
+            type_variables: None,
             modules,
             source_map,
             current_path: current_path.to_vec(),
@@ -716,14 +718,55 @@ impl<'a> Analyzer<'a> {
         &mut self,
         qualified_type_identifier: &swamp_script_ast::QualifiedTypeIdentifier,
     ) -> Result<StructTypeRef, Error> {
-        //   let namespace = self.get_namespace(qualified_type_identifier)?;
-        if let Type::Struct(struct_type) = self.analyze_named_type(qualified_type_identifier)? {
-            Ok(struct_type)
-        } else {
-            Err(self.create_err(
+        let maybe_struct_type = self.analyze_named_type(qualified_type_identifier)?;
+        info!(?maybe_struct_type, "found maybe type");
+        match maybe_struct_type {
+            Type::Struct(struct_type) => Ok(struct_type), // Already a concrete struct, return directly
+
+            Type::Parameterized(parameterized_type) => {
+                if let ParameterizedTypeKind::Struct(struct_ref) = &parameterized_type.base {
+                    if qualified_type_identifier.generic_params.is_empty() {
+                        Err(self.create_err(
+                            ErrorKind::ParameterizedStructTypeWithoutScope,
+                            &qualified_type_identifier.name.0,
+                        ))
+                    } else {
+                        let analyzed_concrete_types =
+                            self.analyze_types(&qualified_type_identifier.generic_params)?;
+                        let type_variables = Instantiator::create_type_parameter_scope(
+                            &parameterized_type.parameters,
+                            &analyzed_concrete_types,
+                        )?;
+                        let (_, instantiated_type) =
+                            Instantiator::instantiate(&parameterized_type, &type_variables)
+                                .map_err(|_semantic_error| {
+                                    self.create_err(
+                                        ErrorKind::UnexpectedTypeAfterInstantiation,
+                                        &qualified_type_identifier.name.0,
+                                    )
+                                })?;
+                        if let Type::Struct(instantiated_struct_type) = instantiated_type {
+                            Ok(instantiated_struct_type)
+                        } else {
+                            Err(self.create_err(
+                                ErrorKind::UnexpectedTypeAfterInstantiation,
+                                &qualified_type_identifier.name.0,
+                            ))
+                        }
+                    }
+                } else {
+                    Err(self.create_err(
+                        ErrorKind::ExpectedStructType,
+                        &qualified_type_identifier.name.0,
+                    ))
+                }
+            }
+
+            _ => Err(self.create_err(
+                // For other Type variants that are not Struct
                 ErrorKind::UnknownStructTypeReference,
                 &qualified_type_identifier.name.0,
-            ))
+            )),
         }
     }
 

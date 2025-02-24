@@ -362,14 +362,14 @@ impl SourceMapDisplay<'_> {
                 write!(f, "InterpolatedString()")
             }
             ExpressionKind::VariableDefinition(a, b) => {
-                write!(f, "let {}=", self.source_map.get_text(&a.name).green())?;
+                write!(f, "let {} = ", self.source_map.get_text(&a.name).green())?;
                 self.show_mut_or_not_expression(f, b, tabs)
             }
             ExpressionKind::VariableReassignment(_, _) => {
                 write!(f, "VariableReassignment()")
             }
-            ExpressionKind::StructInstantiation(_struct_literal) => {
-                write!(f, "StructInstantiation()")
+            ExpressionKind::StructInstantiation(struct_literal) => {
+                self.show_struct_literal(f, struct_literal, tabs)
             }
 
             ExpressionKind::Literal(basic_literal) => {
@@ -578,7 +578,10 @@ impl SourceMapDisplay<'_> {
             Type::Optional(base_type) => write!(f, "{}?", base_type.yellow()),
             Type::External(external_type) => write!(f, "External {}", external_type.type_name),
             Type::Range => write!(f, "Range"),
-            _ => todo!(),
+            Type::Slice(..) => write!(f, "Slice"),
+            Type::SlicePair(..) => write!(f, "SlicePair"),
+            Type::Parameterized(param) => write!(f, "{param:?}"),
+            Type::Variable(var) => write!(f, "{var:?}"),
         }
     }
 
@@ -732,7 +735,36 @@ impl SourceMapDisplay<'_> {
         }
     }
 
-    fn show_location(&self, location: &SingleLocationExpression) -> std::fmt::Result {
+    fn show_location(&self, _location: &SingleLocationExpression) -> std::fmt::Result {
         todo!()
+    }
+
+    fn show_struct_literal(
+        &self,
+        f: &mut Formatter,
+        struct_instantiation: &StructInstantiation,
+        tabs: usize,
+    ) -> std::fmt::Result {
+        write!(
+            f,
+            "{} {{",
+            struct_instantiation.struct_type_ref.assigned_name.green()
+        )?;
+        for ((name, _field), (_index, expression)) in struct_instantiation
+            .struct_type_ref
+            .anon_struct_type
+            .defined_fields
+            .iter()
+            .zip(&struct_instantiation.source_order_expressions)
+        {
+            Self::new_line_and_tab(f, tabs + 1)?;
+            write!(f, "{}: ", name.yellow())?;
+            self.show_expression(f, expression, tabs)?;
+        }
+
+        Self::new_line_and_tab(f, tabs)?;
+        write!(f, "}}")?;
+
+        Ok(())
     }
 }

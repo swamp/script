@@ -170,7 +170,7 @@ impl Analyzer<'_> {
             }
 
             swamp_script_ast::LiteralKind::Map(entries) => {
-                let (map_literal, map_type_ref) = self.analyze_map_literal(ast_node, entries)?;
+                let (map_literal, _map_type_ref) = self.analyze_map_literal(ast_node, entries)?;
 
                 (
                     map_literal,

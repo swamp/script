@@ -1,6 +1,5 @@
 use crate::prelude::Value;
 use fixed32::Fp;
-use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::rc::Rc;
 use swamp_script_semantic::{EnumVariantType, Type};

@@ -3,21 +3,18 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use seq_map::SeqMap;
-use std::fmt::{Debug, Formatter};
+use std::fmt::Formatter;
 use std::path::Path;
 use swamp_script_analyzer::Analyzer;
-use swamp_script_analyzer::prelude::Error;
 use swamp_script_compile::bootstrap_modules;
 use swamp_script_dep_loader::swamp_registry_path;
 use swamp_script_error_report::{ScriptResolveError, show_error, show_script_resolve_error};
-use swamp_script_modules::modules::Modules;
 use swamp_script_modules::symtbl::SymbolTable;
 use swamp_script_parser::AstParser;
 use swamp_script_pretty_print::{ExpressionDisplay, SourceMapDisplay, SymbolTableDisplay};
-use swamp_script_semantic::{Expression, MonomorphizationCache, ProgramState};
+use swamp_script_semantic::{Expression, MonomorphizationCache};
 use swamp_script_source_map::SourceMap;
 use swamp_script_source_map_lookup::SourceMapWrapper;
-use test_log::tracing_subscriber::registry;
 use tracing::warn;
 
 fn internal_compile(
@@ -120,7 +117,7 @@ pub fn check(script: &str, expected_output: &str) {
     };
 
     if !symbol_table.is_empty() {
-        let mut format_symbol_table = SymbolTableDisplay {
+        let format_symbol_table = SymbolTableDisplay {
             symbol_table: &symbol_table,
             source_map_display: &source_map_display,
         };

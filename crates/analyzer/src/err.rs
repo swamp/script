@@ -123,6 +123,9 @@ pub enum ErrorKind {
     UnknownSymbol,
     UnknownEnumType,
     WrongTypeParameters,
+    UnexpectedTypeAfterInstantiation,
+    ParameterizedStructTypeWithoutScope,
+    ExpectedStructType,
 }
 
 impl From<SemanticError> for Error {

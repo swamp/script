@@ -546,6 +546,18 @@ pub fn build_resolve_error(err: &Error) -> Builder<usize> {
         | &swamp_script_analyzer::err::ErrorKind::WrongTypeParameters => {
             Report::build(Kind::Error, 140, "some error", span)
         }
+        ErrorKind::UnexpectedTypeAfterInstantiation => {
+            Report::build(Kind::Error, 140, "UnexpectedTypeAfterInstantiation", span)
+        }
+        ErrorKind::ParameterizedStructTypeWithoutScope => Report::build(
+            Kind::Error,
+            140,
+            "ParameterizedStructTypeWithoutScope",
+            span,
+        ),
+        ErrorKind::ExpectedStructType => {
+            Report::build(Kind::Error, 140, "ExpectedStructType", span)
+        }
     }
 }
 
