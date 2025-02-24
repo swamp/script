@@ -121,7 +121,7 @@ pub fn check(script: &str, expected_output: &str) {
             symbol_table: &symbol_table,
             source_map_display: &source_map_display,
         };
-        SourceMapDisplay::<'_>::set_color(false);
+        SourceMapDisplay::<'_>::set_color(true);
         formatted_output += &*format_symbol_table.to_string();
     }
 

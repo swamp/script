@@ -5,8 +5,8 @@ use swamp_script_modules::modules::{ModuleRef, Modules};
 use swamp_script_modules::symtbl::{FuncDef, Symbol, SymbolTable};
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
-    ArgumentExpressionOrLocation, AssociatedImpls, MutOrImmutableExpression, Postfix, PostfixKind,
-    SingleLocationExpression,
+    ArgumentExpressionOrLocation, AssociatedImpls, MutOrImmutableExpression, ParameterizedType,
+    ParameterizedTypeKind, Postfix, PostfixKind, SingleLocationExpression, TypeVariable,
 };
 use yansi::{Color, Paint};
 
@@ -183,25 +183,35 @@ impl SourceMapDisplay<'_> {
         &self,
         f: &mut Formatter<'_>,
         structs: &SeqMap<String, StructTypeRef>,
+        tabs: usize,
     ) -> std::fmt::Result {
         for (_struct_name, struct_type) in structs {
-            writeln!(f, "  {}:  ", struct_type.assigned_name.yellow())?;
-            self.show_struct(f, struct_type)?;
+            writeln!(f, "{}: ", struct_type.assigned_name.yellow())?;
+            self.show_struct(f, struct_type, tabs)?;
         }
         Ok(())
     }
 
     /// # Errors
     ///
-    pub fn show_struct(&self, f: &mut Formatter<'_>, struct_type: &StructType) -> std::fmt::Result {
+    pub fn show_struct(
+        &self,
+        f: &mut Formatter<'_>,
+        struct_type: &StructType,
+        tabs: usize,
+    ) -> std::fmt::Result {
+        write!(f, "{} {{", struct_type.assigned_name.bright_magenta())?;
+
         for (field_name, field) in &struct_type.anon_struct_type.defined_fields {
-            writeln!(
-                f,
-                "      {}:  {}",
-                field_name.cyan(),
-                field.field_type.magenta(),
-            )?;
+            Self::new_line_and_tab(f, tabs + 1)?;
+
+            write!(f, "{}: ", field_name.cyan())?;
+            self.show_type(f, &field.field_type, tabs + 1)?;
+            write!(f, "{}", ", ".white())?;
         }
+        Self::new_line_and_tab(f, tabs)?;
+
+        write!(f, "}}")?;
 
         Ok(())
     }
@@ -547,6 +557,47 @@ impl SourceMapDisplay<'_> {
         }
     }
 
+    fn show_parameterized_type_kind(
+        &self,
+        f: &mut Formatter,
+        kind: &ParameterizedTypeKind,
+        tabs: usize,
+    ) -> std::fmt::Result {
+        match kind {
+            ParameterizedTypeKind::Struct(struct_ref) => self.show_struct(f, struct_ref, tabs),
+            ParameterizedTypeKind::Enum(enum_ref) => self.show_enum_type_name(f, &enum_ref.0),
+            ParameterizedTypeKind::Parameterized(parameterized_type) => {
+                self.show_parameterized_type(f, parameterized_type, tabs)
+            }
+        }
+    }
+
+    fn show_parameterized_type(
+        &self,
+        f: &mut Formatter,
+        parameterized_type: &ParameterizedType,
+        tabs: usize,
+    ) -> std::fmt::Result {
+        self.show_parameterized_type_kind(f, &parameterized_type.base, tabs)?;
+        write!(f, " <")?;
+
+        self.show_types(f, &parameterized_type.parameters, tabs)?;
+
+        write!(f, ">")?;
+        Ok(())
+    }
+
+    fn show_types(&self, f: &mut Formatter, types: &[Type], tabs: usize) -> std::fmt::Result {
+        for (index, ty) in types.iter().enumerate() {
+            if index > 0 {
+                write!(f, ", ")?;
+            }
+            self.show_type(f, ty, tabs)?;
+        }
+
+        Ok(())
+    }
+
     fn show_type(&self, f: &mut Formatter, resolved_type: &Type, tabs: usize) -> std::fmt::Result {
         match resolved_type {
             Type::Int => write!(f, "{}", "Int".bright_blue()),
@@ -566,7 +617,7 @@ impl SourceMapDisplay<'_> {
                 write!(f, ")")
             }
 
-            Type::Struct(struct_ref) => write!(f, "{}", struct_ref.assigned_name),
+            Type::Struct(struct_ref) => self.show_struct(f, struct_ref, tabs),
 
             Type::Enum(enum_type) => write!(f, "{}", enum_type.0.borrow().assigned_name),
             //Type::EnumVariant(variant) => write!(
@@ -580,8 +631,8 @@ impl SourceMapDisplay<'_> {
             Type::Range => write!(f, "Range"),
             Type::Slice(..) => write!(f, "Slice"),
             Type::SlicePair(..) => write!(f, "SlicePair"),
-            Type::Parameterized(param) => write!(f, "{param:?}"),
-            Type::Variable(var) => write!(f, "{var:?}"),
+            Type::Parameterized(param) => self.show_parameterized_type(f, param, tabs),
+            Type::Variable(var) => self.show_type_variable(f, var, tabs),
         }
     }
 
@@ -697,13 +748,20 @@ impl SourceMapDisplay<'_> {
         }
     }
 
+    pub fn show_enum_type_name(
+        &self,
+        f: &mut Formatter,
+        enum_type: &EnumTypeRef,
+    ) -> std::fmt::Result {
+        write!(f, "{}", &enum_type.borrow().assigned_name.bright_red())
+    }
     pub fn show_enums(
         &self,
         f: &mut Formatter,
         enums: &SeqMap<String, EnumTypeRef>,
     ) -> std::fmt::Result {
         for (_name, enum_type) in enums {
-            write!(f, "{}", &enum_type.borrow().assigned_name.bright_red())?;
+            self.show_enum_type_name(f, enum_type)?;
         }
         Ok(())
     }
@@ -760,11 +818,21 @@ impl SourceMapDisplay<'_> {
             Self::new_line_and_tab(f, tabs + 1)?;
             write!(f, "{}: ", name.yellow())?;
             self.show_expression(f, expression, tabs)?;
+            write!(f, "{}", ", ".white())?;
         }
 
         Self::new_line_and_tab(f, tabs)?;
         write!(f, "}}")?;
 
         Ok(())
+    }
+
+    fn show_type_variable(
+        &self,
+        f: &mut Formatter,
+        type_variable: &TypeVariable,
+        tabs: usize,
+    ) -> std::fmt::Result {
+        write!(f, "{}", type_variable.name.blue())
     }
 }

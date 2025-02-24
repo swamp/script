@@ -12,7 +12,7 @@ struct Something<T> {
     value: T,
 }
 
-a = Something<Int> {
+instantiated = Something<Int> {
     a: 2.3,
     value: 3,
 }
