@@ -234,7 +234,6 @@ impl ParameterizedType {
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct TypeVariable {
     pub name: String,
-    pub number: TypeNumber,
 }
 
 #[derive(Clone, Hash, Eq, PartialEq)]
@@ -1374,6 +1373,7 @@ pub struct StructType {
     pub assigned_name: String,
     pub anon_struct_type: AnonymousStructType,
     pub number: TypeNumber,
+    pub type_variables: Vec<TypeVariable>,
 }
 
 impl Debug for StructType {
@@ -1395,6 +1395,7 @@ impl StructType {
             number: type_number,
             name,
             assigned_name: assigned_name.to_string(),
+            type_variables: Vec::new(),
         }
     }
 

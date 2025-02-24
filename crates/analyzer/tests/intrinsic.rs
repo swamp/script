@@ -6,7 +6,6 @@ mod util;
 fn basic_intrinsic() {
     check(
         r"
-
 fn some_function(x: Float) -> Float {
     core::float_floor(x)
 }

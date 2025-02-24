@@ -51,7 +51,10 @@ pub enum Symbol {
 impl Symbol {
     #[must_use]
     pub const fn is_basic_type(&self) -> bool {
-        matches!(self, Self::Type(..) | Self::Alias(..))
+        matches!(
+            self,
+            Self::Type(..) | Self::Alias(..) | Self::TypeGenerator(..)
+        )
     }
 }
 

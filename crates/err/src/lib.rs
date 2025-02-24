@@ -417,12 +417,9 @@ pub fn build_resolve_error(err: &Error) -> Builder<usize> {
         ErrorKind::UnknownTypeReference => {
             Report::build(Kind::Error, 101, "Unknown type reference", span)
         }
-        ErrorKind::SemanticError(a) => Report::build(
-            Kind::Error,
-            141,
-            &format!("semantic error {a:?}"),
-            &Span::dummy(),
-        ),
+        ErrorKind::SemanticError(a) => {
+            Report::build(Kind::Error, 141, &format!("semantic error {a:?}"), span)
+        }
         ErrorKind::SeqMapError(_) => todo!(),
         ErrorKind::ExpectedMemberCall => todo!(),
         ErrorKind::CouldNotFindStaticMember(x, _y) => {
@@ -558,6 +555,7 @@ pub fn build_resolve_error(err: &Error) -> Builder<usize> {
         ErrorKind::ExpectedStructType => {
             Report::build(Kind::Error, 140, "ExpectedStructType", span)
         }
+        &swamp_script_analyzer::err::ErrorKind::NonParameterizedTypeWithTypeArguments => todo!(),
     }
 }
 

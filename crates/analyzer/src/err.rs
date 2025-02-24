@@ -126,6 +126,7 @@ pub enum ErrorKind {
     UnexpectedTypeAfterInstantiation,
     ParameterizedStructTypeWithoutScope,
     ExpectedStructType,
+    NonParameterizedTypeWithTypeArguments,
 }
 
 impl From<SemanticError> for Error {

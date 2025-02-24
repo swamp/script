@@ -53,6 +53,15 @@ fn add_intrinsic_types(core_ns: &mut SymbolTable) {
     core_ns
         .add_type_generator("Slice", slice_type_generator)
         .unwrap();
+
+    let slice_type_generator = TypeGenerator {
+        kind: GeneratorKind::SlicePair,
+        arity: 2,
+    };
+
+    core_ns
+        .add_type_generator("SlicePair", slice_type_generator)
+        .unwrap();
 }
 
 #[allow(clippy::too_many_lines)]

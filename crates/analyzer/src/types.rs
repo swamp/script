@@ -4,6 +4,7 @@
  */
 use crate::Analyzer;
 use crate::err::{Error, ErrorKind};
+use crate::instantiate::Instantiator;
 use std::rc::Rc;
 use swamp_script_modules::symtbl::{GeneratorKind, Symbol};
 use swamp_script_semantic::{
@@ -40,10 +41,8 @@ impl Analyzer<'_> {
         &mut self,
         type_name_to_find: &swamp_script_ast::QualifiedTypeIdentifier,
     ) -> Result<Type, Error> {
-        //let (module, text) = self.get_module(type_name_to_find)?;
-        //info!(?text, ?module, "looking for named type");
-
         let (path, name) = self.get_path(type_name_to_find);
+
         if path.is_empty() {
             if let Some(found_scope) = &self.shared.type_variables {
                 if let Some(found_type) = found_scope.type_variables.get(&name) {
@@ -64,8 +63,6 @@ impl Analyzer<'_> {
                 .clone()
         };
 
-        //let is_parameterized = !type_name_to_find.generic_params.is_empty();
-
         let mut analyzed_types = Vec::new();
 
         for analyzed_type in &type_name_to_find.generic_params {
@@ -76,36 +73,22 @@ impl Analyzer<'_> {
 
         let result_type = match symbol {
             Symbol::Type(base_type) => {
-                /*
-                if is_parameterized {
-                    info!(?base_type, ?name, "parameterized");
+                match base_type {
+                    Type::Parameterized(parameterized_type_definition) => {
+                        let type_variable_scope = Instantiator::create_type_parameter_scope(
+                            &parameterized_type_definition.parameters,
+                            &analyzed_types,
+                        )?; // Create scope
 
-                    let kind: ParameterizedTypeKind = match base_type {
-                        Type::Struct(struct_ref) => ParameterizedTypeKind::Struct(struct_ref),
-                        Type::Enum(enum_ref) => ParameterizedTypeKind::Enum(enum_ref),
-                        Type::Parameterized(inner) => {
-                            ParameterizedTypeKind::Parameterized(Box::new(inner))
-                        }
-                        _ => {
-                            return Err(
-                                self.create_err(ErrorKind::NotAGeneric, &type_name_to_find.name.0)
-                            );
-                        }
-                    };
+                        let (_, instantiated_type) = Instantiator::instantiate(
+                            &parameterized_type_definition,
+                            &type_variable_scope,
+                        )?; // Instantiate
 
-                    let parameterized_type = ParameterizedType {
-                        base: kind,
-                        parameters: vec![],
-                    };
-                    let result_type = Type::Parameterized(parameterized_type);
-                    info!(?result_type, "parameterized resolution");
-                    result_type
-                } else {
-                    info!(?name, "base_type");
-                    base_type
+                        instantiated_type // Return the instantiated concrete type
+                    }
+                    _ => base_type.clone(), // For non-parameterized types, just return the base type
                 }
-                                 */
-                base_type
             }
             Symbol::Alias(alias_type) => alias_type.referenced_type.clone(),
             Symbol::TypeGenerator(generator) => {
@@ -128,6 +111,36 @@ impl Analyzer<'_> {
 
         Ok(result_type)
     }
+
+    /*
+    if is_parameterized {
+        info!(?base_type, ?name, "parameterized");
+
+        let kind: ParameterizedTypeKind = match base_type {
+            Type::Struct(struct_ref) => ParameterizedTypeKind::Struct(struct_ref),
+            Type::Enum(enum_ref) => ParameterizedTypeKind::Enum(enum_ref),
+            Type::Parameterized(inner) => {
+                ParameterizedTypeKind::Parameterized(Box::new(inner))
+            }
+            _ => {
+                return Err(
+                    self.create_err(ErrorKind::NotAGeneric, &type_name_to_find.name.0)
+                );
+            }
+        };
+
+        let parameterized_type = ParameterizedType {
+            base: kind,
+            parameters: vec![],
+        };
+        let result_type = Type::Parameterized(parameterized_type);
+        info!(?result_type, "parameterized resolution");
+        result_type
+    } else {
+        info!(?name, "base_type");
+        base_type
+    }
+                     */
 
     /*
     /// # Errors
@@ -187,14 +200,6 @@ impl Analyzer<'_> {
     pub fn analyze_type(&mut self, ast_type: &swamp_script_ast::Type) -> Result<Type, Error> {
         let resolved = match ast_type {
             swamp_script_ast::Type::Unit(_) => Type::Unit,
-            /*
-            swamp_script_ast::Type::Struct(ast_struct) => {
-                let text = self.get_text(&ast_struct.name.0);
-                let struct_ref = self.analyze_struct_type(text, ast_struct)?;
-                Type::Struct(StructTypeRef::from(struct_ref))
-            }
-
-             */
             swamp_script_ast::Type::Array(_ast_type) => {
                 todo!() //Type::Array(self.analyze_array_type(ast_type)?)
             }
@@ -212,12 +217,6 @@ impl Analyzer<'_> {
             swamp_script_ast::Type::Tuple(types) => {
                 Type::Tuple(TupleType(self.analyze_types(types)?).into())
             }
-            /*
-            swamp_script_ast::Type::Generic(type_identifier_with_params) => {
-                self.monomorphize(type_identifier_with_params)?
-            }
-
-             */
             swamp_script_ast::Type::Enum(_) => todo!(),
             swamp_script_ast::Type::Named(ast_type_reference) => {
                 self.analyze_named_type(ast_type_reference)?

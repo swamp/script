@@ -26,6 +26,7 @@ use std::num::{ParseFloatError, ParseIntError};
 use std::rc::Rc;
 use swamp_script_modules::modules::Modules;
 use swamp_script_modules::symtbl::{FuncDef, Symbol, SymbolTable, SymbolTableRef};
+use swamp_script_semantic::ParameterizedType;
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
     ArgumentExpressionOrLocation, IntrinsicFunctionDefinitionRef, LocationAccess,
@@ -722,14 +723,10 @@ impl<'a> Analyzer<'a> {
         info!(?maybe_struct_type, "found maybe type");
         match maybe_struct_type {
             Type::Struct(struct_type) => Ok(struct_type), // Already a concrete struct, return directly
-
             Type::Parameterized(parameterized_type) => {
                 if let ParameterizedTypeKind::Struct(struct_ref) = &parameterized_type.base {
                     if qualified_type_identifier.generic_params.is_empty() {
-                        Err(self.create_err(
-                            ErrorKind::ParameterizedStructTypeWithoutScope,
-                            &qualified_type_identifier.name.0,
-                        ))
+                        todo!()
                     } else {
                         let analyzed_concrete_types =
                             self.analyze_types(&qualified_type_identifier.generic_params)?;
@@ -737,16 +734,16 @@ impl<'a> Analyzer<'a> {
                             &parameterized_type.parameters,
                             &analyzed_concrete_types,
                         )?;
-                        let (_, instantiated_type) =
+                        let (replaced, instantiated_type) =
                             Instantiator::instantiate(&parameterized_type, &type_variables)
-                                .map_err(|_semantic_error| {
+                                .map_err(|semantic_error| {
                                     self.create_err(
-                                        ErrorKind::UnexpectedTypeAfterInstantiation,
+                                        ErrorKind::SemanticError(semantic_error),
                                         &qualified_type_identifier.name.0,
                                     )
                                 })?;
-                        if let Type::Struct(instantiated_struct_type) = instantiated_type {
-                            Ok(instantiated_struct_type)
+                        if let Type::Struct(ref instantiated_struct_type) = instantiated_type {
+                            Ok(instantiated_struct_type.clone()) // Return the *instantiated* StructType
                         } else {
                             Err(self.create_err(
                                 ErrorKind::UnexpectedTypeAfterInstantiation,
@@ -756,12 +753,11 @@ impl<'a> Analyzer<'a> {
                     }
                 } else {
                     Err(self.create_err(
-                        ErrorKind::ExpectedStructType,
+                        ErrorKind::NonParameterizedTypeWithTypeArguments, // Or a more specific error for Enum/other ParameterizedTypeKinds
                         &qualified_type_identifier.name.0,
                     ))
                 }
             }
-
             _ => Err(self.create_err(
                 // For other Type variants that are not Struct
                 ErrorKind::UnknownStructTypeReference,

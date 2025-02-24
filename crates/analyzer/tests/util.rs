@@ -19,15 +19,7 @@ use tracing::warn;
 
 fn internal_compile(
     script: &str,
-) -> Result<
-    (
-        SymbolTable,
-        MonomorphizationCache,
-        Option<Expression>,
-        SourceMap,
-    ),
-    ScriptResolveError,
-> {
+) -> Result<(SymbolTable, Option<Expression>, SourceMap), ScriptResolveError> {
     let parser = AstParser;
 
     let program = parser.parse_module(script).expect("Failed to parse script");
@@ -90,7 +82,6 @@ fn internal_compile(
 
     Ok((
         analyzer.shared.definition_table,
-        analyzer.shared.state.monomorphization_cache.clone(),
         maybe_resolved_expression,
         source_map,
     ))
@@ -107,8 +98,7 @@ pub fn check_fail(script: &str, expected_error_message: &str) {
 /// # Panics
 /// Intentionally panics if output is not the same as the `expected_output`
 pub fn check(script: &str, expected_output: &str) {
-    let (symbol_table, monomorphization_cache, expression, source_map) =
-        internal_compile(script).expect("should work");
+    let (symbol_table, expression, source_map) = internal_compile(script).expect("should work");
 
     let mut formatted_output = String::new();
 
@@ -121,28 +111,29 @@ pub fn check(script: &str, expected_output: &str) {
             symbol_table: &symbol_table,
             source_map_display: &source_map_display,
         };
-        SourceMapDisplay::<'_>::set_color(true);
-        formatted_output += &*format_symbol_table.to_string();
-    }
 
-    if !monomorphization_cache.is_empty() {
-        if !formatted_output.is_empty() {
-            formatted_output += "---\n";
-        }
-        for (name, ty) in monomorphization_cache.cache {
-            formatted_output += &*format!("{name} ==> {ty:?}\n");
-        }
+        SourceMapDisplay::<'_>::set_color(true);
+        println!("{format_symbol_table}");
+
+        SourceMapDisplay::<'_>::set_color(false);
+        formatted_output += &*format_symbol_table.to_string();
     }
 
     if let Some(expr) = expression {
         if !formatted_output.is_empty() {
             formatted_output += "---\n";
+            println!("---");
         }
 
         let format_expr = ExpressionDisplay {
             expression: &expr,
             source_map_display: &source_map_display,
         };
+
+        SourceMapDisplay::<'_>::set_color(true);
+        println!("{format_expr}");
+
+        SourceMapDisplay::<'_>::set_color(false);
         formatted_output += &*format_expr.to_string();
         formatted_output += "\n";
     }

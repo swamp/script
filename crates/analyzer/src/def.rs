@@ -11,9 +11,8 @@ use swamp_script_semantic::{
     AliasType, AliasTypeRef, AnonymousStructType, EnumType, EnumTypeRef, EnumVariantCommon,
     EnumVariantSimpleType, EnumVariantSimpleTypeRef, EnumVariantStructType, EnumVariantTupleType,
     EnumVariantType, ExternalFunctionDefinition, Function, InternalFunctionDefinition,
-    LocalIdentifier, LocalTypeIdentifier, ParameterNode, ParameterizedType, ParameterizedTypeKind,
-    Signature, StructType, StructTypeField, StructTypeRef, Type, TypeForParameter, TypeVariable,
-    UseItem,
+    LocalIdentifier, LocalTypeIdentifier, ParameterNode, Signature, StructType, StructTypeField,
+    Type, TypeForParameter, TypeVariable, UseItem,
 };
 
 impl Analyzer<'_> {
@@ -331,17 +330,27 @@ impl Analyzer<'_> {
 
      */
 
-    /// # Panics
-    ///
-    pub fn push_type_variables(&mut self, ast_nodes: &[swamp_script_ast::Node]) {
-        let mut types = SeqMap::new();
+    pub fn convert_to_type_variables(
+        &mut self,
+        ast_nodes: &[swamp_script_ast::Node],
+    ) -> Vec<TypeVariable> {
+        let mut types = Vec::new();
         for ast_node in ast_nodes {
             let name = self.get_text(ast_node).to_string();
-            let number = self.shared.state.allocate_number();
+            types.push(TypeVariable { name });
+        }
+        types
+    }
+
+    /// # Panics
+    ///
+    pub fn set_type_variables_to_extra_symbol_table(&mut self, type_variables: &[TypeVariable]) {
+        let mut types = SeqMap::new();
+        for type_variable in type_variables {
             types
                 .insert(
-                    name.to_string(),
-                    Type::Variable(TypeVariable { name, number }),
+                    type_variable.name.to_string(),
+                    Type::Variable(type_variable.clone()),
                 )
                 .unwrap();
         }
@@ -358,42 +367,29 @@ impl Analyzer<'_> {
         ast_struct: &swamp_script_ast::StructType,
     ) -> Result<(), Error> {
         let is_parameterized = !ast_struct.identifier.parameter_names.is_empty();
+
+        let type_variables = self.convert_to_type_variables(&ast_struct.identifier.parameter_names);
         if is_parameterized {
-            self.push_type_variables(&ast_struct.identifier.parameter_names);
+            self.set_type_variables_to_extra_symbol_table(&type_variables);
         }
 
         let struct_name_str = self.get_text(&ast_struct.identifier.name).to_string();
-        let analyzed_struct_ref = self.analyze_struct_type(&struct_name_str, ast_struct)?;
+
+        let mut analyzed_struct_ref = self.analyze_struct_type(&struct_name_str, ast_struct)?;
 
         if is_parameterized {
-            let x = if let Some(x) = &self.shared.type_variables {
-                x.variables()
-            } else {
-                panic!()
-            };
-
-            let parameterized = ParameterizedType {
-                base: ParameterizedTypeKind::Struct(StructTypeRef::from(analyzed_struct_ref)),
-                parameters: x,
-            };
-
-            self.shared
-                .definition_table
-                .add_parameterized(parameterized.clone())?;
-
-            self.shared
-                .lookup_table
-                .add_parameterized_link(parameterized)?;
-
+            // Remove the type variables from the "extra" symbol table
             self.shared.type_variables = None;
-        } else {
-            let struct_ref = self
-                .shared
-                .definition_table
-                .add_struct(analyzed_struct_ref)?;
-
-            self.shared.lookup_table.add_struct_link(struct_ref)?;
+            // The type variables should be directly on the StructType.
+            analyzed_struct_ref.type_variables = type_variables;
         }
+
+        let struct_ref = self
+            .shared
+            .definition_table
+            .add_struct(analyzed_struct_ref)?;
+
+        self.shared.lookup_table.add_struct_link(struct_ref)?;
 
         Ok(())
     }
@@ -533,7 +529,8 @@ impl Analyzer<'_> {
         let is_parameterized = !attached_to_type.parameter_names.is_empty();
 
         if is_parameterized {
-            self.push_type_variables(&attached_to_type.parameter_names);
+            let type_variables = self.convert_to_type_variables(&attached_to_type.parameter_names);
+            self.set_type_variables_to_extra_symbol_table(&type_variables);
         }
         let type_to_attach_to = self.analyze_named_type(&qualified)?;
         let function_refs: Vec<&swamp_script_ast::Function> = functions.iter().collect();

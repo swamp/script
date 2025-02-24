@@ -372,7 +372,11 @@ impl SourceMapDisplay<'_> {
                 write!(f, "InterpolatedString()")
             }
             ExpressionKind::VariableDefinition(a, b) => {
-                write!(f, "let {} = ", self.source_map.get_text(&a.name).green())?;
+                write!(
+                    f,
+                    "let {} = ",
+                    self.source_map.get_text(&a.name).bright_blue()
+                )?;
                 self.show_mut_or_not_expression(f, b, tabs)
             }
             ExpressionKind::VariableReassignment(_, _) => {
@@ -579,9 +583,24 @@ impl SourceMapDisplay<'_> {
         tabs: usize,
     ) -> std::fmt::Result {
         self.show_parameterized_type_kind(f, &parameterized_type.base, tabs)?;
-        write!(f, " <")?;
+        write!(f, "{}", "<".bright_white())?;
 
         self.show_types(f, &parameterized_type.parameters, tabs)?;
+
+        write!(f, "{}", ">".bright_white())?;
+        Ok(())
+    }
+
+    fn show_parameterized_like(
+        &self,
+        f: &mut Formatter,
+        name: &str,
+        types: &[Type],
+        tabs: usize,
+    ) -> std::fmt::Result {
+        write!(f, "{}<", name.bright_magenta())?;
+
+        self.show_types(f, &types, tabs)?;
 
         write!(f, ">")?;
         Ok(())
@@ -629,8 +648,10 @@ impl SourceMapDisplay<'_> {
             Type::Optional(base_type) => write!(f, "{}?", base_type.yellow()),
             Type::External(external_type) => write!(f, "External {}", external_type.type_name),
             Type::Range => write!(f, "Range"),
-            Type::Slice(..) => write!(f, "Slice"),
-            Type::SlicePair(..) => write!(f, "SlicePair"),
+            Type::Slice(ty) => self.show_parameterized_like(f, "Slice", &[*ty.clone()], tabs),
+            Type::SlicePair(key, value) => {
+                self.show_parameterized_like(f, "SlicePair", &[*key.clone(), *value.clone()], tabs)
+            }
             Type::Parameterized(param) => self.show_parameterized_type(f, param, tabs),
             Type::Variable(var) => self.show_type_variable(f, var, tabs),
         }
@@ -658,25 +679,27 @@ impl SourceMapDisplay<'_> {
         }
         Ok(())
     }
-    pub fn show_type_parameter(
+    pub fn show_parameter(
         &self,
         f: &mut Formatter,
         parameter_type: &TypeForParameter,
+        tabs: usize,
     ) -> std::fmt::Result {
         write!(
             f,
-            "{}{}: {:?}",
+            "{}{}:",
             if parameter_type.is_mutable {
                 "mut ".red()
             } else {
                 "".white()
             },
             parameter_type.name.bright_green(),
-            parameter_type.resolved_type.bright_cyan(),
-        )
+        )?;
+
+        self.show_type(f, &parameter_type.resolved_type, tabs)
     }
 
-    pub fn show_type_parameters(
+    pub fn show_parameters_and_type(
         &self,
         f: &mut Formatter,
         parameter_types: &[TypeForParameter],
@@ -686,7 +709,7 @@ impl SourceMapDisplay<'_> {
             if index > 0 {
                 write!(f, "{}", ", ".white())?;
             }
-            self.show_type_parameter(f, parameter_type)?;
+            self.show_parameter(f, parameter_type, tabs)?;
         }
         Ok(())
     }
@@ -699,7 +722,7 @@ impl SourceMapDisplay<'_> {
     ) -> std::fmt::Result {
         write!(f, "{}", "(".bright_green())?;
 
-        self.show_type_parameters(f, &function_type_signature.parameters, tabs)?;
+        self.show_parameters_and_type(f, &function_type_signature.parameters, tabs)?;
 
         write!(f, "{}", ")".bright_green())?;
 
@@ -833,6 +856,6 @@ impl SourceMapDisplay<'_> {
         type_variable: &TypeVariable,
         tabs: usize,
     ) -> std::fmt::Result {
-        write!(f, "{}", type_variable.name.blue())
+        write!(f, "{}", type_variable.name.red())
     }
 }
