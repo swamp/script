@@ -808,13 +808,13 @@ impl SourceMapDisplay<'_> {
             "{} {{",
             struct_instantiation.struct_type_ref.assigned_name.green()
         )?;
-        for ((name, _field), (_index, expression)) in struct_instantiation
-            .struct_type_ref
-            .anon_struct_type
-            .defined_fields
-            .iter()
-            .zip(&struct_instantiation.source_order_expressions)
-        {
+        for (index, expression) in &struct_instantiation.source_order_expressions {
+            let (name, _struct_field) = struct_instantiation
+                .struct_type_ref
+                .anon_struct_type
+                .defined_fields
+                .iter()
+                .collect::<Vec<_>>()[*index];
             Self::new_line_and_tab(f, tabs + 1)?;
             write!(f, "{}: ", name.yellow())?;
             self.show_expression(f, expression, tabs)?;
