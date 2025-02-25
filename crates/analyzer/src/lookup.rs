@@ -59,6 +59,7 @@ impl TypeVariableStack {
         });
     }
 
+    /*
     pub(crate) fn get(&self, type_name: &str) -> Option<Type> {
         for scope in self.type_variable_scopes.iter().rev() {
             if let Some(found_type) = scope.type_variables.get(&type_name.to_string()) {
@@ -67,6 +68,8 @@ impl TypeVariableStack {
         }
         None
     }
+
+     */
 
     /// Pops the most recent type parameter scope off the stack.
     pub fn pop(&mut self) -> TypeVariableScope {

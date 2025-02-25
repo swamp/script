@@ -2,9 +2,9 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
+use crate::Analyzer;
 use crate::err::{Error, ErrorKind};
 use crate::instantiate::Instantiator;
-use crate::Analyzer;
 use std::rc::Rc;
 use swamp_script_modules::symtbl::{GeneratorKind, Symbol};
 use swamp_script_semantic::{
@@ -78,12 +78,24 @@ impl Analyzer<'_> {
                         let type_variable_scope = Instantiator::create_type_parameter_scope(
                             &parameterized_type_definition.instantiated_with_arguments,
                             &analyzed_types,
-                        )?; // Create scope
+                        )
+                        .map_err(|err| {
+                            self.create_err(
+                                ErrorKind::SemanticError(err),
+                                &type_name_to_find.name.0,
+                            )
+                        })?;
 
                         let (_, instantiated_type) = Instantiator::instantiate(
                             &parameterized_type_definition,
                             &type_variable_scope,
-                        )?; // Instantiate
+                        )
+                        .map_err(|err| {
+                            self.create_err(
+                                ErrorKind::SemanticError(err),
+                                &type_name_to_find.name.0,
+                            )
+                        })?;
 
                         instantiated_type // Return the instantiated concrete type
                     }
@@ -108,8 +120,13 @@ impl Analyzer<'_> {
                 }
             }
             Symbol::Blueprint(blueprint) => {
-                let (_was_changed, ty) =
-                    Instantiator::instantiate_blueprint(blueprint, &analyzed_types)?;
+                let (_was_changed, ty) = Instantiator::instantiate_blueprint(
+                    blueprint,
+                    &analyzed_types,
+                )
+                .map_err(|err| {
+                    self.create_err(ErrorKind::SemanticError(err), &type_name_to_find.name.0)
+                })?;
                 ty
             }
             _ => return Err(self.create_err(ErrorKind::UnknownSymbol, &type_name_to_find.name.0)),

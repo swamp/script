@@ -3,7 +3,6 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use seq_map::SeqMap;
-use std::fmt::Formatter;
 use std::path::Path;
 use swamp_script_analyzer::Analyzer;
 use swamp_script_compile::bootstrap_modules;
@@ -12,7 +11,7 @@ use swamp_script_error_report::{ScriptResolveError, show_error, show_script_reso
 use swamp_script_modules::symtbl::SymbolTable;
 use swamp_script_parser::AstParser;
 use swamp_script_pretty_print::{ExpressionDisplay, SourceMapDisplay, SymbolTableDisplay};
-use swamp_script_semantic::{Expression, MonomorphizationCache};
+use swamp_script_semantic::Expression;
 use swamp_script_source_map::SourceMap;
 use swamp_script_source_map_lookup::SourceMapWrapper;
 use tracing::warn;

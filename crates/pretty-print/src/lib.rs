@@ -865,7 +865,7 @@ impl SourceMapDisplay<'_> {
         &self,
         f: &mut Formatter,
         type_variable: &TypeVariable,
-        tabs: usize,
+        _tabs: usize,
     ) -> std::fmt::Result {
         write!(f, "{}", type_variable.name.red())
     }

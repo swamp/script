@@ -15,15 +15,23 @@ impl Analyzer<'_> {
         let name_node = self.to_node(&constant.constant_identifier.0);
         let name_text = self.get_text_resolved(&name_node).to_string();
         let constant = Constant {
-            name: name_node,
+            name: name_node.clone(),
             assigned_name: name_text,
             id: 0xffff,
             expr: resolved_expr,
             resolved_type,
         };
 
-        let const_ref = self.shared.definition_table.add_constant(constant)?;
-        self.shared.lookup_table.add_constant_link(const_ref)?;
+        let const_ref = self
+            .shared
+            .definition_table
+            .add_constant(constant)
+            .map_err(|s| self.create_err_resolved(ErrorKind::SemanticError(s), &name_node))?;
+
+        self.shared
+            .lookup_table
+            .add_constant_link(const_ref)
+            .map_err(|s| self.create_err_resolved(ErrorKind::SemanticError(s), &name_node))?;
 
         Ok(())
     }

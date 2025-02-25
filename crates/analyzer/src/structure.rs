@@ -330,6 +330,7 @@ impl Analyzer<'_> {
             |symbol_table| Ok((symbol_table, name)),
         )
     }
+    /*
     pub(crate) fn get_canonical_path_and_name(
         &self,
         type_identifier: &swamp_script_ast::QualifiedTypeIdentifier,
@@ -344,4 +345,6 @@ impl Analyzer<'_> {
 
         Ok((path_to_return, name))
     }
+
+     */
 }

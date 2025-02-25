@@ -59,7 +59,12 @@ pub fn analyze_module(
         let target = &mut resolver.shared.lookup_table;
         for symbol_table in &auto_use_modules.modules {
             for (name, symbol) in symbol_table.symbols() {
-                target.add_symbol(name, symbol.clone())?
+                target
+                    .add_symbol(name, symbol.clone())
+                    .map_err(|err| Error {
+                        node: Node::default(),
+                        kind: ErrorKind::SemanticError(err),
+                    })?;
             }
         }
     }

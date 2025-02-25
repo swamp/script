@@ -7,7 +7,14 @@ use crate::err::{Error, ErrorKind};
 use crate::lookup::TypeVariableScope;
 use seq_map::SeqMap;
 use std::rc::Rc;
-use swamp_script_semantic::{AliasType, AliasTypeRef, AnonymousStructType, EnumType, EnumTypeRef, EnumVariantCommon, EnumVariantSimpleType, EnumVariantSimpleTypeRef, EnumVariantStructType, EnumVariantTupleType, EnumVariantType, ExternalFunctionDefinition, Function, InternalFunctionDefinition, LocalIdentifier, LocalTypeIdentifier, ParameterNode, ParameterizedTypeBlueprint, ParameterizedTypeKind, Signature, StructType, StructTypeField, Type, TypeForParameter, TypeVariable, UseItem};
+use swamp_script_semantic::{
+    AliasType, AliasTypeRef, AnonymousStructType, EnumType, EnumTypeRef, EnumVariantCommon,
+    EnumVariantSimpleType, EnumVariantSimpleTypeRef, EnumVariantStructType, EnumVariantTupleType,
+    EnumVariantType, ExternalFunctionDefinition, Function, InternalFunctionDefinition,
+    LocalIdentifier, LocalTypeIdentifier, ParameterNode, ParameterizedTypeBlueprint,
+    ParameterizedTypeKind, Signature, StructType, StructTypeField, Type, TypeForParameter,
+    TypeVariable, UseItem,
+};
 
 impl Analyzer<'_> {
     fn analyze_use_definition(
@@ -32,7 +39,13 @@ impl Analyzer<'_> {
             let last_name = path.last().unwrap();
             self.shared
                 .lookup_table
-                .add_module_link(last_name, found_module.clone())?;
+                .add_module_link(last_name, found_module.clone())
+                .map_err(|err| {
+                    self.create_err(
+                        ErrorKind::SemanticError(err),
+                        &use_definition.module_path.0[0],
+                    )
+                })?;
         }
 
         for ast_items in &use_definition.items {
@@ -46,7 +59,10 @@ impl Analyzer<'_> {
                     {
                         self.shared
                             .lookup_table
-                            .add_symbol(&ident_text, found_symbol.clone())?;
+                            .add_symbol(&ident_text, found_symbol.clone())
+                            .map_err(|err| {
+                                self.create_err(ErrorKind::SemanticError(err), &node.0)
+                            })?;
                     } else {
                         return Err(self.create_err_resolved(
                             ErrorKind::UnknownTypeReference,
@@ -63,7 +79,10 @@ impl Analyzer<'_> {
                     {
                         self.shared
                             .lookup_table
-                            .add_symbol(&ident_text, found_symbol.clone())?;
+                            .add_symbol(&ident_text, found_symbol.clone())
+                            .map_err(|err| {
+                                self.create_err(ErrorKind::SemanticError(err), &node.0)
+                            })?;
                     } else {
                         return Err(self.create_err_resolved(
                             ErrorKind::UnknownTypeReference,
@@ -93,7 +112,13 @@ impl Analyzer<'_> {
         if let Some(found_namespace) = self.shared.modules.get(&nodes_copy) {
             self.shared
                 .lookup_table
-                .add_module_link(nodes_copy.last().unwrap(), found_namespace.clone())?;
+                .add_module_link(nodes_copy.last().unwrap(), found_namespace.clone())
+                .map_err(|err| {
+                    self.create_err(
+                        ErrorKind::SemanticError(err),
+                        &mod_definition.module_path.0[0],
+                    )
+                })?;
             Ok(())
         } else {
             let first = &mod_definition.module_path.0[0];
@@ -117,10 +142,15 @@ impl Analyzer<'_> {
             variants: SeqMap::default(),
         };
 
-        let parent_ref = self.shared.definition_table.add_enum_type(enum_parent)?;
+        let parent_ref = self
+            .shared
+            .definition_table
+            .add_enum_type(enum_parent)
+            .map_err(|err| self.create_err(ErrorKind::SemanticError(err), &enum_type_name.name))?;
         self.shared
             .lookup_table
-            .add_enum_type_link(parent_ref.clone())?;
+            .add_enum_type_link(parent_ref.clone())
+            .map_err(|err| self.create_err(ErrorKind::SemanticError(err), &enum_type_name.name))?;
 
         for (container_index_usize, ast_variant_type) in ast_variants.iter().enumerate() {
             let variant_name_node = match ast_variant_type {
@@ -225,10 +255,19 @@ impl Analyzer<'_> {
             referenced_type: resolved_type,
         };
 
-        let resolved_alias_ref = self.shared.definition_table.add_alias(resolved_alias)?;
+        let resolved_alias_ref = self
+            .shared
+            .definition_table
+            .add_alias(resolved_alias)
+            .map_err(|err| {
+                self.create_err(ErrorKind::SemanticError(err), &ast_alias.identifier.0)
+            })?;
         self.shared
             .lookup_table
-            .add_alias_link(resolved_alias_ref.clone())?;
+            .add_alias_link(resolved_alias_ref.clone())
+            .map_err(|err| {
+                self.create_err(ErrorKind::SemanticError(err), &ast_alias.identifier.0)
+            })?;
 
         Ok(resolved_alias_ref)
     }
@@ -373,23 +412,42 @@ impl Analyzer<'_> {
 
         if is_parameterized {
             self.shared.type_variables = None;
-            
-            let blueprint_ref = self.shared.definition_table.add_blueprint(ParameterizedTypeBlueprint {
-                kind: ParameterizedTypeKind::Struct(analyzed_struct),
-                type_variables,
-            })?;
 
-            self.shared.lookup_table.add_blueprint_link(blueprint_ref)?;
-            
-            return Ok(())
+            let blueprint_ref = self
+                .shared
+                .definition_table
+                .add_blueprint(ParameterizedTypeBlueprint {
+                    kind: ParameterizedTypeKind::Struct(analyzed_struct),
+                    type_variables,
+                })
+                .map_err(|err| {
+                    self.create_err(ErrorKind::SemanticError(err), &ast_struct.identifier.name)
+                })?;
+
+            self.shared
+                .lookup_table
+                .add_blueprint_link(blueprint_ref)
+                .map_err(|err| {
+                    self.create_err(ErrorKind::SemanticError(err), &ast_struct.identifier.name)
+                })?;
+
+            return Ok(());
         }
 
         let struct_ref = self
             .shared
             .definition_table
-            .add_struct(analyzed_struct)?;
+            .add_struct(analyzed_struct)
+            .map_err(|err| {
+                self.create_err(ErrorKind::SemanticError(err), &ast_struct.identifier.name)
+            })?;
 
-        self.shared.lookup_table.add_struct_link(struct_ref)?;
+        self.shared
+            .lookup_table
+            .add_struct_link(struct_ref)
+            .map_err(|err| {
+                self.create_err(ErrorKind::SemanticError(err), &ast_struct.identifier.name)
+            })?;
 
         Ok(())
     }
@@ -434,11 +492,23 @@ impl Analyzer<'_> {
                 let function_ref = self
                     .shared
                     .definition_table
-                    .add_internal_function(&function_name, internal)?;
+                    .add_internal_function(&function_name, internal)
+                    .map_err(|err| {
+                        self.create_err(
+                            ErrorKind::SemanticError(err),
+                            &function_data.declaration.name,
+                        )
+                    })?;
 
                 self.shared
                     .lookup_table
-                    .add_internal_function_link(&function_name, function_ref.clone())?;
+                    .add_internal_function_link(&function_name, function_ref.clone())
+                    .map_err(|err| {
+                        self.create_err(
+                            ErrorKind::SemanticError(err),
+                            &function_data.declaration.name,
+                        )
+                    })?;
 
                 Function::Internal(function_ref)
             }
@@ -466,11 +536,17 @@ impl Analyzer<'_> {
                 let function_ref = self
                     .shared
                     .definition_table
-                    .add_external_function_declaration(external)?;
+                    .add_external_function_declaration(external)
+                    .map_err(|err| {
+                        self.create_err(ErrorKind::SemanticError(err), &ast_signature.name)
+                    })?;
 
                 self.shared
                     .lookup_table
-                    .add_external_function_declaration_link(function_ref.clone())?;
+                    .add_external_function_declaration_link(function_ref.clone())
+                    .map_err(|err| {
+                        self.create_err(ErrorKind::SemanticError(err), &ast_signature.name)
+                    })?;
 
                 Function::External(function_ref)
             }
@@ -572,11 +648,13 @@ impl Analyzer<'_> {
 
             self.stop_function();
 
-            self.shared.state.associated_impls.add_member_function(
-                type_to_attach_to,
-                &function_name_str,
-                resolved_function_ref,
-            )?;
+            self.shared
+                .state
+                .associated_impls
+                .add_member_function(type_to_attach_to, &function_name_str, resolved_function_ref)
+                .map_err(|err| {
+                    self.create_err(ErrorKind::SemanticError(err), &function_name.name)
+                })?;
         }
 
         Ok(())

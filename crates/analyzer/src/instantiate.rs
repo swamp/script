@@ -16,7 +16,10 @@ impl Instantiator {
         concrete: &[Type],
     ) -> Result<TypeVariableScope, SemanticError> {
         if parameters.len() != concrete.len() {
-            return Err(SemanticError::WrongParameterCount);
+            return Err(SemanticError::WrongParameterCount(
+                parameters.len(),
+                concrete.len(),
+            ));
         }
 
         let mut scope = SeqMap::new();
@@ -39,7 +42,10 @@ impl Instantiator {
         concrete: &[Type],
     ) -> Result<TypeVariableScope, SemanticError> {
         if variables.len() != concrete.len() {
-            return Err(SemanticError::WrongParameterCount);
+            return Err(SemanticError::WrongParameterCount(
+                variables.len(),
+                concrete.len(),
+            ));
         }
 
         let mut scope = SeqMap::new();
@@ -54,8 +60,11 @@ impl Instantiator {
         blueprint: ParameterizedTypeBlueprintRef,
         concrete_types: &[Type],
     ) -> Result<(bool, Type), SemanticError> {
-        let scope = Self::create_type_parameter_scope_from_variables(&blueprint.type_variables, concrete_types)?;
-        
+        let scope = Self::create_type_parameter_scope_from_variables(
+            &blueprint.type_variables,
+            concrete_types,
+        )?;
+
         match &blueprint.kind {
             ParameterizedTypeKind::Struct(struct_ref) => {
                 Self::instantiate_struct(struct_ref, &scope)

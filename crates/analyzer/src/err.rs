@@ -3,7 +3,6 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use seq_map::SeqMapError;
 use std::num::{ParseFloatError, ParseIntError};
 use swamp_script_ast::{LocalTypeIdentifier, Pattern};
 use swamp_script_semantic::{
@@ -58,8 +57,6 @@ pub enum ErrorKind {
     ArgumentIsNotMutable,
     WrongNumberOfTupleDeconstructVariables,
     UnknownTypeReference,
-    SemanticError(SemanticError),
-    SeqMapError(SeqMapError),
     ExpectedMemberCall,
     CouldNotFindStaticMember(Node, Node),
     TypeAliasNotAStruct,
@@ -127,13 +124,5 @@ pub enum ErrorKind {
     ParameterizedStructTypeWithoutScope,
     ExpectedStructType,
     NonParameterizedTypeWithTypeArguments,
-}
-
-impl From<SemanticError> for Error {
-    fn from(value: SemanticError) -> Self {
-        Self {
-            node: Node::default(),
-            kind: ErrorKind::SemanticError(value),
-        }
-    }
+    SemanticError(SemanticError),
 }

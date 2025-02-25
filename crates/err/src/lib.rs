@@ -12,7 +12,7 @@ use swamp_script_analyzer::err::ErrorKind;
 use swamp_script_analyzer::prelude::Error;
 use swamp_script_dep_loader::{DepLoaderError, DependencyError};
 use swamp_script_parser::SpecificError;
-use swamp_script_semantic::Span;
+use swamp_script_semantic::{SemanticError, Span};
 use swamp_script_source_map::{FileId, SourceMap};
 
 #[derive(Debug)]
@@ -417,10 +417,7 @@ pub fn build_resolve_error(err: &Error) -> Builder<usize> {
         ErrorKind::UnknownTypeReference => {
             Report::build(Kind::Error, 101, "Unknown type reference", span)
         }
-        ErrorKind::SemanticError(a) => {
-            Report::build(Kind::Error, 141, &format!("semantic error {a:?}"), span)
-        }
-        ErrorKind::SeqMapError(_) => todo!(),
+        ErrorKind::SemanticError(semantic_error) => build_semantic_error(semantic_error, span),
         ErrorKind::ExpectedMemberCall => todo!(),
         ErrorKind::CouldNotFindStaticMember(x, _y) => {
             Report::build(Kind::Error, 9101, "Could not find static member", &x.span)
@@ -567,6 +564,85 @@ pub fn build_script_error(err: &ScriptResolveError, _source_map: &SourceMap) -> 
         ScriptResolveError::DependencyError(err) => panic!("{}", format!("err: {:?}", err)),
     }
 }
+
+#[must_use]
+pub fn build_semantic_error(err: &SemanticError, span: &Span) -> Builder<usize> {
+    match err {
+        SemanticError::CouldNotInsertStruct => {
+            Report::build(Kind::Error, 140, "CouldNotInsertStruct", span)
+        }
+        SemanticError::DuplicateTypeAlias(_) => {
+            Report::build(Kind::Error, 140, "DuplicateTypeAlias", span)
+        }
+        SemanticError::CanOnlyUseStructForMemberFunctions => {
+            Report::build(Kind::Error, 140, "CanOnlyUseStructForMemberFunctions", span)
+        }
+        SemanticError::ResolveNotStruct => {
+            Report::build(Kind::Error, 140, "ResolveNotStruct", span)
+        }
+        SemanticError::DuplicateStructName(_) => {
+            Report::build(Kind::Error, 140, "DuplicateStructName", span)
+        }
+        SemanticError::DuplicateEnumType(_) => {
+            Report::build(Kind::Error, 140, "DuplicateEnumType", span)
+        }
+        SemanticError::DuplicateEnumVariantType(_, _) => {
+            Report::build(Kind::Error, 140, "DuplicateEnumVariantType", span)
+        }
+        SemanticError::DuplicateFieldName(_) => {
+            Report::build(Kind::Error, 140, "DuplicateFieldName", span)
+        }
+        SemanticError::DuplicateExternalFunction(_) => {
+            Report::build(Kind::Error, 140, "DuplicateExternalFunction", span)
+        }
+        SemanticError::DuplicateRustType(_) => {
+            Report::build(Kind::Error, 140, "DuplicateRustType", span)
+        }
+        SemanticError::DuplicateConstName(_) => {
+            Report::build(Kind::Error, 140, "DuplicateConstName", span)
+        }
+        SemanticError::CircularConstantDependency(_) => {
+            Report::build(Kind::Error, 140, "CircularConstantDependency", span)
+        }
+        SemanticError::DuplicateConstantId(_) => {
+            Report::build(Kind::Error, 140, "DuplicateConstantId", span)
+        }
+        SemanticError::IncompatibleTypes => {
+            Report::build(Kind::Error, 140, "IncompatibleTypes", span)
+        }
+        SemanticError::WasNotImmutable => Report::build(Kind::Error, 140, "WasNotImmutable", span),
+        SemanticError::WasNotMutable => Report::build(Kind::Error, 140, "WasNotMutable", span),
+        SemanticError::UnknownGeneric => Report::build(Kind::Error, 140, "UnknownGeneric", span),
+        SemanticError::UnknownLookupModule => {
+            Report::build(Kind::Error, 140, "UnknownLookupModule", span)
+        }
+        SemanticError::UnknownIntrinsic => {
+            Report::build(Kind::Error, 140, "UnknownIntrinsic", span)
+        }
+        SemanticError::UnknownImplOnType => {
+            Report::build(Kind::Error, 140, "UnknownImplOnType", span)
+        }
+        SemanticError::DuplicateSymbolName => {
+            Report::build(Kind::Error, 140, "DuplicateSymbolName", span)
+        }
+        SemanticError::DuplicateNamespaceLink(_) => {
+            Report::build(Kind::Error, 140, "DuplicateNamespaceLink", span)
+        }
+        SemanticError::DuplicateGenericType(_) => {
+            Report::build(Kind::Error, 140, "DuplicateGenericType", span)
+        }
+        SemanticError::UnknownTypeVariable => {
+            Report::build(Kind::Error, 140, "UnknownTypeVariable", span)
+        }
+        SemanticError::WrongParameterCount(expected, encountered) => Report::build(
+            Kind::Error,
+            140,
+            &format!("WrongParameterCount, expected:{expected} vs encountered:{encountered}"),
+            span,
+        ),
+    }
+}
+
 /*
 #[must_use]
 pub fn build_execute_error(err: &ExecuteError) -> Builder<usize> {

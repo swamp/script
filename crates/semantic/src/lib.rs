@@ -239,7 +239,11 @@ pub struct ParameterizedType {
 
 impl ParameterizedType {
     pub(crate) fn same_type(&self, other: &Self) -> bool {
-        self.blueprint.same_type(&other.blueprint) && same_types(&self.instantiated_with_arguments, &other.instantiated_with_arguments)
+        self.blueprint.same_type(&other.blueprint)
+            && same_types(
+                &self.instantiated_with_arguments,
+                &other.instantiated_with_arguments,
+            )
     }
 
     pub fn name(&self) -> String {
@@ -382,7 +386,7 @@ pub enum SemanticError {
     DuplicateNamespaceLink(String),
     DuplicateGenericType(String),
     UnknownTypeVariable,
-    WrongParameterCount,
+    WrongParameterCount(usize, usize),
 }
 
 impl Type {

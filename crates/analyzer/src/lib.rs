@@ -26,7 +26,6 @@ use std::num::{ParseFloatError, ParseIntError};
 use std::rc::Rc;
 use swamp_script_modules::modules::Modules;
 use swamp_script_modules::symtbl::{FuncDef, Symbol, SymbolTable, SymbolTableRef};
-use swamp_script_semantic::ParameterizedType;
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
     ArgumentExpressionOrLocation, IntrinsicFunctionDefinitionRef, LocationAccess,
@@ -724,7 +723,9 @@ impl<'a> Analyzer<'a> {
         match maybe_struct_type {
             Type::Struct(struct_type) => Ok(struct_type), // Already a concrete struct, return directly
             Type::Parameterized(parameterized_type) => {
-                if let ParameterizedTypeKind::Struct(struct_ref) = &parameterized_type.blueprint.kind {
+                if let ParameterizedTypeKind::Struct(_struct_ref) =
+                    &parameterized_type.blueprint.kind
+                {
                     if qualified_type_identifier.generic_params.is_empty() {
                         todo!()
                     } else {
@@ -733,8 +734,14 @@ impl<'a> Analyzer<'a> {
                         let type_variables = Instantiator::create_type_parameter_scope(
                             &parameterized_type.instantiated_with_arguments,
                             &analyzed_concrete_types,
-                        )?;
-                        let (replaced, instantiated_type) =
+                        )
+                        .map_err(|s| {
+                            self.create_err(
+                                ErrorKind::SemanticError(s),
+                                &qualified_type_identifier.name.0,
+                            )
+                        })?;
+                        let (_replaced, instantiated_type) =
                             Instantiator::instantiate(&parameterized_type, &type_variables)
                                 .map_err(|semantic_error| {
                                     self.create_err(
@@ -1917,7 +1924,7 @@ impl<'a> Analyzer<'a> {
         &mut self,
         chain: &swamp_script_ast::PostfixChain,
         expected_type: Option<Type>,
-        location_side: &LocationSide,
+        _location_side: &LocationSide,
     ) -> Result<SingleLocationExpression, Error> {
         let mut items = Vec::new();
 
@@ -1927,7 +1934,7 @@ impl<'a> Analyzer<'a> {
         };
 
         let mut ty = start_variable.resolved_type.clone();
-        for (i, item) in chain.postfixes.iter().enumerate() {
+        for item in &chain.postfixes {
             match &item {
                 swamp_script_ast::Postfix::FieldAccess(field_name_node) => {
                     //let field_name_resolved = self.to_node(field_name_node)
@@ -2149,11 +2156,11 @@ impl<'a> Analyzer<'a> {
     #[allow(clippy::single_match)]
     fn check_special_assignment_compound(
         &mut self,
-        target_expression: &swamp_script_ast::Expression,
+        _target_expression: &swamp_script_ast::Expression,
         target_type: &Type,
-        op: &CompoundOperatorKind,
-        source: &swamp_script_ast::Expression,
-        source_type: &Type,
+        _op: &CompoundOperatorKind,
+        _source: &swamp_script_ast::Expression,
+        _source_type: &Type,
     ) -> Result<Option<ExpressionKind>, Error> {
         match &target_type {
             /*
