@@ -5,7 +5,6 @@ use swamp_script_semantic::{
     AnonymousStructType, ParameterizedType, ParameterizedTypeBlueprintRef, ParameterizedTypeKind,
     SemanticError, StructType, StructTypeField, Type, TypeVariable,
 };
-use tracing::info;
 
 pub struct Instantiator;
 
@@ -76,11 +75,7 @@ impl Instantiator {
         type_variables: &TypeVariableScope,
     ) -> Result<(bool, Type), SemanticError> {
         let mut resolved_params = Vec::new();
-        for (i, param) in parameterized_type
-            .instantiated_with_arguments
-            .iter()
-            .enumerate()
-        {
+        for param in &parameterized_type.instantiated_with_arguments {
             let (_was_replaced, resolved) =
                 Self::instantiate_type_if_needed(param, type_variables)?;
             resolved_params.push(resolved);

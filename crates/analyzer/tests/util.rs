@@ -88,6 +88,7 @@ fn internal_compile(
 
 /// # Panics
 /// Intentionally panics if error message is not equal to the error encountered.
+#[allow(unused)]
 pub fn check_fail(script: &str, expected_error_message: &str) {
     let error = internal_compile(script).expect_err("should have failed");
 
@@ -112,7 +113,7 @@ pub fn check(script: &str, expected_output: &str) {
         };
 
         SourceMapDisplay::<'_>::set_color(true);
-        println!("{format_symbol_table}");
+        print!("{format_symbol_table}");
 
         SourceMapDisplay::<'_>::set_color(false);
         formatted_output += &*format_symbol_table.to_string();

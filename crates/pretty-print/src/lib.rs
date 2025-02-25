@@ -103,11 +103,14 @@ impl SourceMapDisplay<'_> {
         symbol_table: &SymbolTable,
         tabs: usize,
     ) -> std::fmt::Result {
-        writeln!(f)?;
-        for (name, symbol) in symbol_table.symbols() {
+        for (index, (name, symbol)) in symbol_table.symbols().iter().enumerate() {
+            if index > 0 {
+                writeln!(f)?;
+                writeln!(f)?;
+            }
             self.pretty_print_symbol(f, name, symbol, tabs)?;
-            writeln!(f)?;
         }
+        writeln!(f)?;
         Ok(())
     }
 
@@ -117,8 +120,10 @@ impl SourceMapDisplay<'_> {
         blueprint: &ParameterizedTypeBlueprintRef,
         tabs: usize,
     ) -> std::fmt::Result {
-        self.show_parameterized_type_kind(f, &blueprint.kind, tabs)?;
-        self.show_type_variables(f, &blueprint.type_variables, tabs)
+        write!(f, "{}", "<".bright_white())?;
+        self.show_type_variables(f, &blueprint.type_variables, tabs)?;
+        write!(f, "{}", ">".bright_white())?;
+        self.show_parameterized_type_kind(f, &blueprint.kind, tabs)
     }
 }
 
@@ -219,7 +224,7 @@ impl SourceMapDisplay<'_> {
             Self::new_line_and_tab(f, tabs + 1)?;
 
             write!(f, "{}: ", field_name.cyan())?;
-            self.show_type(f, &field.field_type, tabs + 1)?;
+            self.show_short_type(f, &field.field_type, tabs + 1)?;
             write!(f, "{}", ", ".white())?;
         }
         Self::new_line_and_tab(f, tabs)?;
@@ -227,6 +232,14 @@ impl SourceMapDisplay<'_> {
         write!(f, "}}")?;
 
         Ok(())
+    }
+
+    pub fn show_short_struct(
+        &self,
+        f: &mut Formatter<'_>,
+        struct_type: &StructType,
+    ) -> std::fmt::Result {
+        write!(f, "{}", struct_type.assigned_name.bright_magenta())
     }
 
     /// # Errors
@@ -582,7 +595,18 @@ impl SourceMapDisplay<'_> {
     ) -> std::fmt::Result {
         match kind {
             ParameterizedTypeKind::Struct(struct_ref) => self.show_struct(f, struct_ref, tabs),
-            ParameterizedTypeKind::Enum(enum_ref) => self.show_enum_type_name(f, &enum_ref.0),
+            ParameterizedTypeKind::Enum(enum_ref) => self.show_short_enum_type(f, &enum_ref.0),
+        }
+    }
+
+    fn show_short_parameterized_type_kind(
+        &self,
+        f: &mut Formatter,
+        kind: &ParameterizedTypeKind,
+    ) -> std::fmt::Result {
+        match kind {
+            ParameterizedTypeKind::Struct(struct_ref) => self.show_short_struct(f, struct_ref),
+            ParameterizedTypeKind::Enum(enum_ref) => self.show_short_enum_type(f, &enum_ref.0),
         }
     }
 
@@ -593,6 +617,21 @@ impl SourceMapDisplay<'_> {
         tabs: usize,
     ) -> std::fmt::Result {
         self.show_parameterized_type_kind(f, &parameterized_type.blueprint.kind, tabs)?;
+        write!(f, "{}", "<".bright_white())?;
+
+        self.show_types(f, &parameterized_type.instantiated_with_arguments, tabs)?;
+
+        write!(f, "{}", ">".bright_white())?;
+        Ok(())
+    }
+
+    fn show_short_parameterized_type(
+        &self,
+        f: &mut Formatter,
+        parameterized_type: &ParameterizedType,
+        tabs: usize,
+    ) -> std::fmt::Result {
+        self.show_short_parameterized_type_kind(f, &parameterized_type.blueprint.kind)?;
         write!(f, "{}", "<".bright_white())?;
 
         self.show_types(f, &parameterized_type.instantiated_with_arguments, tabs)?;
@@ -663,6 +702,52 @@ impl SourceMapDisplay<'_> {
                 self.show_parameterized_like(f, "SlicePair", &[*key.clone(), *value.clone()], tabs)
             }
             Type::Parameterized(param) => self.show_parameterized_type(f, param, tabs),
+            Type::Blueprint(param) => self.show_blueprint(f, param, tabs),
+            Type::Variable(var) => self.show_type_variable(f, var, tabs),
+        }
+    }
+
+    fn show_short_type(
+        &self,
+        f: &mut Formatter,
+        resolved_type: &Type,
+        tabs: usize,
+    ) -> std::fmt::Result {
+        match resolved_type {
+            Type::Int => write!(f, "{}", "Int".bright_blue()),
+            Type::Float => write!(f, "{}", "Float".bright_blue()),
+            Type::String => write!(f, "{}", "String".bright_blue()),
+            Type::Bool => write!(f, "{}", "Bool".bright_blue()),
+            Type::Unit => write!(f, "{}", "()".bright_blue()),
+
+            Type::Tuple(tuple_type) => {
+                write!(f, "(")?;
+                for (index, item_type) in tuple_type.0.iter().enumerate() {
+                    if index > 0 {
+                        write!(f, "{}", ", ".bright_black())?;
+                    }
+                    self.show_type(f, item_type, tabs + 1)?;
+                }
+                write!(f, ")")
+            }
+
+            Type::Struct(struct_ref) => self.show_short_struct(f, struct_ref),
+
+            Type::Enum(enum_type) => self.show_short_enum_type(f, &enum_type.0),
+            //Type::EnumVariant(variant) => write!(
+            //  f,
+            //"{}::{}",
+            //variant.owner.assigned_name, variant.assigned_name
+            //),
+            Type::Function(signature) => write!(f, "function {signature}"),
+            Type::Optional(base_type) => write!(f, "{}?", base_type.yellow()),
+            Type::External(external_type) => write!(f, "External {}", external_type.type_name),
+            Type::Range => write!(f, "Range"),
+            Type::Slice(ty) => self.show_parameterized_like(f, "Slice", &[*ty.clone()], tabs),
+            Type::SlicePair(key, value) => {
+                self.show_parameterized_like(f, "SlicePair", &[*key.clone(), *value.clone()], tabs)
+            }
+            Type::Parameterized(param) => self.show_short_parameterized_type(f, param, tabs),
             Type::Blueprint(param) => self.show_blueprint(f, param, tabs),
             Type::Variable(var) => self.show_type_variable(f, var, tabs),
         }
@@ -782,20 +867,21 @@ impl SourceMapDisplay<'_> {
         }
     }
 
-    pub fn show_enum_type_name(
+    pub fn show_short_enum_type(
         &self,
         f: &mut Formatter,
         enum_type: &EnumTypeRef,
     ) -> std::fmt::Result {
         write!(f, "{}", &enum_type.borrow().assigned_name.bright_red())
     }
+
     pub fn show_enums(
         &self,
         f: &mut Formatter,
         enums: &SeqMap<String, EnumTypeRef>,
     ) -> std::fmt::Result {
         for (_name, enum_type) in enums {
-            self.show_enum_type_name(f, enum_type)?;
+            self.show_short_enum_type(f, enum_type)?;
         }
         Ok(())
     }
@@ -851,7 +937,7 @@ impl SourceMapDisplay<'_> {
                 .collect::<Vec<_>>()[*index];
             Self::new_line_and_tab(f, tabs + 1)?;
             write!(f, "{}: ", name.yellow())?;
-            self.show_expression(f, expression, tabs)?;
+            self.show_expression(f, expression, tabs + 1)?;
             write!(f, "{}", ", ".white())?;
         }
 
@@ -876,9 +962,11 @@ impl SourceMapDisplay<'_> {
         type_variables: &[TypeVariable],
         tabs: usize,
     ) -> std::fmt::Result {
-        for variable in type_variables {
+        for (index, variable) in type_variables.iter().enumerate() {
+            if index > 0 {
+                write!(f, "{}", ", ".white())?;
+            }
             self.show_type_variable(f, variable, tabs)?;
-            write!(f, "{}", ", ".white())?;
         }
         Ok(())
     }

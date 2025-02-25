@@ -3,7 +3,6 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use crate::modules::ModuleRef;
-use seq_fmt::comma;
 use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::fmt::Debug;
@@ -17,7 +16,6 @@ use swamp_script_semantic::{
     StructType, StructTypeRef, Type,
 };
 use tiny_ver::TinyVersion;
-use tracing::info;
 
 #[derive(Debug, Clone)]
 pub enum FuncDef {
