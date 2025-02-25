@@ -7,6 +7,7 @@ use crate::err::{Error, ErrorKind};
 use crate::lookup::TypeVariableScope;
 use seq_map::SeqMap;
 use std::rc::Rc;
+use swamp_script_ast::QualifiedTypeIdentifier;
 use swamp_script_semantic::{
     AliasType, AliasTypeRef, AnonymousStructType, EnumType, EnumTypeRef, EnumVariantCommon,
     EnumVariantSimpleType, EnumVariantSimpleTypeRef, EnumVariantStructType, EnumVariantTupleType,
@@ -128,7 +129,7 @@ impl Analyzer<'_> {
 
     fn analyze_enum_type_definition(
         &mut self,
-        enum_type_name: &swamp_script_ast::LocalTypeIdentifierWithOptionalTypeParams,
+        enum_type_name: &swamp_script_ast::LocalTypeIdentifierWithOptionalTypeVariables,
         ast_variants: &[swamp_script_ast::EnumVariantType],
     ) -> Result<EnumTypeRef, Error> {
         let mut resolved_variants = SeqMap::new();
@@ -365,11 +366,11 @@ impl Analyzer<'_> {
 
     pub fn convert_to_type_variables(
         &mut self,
-        ast_nodes: &[swamp_script_ast::Node],
+        ast_type_variables: &[swamp_script_ast::TypeVariable],
     ) -> Vec<TypeVariable> {
         let mut types = Vec::new();
-        for ast_node in ast_nodes {
-            let name = self.get_text(ast_node).to_string();
+        for ast_type_variable in ast_type_variables {
+            let name = self.get_text(&ast_type_variable.0).to_string();
             types.push(TypeVariable { name });
         }
         types
@@ -399,10 +400,10 @@ impl Analyzer<'_> {
         &mut self,
         ast_struct: &swamp_script_ast::StructType,
     ) -> Result<(), Error> {
-        let is_parameterized = !ast_struct.identifier.parameter_names.is_empty();
+        let has_type_variables = !ast_struct.identifier.type_variables.is_empty();
 
-        let type_variables = self.convert_to_type_variables(&ast_struct.identifier.parameter_names);
-        if is_parameterized {
+        let type_variables = self.convert_to_type_variables(&ast_struct.identifier.type_variables);
+        if has_type_variables {
             self.set_type_variables_to_extra_symbol_table(&type_variables);
         }
 
@@ -410,7 +411,7 @@ impl Analyzer<'_> {
 
         let analyzed_struct = self.analyze_struct_type(&struct_name_str, ast_struct)?;
 
-        if is_parameterized {
+        if has_type_variables {
             self.shared.type_variables = None;
 
             let blueprint_ref = self
@@ -593,19 +594,31 @@ impl Analyzer<'_> {
 
     fn analyze_impl_definition(
         &mut self,
-        attached_to_type: &swamp_script_ast::LocalTypeIdentifierWithOptionalTypeParams,
-        functions: &Vec<swamp_script_ast::Function>,
+        attached_to_type: &swamp_script_ast::LocalTypeIdentifierWithOptionalTypeVariables,
+        functions: &[swamp_script_ast::Function],
     ) -> Result<(), Error> {
+        let converted_type_variables_to_ast_types = attached_to_type
+            .type_variables
+            .iter()
+            .map(|x| {
+                swamp_script_ast::Type::Named(QualifiedTypeIdentifier {
+                    name: swamp_script_ast::LocalTypeIdentifier(x.0.clone()),
+                    module_path: None,
+                    generic_params: vec![],
+                })
+            })
+            .collect();
+
         let qualified = swamp_script_ast::QualifiedTypeIdentifier {
             name: swamp_script_ast::LocalTypeIdentifier(attached_to_type.name.clone()),
             module_path: None,
-            generic_params: vec![],
+            generic_params: converted_type_variables_to_ast_types,
         };
 
-        let is_parameterized = !attached_to_type.parameter_names.is_empty();
+        let is_parameterized = !attached_to_type.type_variables.is_empty();
 
         if is_parameterized {
-            let type_variables = self.convert_to_type_variables(&attached_to_type.parameter_names);
+            let type_variables = self.convert_to_type_variables(&attached_to_type.type_variables);
             self.set_type_variables_to_extra_symbol_table(&type_variables);
         }
         let type_to_attach_to = self.analyze_named_type(&qualified)?;

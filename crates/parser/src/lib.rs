@@ -13,9 +13,9 @@ use std::str::Chars;
 use swamp_script_ast::{
     AliasType, AssignmentOperatorKind, BinaryOperatorKind, CompoundOperator, CompoundOperatorKind,
     EnumVariantLiteral, ExpressionKind, FieldExpression, FieldName, FieldType, ForPattern, ForVar,
-    IterableExpression, LocalTypeIdentifierWithOptionalTypeParams, PatternElement,
-    QualifiedIdentifier, RangeMode, SpanWithoutFileId, TypeForParameter, VariableBinding,
-    prelude::*,
+    IterableExpression, LocalTypeIdentifierWithOptionalTypeVariables, PatternElement,
+    QualifiedIdentifier, RangeMode, SpanWithoutFileId, TypeForParameter, TypeVariable,
+    VariableBinding, prelude::*,
 };
 use swamp_script_ast::{Function, WhenBinding};
 use swamp_script_ast::{LiteralKind, MutableOrImmutableExpression};
@@ -702,12 +702,17 @@ impl AstParser {
         Ok(Definition::AliasDef(alias_type))
     }
 
-    fn parse_generic_type_params(&self, pair: &Pair<Rule>) -> Result<Vec<Node>, ParseError> {
+    fn parse_generic_type_variables(
+        &self,
+        pair: &Pair<Rule>,
+    ) -> Result<Vec<TypeVariable>, ParseError> {
         assert_eq!(pair.as_rule(), Rule::generic_type_params);
         let mut type_params = Vec::new();
         for type_identifier_pair in Self::convert_into_iterator(pair) {
             if type_identifier_pair.as_rule() == Rule::type_identifier {
-                type_params.push(self.parse_local_type_identifier_node(&type_identifier_pair)?);
+                type_params.push(TypeVariable(
+                    self.parse_local_type_identifier_node(&type_identifier_pair)?,
+                ));
             } else {
                 panic!("internal error generic type params")
             }
@@ -715,20 +720,20 @@ impl AstParser {
         Ok(type_params)
     }
 
-    fn parse_local_type_identifier_with_optional_params(
+    fn parse_local_type_identifier_with_optional_type_variables(
         &self,
         pair: &Pair<Rule>,
-    ) -> Result<LocalTypeIdentifierWithOptionalTypeParams, ParseError> {
+    ) -> Result<LocalTypeIdentifierWithOptionalTypeVariables, ParseError> {
         assert_eq!(pair.as_rule(), Rule::type_identifier_optional_type_params);
 
         let mut inner = pair.clone().into_inner();
         let name = self.expect_local_type_identifier_next(&mut inner)?;
 
-        let parameter_names = if let Some(generic_params_pair) = inner.peek() {
+        let type_variables = if let Some(generic_params_pair) = inner.peek() {
             // Peek to see if generic params exist
             if generic_params_pair.as_rule() == Rule::generic_type_params {
                 let generic_params_pair = inner.next().unwrap(); // Consume the generic_type_params pair
-                self.parse_generic_type_params(&generic_params_pair)?
+                self.parse_generic_type_variables(&generic_params_pair)?
             } else {
                 Vec::new()
             }
@@ -736,9 +741,9 @@ impl AstParser {
             Vec::new()
         };
 
-        Ok(LocalTypeIdentifierWithOptionalTypeParams {
+        Ok(LocalTypeIdentifierWithOptionalTypeVariables {
             name: name.0,
-            parameter_names,
+            type_variables,
         })
     }
 
@@ -746,7 +751,7 @@ impl AstParser {
         let mut inner = Self::convert_into_iterator(pair).peekable();
 
         let name_with_optional_type_params =
-            self.parse_local_type_identifier_with_optional_params(&inner.next().unwrap())?;
+            self.parse_local_type_identifier_with_optional_type_variables(&inner.next().unwrap())?;
 
         let field_definitions_pair_result = Self::next_pair(&mut inner);
         let mut fields = Vec::new();
@@ -892,7 +897,7 @@ impl AstParser {
     fn parse_impl_def(&self, pair: &Pair<Rule>) -> Result<Definition, ParseError> {
         let mut inner = Self::convert_into_iterator(pair);
         let name_with_optional_type_params =
-            self.parse_local_type_identifier_with_optional_params(&inner.next().unwrap())?;
+            self.parse_local_type_identifier_with_optional_type_variables(&inner.next().unwrap())?;
 
         let mut functions = Vec::new();
 
@@ -2264,7 +2269,7 @@ impl AstParser {
         let mut inner = Self::convert_into_iterator(pair);
 
         let name_with_optional_type_params =
-            self.parse_local_type_identifier_with_optional_params(&inner.next().unwrap())?;
+            self.parse_local_type_identifier_with_optional_type_variables(&inner.next().unwrap())?;
         // Parse enum name
         let mut variants = Vec::new();
 

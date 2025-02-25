@@ -116,9 +116,12 @@ impl LocalTypeIdentifier {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Default, Clone)]
-pub struct LocalTypeIdentifierWithOptionalTypeParams {
+pub struct TypeVariable(pub Node);
+
+#[derive(Debug, PartialEq, Eq, Hash, Default, Clone)]
+pub struct LocalTypeIdentifierWithOptionalTypeVariables {
     pub name: Node,
-    pub parameter_names: Vec<Node>,
+    pub type_variables: Vec<TypeVariable>,
 }
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone)]
@@ -186,14 +189,14 @@ pub struct AliasType {
 
 #[derive(Debug, Clone, Eq, PartialEq, Default)]
 pub struct StructType {
-    pub identifier: LocalTypeIdentifierWithOptionalTypeParams,
+    pub identifier: LocalTypeIdentifierWithOptionalTypeVariables,
     pub fields: Vec<FieldType>,
 }
 
 impl StructType {
     #[must_use]
     pub const fn new(
-        identifier: LocalTypeIdentifierWithOptionalTypeParams,
+        identifier: LocalTypeIdentifierWithOptionalTypeVariables,
         fields: Vec<FieldType>,
     ) -> Self {
         Self { identifier, fields }
@@ -211,11 +214,11 @@ pub enum Definition {
     AliasDef(AliasType),
     StructDef(StructType),
     EnumDef(
-        LocalTypeIdentifierWithOptionalTypeParams,
+        LocalTypeIdentifierWithOptionalTypeVariables,
         Vec<EnumVariantType>,
     ),
     FunctionDef(Function),
-    ImplDef(LocalTypeIdentifierWithOptionalTypeParams, Vec<Function>),
+    ImplDef(LocalTypeIdentifierWithOptionalTypeVariables, Vec<Function>),
     Use(Use),
     Mod(Mod),
 

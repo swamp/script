@@ -59,7 +59,7 @@ Error { node: <99:3>, kind: IncompatibleTypes(Int, Float) }
 #[test_log::test]
 fn basic_generic_inception() {
     check(
-        r"
+        "
 
 struct Else<SomeType> {
     another: SomeType,
