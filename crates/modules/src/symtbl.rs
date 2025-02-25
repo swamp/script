@@ -162,7 +162,6 @@ impl SymbolTable {
     ) -> Result<ParameterizedTypeBlueprintRef, SemanticError> {
         let struct_ref = Rc::new(blueprint);
         self.add_blueprint_link(struct_ref.clone())?;
-        info!(?struct_ref, "added struct");
         Ok(struct_ref)
     }
 
@@ -184,7 +183,6 @@ impl SymbolTable {
     pub fn add_struct(&mut self, struct_type: StructType) -> Result<StructTypeRef, SemanticError> {
         let struct_ref = Rc::new(struct_type);
         self.add_struct_link(struct_ref.clone())?;
-        info!(?struct_ref, "added struct");
         Ok(struct_ref)
     }
 
@@ -354,12 +352,6 @@ impl SymbolTable {
         }
 
         None
-    }
-
-    pub fn get_monomorphization_name(name: &str, parameters: &[Type]) -> String {
-        let name = format!("{name}<{}>", comma(parameters));
-        info!(name, "found name");
-        name
     }
 
     pub fn get_struct(&self, name: &str) -> Option<&StructTypeRef> {

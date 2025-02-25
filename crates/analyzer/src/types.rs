@@ -8,8 +8,8 @@ use crate::instantiate::Instantiator;
 use std::rc::Rc;
 use swamp_script_modules::symtbl::{GeneratorKind, Symbol};
 use swamp_script_semantic::{
-    ArrayType, ArrayTypeRef, ExternalType, ExternalTypeRef, MapType, MapTypeRef, Signature,
-    TupleType, Type, TypeForParameter,
+    ArrayType, ArrayTypeRef, ExternalType, ExternalTypeRef, MapType, MapTypeRef, ParameterizedType,
+    Signature, TupleType, Type, TypeForParameter,
 };
 
 impl Analyzer<'_> {
@@ -120,14 +120,28 @@ impl Analyzer<'_> {
                 }
             }
             Symbol::Blueprint(blueprint) => {
-                let (_was_changed, ty) = Instantiator::instantiate_blueprint(
-                    blueprint,
-                    &analyzed_types,
-                )
-                .map_err(|err| {
-                    self.create_err(ErrorKind::SemanticError(err), &type_name_to_find.name.0)
-                })?;
-                ty
+                // Check if any of the analyzed_types are type variables
+                let contains_type_variables = analyzed_types
+                    .iter()
+                    .any(|t| matches!(t, Type::Variable(_)));
+
+                if contains_type_variables {
+                    // Don't instantiate yet, preserve as parameterized
+                    Type::Parameterized(ParameterizedType {
+                        blueprint,
+                        instantiated_with_arguments: analyzed_types,
+                    })
+                } else {
+                    // All concrete types, can instantiate immediately
+                    let (_was_changed, ty) = Instantiator::instantiate_blueprint(
+                        &blueprint,
+                        &analyzed_types,
+                    )
+                    .map_err(|err| {
+                        self.create_err(ErrorKind::SemanticError(err), &type_name_to_find.name.0)
+                    })?;
+                    ty
+                }
             }
             _ => return Err(self.create_err(ErrorKind::UnknownSymbol, &type_name_to_find.name.0)),
         };

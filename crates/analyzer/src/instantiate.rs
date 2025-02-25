@@ -5,6 +5,7 @@ use swamp_script_semantic::{
     AnonymousStructType, ParameterizedType, ParameterizedTypeBlueprintRef, ParameterizedTypeKind,
     SemanticError, StructType, StructTypeField, Type, TypeVariable,
 };
+use tracing::info;
 
 pub struct Instantiator;
 
@@ -24,13 +25,10 @@ impl Instantiator {
 
         let mut scope = SeqMap::new();
         for (param, concrete) in parameters.iter().zip(concrete) {
-            match param {
-                Type::Variable(type_variable) => {
-                    scope
-                        .insert(type_variable.name.clone(), concrete.clone())
-                        .unwrap();
-                }
-                _ => {}
+            if let Type::Variable(type_variable) = param {
+                scope
+                    .insert(type_variable.name.clone(), concrete.clone())
+                    .unwrap();
             };
         }
 
@@ -57,7 +55,7 @@ impl Instantiator {
     }
 
     pub(crate) fn instantiate_blueprint(
-        blueprint: ParameterizedTypeBlueprintRef,
+        blueprint: &ParameterizedTypeBlueprintRef,
         concrete_types: &[Type],
     ) -> Result<(bool, Type), SemanticError> {
         let scope = Self::create_type_parameter_scope_from_variables(
@@ -77,12 +75,18 @@ impl Instantiator {
         parameterized_type: &ParameterizedType,
         type_variables: &TypeVariableScope,
     ) -> Result<(bool, Type), SemanticError> {
-        match &parameterized_type.blueprint.kind {
-            ParameterizedTypeKind::Struct(struct_ref) => {
-                Self::instantiate_struct(struct_ref, type_variables)
-            }
-            ParameterizedTypeKind::Enum(_) => todo!(),
+        let mut resolved_params = Vec::new();
+        for (i, param) in parameterized_type
+            .instantiated_with_arguments
+            .iter()
+            .enumerate()
+        {
+            let (_was_replaced, resolved) =
+                Self::instantiate_type_if_needed(param, type_variables)?;
+            resolved_params.push(resolved);
         }
+
+        Self::instantiate_blueprint(&parameterized_type.blueprint, &resolved_params)
     }
 
     fn instantiate_type_if_needed(
@@ -98,7 +102,7 @@ impl Instantiator {
                 let found_type = type_variables
                     .type_variables
                     .get(&type_variable.name)
-                    .ok_or_else(|| SemanticError::UnknownTypeVariable)?;
+                    .ok_or(SemanticError::UnknownTypeVariable)?;
                 (true, found_type.clone())
             }
 
@@ -109,7 +113,10 @@ impl Instantiator {
     }
 
     fn parameterized_name(name: &str, parameters: &[Type]) -> String {
-        let type_strings: Vec<String> = parameters.iter().map(|t| t.to_string()).collect();
+        let type_strings: Vec<String> = parameters
+            .iter()
+            .map(std::string::ToString::to_string)
+            .collect();
 
         format!("{}<{}>", name, type_strings.join(","))
     }

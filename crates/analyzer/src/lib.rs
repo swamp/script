@@ -411,7 +411,6 @@ impl<'a> Analyzer<'a> {
         expected_type: Option<&Type>,
     ) -> Result<Expression, Error> {
         let expr = self.analyze_expression_internal(ast_expression, expected_type)?;
-        //  info!(ty=?expr.ty, kind=?expr.kind, "resolved to expr");
         let encountered_type = expr.ty.clone();
         if let Some(found_expected_type) = expected_type {
             if found_expected_type.same_type(&encountered_type) {
@@ -719,9 +718,8 @@ impl<'a> Analyzer<'a> {
         qualified_type_identifier: &swamp_script_ast::QualifiedTypeIdentifier,
     ) -> Result<StructTypeRef, Error> {
         let maybe_struct_type = self.analyze_named_type(qualified_type_identifier)?;
-        info!(?maybe_struct_type, "found maybe type");
         match maybe_struct_type {
-            Type::Struct(struct_type) => Ok(struct_type), // Already a concrete struct, return directly
+            Type::Struct(struct_type) => Ok(struct_type),
             Type::Parameterized(parameterized_type) => {
                 if let ParameterizedTypeKind::Struct(_struct_ref) =
                     &parameterized_type.blueprint.kind

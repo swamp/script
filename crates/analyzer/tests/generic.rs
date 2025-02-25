@@ -78,7 +78,6 @@ a = Something<Int> {
         b: 23.0
     },
 }
-
          ",
         r#"
 Else: RefCell { value: GenericType { type_parameters: SeqMap("SomeType": TypeParameterName { resolved_node: <22:8>, assigned_name: "SomeType" }), base_type: Struct(StructType { identifier: LocalTypeIdentifierWithOptionalTypeParams { name: <17:4>, parameter_names: [<22:8>] }, fields: [FieldType { field_name: FieldName(<38:7>), field_type: Named(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<47:8>), module_path: None, generic_params: [] }) }, FieldType { field_name: FieldName(<61:1>), field_type: Named(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<64:5>), module_path: None, generic_params: [] }) }] }), ast_functions: SeqMap(), file_id: 65535 } }

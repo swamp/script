@@ -256,13 +256,15 @@ impl Analyzer<'_> {
                 .get_index(&field_name)
                 .expect("field_name is checked earlier");
 
-            let resolved_expression =
-                self.analyze_expression(&field.expression, Some(&looked_up_field.field_type))?;
+            let expected_type = looked_up_field.field_type.clone();
+
+            let analyzed_expression =
+                self.analyze_expression(&field.expression, Some(&expected_type))?;
 
             source_order_expressions.push((
                 field_index_in_definition,
                 resolved_node,
-                resolved_expression,
+                analyzed_expression,
             ));
         }
 
