@@ -2,11 +2,13 @@ use crate::lookup::TypeVariableScope;
 use seq_map::SeqMap;
 use std::rc::Rc;
 use swamp_script_semantic::{
-    AnonymousStructType, ParameterizedType, ParameterizedTypeKind, SemanticError, StructType,
-    StructTypeField, StructTypeRef, Type,
+    AnonymousStructType, ParameterizedType, ParameterizedTypeBlueprintRef, ParameterizedTypeKind,
+    SemanticError, StructType, StructTypeField, Type, TypeVariable,
 };
 
 pub struct Instantiator;
+
+impl Instantiator {}
 
 impl Instantiator {
     pub fn create_type_parameter_scope(
@@ -32,16 +34,45 @@ impl Instantiator {
         Ok(TypeVariableScope::new(scope))
     }
 
+    pub fn create_type_parameter_scope_from_variables(
+        variables: &[TypeVariable],
+        concrete: &[Type],
+    ) -> Result<TypeVariableScope, SemanticError> {
+        if variables.len() != concrete.len() {
+            return Err(SemanticError::WrongParameterCount);
+        }
+
+        let mut scope = SeqMap::new();
+        for (param, concrete) in variables.iter().zip(concrete) {
+            scope.insert(param.name.clone(), concrete.clone()).unwrap();
+        }
+
+        Ok(TypeVariableScope::new(scope))
+    }
+
+    pub(crate) fn instantiate_blueprint(
+        blueprint: ParameterizedTypeBlueprintRef,
+        concrete_types: &[Type],
+    ) -> Result<(bool, Type), SemanticError> {
+        let scope = Self::create_type_parameter_scope_from_variables(&blueprint.type_variables, concrete_types)?;
+        
+        match &blueprint.kind {
+            ParameterizedTypeKind::Struct(struct_ref) => {
+                Self::instantiate_struct(struct_ref, &scope)
+            }
+            ParameterizedTypeKind::Enum(_) => todo!(),
+        }
+    }
+
     pub fn instantiate(
         parameterized_type: &ParameterizedType,
         type_variables: &TypeVariableScope,
     ) -> Result<(bool, Type), SemanticError> {
-        match &parameterized_type.base {
+        match &parameterized_type.blueprint.kind {
             ParameterizedTypeKind::Struct(struct_ref) => {
                 Self::instantiate_struct(struct_ref, type_variables)
             }
             ParameterizedTypeKind::Enum(_) => todo!(),
-            ParameterizedTypeKind::Parameterized(inner) => Self::instantiate(inner, type_variables),
         }
     }
 
@@ -75,7 +106,7 @@ impl Instantiator {
     }
 
     fn instantiate_struct(
-        struct_type: &StructTypeRef,
+        struct_type: &StructType,
         type_variables: &TypeVariableScope,
     ) -> Result<(bool, Type), SemanticError> {
         let mut was_any_replaced = false;

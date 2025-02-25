@@ -192,9 +192,8 @@ pub struct IteratorTypeDetails {
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub enum ParameterizedTypeKind {
-    Struct(StructTypeRef),
+    Struct(StructType),
     Enum(HashableEnumTypeRef),
-    Parameterized(Box<ParameterizedType>),
 }
 
 impl ParameterizedTypeKind {
@@ -202,7 +201,6 @@ impl ParameterizedTypeKind {
         match (self, other) {
             (Self::Struct(a), Self::Struct(b)) => a.number == b.number,
             (Self::Enum(a), Self::Enum(b)) => a.0.borrow().number == b.0.borrow().number,
-            (Self::Parameterized(a), Self::Parameterized(b)) => a.same_type(b),
             _ => false,
         }
     }
@@ -211,23 +209,41 @@ impl ParameterizedTypeKind {
         match self {
             Self::Struct(struct_type_ref) => struct_type_ref.assigned_name.clone(),
             Self::Enum(enum_type_ref) => enum_type_ref.0.borrow().assigned_name.clone(),
-            Self::Parameterized(inner) => inner.base.name(),
         }
     }
 }
+
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub struct ParameterizedTypeBlueprint {
+    pub kind: ParameterizedTypeKind,
+    pub type_variables: Vec<TypeVariable>,
+}
+
+pub type ParameterizedTypeBlueprintRef = Rc<ParameterizedTypeBlueprint>;
+
+impl ParameterizedTypeBlueprint {
+    pub(crate) fn same_type(&self, other: &Self) -> bool {
+        self.kind.same_type(&other.kind)
+    }
+
+    pub fn name(&self) -> String {
+        self.kind.name()
+    }
+}
+
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct ParameterizedType {
-    pub base: ParameterizedTypeKind,
-    pub parameters: Vec<Type>,
+    pub blueprint: ParameterizedTypeBlueprintRef,
+    pub instantiated_with_arguments: Vec<Type>,
 }
 
 impl ParameterizedType {
     pub(crate) fn same_type(&self, other: &Self) -> bool {
-        self.base.same_type(&other.base) && same_types(&self.parameters, &other.parameters)
+        self.blueprint.same_type(&other.blueprint) && same_types(&self.instantiated_with_arguments, &other.instantiated_with_arguments)
     }
 
     pub fn name(&self) -> String {
-        self.base.name()
+        self.blueprint.name()
     }
 }
 
@@ -257,6 +273,7 @@ pub enum Type {
 
     Slice(Box<Type>),
     SlicePair(Box<Type>, Box<Type>),
+    Blueprint(ParameterizedTypeBlueprintRef),
     Parameterized(ParameterizedType),
 
     Variable(TypeVariable),
@@ -309,6 +326,7 @@ impl Debug for Type {
             Self::Slice(_) => write!(f, "Slice"),
             Self::SlicePair(_, _) => write!(f, "SlicePair"),
             Self::Parameterized(ty) => write!(f, "Parameterized {ty:?}"),
+            Self::Blueprint(ty) => write!(f, "Blueprint {ty:?}"),
             Self::Variable(var) => write!(f, "Variable {var:?}"),
         }
     }
@@ -332,6 +350,7 @@ impl Display for Type {
             Self::Slice(_) => write!(f, "Slice"),
             Self::SlicePair(_, _) => write!(f, "SlicePair"),
             Self::Parameterized(_) => write!(f, "Parameterized"),
+            Self::Blueprint(_) => write!(f, "Blueprint"),
             Self::Variable(_) => write!(f, "Var"),
         }
     }
@@ -1367,13 +1386,12 @@ impl AssociatedImpls {
     }
 }
 
-#[derive(Hash, Eq, PartialEq)]
+#[derive(Hash, Clone, Eq, PartialEq)]
 pub struct StructType {
     pub name: Node,
     pub assigned_name: String,
     pub anon_struct_type: AnonymousStructType,
     pub number: TypeNumber,
-    pub type_variables: Vec<TypeVariable>,
 }
 
 impl Debug for StructType {
@@ -1395,7 +1413,6 @@ impl StructType {
             number: type_number,
             name,
             assigned_name: assigned_name.to_string(),
-            type_variables: Vec::new(),
         }
     }
 

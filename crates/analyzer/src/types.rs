@@ -2,9 +2,9 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use crate::Analyzer;
 use crate::err::{Error, ErrorKind};
 use crate::instantiate::Instantiator;
+use crate::Analyzer;
 use std::rc::Rc;
 use swamp_script_modules::symtbl::{GeneratorKind, Symbol};
 use swamp_script_semantic::{
@@ -76,7 +76,7 @@ impl Analyzer<'_> {
                 match base_type {
                     Type::Parameterized(parameterized_type_definition) => {
                         let type_variable_scope = Instantiator::create_type_parameter_scope(
-                            &parameterized_type_definition.parameters,
+                            &parameterized_type_definition.instantiated_with_arguments,
                             &analyzed_types,
                         )?; // Create scope
 
@@ -90,6 +90,7 @@ impl Analyzer<'_> {
                     _ => base_type.clone(), // For non-parameterized types, just return the base type
                 }
             }
+
             Symbol::Alias(alias_type) => alias_type.referenced_type.clone(),
             Symbol::TypeGenerator(generator) => {
                 if analyzed_types.len() != generator.arity {
@@ -105,6 +106,11 @@ impl Analyzer<'_> {
                         Box::from(analyzed_types[1].clone()),
                     ),
                 }
+            }
+            Symbol::Blueprint(blueprint) => {
+                let (_was_changed, ty) =
+                    Instantiator::instantiate_blueprint(blueprint, &analyzed_types)?;
+                ty
             }
             _ => return Err(self.create_err(ErrorKind::UnknownSymbol, &type_name_to_find.name.0)),
         };

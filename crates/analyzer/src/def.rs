@@ -7,13 +7,7 @@ use crate::err::{Error, ErrorKind};
 use crate::lookup::TypeVariableScope;
 use seq_map::SeqMap;
 use std::rc::Rc;
-use swamp_script_semantic::{
-    AliasType, AliasTypeRef, AnonymousStructType, EnumType, EnumTypeRef, EnumVariantCommon,
-    EnumVariantSimpleType, EnumVariantSimpleTypeRef, EnumVariantStructType, EnumVariantTupleType,
-    EnumVariantType, ExternalFunctionDefinition, Function, InternalFunctionDefinition,
-    LocalIdentifier, LocalTypeIdentifier, ParameterNode, Signature, StructType, StructTypeField,
-    Type, TypeForParameter, TypeVariable, UseItem,
-};
+use swamp_script_semantic::{AliasType, AliasTypeRef, AnonymousStructType, EnumType, EnumTypeRef, EnumVariantCommon, EnumVariantSimpleType, EnumVariantSimpleTypeRef, EnumVariantStructType, EnumVariantTupleType, EnumVariantType, ExternalFunctionDefinition, Function, InternalFunctionDefinition, LocalIdentifier, LocalTypeIdentifier, ParameterNode, ParameterizedTypeBlueprint, ParameterizedTypeKind, Signature, StructType, StructTypeField, Type, TypeForParameter, TypeVariable, UseItem};
 
 impl Analyzer<'_> {
     fn analyze_use_definition(
@@ -375,19 +369,25 @@ impl Analyzer<'_> {
 
         let struct_name_str = self.get_text(&ast_struct.identifier.name).to_string();
 
-        let mut analyzed_struct_ref = self.analyze_struct_type(&struct_name_str, ast_struct)?;
+        let analyzed_struct = self.analyze_struct_type(&struct_name_str, ast_struct)?;
 
         if is_parameterized {
-            // Remove the type variables from the "extra" symbol table
             self.shared.type_variables = None;
-            // The type variables should be directly on the StructType.
-            analyzed_struct_ref.type_variables = type_variables;
+            
+            let blueprint_ref = self.shared.definition_table.add_blueprint(ParameterizedTypeBlueprint {
+                kind: ParameterizedTypeKind::Struct(analyzed_struct),
+                type_variables,
+            })?;
+
+            self.shared.lookup_table.add_blueprint_link(blueprint_ref)?;
+            
+            return Ok(())
         }
 
         let struct_ref = self
             .shared
             .definition_table
-            .add_struct(analyzed_struct_ref)?;
+            .add_struct(analyzed_struct)?;
 
         self.shared.lookup_table.add_struct_link(struct_ref)?;
 

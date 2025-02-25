@@ -724,14 +724,14 @@ impl<'a> Analyzer<'a> {
         match maybe_struct_type {
             Type::Struct(struct_type) => Ok(struct_type), // Already a concrete struct, return directly
             Type::Parameterized(parameterized_type) => {
-                if let ParameterizedTypeKind::Struct(struct_ref) = &parameterized_type.base {
+                if let ParameterizedTypeKind::Struct(struct_ref) = &parameterized_type.blueprint.kind {
                     if qualified_type_identifier.generic_params.is_empty() {
                         todo!()
                     } else {
                         let analyzed_concrete_types =
                             self.analyze_types(&qualified_type_identifier.generic_params)?;
                         let type_variables = Instantiator::create_type_parameter_scope(
-                            &parameterized_type.parameters,
+                            &parameterized_type.instantiated_with_arguments,
                             &analyzed_concrete_types,
                         )?;
                         let (replaced, instantiated_type) =

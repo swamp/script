@@ -8,13 +8,7 @@ use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::fmt::Debug;
 use std::rc::Rc;
-use swamp_script_semantic::{
-    AliasType, AliasTypeRef, Constant, ConstantRef, EnumType, EnumTypeRef, EnumVariantType,
-    EnumVariantTypeRef, ExternalFunctionDefinition, ExternalFunctionDefinitionRef, ExternalType,
-    ExternalTypeRef, HashableEnumTypeRef, InternalFunctionDefinition,
-    InternalFunctionDefinitionRef, IntrinsicFunctionDefinition, IntrinsicFunctionDefinitionRef,
-    ParameterizedType, SemanticError, StructType, StructTypeRef, Type,
-};
+use swamp_script_semantic::{AliasType, AliasTypeRef, Constant, ConstantRef, EnumType, EnumTypeRef, EnumVariantType, EnumVariantTypeRef, ExternalFunctionDefinition, ExternalFunctionDefinitionRef, ExternalType, ExternalTypeRef, HashableEnumTypeRef, InternalFunctionDefinition, InternalFunctionDefinitionRef, IntrinsicFunctionDefinition, IntrinsicFunctionDefinitionRef, ParameterizedType, ParameterizedTypeBlueprint, ParameterizedTypeBlueprintRef, SemanticError, StructType, StructTypeRef, Type};
 use tiny_ver::TinyVersion;
 use tracing::info;
 
@@ -41,6 +35,7 @@ pub struct TypeGenerator {
 pub enum Symbol {
     Type(Type),
     Module(ModuleRef),
+    Blueprint(ParameterizedTypeBlueprintRef),
     PackageVersion(TinyVersion),
     Constant(ConstantRef),
     FunctionDefinition(FuncDef),
@@ -61,6 +56,10 @@ impl Symbol {
 #[derive(Debug, Clone)]
 pub struct SymbolTable {
     symbols: SeqMap<String, Symbol>,
+}
+
+impl SymbolTable {
+
 }
 
 pub type SymbolTableRef = Rc<SymbolTable>;
@@ -149,6 +148,28 @@ impl SymbolTable {
 
         Ok(())
     }
+
+
+    /// # Errors
+    ///
+    pub fn add_blueprint(&mut self, blueprint: ParameterizedTypeBlueprint) -> Result<ParameterizedTypeBlueprintRef, SemanticError> {
+        let struct_ref = Rc::new(blueprint);
+        self.add_blueprint_link(struct_ref.clone())?;
+        info!(?struct_ref, "added struct");
+        Ok(struct_ref)
+    }
+
+    /// # Errors
+    ///
+    pub fn add_blueprint_link(&mut self, blueprint_ref: ParameterizedTypeBlueprintRef) -> Result<(), SemanticError> {
+        let name = blueprint_ref.name().clone();
+        self.symbols
+            .insert(name.clone(), Symbol::Blueprint(blueprint_ref))
+            .map_err(|_| SemanticError::DuplicateStructName(name))?;
+        Ok(())
+    }
+    
+
 
     /// # Errors
     ///

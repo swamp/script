@@ -6,7 +6,8 @@ use swamp_script_modules::symtbl::{FuncDef, Symbol, SymbolTable};
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
     ArgumentExpressionOrLocation, AssociatedImpls, MutOrImmutableExpression, ParameterizedType,
-    ParameterizedTypeKind, Postfix, PostfixKind, SingleLocationExpression, TypeVariable,
+    ParameterizedTypeBlueprintRef, ParameterizedTypeKind, Postfix, PostfixKind,
+    SingleLocationExpression, TypeVariable,
 };
 use yansi::{Color, Paint};
 
@@ -30,7 +31,8 @@ impl SourceMapDisplay<'_> {
             Symbol::Constant(_) => Color::BrightCyan,
             Symbol::FunctionDefinition(_) => Color::Cyan,
             Symbol::Alias(_) => Color::Red,
-            &swamp_script_modules::symtbl::Symbol::TypeGenerator(_) => todo!(),
+            Symbol::Blueprint(_) => Color::Green,
+            Symbol::TypeGenerator(_) => todo!(),
         }
     }
 
@@ -89,6 +91,7 @@ impl SourceMapDisplay<'_> {
             Symbol::PackageVersion(version) => {
                 write!(f, "version {version}")
             }
+            Symbol::Blueprint(blueprint_ref) => self.show_blueprint(f, blueprint_ref, tabs),
         }
     }
 
@@ -106,6 +109,16 @@ impl SourceMapDisplay<'_> {
             writeln!(f)?;
         }
         Ok(())
+    }
+
+    fn show_blueprint(
+        &self,
+        f: &mut Formatter,
+        blueprint: &ParameterizedTypeBlueprintRef,
+        tabs: usize,
+    ) -> std::fmt::Result {
+        self.show_parameterized_type_kind(f, &blueprint.kind, tabs)?;
+        self.show_type_variables(f, &blueprint.type_variables, tabs)
     }
 }
 
@@ -570,9 +583,6 @@ impl SourceMapDisplay<'_> {
         match kind {
             ParameterizedTypeKind::Struct(struct_ref) => self.show_struct(f, struct_ref, tabs),
             ParameterizedTypeKind::Enum(enum_ref) => self.show_enum_type_name(f, &enum_ref.0),
-            ParameterizedTypeKind::Parameterized(parameterized_type) => {
-                self.show_parameterized_type(f, parameterized_type, tabs)
-            }
         }
     }
 
@@ -582,10 +592,10 @@ impl SourceMapDisplay<'_> {
         parameterized_type: &ParameterizedType,
         tabs: usize,
     ) -> std::fmt::Result {
-        self.show_parameterized_type_kind(f, &parameterized_type.base, tabs)?;
+        self.show_parameterized_type_kind(f, &parameterized_type.blueprint.kind, tabs)?;
         write!(f, "{}", "<".bright_white())?;
 
-        self.show_types(f, &parameterized_type.parameters, tabs)?;
+        self.show_types(f, &parameterized_type.instantiated_with_arguments, tabs)?;
 
         write!(f, "{}", ">".bright_white())?;
         Ok(())
@@ -653,6 +663,7 @@ impl SourceMapDisplay<'_> {
                 self.show_parameterized_like(f, "SlicePair", &[*key.clone(), *value.clone()], tabs)
             }
             Type::Parameterized(param) => self.show_parameterized_type(f, param, tabs),
+            Type::Blueprint(param) => self.show_blueprint(f, param, tabs),
             Type::Variable(var) => self.show_type_variable(f, var, tabs),
         }
     }
@@ -857,5 +868,18 @@ impl SourceMapDisplay<'_> {
         tabs: usize,
     ) -> std::fmt::Result {
         write!(f, "{}", type_variable.name.red())
+    }
+
+    fn show_type_variables(
+        &self,
+        f: &mut Formatter,
+        type_variables: &[TypeVariable],
+        tabs: usize,
+    ) -> std::fmt::Result {
+        for variable in type_variables {
+            self.show_type_variable(f, variable, tabs)?;
+            write!(f, "{}", ", ".white())?;
+        }
+        Ok(())
     }
 }

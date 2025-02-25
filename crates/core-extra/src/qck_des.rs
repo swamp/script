@@ -163,6 +163,9 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
         Type::Variable(..) => {
             panic!("can not serialize ranges")
         }
+        Type::Blueprint(..) => {
+            panic!("can not serialize blueprint")
+        }
         Type::Optional(optional_type_ref) => {
             let mut offset = 0;
             let has_some = buf[0] != 0;
