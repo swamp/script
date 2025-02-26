@@ -163,7 +163,10 @@ fn add_intrinsic_sparse_functions(core_ns: &mut SymbolTable, value_type: &Type) 
         return_type: Box::new(value_type.clone()),
     };
 
-    let self_value_to_value_functions = [IntrinsicFunction::SparseSubscript];
+    let self_value_to_value_functions = [
+        IntrinsicFunction::SparseSubscript,
+        IntrinsicFunction::SparseAdd,
+    ];
 
     for intrinsic_fn in self_value_to_value_functions {
         let name = intrinsic_fn.to_string();

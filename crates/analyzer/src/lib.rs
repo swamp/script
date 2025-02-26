@@ -7,6 +7,7 @@ pub mod call;
 pub mod constant;
 pub mod def;
 pub mod err;
+pub mod generate;
 pub mod literal;
 pub mod lookup;
 pub mod operator;
@@ -24,7 +25,12 @@ use std::rc::Rc;
 use swamp_script_modules::modules::Modules;
 use swamp_script_modules::symtbl::{FuncDef, Symbol, SymbolTable, SymbolTableRef};
 use swamp_script_semantic::prelude::*;
-use swamp_script_semantic::{ArgumentExpressionOrLocation, IntrinsicFunction, IntrinsicFunctionDefinitionRef, LocationAccess, LocationAccessKind, MapTypeRef, MutOrImmutableExpression, NormalPattern, Postfix, PostfixKind, RangeMode, SingleLocationExpression, SingleLocationExpressionKind, SingleMutLocationExpression, SparseTypeRef, TypeWithMut, WhenBinding};
+use swamp_script_semantic::{
+    ArgumentExpressionOrLocation, IntrinsicFunction, IntrinsicFunctionDefinitionRef,
+    LocationAccess, LocationAccessKind, MapTypeRef, MutOrImmutableExpression, NormalPattern,
+    Postfix, PostfixKind, RangeMode, SingleLocationExpression, SingleLocationExpressionKind,
+    SingleMutLocationExpression, SparseTypeRef, TypeWithMut, WhenBinding,
+};
 use swamp_script_source_map::SourceMap;
 use tracing::error;
 use tracing::info;
@@ -421,11 +427,6 @@ impl<'a> Analyzer<'a> {
         function_name: &str,
     ) -> Option<FunctionRef> {
         info!(%ty, ?function_name, "looking up member function");
-
-        let core_module =  self.shared.modules.get(&*Self::get_core_path()).unwrap();
-
-        if let Some(internal) = self.check_internal_member_function(ty, function_name, &core_module.namespace.symbol_table) {}
-
         self.shared
             .state
             .associated_impls
@@ -1039,16 +1040,34 @@ impl<'a> Analyzer<'a> {
                         }
                         */
                         Type::Struct(resolved_struct_ref) => {
-                            let subscript_fn = self
-                                .shared
-                                .state
-                                .associated_impls
-                                .get_member_function(
-                                    &Type::Struct(resolved_struct_ref.clone()),
-                                    "subscript",
-                                )
-                                .unwrap();
+                            let subscript_fn = {
+                                self.shared
+                                    .state
+                                    .associated_impls
+                                    .get_member_function(
+                                        &Type::Struct(resolved_struct_ref.clone()),
+                                        "subscript",
+                                    )
+                                    .unwrap()
+                                    .clone()
+                            };
                             let lookup_returns = &subscript_fn.signature().return_type;
+                            let key_type = &subscript_fn.signature().parameters[1].resolved_type;
+                            let resolved_index_expr =
+                                self.analyze_expression(index_expr, Some(key_type))?;
+
+                            let index_arg =
+                                ArgumentExpressionOrLocation::Expression(resolved_index_expr);
+                            let postfix_call = PostfixKind::MemberCall(
+                                subscript_fn.clone(),
+                                Vec::from([index_arg]),
+                            );
+                            self.add_postfix(
+                                &mut suffixes,
+                                postfix_call,
+                                *lookup_returns.clone(),
+                                &index_expr.node,
+                            );
 
                             tv.resolved_type = *lookup_returns.clone();
                             tv.is_mutable = false;
@@ -2441,46 +2460,4 @@ impl<'a> Analyzer<'a> {
 
         Ok(last_type)
     }
-
-    fn check_internal_member_function(
-        &self,
-        ty: &Type,
-        function_name: &str,
-        core_symbol_table: &SymbolTable,
-    ) -> Option<FunctionRef> {
-        match ty {
-            Type::Vec(vector_type) => check_vec_function(vector_type, function_name),
-            Type::Map(map_type) => check_map_function(map_type, function_name),
-            Type::Sparse(sparse_type) => check_sparse_function(sparse_type, function_name),
-            _ => None,
-        }
-    }
-}
-
-fn check_sparse_function(sparse: &SparseTypeRef, function_name: &str, key: Type, value: Type) -> Option<FunctionRef> {
-    match function_name {
-        "new" => {
-            ("sparse_create", 
-        },
-    }
-}
-
-fn check_map_function(p0: &MapTypeRef, p1: &str) -> Option<FunctionRef> {
-    todo!()
-}
-
-fn vec_name_to_intrinsic(function_name: &str) -> Option<String> {
-    let x = match function_name {
-        "len" => "vec_len",
-        _ => return None,
-    };
-    Some(x.to_string())
-}
-
-fn check_vec_function(vec: &VecTypeRef, function_name: &str) -> Option<FunctionRef> {
-    let intrinsic_name = vec_name_to_intrinsic(function_name)?;
-
-
-
-    None
 }

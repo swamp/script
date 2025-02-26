@@ -430,6 +430,8 @@ impl Map<K, V> {
 }
 */
 
+struct SparseId
+
 /// Calculates the magnitude of a 2D vector.
 ///
 /// # Parameters

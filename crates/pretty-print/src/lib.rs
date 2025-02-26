@@ -353,11 +353,7 @@ impl SourceMapDisplay<'_> {
             ExpressionKind::VariableAccess(var) => self.show_variable(f, var),
 
             ExpressionKind::InternalFunctionAccess(internal_function) => {
-                write!(
-                    f,
-                    "fn:{}",
-                    self.source_map.get_text(&internal_function.name.0)
-                )
+                write!(f, "{}", internal_function.assigned_name.bright_magenta())
             }
             ExpressionKind::ExternalFunctionAccess(_) => {
                 write!(f, "ExternalFunctionAccess()")
@@ -371,7 +367,10 @@ impl SourceMapDisplay<'_> {
             ExpressionKind::PostfixChain(base_expr, postfixes) => {
                 self.show_expression(f, base_expr, tabs)?;
                 for postfix in postfixes {
-                    write!(f, " . ")?;
+                    if let PostfixKind::FunctionCall(x) = &postfix.kind {
+                    } else {
+                        write!(f, "{}", ".".bright_yellow())?;
+                    }
                     self.show_postfix(f, postfix, tabs)?;
                 }
                 Ok(())
@@ -383,11 +382,9 @@ impl SourceMapDisplay<'_> {
                 write!(f, "InterpolatedString()")
             }
             ExpressionKind::VariableDefinition(a, b) => {
-                write!(
-                    f,
-                    "let {} = ",
-                    self.source_map.get_text(&a.name).bright_blue()
-                )?;
+                write!(f, "{}", "let ".bright_black())?;
+                self.show_variable_with_short_type(f, &a, tabs)?;
+                write!(f, "{}", " = ".white())?;
                 self.show_mut_or_not_expression(f, b, tabs)
             }
             ExpressionKind::VariableReassignment(_, _) => {
@@ -422,10 +419,14 @@ impl SourceMapDisplay<'_> {
                 write!(f, "Continue")
             }
             ExpressionKind::Block(expressions) => {
+                //                Self::new_line_and_tab(f, tabs+1)?;
+                write!(f, "{}", "{".white())?;
                 for expression in expressions {
                     Self::new_line_and_tab(f, tabs + 1)?;
                     self.show_expression(f, expression, tabs + 1)?;
                 }
+                Self::new_line_and_tab(f, tabs)?;
+                write!(f, "{}", "}".white())?;
                 Ok(())
             }
             ExpressionKind::Match(_) => {
@@ -474,9 +475,37 @@ impl SourceMapDisplay<'_> {
         if var.name.span.file_id == 0 {
             return Ok(());
         }
-        write!(f, "{}", self.source_map.get_text(&var.name))
+        write!(f, "{}", self.source_map.get_text(&var.name).bright_blue())
     }
 
+    fn show_variable_with_type(
+        &self,
+        f: &mut Formatter,
+        var: &VariableRef,
+        tabs: usize,
+    ) -> std::fmt::Result {
+        if var.name.span.file_id == 0 {
+            return Ok(());
+        }
+        write!(f, "{}", self.source_map.get_text(&var.name))?;
+        write!(f, "{}", ": ".bright_white())?;
+        self.show_type(f, &var.resolved_type, tabs)
+    }
+
+    fn show_variable_with_short_type(
+        &self,
+        f: &mut Formatter,
+        var: &VariableRef,
+        tabs: usize,
+    ) -> std::fmt::Result {
+        if var.name.span.file_id == 0 {
+            write!(f, "unknown name")?;
+        } else {
+            write!(f, "{}", self.source_map.get_text(&var.name).bright_blue())?;
+        }
+        write!(f, "{}", ": ".bright_white())?;
+        self.show_short_type(f, &var.resolved_type, tabs)
+    }
     fn show_basic_literal(
         &self,
         f: &mut Formatter,
@@ -561,11 +590,16 @@ impl SourceMapDisplay<'_> {
             PostfixKind::StringRangeIndex(_) => todo!(),
             PostfixKind::MapIndex(_, _) => todo!(),
             PostfixKind::RustTypeIndexRef(_, _) => todo!(),
-            PostfixKind::MemberCall(_function_ref, b) => write!(f, "membercall {b:?}"),
-            PostfixKind::FunctionCall(arguments) => {
-                write!(f, "[call:")?;
+            PostfixKind::MemberCall(function_ref, arguments) => {
+                write!(f, "{}", function_ref.name().green())?;
+                write!(f, "{}", "(".white())?;
                 self.show_arguments(f, arguments, tabs + 1)?;
-                write!(f, "]")
+                write!(f, "{}", ")".white())
+            }
+            PostfixKind::FunctionCall(arguments) => {
+                write!(f, "(")?;
+                self.show_arguments(f, arguments, tabs + 1)?;
+                write!(f, ")")
             }
             PostfixKind::OptionUnwrap => todo!(),
             PostfixKind::NoneCoalesce(_) => todo!(),
@@ -760,7 +794,7 @@ impl SourceMapDisplay<'_> {
     pub fn new_line_and_tab(f: &mut Formatter, tabs: usize) -> std::fmt::Result {
         let tab_str = "..".repeat(tabs);
         writeln!(f)?;
-        write!(f, "{}", tab_str)
+        write!(f, "{}", tab_str.white())
     }
 
     pub fn show_internal_function(

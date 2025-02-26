@@ -2,12 +2,12 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use crate::err::{Error, ErrorKind};
 use crate::Analyzer;
+use crate::err::{Error, ErrorKind};
 use std::rc::Rc;
 use swamp_script_modules::symtbl::{GeneratorKind, Symbol};
 use swamp_script_semantic::{
-    ExternalType, ExternalTypeRef, MapType, MapTypeRef, Signature, SparseType, TupleType, Type,
+    ExternalType, ExternalTypeRef, MapType, MapTypeRef, Signature, TupleType, Type,
     TypeForParameter, VecType, VecTypeRef,
 };
 
@@ -77,16 +77,29 @@ impl Analyzer<'_> {
                         &type_name_to_find.name.0,
                     ));
                 }
+                let core_module = self.shared.modules.get(&*Self::get_core_path()).unwrap();
+
                 match generator.kind {
                     GeneratorKind::Slice => Type::Slice(Box::from(analyzed_types[0].clone())),
                     GeneratorKind::SlicePair => Type::SlicePair(
                         Box::from(analyzed_types[0].clone()),
                         Box::from(analyzed_types[1].clone()),
                     ),
-                    GeneratorKind::Sparse => Type::Sparse(Rc::new(SparseType {
-                        key_type: analyzed_types[0].clone(),
-                        value_type: analyzed_types[1].clone(),
-                    })),
+                    GeneratorKind::Sparse => {
+                        let value_type = &analyzed_types[0];
+                        let key_sparse_id_type = core_module
+                            .namespace
+                            .symbol_table
+                            .get_type("SparseId")
+                            .unwrap();
+                        let struct_type = self.generate_sparse_struct(
+                            &core_module.namespace.symbol_table,
+                            key_sparse_id_type,
+                            value_type,
+                        );
+
+                        Type::Struct(struct_type)
+                    }
                 }
             }
             _ => return Err(self.create_err(ErrorKind::UnknownSymbol, &type_name_to_find.name.0)),

@@ -424,6 +424,7 @@ impl Analyzer<'_> {
                     },
                     body: statements,
                     name: LocalIdentifier(self.to_node(&function_data.declaration.name)),
+                    assigned_name: self.get_text(&function_data.declaration.name).to_string(),
                 };
 
                 let function_ref = self
@@ -643,6 +644,7 @@ impl Analyzer<'_> {
                     },
                     body: statements,
                     name: LocalIdentifier(self.to_node(&function_data.declaration.name)),
+                    assigned_name: self.get_text(&function_data.declaration.name).to_string(),
                 };
 
                 let internal_ref = Rc::new(internal);

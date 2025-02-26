@@ -472,6 +472,7 @@ pub struct LocalIdentifier(pub Node);
 pub struct InternalFunctionDefinition {
     pub body: Expression,
     pub name: LocalIdentifier,
+    pub assigned_name: String,
     pub signature: Signature,
 }
 
@@ -727,11 +728,11 @@ impl Display for Function {
 
 impl Function {
     #[must_use]
-    pub fn name(&self) -> Option<&Node> {
+    pub fn name(&self) -> String {
         match self {
-            Self::Internal(x) => Some(&x.name.0),
-            Self::External(y) => y.name.as_ref(),
-            Self::Intrinsic(z) => None,
+            Self::Internal(x) => x.assigned_name.clone(),
+            Self::External(y) => y.assigned_name.clone(),
+            Self::Intrinsic(z) => z.name.clone(),
         }
     }
 
@@ -1041,6 +1042,7 @@ pub enum IntrinsicFunction {
     SparseRemove,
 
     Float2Magnitude,
+    SparseAdd,
 }
 
 impl fmt::Display for IntrinsicFunction {
@@ -1096,6 +1098,7 @@ impl fmt::Display for IntrinsicFunction {
             // Sparse
             Self::SparseCreate => "sparse_create",
             Self::SparseFromSlice => "sparse_from_slice",
+            Self::SparseAdd => "sparse_add",
             Self::SparseHas => "sparse_has",
             Self::SparseRemove => "sparse_remove",
             Self::SparseSubscriptMut => "sparse_subscript_mut",
