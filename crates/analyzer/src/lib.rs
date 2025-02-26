@@ -28,11 +28,10 @@ use swamp_script_modules::modules::Modules;
 use swamp_script_modules::symtbl::{FuncDef, Symbol, SymbolTable, SymbolTableRef};
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
-    ArgumentExpressionOrLocation, GenericFunctionAccess, GenericTypeBlueprintRef,
-    IntrinsicFunctionDefinitionRef, LocationAccess, LocationAccessKind, MutOrImmutableExpression,
-    NormalPattern, ParameterizedTypeKind, Postfix, PostfixKind, RangeMode,
-    SingleLocationExpression, SingleLocationExpressionKind, SingleMutLocationExpression,
-    TypeWithMut, WhenBinding,
+    ArgumentExpressionOrLocation, GenericTypeBlueprintRef, IntrinsicFunctionDefinitionRef,
+    LocationAccess, LocationAccessKind, MutOrImmutableExpression, NormalPattern,
+    ParameterizedTypeKind, Postfix, PostfixKind, RangeMode, SingleLocationExpression,
+    SingleLocationExpressionKind, SingleMutLocationExpression, TypeWithMut, WhenBinding,
 };
 use swamp_script_source_map::SourceMap;
 use tracing::error;
@@ -417,29 +416,63 @@ impl<'a> Analyzer<'a> {
         ty: &Type,
         function_name: &str,
     ) -> Option<AssociatedFunctionInfo> {
+        info!(%ty, ?function_name, "looking up member function");
+        println!(
+            "DEBUG: Type kind: {}",
+            match ty {
+                Type::Generic(_) => "Generic",
+                Type::Struct(_) => "Struct",
+                Type::Enum(_) => "Enum",
+                _ => "Other",
+            }
+        );
+
         if let Some((blueprint, concrete_types)) = ty.extract_blueprint_and_types() {
-            if let Some(base_function) = blueprint.find_associated_function(function_name) {
+            println!(
+                "DEBUG: Successfully extracted blueprint: {:?}",
+                blueprint.borrow().kind
+            );
+            println!("DEBUG: With concrete types: {:?}", concrete_types);
+
+            if let Some(base_function) = blueprint.borrow().find_associated_function(function_name)
+            {
                 let scope = Instantiator::create_type_parameter_scope_from_variables(
-                    &blueprint.type_variables,
-                    &*concrete_types,
+                    &blueprint.borrow().type_variables,
+                    &concrete_types,
                 )
                 .unwrap();
                 let instantiated_signature =
                     Instantiator::instantiate_signature(base_function.signature(), &scope).unwrap();
                 return Some(AssociatedFunctionInfo::Generic {
                     base_function: base_function.clone(),
-                    blueprint,
+                    blueprint: blueprint.clone(),
                     concrete_types,
                     instantiated_signature,
                 });
             }
+        } else {
+            println!("DEBUG: Failed to extract blueprint from type");
         }
 
-        self.shared
+        println!("DEBUG: Falling back to concrete implementation lookup");
+
+        let result = self
+            .shared
             .state
             .associated_impls
             .get_member_function(ty, function_name)
-            .map(|function| AssociatedFunctionInfo::Concrete(function.clone()))
+            .map(|function| AssociatedFunctionInfo::Concrete(function.clone()));
+
+        println!(
+            "DEBUG: Lookup result: {}",
+            if result.is_some() {
+                "Found"
+            } else {
+                "Not found"
+            }
+        );
+
+        result
     }
 
     pub fn analyze_expression_get_mutability(
@@ -776,7 +809,7 @@ impl<'a> Analyzer<'a> {
             Type::Struct(struct_type) => Ok(struct_type),
             Type::Generic(parameterized_type) => {
                 if let ParameterizedTypeKind::Struct(_struct_ref) =
-                    &parameterized_type.blueprint.kind
+                    &parameterized_type.blueprint.0.borrow().kind
                 {
                     if qualified_type_identifier.generic_params.is_empty() {
                         todo!()
@@ -871,13 +904,13 @@ impl<'a> Analyzer<'a> {
 
                 let base_expr = self.create_expr(
                     kind,
-                    Type::Function(function_info.instantiated_signature().clone()),
+                    Type::Function(function_info.instantiated_signature()),
                     node,
                 );
 
                 let empty_call_postfix = Postfix {
                     node: self.to_node(node),
-                    ty: *function_info.instantiated_signature().return_type.clone(),
+                    ty: *function_info.instantiated_signature().return_type,
                     kind: PostfixKind::FunctionCall(vec![]),
                 };
 
@@ -1250,13 +1283,13 @@ impl<'a> Analyzer<'a> {
             Type::String => (Some(Type::Int), Type::String),
             //Type::Iterator(item_type) => (None, *item_type.clone()),
             Type::Struct(resolved_struct_ref) => {
-                let x = self
-                    .shared
-                    .state
-                    .associated_impls
-                    .get_member_function(&Type::Struct(resolved_struct_ref.clone()), "iter")
+                let associated_function_info = self
+                    .lookup_associated_function(resolved_type, "iter")
                     .expect("todo: missing iter() associated function");
-                match &*x.signature().return_type {
+                match &*associated_function_info
+                    .instantiated_signature()
+                    .return_type
+                {
                     Type::Tuple(tuple_ref) => {
                         if tuple_ref.0.len() == 2 {
                             (Some(tuple_ref.0[0].clone()), tuple_ref.0[1].clone())

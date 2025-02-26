@@ -19,11 +19,10 @@ instantiated = Something<Int> {
 
          ",
         "
-Something: Something {
-....a: Float, 
-....value: T, 
-..}<T>
-
+Something: <T>Something {
+..a: Float, 
+..value: T, 
+}
 ---
 let instantiated = Something<Int> {
 ..a: 2.30f, 
@@ -51,7 +50,7 @@ a = Something<Int> {
 
          ",
         r"
-Error { node: <99:3>, kind: IncompatibleTypes(Int, Float) }
+ResolveError(Error { node: <99:3>, kind: IncompatibleTypes(Int, Float) })
         ",
     );
 }

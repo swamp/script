@@ -213,14 +213,36 @@ impl ParameterizedTypeKind {
     }
 }
 
-#[derive(Debug, Hash)]
+#[derive(Hash)]
 pub struct GenericTypeBlueprint {
     pub kind: ParameterizedTypeKind,
     pub type_variables: Vec<TypeVariable>,
     pub associated_functions: ImplFunctions,
 }
 
-pub type GenericTypeBlueprintRef = Rc<GenericTypeBlueprint>;
+impl Debug for GenericTypeBlueprint {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "kind:{:?}", self.kind)?;
+        write!(f, "type_variables:{:?}", self.type_variables)?;
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct HashableGenericTypeBlueprintRef(pub Rc<RefCell<GenericTypeBlueprint>>);
+
+impl Hash for HashableGenericTypeBlueprintRef {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.borrow().hash(state)
+    }
+}
+
+impl HashableGenericTypeBlueprintRef {
+    pub(crate) fn same_type(&self, other: &Self) -> bool {
+        self.0.borrow().kind.same_type(&other.0.borrow().kind)
+    }
+}
+pub type GenericTypeBlueprintRef = Rc<RefCell<GenericTypeBlueprint>>; // Unfortunately needs RefCell since associated_functions are added
 
 impl GenericTypeBlueprint {
     pub(crate) fn same_type(&self, other: &Self) -> bool {
@@ -238,7 +260,7 @@ impl GenericTypeBlueprint {
 
 #[derive(Debug, Clone, Hash)]
 pub struct GenericType {
-    pub blueprint: GenericTypeBlueprintRef,
+    pub blueprint: HashableGenericTypeBlueprintRef,
     pub instantiated_with_arguments: Vec<Type>,
 }
 
@@ -252,7 +274,7 @@ impl GenericType {
     }
 
     pub fn name(&self) -> String {
-        self.blueprint.name()
+        self.blueprint.0.borrow().name()
     }
 }
 
@@ -282,7 +304,7 @@ pub enum Type {
 
     Slice(Box<Type>),
     SlicePair(Box<Type>, Box<Type>),
-    Blueprint(GenericTypeBlueprintRef),
+    Blueprint(HashableGenericTypeBlueprintRef),
     Generic(GenericType),
 
     Variable(TypeVariable),
@@ -293,14 +315,20 @@ pub enum Type {
 impl Type {
     #[must_use]
     pub const fn is_concrete(&self) -> bool {
-        !matches!(self, Self::Generic(..))
+        !self.is_generic()
+    }
+
+    #[must_use]
+    pub const fn is_generic(&self) -> bool {
+        matches!(self, Self::Generic(..))
     }
 
     #[must_use]
     pub fn extract_blueprint_and_types(&self) -> Option<(GenericTypeBlueprintRef, Vec<Self>)> {
+        println!("DEBUG: Attempting to extract blueprint from: {:?}", self);
         match &self {
             Self::Generic(param_type) => Some((
-                param_type.blueprint.clone(),
+                param_type.blueprint.0.clone(),
                 param_type.instantiated_with_arguments.clone(),
             )),
             _ => None,
@@ -401,7 +429,7 @@ impl Debug for Type {
             Self::Range => write!(f, "Range"),
             Self::Slice(_) => write!(f, "Slice"),
             Self::SlicePair(_, _) => write!(f, "SlicePair"),
-            Self::Generic(ty) => write!(f, "Parameterized {ty:?}"),
+            Self::Generic(ty) => write!(f, "Generic {ty:?}"),
             Self::Blueprint(ty) => write!(f, "Blueprint {ty:?}"),
             Self::Variable(var) => write!(f, "Variable {var:?}"),
         }
@@ -425,7 +453,7 @@ impl Display for Type {
             Self::Range => write!(f, "Range"),
             Self::Slice(_) => write!(f, "Slice"),
             Self::SlicePair(_, _) => write!(f, "SlicePair"),
-            Self::Generic(_) => write!(f, "Parameterized"),
+            Self::Generic(ty) => write!(f, "Generic {ty:?}"),
             Self::Blueprint(_) => write!(f, "Blueprint"),
             Self::Variable(_) => write!(f, "Var"),
         }

@@ -638,10 +638,17 @@ impl Analyzer<'_> {
         type_to_attach_to: &Type,
         functions: &[&swamp_script_ast::Function],
     ) -> Result<(), Error> {
-        self.shared
-            .state
-            .associated_impls
-            .prepare(type_to_attach_to);
+        let maybe_generic = match type_to_attach_to {
+            Type::Generic(generic) => Some(generic),
+            _ => None,
+        };
+
+        if maybe_generic.is_none() {
+            self.shared
+                .state
+                .associated_impls
+                .prepare(type_to_attach_to);
+        }
 
         for function in functions {
             let new_return_type = self.analyze_return_type(function)?;
@@ -662,13 +669,28 @@ impl Analyzer<'_> {
 
             self.stop_function();
 
-            self.shared
-                .state
-                .associated_impls
-                .add_member_function(type_to_attach_to, &function_name_str, resolved_function_ref)
-                .map_err(|err| {
-                    self.create_err(ErrorKind::SemanticError(err), &function_name.name)
-                })?;
+            if let Some(generic_type) = &maybe_generic {
+                generic_type
+                    .blueprint
+                    .0
+                    .borrow_mut()
+                    .associated_functions
+                    .functions
+                    .insert(function_name_str, resolved_function_ref)
+                    .unwrap()
+            } else {
+                self.shared
+                    .state
+                    .associated_impls
+                    .add_member_function(
+                        type_to_attach_to,
+                        &function_name_str,
+                        resolved_function_ref,
+                    )
+                    .map_err(|err| {
+                        self.create_err(ErrorKind::SemanticError(err), &function_name.name)
+                    })?;
+            }
         }
 
         Ok(())

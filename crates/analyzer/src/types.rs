@@ -119,30 +119,10 @@ impl Analyzer<'_> {
                     ),
                 }
             }
-            Symbol::Blueprint(blueprint) => {
-                // Check if any of the analyzed_types are type variables
-                let contains_type_variables = analyzed_types
-                    .iter()
-                    .any(|t| matches!(t, Type::Variable(_)));
-
-                if contains_type_variables {
-                    // Don't instantiate yet, preserve as parameterized
-                    Type::Generic(GenericType {
-                        blueprint,
-                        instantiated_with_arguments: analyzed_types,
-                    })
-                } else {
-                    // All concrete types, can instantiate immediately
-                    let (_was_changed, ty) = Instantiator::instantiate_blueprint(
-                        &blueprint,
-                        &analyzed_types,
-                    )
-                    .map_err(|err| {
-                        self.create_err(ErrorKind::SemanticError(err), &type_name_to_find.name.0)
-                    })?;
-                    ty
-                }
-            }
+            Symbol::Blueprint(blueprint) => Type::Generic(GenericType {
+                blueprint: swamp_script_semantic::HashableGenericTypeBlueprintRef(blueprint),
+                instantiated_with_arguments: analyzed_types,
+            }),
             _ => return Err(self.create_err(ErrorKind::UnknownSymbol, &type_name_to_find.name.0)),
         };
 

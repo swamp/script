@@ -60,11 +60,11 @@ impl Instantiator {
         concrete_types: &[Type],
     ) -> Result<(bool, Type), SemanticError> {
         let scope = Self::create_type_parameter_scope_from_variables(
-            &blueprint.type_variables,
+            &blueprint.borrow().type_variables,
             concrete_types,
         )?;
 
-        match &blueprint.kind {
+        match &blueprint.borrow().kind {
             ParameterizedTypeKind::Struct(struct_ref) => {
                 Self::instantiate_struct(struct_ref, &scope)
             }
@@ -110,7 +110,7 @@ impl Instantiator {
             resolved_params.push(resolved);
         }
 
-        Self::instantiate_blueprint(&parameterized_type.blueprint, &resolved_params)
+        Self::instantiate_blueprint(&parameterized_type.blueprint.0, &resolved_params)
     }
 
     fn instantiate_type_if_needed(

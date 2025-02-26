@@ -158,7 +158,7 @@ impl SymbolTable {
         &mut self,
         blueprint: GenericTypeBlueprint,
     ) -> Result<GenericTypeBlueprintRef, SemanticError> {
-        let struct_ref = Rc::new(blueprint);
+        let struct_ref = Rc::new(RefCell::new(blueprint));
         self.add_blueprint_link(struct_ref.clone())?;
         Ok(struct_ref)
     }
@@ -169,7 +169,7 @@ impl SymbolTable {
         &mut self,
         blueprint_ref: GenericTypeBlueprintRef,
     ) -> Result<(), SemanticError> {
-        let name = blueprint_ref.name().clone();
+        let name = blueprint_ref.borrow().name();
         self.symbols
             .insert(name.clone(), Symbol::Blueprint(blueprint_ref))
             .map_err(|_| SemanticError::DuplicateStructName(name))?;

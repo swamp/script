@@ -121,9 +121,9 @@ impl SourceMapDisplay<'_> {
         tabs: usize,
     ) -> std::fmt::Result {
         write!(f, "{}", "<".bright_white())?;
-        self.show_type_variables(f, &blueprint.type_variables, tabs)?;
+        self.show_type_variables(f, &blueprint.borrow().type_variables, tabs)?;
         write!(f, "{}", ">".bright_white())?;
-        self.show_parameterized_type_kind(f, &blueprint.kind, tabs)
+        self.show_parameterized_type_kind(f, &blueprint.borrow().kind, tabs)
     }
 }
 
@@ -617,7 +617,7 @@ impl SourceMapDisplay<'_> {
         parameterized_type: &GenericType,
         tabs: usize,
     ) -> std::fmt::Result {
-        self.show_parameterized_type_kind(f, &parameterized_type.blueprint.kind, tabs)?;
+        self.show_parameterized_type_kind(f, &parameterized_type.blueprint.0.borrow().kind, tabs)?;
         write!(f, "{}", "<".bright_white())?;
 
         self.show_types(f, &parameterized_type.instantiated_with_arguments, tabs)?;
@@ -632,7 +632,7 @@ impl SourceMapDisplay<'_> {
         parameterized_type: &GenericType,
         tabs: usize,
     ) -> std::fmt::Result {
-        self.show_short_parameterized_type_kind(f, &parameterized_type.blueprint.kind)?;
+        self.show_short_parameterized_type_kind(f, &parameterized_type.blueprint.0.borrow().kind)?;
         write!(f, "{}", "<".bright_white())?;
 
         self.show_types(f, &parameterized_type.instantiated_with_arguments, tabs)?;
@@ -703,7 +703,7 @@ impl SourceMapDisplay<'_> {
                 self.show_parameterized_like(f, "SlicePair", &[*key.clone(), *value.clone()], tabs)
             }
             Type::Generic(param) => self.show_parameterized_type(f, param, tabs),
-            Type::Blueprint(param) => self.show_blueprint(f, param, tabs),
+            Type::Blueprint(param) => self.show_blueprint(f, &param.0, tabs),
             Type::Variable(var) => self.show_type_variable(f, var, tabs),
         }
     }
@@ -749,7 +749,7 @@ impl SourceMapDisplay<'_> {
                 self.show_parameterized_like(f, "SlicePair", &[*key.clone(), *value.clone()], tabs)
             }
             Type::Generic(param) => self.show_short_parameterized_type(f, param, tabs),
-            Type::Blueprint(param) => self.show_blueprint(f, param, tabs),
+            Type::Blueprint(param) => self.show_blueprint(f, &param.0, tabs),
             Type::Variable(var) => self.show_type_variable(f, var, tabs),
         }
     }
