@@ -216,6 +216,7 @@ pub enum Type {
     Optional(Box<Type>),
 
     External(ExternalTypeRef),
+    ExternalGeneric(String, Vec<Type>),
 }
 
 impl Type {
@@ -254,7 +255,14 @@ impl Type {
             Self::External(ext) => Self::calculate_type_id(ext),
             Self::Vec(vec) => Self::calculate_type_id(vec),
             Self::Map(map) => Self::calculate_type_id(map),
-            &Type::Slice(_) | &Type::SlicePair(_, _) => todo!(),
+            Self::Slice(_) => todo!(),
+            Self::SlicePair(_, _) => todo!(),
+            Self::ExternalGeneric(name, types) => {
+                let mut s = DefaultHasher::new();
+                8u64.hash(&mut s);
+                name.hash(&mut s);
+                Self::calculate_type_id(types)
+            }
         }
     }
 }
@@ -295,6 +303,7 @@ impl Debug for Type {
             Self::Range => write!(f, "Range"),
             &Type::Vec(_) | &Type::Map(_) => todo!(),
             &Type::Slice(_) | &Type::SlicePair(_, _) => todo!(),
+            &Type::ExternalGeneric(_, _) => todo!(),
         }
     }
 }
@@ -314,9 +323,13 @@ impl Display for Type {
             Self::Optional(base_type) => write!(f, "{base_type}?"),
             Self::External(external_type) => write!(f, "ExternalType<{}>", external_type.type_name),
             Self::Range => write!(f, "Range"),
-            Type::Vec(v) => write!(f, "Vec"),
-            Type::Map(m) => write!(f, "Map"),
-            &Type::Slice(_) | &Type::SlicePair(_, _) => todo!(),
+            Self::Vec(v) => write!(f, "Vec"),
+            Self::Map(m) => write!(f, "Map"),
+            Self::Slice(_) => todo!(),
+            Self::SlicePair(_, _) => todo!(),
+            Self::ExternalGeneric(name, types) => {
+                write!(f, "ExternalGenericType<{name}<{types:?}>")
+            }
         }
     }
 }
@@ -534,7 +547,7 @@ impl Debug for ExternalFunctionDefinition {
 pub type ExternalFunctionDefinitionRef = Rc<crate::ExternalFunctionDefinition>;
 
 //#[derive(Debug)]
-#[derive(Clone)]
+#[derive(Clone, Hash)]
 pub struct IntrinsicFunctionDefinition {
     pub name: String,
     pub signature: Signature,
@@ -712,6 +725,7 @@ pub type FunctionRef = Rc<Function>;
 pub enum Function {
     Internal(InternalFunctionDefinitionRef),
     External(ExternalFunctionDefinitionRef),
+    Intrinsic(IntrinsicFunctionDefinitionRef),
 }
 
 impl Display for Function {
@@ -719,6 +733,7 @@ impl Display for Function {
         match self {
             Self::Internal(_int) => write!(f, "")?,
             Self::External(_) => write!(f, "external ")?,
+            Self::Intrinsic(_) => write!(f, "intrinsic ")?,
         };
 
         write!(f, "{}", self.signature())
@@ -731,6 +746,7 @@ impl Function {
         match self {
             Self::Internal(x) => Some(&x.name.0),
             Self::External(y) => y.name.as_ref(),
+            Self::Intrinsic(z) => None,
         }
     }
 
@@ -739,6 +755,7 @@ impl Function {
         match self {
             Self::Internal(x) => x.name.0.clone(),
             Self::External(_y) => Node::new_unknown(),
+            Self::Intrinsic(z) => Node::new_unknown(),
         }
     }
 
@@ -747,6 +764,7 @@ impl Function {
         match self {
             Self::Internal(internal) => &internal.signature,
             Self::External(external) => &external.signature,
+            Self::Intrinsic(intrinsic_def) => &intrinsic_def.signature,
         }
     }
 }
@@ -979,7 +997,7 @@ pub struct WhenBinding {
     pub expr: MutOrImmutableExpression,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Hash, Clone)]
 pub enum IntrinsicFunction {
     FloatRound,
     FloatFloor,
@@ -1012,22 +1030,32 @@ pub enum IntrinsicFunction {
     VecRemove,
     VecClear,
     VecCreate,
+    VecSubscript,
+    VecSubscriptMut,
+    VecIter,
+    VecIterMut,
 
     // Map
     MapCreate,
     MapFromSlice,
     MapHas,
     MapRemove,
-
-    Float2Magnitude,
-    VecSubscript,
-    VecSubscriptMut,
-    VecIter,
-    VecIterMut,
     MapIter,
     MapIterMut,
     MapSubscript,
     MapSubscriptMut,
+
+    // Sparse
+    SparseCreate,
+    SparseFromSlice,
+    SparseIter,
+    SparseIterMut,
+    SparseSubscript,
+    SparseSubscriptMut,
+    SparseHas,
+    SparseRemove,
+
+    Float2Magnitude,
 }
 
 impl fmt::Display for IntrinsicFunction {
@@ -1079,6 +1107,16 @@ impl fmt::Display for IntrinsicFunction {
             Self::MapSubscript => "map_subscript",
             Self::MapIter => "map_iter",
             Self::MapIterMut => "map_iter_mut",
+
+            // Sparse
+            Self::SparseCreate => "sparse_create",
+            Self::SparseFromSlice => "sparse_from_slice",
+            Self::SparseHas => "sparse_has",
+            Self::SparseRemove => "sparse_remove",
+            Self::SparseSubscriptMut => "sparse_subscript_mut",
+            Self::SparseSubscript => "sparse_subscript",
+            Self::SparseIter => "sparse_iter",
+            Self::SparseIterMut => "sparse_iter_mut",
 
             // Other
             Self::Float2Magnitude => "float2_magnitude",
@@ -1331,36 +1369,6 @@ impl AssociatedImpls {
         } else {
             Err(SemanticError::UnknownImplOnType)
         }
-    }
-
-    #[must_use]
-    pub fn get_internal_member_function(
-        &self,
-        ty: &Type,
-        function_name: &str,
-    ) -> Option<InternalFunctionDefinitionRef> {
-        if let Some(func) = self.get_member_function(ty, function_name) {
-            match &**func {
-                Function::Internal(fn_def) => Some(fn_def.clone()),
-                Function::External(_) => None,
-            };
-        }
-        None
-    }
-
-    #[must_use]
-    pub fn fetch_external_function_id(
-        &self,
-        ty: &Type,
-        function_name: &str,
-    ) -> Option<ExternalFunctionId> {
-        if let Some(func) = self.get_member_function(ty, function_name) {
-            match &**func {
-                Function::External(fn_def) => Some(fn_def.clone()),
-                Function::Internal(_) => None,
-            };
-        }
-        None
     }
 }
 

@@ -16,9 +16,11 @@ impl Analyzer<'_> {
             Function::Internal(internal_function) => {
                 ExpressionKind::InternalFunctionAccess(internal_function.clone())
             }
-
             Function::External(external_function) => {
                 ExpressionKind::ExternalFunctionAccess(external_function.clone())
+            }
+            Function::Intrinsic(intrinsic_def) => {
+                ExpressionKind::IntrinsicFunctionAccess(intrinsic_def.clone())
             }
         }
     }
@@ -32,7 +34,7 @@ impl Analyzer<'_> {
         let kind = Self::convert_to_function_access(associated_function_info);
         self.create_expr(
             kind,
-            *associated_function_info.signature().return_type.clone(),
+            Type::Function(associated_function_info.signature().clone()),
             ast_node,
         )
     }

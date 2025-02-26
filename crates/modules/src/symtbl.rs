@@ -27,6 +27,7 @@ pub enum FuncDef {
 pub enum GeneratorKind {
     Slice,
     SlicePair,
+    External,
 }
 
 #[derive(Clone, Debug)]
@@ -60,6 +61,8 @@ impl Symbol {
 pub struct SymbolTable {
     symbols: SeqMap<String, Symbol>,
 }
+
+impl SymbolTable {}
 
 impl SymbolTable {}
 
@@ -104,6 +107,20 @@ impl SymbolTable {
         for (name, symbol) in symbol_table.symbols() {
             if symbol.is_basic_type() {
                 self.add_symbol(name, symbol.clone())?;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn extend_intrinsic_functions_from(
+        &mut self,
+        symbol_table: &Self,
+    ) -> Result<(), SemanticError> {
+        for (name, symbol) in symbol_table.symbols() {
+            if let Symbol::FunctionDefinition(func_def) = symbol {
+                if let FuncDef::Intrinsic(intrinsic_def) = func_def {
+                    self.add_symbol(name, symbol.clone())?;
+                }
             }
         }
         Ok(())

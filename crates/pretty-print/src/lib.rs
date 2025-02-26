@@ -5,8 +5,8 @@ use swamp_script_modules::modules::{ModuleRef, Modules};
 use swamp_script_modules::symtbl::{FuncDef, Symbol, SymbolTable};
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
-    ArgumentExpressionOrLocation, AssociatedImpls, MutOrImmutableExpression, Postfix, PostfixKind,
-    SingleLocationExpression,
+    ArgumentExpressionOrLocation, AssociatedImpls, IntrinsicFunctionDefinitionRef,
+    MutOrImmutableExpression, Postfix, PostfixKind, SingleLocationExpression,
 };
 use yansi::{Color, Paint};
 
@@ -465,7 +465,7 @@ impl SourceMapDisplay<'_> {
                 write!(f, "intrinsic {intrinsic_func:?} {arguments:?}")
             }
             ExpressionKind::IntrinsicFunctionAccess(intrinsic_func_def) => {
-                write!(f, "intrinsic_access {intrinsic_func_def:?}")
+                write!(f, "[intrinsic_function_access {intrinsic_func_def:?}]")
             }
         }
     }
@@ -634,6 +634,7 @@ impl SourceMapDisplay<'_> {
                 self.show_parameterized_like(f, "SlicePair", &[*key.clone(), *value.clone()], tabs)
             }
             &swamp_script_semantic::Type::Vec(_) | &swamp_script_semantic::Type::Map(_) => todo!(),
+            &swamp_script_semantic::Type::ExternalGeneric(_, _) => todo!(),
         }
     }
 
@@ -677,7 +678,8 @@ impl SourceMapDisplay<'_> {
             Type::SlicePair(key, value) => {
                 self.show_parameterized_like(f, "SlicePair", &[*key.clone(), *value.clone()], tabs)
             }
-            &swamp_script_semantic::Type::Vec(_) | &swamp_script_semantic::Type::Map(_) => todo!(),
+            Type::Vec(_) | Type::Map(_) => todo!(),
+            Type::ExternalGeneric(_, _) => todo!(),
         }
     }
 
@@ -772,6 +774,16 @@ impl SourceMapDisplay<'_> {
         self.show_expression(f, &internal_func.body, tabs)
     }
 
+    pub fn show_intrinsic_function(
+        &self,
+        f: &mut Formatter,
+        intrinsic_def: &IntrinsicFunctionDefinitionRef,
+        tabs: usize,
+    ) -> std::fmt::Result {
+        self.show_signature(f, &intrinsic_def.signature, tabs)?;
+        Self::new_line_and_tab(f, tabs)
+    }
+
     pub fn show_internal_functions(
         &self,
         f: &mut Formatter,
@@ -791,6 +803,9 @@ impl SourceMapDisplay<'_> {
             Function::Internal(internal) => self.show_internal_function(f, internal, tabs),
             Function::External(external) => {
                 self.show_external_function_declaration(f, external, tabs)
+            }
+            Function::Intrinsic(intrinsic_def) => {
+                self.show_intrinsic_function(f, intrinsic_def, tabs)
             }
         }
     }

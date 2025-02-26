@@ -126,14 +126,16 @@ pub fn bootstrap_modules(
 
     let core_symbol_table = core_module.namespace.symbol_table.as_ref().clone();
 
-    let core_analyzed_symbol_table = analyze_single_module(
+    let mut core_analyzed_symbol_table = analyze_single_module(
         &mut state,
-        core_symbol_table,
+        core_symbol_table.clone(),
         &modules,
         &core_ast_module,
         source_map,
         &core_module.namespace.path,
     )?;
+
+    core_analyzed_symbol_table.extend_intrinsic_functions_from(&core_symbol_table);
 
     core_module.namespace.symbol_table = Rc::new(core_analyzed_symbol_table);
 

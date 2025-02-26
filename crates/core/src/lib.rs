@@ -72,6 +72,211 @@ fn add_intrinsic_functions(core_ns: &mut SymbolTable) {
     let value_type = core_ns.get_type("Value").unwrap().clone();
     add_intrinsic_vec_functions(core_ns, &value_type);
     add_intrinsic_map_functions(core_ns, &value_type);
+    add_intrinsic_sparse_functions(core_ns, &value_type);
+}
+
+#[allow(clippy::too_many_lines)]
+fn add_intrinsic_sparse_functions(core_ns: &mut SymbolTable, value_type: &Type) {
+    let slice_to_self = Signature {
+        parameters: [TypeForParameter {
+            name: "slice".to_string(),
+            resolved_type: Type::Slice(Box::from(value_type.clone())),
+            is_mutable: false,
+            node: None,
+        }]
+        .into(),
+        return_type: Box::new(value_type.clone()),
+    };
+    let slice_to_self_functions = [IntrinsicFunction::SparseFromSlice];
+    for intrinsic_fn in slice_to_self_functions {
+        let name = intrinsic_fn.to_string();
+        core_ns
+            .add_intrinsic_function(IntrinsicFunctionDefinition {
+                name,
+                intrinsic: intrinsic_fn,
+                signature: slice_to_self.clone(),
+            })
+            .unwrap();
+    }
+
+    let unit_to_value = Signature {
+        parameters: [].into(),
+        return_type: Box::new(value_type.clone()),
+    };
+
+    let unit_to_value_functions = [IntrinsicFunction::SparseCreate];
+
+    for intrinsic_fn in unit_to_value_functions {
+        let name = intrinsic_fn.to_string();
+        core_ns
+            .add_intrinsic_function(IntrinsicFunctionDefinition {
+                name,
+                intrinsic: intrinsic_fn,
+                signature: unit_to_value.clone(),
+            })
+            .unwrap();
+    }
+
+    let self_to_value = Signature {
+        parameters: [TypeForParameter {
+            name: "self".to_string(),
+            resolved_type: value_type.clone(),
+            is_mutable: false,
+            node: None,
+        }]
+        .into(),
+        return_type: Box::new(value_type.clone()),
+    };
+
+    let self_to_value_functions = [
+        IntrinsicFunction::SparseIter,
+        IntrinsicFunction::SparseIterMut,
+    ];
+
+    for intrinsic_fn in self_to_value_functions {
+        let name = intrinsic_fn.to_string();
+        core_ns
+            .add_intrinsic_function(IntrinsicFunctionDefinition {
+                name,
+                intrinsic: intrinsic_fn,
+                signature: self_to_value.clone(),
+            })
+            .unwrap();
+    }
+
+    let self_value_to_value = Signature {
+        parameters: [
+            TypeForParameter {
+                name: "self".to_string(),
+                resolved_type: value_type.clone(),
+                is_mutable: false,
+                node: None,
+            },
+            TypeForParameter {
+                name: "i".to_string(),
+                resolved_type: value_type.clone(),
+                is_mutable: false,
+                node: None,
+            },
+        ]
+        .into(),
+        return_type: Box::new(value_type.clone()),
+    };
+
+    let self_value_to_value_functions = [IntrinsicFunction::SparseSubscript];
+
+    for intrinsic_fn in self_value_to_value_functions {
+        let name = intrinsic_fn.to_string();
+        core_ns
+            .add_intrinsic_function(IntrinsicFunctionDefinition {
+                name,
+                intrinsic: intrinsic_fn,
+                signature: self_value_to_value.clone(),
+            })
+            .unwrap();
+    }
+
+    let self_value_value_mut_to_unit = Signature {
+        parameters: [
+            TypeForParameter {
+                name: "self".to_string(),
+                resolved_type: value_type.clone(),
+                is_mutable: false,
+                node: None,
+            },
+            TypeForParameter {
+                name: "key".to_string(),
+                resolved_type: value_type.clone(),
+                is_mutable: false,
+                node: None,
+            },
+            TypeForParameter {
+                name: "value".to_string(),
+                resolved_type: value_type.clone(),
+                is_mutable: true,
+                node: None,
+            },
+        ]
+        .into(),
+        return_type: Box::new(value_type.clone()),
+    };
+
+    let self_value_value_mut_to_unit_functions = [IntrinsicFunction::SparseSubscriptMut];
+
+    for intrinsic_fn in self_value_value_mut_to_unit_functions {
+        let name = intrinsic_fn.to_string();
+        core_ns
+            .add_intrinsic_function(IntrinsicFunctionDefinition {
+                name,
+                intrinsic: intrinsic_fn,
+                signature: self_value_value_mut_to_unit.clone(),
+            })
+            .unwrap();
+    }
+
+    let self_value_to_bool = Signature {
+        parameters: [
+            TypeForParameter {
+                name: "self".to_string(),
+                resolved_type: value_type.clone(),
+                is_mutable: false,
+                node: None,
+            },
+            TypeForParameter {
+                name: "i".to_string(),
+                resolved_type: value_type.clone(),
+                is_mutable: false,
+                node: None,
+            },
+        ]
+        .into(),
+        return_type: Box::new(Type::Bool),
+    };
+
+    let self_value_to_bool_functions = [IntrinsicFunction::SparseHas];
+
+    for intrinsic_fn in self_value_to_bool_functions {
+        let name = intrinsic_fn.to_string();
+        core_ns
+            .add_intrinsic_function(IntrinsicFunctionDefinition {
+                name,
+                intrinsic: intrinsic_fn,
+                signature: self_value_to_bool.clone(),
+            })
+            .unwrap();
+    }
+
+    let self_value_to_option_value = Signature {
+        parameters: [
+            TypeForParameter {
+                name: "self".to_string(),
+                resolved_type: value_type.clone(),
+                is_mutable: false,
+                node: None,
+            },
+            TypeForParameter {
+                name: "key".to_string(),
+                resolved_type: value_type.clone(),
+                is_mutable: false,
+                node: None,
+            },
+        ]
+        .into(),
+        return_type: Box::new(Type::Optional(Box::new(value_type.clone()))),
+    };
+
+    let self_value_to_option_value_functions = [IntrinsicFunction::SparseRemove];
+
+    for intrinsic_fn in self_value_to_option_value_functions {
+        let name = intrinsic_fn.to_string();
+        core_ns
+            .add_intrinsic_function(IntrinsicFunctionDefinition {
+                name,
+                intrinsic: intrinsic_fn,
+                signature: self_value_to_option_value.clone(),
+            })
+            .unwrap();
+    }
 }
 
 #[allow(clippy::too_many_lines)]
@@ -274,6 +479,7 @@ fn add_intrinsic_map_functions(core_ns: &mut SymbolTable, value_type: &Type) {
             .unwrap();
     }
 }
+
 #[allow(clippy::too_many_lines)]
 fn add_intrinsic_vec_functions(core_ns: &mut SymbolTable, value_type: &Type) {
     let unit_to_value = Signature {
@@ -738,7 +944,20 @@ pub fn create_module(tiny_version: &TinyVersion) -> Module {
     let mut intrinsic_types_symbol_table = SymbolTable::new();
     let canonical_core_path = [tiny_version.versioned_name(PACKAGE_NAME).unwrap()];
     add_intrinsic_types(&mut intrinsic_types_symbol_table);
+    add_external_types(&mut intrinsic_types_symbol_table);
     add_intrinsic_functions(&mut intrinsic_types_symbol_table);
 
     Module::new(&canonical_core_path, intrinsic_types_symbol_table, None)
+}
+
+fn add_external_types(symbol_table: &mut SymbolTable) {
+    symbol_table
+        .add_type_generator(
+            "Sparse",
+            TypeGenerator {
+                arity: 1,
+                kind: GeneratorKind::External,
+            },
+        )
+        .expect("TODO: panic message");
 }

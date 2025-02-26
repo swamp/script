@@ -25,10 +25,10 @@ use swamp_script_modules::modules::Modules;
 use swamp_script_modules::symtbl::{FuncDef, Symbol, SymbolTable, SymbolTableRef};
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
-    ArgumentExpressionOrLocation, IntrinsicFunctionDefinitionRef, LocationAccess,
-    LocationAccessKind, MutOrImmutableExpression, NormalPattern, Postfix, PostfixKind, RangeMode,
-    SingleLocationExpression, SingleLocationExpressionKind, SingleMutLocationExpression,
-    TypeWithMut, WhenBinding,
+    ArgumentExpressionOrLocation, IntrinsicFunction, IntrinsicFunctionDefinitionRef,
+    LocationAccess, LocationAccessKind, MutOrImmutableExpression, NormalPattern, Postfix,
+    PostfixKind, RangeMode, SingleLocationExpression, SingleLocationExpressionKind,
+    SingleMutLocationExpression, TypeWithMut, WhenBinding,
 };
 use swamp_script_source_map::SourceMap;
 use tracing::error;
@@ -383,19 +383,68 @@ impl<'a> Analyzer<'a> {
         Ok(resolved_parameters)
     }
 
+    pub fn sparse_intrinsic(external_name: &str) -> Option<IntrinsicFunction> {
+        let intrinsic = match external_name {
+            "new" => IntrinsicFunction::SparseCreate,
+            _ => return None,
+        };
+
+        Some(intrinsic)
+    }
+
+    /// # Panics
+    ///
+    #[allow(clippy::option_if_let_else)]
+    #[must_use]
+    pub fn sparse_function(symbol_table: &SymbolTable, external_name: &str) -> Option<FunctionRef> {
+        if let Some(intrinsic) = Self::sparse_intrinsic(external_name) {
+            let intrinsic_function_def = symbol_table
+                .get_intrinsic_function(&intrinsic.to_string())
+                .unwrap();
+
+            Some(Rc::new(Function::Intrinsic(intrinsic_function_def.clone())))
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub fn external_generic_function_ref(
+        symbol_table: &SymbolTable,
+        external_type_name: &str,
+        external_function_name: &str,
+    ) -> Option<FunctionRef> {
+        match external_type_name {
+            "Sparse" => Self::sparse_function(symbol_table, external_function_name),
+            _ => None,
+        }
+    }
     #[must_use]
     pub fn lookup_associated_function(
         &self,
         ty: &Type,
         function_name: &str,
-    ) -> Option<&FunctionRef> {
+    ) -> Option<FunctionRef> {
         info!(%ty, ?function_name, "looking up member function");
+
+        if let Type::ExternalGeneric(external_type_name, _types) = ty {
+            let core = self
+                .shared
+                .modules
+                .get(&["core-0.0.0".to_string()])
+                .unwrap();
+            return Self::external_generic_function_ref(
+                &core.namespace.symbol_table,
+                external_type_name,
+                function_name,
+            );
+        }
 
         self.shared
             .state
             .associated_impls
             .get_member_function(ty, function_name)
-            .map(|function| function)
+            .cloned()
     }
 
     pub fn analyze_expression_get_mutability(
@@ -912,7 +961,9 @@ impl<'a> Analyzer<'a> {
 
                         tv.resolved_type = *signature.return_type.clone();
                         tv.is_mutable = false;
-                    };
+                    } else {
+                        return Err(self.create_err(ErrorKind::NotAFunctionType, &node));
+                    }
                 }
 
                 swamp_script_ast::Postfix::Subscript(index_expr) => {

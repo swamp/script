@@ -521,7 +521,7 @@ pub fn build_resolve_error(err: &Error) -> Builder<usize> {
         | &ErrorKind::WildcardMustBeLastInGuard
         | &ErrorKind::GuardMustHaveWildcard => todo!(),
         ErrorKind::UnknownParametricType => todo!(),
-        ErrorKind::NotAFunctionType => todo!(),
+        ErrorKind::NotAFunctionType => Report::build(Kind::Error, 140, "not a function type", span),
         ErrorKind::ExpectedMemberFunctionOrFunctionTypeField => Report::build(
             Kind::Error,
             140,

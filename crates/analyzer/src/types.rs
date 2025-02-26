@@ -70,7 +70,10 @@ impl Analyzer<'_> {
             Symbol::TypeGenerator(generator) => {
                 if analyzed_types.len() != generator.arity {
                     return Err(self.create_err(
-                        ErrorKind::WrongNumberOfTypeArguments(1, analyzed_types.len()),
+                        ErrorKind::WrongNumberOfTypeArguments(
+                            generator.arity,
+                            analyzed_types.len(),
+                        ),
                         &type_name_to_find.name.0,
                     ));
                 }
@@ -80,6 +83,7 @@ impl Analyzer<'_> {
                         Box::from(analyzed_types[0].clone()),
                         Box::from(analyzed_types[1].clone()),
                     ),
+                    GeneratorKind::External => Type::ExternalGeneric(name, analyzed_types),
                 }
             }
             _ => return Err(self.create_err(ErrorKind::UnknownSymbol, &type_name_to_find.name.0)),
