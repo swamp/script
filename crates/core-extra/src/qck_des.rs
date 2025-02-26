@@ -157,7 +157,7 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
         Type::SlicePair(..) => {
             panic!("can not serialize ranges")
         }
-        Type::Parameterized(..) => {
+        Type::Generic(..) => {
             panic!("can not serialize ranges")
         }
         Type::Variable(..) => {

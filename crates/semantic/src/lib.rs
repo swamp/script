@@ -11,7 +11,7 @@ use std::cell::RefCell;
 use std::cmp::PartialEq;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
-use std::hash::{Hash, Hasher};
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::rc::Rc;
 
 #[derive(Clone, Hash, Eq, PartialEq, Default)]
@@ -85,7 +85,7 @@ impl ParameterNode {
     }
 }
 
-#[derive(Clone, Hash, Eq, PartialEq)]
+#[derive(Clone, Hash)]
 pub struct Signature {
     pub parameters: Vec<TypeForParameter>,
     pub return_type: Box<Type>,
@@ -125,12 +125,12 @@ impl Signature {
     }
 }
 
-pub const TYPE_NUMBER_FFI_VALUE: u32 = u32::MAX; // TODO: HACK
+pub const TYPE_NUMBER_FFI_VALUE: TypeNumber = u64::MAX; // TODO: HACK
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct ExternalType {
-    pub type_name: String, // To identify the specific Rust type
-    pub number: u32,       // For type comparison
+    pub type_name: String,  // To identify the specific Rust type
+    pub number: TypeNumber, // For type comparison
 }
 
 pub type ExternalTypeRef = Rc<ExternalType>;
@@ -141,7 +141,7 @@ pub struct TypeWithMut {
     pub is_mutable: bool,
 }
 
-#[derive(Clone, Hash, Eq, PartialEq)]
+#[derive(Clone, Hash)]
 pub struct TypeForParameter {
     pub name: String,
     pub resolved_type: Type,
@@ -190,7 +190,7 @@ pub struct IteratorTypeDetails {
     pub yield_type: IteratorYieldType,
 }
 
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, Hash)]
 pub enum ParameterizedTypeKind {
     Struct(StructType),
     Enum(HashableEnumTypeRef),
@@ -213,15 +213,16 @@ impl ParameterizedTypeKind {
     }
 }
 
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
-pub struct ParameterizedTypeBlueprint {
+#[derive(Debug, Hash)]
+pub struct GenericTypeBlueprint {
     pub kind: ParameterizedTypeKind,
     pub type_variables: Vec<TypeVariable>,
+    pub associated_functions: ImplFunctions,
 }
 
-pub type ParameterizedTypeBlueprintRef = Rc<ParameterizedTypeBlueprint>;
+pub type GenericTypeBlueprintRef = Rc<GenericTypeBlueprint>;
 
-impl ParameterizedTypeBlueprint {
+impl GenericTypeBlueprint {
     pub(crate) fn same_type(&self, other: &Self) -> bool {
         self.kind.same_type(&other.kind)
     }
@@ -229,15 +230,19 @@ impl ParameterizedTypeBlueprint {
     pub fn name(&self) -> String {
         self.kind.name()
     }
+
+    pub fn find_associated_function(&self, name: &str) -> Option<&FunctionRef> {
+        self.associated_functions.functions.get(&name.to_string())
+    }
 }
 
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
-pub struct ParameterizedType {
-    pub blueprint: ParameterizedTypeBlueprintRef,
+#[derive(Debug, Clone, Hash)]
+pub struct GenericType {
+    pub blueprint: GenericTypeBlueprintRef,
     pub instantiated_with_arguments: Vec<Type>,
 }
 
-impl ParameterizedType {
+impl GenericType {
     pub(crate) fn same_type(&self, other: &Self) -> bool {
         self.blueprint.same_type(&other.blueprint)
             && same_types(
@@ -256,7 +261,7 @@ pub struct TypeVariable {
     pub name: String,
 }
 
-#[derive(Clone, Hash, Eq, PartialEq)]
+#[derive(Clone, Hash)]
 pub enum Type {
     // built-in Primitives
     Int,
@@ -277,8 +282,8 @@ pub enum Type {
 
     Slice(Box<Type>),
     SlicePair(Box<Type>, Box<Type>),
-    Blueprint(ParameterizedTypeBlueprintRef),
-    Parameterized(ParameterizedType),
+    Blueprint(GenericTypeBlueprintRef),
+    Generic(GenericType),
 
     Variable(TypeVariable),
 
@@ -288,10 +293,77 @@ pub enum Type {
 impl Type {
     #[must_use]
     pub const fn is_concrete(&self) -> bool {
-        !matches!(self, Self::Parameterized(..))
+        !matches!(self, Self::Generic(..))
+    }
+
+    #[must_use]
+    pub fn extract_blueprint_and_types(&self) -> Option<(GenericTypeBlueprintRef, Vec<Self>)> {
+        match &self {
+            Self::Generic(param_type) => Some((
+                param_type.blueprint.clone(),
+                param_type.instantiated_with_arguments.clone(),
+            )),
+            _ => None,
+        }
+    }
+
+    pub fn calculate_type_id<T: Hash>(t: &T) -> TypeNumber {
+        let mut hasher = DefaultHasher::new();
+        t.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    pub fn id(&self) -> TypeNumber {
+        match self {
+            Self::Unit => 0,
+            Self::Int => 1,
+            Self::Bool => 2,
+            Self::Float => 3,
+            Self::String => 4,
+            Self::Tuple(inner) => {
+                // e.g. combine IDs of elements
+                Self::calculate_type_id(inner)
+            }
+            Self::Range => 5,
+            Self::Struct(struct_ref) => struct_ref.number,
+            Self::Enum(enum_type) => enum_type.0.borrow().number,
+            Self::Function(signature) => {
+                // could hash the function signature
+                Self::calculate_type_id(signature)
+            }
+            Self::Optional(inner) => {
+                // combine some constant with the inner type’s id
+                let inner_id = inner.id();
+                let mut s = DefaultHasher::new();
+                7u64.hash(&mut s);
+                inner_id.hash(&mut s);
+                s.finish()
+            }
+            Self::Slice(inner) => Self::calculate_type_id(inner),
+            Self::SlicePair(a, b) => {
+                let mut s = DefaultHasher::new();
+                a.id().hash(&mut s);
+                b.id().hash(&mut s);
+                s.finish()
+            }
+            Self::Blueprint(blueprint) => Self::calculate_type_id(blueprint),
+            Self::Generic(param) => {
+                // Combine the blueprint id with hash of instantiated arguments
+                let mut s = DefaultHasher::new();
+                param.blueprint.hash(&mut s);
+                for arg in param.instantiated_with_arguments.iter() {
+                    arg.id().hash(&mut s);
+                }
+                s.finish()
+            }
+            Self::Variable(var) => {
+                // Possibly use the variable’s name etc.
+                Self::calculate_type_id(var)
+            }
+            Self::External(ext) => Self::calculate_type_id(ext),
+        }
     }
 }
-//pub type TypeRef = Rc<Type>;
 
 impl Debug for Type {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -329,7 +401,7 @@ impl Debug for Type {
             Self::Range => write!(f, "Range"),
             Self::Slice(_) => write!(f, "Slice"),
             Self::SlicePair(_, _) => write!(f, "SlicePair"),
-            Self::Parameterized(ty) => write!(f, "Parameterized {ty:?}"),
+            Self::Generic(ty) => write!(f, "Parameterized {ty:?}"),
             Self::Blueprint(ty) => write!(f, "Blueprint {ty:?}"),
             Self::Variable(var) => write!(f, "Variable {var:?}"),
         }
@@ -353,7 +425,7 @@ impl Display for Type {
             Self::Range => write!(f, "Range"),
             Self::Slice(_) => write!(f, "Slice"),
             Self::SlicePair(_, _) => write!(f, "SlicePair"),
-            Self::Parameterized(_) => write!(f, "Parameterized"),
+            Self::Generic(_) => write!(f, "Parameterized"),
             Self::Blueprint(_) => write!(f, "Blueprint"),
             Self::Variable(_) => write!(f, "Var"),
         }
@@ -433,7 +505,7 @@ impl Type {
                 a1.same_type(b1) && a2.same_type(b2)
             }
 
-            (Self::Parameterized(a), Self::Parameterized(b)) => a.same_type(b),
+            (Self::Generic(a), Self::Generic(b)) => a.same_type(b),
 
             (Self::Function(a), Self::Function(b)) => a.same_type(b),
             (Self::Struct(a), Self::Struct(b)) => compare_struct_types(a, b),
@@ -514,14 +586,20 @@ impl Node {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Hash, Eq, PartialEq)]
 pub struct LocalIdentifier(pub Node);
 
-//#[derive(Debug)]
 pub struct InternalFunctionDefinition {
     pub body: Expression,
     pub name: LocalIdentifier,
     pub signature: Signature,
+}
+
+impl Hash for InternalFunctionDefinition {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        self.signature.hash(state);
+    }
 }
 
 impl Debug for InternalFunctionDefinition {
@@ -549,6 +627,12 @@ pub struct ExternalFunctionDefinition {
     pub assigned_name: String,
     pub signature: Signature,
     pub id: ExternalFunctionId,
+}
+
+impl Hash for ExternalFunctionDefinition {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+    }
 }
 
 impl PartialEq<Self> for ExternalFunctionDefinition {
@@ -691,7 +775,7 @@ pub struct MemberCall {
     pub arguments: Vec<ArgumentExpressionOrLocation>,
 }
 
-#[derive(Debug, Hash, Clone, Eq, PartialEq)]
+#[derive(Debug, Hash, Clone)]
 pub struct StructTypeField {
     pub identifier: Option<Node>,
     pub field_type: Type,
@@ -742,7 +826,7 @@ pub enum StringPart {
 
 pub type FunctionRef = Rc<Function>;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Hash)]
 pub enum Function {
     Internal(InternalFunctionDefinitionRef),
     External(ExternalFunctionDefinitionRef),
@@ -1138,12 +1222,20 @@ impl TryFrom<&str> for IntrinsicFunction {
 }
 
 #[derive(Debug)]
+pub struct GenericFunctionAccess {
+    pub base_function: InternalFunctionDefinitionRef,
+    pub concrete_types: Vec<Type>,
+    pub instantiated_signature: Signature,
+}
+
+#[derive(Debug)]
 pub enum ExpressionKind {
     // Access Lookup values
     ConstantAccess(ConstantRef),
     VariableAccess(VariableRef),
     IntrinsicFunctionAccess(IntrinsicFunctionDefinitionRef),
     InternalFunctionAccess(InternalFunctionDefinitionRef),
+    GenericFunctionAccess(GenericFunctionAccess),
     ExternalFunctionAccess(ExternalFunctionDefinitionRef),
 
     PostfixChain(Box<Expression>, Vec<Postfix>),
@@ -1261,7 +1353,7 @@ pub fn same_struct_ref(a: &StructTypeRef, b: &StructTypeRef) -> bool {
     Rc::ptr_eq(a, b)
 }
 
-pub type TypeNumber = u32;
+pub type TypeNumber = u64;
 
 #[derive(Debug, Hash, Clone, Eq, PartialEq)]
 pub struct LocalTypeIdentifier(pub Node);
@@ -1292,17 +1384,30 @@ pub struct TypeCreator {
 
  */
 
-#[derive(Debug)]
-pub struct Impl {
+#[derive(Debug, Hash)]
+pub struct ImplFunctions {
     pub functions: SeqMap<String, FunctionRef>,
 }
 
-#[derive(Debug)]
-pub struct AssociatedImpls {
-    pub functions: SeqMap<Type, Impl>,
+impl Default for ImplFunctions {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
-impl AssociatedImpls {}
+impl ImplFunctions {
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            functions: SeqMap::default(),
+        }
+    }
+}
+
+#[derive(Debug, Hash)]
+pub struct AssociatedImpls {
+    pub functions: SeqMap<TypeNumber, ImplFunctions>,
+}
 
 impl Default for AssociatedImpls {
     fn default() -> Self {
@@ -1312,7 +1417,7 @@ impl Default for AssociatedImpls {
 
 impl AssociatedImpls {
     #[must_use]
-    pub fn new() -> AssociatedImpls {
+    pub fn new() -> Self {
         Self {
             functions: SeqMap::default(),
         }
@@ -1322,17 +1427,12 @@ impl AssociatedImpls {
 impl AssociatedImpls {
     pub fn prepare(&mut self, ty: &Type) {
         self.functions
-            .insert(
-                ty.clone(),
-                Impl {
-                    functions: SeqMap::default(),
-                },
-            )
+            .insert(ty.id(), ImplFunctions::new())
             .expect("should work");
     }
     #[must_use]
     pub fn get_member_function(&self, ty: &Type, function_name: &str) -> Option<&FunctionRef> {
-        let maybe_found_impl = self.functions.get(&ty);
+        let maybe_found_impl = self.functions.get(&ty.id());
         if let Some(found_impl) = maybe_found_impl {
             if let Some(func) = found_impl.functions.get(&function_name.to_string()) {
                 return Some(func);
@@ -1347,7 +1447,7 @@ impl AssociatedImpls {
         name: &str,
         func: FunctionRef,
     ) -> Result<(), SemanticError> {
-        let maybe_found_impl = self.functions.get_mut(&ty);
+        let maybe_found_impl = self.functions.get_mut(&ty.id());
         if let Some(found_impl) = maybe_found_impl {
             found_impl
                 .functions
@@ -1390,7 +1490,7 @@ impl AssociatedImpls {
     }
 }
 
-#[derive(Hash, Clone, Eq, PartialEq)]
+#[derive(Hash, Clone)]
 pub struct StructType {
     pub name: Node,
     pub assigned_name: String,
@@ -1461,7 +1561,7 @@ pub struct MapType {
 
 pub type EnumVariantStructTypeRef = Rc<EnumVariantStructType>;
 
-#[derive(Clone, Hash, Eq, PartialEq)]
+#[derive(Clone, Hash)]
 pub struct AnonymousStructType {
     pub defined_fields: SeqMap<String, StructTypeField>,
 }
@@ -1472,7 +1572,7 @@ impl Debug for AnonymousStructType {
     }
 }
 
-#[derive(Debug, Hash, Eq, PartialEq)]
+#[derive(Debug, Hash)]
 pub struct EnumVariantStructType {
     pub common: EnumVariantCommon,
     pub anon_struct: AnonymousStructType,
@@ -1480,7 +1580,7 @@ pub struct EnumVariantStructType {
 
 pub type EnumVariantTupleTypeRef = Rc<EnumVariantTupleType>;
 
-#[derive(Debug, Hash, Eq, PartialEq)]
+#[derive(Debug, Hash)]
 pub struct EnumVariantTupleType {
     pub common: EnumVariantCommon,
     pub fields_in_order: Vec<Type>,
@@ -1488,7 +1588,7 @@ pub struct EnumVariantTupleType {
 
 pub type TupleTypeRef = Rc<TupleType>;
 
-#[derive(Debug, Hash, Eq, PartialEq)]
+#[derive(Debug, Hash)]
 pub struct TupleType(pub Vec<Type>);
 
 impl TupleType {
@@ -1500,16 +1600,16 @@ impl TupleType {
 
 pub type EnumTypeRef = Rc<RefCell<EnumType>>;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct HashableEnumTypeRef(pub Rc<RefCell<EnumType>>);
 
 impl Hash for HashableEnumTypeRef {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write_u32(self.0.borrow().number)
+        self.0.borrow().hash(state)
     }
 }
 
-#[derive(Hash, Eq, PartialEq)]
+#[derive(Hash)]
 pub struct EnumType {
     pub name: LocalTypeIdentifier,
     pub assigned_name: String,
@@ -1559,7 +1659,7 @@ impl EnumType {
 
 pub type EnumVariantTypeRef = Rc<EnumVariantType>;
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone)]
 pub struct EnumVariantCommon {
     pub name: LocalTypeIdentifier,
     pub assigned_name: String,
@@ -1570,8 +1670,8 @@ pub struct EnumVariantCommon {
 
 impl Hash for EnumVariantCommon {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write_u8(self.container_index);
-        state.write_u32(self.owner.borrow().number);
+        self.container_index.hash(state);
+        self.owner.borrow().number.hash(state);
     }
 }
 
@@ -1609,14 +1709,14 @@ pub struct EnumVariantTupleFieldType {
     pub field_index: usize,
 }
 
-#[derive(Debug, Hash, Eq, PartialEq, Clone)]
+#[derive(Debug, Hash, Clone)]
 pub struct EnumVariantSimpleType {
     pub common: EnumVariantCommon,
 }
 
 pub type EnumVariantSimpleTypeRef = Rc<EnumVariantSimpleType>;
 
-#[derive(Clone, Hash, Eq, PartialEq)]
+#[derive(Clone, Hash)]
 pub enum EnumVariantType {
     Struct(EnumVariantStructTypeRef),
     Tuple(EnumVariantTupleTypeRef),

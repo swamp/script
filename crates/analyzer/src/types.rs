@@ -8,7 +8,7 @@ use crate::instantiate::Instantiator;
 use std::rc::Rc;
 use swamp_script_modules::symtbl::{GeneratorKind, Symbol};
 use swamp_script_semantic::{
-    ArrayType, ArrayTypeRef, ExternalType, ExternalTypeRef, MapType, MapTypeRef, ParameterizedType,
+    ArrayType, ArrayTypeRef, ExternalType, ExternalTypeRef, MapType, MapTypeRef, GenericType,
     Signature, TupleType, Type, TypeForParameter,
 };
 
@@ -74,7 +74,7 @@ impl Analyzer<'_> {
         let result_type = match symbol {
             Symbol::Type(base_type) => {
                 match base_type {
-                    Type::Parameterized(parameterized_type_definition) => {
+                    Type::Generic(parameterized_type_definition) => {
                         let type_variable_scope = Instantiator::create_type_parameter_scope(
                             &parameterized_type_definition.instantiated_with_arguments,
                             &analyzed_types,
@@ -127,7 +127,7 @@ impl Analyzer<'_> {
 
                 if contains_type_variables {
                     // Don't instantiate yet, preserve as parameterized
-                    Type::Parameterized(ParameterizedType {
+                    Type::Generic(GenericType {
                         blueprint,
                         instantiated_with_arguments: analyzed_types,
                     })

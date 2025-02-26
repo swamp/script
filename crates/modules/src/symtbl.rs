@@ -12,7 +12,7 @@ use swamp_script_semantic::{
     EnumVariantTypeRef, ExternalFunctionDefinition, ExternalFunctionDefinitionRef, ExternalType,
     ExternalTypeRef, HashableEnumTypeRef, InternalFunctionDefinition,
     InternalFunctionDefinitionRef, IntrinsicFunctionDefinition, IntrinsicFunctionDefinitionRef,
-    ParameterizedType, ParameterizedTypeBlueprint, ParameterizedTypeBlueprintRef, SemanticError,
+    GenericType, GenericTypeBlueprint, GenericTypeBlueprintRef, SemanticError,
     StructType, StructTypeRef, Type,
 };
 use tiny_ver::TinyVersion;
@@ -40,7 +40,7 @@ pub struct TypeGenerator {
 pub enum Symbol {
     Type(Type),
     Module(ModuleRef),
-    Blueprint(ParameterizedTypeBlueprintRef),
+    Blueprint(GenericTypeBlueprintRef),
     PackageVersion(TinyVersion),
     Constant(ConstantRef),
     FunctionDefinition(FuncDef),
@@ -156,8 +156,8 @@ impl SymbolTable {
     ///
     pub fn add_blueprint(
         &mut self,
-        blueprint: ParameterizedTypeBlueprint,
-    ) -> Result<ParameterizedTypeBlueprintRef, SemanticError> {
+        blueprint: GenericTypeBlueprint,
+    ) -> Result<GenericTypeBlueprintRef, SemanticError> {
         let struct_ref = Rc::new(blueprint);
         self.add_blueprint_link(struct_ref.clone())?;
         Ok(struct_ref)
@@ -167,7 +167,7 @@ impl SymbolTable {
     ///
     pub fn add_blueprint_link(
         &mut self,
-        blueprint_ref: ParameterizedTypeBlueprintRef,
+        blueprint_ref: GenericTypeBlueprintRef,
     ) -> Result<(), SemanticError> {
         let name = blueprint_ref.name().clone();
         self.symbols
@@ -196,7 +196,7 @@ impl SymbolTable {
 
     pub fn add_parameterized(
         &mut self,
-        parameterized_type: ParameterizedType,
+        parameterized_type: GenericType,
     ) -> Result<(), SemanticError> {
         //let struct_ref = Rc::new(parameterized_type);
         self.add_parameterized_link(parameterized_type)?;
@@ -208,7 +208,7 @@ impl SymbolTable {
     ///
     pub fn add_parameterized_link(
         &mut self,
-        parameterized_type: ParameterizedType,
+        parameterized_type: GenericType,
     ) -> Result<(), SemanticError> {
         let name = parameterized_type.name();
 
@@ -217,7 +217,7 @@ impl SymbolTable {
         self.symbols
             .insert(
                 name.clone(),
-                Symbol::Type(Type::Parameterized(parameterized_type)),
+                Symbol::Type(Type::Generic(parameterized_type)),
             )
             .map_err(|_| SemanticError::DuplicateStructName(name))?;
         Ok(())

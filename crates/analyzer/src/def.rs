@@ -2,17 +2,17 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use crate::Analyzer;
 use crate::err::{Error, ErrorKind};
 use crate::lookup::TypeVariableScope;
+use crate::Analyzer;
 use seq_map::SeqMap;
 use std::rc::Rc;
 use swamp_script_ast::QualifiedTypeIdentifier;
 use swamp_script_semantic::{
     AliasType, AliasTypeRef, AnonymousStructType, EnumType, EnumTypeRef, EnumVariantCommon,
     EnumVariantSimpleType, EnumVariantSimpleTypeRef, EnumVariantStructType, EnumVariantTupleType,
-    EnumVariantType, ExternalFunctionDefinition, Function, InternalFunctionDefinition,
-    LocalIdentifier, LocalTypeIdentifier, ParameterNode, ParameterizedTypeBlueprint,
+    EnumVariantType, ExternalFunctionDefinition, Function, GenericTypeBlueprint, ImplFunctions,
+    InternalFunctionDefinition, LocalIdentifier, LocalTypeIdentifier, ParameterNode,
     ParameterizedTypeKind, Signature, StructType, StructTypeField, Type, TypeForParameter,
     TypeVariable, UseItem,
 };
@@ -417,9 +417,10 @@ impl Analyzer<'_> {
             let blueprint_ref = self
                 .shared
                 .definition_table
-                .add_blueprint(ParameterizedTypeBlueprint {
+                .add_blueprint(GenericTypeBlueprint {
                     kind: ParameterizedTypeKind::Struct(analyzed_struct),
                     type_variables,
+                    associated_functions: ImplFunctions::default(),
                 })
                 .map_err(|err| {
                     self.create_err(ErrorKind::SemanticError(err), &ast_struct.identifier.name)

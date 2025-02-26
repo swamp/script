@@ -2,7 +2,7 @@ use crate::lookup::TypeVariableScope;
 use seq_map::SeqMap;
 use std::rc::Rc;
 use swamp_script_semantic::{
-    AnonymousStructType, ParameterizedType, ParameterizedTypeBlueprintRef, ParameterizedTypeKind,
+    AnonymousStructType, GenericType, GenericTypeBlueprintRef, ParameterizedTypeKind,
     SemanticError, StructType, StructTypeField, Type, TypeVariable,
 };
 
@@ -54,7 +54,7 @@ impl Instantiator {
     }
 
     pub(crate) fn instantiate_blueprint(
-        blueprint: &ParameterizedTypeBlueprintRef,
+        blueprint: &GenericTypeBlueprintRef,
         concrete_types: &[Type],
     ) -> Result<(bool, Type), SemanticError> {
         let scope = Self::create_type_parameter_scope_from_variables(
@@ -71,7 +71,7 @@ impl Instantiator {
     }
 
     pub fn instantiate(
-        parameterized_type: &ParameterizedType,
+        parameterized_type: &GenericType,
         type_variables: &TypeVariableScope,
     ) -> Result<(bool, Type), SemanticError> {
         let mut resolved_params = Vec::new();
@@ -89,7 +89,7 @@ impl Instantiator {
         type_variables: &TypeVariableScope,
     ) -> Result<(bool, Type), SemanticError> {
         let (replaced, result_type) = match ty {
-            Type::Parameterized(parameterized_type) => {
+            Type::Generic(parameterized_type) => {
                 Self::instantiate(parameterized_type, type_variables)?
             }
 

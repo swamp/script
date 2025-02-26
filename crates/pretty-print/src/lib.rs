@@ -5,8 +5,8 @@ use swamp_script_modules::modules::{ModuleRef, Modules};
 use swamp_script_modules::symtbl::{FuncDef, Symbol, SymbolTable};
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
-    ArgumentExpressionOrLocation, AssociatedImpls, MutOrImmutableExpression, ParameterizedType,
-    ParameterizedTypeBlueprintRef, ParameterizedTypeKind, Postfix, PostfixKind,
+    ArgumentExpressionOrLocation, AssociatedImpls, MutOrImmutableExpression, GenericType,
+    GenericTypeBlueprintRef, ParameterizedTypeKind, Postfix, PostfixKind,
     SingleLocationExpression, TypeVariable,
 };
 use yansi::{Color, Paint};
@@ -117,7 +117,7 @@ impl SourceMapDisplay<'_> {
     fn show_blueprint(
         &self,
         f: &mut Formatter,
-        blueprint: &ParameterizedTypeBlueprintRef,
+        blueprint: &GenericTypeBlueprintRef,
         tabs: usize,
     ) -> std::fmt::Result {
         write!(f, "{}", "<".bright_white())?;
@@ -481,7 +481,8 @@ impl SourceMapDisplay<'_> {
             }
             ExpressionKind::IntrinsicFunctionAccess(intrinsic_func_def) => {
                 write!(f, "intrinsic_access {intrinsic_func_def:?}")
-            }
+            },
+            &swamp_script_semantic::ExpressionKind::GenericFunctionAccess(_) => todo!()
         }
     }
 
@@ -613,7 +614,7 @@ impl SourceMapDisplay<'_> {
     fn show_parameterized_type(
         &self,
         f: &mut Formatter,
-        parameterized_type: &ParameterizedType,
+        parameterized_type: &GenericType,
         tabs: usize,
     ) -> std::fmt::Result {
         self.show_parameterized_type_kind(f, &parameterized_type.blueprint.kind, tabs)?;
@@ -628,7 +629,7 @@ impl SourceMapDisplay<'_> {
     fn show_short_parameterized_type(
         &self,
         f: &mut Formatter,
-        parameterized_type: &ParameterizedType,
+        parameterized_type: &GenericType,
         tabs: usize,
     ) -> std::fmt::Result {
         self.show_short_parameterized_type_kind(f, &parameterized_type.blueprint.kind)?;
@@ -701,7 +702,7 @@ impl SourceMapDisplay<'_> {
             Type::SlicePair(key, value) => {
                 self.show_parameterized_like(f, "SlicePair", &[*key.clone(), *value.clone()], tabs)
             }
-            Type::Parameterized(param) => self.show_parameterized_type(f, param, tabs),
+            Type::Generic(param) => self.show_parameterized_type(f, param, tabs),
             Type::Blueprint(param) => self.show_blueprint(f, param, tabs),
             Type::Variable(var) => self.show_type_variable(f, var, tabs),
         }
@@ -747,7 +748,7 @@ impl SourceMapDisplay<'_> {
             Type::SlicePair(key, value) => {
                 self.show_parameterized_like(f, "SlicePair", &[*key.clone(), *value.clone()], tabs)
             }
-            Type::Parameterized(param) => self.show_short_parameterized_type(f, param, tabs),
+            Type::Generic(param) => self.show_short_parameterized_type(f, param, tabs),
             Type::Blueprint(param) => self.show_blueprint(f, param, tabs),
             Type::Variable(var) => self.show_type_variable(f, var, tabs),
         }

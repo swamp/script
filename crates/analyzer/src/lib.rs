@@ -28,14 +28,23 @@ use swamp_script_modules::modules::Modules;
 use swamp_script_modules::symtbl::{FuncDef, Symbol, SymbolTable, SymbolTableRef};
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
-    ArgumentExpressionOrLocation, IntrinsicFunctionDefinitionRef, LocationAccess,
-    LocationAccessKind, MutOrImmutableExpression, NormalPattern, ParameterizedTypeKind, Postfix,
-    PostfixKind, RangeMode, SingleLocationExpression, SingleLocationExpressionKind,
-    SingleMutLocationExpression, TypeWithMut, WhenBinding,
+    ArgumentExpressionOrLocation, GenericTypeBlueprintRef, IntrinsicFunctionDefinitionRef,
+    LocationAccess, LocationAccessKind, MutOrImmutableExpression, NormalPattern,
+    ParameterizedTypeKind, Postfix, PostfixKind, RangeMode, SingleLocationExpression,
+    SingleLocationExpressionKind, SingleMutLocationExpression, TypeWithMut, WhenBinding,
 };
 use swamp_script_source_map::SourceMap;
 use tracing::error;
 use tracing::info;
+
+pub enum AssociatedFunctionInfo {
+    Generic {
+        base_function: FunctionRef,
+        blueprint: GenericTypeBlueprintRef,
+        concrete_types: Vec<Type>,
+    },
+    Concrete(FunctionRef),
+}
 
 #[must_use]
 pub fn convert_range_mode(range_mode: &RangeMode) -> RangeMode {
@@ -388,6 +397,29 @@ impl<'a> Analyzer<'a> {
         Ok(resolved_parameters)
     }
 
+    #[must_use]
+    pub fn lookup_associated_function(
+        &self,
+        type_value: &Type,
+        function_name: &str,
+    ) -> Option<AssociatedFunctionInfo> {
+        if let Some((blueprint, concrete_types)) = type_value.extract_blueprint_and_types() {
+            if let Some(base_function) = blueprint.find_associated_function(function_name) {
+                return Some(AssociatedFunctionInfo::Generic {
+                    base_function: base_function.clone(),
+                    blueprint,
+                    concrete_types,
+                });
+            }
+        }
+
+        self.shared
+            .state
+            .associated_impls
+            .get_member_function(type_value, function_name)
+            .map(|function| AssociatedFunctionInfo::Concrete(function.clone()))
+    }
+
     pub fn analyze_expression_get_mutability(
         &mut self,
         ast_expression: &swamp_script_ast::Expression,
@@ -720,7 +752,7 @@ impl<'a> Analyzer<'a> {
         let maybe_struct_type = self.analyze_named_type(qualified_type_identifier)?;
         match maybe_struct_type {
             Type::Struct(struct_type) => Ok(struct_type),
-            Type::Parameterized(parameterized_type) => {
+            Type::Generic(parameterized_type) => {
                 if let ParameterizedTypeKind::Struct(_struct_ref) =
                     &parameterized_type.blueprint.kind
                 {
