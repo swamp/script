@@ -28,6 +28,8 @@ pub enum GeneratorKind {
     Slice,
     SlicePair,
     Sparse,
+    Map,
+    Vec,
 }
 
 #[derive(Clone, Debug)]

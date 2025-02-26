@@ -164,7 +164,7 @@ impl Analyzer<'_> {
                         self.analyze_array_type_helper(ast_node, items, expected_type)?;
                     (
                         Literal::Array(array_type_ref.clone(), resolved_items),
-                        Type::Unit, //Type::Array(array_type_ref),
+                        Type::Slice(Box::from(array_type_ref.item_type.clone())),
                     )
                 }
             }

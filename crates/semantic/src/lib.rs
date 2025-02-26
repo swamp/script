@@ -289,9 +289,12 @@ impl Debug for Type {
             }
             Self::Optional(base_type) => write!(f, "{base_type:?}?"),
             Self::Range => write!(f, "Range"),
-            &Type::Vec(_) | &Type::Map(_) => todo!(),
-            &Type::Slice(_) | &Type::SlicePair(_, _) => todo!(),
-            &Type::Sparse(_) | &Type::External(_) => todo!(),
+            Self::Vec(_) => write!(f, "Vec"),
+            Self::Map(_) => write!(f, "Map"),
+            Self::Slice(t) => write!(f, "Slice<{t:?}>"),
+            Self::SlicePair(a, b) => write!(f, "SlicePair<{a:?},{b:?}>"),
+            Self::Sparse(t) => write!(f, "Sparse<{t:?}"),
+            Self::External(ext) => write!(f, "Extern<{ext:?}"),
         }
     }
 }
@@ -312,8 +315,8 @@ impl Display for Type {
             Self::Range => write!(f, "Range"),
             Self::Vec(v) => write!(f, "Vec"),
             Self::Map(m) => write!(f, "Map"),
-            Self::Slice(_) => todo!(),
-            Self::SlicePair(_, _) => todo!(),
+            Self::Slice(t) => write!(f, "Slice<{t:?}>"),
+            Self::SlicePair(a, b) => write!(f, "Slice<{a:?}, {b:?}>"),
             &Type::Sparse(_) | &Type::External(_) => todo!(),
         }
     }
@@ -385,6 +388,11 @@ impl Type {
             (Self::Float, Self::Float) => true,
             (Self::Bool, Self::Bool) => true,
             (Self::Unit, Self::Unit) => true,
+
+            (Self::Slice(a), Self::Slice(b)) => a.same_type(b),
+            (Self::SlicePair(a1, a2), Self::SlicePair(b1, b2)) => {
+                a1.same_type(b1) && a2.same_type(b2)
+            }
 
             // Parameterized Intrinsic
             (Self::Function(a), Self::Function(b)) => a.same_type(b),

@@ -1,7 +1,7 @@
 use crate::Analyzer;
 use seq_map::SeqMap;
 use std::rc::Rc;
-use swamp_script_modules::symtbl::SymbolTable;
+use swamp_script_modules::symtbl::{SymbolTable, SymbolTableRef};
 use swamp_script_semantic::{
     AnonymousStructType, Function, FunctionRef, IntrinsicFunction, Signature, StructType,
     TupleType, TupleTypeRef,
@@ -13,10 +13,19 @@ use swamp_script_semantic::{
 use swamp_script_semantic::{StructTypeRef, Type};
 
 impl<'a> Analyzer<'a> {
+    pub fn instantiated_name(name: &str, type_parameters: &[Type]) -> String {
+        let parameters = type_parameters
+            .iter()
+            .map(|ty| ty.to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!("{name}<{parameters}>")
+    }
+
     pub fn generate_empty_struct(&mut self, name: &str, type_parameters: &[Type]) -> StructTypeRef {
         let struct_type = StructType {
             name: Default::default(),
-            assigned_name: format!("{name}<{type_parameters:?}>"),
+            assigned_name: Self::instantiated_name(name, type_parameters),
             anon_struct_type: AnonymousStructType {
                 defined_fields: Default::default(),
             },
@@ -141,16 +150,82 @@ impl<'a> Analyzer<'a> {
         );
         functions.insert("subscript", subscript_fn).unwrap();
 
-        // -----
-        self.shared.state.associated_impls.prepare(&sparse_type);
+        self.add_functions(&sparse_type, functions);
+
+        struct_ref
+    }
+
+    fn add_functions(&mut self, ty: &Type, functions: SeqMap<&str, Function>) {
+        self.shared.state.associated_impls.prepare(&ty);
 
         for (name, func) in functions {
             self.shared
                 .state
                 .associated_impls
-                .add_member_function(&sparse_type, name, FunctionRef::from(func))
+                .add_member_function(&ty, name, FunctionRef::from(func))
                 .unwrap()
         }
+    }
+
+    pub fn generate_vec_struct(
+        &mut self,
+        core_symbol_table: &SymbolTableRef,
+        value_type: &Type,
+    ) -> StructTypeRef {
+        let struct_ref = self.generate_empty_struct("Vec", &[value_type.clone()]);
+        let gen_name = &struct_ref.assigned_name;
+        let vec_type = Type::Struct(struct_ref.clone());
+
+        let mut functions = SeqMap::new();
+
+        let from_slice_fn = self.gen_function(
+            core_symbol_table,
+            &gen_name,
+            "from_slice",
+            &[Type::Slice(Box::from(value_type.clone()))],
+            vec_type.clone(),
+            IntrinsicFunction::VecFromSlice,
+        );
+        functions.insert("from_slice", from_slice_fn).unwrap();
+
+        let new_fn = self.gen_function(
+            core_symbol_table,
+            &gen_name,
+            "new",
+            &[],
+            vec_type.clone(),
+            IntrinsicFunction::VecCreate,
+        );
+        functions.insert("new", new_fn).unwrap();
+
+        self.add_functions(&vec_type, functions);
+
+        struct_ref
+    }
+
+    pub fn generate_map_struct(
+        &mut self,
+        core_symbol_table: &SymbolTableRef,
+        key_type: &Type,
+        value_type: &Type,
+    ) -> StructTypeRef {
+        let struct_ref = self.generate_empty_struct("Map", &[key_type.clone(), value_type.clone()]);
+        let gen_name = &struct_ref.assigned_name;
+        let sparse_type = Type::Struct(struct_ref.clone());
+
+        let mut functions = SeqMap::new();
+
+        let new_func = self.gen_function(
+            core_symbol_table,
+            &gen_name,
+            "new",
+            &[],
+            sparse_type.clone(),
+            IntrinsicFunction::SparseCreate,
+        );
+        functions.insert("from_slice", new_func).unwrap();
+
+        self.add_functions(&sparse_type, functions);
 
         struct_ref
     }

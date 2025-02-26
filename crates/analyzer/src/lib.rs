@@ -410,17 +410,6 @@ impl<'a> Analyzer<'a> {
     }
 
     #[must_use]
-    pub fn external_generic_function_ref(
-        symbol_table: &SymbolTable,
-        external_type_name: &str,
-        external_function_name: &str,
-    ) -> Option<FunctionRef> {
-        match external_type_name {
-            "Sparse" => Self::sparse_function(symbol_table, external_function_name),
-            _ => None,
-        }
-    }
-    #[must_use]
     pub fn lookup_associated_function(
         &self,
         ty: &Type,

@@ -454,7 +454,9 @@ pub fn build_resolve_error(err: &Error) -> Builder<usize> {
         ErrorKind::UnknownMemberFunction => {
             Report::build(Kind::Error, 101, "Unknown member function", span)
         }
-        ErrorKind::WrongNumberOfTypeArguments(_, _) => todo!(),
+        ErrorKind::WrongNumberOfTypeArguments(_, _) => {
+            Report::build(Kind::Error, 101, "WrongNumberOfTypeArguments", span)
+        }
         ErrorKind::OnlyVariablesAllowedInEnumPattern => todo!(),
         ErrorKind::ExpressionsNotAllowedInLetPattern => todo!(),
         ErrorKind::UnknownField => todo!(),

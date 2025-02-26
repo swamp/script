@@ -5,7 +5,7 @@
 use crate::Analyzer;
 use crate::err::{Error, ErrorKind};
 use std::rc::Rc;
-use swamp_script_modules::symtbl::{GeneratorKind, Symbol};
+use swamp_script_modules::symtbl::{GeneratorKind, Symbol, SymbolTableRef};
 use swamp_script_semantic::{
     ExternalType, ExternalTypeRef, MapType, MapTypeRef, Signature, TupleType, Type,
     TypeForParameter, VecType, VecTypeRef,
@@ -95,6 +95,28 @@ impl Analyzer<'_> {
                         let struct_type = self.generate_sparse_struct(
                             &core_module.namespace.symbol_table,
                             key_sparse_id_type,
+                            value_type,
+                        );
+
+                        Type::Struct(struct_type)
+                    }
+
+                    GeneratorKind::Vec => {
+                        let value_type = &analyzed_types[0];
+
+                        let struct_type = self
+                            .generate_vec_struct(&core_module.namespace.symbol_table, value_type);
+
+                        Type::Struct(struct_type)
+                    }
+
+                    GeneratorKind::Map => {
+                        let key_type = &analyzed_types[0];
+                        let value_type = &analyzed_types[1];
+
+                        let struct_type = self.generate_map_struct(
+                            &core_module.namespace.symbol_table,
+                            key_type,
                             value_type,
                         );
 

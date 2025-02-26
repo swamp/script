@@ -963,4 +963,23 @@ fn add_external_types(symbol_table: &mut SymbolTable) {
             },
         )
         .expect("TODO: panic message");
+
+    symbol_table
+        .add_type_generator(
+            "Vec",
+            TypeGenerator {
+                arity: 1,
+                kind: GeneratorKind::Vec,
+            },
+        )
+        .expect("TODO: panic message");
+    symbol_table
+        .add_type_generator(
+            "Map",
+            TypeGenerator {
+                arity: 2,
+                kind: GeneratorKind::Map,
+            },
+        )
+        .expect("TODO: panic message");
 }

@@ -3,26 +3,27 @@ use crate::util::check;
 mod util;
 
 #[test_log::test]
-fn sparse_new() {
+fn vec_new() {
     check(
-        r"
+        "
 
-instantiated = Sparse<Int>::new()
+instantiated = Vec<Int>::from_slice([10, 20])
 
          ",
         "
-let instantiated: Sparse<Int> = Sparse<Int>::new()
-
+let instantiated: Vec<Int> = Vec<Int>::from_slice([10i,
+20i
+])
         ",
     );
 }
 
 #[test_log::test]
-fn sparse_add() {
+fn vec_add() {
     check(
-        r"
+        "
 
-mut instantiated = Sparse<Int>::new()
+mut instantiated = Vec<Int>::new()
 instantiated.add(2)
          ",
         "
@@ -36,7 +37,7 @@ instantiated.add(2)
 }
 
 #[test_log::test]
-fn sparse_subscript() {
+fn vec_subscript() {
     check(
         r"
 
@@ -67,7 +68,7 @@ a = with value {
 }
 
 #[test_log::test]
-fn sparse_subscript_float() {
+fn vec_subscript_float() {
     check(
         r"
 
@@ -97,7 +98,7 @@ a = with value {
 }
 
 #[test_log::test]
-fn sparse_subscript_struct() {
+fn vec_subscript_struct() {
     check(
         r"
 
