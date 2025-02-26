@@ -28,10 +28,11 @@ use swamp_script_modules::modules::Modules;
 use swamp_script_modules::symtbl::{FuncDef, Symbol, SymbolTable, SymbolTableRef};
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
-    ArgumentExpressionOrLocation, GenericTypeBlueprintRef, IntrinsicFunctionDefinitionRef,
-    LocationAccess, LocationAccessKind, MutOrImmutableExpression, NormalPattern,
-    ParameterizedTypeKind, Postfix, PostfixKind, RangeMode, SingleLocationExpression,
-    SingleLocationExpressionKind, SingleMutLocationExpression, TypeWithMut, WhenBinding,
+    ArgumentExpressionOrLocation, GenericFunctionAccess, GenericTypeBlueprintRef,
+    IntrinsicFunctionDefinitionRef, LocationAccess, LocationAccessKind, MutOrImmutableExpression,
+    NormalPattern, ParameterizedTypeKind, Postfix, PostfixKind, RangeMode,
+    SingleLocationExpression, SingleLocationExpressionKind, SingleMutLocationExpression,
+    TypeWithMut, WhenBinding,
 };
 use swamp_script_source_map::SourceMap;
 use tracing::error;
@@ -42,8 +43,21 @@ pub enum AssociatedFunctionInfo {
         base_function: FunctionRef,
         blueprint: GenericTypeBlueprintRef,
         concrete_types: Vec<Type>,
+        instantiated_signature: Signature,
     },
     Concrete(FunctionRef),
+}
+
+impl AssociatedFunctionInfo {
+    pub fn instantiated_signature(&self) -> Signature {
+        match self {
+            AssociatedFunctionInfo::Generic {
+                instantiated_signature,
+                ..
+            } => instantiated_signature.clone(),
+            AssociatedFunctionInfo::Concrete(function_ref) => function_ref.signature().clone(),
+        }
+    }
 }
 
 #[must_use]
@@ -400,15 +414,23 @@ impl<'a> Analyzer<'a> {
     #[must_use]
     pub fn lookup_associated_function(
         &self,
-        type_value: &Type,
+        ty: &Type,
         function_name: &str,
     ) -> Option<AssociatedFunctionInfo> {
-        if let Some((blueprint, concrete_types)) = type_value.extract_blueprint_and_types() {
+        if let Some((blueprint, concrete_types)) = ty.extract_blueprint_and_types() {
             if let Some(base_function) = blueprint.find_associated_function(function_name) {
+                let scope = Instantiator::create_type_parameter_scope_from_variables(
+                    &blueprint.type_variables,
+                    &*concrete_types,
+                )
+                .unwrap();
+                let instantiated_signature =
+                    Instantiator::instantiate_signature(base_function.signature(), &scope).unwrap();
                 return Some(AssociatedFunctionInfo::Generic {
                     base_function: base_function.clone(),
                     blueprint,
                     concrete_types,
+                    instantiated_signature,
                 });
             }
         }
@@ -416,7 +438,7 @@ impl<'a> Analyzer<'a> {
         self.shared
             .state
             .associated_impls
-            .get_member_function(type_value, function_name)
+            .get_member_function(ty, function_name)
             .map(|function| AssociatedFunctionInfo::Concrete(function.clone()))
     }
 
@@ -842,37 +864,29 @@ impl<'a> Analyzer<'a> {
         node: &swamp_script_ast::Node,
         ty: &Type,
     ) -> Result<ExpressionKind, Error> {
-        self.shared
-            .state
-            .associated_impls
-            .get_member_function(ty, "default")
-            .map_or_else(
-                || Err(self.create_err(ErrorKind::NoDefaultImplementedForType(ty.clone()), node)),
-                |function| {
-                    let kind = match &**function {
-                        Function::Internal(internal_function) => {
-                            ExpressionKind::InternalFunctionAccess(internal_function.clone())
-                        }
-                        Function::External(external_function) => {
-                            ExpressionKind::ExternalFunctionAccess(external_function.clone())
-                        }
-                    };
+        self.lookup_associated_function(ty, "default").map_or_else(
+            || Err(self.create_err(ErrorKind::NoDefaultImplementedForType(ty.clone()), node)),
+            |function_info| {
+                let kind = Self::convert_to_function_access(&function_info);
 
-                    let base_expr =
-                        self.create_expr(kind, Type::Function(function.signature().clone()), node);
+                let base_expr = self.create_expr(
+                    kind,
+                    Type::Function(function_info.instantiated_signature().clone()),
+                    node,
+                );
 
-                    let empty_call_postfix = Postfix {
-                        node: self.to_node(node),
-                        ty: *function.signature().return_type.clone(),
-                        kind: PostfixKind::FunctionCall(vec![]),
-                    };
+                let empty_call_postfix = Postfix {
+                    node: self.to_node(node),
+                    ty: *function_info.instantiated_signature().return_type.clone(),
+                    kind: PostfixKind::FunctionCall(vec![]),
+                };
 
-                    let kind =
-                        ExpressionKind::PostfixChain(Box::new(base_expr), vec![empty_call_postfix]);
+                let kind =
+                    ExpressionKind::PostfixChain(Box::new(base_expr), vec![empty_call_postfix]);
 
-                    Ok(kind)
-                },
-            )
+                Ok(kind)
+            },
+        )
     }
 
     fn add_postfix(

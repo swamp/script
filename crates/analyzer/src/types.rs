@@ -8,7 +8,7 @@ use crate::instantiate::Instantiator;
 use std::rc::Rc;
 use swamp_script_modules::symtbl::{GeneratorKind, Symbol};
 use swamp_script_semantic::{
-    ArrayType, ArrayTypeRef, ExternalType, ExternalTypeRef, MapType, MapTypeRef, GenericType,
+    ArrayType, ArrayTypeRef, ExternalType, ExternalTypeRef, GenericType, MapType, MapTypeRef,
     Signature, TupleType, Type, TypeForParameter,
 };
 

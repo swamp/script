@@ -10,10 +10,10 @@ use std::rc::Rc;
 use swamp_script_semantic::{
     AliasType, AliasTypeRef, Constant, ConstantRef, EnumType, EnumTypeRef, EnumVariantType,
     EnumVariantTypeRef, ExternalFunctionDefinition, ExternalFunctionDefinitionRef, ExternalType,
-    ExternalTypeRef, HashableEnumTypeRef, InternalFunctionDefinition,
-    InternalFunctionDefinitionRef, IntrinsicFunctionDefinition, IntrinsicFunctionDefinitionRef,
-    GenericType, GenericTypeBlueprint, GenericTypeBlueprintRef, SemanticError,
-    StructType, StructTypeRef, Type,
+    ExternalTypeRef, GenericType, GenericTypeBlueprint, GenericTypeBlueprintRef,
+    HashableEnumTypeRef, InternalFunctionDefinition, InternalFunctionDefinitionRef,
+    IntrinsicFunctionDefinition, IntrinsicFunctionDefinitionRef, SemanticError, StructType,
+    StructTypeRef, Type,
 };
 use tiny_ver::TinyVersion;
 

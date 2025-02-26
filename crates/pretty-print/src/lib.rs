@@ -5,8 +5,8 @@ use swamp_script_modules::modules::{ModuleRef, Modules};
 use swamp_script_modules::symtbl::{FuncDef, Symbol, SymbolTable};
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
-    ArgumentExpressionOrLocation, AssociatedImpls, MutOrImmutableExpression, GenericType,
-    GenericTypeBlueprintRef, ParameterizedTypeKind, Postfix, PostfixKind,
+    ArgumentExpressionOrLocation, AssociatedImpls, GenericType, GenericTypeBlueprintRef,
+    MutOrImmutableExpression, ParameterizedTypeKind, Postfix, PostfixKind,
     SingleLocationExpression, TypeVariable,
 };
 use yansi::{Color, Paint};
@@ -481,8 +481,8 @@ impl SourceMapDisplay<'_> {
             }
             ExpressionKind::IntrinsicFunctionAccess(intrinsic_func_def) => {
                 write!(f, "intrinsic_access {intrinsic_func_def:?}")
-            },
-            &swamp_script_semantic::ExpressionKind::GenericFunctionAccess(_) => todo!()
+            }
+            &swamp_script_semantic::ExpressionKind::GenericFunctionAccess(_) => todo!(),
         }
     }
 

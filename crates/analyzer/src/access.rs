@@ -2,28 +2,56 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use crate::Analyzer;
 use crate::err::{Error, ErrorKind};
+use crate::{Analyzer, AssociatedFunctionInfo};
 use swamp_script_modules::symtbl::FuncDef;
 
 use swamp_script_semantic::{
-    Expression, ExpressionKind, Function, FunctionRef, Range, RangeMode, Type,
+    Expression, ExpressionKind, Function, GenericFunctionAccess, Range, RangeMode, Type,
 };
 
 impl Analyzer<'_> {
-    fn convert_to_function_access(function: &FunctionRef) -> Expression {
-        match &**function {
-            Function::Internal(x) => Expression {
-                ty: Type::Function(x.signature.clone()),
-                node: function.node(),
-                kind: ExpressionKind::InternalFunctionAccess(x.clone()),
+    pub fn convert_to_function_access(
+        associated_function_info: &AssociatedFunctionInfo,
+    ) -> ExpressionKind {
+        match associated_function_info {
+            AssociatedFunctionInfo::Concrete(function_ref) => match &**function_ref {
+                Function::Internal(internal_function) => {
+                    ExpressionKind::InternalFunctionAccess(internal_function.clone())
+                }
+
+                Function::External(external_function) => {
+                    ExpressionKind::ExternalFunctionAccess(external_function.clone())
+                }
             },
-            Function::External(y) => Expression {
-                ty: Type::Function(y.signature.clone()),
-                node: function.node(),
-                kind: ExpressionKind::ExternalFunctionAccess(y.clone()),
-            },
+            AssociatedFunctionInfo::Generic {
+                base_function,
+                blueprint,
+                concrete_types,
+                instantiated_signature,
+            } => ExpressionKind::GenericFunctionAccess(GenericFunctionAccess {
+                base_function: base_function.clone(),
+                blueprint: blueprint.clone(),
+                concrete_types: concrete_types.clone(),
+                instantiated_signature: instantiated_signature.clone(),
+            }),
         }
+    }
+
+    #[must_use]
+    pub fn convert_to_function_access_expr(
+        &self,
+        associated_function_info: &AssociatedFunctionInfo,
+        ast_node: &swamp_script_ast::Node,
+    ) -> Expression {
+        let kind = Self::convert_to_function_access(associated_function_info);
+        self.create_expr(
+            kind,
+            *associated_function_info
+                .instantiated_signature()
+                .return_type,
+            ast_node,
+        )
     }
 
     pub(crate) fn analyze_static_member_access(
@@ -33,14 +61,12 @@ impl Analyzer<'_> {
     ) -> Result<Expression, Error> {
         let some_type = self.analyze_named_type(named_type)?;
         let member_name = self.get_text(member_name_node);
-        self.shared
-            .state
-            .associated_impls
-            .get_member_function(&some_type, member_name)
+        self.lookup_associated_function(&some_type, member_name)
             .map_or_else(
                 || Err(self.create_err(ErrorKind::UnknownMemberFunction, member_name_node)),
                 |member_function| {
-                    let expr = Self::convert_to_function_access(member_function);
+                    let expr =
+                        self.convert_to_function_access_expr(&member_function, member_name_node);
                     Ok(expr)
                 },
             )

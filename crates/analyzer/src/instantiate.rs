@@ -3,10 +3,12 @@ use seq_map::SeqMap;
 use std::rc::Rc;
 use swamp_script_semantic::{
     AnonymousStructType, GenericType, GenericTypeBlueprintRef, ParameterizedTypeKind,
-    SemanticError, StructType, StructTypeField, Type, TypeVariable,
+    SemanticError, Signature, StructType, StructTypeField, Type, TypeForParameter, TypeVariable,
 };
 
 pub struct Instantiator;
+
+impl Instantiator {}
 
 impl Instantiator {}
 
@@ -68,6 +70,33 @@ impl Instantiator {
             }
             ParameterizedTypeKind::Enum(_) => todo!(),
         }
+    }
+
+    pub(crate) fn instantiate_signature(
+        signature: &Signature,
+        type_variable_scope: &TypeVariableScope,
+    ) -> Result<Signature, SemanticError> {
+        let mut converted_parameters = Vec::new();
+        for type_for_parameter in &signature.parameters {
+            let (_replaced, new_type) = Self::instantiate_type_if_needed(
+                &type_for_parameter.resolved_type,
+                &type_variable_scope,
+            )?;
+            converted_parameters.push(TypeForParameter {
+                name: type_for_parameter.name.clone(),
+                resolved_type: new_type,
+                is_mutable: type_for_parameter.is_mutable,
+                node: type_for_parameter.node.clone(),
+            });
+        }
+
+        let (_replaced, converted_return_type) =
+            Self::instantiate_type_if_needed(&signature.return_type, &type_variable_scope)?;
+
+        Ok(Signature {
+            parameters: converted_parameters,
+            return_type: Box::from(converted_return_type),
+        })
     }
 
     pub fn instantiate(

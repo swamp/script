@@ -1223,8 +1223,9 @@ impl TryFrom<&str> for IntrinsicFunction {
 
 #[derive(Debug)]
 pub struct GenericFunctionAccess {
-    pub base_function: InternalFunctionDefinitionRef,
+    pub base_function: FunctionRef,
     pub concrete_types: Vec<Type>,
+    pub blueprint: GenericTypeBlueprintRef,
     pub instantiated_signature: Signature,
 }
 
