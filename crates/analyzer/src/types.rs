@@ -2,12 +2,12 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use crate::Analyzer;
 use crate::err::{Error, ErrorKind};
+use crate::Analyzer;
 use std::rc::Rc;
 use swamp_script_modules::symtbl::{GeneratorKind, Symbol};
 use swamp_script_semantic::{
-    ExternalType, ExternalTypeRef, MapType, MapTypeRef, Signature, TupleType, Type,
+    ExternalType, ExternalTypeRef, MapType, MapTypeRef, Signature, SparseType, TupleType, Type,
     TypeForParameter, VecType, VecTypeRef,
 };
 
@@ -83,7 +83,10 @@ impl Analyzer<'_> {
                         Box::from(analyzed_types[0].clone()),
                         Box::from(analyzed_types[1].clone()),
                     ),
-                    GeneratorKind::External => Type::ExternalGeneric(name, analyzed_types),
+                    GeneratorKind::Sparse => Type::Sparse(Rc::new(SparseType {
+                        key_type: analyzed_types[0].clone(),
+                        value_type: analyzed_types[1].clone(),
+                    })),
                 }
             }
             _ => return Err(self.create_err(ErrorKind::UnknownSymbol, &type_name_to_find.name.0)),

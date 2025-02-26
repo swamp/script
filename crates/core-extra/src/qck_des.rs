@@ -157,6 +157,9 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
         Type::SlicePair(..) => {
             panic!("can not serialize slice pair")
         }
+        Type::Sparse(..) => {
+            todo!()
+        }
         Type::Optional(optional_type_ref) => {
             let mut offset = 0;
             let has_some = buf[0] != 0;
@@ -169,7 +172,6 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
                 (Value::Option(None), offset)
             }
         }
-        Type::ExternalGeneric(_rust_type_ref, _types) => (Value::Unit, 0),
         Type::External(_rust_type_ref) => {
             //external_creator.create(rust_type_ref.type_name)
             (Value::Unit, 0)

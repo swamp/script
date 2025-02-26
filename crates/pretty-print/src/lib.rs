@@ -633,8 +633,9 @@ impl SourceMapDisplay<'_> {
             Type::SlicePair(key, value) => {
                 self.show_parameterized_like(f, "SlicePair", &[*key.clone(), *value.clone()], tabs)
             }
-            &swamp_script_semantic::Type::Vec(_) | &swamp_script_semantic::Type::Map(_) => todo!(),
-            &swamp_script_semantic::Type::ExternalGeneric(_, _) => todo!(),
+            &swamp_script_semantic::Type::Vec(_)
+            | &swamp_script_semantic::Type::Map(_)
+            | Type::Sparse(..) => todo!(),
         }
     }
 
@@ -678,8 +679,7 @@ impl SourceMapDisplay<'_> {
             Type::SlicePair(key, value) => {
                 self.show_parameterized_like(f, "SlicePair", &[*key.clone(), *value.clone()], tabs)
             }
-            Type::Vec(_) | Type::Map(_) => todo!(),
-            Type::ExternalGeneric(_, _) => todo!(),
+            Type::Vec(_) | Type::Map(_) | Type::Sparse(..) => todo!(),
         }
     }
 

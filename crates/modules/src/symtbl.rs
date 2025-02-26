@@ -27,7 +27,7 @@ pub enum FuncDef {
 pub enum GeneratorKind {
     Slice,
     SlicePair,
-    External,
+    Sparse,
 }
 
 #[derive(Clone, Debug)]

@@ -205,6 +205,7 @@ pub enum Type {
 
     Vec(VecTypeRef),
     Map(MapTypeRef),
+    Sparse(SparseTypeRef),
 
     Slice(Box<Type>),
     SlicePair(Box<Type>, Box<Type>),
@@ -214,9 +215,7 @@ pub enum Type {
     Range, // Only integers for now
 
     Optional(Box<Type>),
-
     External(ExternalTypeRef),
-    ExternalGeneric(String, Vec<Type>),
 }
 
 impl Type {
@@ -252,17 +251,11 @@ impl Type {
                 inner_id.hash(&mut s);
                 s.finish()
             }
-            Self::External(ext) => Self::calculate_type_id(ext),
             Self::Vec(vec) => Self::calculate_type_id(vec),
             Self::Map(map) => Self::calculate_type_id(map),
             Self::Slice(_) => todo!(),
             Self::SlicePair(_, _) => todo!(),
-            Self::ExternalGeneric(name, types) => {
-                let mut s = DefaultHasher::new();
-                8u64.hash(&mut s);
-                name.hash(&mut s);
-                Self::calculate_type_id(types)
-            }
+            &Type::Sparse(_) | &Type::External(_) => todo!(),
         }
     }
 }
@@ -295,15 +288,10 @@ impl Debug for Type {
                 write!(f, "{function_type_signature:?}",)
             }
             Self::Optional(base_type) => write!(f, "{base_type:?}?"),
-            Self::External(external_type) => write!(
-                f,
-                "External({}<0x{:04X}>)",
-                external_type.type_name, external_type.number
-            ),
             Self::Range => write!(f, "Range"),
             &Type::Vec(_) | &Type::Map(_) => todo!(),
             &Type::Slice(_) | &Type::SlicePair(_, _) => todo!(),
-            &Type::ExternalGeneric(_, _) => todo!(),
+            &Type::Sparse(_) | &Type::External(_) => todo!(),
         }
     }
 }
@@ -321,15 +309,12 @@ impl Display for Type {
             Self::Enum(enum_type) => write!(f, "{}", enum_type.0.borrow().assigned_name),
             Self::Function(signature) => write!(f, "function {signature}"),
             Self::Optional(base_type) => write!(f, "{base_type}?"),
-            Self::External(external_type) => write!(f, "ExternalType<{}>", external_type.type_name),
             Self::Range => write!(f, "Range"),
             Self::Vec(v) => write!(f, "Vec"),
             Self::Map(m) => write!(f, "Map"),
             Self::Slice(_) => todo!(),
             Self::SlicePair(_, _) => todo!(),
-            Self::ExternalGeneric(name, types) => {
-                write!(f, "ExternalGenericType<{name}<{types:?}>")
-            }
+            &Type::Sparse(_) | &Type::External(_) => todo!(),
         }
     }
 }
@@ -1437,6 +1422,14 @@ pub type MapTypeRef = Rc<MapType>;
 
 #[derive(Debug, Hash)]
 pub struct MapType {
+    pub key_type: Type,
+    pub value_type: Type,
+}
+
+pub type SparseTypeRef = Rc<SparseType>;
+
+#[derive(Debug, Hash)]
+pub struct SparseType {
     pub key_type: Type,
     pub value_type: Type,
 }

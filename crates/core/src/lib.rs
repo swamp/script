@@ -956,7 +956,7 @@ fn add_external_types(symbol_table: &mut SymbolTable) {
             "Sparse",
             TypeGenerator {
                 arity: 1,
-                kind: GeneratorKind::External,
+                kind: GeneratorKind::Sparse,
             },
         )
         .expect("TODO: panic message");
