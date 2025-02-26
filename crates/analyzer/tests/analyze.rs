@@ -13,8 +13,7 @@ fn init_var() {
         "a = 3",
         r"
 
-InitializeVariable(VariableAssignment { variable_refs: [Variable { name: <0:1>, resolved_type: Int(IntType), mutable_node: None, scope_index: 0, variable_index: 0 }], expression: Literal(IntLiteral(3, <4:1>, IntType)) })
-
+let a: Int = 3i
 ",
     );
 }

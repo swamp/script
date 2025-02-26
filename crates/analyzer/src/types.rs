@@ -130,68 +130,6 @@ impl Analyzer<'_> {
         Ok(result_type)
     }
 
-    /*
-    if is_parameterized {
-        info!(?base_type, ?name, "parameterized");
-
-        let kind: ParameterizedTypeKind = match base_type {
-            Type::Struct(struct_ref) => ParameterizedTypeKind::Struct(struct_ref),
-            Type::Enum(enum_ref) => ParameterizedTypeKind::Enum(enum_ref),
-            Type::Parameterized(inner) => {
-                ParameterizedTypeKind::Parameterized(Box::new(inner))
-            }
-            _ => {
-                return Err(
-                    self.create_err(ErrorKind::NotAGeneric, &type_name_to_find.name.0)
-                );
-            }
-        };
-
-        let parameterized_type = ParameterizedType {
-            base: kind,
-            parameters: vec![],
-        };
-        let result_type = Type::Parameterized(parameterized_type);
-        info!(?result_type, "parameterized resolution");
-        result_type
-    } else {
-        info!(?name, "base_type");
-        base_type
-    }
-                     */
-
-    /*
-    /// # Errors
-    ///
-    pub fn find_struct_type(
-        &mut self,
-        type_name: &swamp_script_ast::QualifiedTypeIdentifier,
-    ) -> Result<StructTypeRef, Error> {
-        if !type_name.generic_params.is_empty() {
-            let ty = self.monomorphize(type_name)?;
-            return if let Type::Struct(struct_ref) = ty {
-                Ok(struct_ref)
-            } else {
-                Err(self.create_err(ErrorKind::ExpectedStruct, &type_name.name.0))
-            };
-        }
-        let (path, name_string) = self.get_path(type_name);
-
-        self.shared
-            .lookup
-            .get_struct(&path, &name_string)
-            .map_or_else(
-                || {
-                    let resolved_node = self.to_node(&type_name.name.0);
-                    Err(self
-                        .create_err_resolved(ErrorKind::UnknownStructTypeReference, &resolved_node))
-                },
-                Ok,
-            )
-    }
-
-     */
-
     /// # Errors
     ///
     pub fn analyze_array_type(

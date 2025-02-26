@@ -8,9 +8,17 @@ fn slice_construct() {
         {
 
         }
+        
+        construct([10, 20])
         ",
         r"
 construct: (v:Slice<Int>) -> ()
+{
+}
+---
+construct([10i, 
+20i
+])
 ",
     );
 }
@@ -22,9 +30,15 @@ fn slice_pair_construct() {
         fn construct(v: SlicePair<String, Int>) {
 
         }
+
+construct(['string': 23, 'another': 42])
         ",
         "
 construct: (v:SlicePair<String, Int>) -> ()
+{
+}
+---
+construct([| InterpolatedString() : 23i, InterpolatedString() : 42i |])
 ",
     );
 }

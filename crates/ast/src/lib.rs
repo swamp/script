@@ -450,8 +450,8 @@ pub enum LiteralKind {
     Bool,
     EnumVariant(EnumVariantLiteral),
     Tuple(Vec<Expression>),
-    Array(Vec<Expression>),
-    Map(Vec<(Expression, Expression)>),
+    Slice(Vec<Expression>),
+    SlicePair(Vec<(Expression, Expression)>),
     None, // none
 }
 
@@ -506,8 +506,6 @@ pub enum Type {
     Unit(Node),
 
     // Composite
-    //Generic(QualifiedTypeIdentifier),
-    //Struct(QualifiedTypeIdentifier),
     Array(Box<Type>),
     Map(Box<Type>, Box<Type>),
     Tuple(Vec<Type>),

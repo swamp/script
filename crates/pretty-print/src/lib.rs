@@ -536,19 +536,22 @@ impl SourceMapDisplay<'_> {
                 self.show_expressions(f, expressions, tabs + 1)?;
                 write!(f, ")")
             }
-            Literal::Array(_array_type, expressions) => {
+            Literal::Slice(_array_type, expressions) => {
                 write!(f, "[")?;
                 self.show_expressions(f, expressions, tabs + 1)?;
                 write!(f, "]")
             }
-            Literal::Map(_map_type, tuple_expressions) => {
-                write!(f, "[|")?;
-                for (key, value) in tuple_expressions {
+            Literal::SlicePair(_map_type, tuple_expressions) => {
+                write!(f, "[| ")?;
+                for (index, (key, value)) in tuple_expressions.iter().enumerate() {
+                    if index > 0 {
+                        write!(f, "{}", ", ".bright_black())?;
+                    }
                     self.show_expression(f, key, tabs + 1)?;
-                    write!(f, "{}", ":".bright_blue())?;
+                    write!(f, "{}", " : ".bright_blue())?;
                     self.show_expression(f, value, tabs + 1)?;
                 }
-                write!(f, "|]")
+                write!(f, " |]")
             }
         }
     }

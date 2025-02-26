@@ -132,7 +132,7 @@ impl Analyzer<'_> {
                 return Err(self.create_err(ErrorKind::UnknownEnumType, ast_node));
             }
 
-            swamp_script_ast::LiteralKind::Array(items) => {
+            swamp_script_ast::LiteralKind::Slice(items) => {
                 if items.is_empty() {
                     if let Some(found_expected_type) = expected_type {
                         match found_expected_type {
@@ -160,21 +160,22 @@ impl Analyzer<'_> {
                         );
                     }
                 } else {
-                    let (array_type_ref, resolved_items) =
-                        self.analyze_array_type_helper(ast_node, items, expected_type)?;
+                    let (element_type, resolved_items) =
+                        self.analyze_slice_helper(ast_node, items, expected_type)?;
                     (
-                        Literal::Array(array_type_ref.clone(), resolved_items),
-                        Type::Slice(Box::from(array_type_ref.item_type.clone())),
+                        Literal::Slice(element_type.clone(), resolved_items),
+                        Type::Slice(Box::from(element_type.clone())),
                     )
                 }
             }
 
-            swamp_script_ast::LiteralKind::Map(entries) => {
-                let (map_literal, _map_type_ref) = self.analyze_map_literal(ast_node, entries)?;
+            swamp_script_ast::LiteralKind::SlicePair(entries) => {
+                let (map_literal, (key_type, value_type)) =
+                    self.analyze_slice_pair(ast_node, entries)?;
 
                 (
                     map_literal,
-                    Type::Unit, //Type::Map(map_type_ref)
+                    Type::SlicePair(Box::from(key_type.clone()), Box::from(value_type.clone())),
                 )
             }
 
@@ -216,11 +217,11 @@ impl Analyzer<'_> {
         Ok((tuple_type_ref, expressions))
     }
 
-    fn analyze_map_literal(
+    fn analyze_slice_pair(
         &mut self,
         node: &swamp_script_ast::Node,
         entries: &[(swamp_script_ast::Expression, swamp_script_ast::Expression)],
-    ) -> Result<(Literal, MapTypeRef), Error> {
+    ) -> Result<(Literal, (Type, Type)), Error> {
         if entries.is_empty() {
             return Err(self.create_err(ErrorKind::EmptyMapLiteral, node));
         }
@@ -263,15 +264,8 @@ impl Analyzer<'_> {
             resolved_entries.push((resolved_key, resolved_value));
         }
 
-        let resolved_map_type = MapType {
-            key_type,
-            value_type,
-        };
-
-        let resolved_map_type_ref = Rc::new(resolved_map_type);
-
-        let literal = Literal::Map(resolved_map_type_ref.clone(), resolved_entries);
-        Ok((literal, resolved_map_type_ref))
+        let literal = Literal::SlicePair((key_type.clone(), value_type.clone()), resolved_entries);
+        Ok((literal, (key_type, value_type)))
     }
 
     #[must_use]

@@ -384,31 +384,6 @@ impl<'a> Analyzer<'a> {
         Ok(resolved_parameters)
     }
 
-    pub fn sparse_intrinsic(external_name: &str) -> Option<IntrinsicFunction> {
-        let intrinsic = match external_name {
-            "new" => IntrinsicFunction::SparseCreate,
-            _ => return None,
-        };
-
-        Some(intrinsic)
-    }
-
-    /// # Panics
-    ///
-    #[allow(clippy::option_if_let_else)]
-    #[must_use]
-    pub fn sparse_function(symbol_table: &SymbolTable, external_name: &str) -> Option<FunctionRef> {
-        if let Some(intrinsic) = Self::sparse_intrinsic(external_name) {
-            let intrinsic_function_def = symbol_table
-                .get_intrinsic_function(&intrinsic.to_string())
-                .unwrap();
-
-            Some(Rc::new(Function::Intrinsic(intrinsic_function_def.clone())))
-        } else {
-            None
-        }
-    }
-
     #[must_use]
     pub fn lookup_associated_function(
         &self,
@@ -1357,37 +1332,25 @@ impl<'a> Analyzer<'a> {
         )
     }
 
-    fn analyze_array_type_helper(
+    fn analyze_slice_helper(
         &mut self,
         node: &swamp_script_ast::Node,
         items: &[swamp_script_ast::Expression],
         expected_type: Option<&Type>,
-    ) -> Result<(VecTypeRef, Vec<Expression>), Error> {
+    ) -> Result<(Type, Vec<Expression>), Error> {
         let expressions = self.analyze_expressions(None, items)?;
         let item_type = if expressions.is_empty() {
             if let Some(found_expected_type) = expected_type {
                 info!(?found_expected_type, "found array type");
-                /*
-                if let Type::Array(found) = found_expected_type {
-                    found.item_type.clone()
-                } else {
-                    return Err(self.create_err(ErrorKind::NotAnArray, node));
-                }
-
-                 */
                 Type::Unit
             } else {
                 return Err(self.create_err(ErrorKind::NotAnArray, node));
             }
         } else {
-            expressions[0].ty.clone()
+            expressions[0].ty.clone() // BUG: TODO: Verify that all items are of the same type
         };
 
-        let array_type = VecType { item_type };
-
-        let array_type_ref = Rc::new(array_type);
-
-        Ok((array_type_ref, expressions))
+        Ok((item_type, expressions))
     }
 
     fn push_block_scope(&mut self, _debug_str: &str) {

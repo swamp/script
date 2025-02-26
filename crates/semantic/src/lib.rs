@@ -200,15 +200,15 @@ pub enum Type {
     Unit,
 
     Tuple(TupleTypeRef),
+    Slice(Box<Type>),
+    SlicePair(Box<Type>, Box<Type>),
+
     Struct(StructTypeRef),
     Enum(HashableEnumTypeRef),
 
     Vec(VecTypeRef),
     Map(MapTypeRef),
     Sparse(SparseTypeRef),
-
-    Slice(Box<Type>),
-    SlicePair(Box<Type>, Box<Type>),
 
     Function(Signature),
 
@@ -1218,8 +1218,8 @@ pub enum Literal {
 
     EnumVariantLiteral(EnumVariantTypeRef, EnumLiteralData),
     TupleLiteral(TupleTypeRef, Vec<Expression>),
-    Array(VecTypeRef, Vec<Expression>),
-    Map(MapTypeRef, Vec<(Expression, Expression)>),
+    Slice(Type, Vec<Expression>),
+    SlicePair((Type, Type), Vec<(Expression, Expression)>),
 }
 
 #[derive(Debug)]

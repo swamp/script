@@ -1170,8 +1170,8 @@ impl AstParser {
             Rule::prefix => self.parse_prefix(sub),
 
             Rule::match_expr => self.parse_match_expr(sub),
-            Rule::map_literal => self.parse_map_literal(sub),
-            Rule::array_literal => self.parse_array_literal(sub),
+            Rule::map_literal => self.parse_slice_pair_literal(sub),
+            Rule::array_literal => self.parse_slice_literal(sub),
             Rule::guard_expr => self.parse_guard_expr_list(sub),
             Rule::return_expr => self.parse_return(sub),
             Rule::break_expr => Ok(self.create_expr(ExpressionKind::Break, sub)),
@@ -2033,15 +2033,15 @@ impl AstParser {
         Ok((literal_kind, self.to_node(&inner)))
     }
 
-    fn parse_array_literal(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
+    fn parse_slice_literal(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
         let mut elements = Vec::new();
         for element in Self::convert_into_iterator(pair) {
             elements.push(self.parse_expression(&element)?);
         }
-        Ok(self.create_expr(ExpressionKind::Literal(LiteralKind::Array(elements)), pair))
+        Ok(self.create_expr(ExpressionKind::Literal(LiteralKind::Slice(elements)), pair))
     }
 
-    fn parse_map_literal(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
+    fn parse_slice_pair_literal(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
         let mut entries = Vec::new();
 
         for entry_pair in Self::convert_into_iterator(pair) {
@@ -2053,7 +2053,10 @@ impl AstParser {
             }
         }
 
-        Ok(self.create_expr(ExpressionKind::Literal(LiteralKind::Map(entries)), pair))
+        Ok(self.create_expr(
+            ExpressionKind::Literal(LiteralKind::SlicePair(entries)),
+            pair,
+        ))
     }
 
     fn parse_mutable_or_immutable_expression(

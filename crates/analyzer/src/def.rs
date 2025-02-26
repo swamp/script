@@ -311,56 +311,6 @@ impl Analyzer<'_> {
         Ok(resolved_struct)
     }
 
-    /*
-    pub fn store_generic_struct(
-        &mut self,
-        ast_struct: &swamp_script_ast::StructType,
-    ) -> Result<(), Error> {
-        let struct_name_str = self.get_text(&ast_struct.identifier.name).to_string();
-
-        let mut parameter_names = SeqMap::new();
-        for name in &ast_struct.identifier.parameter_names {
-            let assigned_name = self.get_text(name).to_string();
-            parameter_names
-                .insert(
-                    assigned_name.clone(),
-                    TypeParameterName {
-                        resolved_node: self.to_node(name),
-                        assigned_name: assigned_name.clone(),
-                    },
-                )
-                .expect("TODO: panic message");
-        }
-
-        let type_id = self.shared.state.allocate_number();
-        let generic_type = GenericType {
-            type_parameters: parameter_names,
-            base_type: ParameterizedType::Struct(ast_struct.clone()),
-            stored_lookup_table: SymbolTable::new(),
-            ast_functions: Vec::new(),
-            canonical_path: self.shared.current_path.clone(),
-            type_id,
-            file_id: self.shared.file_id,
-        };
-
-        info!(struct_name_str, "add generic type");
-        let generic_type_ref = self
-            .shared
-            .definition_table
-            .add_generic(&struct_name_str, generic_type)?;
-
-        self.shared
-            .lookup_table
-            .add_generic_link(&struct_name_str, generic_type_ref.clone())?;
-
-        // Must save lookup table after `add_generic` so it includes itself
-        generic_type_ref.borrow_mut().stored_lookup_table = self.shared.lookup_table.clone();
-
-        Ok(())
-    }
-
-     */
-
     /// # Errors
     ///
     pub fn analyze_struct_type_definition(
@@ -503,7 +453,6 @@ impl Analyzer<'_> {
             swamp_script_ast::Definition::StructDef(ast_struct) => {
                 self.analyze_struct_type_definition(ast_struct)?;
             }
-
             swamp_script_ast::Definition::AliasDef(alias_def) => {
                 self.analyze_alias_type_definition(alias_def)?;
             }
