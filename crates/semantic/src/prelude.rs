@@ -3,9 +3,9 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 pub use crate::{
-    AliasType, AliasTypeRef, AnonymousStructType, ArrayItem, ArrayItemRef, ArrayType, ArrayTypeRef,
-    BinaryOperator, BooleanExpression, CompoundOperator, CompoundOperatorKind, Constant,
-    ConstantRef, EnumLiteralData, EnumType, EnumTypeRef, EnumVariantCommon, EnumVariantSimpleType,
+    AliasType, AliasTypeRef, AnonymousStructType, ArrayItem, ArrayItemRef, BinaryOperator,
+    BooleanExpression, CompoundOperator, CompoundOperatorKind, Constant, ConstantRef,
+    EnumLiteralData, EnumType, EnumTypeRef, EnumVariantCommon, EnumVariantSimpleType,
     EnumVariantStructFieldType, EnumVariantStructType, EnumVariantTupleFieldType,
     EnumVariantTupleType, EnumVariantType, EnumVariantTypeRef, Expression, ExpressionKind,
     ExternalFunctionCall, ExternalFunctionDefinition, ExternalFunctionDefinitionRef,
@@ -15,5 +15,5 @@ pub use crate::{
     LocalTypeIdentifier, Match, MatchArm, MemberCall, Node, ParameterNode, Pattern, PrecisionType,
     ProgramState, SemanticError, Signature, Span, StringPart, StructInstantiation, StructType,
     StructTypeField, StructTypeRef, TupleType, TupleTypeRef, Type, TypeForParameter, TypeNumber,
-    UnaryOperator, Variable, VariableRef, comma_seq,
+    UnaryOperator, Variable, VariableRef, VecType, VecTypeRef, comma_seq,
 };

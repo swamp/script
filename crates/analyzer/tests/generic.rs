@@ -7,15 +7,7 @@ fn basic_generic() {
     check(
         r"
 
-struct Something<T> {
-    a: Float,
-    value: T,
-}
-
-instantiated = Something<Int> {
-    a: 2.3,
-    value: 3,
-}
+instantiated = Sparse<Int>::new()
 
          ",
         "

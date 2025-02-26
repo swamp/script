@@ -10,10 +10,9 @@ use std::rc::Rc;
 use swamp_script_semantic::{
     AliasType, AliasTypeRef, Constant, ConstantRef, EnumType, EnumTypeRef, EnumVariantType,
     EnumVariantTypeRef, ExternalFunctionDefinition, ExternalFunctionDefinitionRef, ExternalType,
-    ExternalTypeRef, GenericType, GenericTypeBlueprint, GenericTypeBlueprintRef,
-    HashableEnumTypeRef, InternalFunctionDefinition, InternalFunctionDefinitionRef,
-    IntrinsicFunctionDefinition, IntrinsicFunctionDefinitionRef, SemanticError, StructType,
-    StructTypeRef, Type,
+    ExternalTypeRef, HashableEnumTypeRef, InternalFunctionDefinition,
+    InternalFunctionDefinitionRef, IntrinsicFunctionDefinition, IntrinsicFunctionDefinitionRef,
+    SemanticError, StructType, StructTypeRef, Type,
 };
 use tiny_ver::TinyVersion;
 
@@ -40,7 +39,6 @@ pub struct TypeGenerator {
 pub enum Symbol {
     Type(Type),
     Module(ModuleRef),
-    Blueprint(GenericTypeBlueprintRef),
     PackageVersion(TinyVersion),
     Constant(ConstantRef),
     FunctionDefinition(FuncDef),
@@ -154,30 +152,6 @@ impl SymbolTable {
 
     /// # Errors
     ///
-    pub fn add_blueprint(
-        &mut self,
-        blueprint: GenericTypeBlueprint,
-    ) -> Result<GenericTypeBlueprintRef, SemanticError> {
-        let struct_ref = Rc::new(RefCell::new(blueprint));
-        self.add_blueprint_link(struct_ref.clone())?;
-        Ok(struct_ref)
-    }
-
-    /// # Errors
-    ///
-    pub fn add_blueprint_link(
-        &mut self,
-        blueprint_ref: GenericTypeBlueprintRef,
-    ) -> Result<(), SemanticError> {
-        let name = blueprint_ref.borrow().name();
-        self.symbols
-            .insert(name.clone(), Symbol::Blueprint(blueprint_ref))
-            .map_err(|_| SemanticError::DuplicateStructName(name))?;
-        Ok(())
-    }
-
-    /// # Errors
-    ///
     pub fn add_struct(&mut self, struct_type: StructType) -> Result<StructTypeRef, SemanticError> {
         let struct_ref = Rc::new(struct_type);
         self.add_struct_link(struct_ref.clone())?;
@@ -190,35 +164,6 @@ impl SymbolTable {
         let name = struct_type_ref.assigned_name.clone();
         self.symbols
             .insert(name.clone(), Symbol::Type(Type::Struct(struct_type_ref)))
-            .map_err(|_| SemanticError::DuplicateStructName(name))?;
-        Ok(())
-    }
-
-    pub fn add_parameterized(
-        &mut self,
-        parameterized_type: GenericType,
-    ) -> Result<(), SemanticError> {
-        //let struct_ref = Rc::new(parameterized_type);
-        self.add_parameterized_link(parameterized_type)?;
-        //info!(?struct_ref, "added struct");
-        Ok(())
-    }
-
-    /// # Errors
-    ///
-    pub fn add_parameterized_link(
-        &mut self,
-        parameterized_type: GenericType,
-    ) -> Result<(), SemanticError> {
-        let name = parameterized_type.name();
-
-        //        info!(name, ?parameterized_type, "stored parameterized link");
-
-        self.symbols
-            .insert(
-                name.clone(),
-                Symbol::Type(Type::Generic(parameterized_type)),
-            )
             .map_err(|_| SemanticError::DuplicateStructName(name))?;
         Ok(())
     }

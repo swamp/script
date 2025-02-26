@@ -152,19 +152,10 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
             panic!("can not serialize ranges")
         }
         Type::Slice(..) => {
-            panic!("can not serialize ranges")
+            panic!("can not serialize slice")
         }
         Type::SlicePair(..) => {
-            panic!("can not serialize ranges")
-        }
-        Type::Generic(..) => {
-            panic!("can not serialize ranges")
-        }
-        Type::Variable(..) => {
-            panic!("can not serialize ranges")
-        }
-        Type::Blueprint(..) => {
-            panic!("can not serialize blueprint")
+            panic!("can not serialize slice pair")
         }
         Type::Optional(optional_type_ref) => {
             let mut offset = 0;
@@ -239,6 +230,7 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
             }
              */
         }
+        &swamp_script_semantic::Type::Vec(_) | &swamp_script_semantic::Type::Map(_) => todo!(),
     };
 
     (val, octet_size)

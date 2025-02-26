@@ -4,12 +4,11 @@
  */
 use crate::Analyzer;
 use crate::err::{Error, ErrorKind};
-use crate::instantiate::Instantiator;
 use std::rc::Rc;
 use swamp_script_modules::symtbl::{GeneratorKind, Symbol};
 use swamp_script_semantic::{
-    ArrayType, ArrayTypeRef, ExternalType, ExternalTypeRef, GenericType, MapType, MapTypeRef,
-    Signature, TupleType, Type, TypeForParameter,
+    ExternalType, ExternalTypeRef, MapType, MapTypeRef, Signature, TupleType, Type,
+    TypeForParameter, VecType, VecTypeRef,
 };
 
 impl Analyzer<'_> {
@@ -43,13 +42,6 @@ impl Analyzer<'_> {
     ) -> Result<Type, Error> {
         let (path, name) = self.get_path(type_name_to_find);
 
-        if path.is_empty() {
-            if let Some(found_scope) = &self.shared.type_variables {
-                if let Some(found_type) = found_scope.type_variables.get(&name) {
-                    return Ok(found_type.clone());
-                }
-            }
-        }
         let symbol = {
             let maybe_symbol_table = self.shared.get_symbol_table(&path);
             let symbol_table = maybe_symbol_table.ok_or_else(|| {
@@ -72,36 +64,7 @@ impl Analyzer<'_> {
         }
 
         let result_type = match symbol {
-            Symbol::Type(base_type) => {
-                match base_type {
-                    Type::Generic(parameterized_type_definition) => {
-                        let type_variable_scope = Instantiator::create_type_parameter_scope(
-                            &parameterized_type_definition.instantiated_with_arguments,
-                            &analyzed_types,
-                        )
-                        .map_err(|err| {
-                            self.create_err(
-                                ErrorKind::SemanticError(err),
-                                &type_name_to_find.name.0,
-                            )
-                        })?;
-
-                        let (_, instantiated_type) = Instantiator::instantiate(
-                            &parameterized_type_definition,
-                            &type_variable_scope,
-                        )
-                        .map_err(|err| {
-                            self.create_err(
-                                ErrorKind::SemanticError(err),
-                                &type_name_to_find.name.0,
-                            )
-                        })?;
-
-                        instantiated_type // Return the instantiated concrete type
-                    }
-                    _ => base_type.clone(), // For non-parameterized types, just return the base type
-                }
-            }
+            Symbol::Type(base_type) => base_type,
 
             Symbol::Alias(alias_type) => alias_type.referenced_type.clone(),
             Symbol::TypeGenerator(generator) => {
@@ -119,10 +82,6 @@ impl Analyzer<'_> {
                     ),
                 }
             }
-            Symbol::Blueprint(blueprint) => Type::Generic(GenericType {
-                blueprint: swamp_script_semantic::HashableGenericTypeBlueprintRef(blueprint),
-                instantiated_with_arguments: analyzed_types,
-            }),
             _ => return Err(self.create_err(ErrorKind::UnknownSymbol, &type_name_to_find.name.0)),
         };
 
@@ -196,12 +155,12 @@ impl Analyzer<'_> {
     pub fn analyze_array_type(
         &mut self,
         ast_type: &swamp_script_ast::Type,
-    ) -> Result<ArrayTypeRef, Error> {
+    ) -> Result<VecTypeRef, Error> {
         // TODO: Check for an existing array type with exact same type
 
         let resolved_type = self.analyze_type(ast_type)?;
 
-        let original_array_type = ArrayType {
+        let original_array_type = VecType {
             item_type: resolved_type,
         };
 

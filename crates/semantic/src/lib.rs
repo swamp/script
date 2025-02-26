@@ -190,99 +190,6 @@ pub struct IteratorTypeDetails {
     pub yield_type: IteratorYieldType,
 }
 
-#[derive(Debug, Clone, Hash)]
-pub enum ParameterizedTypeKind {
-    Struct(StructType),
-    Enum(HashableEnumTypeRef),
-}
-
-impl ParameterizedTypeKind {
-    pub(crate) fn same_type(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Struct(a), Self::Struct(b)) => a.number == b.number,
-            (Self::Enum(a), Self::Enum(b)) => a.0.borrow().number == b.0.borrow().number,
-            _ => false,
-        }
-    }
-
-    pub fn name(&self) -> String {
-        match self {
-            Self::Struct(struct_type_ref) => struct_type_ref.assigned_name.clone(),
-            Self::Enum(enum_type_ref) => enum_type_ref.0.borrow().assigned_name.clone(),
-        }
-    }
-}
-
-#[derive(Hash)]
-pub struct GenericTypeBlueprint {
-    pub kind: ParameterizedTypeKind,
-    pub type_variables: Vec<TypeVariable>,
-    pub associated_functions: ImplFunctions,
-}
-
-impl Debug for GenericTypeBlueprint {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "kind:{:?}", self.kind)?;
-        write!(f, "type_variables:{:?}", self.type_variables)?;
-        Ok(())
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct HashableGenericTypeBlueprintRef(pub Rc<RefCell<GenericTypeBlueprint>>);
-
-impl Hash for HashableGenericTypeBlueprintRef {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.0.borrow().hash(state)
-    }
-}
-
-impl HashableGenericTypeBlueprintRef {
-    pub(crate) fn same_type(&self, other: &Self) -> bool {
-        self.0.borrow().kind.same_type(&other.0.borrow().kind)
-    }
-}
-pub type GenericTypeBlueprintRef = Rc<RefCell<GenericTypeBlueprint>>; // Unfortunately needs RefCell since associated_functions are added
-
-impl GenericTypeBlueprint {
-    pub(crate) fn same_type(&self, other: &Self) -> bool {
-        self.kind.same_type(&other.kind)
-    }
-
-    pub fn name(&self) -> String {
-        self.kind.name()
-    }
-
-    pub fn find_associated_function(&self, name: &str) -> Option<&FunctionRef> {
-        self.associated_functions.functions.get(&name.to_string())
-    }
-}
-
-#[derive(Debug, Clone, Hash)]
-pub struct GenericType {
-    pub blueprint: HashableGenericTypeBlueprintRef,
-    pub instantiated_with_arguments: Vec<Type>,
-}
-
-impl GenericType {
-    pub(crate) fn same_type(&self, other: &Self) -> bool {
-        self.blueprint.same_type(&other.blueprint)
-            && same_types(
-                &self.instantiated_with_arguments,
-                &other.instantiated_with_arguments,
-            )
-    }
-
-    pub fn name(&self) -> String {
-        self.blueprint.0.borrow().name()
-    }
-}
-
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
-pub struct TypeVariable {
-    pub name: String,
-}
-
 #[derive(Clone, Hash)]
 pub enum Type {
     // built-in Primitives
@@ -296,45 +203,22 @@ pub enum Type {
     Struct(StructTypeRef),
     Enum(HashableEnumTypeRef),
 
+    Vec(VecTypeRef),
+    Map(MapTypeRef),
+
+    Slice(Box<Type>),
+    SlicePair(Box<Type>, Box<Type>),
+
     Function(Signature),
 
     Range, // Only integers for now
 
     Optional(Box<Type>),
 
-    Slice(Box<Type>),
-    SlicePair(Box<Type>, Box<Type>),
-    Blueprint(HashableGenericTypeBlueprintRef),
-    Generic(GenericType),
-
-    Variable(TypeVariable),
-
     External(ExternalTypeRef),
 }
 
 impl Type {
-    #[must_use]
-    pub const fn is_concrete(&self) -> bool {
-        !self.is_generic()
-    }
-
-    #[must_use]
-    pub const fn is_generic(&self) -> bool {
-        matches!(self, Self::Generic(..))
-    }
-
-    #[must_use]
-    pub fn extract_blueprint_and_types(&self) -> Option<(GenericTypeBlueprintRef, Vec<Self>)> {
-        println!("DEBUG: Attempting to extract blueprint from: {:?}", self);
-        match &self {
-            Self::Generic(param_type) => Some((
-                param_type.blueprint.0.clone(),
-                param_type.instantiated_with_arguments.clone(),
-            )),
-            _ => None,
-        }
-    }
-
     pub fn calculate_type_id<T: Hash>(t: &T) -> TypeNumber {
         let mut hasher = DefaultHasher::new();
         t.hash(&mut hasher);
@@ -367,28 +251,10 @@ impl Type {
                 inner_id.hash(&mut s);
                 s.finish()
             }
-            Self::Slice(inner) => Self::calculate_type_id(inner),
-            Self::SlicePair(a, b) => {
-                let mut s = DefaultHasher::new();
-                a.id().hash(&mut s);
-                b.id().hash(&mut s);
-                s.finish()
-            }
-            Self::Blueprint(blueprint) => Self::calculate_type_id(blueprint),
-            Self::Generic(param) => {
-                // Combine the blueprint id with hash of instantiated arguments
-                let mut s = DefaultHasher::new();
-                param.blueprint.hash(&mut s);
-                for arg in param.instantiated_with_arguments.iter() {
-                    arg.id().hash(&mut s);
-                }
-                s.finish()
-            }
-            Self::Variable(var) => {
-                // Possibly use the variable’s name etc.
-                Self::calculate_type_id(var)
-            }
             Self::External(ext) => Self::calculate_type_id(ext),
+            Self::Vec(vec) => Self::calculate_type_id(vec),
+            Self::Map(map) => Self::calculate_type_id(map),
+            &Type::Slice(_) | &Type::SlicePair(_, _) => todo!(),
         }
     }
 }
@@ -427,11 +293,8 @@ impl Debug for Type {
                 external_type.type_name, external_type.number
             ),
             Self::Range => write!(f, "Range"),
-            Self::Slice(_) => write!(f, "Slice"),
-            Self::SlicePair(_, _) => write!(f, "SlicePair"),
-            Self::Generic(ty) => write!(f, "Generic {ty:?}"),
-            Self::Blueprint(ty) => write!(f, "Blueprint {ty:?}"),
-            Self::Variable(var) => write!(f, "Variable {var:?}"),
+            &Type::Vec(_) | &Type::Map(_) => todo!(),
+            &Type::Slice(_) | &Type::SlicePair(_, _) => todo!(),
         }
     }
 }
@@ -451,11 +314,9 @@ impl Display for Type {
             Self::Optional(base_type) => write!(f, "{base_type}?"),
             Self::External(external_type) => write!(f, "ExternalType<{}>", external_type.type_name),
             Self::Range => write!(f, "Range"),
-            Self::Slice(_) => write!(f, "Slice"),
-            Self::SlicePair(_, _) => write!(f, "SlicePair"),
-            Self::Generic(ty) => write!(f, "Generic {ty:?}"),
-            Self::Blueprint(_) => write!(f, "Blueprint"),
-            Self::Variable(_) => write!(f, "Var"),
+            Type::Vec(v) => write!(f, "Vec"),
+            Type::Map(m) => write!(f, "Map"),
+            &Type::Slice(_) | &Type::SlicePair(_, _) => todo!(),
         }
     }
 }
@@ -528,13 +389,6 @@ impl Type {
             (Self::Unit, Self::Unit) => true,
 
             // Parameterized Intrinsic
-            (Self::Slice(a), Self::Slice(b)) => a.same_type(b),
-            (Self::SlicePair(a1, a2), Self::SlicePair(b1, b2)) => {
-                a1.same_type(b1) && a2.same_type(b2)
-            }
-
-            (Self::Generic(a), Self::Generic(b)) => a.same_type(b),
-
             (Self::Function(a), Self::Function(b)) => a.same_type(b),
             (Self::Struct(a), Self::Struct(b)) => compare_struct_types(a, b),
             (Self::Tuple(a), Self::Tuple(b)) => {
@@ -1004,8 +858,8 @@ pub struct Range {
 #[derive(Debug)]
 pub enum PostfixKind {
     StructField(StructTypeRef, usize),
-    ArrayIndex(ArrayTypeRef, Expression),
-    ArrayRangeIndex(ArrayTypeRef, Range),
+    ArrayIndex(VecTypeRef, Expression),
+    ArrayRangeIndex(VecTypeRef, Range),
     StringIndex(Expression),
     StringRangeIndex(Range),
     MapIndex(MapTypeRef, Expression),
@@ -1022,8 +876,8 @@ pub enum PostfixKind {
 #[derive(Debug)]
 pub enum LocationAccessKind {
     FieldIndex(StructTypeRef, usize),
-    ArrayIndex(ArrayTypeRef, Expression),
-    ArrayRange(ArrayTypeRef, Range),
+    ArrayIndex(VecTypeRef, Expression),
+    ArrayRange(VecTypeRef, Range),
     StringIndex(Expression),
     StringRange(Range),
     MapIndex(MapTypeRef, Expression),
@@ -1055,7 +909,7 @@ pub struct SingleMutLocationExpression(pub SingleLocationExpression);
 pub enum SingleLocationExpressionKind {
     MutVariableRef,
     MutStructFieldRef(StructTypeRef, usize),
-    MutArrayIndexRef(ArrayTypeRef),
+    MutArrayIndexRef(VecTypeRef),
     MutMapIndexRef(MapTypeRef),
     MutRustTypeIndexRef(ExternalTypeRef),
 }
@@ -1250,21 +1104,12 @@ impl TryFrom<&str> for IntrinsicFunction {
 }
 
 #[derive(Debug)]
-pub struct GenericFunctionAccess {
-    pub base_function: FunctionRef,
-    pub concrete_types: Vec<Type>,
-    pub blueprint: GenericTypeBlueprintRef,
-    pub instantiated_signature: Signature,
-}
-
-#[derive(Debug)]
 pub enum ExpressionKind {
     // Access Lookup values
     ConstantAccess(ConstantRef),
     VariableAccess(VariableRef),
     IntrinsicFunctionAccess(IntrinsicFunctionDefinitionRef),
     InternalFunctionAccess(InternalFunctionDefinitionRef),
-    GenericFunctionAccess(GenericFunctionAccess),
     ExternalFunctionAccess(ExternalFunctionDefinitionRef),
 
     PostfixChain(Box<Expression>, Vec<Postfix>),
@@ -1339,7 +1184,7 @@ pub enum Literal {
 
     EnumVariantLiteral(EnumVariantTypeRef, EnumLiteralData),
     TupleLiteral(TupleTypeRef, Vec<Expression>),
-    Array(ArrayTypeRef, Vec<Expression>),
+    Array(VecTypeRef, Vec<Expression>),
     Map(MapTypeRef, Vec<(Expression, Expression)>),
 }
 
@@ -1348,7 +1193,7 @@ pub struct ArrayInstantiation {
     pub expressions: Vec<Expression>,
     pub item_type: Type,
     pub array_type: Type,
-    pub array_type_ref: ArrayTypeRef,
+    pub array_type_ref: VecTypeRef,
 }
 
 #[derive(Debug)]
@@ -1568,21 +1413,21 @@ pub struct OptionType {
     pub item_type: Type,
 }
 
-pub type ArrayTypeRef = Rc<ArrayType>;
+pub type VecTypeRef = Rc<VecType>;
 
 #[must_use]
-pub fn same_array_ref(a: &ArrayTypeRef, b: &ArrayTypeRef) -> bool {
+pub fn same_array_ref(a: &VecTypeRef, b: &VecTypeRef) -> bool {
     Rc::ptr_eq(a, b)
 }
 
-#[derive(Debug)]
-pub struct ArrayType {
+#[derive(Debug, Hash)]
+pub struct VecType {
     pub item_type: Type,
 }
 
 pub type MapTypeRef = Rc<MapType>;
 
-#[derive(Debug)]
+#[derive(Debug, Hash)]
 pub struct MapType {
     pub key_type: Type,
     pub value_type: Type,
@@ -1841,7 +1686,7 @@ impl MonomorphizationCache {
 // Mutable part
 #[derive(Debug)]
 pub struct ProgramState {
-    pub array_types: Vec<ArrayTypeRef>,
+    pub array_types: Vec<VecTypeRef>,
     pub number: TypeNumber,
     pub external_function_number: ExternalFunctionId,
     pub monomorphization_cache: MonomorphizationCache,

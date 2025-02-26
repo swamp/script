@@ -254,6 +254,7 @@ impl String {
     }
 }
 
+/* FOR FUTURE USE
 struct Vec<T> {
 }
 
@@ -341,7 +342,7 @@ impl Vec<T> {
         vec_clear(self)
     }
 }
-
+*/
 
 /*
 // Iterator should be traits
@@ -360,6 +361,7 @@ impl MutIterator<T> {
 }
 */
 
+/* FOR FUTURE USE
 struct Map<K, V> {
 }
 
@@ -426,7 +428,7 @@ impl Map<K, V> {
         map_remove(self, key)
     }
 }
-
+*/
 
 /// Calculates the magnitude of a 2D vector.
 ///

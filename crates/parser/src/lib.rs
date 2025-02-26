@@ -772,7 +772,10 @@ impl AstParser {
             }
         }
 
-        let struct_def = StructType::new(name_with_optional_type_params, fields);
+        let struct_def = StructType::new(
+            LocalTypeIdentifier(name_with_optional_type_params.name),
+            fields,
+        );
 
         Ok(Definition::StructDef(struct_def))
     }
@@ -923,7 +926,7 @@ impl AstParser {
         }
 
         Ok(Definition::ImplDef(
-            name_with_optional_type_params,
+            LocalTypeIdentifier(name_with_optional_type_params.name),
             functions,
         ))
     }
@@ -2288,7 +2291,7 @@ impl AstParser {
         }
 
         Ok(Definition::EnumDef(
-            name_with_optional_type_params,
+            LocalTypeIdentifier(name_with_optional_type_params.name),
             variants,
         ))
     }

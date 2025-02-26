@@ -189,16 +189,13 @@ pub struct AliasType {
 
 #[derive(Debug, Clone, Eq, PartialEq, Default)]
 pub struct StructType {
-    pub identifier: LocalTypeIdentifierWithOptionalTypeVariables,
+    pub identifier: LocalTypeIdentifier,
     pub fields: Vec<FieldType>,
 }
 
 impl StructType {
     #[must_use]
-    pub const fn new(
-        identifier: LocalTypeIdentifierWithOptionalTypeVariables,
-        fields: Vec<FieldType>,
-    ) -> Self {
+    pub const fn new(identifier: LocalTypeIdentifier, fields: Vec<FieldType>) -> Self {
         Self { identifier, fields }
     }
 }
@@ -213,12 +210,9 @@ pub struct ConstantInfo {
 pub enum Definition {
     AliasDef(AliasType),
     StructDef(StructType),
-    EnumDef(
-        LocalTypeIdentifierWithOptionalTypeVariables,
-        Vec<EnumVariantType>,
-    ),
+    EnumDef(LocalTypeIdentifier, Vec<EnumVariantType>),
     FunctionDef(Function),
-    ImplDef(LocalTypeIdentifierWithOptionalTypeVariables, Vec<Function>),
+    ImplDef(LocalTypeIdentifier, Vec<Function>),
     Use(Use),
     Mod(Mod),
 

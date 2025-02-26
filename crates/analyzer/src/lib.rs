@@ -7,7 +7,6 @@ pub mod call;
 pub mod constant;
 pub mod def;
 pub mod err;
-mod instantiate;
 pub mod literal;
 pub mod lookup;
 pub mod operator;
@@ -18,8 +17,6 @@ pub mod types;
 pub mod variable;
 
 use crate::err::{Error, ErrorKind};
-use crate::instantiate::Instantiator;
-use crate::lookup::TypeVariableScope;
 use seq_map::SeqMap;
 use std::mem::take;
 use std::num::{ParseFloatError, ParseIntError};
@@ -28,36 +25,14 @@ use swamp_script_modules::modules::Modules;
 use swamp_script_modules::symtbl::{FuncDef, Symbol, SymbolTable, SymbolTableRef};
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
-    ArgumentExpressionOrLocation, GenericTypeBlueprintRef, IntrinsicFunctionDefinitionRef,
-    LocationAccess, LocationAccessKind, MutOrImmutableExpression, NormalPattern,
-    ParameterizedTypeKind, Postfix, PostfixKind, RangeMode, SingleLocationExpression,
-    SingleLocationExpressionKind, SingleMutLocationExpression, TypeWithMut, WhenBinding,
+    ArgumentExpressionOrLocation, IntrinsicFunctionDefinitionRef, LocationAccess,
+    LocationAccessKind, MutOrImmutableExpression, NormalPattern, Postfix, PostfixKind, RangeMode,
+    SingleLocationExpression, SingleLocationExpressionKind, SingleMutLocationExpression,
+    TypeWithMut, WhenBinding,
 };
 use swamp_script_source_map::SourceMap;
 use tracing::error;
 use tracing::info;
-
-pub enum AssociatedFunctionInfo {
-    Generic {
-        base_function: FunctionRef,
-        blueprint: GenericTypeBlueprintRef,
-        concrete_types: Vec<Type>,
-        instantiated_signature: Signature,
-    },
-    Concrete(FunctionRef),
-}
-
-impl AssociatedFunctionInfo {
-    pub fn instantiated_signature(&self) -> Signature {
-        match self {
-            AssociatedFunctionInfo::Generic {
-                instantiated_signature,
-                ..
-            } => instantiated_signature.clone(),
-            AssociatedFunctionInfo::Concrete(function_ref) => function_ref.signature().clone(),
-        }
-    }
-}
 
 #[must_use]
 pub fn convert_range_mode(range_mode: &RangeMode) -> RangeMode {
@@ -141,7 +116,6 @@ pub struct SharedState<'a> {
     pub state: &'a mut ProgramState,
     pub lookup_table: SymbolTable,
     pub definition_table: SymbolTable,
-    pub type_variables: Option<TypeVariableScope>,
     pub modules: &'a Modules,
     pub source_map: &'a SourceMap,
     pub file_id: FileId,
@@ -214,7 +188,6 @@ impl<'a> Analyzer<'a> {
             state,
             lookup_table: SymbolTable::default(),
             definition_table: SymbolTable::default(),
-            type_variables: None,
             modules,
             source_map,
             current_path: current_path.to_vec(),
@@ -415,64 +388,14 @@ impl<'a> Analyzer<'a> {
         &self,
         ty: &Type,
         function_name: &str,
-    ) -> Option<AssociatedFunctionInfo> {
+    ) -> Option<&FunctionRef> {
         info!(%ty, ?function_name, "looking up member function");
-        println!(
-            "DEBUG: Type kind: {}",
-            match ty {
-                Type::Generic(_) => "Generic",
-                Type::Struct(_) => "Struct",
-                Type::Enum(_) => "Enum",
-                _ => "Other",
-            }
-        );
 
-        if let Some((blueprint, concrete_types)) = ty.extract_blueprint_and_types() {
-            println!(
-                "DEBUG: Successfully extracted blueprint: {:?}",
-                blueprint.borrow().kind
-            );
-            println!("DEBUG: With concrete types: {:?}", concrete_types);
-
-            if let Some(base_function) = blueprint.borrow().find_associated_function(function_name)
-            {
-                let scope = Instantiator::create_type_parameter_scope_from_variables(
-                    &blueprint.borrow().type_variables,
-                    &concrete_types,
-                )
-                .unwrap();
-                let instantiated_signature =
-                    Instantiator::instantiate_signature(base_function.signature(), &scope).unwrap();
-                return Some(AssociatedFunctionInfo::Generic {
-                    base_function: base_function.clone(),
-                    blueprint: blueprint.clone(),
-                    concrete_types,
-                    instantiated_signature,
-                });
-            }
-        } else {
-            println!("DEBUG: Failed to extract blueprint from type");
-        }
-
-        println!("DEBUG: Falling back to concrete implementation lookup");
-
-        let result = self
-            .shared
+        self.shared
             .state
             .associated_impls
             .get_member_function(ty, function_name)
-            .map(|function| AssociatedFunctionInfo::Concrete(function.clone()));
-
-        println!(
-            "DEBUG: Lookup result: {}",
-            if result.is_some() {
-                "Found"
-            } else {
-                "Not found"
-            }
-        );
-
-        result
+            .map(|function| function)
     }
 
     pub fn analyze_expression_get_mutability(
@@ -807,49 +730,6 @@ impl<'a> Analyzer<'a> {
         let maybe_struct_type = self.analyze_named_type(qualified_type_identifier)?;
         match maybe_struct_type {
             Type::Struct(struct_type) => Ok(struct_type),
-            Type::Generic(parameterized_type) => {
-                if let ParameterizedTypeKind::Struct(_struct_ref) =
-                    &parameterized_type.blueprint.0.borrow().kind
-                {
-                    if qualified_type_identifier.generic_params.is_empty() {
-                        todo!()
-                    } else {
-                        let analyzed_concrete_types =
-                            self.analyze_types(&qualified_type_identifier.generic_params)?;
-                        let type_variables = Instantiator::create_type_parameter_scope(
-                            &parameterized_type.instantiated_with_arguments,
-                            &analyzed_concrete_types,
-                        )
-                        .map_err(|s| {
-                            self.create_err(
-                                ErrorKind::SemanticError(s),
-                                &qualified_type_identifier.name.0,
-                            )
-                        })?;
-                        let (_replaced, instantiated_type) =
-                            Instantiator::instantiate(&parameterized_type, &type_variables)
-                                .map_err(|semantic_error| {
-                                    self.create_err(
-                                        ErrorKind::SemanticError(semantic_error),
-                                        &qualified_type_identifier.name.0,
-                                    )
-                                })?;
-                        if let Type::Struct(ref instantiated_struct_type) = instantiated_type {
-                            Ok(instantiated_struct_type.clone()) // Return the *instantiated* StructType
-                        } else {
-                            Err(self.create_err(
-                                ErrorKind::UnexpectedTypeAfterInstantiation,
-                                &qualified_type_identifier.name.0,
-                            ))
-                        }
-                    }
-                } else {
-                    Err(self.create_err(
-                        ErrorKind::NonParameterizedTypeWithTypeArguments, // Or a more specific error for Enum/other ParameterizedTypeKinds
-                        &qualified_type_identifier.name.0,
-                    ))
-                }
-            }
             _ => Err(self.create_err(
                 // For other Type variants that are not Struct
                 ErrorKind::UnknownStructTypeReference,
@@ -904,13 +784,13 @@ impl<'a> Analyzer<'a> {
 
                 let base_expr = self.create_expr(
                     kind,
-                    Type::Function(function_info.instantiated_signature()),
+                    Type::Function(function_info.signature().clone()),
                     node,
                 );
 
                 let empty_call_postfix = Postfix {
                     node: self.to_node(node),
-                    ty: *function_info.instantiated_signature().return_type,
+                    ty: *function_info.signature().return_type.clone(),
                     kind: PostfixKind::FunctionCall(vec![]),
                 };
 
@@ -1286,10 +1166,7 @@ impl<'a> Analyzer<'a> {
                 let associated_function_info = self
                     .lookup_associated_function(resolved_type, "iter")
                     .expect("todo: missing iter() associated function");
-                match &*associated_function_info
-                    .instantiated_signature()
-                    .return_type
-                {
+                match &*associated_function_info.signature().return_type {
                     Type::Tuple(tuple_ref) => {
                         if tuple_ref.0.len() == 2 {
                             (Some(tuple_ref.0[0].clone()), tuple_ref.0[1].clone())
@@ -1440,7 +1317,7 @@ impl<'a> Analyzer<'a> {
         node: &swamp_script_ast::Node,
         items: &[swamp_script_ast::Expression],
         expected_type: Option<&Type>,
-    ) -> Result<(ArrayTypeRef, Vec<Expression>), Error> {
+    ) -> Result<(VecTypeRef, Vec<Expression>), Error> {
         let expressions = self.analyze_expressions(None, items)?;
         let item_type = if expressions.is_empty() {
             if let Some(found_expected_type) = expected_type {
@@ -1461,7 +1338,7 @@ impl<'a> Analyzer<'a> {
             expressions[0].ty.clone()
         };
 
-        let array_type = ArrayType { item_type };
+        let array_type = VecType { item_type };
 
         let array_type_ref = Rc::new(array_type);
 

@@ -11,7 +11,7 @@ use swamp_script_semantic::prelude::*;
 pub struct TypeRegistry {
     // Container type constructors
     #[allow(unused)]
-    array_types: RefCell<SeqMap<TypeNumber, ArrayTypeRef>>,
+    array_types: RefCell<SeqMap<TypeNumber, VecTypeRef>>,
     #[allow(unused)]
     struct_types: RefCell<SeqMap<String, StructTypeRef>>,
 

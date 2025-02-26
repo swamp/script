@@ -2,54 +2,37 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
+use crate::Analyzer;
 use crate::err::{Error, ErrorKind};
-use crate::{Analyzer, AssociatedFunctionInfo};
 use swamp_script_modules::symtbl::FuncDef;
 
 use swamp_script_semantic::{
-    Expression, ExpressionKind, Function, GenericFunctionAccess, Range, RangeMode, Type,
+    Expression, ExpressionKind, Function, FunctionRef, Range, RangeMode, Type,
 };
 
 impl Analyzer<'_> {
-    pub fn convert_to_function_access(
-        associated_function_info: &AssociatedFunctionInfo,
-    ) -> ExpressionKind {
-        match associated_function_info {
-            AssociatedFunctionInfo::Concrete(function_ref) => match &**function_ref {
-                Function::Internal(internal_function) => {
-                    ExpressionKind::InternalFunctionAccess(internal_function.clone())
-                }
+    pub fn convert_to_function_access(function_ref: &FunctionRef) -> ExpressionKind {
+        match &**function_ref {
+            Function::Internal(internal_function) => {
+                ExpressionKind::InternalFunctionAccess(internal_function.clone())
+            }
 
-                Function::External(external_function) => {
-                    ExpressionKind::ExternalFunctionAccess(external_function.clone())
-                }
-            },
-            AssociatedFunctionInfo::Generic {
-                base_function,
-                blueprint,
-                concrete_types,
-                instantiated_signature,
-            } => ExpressionKind::GenericFunctionAccess(GenericFunctionAccess {
-                base_function: base_function.clone(),
-                blueprint: blueprint.clone(),
-                concrete_types: concrete_types.clone(),
-                instantiated_signature: instantiated_signature.clone(),
-            }),
+            Function::External(external_function) => {
+                ExpressionKind::ExternalFunctionAccess(external_function.clone())
+            }
         }
     }
 
     #[must_use]
     pub fn convert_to_function_access_expr(
         &self,
-        associated_function_info: &AssociatedFunctionInfo,
+        associated_function_info: &FunctionRef,
         ast_node: &swamp_script_ast::Node,
     ) -> Expression {
         let kind = Self::convert_to_function_access(associated_function_info);
         self.create_expr(
             kind,
-            *associated_function_info
-                .instantiated_signature()
-                .return_type,
+            *associated_function_info.signature().return_type.clone(),
             ast_node,
         )
     }

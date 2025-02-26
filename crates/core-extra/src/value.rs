@@ -11,10 +11,10 @@ use std::fmt::{Debug, Display};
 use std::hash::Hash;
 use std::rc::Rc;
 use swamp_script_semantic::{
-    ArrayTypeRef, EnumVariantSimpleTypeRef, EnumVariantStructTypeRef, EnumVariantTupleTypeRef,
+    EnumVariantSimpleTypeRef, EnumVariantStructTypeRef, EnumVariantTupleTypeRef,
     ExternalFunctionDefinitionRef, ExternalTypeRef, FormatSpecifierKind,
     InternalFunctionDefinitionRef, MapTypeRef, PrecisionType, RangeMode, StructTypeRef,
-    TupleTypeRef, TypeNumber,
+    TupleTypeRef, TypeNumber, VecTypeRef,
 };
 use swamp_script_semantic::{Node, Span};
 
@@ -106,7 +106,7 @@ pub enum Value {
     Option(Option<ValueRef>),
 
     // Containers
-    Array(ArrayTypeRef, Vec<ValueRef>),
+    Array(VecTypeRef, Vec<ValueRef>),
     Map(MapTypeRef, SeqMap<Value, ValueRef>), // Do not change to HashMap, the order is important for it to be deterministic
     Tuple(TupleTypeRef, Vec<ValueRef>),
     Struct(StructTypeRef, Vec<ValueRef>), // type of the struct, and the fields themselves in strict order
@@ -533,7 +533,7 @@ impl Value {
         }
     }
 
-    pub fn expect_array(&self) -> Result<(ArrayTypeRef, &Vec<ValueRef>), ValueError> {
+    pub fn expect_array(&self) -> Result<(VecTypeRef, &Vec<ValueRef>), ValueError> {
         match self {
             Self::Array(resolved_array_ref, fields) => Ok((resolved_array_ref.clone(), fields)),
             _ => Err(ValueError::ConversionError("Expected array value".into())),
