@@ -6,7 +6,7 @@
 use crate::ns::Namespace;
 use crate::ns::NamespacePath;
 use crate::symtbl::SymbolTable;
-use crate::{Constant, ConstantId, ConstantRef, Expression, ExpressionKind};
+use crate::{ConstantRef, Expression, ExpressionKind};
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
@@ -86,6 +86,18 @@ impl Modules {
     #[must_use]
     pub fn contains_key(&self, module_path: &[String]) -> bool {
         self.modules.contains_key(module_path)
+    }
+
+    pub fn add(&mut self, module: ModuleRef) {
+        self.modules
+            .insert(module.clone().namespace.path.clone(), module)
+            .expect("todo");
+    }
+
+    pub fn link_module(&mut self, module_path: &[String], referred_module: ModuleRef) {
+        self.modules
+            .insert(module_path.to_vec(), referred_module)
+            .expect("todo");
     }
 
     #[must_use]

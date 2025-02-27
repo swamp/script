@@ -24,7 +24,7 @@ use std::num::{ParseFloatError, ParseIntError};
 use std::rc::Rc;
 
 use swamp_script_semantic::prelude::*;
-use swamp_script_semantic::symtbl::{FuncDef, Symbol, SymbolTable};
+use swamp_script_semantic::symtbl::{FuncDef, Symbol, SymbolTable, SymbolTableRef};
 use swamp_script_semantic::{
     ArgumentExpressionOrLocation, LocationAccess, LocationAccessKind, MutOrImmutableExpression,
     NormalPattern, Postfix, PostfixKind, RangeMode, SingleLocationExpression,
@@ -48,9 +48,15 @@ pub enum LocationSide {
 }
 
 #[derive(Debug)]
+pub struct AutoUseModules {
+    pub modules: Vec<SymbolTableRef>,
+}
+
+#[derive(Debug)]
 pub struct Program {
     pub state: ProgramState,
     pub modules: Modules,
+    pub auto_use_modules: AutoUseModules,
 }
 
 impl Default for Program {
@@ -65,6 +71,9 @@ impl Program {
         Self {
             state: ProgramState::new(),
             modules: Modules::new(),
+            auto_use_modules: AutoUseModules {
+                modules: Vec::new(),
+            },
         }
     }
 }

@@ -5,7 +5,7 @@
 use crate::modules::ModuleRef;
 use crate::{
     Constant, ConstantRef, EnumType, EnumTypeRef, EnumVariantType, EnumVariantTypeRef,
-    ExternalFunctionDefinition, ExternalFunctionDefinitionRef, ExternalTypeRef,
+    ExternalFunctionDefinition, ExternalFunctionDefinitionRef, ExternalType, ExternalTypeRef,
     InternalFunctionDefinition, InternalFunctionDefinitionRef, SemanticError, StructType,
     StructTypeRef, Type,
 };
@@ -133,6 +133,31 @@ impl SymbolTable {
             .insert(name.to_string(), Symbol::Constant(constant_ref))
             .map_err(|_| SemanticError::DuplicateConstName(name.to_string()))?;
 
+        Ok(())
+    }
+
+    pub fn add_external_type(
+        &mut self,
+        external: ExternalType,
+    ) -> Result<ExternalTypeRef, SemanticError> {
+        let external_ref = Rc::new(external);
+        self.add_external_type_link(external_ref.clone())?;
+        Ok(external_ref)
+    }
+
+    /// # Errors
+    ///
+    pub fn add_external_type_link(
+        &mut self,
+        external_type_ref: ExternalTypeRef,
+    ) -> Result<(), SemanticError> {
+        let name = external_type_ref.type_name.clone();
+        self.symbols
+            .insert(
+                name.clone(),
+                Symbol::Type(Type::External(external_type_ref)),
+            )
+            .map_err(|_| SemanticError::DuplicateStructName(name))?;
         Ok(())
     }
 

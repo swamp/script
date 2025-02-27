@@ -152,6 +152,11 @@ pub enum UseItem {
 }
 
 #[derive(Debug)]
+pub struct Mod {
+    pub module_path: ModulePath,
+}
+
+#[derive(Debug)]
 pub struct Use {
     pub module_path: ModulePath,
     //    pub assigned_path: Vec<String>,
@@ -183,8 +188,8 @@ pub enum Definition {
     EnumDef(Node, Vec<EnumVariantType>),
     FunctionDef(Function),
     ImplDef(Node, Vec<Function>),
+    Mod(Mod),
     Use(Use),
-
     // Other
     Constant(ConstantInfo),
 }

@@ -13,6 +13,7 @@ swamp-script-analyzer = { path = "../analyzer", version = "0.0.12" }
 swamp-script-semantic = { path = "../semantic", version = "0.0.12" }
 swamp-script-source-map = { path = "../source-map", version = "0.0.12" }
 tracing = "0.1.41"
+regex = "1.11.1"
 
 [dev-dependencies]
 test-log = { version = "0.2.16", features = ["trace", "log", "color"] }
