@@ -2,13 +2,11 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use crate::modules::ResolvedModuleRef;
+use crate::modules::ModuleRef;
 use crate::{
-    ResolvedConstant, ResolvedConstantRef, ResolvedEnumType, ResolvedEnumTypeRef,
-    ResolvedEnumVariantType, ResolvedEnumVariantTypeRef, ResolvedExternalFunctionDefinition,
-    ResolvedExternalFunctionDefinitionRef, ResolvedInternalFunctionDefinition,
-    ResolvedInternalFunctionDefinitionRef, ResolvedStructType, ResolvedStructTypeRef, ResolvedType,
-    SemanticError,
+    Constant, ConstantRef, EnumType, EnumTypeRef, EnumVariantType, EnumVariantTypeRef,
+    ExternalFunctionDefinition, ExternalFunctionDefinitionRef, InternalFunctionDefinition,
+    InternalFunctionDefinitionRef, SemanticError, StructType, StructTypeRef, Type,
 };
 use seq_map::SeqMap;
 use std::cell::RefCell;
@@ -18,9 +16,9 @@ use tiny_ver::TinyVersion;
 
 #[derive(Debug, Clone)]
 pub enum FuncDef {
-    Internal(ResolvedInternalFunctionDefinitionRef),
-    //Intrinsic(ResolvedIntrinsicFunctionDefinitionRef),
-    External(ResolvedExternalFunctionDefinitionRef),
+    Internal(InternalFunctionDefinitionRef),
+    //Intrinsic(IntrinsicFunctionDefinitionRef),
+    External(ExternalFunctionDefinitionRef),
 }
 
 #[derive(Clone, Debug)]
@@ -40,12 +38,12 @@ pub struct TypeGenerator {
 
 #[derive(Clone, Debug)]
 pub enum Symbol {
-    Type(ResolvedType),
-    Module(ResolvedModuleRef),
+    Type(Type),
+    Module(ModuleRef),
     PackageVersion(TinyVersion),
-    Constant(ResolvedConstantRef),
+    Constant(ConstantRef),
     FunctionDefinition(FuncDef),
-    //Alias(ResolvedAliasTypeRef),
+    //Alias(AliasTypeRef),
     //TypeGenerator(TypeGenerator),
 }
 
@@ -117,10 +115,7 @@ impl SymbolTable {
 
     /// # Errors
     ///
-    pub fn add_constant(
-        &mut self,
-        constant: ResolvedConstant,
-    ) -> Result<ResolvedConstantRef, SemanticError> {
+    pub fn add_constant(&mut self, constant: Constant) -> Result<ConstantRef, SemanticError> {
         let constant_ref = Rc::new(constant);
 
         self.add_constant_link(constant_ref.clone())?;
@@ -130,10 +125,7 @@ impl SymbolTable {
 
     /// # Errors
     ///
-    pub fn add_constant_link(
-        &mut self,
-        constant_ref: ResolvedConstantRef,
-    ) -> Result<(), SemanticError> {
+    pub fn add_constant_link(&mut self, constant_ref: ConstantRef) -> Result<(), SemanticError> {
         let name = constant_ref.assigned_name.clone();
 
         self.symbols
@@ -145,10 +137,7 @@ impl SymbolTable {
 
     /// # Errors
     ///
-    pub fn add_struct(
-        &mut self,
-        struct_type: ResolvedStructType,
-    ) -> Result<ResolvedStructTypeRef, SemanticError> {
+    pub fn add_struct(&mut self, struct_type: StructType) -> Result<StructTypeRef, SemanticError> {
         let struct_ref = Rc::new(RefCell::new(struct_type));
         self.add_struct_link(struct_ref.clone())?;
         Ok(struct_ref)
@@ -156,34 +145,22 @@ impl SymbolTable {
 
     /// # Errors
     ///
-    pub fn add_struct_link(
-        &mut self,
-        struct_type_ref: ResolvedStructTypeRef,
-    ) -> Result<(), SemanticError> {
+    pub fn add_struct_link(&mut self, struct_type_ref: StructTypeRef) -> Result<(), SemanticError> {
         let name = struct_type_ref.borrow().assigned_name.clone();
         self.symbols
-            .insert(
-                name.clone(),
-                Symbol::Type(ResolvedType::Struct(struct_type_ref)),
-            )
+            .insert(name.clone(), Symbol::Type(Type::Struct(struct_type_ref)))
             .map_err(|_| SemanticError::DuplicateStructName(name))?;
         Ok(())
     }
 
-    pub fn add_enum_type(
-        &mut self,
-        enum_type: ResolvedEnumType,
-    ) -> Result<ResolvedEnumTypeRef, SemanticError> {
+    pub fn add_enum_type(&mut self, enum_type: EnumType) -> Result<EnumTypeRef, SemanticError> {
         let enum_type_ref = Rc::new(RefCell::new(enum_type));
         self.add_enum_type_link(enum_type_ref.clone())?;
         Ok(enum_type_ref)
     }
 
-    pub fn add_enum_type_link(
-        &mut self,
-        enum_type_ref: ResolvedEnumTypeRef,
-    ) -> Result<(), SemanticError> {
-        let ty = ResolvedType::Enum(enum_type_ref.clone());
+    pub fn add_enum_type_link(&mut self, enum_type_ref: EnumTypeRef) -> Result<(), SemanticError> {
+        let ty = Type::Enum(enum_type_ref.clone());
         self.symbols
             .insert(
                 enum_type_ref.borrow().assigned_name.clone(),
@@ -198,9 +175,9 @@ impl SymbolTable {
 
     pub fn add_enum_variant(
         &mut self,
-        enum_type_name: ResolvedEnumTypeRef,
-        enum_variant: ResolvedEnumVariantType,
-    ) -> Result<ResolvedEnumVariantTypeRef, SemanticError> {
+        enum_type_name: EnumTypeRef,
+        enum_variant: EnumVariantType,
+    ) -> Result<EnumVariantTypeRef, SemanticError> {
         let enum_variant_ref = Rc::new(enum_variant);
         enum_type_name
             .borrow_mut()
@@ -222,8 +199,8 @@ impl SymbolTable {
     pub fn add_internal_function(
         &mut self,
         name: &str,
-        function: ResolvedInternalFunctionDefinition,
-    ) -> Result<ResolvedInternalFunctionDefinitionRef, SemanticError> {
+        function: InternalFunctionDefinition,
+    ) -> Result<InternalFunctionDefinitionRef, SemanticError> {
         let function_ref = Rc::new(function);
         self.symbols
             .insert(
@@ -237,7 +214,7 @@ impl SymbolTable {
     pub fn add_internal_function_link(
         &mut self,
         name: &str,
-        function_ref: ResolvedInternalFunctionDefinitionRef,
+        function_ref: InternalFunctionDefinitionRef,
     ) -> Result<(), SemanticError> {
         self.symbols
             .insert(
@@ -258,7 +235,7 @@ impl SymbolTable {
             .map_err(|_| SemanticError::DuplicateSymbolName)
     }
 
-    pub fn get_type(&self, name: &str) -> Option<&ResolvedType> {
+    pub fn get_type(&self, name: &str) -> Option<&Type> {
         if let Some(found_symbol) = self.get_symbol(name) {
             if let Symbol::Type(type_ref) = found_symbol {
                 return Some(type_ref);
@@ -268,16 +245,16 @@ impl SymbolTable {
         None
     }
 
-    pub fn get_struct(&self, name: &str) -> Option<&ResolvedStructTypeRef> {
+    pub fn get_struct(&self, name: &str) -> Option<&StructTypeRef> {
         match self.get_type(name)? {
-            ResolvedType::Struct(struct_ref) => Some(struct_ref),
+            Type::Struct(struct_ref) => Some(struct_ref),
             _ => None,
         }
     }
 
-    pub fn get_enum(&self, name: &str) -> Option<&ResolvedEnumTypeRef> {
+    pub fn get_enum(&self, name: &str) -> Option<&EnumTypeRef> {
         match self.get_type(name)? {
-            ResolvedType::Enum(enum_type) => Some(enum_type),
+            Type::Enum(enum_type) => Some(enum_type),
             _ => None,
         }
     }
@@ -287,7 +264,7 @@ impl SymbolTable {
         &self,
         enum_type_name: &str,
         variant_name: &str,
-    ) -> Option<ResolvedEnumVariantTypeRef> {
+    ) -> Option<EnumVariantTypeRef> {
         self.get_enum(enum_type_name).as_ref().map_or_else(
             || None,
             |found_enum| {
@@ -300,14 +277,14 @@ impl SymbolTable {
         )
     }
 
-    pub fn get_constant(&self, name: &str) -> Option<&ResolvedConstantRef> {
+    pub fn get_constant(&self, name: &str) -> Option<&ConstantRef> {
         match self.get_symbol(name)? {
             Symbol::Constant(constant) => Some(constant),
             _ => None,
         }
     }
     #[must_use]
-    pub fn get_module_link(&self, name: &str) -> Option<&ResolvedModuleRef> {
+    pub fn get_module_link(&self, name: &str) -> Option<&ModuleRef> {
         match self.get_symbol(name)? {
             Symbol::Module(module_ref) => Some(module_ref),
             _ => None,
@@ -325,10 +302,7 @@ impl SymbolTable {
     }
 
     #[must_use]
-    pub fn get_internal_function(
-        &self,
-        name: &str,
-    ) -> Option<&ResolvedInternalFunctionDefinitionRef> {
+    pub fn get_internal_function(&self, name: &str) -> Option<&InternalFunctionDefinitionRef> {
         match self.get_function(name)? {
             FuncDef::Internal(internal_fn) => Some(internal_fn),
             _ => None,
@@ -339,7 +313,7 @@ impl SymbolTable {
     pub fn get_external_function_declaration(
         &self,
         name: &str,
-    ) -> Option<&ResolvedExternalFunctionDefinitionRef> {
+    ) -> Option<&ExternalFunctionDefinitionRef> {
         match self.get_function(name)? {
             FuncDef::External(external_def) => Some(external_def),
             _ => None,
@@ -354,8 +328,8 @@ impl SymbolTable {
 
     pub fn add_external_function_declaration(
         &mut self,
-        decl: ResolvedExternalFunctionDefinition,
-    ) -> Result<ResolvedExternalFunctionDefinitionRef, SemanticError> {
+        decl: ExternalFunctionDefinition,
+    ) -> Result<ExternalFunctionDefinitionRef, SemanticError> {
         let decl_ref = Rc::new(decl);
 
         self.add_external_function_declaration_link(decl_ref.clone())?;
@@ -365,7 +339,7 @@ impl SymbolTable {
 
     pub fn add_external_function_declaration_link(
         &mut self,
-        decl_ref: ResolvedExternalFunctionDefinitionRef,
+        decl_ref: ExternalFunctionDefinitionRef,
     ) -> Result<(), SemanticError> {
         self.insert_symbol(
             &decl_ref.assigned_name,
@@ -377,11 +351,7 @@ impl SymbolTable {
         Ok(())
     }
 
-    pub fn add_module_link(
-        &mut self,
-        name: &str,
-        ns: ResolvedModuleRef,
-    ) -> Result<(), SemanticError> {
+    pub fn add_module_link(&mut self, name: &str, ns: ModuleRef) -> Result<(), SemanticError> {
         self.insert_symbol(name, Symbol::Module(ns))
             .map_err(|_| SemanticError::DuplicateNamespaceLink(name.to_string()))?;
         Ok(())

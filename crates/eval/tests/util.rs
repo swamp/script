@@ -6,7 +6,7 @@
 use std::path::Path;
 use swamp_script_analyzer::lookup::NameLookup;
 use swamp_script_analyzer::prelude::ResolveError;
-use swamp_script_analyzer::Resolver;
+use swamp_script_analyzer::Analyzer;
 use swamp_script_core::prelude::Value;
 use swamp_script_eval::prelude::{ExecuteError, VariableValue};
 use swamp_script_eval::{eval_constants, eval_module, Constants, ExternalFunctions};
@@ -67,7 +67,7 @@ fn internal_compile(
 
     let mut name_lookup = NameLookup::new(target_namespace.to_vec(), modules);
 
-    let mut resolver = Resolver::new(&mut state, &mut name_lookup, &source_map, file_id);
+    let mut resolver = Analyzer::new(&mut state, &mut name_lookup, &source_map, file_id);
 
     //let mut resolved_definitions = Vec::new();
     for definition in &program.definitions {

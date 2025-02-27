@@ -5,34 +5,34 @@ use fixed32::Fp;
 use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::rc::Rc;
-use swamp_script_semantic::{ResolvedEnumVariantType, ResolvedRustType, ResolvedType};
+use swamp_script_semantic::{EnumVariantType, ExternalType, Type};
 
 /// # Panics
 ///
 #[inline]
 #[allow(clippy::too_many_lines)]
 #[must_use]
-pub fn quick_deserialize(resolved_type: &ResolvedType, buf: &[u8], depth: usize) -> (Value, usize) {
+pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Value, usize) {
     let (val, octet_size) = match resolved_type {
-        ResolvedType::Int => {
+        Type::Int => {
             let i = i32::from_le_bytes(buf[0..4].try_into().expect("REASON"));
             (Value::Int(i), 4)
         }
 
-        ResolvedType::Float => {
+        Type::Float => {
             let i = i32::from_le_bytes(buf[0..4].try_into().expect("couldn't convert to Fp"));
             (Value::Float(Fp::from_raw(i)), 4)
         }
-        ResolvedType::String => {
+        Type::String => {
             let octet_len =
                 u16::from_le_bytes(buf[0..2].try_into().expect("could not convert strlen"));
             let str =
                 String::from_utf8(buf[2..2 + octet_len as usize].to_owned()).expect("utf8 error");
             (Value::String(str), (octet_len + 2) as usize)
         }
-        ResolvedType::Bool => (Value::Bool(buf[0] != 0), 1),
-        ResolvedType::Unit => (Value::Unit, 0),
-        ResolvedType::Array(array_type_ref) => {
+        Type::Bool => (Value::Bool(buf[0] != 0), 1),
+        Type::Unit => (Value::Unit, 0),
+        Type::Array(array_type_ref) => {
             let mut offset = 0;
             let count = u16::from_le_bytes(
                 buf[offset..offset + 2]
@@ -55,7 +55,7 @@ pub fn quick_deserialize(resolved_type: &ResolvedType, buf: &[u8], depth: usize)
 
             (Value::Array(array_type_ref.clone(), values), offset)
         }
-        ResolvedType::Tuple(tuple_type_ref) => {
+        Type::Tuple(tuple_type_ref) => {
             let mut offset = 0;
             let mut values = Vec::new();
             for tuple_item_type in &tuple_type_ref.0 {
@@ -66,7 +66,7 @@ pub fn quick_deserialize(resolved_type: &ResolvedType, buf: &[u8], depth: usize)
             }
             (Value::Tuple(tuple_type_ref.clone(), values), offset)
         }
-        ResolvedType::Struct(struct_type_ref) => {
+        Type::Struct(struct_type_ref) => {
             let mut values = Vec::new();
             let mut offset = 0;
             for struct_field_type in struct_type_ref
@@ -82,7 +82,7 @@ pub fn quick_deserialize(resolved_type: &ResolvedType, buf: &[u8], depth: usize)
             }
             (Value::Struct(struct_type_ref.clone(), values), offset)
         }
-        ResolvedType::Map(map_type_ref) => {
+        Type::Map(map_type_ref) => {
             let mut offset = 0;
             let count = u16::from_le_bytes(
                 buf[offset..offset + 2]
@@ -112,7 +112,7 @@ pub fn quick_deserialize(resolved_type: &ResolvedType, buf: &[u8], depth: usize)
             }
             (Value::Map(map_type_ref.clone(), seq_map), offset)
         }
-        ResolvedType::Enum(enum_type) => {
+        Type::Enum(enum_type) => {
             let mut offset = 0;
             let enum_lookup_index = buf[offset];
             offset += 1;
@@ -125,10 +125,10 @@ pub fn quick_deserialize(resolved_type: &ResolvedType, buf: &[u8], depth: usize)
                 .expect("should be able to find variant");
 
             let val = match &**variant_type {
-                ResolvedEnumVariantType::Struct(_) => {
+                EnumVariantType::Struct(_) => {
                     todo!("struct containers not done yet")
                 }
-                ResolvedEnumVariantType::Tuple(tuple_type_ref) => {
+                EnumVariantType::Tuple(tuple_type_ref) => {
                     let mut vals_in_order = Vec::new();
                     for tuple_type in &tuple_type_ref.fields_in_order {
                         let (tuple_value, tuple_octet_size) =
@@ -138,7 +138,7 @@ pub fn quick_deserialize(resolved_type: &ResolvedType, buf: &[u8], depth: usize)
                     }
                     Value::EnumVariantTuple(tuple_type_ref.clone(), vals_in_order)
                 }
-                ResolvedEnumVariantType::Nothing(x) => {
+                EnumVariantType::Nothing(x) => {
                     offset += 0;
                     Value::EnumVariantSimple(x.clone())
                 }
@@ -146,10 +146,10 @@ pub fn quick_deserialize(resolved_type: &ResolvedType, buf: &[u8], depth: usize)
 
             (val, offset)
         }
-        ResolvedType::Generic(base_type, type_parameters) => {
-            if let ResolvedType::RustType(found_rust_type) = &**base_type {
+        Type::Generic(base_type, type_parameters) => {
+            if let Type::External(found_rust_type) = &**base_type {
                 if found_rust_type.number == SPARSE_TYPE_ID {
-                    let sparse_type_id_rust_type = Rc::new(ResolvedRustType {
+                    let sparse_type_id_rust_type = Rc::new(ExternalType {
                         type_name: "SparseId".to_string(),
                         number: SPARSE_ID_TYPE_ID, // TODO: FIX hardcoded number
                     });
@@ -166,7 +166,7 @@ pub fn quick_deserialize(resolved_type: &ResolvedType, buf: &[u8], depth: usize)
                     let wrapped_internal_map: Rc<RefCell<Box<dyn RustType>>> =
                         Rc::new(RefCell::new(Box::new(internal_map)));
 
-                    let sparse_collection_rust_type = Rc::new(ResolvedRustType {
+                    let sparse_collection_rust_type = Rc::new(ExternalType {
                         type_name: "Sparse".to_string(),
                         number: SPARSE_TYPE_ID, // TODO: FIX hardcoded number
                     });
@@ -182,13 +182,13 @@ pub fn quick_deserialize(resolved_type: &ResolvedType, buf: &[u8], depth: usize)
                 panic!("unknown generic type")
             }
         }
-        ResolvedType::Function(_) => {
+        Type::Function(_) => {
             panic!("can not serialize function")
         }
-        ResolvedType::Iterable(_) => {
+        Type::Iterable(_) => {
             panic!("can not serialize iterables")
         }
-        ResolvedType::Optional(optional_type_ref) => {
+        Type::Optional(optional_type_ref) => {
             let mut offset = 0;
             let has_some = buf[0] != 0;
             offset += 1;
@@ -200,10 +200,10 @@ pub fn quick_deserialize(resolved_type: &ResolvedType, buf: &[u8], depth: usize)
                 (Value::Option(None), offset)
             }
         }
-        ResolvedType::RustType(rust_type_ref) => {
+        Type::External(rust_type_ref) => {
             match rust_type_ref.number {
                 SPARSE_ID_TYPE_ID => {
-                    let sparse_id_rust_type = Rc::new(ResolvedRustType {
+                    let sparse_id_rust_type = Rc::new(ExternalType {
                         type_name: "SparseId".to_string(),
                         number: SPARSE_ID_TYPE_ID, // TODO: FIX hardcoded number
                     });

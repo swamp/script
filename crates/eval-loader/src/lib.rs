@@ -39,7 +39,7 @@ pub fn resolve_to_existing_module(
 ) -> Result<Option<ResolvedExpression>, ResolveError> {
     let statements = {
         let mut name_lookup = NameLookup::new(path.clone(), &mut modules);
-        let mut resolver = Resolver::new(state, &mut name_lookup, source_map, ast_module.file_id);
+        let mut resolver = Analyzer::new(state, &mut name_lookup, source_map, ast_module.file_id);
 
         for ast_def in ast_module.ast_module.definitions() {
             let _resolved_def = resolver.resolve_definition(ast_def)?;

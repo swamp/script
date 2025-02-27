@@ -3,31 +3,31 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use crate::symtbl::{SymbolTable, SymbolTableRef};
-use crate::ResolvedType;
+use crate::Type;
 use std::fmt::Debug;
 use std::rc::Rc;
 
 #[derive(Debug, Clone)]
-pub struct ResolvedModulePathStr(pub Vec<String>);
+pub struct ModulePathStr(pub Vec<String>);
 
 pub type NamespacePath = Vec<String>;
 
 #[derive(Debug)]
-pub struct ResolvedModuleNamespace {
+pub struct Namespace {
     /*
     #[allow(unused)]
-    structs: SeqMap<String, ResolvedStructTypeRef>,
+    structs: SeqMap<String, StructTypeRef>,
 
-    constants: SeqMap<String, ResolvedConstantRef>,
-
-    #[allow(unused)]
-    build_in_rust_types: SeqMap<String, ResolvedRustTypeRef>,
+    constants: SeqMap<String, ConstantRef>,
 
     #[allow(unused)]
-    enum_types: SeqMap<String, ResolvedEnumTypeRef>,
-    //enum_variant_types: SeqMap<String, ResolvedEnumVariantTypeRef>,
-    internal_functions: SeqMap<String, ResolvedInternalFunctionDefinitionRef>,
-    external_function_declarations: SeqMap<String, ResolvedExternalFunctionDefinitionRef>,
+    build_in_rust_types: SeqMap<String, RustTypeRef>,
+
+    #[allow(unused)]
+    enum_types: SeqMap<String, EnumTypeRef>,
+    //enum_variant_types: SeqMap<String, EnumVariantTypeRef>,
+    internal_functions: SeqMap<String, InternalFunctionDefinitionRef>,
+    external_function_declarations: SeqMap<String, ExternalFunctionDefinitionRef>,
 
      */
     pub symbol_table: SymbolTableRef,
@@ -35,13 +35,13 @@ pub struct ResolvedModuleNamespace {
     pub path: Vec<String>,
 }
 
-pub struct UtilResolvedParameter {
+pub struct UtilParameter {
     pub name: String, // Not used,
     pub is_mutable: bool,
-    pub resolved_type: ResolvedType,
+    pub resolved_type: Type,
 }
 
-impl ResolvedModuleNamespace {
+impl Namespace {
     #[must_use]
     pub fn new(path: NamespacePath, symbol_table: SymbolTable) -> Self {
         Self {
@@ -50,14 +50,14 @@ impl ResolvedModuleNamespace {
         }
     }
     /*
-       pub fn structs(&self) -> &SeqMap<String, ResolvedStructTypeRef> {
+       pub fn structs(&self) -> &SeqMap<String, StructTypeRef> {
            &self.structs
        }
 
        pub fn add_constant_ref(
            &mut self,
-           constant_ref: ResolvedConstantRef,
-       ) -> Result<ResolvedConstantRef, SemanticError> {
+           constant_ref: ConstantRef,
+       ) -> Result<ConstantRef, SemanticError> {
            let name = constant_ref.assigned_name.clone();
 
            self.constants
@@ -69,8 +69,8 @@ impl ResolvedModuleNamespace {
 
        pub fn add_struct(
            &mut self,
-           struct_type: ResolvedStructType,
-       ) -> Result<ResolvedStructTypeRef, SemanticError> {
+           struct_type: StructType,
+       ) -> Result<StructTypeRef, SemanticError> {
            let name = struct_type.assigned_name.clone();
            let struct_ref = Rc::new(RefCell::new(struct_type));
            self.structs
@@ -82,7 +82,7 @@ impl ResolvedModuleNamespace {
 
        pub fn add_struct_ref(
            &mut self,
-           struct_type_ref: ResolvedStructTypeRef,
+           struct_type_ref: StructTypeRef,
        ) -> Result<(), SemanticError> {
            let name = struct_type_ref.borrow().assigned_name.clone();
            self.structs
@@ -94,12 +94,12 @@ impl ResolvedModuleNamespace {
        pub fn add_generated_struct(
            &mut self,
            name: &str,
-           fields: &[(&str, ResolvedType)],
-       ) -> Result<ResolvedStructTypeRef, SemanticError> {
+           fields: &[(&str, Type)],
+       ) -> Result<StructTypeRef, SemanticError> {
            let mut resolved_fields = SeqMap::new();
 
            for (_index, (field_name, field_type)) in fields.iter().enumerate() {
-               let af = ResolvedAnonymousStructFieldType {
+               let af = AnonymousStructFieldType {
                    identifier: None,
                    field_type: field_type.clone(),
                };
@@ -109,12 +109,12 @@ impl ResolvedModuleNamespace {
                    .map_err(|_| SemanticError::DuplicateFieldName(field_name.to_string()))?;
            }
 
-           let anon_struct_type = ResolvedAnonymousStructType {
+           let anon_struct_type = AnonymousStructType {
                defined_fields: resolved_fields,
            };
 
-           let resolved_struct_type = ResolvedStructType {
-               name: ResolvedNode::default(),
+           let resolved_struct_type = StructType {
+               name: Node::default(),
                assigned_name: name.to_string(),
                anon_struct_type,
                functions: SeqMap::default(),
@@ -125,8 +125,8 @@ impl ResolvedModuleNamespace {
 
        pub fn add_built_in_rust_type(
            &mut self,
-           rust_type: ResolvedRustType,
-       ) -> Result<ResolvedRustTypeRef, SemanticError> {
+           rust_type: RustType,
+       ) -> Result<RustTypeRef, SemanticError> {
            let rust_type_ref = Rc::new(rust_type);
            self.build_in_rust_types
                .insert(rust_type_ref.type_name.clone(), rust_type_ref.clone())
@@ -139,8 +139,8 @@ impl ResolvedModuleNamespace {
 
        pub fn add_enum_type(
            &mut self,
-           enum_type: ResolvedEnumType,
-       ) -> Result<ResolvedEnumTypeRef, SemanticError> {
+           enum_type: EnumType,
+       ) -> Result<EnumTypeRef, SemanticError> {
            let enum_type_ref = Rc::new(RefCell::new(enum_type));
 
            assert!(!enum_type_ref.borrow().module_path.is_empty());
@@ -158,9 +158,9 @@ impl ResolvedModuleNamespace {
 
        pub fn add_enum_variant(
            &mut self,
-           enum_type_name: ResolvedEnumTypeRef,
-           enum_variant: ResolvedEnumVariantType,
-       ) -> Result<ResolvedEnumVariantTypeRef, SemanticError> {
+           enum_type_name: EnumTypeRef,
+           enum_variant: EnumVariantType,
+       ) -> Result<EnumVariantTypeRef, SemanticError> {
            let enum_variant_ref = Rc::new(enum_variant);
            enum_type_name
                .borrow_mut()
@@ -182,8 +182,8 @@ impl ResolvedModuleNamespace {
        pub fn add_internal_function(
            &mut self,
            name: &str,
-           function: ResolvedInternalFunctionDefinition,
-       ) -> Result<ResolvedInternalFunctionDefinitionRef, SemanticError> {
+           function: InternalFunctionDefinition,
+       ) -> Result<InternalFunctionDefinitionRef, SemanticError> {
            let function_ref = Rc::new(function);
            self.internal_functions
                .insert(name.to_string(), function_ref.clone())
@@ -194,7 +194,7 @@ impl ResolvedModuleNamespace {
        pub fn add_internal_function_link(
            &mut self,
            name: &str,
-           function_ref: ResolvedInternalFunctionDefinitionRef,
+           function_ref: InternalFunctionDefinitionRef,
        ) -> Result<(), SemanticError> {
            self.internal_functions
                .insert(name.to_string(), function_ref.clone())
@@ -202,19 +202,19 @@ impl ResolvedModuleNamespace {
            Ok(())
        }
 
-       pub fn get_struct(&self, name: &str) -> Option<&ResolvedStructTypeRef> {
+       pub fn get_struct(&self, name: &str) -> Option<&StructTypeRef> {
            self.structs.get(&name.to_string())
        }
 
-       pub fn get_enum(&self, name: &str) -> Option<&ResolvedEnumTypeRef> {
+       pub fn get_enum(&self, name: &str) -> Option<&EnumTypeRef> {
            self.enum_types.get(&name.to_string())
        }
 
-       pub fn get_constant(&self, name: &str) -> Option<&ResolvedConstantRef> {
+       pub fn get_constant(&self, name: &str) -> Option<&ConstantRef> {
            self.constants.get(&name.to_string())
        }
 
-       pub fn get_rust_type(&self, name: &str) -> Option<&ResolvedRustTypeRef> {
+       pub fn get_rust_type(&self, name: &str) -> Option<&RustTypeRef> {
            self.build_in_rust_types.get(&name.to_string())
        }
 
@@ -222,7 +222,7 @@ impl ResolvedModuleNamespace {
        pub fn get_internal_function(
            &self,
            name: &str,
-       ) -> Option<&ResolvedInternalFunctionDefinitionRef> {
+       ) -> Option<&InternalFunctionDefinitionRef> {
            self.internal_functions.get(&name.to_string())
        }
 
@@ -230,15 +230,15 @@ impl ResolvedModuleNamespace {
        pub fn get_external_function_declaration(
            &self,
            name: &str,
-       ) -> Option<&ResolvedExternalFunctionDefinitionRef> {
+       ) -> Option<&ExternalFunctionDefinitionRef> {
            self.external_function_declarations.get(&name.to_string())
        }
 
        pub fn add_external_function_declaration(
            &mut self,
            name: &str,
-           declaration: ResolvedExternalFunctionDefinition,
-       ) -> Result<ResolvedExternalFunctionDefinitionRef, SemanticError> {
+           declaration: ExternalFunctionDefinition,
+       ) -> Result<ExternalFunctionDefinitionRef, SemanticError> {
            let decl_ref = Rc::new(declaration);
            self.external_function_declarations
                .insert(name.to_string(), decl_ref.clone())
@@ -249,7 +249,7 @@ impl ResolvedModuleNamespace {
        pub fn add_external_function_declaration_link(
            &mut self,
            name: &str,
-           decl_ref: ResolvedExternalFunctionDefinitionRef,
+           decl_ref: ExternalFunctionDefinitionRef,
        ) -> Result<(), SemanticError> {
            self.external_function_declarations
                .insert(name.to_string(), decl_ref.clone())

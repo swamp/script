@@ -4,18 +4,19 @@
  */
 
 use crate::err::{ResolveError, ResolveErrorKind};
-use crate::Resolver;
-use swamp_script_semantic::{
-    ResolvedConstant, ResolvedConstantRef, ResolvedExpression, ResolvedExpressionKind,
-};
+use crate::Analyzer;
+use swamp_script_semantic::{Constant, ConstantRef, Expression, ExpressionKind};
 
-impl<'a> Resolver<'a> {
-    fn resolve_constant(&mut self, constant: &swamp_script_ast::ConstantInfo) -> Result<(), ResolveError> {
+impl<'a> Analyzer<'a> {
+    fn resolve_constant(
+        &mut self,
+        constant: &swamp_script_ast::ConstantInfo,
+    ) -> Result<(), ResolveError> {
         let resolved_expr = self.resolve_expression(&constant.expression, None)?;
         let resolved_type = resolved_expr.ty.clone();
         let name_node = self.to_node(&constant.constant_identifier.0);
         let name_text = self.get_text_resolved(&name_node).to_string();
-        let constant = ResolvedConstant {
+        let constant = Constant {
             name: name_node.clone(),
             assigned_name: name_text,
             id: 0xffff,
@@ -51,13 +52,13 @@ impl<'a> Resolver<'a> {
     pub(crate) fn resolve_constant_access(
         &self,
         constant_identifier: &swamp_script_ast::ConstantIdentifier,
-    ) -> Result<ResolvedExpression, ResolveError> {
+    ) -> Result<Expression, ResolveError> {
         self.try_find_constant(constant_identifier).map_or_else(
             || Err(self.create_err(ResolveErrorKind::UnknownConstant, &constant_identifier.0)),
             |constant_ref| {
                 let ty = constant_ref.resolved_type.clone();
                 Ok(self.create_expr(
-                    ResolvedExpressionKind::ConstantAccess(constant_ref.clone()),
+                    ExpressionKind::ConstantAccess(constant_ref.clone()),
                     ty,
                     &constant_identifier.0,
                 ))
@@ -68,7 +69,7 @@ impl<'a> Resolver<'a> {
     pub fn try_find_constant(
         &self,
         constant_identifier: &swamp_script_ast::ConstantIdentifier,
-    ) -> Option<&ResolvedConstantRef> {
+    ) -> Option<&ConstantRef> {
         let constant_name = self.get_text(&constant_identifier.0);
         self.shared.lookup_table.get_constant(constant_name)
     }

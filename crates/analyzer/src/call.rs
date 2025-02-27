@@ -4,33 +4,32 @@
  */
 
 use crate::err::{ResolveError, ResolveErrorKind};
-use crate::{LocationSide, Resolver, SPARSE_TYPE_ID};
+use crate::{Analyzer, LocationSide, SPARSE_TYPE_ID};
 use std::rc::Rc;
 use swamp_script_semantic::{
-    ResolvedArgumentExpressionOrLocation, ResolvedExpression, ResolvedExpressionKind,
-    ResolvedMutOrImmutableExpression, ResolvedNode, ResolvedRustType, ResolvedType,
-    ResolvedTypeForParameter,
+    ArgumentExpressionOrLocation, Expression, ExpressionKind, ExternalType,
+    MutOrImmutableExpression, Node, Type, TypeForParameter,
 };
 
-impl<'a> Resolver<'a> {
+impl<'a> Analyzer<'a> {
     pub fn resolve_argument(
         &mut self,
-        fn_parameter: &ResolvedTypeForParameter,
+        fn_parameter: &TypeForParameter,
         argument_expr: &swamp_script_ast::MutableOrImmutableExpression,
-    ) -> Result<ResolvedArgumentExpressionOrLocation, ResolveError> {
+    ) -> Result<ArgumentExpressionOrLocation, ResolveError> {
         let mut_or_immutable = if fn_parameter.is_mutable {
             let mut_location = self.resolve_to_location(
                 &argument_expr.expression,
                 Some(fn_parameter.resolved_type.clone().unwrap()),
                 LocationSide::Rhs,
             )?;
-            ResolvedArgumentExpressionOrLocation::Location(mut_location)
+            ArgumentExpressionOrLocation::Location(mut_location)
         } else {
             let resolved_expr = self.resolve_expression(
                 &argument_expr.expression,
                 fn_parameter.resolved_type.as_ref(),
             )?;
-            ResolvedArgumentExpressionOrLocation::Expression(resolved_expr)
+            ArgumentExpressionOrLocation::Expression(resolved_expr)
         };
 
         Ok(mut_or_immutable)
@@ -38,10 +37,10 @@ impl<'a> Resolver<'a> {
 
     pub fn resolve_and_verify_parameters(
         &mut self,
-        node: &ResolvedNode,
-        fn_parameters: &[ResolvedTypeForParameter],
+        node: &Node,
+        fn_parameters: &[TypeForParameter],
         arguments: &[swamp_script_ast::MutableOrImmutableExpression],
-    ) -> Result<Vec<ResolvedArgumentExpressionOrLocation>, ResolveError> {
+    ) -> Result<Vec<ArgumentExpressionOrLocation>, ResolveError> {
         if fn_parameters.len() != arguments.len() {
             return Err(self.create_err_resolved(
                 ResolveErrorKind::WrongNumberOfArguments(fn_parameters.len(), arguments.len()),
@@ -65,7 +64,7 @@ impl<'a> Resolver<'a> {
         type_name: &swamp_script_ast::QualifiedTypeIdentifier,
         function_name: &swamp_script_ast::Node,
         arguments: &[swamp_script_ast::MutableOrImmutableExpression],
-    ) -> Result<Option<ResolvedExpression>, ResolveError> {
+    ) -> Result<Option<Expression>, ResolveError> {
         let (type_name_text, function_name_text) = {
             (
                 self.get_text(&type_name.name.0).to_string(),
@@ -91,14 +90,14 @@ impl<'a> Resolver<'a> {
                 ));
             }
 
-            let rust_type_ref = Rc::new(ResolvedRustType {
+            let rust_type_ref = Rc::new(ExternalType {
                 type_name: type_name_text,
                 number: SPARSE_TYPE_ID, // TODO: FIX hardcoded number
             });
 
-            let rust_type_base = ResolvedType::RustType(rust_type_ref.clone());
+            let rust_type_base = Type::External(rust_type_ref.clone());
 
-            let generic_specific_type = ResolvedType::Generic(
+            let generic_specific_type = Type::Generic(
                 Box::from(rust_type_base.clone()),
                 resolved_generic_type_parameters.clone(),
             );
@@ -106,7 +105,7 @@ impl<'a> Resolver<'a> {
             let value_item_type = resolved_generic_type_parameters[0].clone();
 
             let expr = self.create_expr(
-                ResolvedExpressionKind::SparseNew(rust_type_ref, value_item_type),
+                ExpressionKind::SparseNew(rust_type_ref, value_item_type),
                 generic_specific_type,
                 &type_name.name.0,
             );
@@ -120,23 +119,23 @@ impl<'a> Resolver<'a> {
     pub fn resolve_mut_or_immutable_expression(
         &mut self,
         expr: &swamp_script_ast::MutableOrImmutableExpression,
-        expected_type: Option<&ResolvedType>,
+        expected_type: Option<&Type>,
         location_side: LocationSide,
-    ) -> Result<ResolvedMutOrImmutableExpression, ResolveError> {
+    ) -> Result<MutOrImmutableExpression, ResolveError> {
         let is_mutable = self.to_node_option(&expr.is_mutable);
         let expression_or_location = if is_mutable.is_some() {
-            ResolvedArgumentExpressionOrLocation::Location(self.resolve_to_location(
+            ArgumentExpressionOrLocation::Location(self.resolve_to_location(
                 &expr.expression,
                 expected_type.cloned(),
                 location_side,
             )?)
         } else {
-            ResolvedArgumentExpressionOrLocation::Expression(
+            ArgumentExpressionOrLocation::Expression(
                 self.resolve_expression(&expr.expression, expected_type)?,
             )
         };
 
-        Ok(ResolvedMutOrImmutableExpression {
+        Ok(MutOrImmutableExpression {
             expression_or_location,
             is_mutable,
         })

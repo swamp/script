@@ -3,24 +3,23 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use crate::err::{ResolveError, ResolveErrorKind};
-use crate::Resolver;
+use crate::Analyzer;
 use swamp_script_semantic::{
-    ResolvedArrayTypeRef, ResolvedExpression, ResolvedExpressionKind, ResolvedFunction,
-    ResolvedFunctionRef, ResolvedRange, ResolvedRangeMode, ResolvedType,
+    ArrayTypeRef, Expression, ExpressionKind, Function, FunctionRef, Range, RangeMode, Type,
 };
 
-impl<'a> Resolver<'a> {
-    fn convert_to_function_access(function: &ResolvedFunctionRef) -> ResolvedExpression {
+impl<'a> Analyzer<'a> {
+    fn convert_to_function_access(function: &FunctionRef) -> Expression {
         match &**function {
-            ResolvedFunction::Internal(x) => ResolvedExpression {
-                ty: ResolvedType::Function(x.signature.clone()),
+            Function::Internal(x) => Expression {
+                ty: Type::Function(x.signature.clone()),
                 node: function.node(),
-                kind: ResolvedExpressionKind::InternalFunctionAccess(x.clone()),
+                kind: ExpressionKind::InternalFunctionAccess(x.clone()),
             },
-            ResolvedFunction::External(y) => ResolvedExpression {
-                ty: ResolvedType::Function(y.signature.clone()),
+            Function::External(y) => Expression {
+                ty: Type::Function(y.signature.clone()),
                 node: function.node(),
-                kind: ResolvedExpressionKind::ExternalFunctionAccess(y.clone()),
+                kind: ExpressionKind::ExternalFunctionAccess(y.clone()),
             },
         }
     }
@@ -29,7 +28,7 @@ impl<'a> Resolver<'a> {
         &mut self,
         struct_reference: &swamp_script_ast::QualifiedTypeIdentifier,
         member_name_node: &swamp_script_ast::Node,
-    ) -> Result<ResolvedExpression, ResolveError> {
+    ) -> Result<Expression, ResolveError> {
         let struct_type = self.get_struct_type(struct_reference)?;
         let member_name = self.get_text(member_name_node);
         let binding = struct_type.borrow();
@@ -49,9 +48,9 @@ impl<'a> Resolver<'a> {
         &mut self,
         min_expr: &swamp_script_ast::Expression,
         max_expr: &swamp_script_ast::Expression,
-    ) -> Result<(ResolvedExpression, ResolvedExpression), ResolveError> {
-        let resolved_min = self.resolve_expression(min_expr, Some(&ResolvedType::Int))?;
-        let resolved_max = self.resolve_expression(max_expr, Some(&ResolvedType::Int))?;
+    ) -> Result<(Expression, Expression), ResolveError> {
+        let resolved_min = self.resolve_expression(min_expr, Some(&Type::Int))?;
+        let resolved_max = self.resolve_expression(max_expr, Some(&Type::Int))?;
 
         Ok((resolved_min, resolved_max))
     }
@@ -61,14 +60,14 @@ impl<'a> Resolver<'a> {
         min_expr: &swamp_script_ast::Expression,
         max_expr: &swamp_script_ast::Expression,
         mode: &swamp_script_ast::RangeMode,
-    ) -> Result<ResolvedRange, ResolveError> {
+    ) -> Result<Range, ResolveError> {
         let (min, max) = self.resolve_min_max_expr(min_expr, max_expr)?;
 
         let resolved_range_mode = match mode {
-            swamp_script_ast::RangeMode::Inclusive => ResolvedRangeMode::Inclusive,
-            swamp_script_ast::RangeMode::Exclusive => ResolvedRangeMode::Exclusive,
+            swamp_script_ast::RangeMode::Inclusive => RangeMode::Inclusive,
+            swamp_script_ast::RangeMode::Exclusive => RangeMode::Exclusive,
         };
-        Ok(ResolvedRange {
+        Ok(Range {
             min,
             max,
             mode: resolved_range_mode,
@@ -79,15 +78,15 @@ impl<'a> Resolver<'a> {
     ///
     pub fn resolve_array_range_access(
         &mut self,
-        base_expression: ResolvedExpression,
-        array_type_ref: &ResolvedArrayTypeRef,
-        range: ResolvedRange,
-    ) -> Result<ResolvedExpression, ResolveError> {
+        base_expression: Expression,
+        array_type_ref: &ArrayTypeRef,
+        range: Range,
+    ) -> Result<Expression, ResolveError> {
         let node = &base_expression.node.clone();
 
         Ok(self.create_expr_resolved(
-            ResolvedExpressionKind::ArrayRangeAccess(Box::from(base_expression), Box::from(range)),
-            ResolvedType::Array(array_type_ref.clone()),
+            ExpressionKind::ArrayRangeAccess(Box::from(base_expression), Box::from(range)),
+            Type::Array(array_type_ref.clone()),
             &node,
         ))
     }
@@ -96,13 +95,13 @@ impl<'a> Resolver<'a> {
     ///
     pub fn resolve_string_range_access(
         &mut self,
-        base_expr: ResolvedExpression,
-        range: ResolvedRange,
-    ) -> Result<ResolvedExpression, ResolveError> {
+        base_expr: Expression,
+        range: Range,
+    ) -> Result<Expression, ResolveError> {
         let ty = base_expr.ty.clone();
         let node = base_expr.node.clone();
         Ok(self.create_expr_resolved(
-            ResolvedExpressionKind::StringRangeAccess(Box::from(base_expr), Box::from(range)),
+            ExpressionKind::StringRangeAccess(Box::from(base_expr), Box::from(range)),
             ty,
             &node,
         ))

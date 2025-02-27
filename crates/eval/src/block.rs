@@ -9,7 +9,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use swamp_script_core::prelude::Value;
 use swamp_script_core::value::ValueRef;
-use swamp_script_semantic::{ResolvedNode, ResolvedVariableRef};
+use swamp_script_semantic::{Node, VariableRef};
 
 #[derive(Debug, Clone)]
 pub struct BlockScope {
@@ -99,7 +99,7 @@ impl BlockScopes {
     }
 
     #[inline]
-    pub fn init_var(&mut self, variable: &ResolvedVariableRef, value: &Value) {
+    pub fn init_var(&mut self, variable: &VariableRef, value: &Value) {
         self.initialize_var(
             variable.scope_index,
             variable.variable_index,
@@ -109,7 +109,7 @@ impl BlockScopes {
     }
 
     #[inline]
-    pub fn init_var_ref(&mut self, variable: &ResolvedVariableRef, value_ref: &ValueRef) {
+    pub fn init_var_ref(&mut self, variable: &VariableRef, value_ref: &ValueRef) {
         if variable.is_mutable() {
             // TODO: Check that we are not overwriting an existing used variables (debug)
             self.current_block_scopes[variable.scope_index].set(
@@ -127,7 +127,7 @@ impl BlockScopes {
 
     /// Initializes a variable for the first time
     #[inline]
-    pub fn initialize_var_mut(&mut self, variable: &ResolvedVariableRef, value_ref: ValueRef) {
+    pub fn initialize_var_mut(&mut self, variable: &VariableRef, value_ref: ValueRef) {
         // TODO: Check that we are not overwriting an existing used variables (debug)
         self.current_block_scopes[variable.scope_index]
             .set(variable.variable_index, VariableValue::Reference(value_ref));
@@ -156,14 +156,14 @@ impl BlockScopes {
         &variables[variable_index]
     }
 
-    pub fn get_var(&self, var: &ResolvedVariableRef) -> &VariableValue {
+    pub fn get_var(&self, var: &VariableRef) -> &VariableValue {
         self.lookup_var(var.scope_index, var.variable_index)
     }
 
     // ------------------
 
     #[inline]
-    pub fn lookup_var_value(&self, variable: &ResolvedVariableRef) -> Value {
+    pub fn lookup_var_value(&self, variable: &VariableRef) -> Value {
         let x = self.lookup_var(variable.scope_index, variable.variable_index);
         match x {
             VariableValue::Value(v) => v.clone(),
@@ -173,7 +173,7 @@ impl BlockScopes {
 
     /*
     #[inline]
-    pub fn lookup_variable(&self, variable: &ResolvedVariableRef) -> &VariableValue {
+    pub fn lookup_variable(&self, variable: &VariableRef) -> &VariableValue {
         self.lookup_var(variable.scope_index, variable.variable_index)
     }
 
@@ -184,7 +184,7 @@ impl BlockScopes {
     #[inline]
     pub fn lookup_variable_mut_ref(
         &self,
-        variable: &ResolvedVariableRef,
+        variable: &VariableRef,
     ) -> Result<&ValueRef, ExecuteError> {
         let complete_var = self.lookup_var(variable.scope_index, variable.variable_index);
         match complete_var {
@@ -233,7 +233,7 @@ impl BlockScopes {
     #[inline]
     pub fn lookup_mut_variable(
         &self,
-        variable: &ResolvedVariableRef,
+        variable: &VariableRef,
     ) -> Result<Rc<RefCell<Value>>, ExecuteError> {
         self.lookup_mut_var(variable.scope_index, variable.variable_index)
     }
@@ -241,7 +241,7 @@ impl BlockScopes {
 
     // Overwrite ============================
     #[inline]
-    pub fn set_local_var_value(&mut self, var: &ResolvedVariableRef, value: Value) {
+    pub fn set_local_var_value(&mut self, var: &VariableRef, value: Value) {
         self.set_local_var(var.variable_index, VariableValue::Value(value));
     }
     /*
@@ -254,7 +254,7 @@ impl BlockScopes {
     */
     pub(crate) fn initialize_var_mem(
         &mut self,
-        init_var: &ResolvedVariableRef,
+        init_var: &VariableRef,
         source_memory: VariableValue,
     ) -> Result<(), ExecuteError> {
         let is_mutable = init_var.is_mutable();
@@ -300,7 +300,7 @@ impl BlockScopes {
                 if check_is_mut {
                     return Err(ExecuteError {
                         kind: ExecuteErrorKind::VariableWasNotMutable,
-                        node: ResolvedNode::new_unknown(),
+                        node: Node::new_unknown(),
                     });
                 }
             }
@@ -326,7 +326,7 @@ impl BlockScopes {
             }
             _ => Err(ExecuteError {
                 kind: ExecuteErrorKind::VariableWasNotMutable,
-                node: ResolvedNode::new_unknown(),
+                node: Node::new_unknown(),
             }),
         }
     }
@@ -347,7 +347,7 @@ impl BlockScopes {
             }
             _ => Err(ExecuteError {
                 kind: ExecuteErrorKind::VariableWasNotMutable,
-                node: ResolvedNode::new_unknown(),
+                node: Node::new_unknown(),
             }),
         }
     }
@@ -355,7 +355,7 @@ impl BlockScopes {
     #[inline]
     pub fn overwrite_existing_var_mem(
         &mut self,
-        variable: &ResolvedVariableRef,
+        variable: &VariableRef,
         variable_value: VariableValue,
     ) -> Result<(), ExecuteError> {
         match variable_value {
