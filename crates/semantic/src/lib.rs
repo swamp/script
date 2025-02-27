@@ -87,19 +87,19 @@ impl ParameterNode {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct FunctionTypeSignature {
+pub struct Signature {
     pub parameters: Vec<TypeForParameter>,
     pub return_type: Box<Type>,
 }
 
-impl Display for FunctionTypeSignature {
+impl Display for Signature {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         write!(f, "({})->{}", comma(&self.parameters), self.return_type)
     }
 }
 
-impl FunctionTypeSignature {
-    pub fn same_type(&self, other: &FunctionTypeSignature) -> bool {
+impl Signature {
+    pub fn same_type(&self, other: &Signature) -> bool {
         if self.parameters.len() != other.parameters.len()
             || !self.return_type.same_type(&other.return_type)
         {
@@ -195,7 +195,7 @@ pub enum Type {
     Enum(EnumTypeRef),
     Generic(Box<Type>, Vec<Type>),
 
-    Function(FunctionTypeSignature),
+    Function(Signature),
     Iterable(Box<Type>),
 
     Optional(Box<Type>),
@@ -401,7 +401,7 @@ pub struct LocalIdentifier(pub Node);
 pub struct InternalFunctionDefinition {
     pub body: Expression,
     pub name: LocalIdentifier,
-    pub signature: FunctionTypeSignature,
+    pub signature: Signature,
 }
 
 impl Debug for InternalFunctionDefinition {
@@ -427,7 +427,7 @@ pub type ConstantId = u32;
 pub struct ExternalFunctionDefinition {
     pub name: Option<Node>,
     pub assigned_name: String,
-    pub signature: FunctionTypeSignature,
+    pub signature: Signature,
     pub id: ExternalFunctionId,
 }
 
@@ -576,21 +576,14 @@ pub struct MemberCall {
     pub arguments: Vec<ArgumentExpressionOrLocation>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct StructTypeField {
-    pub struct_type_ref: StructTypeRef,
-    pub field_name: Node,
+    pub identifier: Option<Node>,
+    pub field_type: Type,
     pub index: usize,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct AnonymousStructFieldType {
-    pub identifier: Option<Node>,
-
-    pub field_type: Type,
-}
-
-impl Display for AnonymousStructFieldType {
+impl Display for StructTypeField {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         write!(f, "{:?}:{}", self.identifier, self.field_type)
     }
@@ -668,7 +661,7 @@ impl Function {
     }
 
     #[must_use]
-    pub fn signature(&self) -> &FunctionTypeSignature {
+    pub fn signature(&self) -> &Signature {
         match self {
             Self::Internal(internal) => &internal.signature,
             Self::External(external) => &external.signature,
@@ -990,7 +983,7 @@ pub enum ExpressionKind {
 
     // For calls from returned function values
     FunctionCall(
-        FunctionTypeSignature,
+        Signature,
         Box<Expression>,
         Vec<ArgumentExpressionOrLocation>,
     ),
@@ -1211,7 +1204,7 @@ pub type EnumVariantStructTypeRef = Rc<EnumVariantStructType>;
 
 #[derive(Clone, Eq, PartialEq)]
 pub struct AnonymousStructType {
-    pub defined_fields: SeqMap<String, AnonymousStructFieldType>,
+    pub defined_fields: SeqMap<String, StructTypeField>,
 }
 
 impl Debug for AnonymousStructType {

@@ -7,8 +7,8 @@ use crate::err::{Error, ErrorKind};
 use crate::Analyzer;
 use std::rc::Rc;
 use swamp_script_semantic::{
-    ArrayType, ArrayTypeRef, FunctionTypeSignature, MapType, MapTypeRef, StructTypeRef, TupleType,
-    Type, TypeForParameter,
+    ArrayType, ArrayTypeRef, MapType, MapTypeRef, Signature, StructTypeRef, TupleType, Type,
+    TypeForParameter,
 };
 
 impl<'a> Analyzer<'a> {
@@ -38,29 +38,6 @@ impl<'a> Analyzer<'a> {
 
     /// # Errors
     ///
-    pub fn find_struct_type(
-        &self,
-        type_name: &swamp_script_ast::QualifiedTypeIdentifier,
-    ) -> Result<StructTypeRef, Error> {
-        let (path, name_string) = self.get_path(type_name);
-
-        self.shared
-            .lookup
-            .get_struct(&path, &name_string)
-            .map_or_else(
-                || {
-                    let resolved_node = self.to_node(&type_name.name.0);
-                    Err(self.create_err_resolved(
-                        ErrorKind::UnknownStructTypeReference,
-                        &resolved_node,
-                    ))
-                },
-                Ok,
-            )
-    }
-
-    /// # Errors
-    ///
     pub fn analyze_array_type(
         &mut self,
         ast_type: &swamp_script_ast::Type,
@@ -82,10 +59,7 @@ impl<'a> Analyzer<'a> {
 
     /// # Errors
     ///
-    pub fn analyze_type(
-        &mut self,
-        ast_type: &swamp_script_ast::Type,
-    ) -> Result<Type, Error> {
+    pub fn analyze_type(&mut self, ast_type: &swamp_script_ast::Type) -> Result<Type, Error> {
         let resolved = match ast_type {
             swamp_script_ast::Type::Int(_) => Type::Int,
             swamp_script_ast::Type::Float(_) => Type::Float,
@@ -121,7 +95,7 @@ impl<'a> Analyzer<'a> {
                 let parameter_types = self.analyze_param_types(parameters)?;
 
                 let resolved_return_type = self.analyze_type(return_type)?;
-                Type::Function(FunctionTypeSignature {
+                Type::Function(Signature {
                     parameters: parameter_types,
                     return_type: Box::new(resolved_return_type),
                 })

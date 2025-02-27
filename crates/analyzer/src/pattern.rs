@@ -27,12 +27,7 @@ impl<'a> Analyzer<'a> {
             .borrow()
             .get_variant(&variant_name)
             .map_or_else(
-                || {
-                    Err(self.create_err(
-                        ErrorKind::UnknownEnumVariantTypeInPattern,
-                        ast_name,
-                    ))
-                },
+                || Err(self.create_err(ErrorKind::UnknownEnumVariantTypeInPattern, ast_name)),
                 |found_variant| Ok(found_variant.clone()),
             )
     }
@@ -208,10 +203,8 @@ impl<'a> Analyzer<'a> {
                         }
                         EnumVariantType::Nothing(_) => {
                             if !elements.is_empty() {
-                                return Err(self.create_err(
-                                    ErrorKind::EnumVariantHasNoFields,
-                                    &variant_name,
-                                ));
+                                return Err(self
+                                    .create_err(ErrorKind::EnumVariantHasNoFields, &variant_name));
                             }
                         }
                     }

@@ -8,10 +8,7 @@ use crate::Analyzer;
 use swamp_script_semantic::{Constant, ConstantRef, Expression, ExpressionKind};
 
 impl<'a> Analyzer<'a> {
-    fn analyze_constant(
-        &mut self,
-        constant: &swamp_script_ast::ConstantInfo,
-    ) -> Result<(), Error> {
+    fn analyze_constant(&mut self, constant: &swamp_script_ast::ConstantInfo) -> Result<(), Error> {
         let resolved_expr = self.analyze_expression(&constant.expression, None)?;
         let resolved_type = resolved_expr.ty.clone();
         let name_node = self.to_node(&constant.constant_identifier.0);
@@ -28,16 +25,12 @@ impl<'a> Analyzer<'a> {
             .shared
             .definition_table
             .add_constant(constant)
-            .map_err(|s| {
-                self.create_err_resolved(ErrorKind::SemanticError(s), &name_node)
-            })?;
+            .map_err(|s| self.create_err_resolved(ErrorKind::SemanticError(s), &name_node))?;
 
         self.shared
             .lookup_table
             .add_constant_link(const_ref)
-            .map_err(|s| {
-                self.create_err_resolved(ErrorKind::SemanticError(s), &name_node)
-            })?;
+            .map_err(|s| self.create_err_resolved(ErrorKind::SemanticError(s), &name_node))?;
 
         Ok(())
     }

@@ -101,10 +101,9 @@ impl<'a> Analyzer<'a> {
                     )
                 }
                 _ => {
-                    return Err(self.create_err(
-                        ErrorKind::UnknownMemberFunction,
-                        ast_member_function_name,
-                    ))
+                    return Err(
+                        self.create_err(ErrorKind::UnknownMemberFunction, ast_member_function_name)
+                    )
                 }
             },
             _ => {
@@ -193,10 +192,9 @@ impl<'a> Analyzer<'a> {
                 )
             }
             _ => {
-                return Err(self.create_err(
-                    ErrorKind::UnknownMemberFunction,
-                    ast_member_function_name,
-                ))
+                return Err(
+                    self.create_err(ErrorKind::UnknownMemberFunction, ast_member_function_name)
+                )
             }
         };
         Ok(expr)
@@ -246,10 +244,9 @@ impl<'a> Analyzer<'a> {
                 )
             }
             _ => {
-                return Err(self.create_err(
-                    ErrorKind::UnknownMemberFunction,
-                    &ast_member_function_name,
-                ))
+                return Err(
+                    self.create_err(ErrorKind::UnknownMemberFunction, &ast_member_function_name)
+                )
             }
         };
 
@@ -425,10 +422,9 @@ impl<'a> Analyzer<'a> {
                 PostfixKind::FloatClamp(Box::new(min), Box::new(max))
             }
             _ => {
-                return Err(self.create_err(
-                    ErrorKind::UnknownMemberFunction,
-                    &ast_member_function_name,
-                ))
+                return Err(
+                    self.create_err(ErrorKind::UnknownMemberFunction, &ast_member_function_name)
+                )
             }
         };
 
@@ -457,10 +453,7 @@ impl<'a> Analyzer<'a> {
                     ast_member_function_name,
                 ))
             }
-            _ => Err(self.create_err(
-                ErrorKind::UnknownMemberFunction,
-                ast_member_function_name,
-            )),
+            _ => Err(self.create_err(ErrorKind::UnknownMemberFunction, ast_member_function_name)),
         }
     }
 
@@ -514,10 +507,9 @@ impl<'a> Analyzer<'a> {
                 (PostfixKind::IntToFloat, Type::Float)
             }
             _ => {
-                return Err(self.create_err(
-                    ErrorKind::UnknownMemberFunction,
-                    &ast_member_function_name,
-                ))
+                return Err(
+                    self.create_err(ErrorKind::UnknownMemberFunction, &ast_member_function_name)
+                )
             }
         };
 
@@ -542,10 +534,10 @@ impl<'a> Analyzer<'a> {
                     }
                     let sparse_id_type = self
                         .shared
-                        .lookup
-                        .get_rust_type(&["std".to_string()], "SparseId")
+                        .lookup_table
+                        .get_external_type("SparseId")
                         .expect("should have SparseId");
-                    let key_type = Type::External(sparse_id_type);
+                    let key_type = Type::External(sparse_id_type.clone());
                     let value_type = &parameters[0];
                     let function_name_str = self.get_text(ast_member_function_name);
 
@@ -554,10 +546,7 @@ impl<'a> Analyzer<'a> {
                         "add" => {
                             if ast_arguments.len() != 1 {
                                 return Err(self.create_err(
-                                    ErrorKind::WrongNumberOfTypeArguments(
-                                        parameters.len(),
-                                        1,
-                                    ),
+                                    ErrorKind::WrongNumberOfTypeArguments(parameters.len(), 1),
                                     ast_member_function_name,
                                 ));
                             }
@@ -567,10 +556,7 @@ impl<'a> Analyzer<'a> {
                         "remove" => {
                             if ast_arguments.len() != 1 {
                                 return Err(self.create_err(
-                                    ErrorKind::WrongNumberOfTypeArguments(
-                                        parameters.len(),
-                                        1,
-                                    ),
+                                    ErrorKind::WrongNumberOfTypeArguments(parameters.len(), 1),
                                     ast_member_function_name,
                                 ));
                             }

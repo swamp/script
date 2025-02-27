@@ -7,7 +7,13 @@ use crate::err::{Error, ErrorKind};
 use crate::Analyzer;
 use seq_map::SeqMap;
 use std::rc::Rc;
-use swamp_script_semantic::{AnonymousStructFieldType, AnonymousStructType, EnumType, EnumTypeRef, EnumVariantCommon, EnumVariantSimpleType, EnumVariantSimpleTypeRef, EnumVariantStructType, EnumVariantTupleType, EnumVariantType, ExternalFunctionDefinition, Function, FunctionTypeSignature, InternalFunctionDefinition, LocalIdentifier, LocalTypeIdentifier, ParameterNode, StructType, StructTypeField, StructTypeRef, Type, TypeForParameter, UseItem};
+use swamp_script_semantic::{
+    AnonymousStructType, EnumType, EnumTypeRef, EnumVariantCommon, EnumVariantSimpleType,
+    EnumVariantSimpleTypeRef, EnumVariantStructType, EnumVariantTupleType, EnumVariantType,
+    ExternalFunctionDefinition, Function, InternalFunctionDefinition, LocalIdentifier,
+    LocalTypeIdentifier, ParameterNode, Signature, StructType, StructTypeField, StructTypeRef,
+    Type, TypeForParameter, UseItem,
+};
 
 impl<'a> Analyzer<'a> {
     fn analyze_use_definition(
@@ -163,7 +169,7 @@ impl<'a> Analyzer<'a> {
                 ) => {
                     let mut fields = SeqMap::new();
 
-                    for field_with_type in &ast_struct_fields.fields {
+                    for (index, field_with_type) in ast_struct_fields.fields.iter().enumerate() {
                         // TODO: Check the index
                         let resolved_type = self.analyze_type(&field_with_type.field_type)?;
                         let field_name_str =
@@ -172,6 +178,7 @@ impl<'a> Analyzer<'a> {
                         let resolved_field = StructTypeField {
                             identifier: Some(self.to_node(&field_with_type.field_name.0)),
                             field_type: resolved_type,
+                            index,
                         };
 
                         fields.insert(field_name_str, resolved_field).map_err(|_| {
@@ -207,21 +214,21 @@ impl<'a> Analyzer<'a> {
         Ok(parent_ref)
     }
 
-    /// # Errors
-    ///
-    pub fn analyze_struct_type_definition(
+    pub fn analyze_struct_type(
         &mut self,
+        assigned_name: &str,
         ast_struct: &swamp_script_ast::StructType,
-    ) -> Result<(), Error> {
+    ) -> Result<StructType, Error> {
         let mut resolved_fields = SeqMap::new();
 
-        for field_name_and_type in &ast_struct.fields {
+        for (index, field_name_and_type) in ast_struct.fields.iter().enumerate() {
             let resolved_type = self.analyze_type(&field_name_and_type.field_type)?;
             let name_string = self.get_text(&field_name_and_type.field_name.0).to_string();
 
-            let field_type = AnonymousStructFieldType {
+            let field_type = StructTypeField {
                 identifier: Some(self.to_node(&field_name_and_type.field_name.0)),
                 field_type: resolved_type,
+                index,
             };
 
             resolved_fields
@@ -238,24 +245,50 @@ impl<'a> Analyzer<'a> {
             defined_fields: resolved_fields,
         };
 
-        let struct_name_str = self.get_text(&ast_struct.identifier.0).to_string();
-
+        //let unique_id = self.shared.state.allocate_number();
         let resolved_struct = StructType::new(
             self.to_node(&ast_struct.identifier.0),
-            &struct_name_str,
+            assigned_name,
+            //unique_id,
             resolved_anon_struct,
         );
 
-        let resolved_struct_ref = self.shared.lookup.add_struct(resolved_struct)?;
+        Ok(resolved_struct)
+    }
+
+    /// # Errors
+    ///
+    pub fn analyze_struct_type_definition(
+        &mut self,
+        ast_struct: &swamp_script_ast::StructType,
+    ) -> Result<(), Error> {
+        let struct_name_str = self.get_text(&ast_struct.identifier.0).to_string();
+
+        let analyzed_struct = self.analyze_struct_type(&struct_name_str, ast_struct)?;
+
+        let struct_ref = self
+            .shared
+            .definition_table
+            .add_struct(analyzed_struct)
+            .map_err(|err| {
+                self.create_err(ErrorKind::SemanticError(err), &ast_struct.identifier.0)
+            })?;
+
+        self.shared
+            .lookup_table
+            .add_struct_link(struct_ref)
+            .map_err(|err| {
+                self.create_err(ErrorKind::SemanticError(err), &ast_struct.identifier.0)
+            })?;
 
         Ok(())
     }
 
-    fn analyze_function_definition(
+    pub(crate) fn analyze_function_definition(
         &mut self,
         function: &swamp_script_ast::Function,
-    ) -> Result<(), Error> {
-        match function {
+    ) -> Result<Function, Error> {
+        let func = match function {
             swamp_script_ast::Function::Internal(function_data) => {
                 let parameters = self.analyze_parameters(&function_data.declaration.params)?;
                 let return_type = if let Some(found) = &function_data.declaration.return_type {
@@ -271,31 +304,46 @@ impl<'a> Analyzer<'a> {
                     self.create_local_variable_resolved(
                         &param.node.as_ref().unwrap().name,
                         &param.node.as_ref().unwrap().is_mutable,
-                        &<std::option::Option<swamp_script_semantic::Type> as Clone>::clone(
-                            &param.resolved_type,
-                        )
-                        .unwrap()
-                        .clone(),
+                        &param.resolved_type.clone().unwrap(),
                     )?;
                 }
                 let function_name = self.get_text(&function_data.declaration.name).to_string();
                 let statements =
-                    self.analyze_statements_in_function(&function_data.body, &return_type)?;
+                    self.analyze_function_body_expression(&function_data.body, &return_type)?;
                 self.scope.return_type = Type::Unit;
 
                 let internal = InternalFunctionDefinition {
-                    signature: FunctionTypeSignature {
+                    signature: Signature {
                         parameters,
                         return_type: Box::new(return_type),
                     },
                     body: statements,
                     name: LocalIdentifier(self.to_node(&function_data.declaration.name)),
+                    //assigned_name: self.get_text(&function_data.declaration.name).to_string(),
                 };
 
                 let function_ref = self
                     .shared
-                    .lookup
-                    .add_internal_function_ref(&function_name, internal)?;
+                    .definition_table
+                    .add_internal_function(&function_name, internal)
+                    .map_err(|err| {
+                        self.create_err(
+                            ErrorKind::SemanticError(err),
+                            &function_data.declaration.name,
+                        )
+                    })?;
+
+                self.shared
+                    .lookup_table
+                    .add_internal_function_link(&function_name, function_ref.clone())
+                    .map_err(|err| {
+                        self.create_err(
+                            ErrorKind::SemanticError(err),
+                            &function_data.declaration.name,
+                        )
+                    })?;
+
+                Function::Internal(function_ref)
             }
             swamp_script_ast::Function::External(ast_signature) => {
                 let parameters = self.analyze_parameters(&ast_signature.params)?;
@@ -310,17 +358,34 @@ impl<'a> Analyzer<'a> {
 
                 let external = ExternalFunctionDefinition {
                     assigned_name: self.get_text(&ast_signature.name).to_string(),
-                    signature: FunctionTypeSignature {
+                    signature: Signature {
                         parameters,
                         return_type: Box::new(return_type),
                     },
                     name: Some(self.to_node(&ast_signature.name)),
                     id: external_function_id,
                 };
-            }
-        }
 
-        Ok(())
+                let function_ref = self
+                    .shared
+                    .definition_table
+                    .add_external_function_declaration(external)
+                    .map_err(|err| {
+                        self.create_err(ErrorKind::SemanticError(err), &ast_signature.name)
+                    })?;
+
+                self.shared
+                    .lookup_table
+                    .add_external_function_declaration_link(function_ref.clone())
+                    .map_err(|err| {
+                        self.create_err(ErrorKind::SemanticError(err), &ast_signature.name)
+                    })?;
+
+                Function::External(function_ref)
+            }
+        };
+
+        Ok(func)
     }
 
     /// # Errors
@@ -334,7 +399,10 @@ impl<'a> Analyzer<'a> {
                 self.analyze_struct_type_definition(ast_struct)?
             }
             swamp_script_ast::Definition::EnumDef(identifier, variants) => {
-                self.analyze_enum_type_definition(identifier, variants)?;
+                self.analyze_enum_type_definition(
+                    &swamp_script_ast::LocalTypeIdentifier(identifier.clone()),
+                    variants,
+                )?;
             }
             swamp_script_ast::Definition::FunctionDef(function) => {
                 let resolved_return_type = self.analyze_return_type(function)?;
@@ -365,7 +433,7 @@ impl<'a> Analyzer<'a> {
             generic_params: vec![],
         };
 
-        let found_struct = self.find_struct_type(&fake_qualified_type_name)?;
+        let found_struct = self.get_struct_type(&fake_qualified_type_name)?;
 
         for function in functions {
             let new_return_type = self.analyze_return_type(function)?;
@@ -387,9 +455,7 @@ impl<'a> Analyzer<'a> {
                 .borrow_mut()
                 .functions
                 .insert(function_name_str, resolved_function_ref)
-                .map_err(|_| {
-                    self.create_err(ErrorKind::DuplicateFieldName, attached_to_type)
-                })?;
+                .map_err(|_| self.create_err(ErrorKind::DuplicateFieldName, attached_to_type))?;
             self.stop_function();
         }
 
@@ -447,7 +513,7 @@ impl<'a> Analyzer<'a> {
                     self.analyze_statements_in_function(&function_data.body, &return_type)?;
 
                 let internal = InternalFunctionDefinition {
-                    signature: FunctionTypeSignature {
+                    signature: Signature {
                         parameters,
                         return_type: Box::new(return_type),
                     },
@@ -496,7 +562,7 @@ impl<'a> Analyzer<'a> {
                 let external = ExternalFunctionDefinition {
                     assigned_name: self.get_text(&signature.name).to_string(),
                     name: Some(self.to_node(&signature.name)),
-                    signature: FunctionTypeSignature {
+                    signature: Signature {
                         parameters,
                         return_type: Box::new(return_type),
                     },

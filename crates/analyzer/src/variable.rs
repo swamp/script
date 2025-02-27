@@ -60,18 +60,16 @@ impl<'a> Analyzer<'a> {
                 .resolved_type
                 .assignable_type(variable_type_ref)
             {
-                return Err(self.create_err(
-                    ErrorKind::OverwriteVariableWithAnotherType,
-                    &variable.name,
-                ));
+                return Err(
+                    self.create_err(ErrorKind::OverwriteVariableWithAnotherType, &variable.name)
+                );
             }
 
             // For reassignment, check if the EXISTING variable is mutable
             if !existing_variable.is_mutable() {
-                return Err(self.create_err(
-                    ErrorKind::CanOnlyOverwriteVariableWithMut,
-                    &variable.name,
-                ));
+                return Err(
+                    self.create_err(ErrorKind::CanOnlyOverwriteVariableWithMut, &variable.name)
+                );
             }
 
             return Ok((existing_variable, true));
@@ -141,8 +139,9 @@ impl<'a> Analyzer<'a> {
         variable_type_ref: &Type,
     ) -> Result<VariableRef, Error> {
         if let Some(_existing_variable) = self.try_find_local_variable(variable) {
-            return Err(self
-                .create_err_resolved(ErrorKind::OverwriteVariableNotAllowedHere, variable));
+            return Err(
+                self.create_err_resolved(ErrorKind::OverwriteVariableNotAllowedHere, variable)
+            );
         }
         let variable_str = self.get_text_resolved(variable).to_string();
 

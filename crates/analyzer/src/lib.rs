@@ -24,7 +24,7 @@ use std::num::{ParseFloatError, ParseIntError};
 use std::rc::Rc;
 
 use swamp_script_semantic::prelude::*;
-use swamp_script_semantic::symtbl::{Symbol, SymbolTable};
+use swamp_script_semantic::symtbl::{FuncDef, Symbol, SymbolTable};
 use swamp_script_semantic::{
     ArgumentExpressionOrLocation, LocationAccess, LocationAccessKind, MutOrImmutableExpression,
     NormalPattern, Postfix, PostfixKind, RangeMode, SingleLocationExpression,
@@ -169,7 +169,7 @@ impl FunctionScopeState {
 }
 
 pub struct Analyzer<'a> {
-    shared: SharedState<'a>,
+    pub shared: SharedState<'a>,
     scope: FunctionScopeState,
     global: FunctionScopeState,
 }
@@ -389,6 +389,17 @@ impl<'a> Analyzer<'a> {
         Ok((resolved, mutability))
     }
 
+    fn analyze_function_body_expression(
+        &mut self,
+        expression: &swamp_script_ast::Expression,
+        return_type: &Type,
+    ) -> Result<Expression, Error> {
+        let resolved_statement = self.analyze_expression(expression, Some(return_type))?;
+        //let wrapped_expr = Self::check_and_wrap_return_value(resolved_statement, return_type)?;
+
+        Ok(resolved_statement)
+    }
+
     /// # Errors
     ///
     #[allow(clippy::too_many_lines)]
@@ -480,7 +491,7 @@ impl<'a> Analyzer<'a> {
             }
 
             swamp_script_ast::ExpressionKind::FunctionReference(qualified_identifier) => {
-                self.analyze_function_access(qualified_identifier)?
+                self.analyze_static_function_access(qualified_identifier)?
             }
 
             swamp_script_ast::ExpressionKind::Assignment(location, source) => {
@@ -715,11 +726,7 @@ impl<'a> Analyzer<'a> {
         let result_type = match symbol {
             Symbol::Type(base_type) => base_type,
             //Symbol::Alias(alias_type) => alias_type.referenced_type.clone(),
-            _ => {
-                return Err(
-                    self.create_err(ErrorKind::UnknownSymbol, &type_name_to_find.name.0)
-                )
-            }
+            _ => return Err(self.create_err(ErrorKind::UnknownSymbol, &type_name_to_find.name.0)),
         };
 
         Ok(result_type)
@@ -777,10 +784,9 @@ impl<'a> Analyzer<'a> {
 
             Type::Struct(struct_ref) => self.create_default_static_call(node, struct_ref)?,
             _ => {
-                return Err(self.create_err(
-                    ErrorKind::NoDefaultImplemented(field_type.clone()),
-                    node,
-                ))
+                return Err(
+                    self.create_err(ErrorKind::NoDefaultImplemented(field_type.clone()), node)
+                )
             }
         };
 
@@ -942,10 +948,9 @@ impl<'a> Analyzer<'a> {
                         tv.resolved_type = return_type.clone();
                         tv.is_mutable = false;
                     } else {
-                        return Err(self.create_err(
-                            ErrorKind::NotValidLocationStartingPoint,
-                            member_name,
-                        ));
+                        return Err(
+                            self.create_err(ErrorKind::NotValidLocationStartingPoint, member_name)
+                        );
                     }
                 }
                 swamp_script_ast::Postfix::FunctionCall(node, arguments) => {
@@ -1058,13 +1063,13 @@ impl<'a> Analyzer<'a> {
                                 if found_rust_type.number == SPARSE_TYPE_ID {
                                     let sparse_id = self
                                         .shared
-                                        .lookup
-                                        .get_rust_type(&["std".to_string()], "SparseId")
+                                        .lookup_table
+                                        .get_external_type("SparseId")
                                         .expect("SparseId is missing");
                                     let contained_type = &generic_type_parameters[0];
                                     let resolved_key = self.analyze_expression(
                                         index_expr,
-                                        Some(&Type::External(sparse_id)),
+                                        Some(&Type::External(sparse_id.clone())),
                                     )?;
 
                                     let return_type =
@@ -1103,8 +1108,9 @@ impl<'a> Analyzer<'a> {
                     } else if uncertain {
                         &tv.resolved_type
                     } else {
-                        return Err(self
-                            .create_err(ErrorKind::CanNotNoneCoalesce, &default_expr.node));
+                        return Err(
+                            self.create_err(ErrorKind::CanNotNoneCoalesce, &default_expr.node)
+                        );
                     };
 
                     let resolved_default_expr =
@@ -1130,9 +1136,7 @@ impl<'a> Analyzer<'a> {
                         );
                         tv.resolved_type = *unwrapped_type.clone();
                     } else {
-                        return Err(
-                            self.create_err(ErrorKind::ExpectedOptional, option_node)
-                        );
+                        return Err(self.create_err(ErrorKind::ExpectedOptional, option_node));
                     }
                 }
             }
@@ -1167,10 +1171,7 @@ impl<'a> Analyzer<'a> {
                 &expression.node,
             ),
             _ => {
-                return Err(self.create_err(
-                    ErrorKind::ExpectedBooleanExpression,
-                    &expression.node,
-                ))
+                return Err(self.create_err(ErrorKind::ExpectedBooleanExpression, &expression.node))
             }
         };
 
@@ -1211,17 +1212,13 @@ impl<'a> Analyzer<'a> {
                 // TODO: HACK: Remove hardcoded number
                 let rust_type_ref_for_id = self
                     .shared
-                    .lookup
-                    .get_rust_type(&["std".to_string()], "SparseId")
+                    .lookup_table
+                    .get_external_type("SparseId")
                     .expect("SparseId was missing");
-                let rust_id_type = Type::External(rust_type_ref_for_id);
+                let rust_id_type = Type::External(rust_type_ref_for_id.clone());
                 (Some(rust_id_type), params[0].clone())
             }
-            _ => {
-                return Err(
-                    self.create_err(ErrorKind::NotAnIterator, &expression.expression.node)
-                )
-            }
+            _ => return Err(self.create_err(ErrorKind::NotAnIterator, &expression.expression.node)),
         };
 
         Ok(Iterable {
@@ -1293,46 +1290,30 @@ impl<'a> Analyzer<'a> {
         Ok(resolved_parts)
     }
 
-    fn analyze_function_access(
+    pub(crate) fn analyze_static_function_access(
         &self,
-        function_ref_node: &swamp_script_ast::QualifiedIdentifier,
+        qualified_func_name: &swamp_script_ast::QualifiedIdentifier,
     ) -> Result<Expression, Error> {
-        let path = self.get_module_path(&function_ref_node.module_path);
-        let name = self.get_text(&function_ref_node.name).to_string();
-        self.shared
-            .lookup
-            .get_internal_function(&path, &name)
-            .map_or_else(
-                || {
-                    self.shared
-                        .lookup
-                        .get_external_function_declaration(&path, &name)
-                        .map_or_else(
-                            || {
-                                Err(self.create_err(
-                                    ErrorKind::UnknownFunction,
-                                    &function_ref_node.name,
-                                ))
-                            },
-                            |external_function_ref| {
-                                Ok(self.create_expr(
-                                    ExpressionKind::ExternalFunctionAccess(
-                                        external_function_ref.clone(),
-                                    ),
-                                    *external_function_ref.signature.return_type.clone(),
-                                    &function_ref_node.name,
-                                ))
-                            },
-                        )
-                },
-                |function_ref| {
-                    Ok(self.create_expr(
-                        ExpressionKind::InternalFunctionAccess(function_ref.clone()),
-                        *function_ref.signature.return_type.clone(),
-                        &function_ref_node.name,
-                    ))
-                },
-            )
+        let path = self.get_module_path(qualified_func_name.module_path.as_ref());
+        let function_name = self.get_text(&qualified_func_name.name);
+
+        if let Some(found_table) = self.shared.get_symbol_table(&path) {
+            if let Some(found_func) = found_table.get_function(function_name) {
+                let (kind, return_type) = match found_func {
+                    FuncDef::Internal(internal_fn) => (
+                        ExpressionKind::InternalFunctionAccess(internal_fn.clone()),
+                        &internal_fn.signature.return_type,
+                    ),
+                    FuncDef::External(external_fn) => (
+                        ExpressionKind::ExternalFunctionAccess(external_fn.clone()),
+                        &external_fn.signature.return_type,
+                    ),
+                };
+
+                return Ok(self.create_expr(kind, *return_type.clone(), &qualified_func_name.name));
+            }
+        }
+        Err(self.create_err(ErrorKind::UnknownFunction, &qualified_func_name.name))
     }
 
     // The ast assumes it is something similar to a variable, but it can be a function reference as well.
@@ -1341,54 +1322,39 @@ impl<'a> Analyzer<'a> {
         var_node: &swamp_script_ast::Node,
     ) -> Result<Expression, Error> {
         let text = self.get_text(var_node);
-        self.shared
-            .lookup
-            .get_internal_function(&[], text)
-            .map_or_else(
-                || {
-                    self.shared
-                        .lookup
-                        .get_external_function_declaration(&[], text)
-                        .map_or_else(
-                            || {
-                                self.try_find_variable(var_node).map_or_else(
-                                    || {
-                                        Err(self.create_err(
-                                            ErrorKind::UnknownVariable,
-                                            var_node,
-                                        ))
-                                    },
-                                    |variable_ref| {
-                                        let deref = self.create_expr(
-                                            ExpressionKind::VariableAccess(variable_ref.clone()),
-                                            variable_ref.resolved_type.clone(),
-                                            var_node,
-                                        );
-                                        Ok(deref)
-                                    },
-                                )
-                            },
-                            |found_external_function| {
-                                Ok(self.create_expr(
-                                    ExpressionKind::ExternalFunctionAccess(
-                                        found_external_function.clone(),
-                                    ),
-                                    Type::Function(found_external_function.signature.clone()),
-                                    &var_node,
-                                ))
-                            },
-                        )
-                },
-                |found_internal_function| {
-                    Ok(self.create_expr(
+        if let Some(found_symbol) = self.shared.lookup_table.get_symbol(text) {
+            let expr = match found_symbol {
+                Symbol::FunctionDefinition(func) => match func {
+                    FuncDef::External(found_external_function) => self.create_expr(
+                        ExpressionKind::ExternalFunctionAccess(found_external_function.clone()),
+                        Type::Function(found_external_function.signature.clone()),
+                        var_node,
+                    ),
+                    FuncDef::Internal(found_internal_function) => self.create_expr(
                         ExpressionKind::InternalFunctionAccess(found_internal_function.clone()),
                         Type::Function(found_internal_function.signature.clone()),
-                        &var_node,
-                    ))
+                        var_node,
+                    ),
                 },
-            )
-    }
 
+                _ => {
+                    return Err(self.create_err(ErrorKind::UnknownVariable, var_node));
+                }
+            };
+            return Ok(expr);
+        }
+
+        self.try_find_variable(var_node).map_or_else(
+            || Err(self.create_err(ErrorKind::UnknownVariable, var_node)),
+            |variable_ref| {
+                Ok(self.create_expr(
+                    ExpressionKind::VariableAccess(variable_ref.clone()),
+                    variable_ref.resolved_type.clone(),
+                    var_node,
+                ))
+            },
+        )
+    }
     fn analyze_usize_index(
         &mut self,
         usize_expression: &swamp_script_ast::Expression,
@@ -1467,34 +1433,7 @@ impl<'a> Analyzer<'a> {
     ) -> Result<EnumVariantTypeRef, Error> {
         let variant_name_string = self.get_text(&variant_name.0).to_string();
         self.get_enum_variant_type(qualified_type_identifier, &variant_name_string)
-            .map_or_else(
-                || {
-                    Err(self.create_err(
-                        ErrorKind::UnknownEnumVariantType,
-                        &qualified_type_identifier.name.0,
-                    ))
-                },
-                Ok,
-            )
     }
-
-    fn analyze_enum_ref(
-        &self,
-        qualified_type_identifier: &swamp_script_ast::QualifiedTypeIdentifier,
-    ) -> Result<EnumTypeRef, Error> {
-        //let variant_name_string = self.get_text(&qualified_type_identifier.name.0).to_string();
-        self.get_enum_type(qualified_type_identifier).map_or_else(
-            || {
-                Err(self.create_err(
-                    ErrorKind::UnknownEnumVariantType,
-                    &qualified_type_identifier.name.0,
-                ))
-            },
-            Ok,
-        )
-    }
-
-    #[allow(unused)]
 
     fn analyze_enum_variant_literal(
         &mut self,
@@ -1636,7 +1575,7 @@ impl<'a> Analyzer<'a> {
         }
     }
 
-    fn get_module_path(&self, module_path: &Option<swamp_script_ast::ModulePath>) -> Vec<String> {
+    fn get_module_path(&self, module_path: Option<&swamp_script_ast::ModulePath>) -> Vec<String> {
         module_path.as_ref().map_or_else(Vec::new, |found| {
             let mut strings = Vec::new();
             for path_item in &found.0 {
@@ -1650,25 +1589,32 @@ impl<'a> Analyzer<'a> {
         &self,
         qualified_type_identifier: &swamp_script_ast::QualifiedTypeIdentifier,
         variant_name: &str,
-    ) -> Option<EnumVariantTypeRef> {
-        let path = self.get_module_path(&qualified_type_identifier.module_path);
-
-        let enum_name = self.get_text(&qualified_type_identifier.name.0).to_string();
-
-        self.shared
-            .lookup
-            .get_enum_variant_type(&path, &enum_name, variant_name)
+    ) -> Result<EnumVariantTypeRef, Error> {
+        let (symbol_table, enum_name) =
+            self.get_symbol_table_and_name(qualified_type_identifier)?;
+        symbol_table
+            .get_enum_variant_type(&enum_name, variant_name)
+            .ok_or_else(|| {
+                self.create_err(
+                    ErrorKind::UnknownEnumVariantType,
+                    &qualified_type_identifier.name.0,
+                )
+            })
     }
 
-    fn get_enum_type(
+    pub(crate) fn get_symbol_table_and_name(
         &self,
-        qualified_type_identifier: &swamp_script_ast::QualifiedTypeIdentifier,
-    ) -> Option<EnumTypeRef> {
-        let path = self.get_module_path(&qualified_type_identifier.module_path);
+        type_identifier: &swamp_script_ast::QualifiedTypeIdentifier,
+    ) -> Result<(&SymbolTable, String), Error> {
+        let path = self.get_module_path(type_identifier.module_path.as_ref());
+        let name = self.get_text(&type_identifier.name.0).to_string();
+        info!(?path, ?name, "get symbol table");
 
-        let enum_name = self.get_text(&qualified_type_identifier.name.0).to_string();
-
-        self.shared.lookup.get_enum(&path, &enum_name)
+        let maybe_symbol_table = self.shared.get_symbol_table(&path);
+        maybe_symbol_table.map_or_else(
+            || Err(self.create_err(ErrorKind::UnknownModule, &type_identifier.name.0)),
+            |symbol_table| Ok((symbol_table, name)),
+        )
     }
 
     const fn analyze_compound_operator(
@@ -1872,19 +1818,16 @@ impl<'a> Analyzer<'a> {
             let resolved_condition = match &guard.clause {
                 swamp_script_ast::GuardClause::Wildcard(x) => {
                     if found_wildcard.is_some() {
-                        return Err(self.create_err(
-                            ErrorKind::GuardCanNotHaveMultipleWildcards,
-                            &node,
-                        ));
+                        return Err(
+                            self.create_err(ErrorKind::GuardCanNotHaveMultipleWildcards, &node)
+                        );
                     }
                     found_wildcard = Some(x);
                     None
                 }
                 swamp_script_ast::GuardClause::Expression(clause_expr) => {
                     if found_wildcard.is_some() {
-                        return Err(
-                            self.create_err(ErrorKind::WildcardMustBeLastInGuard, &node)
-                        );
+                        return Err(self.create_err(ErrorKind::WildcardMustBeLastInGuard, &node));
                     }
                     Some(self.analyze_bool_expression(&clause_expr)?)
                 }
@@ -1934,10 +1877,7 @@ impl<'a> Analyzer<'a> {
             }
             if !found_var.resolved_type.assignable_type(&ty) {
                 return Err(self.create_err(
-                    ErrorKind::IncompatibleTypes(
-                        found_var.resolved_type.clone(),
-                        ty.clone(),
-                    ),
+                    ErrorKind::IncompatibleTypes(found_var.resolved_type.clone(), ty.clone()),
                     &variable.name,
                 ));
             }
@@ -2008,10 +1948,7 @@ impl<'a> Analyzer<'a> {
 
         let base_expr = self.analyze_expression(&chain.base, None)?;
         let ExpressionKind::VariableAccess(start_variable) = base_expr.kind else {
-            return Err(self.create_err(
-                ErrorKind::NotValidLocationStartingPoint,
-                &chain.base.node,
-            ));
+            return Err(self.create_err(ErrorKind::NotValidLocationStartingPoint, &chain.base.node));
         };
 
         let mut ty = start_variable.resolved_type.clone();
@@ -2114,11 +2051,11 @@ impl<'a> Analyzer<'a> {
                                 if rust_type.number == SPARSE_TYPE_ID {
                                     let sparse_id_type = self
                                         .shared
-                                        .lookup
-                                        .get_rust_type(&["std".to_string()], "SparseId")
+                                        .lookup_table
+                                        .get_external_type("SparseId")
                                         .expect("should have SparseId");
 
-                                    let key_type = Type::External(sparse_id_type);
+                                    let key_type = Type::External(sparse_id_type.clone());
 
                                     let key_expr = self
                                         .analyze_expression(lookup_expr, Some(&key_type.clone()))?;
@@ -2139,10 +2076,9 @@ impl<'a> Analyzer<'a> {
                         }
 
                         _ => {
-                            return Err(self.create_err(
-                                ErrorKind::IllegalIndexInChain,
-                                &lookup_expr.node,
-                            ));
+                            return Err(
+                                self.create_err(ErrorKind::IllegalIndexInChain, &lookup_expr.node)
+                            );
                         }
                     }
                 }
@@ -2158,10 +2094,9 @@ impl<'a> Analyzer<'a> {
                     return Err(self.create_err(ErrorKind::UnwrapCanNotBePartOfChain, &node));
                 }
                 swamp_script_ast::Postfix::NoneCoalesce(expr) => {
-                    return Err(self.create_err(
-                        ErrorKind::NoneCoalesceCanNotBePartOfChain,
-                        &expr.node,
-                    ));
+                    return Err(
+                        self.create_err(ErrorKind::NoneCoalesceCanNotBePartOfChain, &expr.node)
+                    );
                 }
             }
         }
@@ -2473,9 +2408,7 @@ impl<'a> Analyzer<'a> {
             .same_type(&Type::Struct(struct_type.clone()))
             || self_type.is_mutable && !is_mutable
         {
-            return Err(
-                self.create_err_resolved(ErrorKind::SelfNotCorrectType, resolved_node)
-            );
+            return Err(self.create_err_resolved(ErrorKind::SelfNotCorrectType, resolved_node));
         }
 
         let resolved_arguments = self.analyze_and_verify_parameters(
@@ -2498,9 +2431,9 @@ impl<'a> Analyzer<'a> {
         &mut self,
         resolved_node: &Node,
         struct_type: &StructTypeRef,
-        field: &AnonymousStructFieldType,
+        field: &StructTypeField,
         index: usize,
-        signature: &FunctionTypeSignature,
+        signature: &Signature,
         arguments: &[swamp_script_ast::MutableOrImmutableExpression],
     ) -> Result<Vec<Postfix>, Error> {
         let mut suffixes = Vec::new();
@@ -2570,16 +2503,10 @@ impl<'a> Analyzer<'a> {
                     arguments,
                 )?
             } else {
-                return Err(self.create_err(
-                    ErrorKind::NotValidLocationStartingPoint,
-                    &member_name,
-                ));
+                return Err(self.create_err(ErrorKind::NotValidLocationStartingPoint, &member_name));
             }
         } else {
-            return Err(self.create_err(
-                ErrorKind::NotValidLocationStartingPoint,
-                &member_name,
-            ));
+            return Err(self.create_err(ErrorKind::NotValidLocationStartingPoint, &member_name));
         };
 
         let last_type = postfixes.last().unwrap().ty.clone();

@@ -82,20 +82,6 @@ impl Modules {
             constants: Vec::new(),
         }
     }
-    pub fn add(&mut self, module: ModuleRef) {
-        self.modules
-            .insert(module.clone().namespace.path.clone(), module);
-    }
-
-    pub fn add_constant(&mut self, resolved_constant: Constant) -> ConstantRef {
-        let id = self.constants.len();
-        let mut copy = resolved_constant;
-        copy.id = id as ConstantId;
-        let constant_ref = Rc::new(copy);
-        self.constants.push(constant_ref.clone());
-
-        constant_ref
-    }
 
     #[must_use]
     pub fn contains_key(&self, module_path: &[String]) -> bool {
@@ -103,7 +89,7 @@ impl Modules {
     }
 
     #[must_use]
-    pub fn get(&self, module_path: &[String]) -> Option<ModuleRef> {
-        self.modules.get(module_path).cloned()
+    pub fn get(&self, module_path: &[String]) -> Option<&ModuleRef> {
+        self.modules.get(&module_path.to_vec())
     }
 }

@@ -35,9 +35,7 @@ impl<'a> Analyzer<'a> {
         let member_function = binding
             .functions
             .get(&member_name.to_string())
-            .ok_or_else(|| {
-                self.create_err(ErrorKind::UnknownMemberFunction, member_name_node)
-            })?;
+            .ok_or_else(|| self.create_err(ErrorKind::UnknownMemberFunction, member_name_node))?;
 
         let expr = Self::convert_to_function_access(member_function);
 

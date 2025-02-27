@@ -23,10 +23,7 @@ impl<'a> Analyzer<'a> {
         let resolved_literal = match &ast_literal_kind {
             swamp_script_ast::LiteralKind::Int => (
                 Literal::IntLiteral(Self::str_to_int(node_text).map_err(|int_conversion_err| {
-                    self.create_err(
-                        ErrorKind::IntConversionError(int_conversion_err),
-                        ast_node,
-                    )
+                    self.create_err(ErrorKind::IntConversionError(int_conversion_err), ast_node)
                 })?),
                 Type::Int,
             ),
@@ -66,63 +63,73 @@ impl<'a> Analyzer<'a> {
                     }
                 };
 
-                let enum_type_ref = self.analyze_enum_ref(enum_name)?;
-                let enum_type = Type::Enum(enum_type_ref);
+                let (symbol_table, name) = self.get_symbol_table_and_name(enum_name)?;
+                if let Some(enum_type_ref) = symbol_table.get_enum(&name) {
+                    let enum_type = Type::Enum(enum_type_ref.clone());
 
-                // Handle enum variant literals in patterns
-                let variant_ref = self.analyze_enum_variant_ref(enum_name, variant_name)?;
+                    // Handle enum variant literals in patterns
+                    let variant_ref = self.analyze_enum_variant_ref(enum_name, variant_name)?;
 
-                let resolved_data = match enum_literal {
-                    swamp_script_ast::EnumVariantLiteral::Simple(_, _) => EnumLiteralData::Nothing,
-                    swamp_script_ast::EnumVariantLiteral::Tuple(_node, _variant, expressions) => {
-                        let resolved = self
-                            .analyze_expressions(None, expressions)
-                            .expect("enum tuple expressions should resolve");
-                        EnumLiteralData::Tuple(resolved)
-                    }
-                    swamp_script_ast::EnumVariantLiteral::Struct(
-                        _qualified_type_identifier,
-                        variant,
-                        anonym_struct_field_and_expressions,
-                    ) => {
-                        if let EnumVariantType::Struct(resolved_variant_struct_ref) = &*variant_ref
-                        {
-                            if anonym_struct_field_and_expressions.len()
-                                != resolved_variant_struct_ref.anon_struct.defined_fields.len()
+                    let resolved_data = match enum_literal {
+                        swamp_script_ast::EnumVariantLiteral::Simple(_, _) => {
+                            EnumLiteralData::Nothing
+                        }
+                        swamp_script_ast::EnumVariantLiteral::Tuple(
+                            _node,
+                            _variant,
+                            expressions,
+                        ) => {
+                            let resolved = self
+                                .analyze_expressions(None, expressions)
+                                .expect("enum tuple expressions should resolve");
+                            EnumLiteralData::Tuple(resolved)
+                        }
+                        swamp_script_ast::EnumVariantLiteral::Struct(
+                            _qualified_type_identifier,
+                            variant,
+                            anonym_struct_field_and_expressions,
+                        ) => {
+                            if let EnumVariantType::Struct(resolved_variant_struct_ref) =
+                                &*variant_ref
                             {
+                                if anonym_struct_field_and_expressions.len()
+                                    != resolved_variant_struct_ref.anon_struct.defined_fields.len()
+                                {
+                                    return Err(self.create_err(
+                                        ErrorKind::WrongNumberOfArguments(
+                                            anonym_struct_field_and_expressions.len(),
+                                            resolved_variant_struct_ref
+                                                .anon_struct
+                                                .defined_fields
+                                                .len(),
+                                        ),
+                                        &variant.0,
+                                    ));
+                                }
+
+                                let resolved = self.analyze_anon_struct_instantiation(
+                                    &variant.0.clone(),
+                                    &resolved_variant_struct_ref.anon_struct,
+                                    anonym_struct_field_and_expressions,
+                                    false,
+                                )?;
+
+                                EnumLiteralData::Struct(resolved)
+                            } else {
                                 return Err(self.create_err(
-                                    ErrorKind::WrongNumberOfArguments(
-                                        anonym_struct_field_and_expressions.len(),
-                                        resolved_variant_struct_ref
-                                            .anon_struct
-                                            .defined_fields
-                                            .len(),
-                                    ),
+                                    ErrorKind::WrongEnumVariantContainer(variant_ref.clone()),
                                     &variant.0,
                                 ));
                             }
-
-                            let resolved = self.analyze_anon_struct_instantiation(
-                                &variant.0.clone(),
-                                &resolved_variant_struct_ref.anon_struct,
-                                anonym_struct_field_and_expressions,
-                                false,
-                            )?;
-
-                            EnumLiteralData::Struct(resolved)
-                        } else {
-                            return Err(self.create_err(
-                                ErrorKind::WrongEnumVariantContainer(variant_ref.clone()),
-                                &variant.0,
-                            ));
                         }
-                    }
-                };
+                    };
 
-                (
-                    Literal::EnumVariantLiteral(variant_ref, resolved_data),
-                    enum_type,
-                )
+                    return Ok((
+                        Literal::EnumVariantLiteral(variant_ref, resolved_data),
+                        enum_type,
+                    ));
+                }
+                return Err(self.create_err(ErrorKind::UnknownEnumType, ast_node));
             }
 
             swamp_script_ast::LiteralKind::Array(items) => {
@@ -145,10 +152,9 @@ impl<'a> Analyzer<'a> {
                             }
                         }
                     } else {
-                        return Err(self.create_err(
-                            ErrorKind::EmptyArrayCanOnlyBeMapOrArray,
-                            &ast_node,
-                        ));
+                        return Err(
+                            self.create_err(ErrorKind::EmptyArrayCanOnlyBeMapOrArray, &ast_node)
+                        );
                     }
                 } else {
                     let (array_type_ref, resolved_items) =
@@ -263,11 +269,7 @@ impl<'a> Analyzer<'a> {
     }
 
     #[must_use]
-    pub fn create_err(
-        &self,
-        kind: ErrorKind,
-        ast_node: &swamp_script_ast::Node,
-    ) -> Error {
+    pub fn create_err(&self, kind: ErrorKind, ast_node: &swamp_script_ast::Node) -> Error {
         error!(?kind, "error created");
         Error {
             node: self.to_node(ast_node),
@@ -276,11 +278,7 @@ impl<'a> Analyzer<'a> {
     }
 
     #[must_use]
-    pub fn create_err_resolved(
-        &self,
-        kind: ErrorKind,
-        resolved_node: &Node,
-    ) -> Error {
+    pub fn create_err_resolved(&self, kind: ErrorKind, resolved_node: &Node) -> Error {
         Error {
             node: resolved_node.clone(),
             kind,

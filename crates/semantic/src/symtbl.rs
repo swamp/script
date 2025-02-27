@@ -5,8 +5,9 @@
 use crate::modules::ModuleRef;
 use crate::{
     Constant, ConstantRef, EnumType, EnumTypeRef, EnumVariantType, EnumVariantTypeRef,
-    ExternalFunctionDefinition, ExternalFunctionDefinitionRef, InternalFunctionDefinition,
-    InternalFunctionDefinitionRef, SemanticError, StructType, StructTypeRef, Type,
+    ExternalFunctionDefinition, ExternalFunctionDefinitionRef, ExternalTypeRef,
+    InternalFunctionDefinition, InternalFunctionDefinitionRef, SemanticError, StructType,
+    StructTypeRef, Type,
 };
 use seq_map::SeqMap;
 use std::cell::RefCell;
@@ -316,6 +317,13 @@ impl SymbolTable {
     ) -> Option<&ExternalFunctionDefinitionRef> {
         match self.get_function(name)? {
             FuncDef::External(external_def) => Some(external_def),
+            _ => None,
+        }
+    }
+
+    pub fn get_external_type(&self, name: &str) -> Option<&ExternalTypeRef> {
+        match self.get_type(name)? {
+            Type::External(ext_type) => Some(ext_type),
             _ => None,
         }
     }

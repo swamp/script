@@ -112,6 +112,8 @@ pub enum ErrorKind {
     IllegalIndexInChain,
     CanNotNoneCoalesce,
     UnknownSymbol,
+    UnknownEnumType,
+    UnknownModule,
 }
 
 impl From<SemanticError> for Error {
