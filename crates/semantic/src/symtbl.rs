@@ -4,10 +4,10 @@
  */
 use crate::modules::ModuleRef;
 use crate::{
-    Constant, ConstantRef, EnumType, EnumTypeRef, EnumVariantType, EnumVariantTypeRef,
-    ExternalFunctionDefinition, ExternalFunctionDefinitionRef, ExternalType, ExternalTypeRef,
-    InternalFunctionDefinition, InternalFunctionDefinitionRef, SemanticError, StructType,
-    StructTypeRef, Type,
+    AnonymousStructType, Constant, ConstantRef, EnumType, EnumTypeRef, EnumVariantType,
+    EnumVariantTypeRef, ExternalFunctionDefinition, ExternalFunctionDefinitionRef, ExternalType,
+    ExternalTypeRef, InternalFunctionDefinition, InternalFunctionDefinitionRef, Node,
+    SemanticError, StructType, StructTypeField, StructTypeRef, Type,
 };
 use seq_map::SeqMap;
 use std::cell::RefCell;
@@ -84,6 +84,22 @@ impl SymbolTable {
     #[must_use]
     pub const fn symbols(&self) -> &SeqMap<String, Symbol> {
         &self.symbols
+    }
+
+    pub fn structs(&self) -> SeqMap<String, StructTypeRef> {
+        let mut structs = SeqMap::new();
+
+        for (name, symbol) in &self.symbols {
+            if let Symbol::Type(ty) = symbol {
+                if let Type::Struct(struct_ref) = ty {
+                    structs
+                        .insert(name.to_string(), struct_ref.clone())
+                        .unwrap();
+                }
+            }
+        }
+
+        structs
     }
 
     /// # Errors
@@ -166,6 +182,40 @@ impl SymbolTable {
     pub fn add_struct(&mut self, struct_type: StructType) -> Result<StructTypeRef, SemanticError> {
         let struct_ref = Rc::new(RefCell::new(struct_type));
         self.add_struct_link(struct_ref.clone())?;
+        Ok(struct_ref)
+    }
+
+    /// # Errors
+    ///
+    pub fn add_generated_struct(
+        &mut self,
+        name: &str,
+        fields: &[(&str, Type)],
+    ) -> Result<StructTypeRef, SemanticError> {
+        let mut defined_fields = SeqMap::new();
+        for (name, field_type) in fields {
+            defined_fields
+                .insert(
+                    name.to_string(),
+                    StructTypeField {
+                        identifier: None,
+                        field_type: field_type.clone(),
+                    },
+                )
+                .unwrap();
+        }
+
+        let struct_type = StructType {
+            name: Node::default(),
+            assigned_name: name.to_string(),
+            anon_struct_type: AnonymousStructType { defined_fields },
+            functions: SeqMap::default(),
+        };
+
+        let struct_ref = Rc::new(RefCell::new(struct_type));
+
+        self.add_struct_link(struct_ref.clone())?;
+
         Ok(struct_ref)
     }
 

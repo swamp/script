@@ -198,7 +198,7 @@ impl<'a> Analyzer<'a> {
                 ) => {
                     let mut fields = SeqMap::new();
 
-                    for (index, field_with_type) in ast_struct_fields.fields.iter().enumerate() {
+                    for (_index, field_with_type) in ast_struct_fields.fields.iter().enumerate() {
                         // TODO: Check the index
                         let resolved_type = self.analyze_type(&field_with_type.field_type)?;
                         let field_name_str =
@@ -249,7 +249,7 @@ impl<'a> Analyzer<'a> {
     ) -> Result<StructType, Error> {
         let mut resolved_fields = SeqMap::new();
 
-        for (index, field_name_and_type) in ast_struct.fields.iter().enumerate() {
+        for (_index, field_name_and_type) in ast_struct.fields.iter().enumerate() {
             let resolved_type = self.analyze_type(&field_name_and_type.field_type)?;
             let name_string = self.get_text(&field_name_and_type.field_name.0).to_string();
 

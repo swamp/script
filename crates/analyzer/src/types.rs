@@ -3,12 +3,11 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use crate::err::{Error, ErrorKind};
+use crate::err::Error;
 use crate::Analyzer;
 use std::rc::Rc;
 use swamp_script_semantic::{
-    ArrayType, ArrayTypeRef, MapType, MapTypeRef, Signature, StructTypeRef, TupleType, Type,
-    TypeForParameter,
+    ArrayType, ArrayTypeRef, MapType, MapTypeRef, Signature, TupleType, Type, TypeForParameter,
 };
 
 impl<'a> Analyzer<'a> {

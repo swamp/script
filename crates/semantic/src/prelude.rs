@@ -3,10 +3,10 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 pub use crate::{
-    comma_seq, modules::Modules, AnonymousStructType, ArrayItem, ArrayItemRef, ArrayType,
-    ArrayTypeRef, BinaryOperator, BooleanExpression, CompoundOperator, CompoundOperatorKind,
-    Constant, ConstantRef, EnumLiteralData, EnumType, EnumTypeRef, EnumVariantCommon,
-    EnumVariantSimpleType, EnumVariantStructFieldType, EnumVariantStructType,
+    comma_seq, modules::Modules, symtbl::SymbolTable, AnonymousStructType, ArrayItem, ArrayItemRef,
+    ArrayType, ArrayTypeRef, BinaryOperator, BooleanExpression, CompoundOperator,
+    CompoundOperatorKind, Constant, ConstantRef, EnumLiteralData, EnumType, EnumTypeRef,
+    EnumVariantCommon, EnumVariantSimpleType, EnumVariantStructFieldType, EnumVariantStructType,
     EnumVariantTupleFieldType, EnumVariantTupleType, EnumVariantType, EnumVariantTypeRef,
     Expression, ExpressionKind, ExternalFunctionCall, ExternalFunctionDefinition,
     ExternalFunctionDefinitionRef, ExternalFunctionId, ExternalType, ExternalTypeRef, FileId,

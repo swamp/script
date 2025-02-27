@@ -49,6 +49,7 @@ impl Namespace {
             symbol_table: Rc::new(symbol_table),
         }
     }
+
     /*
        pub fn structs(&self) -> &SeqMap<String, StructTypeRef> {
            &self.structs

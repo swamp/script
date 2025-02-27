@@ -1259,7 +1259,7 @@ impl<'a, C> Interpreter<'a, C> {
             }
             ExpressionKind::FieldAccess(expr, index) => {
                 let resolved_expr = self.evaluate_expression(expr)?;
-                let (struct_type, values) = resolved_expr
+                let (_struct_type, values) = resolved_expr
                     .expect_struct()
                     .map_err(|_| self.create_err(ExecuteErrorKind::ExpectedStruct, &expr.node))?;
 

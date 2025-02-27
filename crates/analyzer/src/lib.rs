@@ -100,7 +100,7 @@ pub enum BlockScopeMode {
 pub struct BlockScope {
     mode: BlockScopeMode,
     variables: SeqMap<String, VariableRef>,
-    constants: SeqMap<String, ConstantRef>,
+    constants: SeqMap<String, ConstantRef>, // TODO: check why these are not read
 }
 
 impl Default for BlockScope {
@@ -1445,6 +1445,7 @@ impl<'a> Analyzer<'a> {
     }
 
     fn analyze_enum_variant_literal(
+        // TODO: Is this not used?
         &mut self,
         ast_variant: &swamp_script_ast::EnumVariantLiteral,
     ) -> Result<Literal, Error> {
