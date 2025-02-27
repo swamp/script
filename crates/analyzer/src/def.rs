@@ -8,18 +8,17 @@ use crate::Resolver;
 use seq_map::SeqMap;
 use std::rc::Rc;
 use swamp_script_ast::{
-    AliasType, Definition, EnumVariantType, Function, LocalTypeIdentifier, Mod, Node,
-    QualifiedTypeIdentifier, StructType, Use, UseItem,
+    Definition, EnumVariantType, Function, LocalTypeIdentifier, Node, QualifiedTypeIdentifier,
+    StructType, Use, UseItem,
 };
 use swamp_script_semantic::{
-    FunctionTypeSignature, ResolvedAliasType, ResolvedAliasTypeRef,
-    ResolvedAnonymousStructFieldType, ResolvedAnonymousStructType, ResolvedDefinition,
-    ResolvedEnumType, ResolvedEnumTypeRef, ResolvedEnumVariantCommon,
+    FunctionTypeSignature, ResolvedAnonymousStructFieldType, ResolvedAnonymousStructType,
+    ResolvedDefinition, ResolvedEnumType, ResolvedEnumTypeRef, ResolvedEnumVariantCommon,
     ResolvedEnumVariantSimpleType, ResolvedEnumVariantSimpleTypeRef, ResolvedEnumVariantStructType,
     ResolvedEnumVariantTupleType, ResolvedEnumVariantType, ResolvedExternalFunctionDefinition,
     ResolvedFunction, ResolvedInternalFunctionDefinition, ResolvedLocalIdentifier,
-    ResolvedLocalTypeIdentifier, ResolvedMod, ResolvedParameterNode, ResolvedStructType,
-    ResolvedStructTypeRef, ResolvedType, ResolvedTypeForParameter, ResolvedUse, ResolvedUseItem,
+    ResolvedLocalTypeIdentifier, ResolvedParameterNode, ResolvedStructType, ResolvedStructTypeRef,
+    ResolvedType, ResolvedTypeForParameter, ResolvedUse, ResolvedUseItem,
 };
 
 impl<'a> Resolver<'a> {
@@ -96,18 +95,6 @@ impl<'a> Resolver<'a> {
         }
 
         Ok(ResolvedDefinition::Use(ResolvedUse { path: nodes, items }))
-    }
-
-    fn resolve_mod_definition(
-        &self,
-        mod_definition: &Mod,
-    ) -> Result<ResolvedDefinition, ResolveError> {
-        let mut nodes = Vec::new();
-        for ast_node in &mod_definition.module_path.0 {
-            nodes.push(self.to_node(ast_node));
-        }
-
-        Ok(ResolvedDefinition::Mod(ResolvedMod { path: nodes }))
     }
 
     fn resolve_enum_type_definition(
@@ -217,24 +204,6 @@ impl<'a> Resolver<'a> {
 
         parent_ref.borrow_mut().variants = resolved_variants;
         Ok(parent_ref)
-    }
-
-    pub fn resolve_alias_type_definition(
-        &mut self,
-        ast_alias: &AliasType,
-    ) -> Result<ResolvedAliasTypeRef, ResolveError> {
-        let resolved_type = self.resolve_type(&ast_alias.referenced_type)?;
-
-        let alias_name_str = self.get_text(&ast_alias.identifier.0).to_string();
-        let resolved_alias = ResolvedAliasType {
-            name: self.to_node(&ast_alias.identifier.0),
-            assigned_name: alias_name_str,
-            referenced_type: resolved_type,
-        };
-
-        let resolved_alias_ref = self.shared.lookup.add_alias(resolved_alias)?;
-
-        Ok(resolved_alias_ref)
     }
 
     /// # Errors
@@ -362,9 +331,6 @@ impl<'a> Resolver<'a> {
             Definition::StructDef(ref ast_struct) => {
                 ResolvedDefinition::StructType(self.resolve_struct_type_definition(ast_struct)?)
             }
-            Definition::AliasDef(ref alias_def) => {
-                ResolvedDefinition::AliasType(self.resolve_alias_type_definition(alias_def)?)
-            }
             Definition::EnumDef(identifier, variants) => {
                 let parent = self.resolve_enum_type_definition(identifier, variants)?;
                 ResolvedDefinition::EnumType(parent)
@@ -385,7 +351,6 @@ impl<'a> Resolver<'a> {
                 ResolvedDefinition::Comment(self.to_node(comment_ref))
             }
             Definition::Use(use_info) => self.resolve_use_definition(use_info)?,
-            Definition::Mod(mod_info) => self.resolve_mod_definition(mod_info)?,
             Definition::Constant(const_info) => self.resolve_constant_definition(const_info)?,
         };
 

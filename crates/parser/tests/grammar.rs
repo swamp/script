@@ -2205,18 +2205,6 @@ Use(Use { module_path: ModulePath([<5:8>, <14:9>, <24:5>]), assigned_path: ["gam
 }
 
 #[test_log::test]
-fn mod_statement_3_items() {
-    check(
-        "
-mod gameplay.something.other
-",
-        "
-Mod(Mod { module_path: ModulePath([<5:8>, <14:9>, <24:5>]) })
-",
-    );
-}
-
-#[test_log::test]
 fn qualified_function_call() {
     check(
         r"
@@ -2812,51 +2800,6 @@ while while {
 
 <1:26>WhileLoop(<7:5>IdentifierReference(<7:5>), <13:14>Block([<19:7>VariableAssignment(<19:2>, MutableOrImmutableExpression { is_mutable: None, expression: <24:1>Literal(Int) })]))
 
-
-",
-    );
-}
-
-#[test_log::test]
-fn type_alias_basic() {
-    check(
-        "
-type Something = String
-
-         ",
-        "
-
-AliasDef(AliasType { identifier: LocalTypeIdentifier(<6:9>), referenced_type: String(<18:6>) })
-
-",
-    );
-}
-
-#[test_log::test]
-fn type_alias() {
-    check(
-        "
-type A = (Int, Float)
-
-         ",
-        "
-
-AliasDef(AliasType { identifier: LocalTypeIdentifier(<6:1>), referenced_type: Tuple([Int(<11:3>), Float(<16:5>)]) })
-
-",
-    );
-}
-
-#[test_log::test]
-fn type_alias_another() {
-    check(
-        "
-type A = another_namespace::AnotherStruct<Float>
-
-         ",
-        "
-
-AliasDef(AliasType { identifier: LocalTypeIdentifier(<6:1>), referenced_type: Generic(Named(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<29:13>), module_path: Some(ModulePath([<10:17>])), generic_params: [Float(<43:5>)] }), [Float(<43:5>)]) })
 
 ",
     );

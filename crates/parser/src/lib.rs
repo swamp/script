@@ -11,10 +11,10 @@ use pest_derive::Parser;
 use std::iter::Peekable;
 use std::str::Chars;
 use swamp_script_ast::{
-    prelude::*, AliasType, AssignmentOperatorKind, BinaryOperatorKind, CompoundOperator,
-    CompoundOperatorKind, EnumVariantLiteral, ExpressionKind, FieldExpression, FieldName,
-    FieldType, ForPattern, ForVar, IterableExpression, PatternElement, QualifiedIdentifier,
-    RangeMode, SpanWithoutFileId, TypeForParameter, VariableBinding,
+    prelude::*, AssignmentOperatorKind, BinaryOperatorKind, CompoundOperator, CompoundOperatorKind,
+    EnumVariantLiteral, ExpressionKind, FieldExpression, FieldName, FieldType, ForPattern, ForVar,
+    IterableExpression, PatternElement, QualifiedIdentifier, RangeMode, SpanWithoutFileId,
+    TypeForParameter, VariableBinding,
 };
 use swamp_script_ast::{Function, WhenBinding};
 use swamp_script_ast::{LiteralKind, MutableOrImmutableExpression};
@@ -334,12 +334,10 @@ impl AstParser {
             Rule::impl_def => self.parse_impl_def(&inner_pair),
             Rule::const_def => self.parse_const_definition(&inner_pair),
             Rule::struct_def => self.parse_struct_def(&inner_pair),
-            Rule::type_def => self.parse_type_def(&inner_pair),
             Rule::function_def => self.parse_function_def(&inner_pair),
             Rule::import_def => self.parse_use(&inner_pair),
-            Rule::mod_def => self.parse_mod(&inner_pair),
             Rule::enum_def => self.parse_enum_def(&inner_pair),
-            _ => panic!("parsed to unknown definition"),
+            _ => todo!(),
         }
     }
 
@@ -398,20 +396,6 @@ impl AstParser {
         Ok(Definition::Use(Use {
             module_path: ModulePath(segments),
             items,
-        }))
-    }
-
-    fn parse_mod(&self, pair: &Pair<Rule>) -> Result<Definition, ParseError> {
-        let mut inner = Self::convert_into_iterator(pair);
-        let import_path = Self::next_pair(&mut inner)?;
-
-        let mut segments = Vec::new();
-        for pair in import_path.into_inner() {
-            segments.push(self.to_node(&pair));
-        }
-
-        Ok(Definition::Mod(Mod {
-            module_path: ModulePath(segments),
         }))
     }
 
@@ -684,19 +668,6 @@ impl AstParser {
             }),
             pair,
         ))
-    }
-
-    fn parse_type_def(&self, pair: &Pair<Rule>) -> Result<Definition, ParseError> {
-        let mut inner = Self::convert_into_iterator(pair);
-        let alias_name = self.expect_local_type_identifier_next(&mut inner)?;
-        let referenced_type = self.parse_type(inner.next().expect("should work"))?;
-
-        let alias_type = AliasType {
-            identifier: alias_name,
-            referenced_type,
-        };
-
-        Ok(Definition::AliasDef(alias_type))
     }
 
     fn parse_struct_def(&self, pair: &Pair<Rule>) -> Result<Definition, ParseError> {

@@ -44,21 +44,18 @@ impl<'a> Resolver<'a> {
     ) -> Result<ResolvedType, ResolveError> {
         let (path, text) = self.get_path(type_name_to_find);
 
-        let resolved_type =
-            if let Some(found) = self.shared.lookup.get_alias_referred_type(&path, &text) {
-                found
-            } else if let Some(found) = self.shared.lookup.get_struct(&path, &text) {
-                ResolvedType::Struct(found)
-            } else if let Some(found) = self.shared.lookup.get_enum(&path, &text) {
-                ResolvedType::Enum(found)
-            } else if let Some(found) = self.shared.lookup.get_rust_type(&path, &text) {
-                ResolvedType::RustType(found)
-            } else {
-                Err(self.create_err(
-                    ResolveErrorKind::UnknownTypeReference,
-                    &type_name_to_find.name.0,
-                ))?
-            };
+        let resolved_type = if let Some(found) = self.shared.lookup.get_struct(&path, &text) {
+            ResolvedType::Struct(found)
+        } else if let Some(found) = self.shared.lookup.get_enum(&path, &text) {
+            ResolvedType::Enum(found)
+        } else if let Some(found) = self.shared.lookup.get_rust_type(&path, &text) {
+            ResolvedType::RustType(found)
+        } else {
+            Err(self.create_err(
+                ResolveErrorKind::UnknownTypeReference,
+                &type_name_to_find.name.0,
+            ))?
+        };
 
         Ok(resolved_type)
     }
