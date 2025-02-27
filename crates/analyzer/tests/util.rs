@@ -42,9 +42,12 @@ fn internal_compile(
         show_script_resolve_error(err, &source_map, Path::new(""));
     })?;
 
+    let core_symbol_table = bootstrap_result.core_symbol_table;
+
     let mut analyzer = Analyzer::new(
         &mut bootstrap_result.state,
         &bootstrap_result.modules,
+        core_symbol_table.into(),
         &source_map,
         &canonical_path,
         file_id,

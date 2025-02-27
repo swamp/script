@@ -16,7 +16,7 @@ use swamp_script_dep_loader::{
 use swamp_script_error_report::{ScriptResolveError, show_script_resolve_error};
 use swamp_script_eval_loader::analyze_modules_in_order;
 use swamp_script_modules::modules::Modules;
-use swamp_script_modules::symtbl::SymbolTable;
+use swamp_script_modules::symtbl::{SymbolTable, SymbolTableRef};
 use swamp_script_semantic::ProgramState;
 use swamp_script_source_map::SourceMap;
 use tiny_ver::TinyVersion;
@@ -40,6 +40,7 @@ pub fn analyze_single_module(
     state: &mut ProgramState,
     default_symbol_table: SymbolTable,
     modules: &Modules,
+    core_symbol_table: SymbolTableRef,
     parsed_ast_module: &ParsedAstModule,
     source_map: &SourceMap,
     versioned_module_path: &[String],
@@ -47,6 +48,7 @@ pub fn analyze_single_module(
     let mut analyzer = Analyzer::new(
         state,
         modules,
+        core_symbol_table,
         source_map,
         versioned_module_path,
         parsed_ast_module.file_id,
@@ -93,6 +95,7 @@ pub struct BootstrapResult {
     pub default_symbol_table: SymbolTable,
     pub state: ProgramState,
     pub core_module_path: Vec<String>,
+    pub core_symbol_table: SymbolTable,
 }
 
 /// Bootstraps the core and ffi modules and creates a default symbol table
@@ -130,6 +133,7 @@ pub fn bootstrap_modules(
         &mut state,
         core_symbol_table.clone(),
         &modules,
+        core_symbol_table.clone().into(),
         &core_ast_module,
         source_map,
         &core_module.namespace.path,
@@ -162,6 +166,7 @@ pub fn bootstrap_modules(
         default_symbol_table,
         state,
         core_module_path: core_module_ref.namespace.path.clone(),
+        core_symbol_table,
     };
     Ok(result)
 }
@@ -176,6 +181,7 @@ pub fn compile_and_resolve(
     module_path: &[String],
     source_map: &mut SourceMap,
     parse_module: ParsedAstModule,
+    core_symbol_table: SymbolTableRef,
 ) -> Result<Program, ScriptResolveError> {
     let mut dependency_parser = DependencyParser::new();
     dependency_parser.add_ast_module(module_path.to_vec(), parse_module);
@@ -191,6 +197,7 @@ pub fn compile_and_resolve(
         &mut resolved_program.state,
         &resolved_program.auto_use_modules,
         &mut resolved_program.modules,
+        core_symbol_table,
         source_map,
         &module_paths_in_order,
         &dependency_parser,
@@ -203,6 +210,7 @@ pub fn compile_and_analyze_all_modules(
     module_path: &[String],
     resolved_program: &mut Program,
     source_map: &mut SourceMap,
+    core_symbol_table: SymbolTableRef,
 ) -> Result<(), ScriptResolveError> {
     let mut dependency_parser = DependencyParser::new();
 
@@ -216,6 +224,7 @@ pub fn compile_and_analyze_all_modules(
         &mut resolved_program.state,
         &resolved_program.auto_use_modules,
         &mut resolved_program.modules,
+        core_symbol_table,
         source_map,
         &module_paths_in_order,
         &dependency_parser,
@@ -240,9 +249,14 @@ pub fn compile_analyze_and_link_without_version(
     root_module_path: &[String],
     resolved_program: &mut Program,
     source_map: &mut SourceMap,
+    core_symbol_table: SymbolTableRef,
 ) -> Result<(), ScriptResolveError> {
-    let mangrove_render_result =
-        compile_and_analyze(root_module_path, resolved_program, source_map);
+    let mangrove_render_result = compile_and_analyze(
+        root_module_path,
+        resolved_program,
+        source_map,
+        core_symbol_table,
+    );
 
     match mangrove_render_result {
         Ok(..) => {}
@@ -270,6 +284,12 @@ pub fn compile_and_analyze(
     root_module_path: &[String],
     resolved_program: &mut Program,
     source_map: &mut SourceMap,
+    core_symbol_table: SymbolTableRef,
 ) -> Result<(), ScriptResolveError> {
-    compile_and_analyze_all_modules(root_module_path, resolved_program, source_map)
+    compile_and_analyze_all_modules(
+        root_module_path,
+        resolved_program,
+        source_map,
+        core_symbol_table,
+    )
 }

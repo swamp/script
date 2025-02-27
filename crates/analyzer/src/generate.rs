@@ -1,7 +1,6 @@
 use crate::Analyzer;
 use seq_map::SeqMap;
 use std::rc::Rc;
-use swamp_script_modules::symtbl::{SymbolTable, SymbolTableRef};
 use swamp_script_semantic::{
     AnonymousStructType, Function, FunctionRef, IntrinsicFunction, Signature, StructType,
     TupleType, TupleTypeRef,
@@ -37,7 +36,6 @@ impl<'a> Analyzer<'a> {
 
     pub fn gen_function(
         &self,
-        core_symbol_table: &SymbolTable,
         name_prefix: &str,
         name: &str,
         parameters: &[Type],
@@ -63,7 +61,9 @@ impl<'a> Analyzer<'a> {
 
         let intrinsic_name = func.to_string();
 
-        let intrinsic_fn_def = core_symbol_table
+        let intrinsic_fn_def = self
+            .shared
+            .core_symbol_table
             .get_intrinsic_function(&intrinsic_name)
             .unwrap();
 
@@ -85,12 +85,7 @@ impl<'a> Analyzer<'a> {
         ))
     }
 
-    pub fn generate_sparse_struct(
-        &mut self,
-        core_symbol_table: &SymbolTable,
-        key_type: &Type,
-        value_type: &Type,
-    ) -> StructTypeRef {
+    pub fn generate_sparse_struct(&mut self, key_type: &Type, value_type: &Type) -> StructTypeRef {
         let struct_ref = self.generate_empty_struct("Sparse", &[value_type.clone()]);
         let gen_name = &struct_ref.assigned_name;
         let sparse_type = Type::Struct(struct_ref.clone());
@@ -98,7 +93,6 @@ impl<'a> Analyzer<'a> {
         let mut functions = SeqMap::new();
 
         let new_func = self.gen_function(
-            core_symbol_table,
             &gen_name,
             "new",
             &[],
@@ -108,7 +102,6 @@ impl<'a> Analyzer<'a> {
         functions.insert("new", new_func).unwrap();
 
         let new_func = self.gen_function(
-            core_symbol_table,
             &gen_name,
             "has",
             &[sparse_type.clone(), key_type.clone()],
@@ -118,7 +111,6 @@ impl<'a> Analyzer<'a> {
         functions.insert("has", new_func).unwrap();
 
         let new_func = self.gen_function(
-            core_symbol_table,
             &gen_name,
             "iter",
             &[sparse_type.clone(), key_type.clone()],
@@ -131,7 +123,6 @@ impl<'a> Analyzer<'a> {
         functions.insert("iter", new_func).unwrap();
 
         let new_func = self.gen_function(
-            core_symbol_table,
             &gen_name,
             "add",
             &[sparse_type.clone(), value_type.clone()],
@@ -141,7 +132,6 @@ impl<'a> Analyzer<'a> {
         functions.insert("add", new_func).unwrap();
 
         let subscript_fn = self.gen_function(
-            core_symbol_table,
             &gen_name,
             "subscript",
             &[sparse_type.clone(), key_type.clone()],
@@ -167,11 +157,7 @@ impl<'a> Analyzer<'a> {
         }
     }
 
-    pub fn generate_vec_struct(
-        &mut self,
-        core_symbol_table: &SymbolTableRef,
-        value_type: &Type,
-    ) -> StructTypeRef {
+    pub fn generate_vec_struct(&mut self, value_type: &Type) -> StructTypeRef {
         let struct_ref = self.generate_empty_struct("Vec", &[value_type.clone()]);
         let gen_name = &struct_ref.assigned_name;
         let vec_type = Type::Struct(struct_ref.clone());
@@ -179,7 +165,6 @@ impl<'a> Analyzer<'a> {
         let mut functions = SeqMap::new();
 
         let from_slice_fn = self.gen_function(
-            core_symbol_table,
             &gen_name,
             "from_slice",
             &[Type::Slice(Box::from(value_type.clone()))],
@@ -189,7 +174,6 @@ impl<'a> Analyzer<'a> {
         functions.insert("from_slice", from_slice_fn).unwrap();
 
         let new_fn = self.gen_function(
-            core_symbol_table,
             &gen_name,
             "new",
             &[],
@@ -203,12 +187,7 @@ impl<'a> Analyzer<'a> {
         struct_ref
     }
 
-    pub fn generate_map_struct(
-        &mut self,
-        core_symbol_table: &SymbolTableRef,
-        key_type: &Type,
-        value_type: &Type,
-    ) -> StructTypeRef {
+    pub fn generate_map_struct(&mut self, key_type: &Type, value_type: &Type) -> StructTypeRef {
         let struct_ref = self.generate_empty_struct("Map", &[key_type.clone(), value_type.clone()]);
         let gen_name = &struct_ref.assigned_name;
         let sparse_type = Type::Struct(struct_ref.clone());
@@ -216,7 +195,6 @@ impl<'a> Analyzer<'a> {
         let mut functions = SeqMap::new();
 
         let new_func = self.gen_function(
-            core_symbol_table,
             &gen_name,
             "new",
             &[],

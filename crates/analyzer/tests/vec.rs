@@ -3,11 +3,27 @@ use crate::util::check;
 mod util;
 
 #[test_log::test]
-fn vec_new() {
+fn vec_from_slice() {
     check(
         "
 
 instantiated = Vec<Int>::from_slice([10, 20])
+
+         ",
+        "
+let instantiated: Vec<Int> = Vec<Int>::from_slice([10i,
+20i
+])
+        ",
+    );
+}
+
+#[test_log::test]
+fn vec_from_slice_coerce() {
+    check(
+        "
+
+instantiated = [10, 20]
 
          ",
         "

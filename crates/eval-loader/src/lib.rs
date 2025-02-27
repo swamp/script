@@ -6,12 +6,11 @@ pub mod prelude;
 
 use std::rc::Rc;
 use swamp_script_analyzer::AutoUseModules;
-use swamp_script_analyzer::err::ErrorKind;
 use swamp_script_analyzer::prelude::*;
 use swamp_script_dep_loader::prelude::*;
 use swamp_script_modules::modules::ModuleRef;
 use swamp_script_modules::modules::{Module, Modules};
-use swamp_script_modules::symtbl::SymbolTable;
+use swamp_script_modules::symtbl::{SymbolTable, SymbolTableRef};
 use swamp_script_semantic::prelude::*;
 use swamp_script_source_map::SourceMap;
 
@@ -32,6 +31,7 @@ pub fn resolve_to_new_module(
     state: &mut ProgramState,
     auto_use_modules: &AutoUseModules,
     modules: &mut Modules,
+    core_symbol_table: SymbolTableRef,
     module_path: &[String],
     source_map: &SourceMap,
     ast_module: &ParsedAstModule,
@@ -40,6 +40,7 @@ pub fn resolve_to_new_module(
         state,
         auto_use_modules,
         modules,
+        core_symbol_table,
         source_map,
         module_path,
         ast_module,
@@ -57,6 +58,7 @@ pub fn analyze_module(
     state: &mut ProgramState,
     auto_use_modules: &AutoUseModules,
     modules: &mut Modules,
+    core_symbol_table: SymbolTableRef,
     source_map: &SourceMap,
     canonical_path: &[String],
     ast_module: &ParsedAstModule,
@@ -64,6 +66,7 @@ pub fn analyze_module(
     let mut resolver = Analyzer::new(
         state,
         modules,
+        core_symbol_table,
         source_map,
         canonical_path,
         ast_module.file_id,
@@ -99,6 +102,7 @@ pub fn analyze_modules_in_order(
     state: &mut ProgramState,
     auto_use: &AutoUseModules,
     modules: &mut Modules,
+    core_symbol_table: SymbolTableRef,
     source_map: &SourceMap,
     module_paths_in_order: &[Vec<String>],
     parsed_modules: &DependencyParser,
@@ -109,6 +113,7 @@ pub fn analyze_modules_in_order(
                 state,
                 auto_use,
                 modules,
+                core_symbol_table.clone(),
                 source_map,
                 module_path,
                 parse_module,

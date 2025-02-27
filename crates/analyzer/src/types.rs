@@ -5,7 +5,7 @@
 use crate::Analyzer;
 use crate::err::{Error, ErrorKind};
 use std::rc::Rc;
-use swamp_script_modules::symtbl::{GeneratorKind, Symbol, SymbolTableRef};
+use swamp_script_modules::symtbl::{GeneratorKind, Symbol};
 use swamp_script_semantic::{
     ExternalType, ExternalTypeRef, MapType, MapTypeRef, Signature, TupleType, Type,
     TypeForParameter, VecType, VecTypeRef,
@@ -77,7 +77,6 @@ impl Analyzer<'_> {
                         &type_name_to_find.name.0,
                     ));
                 }
-                let core_module = self.shared.modules.get(&*Self::get_core_path()).unwrap();
 
                 match generator.kind {
                     GeneratorKind::Slice => Type::Slice(Box::from(analyzed_types[0].clone())),
@@ -87,16 +86,14 @@ impl Analyzer<'_> {
                     ),
                     GeneratorKind::Sparse => {
                         let value_type = &analyzed_types[0];
-                        let key_sparse_id_type = core_module
-                            .namespace
-                            .symbol_table
+                        let key_sparse_id_type = self
+                            .shared
+                            .core_symbol_table
                             .get_type("SparseId")
-                            .unwrap();
-                        let struct_type = self.generate_sparse_struct(
-                            &core_module.namespace.symbol_table,
-                            key_sparse_id_type,
-                            value_type,
-                        );
+                            .unwrap()
+                            .clone();
+                        let struct_type =
+                            self.generate_sparse_struct(&key_sparse_id_type, value_type);
 
                         Type::Struct(struct_type)
                     }
@@ -104,8 +101,7 @@ impl Analyzer<'_> {
                     GeneratorKind::Vec => {
                         let value_type = &analyzed_types[0];
 
-                        let struct_type = self
-                            .generate_vec_struct(&core_module.namespace.symbol_table, value_type);
+                        let struct_type = self.generate_vec_struct(value_type);
 
                         Type::Struct(struct_type)
                     }
@@ -114,11 +110,7 @@ impl Analyzer<'_> {
                         let key_type = &analyzed_types[0];
                         let value_type = &analyzed_types[1];
 
-                        let struct_type = self.generate_map_struct(
-                            &core_module.namespace.symbol_table,
-                            key_type,
-                            value_type,
-                        );
+                        let struct_type = self.generate_map_struct(key_type, value_type);
 
                         Type::Struct(struct_type)
                     }

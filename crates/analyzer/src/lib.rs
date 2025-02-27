@@ -121,6 +121,7 @@ pub struct SharedState<'a> {
     pub source_map: &'a SourceMap,
     pub file_id: FileId,
     pub current_path: Vec<String>,
+    pub core_symbol_table: SymbolTableRef,
 }
 
 impl<'a> SharedState<'a> {
@@ -181,6 +182,7 @@ impl<'a> Analyzer<'a> {
     pub fn new(
         state: &'a mut ProgramState,
         modules: &'a Modules,
+        core_symbol_table: SymbolTableRef,
         source_map: &'a SourceMap,
         current_path: &[String],
         file_id: FileId,
@@ -193,6 +195,7 @@ impl<'a> Analyzer<'a> {
             source_map,
             current_path: current_path.to_vec(),
             file_id,
+            core_symbol_table,
         };
         Self {
             scope: FunctionScopeState::new(Type::Unit),
@@ -420,46 +423,138 @@ impl<'a> Analyzer<'a> {
         ast_expression: &swamp_script_ast::Expression,
         expected_type: Option<&Type>,
     ) -> Result<Expression, Error> {
-        let expr = self.analyze_expression_internal(ast_expression, expected_type)?;
-        let encountered_type = expr.ty.clone();
-        if let Some(found_expected_type) = expected_type {
+        let first_expr = self.analyze_expression_internal(ast_expression, expected_type)?;
+        let encountered_type = first_expr.ty.clone();
+
+        let converted_expr: Expression = if let Some(found_expected_type) = expected_type {
+            let converted_expr =
+                self.add_coercion_if_needed(first_expr, found_expected_type, &ast_expression.node);
             if found_expected_type.same_type(&encountered_type) {
-                return Ok(expr);
-            } else if !matches!(encountered_type, Type::Optional(_)) {
-                // If an optional is expected, we can wrap it
-                if let Type::Optional(expected_inner_type) = found_expected_type {
-                    if encountered_type.same_type(expected_inner_type) {
-                        let wrapped = self.create_expr(
-                            ExpressionKind::Option(Option::from(Box::new(expr))),
-                            found_expected_type.clone(),
-                            &ast_expression.node,
-                        );
-                        return Ok(wrapped);
-                    }
-                }
-            } else if matches!(found_expected_type, &Type::Bool) {
-                if let Type::Optional(_inner_type) = encountered_type {
-                    let wrapped = self.create_expr(
-                        ExpressionKind::CoerceOptionToBool(Box::from(expr)),
-                        Type::Bool,
-                        &ast_expression.node,
-                    );
-                    return Ok(wrapped);
-                }
+                converted_expr
+            } else {
+                error!(?converted_expr, ?ast_expression, "expr");
+                error!(
+                    ?found_expected_type,
+                    ?encountered_type,
+                    "incompatible types"
+                );
+                return Err(self.create_err(
+                    ErrorKind::IncompatibleTypes(found_expected_type.clone(), encountered_type),
+                    &ast_expression.node,
+                ));
             }
-            error!(?expr, ?ast_expression, "expr");
-            error!(
-                ?found_expected_type,
-                ?encountered_type,
-                "incompatible types"
-            );
-            return Err(self.create_err(
-                ErrorKind::IncompatibleTypes(found_expected_type.clone(), encountered_type),
-                &ast_expression.node,
-            ));
+        } else {
+            self.guess_coercion_if_needed(first_expr, &ast_expression.node)
+        };
+
+        Ok(converted_expr)
+    }
+
+    fn generate_call_static_member_function(
+        &mut self,
+        ty: &Type,
+        function_name: &str,
+        arguments: Vec<Expression>, // needs ownership
+        node: &swamp_script_ast::Node,
+    ) -> Expression {
+        let mut args = Vec::new();
+        for expr in arguments {
+            args.push(ArgumentExpressionOrLocation::Expression(expr));
         }
 
-        Ok(expr)
+        let func = self
+            .shared
+            .state
+            .associated_impls
+            .get_member_function(ty, function_name)
+            .unwrap()
+            .clone();
+
+        let postfixes = {
+            let mut postfixes = Vec::new();
+
+            self.add_postfix(
+                &mut postfixes,
+                PostfixKind::FunctionCall(args),
+                *func.signature().return_type.clone(),
+                node,
+            );
+            postfixes
+        };
+
+        let internal = if let Function::Internal(internal) = &*func {
+            internal
+        } else {
+            panic!("not great")
+        };
+
+        let start = self.create_expr(
+            ExpressionKind::InternalFunctionAccess(internal.clone()),
+            Type::Function(internal.signature.clone()),
+            node,
+        );
+
+        self.create_expr(
+            ExpressionKind::PostfixChain(Box::from(start), postfixes),
+            *func.signature().return_type.clone(),
+            node,
+        )
+    }
+
+    fn guess_coercion_if_needed(
+        &mut self,
+        expr: Expression,
+        node: &swamp_script_ast::Node,
+    ) -> Expression {
+        let encountered_type = &expr.ty;
+
+        match encountered_type {
+            Type::Slice(element_type) => {
+                let generated_vec = self.generate_vec_struct(element_type);
+                let generated_vec_type = Type::Struct(generated_vec);
+                self.generate_call_static_member_function(
+                    &generated_vec_type,
+                    "from_slice",
+                    vec![expr],
+                    node,
+                )
+            }
+            _ => expr,
+        }
+    }
+
+    fn add_coercion_if_needed(
+        &self,
+        expr: Expression,
+        found_expected_type: &Type,
+        node: &swamp_script_ast::Node,
+    ) -> Expression {
+        let encountered_type = &expr.ty;
+
+        if !matches!(encountered_type, Type::Optional(_)) {
+            // If an optional is expected, we can wrap it
+            if let Type::Optional(expected_inner_type) = found_expected_type {
+                if encountered_type.same_type(expected_inner_type) {
+                    let wrapped = self.create_expr(
+                        ExpressionKind::Option(Option::from(Box::new(expr))),
+                        found_expected_type.clone(),
+                        node,
+                    );
+                    return wrapped;
+                }
+            }
+        } else if matches!(found_expected_type, &Type::Bool) {
+            if let Type::Optional(_inner_type) = encountered_type {
+                let wrapped = self.create_expr(
+                    ExpressionKind::CoerceOptionToBool(Box::from(expr)),
+                    Type::Bool,
+                    node,
+                );
+                return wrapped;
+            }
+        }
+
+        expr
     }
 
     /// # Errors

@@ -8,6 +8,7 @@ use seq_map::SeqMap;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
 use swamp_script_semantic::{Constant, ConstantId, ConstantRef, Expression};
+use tracing::info;
 
 #[derive(Debug)]
 pub struct Modules {
@@ -110,6 +111,7 @@ impl Modules {
 
     #[must_use]
     pub fn get(&self, module_path: &[String]) -> Option<&ModuleRef> {
+        info!(?module_path, "get path");
         self.modules.get(&module_path.to_vec())
     }
 }
