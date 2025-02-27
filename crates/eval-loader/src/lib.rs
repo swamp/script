@@ -15,6 +15,19 @@ use swamp_script_modules::symtbl::SymbolTable;
 use swamp_script_semantic::prelude::*;
 use swamp_script_source_map::SourceMap;
 
+#[derive(Debug)]
+pub enum LoaderErr {
+    CouldNotLoad,
+    SemanticError(SemanticError),
+    AnalyzerError(Error),
+}
+
+impl From<Error> for LoaderErr {
+    fn from(value: Error) -> Self {
+        LoaderErr::AnalyzerError(value)
+    }
+}
+
 pub fn resolve_to_new_module(
     state: &mut ProgramState,
     auto_use_modules: &AutoUseModules,
@@ -22,7 +35,7 @@ pub fn resolve_to_new_module(
     module_path: &[String],
     source_map: &SourceMap,
     ast_module: &ParsedAstModule,
-) -> Result<ModuleRef, Error> {
+) -> Result<ModuleRef, LoaderErr> {
     let (analyzed_symbol_table, expression) = analyze_module(
         state,
         auto_use_modules,
@@ -47,7 +60,7 @@ pub fn analyze_module(
     source_map: &SourceMap,
     canonical_path: &[String],
     ast_module: &ParsedAstModule,
-) -> Result<(SymbolTable, Option<Expression>), Error> {
+) -> Result<(SymbolTable, Option<Expression>), LoaderErr> {
     let mut resolver = Analyzer::new(
         state,
         modules,
@@ -61,10 +74,7 @@ pub fn analyze_module(
             for (name, symbol) in symbol_table.symbols() {
                 target
                     .add_symbol(name, symbol.clone())
-                    .map_err(|err| Error {
-                        node: Node::default(),
-                        kind: ErrorKind::SemanticError(err),
-                    })?;
+                    .map_err(|err| LoaderErr::SemanticError(err))?;
             }
         }
     }
@@ -92,7 +102,7 @@ pub fn analyze_modules_in_order(
     source_map: &SourceMap,
     module_paths_in_order: &[Vec<String>],
     parsed_modules: &DependencyParser,
-) -> Result<(), Error> {
+) -> Result<(), LoaderErr> {
     for module_path in module_paths_in_order {
         if let Some(parse_module) = parsed_modules.get_parsed_module(module_path) {
             analyze_module(
@@ -104,10 +114,7 @@ pub fn analyze_modules_in_order(
                 parse_module,
             )?;
         } else {
-            return Err(Error {
-                kind: ErrorKind::CanNotFindModule(module_path.clone()),
-                node: Node::default(),
-            });
+            return Err(LoaderErr::CouldNotLoad);
         }
     }
     Ok(())
