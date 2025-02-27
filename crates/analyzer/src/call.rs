@@ -6,7 +6,6 @@
 use crate::err::{ResolveError, ResolveErrorKind};
 use crate::{LocationSide, Resolver, SPARSE_TYPE_ID};
 use std::rc::Rc;
-use swamp_script_ast::{MutableOrImmutableExpression, Node, QualifiedTypeIdentifier};
 use swamp_script_semantic::{
     ResolvedArgumentExpressionOrLocation, ResolvedExpression, ResolvedExpressionKind,
     ResolvedMutOrImmutableExpression, ResolvedNode, ResolvedRustType, ResolvedType,
@@ -17,7 +16,7 @@ impl<'a> Resolver<'a> {
     pub fn resolve_argument(
         &mut self,
         fn_parameter: &ResolvedTypeForParameter,
-        argument_expr: &MutableOrImmutableExpression,
+        argument_expr: &swamp_script_ast::MutableOrImmutableExpression,
     ) -> Result<ResolvedArgumentExpressionOrLocation, ResolveError> {
         let mut_or_immutable = if fn_parameter.is_mutable {
             let mut_location = self.resolve_to_location(
@@ -41,7 +40,7 @@ impl<'a> Resolver<'a> {
         &mut self,
         node: &ResolvedNode,
         fn_parameters: &[ResolvedTypeForParameter],
-        arguments: &[MutableOrImmutableExpression],
+        arguments: &[swamp_script_ast::MutableOrImmutableExpression],
     ) -> Result<Vec<ResolvedArgumentExpressionOrLocation>, ResolveError> {
         if fn_parameters.len() != arguments.len() {
             return Err(self.create_err_resolved(
@@ -63,9 +62,9 @@ impl<'a> Resolver<'a> {
 
     pub(crate) fn check_for_internal_static_call(
         &mut self,
-        type_name: &QualifiedTypeIdentifier,
-        function_name: &Node,
-        arguments: &[MutableOrImmutableExpression],
+        type_name: &swamp_script_ast::QualifiedTypeIdentifier,
+        function_name: &swamp_script_ast::Node,
+        arguments: &[swamp_script_ast::MutableOrImmutableExpression],
     ) -> Result<Option<ResolvedExpression>, ResolveError> {
         let (type_name_text, function_name_text) = {
             (
@@ -120,7 +119,7 @@ impl<'a> Resolver<'a> {
 
     pub fn resolve_mut_or_immutable_expression(
         &mut self,
-        expr: &MutableOrImmutableExpression,
+        expr: &swamp_script_ast::MutableOrImmutableExpression,
         expected_type: Option<&ResolvedType>,
         location_side: LocationSide,
     ) -> Result<ResolvedMutOrImmutableExpression, ResolveError> {

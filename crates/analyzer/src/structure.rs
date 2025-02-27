@@ -5,7 +5,6 @@
 use crate::err::{ResolveError, ResolveErrorKind};
 use crate::Resolver;
 use seq_set::SeqSet;
-use swamp_script_ast::{FieldExpression, Node, QualifiedTypeIdentifier};
 use swamp_script_semantic::{
     ResolvedAnonymousStructType, ResolvedArgumentExpressionOrLocation, ResolvedExpression,
     ResolvedExpressionKind, ResolvedFunctionRef, ResolvedLocationAccess,
@@ -21,7 +20,7 @@ impl<'a> Resolver<'a> {
         function: &ResolvedFunctionRef,
         struct_to_instantiate: ResolvedStructTypeRef,
         source_order_expressions: Vec<(usize, ResolvedNode, ResolvedExpression)>,
-        node: &Node,
+        node: &swamp_script_ast::Node,
     ) -> Result<ResolvedExpression, ResolveError> {
         let mut expressions = Vec::new();
 
@@ -119,7 +118,7 @@ impl<'a> Resolver<'a> {
         struct_to_instantiate: ResolvedStructTypeRef,
         mut source_order_expressions: Vec<(usize, ResolvedExpression)>,
         missing_fields: SeqSet<String>,
-        node: &Node,
+        node: &swamp_script_ast::Node,
     ) -> Result<ResolvedExpression, ResolveError> {
         {
             let borrowed_anon_type = &struct_to_instantiate.borrow().anon_struct_type;
@@ -154,8 +153,8 @@ impl<'a> Resolver<'a> {
 
     pub(crate) fn resolve_struct_instantiation(
         &mut self,
-        qualified_type_identifier: &QualifiedTypeIdentifier,
-        ast_fields: &Vec<FieldExpression>,
+        qualified_type_identifier: &swamp_script_ast::QualifiedTypeIdentifier,
+        ast_fields: &Vec<swamp_script_ast::FieldExpression>,
         has_rest: bool,
     ) -> Result<ResolvedExpression, ResolveError> {
         let struct_to_instantiate = self.get_struct_type(qualified_type_identifier)?;
@@ -221,7 +220,7 @@ impl<'a> Resolver<'a> {
     fn resolve_anon_struct_instantiation_helper(
         &mut self,
         struct_to_instantiate: &ResolvedAnonymousStructType,
-        ast_fields: &Vec<FieldExpression>,
+        ast_fields: &Vec<swamp_script_ast::FieldExpression>,
     ) -> Result<
         (
             Vec<(usize, ResolvedNode, ResolvedExpression)>,
@@ -281,9 +280,9 @@ impl<'a> Resolver<'a> {
 
     pub(crate) fn resolve_anon_struct_instantiation(
         &mut self,
-        node: &Node,
+        node: &swamp_script_ast::Node,
         struct_to_instantiate: &ResolvedAnonymousStructType,
-        ast_fields: &Vec<FieldExpression>,
+        ast_fields: &Vec<swamp_script_ast::FieldExpression>,
         allow_rest: bool,
     ) -> Result<Vec<(usize, ResolvedExpression)>, ResolveError> {
         let (source_order_expressions, missing_fields) =

@@ -12,6 +12,7 @@ fixed32 = "0.0.17"
 seq-fmt = "0.0.1"
 seq-set = "0.0.2"
 tracing = "0.1.40"
+tiny-ver = "0.1.2"
 
 [dev-dependencies]
 test-log = { version = "0.2.16", features = ["trace", "log", "color"] }

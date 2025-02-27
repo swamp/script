@@ -5,7 +5,6 @@
 use crate::err::{ResolveError, ResolveErrorKind};
 use crate::Resolver;
 use std::rc::Rc;
-use swamp_script_ast::{EnumVariantLiteral, Expression, LiteralKind, Node};
 use swamp_script_semantic::{
     Fp, ResolvedEnumLiteralData, ResolvedEnumVariantType, ResolvedExpression, ResolvedLiteral,
     ResolvedMapType, ResolvedMapTypeRef, ResolvedNode, ResolvedTupleType, ResolvedTupleTypeRef,
@@ -17,13 +16,13 @@ impl<'a> Resolver<'a> {
     #[allow(clippy::too_many_lines)]
     pub(crate) fn resolve_literal(
         &mut self,
-        ast_node: &Node,
-        ast_literal_kind: &LiteralKind,
+        ast_node: &swamp_script_ast::Node,
+        ast_literal_kind: &swamp_script_ast::LiteralKind,
         expected_type: Option<&ResolvedType>,
     ) -> Result<(ResolvedLiteral, ResolvedType), ResolveError> {
         let node_text = self.get_text(&ast_node);
         let resolved_literal = match &ast_literal_kind {
-            LiteralKind::Int => (
+            swamp_script_ast::LiteralKind::Int => (
                 ResolvedLiteral::IntLiteral(Self::str_to_int(node_text).map_err(
                     |int_conversion_err| {
                         self.create_err(
@@ -34,7 +33,7 @@ impl<'a> Resolver<'a> {
                 )?),
                 ResolvedType::Int,
             ),
-            LiteralKind::Float => {
+            swamp_script_ast::LiteralKind::Float => {
                 let float = Self::str_to_float(node_text).map_err(|float_conversion_err| {
                     self.create_err(
                         ResolveErrorKind::FloatConversionError(float_conversion_err),
@@ -46,11 +45,11 @@ impl<'a> Resolver<'a> {
                     ResolvedType::Float,
                 )
             }
-            LiteralKind::String(processed_string) => (
+            swamp_script_ast::LiteralKind::String(processed_string) => (
                 ResolvedLiteral::StringLiteral(processed_string.to_string()),
                 ResolvedType::String,
             ),
-            LiteralKind::Bool => {
+            swamp_script_ast::LiteralKind::Bool => {
                 let bool_val = if node_text == "false" {
                     false
                 } else if node_text == "true" {
@@ -60,15 +59,15 @@ impl<'a> Resolver<'a> {
                 };
                 (ResolvedLiteral::BoolLiteral(bool_val), ResolvedType::Bool)
             }
-            LiteralKind::EnumVariant(ref enum_literal) => {
+            swamp_script_ast::LiteralKind::EnumVariant(ref enum_literal) => {
                 let (enum_name, variant_name) = match enum_literal {
-                    EnumVariantLiteral::Simple(enum_name, variant_name) => {
+                    swamp_script_ast::EnumVariantLiteral::Simple(enum_name, variant_name) => {
                         (enum_name, variant_name)
                     }
-                    EnumVariantLiteral::Tuple(enum_name, variant_name, _) => {
+                    swamp_script_ast::EnumVariantLiteral::Tuple(enum_name, variant_name, _) => {
                         (enum_name, variant_name)
                     }
-                    EnumVariantLiteral::Struct(enum_name, variant_name, _) => {
+                    swamp_script_ast::EnumVariantLiteral::Struct(enum_name, variant_name, _) => {
                         (enum_name, variant_name)
                     }
                 };
@@ -80,14 +79,14 @@ impl<'a> Resolver<'a> {
                 let variant_ref = self.resolve_enum_variant_ref(enum_name, variant_name)?;
 
                 let resolved_data = match enum_literal {
-                    EnumVariantLiteral::Simple(_, _) => ResolvedEnumLiteralData::Nothing,
-                    EnumVariantLiteral::Tuple(_node, _variant, expressions) => {
+                    swamp_script_ast::EnumVariantLiteral::Simple(_, _) => ResolvedEnumLiteralData::Nothing,
+                    swamp_script_ast::EnumVariantLiteral::Tuple(_node, _variant, expressions) => {
                         let resolved = self
                             .resolve_expressions(None, expressions)
                             .expect("enum tuple expressions should resolve");
                         ResolvedEnumLiteralData::Tuple(resolved)
                     }
-                    EnumVariantLiteral::Struct(
+                    swamp_script_ast::EnumVariantLiteral::Struct(
                         _qualified_type_identifier,
                         variant,
                         anonym_struct_field_and_expressions,
@@ -133,7 +132,7 @@ impl<'a> Resolver<'a> {
                 )
             }
 
-            LiteralKind::Array(items) => {
+            swamp_script_ast::LiteralKind::Array(items) => {
                 if items.len() == 0 {
                     if let Some(found_expected_type) = expected_type {
                         match found_expected_type {
@@ -168,20 +167,20 @@ impl<'a> Resolver<'a> {
                 }
             }
 
-            LiteralKind::Map(entries) => {
+            swamp_script_ast::LiteralKind::Map(entries) => {
                 let (map_literal, map_type_ref) = self.resolve_map_literal(ast_node, &entries)?;
 
                 (map_literal, ResolvedType::Map(map_type_ref.clone()))
             }
 
-            LiteralKind::Tuple(expressions) => {
+            swamp_script_ast::LiteralKind::Tuple(expressions) => {
                 let (tuple_type_ref, resolved_items) = self.resolve_tuple_literal(&expressions)?;
                 (
                     ResolvedLiteral::TupleLiteral(tuple_type_ref.clone(), resolved_items),
                     ResolvedType::Tuple(tuple_type_ref.clone()),
                 )
             }
-            LiteralKind::None => {
+            swamp_script_ast::LiteralKind::None => {
                 if let Some(found_expected_type) = expected_type {
                     if let ResolvedType::Optional(_some_type) = found_expected_type {
                         return Ok((ResolvedLiteral::NoneLiteral, found_expected_type.clone()));
@@ -196,7 +195,7 @@ impl<'a> Resolver<'a> {
 
     fn resolve_tuple_literal(
         &mut self,
-        items: &[Expression],
+        items: &[swamp_script_ast::Expression],
     ) -> Result<(ResolvedTupleTypeRef, Vec<ResolvedExpression>), ResolveError> {
         let expressions = self.resolve_expressions(None, items)?;
         let mut tuple_types = Vec::new();
@@ -214,8 +213,8 @@ impl<'a> Resolver<'a> {
 
     fn resolve_map_literal(
         &mut self,
-        node: &Node,
-        entries: &[(Expression, Expression)],
+        node: &swamp_script_ast::Node,
+        entries: &[(swamp_script_ast::Expression, swamp_script_ast::Expression)],
     ) -> Result<(ResolvedLiteral, ResolvedMapTypeRef), ResolveError> {
         if entries.is_empty() {
             return Err(self.create_err(ResolveErrorKind::EmptyMapLiteral, node));
@@ -271,7 +270,7 @@ impl<'a> Resolver<'a> {
     }
 
     #[must_use]
-    pub fn create_err(&self, kind: ResolveErrorKind, ast_node: &Node) -> ResolveError {
+    pub fn create_err(&self, kind: ResolveErrorKind, ast_node: &swamp_script_ast::Node) -> ResolveError {
         error!(?kind, "error created");
         ResolveError {
             node: self.to_node(ast_node),

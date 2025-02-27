@@ -5,6 +5,7 @@
 pub mod modules;
 pub mod ns;
 pub mod prelude;
+pub mod symtbl;
 
 pub use fixed32::Fp;
 use seq_fmt::comma;
@@ -279,6 +280,8 @@ pub enum SemanticError {
     IncompatibleTypes,
     WasNotImmutable,
     WasNotMutable,
+    DuplicateSymbolName,
+    DuplicateNamespaceLink(String),
 }
 
 impl ResolvedType {
@@ -1437,18 +1440,6 @@ pub enum ResolvedUseItem {
 pub struct ResolvedUse {
     pub path: Vec<ResolvedNode>,
     pub items: Vec<ResolvedUseItem>,
-}
-
-#[derive(Debug)]
-pub enum ResolvedDefinition {
-    StructType(ResolvedStructTypeRef),
-    EnumType(ResolvedEnumTypeRef),
-    ImplType(ResolvedType),
-    FunctionDef(ResolvedFunction),
-    Alias(ResolvedType),
-    Comment(ResolvedNode),
-    Use(ResolvedUse),
-    Constant(ResolvedNode, ResolvedConstantRef),
 }
 
 // Mutable part

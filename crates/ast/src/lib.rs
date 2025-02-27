@@ -186,7 +186,6 @@ pub enum Definition {
     Use(Use),
 
     // Other
-    Comment(Node),
     Constant(ConstantInfo),
 }
 

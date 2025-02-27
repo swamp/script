@@ -5,7 +5,6 @@
 
 use crate::err::{ResolveError, ResolveErrorKind};
 use crate::{Resolver, SPARSE_TYPE_ID};
-use swamp_script_ast::{Expression, Node};
 use swamp_script_semantic::{
     ResolvedArrayTypeRef, ResolvedMapTypeRef, ResolvedPostfix, ResolvedPostfixKind,
     ResolvedTupleTypeRef,
@@ -17,8 +16,8 @@ impl<'a> Resolver<'a> {
         &mut self,
         ty: &ResolvedType,
         is_mutable: bool,
-        ast_member_function_name: &Node,
-        ast_arguments: &[&Expression],
+        ast_member_function_name: &swamp_script_ast::Node,
+        ast_arguments: &[&swamp_script_ast::Expression],
     ) -> Result<Option<ResolvedPostfix>, ResolveError> {
         match &ty {
             ResolvedType::Array(array_type_ref) => {
@@ -76,8 +75,8 @@ impl<'a> Resolver<'a> {
     fn resolve_tuple_member_call(
         &mut self,
         tuple_type: &ResolvedTupleTypeRef,
-        ast_member_function_name: &Node,
-        arguments: &[&Expression],
+        ast_member_function_name: &swamp_script_ast::Node,
+        arguments: &[&swamp_script_ast::Expression],
     ) -> Result<ResolvedPostfix, ResolveError> {
         //let resolved_node = self.to_node(ast_member_function_name);
         if tuple_type.0.len() != 2 {
@@ -122,7 +121,7 @@ impl<'a> Resolver<'a> {
         Ok(resolved_expr)
     }
 
-    fn check_mutable(&mut self, is_mutable: bool, node: &Node) -> Result<(), ResolveError> {
+    fn check_mutable(&mut self, is_mutable: bool, node: &swamp_script_ast::Node) -> Result<(), ResolveError> {
         if !is_mutable {
             Err(self.create_err(ResolveErrorKind::ExpectedMutableLocation, node))
         } else {
@@ -134,7 +133,7 @@ impl<'a> Resolver<'a> {
         &mut self,
         kind: ResolvedPostfixKind,
         ty: &ResolvedType,
-        node: &Node,
+        node: &swamp_script_ast::Node,
     ) -> ResolvedPostfix {
         let resolved_node = self.to_node(node);
 
@@ -149,8 +148,8 @@ impl<'a> Resolver<'a> {
         &mut self,
         map_type: &ResolvedMapTypeRef,
         is_mutable: bool,
-        ast_member_function_name: &Node,
-        ast_arguments: &[&Expression],
+        ast_member_function_name: &swamp_script_ast::Node,
+        ast_arguments: &[&swamp_script_ast::Expression],
     ) -> Result<ResolvedPostfix, ResolveError> {
         let member_function_name_str = self.get_text(ast_member_function_name);
 
@@ -206,8 +205,8 @@ impl<'a> Resolver<'a> {
         &mut self,
         _array_type_ref: &ResolvedArrayTypeRef,
         is_mutable: bool,
-        ast_member_function_name: &Node,
-        ast_arguments: &[&Expression],
+        ast_member_function_name: &swamp_script_ast::Node,
+        ast_arguments: &[&swamp_script_ast::Expression],
     ) -> Result<ResolvedPostfix, ResolveError> {
         let member_function_name_str = self.get_text(ast_member_function_name);
         let resolved_postfix = match member_function_name_str {
@@ -258,8 +257,8 @@ impl<'a> Resolver<'a> {
 
     fn resolve_single_float_expression(
         &mut self,
-        node: &Node,
-        ast_arguments: &[&Expression],
+        node: &swamp_script_ast::Node,
+        ast_arguments: &[&swamp_script_ast::Expression],
     ) -> Result<ResolvedExpression, ResolveError> {
         if ast_arguments.len() != 1 {
             return Err(self.create_err(
@@ -274,8 +273,8 @@ impl<'a> Resolver<'a> {
 
     fn resolve_single_int_expression(
         &mut self,
-        node: &Node,
-        ast_arguments: &[&Expression],
+        node: &swamp_script_ast::Node,
+        ast_arguments: &[&swamp_script_ast::Expression],
     ) -> Result<ResolvedExpression, ResolveError> {
         if ast_arguments.len() != 1 {
             return Err(self.create_err(
@@ -290,8 +289,8 @@ impl<'a> Resolver<'a> {
 
     fn resolve_two_float_expressions(
         &mut self,
-        node: &Node,
-        ast_arguments: &[&Expression],
+        node: &swamp_script_ast::Node,
+        ast_arguments: &[&swamp_script_ast::Expression],
     ) -> Result<(ResolvedExpression, ResolvedExpression), ResolveError> {
         if ast_arguments.len() != 2 {
             return Err(self.create_err(
@@ -308,8 +307,8 @@ impl<'a> Resolver<'a> {
     #[allow(clippy::too_many_lines)]
     fn resolve_float_member_call(
         &mut self,
-        ast_member_function_name: &Node,
-        ast_arguments: &[&Expression],
+        ast_member_function_name: &swamp_script_ast::Node,
+        ast_arguments: &[&swamp_script_ast::Expression],
     ) -> Result<ResolvedPostfix, ResolveError> {
         let function_name_str = self.get_text(ast_member_function_name);
         let node = ast_member_function_name;
@@ -437,8 +436,8 @@ impl<'a> Resolver<'a> {
 
     fn resolve_string_member_call(
         &mut self,
-        ast_member_function_name: &Node,
-        ast_arguments: &[&Expression],
+        ast_member_function_name: &swamp_script_ast::Node,
+        ast_arguments: &[&swamp_script_ast::Expression],
     ) -> Result<ResolvedPostfix, ResolveError> {
         let function_name_str = self.get_text(ast_member_function_name);
         let node = self.to_node(&ast_member_function_name);
@@ -466,8 +465,8 @@ impl<'a> Resolver<'a> {
 
     fn resolve_int_member_call(
         &mut self,
-        ast_member_function_name: &Node,
-        ast_arguments: &[&Expression],
+        ast_member_function_name: &swamp_script_ast::Node,
+        ast_arguments: &[&swamp_script_ast::Expression],
     ) -> Result<ResolvedPostfix, ResolveError> {
         let function_name_str = self.get_text(ast_member_function_name);
         let node = self.to_node(&ast_member_function_name);
@@ -533,8 +532,8 @@ impl<'a> Resolver<'a> {
     fn check_for_internal_member_call_extra(
         &mut self,
         ty: &ResolvedType,
-        ast_member_function_name: &Node,
-        ast_arguments: &[&Expression],
+        ast_member_function_name: &swamp_script_ast::Node,
+        ast_arguments: &[&swamp_script_ast::Expression],
     ) -> Result<Option<ResolvedPostfix>, ResolveError> {
         // TODO: Early out
         if let ResolvedType::Generic(generic_type, parameters) = ty.clone() {

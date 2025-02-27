@@ -3,12 +3,11 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use crate::ns::{ResolvedModuleNamespace, ResolvedModuleNamespaceRef};
+use crate::ns::NamespacePath;
+use crate::ns::ResolvedModuleNamespace;
+use crate::symtbl::SymbolTable;
 use crate::ResolvedExpressionKind;
-use crate::{
-    ConstantId, ResolvedConstant, ResolvedConstantRef, ResolvedDefinition, ResolvedExpression,
-};
-use std::cell::RefCell;
+use crate::{ConstantId, ResolvedConstant, ResolvedConstantRef, ResolvedExpression};
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
@@ -26,21 +25,12 @@ impl Default for ResolvedModules {
 }
 
 pub struct ResolvedModule {
-    pub definitions: Vec<ResolvedDefinition>,
+    pub namespace: ResolvedModuleNamespace,
     pub expression: Option<ResolvedExpression>,
-    pub namespace: ResolvedModuleNamespaceRef,
 }
 
 impl Debug for ResolvedModule {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        for resolved_def in &self.definitions {
-            writeln!(f, "{resolved_def:?}")?;
-        }
-
-        if !self.definitions.is_empty() && self.expression.is_some() {
-            writeln!(f, "---\n")?;
-        }
-
         if let Some(resolved_expression) = &self.expression {
             pretty_print(f, resolved_expression, 0)?;
         }
@@ -71,15 +61,17 @@ pub fn pretty_print(
     }
 }
 
-pub type ResolvedModuleRef = Rc<RefCell<ResolvedModule>>;
+pub type ResolvedModuleRef = Rc<ResolvedModule>;
 
 impl ResolvedModule {
-    pub fn new(module_path: &[String]) -> Self {
-        let ns_ref = Rc::new(RefCell::new(ResolvedModuleNamespace::new(module_path)));
+    pub fn new(
+        module_path: &[String],
+        symbol_table: SymbolTable,
+        expression: Option<ResolvedExpression>,
+    ) -> Self {
         Self {
-            definitions: Vec::new(),
-            namespace: ns_ref,
-            expression: None,
+            namespace: ResolvedModuleNamespace::new(NamespacePath::from(module_path), symbol_table),
+            expression,
         }
     }
 }
@@ -92,10 +84,8 @@ impl ResolvedModules {
         }
     }
     pub fn add(&mut self, module: ResolvedModuleRef) {
-        self.modules.insert(
-            module.clone().borrow().namespace.borrow().path.clone(),
-            module,
-        );
+        self.modules
+            .insert(module.clone().namespace.path.clone(), module);
     }
 
     pub fn add_constant(&mut self, resolved_constant: ResolvedConstant) -> ResolvedConstantRef {
@@ -106,21 +96,6 @@ impl ResolvedModules {
         self.constants.push(constant_ref.clone());
 
         constant_ref
-    }
-
-    pub fn add_empty_module(&mut self, module_path: &[String]) -> ResolvedModuleRef {
-        let ns_ref = Rc::new(RefCell::new(ResolvedModuleNamespace::new(module_path)));
-        let module = ResolvedModule {
-            definitions: vec![],
-            expression: None,
-            namespace: ns_ref,
-        };
-        let module_ref = Rc::new(RefCell::new(module));
-
-        self.modules
-            .insert(Vec::from(module_path), module_ref.clone());
-
-        module_ref
     }
 
     #[must_use]

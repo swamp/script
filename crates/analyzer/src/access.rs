@@ -4,7 +4,6 @@
  */
 use crate::err::{ResolveError, ResolveErrorKind};
 use crate::Resolver;
-use swamp_script_ast::{Expression, Node, QualifiedTypeIdentifier, RangeMode};
 use swamp_script_semantic::{
     ResolvedArrayTypeRef, ResolvedExpression, ResolvedExpressionKind, ResolvedFunction,
     ResolvedFunctionRef, ResolvedRange, ResolvedRangeMode, ResolvedType,
@@ -27,9 +26,9 @@ impl<'a> Resolver<'a> {
     }
 
     pub(crate) fn resolve_static_member_access(
-        &self,
-        struct_reference: &QualifiedTypeIdentifier,
-        member_name_node: &Node,
+        &mut self,
+        struct_reference: &swamp_script_ast::QualifiedTypeIdentifier,
+        member_name_node: &swamp_script_ast::Node,
     ) -> Result<ResolvedExpression, ResolveError> {
         let struct_type = self.get_struct_type(struct_reference)?;
         let member_name = self.get_text(member_name_node);
@@ -48,8 +47,8 @@ impl<'a> Resolver<'a> {
 
     pub(crate) fn resolve_min_max_expr(
         &mut self,
-        min_expr: &Expression,
-        max_expr: &Expression,
+        min_expr: &swamp_script_ast::Expression,
+        max_expr: &swamp_script_ast::Expression,
     ) -> Result<(ResolvedExpression, ResolvedExpression), ResolveError> {
         let resolved_min = self.resolve_expression(min_expr, Some(&ResolvedType::Int))?;
         let resolved_max = self.resolve_expression(max_expr, Some(&ResolvedType::Int))?;
@@ -59,15 +58,15 @@ impl<'a> Resolver<'a> {
 
     pub fn resolve_range(
         &mut self,
-        min_expr: &Expression,
-        max_expr: &Expression,
-        mode: &RangeMode,
+        min_expr: &swamp_script_ast::Expression,
+        max_expr: &swamp_script_ast::Expression,
+        mode: &swamp_script_ast::RangeMode,
     ) -> Result<ResolvedRange, ResolveError> {
         let (min, max) = self.resolve_min_max_expr(min_expr, max_expr)?;
 
         let resolved_range_mode = match mode {
-            RangeMode::Inclusive => ResolvedRangeMode::Inclusive,
-            RangeMode::Exclusive => ResolvedRangeMode::Exclusive,
+            swamp_script_ast::RangeMode::Inclusive => ResolvedRangeMode::Inclusive,
+            swamp_script_ast::RangeMode::Exclusive => ResolvedRangeMode::Exclusive,
         };
         Ok(ResolvedRange {
             min,

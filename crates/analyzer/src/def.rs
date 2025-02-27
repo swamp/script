@@ -7,25 +7,21 @@ use crate::err::{ResolveError, ResolveErrorKind};
 use crate::Resolver;
 use seq_map::SeqMap;
 use std::rc::Rc;
-use swamp_script_ast::{
-    Definition, EnumVariantType, Function, LocalTypeIdentifier, Node, QualifiedTypeIdentifier,
-    StructType, Use, UseItem,
-};
 use swamp_script_semantic::{
     FunctionTypeSignature, ResolvedAnonymousStructFieldType, ResolvedAnonymousStructType,
-    ResolvedDefinition, ResolvedEnumType, ResolvedEnumTypeRef, ResolvedEnumVariantCommon,
+    ResolvedEnumType, ResolvedEnumTypeRef, ResolvedEnumVariantCommon,
     ResolvedEnumVariantSimpleType, ResolvedEnumVariantSimpleTypeRef, ResolvedEnumVariantStructType,
     ResolvedEnumVariantTupleType, ResolvedEnumVariantType, ResolvedExternalFunctionDefinition,
     ResolvedFunction, ResolvedInternalFunctionDefinition, ResolvedLocalIdentifier,
     ResolvedLocalTypeIdentifier, ResolvedParameterNode, ResolvedStructType, ResolvedStructTypeRef,
-    ResolvedType, ResolvedTypeForParameter, ResolvedUse, ResolvedUseItem,
+    ResolvedType, ResolvedTypeForParameter, ResolvedUseItem,
 };
 
 impl<'a> Resolver<'a> {
     fn resolve_use_definition(
-        &self,
-        use_definition: &Use,
-    ) -> Result<ResolvedDefinition, ResolveError> {
+        &mut self,
+        use_definition: &swamp_script_ast::Use,
+    ) -> Result<(), ResolveError> {
         let mut nodes = Vec::new();
         for ast_node in &use_definition.module_path.0 {
             nodes.push(self.to_node(ast_node));
@@ -39,49 +35,55 @@ impl<'a> Resolver<'a> {
             })
             .collect();
 
-        let mut items = Vec::new();
-        let lookup = &self.shared.lookup;
+        let found_module = self.shared.modules.get(&path).unwrap();
+        if use_definition.items.is_empty() {
+            let last_name = path.last().unwrap();
+            self.shared
+                .lookup_table
+                .add_module_link(last_name, found_module.clone())
+                .map_err(|err| {
+                    self.create_err(
+                        ResolveErrorKind::SemanticError(err),
+                        &use_definition.module_path.0[0],
+                    )
+                })?;
+        }
 
         for ast_items in &use_definition.items {
-            let resolved_item = match ast_items {
-                UseItem::Identifier(node) => {
+            match ast_items {
+                swamp_script_ast::UseItem::Identifier(node) => {
                     let ident_resolved_node = self.to_node(&node.0);
                     let ident = ResolvedUseItem::Identifier(ident_resolved_node.clone());
-                    let ident_text = self.get_text_resolved(&ident_resolved_node);
-
-                    lookup.get_internal_function(&path, ident_text).ok_or(
-                        self.create_err_resolved(
-                            ResolveErrorKind::UnknownTypeReference,
-                            &ident_resolved_node,
-                        ),
-                    )?;
-                    if let Some(found_internal_function) =
-                        lookup.get_internal_function(&path, ident_text)
+                    let ident_text = self.get_text_resolved(&ident_resolved_node).to_string();
+                    if let Some(found_symbol) =
+                        found_module.namespace.symbol_table.get_symbol(&ident_text)
                     {
-                        lookup.add_internal_function_link(ident_text, found_internal_function)?;
-                    } else if let Some(found_external_function_def) =
-                        lookup.get_external_function_declaration(&path, ident_text)
-                    {
-                        lookup.add_external_function_declaration_link(
-                            ident_text,
-                            found_external_function_def,
-                        )?;
+                        self.shared
+                            .lookup_table
+                            .add_symbol(&ident_text, found_symbol.clone())
+                            .map_err(|err| {
+                                self.create_err(ResolveErrorKind::SemanticError(err), &node.0)
+                            })?;
                     } else {
                         return Err(self.create_err_resolved(
-                            ResolveErrorKind::UnknownFunction,
+                            ResolveErrorKind::UnknownTypeReference,
                             &ident_resolved_node,
                         ));
                     }
                     ident
                 }
-                UseItem::Type(node) => {
+                swamp_script_ast::UseItem::Type(node) => {
                     let ident_resolved_node = self.to_node(&node.0);
-                    let ident_text = self.get_text_resolved(&ident_resolved_node);
-
-                    if let Some(found_struct) = lookup.get_struct(&path, ident_text) {
-                        lookup.add_struct_link(found_struct)?;
-                    } else if let Some(found_enum) = lookup.get_enum(&path, ident_text) {
-                        lookup.add_enum_link(found_enum)?;
+                    let ident_text = self.get_text_resolved(&ident_resolved_node).to_string();
+                    if let Some(found_symbol) =
+                        found_module.namespace.symbol_table.get_symbol(&ident_text)
+                    {
+                        self.shared
+                            .lookup_table
+                            .add_symbol(&ident_text, found_symbol.clone())
+                            .map_err(|err| {
+                                self.create_err(ResolveErrorKind::SemanticError(err), &node.0)
+                            })?;
                     } else {
                         return Err(self.create_err_resolved(
                             ResolveErrorKind::UnknownTypeReference,
@@ -91,16 +93,15 @@ impl<'a> Resolver<'a> {
                     ResolvedUseItem::TypeIdentifier(self.to_node(&node.0))
                 }
             };
-            items.push(resolved_item);
         }
 
-        Ok(ResolvedDefinition::Use(ResolvedUse { path: nodes, items }))
+        Ok(())
     }
 
     fn resolve_enum_type_definition(
         &mut self,
-        enum_type_name: &Node,
-        ast_variants: &Vec<EnumVariantType>,
+        enum_type_name: &swamp_script_ast::Node,
+        ast_variants: &Vec<swamp_script_ast::EnumVariantType>,
     ) -> Result<ResolvedEnumTypeRef, ResolveError> {
         let mut resolved_variants = SeqMap::new();
 
@@ -118,9 +119,9 @@ impl<'a> Resolver<'a> {
 
         for (container_index_usize, ast_variant_type) in ast_variants.iter().enumerate() {
             let variant_name_node = match ast_variant_type {
-                EnumVariantType::Simple(name) => name,
-                EnumVariantType::Tuple(name, _) => name,
-                EnumVariantType::Struct(name, _) => name,
+                swamp_script_ast::EnumVariantType::Simple(name) => name,
+                swamp_script_ast::EnumVariantType::Tuple(name, _) => name,
+                swamp_script_ast::EnumVariantType::Struct(name, _) => name,
             };
 
             let number = self.shared.state.allocate_number();
@@ -137,13 +138,13 @@ impl<'a> Resolver<'a> {
             };
 
             let variant_type = match ast_variant_type {
-                EnumVariantType::Simple(_variant_name_node) => {
+                swamp_script_ast::EnumVariantType::Simple(_variant_name_node) => {
                     let simple_ref = ResolvedEnumVariantSimpleType { common };
                     ResolvedEnumVariantType::Nothing(ResolvedEnumVariantSimpleTypeRef::from(
                         simple_ref,
                     ))
                 }
-                EnumVariantType::Tuple(_variant_name_node, types) => {
+                swamp_script_ast::EnumVariantType::Tuple(_variant_name_node, types) => {
                     let mut vec = Vec::new();
                     for tuple_type in types {
                         let resolved_type = self.resolve_type(tuple_type)?;
@@ -158,7 +159,7 @@ impl<'a> Resolver<'a> {
 
                     ResolvedEnumVariantType::Tuple(resolved_tuple_type_ref)
                 }
-                EnumVariantType::Struct(_variant_name_node, ast_struct_fields) => {
+                swamp_script_ast::EnumVariantType::Struct(_variant_name_node, ast_struct_fields) => {
                     let mut fields = SeqMap::new();
 
                     for (_index, field_with_type) in ast_struct_fields.fields.iter().enumerate() {
@@ -210,8 +211,8 @@ impl<'a> Resolver<'a> {
     ///
     pub fn resolve_struct_type_definition(
         &mut self,
-        ast_struct: &StructType,
-    ) -> Result<ResolvedStructTypeRef, ResolveError> {
+        ast_struct: &swamp_script_ast::StructType,
+    ) -> Result<(), ResolveError> {
         let mut resolved_fields = SeqMap::new();
 
         for field_name_and_type in &ast_struct.fields {
@@ -247,15 +248,15 @@ impl<'a> Resolver<'a> {
 
         let resolved_struct_ref = self.shared.lookup.add_struct(resolved_struct)?;
 
-        Ok(resolved_struct_ref)
+        Ok(())
     }
 
     fn resolve_function_definition(
         &mut self,
-        function: &Function,
-    ) -> Result<ResolvedDefinition, ResolveError> {
-        let resolved_function = match function {
-            Function::Internal(function_data) => {
+        function: &swamp_script_ast::Function,
+    ) -> Result<(), ResolveError> {
+        match function {
+            swamp_script_ast::Function::Internal(function_data) => {
                 let parameters = self.resolve_parameters(&function_data.declaration.params)?;
                 let return_type = if let Some(found) = &function_data.declaration.return_type {
                     self.resolve_type(found)?
@@ -291,9 +292,8 @@ impl<'a> Resolver<'a> {
                     .shared
                     .lookup
                     .add_internal_function_ref(&function_name, internal)?;
-                ResolvedFunction::Internal(function_ref)
             }
-            Function::External(ast_signature) => {
+            swamp_script_ast::Function::External(ast_signature) => {
                 let parameters = self.resolve_parameters(&ast_signature.params)?;
                 let external_return_type = if let Some(found) = &ast_signature.return_type {
                     self.resolve_type(found)?
@@ -314,44 +314,37 @@ impl<'a> Resolver<'a> {
                     id: external_function_id,
                 };
 
-                ResolvedFunction::External(Rc::new(external))
-            }
-        };
 
-        Ok(ResolvedDefinition::FunctionDef(resolved_function))
+            }
+        }
+
+        Ok(())
     }
 
     /// # Errors
     ///
     pub fn resolve_definition(
         &mut self,
-        ast_def: &Definition,
-    ) -> Result<ResolvedDefinition, ResolveError> {
+        ast_def: &swamp_script_ast::Definition,
+    ) -> Result<(), ResolveError> {
         let resolved_def = match ast_def {
-            Definition::StructDef(ref ast_struct) => {
-                ResolvedDefinition::StructType(self.resolve_struct_type_definition(ast_struct)?)
+            swamp_script_ast::Definition::StructDef(ref ast_struct) => {
+                self.resolve_struct_type_definition(ast_struct)?
             }
-            Definition::EnumDef(identifier, variants) => {
-                let parent = self.resolve_enum_type_definition(identifier, variants)?;
-                ResolvedDefinition::EnumType(parent)
+            swamp_script_ast::Definition::EnumDef(identifier, variants) => {
+                self.resolve_enum_type_definition(identifier, variants)?;
             }
-            Definition::FunctionDef(function) => {
+            swamp_script_ast::Definition::FunctionDef(function) => {
                 let resolved_return_type = self.resolve_return_type(function)?;
                 self.start_function(resolved_return_type);
-                let resolved_def = self.resolve_function_definition(function)?;
+                self.resolve_function_definition(function)?;
                 self.stop_function();
-                resolved_def
             }
-            Definition::ImplDef(type_identifier, functions) => {
-                let attached_type_type =
+            swamp_script_ast::Definition::ImplDef(type_identifier, functions) => {
                     self.resolve_impl_definition(type_identifier, functions)?;
-                ResolvedDefinition::ImplType(attached_type_type)
             }
-            Definition::Comment(comment_ref) => {
-                ResolvedDefinition::Comment(self.to_node(comment_ref))
-            }
-            Definition::Use(use_info) => self.resolve_use_definition(use_info)?,
-            Definition::Constant(const_info) => self.resolve_constant_definition(const_info)?,
+            swamp_script_ast::Definition::Use(use_info) => self.resolve_use_definition(use_info)?,
+            swamp_script_ast::Definition::Constant(const_info) => self.resolve_constant_definition(const_info)?,
         };
 
         Ok(resolved_def)
@@ -359,11 +352,11 @@ impl<'a> Resolver<'a> {
 
     fn resolve_impl_definition(
         &mut self,
-        attached_to_type: &Node,
-        functions: &Vec<Function>,
+        attached_to_type: &swamp_script_ast::Node,
+        functions: &Vec<swamp_script_ast::Function>,
     ) -> Result<ResolvedType, ResolveError> {
-        let fake_qualified_type_name = QualifiedTypeIdentifier {
-            name: LocalTypeIdentifier(attached_to_type.clone()),
+        let fake_qualified_type_name = swamp_script_ast::QualifiedTypeIdentifier {
+            name: swamp_script_ast::LocalTypeIdentifier(attached_to_type.clone()),
             module_path: None,
             generic_params: vec![],
         };
@@ -375,8 +368,8 @@ impl<'a> Resolver<'a> {
             self.start_function(new_return_type);
 
             let function_name = match function {
-                Function::Internal(function_with_body) => &function_with_body.declaration,
-                Function::External(external_declaration) => external_declaration,
+                swamp_script_ast::Function::Internal(function_with_body) => &function_with_body.declaration,
+                swamp_script_ast::Function::External(external_declaration) => external_declaration,
             };
 
             let function_name_str = self.get_text(&function_name.name).to_string();
@@ -399,11 +392,11 @@ impl<'a> Resolver<'a> {
 
     fn resolve_impl_func(
         &mut self,
-        function: &Function,
+        function: &swamp_script_ast::Function,
         found_struct: &ResolvedStructTypeRef,
     ) -> Result<ResolvedFunction, ResolveError> {
         let resolved_fn = match function {
-            Function::Internal(function_data) => {
+            swamp_script_ast::Function::Internal(function_data) => {
                 let mut parameters = Vec::new();
 
                 if let Some(found_self) = &function_data.declaration.self_parameter {
@@ -461,7 +454,7 @@ impl<'a> Resolver<'a> {
                 ResolvedFunction::Internal(internal_ref)
             }
 
-            Function::External(signature) => {
+            swamp_script_ast::Function::External(signature) => {
                 let mut parameters = Vec::new();
 
                 if let Some(found_self) = &signature.self_parameter {

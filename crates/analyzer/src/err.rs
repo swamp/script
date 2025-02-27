@@ -5,7 +5,6 @@
 
 use seq_map::SeqMapError;
 use std::num::{ParseFloatError, ParseIntError};
-use swamp_script_ast::{LocalTypeIdentifier, Pattern};
 use swamp_script_semantic::{
     ResolvedAnonymousStructType, ResolvedEnumVariantTypeRef, ResolvedNode, ResolvedStructTypeRef,
     ResolvedType, SemanticError, Span,
@@ -29,10 +28,10 @@ pub enum ResolveErrorKind {
     //NamespaceError(NamespaceError),
     CanNotFindModule(Vec<String>),
     UnknownStructTypeReference,
-    UnknownLocalStructTypeReference(LocalTypeIdentifier),
+    UnknownLocalStructTypeReference(swamp_script_ast::LocalTypeIdentifier),
     DuplicateFieldName,
     Unknown(String),
-    UnknownImplTargetTypeReference(LocalTypeIdentifier),
+    UnknownImplTargetTypeReference(swamp_script_ast::LocalTypeIdentifier),
     WrongFieldCountInStructInstantiation(ResolvedStructTypeRef, usize),
     MissingFieldInStructInstantiation(Vec<String>, ResolvedAnonymousStructType),
     ExpectedFunctionExpression,
@@ -51,7 +50,7 @@ pub enum ResolveErrorKind {
     UnknownEnumVariantType,
     WasNotStructType,
     UnknownStructField,
-    MustBeEnumType(Pattern),
+    MustBeEnumType(swamp_script_ast::Pattern),
     UnknownEnumVariantTypeInPattern,
     ExpectedEnumInPattern,
     WrongEnumVariantContainer(ResolvedEnumVariantTypeRef),
@@ -122,6 +121,7 @@ pub enum ResolveErrorKind {
     SelfNotCorrectType,
     IllegalIndexInChain,
     CanNotNoneCoalesce,
+    UnknownSymbol,
 }
 
 impl From<SemanticError> for ResolveError {
