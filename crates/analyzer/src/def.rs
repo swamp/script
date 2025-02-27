@@ -3,23 +3,17 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use crate::err::{ResolveError, ResolveErrorKind};
+use crate::err::{Error, ErrorKind};
 use crate::Analyzer;
 use seq_map::SeqMap;
 use std::rc::Rc;
-use swamp_script_semantic::{
-    AnonymousStructFieldType, AnonymousStructType, EnumType, EnumTypeRef, EnumVariantCommon,
-    EnumVariantSimpleType, EnumVariantSimpleTypeRef, EnumVariantStructType, EnumVariantTupleType,
-    EnumVariantType, ExternalFunctionDefinition, Function, FunctionTypeSignature,
-    InternalFunctionDefinition, LocalIdentifier, LocalTypeIdentifier, ParameterNode, StructType,
-    StructTypeRef, Type, TypeForParameter, UseItem,
-};
+use swamp_script_semantic::{AnonymousStructFieldType, AnonymousStructType, EnumType, EnumTypeRef, EnumVariantCommon, EnumVariantSimpleType, EnumVariantSimpleTypeRef, EnumVariantStructType, EnumVariantTupleType, EnumVariantType, ExternalFunctionDefinition, Function, FunctionTypeSignature, InternalFunctionDefinition, LocalIdentifier, LocalTypeIdentifier, ParameterNode, StructType, StructTypeField, StructTypeRef, Type, TypeForParameter, UseItem};
 
 impl<'a> Analyzer<'a> {
     fn analyze_use_definition(
         &mut self,
         use_definition: &swamp_script_ast::Use,
-    ) -> Result<(), ResolveError> {
+    ) -> Result<(), Error> {
         let mut nodes = Vec::new();
         for ast_node in &use_definition.module_path.0 {
             nodes.push(self.to_node(ast_node));
@@ -41,7 +35,7 @@ impl<'a> Analyzer<'a> {
                 .add_module_link(last_name, found_module.clone())
                 .map_err(|err| {
                     self.create_err(
-                        ResolveErrorKind::SemanticError(err),
+                        ErrorKind::SemanticError(err),
                         &use_definition.module_path.0[0],
                     )
                 })?;
@@ -60,11 +54,11 @@ impl<'a> Analyzer<'a> {
                             .lookup_table
                             .add_symbol(&ident_text, found_symbol.clone())
                             .map_err(|err| {
-                                self.create_err(ResolveErrorKind::SemanticError(err), &node.0)
+                                self.create_err(ErrorKind::SemanticError(err), &node.0)
                             })?;
                     } else {
                         return Err(self.create_err_resolved(
-                            ResolveErrorKind::UnknownTypeReference,
+                            ErrorKind::UnknownTypeReference,
                             &ident_resolved_node,
                         ));
                     }
@@ -80,11 +74,11 @@ impl<'a> Analyzer<'a> {
                             .lookup_table
                             .add_symbol(&ident_text, found_symbol.clone())
                             .map_err(|err| {
-                                self.create_err(ResolveErrorKind::SemanticError(err), &node.0)
+                                self.create_err(ErrorKind::SemanticError(err), &node.0)
                             })?;
                     } else {
                         return Err(self.create_err_resolved(
-                            ResolveErrorKind::UnknownTypeReference,
+                            ErrorKind::UnknownTypeReference,
                             &ident_resolved_node,
                         ));
                     }
@@ -98,22 +92,30 @@ impl<'a> Analyzer<'a> {
 
     fn analyze_enum_type_definition(
         &mut self,
-        enum_type_name: &swamp_script_ast::Node,
-        ast_variants: &Vec<swamp_script_ast::EnumVariantType>,
-    ) -> Result<EnumTypeRef, ResolveError> {
+        enum_type_name: &swamp_script_ast::LocalTypeIdentifier,
+        ast_variants: &[swamp_script_ast::EnumVariantType],
+    ) -> Result<EnumTypeRef, Error> {
         let mut resolved_variants = SeqMap::new();
 
         let parent_number = self.shared.state.allocate_number();
 
         let enum_parent = EnumType {
-            name: LocalTypeIdentifier(self.to_node(enum_type_name)),
-            assigned_name: self.get_text(enum_type_name).to_string(),
-            module_path: self.shared.lookup.get_path(),
+            name: LocalTypeIdentifier(self.to_node(&enum_type_name.0)),
+            assigned_name: self.get_text(&enum_type_name.0).to_string(),
+            module_path: vec![],
             number: parent_number,
             variants: SeqMap::default(),
         };
 
-        let parent_ref = self.shared.lookup.add_enum_type(enum_parent)?;
+        let parent_ref = self
+            .shared
+            .definition_table
+            .add_enum_type(enum_parent)
+            .map_err(|err| self.create_err(ErrorKind::SemanticError(err), &enum_type_name.0))?;
+        self.shared
+            .lookup_table
+            .add_enum_type_link(parent_ref.clone())
+            .map_err(|err| self.create_err(ErrorKind::SemanticError(err), &enum_type_name.0))?;
 
         for (container_index_usize, ast_variant_type) in ast_variants.iter().enumerate() {
             let variant_name_node = match ast_variant_type {
@@ -161,20 +163,20 @@ impl<'a> Analyzer<'a> {
                 ) => {
                     let mut fields = SeqMap::new();
 
-                    for (_index, field_with_type) in ast_struct_fields.fields.iter().enumerate() {
+                    for field_with_type in &ast_struct_fields.fields {
                         // TODO: Check the index
                         let resolved_type = self.analyze_type(&field_with_type.field_type)?;
                         let field_name_str =
                             self.get_text(&field_with_type.field_name.0).to_string();
 
-                        let resolved_field = AnonymousStructFieldType {
+                        let resolved_field = StructTypeField {
                             identifier: Some(self.to_node(&field_with_type.field_name.0)),
                             field_type: resolved_type,
                         };
 
                         fields.insert(field_name_str, resolved_field).map_err(|_| {
                             self.create_err(
-                                ResolveErrorKind::DuplicateFieldName,
+                                ErrorKind::DuplicateFieldName,
                                 &field_with_type.field_name.0,
                             )
                         })?;
@@ -197,12 +199,11 @@ impl<'a> Analyzer<'a> {
 
             resolved_variants
                 .insert(variant_name_str, variant_type.into())
-                .map_err(|_| {
-                    self.create_err(ResolveErrorKind::DuplicateFieldName, variant_name_node)
-                })?;
+                .map_err(|_| self.create_err(ErrorKind::DuplicateFieldName, variant_name_node))?;
         }
 
         parent_ref.borrow_mut().variants = resolved_variants;
+
         Ok(parent_ref)
     }
 
@@ -211,7 +212,7 @@ impl<'a> Analyzer<'a> {
     pub fn analyze_struct_type_definition(
         &mut self,
         ast_struct: &swamp_script_ast::StructType,
-    ) -> Result<(), ResolveError> {
+    ) -> Result<(), Error> {
         let mut resolved_fields = SeqMap::new();
 
         for field_name_and_type in &ast_struct.fields {
@@ -227,7 +228,7 @@ impl<'a> Analyzer<'a> {
                 .insert(name_string, field_type)
                 .map_err(|_| {
                     self.create_err(
-                        ResolveErrorKind::DuplicateFieldName,
+                        ErrorKind::DuplicateFieldName,
                         &field_name_and_type.field_name.0,
                     )
                 })?;
@@ -253,7 +254,7 @@ impl<'a> Analyzer<'a> {
     fn analyze_function_definition(
         &mut self,
         function: &swamp_script_ast::Function,
-    ) -> Result<(), ResolveError> {
+    ) -> Result<(), Error> {
         match function {
             swamp_script_ast::Function::Internal(function_data) => {
                 let parameters = self.analyze_parameters(&function_data.declaration.params)?;
@@ -327,7 +328,7 @@ impl<'a> Analyzer<'a> {
     pub fn analyze_definition(
         &mut self,
         ast_def: &swamp_script_ast::Definition,
-    ) -> Result<(), ResolveError> {
+    ) -> Result<(), Error> {
         let resolved_def = match ast_def {
             swamp_script_ast::Definition::StructDef(ref ast_struct) => {
                 self.analyze_struct_type_definition(ast_struct)?
@@ -357,7 +358,7 @@ impl<'a> Analyzer<'a> {
         &mut self,
         attached_to_type: &swamp_script_ast::Node,
         functions: &Vec<swamp_script_ast::Function>,
-    ) -> Result<Type, ResolveError> {
+    ) -> Result<Type, Error> {
         let fake_qualified_type_name = swamp_script_ast::QualifiedTypeIdentifier {
             name: swamp_script_ast::LocalTypeIdentifier(attached_to_type.clone()),
             module_path: None,
@@ -387,7 +388,7 @@ impl<'a> Analyzer<'a> {
                 .functions
                 .insert(function_name_str, resolved_function_ref)
                 .map_err(|_| {
-                    self.create_err(ResolveErrorKind::DuplicateFieldName, attached_to_type)
+                    self.create_err(ErrorKind::DuplicateFieldName, attached_to_type)
                 })?;
             self.stop_function();
         }
@@ -399,7 +400,7 @@ impl<'a> Analyzer<'a> {
         &mut self,
         function: &swamp_script_ast::Function,
         found_struct: &StructTypeRef,
-    ) -> Result<Function, ResolveError> {
+    ) -> Result<Function, Error> {
         let resolved_fn = match function {
             swamp_script_ast::Function::Internal(function_data) => {
                 let mut parameters = Vec::new();

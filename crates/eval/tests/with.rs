@@ -31,7 +31,7 @@ fn fail_with_block() {
 
         }
     ",
-        "ResolveError(ResolveError { node: <71:1>, kind: UnknownVariable })",
+        "Error(Error { node: <71:1>, kind: UnknownVariable })",
     );
 }
 

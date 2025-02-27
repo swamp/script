@@ -5,7 +5,7 @@
 
 use std::path::Path;
 use swamp_script_analyzer::lookup::NameLookup;
-use swamp_script_analyzer::prelude::ResolveError;
+use swamp_script_analyzer::prelude::Error;
 use swamp_script_analyzer::Analyzer;
 use swamp_script_core::prelude::Value;
 use swamp_script_eval::prelude::{ExecuteError, VariableValue};
@@ -24,19 +24,19 @@ use swamp_script_source_map_lookup::SourceMapWrapper;
 #[allow(dead_code)]
 pub enum EvalTestError {
     ExecuteError(ExecuteError),
-    ResolveError(ResolveError),
+    Error(Error),
     String(String),
 }
 
-impl From<ResolveError> for EvalTestError {
-    fn from(e: ResolveError) -> Self {
-        Self::ResolveError(e)
+impl From<Error> for EvalTestError {
+    fn from(e: Error) -> Self {
+        Self::Error(e)
     }
 }
 
 impl From<SemanticError> for EvalTestError {
     fn from(e: SemanticError) -> Self {
-        Self::ResolveError(e.into())
+        Self::Error(e.into())
     }
 }
 
@@ -50,7 +50,7 @@ fn internal_compile(
     script: &str,
     target_namespace: &[String],
     modules: &mut ResolvedModules,
-) -> Result<(Option<ResolvedExpression>, SourceMap), ResolveError> {
+) -> Result<(Option<ResolvedExpression>, SourceMap), Error> {
     let parser = AstParser {};
 
     let program = parser.parse_module(script).expect("Failed to parse script");

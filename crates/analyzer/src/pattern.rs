@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use crate::err::{ResolveError, ResolveErrorKind};
+use crate::err::{Error, ErrorKind};
 use crate::Analyzer;
 use swamp_script_semantic::{
     EnumVariantType, EnumVariantTypeRef, NormalPattern, Pattern, PatternElement, Type,
@@ -15,10 +15,10 @@ impl<'a> Analyzer<'a> {
         &self,
         expression_type: &Type,
         ast_name: &swamp_script_ast::Node,
-    ) -> Result<EnumVariantTypeRef, ResolveError> {
+    ) -> Result<EnumVariantTypeRef, Error> {
         let enum_type_ref = match expression_type {
             Type::Enum(enum_type_ref) => enum_type_ref,
-            _ => Err(self.create_err(ResolveErrorKind::ExpectedEnumInPattern, ast_name))?,
+            _ => Err(self.create_err(ErrorKind::ExpectedEnumInPattern, ast_name))?,
         };
 
         let variant_name = self.get_text(ast_name).to_string();
@@ -29,7 +29,7 @@ impl<'a> Analyzer<'a> {
             .map_or_else(
                 || {
                     Err(self.create_err(
-                        ResolveErrorKind::UnknownEnumVariantTypeInPattern,
+                        ErrorKind::UnknownEnumVariantTypeInPattern,
                         ast_name,
                     ))
                 },
@@ -41,7 +41,7 @@ impl<'a> Analyzer<'a> {
         &mut self,
         ast_pattern: &swamp_script_ast::Pattern,
         expected_condition_type: &Type,
-    ) -> Result<(Pattern, bool), ResolveError> {
+    ) -> Result<(Pattern, bool), Error> {
         match ast_pattern {
             swamp_script_ast::Pattern::Wildcard(node) => {
                 Ok((Pattern::Wildcard(self.to_node(node)), false))
@@ -70,7 +70,7 @@ impl<'a> Analyzer<'a> {
         node: &swamp_script_ast::Node,
         ast_normal_pattern: &swamp_script_ast::NormalPattern,
         expected_condition_type: &Type,
-    ) -> Result<(NormalPattern, bool), ResolveError> {
+    ) -> Result<(NormalPattern, bool), Error> {
         match ast_normal_pattern {
             swamp_script_ast::NormalPattern::PatternList(elements) => {
                 let mut resolved_elements = Vec::new();
@@ -88,7 +88,7 @@ impl<'a> Analyzer<'a> {
                         }
                         swamp_script_ast::PatternElement::Expression(expr) => {
                             return Err(self.create_err(
-                                ResolveErrorKind::ExpressionsNotAllowedInLetPattern,
+                                ErrorKind::ExpressionsNotAllowedInLetPattern,
                                 &expr.node,
                             ));
                         }
@@ -115,7 +115,7 @@ impl<'a> Analyzer<'a> {
                             // For tuples, elements must be in order but can be partial
                             if elements.len() > tuple_type.fields_in_order.len() {
                                 return Err(self.create_err(
-                                    ResolveErrorKind::TooManyTupleFields {
+                                    ErrorKind::TooManyTupleFields {
                                         max: tuple_type.fields_in_order.len(),
                                         got: elements.len(),
                                     },
@@ -146,7 +146,7 @@ impl<'a> Analyzer<'a> {
                                     }
                                     swamp_script_ast::PatternElement::Expression(expr) => {
                                         return Err(self.create_err(
-                                            ResolveErrorKind::ExpressionsNotAllowedInLetPattern,
+                                            ErrorKind::ExpressionsNotAllowedInLetPattern,
                                             &expr.node,
                                         ));
                                     }
@@ -169,7 +169,7 @@ impl<'a> Analyzer<'a> {
                                             .defined_fields
                                             .get_index(&var_name_str)
                                             .ok_or_else(|| {
-                                                self.create_err(ResolveErrorKind::UnknownField, var)
+                                                self.create_err(ErrorKind::UnknownField, var)
                                             })?;
 
                                         let field_type = struct_type
@@ -177,7 +177,7 @@ impl<'a> Analyzer<'a> {
                                             .defined_fields
                                             .get(&var_name_str)
                                             .ok_or_else(|| {
-                                                self.create_err(ResolveErrorKind::UnknownField, var)
+                                                self.create_err(ErrorKind::UnknownField, var)
                                             })?;
 
                                         let variable_ref = self.create_local_variable(
@@ -199,7 +199,7 @@ impl<'a> Analyzer<'a> {
                                     }
                                     swamp_script_ast::PatternElement::Expression(expr) => {
                                         return Err(self.create_err(
-                                            ResolveErrorKind::ExpressionsNotAllowedInLetPattern,
+                                            ErrorKind::ExpressionsNotAllowedInLetPattern,
                                             &expr.node,
                                         ));
                                     }
@@ -209,7 +209,7 @@ impl<'a> Analyzer<'a> {
                         EnumVariantType::Nothing(_) => {
                             if !elements.is_empty() {
                                 return Err(self.create_err(
-                                    ResolveErrorKind::EnumVariantHasNoFields,
+                                    ErrorKind::EnumVariantHasNoFields,
                                     &variant_name,
                                 ));
                             }

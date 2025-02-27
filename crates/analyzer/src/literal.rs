@@ -2,7 +2,7 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use crate::err::{ResolveError, ResolveErrorKind};
+use crate::err::{Error, ErrorKind};
 use crate::Analyzer;
 use std::rc::Rc;
 use swamp_script_semantic::{
@@ -18,13 +18,13 @@ impl<'a> Analyzer<'a> {
         ast_node: &swamp_script_ast::Node,
         ast_literal_kind: &swamp_script_ast::LiteralKind,
         expected_type: Option<&Type>,
-    ) -> Result<(Literal, Type), ResolveError> {
+    ) -> Result<(Literal, Type), Error> {
         let node_text = self.get_text(&ast_node);
         let resolved_literal = match &ast_literal_kind {
             swamp_script_ast::LiteralKind::Int => (
                 Literal::IntLiteral(Self::str_to_int(node_text).map_err(|int_conversion_err| {
                     self.create_err(
-                        ResolveErrorKind::IntConversionError(int_conversion_err),
+                        ErrorKind::IntConversionError(int_conversion_err),
                         ast_node,
                     )
                 })?),
@@ -33,7 +33,7 @@ impl<'a> Analyzer<'a> {
             swamp_script_ast::LiteralKind::Float => {
                 let float = Self::str_to_float(node_text).map_err(|float_conversion_err| {
                     self.create_err(
-                        ResolveErrorKind::FloatConversionError(float_conversion_err),
+                        ErrorKind::FloatConversionError(float_conversion_err),
                         ast_node,
                     )
                 })?;
@@ -49,7 +49,7 @@ impl<'a> Analyzer<'a> {
                 } else if node_text == "true" {
                     true
                 } else {
-                    return Err(self.create_err(ResolveErrorKind::BoolConversionError, ast_node));
+                    return Err(self.create_err(ErrorKind::BoolConversionError, ast_node));
                 };
                 (Literal::BoolLiteral(bool_val), Type::Bool)
             }
@@ -91,7 +91,7 @@ impl<'a> Analyzer<'a> {
                                 != resolved_variant_struct_ref.anon_struct.defined_fields.len()
                             {
                                 return Err(self.create_err(
-                                    ResolveErrorKind::WrongNumberOfArguments(
+                                    ErrorKind::WrongNumberOfArguments(
                                         anonym_struct_field_and_expressions.len(),
                                         resolved_variant_struct_ref
                                             .anon_struct
@@ -112,7 +112,7 @@ impl<'a> Analyzer<'a> {
                             EnumLiteralData::Struct(resolved)
                         } else {
                             return Err(self.create_err(
-                                ResolveErrorKind::WrongEnumVariantContainer(variant_ref.clone()),
+                                ErrorKind::WrongEnumVariantContainer(variant_ref.clone()),
                                 &variant.0,
                             ));
                         }
@@ -139,14 +139,14 @@ impl<'a> Analyzer<'a> {
                             ),
                             _ => {
                                 return Err(self.create_err(
-                                    ResolveErrorKind::EmptyArrayCanOnlyBeMapOrArray,
+                                    ErrorKind::EmptyArrayCanOnlyBeMapOrArray,
                                     &ast_node,
                                 ))
                             }
                         }
                     } else {
                         return Err(self.create_err(
-                            ResolveErrorKind::EmptyArrayCanOnlyBeMapOrArray,
+                            ErrorKind::EmptyArrayCanOnlyBeMapOrArray,
                             &ast_node,
                         ));
                     }
@@ -179,7 +179,7 @@ impl<'a> Analyzer<'a> {
                         return Ok((Literal::NoneLiteral, found_expected_type.clone()));
                     }
                 }
-                return Err(self.create_err(ResolveErrorKind::NoneNeedsExpectedTypeHint, &ast_node));
+                return Err(self.create_err(ErrorKind::NoneNeedsExpectedTypeHint, &ast_node));
             }
         };
 
@@ -189,7 +189,7 @@ impl<'a> Analyzer<'a> {
     fn analyze_tuple_literal(
         &mut self,
         items: &[swamp_script_ast::Expression],
-    ) -> Result<(TupleTypeRef, Vec<Expression>), ResolveError> {
+    ) -> Result<(TupleTypeRef, Vec<Expression>), Error> {
         let expressions = self.analyze_expressions(None, items)?;
         let mut tuple_types = Vec::new();
         for expr in &expressions {
@@ -208,9 +208,9 @@ impl<'a> Analyzer<'a> {
         &mut self,
         node: &swamp_script_ast::Node,
         entries: &[(swamp_script_ast::Expression, swamp_script_ast::Expression)],
-    ) -> Result<(Literal, MapTypeRef), ResolveError> {
+    ) -> Result<(Literal, MapTypeRef), Error> {
         if entries.is_empty() {
-            return Err(self.create_err(ResolveErrorKind::EmptyMapLiteral, node));
+            return Err(self.create_err(ErrorKind::EmptyMapLiteral, node));
         }
 
         // Resolve first entry to determine map types
@@ -230,7 +230,7 @@ impl<'a> Analyzer<'a> {
 
             if !resolved_key.ty.same_type(&key_type) {
                 return Err(self.create_err(
-                    ResolveErrorKind::MapKeyTypeMismatch {
+                    ErrorKind::MapKeyTypeMismatch {
                         expected: key_type,
                         found: resolved_key.ty.clone(),
                     },
@@ -240,7 +240,7 @@ impl<'a> Analyzer<'a> {
 
             if !resolved_value.ty.same_type(&value_type) {
                 return Err(self.create_err(
-                    ResolveErrorKind::MapValueTypeMismatch {
+                    ErrorKind::MapValueTypeMismatch {
                         expected: value_type,
                         found: resolved_value.ty.clone(),
                     },
@@ -265,11 +265,11 @@ impl<'a> Analyzer<'a> {
     #[must_use]
     pub fn create_err(
         &self,
-        kind: ResolveErrorKind,
+        kind: ErrorKind,
         ast_node: &swamp_script_ast::Node,
-    ) -> ResolveError {
+    ) -> Error {
         error!(?kind, "error created");
-        ResolveError {
+        Error {
             node: self.to_node(ast_node),
             kind,
         }
@@ -278,10 +278,10 @@ impl<'a> Analyzer<'a> {
     #[must_use]
     pub fn create_err_resolved(
         &self,
-        kind: ResolveErrorKind,
+        kind: ErrorKind,
         resolved_node: &Node,
-    ) -> ResolveError {
-        ResolveError {
+    ) -> Error {
+        Error {
             node: resolved_node.clone(),
             kind,
         }

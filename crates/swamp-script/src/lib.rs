@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use std::path::Path;
-use swamp_script_analyzer::prelude::ResolveError;
+use swamp_script_analyzer::prelude::Error;
 use swamp_script_analyzer::prelude::ResolvedProgram;
 use swamp_script_dep_loader::{
     parse_dependant_modules_and_resolve, DepLoaderError, DependencyParser, ParseModule,
@@ -13,18 +13,18 @@ use swamp_script_source_map::SourceMap;
 pub mod prelude;
 
 #[derive(Debug)]
-pub enum ScriptResolveError {
-    ResolveError(ResolveError),
+pub enum ScriptError {
+    Error(Error),
     DepLoaderError(DepLoaderError),
 }
 
-impl From<ResolveError> for ScriptResolveError {
-    fn from(err: ResolveError) -> Self {
-        Self::ResolveError(err)
+impl From<Error> for ScriptError {
+    fn from(err: Error) -> Self {
+        Self::Error(err)
     }
 }
 
-impl From<DepLoaderError> for ScriptResolveError {
+impl From<DepLoaderError> for ScriptError {
     fn from(err: DepLoaderError) -> Self {
         Self::DepLoaderError(err)
     }
@@ -35,7 +35,7 @@ pub fn compile_and_resolve(
     module_path: &[String],
     parse_module: ParseModule,
     source_map: &mut SourceMap,
-) -> Result<ResolvedProgram, ScriptResolveError> {
+) -> Result<ResolvedProgram, ScriptError> {
     let mut dependency_parser = DependencyParser::new();
     dependency_parser.add_ast_module(module_path.to_vec(), parse_module);
 

@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use crate::err::{ResolveError, ResolveErrorKind};
+use crate::err::{Error, ErrorKind};
 use crate::Analyzer;
 use std::rc::Rc;
 use swamp_script_semantic::{
@@ -18,7 +18,7 @@ impl<'a> Analyzer<'a> {
         &mut self,
         ast_key_type: &swamp_script_ast::Type,
         ast_value_type: &swamp_script_ast::Type,
-    ) -> Result<MapTypeRef, ResolveError> {
+    ) -> Result<MapTypeRef, Error> {
         // TODO: Check for an existing map type with exact same type
 
         let key_type = self.analyze_type(ast_key_type)?;
@@ -41,7 +41,7 @@ impl<'a> Analyzer<'a> {
     pub fn find_struct_type(
         &self,
         type_name: &swamp_script_ast::QualifiedTypeIdentifier,
-    ) -> Result<StructTypeRef, ResolveError> {
+    ) -> Result<StructTypeRef, Error> {
         let (path, name_string) = self.get_path(type_name);
 
         self.shared
@@ -51,7 +51,7 @@ impl<'a> Analyzer<'a> {
                 || {
                     let resolved_node = self.to_node(&type_name.name.0);
                     Err(self.create_err_resolved(
-                        ResolveErrorKind::UnknownStructTypeReference,
+                        ErrorKind::UnknownStructTypeReference,
                         &resolved_node,
                     ))
                 },
@@ -64,7 +64,7 @@ impl<'a> Analyzer<'a> {
     pub fn analyze_array_type(
         &mut self,
         ast_type: &swamp_script_ast::Type,
-    ) -> Result<ArrayTypeRef, ResolveError> {
+    ) -> Result<ArrayTypeRef, Error> {
         // TODO: Check for an existing array type with exact same type
 
         let resolved_type = self.analyze_type(ast_type)?;
@@ -85,7 +85,7 @@ impl<'a> Analyzer<'a> {
     pub fn analyze_type(
         &mut self,
         ast_type: &swamp_script_ast::Type,
-    ) -> Result<Type, ResolveError> {
+    ) -> Result<Type, Error> {
         let resolved = match ast_type {
             swamp_script_ast::Type::Int(_) => Type::Int,
             swamp_script_ast::Type::Float(_) => Type::Float,
@@ -134,7 +134,7 @@ impl<'a> Analyzer<'a> {
     pub(crate) fn analyze_types(
         &mut self,
         types: &[swamp_script_ast::Type],
-    ) -> Result<Vec<Type>, ResolveError> {
+    ) -> Result<Vec<Type>, Error> {
         let mut resolved_types = Vec::new();
         for some_type in types {
             resolved_types.push(self.analyze_type(some_type)?);
@@ -145,7 +145,7 @@ impl<'a> Analyzer<'a> {
     fn analyze_param_types(
         &mut self,
         type_for_parameters: &Vec<swamp_script_ast::TypeForParameter>,
-    ) -> Result<Vec<TypeForParameter>, ResolveError> {
+    ) -> Result<Vec<TypeForParameter>, Error> {
         let mut vec = Vec::new();
         for x in type_for_parameters {
             vec.push(TypeForParameter {

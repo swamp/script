@@ -2,7 +2,7 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use crate::err::{ResolveError, ResolveErrorKind};
+use crate::err::{Error, ErrorKind};
 use crate::Analyzer;
 use seq_set::SeqSet;
 use swamp_script_semantic::{
@@ -19,7 +19,7 @@ impl<'a> Analyzer<'a> {
         struct_to_instantiate: StructTypeRef,
         source_order_expressions: Vec<(usize, Node, Expression)>,
         node: &swamp_script_ast::Node,
-    ) -> Result<Expression, ResolveError> {
+    ) -> Result<Expression, Error> {
         let mut expressions = Vec::new();
 
         self.push_block_scope("struct_instantiation");
@@ -110,7 +110,7 @@ impl<'a> Analyzer<'a> {
         mut source_order_expressions: Vec<(usize, Expression)>,
         missing_fields: SeqSet<String>,
         node: &swamp_script_ast::Node,
-    ) -> Result<Expression, ResolveError> {
+    ) -> Result<Expression, Error> {
         {
             let borrowed_anon_type = &struct_to_instantiate.borrow().anon_struct_type;
 
@@ -147,7 +147,7 @@ impl<'a> Analyzer<'a> {
         qualified_type_identifier: &swamp_script_ast::QualifiedTypeIdentifier,
         ast_fields: &Vec<swamp_script_ast::FieldExpression>,
         has_rest: bool,
-    ) -> Result<Expression, ResolveError> {
+    ) -> Result<Expression, Error> {
         let struct_to_instantiate = self.get_struct_type(qualified_type_identifier)?;
 
         let (source_order_expressions, missing_fields) = self
@@ -199,7 +199,7 @@ impl<'a> Analyzer<'a> {
         } else {
             let node = qualified_type_identifier.name.0.clone();
             Err(self.create_err(
-                ResolveErrorKind::MissingFieldInStructInstantiation(
+                ErrorKind::MissingFieldInStructInstantiation(
                     missing_fields.to_vec(),
                     struct_to_instantiate.borrow().anon_struct_type.clone(),
                 ),
@@ -212,7 +212,7 @@ impl<'a> Analyzer<'a> {
         &mut self,
         struct_to_instantiate: &AnonymousStructType,
         ast_fields: &Vec<swamp_script_ast::FieldExpression>,
-    ) -> Result<(Vec<(usize, Node, Expression)>, SeqSet<String>), ResolveError> {
+    ) -> Result<(Vec<(usize, Node, Expression)>, SeqSet<String>), Error> {
         let mut missing_fields: SeqSet<String> = struct_to_instantiate
             .defined_fields
             .keys()
@@ -232,11 +232,11 @@ impl<'a> Analyzer<'a> {
                     .contains_key(&field_name)
                 {
                     Err(self.create_err(
-                        ResolveErrorKind::DuplicateFieldInStructInstantiation(field_name),
+                        ErrorKind::DuplicateFieldInStructInstantiation(field_name),
                         &field.field_name.0,
                     ))
                 } else {
-                    Err(self.create_err(ResolveErrorKind::UnknownStructField, &field.field_name.0))
+                    Err(self.create_err(ErrorKind::UnknownStructField, &field.field_name.0))
                 };
             }
 
@@ -269,7 +269,7 @@ impl<'a> Analyzer<'a> {
         struct_to_instantiate: &AnonymousStructType,
         ast_fields: &Vec<swamp_script_ast::FieldExpression>,
         allow_rest: bool,
-    ) -> Result<Vec<(usize, Expression)>, ResolveError> {
+    ) -> Result<Vec<(usize, Expression)>, Error> {
         let (source_order_expressions, missing_fields) =
             self.analyze_anon_struct_instantiation_helper(struct_to_instantiate, ast_fields)?;
 
@@ -299,7 +299,7 @@ impl<'a> Analyzer<'a> {
             }
         } else if !missing_fields.is_empty() {
             return Err(self.create_err(
-                ResolveErrorKind::MissingFieldInStructInstantiation(
+                ErrorKind::MissingFieldInStructInstantiation(
                     missing_fields.to_vec(),
                     struct_to_instantiate.clone(),
                 ),

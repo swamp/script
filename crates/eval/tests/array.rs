@@ -70,7 +70,7 @@ fn array_remove_fail() {
 
     a.remove(1)
     ",
-        "ResolveError(ResolveError { node: <26:6>, kind: ExpectedMutableLocation })",
+        "Error(Error { node: <26:6>, kind: ExpectedMutableLocation })",
     );
 }
 

@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use crate::err::{ResolveError, ResolveErrorKind};
+use crate::err::{Error, ErrorKind};
 use crate::{Analyzer, SPARSE_TYPE_ID};
 use swamp_script_semantic::{ArrayTypeRef, MapTypeRef, Postfix, PostfixKind, TupleTypeRef};
 use swamp_script_semantic::{Expression, Type};
@@ -15,7 +15,7 @@ impl<'a> Analyzer<'a> {
         is_mutable: bool,
         ast_member_function_name: &swamp_script_ast::Node,
         ast_arguments: &[&swamp_script_ast::Expression],
-    ) -> Result<Option<Postfix>, ResolveError> {
+    ) -> Result<Option<Postfix>, Error> {
         match &ty {
             Type::Array(array_type_ref) => {
                 let resolved = self.analyze_array_member_call(
@@ -74,11 +74,11 @@ impl<'a> Analyzer<'a> {
         tuple_type: &TupleTypeRef,
         ast_member_function_name: &swamp_script_ast::Node,
         arguments: &[&swamp_script_ast::Expression],
-    ) -> Result<Postfix, ResolveError> {
+    ) -> Result<Postfix, Error> {
         //let resolved_node = self.to_node(ast_member_function_name);
         if tuple_type.0.len() != 2 {
             return Err(self.create_err(
-                ResolveErrorKind::WrongNumberOfArguments(2, tuple_type.0.len()),
+                ErrorKind::WrongNumberOfArguments(2, tuple_type.0.len()),
                 ast_member_function_name,
             ));
         }
@@ -90,7 +90,7 @@ impl<'a> Analyzer<'a> {
                 "magnitude" => {
                     if !arguments.is_empty() {
                         return Err(self.create_err(
-                            ResolveErrorKind::WrongNumberOfArguments(arguments.len(), 0),
+                            ErrorKind::WrongNumberOfArguments(arguments.len(), 0),
                             ast_member_function_name,
                         ));
                     }
@@ -102,14 +102,14 @@ impl<'a> Analyzer<'a> {
                 }
                 _ => {
                     return Err(self.create_err(
-                        ResolveErrorKind::UnknownMemberFunction,
+                        ErrorKind::UnknownMemberFunction,
                         ast_member_function_name,
                     ))
                 }
             },
             _ => {
                 return Err(self.create_err(
-                    ResolveErrorKind::WrongNumberOfArguments(99, tuple_type.0.len()),
+                    ErrorKind::WrongNumberOfArguments(99, tuple_type.0.len()),
                     ast_member_function_name,
                 ))
             }
@@ -122,9 +122,9 @@ impl<'a> Analyzer<'a> {
         &mut self,
         is_mutable: bool,
         node: &swamp_script_ast::Node,
-    ) -> Result<(), ResolveError> {
+    ) -> Result<(), Error> {
         if !is_mutable {
-            Err(self.create_err(ResolveErrorKind::ExpectedMutableLocation, node))
+            Err(self.create_err(ErrorKind::ExpectedMutableLocation, node))
         } else {
             Ok(())
         }
@@ -151,7 +151,7 @@ impl<'a> Analyzer<'a> {
         is_mutable: bool,
         ast_member_function_name: &swamp_script_ast::Node,
         ast_arguments: &[&swamp_script_ast::Expression],
-    ) -> Result<Postfix, ResolveError> {
+    ) -> Result<Postfix, Error> {
         let member_function_name_str = self.get_text(ast_member_function_name);
 
         let expr = match member_function_name_str {
@@ -160,7 +160,7 @@ impl<'a> Analyzer<'a> {
 
                 if ast_arguments.len() != 1 {
                     return Err(self.create_err(
-                        ResolveErrorKind::WrongNumberOfArguments(ast_arguments.len(), 1),
+                        ErrorKind::WrongNumberOfArguments(ast_arguments.len(), 1),
                         ast_member_function_name,
                     ));
                 }
@@ -178,7 +178,7 @@ impl<'a> Analyzer<'a> {
             "has" => {
                 if ast_arguments.len() != 1 {
                     return Err(self.create_err(
-                        ResolveErrorKind::WrongNumberOfArguments(ast_arguments.len(), 1),
+                        ErrorKind::WrongNumberOfArguments(ast_arguments.len(), 1),
                         ast_member_function_name,
                     ));
                 }
@@ -194,7 +194,7 @@ impl<'a> Analyzer<'a> {
             }
             _ => {
                 return Err(self.create_err(
-                    ResolveErrorKind::UnknownMemberFunction,
+                    ErrorKind::UnknownMemberFunction,
                     ast_member_function_name,
                 ))
             }
@@ -208,7 +208,7 @@ impl<'a> Analyzer<'a> {
         is_mutable: bool,
         ast_member_function_name: &swamp_script_ast::Node,
         ast_arguments: &[&swamp_script_ast::Expression],
-    ) -> Result<Postfix, ResolveError> {
+    ) -> Result<Postfix, Error> {
         let member_function_name_str = self.get_text(ast_member_function_name);
         let resolved_postfix = match member_function_name_str {
             "remove" => {
@@ -216,7 +216,7 @@ impl<'a> Analyzer<'a> {
 
                 if ast_arguments.len() != 1 {
                     return Err(self.create_err(
-                        ResolveErrorKind::WrongNumberOfArguments(ast_arguments.len(), 1),
+                        ErrorKind::WrongNumberOfArguments(ast_arguments.len(), 1),
                         ast_member_function_name,
                     ));
                 }
@@ -234,7 +234,7 @@ impl<'a> Analyzer<'a> {
 
                 if !ast_arguments.is_empty() {
                     return Err(self.create_err(
-                        ResolveErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
+                        ErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
                         ast_member_function_name,
                     ));
                 }
@@ -247,7 +247,7 @@ impl<'a> Analyzer<'a> {
             }
             _ => {
                 return Err(self.create_err(
-                    ResolveErrorKind::UnknownMemberFunction,
+                    ErrorKind::UnknownMemberFunction,
                     &ast_member_function_name,
                 ))
             }
@@ -260,10 +260,10 @@ impl<'a> Analyzer<'a> {
         &mut self,
         node: &swamp_script_ast::Node,
         ast_arguments: &[&swamp_script_ast::Expression],
-    ) -> Result<Expression, ResolveError> {
+    ) -> Result<Expression, Error> {
         if ast_arguments.len() != 1 {
             return Err(self.create_err(
-                ResolveErrorKind::WrongNumberOfArguments(ast_arguments.len(), 1),
+                ErrorKind::WrongNumberOfArguments(ast_arguments.len(), 1),
                 &node,
             ));
         }
@@ -276,10 +276,10 @@ impl<'a> Analyzer<'a> {
         &mut self,
         node: &swamp_script_ast::Node,
         ast_arguments: &[&swamp_script_ast::Expression],
-    ) -> Result<Expression, ResolveError> {
+    ) -> Result<Expression, Error> {
         if ast_arguments.len() != 1 {
             return Err(self.create_err(
-                ResolveErrorKind::WrongNumberOfArguments(ast_arguments.len(), 1),
+                ErrorKind::WrongNumberOfArguments(ast_arguments.len(), 1),
                 &node,
             ));
         }
@@ -292,10 +292,10 @@ impl<'a> Analyzer<'a> {
         &mut self,
         node: &swamp_script_ast::Node,
         ast_arguments: &[&swamp_script_ast::Expression],
-    ) -> Result<(Expression, Expression), ResolveError> {
+    ) -> Result<(Expression, Expression), Error> {
         if ast_arguments.len() != 2 {
             return Err(self.create_err(
-                ResolveErrorKind::WrongNumberOfArguments(ast_arguments.len(), 2),
+                ErrorKind::WrongNumberOfArguments(ast_arguments.len(), 2),
                 &node,
             ));
         }
@@ -310,7 +310,7 @@ impl<'a> Analyzer<'a> {
         &mut self,
         ast_member_function_name: &swamp_script_ast::Node,
         ast_arguments: &[&swamp_script_ast::Expression],
-    ) -> Result<Postfix, ResolveError> {
+    ) -> Result<Postfix, Error> {
         let function_name_str = self.get_text(ast_member_function_name);
         let node = ast_member_function_name;
 
@@ -319,7 +319,7 @@ impl<'a> Analyzer<'a> {
             "round" => {
                 if !ast_arguments.is_empty() {
                     return Err(self.create_err(
-                        ResolveErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
+                        ErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
                         &ast_member_function_name,
                     ));
                 }
@@ -328,7 +328,7 @@ impl<'a> Analyzer<'a> {
             "floor" => {
                 if !ast_arguments.is_empty() {
                     return Err(self.create_err(
-                        ResolveErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
+                        ErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
                         &ast_member_function_name,
                     ));
                 }
@@ -338,7 +338,7 @@ impl<'a> Analyzer<'a> {
             "sqrt" => {
                 if !ast_arguments.is_empty() {
                     return Err(self.create_err(
-                        ResolveErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
+                        ErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
                         &ast_member_function_name,
                     ));
                 }
@@ -347,7 +347,7 @@ impl<'a> Analyzer<'a> {
             "sign" => {
                 if !ast_arguments.is_empty() {
                     return Err(self.create_err(
-                        ResolveErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
+                        ErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
                         &ast_member_function_name,
                     ));
                 }
@@ -356,7 +356,7 @@ impl<'a> Analyzer<'a> {
             "abs" => {
                 if !ast_arguments.is_empty() {
                     return Err(self.create_err(
-                        ResolveErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
+                        ErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
                         &ast_member_function_name,
                     ));
                 }
@@ -365,7 +365,7 @@ impl<'a> Analyzer<'a> {
             "rnd" => {
                 if !ast_arguments.is_empty() {
                     return Err(self.create_err(
-                        ResolveErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
+                        ErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
                         &ast_member_function_name,
                     ));
                 }
@@ -375,7 +375,7 @@ impl<'a> Analyzer<'a> {
             "cos" => {
                 if !ast_arguments.is_empty() {
                     return Err(self.create_err(
-                        ResolveErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
+                        ErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
                         &ast_member_function_name,
                     ));
                 }
@@ -384,7 +384,7 @@ impl<'a> Analyzer<'a> {
             "sin" => {
                 if !ast_arguments.is_empty() {
                     return Err(self.create_err(
-                        ResolveErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
+                        ErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
                         &ast_member_function_name,
                     ));
                 }
@@ -393,7 +393,7 @@ impl<'a> Analyzer<'a> {
             "acos" => {
                 if !ast_arguments.is_empty() {
                     return Err(self.create_err(
-                        ResolveErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
+                        ErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
                         &ast_member_function_name,
                     ));
                 }
@@ -402,7 +402,7 @@ impl<'a> Analyzer<'a> {
             "asin" => {
                 if !ast_arguments.is_empty() {
                     return Err(self.create_err(
-                        ResolveErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
+                        ErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
                         &ast_member_function_name,
                     ));
                 }
@@ -426,7 +426,7 @@ impl<'a> Analyzer<'a> {
             }
             _ => {
                 return Err(self.create_err(
-                    ResolveErrorKind::UnknownMemberFunction,
+                    ErrorKind::UnknownMemberFunction,
                     &ast_member_function_name,
                 ))
             }
@@ -439,7 +439,7 @@ impl<'a> Analyzer<'a> {
         &mut self,
         ast_member_function_name: &swamp_script_ast::Node,
         ast_arguments: &[&swamp_script_ast::Expression],
-    ) -> Result<Postfix, ResolveError> {
+    ) -> Result<Postfix, Error> {
         let function_name_str = self.get_text(ast_member_function_name);
         let node = self.to_node(&ast_member_function_name);
 
@@ -447,7 +447,7 @@ impl<'a> Analyzer<'a> {
             "len" => {
                 if !ast_arguments.is_empty() {
                     return Err(self.create_err_resolved(
-                        ResolveErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
+                        ErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
                         &node,
                     ));
                 }
@@ -458,7 +458,7 @@ impl<'a> Analyzer<'a> {
                 ))
             }
             _ => Err(self.create_err(
-                ResolveErrorKind::UnknownMemberFunction,
+                ErrorKind::UnknownMemberFunction,
                 ast_member_function_name,
             )),
         }
@@ -468,7 +468,7 @@ impl<'a> Analyzer<'a> {
         &mut self,
         ast_member_function_name: &swamp_script_ast::Node,
         ast_arguments: &[&swamp_script_ast::Expression],
-    ) -> Result<Postfix, ResolveError> {
+    ) -> Result<Postfix, Error> {
         let function_name_str = self.get_text(ast_member_function_name);
         let node = self.to_node(&ast_member_function_name);
 
@@ -476,7 +476,7 @@ impl<'a> Analyzer<'a> {
             "abs" => {
                 if !ast_arguments.is_empty() {
                     return Err(self.create_err_resolved(
-                        ResolveErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
+                        ErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
                         &node,
                     ));
                 }
@@ -485,7 +485,7 @@ impl<'a> Analyzer<'a> {
             "rnd" => {
                 if !ast_arguments.is_empty() {
                     return Err(self.create_err_resolved(
-                        ResolveErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
+                        ErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
                         &node,
                     ));
                 }
@@ -507,7 +507,7 @@ impl<'a> Analyzer<'a> {
             "to_float" => {
                 if !ast_arguments.is_empty() {
                     return Err(self.create_err_resolved(
-                        ResolveErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
+                        ErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
                         &node,
                     ));
                 }
@@ -515,7 +515,7 @@ impl<'a> Analyzer<'a> {
             }
             _ => {
                 return Err(self.create_err(
-                    ResolveErrorKind::UnknownMemberFunction,
+                    ErrorKind::UnknownMemberFunction,
                     &ast_member_function_name,
                 ))
             }
@@ -529,14 +529,14 @@ impl<'a> Analyzer<'a> {
         ty: &Type,
         ast_member_function_name: &swamp_script_ast::Node,
         ast_arguments: &[&swamp_script_ast::Expression],
-    ) -> Result<Option<Postfix>, ResolveError> {
+    ) -> Result<Option<Postfix>, Error> {
         // TODO: Early out
         if let Type::Generic(generic_type, parameters) = ty.clone() {
             if let Type::External(rust_type_ref) = *generic_type {
                 if rust_type_ref.as_ref().number == SPARSE_TYPE_ID {
                     if parameters.len() != 1 {
                         return Err(self.create_err(
-                            ResolveErrorKind::WrongNumberOfTypeArguments(parameters.len(), 1),
+                            ErrorKind::WrongNumberOfTypeArguments(parameters.len(), 1),
                             ast_member_function_name,
                         ));
                     }
@@ -554,7 +554,7 @@ impl<'a> Analyzer<'a> {
                         "add" => {
                             if ast_arguments.len() != 1 {
                                 return Err(self.create_err(
-                                    ResolveErrorKind::WrongNumberOfTypeArguments(
+                                    ErrorKind::WrongNumberOfTypeArguments(
                                         parameters.len(),
                                         1,
                                     ),
@@ -567,7 +567,7 @@ impl<'a> Analyzer<'a> {
                         "remove" => {
                             if ast_arguments.len() != 1 {
                                 return Err(self.create_err(
-                                    ResolveErrorKind::WrongNumberOfTypeArguments(
+                                    ErrorKind::WrongNumberOfTypeArguments(
                                         parameters.len(),
                                         1,
                                     ),

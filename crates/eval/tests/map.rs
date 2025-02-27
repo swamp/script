@@ -97,7 +97,7 @@ fn map_fail_insert_with_immutable() {
     a[3] = 'ossian'
 
     ",
-        "ResolveError(ResolveError { node: <42:4>, kind: NotValidLocationStartingPoint })",
+        "Error(Error { node: <42:4>, kind: NotValidLocationStartingPoint })",
     );
 }
 
@@ -110,7 +110,7 @@ fn map_fail_insert() {
     a[3] = 'ossian'
 
     ",
-        "ResolveError(ResolveError { node: <42:4>, kind: NotValidLocationStartingPoint })",
+        "Error(Error { node: <42:4>, kind: NotValidLocationStartingPoint })",
     );
 }
 
@@ -136,7 +136,7 @@ fn map_insert_wrong_type() {
     a[3] = 5.5
 
     ",
-        "ResolveError(ResolveError { node: <53:3>, kind: IncompatibleTypes(String, Float) })",
+        "Error(Error { node: <53:3>, kind: IncompatibleTypes(String, Float) })",
     );
 }
 

@@ -6,7 +6,7 @@ use std::cell::RefCell;
 use std::path::Path;
 use std::rc::Rc;
 use swamp_script_analyzer::lookup::NameLookup;
-use swamp_script_analyzer::prelude::ResolveError;
+use swamp_script_analyzer::prelude::Error;
 use swamp_script_analyzer::Analyzer;
 use swamp_script_error_report::show_error;
 use swamp_script_parser::AstParser;
@@ -16,7 +16,7 @@ use swamp_script_semantic::ProgramState;
 use swamp_script_source_map::SourceMap;
 use tracing::warn;
 
-fn internal_compile(script: &str) -> Result<Module, ResolveError> {
+fn internal_compile(script: &str) -> Result<Module, Error> {
     let parser = AstParser {};
 
     let program = parser.parse_module(script).expect("Failed to parse script");

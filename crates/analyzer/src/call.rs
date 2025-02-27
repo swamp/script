@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use crate::err::{ResolveError, ResolveErrorKind};
+use crate::err::{Error, ErrorKind};
 use crate::{Analyzer, LocationSide, SPARSE_TYPE_ID};
 use std::rc::Rc;
 use swamp_script_semantic::{
@@ -16,7 +16,7 @@ impl<'a> Analyzer<'a> {
         &mut self,
         fn_parameter: &TypeForParameter,
         argument_expr: &swamp_script_ast::MutableOrImmutableExpression,
-    ) -> Result<ArgumentExpressionOrLocation, ResolveError> {
+    ) -> Result<ArgumentExpressionOrLocation, Error> {
         let mut_or_immutable = if fn_parameter.is_mutable {
             let mut_location = self.analyze_to_location(
                 &argument_expr.expression,
@@ -40,10 +40,10 @@ impl<'a> Analyzer<'a> {
         node: &Node,
         fn_parameters: &[TypeForParameter],
         arguments: &[swamp_script_ast::MutableOrImmutableExpression],
-    ) -> Result<Vec<ArgumentExpressionOrLocation>, ResolveError> {
+    ) -> Result<Vec<ArgumentExpressionOrLocation>, Error> {
         if fn_parameters.len() != arguments.len() {
             return Err(self.create_err_resolved(
-                ResolveErrorKind::WrongNumberOfArguments(fn_parameters.len(), arguments.len()),
+                ErrorKind::WrongNumberOfArguments(fn_parameters.len(), arguments.len()),
                 node,
             ));
         }
@@ -64,7 +64,7 @@ impl<'a> Analyzer<'a> {
         type_name: &swamp_script_ast::QualifiedTypeIdentifier,
         function_name: &swamp_script_ast::Node,
         arguments: &[swamp_script_ast::MutableOrImmutableExpression],
-    ) -> Result<Option<Expression>, ResolveError> {
+    ) -> Result<Option<Expression>, Error> {
         let (type_name_text, function_name_text) = {
             (
                 self.get_text(&type_name.name.0).to_string(),
@@ -75,14 +75,14 @@ impl<'a> Analyzer<'a> {
         if type_name_text == "Sparse" && function_name_text == "new" {
             if !arguments.is_empty() {
                 return Err(self.create_err(
-                    ResolveErrorKind::WrongNumberOfArguments(arguments.len(), 0),
+                    ErrorKind::WrongNumberOfArguments(arguments.len(), 0),
                     function_name,
                 ));
             }
             let resolved_generic_type_parameters = self.analyze_types(&type_name.generic_params)?;
             if resolved_generic_type_parameters.len() != 1 {
                 return Err(self.create_err(
-                    ResolveErrorKind::WrongNumberOfTypeArguments(
+                    ErrorKind::WrongNumberOfTypeArguments(
                         resolved_generic_type_parameters.len(),
                         1,
                     ),
@@ -121,7 +121,7 @@ impl<'a> Analyzer<'a> {
         expr: &swamp_script_ast::MutableOrImmutableExpression,
         expected_type: Option<&Type>,
         location_side: LocationSide,
-    ) -> Result<MutOrImmutableExpression, ResolveError> {
+    ) -> Result<MutOrImmutableExpression, Error> {
         let is_mutable = self.to_node_option(&expr.is_mutable);
         let expression_or_location = if is_mutable.is_some() {
             ArgumentExpressionOrLocation::Location(self.analyze_to_location(

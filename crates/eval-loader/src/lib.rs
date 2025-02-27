@@ -6,7 +6,7 @@ pub mod prelude;
 
 use std::cell::RefCell;
 use std::rc::Rc;
-use swamp_script_analyzer::err::ResolveErrorKind;
+use swamp_script_analyzer::err::ErrorKind;
 use swamp_script_analyzer::lookup::NameLookup;
 use swamp_script_analyzer::prelude::*;
 use swamp_script_dep_loader::prelude::*;
@@ -20,7 +20,7 @@ pub fn analyze_to_new_module(
     module_path: &[String],
     source_map: &SourceMap,
     ast_module: &ParseModule,
-) -> Result<(), ResolveError> {
+) -> Result<(), Error> {
     let resolved_module = ResolvedModule::new(module_path);
     let resolved_module_ref = Rc::new(RefCell::new(resolved_module));
     modules.add(resolved_module_ref);
@@ -36,7 +36,7 @@ pub fn analyze_to_existing_module(
     path: Vec<String>,
     source_map: &SourceMap,
     ast_module: &ParseModule,
-) -> Result<Option<ResolvedExpression>, ResolveError> {
+) -> Result<Option<ResolvedExpression>, Error> {
     let statements = {
         let mut name_lookup = NameLookup::new(path.clone(), &mut modules);
         let mut resolver = Analyzer::new(state, &mut name_lookup, source_map, ast_module.file_id);
@@ -62,7 +62,7 @@ pub fn analyze_program(
     source_map: &SourceMap,
     module_paths_in_order: &[Vec<String>],
     parsed_modules: &DependencyParser,
-) -> Result<(), ResolveError> {
+) -> Result<(), Error> {
     for module_path in module_paths_in_order {
         if let Some(parse_module) = parsed_modules.get_parsed_module(module_path) {
             if let Some(_found_module) = modules.get(&*module_path.clone()) {
@@ -77,8 +77,8 @@ pub fn analyze_program(
                 analyze_to_new_module(state, modules, module_path, source_map, parse_module)?;
             }
         } else {
-            return Err(ResolveError {
-                kind: ResolveErrorKind::CanNotFindModule(module_path.clone()),
+            return Err(Error {
+                kind: ErrorKind::CanNotFindModule(module_path.clone()),
                 node: ResolvedNode::default(),
             });
         }
