@@ -11,16 +11,16 @@ use swamp_script_semantic::{
 use tracing::debug;
 
 impl<'a> Analyzer<'a> {
-    pub(crate) fn resolve_binary_op(
+    pub(crate) fn analyze_binary_op(
         &mut self,
         ast_left: &swamp_script_ast::Expression,
         ast_op: &swamp_script_ast::BinaryOperator,
         ast_right: &swamp_script_ast::Expression,
     ) -> Result<(BinaryOperator, Type), ResolveError> {
-        let left = self.resolve_expression(ast_left, None)?;
+        let left = self.analyze_expression(ast_left, None)?;
         let left_type = left.ty.clone();
 
-        let right = self.resolve_expression(ast_right, None)?;
+        let right = self.analyze_expression(ast_right, None)?;
         let right_type = right.ty.clone();
 
         let kind = self.convert_binary_operator_kind(ast_op);
@@ -89,7 +89,7 @@ impl<'a> Analyzer<'a> {
         }
     }
 
-    pub(crate) fn resolve_unary_op(
+    pub(crate) fn analyze_unary_op(
         &mut self,
         ast_op: &swamp_script_ast::UnaryOperator,
         ast_left: &swamp_script_ast::Expression,
@@ -102,7 +102,7 @@ impl<'a> Analyzer<'a> {
                 (node, UnaryOperatorKind::Negate, None)
             }
         };
-        let left = self.resolve_expression(ast_left, require_type)?;
+        let left = self.analyze_expression(ast_left, require_type)?;
         let resolved_type = left.ty.clone();
         Ok((
             UnaryOperator {

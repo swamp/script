@@ -37,14 +37,14 @@ fn internal_compile(script: &str) -> Result<Module, ResolveError> {
 
     let mut resolved_definitions = Vec::new();
     for definition in &program.definitions {
-        let resolved_definition = resolver.resolve_definition(definition)?;
+        let resolved_definition = resolver.analyze_definition(definition)?;
         resolved_definitions.push(resolved_definition);
     }
 
     let expression = &program.expression;
     let maybe_resolved_expression = match expression {
         Some(unwrapped_expression) => {
-            let result = resolver.resolve_expression(unwrapped_expression, None);
+            let result = resolver.analyze_expression(unwrapped_expression, None);
             if let Ok(expression) = result {
                 Some(expression)
             } else {

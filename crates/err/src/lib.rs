@@ -261,14 +261,14 @@ pub fn build_parse_error(err: &SpecificError, span: &Span) -> Builder<usize> {
 /// # Panics
 ///
 pub fn show_error(err: &ResolveError, source_map: &SourceMap) {
-    let builder = build_resolve_error(err);
+    let builder = build_analyze_error(err);
     let report = builder.build();
     report.print(source_map, stderr()).unwrap();
 }
 
 #[must_use]
 #[allow(clippy::too_many_lines)]
-pub fn build_resolve_error(err: &ResolveError) -> Builder<usize> {
+pub fn build_analyze_error(err: &ResolveError) -> Builder<usize> {
     let span = &err.node.span;
     match &err.kind {
         ResolveErrorKind::TypeDoNotSupportRangeAccess => Report::build(

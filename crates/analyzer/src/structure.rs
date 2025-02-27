@@ -13,7 +13,7 @@ use swamp_script_semantic::{
 };
 
 impl<'a> Analyzer<'a> {
-    fn resolve_struct_init_calling_default(
+    fn analyze_struct_init_calling_default(
         &mut self,
         function: &FunctionRef,
         struct_to_instantiate: StructTypeRef,
@@ -104,7 +104,7 @@ impl<'a> Analyzer<'a> {
         Ok(block)
     }
 
-    fn resolve_struct_init_field_by_field(
+    fn analyze_struct_init_field_by_field(
         &mut self,
         struct_to_instantiate: StructTypeRef,
         mut source_order_expressions: Vec<(usize, Expression)>,
@@ -142,7 +142,7 @@ impl<'a> Analyzer<'a> {
         ))
     }
 
-    pub(crate) fn resolve_struct_instantiation(
+    pub(crate) fn analyze_struct_instantiation(
         &mut self,
         qualified_type_identifier: &swamp_script_ast::QualifiedTypeIdentifier,
         ast_fields: &Vec<swamp_script_ast::FieldExpression>,
@@ -151,7 +151,7 @@ impl<'a> Analyzer<'a> {
         let struct_to_instantiate = self.get_struct_type(qualified_type_identifier)?;
 
         let (source_order_expressions, missing_fields) = self
-            .resolve_anon_struct_instantiation_helper(
+            .analyze_anon_struct_instantiation_helper(
                 &struct_to_instantiate.borrow().anon_struct_type,
                 ast_fields,
             )?;
@@ -163,7 +163,7 @@ impl<'a> Analyzer<'a> {
                 .functions
                 .get(&"default".to_string())
             {
-                self.resolve_struct_init_calling_default(
+                self.analyze_struct_init_calling_default(
                     function,
                     struct_to_instantiate,
                     source_order_expressions,
@@ -174,7 +174,7 @@ impl<'a> Analyzer<'a> {
                     .into_iter()
                     .map(|(a, _b, c)| (a, c))
                     .collect::<Vec<_>>();
-                self.resolve_struct_init_field_by_field(
+                self.analyze_struct_init_field_by_field(
                     struct_to_instantiate,
                     mapped,
                     missing_fields,
@@ -208,7 +208,7 @@ impl<'a> Analyzer<'a> {
         }
     }
 
-    fn resolve_anon_struct_instantiation_helper(
+    fn analyze_anon_struct_instantiation_helper(
         &mut self,
         struct_to_instantiate: &AnonymousStructType,
         ast_fields: &Vec<swamp_script_ast::FieldExpression>,
@@ -251,7 +251,7 @@ impl<'a> Analyzer<'a> {
                 .expect("field_name is checked earlier");
 
             let resolved_expression =
-                self.resolve_expression(&field.expression, Some(&looked_up_field.field_type))?;
+                self.analyze_expression(&field.expression, Some(&looked_up_field.field_type))?;
 
             source_order_expressions.push((
                 field_index_in_definition,
@@ -263,7 +263,7 @@ impl<'a> Analyzer<'a> {
         Ok((source_order_expressions, missing_fields))
     }
 
-    pub(crate) fn resolve_anon_struct_instantiation(
+    pub(crate) fn analyze_anon_struct_instantiation(
         &mut self,
         node: &swamp_script_ast::Node,
         struct_to_instantiate: &AnonymousStructType,
@@ -271,7 +271,7 @@ impl<'a> Analyzer<'a> {
         allow_rest: bool,
     ) -> Result<Vec<(usize, Expression)>, ResolveError> {
         let (source_order_expressions, missing_fields) =
-            self.resolve_anon_struct_instantiation_helper(struct_to_instantiate, ast_fields)?;
+            self.analyze_anon_struct_instantiation_helper(struct_to_instantiate, ast_fields)?;
 
         let mut mapped: Vec<(usize, Expression)> = source_order_expressions
             .into_iter()

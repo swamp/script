@@ -14,15 +14,15 @@ use swamp_script_semantic::{
 impl<'a> Analyzer<'a> {
     /// # Errors
     ///
-    pub fn resolve_map_type(
+    pub fn analyze_map_type(
         &mut self,
         ast_key_type: &swamp_script_ast::Type,
         ast_value_type: &swamp_script_ast::Type,
     ) -> Result<MapTypeRef, ResolveError> {
         // TODO: Check for an existing map type with exact same type
 
-        let key_type = self.resolve_type(ast_key_type)?;
-        let value_type = self.resolve_type(ast_value_type)?;
+        let key_type = self.analyze_type(ast_key_type)?;
+        let value_type = self.analyze_type(ast_value_type)?;
 
         let original_map_type = MapType {
             key_type,
@@ -61,13 +61,13 @@ impl<'a> Analyzer<'a> {
 
     /// # Errors
     ///
-    pub fn resolve_array_type(
+    pub fn analyze_array_type(
         &mut self,
         ast_type: &swamp_script_ast::Type,
     ) -> Result<ArrayTypeRef, ResolveError> {
         // TODO: Check for an existing array type with exact same type
 
-        let resolved_type = self.resolve_type(ast_type)?;
+        let resolved_type = self.analyze_type(ast_type)?;
 
         let original_array_type = ArrayType {
             item_type: resolved_type,
@@ -82,7 +82,7 @@ impl<'a> Analyzer<'a> {
 
     /// # Errors
     ///
-    pub fn resolve_type(
+    pub fn analyze_type(
         &mut self,
         ast_type: &swamp_script_ast::Type,
     ) -> Result<Type, ResolveError> {
@@ -97,30 +97,30 @@ impl<'a> Analyzer<'a> {
                 Type::Struct(struct_ref)
             }
             swamp_script_ast::Type::Array(ast_type) => {
-                Type::Array(self.resolve_array_type(ast_type)?)
+                Type::Array(self.analyze_array_type(ast_type)?)
             }
             swamp_script_ast::Type::Map(key_type, value_type) => {
-                Type::Map(self.resolve_map_type(key_type, value_type)?)
+                Type::Map(self.analyze_map_type(key_type, value_type)?)
             }
             swamp_script_ast::Type::Tuple(types) => {
-                Type::Tuple(TupleType(self.resolve_types(types)?).into())
+                Type::Tuple(TupleType(self.analyze_types(types)?).into())
             }
             swamp_script_ast::Type::Generic(base_type, generic_types) => {
-                let base_type = self.resolve_type(base_type)?;
-                Type::Generic(Box::new(base_type), self.resolve_types(generic_types)?)
+                let base_type = self.analyze_type(base_type)?;
+                Type::Generic(Box::new(base_type), self.analyze_types(generic_types)?)
             }
             swamp_script_ast::Type::Enum(_) => todo!(),
             swamp_script_ast::Type::Named(ast_type_reference) => {
                 self.analyze_named_type(ast_type_reference)?
             }
             swamp_script_ast::Type::Optional(inner_type_ast, _node) => {
-                let inner_resolved_type = self.resolve_type(inner_type_ast)?;
+                let inner_resolved_type = self.analyze_type(inner_type_ast)?;
                 Type::Optional(Box::from(inner_resolved_type))
             }
             swamp_script_ast::Type::Function(parameters, return_type) => {
-                let parameter_types = self.resolve_param_types(parameters)?;
+                let parameter_types = self.analyze_param_types(parameters)?;
 
-                let resolved_return_type = self.resolve_type(return_type)?;
+                let resolved_return_type = self.analyze_type(return_type)?;
                 Type::Function(FunctionTypeSignature {
                     parameters: parameter_types,
                     return_type: Box::new(resolved_return_type),
@@ -131,18 +131,18 @@ impl<'a> Analyzer<'a> {
         Ok(resolved)
     }
 
-    pub(crate) fn resolve_types(
+    pub(crate) fn analyze_types(
         &mut self,
         types: &[swamp_script_ast::Type],
     ) -> Result<Vec<Type>, ResolveError> {
         let mut resolved_types = Vec::new();
         for some_type in types {
-            resolved_types.push(self.resolve_type(some_type)?);
+            resolved_types.push(self.analyze_type(some_type)?);
         }
         Ok(resolved_types)
     }
 
-    fn resolve_param_types(
+    fn analyze_param_types(
         &mut self,
         type_for_parameters: &Vec<swamp_script_ast::TypeForParameter>,
     ) -> Result<Vec<TypeForParameter>, ResolveError> {
@@ -150,7 +150,7 @@ impl<'a> Analyzer<'a> {
         for x in type_for_parameters {
             vec.push(TypeForParameter {
                 name: String::new(),
-                resolved_type: Some(self.resolve_type(&x.ast_type)?),
+                resolved_type: Some(self.analyze_type(&x.ast_type)?),
                 is_mutable: x.is_mutable,
                 node: None,
             });

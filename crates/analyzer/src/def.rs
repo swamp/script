@@ -16,7 +16,7 @@ use swamp_script_semantic::{
 };
 
 impl<'a> Analyzer<'a> {
-    fn resolve_use_definition(
+    fn analyze_use_definition(
         &mut self,
         use_definition: &swamp_script_ast::Use,
     ) -> Result<(), ResolveError> {
@@ -96,7 +96,7 @@ impl<'a> Analyzer<'a> {
         Ok(())
     }
 
-    fn resolve_enum_type_definition(
+    fn analyze_enum_type_definition(
         &mut self,
         enum_type_name: &swamp_script_ast::Node,
         ast_variants: &Vec<swamp_script_ast::EnumVariantType>,
@@ -143,7 +143,7 @@ impl<'a> Analyzer<'a> {
                 swamp_script_ast::EnumVariantType::Tuple(_variant_name_node, types) => {
                     let mut vec = Vec::new();
                     for tuple_type in types {
-                        let resolved_type = self.resolve_type(tuple_type)?;
+                        let resolved_type = self.analyze_type(tuple_type)?;
                         vec.push(resolved_type);
                     }
 
@@ -163,7 +163,7 @@ impl<'a> Analyzer<'a> {
 
                     for (_index, field_with_type) in ast_struct_fields.fields.iter().enumerate() {
                         // TODO: Check the index
-                        let resolved_type = self.resolve_type(&field_with_type.field_type)?;
+                        let resolved_type = self.analyze_type(&field_with_type.field_type)?;
                         let field_name_str =
                             self.get_text(&field_with_type.field_name.0).to_string();
 
@@ -208,14 +208,14 @@ impl<'a> Analyzer<'a> {
 
     /// # Errors
     ///
-    pub fn resolve_struct_type_definition(
+    pub fn analyze_struct_type_definition(
         &mut self,
         ast_struct: &swamp_script_ast::StructType,
     ) -> Result<(), ResolveError> {
         let mut resolved_fields = SeqMap::new();
 
         for field_name_and_type in &ast_struct.fields {
-            let resolved_type = self.resolve_type(&field_name_and_type.field_type)?;
+            let resolved_type = self.analyze_type(&field_name_and_type.field_type)?;
             let name_string = self.get_text(&field_name_and_type.field_name.0).to_string();
 
             let field_type = AnonymousStructFieldType {
@@ -250,15 +250,15 @@ impl<'a> Analyzer<'a> {
         Ok(())
     }
 
-    fn resolve_function_definition(
+    fn analyze_function_definition(
         &mut self,
         function: &swamp_script_ast::Function,
     ) -> Result<(), ResolveError> {
         match function {
             swamp_script_ast::Function::Internal(function_data) => {
-                let parameters = self.resolve_parameters(&function_data.declaration.params)?;
+                let parameters = self.analyze_parameters(&function_data.declaration.params)?;
                 let return_type = if let Some(found) = &function_data.declaration.return_type {
-                    self.resolve_type(found)?
+                    self.analyze_type(found)?
                 } else {
                     Type::Unit
                 };
@@ -279,7 +279,7 @@ impl<'a> Analyzer<'a> {
                 }
                 let function_name = self.get_text(&function_data.declaration.name).to_string();
                 let statements =
-                    self.resolve_statements_in_function(&function_data.body, &return_type)?;
+                    self.analyze_statements_in_function(&function_data.body, &return_type)?;
                 self.scope.return_type = Type::Unit;
 
                 let internal = InternalFunctionDefinition {
@@ -297,9 +297,9 @@ impl<'a> Analyzer<'a> {
                     .add_internal_function_ref(&function_name, internal)?;
             }
             swamp_script_ast::Function::External(ast_signature) => {
-                let parameters = self.resolve_parameters(&ast_signature.params)?;
+                let parameters = self.analyze_parameters(&ast_signature.params)?;
                 let external_return_type = if let Some(found) = &ast_signature.return_type {
-                    self.resolve_type(found)?
+                    self.analyze_type(found)?
                 } else {
                     Type::Unit
                 };
@@ -324,36 +324,36 @@ impl<'a> Analyzer<'a> {
 
     /// # Errors
     ///
-    pub fn resolve_definition(
+    pub fn analyze_definition(
         &mut self,
         ast_def: &swamp_script_ast::Definition,
     ) -> Result<(), ResolveError> {
         let resolved_def = match ast_def {
             swamp_script_ast::Definition::StructDef(ref ast_struct) => {
-                self.resolve_struct_type_definition(ast_struct)?
+                self.analyze_struct_type_definition(ast_struct)?
             }
             swamp_script_ast::Definition::EnumDef(identifier, variants) => {
-                self.resolve_enum_type_definition(identifier, variants)?;
+                self.analyze_enum_type_definition(identifier, variants)?;
             }
             swamp_script_ast::Definition::FunctionDef(function) => {
-                let resolved_return_type = self.resolve_return_type(function)?;
+                let resolved_return_type = self.analyze_return_type(function)?;
                 self.start_function(resolved_return_type);
-                self.resolve_function_definition(function)?;
+                self.analyze_function_definition(function)?;
                 self.stop_function();
             }
             swamp_script_ast::Definition::ImplDef(type_identifier, functions) => {
-                self.resolve_impl_definition(type_identifier, functions)?;
+                self.analyze_impl_definition(type_identifier, functions)?;
             }
-            swamp_script_ast::Definition::Use(use_info) => self.resolve_use_definition(use_info)?,
+            swamp_script_ast::Definition::Use(use_info) => self.analyze_use_definition(use_info)?,
             swamp_script_ast::Definition::Constant(const_info) => {
-                self.resolve_constant_definition(const_info)?
+                self.analyze_constant_definition(const_info)?
             }
         };
 
         Ok(resolved_def)
     }
 
-    fn resolve_impl_definition(
+    fn analyze_impl_definition(
         &mut self,
         attached_to_type: &swamp_script_ast::Node,
         functions: &Vec<swamp_script_ast::Function>,
@@ -367,7 +367,7 @@ impl<'a> Analyzer<'a> {
         let found_struct = self.find_struct_type(&fake_qualified_type_name)?;
 
         for function in functions {
-            let new_return_type = self.resolve_return_type(function)?;
+            let new_return_type = self.analyze_return_type(function)?;
             self.start_function(new_return_type);
 
             let function_name = match function {
@@ -379,7 +379,7 @@ impl<'a> Analyzer<'a> {
 
             let function_name_str = self.get_text(&function_name.name).to_string();
 
-            let resolved_function = self.resolve_impl_func(function, &found_struct)?;
+            let resolved_function = self.analyze_impl_func(function, &found_struct)?;
             let resolved_function_ref = Rc::new(resolved_function);
 
             found_struct
@@ -395,7 +395,7 @@ impl<'a> Analyzer<'a> {
         Ok(Type::Struct(found_struct))
     }
 
-    fn resolve_impl_func(
+    fn analyze_impl_func(
         &mut self,
         function: &swamp_script_ast::Function,
         found_struct: &StructTypeRef,
@@ -418,7 +418,7 @@ impl<'a> Analyzer<'a> {
                 }
 
                 for param in &function_data.declaration.params {
-                    let resolved_type = self.resolve_type(&param.param_type)?;
+                    let resolved_type = self.analyze_type(&param.param_type)?;
 
                     parameters.push(TypeForParameter {
                         name: self.get_text(&param.variable.name).to_string(),
@@ -432,7 +432,7 @@ impl<'a> Analyzer<'a> {
                 }
 
                 let return_type =
-                    self.resolve_maybe_type(&function_data.declaration.return_type)?;
+                    self.analyze_maybe_type(&function_data.declaration.return_type)?;
 
                 for param in &parameters {
                     self.create_local_variable_resolved(
@@ -443,7 +443,7 @@ impl<'a> Analyzer<'a> {
                 }
 
                 let statements =
-                    self.resolve_statements_in_function(&function_data.body, &return_type)?;
+                    self.analyze_statements_in_function(&function_data.body, &return_type)?;
 
                 let internal = InternalFunctionDefinition {
                     signature: FunctionTypeSignature {
@@ -477,7 +477,7 @@ impl<'a> Analyzer<'a> {
 
                 // Handle parameters, including self if present
                 for param in &signature.params {
-                    let resolved_type = self.resolve_type(&param.param_type)?;
+                    let resolved_type = self.analyze_type(&param.param_type)?;
 
                     parameters.push(TypeForParameter {
                         name: self.get_text(&param.variable.name).to_string(),
@@ -490,7 +490,7 @@ impl<'a> Analyzer<'a> {
                     });
                 }
 
-                let return_type = self.resolve_maybe_type(&signature.return_type)?;
+                let return_type = self.analyze_maybe_type(&signature.return_type)?;
 
                 let external = ExternalFunctionDefinition {
                     assigned_name: self.get_text(&signature.name).to_string(),

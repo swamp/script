@@ -13,7 +13,7 @@ use tracing::error;
 
 impl<'a> Analyzer<'a> {
     #[allow(clippy::too_many_lines)]
-    pub(crate) fn resolve_literal(
+    pub(crate) fn analyze_literal(
         &mut self,
         ast_node: &swamp_script_ast::Node,
         ast_literal_kind: &swamp_script_ast::LiteralKind,
@@ -66,17 +66,17 @@ impl<'a> Analyzer<'a> {
                     }
                 };
 
-                let enum_type_ref = self.resolve_enum_ref(enum_name)?;
+                let enum_type_ref = self.analyze_enum_ref(enum_name)?;
                 let enum_type = Type::Enum(enum_type_ref);
 
                 // Handle enum variant literals in patterns
-                let variant_ref = self.resolve_enum_variant_ref(enum_name, variant_name)?;
+                let variant_ref = self.analyze_enum_variant_ref(enum_name, variant_name)?;
 
                 let resolved_data = match enum_literal {
                     swamp_script_ast::EnumVariantLiteral::Simple(_, _) => EnumLiteralData::Nothing,
                     swamp_script_ast::EnumVariantLiteral::Tuple(_node, _variant, expressions) => {
                         let resolved = self
-                            .resolve_expressions(None, expressions)
+                            .analyze_expressions(None, expressions)
                             .expect("enum tuple expressions should resolve");
                         EnumLiteralData::Tuple(resolved)
                     }
@@ -102,7 +102,7 @@ impl<'a> Analyzer<'a> {
                                 ));
                             }
 
-                            let resolved = self.resolve_anon_struct_instantiation(
+                            let resolved = self.analyze_anon_struct_instantiation(
                                 &variant.0.clone(),
                                 &resolved_variant_struct_ref.anon_struct,
                                 anonym_struct_field_and_expressions,
@@ -152,7 +152,7 @@ impl<'a> Analyzer<'a> {
                     }
                 } else {
                     let (array_type_ref, resolved_items) =
-                        self.resolve_array_type_helper(ast_node, &items, expected_type)?;
+                        self.analyze_array_type_helper(ast_node, &items, expected_type)?;
                     (
                         Literal::Array(array_type_ref.clone(), resolved_items),
                         Type::Array(array_type_ref),
@@ -161,13 +161,13 @@ impl<'a> Analyzer<'a> {
             }
 
             swamp_script_ast::LiteralKind::Map(entries) => {
-                let (map_literal, map_type_ref) = self.resolve_map_literal(ast_node, &entries)?;
+                let (map_literal, map_type_ref) = self.analyze_map_literal(ast_node, &entries)?;
 
                 (map_literal, Type::Map(map_type_ref.clone()))
             }
 
             swamp_script_ast::LiteralKind::Tuple(expressions) => {
-                let (tuple_type_ref, resolved_items) = self.resolve_tuple_literal(&expressions)?;
+                let (tuple_type_ref, resolved_items) = self.analyze_tuple_literal(&expressions)?;
                 (
                     Literal::TupleLiteral(tuple_type_ref.clone(), resolved_items),
                     Type::Tuple(tuple_type_ref.clone()),
@@ -186,11 +186,11 @@ impl<'a> Analyzer<'a> {
         Ok(resolved_literal)
     }
 
-    fn resolve_tuple_literal(
+    fn analyze_tuple_literal(
         &mut self,
         items: &[swamp_script_ast::Expression],
     ) -> Result<(TupleTypeRef, Vec<Expression>), ResolveError> {
-        let expressions = self.resolve_expressions(None, items)?;
+        let expressions = self.analyze_expressions(None, items)?;
         let mut tuple_types = Vec::new();
         for expr in &expressions {
             let item_type = expr.ty.clone();
@@ -204,7 +204,7 @@ impl<'a> Analyzer<'a> {
         Ok((tuple_type_ref, expressions))
     }
 
-    fn resolve_map_literal(
+    fn analyze_map_literal(
         &mut self,
         node: &swamp_script_ast::Node,
         entries: &[(swamp_script_ast::Expression, swamp_script_ast::Expression)],
@@ -215,8 +215,8 @@ impl<'a> Analyzer<'a> {
 
         // Resolve first entry to determine map types
         let (first_key, first_value) = &entries[0];
-        let resolved_first_key = self.resolve_expression(first_key, None)?;
-        let resolved_first_value = self.resolve_expression(first_value, None)?;
+        let resolved_first_key = self.analyze_expression(first_key, None)?;
+        let resolved_first_value = self.analyze_expression(first_value, None)?;
         let key_type = resolved_first_key.ty.clone();
         let value_type = resolved_first_value.ty.clone();
 
@@ -225,8 +225,8 @@ impl<'a> Analyzer<'a> {
         resolved_entries.push((resolved_first_key, resolved_first_value));
 
         for (key, value) in entries.iter().skip(1) {
-            let resolved_key = self.resolve_expression(key, None)?;
-            let resolved_value = self.resolve_expression(value, None)?;
+            let resolved_key = self.analyze_expression(key, None)?;
+            let resolved_value = self.analyze_expression(value, None)?;
 
             if !resolved_key.ty.same_type(&key_type) {
                 return Err(self.create_err(

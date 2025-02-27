@@ -8,11 +8,11 @@ use crate::Analyzer;
 use swamp_script_semantic::{Constant, ConstantRef, Expression, ExpressionKind};
 
 impl<'a> Analyzer<'a> {
-    fn resolve_constant(
+    fn analyze_constant(
         &mut self,
         constant: &swamp_script_ast::ConstantInfo,
     ) -> Result<(), ResolveError> {
-        let resolved_expr = self.resolve_expression(&constant.expression, None)?;
+        let resolved_expr = self.analyze_expression(&constant.expression, None)?;
         let resolved_type = resolved_expr.ty.clone();
         let name_node = self.to_node(&constant.constant_identifier.0);
         let name_text = self.get_text_resolved(&name_node).to_string();
@@ -42,14 +42,14 @@ impl<'a> Analyzer<'a> {
         Ok(())
     }
 
-    pub(crate) fn resolve_constant_definition(
+    pub(crate) fn analyze_constant_definition(
         &mut self,
         constant: &swamp_script_ast::ConstantInfo,
     ) -> Result<(), ResolveError> {
-        self.resolve_constant(constant)
+        self.analyze_constant(constant)
     }
 
-    pub(crate) fn resolve_constant_access(
+    pub(crate) fn analyze_constant_access(
         &self,
         constant_identifier: &swamp_script_ast::ConstantIdentifier,
     ) -> Result<Expression, ResolveError> {

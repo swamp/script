@@ -37,7 +37,7 @@ impl<'a> Analyzer<'a> {
             )
     }
 
-    pub(crate) fn resolve_pattern(
+    pub(crate) fn analyze_pattern(
         &mut self,
         ast_pattern: &swamp_script_ast::Pattern,
         expected_condition_type: &Type,
@@ -48,12 +48,12 @@ impl<'a> Analyzer<'a> {
             }
             swamp_script_ast::Pattern::NormalPattern(node, normal_pattern, maybe_guard) => {
                 let (normal_pattern, was_pushed) =
-                    self.resolve_normal_pattern(node, normal_pattern, expected_condition_type)?;
+                    self.analyze_normal_pattern(node, normal_pattern, expected_condition_type)?;
                 let resolved_guard = if let Some(guard_clause) = maybe_guard {
                     match guard_clause {
                         swamp_script_ast::GuardClause::Wildcard(_) => None,
                         swamp_script_ast::GuardClause::Expression(clause_expr) => {
-                            Some(self.resolve_bool_expression(&clause_expr)?)
+                            Some(self.analyze_bool_expression(&clause_expr)?)
                         }
                     }
                 } else {
@@ -65,7 +65,7 @@ impl<'a> Analyzer<'a> {
     }
 
     #[allow(clippy::too_many_lines)]
-    pub(crate) fn resolve_normal_pattern(
+    pub(crate) fn analyze_normal_pattern(
         &mut self,
         node: &swamp_script_ast::Node,
         ast_normal_pattern: &swamp_script_ast::NormalPattern,
@@ -229,7 +229,7 @@ impl<'a> Analyzer<'a> {
             }
 
             swamp_script_ast::NormalPattern::Literal(ast_literal) => Ok((
-                self.resolve_pattern_literal(node, ast_literal, expected_condition_type)?,
+                self.analyze_pattern_literal(node, ast_literal, expected_condition_type)?,
                 false,
             )),
         }

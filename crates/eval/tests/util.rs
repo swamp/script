@@ -71,13 +71,13 @@ fn internal_compile(
 
     //let mut resolved_definitions = Vec::new();
     for definition in &program.definitions {
-        resolver.resolve_definition(definition)?;
+        resolver.analyze_definition(definition)?;
         //  resolved_definitions.push(resolved_definition);
     }
 
     let maybe_resolved_expression = program
         .expression
-        .map(|expr| resolver.resolve_expression(&expr, None))
+        .map(|expr| resolver.analyze_expression(&expr, None))
         .transpose()?;
 
     Ok((maybe_resolved_expression, source_map))

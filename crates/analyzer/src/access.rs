@@ -24,7 +24,7 @@ impl<'a> Analyzer<'a> {
         }
     }
 
-    pub(crate) fn resolve_static_member_access(
+    pub(crate) fn analyze_static_member_access(
         &mut self,
         struct_reference: &swamp_script_ast::QualifiedTypeIdentifier,
         member_name_node: &swamp_script_ast::Node,
@@ -44,24 +44,24 @@ impl<'a> Analyzer<'a> {
         Ok(expr)
     }
 
-    pub(crate) fn resolve_min_max_expr(
+    pub(crate) fn analyze_min_max_expr(
         &mut self,
         min_expr: &swamp_script_ast::Expression,
         max_expr: &swamp_script_ast::Expression,
     ) -> Result<(Expression, Expression), ResolveError> {
-        let resolved_min = self.resolve_expression(min_expr, Some(&Type::Int))?;
-        let resolved_max = self.resolve_expression(max_expr, Some(&Type::Int))?;
+        let resolved_min = self.analyze_expression(min_expr, Some(&Type::Int))?;
+        let resolved_max = self.analyze_expression(max_expr, Some(&Type::Int))?;
 
         Ok((resolved_min, resolved_max))
     }
 
-    pub fn resolve_range(
+    pub fn analyze_range(
         &mut self,
         min_expr: &swamp_script_ast::Expression,
         max_expr: &swamp_script_ast::Expression,
         mode: &swamp_script_ast::RangeMode,
     ) -> Result<Range, ResolveError> {
-        let (min, max) = self.resolve_min_max_expr(min_expr, max_expr)?;
+        let (min, max) = self.analyze_min_max_expr(min_expr, max_expr)?;
 
         let resolved_range_mode = match mode {
             swamp_script_ast::RangeMode::Inclusive => RangeMode::Inclusive,
@@ -76,7 +76,7 @@ impl<'a> Analyzer<'a> {
 
     /// # Errors
     ///
-    pub fn resolve_array_range_access(
+    pub fn analyze_array_range_access(
         &mut self,
         base_expression: Expression,
         array_type_ref: &ArrayTypeRef,
@@ -93,7 +93,7 @@ impl<'a> Analyzer<'a> {
 
     /// # Errors
     ///
-    pub fn resolve_string_range_access(
+    pub fn analyze_string_range_access(
         &mut self,
         base_expr: Expression,
         range: Range,

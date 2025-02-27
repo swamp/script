@@ -3,4 +3,4 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-pub use crate::resolve_program;
+pub use crate::analyze_program;

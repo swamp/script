@@ -8,7 +8,7 @@ use swamp_script_analyzer::prelude::ResolvedProgram;
 use swamp_script_dep_loader::{
     parse_dependant_modules_and_resolve, DepLoaderError, DependencyParser, ParseModule,
 };
-use swamp_script_eval_loader::resolve_program;
+use swamp_script_eval_loader::analyze_program;
 use swamp_script_source_map::SourceMap;
 pub mod prelude;
 
@@ -47,7 +47,7 @@ pub fn compile_and_resolve(
     )?;
 
     let mut resolved_program = ResolvedProgram::new();
-    resolve_program(
+    analyze_program(
         &mut resolved_program.state,
         &mut resolved_program.modules,
         source_map,
