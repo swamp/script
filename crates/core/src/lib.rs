@@ -294,7 +294,7 @@ fn add_intrinsic_map_functions(core_ns: &mut SymbolTable, value_type: &Type) {
         .into(),
         return_type: Box::new(value_type.clone()),
     };
-    let slice_to_self_functions = [IntrinsicFunction::MapFromSlice];
+    let slice_to_self_functions = [IntrinsicFunction::MapFromSlicePair];
     for intrinsic_fn in slice_to_self_functions {
         let name = intrinsic_fn.to_string();
         core_ns

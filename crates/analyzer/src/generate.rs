@@ -34,7 +34,7 @@ impl<'a> Analyzer<'a> {
         Rc::new(struct_type)
     }
 
-    pub fn gen_function(
+    fn gen_function(
         &self,
         name_prefix: &str,
         name: &str,
@@ -50,10 +50,21 @@ impl<'a> Analyzer<'a> {
                 is_mutable: false,
                 node: None,
             })
-            .collect();
+            .collect::<Vec<_>>();
 
+        self.gen_function_mut(name_prefix, name, &params, return_type, func)
+    }
+
+    pub fn gen_function_mut(
+        &self,
+        name_prefix: &str,
+        name: &str,
+        params: &[TypeForParameter],
+        return_type: Type,
+        func: IntrinsicFunction,
+    ) -> Function {
         let generated_signature = Signature {
-            parameters: params,
+            parameters: Vec::from(params),
             return_type: Box::new(return_type),
         };
 
@@ -190,20 +201,59 @@ impl<'a> Analyzer<'a> {
     pub fn generate_map_struct(&mut self, key_type: &Type, value_type: &Type) -> StructTypeRef {
         let struct_ref = self.generate_empty_struct("Map", &[key_type.clone(), value_type.clone()]);
         let gen_name = &struct_ref.assigned_name;
-        let sparse_type = Type::Struct(struct_ref.clone());
+        let map_type = Type::Struct(struct_ref.clone());
 
         let mut functions = SeqMap::new();
 
-        let new_func = self.gen_function(
+        let from_slice_pair_fn = self.gen_function(
+            &gen_name,
+            "from_slice_pair",
+            &[],
+            map_type.clone(),
+            IntrinsicFunction::MapFromSlicePair,
+        );
+        functions
+            .insert("from_slice_pair", from_slice_pair_fn)
+            .unwrap();
+
+        let new_fn = self.gen_function(
             &gen_name,
             "new",
             &[],
-            sparse_type.clone(),
-            IntrinsicFunction::SparseCreate,
+            map_type.clone(),
+            IntrinsicFunction::MapCreate,
         );
-        functions.insert("from_slice", new_func).unwrap();
+        functions.insert("new", new_fn).unwrap();
 
-        self.add_functions(&sparse_type, functions);
+        let subscript_mut = self.gen_function_mut(
+            &gen_name,
+            "subscript_mut",
+            &[
+                TypeForParameter {
+                    name: "self".to_string(),
+                    resolved_type: map_type.clone(),
+                    is_mutable: true,
+                    node: None,
+                },
+                TypeForParameter {
+                    name: "key".to_string(),
+                    resolved_type: key_type.clone(),
+                    is_mutable: false,
+                    node: None,
+                },
+                TypeForParameter {
+                    name: "out_value".to_string(),
+                    resolved_type: value_type.clone(),
+                    is_mutable: true,
+                    node: None,
+                },
+            ],
+            Type::Unit,
+            IntrinsicFunction::MapSubscriptMut,
+        );
+        functions.insert("subscript_mut", subscript_mut).unwrap();
+
+        self.add_functions(&map_type, functions);
 
         struct_ref
     }

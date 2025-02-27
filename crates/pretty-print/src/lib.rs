@@ -6,7 +6,8 @@ use swamp_script_modules::symtbl::{FuncDef, Symbol, SymbolTable};
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
     ArgumentExpressionOrLocation, AssociatedImpls, IntrinsicFunctionDefinitionRef,
-    MutOrImmutableExpression, Postfix, PostfixKind, SingleLocationExpression,
+    LocationAccessKind, MapTypeRef, MutOrImmutableExpression, Postfix, PostfixKind, Range,
+    SingleLocationExpression, SingleMutLocationExpression, SparseTypeRef,
 };
 use yansi::{Color, Paint};
 
@@ -339,6 +340,82 @@ impl SourceMapDisplay<'_> {
         self.show_argument(f, &mut_expr.expression_or_location, tabs)
     }
 
+    fn show_mut_location(
+        &self,
+        f: &mut Formatter,
+        var: &SingleMutLocationExpression,
+        expr: &Expression,
+        tabs: usize,
+    ) -> std::fmt::Result {
+        write!(f, "{}", "*".bright_red())?;
+        /*
+        pub kind: SingleLocationExpressionKind,
+        pub node: Node,
+        pub ty: Type,
+
+        pub starting_variable: VariableRef,
+        pub access_chain: Vec<LocationAccess>,
+
+         */
+
+        self.show_variable(f, &var.0.starting_variable)?;
+
+        /*
+        match var.0.kind {
+            SingleLocationExpressionKind::MutVariableRef => write!(f, "MUT"),
+            SingleLocationExpressionKind::MutStructFieldRef(struct_ref, index) => self.show_struct_field(f, struct_ref, index, tabs),
+            SingleLocationExpressionKind::MutArrayIndexRef(vector_type) => self.show_vector_index(f, vector_type, tabs),
+            SingleLocationExpressionKind::MutMapIndexRef(map_type) => self.show_map_index(f, map_type, tabs),
+            SingleLocationExpressionKind::MutRustTypeIndexRef(ExternalTypeRef),
+        }
+
+         */
+
+        for location_access in &var.0.access_chain {
+            match &location_access.kind {
+                LocationAccessKind::FieldIndex(struct_type, index) => {
+                    self.show_struct_field(f, struct_type, *index)?
+                }
+                LocationAccessKind::ArrayIndex(vec_type, index_expr) => {
+                    self.show_vec_index(f, vec_type, &index_expr, tabs)?
+                }
+                LocationAccessKind::ArrayRange(vec_type, range) => {
+                    self.show_vec_range(f, vec_type, range)?
+                }
+                LocationAccessKind::StringIndex(index_expr) => {
+                    self.show_string_index(f, &index_expr)?
+                }
+                LocationAccessKind::StringRange(range) => self.show_string_range(f, range)?,
+                LocationAccessKind::MapIndex(map_type_ref, key_expr) => {
+                    self.show_map_index(f, map_type_ref, key_expr, false)?
+                }
+                LocationAccessKind::MapIndexInsertIfNonExisting(map_type_ref, key_expr) => {
+                    self.show_map_index(f, map_type_ref, key_expr, true)?
+                }
+                LocationAccessKind::SparseIndex(sparse_type, key_expr) => {
+                    self.show_sparse_index(f, sparse_type, key_expr, false)?
+                }
+                LocationAccessKind::SparseIndexInsertIfNonExisting(sparse_type, key_expr) => {
+                    self.show_sparse_index(f, sparse_type, key_expr, true)?
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn show_assignment(
+        &self,
+        f: &mut Formatter,
+        var: &SingleMutLocationExpression,
+        expr: &Expression,
+        tabs: usize,
+    ) -> std::fmt::Result {
+        self.show_mut_location(f, var, expr, tabs)?;
+        write!(f, "{}", " = ".white())?;
+        self.show_expression(f, expr, tabs)
+    }
+
     #[allow(clippy::too_many_lines)]
     fn show_expression(
         &self,
@@ -444,9 +521,7 @@ impl SourceMapDisplay<'_> {
             ExpressionKind::TupleDestructuring(_, _, _) => {
                 write!(f, "TupleDestructuring()")
             }
-            ExpressionKind::Assignment(_, _) => {
-                write!(f, "Assignment()")
-            }
+            ExpressionKind::Assignment(var, expr) => self.show_assignment(f, var, expr, tabs),
             ExpressionKind::AssignmentSlice(_, _) => {
                 write!(f, "AssignmentSlice()")
             }
@@ -925,5 +1000,65 @@ impl SourceMapDisplay<'_> {
         write!(f, "}}")?;
 
         Ok(())
+    }
+
+    fn show_struct_field(
+        &self,
+        f: &mut Formatter,
+        struct_type: &StructTypeRef,
+        field_index: usize,
+    ) -> std::fmt::Result {
+        todo!()
+    }
+
+    fn show_vec_index(
+        &self,
+        f: &mut Formatter,
+        vec_type: &VecTypeRef,
+        index_expr: &Expression,
+        tabs: usize,
+    ) -> std::fmt::Result {
+        write!(f, "vec")?;
+        self.show_expression(f, index_expr, tabs)
+    }
+
+    fn show_range(f: &mut Formatter, range: &Range) -> std::fmt::Result {
+        write!(f, "{:?}", range)
+    }
+    fn show_vec_range(
+        &self,
+        f: &mut Formatter,
+        vec_type: &VecTypeRef,
+        range: &Range,
+    ) -> std::fmt::Result {
+        Self::show_range(f, range)
+    }
+
+    fn show_string_index(&self, f: &mut Formatter, index_expr: &Expression) -> std::fmt::Result {
+        todo!()
+    }
+
+    fn show_string_range(&self, f: &mut Formatter, range: &Range) -> std::fmt::Result {
+        todo!()
+    }
+
+    fn show_map_index(
+        &self,
+        f: &mut Formatter,
+        p1: &MapTypeRef,
+        key_expr: &Expression,
+        auto_insert: bool,
+    ) -> std::fmt::Result {
+        todo!()
+    }
+
+    fn show_sparse_index(
+        &self,
+        f: &mut Formatter,
+        p1: &SparseTypeRef,
+        key_expr: &Expression,
+        auto_insert: bool,
+    ) -> std::fmt::Result {
+        todo!()
     }
 }

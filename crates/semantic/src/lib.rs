@@ -894,7 +894,8 @@ pub enum LocationAccessKind {
     StringRange(Range),
     MapIndex(MapTypeRef, Expression),
     MapIndexInsertIfNonExisting(MapTypeRef, Expression),
-    RustTypeIndex(ExternalTypeRef, Expression),
+    SparseIndex(SparseTypeRef, Expression),
+    SparseIndexInsertIfNonExisting(SparseTypeRef, Expression),
 }
 
 #[derive(Debug)]
@@ -1031,7 +1032,7 @@ pub enum IntrinsicFunction {
 
     // Map
     MapCreate,
-    MapFromSlice,
+    MapFromSlicePair,
     MapHas,
     MapRemove,
     MapIter,
@@ -1095,7 +1096,7 @@ impl fmt::Display for IntrinsicFunction {
 
             // Map
             Self::MapCreate => "map_create",
-            Self::MapFromSlice => "map_from_slice",
+            Self::MapFromSlicePair => "map_from_slice_pair",
             Self::MapHas => "map_has",
             Self::MapRemove => "map_remove",
             Self::MapSubscriptMut => "map_subscript_mut",

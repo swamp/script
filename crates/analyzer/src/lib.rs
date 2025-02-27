@@ -519,6 +519,16 @@ impl<'a> Analyzer<'a> {
                     node,
                 )
             }
+            Type::SlicePair(key_type, value_type) => {
+                let generated_map = self.generate_map_struct(key_type, value_type);
+                let generated_map_type = Type::Struct(generated_map);
+                self.generate_call_static_member_function(
+                    &generated_map_type,
+                    "from_slice_pair",
+                    vec![expr],
+                    node,
+                )
+            }
             _ => expr,
         }
     }
@@ -2090,6 +2100,8 @@ impl<'a> Analyzer<'a> {
 
                          */
                         Type::Struct(resolved_struct_ref) => {
+                            //self.generate_call_member_function_mut(Type::Struct(resolved_struct_ref), "subscript_mut",  )
+
                             let return_type = {
                                 let subscript_fn = self
                                     .shared
@@ -2102,6 +2114,7 @@ impl<'a> Analyzer<'a> {
                                     .unwrap();
                                 &subscript_fn.signature().parameters[2].resolved_type.clone()
                             };
+
                             ty = return_type.clone();
                             //tv.resolved_type = *lookup_returns.clone();
                             //tv.is_mutable = false;
