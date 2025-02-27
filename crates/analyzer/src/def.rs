@@ -207,7 +207,6 @@ impl<'a> Analyzer<'a> {
                         let resolved_field = StructTypeField {
                             identifier: Some(self.to_node(&field_with_type.field_name.0)),
                             field_type: resolved_type,
-                            index,
                         };
 
                         fields.insert(field_name_str, resolved_field).map_err(|_| {
@@ -257,7 +256,6 @@ impl<'a> Analyzer<'a> {
             let field_type = StructTypeField {
                 identifier: Some(self.to_node(&field_name_and_type.field_name.0)),
                 field_type: resolved_type,
-                index,
             };
 
             resolved_fields

@@ -580,7 +580,6 @@ pub struct MemberCall {
 pub struct StructTypeField {
     pub identifier: Option<Node>,
     pub field_type: Type,
-    pub index: usize,
 }
 
 impl Display for StructTypeField {
@@ -948,7 +947,7 @@ pub enum ExpressionKind {
     // Access Lookup values
     ConstantAccess(ConstantRef),
     VariableAccess(VariableRef),
-    FieldAccess(Box<Expression>, StructTypeField),
+    FieldAccess(Box<Expression>, usize),
     ArrayAccess(
         Box<Expression>,
         ArrayTypeRef,

@@ -1257,12 +1257,13 @@ impl<'a, C> Interpreter<'a, C> {
             ExpressionKind::VariableAccess(variable_ref) => {
                 self.current_block_scopes.lookup_var_value(variable_ref)
             }
-            ExpressionKind::FieldAccess(expr, struct_field) => {
+            ExpressionKind::FieldAccess(expr, index) => {
                 let resolved_expr = self.evaluate_expression(expr)?;
-                let (_struct_type, values) = resolved_expr
+                let (struct_type, values) = resolved_expr
                     .expect_struct()
                     .map_err(|_| self.create_err(ExecuteErrorKind::ExpectedStruct, &expr.node))?;
-                let x = values[struct_field.index].borrow().clone();
+
+                let x = values[*index].borrow().clone();
                 x
             }
 
