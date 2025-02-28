@@ -1396,6 +1396,10 @@ pub struct ProgramState {
     pub array_types: Vec<ArrayTypeRef>,
     pub number: TypeNumber,
     pub external_function_number: ExternalFunctionId,
+    // It is just so we don't have to do another dendency check of the
+    // modules, we know that these constants have been
+    // evaluated in order already
+    pub constants_in_dependency_order: Vec<ConstantRef>,
 }
 
 impl ProgramState {
@@ -1404,6 +1408,7 @@ impl ProgramState {
             array_types: Vec::new(),
             number: 0,
             external_function_number: 0,
+            constants_in_dependency_order: Vec::new(),
         }
     }
 

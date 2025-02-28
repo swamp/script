@@ -6,7 +6,7 @@
 use crate::ns::Namespace;
 use crate::ns::NamespacePath;
 use crate::symtbl::SymbolTable;
-use crate::{ConstantRef, Expression, ExpressionKind};
+use crate::{Constant, ConstantRef, Expression, ExpressionKind};
 use seq_map::SeqMap;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
@@ -15,7 +15,6 @@ use tracing::info;
 #[derive(Debug)]
 pub struct Modules {
     modules: SeqMap<Vec<String>, ModuleRef>,
-    pub constants: Vec<ConstantRef>,
 }
 
 impl Default for Modules {
@@ -80,8 +79,11 @@ impl Modules {
     pub fn new() -> Self {
         Self {
             modules: SeqMap::new(),
-            constants: Vec::new(),
         }
+    }
+
+    pub fn modules(&self) -> &SeqMap<Vec<String>, ModuleRef> {
+        &self.modules
     }
 
     #[must_use]

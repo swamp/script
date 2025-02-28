@@ -16,7 +16,7 @@ impl<'a> Analyzer<'a> {
         let constant = Constant {
             name: name_node.clone(),
             assigned_name: name_text,
-            id: 0xffff,
+            id: self.shared.state.constants_in_dependency_order.len() as u32,
             expr: resolved_expr,
             resolved_type,
         };
@@ -29,8 +29,14 @@ impl<'a> Analyzer<'a> {
 
         self.shared
             .lookup_table
-            .add_constant_link(const_ref)
+            .add_constant_link(const_ref.clone())
             .map_err(|s| self.create_err_resolved(ErrorKind::SemanticError(s), &name_node))?;
+
+        // This extra storage of the constants in modules is to have them in analyze / dependency order
+        self.shared
+            .state
+            .constants_in_dependency_order
+            .push(const_ref);
 
         Ok(())
     }

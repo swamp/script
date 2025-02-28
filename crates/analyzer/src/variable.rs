@@ -114,7 +114,11 @@ impl<'a> Analyzer<'a> {
         variable_type_ref: &Type,
     ) -> Result<VariableRef, Error> {
         if variable_type_ref == &Type::Unit {
-            error!("serious");
+            let debug_text = self.get_text(variable);
+            error!(
+                ?debug_text,
+                "panic, tries to create a local variable as a unit"
+            );
         }
         assert_ne!(*variable_type_ref, Type::Unit);
         self.create_local_variable_resolved(

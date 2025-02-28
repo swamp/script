@@ -1892,6 +1892,9 @@ impl<'a> Analyzer<'a> {
         let source_expr =
             self.analyze_mut_or_immutable_expression(source_expression, None, LocationSide::Rhs)?;
         let ty = source_expr.ty().clone();
+        if ty == Type::Unit {
+            return Err(self.create_err(ErrorKind::VariableCanNotBeUnit, &variable.name));
+        }
 
         let maybe_found_variable = self.try_find_variable(&variable.name);
 

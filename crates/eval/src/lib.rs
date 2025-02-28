@@ -24,7 +24,7 @@ use swamp_script_semantic::{
     SingleLocationExpressionKind, UnaryOperatorKind,
 };
 use swamp_script_semantic::{ArgumentExpressionOrLocation, LocationAccess, LocationAccessKind};
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 pub mod err;
 
@@ -174,14 +174,15 @@ pub fn eval_module<C>(
 
 pub fn eval_constants<C>(
     externals: &ExternalFunctions<C>,
-    constants: &mut Constants,
-    modules: &Modules,
+    eval_constants: &mut Constants,
+    program_state: &ProgramState,
     context: &mut C,
 ) -> Result<(), ExecuteError> {
-    for constant in &modules.constants {
-        let mut interpreter = Interpreter::<C>::new(externals, constants, context);
+    for constant in &program_state.constants_in_dependency_order {
+        debug!(?constant.id, "eval constant");
+        let mut interpreter = Interpreter::<C>::new(externals, eval_constants, context);
         let value = interpreter.evaluate_expression(&constant.expr)?;
-        constants.set(constant.id, value);
+        eval_constants.set(constant.id, value);
     }
 
     Ok(())
