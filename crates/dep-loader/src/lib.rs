@@ -13,7 +13,7 @@ use swamp_script_ast::Function;
 use swamp_script_parser::{AstParser, ParseError};
 use swamp_script_source_map::{FileId, SourceMap};
 use tracing::debug;
-
+use tracing::info;
 pub struct ParseRoot;
 
 #[derive(Debug)]
@@ -175,6 +175,7 @@ pub fn get_all_local_paths(
                         .to_string();
                     sections.push(import_path);
                 }
+                info!(?sections, "detected mod dependency!");
                 imports.push(sections);
             }
             _ => continue,
@@ -187,8 +188,16 @@ pub fn get_all_local_paths(
 pub fn module_path_to_relative_swamp_file(module_path_vec: &[String]) -> PathBuf {
     let mut path_buf = PathBuf::new();
 
-    path_buf.push(module_path_vec.join("/"));
-    if module_path_vec.len() == 1 {
+    let orig_len = module_path_vec.len();
+
+    let converted_path = if module_path_vec[0] == "crate" {
+        &module_path_vec[1..]
+    } else {
+        module_path_vec
+    };
+
+    path_buf.push(converted_path.join("/"));
+    if orig_len == 1 {
         path_buf.push("lib"); // lib is default if the path only contains the package root
     }
 
@@ -204,11 +213,11 @@ pub fn module_path_to_relative_swamp_file_string(module_path_vec: &[String]) -> 
         .into()
 }
 
-pub fn mount_name_from_path(path: &[String]) -> (&str, &[String]) {
+pub fn mount_name_from_path(path: &[String]) -> &str {
     if path[0] == "crate" {
-        ("crate", &path[1..])
+        "crate"
     } else {
-        ("registry", path)
+        "registry"
     }
 }
 
@@ -218,11 +227,11 @@ pub fn parse_single_module(
     source_map: &mut SourceMap,
     module_path: &[String],
 ) -> Result<ParsedAstModule, DependencyError> {
-    let (mount_name, relative_file_path) = mount_name_from_path(&module_path);
+    let mount_name = mount_name_from_path(&module_path);
 
     let (file_id, script) = source_map.read_file_relative(
         mount_name,
-        &module_path_to_relative_swamp_file_string(relative_file_path),
+        &module_path_to_relative_swamp_file_string(module_path),
     )?;
 
     let parse_module = ParseRoot.parse(script, file_id)?;

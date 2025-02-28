@@ -14,6 +14,7 @@ use swamp_script_semantic::{
     LocalTypeIdentifier, ParameterNode, Signature, StructType, StructTypeField, StructTypeRef,
     Type, TypeForParameter, UseItem,
 };
+use tracing::info;
 
 impl<'a> Analyzer<'a> {
     fn analyze_mod_definition(
@@ -27,6 +28,8 @@ impl<'a> Analyzer<'a> {
 
         let mut nodes_copy = path.clone();
         nodes_copy.insert(0, "crate".to_string());
+
+        info!(?path, ?nodes_copy, "analyzing mod!");
 
         if let Some(found_namespace) = self.shared.modules.get(&nodes_copy) {
             self.shared
@@ -61,7 +64,7 @@ impl<'a> Analyzer<'a> {
                 text.to_string()
             })
             .collect();
-
+        info!(?path, "trying to get module");
         let found_module = self.shared.modules.get(&path).unwrap();
         if use_definition.items.is_empty() {
             let last_name = path.last().unwrap();

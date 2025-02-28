@@ -10,6 +10,7 @@ use crate::{ConstantRef, Expression, ExpressionKind};
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
+use tracing::info;
 
 #[derive(Debug)]
 pub struct Modules {
@@ -89,9 +90,9 @@ impl Modules {
     }
 
     pub fn add(&mut self, module: ModuleRef) {
-        self.modules
-            .insert(module.clone().namespace.path.clone(), module)
-            .expect("todo");
+        let path = module.clone().namespace.path.clone();
+        info!(?path, "trying to insert module");
+        self.modules.insert(path, module).expect("could not insert");
     }
 
     pub fn link_module(&mut self, module_path: &[String], referred_module: ModuleRef) {

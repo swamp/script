@@ -472,7 +472,7 @@ pub fn build_analyze_error(err: &Error) -> Builder<usize> {
         &swamp_script_analyzer::err::ErrorKind::IllegalIndexInChain => Report::build(Kind::Error, 140, "illegal index in chain", span),
         &swamp_script_analyzer::err::ErrorKind::CanNotNoneCoalesce => todo!(),
         &ErrorKind::GuardCanNotHaveMultipleWildcards | &ErrorKind::WildcardMustBeLastInGuard | &ErrorKind::GuardMustHaveWildcard => todo!(),
-        &swamp_script_analyzer::err::ErrorKind::UnknownSymbol | &swamp_script_analyzer::err::ErrorKind::UnknownEnumType | &swamp_script_analyzer::err::ErrorKind::UnknownModule => todo!(),
+        &swamp_script_analyzer::err::ErrorKind::UnknownSymbol | &swamp_script_analyzer::err::ErrorKind::UnknownEnumType | &swamp_script_analyzer::err::ErrorKind::UnknownModule => Report::build(Kind::Error, 140, "some error", span),
     }
 }
 

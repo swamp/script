@@ -7,10 +7,12 @@ use swamp_script_analyzer::{Analyzer, AutoUseModules};
 use swamp_script_dep_loader::{
     parse_local_modules_and_get_order, DependencyParser, ParsedAstModule,
 };
+use swamp_script_semantic::modules::Module;
 use swamp_script_semantic::prelude::Modules;
 use swamp_script_semantic::symtbl::SymbolTable;
 use swamp_script_semantic::{Expression, ProgramState};
 use swamp_script_source_map::SourceMap;
+use tracing::info;
 
 pub fn analyze_module(
     state: &mut ProgramState,
@@ -55,7 +57,11 @@ pub fn analyze_modules_in_order(
 ) -> Result<(), Error> {
     for module_path in module_paths_in_order {
         if let Some(parse_module) = parsed_modules.get_parsed_module(module_path) {
-            analyze_module(state, auto_use, modules, source_map, parse_module)?;
+            info!(?module_path, "analyzing module");
+            let (analyzed_symbol_table, maybe_expression) =
+                analyze_module(state, auto_use, modules, source_map, parse_module)?;
+            let analyzed_module = Module::new(module_path, analyzed_symbol_table, maybe_expression);
+            modules.add(analyzed_module.into());
         } else {
             panic!("could not load")
         }
@@ -73,6 +79,8 @@ pub fn compile_and_analyze_all_modules(
     let module_paths_in_order =
         parse_local_modules_and_get_order(module_path.to_vec(), &mut dependency_parser, source_map)
             .unwrap();
+
+    info!(?module_paths_in_order, "official analysis order");
 
     analyze_modules_in_order(
         &mut resolved_program.state,
