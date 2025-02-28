@@ -7,6 +7,7 @@ use crate::ns::Namespace;
 use crate::ns::NamespacePath;
 use crate::symtbl::SymbolTable;
 use crate::{ConstantRef, Expression, ExpressionKind};
+use seq_map::SeqMap;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
@@ -14,7 +15,7 @@ use tracing::info;
 
 #[derive(Debug)]
 pub struct Modules {
-    pub modules: HashMap<Vec<String>, ModuleRef>,
+    modules: SeqMap<Vec<String>, ModuleRef>,
     pub constants: Vec<ConstantRef>,
 }
 
@@ -79,23 +80,25 @@ impl Module {
 impl Modules {
     pub fn new() -> Self {
         Self {
-            modules: HashMap::new(),
+            modules: SeqMap::new(),
             constants: Vec::new(),
         }
     }
 
     #[must_use]
     pub fn contains_key(&self, module_path: &[String]) -> bool {
-        self.modules.contains_key(module_path)
+        self.modules.contains_key(&module_path.to_vec())
     }
 
     pub fn add(&mut self, module: ModuleRef) {
         let path = module.clone().namespace.path.clone();
-        info!(?path, "trying to insert module");
+        info!(?path, ?self, "trying to insert module");
+
         self.modules.insert(path, module).expect("could not insert");
     }
 
     pub fn link_module(&mut self, module_path: &[String], referred_module: ModuleRef) {
+        info!(?module_path, "trying to link module");
         self.modules
             .insert(module_path.to_vec(), referred_module)
             .expect("todo");

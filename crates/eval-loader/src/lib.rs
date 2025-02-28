@@ -21,6 +21,7 @@ pub fn analyze_module(
     source_map: &SourceMap,
     ast_module: &ParsedAstModule,
 ) -> Result<(SymbolTable, Option<Expression>), Error> {
+    info!(?ast_module, "Analyzing module");
     let mut resolver = Analyzer::new(state, modules, source_map, ast_module.file_id);
     if !auto_use_modules.modules.is_empty() {
         let target = &mut resolver.shared.lookup_table;

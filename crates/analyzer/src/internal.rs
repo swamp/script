@@ -202,7 +202,7 @@ impl<'a> Analyzer<'a> {
 
     fn analyze_array_member_call(
         &mut self,
-        _array_type_ref: &ArrayTypeRef,
+        array_type_ref: &ArrayTypeRef,
         is_mutable: bool,
         ast_member_function_name: &swamp_script_ast::Node,
         ast_arguments: &[&swamp_script_ast::Expression],
@@ -227,6 +227,25 @@ impl<'a> Analyzer<'a> {
                 )
             }
 
+            "add" => {
+                self.check_mutable(is_mutable, &ast_member_function_name)?;
+
+                if ast_arguments.len() != 1 {
+                    return Err(self.create_err(
+                        ErrorKind::WrongNumberOfArguments(ast_arguments.len(), 1),
+                        ast_member_function_name,
+                    ));
+                }
+                let value_expr =
+                    self.analyze_expression(&ast_arguments[0], Some(&array_type_ref.item_type))?;
+
+                self.create_postfix(
+                    PostfixKind::ArrayAdd(Box::new(value_expr)),
+                    &Type::Unit,
+                    ast_member_function_name,
+                )
+            }
+
             "clear" => {
                 self.check_mutable(is_mutable, &ast_member_function_name)?;
 
@@ -243,6 +262,33 @@ impl<'a> Analyzer<'a> {
                     ast_member_function_name,
                 )
             }
+
+            "len" => {
+                if !ast_arguments.is_empty() {
+                    return Err(self.create_err(
+                        ErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
+                        ast_member_function_name,
+                    ));
+                }
+
+                self.create_postfix(PostfixKind::ArrayLen, &Type::Int, ast_member_function_name)
+            }
+
+            "is_empty" => {
+                if !ast_arguments.is_empty() {
+                    return Err(self.create_err(
+                        ErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
+                        ast_member_function_name,
+                    ));
+                }
+
+                self.create_postfix(
+                    PostfixKind::ArrayIsEmpty,
+                    &Type::Bool,
+                    ast_member_function_name,
+                )
+            }
+
             _ => {
                 return Err(
                     self.create_err(ErrorKind::UnknownMemberFunction, &ast_member_function_name)

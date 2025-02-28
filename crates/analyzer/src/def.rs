@@ -64,8 +64,8 @@ impl<'a> Analyzer<'a> {
                 text.to_string()
             })
             .collect();
-        info!(?path, "trying to get module");
-        let found_module = self.shared.modules.get(&path).unwrap();
+        info!(?path, "trying to reference module in analysis");
+        let found_module = self.shared.get_module(&path).unwrap().clone();
         if use_definition.items.is_empty() {
             let last_name = path.last().unwrap();
             self.shared

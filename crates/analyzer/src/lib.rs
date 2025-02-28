@@ -23,6 +23,7 @@ use std::mem::take;
 use std::num::{ParseFloatError, ParseIntError};
 use std::rc::Rc;
 
+use swamp_script_semantic::modules::ModuleRef;
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::symtbl::{FuncDef, Symbol, SymbolTable, SymbolTableRef};
 use swamp_script_semantic::{
@@ -135,6 +136,15 @@ impl<'a> SharedState<'a> {
         if path.is_empty() {
             return Some(&self.lookup_table);
         }
+        if let Some(module) = self.get_module(path) {
+            Some(&module.namespace.symbol_table)
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub fn get_module(&'a self, path: &[String]) -> Option<&'a ModuleRef> {
         let resolved_path = {
             self.lookup_table.get_package_version(&path[0]).map_or_else(
                 || path.to_vec(),
@@ -150,12 +160,12 @@ impl<'a> SharedState<'a> {
 
         if path.len() == 1 {
             if let Some(module_ref) = self.lookup_table.get_module_link(&path[0]) {
-                return Some(&module_ref.namespace.symbol_table);
+                return Some(&module_ref);
             }
         }
 
         if let Some(x) = self.modules.get(&resolved_path) {
-            return Some(&x.namespace.symbol_table);
+            return Some(&x);
         }
 
         None
@@ -488,6 +498,10 @@ impl<'a> Analyzer<'a> {
             }
             swamp_script_ast::ExpressionKind::DestructuringAssignment(variables, expression) => {
                 self.analyze_destructuring(&ast_expression.node, variables, expression)?
+            }
+
+            swamp_script_ast::ExpressionKind::StaticFunctionReference(qualified_identifier) => {
+                self.analyze_static_function_access(qualified_identifier)?
             }
 
             swamp_script_ast::ExpressionKind::StaticMemberFunctionReference(

@@ -1563,11 +1563,24 @@ impl AstParser {
         ))
     }
 
+    fn parse_static_function_reference(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
+        let mut inner = pair.clone().into_inner();
+
+        let qualified_identifier = self.parse_qualified_identifier(&inner.next().unwrap())?;
+
+        Ok(self.create_expr(
+            ExpressionKind::StaticFunctionReference(qualified_identifier),
+            pair,
+        ))
+    }
+
     fn parse_term(&self, pair2: &Pair<Rule>) -> Result<Expression, ParseError> {
         assert_eq!(pair2.as_rule(), Rule::term);
         let sub = &Self::right_alternative(pair2)?;
         match sub.as_rule() {
+            Rule::static_function_reference => self.parse_static_function_reference(sub),
             Rule::static_member_reference => self.parse_static_member_reference(sub),
+
             Rule::enum_literal => {
                 Ok(self.create_expr(ExpressionKind::Literal(self.parse_enum_literal(sub)?), sub))
             }

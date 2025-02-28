@@ -799,6 +799,7 @@ pub enum PostfixKind {
     SparseAccess(Box<Expression>),
 
     ArrayRemoveIndex(Box<Expression>),
+    ArrayAdd(Box<Expression>),
     ArrayClear,
 
     // Map built in
@@ -834,6 +835,8 @@ pub enum PostfixKind {
 
     // Tuple built in
     Tuple2FloatMagnitude,
+    ArrayLen,
+    ArrayIsEmpty,
 }
 
 #[derive(Debug)]

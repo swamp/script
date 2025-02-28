@@ -361,6 +361,7 @@ pub enum ExpressionKind {
     ConstantReference(ConstantIdentifier),
     FunctionReference(QualifiedIdentifier),
     StaticMemberFunctionReference(QualifiedTypeIdentifier, Node),
+    StaticFunctionReference(QualifiedIdentifier),
 
     // Assignments
     VariableDefinition(Variable, Option<Type>, Box<MutableOrImmutableExpression>),
