@@ -8,7 +8,6 @@ use crate::ns::NamespacePath;
 use crate::symtbl::SymbolTable;
 use crate::{ConstantRef, Expression, ExpressionKind};
 use seq_map::SeqMap;
-use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
 use tracing::info;
