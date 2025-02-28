@@ -334,6 +334,7 @@ impl AstParser {
             Rule::impl_def => self.parse_impl_def(&inner_pair),
             Rule::const_def => self.parse_const_definition(&inner_pair),
             Rule::struct_def => self.parse_struct_def(&inner_pair),
+            Rule::type_def => self.parse_type_def(&inner_pair),
             Rule::function_def => self.parse_function_def(&inner_pair),
             Rule::import_def => self.parse_use(&inner_pair),
             Rule::mod_def => self.parse_mod(&inner_pair),
@@ -684,6 +685,19 @@ impl AstParser {
             }),
             pair,
         ))
+    }
+
+    fn parse_type_def(&self, pair: &Pair<Rule>) -> Result<Definition, ParseError> {
+        let mut inner = Self::convert_into_iterator(pair);
+        let alias_name = self.expect_local_type_identifier_next(&mut inner)?;
+        let referenced_type = self.parse_type(inner.next().expect("should work"))?;
+
+        let alias_type = AliasType {
+            identifier: alias_name,
+            referenced_type,
+        };
+
+        Ok(Definition::AliasDef(alias_type))
     }
 
     fn parse_struct_def(&self, pair: &Pair<Rule>) -> Result<Definition, ParseError> {
@@ -2017,7 +2031,7 @@ impl AstParser {
                 let base_type = if let Some(inner_pair) = inner.next() {
                     self.parse_type(inner_pair)?
                 } else {
-                    self.parse_type_from_str(&mut inner, &pair)?
+                    panic!("shouldn't get to here")
                 };
 
                 let optional_marker = inner
@@ -2075,10 +2089,7 @@ impl AstParser {
 
                 Ok(Type::Function(param_types, Box::new(return_type)))
             }
-            Rule::built_in_type => {
-                let mut inner = pair.clone().into_inner();
-                self.parse_type_from_str(&mut inner, &pair)
-            }
+
             Rule::qualified_type_identifier => {
                 let qualified_id = self.parse_qualified_type_identifier(&pair)?;
 
@@ -2122,6 +2133,7 @@ impl AstParser {
             _ => Err(self.create_error_pair(SpecificError::UnexpectedTypeRule, &pair)),
         }
     }
+    /*
 
     fn parse_type_from_str<'a>(
         &self,
@@ -2139,6 +2151,8 @@ impl AstParser {
             )),
         }
     }
+
+     */
 
     #[allow(unused)] // TODO: Use this again
     fn parse_local_type_identifier(

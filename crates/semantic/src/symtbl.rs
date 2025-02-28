@@ -4,9 +4,9 @@
  */
 use crate::modules::ModuleRef;
 use crate::{
-    AnonymousStructType, Constant, ConstantRef, EnumType, EnumTypeRef, EnumVariantType,
-    EnumVariantTypeRef, ExternalFunctionDefinition, ExternalFunctionDefinitionRef, ExternalType,
-    ExternalTypeRef, InternalFunctionDefinition, InternalFunctionDefinitionRef, Node,
+    AliasType, AliasTypeRef, AnonymousStructType, Constant, ConstantRef, EnumType, EnumTypeRef,
+    EnumVariantType, EnumVariantTypeRef, ExternalFunctionDefinition, ExternalFunctionDefinitionRef,
+    ExternalType, ExternalTypeRef, InternalFunctionDefinition, InternalFunctionDefinitionRef, Node,
     SemanticError, StructType, StructTypeField, StructTypeRef, Type,
 };
 use seq_map::SeqMap;
@@ -44,7 +44,7 @@ pub enum Symbol {
     PackageVersion(TinyVersion),
     Constant(ConstantRef),
     FunctionDefinition(FuncDef),
-    //Alias(AliasTypeRef),
+    Alias(AliasTypeRef),
     //TypeGenerator(TypeGenerator),
 }
 
@@ -148,6 +148,25 @@ impl SymbolTable {
         self.symbols
             .insert(name.to_string(), Symbol::Constant(constant_ref))
             .map_err(|_| SemanticError::DuplicateConstName(name.to_string()))?;
+
+        Ok(())
+    }
+
+    /// # Errors
+    ///
+    pub fn add_alias(&mut self, alias_type: AliasType) -> Result<AliasTypeRef, SemanticError> {
+        let alias_ref = Rc::new(alias_type);
+        self.add_alias_link(alias_ref.clone())?;
+        Ok(alias_ref)
+    }
+
+    /// # Errors
+    ///
+    pub fn add_alias_link(&mut self, alias_type_ref: AliasTypeRef) -> Result<(), SemanticError> {
+        let name = alias_type_ref.assigned_name.clone();
+        self.symbols
+            .insert(name.clone(), Symbol::Alias(alias_type_ref.clone()))
+            .map_err(|_| SemanticError::DuplicateStructName(name))?;
 
         Ok(())
     }

@@ -719,11 +719,26 @@ impl<'a> Analyzer<'a> {
         }
     }
 
+    pub fn check_built_in_type(s: &str) -> Option<Type> {
+        let found = match s {
+            "Int" => Type::Int,
+            "Float" => Type::Float,
+            "Bool" => Type::Bool,
+            "String" => Type::String,
+            _ => return None,
+        };
+        Some(found)
+    }
+
     pub(crate) fn analyze_named_type(
         &mut self,
         type_name_to_find: &swamp_script_ast::QualifiedTypeIdentifier,
     ) -> Result<Type, Error> {
         let (path, name) = self.get_path(type_name_to_find);
+        // TODO: the built in should be put in the symbol table
+        if let Some(ty) = Self::check_built_in_type(&name) {
+            return Ok(ty);
+        }
 
         let symbol = {
             let maybe_symbol_table = self.shared.get_symbol_table(&path);
@@ -748,7 +763,7 @@ impl<'a> Analyzer<'a> {
 
         let result_type = match symbol {
             Symbol::Type(base_type) => base_type,
-            //Symbol::Alias(alias_type) => alias_type.referenced_type.clone(),
+            Symbol::Alias(alias_type) => alias_type.referenced_type.clone(),
             _ => return Err(self.create_err(ErrorKind::UnknownSymbol, &type_name_to_find.name.0)),
         };
 

@@ -163,6 +163,12 @@ pub struct Use {
     pub items: Vec<UseItem>,
 }
 
+#[derive(Debug, Eq, PartialEq)]
+pub struct AliasType {
+    pub identifier: LocalTypeIdentifier,
+    pub referenced_type: Type,
+}
+
 #[derive(Debug, Eq, PartialEq, Default)]
 pub struct StructType {
     pub identifier: LocalTypeIdentifier,
@@ -184,6 +190,7 @@ pub struct ConstantInfo {
 
 #[derive(Debug)]
 pub enum Definition {
+    AliasDef(AliasType),
     StructDef(StructType),
     EnumDef(Node, Vec<EnumVariantType>),
     FunctionDef(Function),

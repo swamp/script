@@ -1113,6 +1113,14 @@ pub struct Constant {
 }
 pub type ConstantRef = Rc<Constant>;
 
+#[derive(Debug)]
+pub struct AliasType {
+    pub name: Node,
+    pub assigned_name: String,
+    pub referenced_type: Type,
+}
+pub type AliasTypeRef = Rc<AliasType>;
+
 #[derive(Eq, PartialEq)]
 pub struct StructType {
     pub name: Node,

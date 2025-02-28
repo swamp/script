@@ -8,11 +8,11 @@ use crate::Analyzer;
 use seq_map::SeqMap;
 use std::rc::Rc;
 use swamp_script_semantic::{
-    AnonymousStructType, EnumType, EnumTypeRef, EnumVariantCommon, EnumVariantSimpleType,
-    EnumVariantSimpleTypeRef, EnumVariantStructType, EnumVariantTupleType, EnumVariantType,
-    ExternalFunctionDefinition, Function, InternalFunctionDefinition, LocalIdentifier,
-    LocalTypeIdentifier, ParameterNode, Signature, StructType, StructTypeField, StructTypeRef,
-    Type, TypeForParameter, UseItem,
+    AliasType, AliasTypeRef, AnonymousStructType, EnumType, EnumTypeRef, EnumVariantCommon,
+    EnumVariantSimpleType, EnumVariantSimpleTypeRef, EnumVariantStructType, EnumVariantTupleType,
+    EnumVariantType, ExternalFunctionDefinition, Function, InternalFunctionDefinition,
+    LocalIdentifier, LocalTypeIdentifier, ParameterNode, Signature, StructType, StructTypeField,
+    StructTypeRef, Type, TypeForParameter, UseItem,
 };
 use tracing::info;
 
@@ -245,6 +245,36 @@ impl<'a> Analyzer<'a> {
         Ok(parent_ref)
     }
 
+    pub fn analyze_alias_type_definition(
+        &mut self,
+        ast_alias: &swamp_script_ast::AliasType,
+    ) -> Result<AliasTypeRef, Error> {
+        let resolved_type = self.analyze_type(&ast_alias.referenced_type)?;
+
+        let alias_name_str = self.get_text(&ast_alias.identifier.0).to_string();
+        let resolved_alias = AliasType {
+            name: self.to_node(&ast_alias.identifier.0),
+            assigned_name: alias_name_str,
+            referenced_type: resolved_type,
+        };
+
+        let resolved_alias_ref = self
+            .shared
+            .definition_table
+            .add_alias(resolved_alias)
+            .map_err(|err| {
+                self.create_err(ErrorKind::SemanticError(err), &ast_alias.identifier.0)
+            })?;
+        self.shared
+            .lookup_table
+            .add_alias_link(resolved_alias_ref.clone())
+            .map_err(|err| {
+                self.create_err(ErrorKind::SemanticError(err), &ast_alias.identifier.0)
+            })?;
+
+        Ok(resolved_alias_ref)
+    }
+
     pub fn analyze_struct_type(
         &mut self,
         assigned_name: &str,
@@ -427,6 +457,9 @@ impl<'a> Analyzer<'a> {
         let resolved_def = match ast_def {
             swamp_script_ast::Definition::StructDef(ref ast_struct) => {
                 self.analyze_struct_type_definition(ast_struct)?
+            }
+            swamp_script_ast::Definition::AliasDef(alias_def) => {
+                self.analyze_alias_type_definition(alias_def)?;
             }
             swamp_script_ast::Definition::EnumDef(identifier, variants) => {
                 self.analyze_enum_type_definition(
