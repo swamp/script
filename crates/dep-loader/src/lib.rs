@@ -12,11 +12,9 @@ use swamp_script_ast::prelude::*;
 use swamp_script_ast::Function;
 use swamp_script_parser::{AstParser, ParseError};
 use swamp_script_source_map::{FileId, SourceMap};
-use tracing::{debug, trace};
-
-pub struct ParseRoot {
-    pub base_path: PathBuf,
-}
+use tracing::debug;
+use tracing::info;
+pub struct ParseRoot;
 
 #[derive(Debug)]
 pub enum ParseRootError {
@@ -37,12 +35,12 @@ impl From<ParseError> for ParseRootError {
 }
 
 #[derive(Debug)]
-pub struct ParseModule {
+pub struct ParsedAstModule {
     pub ast_module: swamp_script_ast::Module,
     pub file_id: FileId,
 }
 
-impl ParseModule {
+impl ParsedAstModule {
     // TODO: HACK: declare_external_function() should be removed
     pub fn declare_external_function(
         &mut self,
@@ -70,16 +68,20 @@ impl ParseModule {
 pub struct RelativePath(pub String);
 
 impl ParseRoot {
-    pub fn new(base_path: PathBuf) -> Self {
-        Self { base_path }
+    pub fn new() -> Self {
+        Self {}
     }
 
-    pub fn parse(&self, contents: String, file_id: FileId) -> Result<ParseModule, ParseRootError> {
+    pub fn parse(
+        &self,
+        contents: String,
+        file_id: FileId,
+    ) -> Result<ParsedAstModule, ParseRootError> {
         let parser = AstParser {};
 
         let ast_program = parser.parse_module(&*contents)?;
 
-        Ok(ParseModule {
+        Ok(ParsedAstModule {
             ast_module: ast_program,
             file_id,
         })
@@ -97,7 +99,7 @@ pub struct ModuleInfo {
 
 pub struct DependencyParser {
     pub import_scanned_modules: SeqMap<Vec<String>, ModuleInfo>,
-    already_parsed_modules: SeqMap<Vec<String>, ParseModule>,
+    already_parsed_modules: SeqMap<Vec<String>, ParsedAstModule>,
     pub already_resolved_modules: HashSet<Vec<String>>,
 }
 
@@ -120,7 +122,7 @@ impl DependencyParser {
         self.already_resolved_modules.insert(module_path);
     }
 
-    pub fn add_ast_module(&mut self, module_path: Vec<String>, parsed_module: ParseModule) {
+    pub fn add_ast_module(&mut self, module_path: Vec<String>, parsed_module: ParsedAstModule) {
         debug!(
             "Adding ast module parsed outside of graph resolver {:?}",
             module_path
@@ -150,13 +152,19 @@ impl From<io::Error> for DependencyError {
     }
 }
 
-fn get_all_import_paths(source_map: &SourceMap, parsed_module: &ParseModule) -> Vec<Vec<String>> {
+pub const LOCAL_ROOT_PACKAGE_PATH: &str = "crate";
+
+pub fn get_all_local_paths(
+    source_map: &SourceMap,
+    parsed_module: &ParsedAstModule,
+) -> Vec<Vec<String>> {
     let mut imports = vec![];
 
     for def in parsed_module.ast_module.definitions() {
         match def {
-            Definition::Use(import) => {
+            Definition::Mod(import) => {
                 let mut sections = Vec::new();
+                sections.push(LOCAL_ROOT_PACKAGE_PATH.to_string());
                 for section_node in &import.module_path.0 {
                     let import_path = source_map
                         .get_span_source(
@@ -167,6 +175,7 @@ fn get_all_import_paths(source_map: &SourceMap, parsed_module: &ParseModule) -> 
                         .to_string();
                     sections.push(import_path);
                 }
+                info!(?sections, "detected mod dependency!");
                 imports.push(sections);
             }
             _ => continue,
@@ -179,7 +188,18 @@ fn get_all_import_paths(source_map: &SourceMap, parsed_module: &ParseModule) -> 
 pub fn module_path_to_relative_swamp_file(module_path_vec: &[String]) -> PathBuf {
     let mut path_buf = PathBuf::new();
 
-    path_buf.push(module_path_vec.join("/"));
+    let orig_len = module_path_vec.len();
+
+    let converted_path = if module_path_vec[0] == "crate" {
+        &module_path_vec[1..]
+    } else {
+        module_path_vec
+    };
+
+    path_buf.push(converted_path.join("/"));
+    if orig_len == 1 {
+        path_buf.push("lib"); // lib is default if the path only contains the package root
+    }
 
     path_buf.set_extension("swamp");
 
@@ -193,10 +213,35 @@ pub fn module_path_to_relative_swamp_file_string(module_path_vec: &[String]) -> 
         .into()
 }
 
+pub fn mount_name_from_path(path: &[String]) -> &str {
+    if path[0] == "crate" {
+        "crate"
+    } else {
+        "registry"
+    }
+}
+
+/// Parses just a single module. Any `mod` keywords in this file will be ignored. So this
+/// is mainly for internal use.
+pub fn parse_single_module(
+    source_map: &mut SourceMap,
+    module_path: &[String],
+) -> Result<ParsedAstModule, DependencyError> {
+    let mount_name = mount_name_from_path(&module_path);
+
+    let (file_id, script) = source_map.read_file_relative(
+        mount_name,
+        &module_path_to_relative_swamp_file_string(module_path),
+    )?;
+
+    let parse_module = ParseRoot.parse(script, file_id)?;
+
+    Ok(parse_module)
+}
+
 impl DependencyParser {
-    pub fn parse_all_dependant_modules(
+    pub fn parse_local_modules(
         &mut self,
-        parse_root: ParseRoot,
         module_path: &[String],
         source_map: &mut SourceMap,
     ) -> Result<(), DependencyError> {
@@ -211,27 +256,21 @@ impl DependencyParser {
             let parsed_module_to_scan =
                 if let Some(parsed_module) = self.already_parsed_modules.get(module_path_vec) {
                     parsed_module
+                } else if self.already_resolved_modules.contains(module_path_vec) {
+                    continue;
                 } else {
-                    if self.already_resolved_modules.contains(module_path_vec) {
-                        continue;
-                    } else {
-                        let (file_id, script) = source_map.read_file_relative(
-                            &module_path_to_relative_swamp_file_string(module_path_vec),
-                        )?;
-                        let parse_module = parse_root.parse(script, file_id)?;
+                    let parsed_ast_module = parse_single_module(source_map, &*path)?;
 
-                        self.already_parsed_modules
-                            .insert(path.clone(), parse_module)
-                            .expect("TODO: panic message");
+                    self.already_parsed_modules
+                        .insert(path.clone(), parsed_ast_module)
+                        .expect("TODO: panic message");
 
-                        self.already_parsed_modules
-                            .get(&path.clone())
-                            .expect("we just inserted it")
-                    }
+                    self.already_parsed_modules
+                        .get(&path.clone())
+                        .expect("we just inserted it")
                 };
 
-            let imports = get_all_import_paths(source_map, parsed_module_to_scan);
-
+            let imports = get_all_local_paths(source_map, parsed_module_to_scan);
             let filtered_imports: Vec<Vec<String>> = imports
                 .into_iter()
                 .filter(|import| !self.already_resolved_modules.contains(import))
@@ -254,11 +293,11 @@ impl DependencyParser {
         Ok(())
     }
 
-    pub fn get_parsed_module(&self, path: &[String]) -> Option<&ParseModule> {
+    pub fn get_parsed_module(&self, path: &[String]) -> Option<&ParsedAstModule> {
         self.already_parsed_modules.get(&path.to_vec())
     }
 
-    pub fn get_parsed_module_mut(&mut self, path: &[String]) -> Option<&mut ParseModule> {
+    pub fn get_parsed_module_mut(&mut self, path: &[String]) -> Option<&mut ParsedAstModule> {
         self.already_parsed_modules.get_mut(&path.to_vec())
     }
 
@@ -327,22 +366,77 @@ impl From<DependencyError> for DepLoaderError {
     }
 }
 
-pub fn parse_dependant_modules_and_resolve(
-    base_path: PathBuf,
+pub fn os_cache_path(project_name: &str, directory_name: &str) -> io::Result<PathBuf> {
+    if cfg!(target_os = "windows") {
+        match env::var("LOCALAPPDATA") {
+            Ok(app_data) => {
+                let mut path = PathBuf::from(app_data);
+                path.push(project_name);
+                path.push(directory_name);
+                Ok(path)
+            }
+            Err(err) => {
+                eprintln!("Error: LOCALAPPDATA environment variable not found.");
+                Err(io::Error::new(io::ErrorKind::Other, err.to_string()))
+            }
+        }
+    } else if cfg!(target_os = "macos") {
+        match env::var("HOME") {
+            Ok(home_dir) => {
+                let mut path = PathBuf::from(home_dir);
+                path.push("Library");
+                path.push("Caches");
+                path.push(project_name);
+                path.push(directory_name);
+                Ok(path)
+            }
+            Err(err) => {
+                eprintln!("Error: HOME environment variable not found.");
+                Err(io::Error::new(io::ErrorKind::Other, err.to_string()))
+            }
+        }
+    } else if cfg!(target_os = "linux") {
+        let xdg_cache_home = env::var("XDG_CACHE_HOME").ok();
+        let cache_dir = xdg_cache_home.as_deref().unwrap_or("$HOME/.cache");
+
+        match env::var("HOME") {
+            Ok(home_dir) => {
+                let mut path = PathBuf::from(cache_dir.replace("$HOME", &home_dir));
+                path.push(project_name);
+                path.push(directory_name);
+                Ok(path)
+            }
+            Err(err) => {
+                eprintln!("Error: HOME environment variable not found.");
+                Err(io::Error::new(io::ErrorKind::Other, err.to_string()))
+            }
+        }
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "unknown operating system",
+        ))
+    }
+}
+
+pub fn swamp_registry_path() -> io::Result<PathBuf> {
+    os_cache_path("swamp", "registry")
+}
+
+pub fn parse_local_modules_and_get_order(
     module_path: Vec<String>,
     dependency_parser: &mut DependencyParser,
     source_map: &mut SourceMap,
 ) -> Result<Vec<Vec<String>>, DepLoaderError> {
     debug!(current_directory=?get_current_dir().expect("failed to get current directory"), "current directory");
-    let parse_root = ParseRoot::new(base_path);
-
-    dependency_parser.parse_all_dependant_modules(parse_root, &module_path, source_map)?;
+    dependency_parser.parse_local_modules(&module_path, source_map)?;
 
     let module_paths_in_order = dependency_parser.get_analysis_order()?;
 
     Ok(module_paths_in_order)
 }
 
+/*
 pub fn create_parsed_modules(
     script: &str,
     source_map: &mut SourceMap,
@@ -371,3 +465,5 @@ pub fn create_parsed_modules(
 
     Ok(graph)
 }
+
+ */

@@ -11,7 +11,7 @@ use sparse_slot::{Id, SparseSlot};
 use std::cell::RefCell;
 use std::fmt::{Debug, Display, Formatter};
 use std::rc::Rc;
-use swamp_script_semantic::{ResolvedRustTypeRef, ResolvedType};
+use swamp_script_semantic::{ExternalTypeRef, Type};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct SparseValueId(pub Id);
@@ -62,8 +62,8 @@ impl QuickSerialize for SparseValueId {
 pub struct SparseValueMap {
     pub sparse_slot: SparseSlot<Rc<RefCell<Value>>>,
     pub id_generator: IndexAllocator,
-    pub value_item_type: ResolvedType,
-    pub rust_type_ref_for_id: ResolvedRustTypeRef,
+    pub value_item_type: Type,
+    pub rust_type_ref_for_id: ExternalTypeRef,
 }
 
 impl Debug for SparseValueMap {
@@ -111,8 +111,8 @@ impl SparseValueMap {
     ///
     #[must_use]
     pub fn quick_deserialize(
-        key_type: ResolvedRustTypeRef,
-        value_item_type: ResolvedType,
+        key_type: ExternalTypeRef,
+        value_item_type: Type,
         octets: &[u8],
     ) -> (Self, usize) {
         let mut sparse = Self::new(key_type, value_item_type.clone());
@@ -172,9 +172,9 @@ impl Display for SparseValueMap {
 
 impl SparseValueMap {
     #[must_use]
-    pub fn new(rust_type_ref_for_id: ResolvedRustTypeRef, value_item_type: ResolvedType) -> Self {
+    pub fn new(rust_type_ref_for_id: ExternalTypeRef, value_item_type: Type) -> Self {
         /* let type_parameter = match &resolved_type {
-            ResolvedType::Generic(_, parameters) => parameters[0].clone(),
+            Type::Generic(_, parameters) => parameters[0].clone(),
             _ => panic!("illegal sparse type. not generic"),
         }; */
 

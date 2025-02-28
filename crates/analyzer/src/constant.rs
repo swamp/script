@@ -3,71 +3,61 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use crate::err::{ResolveError, ResolveErrorKind};
-use crate::Resolver;
-use swamp_script_ast::{ConstantIdentifier, ConstantInfo};
-use swamp_script_semantic::{
-    ResolvedConstant, ResolvedConstantRef, ResolvedDefinition, ResolvedExpression,
-    ResolvedExpressionKind, ResolvedNode,
-};
+use crate::err::{Error, ErrorKind};
+use crate::Analyzer;
+use swamp_script_semantic::{Constant, ConstantRef, Expression, ExpressionKind};
 
-impl<'a> Resolver<'a> {
-    fn resolve_constant(
-        &mut self,
-        constant: &ConstantInfo,
-    ) -> Result<(ResolvedConstantRef, String, ResolvedNode), ResolveError> {
-        let (constant, name_node, name_text) = {
-            let resolved_expr = self.resolve_expression(&constant.expression, None)?;
-            let resolved_type = resolved_expr.ty.clone();
-            let name_node = self.to_node(&constant.constant_identifier.0);
-            let name_text = self.get_text_resolved(&name_node).to_string();
-            let constant = ResolvedConstant {
-                name: name_node.clone(),
-                assigned_name: name_text.to_string(),
-                id: 0xffff,
-                expr: resolved_expr,
-                resolved_type,
-            };
-            (constant, name_node, name_text)
+impl<'a> Analyzer<'a> {
+    fn analyze_constant(&mut self, constant: &swamp_script_ast::ConstantInfo) -> Result<(), Error> {
+        let resolved_expr = self.analyze_expression(&constant.expression, None)?;
+        let resolved_type = resolved_expr.ty.clone();
+        let name_node = self.to_node(&constant.constant_identifier.0);
+        let name_text = self.get_text_resolved(&name_node).to_string();
+        let constant = Constant {
+            name: name_node.clone(),
+            assigned_name: name_text,
+            id: self.shared.state.constants_in_dependency_order.len() as u32,
+            expr: resolved_expr,
+            resolved_type,
         };
 
-        let const_ref = self.shared.lookup.add_constant(constant)?;
+        let const_ref = self
+            .shared
+            .definition_table
+            .add_constant(constant)
+            .map_err(|s| self.create_err_resolved(ErrorKind::SemanticError(s), &name_node))?;
 
-        Ok((const_ref, name_text, name_node))
+        self.shared
+            .lookup_table
+            .add_constant_link(const_ref.clone())
+            .map_err(|s| self.create_err_resolved(ErrorKind::SemanticError(s), &name_node))?;
+
+        // This extra storage of the constants in modules is to have them in analyze / dependency order
+        self.shared
+            .state
+            .constants_in_dependency_order
+            .push(const_ref);
+
+        Ok(())
     }
 
-    pub(crate) fn resolve_constant_definition(
+    pub(crate) fn analyze_constant_definition(
         &mut self,
-        constant: &ConstantInfo,
-    ) -> Result<ResolvedDefinition, ResolveError> {
-        let (constant_ref, name, node) = self.resolve_constant(constant)?;
-
-        self.global
-            .block_scope_stack
-            .last_mut()
-            .unwrap()
-            .constants
-            .insert(name, constant_ref.clone())
-            .map_err(|_| {
-                self.create_err(
-                    ResolveErrorKind::DuplicateFieldName,
-                    &constant.expression.node,
-                )
-            })?;
-
-        Ok(ResolvedDefinition::Constant(node, constant_ref))
+        constant: &swamp_script_ast::ConstantInfo,
+    ) -> Result<(), Error> {
+        self.analyze_constant(constant)
     }
 
-    pub(crate) fn resolve_constant_access(
+    pub(crate) fn analyze_constant_access(
         &self,
-        constant_identifier: &ConstantIdentifier,
-    ) -> Result<ResolvedExpression, ResolveError> {
+        constant_identifier: &swamp_script_ast::ConstantIdentifier,
+    ) -> Result<Expression, Error> {
         self.try_find_constant(constant_identifier).map_or_else(
-            || Err(self.create_err(ResolveErrorKind::UnknownConstant, &constant_identifier.0)),
+            || Err(self.create_err(ErrorKind::UnknownConstant, &constant_identifier.0)),
             |constant_ref| {
                 let ty = constant_ref.resolved_type.clone();
                 Ok(self.create_expr(
-                    ResolvedExpressionKind::ConstantAccess(constant_ref),
+                    ExpressionKind::ConstantAccess(constant_ref.clone()),
                     ty,
                     &constant_identifier.0,
                 ))
@@ -77,15 +67,9 @@ impl<'a> Resolver<'a> {
 
     pub fn try_find_constant(
         &self,
-        constant_identifier: &ConstantIdentifier,
-    ) -> Option<ResolvedConstantRef> {
+        constant_identifier: &swamp_script_ast::ConstantIdentifier,
+    ) -> Option<&ConstantRef> {
         let constant_name = self.get_text(&constant_identifier.0);
-        for scope in self.scope.block_scope_stack.iter().rev() {
-            if let Some(value) = scope.constants.get(&constant_name.to_string()) {
-                return Some(value.clone());
-            }
-        }
-
-        self.shared.lookup.get_constant(&vec![], constant_name)
+        self.shared.lookup_table.get_constant(constant_name)
     }
 }

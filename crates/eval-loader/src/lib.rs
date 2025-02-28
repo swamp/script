@@ -2,86 +2,95 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-pub mod prelude;
-
-use std::cell::RefCell;
-use std::rc::Rc;
-use swamp_script_analyzer::err::ResolveErrorKind;
-use swamp_script_analyzer::lookup::NameLookup;
-use swamp_script_analyzer::prelude::*;
-use swamp_script_dep_loader::prelude::*;
-use swamp_script_semantic::modules::ResolvedModules;
-use swamp_script_semantic::prelude::*;
+use swamp_script_analyzer::prelude::{Error, Program};
+use swamp_script_analyzer::{Analyzer, AutoUseModules};
+use swamp_script_dep_loader::{
+    parse_local_modules_and_get_order, DependencyParser, ParsedAstModule,
+};
+use swamp_script_semantic::modules::Module;
+use swamp_script_semantic::prelude::Modules;
+use swamp_script_semantic::symtbl::SymbolTable;
+use swamp_script_semantic::{Expression, ProgramState};
 use swamp_script_source_map::SourceMap;
+use tracing::info;
 
-pub fn resolve_to_new_module(
-    state: &mut ResolvedProgramState,
-    modules: &mut ResolvedModules,
-    module_path: &[String],
+pub fn analyze_module(
+    state: &mut ProgramState,
+    auto_use_modules: &AutoUseModules,
+    modules: &mut Modules,
     source_map: &SourceMap,
-    ast_module: &ParseModule,
-) -> Result<(), ResolveError> {
-    let resolved_module = ResolvedModule::new(module_path);
-    let resolved_module_ref = Rc::new(RefCell::new(resolved_module));
-    modules.add(resolved_module_ref);
+    ast_module: &ParsedAstModule,
+) -> Result<(SymbolTable, Option<Expression>), Error> {
+    info!(?ast_module, "Analyzing module");
+    let mut resolver = Analyzer::new(state, modules, source_map, ast_module.file_id);
+    if !auto_use_modules.modules.is_empty() {
+        let target = &mut resolver.shared.lookup_table;
+        for symbol_table in &auto_use_modules.modules {
+            for (name, symbol) in symbol_table.symbols() {
+                target.add_symbol(name, symbol.clone())?;
+            }
+        }
+    }
 
-    resolve_to_existing_module(state, modules, module_path.to_vec(), source_map, ast_module)?;
-
-    Ok(())
-}
-
-pub fn resolve_to_existing_module(
-    state: &mut ResolvedProgramState,
-    mut modules: &mut ResolvedModules,
-    path: Vec<String>,
-    source_map: &SourceMap,
-    ast_module: &ParseModule,
-) -> Result<Option<ResolvedExpression>, ResolveError> {
     let statements = {
-        let mut name_lookup = NameLookup::new(path.clone(), &mut modules);
-        let mut resolver = Resolver::new(state, &mut name_lookup, source_map, ast_module.file_id);
-
         for ast_def in ast_module.ast_module.definitions() {
-            let _resolved_def = resolver.resolve_definition(ast_def)?;
+            resolver.analyze_definition(ast_def)?;
         }
 
         let maybe_resolved_expression = if let Some(expr) = ast_module.ast_module.expression() {
-            Some(resolver.resolve_expression(expr, None)?)
+            Some(resolver.analyze_expression(expr, None)?)
         } else {
             None
         };
         maybe_resolved_expression
     };
 
-    Ok(statements)
+    Ok((resolver.shared.definition_table, statements))
 }
 
-pub fn resolve_program(
-    state: &mut ResolvedProgramState,
-    modules: &mut ResolvedModules,
+pub fn analyze_modules_in_order(
+    state: &mut ProgramState,
+    auto_use: &AutoUseModules,
+    modules: &mut Modules,
     source_map: &SourceMap,
     module_paths_in_order: &[Vec<String>],
     parsed_modules: &DependencyParser,
-) -> Result<(), ResolveError> {
+) -> Result<(), Error> {
     for module_path in module_paths_in_order {
         if let Some(parse_module) = parsed_modules.get_parsed_module(module_path) {
-            if let Some(_found_module) = modules.get(&*module_path.clone()) {
-                let _maybe_expression = resolve_to_existing_module(
-                    state,
-                    modules,
-                    module_path.clone(),
-                    source_map,
-                    parse_module,
-                )?;
-            } else {
-                resolve_to_new_module(state, modules, module_path, source_map, parse_module)?;
-            }
+            info!(?module_path, "analyzing module");
+            let (analyzed_symbol_table, maybe_expression) =
+                analyze_module(state, auto_use, modules, source_map, parse_module)?;
+            let analyzed_module = Module::new(module_path, analyzed_symbol_table, maybe_expression);
+            modules.add(analyzed_module.into());
         } else {
-            return Err(ResolveError {
-                kind: ResolveErrorKind::CanNotFindModule(module_path.clone()),
-                node: ResolvedNode::default(),
-            });
+            panic!("could not load")
         }
     }
+    Ok(())
+}
+
+pub fn compile_and_analyze_all_modules(
+    module_path: &[String],
+    resolved_program: &mut Program,
+    source_map: &mut SourceMap,
+) -> Result<(), Error> {
+    let mut dependency_parser = DependencyParser::new();
+
+    let module_paths_in_order =
+        parse_local_modules_and_get_order(module_path.to_vec(), &mut dependency_parser, source_map)
+            .unwrap();
+
+    info!(?module_paths_in_order, "official analysis order");
+
+    analyze_modules_in_order(
+        &mut resolved_program.state,
+        &resolved_program.auto_use_modules,
+        &mut resolved_program.modules,
+        source_map,
+        &module_paths_in_order,
+        &dependency_parser,
+    )?;
+
     Ok(())
 }

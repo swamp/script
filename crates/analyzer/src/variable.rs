@@ -2,18 +2,16 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use crate::err::{ResolveError, ResolveErrorKind};
-use crate::{BlockScopeMode, Resolver};
+use crate::err::{Error, ErrorKind};
+use crate::{Analyzer, BlockScopeMode};
 use std::rc::Rc;
-use swamp_script_ast::{Node, Variable};
 use swamp_script_semantic::{
-    ResolvedExpression, ResolvedExpressionKind, ResolvedMutOrImmutableExpression, ResolvedNode,
-    ResolvedType, ResolvedVariable, ResolvedVariableRef,
+    Expression, ExpressionKind, MutOrImmutableExpression, Node, Type, Variable, VariableRef,
 };
 use tracing::error;
 
-impl<'a> Resolver<'a> {
-    fn try_find_local_variable(&self, node: &ResolvedNode) -> Option<&ResolvedVariableRef> {
+impl<'a> Analyzer<'a> {
+    fn try_find_local_variable(&self, node: &Node) -> Option<&VariableRef> {
         let current_scope = self
             .scope
             .block_scope_stack
@@ -28,15 +26,15 @@ impl<'a> Resolver<'a> {
     #[allow(unused)]
     pub(crate) fn find_variable(
         &self,
-        variable: &Variable,
-    ) -> Result<ResolvedVariableRef, ResolveError> {
+        variable: &swamp_script_ast::Variable,
+    ) -> Result<VariableRef, Error> {
         self.try_find_variable(&variable.name).map_or_else(
-            || Err(self.create_err(ResolveErrorKind::UnknownVariable, &variable.name)),
+            || Err(self.create_err(ErrorKind::UnknownVariable, &variable.name)),
             Ok,
         )
     }
 
-    pub(crate) fn try_find_variable(&self, node: &Node) -> Option<ResolvedVariableRef> {
+    pub(crate) fn try_find_variable(&self, node: &swamp_script_ast::Node) -> Option<VariableRef> {
         let variable_text = self.get_text(node);
 
         for scope in self.scope.block_scope_stack.iter().rev() {
@@ -53,27 +51,25 @@ impl<'a> Resolver<'a> {
 
     pub(crate) fn set_or_overwrite_variable_with_type(
         &mut self,
-        variable: &Variable,
-        variable_type_ref: &ResolvedType,
-    ) -> Result<(ResolvedVariableRef, bool), ResolveError> {
+        variable: &swamp_script_ast::Variable,
+        variable_type_ref: &Type,
+    ) -> Result<(VariableRef, bool), Error> {
         if let Some(existing_variable) = self.try_find_variable(&variable.name) {
             // Check type compatibility
             if !&existing_variable
                 .resolved_type
                 .assignable_type(variable_type_ref)
             {
-                return Err(self.create_err(
-                    ResolveErrorKind::OverwriteVariableWithAnotherType,
-                    &variable.name,
-                ));
+                return Err(
+                    self.create_err(ErrorKind::OverwriteVariableWithAnotherType, &variable.name)
+                );
             }
 
             // For reassignment, check if the EXISTING variable is mutable
             if !existing_variable.is_mutable() {
-                return Err(self.create_err(
-                    ResolveErrorKind::CanOnlyOverwriteVariableWithMut,
-                    &variable.name,
-                ));
+                return Err(
+                    self.create_err(ErrorKind::CanOnlyOverwriteVariableWithMut, &variable.name)
+                );
             }
 
             return Ok((existing_variable, true));
@@ -93,7 +89,7 @@ impl<'a> Resolver<'a> {
             .variables;
         let variable_index = variables.len();
 
-        let resolved_variable = ResolvedVariable {
+        let resolved_variable = Variable {
             name,
             resolved_type: variable_type_ref.clone(),
             mutable_node,
@@ -113,14 +109,18 @@ impl<'a> Resolver<'a> {
     }
     pub(crate) fn create_local_variable(
         &mut self,
-        variable: &Node,
-        is_mutable: &Option<Node>,
-        variable_type_ref: &ResolvedType,
-    ) -> Result<ResolvedVariableRef, ResolveError> {
-        if variable_type_ref == &ResolvedType::Unit {
-            error!("serious");
+        variable: &swamp_script_ast::Node,
+        is_mutable: &Option<swamp_script_ast::Node>,
+        variable_type_ref: &Type,
+    ) -> Result<VariableRef, Error> {
+        if variable_type_ref == &Type::Unit {
+            let debug_text = self.get_text(variable);
+            error!(
+                ?debug_text,
+                "panic, tries to create a local variable as a unit"
+            );
         }
-        assert_ne!(*variable_type_ref, ResolvedType::Unit);
+        assert_ne!(*variable_type_ref, Type::Unit);
         self.create_local_variable_resolved(
             &self.to_node(variable),
             &self.to_node_option(is_mutable),
@@ -130,21 +130,22 @@ impl<'a> Resolver<'a> {
 
     pub(crate) fn create_variable(
         &mut self,
-        variable: &Variable,
-        variable_type_ref: &ResolvedType,
-    ) -> Result<ResolvedVariableRef, ResolveError> {
+        variable: &swamp_script_ast::Variable,
+        variable_type_ref: &Type,
+    ) -> Result<VariableRef, Error> {
         self.create_local_variable(&variable.name, &variable.is_mutable, variable_type_ref)
     }
 
     pub(crate) fn create_local_variable_resolved(
         &mut self,
-        variable: &ResolvedNode,
-        is_mutable: &Option<ResolvedNode>,
-        variable_type_ref: &ResolvedType,
-    ) -> Result<ResolvedVariableRef, ResolveError> {
+        variable: &Node,
+        is_mutable: &Option<Node>,
+        variable_type_ref: &Type,
+    ) -> Result<VariableRef, Error> {
         if let Some(_existing_variable) = self.try_find_local_variable(variable) {
-            return Err(self
-                .create_err_resolved(ResolveErrorKind::OverwriteVariableNotAllowedHere, variable));
+            return Err(
+                self.create_err_resolved(ErrorKind::OverwriteVariableNotAllowedHere, variable)
+            );
         }
         let variable_str = self.get_text_resolved(variable).to_string();
 
@@ -157,7 +158,7 @@ impl<'a> Resolver<'a> {
             .expect("block scope should have at least one scope")
             .variables;
 
-        let resolved_variable = ResolvedVariable {
+        let resolved_variable = Variable {
             name: variable.clone(),
             resolved_type: variable_type_ref.clone(),
             mutable_node: is_mutable.clone(),
@@ -178,8 +179,8 @@ impl<'a> Resolver<'a> {
         &mut self,
         variable_str: &str,
         is_mutable: bool,
-        variable_type_ref: &ResolvedType,
-    ) -> Result<ResolvedVariableRef, ResolveError> {
+        variable_type_ref: &Type,
+    ) -> Result<VariableRef, Error> {
         let scope_index = self.scope.block_scope_stack.len() - 1;
 
         let variables = &mut self
@@ -189,11 +190,11 @@ impl<'a> Resolver<'a> {
             .expect("block scope should have at least one scope")
             .variables;
 
-        let resolved_variable = ResolvedVariable {
-            name: ResolvedNode::default(),
+        let resolved_variable = Variable {
+            name: Node::default(),
             resolved_type: variable_type_ref.clone(),
             mutable_node: if is_mutable {
-                Some(ResolvedNode::default())
+                Some(Node::default())
             } else {
                 None
             },
@@ -212,16 +213,14 @@ impl<'a> Resolver<'a> {
 
     pub(crate) fn create_variable_binding_for_with(
         &mut self,
-        ast_variable: &Variable,
-        converted_expression: ResolvedMutOrImmutableExpression,
-    ) -> Result<ResolvedExpression, ResolveError> {
+        ast_variable: &swamp_script_ast::Variable,
+        converted_expression: MutOrImmutableExpression,
+    ) -> Result<Expression, Error> {
         let expression_type = converted_expression.ty().clone();
         let (variable_ref, _is_reassignment) =
             self.set_or_overwrite_variable_with_type(ast_variable, &expression_type)?;
-        let expr_kind = ResolvedExpressionKind::VariableDefinition(
-            variable_ref,
-            Box::from(converted_expression),
-        );
+        let expr_kind =
+            ExpressionKind::VariableDefinition(variable_ref, Box::from(converted_expression));
 
         let expr = self.create_expr(expr_kind, expression_type, &ast_variable.name);
         //        };

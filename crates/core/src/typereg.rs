@@ -11,9 +11,9 @@ use swamp_script_semantic::prelude::*;
 pub struct TypeRegistry {
     // Container type constructors
     #[allow(unused)]
-    array_types: RefCell<SeqMap<TypeNumber, ResolvedArrayTypeRef>>,
+    array_types: RefCell<SeqMap<TypeNumber, ArrayTypeRef>>,
     #[allow(unused)]
-    struct_types: RefCell<SeqMap<String, ResolvedStructTypeRef>>,
+    struct_types: RefCell<SeqMap<String, StructTypeRef>>,
 
     // Type numbering
     next_type_number: RefCell<TypeNumber>,
@@ -42,39 +42,39 @@ impl TypeRegistry {
     }
 
     // Primitive type getters
-    pub const fn get_float_type(&self) -> ResolvedType {
-        ResolvedType::Float
+    pub const fn get_float_type(&self) -> Type {
+        Type::Float
     }
 
-    pub const fn get_int_type(&self) -> ResolvedType {
-        ResolvedType::Int
+    pub const fn get_int_type(&self) -> Type {
+        Type::Int
     }
 
-    pub const fn get_string_type(&self) -> ResolvedType {
-        ResolvedType::String
+    pub const fn get_string_type(&self) -> Type {
+        Type::String
     }
 
-    pub const fn get_bool_type(&self) -> ResolvedType {
-        ResolvedType::Bool
+    pub const fn get_bool_type(&self) -> Type {
+        Type::Bool
     }
 
-    pub const fn get_unit_type(&self) -> ResolvedType {
-        ResolvedType::Unit
+    pub const fn get_unit_type(&self) -> Type {
+        Type::Unit
     }
 
     // Container type constructors
     /*
-        pub fn get_array_type(&self, item_type: ResolvedType) -> ResolvedType {
+        pub fn get_array_type(&self, item_type: Type) -> Type {
             let mut array_types = self.array_types.borrow_mut();
             if let Some(existing) = array_types.get(&item_type) {
-                return ResolvedType::Array(existing.clone());
+                return Type::Array(existing.clone());
             }
 
-            let array_type = Rc::new(ResolvedArrayType {
+            let array_type = Rc::new(ArrayType {
                 item_type: item_type.clone(),
             });
             array_types.insert(item_type, array_type.clone());
-            ResolvedType::Array(array_type)
+            Type::Array(array_type)
         }
     */
 
@@ -83,16 +83,16 @@ impl TypeRegistry {
         &self,
         name: String,
         module_path: ModulePath,
-        fields: SeqMap<IdentifierName, ResolvedType>,
-    ) -> ResolvedType {
+        fields: SeqMap<IdentifierName, Type>,
+    ) -> Type {
         let mut struct_types = self.struct_types.borrow_mut();
         if let Some(existing) = struct_types.get(&name) {
             // TODO: should include module_path
-            return ResolvedType::Struct(existing.clone());
+            return Type::Struct(existing.clone());
         }
 
         let number = self.allocate_type_number();
-        let struct_type = Rc::new(RefCell::new(ResolvedStructType {
+        let struct_type = Rc::new(RefCell::new(StructType {
             number,
             module_path,
             fields,
@@ -107,15 +107,15 @@ impl TypeRegistry {
         struct_types
             .insert(name, struct_type.clone())
             .expect("could not insert name");
-        ResolvedType::Struct(struct_type)
+        Type::Struct(struct_type)
     }
 
     // Helper for deriving macros
     pub fn register_derived_struct(
         &self,
         name: &str,
-        fields: Vec<(&str, ResolvedType)>,
-    ) -> ResolvedType {
+        fields: Vec<(&str, Type)>,
+    ) -> Type {
         let fields = fields
             .into_iter()
             .map(|(name, ty)| (IdentifierName(name.to_string()), ty))

@@ -13,7 +13,7 @@ use std::str::Chars;
 use swamp_script_ast::{
     prelude::*, AssignmentOperatorKind, BinaryOperatorKind, CompoundOperator, CompoundOperatorKind,
     EnumVariantLiteral, ExpressionKind, FieldExpression, FieldName, FieldType, ForPattern, ForVar,
-    IterableExpression, PatternElement, QualifiedIdentifier, RangeMode, SpanWithoutFileId,
+    IterableExpression, Mod, PatternElement, QualifiedIdentifier, RangeMode, SpanWithoutFileId,
     TypeForParameter, VariableBinding,
 };
 use swamp_script_ast::{Function, WhenBinding};
@@ -336,6 +336,7 @@ impl AstParser {
             Rule::struct_def => self.parse_struct_def(&inner_pair),
             Rule::function_def => self.parse_function_def(&inner_pair),
             Rule::import_def => self.parse_use(&inner_pair),
+            Rule::mod_def => self.parse_mod(&inner_pair),
             Rule::enum_def => self.parse_enum_def(&inner_pair),
             _ => todo!(),
         }
@@ -366,36 +367,51 @@ impl AstParser {
             segments.push(self.to_node(&pair));
         }
 
-        let items = if let Some(import_list) = inner.next() {
-            let mut imported_items = Vec::new();
-            for list_item in import_list.into_inner() {
-                let item = Self::next_pair(&mut list_item.into_inner())?;
+        let items = match inner.next() {
+            Some(import_list) => {
+                let mut imported_items = Vec::new();
+                for list_item in import_list.into_inner() {
+                    let item = Self::next_pair(&mut list_item.into_inner())?;
 
-                let import_item = match item.as_rule() {
-                    Rule::identifier => {
-                        UseItem::Identifier(LocalIdentifier::new(self.to_node(&item)))
-                    }
-                    Rule::type_identifier => {
-                        UseItem::Type(LocalTypeIdentifier::new(self.to_node(&item)))
-                    }
-                    _ => {
-                        return Err(
-                            self.create_error_pair(SpecificError::ExpectedIdentifier, &item)
-                        );
-                    }
-                };
+                    let import_item = match item.as_rule() {
+                        Rule::identifier => {
+                            UseItem::Identifier(LocalIdentifier::new(self.to_node(&item)))
+                        }
+                        Rule::type_identifier => {
+                            UseItem::Type(LocalTypeIdentifier::new(self.to_node(&item)))
+                        }
+                        _ => {
+                            return Err(
+                                self.create_error_pair(SpecificError::ExpectedIdentifier, &item)
+                            );
+                        }
+                    };
 
-                imported_items.push(import_item);
+                    imported_items.push(import_item);
+                }
+
+                imported_items
             }
-
-            imported_items
-        } else {
-            Vec::new()
+            _ => Vec::new(),
         };
 
         Ok(Definition::Use(Use {
             module_path: ModulePath(segments),
             items,
+        }))
+    }
+
+    fn parse_mod(&self, pair: &Pair<Rule>) -> Result<Definition, ParseError> {
+        let mut inner = Self::convert_into_iterator(pair);
+        let import_path = Self::next_pair(&mut inner)?;
+
+        let mut segments = Vec::new();
+        for pair in import_path.into_inner() {
+            segments.push(self.to_node(&pair));
+        }
+
+        Ok(Definition::Mod(Mod {
+            module_path: ModulePath(segments),
         }))
     }
 
@@ -1547,11 +1563,24 @@ impl AstParser {
         ))
     }
 
+    fn parse_static_function_reference(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
+        let mut inner = pair.clone().into_inner();
+
+        let qualified_identifier = self.parse_qualified_identifier(&inner.next().unwrap())?;
+
+        Ok(self.create_expr(
+            ExpressionKind::StaticFunctionReference(qualified_identifier),
+            pair,
+        ))
+    }
+
     fn parse_term(&self, pair2: &Pair<Rule>) -> Result<Expression, ParseError> {
         assert_eq!(pair2.as_rule(), Rule::term);
         let sub = &Self::right_alternative(pair2)?;
         match sub.as_rule() {
+            Rule::static_function_reference => self.parse_static_function_reference(sub),
             Rule::static_member_reference => self.parse_static_member_reference(sub),
+
             Rule::enum_literal => {
                 Ok(self.create_expr(ExpressionKind::Literal(self.parse_enum_literal(sub)?), sub))
             }

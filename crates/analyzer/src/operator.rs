@@ -3,26 +3,24 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use crate::err::{ResolveError, ResolveErrorKind};
-use crate::Resolver;
-use swamp_script_ast::{BinaryOperator, BinaryOperatorKind, Expression, UnaryOperator};
+use crate::err::{Error, ErrorKind};
+use crate::Analyzer;
 use swamp_script_semantic::{
-    ResolvedBinaryOperator, ResolvedBinaryOperatorKind, ResolvedType, ResolvedUnaryOperator,
-    ResolvedUnaryOperatorKind,
+    BinaryOperator, BinaryOperatorKind, Type, UnaryOperator, UnaryOperatorKind,
 };
 use tracing::debug;
 
-impl<'a> Resolver<'a> {
-    pub(crate) fn resolve_binary_op(
+impl<'a> Analyzer<'a> {
+    pub(crate) fn analyze_binary_op(
         &mut self,
-        ast_left: &Expression,
-        ast_op: &BinaryOperator,
-        ast_right: &Expression,
-    ) -> Result<(ResolvedBinaryOperator, ResolvedType), ResolveError> {
-        let left = self.resolve_expression(ast_left, None)?;
+        ast_left: &swamp_script_ast::Expression,
+        ast_op: &swamp_script_ast::BinaryOperator,
+        ast_right: &swamp_script_ast::Expression,
+    ) -> Result<(BinaryOperator, Type), Error> {
+        let left = self.analyze_expression(ast_left, None)?;
         let left_type = left.ty.clone();
 
-        let right = self.resolve_expression(ast_right, None)?;
+        let right = self.analyze_expression(ast_right, None)?;
         let right_type = right.ty.clone();
 
         let kind = self.convert_binary_operator_kind(ast_op);
@@ -30,42 +28,42 @@ impl<'a> Resolver<'a> {
 
         match (&kind, &left_type, &right_type) {
             // String concatenation - allow any type on the right
-            (&ResolvedBinaryOperatorKind::Add, ResolvedType::String, _) => Ok((
-                ResolvedBinaryOperator {
+            (&BinaryOperatorKind::Add, Type::String, _) => Ok((
+                BinaryOperator {
                     left: Box::new(left),
                     right: Box::new(right),
                     kind,
                     node,
                 },
-                ResolvedType::String,
+                Type::String,
             )),
 
             // Comparison operators
             (
-                ResolvedBinaryOperatorKind::Equal
-                | ResolvedBinaryOperatorKind::NotEqual
-                | ResolvedBinaryOperatorKind::GreaterThan
-                | ResolvedBinaryOperatorKind::GreaterEqual
-                | ResolvedBinaryOperatorKind::LessThan
-                | ResolvedBinaryOperatorKind::LessEqual,
+                BinaryOperatorKind::Equal
+                | BinaryOperatorKind::NotEqual
+                | BinaryOperatorKind::GreaterThan
+                | BinaryOperatorKind::GreaterEqual
+                | BinaryOperatorKind::LessThan
+                | BinaryOperatorKind::LessEqual,
                 _,
                 _,
             ) => {
                 if !left_type.same_type(&right_type) {
                     debug!(?left_type, ?right_type, "type mismatch in comparison");
                     return Err(self.create_err(
-                        ResolveErrorKind::IncompatibleTypes(left_type, right_type),
+                        ErrorKind::IncompatibleTypes(left_type, right_type),
                         &ast_op.node,
                     ));
                 }
                 Ok((
-                    ResolvedBinaryOperator {
+                    BinaryOperator {
                         left: Box::new(left),
                         right: Box::new(right),
                         kind,
                         node,
                     },
-                    ResolvedType::Bool,
+                    Type::Bool,
                 ))
             }
 
@@ -74,12 +72,12 @@ impl<'a> Resolver<'a> {
                 if !left_type.same_type(&right_type) {
                     debug!(?left_type, ?right_type, "type mismatch in operation");
                     return Err(self.create_err_resolved(
-                        ResolveErrorKind::IncompatibleTypes(left_type, right_type),
+                        ErrorKind::IncompatibleTypes(left_type, right_type),
                         &node,
                     ));
                 }
                 Ok((
-                    ResolvedBinaryOperator {
+                    BinaryOperator {
                         left: Box::new(left),
                         right: Box::new(right),
                         kind,
@@ -91,23 +89,23 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    pub(crate) fn resolve_unary_op(
+    pub(crate) fn analyze_unary_op(
         &mut self,
-        ast_op: &UnaryOperator,
-        ast_left: &Expression,
-    ) -> Result<(ResolvedUnaryOperator, ResolvedType), ResolveError> {
+        ast_op: &swamp_script_ast::UnaryOperator,
+        ast_left: &swamp_script_ast::Expression,
+    ) -> Result<(UnaryOperator, Type), Error> {
         let (node, kind, require_type) = match ast_op {
-            UnaryOperator::Not(node) => (
-                node,
-                ResolvedUnaryOperatorKind::Not,
-                Some(&ResolvedType::Bool),
-            ),
-            UnaryOperator::Negate(node) => (node, ResolvedUnaryOperatorKind::Negate, None),
+            swamp_script_ast::UnaryOperator::Not(node) => {
+                (node, UnaryOperatorKind::Not, Some(&Type::Bool))
+            }
+            swamp_script_ast::UnaryOperator::Negate(node) => {
+                (node, UnaryOperatorKind::Negate, None)
+            }
         };
-        let left = self.resolve_expression(ast_left, require_type)?;
+        let left = self.analyze_expression(ast_left, require_type)?;
         let resolved_type = left.ty.clone();
         Ok((
-            ResolvedUnaryOperator {
+            UnaryOperator {
                 left: Box::new(left),
                 kind,
                 node: self.to_node(node),
@@ -118,23 +116,25 @@ impl<'a> Resolver<'a> {
 
     const fn convert_binary_operator_kind(
         &self,
-        binary_operator: &BinaryOperator,
-    ) -> ResolvedBinaryOperatorKind {
+        binary_operator: &swamp_script_ast::BinaryOperator,
+    ) -> BinaryOperatorKind {
         match binary_operator.kind {
-            BinaryOperatorKind::Add => ResolvedBinaryOperatorKind::Add,
-            BinaryOperatorKind::Subtract => ResolvedBinaryOperatorKind::Subtract,
-            BinaryOperatorKind::Multiply => ResolvedBinaryOperatorKind::Multiply,
-            BinaryOperatorKind::Divide => ResolvedBinaryOperatorKind::Divide,
-            BinaryOperatorKind::Modulo => ResolvedBinaryOperatorKind::Modulo,
-            BinaryOperatorKind::LogicalOr => ResolvedBinaryOperatorKind::LogicalOr,
-            BinaryOperatorKind::LogicalAnd => ResolvedBinaryOperatorKind::LogicalAnd,
-            BinaryOperatorKind::Equal => ResolvedBinaryOperatorKind::Equal,
-            BinaryOperatorKind::NotEqual => ResolvedBinaryOperatorKind::NotEqual,
-            BinaryOperatorKind::LessThan => ResolvedBinaryOperatorKind::LessThan,
-            BinaryOperatorKind::LessEqual => ResolvedBinaryOperatorKind::LessEqual,
-            BinaryOperatorKind::GreaterThan => ResolvedBinaryOperatorKind::GreaterThan,
-            BinaryOperatorKind::GreaterEqual => ResolvedBinaryOperatorKind::GreaterEqual,
-            BinaryOperatorKind::RangeExclusive => ResolvedBinaryOperatorKind::RangeExclusive,
+            swamp_script_ast::BinaryOperatorKind::Add => BinaryOperatorKind::Add,
+            swamp_script_ast::BinaryOperatorKind::Subtract => BinaryOperatorKind::Subtract,
+            swamp_script_ast::BinaryOperatorKind::Multiply => BinaryOperatorKind::Multiply,
+            swamp_script_ast::BinaryOperatorKind::Divide => BinaryOperatorKind::Divide,
+            swamp_script_ast::BinaryOperatorKind::Modulo => BinaryOperatorKind::Modulo,
+            swamp_script_ast::BinaryOperatorKind::LogicalOr => BinaryOperatorKind::LogicalOr,
+            swamp_script_ast::BinaryOperatorKind::LogicalAnd => BinaryOperatorKind::LogicalAnd,
+            swamp_script_ast::BinaryOperatorKind::Equal => BinaryOperatorKind::Equal,
+            swamp_script_ast::BinaryOperatorKind::NotEqual => BinaryOperatorKind::NotEqual,
+            swamp_script_ast::BinaryOperatorKind::LessThan => BinaryOperatorKind::LessThan,
+            swamp_script_ast::BinaryOperatorKind::LessEqual => BinaryOperatorKind::LessEqual,
+            swamp_script_ast::BinaryOperatorKind::GreaterThan => BinaryOperatorKind::GreaterThan,
+            swamp_script_ast::BinaryOperatorKind::GreaterEqual => BinaryOperatorKind::GreaterEqual,
+            swamp_script_ast::BinaryOperatorKind::RangeExclusive => {
+                BinaryOperatorKind::RangeExclusive
+            }
         }
     }
 }

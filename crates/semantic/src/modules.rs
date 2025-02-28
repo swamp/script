@@ -3,44 +3,33 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use crate::ns::{ResolvedModuleNamespace, ResolvedModuleNamespaceRef};
-use crate::ResolvedExpressionKind;
-use crate::{
-    ConstantId, ResolvedConstant, ResolvedConstantRef, ResolvedDefinition, ResolvedExpression,
-};
-use std::cell::RefCell;
-use std::collections::HashMap;
+use crate::ns::Namespace;
+use crate::ns::NamespacePath;
+use crate::symtbl::SymbolTable;
+use crate::{Constant, ConstantRef, Expression, ExpressionKind};
+use seq_map::SeqMap;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
+use tracing::info;
 
 #[derive(Debug)]
-pub struct ResolvedModules {
-    pub modules: HashMap<Vec<String>, ResolvedModuleRef>,
-    pub constants: Vec<ResolvedConstantRef>,
+pub struct Modules {
+    modules: SeqMap<Vec<String>, ModuleRef>,
 }
 
-impl Default for ResolvedModules {
+impl Default for Modules {
     fn default() -> Self {
         Self::new()
     }
 }
 
-pub struct ResolvedModule {
-    pub definitions: Vec<ResolvedDefinition>,
-    pub expression: Option<ResolvedExpression>,
-    pub namespace: ResolvedModuleNamespaceRef,
+pub struct Module {
+    pub namespace: Namespace,
+    pub expression: Option<Expression>,
 }
 
-impl Debug for ResolvedModule {
+impl Debug for Module {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        for resolved_def in &self.definitions {
-            writeln!(f, "{resolved_def:?}")?;
-        }
-
-        if !self.definitions.is_empty() && self.expression.is_some() {
-            writeln!(f, "---\n")?;
-        }
-
         if let Some(resolved_expression) = &self.expression {
             pretty_print(f, resolved_expression, 0)?;
         }
@@ -53,10 +42,10 @@ impl Debug for ResolvedModule {
 ///
 pub fn pretty_print(
     f: &mut Formatter<'_>,
-    resolved_expression: &ResolvedExpression,
+    resolved_expression: &Expression,
     tabs: usize,
 ) -> std::fmt::Result {
-    if let ResolvedExpressionKind::Block(expressions) = &resolved_expression.kind {
+    if let ExpressionKind::Block(expressions) = &resolved_expression.kind {
         for internal_expr in expressions {
             pretty_print(f, internal_expr, tabs + 1)?;
         }
@@ -71,65 +60,53 @@ pub fn pretty_print(
     }
 }
 
-pub type ResolvedModuleRef = Rc<RefCell<ResolvedModule>>;
+pub type ModuleRef = Rc<Module>;
 
-impl ResolvedModule {
-    pub fn new(module_path: &[String]) -> Self {
-        let ns_ref = Rc::new(RefCell::new(ResolvedModuleNamespace::new(module_path)));
+impl Module {
+    pub fn new(
+        module_path: &[String],
+        symbol_table: SymbolTable,
+        expression: Option<Expression>,
+    ) -> Self {
         Self {
-            definitions: Vec::new(),
-            namespace: ns_ref,
-            expression: None,
+            namespace: Namespace::new(NamespacePath::from(module_path), symbol_table),
+            expression,
         }
     }
 }
 
-impl ResolvedModules {
+impl Modules {
     pub fn new() -> Self {
         Self {
-            modules: HashMap::new(),
-            constants: Vec::new(),
+            modules: SeqMap::new(),
         }
     }
-    pub fn add(&mut self, module: ResolvedModuleRef) {
-        self.modules.insert(
-            module.clone().borrow().namespace.borrow().path.clone(),
-            module,
-        );
-    }
 
-    pub fn add_constant(&mut self, resolved_constant: ResolvedConstant) -> ResolvedConstantRef {
-        let id = self.constants.len();
-        let mut copy = resolved_constant;
-        copy.id = id as ConstantId;
-        let constant_ref = Rc::new(copy);
-        self.constants.push(constant_ref.clone());
-
-        constant_ref
-    }
-
-    pub fn add_empty_module(&mut self, module_path: &[String]) -> ResolvedModuleRef {
-        let ns_ref = Rc::new(RefCell::new(ResolvedModuleNamespace::new(module_path)));
-        let module = ResolvedModule {
-            definitions: vec![],
-            expression: None,
-            namespace: ns_ref,
-        };
-        let module_ref = Rc::new(RefCell::new(module));
-
-        self.modules
-            .insert(Vec::from(module_path), module_ref.clone());
-
-        module_ref
+    pub fn modules(&self) -> &SeqMap<Vec<String>, ModuleRef> {
+        &self.modules
     }
 
     #[must_use]
     pub fn contains_key(&self, module_path: &[String]) -> bool {
-        self.modules.contains_key(module_path)
+        self.modules.contains_key(&module_path.to_vec())
+    }
+
+    pub fn add(&mut self, module: ModuleRef) {
+        let path = module.clone().namespace.path.clone();
+        info!(?path, ?self, "trying to insert module");
+
+        self.modules.insert(path, module).expect("could not insert");
+    }
+
+    pub fn link_module(&mut self, module_path: &[String], referred_module: ModuleRef) {
+        info!(?module_path, "trying to link module");
+        self.modules
+            .insert(module_path.to_vec(), referred_module)
+            .expect("todo");
     }
 
     #[must_use]
-    pub fn get(&self, module_path: &[String]) -> Option<ResolvedModuleRef> {
-        self.modules.get(module_path).cloned()
+    pub fn get(&self, module_path: &[String]) -> Option<&ModuleRef> {
+        self.modules.get(&module_path.to_vec())
     }
 }

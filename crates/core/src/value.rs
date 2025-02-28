@@ -12,13 +12,11 @@ use std::fmt::{Debug, Display};
 use std::hash::Hash;
 use std::rc::Rc;
 use swamp_script_semantic::{
-    ResolvedArrayTypeRef, ResolvedEnumVariantSimpleTypeRef, ResolvedEnumVariantStructTypeRef,
-    ResolvedEnumVariantTupleTypeRef, ResolvedExternalFunctionDefinitionRef,
-    ResolvedFormatSpecifierKind, ResolvedInternalFunctionDefinitionRef, ResolvedMapTypeRef,
-    ResolvedPrecisionType, ResolvedRangeMode, ResolvedRustTypeRef, ResolvedStructTypeRef,
-    ResolvedTupleTypeRef, TypeNumber,
+    ArrayTypeRef, EnumVariantSimpleTypeRef, EnumVariantStructTypeRef, EnumVariantTupleTypeRef,
+    ExternalFunctionDefinitionRef, ExternalTypeRef, FormatSpecifierKind,
+    InternalFunctionDefinitionRef, MapTypeRef, Node, PrecisionType, RangeMode, Span, StructTypeRef,
+    TupleTypeRef, TypeNumber,
 };
-use swamp_script_semantic::{ResolvedNode, Span};
 
 pub type ValueRef = Rc<RefCell<Value>>;
 
@@ -90,24 +88,24 @@ pub enum Value {
     Option(Option<ValueRef>),
 
     // Containers
-    Array(ResolvedArrayTypeRef, Vec<ValueRef>),
-    Map(ResolvedMapTypeRef, SeqMap<Value, ValueRef>), // Do not change to HashMap, the order is important for it to be deterministic
-    Tuple(ResolvedTupleTypeRef, Vec<ValueRef>),
-    Struct(ResolvedStructTypeRef, Vec<ValueRef>), // type of the struct, and the fields themselves in strict order
+    Array(ArrayTypeRef, Vec<ValueRef>),
+    Map(MapTypeRef, SeqMap<Value, ValueRef>), // Do not change to HashMap, the order is important for it to be deterministic
+    Tuple(TupleTypeRef, Vec<ValueRef>),
+    Struct(StructTypeRef, Vec<ValueRef>), // type of the struct, and the fields themselves in strict order
 
-    EnumVariantSimple(ResolvedEnumVariantSimpleTypeRef),
-    EnumVariantTuple(ResolvedEnumVariantTupleTypeRef, Vec<ValueRef>),
-    EnumVariantStruct(ResolvedEnumVariantStructTypeRef, Vec<ValueRef>),
+    EnumVariantSimple(EnumVariantSimpleTypeRef),
+    EnumVariantTuple(EnumVariantTupleTypeRef, Vec<ValueRef>),
+    EnumVariantStruct(EnumVariantStructTypeRef, Vec<ValueRef>),
 
     // Number generators
-    Range(Box<i32>, Box<i32>, ResolvedRangeMode),
+    Range(Box<i32>, Box<i32>, RangeMode),
 
     // Higher order
-    InternalFunction(ResolvedInternalFunctionDefinitionRef),
-    ExternalFunction(ResolvedExternalFunctionDefinitionRef),
+    InternalFunction(InternalFunctionDefinitionRef),
+    ExternalFunction(ExternalFunctionDefinitionRef),
 
     // Other
-    RustValue(ResolvedRustTypeRef, Rc<RefCell<Box<dyn RustType>>>),
+    RustValue(ExternalTypeRef, Rc<RefCell<Box<dyn RustType>>>),
 }
 
 #[allow(unused)]
@@ -347,7 +345,7 @@ fn deep_clone_valref(val_ref: &ValueRef) -> ValueRef {
     Rc::new(RefCell::new(cloned_value))
 }
 
-pub fn to_rust_value<T: RustType + 'static>(type_ref: ResolvedRustTypeRef, value: T) -> Value {
+pub fn to_rust_value<T: RustType + 'static>(type_ref: ExternalTypeRef, value: T) -> Value {
     Value::RustValue(
         type_ref,
         Rc::new(RefCell::new(Box::new(value) as Box<dyn RustType>)),
@@ -410,8 +408,8 @@ impl Value {
                 let start = *start_val;
                 let end = *max_val;
                 match range_mode {
-                    ResolvedRangeMode::Exclusive => Ok(Box::new((start..end).map(Value::Int))),
-                    ResolvedRangeMode::Inclusive => Ok(Box::new((start..=end).map(Value::Int))),
+                    RangeMode::Exclusive => Ok(Box::new((start..end).map(Value::Int))),
+                    RangeMode::Inclusive => Ok(Box::new((start..=end).map(Value::Int))),
                 }
             }
             _ => Err(ValueError::CanNotCoerceToIterator),
@@ -502,21 +500,21 @@ impl Value {
         }
     }
 
-    pub fn expect_struct(&self) -> Result<(ResolvedStructTypeRef, &Vec<ValueRef>), ValueError> {
+    pub fn expect_struct(&self) -> Result<(StructTypeRef, &Vec<ValueRef>), ValueError> {
         match self {
             Self::Struct(struct_ref, fields) => Ok((struct_ref.clone(), fields)),
             _ => Err(ValueError::ConversionError("Expected struct value".into())),
         }
     }
 
-    pub fn expect_array(&self) -> Result<(ResolvedArrayTypeRef, &Vec<ValueRef>), ValueError> {
+    pub fn expect_array(&self) -> Result<(ArrayTypeRef, &Vec<ValueRef>), ValueError> {
         match self {
             Self::Array(resolved_array_ref, fields) => Ok((resolved_array_ref.clone(), fields)),
             _ => Err(ValueError::ConversionError("Expected array value".into())),
         }
     }
 
-    pub fn expect_map(&self) -> Result<(ResolvedMapTypeRef, &SeqMap<Value, ValueRef>), ValueError> {
+    pub fn expect_map(&self) -> Result<(MapTypeRef, &SeqMap<Value, ValueRef>), ValueError> {
         match self {
             Self::Map(resolved_map_type_ref, seq_map) => {
                 Ok((resolved_map_type_ref.clone(), seq_map))
@@ -527,7 +525,7 @@ impl Value {
 
     pub fn expect_map_mut(
         &mut self,
-    ) -> Result<(ResolvedMapTypeRef, &mut SeqMap<Value, ValueRef>), ValueError> {
+    ) -> Result<(MapTypeRef, &mut SeqMap<Value, ValueRef>), ValueError> {
         match self {
             Self::Map(resolved_map_type_ref, seq_map) => {
                 Ok((resolved_map_type_ref.clone(), seq_map))
@@ -604,7 +602,7 @@ impl Value {
     }
 
     pub fn new_rust_value<T: RustType + 'static + PartialEq>(
-        rust_type_ref: ResolvedRustTypeRef,
+        rust_type_ref: ExternalTypeRef,
         value: T,
     ) -> Self {
         let boxed = Box::new(Box::new(value)) as Box<dyn RustType>;
@@ -612,8 +610,8 @@ impl Value {
     }
 
     pub fn new_hidden_rust_struct<T: RustType + 'static + PartialEq>(
-        struct_type: ResolvedStructTypeRef,
-        rust_description: ResolvedRustTypeRef,
+        struct_type: StructTypeRef,
+        rust_description: ExternalTypeRef,
         value: T,
     ) -> Self {
         let rust_value = Rc::new(RefCell::new(Self::new_rust_value(rust_description, value)));
@@ -622,7 +620,7 @@ impl Value {
 }
 
 pub trait SourceMapLookup: Debug {
-    fn get_text(&self, resolved_node: &ResolvedNode) -> &str;
+    fn get_text(&self, resolved_node: &Node) -> &str;
     fn get_text_span(&self, span: &Span) -> &str;
 }
 
@@ -687,8 +685,8 @@ impl Display for Value {
             Self::InternalFunction(_reference) => write!(f, "<function>"), // TODO:
             Self::Unit => write!(f, "()"),
             Self::Range(start, end, range_mode) => match range_mode {
-                ResolvedRangeMode::Exclusive => write!(f, "{start}..{end}"),
-                ResolvedRangeMode::Inclusive => write!(f, "{start}..={end}"),
+                RangeMode::Exclusive => write!(f, "{start}..{end}"),
+                RangeMode::Inclusive => write!(f, "{start}..={end}"),
             },
 
             Self::ExternalFunction(_) => write!(f, "<external>"), // TODO:
@@ -805,21 +803,20 @@ impl Hash for Value {
 
 /// # Errors
 ///
-pub fn format_value(value: &Value, spec: &ResolvedFormatSpecifierKind) -> Result<String, String> {
+pub fn format_value(value: &Value, spec: &FormatSpecifierKind) -> Result<String, String> {
     match (value, spec) {
-        (Value::Int(n), ResolvedFormatSpecifierKind::LowerHex) => Ok(format!("{n:x}")),
-        (Value::Int(n), ResolvedFormatSpecifierKind::UpperHex) => Ok(format!("{n:X}")),
-        (Value::Int(n), ResolvedFormatSpecifierKind::Binary) => Ok(format!("{n:b}")),
+        (Value::Int(n), FormatSpecifierKind::LowerHex) => Ok(format!("{n:x}")),
+        (Value::Int(n), FormatSpecifierKind::UpperHex) => Ok(format!("{n:X}")),
+        (Value::Int(n), FormatSpecifierKind::Binary) => Ok(format!("{n:b}")),
 
-        (Value::Float(f), ResolvedFormatSpecifierKind::Float) => Ok(format!("{f}")),
-        (
-            Value::Float(f),
-            ResolvedFormatSpecifierKind::Precision(prec, _node, ResolvedPrecisionType::Float),
-        ) => Ok(format!("{:.*}", *prec as usize, f)),
+        (Value::Float(f), FormatSpecifierKind::Float) => Ok(format!("{f}")),
+        (Value::Float(f), FormatSpecifierKind::Precision(prec, _node, PrecisionType::Float)) => {
+            Ok(format!("{:.*}", *prec as usize, f))
+        }
 
         (
             Value::String(s),
-            ResolvedFormatSpecifierKind::Precision(prec, _node, ResolvedPrecisionType::String, ..),
+            FormatSpecifierKind::Precision(prec, _node, PrecisionType::String, ..),
         ) => Ok(format!("{:.*}", *prec as usize, s)),
 
         _ => Err(format!(

@@ -24,7 +24,7 @@ fn basic_eval_fail() {
         a
     ",
         r"
-ResolveError(ResolveError { node: <23:1>, kind: VariableIsNotMutable })
+Error(Error { node: <23:1>, kind: VariableIsNotMutable })
 ",
     );
 }

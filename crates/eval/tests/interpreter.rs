@@ -257,7 +257,7 @@ increment(x)
 print(x)
 
     "#,
-        "ResolveError(ArgumentIsNotMutable)",
+        "Error(ArgumentIsNotMutable)",
     );
 }
 
@@ -276,7 +276,7 @@ fn call_mut_2() {
     print(x)
 
     ",
-        "ResolveError(ResolveError { node: <103:1>, kind: VariableIsNotMutable })",
+        "Error(Error { node: <103:1>, kind: VariableIsNotMutable })",
     );
 }
 
@@ -927,7 +927,7 @@ fn undefined_variable() {
         "
         print(undefined_variable)
         ",
-        "ResolveError(ResolveError { node: <15:18>, kind: UnknownVariable })",
+        "Error(Error { node: <15:18>, kind: UnknownVariable })",
     );
 }
 

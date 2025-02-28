@@ -4,7 +4,7 @@
  */
 
 use swamp_script_core::value::ValueError;
-use swamp_script_semantic::{ExternalFunctionId, ResolvedNode};
+use swamp_script_semantic::{ExternalFunctionId, Node};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ConversionError {
@@ -14,7 +14,7 @@ pub enum ConversionError {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct ExecuteError {
-    pub node: ResolvedNode,
+    pub node: Node,
     pub kind: ExecuteErrorKind,
 }
 

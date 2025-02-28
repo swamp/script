@@ -5,6 +5,7 @@
 pub mod modules;
 pub mod ns;
 pub mod prelude;
+pub mod symtbl;
 
 pub use fixed32::Fp;
 use seq_fmt::comma;
@@ -17,11 +18,11 @@ use std::hash::Hash;
 use std::rc::Rc;
 
 #[derive(Clone, Eq, PartialEq, Default)]
-pub struct ResolvedNode {
+pub struct Node {
     pub span: Span,
 }
 
-impl Debug for ResolvedNode {
+impl Debug for Node {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if self.span.file_id == 0xffff {
             write!(f, "<{}:{}>", self.span.offset, self.span.length)
@@ -66,18 +67,18 @@ impl Debug for Span {
 }
 
 #[derive(Clone, Eq, PartialEq)]
-pub struct ResolvedParameterNode {
-    pub name: ResolvedNode,
-    pub is_mutable: Option<ResolvedNode>,
+pub struct ParameterNode {
+    pub name: Node,
+    pub is_mutable: Option<Node>,
 }
 
-impl Debug for ResolvedParameterNode {
+impl Debug for ParameterNode {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ResolvedParameter")
+        write!(f, "Parameter")
     }
 }
 
-impl ResolvedParameterNode {
+impl ParameterNode {
     #[inline]
     #[must_use]
     pub const fn is_mutable(&self) -> bool {
@@ -86,19 +87,19 @@ impl ResolvedParameterNode {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct FunctionTypeSignature {
-    pub parameters: Vec<ResolvedTypeForParameter>,
-    pub return_type: Box<ResolvedType>,
+pub struct Signature {
+    pub parameters: Vec<TypeForParameter>,
+    pub return_type: Box<Type>,
 }
 
-impl Display for FunctionTypeSignature {
+impl Display for Signature {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         write!(f, "({})->{}", comma(&self.parameters), self.return_type)
     }
 }
 
-impl FunctionTypeSignature {
-    pub fn same_type(&self, other: &FunctionTypeSignature) -> bool {
+impl Signature {
+    pub fn same_type(&self, other: &Signature) -> bool {
         if self.parameters.len() != other.parameters.len()
             || !self.return_type.same_type(&other.return_type)
         {
@@ -129,28 +130,28 @@ impl FunctionTypeSignature {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct ResolvedRustType {
+pub struct ExternalType {
     pub type_name: String, // To identify the specific Rust type
     pub number: u32,       // For type comparison
 }
 
-pub type ResolvedRustTypeRef = Rc<ResolvedRustType>;
+pub type ExternalTypeRef = Rc<ExternalType>;
 
 #[derive(Debug, Clone)]
-pub struct ResolvedTypeWithMut {
-    pub resolved_type: ResolvedType,
+pub struct TypeWithMut {
+    pub resolved_type: Type,
     pub is_mutable: bool,
 }
 
 #[derive(Debug, Clone)]
-pub struct ResolvedTypeForParameter {
+pub struct TypeForParameter {
     pub name: String,
-    pub resolved_type: Option<ResolvedType>,
+    pub resolved_type: Option<Type>,
     pub is_mutable: bool,
-    pub node: Option<ResolvedParameterNode>,
+    pub node: Option<ParameterNode>,
 }
 
-impl Display for ResolvedTypeForParameter {
+impl Display for TypeForParameter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         write!(
             f,
@@ -162,9 +163,9 @@ impl Display for ResolvedTypeForParameter {
     }
 }
 
-impl Eq for ResolvedTypeForParameter {}
+impl Eq for TypeForParameter {}
 
-impl PartialEq for ResolvedTypeForParameter {
+impl PartialEq for TypeForParameter {
     fn eq(&self, other: &Self) -> bool {
         // Compare resolved_type in a way that treats either None as automatically equal:
         let types_equal = match (&self.resolved_type, &other.resolved_type) {
@@ -177,7 +178,7 @@ impl PartialEq for ResolvedTypeForParameter {
 }
 
 #[derive(Clone, Eq, PartialEq)]
-pub enum ResolvedType {
+pub enum Type {
     // Primitives
     Int,
     Float,
@@ -186,22 +187,22 @@ pub enum ResolvedType {
     Unit,
 
     // Containers
-    Array(ResolvedArrayTypeRef),
-    Tuple(ResolvedTupleTypeRef),
-    Struct(ResolvedStructTypeRef),
-    Map(ResolvedMapTypeRef),
+    Array(ArrayTypeRef),
+    Tuple(TupleTypeRef),
+    Struct(StructTypeRef),
+    Map(MapTypeRef),
 
-    Enum(ResolvedEnumTypeRef),
-    Generic(Box<ResolvedType>, Vec<ResolvedType>),
+    Enum(EnumTypeRef),
+    Generic(Box<Type>, Vec<Type>),
 
-    Function(FunctionTypeSignature),
-    Iterable(Box<ResolvedType>),
+    Function(Signature),
+    Iterable(Box<Type>),
 
-    Optional(Box<ResolvedType>),
-    RustType(ResolvedRustTypeRef),
+    Optional(Box<Type>),
+    External(ExternalTypeRef),
 }
 
-impl Debug for ResolvedType {
+impl Debug for Type {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::Int => write!(f, "Int"),
@@ -229,12 +230,12 @@ impl Debug for ResolvedType {
             }
             Self::Iterable(type_generated) => write!(f, "Iterable<{type_generated:?}>"),
             Self::Optional(base_type) => write!(f, "{base_type:?}?"),
-            Self::RustType(rust_type) => write!(f, "{:?}?", rust_type.type_name),
+            Self::External(rust_type) => write!(f, "{:?}?", rust_type.type_name),
         }
     }
 }
 
-impl Display for ResolvedType {
+impl Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         match self {
             Self::Int => write!(f, "Int"),
@@ -256,7 +257,7 @@ impl Display for ResolvedType {
             Self::Function(signature) => write!(f, "function {signature}"),
             Self::Iterable(generating_type) => write!(f, "Iterable<{generating_type}>"),
             Self::Optional(base_type) => write!(f, "{base_type}?"),
-            Self::RustType(rust_type) => write!(f, "RustType {}", rust_type.type_name),
+            Self::External(rust_type) => write!(f, "RustType {}", rust_type.type_name),
         }
     }
 }
@@ -279,17 +280,19 @@ pub enum SemanticError {
     IncompatibleTypes,
     WasNotImmutable,
     WasNotMutable,
+    DuplicateSymbolName,
+    DuplicateNamespaceLink(String),
 }
 
-impl ResolvedType {
-    pub fn expect_struct_type(&self) -> Result<ResolvedStructTypeRef, SemanticError> {
+impl Type {
+    pub fn expect_struct_type(&self) -> Result<StructTypeRef, SemanticError> {
         match self {
-            ResolvedType::Struct(struct_type_ref) => Ok(struct_type_ref.clone()),
+            Type::Struct(struct_type_ref) => Ok(struct_type_ref.clone()),
             _ => Err(SemanticError::ResolveNotStruct),
         }
     }
 
-    pub fn assignable_type(&self, other: &ResolvedType) -> bool {
+    pub fn assignable_type(&self, other: &Type) -> bool {
         if self.same_type(other) {
             true
         } else if let Self::Optional(inner_type) = self {
@@ -298,7 +301,7 @@ impl ResolvedType {
             false
         }
     }
-    pub fn same_type(&self, other: &ResolvedType) -> bool {
+    pub fn same_type(&self, other: &Type) -> bool {
         match (self, other) {
             (Self::Function(a), Self::Function(b)) => a.same_type(b),
             (Self::Int, Self::Int) => true,
@@ -323,7 +326,7 @@ impl ResolvedType {
             (Self::Optional(inner_type_a), Self::Optional(inner_type_b)) => {
                 inner_type_a.same_type(inner_type_b)
             }
-            (Self::RustType(type_ref_a), Self::RustType(type_ref_b)) => {
+            (Self::External(type_ref_a), Self::External(type_ref_b)) => {
                 type_ref_a.number == type_ref_b.number
             }
 
@@ -348,7 +351,7 @@ impl ResolvedType {
     }
 }
 
-fn compare_struct_types(a: &ResolvedStructTypeRef, b: &ResolvedStructTypeRef) -> bool {
+fn compare_struct_types(a: &StructTypeRef, b: &StructTypeRef) -> bool {
     let a_borrow = a.borrow();
     let b_borrow = b.borrow();
     if a_borrow.assigned_name != b_borrow.assigned_name {
@@ -379,7 +382,7 @@ fn compare_struct_types(a: &ResolvedStructTypeRef, b: &ResolvedStructTypeRef) ->
     true
 }
 
-impl ResolvedNode {
+impl Node {
     pub fn new_unknown() -> Self {
         Self {
             span: Span {
@@ -392,86 +395,86 @@ impl ResolvedNode {
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct ResolvedLocalIdentifier(pub ResolvedNode);
+pub struct LocalIdentifier(pub Node);
 
 //#[derive(Debug)]
-pub struct ResolvedInternalFunctionDefinition {
-    pub body: ResolvedExpression,
-    pub name: ResolvedLocalIdentifier,
-    pub signature: FunctionTypeSignature,
+pub struct InternalFunctionDefinition {
+    pub body: Expression,
+    pub name: LocalIdentifier,
+    pub signature: Signature,
 }
 
-impl Debug for ResolvedInternalFunctionDefinition {
+impl Debug for InternalFunctionDefinition {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}\n{:?}", self.signature, self.body)
     }
 }
 
-impl PartialEq<Self> for ResolvedInternalFunctionDefinition {
+impl PartialEq<Self> for InternalFunctionDefinition {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
     }
 }
 
-impl Eq for ResolvedInternalFunctionDefinition {}
+impl Eq for InternalFunctionDefinition {}
 
-pub type ResolvedInternalFunctionDefinitionRef = Rc<ResolvedInternalFunctionDefinition>;
+pub type InternalFunctionDefinitionRef = Rc<InternalFunctionDefinition>;
 
 pub type ExternalFunctionId = u32;
 
 pub type ConstantId = u32;
 
-pub struct ResolvedExternalFunctionDefinition {
-    pub name: Option<ResolvedNode>,
+pub struct ExternalFunctionDefinition {
+    pub name: Option<Node>,
     pub assigned_name: String,
-    pub signature: FunctionTypeSignature,
+    pub signature: Signature,
     pub id: ExternalFunctionId,
 }
 
-impl PartialEq<Self> for ResolvedExternalFunctionDefinition {
+impl PartialEq<Self> for ExternalFunctionDefinition {
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id
     }
 }
 
-impl Eq for ResolvedExternalFunctionDefinition {}
+impl Eq for ExternalFunctionDefinition {}
 
-impl Debug for ResolvedExternalFunctionDefinition {
+impl Debug for ExternalFunctionDefinition {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "external fn")
     }
 }
 
-pub type ResolvedExternalFunctionDefinitionRef = Rc<crate::ResolvedExternalFunctionDefinition>;
+pub type ExternalFunctionDefinitionRef = Rc<crate::ExternalFunctionDefinition>;
 
 #[derive(Debug)]
-pub struct ResolvedVariable {
-    pub name: ResolvedNode,
-    pub resolved_type: ResolvedType,
-    pub mutable_node: Option<ResolvedNode>,
+pub struct Variable {
+    pub name: Node,
+    pub resolved_type: Type,
+    pub mutable_node: Option<Node>,
 
     pub scope_index: usize,
     pub variable_index: usize,
 }
 
-impl ResolvedVariable {
+impl Variable {
     #[must_use]
     pub const fn is_mutable(&self) -> bool {
         self.mutable_node.is_some()
     }
 }
 
-pub type ResolvedVariableRef = Rc<ResolvedVariable>;
+pub type VariableRef = Rc<Variable>;
 
 #[derive(Debug)]
-pub struct ResolvedMutVariable {
-    pub variable_ref: ResolvedVariableRef,
+pub struct MutVariable {
+    pub variable_ref: VariableRef,
 }
 
-//type ResolvedMutVariableRef = Rc<ResolvedMutVariable>;
+//type MutVariableRef = Rc<MutVariable>;
 
 #[derive(Debug)]
-pub enum ResolvedBinaryOperatorKind {
+pub enum BinaryOperatorKind {
     Add,
     Subtract,
     Multiply,
@@ -489,34 +492,34 @@ pub enum ResolvedBinaryOperatorKind {
 }
 
 #[derive(Debug)]
-pub struct ResolvedBinaryOperator {
-    pub left: Box<ResolvedExpression>,
-    pub right: Box<ResolvedExpression>,
-    pub kind: ResolvedBinaryOperatorKind,
-    pub node: ResolvedNode,
+pub struct BinaryOperator {
+    pub left: Box<Expression>,
+    pub right: Box<Expression>,
+    pub kind: BinaryOperatorKind,
+    pub node: Node,
 }
 
 #[derive(Debug)]
-pub enum ResolvedUnaryOperatorKind {
+pub enum UnaryOperatorKind {
     Not,
     Negate,
 }
 #[derive(Debug)]
-pub struct ResolvedUnaryOperator {
-    pub left: Box<ResolvedExpression>,
-    pub kind: ResolvedUnaryOperatorKind,
-    pub node: ResolvedNode,
+pub struct UnaryOperator {
+    pub left: Box<Expression>,
+    pub kind: UnaryOperatorKind,
+    pub node: Node,
 }
 
 #[derive()]
-pub struct ResolvedInternalFunctionCall {
-    pub arguments: Vec<ResolvedArgumentExpressionOrLocation>,
+pub struct InternalFunctionCall {
+    pub arguments: Vec<ArgumentExpressionOrLocation>,
 
-    pub function_definition: ResolvedInternalFunctionDefinitionRef,
-    pub function_expression: Box<ResolvedExpression>,
+    pub function_definition: InternalFunctionDefinitionRef,
+    pub function_expression: Box<Expression>,
 }
 
-impl Debug for ResolvedInternalFunctionCall {
+impl Debug for InternalFunctionCall {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -527,10 +530,10 @@ impl Debug for ResolvedInternalFunctionCall {
 }
 
 #[derive(Debug)]
-pub struct ResolvedExternalFunctionCall {
-    pub arguments: Vec<ResolvedArgumentExpressionOrLocation>,
-    pub function_definition: ResolvedExternalFunctionDefinitionRef,
-    pub function_expression: Box<ResolvedExpression>,
+pub struct ExternalFunctionCall {
+    pub arguments: Vec<ArgumentExpressionOrLocation>,
+    pub function_definition: ExternalFunctionDefinitionRef,
+    pub function_expression: Box<Expression>,
 }
 
 #[must_use]
@@ -568,88 +571,80 @@ pub fn comma_tuple_ref<K: Display, V: Display>(values: &[(&K, &V)]) -> String {
 }
 
 #[derive(Debug)]
-pub struct ResolvedMemberCall {
-    pub function: ResolvedFunctionRef,
-    pub arguments: Vec<ResolvedArgumentExpressionOrLocation>,
+pub struct MemberCall {
+    pub function: FunctionRef,
+    pub arguments: Vec<ArgumentExpressionOrLocation>,
 }
 
-#[derive(Debug)]
-pub struct ResolvedStructTypeField {
-    pub struct_type_ref: ResolvedStructTypeRef,
-    pub field_name: ResolvedNode,
-    pub index: usize,
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct StructTypeField {
+    pub identifier: Option<Node>,
+    pub field_type: Type,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct ResolvedAnonymousStructFieldType {
-    pub identifier: Option<ResolvedNode>,
-
-    pub field_type: ResolvedType,
-}
-
-impl Display for ResolvedAnonymousStructFieldType {
+impl Display for StructTypeField {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         write!(f, "{:?}:{}", self.identifier, self.field_type)
     }
 }
 
 #[derive(Debug)]
-pub struct ResolvedMapIndexLookup {
-    pub map_type: ResolvedType,
-    pub item_type: ResolvedType,
-    pub map_type_ref: ResolvedMapTypeRef,
-    pub index_expression: Box<ResolvedExpression>,
-    pub map_expression: Box<ResolvedExpression>,
+pub struct MapIndexLookup {
+    pub map_type: Type,
+    pub item_type: Type,
+    pub map_type_ref: MapTypeRef,
+    pub index_expression: Box<Expression>,
+    pub map_expression: Box<Expression>,
 }
 
 #[derive(Debug)]
-pub struct ResolvedArrayItem {
-    pub item_type: ResolvedType,
-    pub int_expression: ResolvedExpression,
-    pub array_expression: ResolvedExpression,
-    pub array_type: ResolvedType,
+pub struct ArrayItem {
+    pub item_type: Type,
+    pub int_expression: Expression,
+    pub array_expression: Expression,
+    pub array_type: Type,
 }
 
-pub type ResolvedArrayItemRef = Rc<ResolvedArrayItem>;
+pub type ArrayItemRef = Rc<ArrayItem>;
 
 #[derive(Debug)]
-pub enum ResolvedPrecisionType {
+pub enum PrecisionType {
     Float,
     String,
 }
 
 #[derive(Debug)]
-pub enum ResolvedFormatSpecifierKind {
-    LowerHex,                                            // :x
-    UpperHex,                                            // :X
-    Binary,                                              // :b
-    Float,                                               // :f
-    Precision(u32, ResolvedNode, ResolvedPrecisionType), // :..2f or :..5s
+pub enum FormatSpecifierKind {
+    LowerHex,                            // :x
+    UpperHex,                            // :X
+    Binary,                              // :b
+    Float,                               // :f
+    Precision(u32, Node, PrecisionType), // :..2f or :..5s
 }
 
 #[derive(Debug)]
-pub struct ResolvedFormatSpecifier {
-    pub node: ResolvedNode,
-    pub kind: ResolvedFormatSpecifierKind,
+pub struct FormatSpecifier {
+    pub node: Node,
+    pub kind: FormatSpecifierKind,
 }
 
 #[derive(Debug)]
-pub enum ResolvedStringPart {
-    Literal(ResolvedNode, String),
-    Interpolation(ResolvedExpression, Option<ResolvedFormatSpecifier>),
+pub enum StringPart {
+    Literal(Node, String),
+    Interpolation(Expression, Option<FormatSpecifier>),
 }
 
-pub type ResolvedFunctionRef = Rc<ResolvedFunction>;
+pub type FunctionRef = Rc<Function>;
 
 #[derive(Debug, Eq, PartialEq)]
-pub enum ResolvedFunction {
-    Internal(ResolvedInternalFunctionDefinitionRef),
-    External(ResolvedExternalFunctionDefinitionRef),
+pub enum Function {
+    Internal(InternalFunctionDefinitionRef),
+    External(ExternalFunctionDefinitionRef),
 }
 
-impl ResolvedFunction {
+impl Function {
     #[must_use]
-    pub fn name(&self) -> Option<&ResolvedNode> {
+    pub fn name(&self) -> Option<&Node> {
         match self {
             Self::Internal(x) => Some(&x.name.0),
             Self::External(y) => y.name.as_ref(),
@@ -657,15 +652,15 @@ impl ResolvedFunction {
     }
 
     #[must_use]
-    pub fn node(&self) -> ResolvedNode {
+    pub fn node(&self) -> Node {
         match self {
             Self::Internal(x) => x.name.0.clone(),
-            Self::External(_y) => ResolvedNode::new_unknown(),
+            Self::External(_y) => Node::new_unknown(),
         }
     }
 
     #[must_use]
-    pub fn signature(&self) -> &FunctionTypeSignature {
+    pub fn signature(&self) -> &Signature {
         match self {
             Self::Internal(internal) => &internal.signature,
             Self::External(external) => &external.signature,
@@ -674,64 +669,61 @@ impl ResolvedFunction {
 }
 
 #[derive(Debug)]
-pub struct ResolvedBooleanExpression {
+pub struct BooleanExpression {
     #[allow(unused)]
-    pub expression: Box<ResolvedExpression>,
+    pub expression: Box<Expression>,
 }
 
 #[derive(Debug)]
-pub struct ResolvedMatch {
-    pub arms: Vec<ResolvedMatchArm>,
-    pub expression: Box<ResolvedExpression>,
+pub struct Match {
+    pub arms: Vec<MatchArm>,
+    pub expression: Box<Expression>,
 }
 
 #[derive(Debug)]
-pub struct ResolvedMatchArm {
+pub struct MatchArm {
     #[allow(unused)]
-    pub pattern: ResolvedPattern,
-    pub expression: Box<ResolvedExpression>,
-    pub expression_type: ResolvedType,
+    pub pattern: Pattern,
+    pub expression: Box<Expression>,
+    pub expression_type: Type,
 }
 
 #[derive(Debug)]
-pub enum ResolvedPattern {
-    Normal(ResolvedNormalPattern, Option<ResolvedBooleanExpression>),
-    Wildcard(ResolvedNode),
+pub enum Pattern {
+    Normal(NormalPattern, Option<BooleanExpression>),
+    Wildcard(Node),
 }
 
 #[derive(Debug)]
-pub enum ResolvedNormalPattern {
-    PatternList(Vec<ResolvedPatternElement>),
-    EnumPattern(
-        ResolvedEnumVariantTypeRef,
-        Option<Vec<ResolvedPatternElement>>,
-    ),
-    Literal(ResolvedLiteral),
+pub enum NormalPattern {
+    PatternList(Vec<PatternElement>),
+    EnumPattern(EnumVariantTypeRef, Option<Vec<PatternElement>>),
+    Literal(Literal),
 }
 
 #[derive(Debug)]
-pub enum ResolvedPatternElement {
-    Variable(ResolvedVariableRef),
-    VariableWithFieldIndex(ResolvedVariableRef, usize),
-    Wildcard(ResolvedNode),
+pub enum PatternElement {
+    Variable(VariableRef),
+    VariableWithFieldIndex(VariableRef, usize),
+    Wildcard(Node),
 }
 
 #[derive(Debug)]
-pub struct ResolvedIterable {
-    pub key_type: Option<ResolvedType>, // It does not have to support a key type
-    pub value_type: ResolvedType,
+pub struct Iterable {
+    pub key_type: Option<Type>, // It does not have to support a key type
+    pub value_type: Type,
 
-    pub resolved_expression: Box<ResolvedMutOrImmutableExpression>,
+    pub resolved_expression: Box<MutOrImmutableExpression>,
 }
 
 #[derive(Debug)]
-pub struct ResolvedStructInstantiation {
-    pub source_order_expressions: Vec<(usize, ResolvedExpression)>,
-    pub struct_type_ref: ResolvedStructTypeRef,
+pub struct StructInstantiation {
+    pub source_order_expressions: Vec<(usize, Expression)>,
+    pub struct_type_ref: StructTypeRef,
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub enum ResolvedCompoundOperatorKind {
+pub enum CompoundOperatorKind {
     Add,
     Sub,
     Mul,
@@ -740,20 +732,20 @@ pub enum ResolvedCompoundOperatorKind {
 }
 
 #[derive(Debug)]
-pub struct ResolvedCompoundOperator {
-    pub node: ResolvedNode,
-    pub kind: ResolvedCompoundOperatorKind,
+pub struct CompoundOperator {
+    pub node: Node,
+    pub kind: CompoundOperatorKind,
 }
 
 #[derive(Debug)]
-pub struct ResolvedVariableCompoundAssignment {
-    pub variable_ref: ResolvedVariableRef, // compound only support single variable
-    pub expression: Box<ResolvedExpression>,
-    pub compound_operator: ResolvedCompoundOperator,
+pub struct VariableCompoundAssignment {
+    pub variable_ref: VariableRef, // compound only support single variable
+    pub expression: Box<Expression>,
+    pub compound_operator: CompoundOperator,
 }
 
-pub fn create_rust_type(name: &str, type_number: TypeNumber) -> ResolvedRustTypeRef {
-    let rust_type = ResolvedRustType {
+pub fn create_rust_type(name: &str, type_number: TypeNumber) -> ExternalTypeRef {
+    let rust_type = ExternalType {
         type_name: name.to_string(),
         number: type_number,
     };
@@ -761,68 +753,66 @@ pub fn create_rust_type(name: &str, type_number: TypeNumber) -> ResolvedRustType
 }
 
 #[derive(Debug)]
-pub struct ResolvedGuard {
-    pub condition: Option<ResolvedBooleanExpression>,
-    pub result: ResolvedExpression,
+pub struct Guard {
+    pub condition: Option<BooleanExpression>,
+    pub result: Expression,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub enum ResolvedRangeMode {
+pub enum RangeMode {
     Inclusive,
     Exclusive,
 }
 
 #[derive(Debug)]
-pub struct ResolvedPostfix {
-    pub node: ResolvedNode,
-    pub ty: ResolvedType,
-    pub kind: ResolvedPostfixKind,
+pub struct Postfix {
+    pub node: Node,
+    pub ty: Type,
+    pub kind: PostfixKind,
 }
 
 #[derive(Debug)]
-pub struct ResolvedRange {
-    pub min: ResolvedExpression,
-    pub max: ResolvedExpression,
-    pub mode: ResolvedRangeMode,
+pub struct Range {
+    pub min: Expression,
+    pub max: Expression,
+    pub mode: RangeMode,
 }
 
 #[derive(Debug)]
-pub enum ResolvedPostfixKind {
-    StructField(ResolvedStructTypeRef, usize),
-    ArrayIndex(ResolvedArrayTypeRef, ResolvedExpression),
-    ArrayRangeIndex(ResolvedArrayTypeRef, ResolvedRange),
-    StringIndex(ResolvedExpression),
-    StringRangeIndex(ResolvedRange),
-    MapIndex(ResolvedMapTypeRef, ResolvedExpression),
-    RustTypeIndexRef(ResolvedRustTypeRef, ResolvedExpression),
-    MemberCall(
-        ResolvedFunctionRef,
-        Vec<ResolvedArgumentExpressionOrLocation>,
-    ),
-    FunctionCall(Vec<ResolvedArgumentExpressionOrLocation>),
+pub enum PostfixKind {
+    StructField(StructTypeRef, usize),
+    ArrayIndex(ArrayTypeRef, Expression),
+    ArrayRangeIndex(ArrayTypeRef, Range),
+    StringIndex(Expression),
+    StringRangeIndex(Range),
+    MapIndex(MapTypeRef, Expression),
+    ExternalTypeIndexRef(ExternalTypeRef, Expression),
+    MemberCall(FunctionRef, Vec<ArgumentExpressionOrLocation>),
+    FunctionCall(Vec<ArgumentExpressionOrLocation>),
     OptionUnwrap, // ? operator
-    NoneCoalesce(ResolvedExpression),
+    NoneCoalesce(Expression),
 
     // --- sparse built in
     // TODO: Have a better interface for these "engine" member calls
-    SparseAdd(Box<ResolvedExpression>),
-    SparseRemove(Box<ResolvedExpression>),
-    SparseAccess(Box<ResolvedExpression>),
+    SparseAdd(Box<Expression>),
+    SparseRemove(Box<Expression>),
+    SparseAccess(Box<Expression>),
 
-    ArrayRemoveIndex(Box<ResolvedExpression>),
+    ArrayRemoveIndex(Box<Expression>),
+    ArrayAdd(Box<Expression>),
     ArrayClear,
 
     // Map built in
-    MapRemove(Box<ResolvedExpression>, ResolvedMapTypeRef),
-    MapHas(Box<ResolvedExpression>),
+    MapRemove(Box<Expression>, MapTypeRef),
+    MapHas(Box<Expression>),
 
     // Integer built in
     IntAbs,
     IntRnd,
     IntToFloat,
-    IntClamp(Box<ResolvedExpression>, Box<ResolvedExpression>),
-    IntMin(Box<ResolvedExpression>),
-    IntMax(Box<ResolvedExpression>),
+    IntClamp(Box<Expression>, Box<Expression>),
+    IntMin(Box<Expression>),
+    IntMax(Box<Expression>),
 
     // Float built in
     FloatRound,
@@ -834,242 +824,210 @@ pub enum ResolvedPostfixKind {
     FloatSin,
     FloatAcos,
     FloatAsin,
-    FloatAtan2(Box<ResolvedExpression>),
+    FloatAtan2(Box<Expression>),
     FloatSqrt,
-    FloatClamp(Box<ResolvedExpression>, Box<ResolvedExpression>),
-    FloatMin(Box<ResolvedExpression>),
-    FloatMax(Box<ResolvedExpression>),
+    FloatClamp(Box<Expression>, Box<Expression>),
+    FloatMin(Box<Expression>),
+    FloatMax(Box<Expression>),
 
     // String built in
     StringLen,
 
     // Tuple built in
     Tuple2FloatMagnitude,
+    ArrayLen,
+    ArrayIsEmpty,
 }
 
 #[derive(Debug)]
-pub enum ResolvedLocationAccessKind {
-    FieldIndex(ResolvedStructTypeRef, usize),
-    ArrayIndex(ResolvedArrayTypeRef, ResolvedExpression),
-    ArrayRange(ResolvedArrayTypeRef, ResolvedRange),
-    StringIndex(ResolvedExpression),
-    StringRange(ResolvedRange),
-    MapIndex(ResolvedMapTypeRef, ResolvedExpression),
-    MapIndexInsertIfNonExisting(ResolvedMapTypeRef, ResolvedExpression),
-    RustTypeIndex(ResolvedRustTypeRef, ResolvedExpression),
+pub enum LocationAccessKind {
+    FieldIndex(StructTypeRef, usize),
+    ArrayIndex(ArrayTypeRef, Expression),
+    ArrayRange(ArrayTypeRef, Range),
+    StringIndex(Expression),
+    StringRange(Range),
+    MapIndex(MapTypeRef, Expression),
+    MapIndexInsertIfNonExisting(MapTypeRef, Expression),
+    ExternalTypeIndex(ExternalTypeRef, Expression),
 }
 
 #[derive(Debug)]
-pub struct ResolvedLocationAccess {
-    pub node: ResolvedNode,
-    pub ty: ResolvedType,
-    pub kind: ResolvedLocationAccessKind,
+pub struct LocationAccess {
+    pub node: Node,
+    pub ty: Type,
+    pub kind: LocationAccessKind,
 }
 
 #[derive(Debug)]
-pub struct ResolvedSingleLocationExpression {
-    pub kind: ResolvedSingleLocationExpressionKind,
-    pub node: ResolvedNode,
-    pub ty: ResolvedType,
+pub struct SingleLocationExpression {
+    pub kind: SingleLocationExpressionKind,
+    pub node: Node,
+    pub ty: Type,
 
-    pub starting_variable: ResolvedVariableRef,
-    pub access_chain: Vec<ResolvedLocationAccess>,
+    pub starting_variable: VariableRef,
+    pub access_chain: Vec<LocationAccess>,
 }
 
 #[derive(Debug)]
-pub struct ResolvedSingleMutLocationExpression(pub ResolvedSingleLocationExpression);
+pub struct SingleMutLocationExpression(pub SingleLocationExpression);
 
 #[derive(Debug)]
-pub enum ResolvedSingleLocationExpressionKind {
+pub enum SingleLocationExpressionKind {
     MutVariableRef,
-    MutStructFieldRef(ResolvedStructTypeRef, usize),
-    MutArrayIndexRef(ResolvedArrayTypeRef),
-    MutMapIndexRef(ResolvedMapTypeRef),
-    MutRustTypeIndexRef(ResolvedRustTypeRef),
+    MutStructFieldRef(StructTypeRef, usize),
+    MutArrayIndexRef(ArrayTypeRef),
+    MutMapIndexRef(MapTypeRef),
+    MutExternalTypeIndexRef(ExternalTypeRef),
 }
 
 #[derive(Debug)]
-pub struct ResolvedSliceLocationExpression {
-    pub start: Box<ResolvedExpression>,
-    pub range_start: Box<ResolvedExpression>,
-    pub range_end: Box<ResolvedExpression>,
-    pub mode: ResolvedRangeMode,
-    pub ty: ResolvedType,
+pub struct SliceLocationExpression {
+    pub start: Box<Expression>,
+    pub range_start: Box<Expression>,
+    pub range_end: Box<Expression>,
+    pub mode: RangeMode,
+    pub ty: Type,
 }
 
 #[derive(Debug)]
-pub struct ResolvedMutOrImmutableExpression {
-    pub expression_or_location: ResolvedArgumentExpressionOrLocation,
-    pub is_mutable: Option<ResolvedNode>,
+pub struct MutOrImmutableExpression {
+    pub expression_or_location: ArgumentExpressionOrLocation,
+    pub is_mutable: Option<Node>,
 }
 
-impl ResolvedMutOrImmutableExpression {}
+impl MutOrImmutableExpression {}
 
-impl ResolvedMutOrImmutableExpression {
-    pub fn expect_immutable(self) -> Result<ResolvedExpression, SemanticError> {
+impl MutOrImmutableExpression {
+    pub fn expect_immutable(self) -> Result<Expression, SemanticError> {
         match self.expression_or_location {
-            ResolvedArgumentExpressionOrLocation::Expression(expr) => Ok(expr),
-            ResolvedArgumentExpressionOrLocation::Location(_) => {
-                Err(SemanticError::WasNotImmutable)
-            }
+            ArgumentExpressionOrLocation::Expression(expr) => Ok(expr),
+            ArgumentExpressionOrLocation::Location(_) => Err(SemanticError::WasNotImmutable),
         }
     }
 
-    pub fn expect_immutable_ref(&self) -> Result<&ResolvedExpression, SemanticError> {
+    pub fn expect_immutable_ref(&self) -> Result<&Expression, SemanticError> {
         match &self.expression_or_location {
-            ResolvedArgumentExpressionOrLocation::Expression(expr) => Ok(expr),
-            ResolvedArgumentExpressionOrLocation::Location(_) => {
-                Err(SemanticError::WasNotImmutable)
-            }
+            ArgumentExpressionOrLocation::Expression(expr) => Ok(expr),
+            ArgumentExpressionOrLocation::Location(_) => Err(SemanticError::WasNotImmutable),
         }
     }
 
-    pub fn ty(&self) -> &ResolvedType {
+    pub fn ty(&self) -> &Type {
         match &self.expression_or_location {
-            ResolvedArgumentExpressionOrLocation::Expression(expr) => &expr.ty,
-            ResolvedArgumentExpressionOrLocation::Location(loc) => &loc.ty,
+            ArgumentExpressionOrLocation::Expression(expr) => &expr.ty,
+            ArgumentExpressionOrLocation::Location(loc) => &loc.ty,
         }
     }
 }
 
 #[derive(Debug)]
-pub enum ResolvedArgumentExpressionOrLocation {
-    Expression(ResolvedExpression),
-    Location(ResolvedSingleLocationExpression),
+pub enum ArgumentExpressionOrLocation {
+    Expression(Expression),
+    Location(SingleLocationExpression),
 }
 
 #[derive()]
-pub struct ResolvedExpression {
-    pub ty: ResolvedType,
-    pub node: ResolvedNode,
-    pub kind: ResolvedExpressionKind,
+pub struct Expression {
+    pub ty: Type,
+    pub node: Node,
+    pub kind: ExpressionKind,
 }
 
-impl Debug for ResolvedExpression {
+impl Debug for Expression {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         write!(f, "{:?}{},{:?}", self.node, self.ty, self.kind)
     }
 }
 
 #[derive(Debug)]
-pub struct ResolvedWhenBinding {
-    pub variable: ResolvedVariableRef,
-    pub expr: ResolvedMutOrImmutableExpression,
+pub struct WhenBinding {
+    pub variable: VariableRef,
+    pub expr: MutOrImmutableExpression,
 }
 
 #[derive(Debug)]
-pub enum ResolvedExpressionKind {
+pub enum ExpressionKind {
     // Access Lookup values
-    ConstantAccess(ResolvedConstantRef),
-    VariableAccess(ResolvedVariableRef),
-    FieldAccess(Box<ResolvedExpression>, ResolvedStructTypeField),
+    ConstantAccess(ConstantRef),
+    VariableAccess(VariableRef),
+    FieldAccess(Box<Expression>, usize),
     ArrayAccess(
-        Box<ResolvedExpression>,
-        ResolvedArrayTypeRef,
-        Box<ResolvedExpression>, // int index lookup
+        Box<Expression>,
+        ArrayTypeRef,
+        Box<Expression>, // int index lookup
     ), // Read from an array: arr[3]
-    MapIndexAccess(
-        Box<ResolvedExpression>,
-        ResolvedMapTypeRef,
-        Box<ResolvedExpression>,
-    ),
-    StringRangeAccess(Box<ResolvedExpression>, Box<ResolvedRange>),
-    ArrayRangeAccess(Box<ResolvedExpression>, Box<ResolvedRange>),
+    MapIndexAccess(Box<Expression>, MapTypeRef, Box<Expression>),
+    StringRangeAccess(Box<Expression>, Box<Range>),
+    ArrayRangeAccess(Box<Expression>, Box<Range>),
 
     // ----
-    InternalFunctionAccess(ResolvedInternalFunctionDefinitionRef),
-    ExternalFunctionAccess(ResolvedExternalFunctionDefinitionRef),
+    InternalFunctionAccess(InternalFunctionDefinitionRef),
+    ExternalFunctionAccess(ExternalFunctionDefinitionRef),
 
     // Adding to a collection
     MapAssignment(
-        Box<ResolvedSingleMutLocationExpression>,
-        Box<ResolvedExpression>,
-        Box<ResolvedExpression>,
+        Box<SingleMutLocationExpression>,
+        Box<Expression>,
+        Box<Expression>,
     ), // Motivation: Can not use location since adding is more complex
 
     // Operators
-    BinaryOp(ResolvedBinaryOperator),
-    UnaryOp(ResolvedUnaryOperator),
-    PostfixChain(Box<ResolvedExpression>, Vec<ResolvedPostfix>),
+    BinaryOp(BinaryOperator),
+    UnaryOp(UnaryOperator),
+    PostfixChain(Box<Expression>, Vec<Postfix>),
 
     // Conversion
     // the `?` operator. unwraps the value, unless it is none
-    //NoneCoalesceOperator(Box<ResolvedExpression>, Box<ResolvedExpression>),
-    CoerceOptionToBool(Box<ResolvedExpression>),
+    //NoneCoalesceOperator(Box<Expression>, Box<Expression>),
+    CoerceOptionToBool(Box<Expression>),
 
     // Calls
 
     // For calls from returned function values
     FunctionCall(
-        FunctionTypeSignature,
-        Box<ResolvedExpression>,
-        Vec<ResolvedArgumentExpressionOrLocation>,
+        Signature,
+        Box<Expression>,
+        Vec<ArgumentExpressionOrLocation>,
     ),
 
-    MemberCall(ResolvedMemberCall),
-    InterpolatedString(Vec<ResolvedStringPart>),
+    MemberCall(MemberCall),
+    InterpolatedString(Vec<StringPart>),
 
     // Constructing
-    VariableDefinition(ResolvedVariableRef, Box<ResolvedMutOrImmutableExpression>), // First time assignment
-    VariableReassignment(ResolvedVariableRef, Box<ResolvedMutOrImmutableExpression>),
+    VariableDefinition(VariableRef, Box<MutOrImmutableExpression>), // First time assignment
+    VariableReassignment(VariableRef, Box<MutOrImmutableExpression>),
 
-    StructInstantiation(ResolvedStructInstantiation),
-    Array(ResolvedArrayInstantiation),
-    Tuple(Vec<ResolvedExpression>),
-    Literal(ResolvedLiteral),
-    Option(Option<Box<ResolvedExpression>>), // Wrapping an expression in `Some()`
-    Range(
-        Box<ResolvedExpression>,
-        Box<ResolvedExpression>,
-        ResolvedRangeMode,
-    ),
+    StructInstantiation(StructInstantiation),
+    Array(ArrayInstantiation),
+    Tuple(Vec<Expression>),
+    Literal(Literal),
+    Option(Option<Box<Expression>>), // Wrapping an expression in `Some()`
+    Range(Box<Expression>, Box<Expression>, RangeMode),
 
     // Control
-    ForLoop(
-        ResolvedForPattern,
-        ResolvedIterable,
-        Box<ResolvedExpression>,
-    ),
-    WhileLoop(ResolvedBooleanExpression, Box<ResolvedExpression>),
-    Return(Option<Box<ResolvedExpression>>),
+    ForLoop(ForPattern, Iterable, Box<Expression>),
+    WhileLoop(BooleanExpression, Box<Expression>),
+    Return(Option<Box<Expression>>),
     Break,
     Continue, //
 
-    Block(Vec<ResolvedExpression>),
+    Block(Vec<Expression>),
 
     // Match and compare
-    Match(ResolvedMatch),
-    Guard(Vec<ResolvedGuard>),
-    If(
-        ResolvedBooleanExpression,
-        Box<ResolvedExpression>,
-        Option<Box<ResolvedExpression>>,
-    ),
+    Match(Match),
+    Guard(Vec<Guard>),
+    If(BooleanExpression, Box<Expression>, Option<Box<Expression>>),
 
-    When(
-        Vec<ResolvedWhenBinding>,
-        Box<ResolvedExpression>,
-        Option<Box<ResolvedExpression>>,
-    ),
+    When(Vec<WhenBinding>, Box<Expression>, Option<Box<Expression>>),
 
-    TupleDestructuring(
-        Vec<ResolvedVariableRef>,
-        ResolvedTupleTypeRef,
-        Box<ResolvedExpression>,
-    ),
+    TupleDestructuring(Vec<VariableRef>, TupleTypeRef, Box<Expression>),
 
-    Assignment(
-        Box<ResolvedSingleMutLocationExpression>,
-        Box<ResolvedExpression>,
-    ),
-    AssignmentSlice(
-        Box<ResolvedSliceLocationExpression>,
-        Box<ResolvedExpression>,
-    ),
+    Assignment(Box<SingleMutLocationExpression>, Box<Expression>),
+    AssignmentSlice(Box<SliceLocationExpression>, Box<Expression>),
     CompoundAssignment(
-        ResolvedSingleMutLocationExpression,
-        ResolvedCompoundOperatorKind,
-        Box<ResolvedExpression>,
+        SingleMutLocationExpression,
+        CompoundOperatorKind,
+        Box<Expression>,
     ),
 
     // --------------------------------------------------------------------
@@ -1077,48 +1035,45 @@ pub enum ResolvedExpressionKind {
     // --------------------------------------------------------------------
 
     // array built in
-    ArrayExtend(ResolvedSingleMutLocationExpression, Box<ResolvedExpression>), // Extends an array with another array
-    ArrayPush(ResolvedSingleMutLocationExpression, Box<ResolvedExpression>), // Adds an item to an array
+    ArrayExtend(SingleMutLocationExpression, Box<Expression>), // Extends an array with another array
+    ArrayPush(SingleMutLocationExpression, Box<Expression>),   // Adds an item to an array
 
     // Sparse Built in
-    SparseNew(ResolvedRustTypeRef, ResolvedType), // item type
+    SparseNew(ExternalTypeRef, Type), // item type
 }
 
 #[derive(Debug)]
-pub struct ResolvedStringConst(pub ResolvedNode);
+pub struct StringConst(pub Node);
 
 #[derive(Debug)]
-pub enum ResolvedLiteral {
+pub enum Literal {
     FloatLiteral(Fp),
     NoneLiteral,
     IntLiteral(i32),
     StringLiteral(String),
     BoolLiteral(bool),
 
-    EnumVariantLiteral(ResolvedEnumVariantTypeRef, ResolvedEnumLiteralData),
-    TupleLiteral(ResolvedTupleTypeRef, Vec<ResolvedExpression>),
-    Array(ResolvedArrayTypeRef, Vec<ResolvedExpression>),
-    Map(
-        ResolvedMapTypeRef,
-        Vec<(ResolvedExpression, ResolvedExpression)>,
-    ),
+    EnumVariantLiteral(EnumVariantTypeRef, EnumLiteralData),
+    TupleLiteral(TupleTypeRef, Vec<Expression>),
+    Array(ArrayTypeRef, Vec<Expression>),
+    Map(MapTypeRef, Vec<(Expression, Expression)>),
 }
 
 #[derive(Debug)]
-pub struct ResolvedArrayInstantiation {
-    pub expressions: Vec<ResolvedExpression>,
-    pub item_type: ResolvedType,
-    pub array_type: ResolvedType,
-    pub array_type_ref: ResolvedArrayTypeRef,
+pub struct ArrayInstantiation {
+    pub expressions: Vec<Expression>,
+    pub item_type: Type,
+    pub array_type: Type,
+    pub array_type_ref: ArrayTypeRef,
 }
 
 #[derive(Debug)]
-pub enum ResolvedForPattern {
-    Single(ResolvedVariableRef),
-    Pair(ResolvedVariableRef, ResolvedVariableRef),
+pub enum ForPattern {
+    Single(VariableRef),
+    Pair(VariableRef, VariableRef),
 }
 
-impl ResolvedForPattern {
+impl ForPattern {
     #[must_use]
     pub fn is_mutable(&self) -> bool {
         match self {
@@ -1128,58 +1083,54 @@ impl ResolvedForPattern {
     }
 }
 
-impl Display for ResolvedForPattern {
+impl Display for ForPattern {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "resolved_for_pattern")
     }
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct ResolvedModulePathItem(pub ResolvedNode);
+pub struct ModulePathItem(pub Node);
 
-pub type ResolvedStructTypeRef = Rc<RefCell<ResolvedStructType>>;
+pub type StructTypeRef = Rc<RefCell<StructType>>;
 
-pub fn same_struct_ref(a: &ResolvedStructTypeRef, b: &ResolvedStructTypeRef) -> bool {
+pub fn same_struct_ref(a: &StructTypeRef, b: &StructTypeRef) -> bool {
     Rc::ptr_eq(a, b)
 }
 
 pub type TypeNumber = u32;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct ResolvedLocalTypeIdentifier(pub ResolvedNode);
+pub struct LocalTypeIdentifier(pub Node);
 
 #[derive(Debug)]
-pub struct ResolvedConstant {
-    pub name: ResolvedNode,
+pub struct Constant {
+    pub name: Node,
     pub assigned_name: String,
     pub id: ConstantId,
-    pub expr: ResolvedExpression,
-    pub resolved_type: ResolvedType,
+    pub expr: Expression,
+    pub resolved_type: Type,
 }
-pub type ResolvedConstantRef = Rc<ResolvedConstant>;
+pub type ConstantRef = Rc<Constant>;
 
 #[derive(Eq, PartialEq)]
-pub struct ResolvedStructType {
-    pub name: ResolvedNode,
+pub struct StructType {
+    pub name: Node,
     pub assigned_name: String,
-    pub anon_struct_type: ResolvedAnonymousStructType,
+    pub anon_struct_type: AnonymousStructType,
 
-    // Resolved
-    pub functions: SeqMap<String, ResolvedFunctionRef>,
+    //
+    pub functions: SeqMap<String, FunctionRef>,
 }
 
-impl Debug for ResolvedStructType {
+impl Debug for StructType {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "struct {:?}", self.assigned_name)
     }
 }
 
-impl ResolvedStructType {
-    pub fn new(
-        name: ResolvedNode,
-        assigned_name: &str,
-        anon_struct_type: ResolvedAnonymousStructType,
-    ) -> Self {
+impl StructType {
+    pub fn new(name: Node, assigned_name: &str, anon_struct_type: AnonymousStructType) -> Self {
         Self {
             //defined_in_module,
             anon_struct_type,
@@ -1195,113 +1146,113 @@ impl ResolvedStructType {
             .get_index(&field_name.to_string())
     }
 
-    pub fn name(&self) -> &ResolvedNode {
+    pub fn name(&self) -> &Node {
         &self.name
     }
 
     pub fn add_external_member_function(
         &mut self,
-        external_func: ResolvedExternalFunctionDefinitionRef,
+        external_func: ExternalFunctionDefinitionRef,
     ) -> Result<(), SeqMapError> {
         let name = external_func.assigned_name.clone();
-        let func = ResolvedFunction::External(external_func);
+        let func = Function::External(external_func);
         self.functions.insert(name, func.into())?;
         Ok(())
     }
 
-    pub fn get_member_function(&self, function_name: &str) -> Option<&ResolvedFunctionRef> {
+    pub fn get_member_function(&self, function_name: &str) -> Option<&FunctionRef> {
         self.functions.get(&function_name.to_string())
     }
 
     pub fn get_internal_member_function(
         &self,
         function_name: &str,
-    ) -> Option<ResolvedInternalFunctionDefinitionRef> {
+    ) -> Option<InternalFunctionDefinitionRef> {
         let func = self.functions.get(&function_name.to_string())?;
         match &**func {
-            ResolvedFunction::Internal(fn_def) => Some(fn_def.clone()),
+            Function::Internal(fn_def) => Some(fn_def.clone()),
             _ => None,
         }
     }
 }
 
-pub type ResolvedOptionTypeRef = Rc<crate::ResolvedOptionType>;
+pub type OptionTypeRef = Rc<crate::OptionType>;
 
 #[derive(Debug)]
-pub struct ResolvedOptionType {
-    pub item_type: ResolvedType,
+pub struct OptionType {
+    pub item_type: Type,
 }
 
-pub type ResolvedArrayTypeRef = Rc<ResolvedArrayType>;
+pub type ArrayTypeRef = Rc<ArrayType>;
 
-pub fn same_array_ref(a: &ResolvedArrayTypeRef, b: &ResolvedArrayTypeRef) -> bool {
+pub fn same_array_ref(a: &ArrayTypeRef, b: &ArrayTypeRef) -> bool {
     Rc::ptr_eq(a, b)
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct ResolvedArrayType {
-    pub item_type: ResolvedType,
+pub struct ArrayType {
+    pub item_type: Type,
 }
 
-pub type ResolvedMapTypeRef = Rc<ResolvedMapType>;
+pub type MapTypeRef = Rc<MapType>;
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct ResolvedMapType {
-    pub key_type: ResolvedType,
-    pub value_type: ResolvedType,
+pub struct MapType {
+    pub key_type: Type,
+    pub value_type: Type,
 }
 
-pub type ResolvedEnumVariantStructTypeRef = Rc<ResolvedEnumVariantStructType>;
+pub type EnumVariantStructTypeRef = Rc<EnumVariantStructType>;
 
 #[derive(Clone, Eq, PartialEq)]
-pub struct ResolvedAnonymousStructType {
-    pub defined_fields: SeqMap<String, ResolvedAnonymousStructFieldType>,
+pub struct AnonymousStructType {
+    pub defined_fields: SeqMap<String, StructTypeField>,
 }
 
-impl Debug for ResolvedAnonymousStructType {
+impl Debug for AnonymousStructType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         write!(f, "{}", comma_seq(&self.defined_fields))
     }
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct ResolvedEnumVariantStructType {
-    pub common: ResolvedEnumVariantCommon,
-    pub anon_struct: ResolvedAnonymousStructType,
+pub struct EnumVariantStructType {
+    pub common: EnumVariantCommon,
+    pub anon_struct: AnonymousStructType,
 }
 
-pub type ResolvedEnumVariantTupleTypeRef = Rc<ResolvedEnumVariantTupleType>;
+pub type EnumVariantTupleTypeRef = Rc<EnumVariantTupleType>;
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct ResolvedEnumVariantTupleType {
-    pub common: ResolvedEnumVariantCommon,
-    pub fields_in_order: Vec<ResolvedType>,
+pub struct EnumVariantTupleType {
+    pub common: EnumVariantCommon,
+    pub fields_in_order: Vec<Type>,
 }
 
-pub type ResolvedTupleTypeRef = Rc<ResolvedTupleType>;
+pub type TupleTypeRef = Rc<TupleType>;
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct ResolvedTupleType(pub Vec<ResolvedType>);
+pub struct TupleType(pub Vec<Type>);
 
-impl ResolvedTupleType {
-    pub fn new(types: Vec<ResolvedType>) -> Self {
+impl TupleType {
+    pub fn new(types: Vec<Type>) -> Self {
         Self(types)
     }
 }
 
-pub type ResolvedEnumTypeRef = Rc<RefCell<ResolvedEnumType>>;
+pub type EnumTypeRef = Rc<RefCell<EnumType>>;
 
 #[derive(Eq, PartialEq)]
-pub struct ResolvedEnumType {
-    pub name: ResolvedLocalTypeIdentifier,
+pub struct EnumType {
+    pub name: LocalTypeIdentifier,
     pub assigned_name: String,
     pub module_path: Vec<String>,
     pub number: TypeNumber,
 
-    pub variants: SeqMap<String, ResolvedEnumVariantTypeRef>,
+    pub variants: SeqMap<String, EnumVariantTypeRef>,
 }
 
-impl Debug for ResolvedEnumType {
+impl Debug for EnumType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         write!(f, "{}", self.assigned_name)?;
         let s = comma(
@@ -1315,10 +1266,10 @@ impl Debug for ResolvedEnumType {
     }
 }
 
-impl ResolvedEnumType {
+impl EnumType {
     #[must_use]
     pub fn new(
-        name: ResolvedLocalTypeIdentifier,
+        name: LocalTypeIdentifier,
         assigned_name: &str,
         module_path: Vec<String>,
         number: TypeNumber,
@@ -1333,31 +1284,31 @@ impl ResolvedEnumType {
     }
 
     #[must_use]
-    pub const fn name(&self) -> &ResolvedLocalTypeIdentifier {
+    pub const fn name(&self) -> &LocalTypeIdentifier {
         &self.name
     }
 
-    pub fn get_variant(&self, name: &str) -> Option<&ResolvedEnumVariantTypeRef> {
+    pub fn get_variant(&self, name: &str) -> Option<&EnumVariantTypeRef> {
         self.variants.get(&name.to_string())
     }
 
-    pub fn get_variant_from_index(&self, index: usize) -> Option<&ResolvedEnumVariantTypeRef> {
+    pub fn get_variant_from_index(&self, index: usize) -> Option<&EnumVariantTypeRef> {
         Some(self.variants.values().collect::<Vec<_>>()[index])
     }
 }
 
-pub type ResolvedEnumVariantTypeRef = Rc<ResolvedEnumVariantType>;
+pub type EnumVariantTypeRef = Rc<EnumVariantType>;
 
 #[derive(Eq, PartialEq, Clone)]
-pub struct ResolvedEnumVariantCommon {
-    pub name: ResolvedLocalTypeIdentifier,
+pub struct EnumVariantCommon {
+    pub name: LocalTypeIdentifier,
     pub assigned_name: String,
     pub number: TypeNumber,
     pub container_index: u8,
-    pub owner: ResolvedEnumTypeRef,
+    pub owner: EnumTypeRef,
 }
 
-impl Debug for ResolvedEnumVariantCommon {
+impl Debug for EnumVariantCommon {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(
             f,
@@ -1369,43 +1320,43 @@ impl Debug for ResolvedEnumVariantCommon {
     }
 }
 
-pub type ResolvedEnumVariantStructFieldTypeRef = Rc<ResolvedEnumVariantStructFieldType>;
+pub type EnumVariantStructFieldTypeRef = Rc<EnumVariantStructFieldType>;
 
 #[derive(Debug)]
-pub struct ResolvedEnumVariantStructFieldType {
-    pub name: ResolvedLocalIdentifier,
-    pub enum_variant: ResolvedEnumVariantTypeRef,
-    pub resolved_type: ResolvedType,
+pub struct EnumVariantStructFieldType {
+    pub name: LocalIdentifier,
+    pub enum_variant: EnumVariantTypeRef,
+    pub resolved_type: Type,
 
     pub field_index: usize,
 }
 
-pub type ResolvedEnumVariantTupleFieldTypeRef = Rc<ResolvedEnumVariantTupleFieldType>;
+pub type EnumVariantTupleFieldTypeRef = Rc<EnumVariantTupleFieldType>;
 
 #[derive(Debug, Eq, PartialEq)]
-pub struct ResolvedEnumVariantTupleFieldType {
-    pub name: ResolvedLocalIdentifier,
-    pub enum_variant: ResolvedEnumVariantTypeRef,
-    pub resolved_type: ResolvedType,
+pub struct EnumVariantTupleFieldType {
+    pub name: LocalIdentifier,
+    pub enum_variant: EnumVariantTypeRef,
+    pub resolved_type: Type,
 
     pub field_index: usize,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct ResolvedEnumVariantSimpleType {
-    pub common: ResolvedEnumVariantCommon,
+pub struct EnumVariantSimpleType {
+    pub common: EnumVariantCommon,
 }
 
-pub type ResolvedEnumVariantSimpleTypeRef = Rc<ResolvedEnumVariantSimpleType>;
+pub type EnumVariantSimpleTypeRef = Rc<EnumVariantSimpleType>;
 
 #[derive(Clone, Eq, PartialEq)]
-pub enum ResolvedEnumVariantType {
-    Struct(ResolvedEnumVariantStructTypeRef),
-    Tuple(ResolvedEnumVariantTupleTypeRef),
-    Nothing(ResolvedEnumVariantSimpleTypeRef),
+pub enum EnumVariantType {
+    Struct(EnumVariantStructTypeRef),
+    Tuple(EnumVariantTupleTypeRef),
+    Nothing(EnumVariantSimpleTypeRef),
 }
-impl ResolvedEnumVariantType {
-    pub fn common(&self) -> &ResolvedEnumVariantCommon {
+impl EnumVariantType {
+    pub fn common(&self) -> &EnumVariantCommon {
         match self {
             Self::Tuple(tuple) => &tuple.common,
             Self::Struct(c) => &c.common,
@@ -1414,7 +1365,7 @@ impl ResolvedEnumVariantType {
     }
 }
 
-impl Debug for ResolvedEnumVariantType {
+impl Debug for EnumVariantType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         match self {
             Self::Struct(x) => write!(f, "{{ {x:?} }}"),
@@ -1425,46 +1376,39 @@ impl Debug for ResolvedEnumVariantType {
 }
 
 #[derive(Debug)]
-pub struct ResolvedImplMember {}
+pub struct ImplMember {}
 
 #[derive(Debug)]
-pub enum ResolvedUseItem {
-    Identifier(ResolvedNode),
-    TypeIdentifier(ResolvedNode),
+pub enum UseItem {
+    Identifier(Node),
+    TypeIdentifier(Node),
 }
 
 #[derive(Debug)]
-pub struct ResolvedUse {
-    pub path: Vec<ResolvedNode>,
-    pub items: Vec<ResolvedUseItem>,
-}
-
-#[derive(Debug)]
-pub enum ResolvedDefinition {
-    StructType(ResolvedStructTypeRef),
-    EnumType(ResolvedEnumTypeRef),
-    ImplType(ResolvedType),
-    FunctionDef(ResolvedFunction),
-    Alias(ResolvedType),
-    Comment(ResolvedNode),
-    Use(ResolvedUse),
-    Constant(ResolvedNode, ResolvedConstantRef),
+pub struct Use {
+    pub path: Vec<Node>,
+    pub items: Vec<UseItem>,
 }
 
 // Mutable part
 #[derive(Debug)]
-pub struct ResolvedProgramState {
-    pub array_types: Vec<ResolvedArrayTypeRef>,
+pub struct ProgramState {
+    pub array_types: Vec<ArrayTypeRef>,
     pub number: TypeNumber,
     pub external_function_number: ExternalFunctionId,
+    // It is just so we don't have to do another dendency check of the
+    // modules, we know that these constants have been
+    // evaluated in order already
+    pub constants_in_dependency_order: Vec<ConstantRef>,
 }
 
-impl ResolvedProgramState {
+impl ProgramState {
     pub fn new() -> Self {
         Self {
             array_types: Vec::new(),
             number: 0,
             external_function_number: 0,
+            constants_in_dependency_order: Vec::new(),
         }
     }
 
@@ -1480,13 +1424,13 @@ impl ResolvedProgramState {
 }
 
 #[derive()]
-pub enum ResolvedEnumLiteralData {
+pub enum EnumLiteralData {
     Nothing,
-    Tuple(Vec<ResolvedExpression>),
-    Struct(Vec<(usize, ResolvedExpression)>),
+    Tuple(Vec<Expression>),
+    Struct(Vec<(usize, Expression)>),
 }
 
-impl Debug for ResolvedEnumLiteralData {
+impl Debug for EnumLiteralData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         match self {
             Self::Nothing => Ok(()),

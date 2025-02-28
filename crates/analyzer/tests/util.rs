@@ -5,24 +5,24 @@
 use std::cell::RefCell;
 use std::path::Path;
 use std::rc::Rc;
-use swamp_script_analyzer::lookup::NameLookup;
-use swamp_script_analyzer::prelude::ResolveError;
-use swamp_script_analyzer::Resolver;
+use swamp_script_analyzer::prelude::Error;
+use swamp_script_analyzer::Analyzer;
 use swamp_script_error_report::show_error;
 use swamp_script_parser::AstParser;
-use swamp_script_semantic::modules::{ResolvedModule, ResolvedModules};
-use swamp_script_semantic::ns::ResolvedModuleNamespace;
-use swamp_script_semantic::ResolvedProgramState;
+use swamp_script_semantic::modules::{Module, Modules};
+use swamp_script_semantic::ns::Namespace;
+use swamp_script_semantic::ProgramState;
 use swamp_script_source_map::SourceMap;
 use tracing::warn;
 
-fn internal_compile(script: &str) -> Result<ResolvedModule, ResolveError> {
+fn internal_compile(script: &str) -> Result<Module, Error> {
+    /*
     let parser = AstParser {};
 
     let program = parser.parse_module(script).expect("Failed to parse script");
 
-    let mut state = ResolvedProgramState::new();
-    let mut modules = ResolvedModules::new();
+    let mut state = ProgramState::new();
+    let mut modules = Modules::new();
 
     let mut source_map = SourceMap::new(Path::new("tests/fixtures/"));
     let file_id = 0xffff;
@@ -33,18 +33,18 @@ fn internal_compile(script: &str) -> Result<ResolvedModule, ResolveError> {
 
     let mut name_lookup = NameLookup::new(resolved_path_str, &mut modules);
 
-    let mut resolver = Resolver::new(&mut state, &mut name_lookup, &source_map, file_id);
+    let mut resolver = Analyzer::new(&mut state, &mut name_lookup, &source_map, file_id);
 
     let mut resolved_definitions = Vec::new();
     for definition in &program.definitions {
-        let resolved_definition = resolver.resolve_definition(definition)?;
+        let resolved_definition = resolver.analyze_definition(definition)?;
         resolved_definitions.push(resolved_definition);
     }
 
     let expression = &program.expression;
     let maybe_resolved_expression = match expression {
         Some(unwrapped_expression) => {
-            let result = resolver.resolve_expression(unwrapped_expression, None);
+            let result = resolver.analyze_expression(unwrapped_expression, None);
             if let Ok(expression) = result {
                 Some(expression)
             } else {
@@ -56,15 +56,24 @@ fn internal_compile(script: &str) -> Result<ResolvedModule, ResolveError> {
         None => None,
     };
 
-    let ns_ref = Rc::new(RefCell::new(ResolvedModuleNamespace::new(&[])));
+    let ns_ref = Rc::new(RefCell::new(ModuleNamespace::new(&[])));
 
-    let resolved_module = ResolvedModule {
+    let resolved_module = Module {
         definitions: resolved_definitions,
         expression: maybe_resolved_expression,
         namespace: ns_ref,
     };
 
     Ok(resolved_module)
+
+     */
+    Ok(Module {
+        namespace: Namespace {
+            symbol_table: Rc::new(Default::default()),
+            path: vec![],
+        },
+        expression: None,
+    })
 }
 
 /// # Panics

@@ -1215,7 +1215,7 @@ if booster? {
 
          ",
         r"
-ResolveError { node: <59:1>, kind: IncompatibleTypes(Bool, Int) }
+Error { node: <59:1>, kind: IncompatibleTypes(Bool, Int) }
 ",
     );
 }
@@ -1292,7 +1292,7 @@ mut pos = Position { x: 10, y : 20 }
 Something::not_allowed(pos)
          ",
         r"
-        ResolveError { node: <128:3>, kind: VariableIsNotMutable }
+        Error { node: <128:3>, kind: VariableIsNotMutable }
         ",
     );
 }
@@ -1309,7 +1309,7 @@ while a < 3 {
 }
          ",
         r"
-        ResolveError { node: <128:3>, kind: VariableIsNotMutable }
+        Error { node: <128:3>, kind: VariableIsNotMutable }
         ",
     );
 }

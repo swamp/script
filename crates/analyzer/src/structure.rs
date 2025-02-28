@@ -2,27 +2,24 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use crate::err::{ResolveError, ResolveErrorKind};
-use crate::Resolver;
+use crate::err::{Error, ErrorKind};
+use crate::Analyzer;
 use seq_set::SeqSet;
-use swamp_script_ast::{FieldExpression, Node, QualifiedTypeIdentifier};
 use swamp_script_semantic::{
-    ResolvedAnonymousStructType, ResolvedArgumentExpressionOrLocation, ResolvedExpression,
-    ResolvedExpressionKind, ResolvedFunctionRef, ResolvedLocationAccess,
-    ResolvedLocationAccessKind, ResolvedMutOrImmutableExpression, ResolvedNode,
-    ResolvedSingleLocationExpression, ResolvedSingleLocationExpressionKind,
-    ResolvedSingleMutLocationExpression, ResolvedStructInstantiation, ResolvedStructTypeRef,
-    ResolvedType,
+    AnonymousStructType, ArgumentExpressionOrLocation, Expression, ExpressionKind, FunctionRef,
+    LocationAccess, LocationAccessKind, MutOrImmutableExpression, Node, SingleLocationExpression,
+    SingleLocationExpressionKind, SingleMutLocationExpression, StructInstantiation, StructTypeRef,
+    Type,
 };
 
-impl<'a> Resolver<'a> {
-    fn resolve_struct_init_calling_default(
+impl<'a> Analyzer<'a> {
+    fn analyze_struct_init_calling_default(
         &mut self,
-        function: &ResolvedFunctionRef,
-        struct_to_instantiate: ResolvedStructTypeRef,
-        source_order_expressions: Vec<(usize, ResolvedNode, ResolvedExpression)>,
-        node: &Node,
-    ) -> Result<ResolvedExpression, ResolveError> {
+        function: &FunctionRef,
+        struct_to_instantiate: StructTypeRef,
+        source_order_expressions: Vec<(usize, Node, Expression)>,
+        node: &swamp_script_ast::Node,
+    ) -> Result<Expression, Error> {
         let mut expressions = Vec::new();
 
         self.push_block_scope("struct_instantiation");
@@ -30,7 +27,7 @@ impl<'a> Resolver<'a> {
         let temp_var = self.create_local_variable_generated(
             "__generated",
             true,
-            &ResolvedType::Struct(struct_to_instantiate.clone()),
+            &Type::Struct(struct_to_instantiate.clone()),
         )?;
 
         // temp_var = StructType::default()
@@ -41,16 +38,14 @@ impl<'a> Resolver<'a> {
         let static_call = self.create_expr(default_call_kind, return_type, node);
 
         let expr = self.create_expr(
-            ResolvedExpressionKind::VariableDefinition(
+            ExpressionKind::VariableDefinition(
                 temp_var.clone(),
-                Box::new(ResolvedMutOrImmutableExpression {
-                    expression_or_location: ResolvedArgumentExpressionOrLocation::Expression(
-                        static_call,
-                    ),
+                Box::new(MutOrImmutableExpression {
+                    expression_or_location: ArgumentExpressionOrLocation::Expression(static_call),
                     is_mutable: None,
                 }),
             ),
-            ResolvedType::Unit,
+            Type::Unit,
             node,
         );
         expressions.push(expr);
@@ -63,19 +58,17 @@ impl<'a> Resolver<'a> {
 
             let field_expression_type = field_source_expression.ty.clone();
 
-            let kind = ResolvedLocationAccessKind::FieldIndex(
-                struct_to_instantiate.clone(),
-                field_target_index,
-            );
+            let kind =
+                LocationAccessKind::FieldIndex(struct_to_instantiate.clone(), field_target_index);
 
-            let single_chain = vec![ResolvedLocationAccess {
+            let single_chain = vec![LocationAccess {
                 node: resolved_field_name_node,
                 ty: field_expression_type.clone(),
                 kind,
             }];
 
-            let created_location = ResolvedSingleLocationExpression {
-                kind: ResolvedSingleLocationExpressionKind::MutStructFieldRef(
+            let created_location = SingleLocationExpression {
+                kind: SingleLocationExpressionKind::MutStructFieldRef(
                     struct_to_instantiate.clone(),
                     field_target_index,
                 ),
@@ -85,14 +78,14 @@ impl<'a> Resolver<'a> {
                 access_chain: single_chain,
             };
 
-            let created_mut_location = ResolvedSingleMutLocationExpression(created_location);
+            let created_mut_location = SingleMutLocationExpression(created_location);
 
             let overwrite_expression = self.create_expr_resolved(
-                ResolvedExpressionKind::Assignment(
+                ExpressionKind::Assignment(
                     Box::from(created_mut_location),
                     Box::new(field_source_expression),
                 ),
-                ResolvedType::Unit,
+                Type::Unit,
                 &node,
             );
 
@@ -100,27 +93,24 @@ impl<'a> Resolver<'a> {
         }
 
         let ty = temp_var.resolved_type.clone();
-        let access_variable = self.create_expr(
-            ResolvedExpressionKind::VariableAccess(temp_var),
-            ty.clone(),
-            &node,
-        );
+        let access_variable =
+            self.create_expr(ExpressionKind::VariableAccess(temp_var), ty.clone(), &node);
 
         expressions.push(access_variable); // make sure the block returns the overwritten temp_var
 
         self.pop_block_scope("struct instantiation");
 
-        let block = self.create_expr(ResolvedExpressionKind::Block(expressions), ty, &node);
+        let block = self.create_expr(ExpressionKind::Block(expressions), ty, &node);
         Ok(block)
     }
 
-    fn resolve_struct_init_field_by_field(
+    fn analyze_struct_init_field_by_field(
         &mut self,
-        struct_to_instantiate: ResolvedStructTypeRef,
-        mut source_order_expressions: Vec<(usize, ResolvedExpression)>,
+        struct_to_instantiate: StructTypeRef,
+        mut source_order_expressions: Vec<(usize, Expression)>,
         missing_fields: SeqSet<String>,
-        node: &Node,
-    ) -> Result<ResolvedExpression, ResolveError> {
+        node: &swamp_script_ast::Node,
+    ) -> Result<Expression, Error> {
         {
             let borrowed_anon_type = &struct_to_instantiate.borrow().anon_struct_type;
 
@@ -140,10 +130,10 @@ impl<'a> Resolver<'a> {
             }
         }
 
-        let ty = ResolvedType::Struct(struct_to_instantiate.clone());
+        let ty = Type::Struct(struct_to_instantiate.clone());
 
         Ok(self.create_expr(
-            ResolvedExpressionKind::StructInstantiation(ResolvedStructInstantiation {
+            ExpressionKind::StructInstantiation(StructInstantiation {
                 source_order_expressions,
                 struct_type_ref: struct_to_instantiate,
             }),
@@ -152,16 +142,16 @@ impl<'a> Resolver<'a> {
         ))
     }
 
-    pub(crate) fn resolve_struct_instantiation(
+    pub(crate) fn analyze_struct_instantiation(
         &mut self,
-        qualified_type_identifier: &QualifiedTypeIdentifier,
-        ast_fields: &Vec<FieldExpression>,
+        qualified_type_identifier: &swamp_script_ast::QualifiedTypeIdentifier,
+        ast_fields: &Vec<swamp_script_ast::FieldExpression>,
         has_rest: bool,
-    ) -> Result<ResolvedExpression, ResolveError> {
+    ) -> Result<Expression, Error> {
         let struct_to_instantiate = self.get_struct_type(qualified_type_identifier)?;
 
         let (source_order_expressions, missing_fields) = self
-            .resolve_anon_struct_instantiation_helper(
+            .analyze_anon_struct_instantiation_helper(
                 &struct_to_instantiate.borrow().anon_struct_type,
                 ast_fields,
             )?;
@@ -173,18 +163,18 @@ impl<'a> Resolver<'a> {
                 .functions
                 .get(&"default".to_string())
             {
-                self.resolve_struct_init_calling_default(
+                self.analyze_struct_init_calling_default(
                     function,
                     struct_to_instantiate,
                     source_order_expressions,
                     &qualified_type_identifier.name.0,
                 )
             } else {
-                let mapped: Vec<(usize, ResolvedExpression)> = source_order_expressions
+                let mapped: Vec<(usize, Expression)> = source_order_expressions
                     .into_iter()
                     .map(|(a, _b, c)| (a, c))
                     .collect::<Vec<_>>();
-                self.resolve_struct_init_field_by_field(
+                self.analyze_struct_init_field_by_field(
                     struct_to_instantiate,
                     mapped,
                     missing_fields,
@@ -192,14 +182,14 @@ impl<'a> Resolver<'a> {
                 )
             }
         } else if missing_fields.is_empty() {
-            let ty = ResolvedType::Struct(struct_to_instantiate.clone());
+            let ty = Type::Struct(struct_to_instantiate.clone());
             let node = qualified_type_identifier.name.0.clone();
-            let mapped: Vec<(usize, ResolvedExpression)> = source_order_expressions
+            let mapped: Vec<(usize, Expression)> = source_order_expressions
                 .into_iter()
                 .map(|(a, _b, c)| (a, c))
                 .collect::<Vec<_>>();
             Ok(self.create_expr(
-                ResolvedExpressionKind::StructInstantiation(ResolvedStructInstantiation {
+                ExpressionKind::StructInstantiation(StructInstantiation {
                     source_order_expressions: mapped,
                     struct_type_ref: struct_to_instantiate,
                 }),
@@ -209,7 +199,7 @@ impl<'a> Resolver<'a> {
         } else {
             let node = qualified_type_identifier.name.0.clone();
             Err(self.create_err(
-                ResolveErrorKind::MissingFieldInStructInstantiation(
+                ErrorKind::MissingFieldInStructInstantiation(
                     missing_fields.to_vec(),
                     struct_to_instantiate.borrow().anon_struct_type.clone(),
                 ),
@@ -218,17 +208,11 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn resolve_anon_struct_instantiation_helper(
+    fn analyze_anon_struct_instantiation_helper(
         &mut self,
-        struct_to_instantiate: &ResolvedAnonymousStructType,
-        ast_fields: &Vec<FieldExpression>,
-    ) -> Result<
-        (
-            Vec<(usize, ResolvedNode, ResolvedExpression)>,
-            SeqSet<String>,
-        ),
-        ResolveError,
-    > {
+        struct_to_instantiate: &AnonymousStructType,
+        ast_fields: &Vec<swamp_script_ast::FieldExpression>,
+    ) -> Result<(Vec<(usize, Node, Expression)>, SeqSet<String>), Error> {
         let mut missing_fields: SeqSet<String> = struct_to_instantiate
             .defined_fields
             .keys()
@@ -248,11 +232,11 @@ impl<'a> Resolver<'a> {
                     .contains_key(&field_name)
                 {
                     Err(self.create_err(
-                        ResolveErrorKind::DuplicateFieldInStructInstantiation(field_name),
+                        ErrorKind::DuplicateFieldInStructInstantiation(field_name),
                         &field.field_name.0,
                     ))
                 } else {
-                    Err(self.create_err(ResolveErrorKind::UnknownStructField, &field.field_name.0))
+                    Err(self.create_err(ErrorKind::UnknownStructField, &field.field_name.0))
                 };
             }
 
@@ -267,7 +251,7 @@ impl<'a> Resolver<'a> {
                 .expect("field_name is checked earlier");
 
             let resolved_expression =
-                self.resolve_expression(&field.expression, Some(&looked_up_field.field_type))?;
+                self.analyze_expression(&field.expression, Some(&looked_up_field.field_type))?;
 
             source_order_expressions.push((
                 field_index_in_definition,
@@ -279,17 +263,17 @@ impl<'a> Resolver<'a> {
         Ok((source_order_expressions, missing_fields))
     }
 
-    pub(crate) fn resolve_anon_struct_instantiation(
+    pub(crate) fn analyze_anon_struct_instantiation(
         &mut self,
-        node: &Node,
-        struct_to_instantiate: &ResolvedAnonymousStructType,
-        ast_fields: &Vec<FieldExpression>,
+        node: &swamp_script_ast::Node,
+        struct_to_instantiate: &AnonymousStructType,
+        ast_fields: &Vec<swamp_script_ast::FieldExpression>,
         allow_rest: bool,
-    ) -> Result<Vec<(usize, ResolvedExpression)>, ResolveError> {
+    ) -> Result<Vec<(usize, Expression)>, Error> {
         let (source_order_expressions, missing_fields) =
-            self.resolve_anon_struct_instantiation_helper(struct_to_instantiate, ast_fields)?;
+            self.analyze_anon_struct_instantiation_helper(struct_to_instantiate, ast_fields)?;
 
-        let mut mapped: Vec<(usize, ResolvedExpression)> = source_order_expressions
+        let mut mapped: Vec<(usize, Expression)> = source_order_expressions
             .into_iter()
             .map(|(a, _b, c)| (a, c))
             .collect::<Vec<_>>();
@@ -315,7 +299,7 @@ impl<'a> Resolver<'a> {
             }
         } else if !missing_fields.is_empty() {
             return Err(self.create_err(
-                ResolveErrorKind::MissingFieldInStructInstantiation(
+                ErrorKind::MissingFieldInStructInstantiation(
                     missing_fields.to_vec(),
                     struct_to_instantiate.clone(),
                 ),

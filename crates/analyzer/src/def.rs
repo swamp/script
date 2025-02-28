@@ -3,29 +3,55 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use crate::err::{ResolveError, ResolveErrorKind};
-use crate::Resolver;
+use crate::err::{Error, ErrorKind};
+use crate::Analyzer;
 use seq_map::SeqMap;
 use std::rc::Rc;
-use swamp_script_ast::{
-    Definition, EnumVariantType, Function, LocalTypeIdentifier, Node, QualifiedTypeIdentifier,
-    StructType, Use, UseItem,
-};
 use swamp_script_semantic::{
-    FunctionTypeSignature, ResolvedAnonymousStructFieldType, ResolvedAnonymousStructType,
-    ResolvedDefinition, ResolvedEnumType, ResolvedEnumTypeRef, ResolvedEnumVariantCommon,
-    ResolvedEnumVariantSimpleType, ResolvedEnumVariantSimpleTypeRef, ResolvedEnumVariantStructType,
-    ResolvedEnumVariantTupleType, ResolvedEnumVariantType, ResolvedExternalFunctionDefinition,
-    ResolvedFunction, ResolvedInternalFunctionDefinition, ResolvedLocalIdentifier,
-    ResolvedLocalTypeIdentifier, ResolvedParameterNode, ResolvedStructType, ResolvedStructTypeRef,
-    ResolvedType, ResolvedTypeForParameter, ResolvedUse, ResolvedUseItem,
+    AnonymousStructType, EnumType, EnumTypeRef, EnumVariantCommon, EnumVariantSimpleType,
+    EnumVariantSimpleTypeRef, EnumVariantStructType, EnumVariantTupleType, EnumVariantType,
+    ExternalFunctionDefinition, Function, InternalFunctionDefinition, LocalIdentifier,
+    LocalTypeIdentifier, ParameterNode, Signature, StructType, StructTypeField, StructTypeRef,
+    Type, TypeForParameter, UseItem,
 };
+use tracing::info;
 
-impl<'a> Resolver<'a> {
-    fn resolve_use_definition(
-        &self,
-        use_definition: &Use,
-    ) -> Result<ResolvedDefinition, ResolveError> {
+impl<'a> Analyzer<'a> {
+    fn analyze_mod_definition(
+        &mut self,
+        mod_definition: &swamp_script_ast::Mod,
+    ) -> Result<(), Error> {
+        let mut path = Vec::new();
+        for ast_node in &mod_definition.module_path.0 {
+            path.push(self.get_text(ast_node).to_string());
+        }
+
+        let mut nodes_copy = path.clone();
+        nodes_copy.insert(0, "crate".to_string());
+
+        info!(?path, ?nodes_copy, "analyzing mod!");
+
+        if let Some(found_namespace) = self.shared.modules.get(&nodes_copy) {
+            self.shared
+                .lookup_table
+                .add_module_link(nodes_copy.last().unwrap(), found_namespace.clone())
+                .map_err(|err| {
+                    self.create_err(
+                        ErrorKind::SemanticError(err),
+                        &mod_definition.module_path.0[0],
+                    )
+                })?;
+            Ok(())
+        } else {
+            let first = &mod_definition.module_path.0[0];
+            Err(self.create_err(ErrorKind::UnknownModule, first))
+        }
+    }
+
+    fn analyze_use_definition(
+        &mut self,
+        use_definition: &swamp_script_ast::Use,
+    ) -> Result<(), Error> {
         let mut nodes = Vec::new();
         for ast_node in &use_definition.module_path.0 {
             nodes.push(self.to_node(ast_node));
@@ -38,98 +64,111 @@ impl<'a> Resolver<'a> {
                 text.to_string()
             })
             .collect();
-
-        let mut items = Vec::new();
-        let lookup = &self.shared.lookup;
+        info!(?path, "trying to reference module in analysis");
+        let found_module = self.shared.get_module(&path).unwrap().clone();
+        if use_definition.items.is_empty() {
+            let last_name = path.last().unwrap();
+            self.shared
+                .lookup_table
+                .add_module_link(last_name, found_module.clone())
+                .map_err(|err| {
+                    self.create_err(
+                        ErrorKind::SemanticError(err),
+                        &use_definition.module_path.0[0],
+                    )
+                })?;
+        }
 
         for ast_items in &use_definition.items {
-            let resolved_item = match ast_items {
-                UseItem::Identifier(node) => {
+            match ast_items {
+                swamp_script_ast::UseItem::Identifier(node) => {
                     let ident_resolved_node = self.to_node(&node.0);
-                    let ident = ResolvedUseItem::Identifier(ident_resolved_node.clone());
-                    let ident_text = self.get_text_resolved(&ident_resolved_node);
-
-                    lookup.get_internal_function(&path, ident_text).ok_or(
-                        self.create_err_resolved(
-                            ResolveErrorKind::UnknownTypeReference,
-                            &ident_resolved_node,
-                        ),
-                    )?;
-                    if let Some(found_internal_function) =
-                        lookup.get_internal_function(&path, ident_text)
+                    let ident = UseItem::Identifier(ident_resolved_node.clone());
+                    let ident_text = self.get_text_resolved(&ident_resolved_node).to_string();
+                    if let Some(found_symbol) =
+                        found_module.namespace.symbol_table.get_symbol(&ident_text)
                     {
-                        lookup.add_internal_function_link(ident_text, found_internal_function)?;
-                    } else if let Some(found_external_function_def) =
-                        lookup.get_external_function_declaration(&path, ident_text)
-                    {
-                        lookup.add_external_function_declaration_link(
-                            ident_text,
-                            found_external_function_def,
-                        )?;
+                        self.shared
+                            .lookup_table
+                            .add_symbol(&ident_text, found_symbol.clone())
+                            .map_err(|err| {
+                                self.create_err(ErrorKind::SemanticError(err), &node.0)
+                            })?;
                     } else {
                         return Err(self.create_err_resolved(
-                            ResolveErrorKind::UnknownFunction,
+                            ErrorKind::UnknownTypeReference,
                             &ident_resolved_node,
                         ));
                     }
                     ident
                 }
-                UseItem::Type(node) => {
+                swamp_script_ast::UseItem::Type(node) => {
                     let ident_resolved_node = self.to_node(&node.0);
-                    let ident_text = self.get_text_resolved(&ident_resolved_node);
-
-                    if let Some(found_struct) = lookup.get_struct(&path, ident_text) {
-                        lookup.add_struct_link(found_struct)?;
-                    } else if let Some(found_enum) = lookup.get_enum(&path, ident_text) {
-                        lookup.add_enum_link(found_enum)?;
+                    let ident_text = self.get_text_resolved(&ident_resolved_node).to_string();
+                    if let Some(found_symbol) =
+                        found_module.namespace.symbol_table.get_symbol(&ident_text)
+                    {
+                        self.shared
+                            .lookup_table
+                            .add_symbol(&ident_text, found_symbol.clone())
+                            .map_err(|err| {
+                                self.create_err(ErrorKind::SemanticError(err), &node.0)
+                            })?;
                     } else {
                         return Err(self.create_err_resolved(
-                            ResolveErrorKind::UnknownTypeReference,
+                            ErrorKind::UnknownTypeReference,
                             &ident_resolved_node,
                         ));
                     }
-                    ResolvedUseItem::TypeIdentifier(self.to_node(&node.0))
+                    UseItem::TypeIdentifier(self.to_node(&node.0))
                 }
             };
-            items.push(resolved_item);
         }
 
-        Ok(ResolvedDefinition::Use(ResolvedUse { path: nodes, items }))
+        Ok(())
     }
 
-    fn resolve_enum_type_definition(
+    fn analyze_enum_type_definition(
         &mut self,
-        enum_type_name: &Node,
-        ast_variants: &Vec<EnumVariantType>,
-    ) -> Result<ResolvedEnumTypeRef, ResolveError> {
+        enum_type_name: &swamp_script_ast::LocalTypeIdentifier,
+        ast_variants: &[swamp_script_ast::EnumVariantType],
+    ) -> Result<EnumTypeRef, Error> {
         let mut resolved_variants = SeqMap::new();
 
         let parent_number = self.shared.state.allocate_number();
 
-        let enum_parent = ResolvedEnumType {
-            name: ResolvedLocalTypeIdentifier(self.to_node(enum_type_name)),
-            assigned_name: self.get_text(enum_type_name).to_string(),
-            module_path: self.shared.lookup.get_path(),
+        let enum_parent = EnumType {
+            name: LocalTypeIdentifier(self.to_node(&enum_type_name.0)),
+            assigned_name: self.get_text(&enum_type_name.0).to_string(),
+            module_path: vec![],
             number: parent_number,
             variants: SeqMap::default(),
         };
 
-        let parent_ref = self.shared.lookup.add_enum_type(enum_parent)?;
+        let parent_ref = self
+            .shared
+            .definition_table
+            .add_enum_type(enum_parent)
+            .map_err(|err| self.create_err(ErrorKind::SemanticError(err), &enum_type_name.0))?;
+        self.shared
+            .lookup_table
+            .add_enum_type_link(parent_ref.clone())
+            .map_err(|err| self.create_err(ErrorKind::SemanticError(err), &enum_type_name.0))?;
 
         for (container_index_usize, ast_variant_type) in ast_variants.iter().enumerate() {
             let variant_name_node = match ast_variant_type {
-                EnumVariantType::Simple(name) => name,
-                EnumVariantType::Tuple(name, _) => name,
-                EnumVariantType::Struct(name, _) => name,
+                swamp_script_ast::EnumVariantType::Simple(name) => name,
+                swamp_script_ast::EnumVariantType::Tuple(name, _) => name,
+                swamp_script_ast::EnumVariantType::Struct(name, _) => name,
             };
 
             let number = self.shared.state.allocate_number();
 
-            let common = ResolvedEnumVariantCommon {
-                name: ResolvedLocalTypeIdentifier(self.to_node(variant_name_node)),
+            let common = EnumVariantCommon {
+                name: LocalTypeIdentifier(self.to_node(variant_name_node)),
                 number,
-                //module_path: ResolvedModulePath(vec![]), // TODO:
-                //variant_name: ResolvedLocalTypeIdentifier(self.to_node(variant_name_node)),
+                //module_path: ModulePath(vec![]), // TODO:
+                //variant_name: LocalTypeIdentifier(self.to_node(variant_name_node)),
                 assigned_name: self.get_text(variant_name_node).to_string(),
                 //enum_ref: parent_ref.clone(),
                 container_index: container_index_usize as u8,
@@ -137,59 +176,60 @@ impl<'a> Resolver<'a> {
             };
 
             let variant_type = match ast_variant_type {
-                EnumVariantType::Simple(_variant_name_node) => {
-                    let simple_ref = ResolvedEnumVariantSimpleType { common };
-                    ResolvedEnumVariantType::Nothing(ResolvedEnumVariantSimpleTypeRef::from(
-                        simple_ref,
-                    ))
+                swamp_script_ast::EnumVariantType::Simple(_variant_name_node) => {
+                    let simple_ref = EnumVariantSimpleType { common };
+                    EnumVariantType::Nothing(EnumVariantSimpleTypeRef::from(simple_ref))
                 }
-                EnumVariantType::Tuple(_variant_name_node, types) => {
+                swamp_script_ast::EnumVariantType::Tuple(_variant_name_node, types) => {
                     let mut vec = Vec::new();
                     for tuple_type in types {
-                        let resolved_type = self.resolve_type(tuple_type)?;
+                        let resolved_type = self.analyze_type(tuple_type)?;
                         vec.push(resolved_type);
                     }
 
-                    let resolved_tuple_type = ResolvedEnumVariantTupleType {
+                    let resolved_tuple_type = EnumVariantTupleType {
                         common,
                         fields_in_order: vec,
                     };
                     let resolved_tuple_type_ref = Rc::new(resolved_tuple_type);
 
-                    ResolvedEnumVariantType::Tuple(resolved_tuple_type_ref)
+                    EnumVariantType::Tuple(resolved_tuple_type_ref)
                 }
-                EnumVariantType::Struct(_variant_name_node, ast_struct_fields) => {
+                swamp_script_ast::EnumVariantType::Struct(
+                    _variant_name_node,
+                    ast_struct_fields,
+                ) => {
                     let mut fields = SeqMap::new();
 
                     for (_index, field_with_type) in ast_struct_fields.fields.iter().enumerate() {
                         // TODO: Check the index
-                        let resolved_type = self.resolve_type(&field_with_type.field_type)?;
+                        let resolved_type = self.analyze_type(&field_with_type.field_type)?;
                         let field_name_str =
                             self.get_text(&field_with_type.field_name.0).to_string();
 
-                        let resolved_field = ResolvedAnonymousStructFieldType {
+                        let resolved_field = StructTypeField {
                             identifier: Some(self.to_node(&field_with_type.field_name.0)),
                             field_type: resolved_type,
                         };
 
                         fields.insert(field_name_str, resolved_field).map_err(|_| {
                             self.create_err(
-                                ResolveErrorKind::DuplicateFieldName,
+                                ErrorKind::DuplicateFieldName,
                                 &field_with_type.field_name.0,
                             )
                         })?;
                     }
 
-                    let enum_variant_struct_type = ResolvedEnumVariantStructType {
+                    let enum_variant_struct_type = EnumVariantStructType {
                         common,
-                        anon_struct: ResolvedAnonymousStructType {
+                        anon_struct: AnonymousStructType {
                             defined_fields: fields,
                         },
                     };
 
                     let enum_variant_struct_type_ref = Rc::new(enum_variant_struct_type);
 
-                    ResolvedEnumVariantType::Struct(enum_variant_struct_type_ref)
+                    EnumVariantType::Struct(enum_variant_struct_type_ref)
                 }
             };
 
@@ -197,28 +237,26 @@ impl<'a> Resolver<'a> {
 
             resolved_variants
                 .insert(variant_name_str, variant_type.into())
-                .map_err(|_| {
-                    self.create_err(ResolveErrorKind::DuplicateFieldName, variant_name_node)
-                })?;
+                .map_err(|_| self.create_err(ErrorKind::DuplicateFieldName, variant_name_node))?;
         }
 
         parent_ref.borrow_mut().variants = resolved_variants;
+
         Ok(parent_ref)
     }
 
-    /// # Errors
-    ///
-    pub fn resolve_struct_type_definition(
+    pub fn analyze_struct_type(
         &mut self,
-        ast_struct: &StructType,
-    ) -> Result<ResolvedStructTypeRef, ResolveError> {
+        assigned_name: &str,
+        ast_struct: &swamp_script_ast::StructType,
+    ) -> Result<StructType, Error> {
         let mut resolved_fields = SeqMap::new();
 
-        for field_name_and_type in &ast_struct.fields {
-            let resolved_type = self.resolve_type(&field_name_and_type.field_type)?;
+        for (_index, field_name_and_type) in ast_struct.fields.iter().enumerate() {
+            let resolved_type = self.analyze_type(&field_name_and_type.field_type)?;
             let name_string = self.get_text(&field_name_and_type.field_name.0).to_string();
 
-            let field_type = ResolvedAnonymousStructFieldType {
+            let field_type = StructTypeField {
                 identifier: Some(self.to_node(&field_name_and_type.field_name.0)),
                 field_type: resolved_type,
             };
@@ -227,40 +265,66 @@ impl<'a> Resolver<'a> {
                 .insert(name_string, field_type)
                 .map_err(|_| {
                     self.create_err(
-                        ResolveErrorKind::DuplicateFieldName,
+                        ErrorKind::DuplicateFieldName,
                         &field_name_and_type.field_name.0,
                     )
                 })?;
         }
 
-        let resolved_anon_struct = ResolvedAnonymousStructType {
+        let resolved_anon_struct = AnonymousStructType {
             defined_fields: resolved_fields,
         };
 
-        let struct_name_str = self.get_text(&ast_struct.identifier.0).to_string();
-
-        let resolved_struct = ResolvedStructType::new(
+        //let unique_id = self.shared.state.allocate_number();
+        let resolved_struct = StructType::new(
             self.to_node(&ast_struct.identifier.0),
-            &struct_name_str,
+            assigned_name,
+            //unique_id,
             resolved_anon_struct,
         );
 
-        let resolved_struct_ref = self.shared.lookup.add_struct(resolved_struct)?;
-
-        Ok(resolved_struct_ref)
+        Ok(resolved_struct)
     }
 
-    fn resolve_function_definition(
+    /// # Errors
+    ///
+    pub fn analyze_struct_type_definition(
         &mut self,
-        function: &Function,
-    ) -> Result<ResolvedDefinition, ResolveError> {
-        let resolved_function = match function {
-            Function::Internal(function_data) => {
-                let parameters = self.resolve_parameters(&function_data.declaration.params)?;
+        ast_struct: &swamp_script_ast::StructType,
+    ) -> Result<(), Error> {
+        let struct_name_str = self.get_text(&ast_struct.identifier.0).to_string();
+
+        let analyzed_struct = self.analyze_struct_type(&struct_name_str, ast_struct)?;
+
+        let struct_ref = self
+            .shared
+            .definition_table
+            .add_struct(analyzed_struct)
+            .map_err(|err| {
+                self.create_err(ErrorKind::SemanticError(err), &ast_struct.identifier.0)
+            })?;
+
+        self.shared
+            .lookup_table
+            .add_struct_link(struct_ref)
+            .map_err(|err| {
+                self.create_err(ErrorKind::SemanticError(err), &ast_struct.identifier.0)
+            })?;
+
+        Ok(())
+    }
+
+    pub(crate) fn analyze_function_definition(
+        &mut self,
+        function: &swamp_script_ast::Function,
+    ) -> Result<Function, Error> {
+        let func = match function {
+            swamp_script_ast::Function::Internal(function_data) => {
+                let parameters = self.analyze_parameters(&function_data.declaration.params)?;
                 let return_type = if let Some(found) = &function_data.declaration.return_type {
-                    self.resolve_type(found)?
+                    self.analyze_type(found)?
                 } else {
-                    ResolvedType::Unit
+                    Type::Unit
                 };
 
                 self.scope.return_type = return_type.clone();
@@ -270,43 +334,61 @@ impl<'a> Resolver<'a> {
                     self.create_local_variable_resolved(
                         &param.node.as_ref().unwrap().name,
                         &param.node.as_ref().unwrap().is_mutable,
-                        &<std::option::Option<swamp_script_semantic::ResolvedType> as Clone>::clone(&param.resolved_type).unwrap().clone(),
+                        &param.resolved_type.clone().unwrap(),
                     )?;
                 }
                 let function_name = self.get_text(&function_data.declaration.name).to_string();
                 let statements =
-                    self.resolve_statements_in_function(&function_data.body, &return_type)?;
-                self.scope.return_type = ResolvedType::Unit;
+                    self.analyze_function_body_expression(&function_data.body, &return_type)?;
+                self.scope.return_type = Type::Unit;
 
-                let internal = ResolvedInternalFunctionDefinition {
-                    signature: FunctionTypeSignature {
+                let internal = InternalFunctionDefinition {
+                    signature: Signature {
                         parameters,
                         return_type: Box::new(return_type),
                     },
                     body: statements,
-                    name: ResolvedLocalIdentifier(self.to_node(&function_data.declaration.name)),
+                    name: LocalIdentifier(self.to_node(&function_data.declaration.name)),
+                    //assigned_name: self.get_text(&function_data.declaration.name).to_string(),
                 };
 
                 let function_ref = self
                     .shared
-                    .lookup
-                    .add_internal_function_ref(&function_name, internal)?;
-                ResolvedFunction::Internal(function_ref)
+                    .definition_table
+                    .add_internal_function(&function_name, internal)
+                    .map_err(|err| {
+                        self.create_err(
+                            ErrorKind::SemanticError(err),
+                            &function_data.declaration.name,
+                        )
+                    })?;
+
+                self.shared
+                    .lookup_table
+                    .add_internal_function_link(&function_name, function_ref.clone())
+                    .map_err(|err| {
+                        self.create_err(
+                            ErrorKind::SemanticError(err),
+                            &function_data.declaration.name,
+                        )
+                    })?;
+
+                Function::Internal(function_ref)
             }
-            Function::External(ast_signature) => {
-                let parameters = self.resolve_parameters(&ast_signature.params)?;
+            swamp_script_ast::Function::External(ast_signature) => {
+                let parameters = self.analyze_parameters(&ast_signature.params)?;
                 let external_return_type = if let Some(found) = &ast_signature.return_type {
-                    self.resolve_type(found)?
+                    self.analyze_type(found)?
                 } else {
-                    ResolvedType::Unit
+                    Type::Unit
                 };
 
                 let return_type = external_return_type;
                 let external_function_id = self.shared.state.allocate_external_function_id();
 
-                let external = ResolvedExternalFunctionDefinition {
+                let external = ExternalFunctionDefinition {
                     assigned_name: self.get_text(&ast_signature.name).to_string(),
-                    signature: FunctionTypeSignature {
+                    signature: Signature {
                         parameters,
                         return_type: Box::new(return_type),
                     },
@@ -314,105 +396,119 @@ impl<'a> Resolver<'a> {
                     id: external_function_id,
                 };
 
-                ResolvedFunction::External(Rc::new(external))
+                let function_ref = self
+                    .shared
+                    .definition_table
+                    .add_external_function_declaration(external)
+                    .map_err(|err| {
+                        self.create_err(ErrorKind::SemanticError(err), &ast_signature.name)
+                    })?;
+
+                self.shared
+                    .lookup_table
+                    .add_external_function_declaration_link(function_ref.clone())
+                    .map_err(|err| {
+                        self.create_err(ErrorKind::SemanticError(err), &ast_signature.name)
+                    })?;
+
+                Function::External(function_ref)
             }
         };
 
-        Ok(ResolvedDefinition::FunctionDef(resolved_function))
+        Ok(func)
     }
 
     /// # Errors
     ///
-    pub fn resolve_definition(
+    pub fn analyze_definition(
         &mut self,
-        ast_def: &Definition,
-    ) -> Result<ResolvedDefinition, ResolveError> {
+        ast_def: &swamp_script_ast::Definition,
+    ) -> Result<(), Error> {
         let resolved_def = match ast_def {
-            Definition::StructDef(ref ast_struct) => {
-                ResolvedDefinition::StructType(self.resolve_struct_type_definition(ast_struct)?)
+            swamp_script_ast::Definition::StructDef(ref ast_struct) => {
+                self.analyze_struct_type_definition(ast_struct)?
             }
-            Definition::EnumDef(identifier, variants) => {
-                let parent = self.resolve_enum_type_definition(identifier, variants)?;
-                ResolvedDefinition::EnumType(parent)
+            swamp_script_ast::Definition::EnumDef(identifier, variants) => {
+                self.analyze_enum_type_definition(
+                    &swamp_script_ast::LocalTypeIdentifier(identifier.clone()),
+                    variants,
+                )?;
             }
-            Definition::FunctionDef(function) => {
-                let resolved_return_type = self.resolve_return_type(function)?;
+            swamp_script_ast::Definition::FunctionDef(function) => {
+                let resolved_return_type = self.analyze_return_type(function)?;
                 self.start_function(resolved_return_type);
-                let resolved_def = self.resolve_function_definition(function)?;
+                self.analyze_function_definition(function)?;
                 self.stop_function();
-                resolved_def
             }
-            Definition::ImplDef(type_identifier, functions) => {
-                let attached_type_type =
-                    self.resolve_impl_definition(type_identifier, functions)?;
-                ResolvedDefinition::ImplType(attached_type_type)
+            swamp_script_ast::Definition::ImplDef(type_identifier, functions) => {
+                self.analyze_impl_definition(type_identifier, functions)?;
             }
-            Definition::Comment(comment_ref) => {
-                ResolvedDefinition::Comment(self.to_node(comment_ref))
+            swamp_script_ast::Definition::Mod(mod_info) => self.analyze_mod_definition(mod_info)?,
+            swamp_script_ast::Definition::Use(use_info) => self.analyze_use_definition(use_info)?,
+            swamp_script_ast::Definition::Constant(const_info) => {
+                self.analyze_constant_definition(const_info)?
             }
-            Definition::Use(use_info) => self.resolve_use_definition(use_info)?,
-            Definition::Constant(const_info) => self.resolve_constant_definition(const_info)?,
         };
 
         Ok(resolved_def)
     }
 
-    fn resolve_impl_definition(
+    fn analyze_impl_definition(
         &mut self,
-        attached_to_type: &Node,
-        functions: &Vec<Function>,
-    ) -> Result<ResolvedType, ResolveError> {
-        let fake_qualified_type_name = QualifiedTypeIdentifier {
-            name: LocalTypeIdentifier(attached_to_type.clone()),
+        attached_to_type: &swamp_script_ast::Node,
+        functions: &Vec<swamp_script_ast::Function>,
+    ) -> Result<Type, Error> {
+        let fake_qualified_type_name = swamp_script_ast::QualifiedTypeIdentifier {
+            name: swamp_script_ast::LocalTypeIdentifier(attached_to_type.clone()),
             module_path: None,
             generic_params: vec![],
         };
 
-        let found_struct = self.find_struct_type(&fake_qualified_type_name)?;
+        let found_struct = self.get_struct_type(&fake_qualified_type_name)?;
 
         for function in functions {
-            let new_return_type = self.resolve_return_type(function)?;
+            let new_return_type = self.analyze_return_type(function)?;
             self.start_function(new_return_type);
 
             let function_name = match function {
-                Function::Internal(function_with_body) => &function_with_body.declaration,
-                Function::External(external_declaration) => external_declaration,
+                swamp_script_ast::Function::Internal(function_with_body) => {
+                    &function_with_body.declaration
+                }
+                swamp_script_ast::Function::External(external_declaration) => external_declaration,
             };
 
             let function_name_str = self.get_text(&function_name.name).to_string();
 
-            let resolved_function = self.resolve_impl_func(function, &found_struct)?;
+            let resolved_function = self.analyze_impl_func(function, &found_struct)?;
             let resolved_function_ref = Rc::new(resolved_function);
 
             found_struct
                 .borrow_mut()
                 .functions
                 .insert(function_name_str, resolved_function_ref)
-                .map_err(|_| {
-                    self.create_err(ResolveErrorKind::DuplicateFieldName, attached_to_type)
-                })?;
+                .map_err(|_| self.create_err(ErrorKind::DuplicateFieldName, attached_to_type))?;
             self.stop_function();
         }
 
-        Ok(ResolvedType::Struct(found_struct))
+        Ok(Type::Struct(found_struct))
     }
 
-    fn resolve_impl_func(
+    fn analyze_impl_func(
         &mut self,
-        function: &Function,
-        found_struct: &ResolvedStructTypeRef,
-    ) -> Result<ResolvedFunction, ResolveError> {
+        function: &swamp_script_ast::Function,
+        found_struct: &StructTypeRef,
+    ) -> Result<Function, Error> {
         let resolved_fn = match function {
-            Function::Internal(function_data) => {
+            swamp_script_ast::Function::Internal(function_data) => {
                 let mut parameters = Vec::new();
 
                 if let Some(found_self) = &function_data.declaration.self_parameter {
-                    let resolved_type = ResolvedType::Struct(found_struct.clone());
-                    parameters.push(ResolvedTypeForParameter {
+                    let resolved_type = Type::Struct(found_struct.clone());
+                    parameters.push(TypeForParameter {
                         name: self.get_text(&found_self.self_node).to_string(),
                         resolved_type: Some(resolved_type),
                         is_mutable: found_self.is_mutable.is_some(),
-                        node: Option::from(ResolvedParameterNode {
+                        node: Option::from(ParameterNode {
                             name: self.to_node(&found_self.self_node),
                             is_mutable: self.to_node_option(&found_self.is_mutable),
                         }),
@@ -420,13 +516,13 @@ impl<'a> Resolver<'a> {
                 }
 
                 for param in &function_data.declaration.params {
-                    let resolved_type = self.resolve_type(&param.param_type)?;
+                    let resolved_type = self.analyze_type(&param.param_type)?;
 
-                    parameters.push(ResolvedTypeForParameter {
+                    parameters.push(TypeForParameter {
                         name: self.get_text(&param.variable.name).to_string(),
                         resolved_type: Some(resolved_type),
                         is_mutable: param.variable.is_mutable.is_some(),
-                        node: Option::from(ResolvedParameterNode {
+                        node: Option::from(ParameterNode {
                             name: self.to_node(&param.variable.name),
                             is_mutable: self.to_node_option(&param.variable.is_mutable),
                         }),
@@ -434,7 +530,7 @@ impl<'a> Resolver<'a> {
                 }
 
                 let return_type =
-                    self.resolve_maybe_type(&function_data.declaration.return_type)?;
+                    self.analyze_maybe_type(&function_data.declaration.return_type)?;
 
                 for param in &parameters {
                     self.create_local_variable_resolved(
@@ -445,32 +541,32 @@ impl<'a> Resolver<'a> {
                 }
 
                 let statements =
-                    self.resolve_statements_in_function(&function_data.body, &return_type)?;
+                    self.analyze_statements_in_function(&function_data.body, &return_type)?;
 
-                let internal = ResolvedInternalFunctionDefinition {
-                    signature: FunctionTypeSignature {
+                let internal = InternalFunctionDefinition {
+                    signature: Signature {
                         parameters,
                         return_type: Box::new(return_type),
                     },
                     body: statements,
-                    name: ResolvedLocalIdentifier(self.to_node(&function_data.declaration.name)),
+                    name: LocalIdentifier(self.to_node(&function_data.declaration.name)),
                 };
 
                 let internal_ref = Rc::new(internal);
 
-                ResolvedFunction::Internal(internal_ref)
+                Function::Internal(internal_ref)
             }
 
-            Function::External(signature) => {
+            swamp_script_ast::Function::External(signature) => {
                 let mut parameters = Vec::new();
 
                 if let Some(found_self) = &signature.self_parameter {
-                    let resolved_type = ResolvedType::Struct(found_struct.clone());
-                    parameters.push(ResolvedTypeForParameter {
+                    let resolved_type = Type::Struct(found_struct.clone());
+                    parameters.push(TypeForParameter {
                         name: self.get_text(&found_self.self_node).to_string(),
                         resolved_type: Some(resolved_type),
                         is_mutable: found_self.is_mutable.is_some(),
-                        node: Option::from(ResolvedParameterNode {
+                        node: Option::from(ParameterNode {
                             name: self.to_node(&found_self.self_node),
                             is_mutable: self.to_node_option(&found_self.is_mutable),
                         }),
@@ -479,25 +575,25 @@ impl<'a> Resolver<'a> {
 
                 // Handle parameters, including self if present
                 for param in &signature.params {
-                    let resolved_type = self.resolve_type(&param.param_type)?;
+                    let resolved_type = self.analyze_type(&param.param_type)?;
 
-                    parameters.push(ResolvedTypeForParameter {
+                    parameters.push(TypeForParameter {
                         name: self.get_text(&param.variable.name).to_string(),
                         resolved_type: Some(resolved_type),
                         is_mutable: param.variable.is_mutable.is_some(),
-                        node: Option::from(ResolvedParameterNode {
+                        node: Option::from(ParameterNode {
                             name: self.to_node(&param.variable.name),
                             is_mutable: self.to_node_option(&param.variable.is_mutable),
                         }),
                     });
                 }
 
-                let return_type = self.resolve_maybe_type(&signature.return_type)?;
+                let return_type = self.analyze_maybe_type(&signature.return_type)?;
 
-                let external = ResolvedExternalFunctionDefinition {
+                let external = ExternalFunctionDefinition {
                     assigned_name: self.get_text(&signature.name).to_string(),
                     name: Some(self.to_node(&signature.name)),
-                    signature: FunctionTypeSignature {
+                    signature: Signature {
                         parameters,
                         return_type: Box::new(return_type),
                     },
@@ -506,7 +602,7 @@ impl<'a> Resolver<'a> {
 
                 let external_ref = Rc::new(external);
 
-                ResolvedFunction::External(external_ref)
+                Function::External(external_ref)
             }
         };
         Ok(resolved_fn)

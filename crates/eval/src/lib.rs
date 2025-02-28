@@ -15,19 +15,16 @@ use swamp_script_core::value::ValueRef;
 use swamp_script_core::value::{
     convert_vec_to_rc_refcell, format_value, to_rust_value, SourceMapLookup, Value,
 };
-use swamp_script_semantic::modules::ResolvedModules;
+use swamp_script_semantic::modules::Modules;
 use swamp_script_semantic::prelude::*;
-use swamp_script_semantic::{same_array_ref, ResolvedPostfix};
+use swamp_script_semantic::{same_array_ref, Postfix};
 use swamp_script_semantic::{
-    same_struct_ref, ConstantId, ResolvedBinaryOperatorKind, ResolvedCompoundOperatorKind,
-    ResolvedForPattern, ResolvedFunction, ResolvedMutOrImmutableExpression, ResolvedNormalPattern,
-    ResolvedPatternElement, ResolvedPostfixKind, ResolvedSingleLocationExpression,
-    ResolvedSingleLocationExpressionKind, ResolvedUnaryOperatorKind,
+    same_struct_ref, BinaryOperatorKind, CompoundOperatorKind, ConstantId, ForPattern, Function,
+    MutOrImmutableExpression, NormalPattern, PatternElement, PostfixKind, SingleLocationExpression,
+    SingleLocationExpressionKind, UnaryOperatorKind,
 };
-use swamp_script_semantic::{
-    ResolvedArgumentExpressionOrLocation, ResolvedLocationAccess, ResolvedLocationAccessKind,
-};
-use tracing::{error, info};
+use swamp_script_semantic::{ArgumentExpressionOrLocation, LocationAccess, LocationAccessKind};
+use tracing::{debug, error, info};
 
 pub mod err;
 
@@ -51,7 +48,7 @@ type FunctionFn<C> = Box<RawFunctionFn<C>>;
 
 #[derive(Debug)]
 pub enum FunctionData {
-    Internal(ResolvedInternalFunctionDefinitionRef),
+    Internal(InternalFunctionDefinitionRef),
     External(ExternalFunctionId),
 }
 
@@ -162,7 +159,7 @@ impl<C> ExternalFunctions<C> {
 pub fn eval_module<C>(
     externals: &ExternalFunctions<C>,
     constants: &Constants,
-    root_expression: &ResolvedExpression,
+    root_expression: &Expression,
     debug_source_map: Option<&dyn SourceMapLookup>,
     context: &mut C,
 ) -> Result<Value, ExecuteError> {
@@ -177,14 +174,15 @@ pub fn eval_module<C>(
 
 pub fn eval_constants<C>(
     externals: &ExternalFunctions<C>,
-    constants: &mut Constants,
-    modules: &ResolvedModules,
+    eval_constants: &mut Constants,
+    program_state: &ProgramState,
     context: &mut C,
 ) -> Result<(), ExecuteError> {
-    for constant in &modules.constants {
-        let mut interpreter = Interpreter::<C>::new(externals, constants, context);
+    for constant in &program_state.constants_in_dependency_order {
+        debug!(?constant.id, "eval constant");
+        let mut interpreter = Interpreter::<C>::new(externals, eval_constants, context);
         let value = interpreter.evaluate_expression(&constant.expr)?;
-        constants.set(constant.id, value);
+        eval_constants.set(constant.id, value);
     }
 
     Ok(())
@@ -193,7 +191,7 @@ pub fn eval_constants<C>(
 pub fn util_execute_function<C>(
     externals: &ExternalFunctions<C>,
     constants: &Constants,
-    func: &ResolvedInternalFunctionDefinitionRef,
+    func: &InternalFunctionDefinitionRef,
     arguments: &[VariableValue],
     context: &mut C,
     debug_source_map: Option<&dyn SourceMapLookup>,
@@ -210,7 +208,7 @@ pub fn util_execute_function<C>(
 pub fn util_execute_expression<C>(
     externals: &ExternalFunctions<C>,
     constants: &Constants,
-    expr: &ResolvedExpression,
+    expr: &Expression,
     context: &mut C,
     debug_source_map: Option<&dyn SourceMapLookup>,
 ) -> Result<Value, ExecuteError> {
@@ -225,7 +223,7 @@ pub fn util_execute_expression<C>(
 pub fn util_execute_member_function_mut<C>(
     externals: &ExternalFunctions<C>,
     constants: &Constants,
-    fn_def: &ResolvedInternalFunctionDefinitionRef,
+    fn_def: &InternalFunctionDefinitionRef,
     self_value_ref: ValueRef,
     arguments: &[Value],
     context: &mut C,
@@ -305,8 +303,8 @@ impl<'a, C> Interpreter<'a, C> {
 
     fn bind_parameters(
         &mut self,
-        node: &ResolvedNode,
-        params: &[ResolvedTypeForParameter],
+        node: &Node,
+        params: &[TypeForParameter],
         args: &[VariableValue],
     ) -> Result<(), ExecuteError> {
         for (index, (param, arg)) in params.iter().zip(args).enumerate() {
@@ -333,8 +331,8 @@ impl<'a, C> Interpreter<'a, C> {
     }
     fn evaluate_function_call(
         &mut self,
-        function_expression: &ResolvedExpression,
-        arguments: &[ResolvedArgumentExpressionOrLocation],
+        function_expression: &Expression,
+        arguments: &[ArgumentExpressionOrLocation],
     ) -> Result<Value, ExecuteError> {
         let func_val = self.evaluate_expression(function_expression)?;
         let evaluated_args = self.evaluate_args(arguments)?;
@@ -379,15 +377,15 @@ impl<'a, C> Interpreter<'a, C> {
 
     fn evaluate_location_chain(
         &mut self,
-        node: &ResolvedNode,
+        node: &Node,
         start_value_reference: ValueRef,
-        chain_items: &Vec<ResolvedLocationAccess>,
+        chain_items: &Vec<LocationAccess>,
     ) -> Result<ValueRef, ExecuteError> {
         let mut value_ref = start_value_reference;
         for chain in chain_items {
             value_ref = {
                 match &chain.kind {
-                    ResolvedLocationAccessKind::FieldIndex(_resolved_node, index) => {
+                    LocationAccessKind::FieldIndex(_resolved_node, index) => {
                         let borrowed = value_ref.borrow();
 
                         let (_struct_ref, fields) = borrowed
@@ -395,7 +393,7 @@ impl<'a, C> Interpreter<'a, C> {
                             .map_err(|_| self.create_err(ExecuteErrorKind::ExpectedStruct, node))?;
                         fields[*index].clone()
                     }
-                    ResolvedLocationAccessKind::ArrayIndex(_array_type_ref, index_expr) => {
+                    LocationAccessKind::ArrayIndex(_array_type_ref, index_expr) => {
                         let index = self
                             .evaluate_expression(index_expr)?
                             .expect_int()
@@ -409,11 +407,11 @@ impl<'a, C> Interpreter<'a, C> {
                         fields[index as usize].clone()
                     }
 
-                    ResolvedLocationAccessKind::ArrayRange(_, _) => todo!(),
-                    ResolvedLocationAccessKind::StringIndex(_) => todo!(),
-                    ResolvedLocationAccessKind::StringRange(_) => todo!(),
+                    LocationAccessKind::ArrayRange(_, _) => todo!(),
+                    LocationAccessKind::StringIndex(_) => todo!(),
+                    LocationAccessKind::StringRange(_) => todo!(),
 
-                    ResolvedLocationAccessKind::MapIndex(_map_type_ref, key_expr) => {
+                    LocationAccessKind::MapIndex(_map_type_ref, key_expr) => {
                         let key_expr_value = self.evaluate_expression(key_expr)?;
 
                         let borrowed = value_ref.borrow();
@@ -427,10 +425,7 @@ impl<'a, C> Interpreter<'a, C> {
                         wrap_in_option(maybe_found)
                     }
 
-                    ResolvedLocationAccessKind::MapIndexInsertIfNonExisting(
-                        _map_type_ref,
-                        key_expr,
-                    ) => {
+                    LocationAccessKind::MapIndexInsertIfNonExisting(_map_type_ref, key_expr) => {
                         let key_expr_value = self.evaluate_expression(key_expr)?;
                         let key = key_expr_value.clone();
                         let mut borrowed_mut = value_ref.borrow_mut();
@@ -456,7 +451,7 @@ impl<'a, C> Interpreter<'a, C> {
                         }
                     }
 
-                    ResolvedLocationAccessKind::RustTypeIndex(_rust_type_ref, key_expr) => {
+                    LocationAccessKind::ExternalTypeIndex(_rust_type_ref, key_expr) => {
                         let key_expr_value = self.evaluate_expression(key_expr)?;
                         if let Some(found_sparse_id) =
                             key_expr_value.downcast_rust::<SparseValueId>()
@@ -482,7 +477,7 @@ impl<'a, C> Interpreter<'a, C> {
 
     fn evaluate_location(
         &mut self,
-        found_location_expr: &ResolvedSingleLocationExpression,
+        found_location_expr: &SingleLocationExpression,
     ) -> Result<ValueRef, ExecuteError> {
         let variable_ref = self
             .current_block_scopes
@@ -495,12 +490,11 @@ impl<'a, C> Interpreter<'a, C> {
         )?;
 
         let converted_value_ref = match &found_location_expr.kind {
-            ResolvedSingleLocationExpressionKind::MutVariableRef => value_ref,
-            ResolvedSingleLocationExpressionKind::MutStructFieldRef(
-                _base_expression,
-                _resolved_access,
-            ) => value_ref,
-            ResolvedSingleLocationExpressionKind::MutArrayIndexRef(_resolved_array_ref) => {
+            SingleLocationExpressionKind::MutVariableRef => value_ref,
+            SingleLocationExpressionKind::MutStructFieldRef(_base_expression, _resolved_access) => {
+                value_ref
+            }
+            SingleLocationExpressionKind::MutArrayIndexRef(_resolved_array_ref) => {
                 //info!(?base_expression, "base expression for field access");
                 let (_struct, _values) = value_ref.borrow().expect_array().map_err(|_| {
                     self.create_err(ExecuteErrorKind::ExpectedArray, &found_location_expr.node)
@@ -517,13 +511,13 @@ impl<'a, C> Interpreter<'a, C> {
 
     fn evaluate_mut_or_immutable_expression(
         &mut self,
-        expr: &ResolvedMutOrImmutableExpression,
+        expr: &MutOrImmutableExpression,
     ) -> Result<VariableValue, ExecuteError> {
         let var_value = match &expr.expression_or_location {
-            ResolvedArgumentExpressionOrLocation::Location(loc) => {
+            ArgumentExpressionOrLocation::Location(loc) => {
                 VariableValue::Reference(self.evaluate_location(loc)?)
             }
-            ResolvedArgumentExpressionOrLocation::Expression(expr) => {
+            ArgumentExpressionOrLocation::Expression(expr) => {
                 VariableValue::Value(self.evaluate_expression(expr)?)
             }
         };
@@ -532,13 +526,13 @@ impl<'a, C> Interpreter<'a, C> {
 
     fn evaluate_argument(
         &mut self,
-        expr: &ResolvedArgumentExpressionOrLocation,
+        expr: &ArgumentExpressionOrLocation,
     ) -> Result<VariableValue, ExecuteError> {
         let var_value = match expr {
-            ResolvedArgumentExpressionOrLocation::Location(mutable_location) => {
+            ArgumentExpressionOrLocation::Location(mutable_location) => {
                 VariableValue::Reference(self.evaluate_location(mutable_location)?)
             }
-            ResolvedArgumentExpressionOrLocation::Expression(expr) => {
+            ArgumentExpressionOrLocation::Expression(expr) => {
                 let value = self.evaluate_expression(expr)?;
                 VariableValue::Value(value)
             }
@@ -549,7 +543,7 @@ impl<'a, C> Interpreter<'a, C> {
 
     fn evaluate_args(
         &mut self,
-        args: &[ResolvedArgumentExpressionOrLocation],
+        args: &[ArgumentExpressionOrLocation],
     ) -> Result<Vec<VariableValue>, ExecuteError> {
         let mut evaluated = Vec::with_capacity(args.len());
 
@@ -561,10 +555,7 @@ impl<'a, C> Interpreter<'a, C> {
         Ok(evaluated)
     }
 
-    fn evaluate_expressions(
-        &mut self,
-        exprs: &[ResolvedExpression],
-    ) -> Result<Vec<Value>, ExecuteError> {
+    fn evaluate_expressions(&mut self, exprs: &[Expression]) -> Result<Vec<Value>, ExecuteError> {
         let mut values = vec![];
         for expr in exprs {
             let value = self.evaluate_expression(expr)?;
@@ -576,8 +567,8 @@ impl<'a, C> Interpreter<'a, C> {
 
     fn evaluate_while_loop(
         &mut self,
-        condition: &ResolvedBooleanExpression,
-        body: &ResolvedExpression,
+        condition: &BooleanExpression,
+        body: &Expression,
     ) -> Result<ValueWithSignal, ExecuteError> {
         let mut result = Value::Unit;
         while self
@@ -604,7 +595,7 @@ impl<'a, C> Interpreter<'a, C> {
 
     fn evaluate_block(
         &mut self,
-        expressions: &Vec<ResolvedExpression>,
+        expressions: &Vec<Expression>,
     ) -> Result<ValueWithSignal, ExecuteError> {
         let mut result = Value::Unit;
 
@@ -623,9 +614,9 @@ impl<'a, C> Interpreter<'a, C> {
 
     fn evaluate_for_loop_mutable(
         &mut self,
-        pattern: &ResolvedForPattern,
-        iterator_expr: &ResolvedIterable,
-        body: &Box<ResolvedExpression>,
+        pattern: &ForPattern,
+        iterator_expr: &Iterable,
+        body: &Box<Expression>,
     ) -> Result<ValueWithSignal, ExecuteError> {
         let mut result = Value::Unit;
 
@@ -639,7 +630,7 @@ impl<'a, C> Interpreter<'a, C> {
         };
 
         match pattern {
-            ResolvedForPattern::Single(var_ref) => {
+            ForPattern::Single(var_ref) => {
                 self.push_block_scope();
 
                 for value in ValueReference(iterator_value).into_iter_mut().unwrap() {
@@ -657,7 +648,7 @@ impl<'a, C> Interpreter<'a, C> {
                 self.pop_block_scope();
             }
 
-            ResolvedForPattern::Pair(first_ref, second_ref) => {
+            ForPattern::Pair(first_ref, second_ref) => {
                 self.push_block_scope();
 
                 for (key, value_reference) in ValueReference(iterator_value)
@@ -692,9 +683,9 @@ impl<'a, C> Interpreter<'a, C> {
 
     fn evaluate_for_loop(
         &mut self,
-        pattern: &ResolvedForPattern,
-        iterator_expr: &ResolvedIterable,
-        body: &Box<ResolvedExpression>,
+        pattern: &ForPattern,
+        iterator_expr: &Iterable,
+        body: &Box<Expression>,
     ) -> Result<ValueWithSignal, ExecuteError> {
         let mut result = Value::Unit;
 
@@ -702,7 +693,7 @@ impl<'a, C> Interpreter<'a, C> {
             self.evaluate_mut_or_immutable_expression(&iterator_expr.resolved_expression)?;
 
         match pattern {
-            ResolvedForPattern::Single(var_ref) => {
+            ForPattern::Single(var_ref) => {
                 self.push_block_scope();
 
                 for value in iterator_value.into_iter().unwrap() {
@@ -728,7 +719,7 @@ impl<'a, C> Interpreter<'a, C> {
                 self.pop_block_scope();
             }
 
-            ResolvedForPattern::Pair(first_ref, second_ref) => {
+            ForPattern::Pair(first_ref, second_ref) => {
                 self.push_block_scope();
 
                 // iterator_expr.is_mutable() should select reference
@@ -764,7 +755,7 @@ impl<'a, C> Interpreter<'a, C> {
         Ok(ValueWithSignal::Value(result))
     }
 
-    fn debug_expr(&self, expr: &ResolvedExpression) {
+    fn debug_expr(&self, expr: &Expression) {
         if let Some(debug_source_map) = self.debug_source_map {
             let source_line = debug_source_map.get_text(&expr.node);
             eprintln!("{:?}:\n  {}", expr.kind, source_line);
@@ -776,13 +767,13 @@ impl<'a, C> Interpreter<'a, C> {
     #[allow(clippy::too_many_lines)]
     fn evaluate_expression_with_signal(
         &mut self,
-        expr: &ResolvedExpression,
+        expr: &Expression,
     ) -> Result<ValueWithSignal, ExecuteError> {
         match &expr.kind {
-            ResolvedExpressionKind::Break => Ok(ValueWithSignal::Break),
-            ResolvedExpressionKind::Continue => Ok(ValueWithSignal::Continue),
+            ExpressionKind::Break => Ok(ValueWithSignal::Break),
+            ExpressionKind::Continue => Ok(ValueWithSignal::Continue),
 
-            ResolvedExpressionKind::Return(maybe_expr) => {
+            ExpressionKind::Return(maybe_expr) => {
                 let value = match maybe_expr {
                     None => Value::Unit,
                     Some(expr) => self.evaluate_expression(expr)?,
@@ -790,11 +781,9 @@ impl<'a, C> Interpreter<'a, C> {
                 Ok(ValueWithSignal::Return(value))
             }
 
-            ResolvedExpressionKind::WhileLoop(condition, body) => {
-                self.evaluate_while_loop(condition, body)
-            }
+            ExpressionKind::WhileLoop(condition, body) => self.evaluate_while_loop(condition, body),
 
-            ResolvedExpressionKind::ForLoop(pattern, iterator_expr, body) => {
+            ExpressionKind::ForLoop(pattern, iterator_expr, body) => {
                 if pattern.is_mutable() {
                     self.evaluate_for_loop_mutable(pattern, iterator_expr, body)
                 } else {
@@ -802,7 +791,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            ResolvedExpressionKind::If(condition, consequences, optional_alternative) => {
+            ExpressionKind::If(condition, consequences, optional_alternative) => {
                 let cond_value = self.evaluate_expression(&condition.expression)?;
                 if cond_value.is_truthy().unwrap() {
                     // TODO: error handling
@@ -814,9 +803,9 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            ResolvedExpressionKind::Block(expressions) => self.evaluate_block(expressions),
+            ExpressionKind::Block(expressions) => self.evaluate_block(expressions),
 
-            ResolvedExpressionKind::When(bindings, true_block, maybe_else_block) => {
+            ExpressionKind::When(bindings, true_block, maybe_else_block) => {
                 let mut all_are_some = true;
                 let mut all_expressions = Vec::new();
                 for binding in bindings {
@@ -872,33 +861,33 @@ impl<'a, C> Interpreter<'a, C> {
     // ---------------
     #[allow(clippy::too_many_lines)]
     #[inline]
-    fn evaluate_expression(&mut self, expr: &ResolvedExpression) -> Result<Value, ExecuteError> {
+    fn evaluate_expression(&mut self, expr: &Expression) -> Result<Value, ExecuteError> {
         self.depth += 1;
         self.debug_expr(expr);
         let value = match &expr.kind {
             // Illegal in this context
-            ResolvedExpressionKind::Continue => {
+            ExpressionKind::Continue => {
                 return Err(self.create_err(ExecuteErrorKind::ContinueNotAllowedHere, &expr.node));
             }
-            ResolvedExpressionKind::Break => {
+            ExpressionKind::Break => {
                 return Err(self.create_err(ExecuteErrorKind::BreakNotAllowedHere, &expr.node));
             }
-            ResolvedExpressionKind::Return(_maybe_expr) => {
+            ExpressionKind::Return(_maybe_expr) => {
                 return Err(self.create_err(ExecuteErrorKind::ReturnNotAllowedHere, &expr.node));
             }
 
-            ResolvedExpressionKind::WhileLoop(_condition, _body) => {
+            ExpressionKind::WhileLoop(_condition, _body) => {
                 panic!("should have been handled earlier")
             }
 
-            ResolvedExpressionKind::ForLoop(_pattern, _iterator_expr, _body) => {
+            ExpressionKind::ForLoop(_pattern, _iterator_expr, _body) => {
                 panic!("should have been handled earlier")
             }
 
             // Constructing
-            ResolvedExpressionKind::Literal(lit) => self.evaluate_literal(&expr.node, lit)?,
+            ExpressionKind::Literal(lit) => self.evaluate_literal(&expr.node, lit)?,
 
-            ResolvedExpressionKind::Array(array_instantiation) => {
+            ExpressionKind::Array(array_instantiation) => {
                 let mut values = Vec::new();
                 for element in &array_instantiation.expressions {
                     values.push(self.evaluate_expression(element)?);
@@ -910,7 +899,7 @@ impl<'a, C> Interpreter<'a, C> {
                 )
             }
 
-            ResolvedExpressionKind::StructInstantiation(struct_instantiation) => {
+            ExpressionKind::StructInstantiation(struct_instantiation) => {
                 // Evaluate all field expressions and validate types
                 let mut field_values =
                     Vec::with_capacity(struct_instantiation.source_order_expressions.len());
@@ -931,7 +920,7 @@ impl<'a, C> Interpreter<'a, C> {
                 )
             }
 
-            ResolvedExpressionKind::Range(start, end, range_mode) => {
+            ExpressionKind::Range(start, end, range_mode) => {
                 let start_val = self.evaluate_expression(start)?;
                 let end_val = self.evaluate_expression(end)?;
                 match (start_val, end_val) {
@@ -943,7 +932,7 @@ impl<'a, C> Interpreter<'a, C> {
             }
 
             // ==================== ASSIGNMENT ====================
-            ResolvedExpressionKind::VariableDefinition(target_var, source_expr) => {
+            ExpressionKind::VariableDefinition(target_var, source_expr) => {
                 let source_value_or_reference =
                     self.evaluate_mut_or_immutable_expression(source_expr)?;
 
@@ -953,7 +942,7 @@ impl<'a, C> Interpreter<'a, C> {
                 source_value_or_reference.to_value().clone()
             }
 
-            ResolvedExpressionKind::VariableReassignment(variable_ref, source_expr) => {
+            ExpressionKind::VariableReassignment(variable_ref, source_expr) => {
                 let new_value = self.evaluate_mut_or_immutable_expression(source_expr)?;
 
                 let value_ref = self
@@ -975,7 +964,7 @@ impl<'a, C> Interpreter<'a, C> {
 
                 Value::Unit
             }
-            ResolvedExpressionKind::ArrayExtend(location, source_expression) => {
+            ExpressionKind::ArrayExtend(location, source_expression) => {
                 let source_val = self.evaluate_expression(source_expression)?;
 
                 let array_val_ref = self.evaluate_location(&location.0)?;
@@ -993,7 +982,7 @@ impl<'a, C> Interpreter<'a, C> {
                 Value::Unit
             }
 
-            ResolvedExpressionKind::ArrayPush(location, source_expression) => {
+            ExpressionKind::ArrayPush(location, source_expression) => {
                 let source_val = self.evaluate_expression(source_expression)?;
                 let array_val_ref = self.evaluate_location(&location.0)?;
 
@@ -1006,7 +995,7 @@ impl<'a, C> Interpreter<'a, C> {
                 Value::Unit
             }
 
-            ResolvedExpressionKind::MapAssignment(map, index, value) => {
+            ExpressionKind::MapAssignment(map, index, value) => {
                 let map_val = self.evaluate_location(&map.0)?;
                 let index_val = self.evaluate_expression(index)?;
                 let new_val = self.evaluate_expression(value)?;
@@ -1025,13 +1014,13 @@ impl<'a, C> Interpreter<'a, C> {
             }
 
             // ------------- LOOKUP ---------------------
-            ResolvedExpressionKind::ConstantAccess(constant) => {
+            ExpressionKind::ConstantAccess(constant) => {
                 self.constants.lookup_constant_value(constant.id).clone()
             }
 
-            ResolvedExpressionKind::AssignmentSlice(_mut_location, _source) => todo!(),
+            ExpressionKind::AssignmentSlice(_mut_location, _source) => todo!(),
 
-            ResolvedExpressionKind::Assignment(mut_location_expr, source_expr) => {
+            ExpressionKind::Assignment(mut_location_expr, source_expr) => {
                 let value_ref = self.evaluate_location(&mut_location_expr.0)?;
                 let source_value = self.evaluate_expression(source_expr)?;
 
@@ -1040,7 +1029,7 @@ impl<'a, C> Interpreter<'a, C> {
                 Value::Unit
             }
 
-            ResolvedExpressionKind::CompoundAssignment(mut_location_expr, op, source_expr) => {
+            ExpressionKind::CompoundAssignment(mut_location_expr, op, source_expr) => {
                 let value_ref = self.evaluate_location(&mut_location_expr.0)?;
                 let source_value = self.evaluate_expression(source_expr)?;
 
@@ -1055,30 +1044,26 @@ impl<'a, C> Interpreter<'a, C> {
             }
 
             // Operators
-            ResolvedExpressionKind::BinaryOp(binary_operator) => {
+            ExpressionKind::BinaryOp(binary_operator) => {
                 let left_val = self.evaluate_expression(&binary_operator.left)?;
                 let right_val = self.evaluate_expression(&binary_operator.right)?;
                 self.evaluate_binary_op(&expr.node, left_val, &binary_operator.kind, right_val)?
             }
 
-            ResolvedExpressionKind::UnaryOp(unary_operator) => {
+            ExpressionKind::UnaryOp(unary_operator) => {
                 let left_val = self.evaluate_expression(&unary_operator.left)?;
                 self.evaluate_unary_op(&expr.node, &unary_operator.kind, left_val)?
             }
 
             // Calling
-            ResolvedExpressionKind::FunctionCall(_signature, expr, arguments) => {
+            ExpressionKind::FunctionCall(_signature, expr, arguments) => {
                 self.evaluate_function_call(expr, arguments)?
             }
 
-            ResolvedExpressionKind::MemberCall(resolved_member_call) => {
+            ExpressionKind::MemberCall(resolved_member_call) => {
                 let parameters = match &*resolved_member_call.function {
-                    ResolvedFunction::Internal(function_data) => {
-                        &function_data.signature.parameters
-                    }
-                    ResolvedFunction::External(external_data) => {
-                        &external_data.signature.parameters
-                    }
+                    Function::Internal(function_data) => &function_data.signature.parameters,
+                    Function::External(external_data) => &external_data.signature.parameters,
                 };
 
                 let mut member_call_arguments = Vec::new();
@@ -1096,7 +1081,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
 
                 match &*resolved_member_call.function {
-                    ResolvedFunction::Internal(internal_function) => {
+                    Function::Internal(internal_function) => {
                         self.push_function_scope();
                         self.bind_parameters(
                             &expr.node,
@@ -1108,7 +1093,7 @@ impl<'a, C> Interpreter<'a, C> {
 
                         result
                     }
-                    ResolvedFunction::External(external_func) => {
+                    Function::External(external_func) => {
                         let mut func = self
                             .externals
                             .external_functions_by_id
@@ -1120,19 +1105,19 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            ResolvedExpressionKind::Block(statements) => {
+            ExpressionKind::Block(statements) => {
                 self.evaluate_block(statements)?.try_into().unwrap() // TODO: Error handling
             }
 
-            ResolvedExpressionKind::InterpolatedString(parts) => {
+            ExpressionKind::InterpolatedString(parts) => {
                 let mut result = String::new();
 
                 for part in parts {
                     match part {
-                        ResolvedStringPart::Literal(_resolved_node, text) => {
+                        StringPart::Literal(_resolved_node, text) => {
                             result.push_str(text);
                         }
-                        ResolvedStringPart::Interpolation(expr, format_spec) => {
+                        StringPart::Interpolation(expr, format_spec) => {
                             let value = self.evaluate_expression(expr)?;
                             let formatted = match format_spec {
                                 Some(spec) => format_value(&value, &spec.kind).unwrap(), // TODO: Error handling
@@ -1146,14 +1131,14 @@ impl<'a, C> Interpreter<'a, C> {
                 Value::String(result)
             }
 
-            ResolvedExpressionKind::Match(resolved_match) => self.eval_match(resolved_match)?,
-            ResolvedExpressionKind::Guard(guards) => self.eval_guard(&expr.node, guards)?,
+            ExpressionKind::Match(resolved_match) => self.eval_match(resolved_match)?,
+            ExpressionKind::Guard(guards) => self.eval_guard(&expr.node, guards)?,
 
-            ResolvedExpressionKind::InternalFunctionAccess(fetch_function) => {
+            ExpressionKind::InternalFunctionAccess(fetch_function) => {
                 Value::InternalFunction(fetch_function.clone())
             }
 
-            ResolvedExpressionKind::ExternalFunctionAccess(fetch_function) => {
+            ExpressionKind::ExternalFunctionAccess(fetch_function) => {
                 self.externals
                     .external_functions_by_id
                     .get(&fetch_function.id)
@@ -1161,9 +1146,9 @@ impl<'a, C> Interpreter<'a, C> {
                 Value::ExternalFunction(fetch_function.clone())
             }
 
-            //ResolvedExpressionKind::MutMemberCall(_, _) => todo!(),
-            ResolvedExpressionKind::Tuple(_) => todo!(),
-            ResolvedExpressionKind::Option(inner) => match inner {
+            //ExpressionKind::MutMemberCall(_, _) => todo!(),
+            ExpressionKind::Tuple(_) => todo!(),
+            ExpressionKind::Option(inner) => match inner {
                 None => Value::Option(None),
                 Some(expression) => {
                     let v = self.evaluate_expression(expression)?;
@@ -1177,10 +1162,7 @@ impl<'a, C> Interpreter<'a, C> {
             },
 
             // --------------- SPECIAL FUNCTIONS
-            ResolvedExpressionKind::SparseNew(
-                sparse_id_rust_type_ref,
-                resolved_value_item_type,
-            ) => {
+            ExpressionKind::SparseNew(sparse_id_rust_type_ref, resolved_value_item_type) => {
                 let sparse_value_map = SparseValueMap::new(
                     sparse_id_rust_type_ref.clone(),
                     resolved_value_item_type.clone(),
@@ -1188,7 +1170,7 @@ impl<'a, C> Interpreter<'a, C> {
                 to_rust_value(sparse_id_rust_type_ref.clone(), sparse_value_map)
             }
 
-            ResolvedExpressionKind::CoerceOptionToBool(expression) => {
+            ExpressionKind::CoerceOptionToBool(expression) => {
                 let value = self.evaluate_expression(expression)?;
                 match value {
                     Value::Option(inner) => Value::Bool(inner.is_some()),
@@ -1200,7 +1182,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            ResolvedExpressionKind::If(condition, consequences, optional_alternative) => {
+            ExpressionKind::If(condition, consequences, optional_alternative) => {
                 let cond_value = self.evaluate_expression(&condition.expression)?;
                 if cond_value.is_truthy().unwrap() {
                     // TODO: ERROR HANDLING
@@ -1212,7 +1194,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            ResolvedExpressionKind::When(bindings, true_block, maybe_else_block) => {
+            ExpressionKind::When(bindings, true_block, maybe_else_block) => {
                 let mut all_are_some = true;
                 let mut all_expressions = Vec::new();
                 for binding in bindings {
@@ -1255,7 +1237,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            ResolvedExpressionKind::TupleDestructuring(variable_refs, _, expr) => {
+            ExpressionKind::TupleDestructuring(variable_refs, _, expr) => {
                 let value = self.evaluate_expression(expr)?;
                 if let Value::Tuple(_tuple_ref, values) = value {
                     if variable_refs.len() > values.len() {
@@ -1273,19 +1255,20 @@ impl<'a, C> Interpreter<'a, C> {
                 }
                 Value::Unit
             }
-            ResolvedExpressionKind::VariableAccess(variable_ref) => {
+            ExpressionKind::VariableAccess(variable_ref) => {
                 self.current_block_scopes.lookup_var_value(variable_ref)
             }
-            ResolvedExpressionKind::FieldAccess(expr, struct_field) => {
+            ExpressionKind::FieldAccess(expr, index) => {
                 let resolved_expr = self.evaluate_expression(expr)?;
                 let (_struct_type, values) = resolved_expr
                     .expect_struct()
                     .map_err(|_| self.create_err(ExecuteErrorKind::ExpectedStruct, &expr.node))?;
-                let x = values[struct_field.index].borrow().clone();
+
+                let x = values[*index].borrow().clone();
                 x
             }
 
-            ResolvedExpressionKind::ArrayAccess(expr, _array, index_expr) => {
+            ExpressionKind::ArrayAccess(expr, _array, index_expr) => {
                 let resolved_expr = self.evaluate_expression(expr)?;
                 let (_array_type, values) = resolved_expr
                     .expect_array()
@@ -1301,7 +1284,7 @@ impl<'a, C> Interpreter<'a, C> {
                 x
             }
 
-            ResolvedExpressionKind::MapIndexAccess(expr, _map_type_ref, key_expr) => {
+            ExpressionKind::MapIndexAccess(expr, _map_type_ref, key_expr) => {
                 let resolved_expr = self.evaluate_expression(expr)?;
                 let (_map_type, seq_map) = resolved_expr
                     .expect_map()
@@ -1312,9 +1295,9 @@ impl<'a, C> Interpreter<'a, C> {
                 let value_val_maybe = seq_map.get(&key_val);
                 Value::Option(value_val_maybe.cloned())
             }
-            ResolvedExpressionKind::StringRangeAccess(_, _) => todo!(),
-            ResolvedExpressionKind::ArrayRangeAccess(_, _) => todo!(),
-            ResolvedExpressionKind::PostfixChain(start, parts) => {
+            ExpressionKind::StringRangeAccess(_, _) => todo!(),
+            ExpressionKind::ArrayRangeAccess(_, _) => todo!(),
+            ExpressionKind::PostfixChain(start, parts) => {
                 let value_ref = self.eval_chain(&expr.node, start, parts)?;
                 let x = value_ref.borrow().clone();
                 x
@@ -1325,21 +1308,17 @@ impl<'a, C> Interpreter<'a, C> {
         Ok(value)
     }
 
-    fn evaluate_literal(
-        &mut self,
-        node: &ResolvedNode,
-        lit: &ResolvedLiteral,
-    ) -> Result<Value, ExecuteError> {
+    fn evaluate_literal(&mut self, node: &Node, lit: &Literal) -> Result<Value, ExecuteError> {
         let v = match lit {
-            ResolvedLiteral::IntLiteral(n) => Value::Int(*n),
-            ResolvedLiteral::FloatLiteral(f) => Value::Float(*f),
-            ResolvedLiteral::StringLiteral(s) => Value::String(s.clone()),
-            ResolvedLiteral::BoolLiteral(b) => Value::Bool(*b),
+            Literal::IntLiteral(n) => Value::Int(*n),
+            Literal::FloatLiteral(f) => Value::Float(*f),
+            Literal::StringLiteral(s) => Value::String(s.clone()),
+            Literal::BoolLiteral(b) => Value::Bool(*b),
 
-            ResolvedLiteral::EnumVariantLiteral(enum_variant_type, data) => {
+            Literal::EnumVariantLiteral(enum_variant_type, data) => {
                 let variant_container_value: Value = match &**enum_variant_type {
-                    ResolvedEnumVariantType::Tuple(tuple_type) => match data {
-                        ResolvedEnumLiteralData::Tuple(tuple_expressions) => {
+                    EnumVariantType::Tuple(tuple_type) => match data {
+                        EnumLiteralData::Tuple(tuple_expressions) => {
                             let eval_expressions = self.evaluate_expressions(tuple_expressions)?;
                             let value_refs = values_to_value_refs_owned(eval_expressions);
                             Value::EnumVariantTuple(tuple_type.clone(), value_refs)
@@ -1347,8 +1326,8 @@ impl<'a, C> Interpreter<'a, C> {
                         _ => panic!("wrong container type"),
                     },
 
-                    ResolvedEnumVariantType::Struct(struct_type_ref) => match data {
-                        ResolvedEnumLiteralData::Struct(source_order_field_values) => {
+                    EnumVariantType::Struct(struct_type_ref) => match data {
+                        EnumLiteralData::Struct(source_order_field_values) => {
                             let mut field_values =
                                 Vec::with_capacity(source_order_field_values.len());
                             field_values
@@ -1362,23 +1341,21 @@ impl<'a, C> Interpreter<'a, C> {
                         _ => panic!("wrong container type"),
                     },
 
-                    ResolvedEnumVariantType::Nothing(data) => {
-                        Value::EnumVariantSimple(data.clone())
-                    }
+                    EnumVariantType::Nothing(data) => Value::EnumVariantSimple(data.clone()),
                 };
                 variant_container_value
             }
 
-            ResolvedLiteral::TupleLiteral(tuple_type, resolved_expressions) => {
+            Literal::TupleLiteral(tuple_type, resolved_expressions) => {
                 let values = self.evaluate_expressions(resolved_expressions)?;
                 Value::Tuple(tuple_type.clone(), convert_vec_to_rc_refcell(values))
             }
 
-            ResolvedLiteral::Array(array_type, expressions) => {
+            Literal::Array(array_type, expressions) => {
                 let values = self.evaluate_expressions(expressions)?;
                 Value::Array(array_type.clone(), convert_vec_to_rc_refcell(values))
             }
-            ResolvedLiteral::Map(map_type_ref, expressions) => {
+            Literal::Map(map_type_ref, expressions) => {
                 let mut items = SeqMap::new();
                 for (key, value) in expressions {
                     let key_val = self.evaluate_expression(key)?;
@@ -1394,7 +1371,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
                 Value::Map(map_type_ref.clone(), items)
             }
-            ResolvedLiteral::NoneLiteral => Value::Option(None),
+            Literal::NoneLiteral => Value::Option(None),
         };
         Ok(v)
     }
@@ -1403,11 +1380,11 @@ impl<'a, C> Interpreter<'a, C> {
     fn eval_internal_postfix(
         &mut self,
         value_ref: &ValueRef,
-        resolved_postfix: &ResolvedPostfix,
+        resolved_postfix: &Postfix,
     ) -> Result<Value, ExecuteError> {
         let node = &resolved_postfix.node;
         let val = match &resolved_postfix.kind {
-            ResolvedPostfixKind::ArrayRemoveIndex(usize_index_expression) => {
+            PostfixKind::ArrayRemoveIndex(usize_index_expression) => {
                 let index_val = self.evaluate_expression(usize_index_expression)?;
                 let Value::Int(index) = index_val else {
                     return Err(self.create_err(ExecuteErrorKind::ArgumentIsNotMutable, node));
@@ -1422,7 +1399,7 @@ impl<'a, C> Interpreter<'a, C> {
                 value_ref.borrow().clone()
             }
 
-            ResolvedPostfixKind::ArrayClear => {
+            PostfixKind::ArrayClear => {
                 if let Value::Array(_type_id, ref mut vector) = &mut *value_ref.borrow_mut() {
                     vector.clear();
                 } else {
@@ -1431,7 +1408,7 @@ impl<'a, C> Interpreter<'a, C> {
                 Value::Unit
             }
 
-            ResolvedPostfixKind::MapHas(index_expr) => {
+            PostfixKind::MapHas(index_expr) => {
                 let index_val = self.evaluate_expression(index_expr)?;
 
                 if let Value::Map(_type_id, ref seq_map) = value_ref.borrow().clone() {
@@ -1442,7 +1419,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            ResolvedPostfixKind::MapRemove(index_expr, _map_type_ref) => {
+            PostfixKind::MapRemove(index_expr, _map_type_ref) => {
                 let index_val = self.evaluate_expression(&index_expr)?;
 
                 let result = {
@@ -1457,7 +1434,7 @@ impl<'a, C> Interpreter<'a, C> {
                 result
             }
 
-            ResolvedPostfixKind::SparseAdd(value_expression) => {
+            PostfixKind::SparseAdd(value_expression) => {
                 let borrowed = value_ref.borrow();
 
                 let sparse_value_map = borrowed.downcast_rust::<SparseValueMap>();
@@ -1471,7 +1448,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            ResolvedPostfixKind::SparseRemove(id_expression) => {
+            PostfixKind::SparseRemove(id_expression) => {
                 let borrowed = value_ref.borrow();
 
                 let sparse_value_map = borrowed.downcast_rust::<SparseValueMap>();
@@ -1486,7 +1463,7 @@ impl<'a, C> Interpreter<'a, C> {
 
                 Value::Unit
             }
-            ResolvedPostfixKind::SparseAccess(id_expression) => {
+            PostfixKind::SparseAccess(id_expression) => {
                 let sparse_value_map = value_ref.borrow_mut().downcast_rust::<SparseValueMap>();
                 if let Some(found) = sparse_value_map {
                     let id_value = self.evaluate_expression(id_expression)?;
@@ -1504,14 +1481,14 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            ResolvedPostfixKind::FloatRound => {
+            PostfixKind::FloatRound => {
                 if let Value::Float(f) = value_ref.borrow().clone() {
                     Value::Int(f.round().into())
                 } else {
                     return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
                 }
             }
-            ResolvedPostfixKind::FloatFloor => {
+            PostfixKind::FloatFloor => {
                 if let Value::Float(f) = value_ref.borrow().clone() {
                     Value::Int(f.floor().into())
                 } else {
@@ -1519,7 +1496,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            ResolvedPostfixKind::FloatSign => {
+            PostfixKind::FloatSign => {
                 if let Value::Float(f) = value_ref.borrow().clone() {
                     let signum = if f.inner() < 0 {
                         -1
@@ -1533,7 +1510,7 @@ impl<'a, C> Interpreter<'a, C> {
                     return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
                 }
             }
-            ResolvedPostfixKind::FloatAbs => {
+            PostfixKind::FloatAbs => {
                 if let Value::Float(f) = value_ref.borrow().clone() {
                     Value::Float(f.abs())
                 } else {
@@ -1541,7 +1518,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            ResolvedPostfixKind::FloatCos => {
+            PostfixKind::FloatCos => {
                 if let Value::Float(f) = value_ref.borrow().clone() {
                     Value::Float(f.cos())
                 } else {
@@ -1549,7 +1526,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            ResolvedPostfixKind::FloatAcos => {
+            PostfixKind::FloatAcos => {
                 if let Value::Float(f) = value_ref.borrow().clone() {
                     Value::Float(f.acos())
                 } else {
@@ -1557,7 +1534,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            ResolvedPostfixKind::FloatSin => {
+            PostfixKind::FloatSin => {
                 if let Value::Float(f) = value_ref.borrow().clone() {
                     Value::Float(f.sin())
                 } else {
@@ -1565,7 +1542,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            ResolvedPostfixKind::FloatAsin => {
+            PostfixKind::FloatAsin => {
                 if let Value::Float(f) = value_ref.borrow().clone() {
                     Value::Float(f.asin())
                 } else {
@@ -1573,7 +1550,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            ResolvedPostfixKind::FloatSqrt => {
+            PostfixKind::FloatSqrt => {
                 if let Value::Float(f) = value_ref.borrow().clone() {
                     Value::Float(f.sqrt())
                 } else {
@@ -1581,7 +1558,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            ResolvedPostfixKind::FloatMin(min) => {
+            PostfixKind::FloatMin(min) => {
                 let min_value = self.evaluate_expression(min)?;
                 if let (Value::Float(f), Value::Float(min_f)) =
                     (value_ref.borrow().clone(), min_value)
@@ -1592,7 +1569,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            ResolvedPostfixKind::FloatMax(max) => {
+            PostfixKind::FloatMax(max) => {
                 let max_value = self.evaluate_expression(max)?;
                 if let (Value::Float(f), Value::Float(max_f)) =
                     (value_ref.borrow().clone(), max_value)
@@ -1603,7 +1580,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            ResolvedPostfixKind::FloatAtan2(x) => {
+            PostfixKind::FloatAtan2(x) => {
                 let x_value = self.evaluate_expression(x)?;
                 if let (Value::Float(_y_f), Value::Float(_x_f)) =
                     (value_ref.borrow().clone(), x_value)
@@ -1614,7 +1591,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            ResolvedPostfixKind::FloatClamp(min, max) => {
+            PostfixKind::FloatClamp(min, max) => {
                 let min_value = self.evaluate_expression(min)?;
                 let max_value = self.evaluate_expression(max)?;
                 if let (Value::Float(f), Value::Float(min_f), Value::Float(max_f)) =
@@ -1626,7 +1603,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            ResolvedPostfixKind::FloatRnd => {
+            PostfixKind::FloatRnd => {
                 if let Value::Float(f) = value_ref.borrow().clone() {
                     let new_raw = squirrel_prng::squirrel_noise5(f.inner() as u32, 0);
                     Value::Int(new_raw as i32)
@@ -1635,7 +1612,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            ResolvedPostfixKind::IntAbs => {
+            PostfixKind::IntAbs => {
                 if let Value::Int(i) = value_ref.borrow().clone() {
                     Value::Int(i.abs())
                 } else {
@@ -1643,7 +1620,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            ResolvedPostfixKind::IntClamp(min, max) => {
+            PostfixKind::IntClamp(min, max) => {
                 let min_value = self.evaluate_expression(min)?;
                 let max_value = self.evaluate_expression(max)?;
                 if let (Value::Int(i), Value::Int(min_i), Value::Int(max_i)) =
@@ -1655,7 +1632,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            ResolvedPostfixKind::IntMin(max) => {
+            PostfixKind::IntMin(max) => {
                 let max_value = self.evaluate_expression(max)?;
                 if let (Value::Int(i), Value::Int(min_i)) = (value_ref.borrow().clone(), max_value)
                 {
@@ -1665,7 +1642,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            ResolvedPostfixKind::IntMax(max) => {
+            PostfixKind::IntMax(max) => {
                 let max_value = self.evaluate_expression(max)?;
                 if let (Value::Int(i), Value::Int(max_i)) = (value_ref.borrow().clone(), max_value)
                 {
@@ -1675,7 +1652,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            ResolvedPostfixKind::IntRnd => {
+            PostfixKind::IntRnd => {
                 if let Value::Int(i) = value_ref.borrow().clone() {
                     Value::Int(squirrel_prng::squirrel_noise5(i as u32, 0) as i32)
                 } else {
@@ -1683,7 +1660,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            ResolvedPostfixKind::IntToFloat => {
+            PostfixKind::IntToFloat => {
                 if let Value::Int(i) = value_ref.borrow().clone() {
                     Value::Float(Fp::from(i as i16))
                 } else {
@@ -1691,7 +1668,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            ResolvedPostfixKind::StringLen => {
+            PostfixKind::StringLen => {
                 if let Value::String(s) = value_ref.borrow().clone() {
                     Value::Int(s.len().try_into().expect("string len overflow"))
                 } else {
@@ -1699,7 +1676,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            ResolvedPostfixKind::Tuple2FloatMagnitude => {
+            PostfixKind::Tuple2FloatMagnitude => {
                 if let Value::Tuple(_tuple_ref, values) = value_ref.borrow().clone() {
                     if values.len() != 2 {
                         return Err(self.create_err(
@@ -1742,12 +1719,12 @@ impl<'a, C> Interpreter<'a, C> {
     #[allow(clippy::too_many_lines)]
     fn eval_chain(
         &mut self,
-        node: &ResolvedNode,
-        start: &ResolvedExpression,
-        parts: &[ResolvedPostfix],
+        node: &Node,
+        start: &Expression,
+        parts: &[Postfix],
     ) -> Result<ValueRef, ExecuteError> {
         let (mut val_ref, mut is_mutable) = match &start.kind {
-            ResolvedExpressionKind::VariableAccess(start_var) => {
+            ExpressionKind::VariableAccess(start_var) => {
                 let start_variable_value = self.current_block_scopes.get_var(&start_var);
 
                 match start_variable_value {
@@ -1765,7 +1742,7 @@ impl<'a, C> Interpreter<'a, C> {
         let mut is_undefined = false;
 
         for part in parts {
-            if let ResolvedPostfixKind::NoneCoalesce(default_expression) = &part.kind {
+            if let PostfixKind::NoneCoalesce(default_expression) = &part.kind {
                 val_ref = {
                     let borrowed = val_ref.borrow();
 
@@ -1788,10 +1765,10 @@ impl<'a, C> Interpreter<'a, C> {
                 continue;
             }
             match &part.kind {
-                ResolvedPostfixKind::NoneCoalesce(_default_expression) => {
+                PostfixKind::NoneCoalesce(_default_expression) => {
                     // Handled earlier
                 }
-                ResolvedPostfixKind::StructField(expected_struct_type, index) => {
+                PostfixKind::StructField(expected_struct_type, index) => {
                     let (encountered_struct_type, fields) = {
                         let brw = val_ref.borrow();
                         let (struct_ref, fields_ref) = brw.expect_struct().map_err(|_| {
@@ -1806,7 +1783,7 @@ impl<'a, C> Interpreter<'a, C> {
                     ));
                     val_ref = fields[*index].clone();
                 }
-                ResolvedPostfixKind::ArrayIndex(expected_array_type, index_expr) => {
+                PostfixKind::ArrayIndex(expected_array_type, index_expr) => {
                     let (encountered_array_type, fields) = {
                         let brw = val_ref.borrow();
                         let (array_ref, fields_ref) = brw.expect_array().map_err(|_| {
@@ -1827,7 +1804,7 @@ impl<'a, C> Interpreter<'a, C> {
                     }
                     val_ref = fields[index].clone();
                 }
-                ResolvedPostfixKind::MapIndex(_expected_map_type_ref, key_expr) => {
+                PostfixKind::MapIndex(_expected_map_type_ref, key_expr) => {
                     let (_encountered_map_type, seq_map) = {
                         let brw = val_ref.borrow();
                         let (array_ref, seq_map) = brw.expect_map().map_err(|_| {
@@ -1839,7 +1816,7 @@ impl<'a, C> Interpreter<'a, C> {
 
                     val_ref = Rc::new(RefCell::new(Value::Option(seq_map.get(&key_val).cloned())));
                 }
-                ResolvedPostfixKind::RustTypeIndexRef(_rust_type_ref, map_expr) => {
+                PostfixKind::ExternalTypeIndexRef(_rust_type_ref, map_expr) => {
                     let key_expr_value = self.evaluate_expression(map_expr)?;
                     val_ref = {
                         if let Some(found_sparse_id) =
@@ -1859,20 +1836,20 @@ impl<'a, C> Interpreter<'a, C> {
                         }
                     };
                 }
-                ResolvedPostfixKind::MemberCall(function_ref, arguments) => {
+                PostfixKind::MemberCall(function_ref, arguments) => {
                     let val =
                         self.eval_member_call(node, &val_ref, is_mutable, function_ref, arguments)?;
 
                     val_ref = Rc::new(RefCell::new(val));
                     is_mutable = false;
                 }
-                ResolvedPostfixKind::FunctionCall(arguments) => {
+                PostfixKind::FunctionCall(arguments) => {
                     let val = self.eval_function_call(node, &val_ref, arguments)?;
 
                     val_ref = Rc::new(RefCell::new(val));
                     is_mutable = false;
                 }
-                ResolvedPostfixKind::OptionUnwrap => {
+                PostfixKind::OptionUnwrap => {
                     val_ref = {
                         let borrowed = val_ref.borrow();
 
@@ -1914,13 +1891,13 @@ impl<'a, C> Interpreter<'a, C> {
 
     fn eval_function_call(
         &mut self,
-        node: &ResolvedNode,
+        node: &Node,
         function_val: &ValueRef,
-        arguments: &[ResolvedArgumentExpressionOrLocation],
+        arguments: &[ArgumentExpressionOrLocation],
     ) -> Result<Value, ExecuteError> {
         let resolved_fn = match function_val.borrow().clone() {
-            Value::InternalFunction(x) => ResolvedFunction::Internal(x.clone()),
-            Value::ExternalFunction(external_fn) => ResolvedFunction::External(external_fn.clone()),
+            Value::InternalFunction(x) => Function::Internal(x.clone()),
+            Value::ExternalFunction(external_fn) => Function::External(external_fn.clone()),
             _ => panic!("no function to call"),
         };
 
@@ -1933,7 +1910,7 @@ impl<'a, C> Interpreter<'a, C> {
         let resolved_arguments = self.evaluate_args(&arguments)?;
 
         let result_val = match &resolved_fn {
-            ResolvedFunction::Internal(internal_function) => {
+            Function::Internal(internal_function) => {
                 self.push_function_scope();
 
                 self.bind_parameters(node, &parameters, &resolved_arguments)?;
@@ -1942,7 +1919,7 @@ impl<'a, C> Interpreter<'a, C> {
 
                 result
             }
-            ResolvedFunction::External(external_func) => {
+            Function::External(external_func) => {
                 let mut func = self
                     .externals
                     .external_functions_by_id
@@ -1959,11 +1936,11 @@ impl<'a, C> Interpreter<'a, C> {
     #[inline]
     fn eval_member_call(
         &mut self,
-        node: &ResolvedNode,
+        node: &Node,
         self_value_ref: &ValueRef,
         is_mutable: bool,
-        function_ref: &ResolvedFunctionRef,
-        arguments: &[ResolvedArgumentExpressionOrLocation],
+        function_ref: &FunctionRef,
+        arguments: &[ArgumentExpressionOrLocation],
     ) -> Result<Value, ExecuteError> {
         let parameters = &function_ref.signature().parameters;
 
@@ -1986,7 +1963,7 @@ impl<'a, C> Interpreter<'a, C> {
         }
 
         let result_val = match &**function_ref {
-            ResolvedFunction::Internal(internal_function) => {
+            Function::Internal(internal_function) => {
                 self.push_function_scope();
                 self.bind_parameters(node, &parameters, &member_call_arguments)?;
                 let result = self.evaluate_expression(&internal_function.body)?;
@@ -1994,7 +1971,7 @@ impl<'a, C> Interpreter<'a, C> {
 
                 result
             }
-            ResolvedFunction::External(external_func) => {
+            Function::External(external_func) => {
                 let mut func = self
                     .externals
                     .external_functions_by_id
@@ -2008,11 +1985,7 @@ impl<'a, C> Interpreter<'a, C> {
         Ok(result_val)
     }
 
-    fn eval_guard(
-        &mut self,
-        node: &ResolvedNode,
-        guards: &[ResolvedGuard],
-    ) -> Result<Value, ExecuteError> {
+    fn eval_guard(&mut self, node: &Node, guards: &[Guard]) -> Result<Value, ExecuteError> {
         for guard in guards {
             let should_evaluate = if let Some(found_clause) = &guard.condition {
                 self.evaluate_expression(&found_clause.expression)?
@@ -2031,15 +2004,13 @@ impl<'a, C> Interpreter<'a, C> {
 
     #[inline(always)]
     #[allow(clippy::too_many_lines)]
-    fn eval_match(&mut self, resolved_match: &ResolvedMatch) -> Result<Value, ExecuteError> {
+    fn eval_match(&mut self, resolved_match: &Match) -> Result<Value, ExecuteError> {
         let actual_value = self.evaluate_expression(&resolved_match.expression)?;
 
         for arm in &resolved_match.arms {
             match &arm.pattern {
-                ResolvedPattern::Wildcard(_node) => {
-                    return self.evaluate_expression(&arm.expression)
-                }
-                ResolvedPattern::Normal(normal_pattern, maybe_guard) => {
+                Pattern::Wildcard(_node) => return self.evaluate_expression(&arm.expression),
+                Pattern::Normal(normal_pattern, maybe_guard) => {
                     if let Some(found_guard) = maybe_guard {
                         if !self
                             .evaluate_expression(&found_guard.expression)?
@@ -2051,19 +2022,19 @@ impl<'a, C> Interpreter<'a, C> {
                         }
                     }
                     match &normal_pattern {
-                        ResolvedNormalPattern::PatternList(elements) => {
+                        NormalPattern::PatternList(elements) => {
                             // Handle single variable/wildcard patterns that match any value
                             if elements.len() == 1 {
                                 return match &elements[0] {
-                                    ResolvedPatternElement::Variable(var_ref)
-                                    | ResolvedPatternElement::VariableWithFieldIndex(var_ref, _) => {
+                                    PatternElement::Variable(var_ref)
+                                    | PatternElement::VariableWithFieldIndex(var_ref, _) => {
                                         self.push_block_scope();
                                         self.current_block_scopes.init_var(var_ref, &actual_value);
                                         let result = self.evaluate_expression(&arm.expression);
                                         self.pop_block_scope();
                                         result
                                     }
-                                    ResolvedPatternElement::Wildcard(_) => {
+                                    PatternElement::Wildcard(_) => {
                                         // Wildcard matches anything
                                         self.evaluate_expression(&arm.expression)
                                     }
@@ -2076,22 +2047,19 @@ impl<'a, C> Interpreter<'a, C> {
 
                                     for (element, value) in elements.iter().zip(values.iter()) {
                                         match element {
-                                            ResolvedPatternElement::Variable(var_ref) => {
+                                            PatternElement::Variable(var_ref) => {
                                                 self.current_block_scopes.set_local_var_value(
                                                     var_ref,
                                                     value.borrow().clone(),
                                                 );
                                             }
-                                            ResolvedPatternElement::VariableWithFieldIndex(
-                                                var_ref,
-                                                _,
-                                            ) => {
+                                            PatternElement::VariableWithFieldIndex(var_ref, _) => {
                                                 self.current_block_scopes.set_local_var_value(
                                                     var_ref,
                                                     value.borrow().clone(),
                                                 );
                                             }
-                                            ResolvedPatternElement::Wildcard(_) => {
+                                            PatternElement::Wildcard(_) => {
                                                 // Skip wildcards
                                                 continue;
                                             }
@@ -2105,7 +2073,7 @@ impl<'a, C> Interpreter<'a, C> {
                             }
                         }
 
-                        ResolvedNormalPattern::EnumPattern(variant_ref, maybe_elements) => {
+                        NormalPattern::EnumPattern(variant_ref, maybe_elements) => {
                             match &actual_value {
                                 Value::EnumVariantTuple(value_tuple_type, values) => {
                                     // First check if the variant types match
@@ -2122,18 +2090,24 @@ impl<'a, C> Interpreter<'a, C> {
                                                 elements.iter().zip(values.iter())
                                             {
                                                 match element {
-                                                    ResolvedPatternElement::Variable(var_ref) => {
+                                                    PatternElement::Variable(var_ref) => {
                                                         self.current_block_scopes
-                                                            .set_local_var_value(var_ref, value.borrow().clone());
+                                                            .set_local_var_value(
+                                                                var_ref,
+                                                                value.borrow().clone(),
+                                                            );
                                                     }
-                                                    ResolvedPatternElement::VariableWithFieldIndex(
+                                                    PatternElement::VariableWithFieldIndex(
                                                         var_ref,
                                                         _,
                                                     ) => {
                                                         self.current_block_scopes
-                                                            .set_local_var_value(var_ref, value.borrow().clone());
+                                                            .set_local_var_value(
+                                                                var_ref,
+                                                                value.borrow().clone(),
+                                                            );
                                                     }
-                                                    ResolvedPatternElement::Wildcard(_) => continue,
+                                                    PatternElement::Wildcard(_) => continue,
                                                 }
                                             }
 
@@ -2157,7 +2131,7 @@ impl<'a, C> Interpreter<'a, C> {
                                             self.push_block_scope();
 
                                             for element in elements {
-                                                if let ResolvedPatternElement::VariableWithFieldIndex(
+                                                if let PatternElement::VariableWithFieldIndex(
                                                     var_ref,
                                                     field_index,
                                                 ) = element
@@ -2188,21 +2162,21 @@ impl<'a, C> Interpreter<'a, C> {
                             }
                         }
 
-                        ResolvedNormalPattern::Literal(lit) => match (lit, &actual_value) {
-                            (ResolvedLiteral::IntLiteral(a), Value::Int(b)) if a == b => {
+                        NormalPattern::Literal(lit) => match (lit, &actual_value) {
+                            (Literal::IntLiteral(a), Value::Int(b)) if a == b => {
                                 return self.evaluate_expression(&arm.expression);
                             }
-                            (ResolvedLiteral::FloatLiteral(a), Value::Float(b)) if a == b => {
+                            (Literal::FloatLiteral(a), Value::Float(b)) if a == b => {
                                 return self.evaluate_expression(&arm.expression);
                             }
-                            (ResolvedLiteral::StringLiteral(a), Value::String(b)) if *a == *b => {
+                            (Literal::StringLiteral(a), Value::String(b)) if *a == *b => {
                                 return self.evaluate_expression(&arm.expression);
                             }
-                            (ResolvedLiteral::BoolLiteral(a), Value::Bool(b)) if a == b => {
+                            (Literal::BoolLiteral(a), Value::Bool(b)) if a == b => {
                                 return self.evaluate_expression(&arm.expression);
                             }
                             (
-                                ResolvedLiteral::TupleLiteral(_a_type_ref, a_values),
+                                Literal::TupleLiteral(_a_type_ref, a_values),
                                 Value::Tuple(_b_type_ref, b_values),
                             ) if self.expressions_equal_to_values(&a_values, &b_values)? => {
                                 return self.evaluate_expression(&arm.expression);
@@ -2231,104 +2205,76 @@ impl<'a, C> Interpreter<'a, C> {
     #[allow(clippy::too_many_lines)]
     fn evaluate_binary_op(
         &self,
-        node: &ResolvedNode,
+        node: &Node,
         left_val: Value,
-        op: &ResolvedBinaryOperatorKind,
+        op: &BinaryOperatorKind,
         right_val: Value,
     ) -> Result<Value, ExecuteError> {
         let result: Value = match (&left_val, op, &right_val) {
             // Integer operations
-            (Value::Int(a), ResolvedBinaryOperatorKind::Add, Value::Int(b)) => Value::Int(a + b),
-            (Value::Int(a), ResolvedBinaryOperatorKind::Subtract, Value::Int(b)) => {
-                Value::Int(a - b)
-            }
-            (Value::Int(a), ResolvedBinaryOperatorKind::Multiply, Value::Int(b)) => {
-                Value::Int(a * b)
-            }
-            (Value::Int(a), ResolvedBinaryOperatorKind::Divide, Value::Int(b)) => {
+            (Value::Int(a), BinaryOperatorKind::Add, Value::Int(b)) => Value::Int(a + b),
+            (Value::Int(a), BinaryOperatorKind::Subtract, Value::Int(b)) => Value::Int(a - b),
+            (Value::Int(a), BinaryOperatorKind::Multiply, Value::Int(b)) => Value::Int(a * b),
+            (Value::Int(a), BinaryOperatorKind::Divide, Value::Int(b)) => {
                 if *b == 0 {
                     return Err(self.create_err(ExecuteErrorKind::DivideByZero, node));
                 }
                 Value::Int(a / b)
             }
-            (Value::Int(a), ResolvedBinaryOperatorKind::Modulo, Value::Int(b)) => {
+            (Value::Int(a), BinaryOperatorKind::Modulo, Value::Int(b)) => {
                 Value::Int(Self::modulo(*a, *b))
             }
-            (Value::Int(a), ResolvedBinaryOperatorKind::Equal, Value::Int(b)) => {
-                Value::Bool(a == b)
-            }
-            (Value::Int(a), ResolvedBinaryOperatorKind::NotEqual, Value::Int(b)) => {
-                Value::Bool(a != b)
-            }
-            (Value::Int(a), ResolvedBinaryOperatorKind::LessThan, Value::Int(b)) => {
-                Value::Bool(a < b)
-            }
-            (Value::Int(a), ResolvedBinaryOperatorKind::GreaterThan, Value::Int(b)) => {
-                Value::Bool(a > b)
-            }
-            (Value::Int(a), ResolvedBinaryOperatorKind::LessEqual, Value::Int(b)) => {
-                Value::Bool(a <= b)
-            }
-            (Value::Int(a), ResolvedBinaryOperatorKind::GreaterEqual, Value::Int(b)) => {
-                Value::Bool(a >= b)
-            }
+            (Value::Int(a), BinaryOperatorKind::Equal, Value::Int(b)) => Value::Bool(a == b),
+            (Value::Int(a), BinaryOperatorKind::NotEqual, Value::Int(b)) => Value::Bool(a != b),
+            (Value::Int(a), BinaryOperatorKind::LessThan, Value::Int(b)) => Value::Bool(a < b),
+            (Value::Int(a), BinaryOperatorKind::GreaterThan, Value::Int(b)) => Value::Bool(a > b),
+            (Value::Int(a), BinaryOperatorKind::LessEqual, Value::Int(b)) => Value::Bool(a <= b),
+            (Value::Int(a), BinaryOperatorKind::GreaterEqual, Value::Int(b)) => Value::Bool(a >= b),
 
             // Float operations
-            (Value::Float(a), ResolvedBinaryOperatorKind::Equal, Value::Float(b)) => {
-                Value::Bool(a == b)
-            }
-            (Value::Float(a), ResolvedBinaryOperatorKind::NotEqual, Value::Float(b)) => {
-                Value::Bool(a != b)
-            }
+            (Value::Float(a), BinaryOperatorKind::Equal, Value::Float(b)) => Value::Bool(a == b),
+            (Value::Float(a), BinaryOperatorKind::NotEqual, Value::Float(b)) => Value::Bool(a != b),
 
-            (Value::Float(a), ResolvedBinaryOperatorKind::Add, Value::Float(b)) => {
-                Value::Float(*a + *b)
-            }
-            (Value::Float(a), ResolvedBinaryOperatorKind::Subtract, Value::Float(b)) => {
+            (Value::Float(a), BinaryOperatorKind::Add, Value::Float(b)) => Value::Float(*a + *b),
+            (Value::Float(a), BinaryOperatorKind::Subtract, Value::Float(b)) => {
                 Value::Float(*a - *b)
             }
-            (Value::Float(a), ResolvedBinaryOperatorKind::Multiply, Value::Float(b)) => {
+            (Value::Float(a), BinaryOperatorKind::Multiply, Value::Float(b)) => {
                 Value::Float(*a * *b)
             }
-            (Value::Float(a), ResolvedBinaryOperatorKind::Divide, Value::Float(b)) => {
+            (Value::Float(a), BinaryOperatorKind::Divide, Value::Float(b)) => {
                 if b.abs().inner() <= 400 {
                     return Err(self.create_err(ExecuteErrorKind::DivideByZero, node));
                 }
                 Value::Float(*a / *b)
             }
-            (Value::Float(a), ResolvedBinaryOperatorKind::Modulo, Value::Float(b)) => {
+            (Value::Float(a), BinaryOperatorKind::Modulo, Value::Float(b)) => {
                 Value::Float(Self::modulo_fp(*a, *b))
             }
 
-            (Value::Float(a), ResolvedBinaryOperatorKind::GreaterThan, Value::Float(b)) => {
+            (Value::Float(a), BinaryOperatorKind::GreaterThan, Value::Float(b)) => {
                 Value::Bool(a > b)
             }
-            (Value::Float(a), ResolvedBinaryOperatorKind::GreaterEqual, Value::Float(b)) => {
+            (Value::Float(a), BinaryOperatorKind::GreaterEqual, Value::Float(b)) => {
                 Value::Bool(a >= b)
             }
-            (Value::Float(a), ResolvedBinaryOperatorKind::LessThan, Value::Float(b)) => {
-                Value::Bool(a < b)
-            }
-            (Value::Float(a), ResolvedBinaryOperatorKind::LessEqual, Value::Float(b)) => {
+            (Value::Float(a), BinaryOperatorKind::LessThan, Value::Float(b)) => Value::Bool(a < b),
+            (Value::Float(a), BinaryOperatorKind::LessEqual, Value::Float(b)) => {
                 Value::Bool(a <= b)
             }
 
             // Boolean operations
-            (Value::Bool(a), ResolvedBinaryOperatorKind::LogicalAnd, Value::Bool(b)) => {
+            (Value::Bool(a), BinaryOperatorKind::LogicalAnd, Value::Bool(b)) => {
                 Value::Bool(*a && *b)
             }
-            (Value::Bool(a), ResolvedBinaryOperatorKind::LogicalOr, Value::Bool(b)) => {
+            (Value::Bool(a), BinaryOperatorKind::LogicalOr, Value::Bool(b)) => {
                 Value::Bool(*a || *b)
             }
 
             // Comparison operations
 
             // RustType
-            (
-                Value::RustValue(_, left),
-                ResolvedBinaryOperatorKind::Equal,
-                Value::RustValue(_, right),
-            ) => {
+            (Value::RustValue(_, left), BinaryOperatorKind::Equal, Value::RustValue(_, right)) => {
                 let left_borrow = left.borrow();
                 let right_borrow = right.borrow();
                 let equal = left_borrow.eq_dyn(&**right_borrow);
@@ -2336,7 +2282,7 @@ impl<'a, C> Interpreter<'a, C> {
             }
             (
                 Value::RustValue(_, left),
-                ResolvedBinaryOperatorKind::NotEqual,
+                BinaryOperatorKind::NotEqual,
                 Value::RustValue(_, right),
             ) => {
                 let left_borrow = left.borrow();
@@ -2346,43 +2292,35 @@ impl<'a, C> Interpreter<'a, C> {
             }
 
             // String operations
-            (Value::String(a), ResolvedBinaryOperatorKind::Add, Value::String(b)) => {
+            (Value::String(a), BinaryOperatorKind::Add, Value::String(b)) => {
                 Value::String(a.to_owned() + b)
             }
-            (Value::String(a), ResolvedBinaryOperatorKind::Equal, Value::String(b)) => {
-                Value::Bool(a == b)
-            }
+            (Value::String(a), BinaryOperatorKind::Equal, Value::String(b)) => Value::Bool(a == b),
 
-            (Value::String(a), ResolvedBinaryOperatorKind::Add, Value::Int(b)) => {
+            (Value::String(a), BinaryOperatorKind::Add, Value::Int(b)) => {
                 Value::String(a.to_owned() + &(*b).to_string())
             }
-            (Value::Int(a), ResolvedBinaryOperatorKind::Add, Value::String(b)) => {
+            (Value::Int(a), BinaryOperatorKind::Add, Value::String(b)) => {
                 Value::String(a.to_string() + b)
             }
 
             // Enum
             (
                 Value::EnumVariantSimple(a),
-                ResolvedBinaryOperatorKind::Equal,
+                BinaryOperatorKind::Equal,
                 Value::EnumVariantSimple(b),
             ) => Value::Bool(a == b),
             (
                 Value::EnumVariantSimple(a),
-                ResolvedBinaryOperatorKind::NotEqual,
+                BinaryOperatorKind::NotEqual,
                 Value::EnumVariantSimple(b),
             ) => Value::Bool(a != b),
 
             // Bool
-            (Value::Bool(a), ResolvedBinaryOperatorKind::Equal, Value::Bool(b)) => {
-                Value::Bool(a == b)
-            }
-            (Value::Bool(a), ResolvedBinaryOperatorKind::NotEqual, Value::Bool(b)) => {
-                Value::Bool(a != b)
-            }
+            (Value::Bool(a), BinaryOperatorKind::Equal, Value::Bool(b)) => Value::Bool(a == b),
+            (Value::Bool(a), BinaryOperatorKind::NotEqual, Value::Bool(b)) => Value::Bool(a != b),
 
-            (Value::Option(a), ResolvedBinaryOperatorKind::Equal, Value::Option(b)) => {
-                Value::Bool(a == b)
-            }
+            (Value::Option(a), BinaryOperatorKind::Equal, Value::Option(b)) => Value::Bool(a == b),
 
             _ => {
                 error!(?op, "invalid binary operation!!");
@@ -2395,21 +2333,21 @@ impl<'a, C> Interpreter<'a, C> {
 
     fn evaluate_unary_op(
         &self,
-        node: &ResolvedNode,
-        op: &ResolvedUnaryOperatorKind,
+        node: &Node,
+        op: &UnaryOperatorKind,
         val: Value,
     ) -> Result<Value, ExecuteError> {
         match (op, val) {
-            (ResolvedUnaryOperatorKind::Negate, Value::Int(n)) => Ok(Value::Int(-n)),
-            (ResolvedUnaryOperatorKind::Negate, Value::Float(n)) => Ok(Value::Float(-n)),
-            (ResolvedUnaryOperatorKind::Not, Value::Bool(b)) => Ok(Value::Bool(!b)),
+            (UnaryOperatorKind::Negate, Value::Int(n)) => Ok(Value::Int(-n)),
+            (UnaryOperatorKind::Negate, Value::Float(n)) => Ok(Value::Float(-n)),
+            (UnaryOperatorKind::Not, Value::Bool(b)) => Ok(Value::Bool(!b)),
             _ => Err(self.create_err(ExecuteErrorKind::DivideByZero, node)),
         }
     }
 
     fn expressions_equal_to_values(
         &mut self,
-        p0: &[ResolvedExpression],
+        p0: &[Expression],
         p1: &[ValueRef],
     ) -> Result<bool, ExecuteError> {
         for (a, b_value) in p0.iter().zip(p1.iter()) {
@@ -2426,49 +2364,49 @@ impl<'a, C> Interpreter<'a, C> {
     #[inline(always)]
     fn apply_compound_operator(
         &self,
-        node: &ResolvedNode,
+        node: &Node,
         target: &mut Value,
-        operator: &ResolvedCompoundOperatorKind,
+        operator: &CompoundOperatorKind,
         source: &Value,
     ) -> Result<(), ExecuteError> {
         match operator {
-            ResolvedCompoundOperatorKind::Mul => {
+            CompoundOperatorKind::Mul => {
                 *target = self.evaluate_binary_op(
                     node,
                     target.clone(),
-                    &ResolvedBinaryOperatorKind::Multiply,
+                    &BinaryOperatorKind::Multiply,
                     source.clone(),
                 )?;
             }
-            ResolvedCompoundOperatorKind::Div => {
+            CompoundOperatorKind::Div => {
                 *target = self.evaluate_binary_op(
                     node,
                     target.clone(),
-                    &ResolvedBinaryOperatorKind::Divide,
+                    &BinaryOperatorKind::Divide,
                     source.clone(),
                 )?;
             }
-            ResolvedCompoundOperatorKind::Add => {
+            CompoundOperatorKind::Add => {
                 *target = self.evaluate_binary_op(
                     node,
                     target.clone(),
-                    &ResolvedBinaryOperatorKind::Add,
+                    &BinaryOperatorKind::Add,
                     source.clone(),
                 )?;
             }
-            ResolvedCompoundOperatorKind::Sub => {
+            CompoundOperatorKind::Sub => {
                 *target = self.evaluate_binary_op(
                     node,
                     target.clone(),
-                    &ResolvedBinaryOperatorKind::Subtract,
+                    &BinaryOperatorKind::Subtract,
                     source.clone(),
                 )?;
             }
-            ResolvedCompoundOperatorKind::Modulo => {
+            CompoundOperatorKind::Modulo => {
                 *target = self.evaluate_binary_op(
                     node,
                     target.clone(),
-                    &ResolvedBinaryOperatorKind::Modulo,
+                    &BinaryOperatorKind::Modulo,
                     source.clone(),
                 )?;
             }
@@ -2479,8 +2417,8 @@ impl<'a, C> Interpreter<'a, C> {
     /*
         fn evaluate_range(
             &mut self,
-            min_expr: &ResolvedExpression,
-            max_expr: &ResolvedExpression,
+            min_expr: &Expression,
+            max_expr: &Expression,
         ) -> Result<(i32, i32), ExecuteError> {
             let min_value = self.evaluate_expression_int(&min_expr)?;
             let max_value = self.evaluate_expression_int(&max_expr)?;
@@ -2492,7 +2430,7 @@ impl<'a, C> Interpreter<'a, C> {
             start_val: i32,
             end_val: i32,
             len: usize,
-            mode: &ResolvedRangeMode,
+            mode: &RangeMode,
         ) -> (usize, usize) {
             let adjusted_min = if start_val < 0 {
                 len + start_val as usize
@@ -2505,7 +2443,7 @@ impl<'a, C> Interpreter<'a, C> {
             } else {
                 end_val as usize
             };
-            if ResolvedRangeMode::Inclusive == mode.clone() {
+            if RangeMode::Inclusive == mode.clone() {
                 adjusted_max += 1;
             }
 
@@ -2514,9 +2452,9 @@ impl<'a, C> Interpreter<'a, C> {
 
         fn evaluate_and_calculate_range(
             &mut self,
-            min_expr: &ResolvedExpression,
-            max_expr: &ResolvedExpression,
-            mode: &ResolvedRangeMode,
+            min_expr: &Expression,
+            max_expr: &Expression,
+            mode: &RangeMode,
             len: usize,
         ) -> Result<(usize, usize), ExecuteError> {
             let (start_val, end_val) = self.evaluate_range(min_expr, max_expr)?;
@@ -2527,11 +2465,11 @@ impl<'a, C> Interpreter<'a, C> {
         #[inline]
         fn evaluate_array_range_access(
             &mut self,
-            base_expr: &ResolvedExpression,
-            array_type_ref: &ResolvedArrayTypeRef,
-            min_expr: &ResolvedExpression,
-            max_expr: &ResolvedExpression,
-            mode: &ResolvedRangeMode,
+            base_expr: &Expression,
+            array_type_ref: &ArrayTypeRef,
+            min_expr: &Expression,
+            max_expr: &Expression,
+            mode: &RangeMode,
         ) -> Result<Value, ExecuteError> {
             let array_value = self.evaluate_expression(base_expr)?;
 
@@ -2548,7 +2486,7 @@ impl<'a, C> Interpreter<'a, C> {
 
         fn evaluate_expression_int(
             &mut self,
-            int_expr: &ResolvedExpression,
+            int_expr: &Expression,
         ) -> Result<i32, ExecuteError> {
             let v = self.evaluate_expression(&int_expr)?;
 
@@ -2563,10 +2501,10 @@ impl<'a, C> Interpreter<'a, C> {
     /*
     fn evaluate_string_range_access(
         &mut self,
-        string_expr: &ResolvedExpression,
-        start_expr: &ResolvedExpression,
-        end_expr: &ResolvedExpression,
-        mode: &ResolvedRangeMode,
+        string_expr: &Expression,
+        start_expr: &Expression,
+        end_expr: &Expression,
+        mode: &RangeMode,
     ) -> Result<Value, ExecuteError> {
         let string_value = self.evaluate_expression(string_expr)?;
 
@@ -2583,7 +2521,7 @@ impl<'a, C> Interpreter<'a, C> {
 
      */
 
-    fn create_err(&self, kind: ExecuteErrorKind, node: &ResolvedNode) -> ExecuteError {
+    fn create_err(&self, kind: ExecuteErrorKind, node: &Node) -> ExecuteError {
         ExecuteError {
             node: node.clone(),
             kind,

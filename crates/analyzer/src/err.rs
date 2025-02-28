@@ -5,19 +5,18 @@
 
 use seq_map::SeqMapError;
 use std::num::{ParseFloatError, ParseIntError};
-use swamp_script_ast::{LocalTypeIdentifier, Pattern};
 use swamp_script_semantic::{
-    ResolvedAnonymousStructType, ResolvedEnumVariantTypeRef, ResolvedNode, ResolvedStructTypeRef,
-    ResolvedType, SemanticError, Span,
+    AnonymousStructType, EnumVariantTypeRef, Node, SemanticError, Span, StructTypeRef, Type,
 };
 
 #[derive(Debug)]
-pub struct ResolveError {
-    pub node: ResolvedNode,
-    pub kind: ResolveErrorKind,
+pub struct Error {
+    pub node: Node,
+    pub kind: ErrorKind,
 }
 #[derive(Debug)]
-pub enum ResolveErrorKind {
+pub enum ErrorKind {
+    VariableCanNotBeUnit,
     GuardCanNotHaveMultipleWildcards,
     WildcardMustBeLastInGuard,
     GuardMustHaveWildcard,
@@ -29,32 +28,32 @@ pub enum ResolveErrorKind {
     //NamespaceError(NamespaceError),
     CanNotFindModule(Vec<String>),
     UnknownStructTypeReference,
-    UnknownLocalStructTypeReference(LocalTypeIdentifier),
+    UnknownLocalStructTypeReference(swamp_script_ast::LocalTypeIdentifier),
     DuplicateFieldName,
     Unknown(String),
-    UnknownImplTargetTypeReference(LocalTypeIdentifier),
-    WrongFieldCountInStructInstantiation(ResolvedStructTypeRef, usize),
-    MissingFieldInStructInstantiation(Vec<String>, ResolvedAnonymousStructType),
+    UnknownImplTargetTypeReference(swamp_script_ast::LocalTypeIdentifier),
+    WrongFieldCountInStructInstantiation(StructTypeRef, usize),
+    MissingFieldInStructInstantiation(Vec<String>, AnonymousStructType),
     ExpectedFunctionExpression,
-    CouldNotFindMember(ResolvedNode, ResolvedNode),
+    CouldNotFindMember(Node, Node),
     UnknownVariable,
     NotAnArray,
-    ArrayIndexMustBeInt(ResolvedType),
+    ArrayIndexMustBeInt(Type),
     OverwriteVariableWithAnotherType,
     NoneNeedsExpectedTypeHint,
     ExpectedMutableLocation,
     WrongNumberOfArguments(usize, usize),
-    IncompatibleArguments(ResolvedType, ResolvedType),
+    IncompatibleArguments(Type, Type),
     CanOnlyOverwriteVariableWithMut,
     OverwriteVariableNotAllowedHere,
-    NotNamedStruct(ResolvedType),
+    NotNamedStruct(Type),
     UnknownEnumVariantType,
     WasNotStructType,
     UnknownStructField,
-    MustBeEnumType(Pattern),
+    MustBeEnumType(swamp_script_ast::Pattern),
     UnknownEnumVariantTypeInPattern,
     ExpectedEnumInPattern,
-    WrongEnumVariantContainer(ResolvedEnumVariantTypeRef),
+    WrongEnumVariantContainer(EnumVariantTypeRef),
     VariableIsNotMutable,
     ArgumentIsNotMutable,
     WrongNumberOfTupleDeconstructVariables,
@@ -62,37 +61,28 @@ pub enum ResolveErrorKind {
     SemanticError(SemanticError),
     SeqMapError(SeqMapError),
     ExpectedMemberCall,
-    CouldNotFindStaticMember(ResolvedNode, ResolvedNode),
+    CouldNotFindStaticMember(Node, Node),
     TypeAliasNotAStruct,
     ModuleNotUnique,
-    ExpressionIsOfWrongFieldType(Span, ResolvedType, ResolvedType),
+    ExpressionIsOfWrongFieldType(Span, Type, Type),
     ExpectedOptional,
     ExpectedVariable,
     EmptyMapLiteral,
-    MapKeyTypeMismatch {
-        expected: ResolvedType,
-        found: ResolvedType,
-    },
-    MapValueTypeMismatch {
-        expected: ResolvedType,
-        found: ResolvedType,
-    },
-    TypeIsNotAnIndexCollection(ResolvedType),
-    NotSameKeyTypeForMapIndex(ResolvedType, ResolvedType),
+    MapKeyTypeMismatch { expected: Type, found: Type },
+    MapValueTypeMismatch { expected: Type, found: Type },
+    TypeIsNotAnIndexCollection(Type),
+    NotSameKeyTypeForMapIndex(Type, Type),
     UnknownIndexAwareCollection,
     InvalidOperatorForArray,
-    IncompatibleTypes(ResolvedType, ResolvedType),
-    ExpectedArray(ResolvedType),
+    IncompatibleTypes(Type, Type),
+    ExpectedArray(Type),
     UnknownMemberFunction,
     WrongNumberOfTypeArguments(usize, i32),
     OnlyVariablesAllowedInEnumPattern,
     ExpressionsNotAllowedInLetPattern,
     UnknownField,
     EnumVariantHasNoFields,
-    TooManyTupleFields {
-        max: usize,
-        got: usize,
-    },
+    TooManyTupleFields { max: usize, got: usize },
     NotInFunction,
     ExpectedBooleanExpression,
     NotAnIterator,
@@ -105,8 +95,8 @@ pub enum ResolveErrorKind {
     InternalError(&'static str),
     WasNotFieldMutRef,
     UnknownFunction,
-    NoDefaultImplemented(ResolvedType),
-    NoDefaultImplementedForStruct(ResolvedStructTypeRef),
+    NoDefaultImplemented(Type),
+    NoDefaultImplementedForStruct(StructTypeRef),
     UnknownConstant,
     ExpectedFunctionTypeForFunctionCall,
     TypeDoNotSupportIndexAccess,
@@ -122,13 +112,16 @@ pub enum ResolveErrorKind {
     SelfNotCorrectType,
     IllegalIndexInChain,
     CanNotNoneCoalesce,
+    UnknownSymbol,
+    UnknownEnumType,
+    UnknownModule,
 }
 
-impl From<SemanticError> for ResolveError {
+impl From<SemanticError> for Error {
     fn from(value: SemanticError) -> Self {
         Self {
             node: Default::default(),
-            kind: ResolveErrorKind::SemanticError(value),
+            kind: ErrorKind::SemanticError(value),
         }
     }
 }
