@@ -6,7 +6,7 @@
 use crate::ns::Namespace;
 use crate::ns::NamespacePath;
 use crate::symtbl::SymbolTable;
-use crate::{Constant, ConstantRef, Expression, ExpressionKind};
+use crate::{Expression, ExpressionKind};
 use seq_map::SeqMap;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;

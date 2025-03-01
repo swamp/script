@@ -539,11 +539,11 @@ impl<'a> Analyzer<'a> {
                     let resolved_type = Type::Struct(found_struct.clone());
                     parameters.push(TypeForParameter {
                         name: self.get_text(&found_self.self_node).to_string(),
-                        resolved_type: resolved_type,
+                        resolved_type,
                         is_mutable: found_self.is_mutable.is_some(),
                         node: Option::from(ParameterNode {
                             name: self.to_node(&found_self.self_node),
-                            is_mutable: self.to_node_option(&found_self.is_mutable),
+                            is_mutable: self.to_node_option(Option::from(&found_self.is_mutable)),
                         }),
                     });
                 }
@@ -553,17 +553,18 @@ impl<'a> Analyzer<'a> {
 
                     parameters.push(TypeForParameter {
                         name: self.get_text(&param.variable.name).to_string(),
-                        resolved_type: resolved_type,
+                        resolved_type,
                         is_mutable: param.variable.is_mutable.is_some(),
                         node: Option::from(ParameterNode {
                             name: self.to_node(&param.variable.name),
-                            is_mutable: self.to_node_option(&param.variable.is_mutable),
+                            is_mutable: self
+                                .to_node_option(Option::from(&param.variable.is_mutable)),
                         }),
                     });
                 }
 
                 let return_type =
-                    self.analyze_maybe_type(&function_data.declaration.return_type)?;
+                    self.analyze_maybe_type(Option::from(&function_data.declaration.return_type))?;
 
                 for param in &parameters {
                     self.create_local_variable_resolved(
@@ -597,11 +598,11 @@ impl<'a> Analyzer<'a> {
                     let resolved_type = Type::Struct(found_struct.clone());
                     parameters.push(TypeForParameter {
                         name: self.get_text(&found_self.self_node).to_string(),
-                        resolved_type: resolved_type,
+                        resolved_type,
                         is_mutable: found_self.is_mutable.is_some(),
                         node: Option::from(ParameterNode {
                             name: self.to_node(&found_self.self_node),
-                            is_mutable: self.to_node_option(&found_self.is_mutable),
+                            is_mutable: self.to_node_option(Option::from(&found_self.is_mutable)),
                         }),
                     });
                 }
@@ -612,16 +613,17 @@ impl<'a> Analyzer<'a> {
 
                     parameters.push(TypeForParameter {
                         name: self.get_text(&param.variable.name).to_string(),
-                        resolved_type: resolved_type,
+                        resolved_type,
                         is_mutable: param.variable.is_mutable.is_some(),
                         node: Option::from(ParameterNode {
                             name: self.to_node(&param.variable.name),
-                            is_mutable: self.to_node_option(&param.variable.is_mutable),
+                            is_mutable: self
+                                .to_node_option(Option::from(&param.variable.is_mutable)),
                         }),
                     });
                 }
 
-                let return_type = self.analyze_maybe_type(&signature.return_type)?;
+                let return_type = self.analyze_maybe_type(Option::from(&signature.return_type))?;
 
                 let external = ExternalFunctionDefinition {
                     assigned_name: self.get_text(&signature.name).to_string(),

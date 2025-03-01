@@ -35,6 +35,7 @@ use swamp_script_source_map::SourceMap;
 use tracing::error;
 use tracing::info;
 
+#[must_use]
 pub fn convert_range_mode(range_mode: &swamp_script_ast::RangeMode) -> RangeMode {
     match range_mode {
         swamp_script_ast::RangeMode::Inclusive => RangeMode::Inclusive,
@@ -42,7 +43,7 @@ pub fn convert_range_mode(range_mode: &swamp_script_ast::RangeMode) -> RangeMode
     }
 }
 
-#[derive(Eq, PartialEq, Debug)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum LocationSide {
     Lhs,
     Rhs,
@@ -91,7 +92,7 @@ pub const fn convert_span(without: &swamp_script_ast::SpanWithoutFileId, file_id
 pub const SPARSE_TYPE_ID: TypeNumber = 999;
 pub const SPARSE_ID_TYPE_ID: TypeNumber = 998;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TypeContextScope {
     InsideFunction, // Allow return, but not break
     InsideLoop,     // Allow break and return
@@ -103,21 +104,25 @@ pub enum TypeContextScope {
 
 impl TypeContextScope {
     /// Returns true if return statements are allowed in this scope
+    #[must_use]
     pub fn allows_return(&self) -> bool {
         matches!(self, Self::InsideFunction | Self::InsideBothFunctionAndLoop)
     }
 
     /// Returns true if break statements are allowed in this scope
+    #[must_use]
     pub fn allows_break(&self) -> bool {
         matches!(self, Self::InsideLoop | Self::InsideBothFunctionAndLoop)
     }
 
     /// Returns true if continue statements are allowed in this scope
+    #[must_use]
     pub fn allows_continue(&self) -> bool {
         self.allows_break() // Same rules as break
     }
 
     /// Creates a new scope when entering a function
+    #[must_use]
     pub fn enter_function(&self) -> Self {
         match self {
             Self::ArgumentOrOutsideFunction => Self::InsideFunction,
@@ -127,6 +132,7 @@ impl TypeContextScope {
     }
 
     /// Creates a new scope when entering a loop
+    #[must_use]
     pub fn enter_loop(&self) -> Self {
         match self {
             Self::ArgumentOrOutsideFunction => Self::InsideLoop,
@@ -150,26 +156,27 @@ pub struct TypeContext<'a> {
     pub is_in_compare_like: bool,
 }
 
-impl<'a> TypeContext<'a> {
+impl TypeContext<'_> {
     pub(crate) fn allows_continue(&self) -> bool {
         self.scope.allows_continue() && self.is_in_compare_like
     }
 }
 
-impl<'a> TypeContext<'a> {
+impl TypeContext<'_> {
     pub(crate) fn allows_return(&self) -> bool {
         self.scope.allows_return() && self.is_in_compare_like
     }
 }
 
-impl<'a> TypeContext<'a> {
+impl TypeContext<'_> {
     pub(crate) fn allows_break(&self) -> bool {
         self.scope.allows_break()
     }
 }
 
 impl<'a> TypeContext<'a> {
-    pub fn new(
+    #[must_use]
+    pub const fn new(
         expected_type: Option<&'a Type>,
         return_type: Option<&'a Type>,
         scope: TypeContextScope,
@@ -182,7 +189,7 @@ impl<'a> TypeContext<'a> {
         }
     }
 
-    pub fn new_argument(required_type: &'a Type) -> Self {
+    pub const fn new_argument(required_type: &'a Type) -> Self {
         Self {
             expected_type: Some(required_type),
             return_type: None,
@@ -191,7 +198,8 @@ impl<'a> TypeContext<'a> {
         }
     }
 
-    pub fn new_unsure_argument(expected_type: Option<&'a Type>) -> Self {
+    #[must_use]
+    pub const fn new_unsure_argument(expected_type: Option<&'a Type>) -> Self {
         Self {
             expected_type,
             return_type: None,
@@ -200,7 +208,8 @@ impl<'a> TypeContext<'a> {
         }
     }
 
-    pub fn new_anything_argument() -> Self {
+    #[must_use]
+    pub const fn new_anything_argument() -> Self {
         Self {
             expected_type: None,
             return_type: None,
@@ -218,29 +227,24 @@ impl<'a> TypeContext<'a> {
         }
     }
 
-    pub fn with_expected_type(&self, expected_type: Option<&'a Type>) -> Self {
+    #[must_use]
+    pub const fn with_expected_type(&self, expected_type: Option<&'a Type>) -> Self {
         Self {
             expected_type,
             return_type: self.return_type,
-            scope: self.scope.clone(),
+            scope: self.scope,
             is_in_compare_like: self.is_in_compare_like,
         }
     }
 
-    pub(crate) fn we_know_expected_type(&self, found_type: &'a Type) -> Self {
+    pub(crate) const fn we_know_expected_type(&self, found_type: &'a Type) -> Self {
         self.with_expected_type(Some(found_type))
     }
 
-    pub(crate) fn return_type_to_expected(&self) -> Self {
-        Self {
-            expected_type: self.return_type,
-            return_type: None,
-            scope: TypeContextScope::ArgumentOrOutsideFunction,
-            is_in_compare_like: false,
-        }
-    }
-
-    pub fn for_return(&self) -> Self {
+    /// # Panics
+    ///
+    #[must_use]
+    pub const fn for_return(&self) -> Self {
         Self {
             expected_type: Some(self.return_type.unwrap()),
             return_type: Some(self.return_type.unwrap()),
@@ -249,6 +253,7 @@ impl<'a> TypeContext<'a> {
         }
     }
 
+    #[must_use]
     pub fn enter_function(&self, required_type: &'a Type) -> Self {
         Self {
             expected_type: Some(required_type),
@@ -259,6 +264,7 @@ impl<'a> TypeContext<'a> {
     }
 
     /// Creates a new scope when entering a loop
+    #[must_use]
     pub fn enter_loop(&self) -> Self {
         Self {
             expected_type: self.expected_type,
@@ -269,6 +275,7 @@ impl<'a> TypeContext<'a> {
     }
 
     /// Creates a new scope when entering a loop
+    #[must_use]
     pub fn enter_compare(&self) -> Self {
         Self {
             expected_type: self.expected_type,
@@ -289,7 +296,6 @@ pub enum BlockScopeMode {
 pub struct BlockScope {
     mode: BlockScopeMode,
     variables: SeqMap<String, VariableRef>,
-    constants: SeqMap<String, ConstantRef>, // TODO: check why these are not read
 }
 
 impl Default for BlockScope {
@@ -304,7 +310,6 @@ impl BlockScope {
         Self {
             mode: BlockScopeMode::Open,
             variables: SeqMap::new(),
-            constants: SeqMap::new(),
         }
     }
 }
@@ -324,11 +329,8 @@ impl<'a> SharedState<'a> {
         if path.is_empty() {
             return Some(&self.lookup_table);
         }
-        if let Some(module) = self.get_module(path) {
-            Some(&module.namespace.symbol_table)
-        } else {
-            None
-        }
+        self.get_module(path)
+            .map_or(None, |module| Some(&module.namespace.symbol_table))
     }
 
     #[must_use]
@@ -348,12 +350,12 @@ impl<'a> SharedState<'a> {
 
         if path.len() == 1 {
             if let Some(module_ref) = self.lookup_table.get_module_link(&path[0]) {
-                return Some(&module_ref);
+                return Some(module_ref);
             }
         }
 
         if let Some(x) = self.modules.get(&resolved_path) {
-            return Some(&x);
+            return Some(x);
         }
 
         None
@@ -416,7 +418,7 @@ impl<'a> Analyzer<'a> {
         &mut self,
         condition: &swamp_script_ast::Expression,
         true_expression: &swamp_script_ast::Expression,
-        maybe_false_expression: Option<&Box<swamp_script_ast::Expression>>,
+        maybe_false_expression: Option<&swamp_script_ast::Expression>,
         context: &TypeContext,
     ) -> Result<Expression, Error> {
         // Analyze the condition (must be boolean)
@@ -525,7 +527,7 @@ impl<'a> Analyzer<'a> {
 
     fn analyze_maybe_type(
         &mut self,
-        maybe_type: &Option<swamp_script_ast::Type>,
+        maybe_type: Option<&swamp_script_ast::Type>,
     ) -> Result<Type, Error> {
         let found_type = match maybe_type {
             None => Type::Unit,
@@ -542,16 +544,25 @@ impl<'a> Analyzer<'a> {
     ) -> Result<ForPattern, Error> {
         match pattern {
             swamp_script_ast::ForPattern::Single(var) => {
-                let variable_ref =
-                    self.create_local_variable(&var.identifier, &var.is_mut, value_type)?;
+                let variable_ref = self.create_local_variable(
+                    &var.identifier,
+                    Option::from(&var.is_mut),
+                    value_type,
+                )?;
                 Ok(ForPattern::Single(variable_ref))
             }
             swamp_script_ast::ForPattern::Pair(first, second) => {
                 let found_key = key_type.unwrap();
-                let first_var_ref =
-                    self.create_local_variable(&first.identifier, &first.is_mut, found_key)?;
-                let second_var_ref =
-                    self.create_local_variable(&second.identifier, &second.is_mut, value_type)?;
+                let first_var_ref = self.create_local_variable(
+                    &first.identifier,
+                    Option::from(&first.is_mut),
+                    found_key,
+                )?;
+                let second_var_ref = self.create_local_variable(
+                    &second.identifier,
+                    Option::from(&second.is_mut),
+                    value_type,
+                )?;
                 Ok(ForPattern::Pair(first_var_ref, second_var_ref))
             }
         }
@@ -569,7 +580,7 @@ impl<'a> Analyzer<'a> {
                 resolved_type: param_type,
                 is_mutable: parameter.variable.is_mutable.is_some(),
                 node: Some(ParameterNode {
-                    is_mutable: self.to_node_option(&parameter.variable.is_mutable),
+                    is_mutable: self.to_node_option(Option::from(&parameter.variable.is_mutable)),
                     name: self.to_node(&parameter.variable.name),
                 }),
             });
@@ -708,7 +719,11 @@ impl<'a> Analyzer<'a> {
                 variable,
                 coerce_type,
                 source_expression,
-            ) => self.analyze_create_variable(variable, coerce_type, source_expression)?,
+            ) => self.analyze_create_variable(
+                variable,
+                Option::from(coerce_type),
+                source_expression,
+            )?,
 
             swamp_script_ast::ExpressionKind::VariableAssignment(variable, source_expression) => {
                 self.analyze_variable_assignment(variable, source_expression)?
@@ -766,7 +781,7 @@ impl<'a> Analyzer<'a> {
                     self.analyze_block(&ast_expression.node, context, expressions)?;
                 self.create_expr(
                     ExpressionKind::Block(block),
-                    resulting_type.clone(),
+                    resulting_type,
                     &ast_expression.node,
                 )
             }
@@ -776,7 +791,7 @@ impl<'a> Analyzer<'a> {
             }
 
             swamp_script_ast::ExpressionKind::When(variable_bindings, true_expr, else_expr) => {
-                self.analyze_when_expr(context, variable_bindings, true_expr, else_expr)?
+                self.analyze_when_expr(context, variable_bindings, true_expr, else_expr.as_deref())?
             }
 
             swamp_script_ast::ExpressionKind::InterpolatedString(string_parts) => {
@@ -863,12 +878,12 @@ impl<'a> Analyzer<'a> {
             ) => self.analyze_if_expression(
                 expression,
                 true_expression,
-                maybe_false_expression.as_ref(),
+                maybe_false_expression.as_deref(),
                 context,
             )?,
 
             swamp_script_ast::ExpressionKind::Match(expression, arms) => {
-                let (match_expr, return_type) = self.analyze_match(expression, &context, arms)?;
+                let (match_expr, return_type) = self.analyze_match(expression, context, arms)?;
                 self.create_expr(
                     ExpressionKind::Match(match_expr),
                     return_type,
@@ -1018,38 +1033,42 @@ impl<'a> Analyzer<'a> {
         node: &swamp_script_ast::Node,
         struct_ref_borrow: &StructTypeRef,
     ) -> Result<ExpressionKind, Error> {
-        if let Some(function) = struct_ref_borrow
+        struct_ref_borrow
             .borrow()
             .functions
             .get(&"default".to_string())
-        {
-            let kind = match &**function {
-                Function::Internal(internal_function) => {
-                    ExpressionKind::InternalFunctionAccess(internal_function.clone())
-                }
-                Function::External(external_function) => {
-                    ExpressionKind::ExternalFunctionAccess(external_function.clone())
-                }
-            };
+            .map_or_else(
+                || {
+                    Err(self.create_err(
+                        ErrorKind::NoDefaultImplementedForStruct(struct_ref_borrow.clone()),
+                        node,
+                    ))
+                },
+                |function| {
+                    let kind = match &**function {
+                        Function::Internal(internal_function) => {
+                            ExpressionKind::InternalFunctionAccess(internal_function.clone())
+                        }
+                        Function::External(external_function) => {
+                            ExpressionKind::ExternalFunctionAccess(external_function.clone())
+                        }
+                    };
 
-            let base_expr =
-                self.create_expr(kind, Type::Function(function.signature().clone()), node);
+                    let base_expr =
+                        self.create_expr(kind, Type::Function(function.signature().clone()), node);
 
-            let empty_call_postfix = Postfix {
-                node: self.to_node(node),
-                ty: *function.signature().return_type.clone(),
-                kind: PostfixKind::FunctionCall(vec![]),
-            };
+                    let empty_call_postfix = Postfix {
+                        node: self.to_node(node),
+                        ty: *function.signature().return_type.clone(),
+                        kind: PostfixKind::FunctionCall(vec![]),
+                    };
 
-            let kind = ExpressionKind::PostfixChain(Box::new(base_expr), vec![empty_call_postfix]);
+                    let kind =
+                        ExpressionKind::PostfixChain(Box::new(base_expr), vec![empty_call_postfix]);
 
-            Ok(kind)
-        } else {
-            Err(self.create_err(
-                ErrorKind::NoDefaultImplementedForStruct(struct_ref_borrow.clone()),
-                node,
-            ))
-        }
+                    Ok(kind)
+                },
+            )
     }
 
     fn add_postfix(
@@ -1066,15 +1085,19 @@ impl<'a> Analyzer<'a> {
             kind,
         };
 
-        vec.push(postfix)
+        vec.push(postfix);
     }
 
+    /// # Panics
+    ///
+    /// # Errors
+    ///
     pub fn analyze_struct_field(
         &mut self,
         field_name: &swamp_script_ast::Node,
         tv: Type,
     ) -> Result<(StructTypeRef, usize, Type), Error> {
-        let field_name_str = self.get_text(&field_name).to_string();
+        let field_name_str = self.get_text(field_name).to_string();
 
         if let Type::Struct(struct_type) = &tv {
             if let Some(found_field) = struct_type
@@ -1108,7 +1131,7 @@ impl<'a> Analyzer<'a> {
         ) = &chain.base.kind
         {
             if let Some(found_expr) =
-                self.check_for_internal_static_call(qualified_type_reference, member_name, &vec![])?
+                self.check_for_internal_static_call(qualified_type_reference, member_name, &[])?
             {
                 return Ok(found_expr);
             }
@@ -1185,7 +1208,7 @@ impl<'a> Analyzer<'a> {
                             &mut suffixes,
                             PostfixKind::FunctionCall(resolved_arguments),
                             *signature.return_type.clone(),
-                            &node,
+                            node,
                         );
 
                         tv.resolved_type = *signature.return_type.clone();
@@ -1220,10 +1243,8 @@ impl<'a> Analyzer<'a> {
                                     Type::String,
                                     &index_expr.node,
                                 );
-
-                                tv.resolved_type = Type::String;
                             }
-
+                            tv.resolved_type = Type::String;
                             tv.is_mutable = false;
                         }
 
@@ -1519,7 +1540,8 @@ impl<'a> Analyzer<'a> {
                 swamp_script_ast::StringPart::Interpolation(expression, format_specifier) => {
                     let any_context = TypeContext::new_anything_argument();
                     let expr = self.analyze_expression(expression, &any_context)?;
-                    let resolved_format_specifier = self.analyze_format_specifier(format_specifier);
+                    let resolved_format_specifier =
+                        self.analyze_format_specifier(Option::from(format_specifier));
                     StringPart::Interpolation(expr, resolved_format_specifier)
                 }
             };
@@ -1647,7 +1669,6 @@ impl<'a> Analyzer<'a> {
         self.scope.block_scope_stack.push(BlockScope {
             mode: BlockScopeMode::Open,
             variables: SeqMap::default(),
-            constants: SeqMap::default(),
         });
     }
 
@@ -1659,7 +1680,6 @@ impl<'a> Analyzer<'a> {
         self.scope.block_scope_stack.push(BlockScope {
             mode: BlockScopeMode::Closed,
             variables: SeqMap::default(),
-            constants: SeqMap::default(),
         });
     }
 
@@ -1676,53 +1696,6 @@ impl<'a> Analyzer<'a> {
         self.get_enum_variant_type(qualified_type_identifier, &variant_name_string)
     }
 
-    fn analyze_enum_variant_literal(
-        // TODO: Is this not used?
-        &mut self,
-        ast_variant: &swamp_script_ast::EnumVariantLiteral,
-    ) -> Result<Literal, Error> {
-        let (qualified_name, variant_name) = match ast_variant {
-            swamp_script_ast::EnumVariantLiteral::Simple(name, variant) => (name, variant),
-            swamp_script_ast::EnumVariantLiteral::Tuple(name, variant, _) => (name, variant),
-            swamp_script_ast::EnumVariantLiteral::Struct(name, variant, _) => (name, variant),
-        };
-
-        let variant_ref = self.analyze_enum_variant_ref(qualified_name, variant_name)?;
-
-        let resolved_data = match ast_variant {
-            swamp_script_ast::EnumVariantLiteral::Simple(_qualified_name, _variant_name) => {
-                EnumLiteralData::Nothing
-            }
-            swamp_script_ast::EnumVariantLiteral::Tuple(
-                _qualified_name,
-                _variant_name,
-                expressions,
-            ) => EnumLiteralData::Tuple(self.analyze_argument_expressions(None, expressions)?),
-            swamp_script_ast::EnumVariantLiteral::Struct(
-                _qualified_name,
-                variant_name,
-                field_expressions,
-            ) => {
-                if let EnumVariantType::Struct(struct_ref) = &*variant_ref {
-                    let resolved = self.analyze_anon_struct_instantiation(
-                        &variant_name.0.clone(),
-                        &struct_ref.anon_struct,
-                        field_expressions,
-                        false,
-                    )?;
-                    EnumLiteralData::Struct(resolved)
-                } else {
-                    return Err(self.create_err(
-                        ErrorKind::WrongEnumVariantContainer(variant_ref.clone()),
-                        &variant_name.0,
-                    ));
-                }
-            }
-        };
-
-        Ok(Literal::EnumVariantLiteral(variant_ref, resolved_data))
-    }
-
     fn analyze_match(
         &mut self,
         scrutinee: &swamp_script_ast::Expression,
@@ -1730,7 +1703,7 @@ impl<'a> Analyzer<'a> {
         arms: &Vec<swamp_script_ast::MatchArm>,
     ) -> Result<(Match, Type), Error> {
         let mut known_type = default_context.expected_type.cloned();
-        let mut own_context = default_context.clone();
+        let own_context = default_context.clone();
         // Analyze the scrutinee with no specific expected type
         let scrutinee_context = TypeContext::new_anything_argument();
         let resolved_scrutinee = self.analyze_expression(scrutinee, &scrutinee_context)?;
@@ -1757,27 +1730,25 @@ impl<'a> Analyzer<'a> {
             resolved_arms.push(resolved_arm);
         }
 
-        if let Some(encountered_type) = known_type {
-            if matches!(encountered_type, Type::Never) {
-                Err(self.create_err(
-                    ErrorKind::IncompatibleTypes(
-                        encountered_type.clone(),
-                        encountered_type.clone(),
-                    ),
-                    &scrutinee.node,
-                ))
-            } else {
-                Ok((
-                    Match {
-                        expression: Box::new(resolved_scrutinee),
-                        arms: resolved_arms,
-                    },
-                    encountered_type.clone(),
-                ))
-            }
-        } else {
-            Err(self.create_err(ErrorKind::MatchArmsMustHaveTypes, &scrutinee.node))
-        }
+        known_type.map_or_else(
+            || Err(self.create_err(ErrorKind::MatchArmsMustHaveTypes, &scrutinee.node)),
+            |encountered_type| {
+                if matches!(encountered_type, Type::Never) {
+                    Err(self.create_err(
+                        ErrorKind::IncompatibleTypes(encountered_type.clone(), encountered_type),
+                        &scrutinee.node,
+                    ))
+                } else {
+                    Ok((
+                        Match {
+                            expression: Box::new(resolved_scrutinee),
+                            arms: resolved_arms,
+                        },
+                        encountered_type,
+                    ))
+                }
+            },
+        )
     }
 
     fn analyze_arm(
@@ -1903,7 +1874,7 @@ impl<'a> Analyzer<'a> {
         }
     }
 
-    const fn to_node_option(&self, maybe_node: &Option<swamp_script_ast::Node>) -> Option<Node> {
+    const fn to_node_option(&self, maybe_node: Option<&swamp_script_ast::Node>) -> Option<Node> {
         match maybe_node {
             None => None,
             Some(node) => Some(self.to_node(node)),
@@ -1912,7 +1883,7 @@ impl<'a> Analyzer<'a> {
 
     const fn analyze_format_specifier(
         &self,
-        ast_format_specifier: &Option<swamp_script_ast::FormatSpecifier>,
+        ast_format_specifier: Option<&swamp_script_ast::FormatSpecifier>,
     ) -> Option<FormatSpecifier> {
         let f = match ast_format_specifier {
             None => return None,
@@ -2001,7 +1972,7 @@ impl<'a> Analyzer<'a> {
         context: &TypeContext,
         variables: &[swamp_script_ast::WhenBinding],
         true_expr: &swamp_script_ast::Expression,
-        else_expr: &Option<Box<swamp_script_ast::Expression>>,
+        else_expr: Option<&swamp_script_ast::Expression>,
     ) -> Result<Expression, Error> {
         self.push_block_scope("when");
         let mut bindings = Vec::new();
@@ -2095,7 +2066,7 @@ impl<'a> Analyzer<'a> {
                 swamp_script_ast::GuardClause::Wildcard(x) => {
                     if found_wildcard.is_some() {
                         return Err(
-                            self.create_err(ErrorKind::GuardCanNotHaveMultipleWildcards, &node)
+                            self.create_err(ErrorKind::GuardCanNotHaveMultipleWildcards, node)
                         );
                     }
                     found_wildcard = Some(x);
@@ -2103,9 +2074,9 @@ impl<'a> Analyzer<'a> {
                 }
                 swamp_script_ast::GuardClause::Expression(clause_expr) => {
                     if found_wildcard.is_some() {
-                        return Err(self.create_err(ErrorKind::WildcardMustBeLastInGuard, &node));
+                        return Err(self.create_err(ErrorKind::WildcardMustBeLastInGuard, node));
                     }
-                    Some(self.analyze_bool_argument_expression(&clause_expr)?)
+                    Some(self.analyze_bool_argument_expression(clause_expr)?)
                 }
             };
 
@@ -2125,17 +2096,18 @@ impl<'a> Analyzer<'a> {
         }
 
         if found_wildcard.is_none() {
-            return Err(self.create_err(ErrorKind::GuardMustHaveWildcard, &node));
+            return Err(self.create_err(ErrorKind::GuardMustHaveWildcard, node));
         }
 
         let kind = ExpressionKind::Guard(guards);
 
-        if let Some(found_expecting_type) = detected_type {
-            let expr = self.create_expr(kind, found_expecting_type.clone(), node);
-            Ok(expr)
-        } else {
-            Err(self.create_err(ErrorKind::GuardHasNoType, node))
-        }
+        detected_type.map_or_else(
+            || Err(self.create_err(ErrorKind::GuardHasNoType, node)),
+            |found_expecting_type| {
+                let expr = self.create_expr(kind, found_expecting_type, node);
+                Ok(expr)
+            },
+        )
     }
 
     pub fn analyze_variable_assignment(
@@ -2168,7 +2140,7 @@ impl<'a> Analyzer<'a> {
             }
             ExpressionKind::VariableReassignment(found_var, Box::from(source_expr))
         } else {
-            let new_var = self.create_variable(&variable, &ty)?;
+            let new_var = self.create_variable(variable, &ty)?;
             ExpressionKind::VariableDefinition(new_var, Box::from(source_expr))
         };
 
@@ -2178,7 +2150,7 @@ impl<'a> Analyzer<'a> {
     fn analyze_create_variable(
         &mut self,
         var: &swamp_script_ast::Variable,
-        annotation_type: &Option<swamp_script_ast::Type>,
+        annotation_type: Option<&swamp_script_ast::Type>,
         source_expression: &swamp_script_ast::MutableOrImmutableExpression,
     ) -> Result<Expression, Error> {
         let ty = if let Some(found_ast_type) = annotation_type {
@@ -2197,8 +2169,11 @@ impl<'a> Analyzer<'a> {
             LocationSide::Rhs,
         )?;
 
-        let var_ref =
-            self.create_local_variable(&var.name, &var.is_mutable, &resolved_source.ty())?;
+        let var_ref = self.create_local_variable(
+            &var.name,
+            Option::from(&var.is_mutable),
+            &resolved_source.ty(),
+        )?;
 
         let resolved_type = resolved_source.ty().clone();
         assert_ne!(resolved_type, Type::Unit);
@@ -2223,7 +2198,7 @@ impl<'a> Analyzer<'a> {
             kind,
         };
 
-        vec.push(postfix)
+        vec.push(postfix);
     }
 
     #[allow(clippy::too_many_lines)]
@@ -2276,7 +2251,6 @@ impl<'a> Analyzer<'a> {
                                     Type::String,
                                     &lookup_expr.node,
                                 );
-                                ty = Type::String;
                             } else {
                                 let index_expr_context = TypeContext::new_argument(&Type::Int);
                                 let index_expr =
@@ -2287,8 +2261,8 @@ impl<'a> Analyzer<'a> {
                                     Type::String,
                                     &lookup_expr.node,
                                 );
-                                ty = Type::String;
                             }
+                            ty = Type::String;
                         }
 
                         Type::Array(array_type) => {
@@ -2379,14 +2353,14 @@ impl<'a> Analyzer<'a> {
                 }
 
                 swamp_script_ast::Postfix::MemberCall(node, _) => {
-                    return Err(self.create_err(ErrorKind::CallsCanNotBePartOfChain, &node));
+                    return Err(self.create_err(ErrorKind::CallsCanNotBePartOfChain, node));
                 }
 
                 swamp_script_ast::Postfix::FunctionCall(node, _) => {
-                    return Err(self.create_err(ErrorKind::CallsCanNotBePartOfChain, &node));
+                    return Err(self.create_err(ErrorKind::CallsCanNotBePartOfChain, node));
                 }
                 swamp_script_ast::Postfix::OptionUnwrap(node) => {
-                    return Err(self.create_err(ErrorKind::UnwrapCanNotBePartOfChain, &node));
+                    return Err(self.create_err(ErrorKind::UnwrapCanNotBePartOfChain, node));
                 }
                 swamp_script_ast::Postfix::NoneCoalesce(expr) => {
                     return Err(
@@ -2397,7 +2371,7 @@ impl<'a> Analyzer<'a> {
         }
 
         if let Some(found_expected_type) = context.expected_type {
-            if !ty.compatible_with(&found_expected_type) {
+            if !ty.compatible_with(found_expected_type) {
                 return Err(self.create_err(
                     ErrorKind::IncompatibleTypes(ty, found_expected_type.clone()),
                     &chain.base.node,
@@ -2557,6 +2531,7 @@ impl<'a> Analyzer<'a> {
         Ok(expr)
     }
 
+    #[must_use]
     pub fn create_mut_single_location_expr(
         &self,
         kind: SingleLocationExpressionKind,
@@ -2567,7 +2542,7 @@ impl<'a> Analyzer<'a> {
             kind,
             ty,
             starting_variable: Rc::new(Variable {
-                name: Default::default(),
+                name: Node::default(),
                 resolved_type: Type::Int,
                 mutable_node: None,
                 scope_index: 0,
@@ -2578,6 +2553,7 @@ impl<'a> Analyzer<'a> {
         })
     }
 
+    #[must_use]
     pub fn create_single_location_expr(
         &self,
         kind: SingleLocationExpressionKind,
@@ -2588,7 +2564,7 @@ impl<'a> Analyzer<'a> {
             kind,
             ty,
             starting_variable: Rc::new(Variable {
-                name: Default::default(),
+                name: Node::default(),
                 resolved_type: Type::Int,
                 mutable_node: None,
                 scope_index: 0,
@@ -2599,6 +2575,7 @@ impl<'a> Analyzer<'a> {
         }
     }
 
+    #[must_use]
     pub fn create_single_location_expr_resolved(
         &self,
         kind: SingleLocationExpressionKind,
@@ -2609,7 +2586,7 @@ impl<'a> Analyzer<'a> {
             kind,
             ty,
             starting_variable: Rc::new(Variable {
-                name: Default::default(),
+                name: Node::default(),
                 resolved_type: Type::Int,
                 mutable_node: None,
                 scope_index: 0,
@@ -2619,6 +2596,7 @@ impl<'a> Analyzer<'a> {
             access_chain: vec![],
         }
     }
+    #[must_use]
     pub fn create_mut_single_location_expr_resolved(
         &self,
         kind: SingleLocationExpressionKind,
@@ -2629,7 +2607,7 @@ impl<'a> Analyzer<'a> {
             kind,
             ty,
             starting_variable: Rc::new(Variable {
-                name: Default::default(),
+                name: Node::default(),
                 resolved_type: Type::Int,
                 mutable_node: None,
                 scope_index: 0,
@@ -2640,7 +2618,8 @@ impl<'a> Analyzer<'a> {
         })
     }
 
-    pub fn create_expr(
+    #[must_use]
+    pub const fn create_expr(
         &self,
         kind: ExpressionKind,
         ty: Type,
@@ -2654,6 +2633,7 @@ impl<'a> Analyzer<'a> {
         }
     }
 
+    #[must_use]
     pub fn create_expr_resolved(
         &self,
         kind: ExpressionKind,
@@ -2680,7 +2660,7 @@ impl<'a> Analyzer<'a> {
         let mut variable_refs = Vec::new();
         if let Type::Tuple(tuple) = tuple_expr_type.clone() {
             if target_ast_variables.len() > tuple.0.len() {
-                return Err(self.create_err(ErrorKind::TooManyDestructureVariables, &node));
+                return Err(self.create_err(ErrorKind::TooManyDestructureVariables, node));
             }
             for (variable_ref, tuple_type) in target_ast_variables.iter().zip(tuple.0.clone()) {
                 let (variable_ref, _is_reassignment) =
@@ -2690,9 +2670,9 @@ impl<'a> Analyzer<'a> {
             let expr_kind =
                 ExpressionKind::TupleDestructuring(variable_refs, tuple, Box::from(tuple_resolved));
 
-            Ok(self.create_expr(expr_kind, Type::Unit, &node))
+            Ok(self.create_expr(expr_kind, Type::Unit, node))
         } else {
-            Err(self.create_err(ErrorKind::CanNotDestructure, &node))
+            Err(self.create_err(ErrorKind::CanNotDestructure, node))
         }
     }
 
@@ -2716,7 +2696,7 @@ impl<'a> Analyzer<'a> {
         }
 
         let resolved_arguments = self.analyze_and_verify_parameters(
-            &resolved_node,
+            resolved_node,
             &signature.parameters[1..],
             arguments,
         )?;
@@ -2753,7 +2733,7 @@ impl<'a> Analyzer<'a> {
         suffixes.push(struct_field_postfix);
 
         let resolved_arguments =
-            self.analyze_and_verify_parameters(&resolved_node, &signature.parameters, arguments)?;
+            self.analyze_and_verify_parameters(resolved_node, &signature.parameters, arguments)?;
 
         let call_kind = PostfixKind::FunctionCall(resolved_arguments);
 
@@ -2807,10 +2787,10 @@ impl<'a> Analyzer<'a> {
                     arguments,
                 )?
             } else {
-                return Err(self.create_err(ErrorKind::NotValidLocationStartingPoint, &member_name));
+                return Err(self.create_err(ErrorKind::NotValidLocationStartingPoint, member_name));
             }
         } else {
-            return Err(self.create_err(ErrorKind::NotValidLocationStartingPoint, &member_name));
+            return Err(self.create_err(ErrorKind::NotValidLocationStartingPoint, member_name));
         };
 
         let last_type = postfixes.last().unwrap().ty.clone();
@@ -2868,7 +2848,7 @@ impl<'a> Analyzer<'a> {
             None
         };
 
-        Ok(self.create_expr(ExpressionKind::Return(inner), Type::Never, &node))
+        Ok(self.create_expr(ExpressionKind::Return(inner), Type::Never, node))
     }
 
     fn analyze_continue(
@@ -2879,6 +2859,6 @@ impl<'a> Analyzer<'a> {
         if !context.allows_continue() {
             return Err(self.create_err(ErrorKind::ContinueOutsideLoop, node));
         }
-        Ok(self.create_expr(ExpressionKind::Continue, Type::Never, &node))
+        Ok(self.create_expr(ExpressionKind::Continue, Type::Never, node))
     }
 }

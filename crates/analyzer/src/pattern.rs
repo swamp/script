@@ -78,7 +78,7 @@ impl<'a> Analyzer<'a> {
                                 scope_is_pushed = true;
                             }
                             let variable_ref =
-                                self.create_local_variable(var, &None, expected_condition_type)?;
+                                self.create_local_variable(var, None, expected_condition_type)?;
                             resolved_elements.push(PatternElement::Variable(variable_ref));
                         }
                         swamp_script_ast::PatternElement::Expression(expr) => {
@@ -131,7 +131,7 @@ impl<'a> Analyzer<'a> {
                                     swamp_script_ast::PatternElement::Variable(var) => {
                                         info!(?var, "ENUM TUPLE found variable to handle");
                                         let variable_ref =
-                                            self.create_local_variable(var, &None, field_type)?;
+                                            self.create_local_variable(var, None, field_type)?;
                                         resolved_elements
                                             .push(PatternElement::Variable(variable_ref));
                                     }
@@ -177,7 +177,7 @@ impl<'a> Analyzer<'a> {
 
                                         let variable_ref = self.create_local_variable(
                                             var,
-                                            &None,
+                                            None,
                                             &field_type.field_type,
                                         )?;
 

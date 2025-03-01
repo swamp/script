@@ -4,7 +4,7 @@
  */
 
 use crate::err::{Error, ErrorKind};
-use crate::{Analyzer, TypeContext, TypeContextScope};
+use crate::{Analyzer, TypeContext};
 use swamp_script_semantic::{Constant, ConstantRef, Expression, ExpressionKind};
 
 impl<'a> Analyzer<'a> {

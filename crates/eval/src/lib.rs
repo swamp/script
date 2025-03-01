@@ -15,7 +15,6 @@ use swamp_script_core::value::ValueRef;
 use swamp_script_core::value::{
     convert_vec_to_rc_refcell, format_value, to_rust_value, SourceMapLookup, Value,
 };
-use swamp_script_semantic::modules::Modules;
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{same_array_ref, Postfix};
 use swamp_script_semantic::{

@@ -78,7 +78,7 @@ impl<'a> Analyzer<'a> {
         // For first assignment, create new variable with the mutability from the assignment
         let scope_index = self.scope.block_scope_stack.len() - 1;
         let name = self.to_node(&variable.name);
-        let mutable_node = self.to_node_option(&variable.is_mutable);
+        let mutable_node = self.to_node_option(Option::from(&variable.is_mutable));
         let variable_name_str = self.get_text_resolved(&name).to_string();
 
         let variables = &mut self
@@ -110,7 +110,7 @@ impl<'a> Analyzer<'a> {
     pub(crate) fn create_local_variable(
         &mut self,
         variable: &swamp_script_ast::Node,
-        is_mutable: &Option<swamp_script_ast::Node>,
+        is_mutable: Option<&swamp_script_ast::Node>,
         variable_type_ref: &Type,
     ) -> Result<VariableRef, Error> {
         if variable_type_ref == &Type::Unit {
@@ -123,7 +123,7 @@ impl<'a> Analyzer<'a> {
         assert_ne!(*variable_type_ref, Type::Unit);
         self.create_local_variable_resolved(
             &self.to_node(variable),
-            &self.to_node_option(is_mutable),
+            &self.to_node_option(Option::from(is_mutable)),
             variable_type_ref,
         )
     }
@@ -133,7 +133,11 @@ impl<'a> Analyzer<'a> {
         variable: &swamp_script_ast::Variable,
         variable_type_ref: &Type,
     ) -> Result<VariableRef, Error> {
-        self.create_local_variable(&variable.name, &variable.is_mutable, variable_type_ref)
+        self.create_local_variable(
+            &variable.name,
+            Option::from(&variable.is_mutable),
+            variable_type_ref,
+        )
     }
 
     pub(crate) fn create_local_variable_resolved(
