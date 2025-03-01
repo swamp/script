@@ -5,7 +5,7 @@
 use swamp_script_analyzer::prelude::{Error, Program};
 use swamp_script_analyzer::{Analyzer, AutoUseModules, TypeContext, TypeContextScope};
 use swamp_script_dep_loader::{
-    parse_local_modules_and_get_order, DependencyParser, ParsedAstModule,
+    parse_local_modules_and_get_order, DepLoaderError, DependencyParser, ParsedAstModule,
 };
 use swamp_script_semantic::modules::Module;
 use swamp_script_semantic::prelude::Modules;
@@ -13,6 +13,24 @@ use swamp_script_semantic::symtbl::SymbolTable;
 use swamp_script_semantic::{Expression, ProgramState};
 use swamp_script_source_map::SourceMap;
 use tracing::info;
+
+#[derive(Debug)]
+pub enum EvalLoaderError {
+    DepLoaderError(DepLoaderError),
+    AnalyzerError(Error),
+}
+
+impl From<DepLoaderError> for EvalLoaderError {
+    fn from(err: DepLoaderError) -> Self {
+        Self::DepLoaderError(err)
+    }
+}
+
+impl From<Error> for EvalLoaderError {
+    fn from(err: Error) -> Self {
+        Self::AnalyzerError(err)
+    }
+}
 
 pub fn analyze_module(
     state: &mut ProgramState,
@@ -75,12 +93,14 @@ pub fn compile_and_analyze_all_modules(
     module_path: &[String],
     resolved_program: &mut Program,
     source_map: &mut SourceMap,
-) -> Result<(), Error> {
+) -> Result<(), EvalLoaderError> {
     let mut dependency_parser = DependencyParser::new();
 
-    let module_paths_in_order =
-        parse_local_modules_and_get_order(module_path.to_vec(), &mut dependency_parser, source_map)
-            .unwrap();
+    let module_paths_in_order = parse_local_modules_and_get_order(
+        module_path.to_vec(),
+        &mut dependency_parser,
+        source_map,
+    )?;
 
     info!(?module_paths_in_order, "official analysis order");
 

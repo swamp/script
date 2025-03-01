@@ -9,8 +9,10 @@ use std::io;
 use std::io::{stderr, Write};
 use swamp_script_analyzer::err::ErrorKind;
 use swamp_script_analyzer::prelude::Error;
+use swamp_script_dep_loader::{DepLoaderError, DependencyError, ParseRootError, ParserError};
 use swamp_script_eval::err::ExecuteErrorKind;
 use swamp_script_eval::prelude::ExecuteError;
+use swamp_script_eval_loader::EvalLoaderError;
 use swamp_script_parser::SpecificError;
 use swamp_script_semantic::Span;
 use swamp_script_source_map::{FileId, SourceMap};
@@ -159,10 +161,51 @@ pub fn show_execute_error(err: &ExecuteError, source_map: &SourceMap) {
 
 /// # Panics
 ///
-pub fn show_parse_error(err: &SpecificError, span: &Span, source_map: &SourceMap) {
+pub fn show_parse_error_internal(err: &SpecificError, span: &Span, source_map: &SourceMap) {
     let builder = build_parse_error(err, span);
     let report = builder.build();
     report.print(source_map, stderr()).unwrap();
+}
+
+/// # Panics
+///
+pub fn show_parser_error(err: &ParserError, source_map: &SourceMap) {
+    let span = Span {
+        file_id: err.file_id,
+        offset: err.node.span.offset,
+        length: err.node.span.length,
+    };
+    show_parse_error_internal(&err.specific, &span, source_map);
+}
+
+pub fn show_eval_loader_error(err: &EvalLoaderError, source_map: &SourceMap) {
+    match err {
+        EvalLoaderError::DepLoaderError(err) => show_dep_loader_error(err, source_map),
+        EvalLoaderError::AnalyzerError(err) => show_analyzer_error(err, source_map),
+    }
+}
+
+pub fn show_dep_loader_error(err: &DepLoaderError, source_map: &SourceMap) {
+    match err {
+        DepLoaderError::DependencyError(err) => show_dependency_error(err, source_map),
+    }
+}
+
+pub fn show_dependency_error(err: &DependencyError, source_map: &SourceMap) {
+    match err {
+        DependencyError::CircularDependency(x) => {
+            eprintln!("{}", format!("circular dependency {:?}", x))
+        }
+        DependencyError::ParseRootError(err) => show_parse_root_error(err, source_map),
+        DependencyError::IoError(_) => {}
+    }
+}
+
+fn show_parse_root_error(err: &ParseRootError, source_map: &SourceMap) {
+    match err {
+        ParseRootError::IoError(_) => {}
+        ParseRootError::ParserError(err) => show_parser_error(err, source_map),
+    }
 }
 
 #[must_use]
@@ -269,7 +312,7 @@ pub fn build_parse_error(err: &SpecificError, span: &Span) -> Builder<usize> {
 
 /// # Panics
 ///
-pub fn show_error(err: &Error, source_map: &SourceMap) {
+pub fn show_analyzer_error(err: &Error, source_map: &SourceMap) {
     let builder = build_analyze_error(err);
     let report = builder.build();
     report.print(source_map, stderr()).unwrap();
@@ -286,6 +329,7 @@ pub fn build_analyze_error(err: &Error) -> Builder<usize> {
             "break outside loop",
             span,
         ),
+
         ErrorKind::ReturnOutsideCompare => Report::build(
             Kind::Error,
             4243,
@@ -300,6 +344,12 @@ pub fn build_analyze_error(err: &Error) -> Builder<usize> {
             span,
         ),
 
+        ErrorKind::UnusedVariablesCanNotBeMut => Report::build(
+            Kind::Error,
+            4243,
+            "unused variables can not be mut",
+            span,
+        ),
         ErrorKind::MatchArmsMustHaveTypes => Report::build(
             Kind::Error,
             4243,
@@ -379,6 +429,9 @@ pub fn build_analyze_error(err: &Error) -> Builder<usize> {
         ErrorKind::UnknownVariable => {
             Report::build(Kind::Error, 105, "Unknown variable", span)
         }
+        ErrorKind::UnknownIdentifier => {
+            Report::build(Kind::Error, 105, "Unknown identifier", span)
+        }
         ErrorKind::NotAnArray => Report::build(Kind::Error, 5405, "was not an array", span),
         ErrorKind::ArrayIndexMustBeInt(_) => todo!(),
         ErrorKind::OverwriteVariableWithAnotherType => Report::build(Kind::Error, 14505, "overwrite variable with another type", span),
@@ -400,7 +453,12 @@ pub fn build_analyze_error(err: &Error) -> Builder<usize> {
             "Variable needs to be mut to overwrite",
             span,
         ),
-        ErrorKind::OverwriteVariableNotAllowedHere => todo!(),
+        ErrorKind::OverwriteVariableNotAllowedHere =>  Report::build(
+            Kind::Error,
+            90423,
+            "overwrite variable is not allowed here",
+            span,
+        ),
         ErrorKind::NotNamedStruct(_) => todo!(),
         ErrorKind::UnknownEnumVariantType => Report::build(
             Kind::Error,

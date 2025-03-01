@@ -792,8 +792,7 @@ impl<'a, C> Interpreter<'a, C> {
 
             ExpressionKind::If(condition, consequences, optional_alternative) => {
                 let cond_value = self.evaluate_expression(&condition.expression)?;
-                if cond_value.is_truthy().unwrap() {
-                    // TODO: error handling
+                if cond_value.is_truthy()? {
                     self.evaluate_expression_with_signal(consequences)
                 } else if let Some(alternative) = optional_alternative {
                     self.evaluate_expression_with_signal(alternative)

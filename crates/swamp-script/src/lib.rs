@@ -7,6 +7,7 @@ use swamp_script_analyzer::prelude::Program;
 use swamp_script_dep_loader::DepLoaderError;
 use swamp_script_source_map::SourceMap;
 pub mod prelude;
+use swamp_script_eval_loader::EvalLoaderError;
 use swamp_script_semantic::SemanticError;
 
 #[derive(Debug)]
@@ -44,7 +45,7 @@ pub fn compile_and_analyze(
     module_path: &[String],
     resolved_program: &mut Program,
     source_map: &mut SourceMap,
-) -> Result<(), Error> {
+) -> Result<(), EvalLoaderError> {
     swamp_script_eval_loader::compile_and_analyze_all_modules(
         module_path,
         resolved_program,

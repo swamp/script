@@ -16,6 +16,8 @@ pub struct Error {
 }
 #[derive(Debug)]
 pub enum ErrorKind {
+    UnusedVariablesCanNotBeMut,
+    UnknownIdentifier,
     VariableTypeMustBeConcrete,
     GuardCanNotHaveMultipleWildcards,
     WildcardMustBeLastInGuard,

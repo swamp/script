@@ -166,7 +166,7 @@ impl<'a> Analyzer<'a> {
         let resolved_variable = Variable {
             name: variable.clone(),
             resolved_type: variable_type_ref.clone(),
-            mutable_node: is_mutable.clone().cloned(),
+            mutable_node: is_mutable.cloned(),
             scope_index,
             variable_index: variables.len(),
         };
@@ -174,6 +174,9 @@ impl<'a> Analyzer<'a> {
         let variable_ref = Rc::new(resolved_variable);
 
         let should_insert_in_scope = !variable_str.starts_with('_');
+        if !should_insert_in_scope && is_mutable.is_some() {
+            return Err(self.create_err_resolved(ErrorKind::UnusedVariablesCanNotBeMut, variable));
+        }
         if should_insert_in_scope {
             variables
                 .insert(variable_str, variable_ref.clone())

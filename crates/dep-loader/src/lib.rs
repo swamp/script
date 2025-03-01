@@ -10,27 +10,22 @@ use std::path::PathBuf;
 use std::{env, io};
 use swamp_script_ast::prelude::*;
 use swamp_script_ast::Function;
-use swamp_script_parser::{AstParser, ParseError};
+use swamp_script_parser::{AstParser, ParseError, SpecificError};
 use swamp_script_source_map::{FileId, SourceMap};
-use tracing::debug;
 use tracing::info;
+use tracing::{debug, Span};
 pub struct ParseRoot;
 
 #[derive(Debug)]
 pub enum ParseRootError {
     IoError(std::io::Error),
-    ParseError(ParseError),
+
+    ParserError(ParserError),
 }
 
 impl From<std::io::Error> for ParseRootError {
     fn from(err: std::io::Error) -> Self {
         Self::IoError(err)
-    }
-}
-
-impl From<ParseError> for ParseRootError {
-    fn from(value: ParseError) -> Self {
-        Self::ParseError(value)
     }
 }
 
@@ -67,6 +62,13 @@ impl ParsedAstModule {
 #[derive(Debug)]
 pub struct RelativePath(pub String);
 
+#[derive(Debug)]
+pub struct ParserError {
+    pub node: Node,
+    pub specific: SpecificError,
+    pub file_id: FileId,
+}
+
 impl ParseRoot {
     pub fn new() -> Self {
         Self {}
@@ -79,7 +81,14 @@ impl ParseRoot {
     ) -> Result<ParsedAstModule, ParseRootError> {
         let parser = AstParser {};
 
-        let ast_program = parser.parse_module(&*contents)?;
+        let ast_program = parser.parse_module(&contents).map_err(|err| {
+            let new_err = ParserError {
+                node: Node { span: err.span },
+                specific: err.specific,
+                file_id,
+            };
+            ParseRootError::ParserError(new_err)
+        })?;
 
         Ok(ParsedAstModule {
             ast_module: ast_program,
@@ -259,7 +268,7 @@ impl DependencyParser {
                 } else if self.already_resolved_modules.contains(module_path_vec) {
                     continue;
                 } else {
-                    let parsed_ast_module = parse_single_module(source_map, &*path)?;
+                    let parsed_ast_module = parse_single_module(source_map, &path)?;
 
                     self.already_parsed_modules
                         .insert(path.clone(), parsed_ast_module)

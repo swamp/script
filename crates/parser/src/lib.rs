@@ -128,7 +128,7 @@ impl From<Error<Rule>> for ParseError {
         };
         Self {
             span,
-            specific: SpecificError::General(value.to_string()),
+            specific: SpecificError::General(value.variant.to_string()),
         }
     }
 }

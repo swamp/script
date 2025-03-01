@@ -422,13 +422,10 @@ impl<'a> Analyzer<'a> {
         maybe_false_expression: Option<&swamp_script_ast::Expression>,
         context: &TypeContext,
     ) -> Result<Expression, Error> {
-        // Analyze the condition (must be boolean)
         let resolved_condition = self.analyze_bool_argument_expression(condition)?;
 
-        // Create a context for if-statement branches that allows control flow statements
         let branch_context = context.enter_compare();
 
-        // Analyze the true branch
         let true_expr = self.analyze_expression(true_expression, &branch_context)?;
         let resolved_true = Box::new(true_expr);
 
@@ -859,11 +856,11 @@ impl<'a> Analyzer<'a> {
             }
             swamp_script_ast::ExpressionKind::WhileLoop(expression, statements) => {
                 let condition = self.analyze_bool_argument_expression(expression)?;
-                self.push_block_scope("while_loop");
+                //self.push_block_scope("while_loop");
                 let resolved_statements =
                     self.analyze_expression(statements, &context.enter_loop())?;
                 let resolved_type = resolved_statements.ty.clone();
-                self.pop_block_scope("while_loop");
+                //self.pop_block_scope("while_loop");
 
                 self.create_expr(
                     ExpressionKind::WhileLoop(condition, Box::from(resolved_statements)),
@@ -1505,6 +1502,8 @@ impl<'a> Analyzer<'a> {
             return Ok((vec![], Type::Unit));
         }
 
+        self.push_block_scope("block");
+
         let mut resolved_expressions = Vec::with_capacity(ast_expressions.len());
 
         for expression in &ast_expressions[..ast_expressions.len() - 1] {
@@ -1524,6 +1523,8 @@ impl<'a> Analyzer<'a> {
             self.analyze_expression(&ast_expressions[ast_expressions.len() - 1], context)?;
         let last_type = last_expr.ty.clone();
         resolved_expressions.push(last_expr);
+
+        self.pop_block_scope("block");
 
         Ok((resolved_expressions, last_type))
     }
@@ -1585,6 +1586,17 @@ impl<'a> Analyzer<'a> {
         var_node: &swamp_script_ast::Node,
     ) -> Result<Expression, Error> {
         let text = self.get_text(var_node);
+
+        // Must check variable first, since that is more intuitive for the user.
+        // local variables before other functions
+        if let Some(found_variable) = self.try_find_variable(var_node) {
+            return Ok(self.create_expr(
+                ExpressionKind::VariableAccess(found_variable.clone()),
+                found_variable.resolved_type.clone(),
+                var_node,
+            ));
+        }
+
         if let Some(found_symbol) = self.shared.lookup_table.get_symbol(text) {
             let expr = match found_symbol {
                 Symbol::FunctionDefinition(func) => match func {
@@ -1601,22 +1613,13 @@ impl<'a> Analyzer<'a> {
                 },
 
                 _ => {
-                    return Err(self.create_err(ErrorKind::UnknownVariable, var_node));
+                    return Err(self.create_err(ErrorKind::UnknownIdentifier, var_node));
                 }
             };
             return Ok(expr);
         }
 
-        self.try_find_variable(var_node).map_or_else(
-            || Err(self.create_err(ErrorKind::UnknownVariable, var_node)),
-            |variable_ref| {
-                Ok(self.create_expr(
-                    ExpressionKind::VariableAccess(variable_ref.clone()),
-                    variable_ref.resolved_type.clone(),
-                    var_node,
-                ))
-            },
-        )
+        Err(self.create_err(ErrorKind::UnknownIdentifier, var_node))
     }
     fn analyze_usize_index(
         &mut self,
@@ -1987,6 +1990,7 @@ impl<'a> Analyzer<'a> {
         true_expr: &swamp_script_ast::Expression,
         else_expr: Option<&swamp_script_ast::Expression>,
     ) -> Result<Expression, Error> {
+        // Since we are making new variable bindings, we have to push a scope for them
         self.push_block_scope("when");
         let mut bindings = Vec::new();
         for variable_binding in variables {
