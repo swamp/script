@@ -676,7 +676,7 @@ pub struct BooleanExpression {
 #[derive(Debug)]
 pub struct Match {
     pub arms: Vec<MatchArm>,
-    pub expression: Box<Expression>,
+    pub expression: Box<MutOrImmutableExpression>,
 }
 
 #[derive(Debug)]

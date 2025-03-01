@@ -22,6 +22,13 @@ impl VariableValue {
             Self::Reference(value_ref) => value_ref.borrow().clone(),
         }
     }
+
+    pub fn to_value_ref(&self) -> ValueRef {
+        match self {
+            Self::Value(v) => Rc::new(RefCell::new(v.clone())),
+            Self::Reference(value_ref) => value_ref.clone(),
+        }
+    }
 }
 
 impl PartialEq for VariableValue {

@@ -395,7 +395,7 @@ pub enum ExpressionKind {
 
     // Compare and Matching
     If(Box<Expression>, Box<Expression>, Option<Box<Expression>>),
-    Match(Box<Expression>, Vec<MatchArm>),
+    Match(Box<MutableOrImmutableExpression>, Vec<MatchArm>),
     Guard(Vec<GuardExpr>),
 
     InterpolatedString(Vec<StringPart>),

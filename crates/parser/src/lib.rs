@@ -2253,7 +2253,7 @@ impl AstParser {
 
     fn parse_match_expr(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
         let mut inner = Self::convert_into_iterator(pair);
-        let value = self.parse_expression(&Self::next_pair(&mut inner)?)?;
+        let value = self.parse_mutable_or_immutable_expression(&Self::next_pair(&mut inner)?)?;
         let arms_pair = Self::next_pair(&mut inner)?;
         let mut arms = Vec::new();
 

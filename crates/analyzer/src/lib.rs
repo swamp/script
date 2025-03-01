@@ -23,6 +23,7 @@ use std::mem::take;
 use std::num::{ParseFloatError, ParseIntError};
 use std::rc::Rc;
 
+use swamp_script_ast::MutableOrImmutableExpression;
 use swamp_script_semantic::modules::ModuleRef;
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::symtbl::{FuncDef, Symbol, SymbolTable, SymbolTableRef};
@@ -1698,7 +1699,7 @@ impl<'a> Analyzer<'a> {
 
     fn analyze_match(
         &mut self,
-        scrutinee: &swamp_script_ast::Expression,
+        scrutinee: &swamp_script_ast::MutableOrImmutableExpression,
         default_context: &TypeContext,
         arms: &Vec<swamp_script_ast::MatchArm>,
     ) -> Result<(Match, Type), Error> {
@@ -1706,18 +1707,22 @@ impl<'a> Analyzer<'a> {
         let own_context = default_context.clone();
         // Analyze the scrutinee with no specific expected type
         let scrutinee_context = TypeContext::new_anything_argument();
-        let resolved_scrutinee = self.analyze_expression(scrutinee, &scrutinee_context)?;
-        let scrutinee_type = resolved_scrutinee.ty.clone();
+        let resolved_scrutinee = self.analyze_mut_or_immutable_expression(
+            scrutinee,
+            &scrutinee_context,
+            LocationSide::Rhs,
+        )?;
+        let scrutinee_type = resolved_scrutinee.ty().clone();
 
         // Ensure we have at least one arm
         if arms.is_empty() {
-            return Err(self.create_err(ErrorKind::EmptyMatch, &scrutinee.node));
+            return Err(self.create_err(ErrorKind::EmptyMatch, &scrutinee.expression.node));
         }
 
         let mut resolved_arms = Vec::with_capacity(arms.len());
 
         for arm in arms {
-            let resolved_arm = self.analyze_arm(
+            let (resolved_arm, anyone_wants_mutable) = self.analyze_arm(
                 arm,
                 &resolved_scrutinee,
                 &own_context.with_expected_type(known_type.as_ref()),
@@ -1731,12 +1736,17 @@ impl<'a> Analyzer<'a> {
         }
 
         known_type.map_or_else(
-            || Err(self.create_err(ErrorKind::MatchArmsMustHaveTypes, &scrutinee.node)),
+            || {
+                Err(self.create_err(
+                    ErrorKind::MatchArmsMustHaveTypes,
+                    &scrutinee.expression.node,
+                ))
+            },
             |encountered_type| {
                 if matches!(encountered_type, Type::Never) {
                     Err(self.create_err(
                         ErrorKind::IncompatibleTypes(encountered_type.clone(), encountered_type),
-                        &scrutinee.node,
+                        &scrutinee.expression.node,
                     ))
                 } else {
                     Ok((
@@ -1754,11 +1764,11 @@ impl<'a> Analyzer<'a> {
     fn analyze_arm(
         &mut self,
         arm: &swamp_script_ast::MatchArm,
-        _expression: &Expression,
+        _expression: &MutOrImmutableExpression,
         type_context: &TypeContext,
         expected_condition_type: &Type,
-    ) -> Result<MatchArm, Error> {
-        let (resolved_pattern, scope_was_pushed) =
+    ) -> Result<(MatchArm, bool), Error> {
+        let (resolved_pattern, scope_was_pushed, anyone_wants_mutable) =
             self.analyze_pattern(&arm.pattern, expected_condition_type)?;
 
         let resolved_expression = self.analyze_expression(&arm.expression, type_context)?;
@@ -1768,11 +1778,14 @@ impl<'a> Analyzer<'a> {
 
         let resolved_type = resolved_expression.ty.clone();
 
-        Ok(MatchArm {
-            pattern: resolved_pattern,
-            expression: Box::from(resolved_expression),
-            expression_type: resolved_type,
-        })
+        Ok((
+            MatchArm {
+                pattern: resolved_pattern,
+                expression: Box::from(resolved_expression),
+                expression_type: resolved_type,
+            },
+            anyone_wants_mutable,
+        ))
     }
 
     fn str_to_int(text: &str) -> Result<i32, ParseIntError> {

@@ -36,14 +36,15 @@ impl<'a> Analyzer<'a> {
         &mut self,
         ast_pattern: &swamp_script_ast::Pattern,
         expected_condition_type: &Type,
-    ) -> Result<(Pattern, bool), Error> {
+    ) -> Result<(Pattern, bool, bool), Error> {
         match ast_pattern {
             swamp_script_ast::Pattern::Wildcard(node) => {
-                Ok((Pattern::Wildcard(self.to_node(node)), false))
+                Ok((Pattern::Wildcard(self.to_node(node)), false, false))
             }
             swamp_script_ast::Pattern::NormalPattern(node, normal_pattern, maybe_guard) => {
-                let (normal_pattern, was_pushed) =
+                let (normal_pattern, was_pushed, wanted_mutable) =
                     self.analyze_normal_pattern(node, normal_pattern, expected_condition_type)?;
+
                 let resolved_guard = if let Some(guard_clause) = maybe_guard {
                     match guard_clause {
                         swamp_script_ast::GuardClause::Wildcard(_) => None,
@@ -54,7 +55,11 @@ impl<'a> Analyzer<'a> {
                 } else {
                     None
                 };
-                Ok((Pattern::Normal(normal_pattern, resolved_guard), was_pushed))
+                Ok((
+                    Pattern::Normal(normal_pattern, resolved_guard),
+                    was_pushed,
+                    wanted_mutable,
+                ))
             }
         }
     }
@@ -65,7 +70,8 @@ impl<'a> Analyzer<'a> {
         node: &swamp_script_ast::Node,
         ast_normal_pattern: &swamp_script_ast::NormalPattern,
         expected_condition_type: &Type,
-    ) -> Result<(NormalPattern, bool), Error> {
+    ) -> Result<(NormalPattern, bool, bool), Error> {
+        let mut anyone_wants_mutable = false;
         match ast_normal_pattern {
             swamp_script_ast::NormalPattern::PatternList(elements) => {
                 let mut resolved_elements = Vec::new();
@@ -76,6 +82,9 @@ impl<'a> Analyzer<'a> {
                             if !scope_is_pushed {
                                 self.push_block_scope("pattern_list one variable");
                                 scope_is_pushed = true;
+                            }
+                            if var.is_mutable.is_some() {
+                                anyone_wants_mutable = true;
                             }
                             let variable_ref = self.create_local_variable(
                                 &var.name,
@@ -98,6 +107,7 @@ impl<'a> Analyzer<'a> {
                 Ok((
                     NormalPattern::PatternList(resolved_elements),
                     scope_is_pushed,
+                    anyone_wants_mutable,
                 ))
             }
 
@@ -132,7 +142,9 @@ impl<'a> Analyzer<'a> {
                             {
                                 match element {
                                     swamp_script_ast::PatternElement::Variable(var) => {
-                                        info!(?var, "ENUM TUPLE found variable to handle");
+                                        if var.is_mutable.is_some() {
+                                            anyone_wants_mutable = true;
+                                        }
                                         let variable_ref = self.create_local_variable(
                                             &var.name,
                                             var.is_mutable.as_ref(),
@@ -181,6 +193,10 @@ impl<'a> Analyzer<'a> {
                                                 self.create_err(ErrorKind::UnknownField, &var.name)
                                             })?;
 
+                                        if var.is_mutable.is_some() {
+                                            anyone_wants_mutable = true;
+                                        }
+
                                         let variable_ref = self.create_local_variable(
                                             &var.name,
                                             Option::from(&var.is_mutable),
@@ -218,11 +234,13 @@ impl<'a> Analyzer<'a> {
                     Ok((
                         NormalPattern::EnumPattern(enum_variant_type_ref, Some(resolved_elements)),
                         scope_was_pushed,
+                        anyone_wants_mutable,
                     ))
                 } else {
                     Ok((
                         NormalPattern::EnumPattern(enum_variant_type_ref, None),
                         false,
+                        anyone_wants_mutable,
                     ))
                 }
             }
@@ -230,6 +248,7 @@ impl<'a> Analyzer<'a> {
             swamp_script_ast::NormalPattern::Literal(ast_literal) => Ok((
                 self.analyze_pattern_literal(node, ast_literal, expected_condition_type)?,
                 false,
+                anyone_wants_mutable,
             )),
         }
     }

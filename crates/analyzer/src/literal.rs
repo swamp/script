@@ -79,9 +79,7 @@ impl<'a> Analyzer<'a> {
                             _variant,
                             expressions,
                         ) => {
-                            let resolved = self
-                                .analyze_argument_expressions(None, expressions)
-                                .expect("enum tuple expressions should resolve");
+                            let resolved = self.analyze_argument_expressions(None, expressions)?;
                             EnumLiteralData::Tuple(resolved)
                         }
                         swamp_script_ast::EnumVariantLiteral::Struct(

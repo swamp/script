@@ -313,7 +313,7 @@ impl<'a, C> Interpreter<'a, C> {
                         // For mutable parameters, use the SAME reference
                         arg.clone()
                     }
-                    _ => return Err(self.create_err(ExecuteErrorKind::ArgumentIsNotMutable, &node)),
+                    _ => return Err(self.create_err(ExecuteErrorKind::ArgumentIsNotMutable, node)),
                 }
             } else {
                 match arg {
@@ -1911,9 +1911,11 @@ impl<'a, C> Interpreter<'a, C> {
 
         let parameters = &resolved_fn.signature().parameters;
         // Check total number of parameters (including self)
-        if arguments.len() != parameters.len() {
-            panic!("wrong number of arguments")
-        }
+        assert_eq!(
+            arguments.len(),
+            parameters.len(),
+            "wrong number of arguments"
+        );
 
         let resolved_arguments = self.evaluate_args(&arguments)?;
 
@@ -2011,9 +2013,10 @@ impl<'a, C> Interpreter<'a, C> {
     }
 
     #[inline(always)]
-    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     fn eval_match(&mut self, resolved_match: &Match) -> Result<Value, ExecuteError> {
-        let actual_value = self.evaluate_expression(&resolved_match.expression)?;
+        let actual_value = self.evaluate_mut_or_immutable_expression(&resolved_match.expression)?;
+        let value_ref = actual_value.to_value_ref();
 
         for arm in &resolved_match.arms {
             match &arm.pattern {
@@ -2022,155 +2025,37 @@ impl<'a, C> Interpreter<'a, C> {
                     if let Some(found_guard) = maybe_guard {
                         if !self
                             .evaluate_expression(&found_guard.expression)?
-                            .is_truthy()
-                            .unwrap()
+                            .is_truthy()?
                         // TODO: ERROR HANDLING
                         {
                             continue;
                         }
                     }
+
+                    let immutable_value = actual_value.to_value();
+
                     match &normal_pattern {
                         NormalPattern::PatternList(elements) => {
-                            // Handle single variable/wildcard patterns that match any value
-                            if elements.len() == 1 {
-                                return match &elements[0] {
-                                    PatternElement::Variable(var_ref)
-                                    | PatternElement::VariableWithFieldIndex(var_ref, _) => {
-                                        self.push_block_scope();
-                                        self.current_block_scopes.init_var(var_ref, &actual_value);
-                                        let result = self.evaluate_expression(&arm.expression);
-                                        self.pop_block_scope();
-                                        result
-                                    }
-                                    PatternElement::Wildcard(_) => {
-                                        // Wildcard matches anything
-                                        self.evaluate_expression(&arm.expression)
-                                    }
-                                };
-                            }
+                            return Ok(self.eval_normal_pattern_list(
+                                elements,
+                                &arm.expression,
+                                value_ref.clone(),
+                            )?);
+                        }
+                        NormalPattern::EnumPattern(enum_variant_ref, pattern_elements) => {
+                            let maybe_found_match = self.eval_normal_pattern_enum(
+                                pattern_elements.as_ref(),
+                                &arm.expression,
+                                enum_variant_ref,
+                                value_ref.clone(),
+                            )?;
 
-                            if let Value::Tuple(_tuple_type_ref, values) = &actual_value {
-                                if elements.len() == values.len() {
-                                    self.push_block_scope();
-
-                                    for (element, value) in elements.iter().zip(values.iter()) {
-                                        match element {
-                                            PatternElement::Variable(var_ref) => {
-                                                self.current_block_scopes.set_local_var_value(
-                                                    var_ref,
-                                                    value.borrow().clone(),
-                                                );
-                                            }
-                                            PatternElement::VariableWithFieldIndex(var_ref, _) => {
-                                                self.current_block_scopes.set_local_var_value(
-                                                    var_ref,
-                                                    value.borrow().clone(),
-                                                );
-                                            }
-                                            PatternElement::Wildcard(_) => {
-                                                // Skip wildcards
-                                                continue;
-                                            }
-                                        }
-                                    }
-
-                                    let result = self.evaluate_expression(&arm.expression);
-                                    self.pop_block_scope();
-                                    return result;
-                                }
+                            if let Some(found_match) = maybe_found_match {
+                                return Ok(found_match);
                             }
                         }
 
-                        NormalPattern::EnumPattern(variant_ref, maybe_elements) => {
-                            match &actual_value {
-                                Value::EnumVariantTuple(value_tuple_type, values) => {
-                                    // First check if the variant types match
-                                    if variant_ref.common().number != value_tuple_type.common.number
-                                    {
-                                        continue; // Try next pattern
-                                    }
-
-                                    if let Some(elements) = maybe_elements {
-                                        if elements.len() == values.len() {
-                                            self.push_block_scope();
-
-                                            for (element, value) in
-                                                elements.iter().zip(values.iter())
-                                            {
-                                                match element {
-                                                    PatternElement::Variable(var_ref) => {
-                                                        self.current_block_scopes
-                                                            .set_local_var_value(
-                                                                var_ref,
-                                                                value.borrow().clone(),
-                                                            );
-                                                    }
-                                                    PatternElement::VariableWithFieldIndex(
-                                                        var_ref,
-                                                        _,
-                                                    ) => {
-                                                        self.current_block_scopes
-                                                            .set_local_var_value(
-                                                                var_ref,
-                                                                value.borrow().clone(),
-                                                            );
-                                                    }
-                                                    PatternElement::Wildcard(_) => continue,
-                                                }
-                                            }
-
-                                            let result = self.evaluate_expression(&arm.expression);
-                                            self.pop_block_scope();
-                                            return result;
-                                        }
-                                    }
-                                }
-                                Value::EnumVariantStruct(value_enum_struct_type, values) => {
-                                    info!(
-                                        ?value_enum_struct_type,
-                                        ?variant_ref,
-                                        "comparing enum variant struct match arm"
-                                    );
-                                    if value_enum_struct_type.common.number
-                                        == variant_ref.common().number
-                                    {
-                                        info!(?value_enum_struct_type, ?variant_ref, "FOUND!");
-                                        if let Some(elements) = maybe_elements {
-                                            self.push_block_scope();
-
-                                            for element in elements {
-                                                if let PatternElement::VariableWithFieldIndex(
-                                                    var_ref,
-                                                    field_index,
-                                                ) = element
-                                                {
-                                                    let value = &values[*field_index];
-                                                    info!(?value, "setting match arm variable");
-                                                    self.current_block_scopes
-                                                        .init_var_ref(var_ref, value);
-                                                }
-                                            }
-
-                                            let result = self.evaluate_expression(&arm.expression);
-                                            self.pop_block_scope();
-                                            return result;
-                                        }
-                                    }
-                                }
-
-                                Value::EnumVariantSimple(value_variant_ref) => {
-                                    if value_variant_ref.common.number
-                                        == variant_ref.common().number
-                                        && maybe_elements.is_none()
-                                    {
-                                        return self.evaluate_expression(&arm.expression);
-                                    }
-                                }
-                                _ => {}
-                            }
-                        }
-
-                        NormalPattern::Literal(lit) => match (lit, &actual_value) {
+                        NormalPattern::Literal(lit) => match (lit, &immutable_value) {
                             (Literal::IntLiteral(a), Value::Int(b)) if a == b => {
                                 return self.evaluate_expression(&arm.expression);
                             }
@@ -2197,6 +2082,146 @@ impl<'a, C> Interpreter<'a, C> {
         }
 
         panic!("must match one of the match arms!");
+    }
+
+    fn eval_normal_pattern_list(
+        &mut self,
+        elements: &[PatternElement],
+        expression_to_evaluate: &Expression,
+        value_ref: ValueRef,
+    ) -> Result<Value, ExecuteError> {
+        // Handle single variable/wildcard patterns that match any value
+        if elements.len() == 1 {
+            return match &elements[0] {
+                PatternElement::Variable(var_ref)
+                | PatternElement::VariableWithFieldIndex(var_ref, _) => {
+                    self.push_block_scope();
+                    self.current_block_scopes
+                        .initialize_var_mut(var_ref, value_ref);
+                    let result = self.evaluate_expression(expression_to_evaluate);
+                    self.pop_block_scope();
+                    result
+                }
+                PatternElement::Wildcard(_) => {
+                    // Wildcard matches anything
+                    self.evaluate_expression(expression_to_evaluate)
+                }
+            };
+        }
+
+        if let Value::Tuple(_tuple_type_ref, values) = value_ref.borrow_mut().clone() {
+            assert_eq!(
+                elements.len(),
+                values.len(),
+                "must use all elements in tuple"
+            );
+            self.push_block_scope();
+
+            for (element, _inside_value) in elements.iter().zip(values.iter()) {
+                match element {
+                    PatternElement::Variable(var_ref) => {
+                        self.current_block_scopes
+                            .initialize_var_mut(var_ref, value_ref.clone());
+                    }
+                    PatternElement::VariableWithFieldIndex(var_ref, _) => {
+                        self.current_block_scopes
+                            .initialize_var_mut(var_ref, value_ref.clone());
+                    }
+                    PatternElement::Wildcard(_) => {
+                        // Skip wildcards
+                        continue;
+                    }
+                }
+            }
+
+            let result = self.evaluate_expression(expression_to_evaluate);
+            self.pop_block_scope();
+
+            return result;
+        }
+        panic!("should not get here")
+    }
+
+    fn eval_normal_pattern_enum(
+        &mut self,
+        maybe_elements: Option<&Vec<PatternElement>>,
+        expression_to_evaluate: &Expression,
+        variant_ref: &EnumVariantTypeRef,
+        value_ref: ValueRef,
+    ) -> Result<Option<Value>, ExecuteError> {
+        match value_ref.borrow_mut().clone() {
+            Value::EnumVariantTuple(value_tuple_type, values) => {
+                // First check if the variant types match
+                if variant_ref.common().number != value_tuple_type.common.number {
+                    return Ok(None); // Try next pattern
+                }
+
+                if let Some(elements) = maybe_elements {
+                    assert_eq!(elements.len(), values.len());
+                    self.push_block_scope();
+
+                    for (element, value) in elements.iter().zip(values.iter()) {
+                        match element {
+                            PatternElement::Variable(var_ref) => {
+                                self.current_block_scopes
+                                    .initialize_var_mut(var_ref, value.clone());
+                            }
+                            PatternElement::VariableWithFieldIndex(var_ref, _) => {
+                                self.current_block_scopes
+                                    .initialize_var_mut(var_ref, value.clone());
+                            }
+                            PatternElement::Wildcard(_) => continue,
+                        }
+                    }
+
+                    let result = self.evaluate_expression(&expression_to_evaluate);
+                    self.pop_block_scope();
+                    return Ok(Option::from(result?));
+                } else {
+                    panic!("not work");
+                }
+            }
+            Value::EnumVariantStruct(value_enum_struct_type, values) => {
+                info!(
+                    ?value_enum_struct_type,
+                    ?variant_ref,
+                    "comparing enum variant struct match arm"
+                );
+                if value_enum_struct_type.common.number == variant_ref.common().number {
+                    info!(?value_enum_struct_type, ?variant_ref, "FOUND!");
+                    if let Some(elements) = maybe_elements {
+                        self.push_block_scope();
+
+                        for element in elements {
+                            if let PatternElement::VariableWithFieldIndex(var_ref, field_index) =
+                                element
+                            {
+                                let value = &values[*field_index];
+                                info!(?value, "setting match arm variable");
+                                self.current_block_scopes.init_var_ref(var_ref, value);
+                            }
+                        }
+
+                        let result = self.evaluate_expression(&expression_to_evaluate);
+                        self.pop_block_scope();
+                        return Ok(Some(result?));
+                    }
+                }
+            }
+
+            Value::EnumVariantSimple(value_variant_ref) => {
+                if value_variant_ref.common.number == variant_ref.common().number
+                    && maybe_elements.is_none()
+                {
+                    return Ok(Some(self.evaluate_expression(&expression_to_evaluate)?));
+                }
+            }
+            _ => {
+                panic!("could not find it")
+            }
+        }
+
+        Ok(None)
     }
 
     #[inline(always)]
