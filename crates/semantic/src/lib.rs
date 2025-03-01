@@ -6,7 +6,6 @@ pub mod modules;
 pub mod ns;
 pub mod prelude;
 pub mod symtbl;
-
 pub use fixed32::Fp;
 use seq_fmt::comma;
 use seq_map::{SeqMap, SeqMapError};
@@ -222,9 +221,6 @@ impl Debug for Type {
             ),
             Self::Generic(base, parameters) => write!(f, "{base:?}<{parameters:?}>"),
             Self::Enum(enum_type_ref) => write!(f, "{:?}", enum_type_ref.borrow().assigned_name),
-            //            Self::EnumVariant(enum_type_variant) => {
-            //              write!(f, "{:?}", enum_type_variant.assigned_name)
-            //        }
             Self::Function(function_type_signature) => {
                 write!(f, "{:?}", function_type_signature)
             }
@@ -250,11 +246,6 @@ impl Display for Type {
             Self::Map(map_ref) => write!(f, "[{}:{}]", map_ref.key_type, map_ref.value_type),
             Self::Generic(base_type, params) => write!(f, "{base_type}<{}>", comma(params)),
             Self::Enum(enum_type) => write!(f, "{}", enum_type.borrow().assigned_name),
-            //Self::EnumVariant(variant) => write!(
-            //  f,
-            //"{}::{}",
-            //variant.owner.assigned_name, variant.assigned_name
-            //),
             Self::Function(signature) => write!(f, "function {signature}"),
             Self::Iterable(generating_type) => write!(f, "Iterable<{generating_type}>"),
             Self::Optional(base_type) => write!(f, "{base_type}?"),
@@ -283,6 +274,7 @@ pub enum SemanticError {
     WasNotMutable,
     DuplicateSymbolName,
     DuplicateNamespaceLink(String),
+    MismatchedTypes { expected: Type, found: Vec<Type> },
 }
 
 impl Type {

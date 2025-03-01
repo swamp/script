@@ -792,7 +792,6 @@ impl<'a, C> Interpreter<'a, C> {
             }
 
             ExpressionKind::If(condition, consequences, optional_alternative) => {
-                self.debug_expr(&condition.expression);
                 let cond_value = self.evaluate_expression(&condition.expression)?;
                 if cond_value.is_truthy().unwrap() {
                     // TODO: error handling
@@ -864,7 +863,6 @@ impl<'a, C> Interpreter<'a, C> {
     #[inline]
     fn evaluate_expression(&mut self, expr: &Expression) -> Result<Value, ExecuteError> {
         self.depth += 1;
-        //self.debug_expr(expr);
         let value = match &expr.kind {
             // Illegal in this context
             ExpressionKind::Continue => {
@@ -1257,7 +1255,9 @@ impl<'a, C> Interpreter<'a, C> {
                 Value::Unit
             }
             ExpressionKind::VariableAccess(variable_ref) => {
-                self.current_block_scopes.lookup_var_value(variable_ref)
+                let temp = self.current_block_scopes.lookup_var_value(variable_ref);
+                assert_ne!(temp, Value::Unit);
+                temp
             }
             ExpressionKind::FieldAccess(expr, index) => {
                 let resolved_expr = self.evaluate_expression(expr)?;
@@ -1306,6 +1306,8 @@ impl<'a, C> Interpreter<'a, C> {
         };
 
         self.depth -= 1;
+        //self.debug_expr(expr);
+        //info!(?value, "resulted in value");
         Ok(value)
     }
 
@@ -1729,8 +1731,14 @@ impl<'a, C> Interpreter<'a, C> {
                 let start_variable_value = self.current_block_scopes.get_var(&start_var);
 
                 match start_variable_value {
-                    VariableValue::Value(value) => (Rc::new(RefCell::new(value.clone())), false),
-                    VariableValue::Reference(value_ref) => (value_ref.clone(), true),
+                    VariableValue::Value(value) => {
+                        assert_ne!(*value, Value::Unit);
+                        (Rc::new(RefCell::new(value.clone())), false)
+                    }
+                    VariableValue::Reference(value_ref) => {
+                        assert_ne!(value_ref.borrow().clone(), Value::Unit);
+                        (value_ref.clone(), true)
+                    }
                 }
             }
             _ => (

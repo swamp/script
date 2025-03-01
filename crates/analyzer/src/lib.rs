@@ -242,8 +242,8 @@ impl<'a> TypeContext<'a> {
 
     pub fn for_return(&self) -> Self {
         Self {
-            expected_type: self.return_type,
-            return_type: self.return_type,
+            expected_type: Some(self.return_type.unwrap()),
+            return_type: Some(self.return_type.unwrap()),
             scope: TypeContextScope::ArgumentOrOutsideFunction,
             is_in_compare_like: false,
         }
@@ -416,61 +416,40 @@ impl<'a> Analyzer<'a> {
         &mut self,
         condition: &swamp_script_ast::Expression,
         true_expression: &swamp_script_ast::Expression,
-        maybe_false_expression: &Option<Box<swamp_script_ast::Expression>>,
+        maybe_false_expression: Option<&Box<swamp_script_ast::Expression>>,
         context: &TypeContext,
     ) -> Result<Expression, Error> {
+        // Analyze the condition (must be boolean)
         let resolved_condition = self.analyze_bool_argument_expression(condition)?;
 
-        let true_expr = self.analyze_expression(true_expression, &context.enter_compare())?;
-        let if_result_type = true_expr.ty.clone();
+        // Create a context for if-statement branches that allows control flow statements
+        let branch_context = context.enter_compare();
+
+        // Analyze the true branch
+        let true_expr = self.analyze_expression(true_expression, &branch_context)?;
         let resolved_true = Box::new(true_expr);
 
-        let else_statements = if let Some(false_expression) = maybe_false_expression {
-            let false_context = if matches!(resolved_true.kind, ExpressionKind::Return(_)) {
-                context.enter_compare()
-            } else {
-                context.with_expected_type(Some(&if_result_type))
-            };
+        let mut detected = context.expected_type.cloned();
+        if detected.is_none() && !matches!(resolved_true.ty, Type::Never) {
+            detected = Some(resolved_true.ty.clone());
+        }
 
-            Some(Box::new(
-                self.analyze_expression(false_expression, &false_context)?,
-            ))
+        // Analyze the false branch if it exists
+        let else_statements = if let Some(false_expression) = maybe_false_expression {
+            let else_context = branch_context.with_expected_type(detected.as_ref());
+            let else_expr = self.analyze_expression(false_expression, &else_context)?;
+            if detected.is_none() && !matches!(else_expr.ty, Type::Never) {
+                detected = Some(else_expr.ty.clone());
+            }
+
+            Some(Box::new(else_expr))
         } else {
             None
         };
 
-        // Determine the final type
-        let final_type = if let Some(ref else_expr) = else_statements {
-            if matches!(resolved_true.kind, ExpressionKind::Return(_)) {
-                // If true branch is a return, use else branch type
-                else_expr.ty.clone()
-            } else if matches!(else_expr.kind, ExpressionKind::Return(_)) {
-                // If else branch is a return, use true branch type
-                if_result_type
-            } else if if_result_type.compatible_with(&else_expr.ty) {
-                // If types are compatible, use that type
-                if_result_type
-            } else {
-                // One branch might be Unit
-                // Incompatible types - error
-                return Err(self.create_err(
-                    ErrorKind::IncompatibleTypes(if_result_type.clone(), else_expr.ty.clone()),
-                    &condition.node,
-                ));
-            }
-        } else {
-            // No else branch, use true branch type
-            if matches!(resolved_true.kind, ExpressionKind::Return(_)) {
-                // If the true branch is a return with no else, the expression is Never
-                Type::Unit // Or Type::Never if you have that
-            } else {
-                if_result_type
-            }
-        };
-
         Ok(self.create_expr(
             ExpressionKind::If(resolved_condition, resolved_true, else_statements),
-            final_type,
+            detected.unwrap(),
             &condition.node,
         ))
     }
@@ -884,7 +863,7 @@ impl<'a> Analyzer<'a> {
             ) => self.analyze_if_expression(
                 expression,
                 true_expression,
-                maybe_false_expression,
+                maybe_false_expression.as_ref(),
                 context,
             )?,
 
