@@ -363,7 +363,7 @@ impl<'a> Analyzer<'a> {
                 for param in &parameters {
                     self.create_local_variable_resolved(
                         &param.node.as_ref().unwrap().name,
-                        &param.node.as_ref().unwrap().is_mutable,
+                        param.node.as_ref().unwrap().is_mutable.as_ref(),
                         &param.resolved_type.clone(),
                     )?;
                 }
@@ -569,7 +569,7 @@ impl<'a> Analyzer<'a> {
                 for param in &parameters {
                     self.create_local_variable_resolved(
                         &param.node.as_ref().unwrap().name,
-                        &param.node.as_ref().unwrap().is_mutable,
+                        param.node.as_ref().unwrap().is_mutable.as_ref(),
                         &param.resolved_type.clone(),
                     )?;
                 }

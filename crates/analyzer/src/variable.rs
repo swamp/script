@@ -23,6 +23,7 @@ impl<'a> Analyzer<'a> {
 
         current_scope.variables.get(&variable_text)
     }
+
     #[allow(unused)]
     pub(crate) fn find_variable(
         &self,
@@ -123,7 +124,7 @@ impl<'a> Analyzer<'a> {
         assert_ne!(*variable_type_ref, Type::Unit);
         self.create_local_variable_resolved(
             &self.to_node(variable),
-            &self.to_node_option(Option::from(is_mutable)),
+            Option::from(&self.to_node_option(is_mutable)),
             variable_type_ref,
         )
     }
@@ -143,7 +144,7 @@ impl<'a> Analyzer<'a> {
     pub(crate) fn create_local_variable_resolved(
         &mut self,
         variable: &Node,
-        is_mutable: &Option<Node>,
+        is_mutable: Option<&Node>,
         variable_type_ref: &Type,
     ) -> Result<VariableRef, Error> {
         if let Some(_existing_variable) = self.try_find_local_variable(variable) {
@@ -165,16 +166,19 @@ impl<'a> Analyzer<'a> {
         let resolved_variable = Variable {
             name: variable.clone(),
             resolved_type: variable_type_ref.clone(),
-            mutable_node: is_mutable.clone(),
+            mutable_node: is_mutable.clone().cloned(),
             scope_index,
             variable_index: variables.len(),
         };
 
         let variable_ref = Rc::new(resolved_variable);
 
-        variables
-            .insert(variable_str, variable_ref.clone())
-            .expect("should have checked earlier for variable");
+        let should_insert_in_scope = !variable_str.starts_with('_');
+        if should_insert_in_scope {
+            variables
+                .insert(variable_str, variable_ref.clone())
+                .expect("should have checked earlier for variable");
+        }
 
         Ok(variable_ref)
     }
