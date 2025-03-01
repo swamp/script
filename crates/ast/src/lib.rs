@@ -554,7 +554,7 @@ pub enum NormalPattern {
 
 #[derive(Debug)]
 pub enum PatternElement {
-    Variable(Node),
+    Variable(Variable),
     Expression(Expression),
     Wildcard(Node),
 }

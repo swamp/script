@@ -77,8 +77,11 @@ impl<'a> Analyzer<'a> {
                                 self.push_block_scope("pattern_list one variable");
                                 scope_is_pushed = true;
                             }
-                            let variable_ref =
-                                self.create_local_variable(var, None, expected_condition_type)?;
+                            let variable_ref = self.create_local_variable(
+                                &var.name,
+                                Option::from(&var.is_mutable),
+                                expected_condition_type,
+                            )?;
                             resolved_elements.push(PatternElement::Variable(variable_ref));
                         }
                         swamp_script_ast::PatternElement::Expression(expr) => {
@@ -130,8 +133,11 @@ impl<'a> Analyzer<'a> {
                                 match element {
                                     swamp_script_ast::PatternElement::Variable(var) => {
                                         info!(?var, "ENUM TUPLE found variable to handle");
-                                        let variable_ref =
-                                            self.create_local_variable(var, None, field_type)?;
+                                        let variable_ref = self.create_local_variable(
+                                            &var.name,
+                                            var.is_mutable.as_ref(),
+                                            field_type,
+                                        )?;
                                         resolved_elements
                                             .push(PatternElement::Variable(variable_ref));
                                     }
@@ -157,14 +163,14 @@ impl<'a> Analyzer<'a> {
                             for element in elements {
                                 match element {
                                     swamp_script_ast::PatternElement::Variable(var) => {
-                                        let var_name_str = self.get_text(var).to_string();
+                                        let var_name_str = self.get_text(&var.name).to_string();
                                         // Check if the field exists
                                         let field_index = struct_type
                                             .anon_struct
                                             .defined_fields
                                             .get_index(&var_name_str)
                                             .ok_or_else(|| {
-                                                self.create_err(ErrorKind::UnknownField, var)
+                                                self.create_err(ErrorKind::UnknownField, &var.name)
                                             })?;
 
                                         let field_type = struct_type
@@ -172,12 +178,12 @@ impl<'a> Analyzer<'a> {
                                             .defined_fields
                                             .get(&var_name_str)
                                             .ok_or_else(|| {
-                                                self.create_err(ErrorKind::UnknownField, var)
+                                                self.create_err(ErrorKind::UnknownField, &var.name)
                                             })?;
 
                                         let variable_ref = self.create_local_variable(
-                                            var,
-                                            None,
+                                            &var.name,
+                                            Option::from(&var.is_mutable),
                                             &field_type.field_type,
                                         )?;
 
@@ -204,7 +210,7 @@ impl<'a> Analyzer<'a> {
                         EnumVariantType::Nothing(_) => {
                             if !elements.is_empty() {
                                 return Err(self
-                                    .create_err(ErrorKind::EnumVariantHasNoFields, &variant_name));
+                                    .create_err(ErrorKind::EnumVariantHasNoFields, variant_name));
                             }
                         }
                     }

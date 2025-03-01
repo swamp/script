@@ -446,7 +446,7 @@ pattern_list     = {
     (pattern_field | expression) ~ (COMMA ~ (pattern_field | expression))*
 }
 enum_pattern     = { type_identifier ~ pattern_list? }
-pattern_field    = { identifier | "_" }
+pattern_field    = { maybe_mut_identifier | "_" }
 wildcard_pattern = { "_" }
 
 /*

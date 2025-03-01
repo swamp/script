@@ -2403,10 +2403,12 @@ impl AstParser {
         for item in Self::convert_into_iterator(pair) {
             match item.as_rule() {
                 Rule::pattern_field => {
-                    if item.as_str() == "_" {
+                    let inner_pair = item.clone().into_inner().next().unwrap();
+                    let maybe_mut_identifier = self.parse_maybe_mut_identifier(&inner_pair)?;
+                    if inner_pair.as_str() == "_" {
                         elements.push(PatternElement::Wildcard(self.to_node(&item)));
                     } else {
-                        elements.push(PatternElement::Variable(self.to_node(&item)));
+                        elements.push(PatternElement::Variable(maybe_mut_identifier));
                     }
                 }
                 Rule::expression => {
