@@ -4,6 +4,7 @@
  */
 use crate::err::{Error, ErrorKind};
 use crate::Analyzer;
+use crate::TypeContext;
 use swamp_script_semantic::{
     ArrayTypeRef, Expression, ExpressionKind, Function, FunctionRef, Range, RangeMode, Type,
 };
@@ -47,8 +48,10 @@ impl<'a> Analyzer<'a> {
         min_expr: &swamp_script_ast::Expression,
         max_expr: &swamp_script_ast::Expression,
     ) -> Result<(Expression, Expression), Error> {
-        let resolved_min = self.analyze_expression(min_expr, Some(&Type::Int))?;
-        let resolved_max = self.analyze_expression(max_expr, Some(&Type::Int))?;
+        let context = TypeContext::new_argument(&Type::Int);
+
+        let resolved_min = self.analyze_expression(min_expr, &context)?;
+        let resolved_max = self.analyze_expression(max_expr, &context)?;
 
         Ok((resolved_min, resolved_max))
     }

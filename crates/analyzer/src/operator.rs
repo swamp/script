@@ -4,7 +4,7 @@
  */
 
 use crate::err::{Error, ErrorKind};
-use crate::Analyzer;
+use crate::{Analyzer, TypeContext};
 use swamp_script_semantic::{
     BinaryOperator, BinaryOperatorKind, Type, UnaryOperator, UnaryOperatorKind,
 };
@@ -17,10 +17,11 @@ impl<'a> Analyzer<'a> {
         ast_op: &swamp_script_ast::BinaryOperator,
         ast_right: &swamp_script_ast::Expression,
     ) -> Result<(BinaryOperator, Type), Error> {
-        let left = self.analyze_expression(ast_left, None)?;
+        let anything_context = TypeContext::new_anything_argument();
+        let left = self.analyze_expression(ast_left, &anything_context)?;
         let left_type = left.ty.clone();
 
-        let right = self.analyze_expression(ast_right, None)?;
+        let right = self.analyze_expression(ast_right, &anything_context)?;
         let right_type = right.ty.clone();
 
         let kind = self.convert_binary_operator_kind(ast_op);
@@ -49,7 +50,7 @@ impl<'a> Analyzer<'a> {
                 _,
                 _,
             ) => {
-                if !left_type.same_type(&right_type) {
+                if !left_type.compatible_with(&right_type) {
                     debug!(?left_type, ?right_type, "type mismatch in comparison");
                     return Err(self.create_err(
                         ErrorKind::IncompatibleTypes(left_type, right_type),
@@ -69,7 +70,7 @@ impl<'a> Analyzer<'a> {
 
             // All other operators require exact type matches
             _ => {
-                if !left_type.same_type(&right_type) {
+                if !left_type.compatible_with(&right_type) {
                     debug!(?left_type, ?right_type, "type mismatch in operation");
                     return Err(self.create_err_resolved(
                         ErrorKind::IncompatibleTypes(left_type, right_type),
@@ -102,7 +103,8 @@ impl<'a> Analyzer<'a> {
                 (node, UnaryOperatorKind::Negate, None)
             }
         };
-        let left = self.analyze_expression(ast_left, require_type)?;
+        let context = TypeContext::new_unsure_argument(require_type);
+        let left = self.analyze_expression(ast_left, &context)?;
         let resolved_type = left.ty.clone();
         Ok((
             UnaryOperator {

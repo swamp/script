@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use crate::err::{Error, ErrorKind};
-use crate::Analyzer;
+use crate::{Analyzer, TypeContext};
 use std::rc::Rc;
 use swamp_script_semantic::{
     EnumLiteralData, EnumVariantType, Expression, Fp, Literal, MapType, MapTypeRef, Node,
@@ -17,7 +17,7 @@ impl<'a> Analyzer<'a> {
         &mut self,
         ast_node: &swamp_script_ast::Node,
         ast_literal_kind: &swamp_script_ast::LiteralKind,
-        expected_type: Option<&Type>,
+        context: &TypeContext,
     ) -> Result<(Literal, Type), Error> {
         let node_text = self.get_text(&ast_node);
         let resolved_literal = match &ast_literal_kind {
@@ -80,7 +80,7 @@ impl<'a> Analyzer<'a> {
                             expressions,
                         ) => {
                             let resolved = self
-                                .analyze_expressions(None, expressions)
+                                .analyze_argument_expressions(None, expressions)
                                 .expect("enum tuple expressions should resolve");
                             EnumLiteralData::Tuple(resolved)
                         }
@@ -134,7 +134,7 @@ impl<'a> Analyzer<'a> {
 
             swamp_script_ast::LiteralKind::Array(items) => {
                 if items.len() == 0 {
-                    if let Some(found_expected_type) = expected_type {
+                    if let Some(found_expected_type) = context.expected_type {
                         match found_expected_type {
                             Type::Map(map_type_ref) => (
                                 Literal::Map(map_type_ref.clone(), vec![]),
@@ -153,12 +153,12 @@ impl<'a> Analyzer<'a> {
                         }
                     } else {
                         return Err(
-                            self.create_err(ErrorKind::EmptyArrayCanOnlyBeMapOrArray, &ast_node)
+                            self.create_err(ErrorKind::EmptyArrayCanOnlyBeMapOrArray, ast_node)
                         );
                     }
                 } else {
                     let (array_type_ref, resolved_items) =
-                        self.analyze_array_type_helper(ast_node, &items, expected_type)?;
+                        self.analyze_array_type_helper(ast_node, items, context.expected_type)?;
                     (
                         Literal::Array(array_type_ref.clone(), resolved_items),
                         Type::Array(array_type_ref),
@@ -180,7 +180,7 @@ impl<'a> Analyzer<'a> {
                 )
             }
             swamp_script_ast::LiteralKind::None => {
-                if let Some(found_expected_type) = expected_type {
+                if let Some(found_expected_type) = context.expected_type {
                     if let Type::Optional(_some_type) = found_expected_type {
                         return Ok((Literal::NoneLiteral, found_expected_type.clone()));
                     }
@@ -196,7 +196,7 @@ impl<'a> Analyzer<'a> {
         &mut self,
         items: &[swamp_script_ast::Expression],
     ) -> Result<(TupleTypeRef, Vec<Expression>), Error> {
-        let expressions = self.analyze_expressions(None, items)?;
+        let expressions = self.analyze_argument_expressions(None, items)?;
         let mut tuple_types = Vec::new();
         for expr in &expressions {
             let item_type = expr.ty.clone();
@@ -221,20 +221,24 @@ impl<'a> Analyzer<'a> {
 
         // Resolve first entry to determine map types
         let (first_key, first_value) = &entries[0];
-        let resolved_first_key = self.analyze_expression(first_key, None)?;
-        let resolved_first_value = self.analyze_expression(first_value, None)?;
+        let anything_context = TypeContext::new_anything_argument();
+        let resolved_first_key = self.analyze_expression(first_key, &anything_context)?;
+        let resolved_first_value = self.analyze_expression(first_value, &anything_context)?;
         let key_type = resolved_first_key.ty.clone();
         let value_type = resolved_first_value.ty.clone();
+
+        let key_context = TypeContext::new_argument(&key_type);
+        let value_context = TypeContext::new_argument(&value_type);
 
         // Check all entries match the types
         let mut resolved_entries = Vec::new();
         resolved_entries.push((resolved_first_key, resolved_first_value));
 
         for (key, value) in entries.iter().skip(1) {
-            let resolved_key = self.analyze_expression(key, None)?;
-            let resolved_value = self.analyze_expression(value, None)?;
+            let resolved_key = self.analyze_expression(key, &key_context)?;
+            let resolved_value = self.analyze_expression(value, &value_context)?;
 
-            if !resolved_key.ty.same_type(&key_type) {
+            if !resolved_key.ty.compatible_with(&key_type) {
                 return Err(self.create_err(
                     ErrorKind::MapKeyTypeMismatch {
                         expected: key_type,
@@ -244,7 +248,7 @@ impl<'a> Analyzer<'a> {
                 ));
             }
 
-            if !resolved_value.ty.same_type(&value_type) {
+            if !resolved_value.ty.compatible_with(&value_type) {
                 return Err(self.create_err(
                     ErrorKind::MapValueTypeMismatch {
                         expected: value_type,

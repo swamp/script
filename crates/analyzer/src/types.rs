@@ -123,7 +123,7 @@ impl<'a> Analyzer<'a> {
         for x in type_for_parameters {
             vec.push(TypeForParameter {
                 name: String::new(),
-                resolved_type: Some(self.analyze_type(&x.ast_type)?),
+                resolved_type: self.analyze_type(&x.ast_type)?,
                 is_mutable: x.is_mutable,
                 node: None,
             });

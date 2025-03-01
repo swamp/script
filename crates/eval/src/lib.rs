@@ -792,6 +792,7 @@ impl<'a, C> Interpreter<'a, C> {
             }
 
             ExpressionKind::If(condition, consequences, optional_alternative) => {
+                self.debug_expr(&condition.expression);
                 let cond_value = self.evaluate_expression(&condition.expression)?;
                 if cond_value.is_truthy().unwrap() {
                     // TODO: error handling
@@ -863,7 +864,7 @@ impl<'a, C> Interpreter<'a, C> {
     #[inline]
     fn evaluate_expression(&mut self, expr: &Expression) -> Result<Value, ExecuteError> {
         self.depth += 1;
-        self.debug_expr(expr);
+        //self.debug_expr(expr);
         let value = match &expr.kind {
             // Illegal in this context
             ExpressionKind::Continue => {

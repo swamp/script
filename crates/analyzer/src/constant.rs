@@ -4,12 +4,13 @@
  */
 
 use crate::err::{Error, ErrorKind};
-use crate::Analyzer;
+use crate::{Analyzer, TypeContext, TypeContextScope};
 use swamp_script_semantic::{Constant, ConstantRef, Expression, ExpressionKind};
 
 impl<'a> Analyzer<'a> {
     fn analyze_constant(&mut self, constant: &swamp_script_ast::ConstantInfo) -> Result<(), Error> {
-        let resolved_expr = self.analyze_expression(&constant.expression, None)?;
+        let context = TypeContext::new_anything_argument();
+        let resolved_expr = self.analyze_expression(&constant.expression, &context)?;
         let resolved_type = resolved_expr.ty.clone();
         let name_node = self.to_node(&constant.constant_identifier.0);
         let name_text = self.get_text_resolved(&name_node).to_string();

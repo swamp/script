@@ -364,7 +364,7 @@ impl<'a> Analyzer<'a> {
                     self.create_local_variable_resolved(
                         &param.node.as_ref().unwrap().name,
                         &param.node.as_ref().unwrap().is_mutable,
-                        &param.resolved_type.clone().unwrap(),
+                        &param.resolved_type.clone(),
                     )?;
                 }
                 let function_name = self.get_text(&function_data.declaration.name).to_string();
@@ -539,7 +539,7 @@ impl<'a> Analyzer<'a> {
                     let resolved_type = Type::Struct(found_struct.clone());
                     parameters.push(TypeForParameter {
                         name: self.get_text(&found_self.self_node).to_string(),
-                        resolved_type: Some(resolved_type),
+                        resolved_type: resolved_type,
                         is_mutable: found_self.is_mutable.is_some(),
                         node: Option::from(ParameterNode {
                             name: self.to_node(&found_self.self_node),
@@ -553,7 +553,7 @@ impl<'a> Analyzer<'a> {
 
                     parameters.push(TypeForParameter {
                         name: self.get_text(&param.variable.name).to_string(),
-                        resolved_type: Some(resolved_type),
+                        resolved_type: resolved_type,
                         is_mutable: param.variable.is_mutable.is_some(),
                         node: Option::from(ParameterNode {
                             name: self.to_node(&param.variable.name),
@@ -569,7 +569,7 @@ impl<'a> Analyzer<'a> {
                     self.create_local_variable_resolved(
                         &param.node.as_ref().unwrap().name,
                         &param.node.as_ref().unwrap().is_mutable,
-                        &param.resolved_type.clone().unwrap(),
+                        &param.resolved_type.clone(),
                     )?;
                 }
 
@@ -597,7 +597,7 @@ impl<'a> Analyzer<'a> {
                     let resolved_type = Type::Struct(found_struct.clone());
                     parameters.push(TypeForParameter {
                         name: self.get_text(&found_self.self_node).to_string(),
-                        resolved_type: Some(resolved_type),
+                        resolved_type: resolved_type,
                         is_mutable: found_self.is_mutable.is_some(),
                         node: Option::from(ParameterNode {
                             name: self.to_node(&found_self.self_node),
@@ -612,7 +612,7 @@ impl<'a> Analyzer<'a> {
 
                     parameters.push(TypeForParameter {
                         name: self.get_text(&param.variable.name).to_string(),
-                        resolved_type: Some(resolved_type),
+                        resolved_type: resolved_type,
                         is_mutable: param.variable.is_mutable.is_some(),
                         node: Option::from(ParameterNode {
                             name: self.to_node(&param.variable.name),

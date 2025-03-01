@@ -101,23 +101,17 @@ impl Display for Signature {
 impl Signature {
     pub fn same_type(&self, other: &Signature) -> bool {
         if self.parameters.len() != other.parameters.len()
-            || !self.return_type.same_type(&other.return_type)
+            || !self.return_type.compatible_with(&other.return_type)
         {
             return false;
         }
 
         for (param, other_param) in self.parameters.iter().zip(other.parameters.clone()) {
-            // If either param.resolved_type or other_param.resolved_type is None,
-            // treat them as equal automatically. Otherwise compare them.
-            match (&param.resolved_type, &other_param.resolved_type) {
-                // If either is None, skip the check and continue
-                (None, _) | (_, None) => {}
-                // If both are Some, compare them
-                (Some(p_type), Some(o_type)) => {
-                    if !p_type.same_type(o_type) {
-                        return false;
-                    }
-                }
+            if !&param
+                .resolved_type
+                .compatible_with(&other_param.resolved_type)
+            {
+                return false;
             }
 
             if param.is_mutable != other_param.is_mutable {
@@ -146,7 +140,7 @@ pub struct TypeWithMut {
 #[derive(Debug, Clone)]
 pub struct TypeForParameter {
     pub name: String,
-    pub resolved_type: Option<Type>,
+    pub resolved_type: Type,
     pub is_mutable: bool,
     pub node: Option<ParameterNode>,
 }
@@ -167,11 +161,7 @@ impl Eq for TypeForParameter {}
 
 impl PartialEq for TypeForParameter {
     fn eq(&self, other: &Self) -> bool {
-        // Compare resolved_type in a way that treats either None as automatically equal:
-        let types_equal = match (&self.resolved_type, &other.resolved_type) {
-            (None, _) | (_, None) => true,
-            (Some(t1), Some(t2)) => t1.same_type(t2),
-        };
+        let types_equal = self.resolved_type.compatible_with(&other.resolved_type);
 
         types_equal && (self.is_mutable == other.is_mutable)
     }
@@ -184,7 +174,9 @@ pub enum Type {
     Float,
     String,
     Bool,
-    Unit,
+
+    Unit,  // Empty or nothing
+    Never, // Not even empty since control flow has escaped with break or return.
 
     // Containers
     Array(ArrayTypeRef),
@@ -202,6 +194,13 @@ pub enum Type {
     External(ExternalTypeRef),
 }
 
+impl Type {
+    #[must_use]
+    pub const fn is_concrete(&self) -> bool {
+        !matches!(self, Self::Unit | Self::Never)
+    }
+}
+
 impl Debug for Type {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
@@ -209,7 +208,8 @@ impl Debug for Type {
             Self::Float => write!(f, "Float"),
             Self::String => write!(f, "String"),
             Self::Bool => write!(f, "Bool"),
-            Self::Unit => write!(f, "()"),
+            Self::Unit => write!(f, "Unit"),
+            Self::Never => write!(f, "!"),
             Self::Array(array_type_ref) => write!(f, "[{:?}]", array_type_ref.item_type),
             Self::Tuple(tuple_type_ref) => write!(f, "( {:?} )", tuple_type_ref.0),
             Self::Struct(struct_type_ref) => {
@@ -242,7 +242,8 @@ impl Display for Type {
             Self::Float => write!(f, "Float"),
             Self::String => write!(f, "String"),
             Self::Bool => write!(f, "Bool"),
-            Self::Unit => write!(f, "()"),
+            Self::Unit => write!(f, "Unit"),
+            Self::Never => write!(f, "!"),
             Self::Array(array_ref) => write!(f, "[{}]", &array_ref.item_type.to_string()),
             Self::Tuple(tuple) => write!(f, "({})", comma(&tuple.0)),
             Self::Struct(struct_ref) => write!(f, "{}", struct_ref.borrow().assigned_name),
@@ -293,17 +294,20 @@ impl Type {
     }
 
     pub fn assignable_type(&self, other: &Type) -> bool {
-        if self.same_type(other) {
+        if self.compatible_with(other) {
             true
         } else if let Self::Optional(inner_type) = self {
-            inner_type.same_type(other)
+            inner_type.compatible_with(other)
         } else {
             false
         }
     }
-    pub fn same_type(&self, other: &Type) -> bool {
+
+    #[must_use]
+    pub fn compatible_with(&self, other: &Type) -> bool {
         match (self, other) {
             (Self::Function(a), Self::Function(b)) => a.same_type(b),
+            (_, Self::Never) => true,
             (Self::Int, Self::Int) => true,
             (Self::Float, Self::Float) => true,
             (Self::String, Self::String) => true,
@@ -311,27 +315,30 @@ impl Type {
             (Self::Unit, Self::Unit) => true,
             (Self::Array(_), Self::Array(_)) => true,
             (Self::Map(a), Self::Map(b)) => {
-                a.key_type.same_type(&b.key_type) && a.value_type.same_type(&b.value_type)
+                a.key_type.compatible_with(&b.key_type)
+                    && a.value_type.compatible_with(&b.value_type)
             }
             (Self::Struct(a), Self::Struct(b)) => compare_struct_types(a, b),
             (Self::Tuple(a), Self::Tuple(b)) => {
                 if a.0.len() != b.0.len() {
                     return false;
                 }
-                a.0.iter().zip(b.0.iter()).all(|(a, b)| a.same_type(b))
+                a.0.iter()
+                    .zip(b.0.iter())
+                    .all(|(a, b)| a.compatible_with(b))
             }
             (Self::Enum(_), Self::Enum(_)) => true,
-            (Self::Iterable(a), Self::Iterable(b)) => a.same_type(b),
+            (Self::Iterable(a), Self::Iterable(b)) => a.compatible_with(b),
             //(Self::EnumVariant(a), Self::EnumVariant(b)) => a.owner.number == b.owner.number,
             (Self::Optional(inner_type_a), Self::Optional(inner_type_b)) => {
-                inner_type_a.same_type(inner_type_b)
+                inner_type_a.compatible_with(inner_type_b)
             }
             (Self::External(type_ref_a), Self::External(type_ref_b)) => {
                 type_ref_a.number == type_ref_b.number
             }
 
             (Self::Generic(base_a, params_a), Self::Generic(base_b, params_b)) => {
-                if !base_a.same_type(base_b) {
+                if !base_a.compatible_with(base_b) {
                     return false;
                 }
 
@@ -340,7 +347,7 @@ impl Type {
                 }
 
                 for (param_a, param_b) in params_a.iter().zip(params_b) {
-                    if !param_a.same_type(param_b) {
+                    if !param_a.compatible_with(param_b) {
                         return false;
                     }
                 }
@@ -374,7 +381,7 @@ fn compare_struct_types(a: &StructTypeRef, b: &StructTypeRef) -> bool {
             return false;
         }
 
-        if !a_type.field_type.same_type(&b_type.field_type) {
+        if !a_type.field_type.compatible_with(&b_type.field_type) {
             return false;
         }
     }

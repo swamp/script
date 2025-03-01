@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use crate::err::{Error, ErrorKind};
-use crate::Analyzer;
+use crate::{Analyzer, TypeContext};
 use seq_set::SeqSet;
 use swamp_script_semantic::{
     AnonymousStructType, ArgumentExpressionOrLocation, Expression, ExpressionKind, FunctionRef,
@@ -250,8 +250,9 @@ impl<'a> Analyzer<'a> {
                 .get_index(&field_name)
                 .expect("field_name is checked earlier");
 
+            let field_type_context = TypeContext::new_argument(&looked_up_field.field_type);
             let resolved_expression =
-                self.analyze_expression(&field.expression, Some(&looked_up_field.field_type))?;
+                self.analyze_expression(&field.expression, &field_type_context)?;
 
             source_order_expressions.push((
                 field_index_in_definition,

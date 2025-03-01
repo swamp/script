@@ -566,7 +566,12 @@ impl Value {
     pub fn is_truthy(&self) -> Result<bool, ValueError> {
         let v = match self {
             Self::Bool(b) => *b,
-            _ => return Err(ValueError::ConversionError("Expected bool value".into())),
+            _ => {
+                return Err(ValueError::ConversionError(format!(
+                    "Expected bool value {}",
+                    self
+                )))
+            }
         };
 
         Ok(v)

@@ -4,6 +4,7 @@
  */
 
 use crate::err::{Error, ErrorKind};
+use crate::TypeContext;
 use crate::{Analyzer, LocationSide, SPARSE_TYPE_ID};
 use std::rc::Rc;
 use swamp_script_semantic::{
@@ -17,18 +18,14 @@ impl<'a> Analyzer<'a> {
         fn_parameter: &TypeForParameter,
         argument_expr: &swamp_script_ast::MutableOrImmutableExpression,
     ) -> Result<ArgumentExpressionOrLocation, Error> {
+        let context = TypeContext::new_argument(&fn_parameter.resolved_type);
+
         let mut_or_immutable = if fn_parameter.is_mutable {
-            let mut_location = self.analyze_to_location(
-                &argument_expr.expression,
-                Some(fn_parameter.resolved_type.clone().unwrap()),
-                LocationSide::Rhs,
-            )?;
+            let mut_location =
+                self.analyze_to_location(&argument_expr.expression, &context, LocationSide::Rhs)?;
             ArgumentExpressionOrLocation::Location(mut_location)
         } else {
-            let resolved_expr = self.analyze_expression(
-                &argument_expr.expression,
-                fn_parameter.resolved_type.as_ref(),
-            )?;
+            let resolved_expr = self.analyze_expression(&argument_expr.expression, &context)?;
             ArgumentExpressionOrLocation::Expression(resolved_expr)
         };
 
@@ -119,19 +116,19 @@ impl<'a> Analyzer<'a> {
     pub fn analyze_mut_or_immutable_expression(
         &mut self,
         expr: &swamp_script_ast::MutableOrImmutableExpression,
-        expected_type: Option<&Type>,
+        context: &TypeContext,
         location_side: LocationSide,
     ) -> Result<MutOrImmutableExpression, Error> {
         let is_mutable = self.to_node_option(&expr.is_mutable);
         let expression_or_location = if is_mutable.is_some() {
             ArgumentExpressionOrLocation::Location(self.analyze_to_location(
                 &expr.expression,
-                expected_type.cloned(),
+                context,
                 location_side,
             )?)
         } else {
             ArgumentExpressionOrLocation::Expression(
-                self.analyze_expression(&expr.expression, expected_type)?,
+                self.analyze_expression(&expr.expression, context)?,
             )
         };
 

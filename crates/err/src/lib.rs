@@ -280,6 +280,40 @@ pub fn show_error(err: &Error, source_map: &SourceMap) {
 pub fn build_analyze_error(err: &Error) -> Builder<usize> {
     let span = &err.node.span;
     match &err.kind {
+        ErrorKind::BreakOutsideLoop => Report::build(
+            Kind::Error,
+            4243,
+            "break outside loop",
+            span,
+        ),
+        ErrorKind::ReturnOutsideCompare => Report::build(
+            Kind::Error,
+            4243,
+            "return outside compare",
+            span,
+        ),
+
+        ErrorKind::EmptyMatch => Report::build(
+            Kind::Error,
+            4243,
+            "empty match",
+            span,
+        ),
+
+        ErrorKind::MatchArmsMustHaveTypes => Report::build(
+            Kind::Error,
+            4243,
+            "arms must have types",
+            span,
+        ),
+
+        ErrorKind::ContinueOutsideLoop => Report::build(
+            Kind::Error,
+            4243,
+            "continue outside loop",
+            span,
+        ),
+
         ErrorKind::TypeDoNotSupportRangeAccess => Report::build(
             Kind::Error,
             4253,
@@ -394,7 +428,7 @@ pub fn build_analyze_error(err: &Error) -> Builder<usize> {
         ),
         ErrorKind::ExpectedEnumInPattern => todo!(),
         ErrorKind::WrongEnumVariantContainer(_) => todo!(),
-        ErrorKind::VariableIsNotMutable =>  Report::build(Kind::Error, 75301, "Variable is not mutable", span),
+        ErrorKind::VariableIsNotMutable => Report::build(Kind::Error, 75301, "Variable is not mutable", span),
         ErrorKind::ArgumentIsNotMutable => Report::build(Kind::Error, 1401, "Argument is not mutable", span),
         ErrorKind::WrongNumberOfTupleDeconstructVariables => todo!(),
         ErrorKind::UnknownTypeReference => {
@@ -460,20 +494,20 @@ pub fn build_analyze_error(err: &Error) -> Builder<usize> {
         ErrorKind::ExpectedFunctionTypeForFunctionCall => Report::build(Kind::Error, 4404, "expected function type for function call", span),
         &ErrorKind::TypeDoNotSupportIndexAccess => todo!(),
         ErrorKind::ExpectedMutableLocation => Report::build(Kind::Error, 104, "expected mutable location", span),
-        ErrorKind::GuardHasNoType =>Report::build(Kind::Error, 105, "guard has no type", span),
-        ErrorKind::EmptyBlockWrongType =>Report::build(Kind::Error, 106, "empty block wrong type", span),
-        ErrorKind::NoneNeedsExpectedTypeHint =>Report::build(Kind::Error, 107, "None needs expected type hint", span),
-        ErrorKind::NotValidLocationStartingPoint =>Report::build(Kind::Error, 108, "not valid location starting point", span),
-        ErrorKind::ArgumentMustBeImmutable =>Report::build(Kind::Error, 109, "argument must be immutable", span),
-        ErrorKind::NotValidLocationItem =>Report::build(Kind::Error, 110, "not valid location item", span),
-        ErrorKind::ExpectedImmutableExpression =>Report::build(Kind::Error, 112, "expected immutable expression", span),
+        ErrorKind::GuardHasNoType => Report::build(Kind::Error, 105, "guard has no type", span),
+        ErrorKind::EmptyBlockWrongType => Report::build(Kind::Error, 106, "empty block wrong type", span),
+        ErrorKind::NoneNeedsExpectedTypeHint => Report::build(Kind::Error, 107, "None needs expected type hint", span),
+        ErrorKind::NotValidLocationStartingPoint => Report::build(Kind::Error, 108, "not valid location starting point", span),
+        ErrorKind::ArgumentMustBeImmutable => Report::build(Kind::Error, 109, "argument must be immutable", span),
+        ErrorKind::NotValidLocationItem => Report::build(Kind::Error, 110, "not valid location item", span),
+        ErrorKind::ExpectedImmutableExpression => Report::build(Kind::Error, 112, "expected immutable expression", span),
         &swamp_script_analyzer::err::ErrorKind::CallsCanNotBePartOfChain | &swamp_script_analyzer::err::ErrorKind::UnwrapCanNotBePartOfChain | &swamp_script_analyzer::err::ErrorKind::NoneCoalesceCanNotBePartOfChain => todo!(),
         &swamp_script_analyzer::err::ErrorKind::SelfNotCorrectType => todo!(),
         &swamp_script_analyzer::err::ErrorKind::IllegalIndexInChain => Report::build(Kind::Error, 140, "illegal index in chain", span),
         &swamp_script_analyzer::err::ErrorKind::CanNotNoneCoalesce => todo!(),
         &ErrorKind::GuardCanNotHaveMultipleWildcards | &ErrorKind::WildcardMustBeLastInGuard | &ErrorKind::GuardMustHaveWildcard => todo!(),
         &swamp_script_analyzer::err::ErrorKind::UnknownSymbol | &swamp_script_analyzer::err::ErrorKind::UnknownEnumType | &swamp_script_analyzer::err::ErrorKind::UnknownModule => Report::build(Kind::Error, 140, "some error", span),
-        &swamp_script_analyzer::err::ErrorKind::VariableCanNotBeUnit => Report::build(Kind::Error, 143, "VariableCanNotBeUnit", span),
+        &swamp_script_analyzer::err::ErrorKind::VariableTypeMustBeConcrete => Report::build(Kind::Error, 143, "VariableCanNotBeUnit", span),
     }
 }
 

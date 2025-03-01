@@ -38,7 +38,7 @@ pub fn overwrite_struct(
         if let Some(source_field_type) = source_anon_type.defined_fields.get(field_name) {
             if source_field_type
                 .field_type
-                .same_type(&target_field_type.field_type)
+                .compatible_with(&target_field_type.field_type)
             {
                 let index = source_anon_type
                     .defined_fields

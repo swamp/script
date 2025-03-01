@@ -16,7 +16,7 @@ pub struct Error {
 }
 #[derive(Debug)]
 pub enum ErrorKind {
-    VariableCanNotBeUnit,
+    VariableTypeMustBeConcrete,
     GuardCanNotHaveMultipleWildcards,
     WildcardMustBeLastInGuard,
     GuardMustHaveWildcard,
@@ -115,6 +115,11 @@ pub enum ErrorKind {
     UnknownSymbol,
     UnknownEnumType,
     UnknownModule,
+    BreakOutsideLoop,
+    ReturnOutsideCompare,
+    EmptyMatch,
+    MatchArmsMustHaveTypes,
+    ContinueOutsideLoop,
 }
 
 impl From<SemanticError> for Error {

@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use swamp_script_analyzer::prelude::{Error, Program};
-use swamp_script_analyzer::{Analyzer, AutoUseModules};
+use swamp_script_analyzer::{Analyzer, AutoUseModules, TypeContext, TypeContextScope};
 use swamp_script_dep_loader::{
     parse_local_modules_and_get_order, DependencyParser, ParsedAstModule,
 };
@@ -32,13 +32,14 @@ pub fn analyze_module(
         }
     }
 
+    let outside_context = TypeContext::new(None, None, TypeContextScope::ArgumentOrOutsideFunction);
     let statements = {
         for ast_def in ast_module.ast_module.definitions() {
             resolver.analyze_definition(ast_def)?;
         }
 
         let maybe_resolved_expression = if let Some(expr) = ast_module.ast_module.expression() {
-            Some(resolver.analyze_expression(expr, None)?)
+            Some(resolver.analyze_expression(expr, &outside_context)?)
         } else {
             None
         };

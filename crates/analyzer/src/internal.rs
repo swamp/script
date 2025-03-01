@@ -4,7 +4,7 @@
  */
 
 use crate::err::{Error, ErrorKind};
-use crate::{Analyzer, SPARSE_TYPE_ID};
+use crate::{Analyzer, TypeContext, SPARSE_TYPE_ID};
 use swamp_script_semantic::{ArrayTypeRef, MapTypeRef, Postfix, PostfixKind, TupleTypeRef};
 use swamp_script_semantic::{Expression, Type};
 
@@ -152,7 +152,7 @@ impl<'a> Analyzer<'a> {
         ast_arguments: &[&swamp_script_ast::Expression],
     ) -> Result<Postfix, Error> {
         let member_function_name_str = self.get_text(ast_member_function_name);
-
+        let key_arg_context = TypeContext::new_argument(&map_type.key_type);
         let expr = match member_function_name_str {
             "remove" => {
                 self.check_mutable(is_mutable, &ast_member_function_name)?;
@@ -164,8 +164,7 @@ impl<'a> Analyzer<'a> {
                     ));
                 }
 
-                let key_expr =
-                    self.analyze_expression(&ast_arguments[0], Some(&map_type.key_type))?;
+                let key_expr = self.analyze_expression(&ast_arguments[0], &key_arg_context)?;
 
                 self.create_postfix(
                     PostfixKind::MapRemove(Box::new(key_expr), map_type.clone()),
@@ -182,8 +181,7 @@ impl<'a> Analyzer<'a> {
                     ));
                 }
 
-                let key_expr =
-                    self.analyze_expression(&ast_arguments[0], Some(&map_type.key_type))?;
+                let key_expr = self.analyze_expression(&ast_arguments[0], &key_arg_context)?;
 
                 self.create_postfix(
                     PostfixKind::MapHas(Box::new(key_expr)),
@@ -236,8 +234,10 @@ impl<'a> Analyzer<'a> {
                         ast_member_function_name,
                     ));
                 }
+
+                let element_type_context = TypeContext::new_argument(&array_type_ref.item_type);
                 let value_expr =
-                    self.analyze_expression(&ast_arguments[0], Some(&array_type_ref.item_type))?;
+                    self.analyze_expression(&ast_arguments[0], &element_type_context)?;
 
                 self.create_postfix(
                     PostfixKind::ArrayAdd(Box::new(value_expr)),
@@ -310,7 +310,8 @@ impl<'a> Analyzer<'a> {
                 &node,
             ));
         }
-        let float_expression = { self.analyze_immutable(&ast_arguments[0], &Type::Float)? };
+        let float_expression =
+            { self.analyze_immutable_argument(&ast_arguments[0], &Type::Float)? };
 
         Ok(float_expression)
     }
@@ -326,7 +327,7 @@ impl<'a> Analyzer<'a> {
                 &node,
             ));
         }
-        let expr2 = self.analyze_immutable(&ast_arguments[0], &Type::Int)?;
+        let expr2 = self.analyze_immutable_argument(&ast_arguments[0], &Type::Int)?;
 
         Ok(expr2)
     }
@@ -342,8 +343,8 @@ impl<'a> Analyzer<'a> {
                 &node,
             ));
         }
-        let expr2 = self.analyze_immutable(&ast_arguments[0], &Type::Float)?;
-        let expr3 = self.analyze_immutable(&ast_arguments[1], &Type::Float)?;
+        let expr2 = self.analyze_immutable_argument(&ast_arguments[0], &Type::Float)?;
+        let expr3 = self.analyze_immutable_argument(&ast_arguments[1], &Type::Float)?;
 
         Ok((expr2, expr3))
     }
@@ -596,7 +597,8 @@ impl<'a> Analyzer<'a> {
                                     ast_member_function_name,
                                 ));
                             }
-                            let value = self.analyze_immutable(&ast_arguments[0], value_type)?;
+                            let value =
+                                self.analyze_immutable_argument(&ast_arguments[0], value_type)?;
                             (PostfixKind::SparseAdd(Box::new(value)), key_type)
                         }
                         "remove" => {
@@ -607,7 +609,7 @@ impl<'a> Analyzer<'a> {
                                 ));
                             }
                             let sparse_slot_id_expression =
-                                self.analyze_immutable(&ast_arguments[0], &key_type)?;
+                                self.analyze_immutable_argument(&ast_arguments[0], &key_type)?;
                             (
                                 PostfixKind::SparseRemove(Box::new(sparse_slot_id_expression)),
                                 Type::Unit, //Type::Optional(value_type),

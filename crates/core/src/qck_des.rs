@@ -32,6 +32,7 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
         }
         Type::Bool => (Value::Bool(buf[0] != 0), 1),
         Type::Unit => (Value::Unit, 0),
+        Type::Never => panic!("can not deserialize never type"),
         Type::Array(array_type_ref) => {
             let mut offset = 0;
             let count = u16::from_le_bytes(
