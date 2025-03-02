@@ -21,7 +21,7 @@ swamp-script-analyzer = { path = "../analyzer", version = "0.0.12" }
 swamp-script-error-report = { path = "../err", version = "0.0.12" }
 
 # Core and Std
-swamp-script-core = { path = "../core", version = "0.0.12" }
+swamp-script-core-extra = { path = "../core-extra", version = "0.0.12" }
 swamp-script-std = { path = "../std", version = "0.0.12" }
 
 # Runner

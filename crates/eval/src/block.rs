@@ -7,8 +7,8 @@ use crate::err::{ExecuteError, ExecuteErrorKind};
 use crate::prelude::VariableValue;
 use std::cell::RefCell;
 use std::rc::Rc;
-use swamp_script_core::prelude::Value;
-use swamp_script_core::value::ValueRef;
+use swamp_script_core_extra::prelude::Value;
+use swamp_script_core_extra::value::ValueRef;
 use swamp_script_semantic::{Node, VariableRef};
 
 #[derive(Debug, Clone)]

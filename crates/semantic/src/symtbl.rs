@@ -2,6 +2,7 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
+use crate::intr::IntrinsicFunctionDefinitionRef;
 use crate::modules::ModuleRef;
 use crate::{
     AliasType, AliasTypeRef, AnonymousStructType, Constant, ConstantRef, EnumType, EnumTypeRef,
@@ -18,7 +19,7 @@ use tiny_ver::TinyVersion;
 #[derive(Debug, Clone)]
 pub enum FuncDef {
     Internal(InternalFunctionDefinitionRef),
-    //Intrinsic(IntrinsicFunctionDefinitionRef),
+    Intrinsic(IntrinsicFunctionDefinitionRef),
     External(ExternalFunctionDefinitionRef),
 }
 
@@ -400,6 +401,15 @@ impl SymbolTable {
     pub fn get_internal_function(&self, name: &str) -> Option<&InternalFunctionDefinitionRef> {
         match self.get_function(name)? {
             FuncDef::Internal(internal_fn) => Some(internal_fn),
+            FuncDef::External(_) => None,
+            FuncDef::Intrinsic(_) => None,
+        }
+    }
+
+    #[must_use]
+    pub fn get_intrinsic_function(&self, name: &str) -> Option<&IntrinsicFunctionDefinitionRef> {
+        match self.get_function(name)? {
+            FuncDef::Intrinsic(intrinsic_fn) => Some(intrinsic_fn),
             _ => None,
         }
     }

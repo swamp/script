@@ -12,4 +12,4 @@ swamp-script-derive = { path = "../derive" , version = "0.0.12" }
 [dev-dependencies]
 swamp-script-derive = { path = "../derive" , version = "0.0.12" }
 swamp-script-semantic = { path = "../semantic" , version = "0.0.12" }
-swamp-script-core = { path = "../core" , version = "0.0.12" }
+swamp-script-core-extra = { path = "../core-extra" , version = "0.0.12" }

@@ -1569,6 +1569,12 @@ impl<'a> Analyzer<'a> {
                         ExpressionKind::ExternalFunctionAccess(external_fn.clone()),
                         &external_fn.signature.return_type,
                     ),
+                    // Can not have a reference to an intrinsic function
+                    FuncDef::Intrinsic(_) => {
+                        return Err(
+                            self.create_err(ErrorKind::UnknownFunction, &qualified_func_name.name)
+                        );
+                    }
                 };
 
                 return Ok(self.create_expr(kind, *return_type.clone(), &qualified_func_name.name));
@@ -1607,6 +1613,7 @@ impl<'a> Analyzer<'a> {
                         Type::Function(found_internal_function.signature.clone()),
                         var_node,
                     ),
+                    FuncDef::Intrinsic(_) => todo!(),
                 },
 
                 _ => {

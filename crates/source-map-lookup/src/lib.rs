@@ -1,4 +1,4 @@
-use swamp_script_core::prelude::SourceMapLookup;
+use swamp_script_core_extra::prelude::SourceMapLookup;
 use swamp_script_semantic::{Node, Span};
 use swamp_script_source_map::SourceMap;
 

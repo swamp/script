@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 pub use {
-    crate::ScriptError, swamp_script_analyzer::prelude::*, swamp_script_core::prelude::*,
+    crate::ScriptError, swamp_script_analyzer::prelude::*, swamp_script_core_extra::prelude::*,
     swamp_script_dep_loader::prelude::*, swamp_script_error_report::*,
     swamp_script_eval::prelude::*, swamp_script_eval_loader::EvalLoaderError,
     swamp_script_parser::prelude::*, swamp_script_semantic::prelude::*,

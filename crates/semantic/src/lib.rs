@@ -2,10 +2,13 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
+pub mod intr;
 pub mod modules;
 pub mod ns;
 pub mod prelude;
 pub mod symtbl;
+
+use crate::intr::IntrinsicFunction;
 pub use fixed32::Fp;
 use seq_fmt::comma;
 use seq_map::{SeqMap, SeqMapError};
@@ -792,6 +795,9 @@ pub enum PostfixKind {
     NoneCoalesce(Expression),
 
     // --- sparse built in
+    IntrinsicCallEx(IntrinsicFunction, Vec<ArgumentExpressionOrLocation>),
+    IntrinsicCall(IntrinsicFunction, Vec<Expression>),
+    /*
     // TODO: Have a better interface for these "engine" member calls
     SparseAdd(Box<Expression>),
     SparseRemove(Box<Expression>),
@@ -836,6 +842,8 @@ pub enum PostfixKind {
     Tuple2FloatMagnitude,
     ArrayLen,
     ArrayIsEmpty,
+
+     */
 }
 
 #[derive(Debug)]

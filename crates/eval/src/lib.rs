@@ -9,10 +9,10 @@ use err::ExecuteError;
 use seq_map::SeqMap;
 use std::fmt::Debug;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
-use swamp_script_core::extra::{SparseValueId, SparseValueMap};
-use swamp_script_core::prelude::ValueError;
-use swamp_script_core::value::ValueRef;
-use swamp_script_core::value::{
+use swamp_script_core_extra::extra::{SparseValueId, SparseValueMap};
+use swamp_script_core_extra::prelude::ValueError;
+use swamp_script_core_extra::value::ValueRef;
+use swamp_script_core_extra::value::{
     convert_vec_to_rc_refcell, format_value, to_rust_value, SourceMapLookup, Value,
 };
 use swamp_script_semantic::prelude::*;
@@ -1378,15 +1378,18 @@ impl<'a, C> Interpreter<'a, C> {
     }
 
     #[allow(clippy::too_many_lines)]
-    fn eval_internal_postfix(
+    fn eval_intrinsic_postfix(
         &mut self,
+        node: &Node,
         value_ref: &ValueRef,
-        resolved_postfix: &Postfix,
+        //        resolved_postfix: &Postfix,
+        intrinsic_function: &IntrinsicFunction,
+        arguments: &[Expression],
     ) -> Result<Value, ExecuteError> {
-        let node = &resolved_postfix.node;
-        let val = match &resolved_postfix.kind {
-            PostfixKind::ArrayRemoveIndex(usize_index_expression) => {
-                let index_val = self.evaluate_expression(usize_index_expression)?;
+        //let node = &resolved_postfix.node;
+        let val = match &intrinsic_function {
+            IntrinsicFunction::VecRemoveIndex => {
+                let index_val = self.evaluate_expression(&arguments[0])?;
                 let Value::Int(index) = index_val else {
                     return Err(self.create_err(ExecuteErrorKind::ArgumentIsNotMutable, node));
                 };
@@ -1400,7 +1403,7 @@ impl<'a, C> Interpreter<'a, C> {
                 value_ref.borrow().clone()
             }
 
-            PostfixKind::ArrayClear => {
+            IntrinsicFunction::VecClear => {
                 if let Value::Array(_type_id, ref mut vector) = &mut *value_ref.borrow_mut() {
                     vector.clear();
                 } else {
@@ -1409,8 +1412,36 @@ impl<'a, C> Interpreter<'a, C> {
                 Value::Unit
             }
 
-            PostfixKind::MapHas(index_expr) => {
-                let index_val = self.evaluate_expression(index_expr)?;
+            IntrinsicFunction::VecPush => {
+                if let Value::Array(_type_id, ref mut vector) = &mut *value_ref.borrow_mut() {
+                    let value_to_add = self.evaluate_expression(&arguments[0])?;
+                    vector.push(Rc::new(RefCell::new(value_to_add)));
+                } else {
+                    Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, node))?;
+                }
+                Value::Unit
+            }
+
+            IntrinsicFunction::VecLen => {
+                if let Value::Array(_type_id, ref mut vector) = &mut *value_ref.borrow_mut() {
+                    let length = vector.len();
+                    Value::Int(length as i32)
+                } else {
+                    Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, node))?
+                }
+            }
+
+            IntrinsicFunction::VecPop => {
+                if let Value::Array(_type_id, ref mut vector) = &mut *value_ref.borrow_mut() {
+                    let maybe_val = vector.pop();
+                    Value::Option(maybe_val)
+                } else {
+                    Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, node))?
+                }
+            }
+
+            IntrinsicFunction::MapHas => {
+                let index_val = self.evaluate_expression(&arguments[0])?;
 
                 if let Value::Map(_type_id, ref seq_map) = value_ref.borrow().clone() {
                     let has_key = seq_map.contains_key(&index_val);
@@ -1420,8 +1451,8 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            PostfixKind::MapRemove(index_expr, _map_type_ref) => {
-                let index_val = self.evaluate_expression(&index_expr)?;
+            IntrinsicFunction::MapRemove => {
+                let index_val = self.evaluate_expression(&arguments[0])?;
 
                 let result = {
                     let mut borrowed = value_ref.borrow_mut();
@@ -1435,12 +1466,12 @@ impl<'a, C> Interpreter<'a, C> {
                 result
             }
 
-            PostfixKind::SparseAdd(value_expression) => {
+            IntrinsicFunction::SparseAdd => {
                 let borrowed = value_ref.borrow();
 
                 let sparse_value_map = borrowed.downcast_rust::<SparseValueMap>();
                 if let Some(found) = sparse_value_map {
-                    let resolved_value = self.evaluate_expression(value_expression)?;
+                    let resolved_value = self.evaluate_expression(&arguments[0])?;
                     let id_value = found.borrow_mut().add(resolved_value);
 
                     id_value
@@ -1449,12 +1480,12 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            PostfixKind::SparseRemove(id_expression) => {
+            IntrinsicFunction::SparseRemove => {
                 let borrowed = value_ref.borrow();
 
                 let sparse_value_map = borrowed.downcast_rust::<SparseValueMap>();
                 if let Some(found) = sparse_value_map {
-                    let id_value = self.evaluate_expression(id_expression)?;
+                    let id_value = self.evaluate_expression(&arguments[0])?;
                     if let Some(found_id) = id_value.downcast_rust::<SparseValueId>() {
                         found.borrow_mut().remove(&found_id.borrow());
                     } else {
@@ -1464,10 +1495,10 @@ impl<'a, C> Interpreter<'a, C> {
 
                 Value::Unit
             }
-            PostfixKind::SparseAccess(id_expression) => {
+            IntrinsicFunction::SparseSubscript => {
                 let sparse_value_map = value_ref.borrow_mut().downcast_rust::<SparseValueMap>();
                 if let Some(found) = sparse_value_map {
-                    let id_value = self.evaluate_expression(id_expression)?;
+                    let id_value = self.evaluate_expression(&arguments[0])?; // id
                     if let Some(found_id) = id_value.downcast_rust::<SparseValueId>() {
                         if let Some(found_value) = found.borrow_mut().get(&found_id.borrow()) {
                             Value::Option(Some(found_value.clone()))
@@ -1482,14 +1513,14 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            PostfixKind::FloatRound => {
+            IntrinsicFunction::FloatRound => {
                 if let Value::Float(f) = value_ref.borrow().clone() {
                     Value::Int(f.round().into())
                 } else {
                     return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
                 }
             }
-            PostfixKind::FloatFloor => {
+            IntrinsicFunction::FloatFloor => {
                 if let Value::Float(f) = value_ref.borrow().clone() {
                     Value::Int(f.floor().into())
                 } else {
@@ -1497,7 +1528,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            PostfixKind::FloatSign => {
+            IntrinsicFunction::FloatSign => {
                 if let Value::Float(f) = value_ref.borrow().clone() {
                     let signum = if f.inner() < 0 {
                         -1
@@ -1511,7 +1542,7 @@ impl<'a, C> Interpreter<'a, C> {
                     return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
                 }
             }
-            PostfixKind::FloatAbs => {
+            IntrinsicFunction::FloatAbs => {
                 if let Value::Float(f) = value_ref.borrow().clone() {
                     Value::Float(f.abs())
                 } else {
@@ -1519,7 +1550,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            PostfixKind::FloatCos => {
+            IntrinsicFunction::FloatCos => {
                 if let Value::Float(f) = value_ref.borrow().clone() {
                     Value::Float(f.cos())
                 } else {
@@ -1527,7 +1558,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            PostfixKind::FloatAcos => {
+            IntrinsicFunction::FloatAcos => {
                 if let Value::Float(f) = value_ref.borrow().clone() {
                     Value::Float(f.acos())
                 } else {
@@ -1535,7 +1566,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            PostfixKind::FloatSin => {
+            IntrinsicFunction::FloatSin => {
                 if let Value::Float(f) = value_ref.borrow().clone() {
                     Value::Float(f.sin())
                 } else {
@@ -1543,7 +1574,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            PostfixKind::FloatAsin => {
+            IntrinsicFunction::FloatAsin => {
                 if let Value::Float(f) = value_ref.borrow().clone() {
                     Value::Float(f.asin())
                 } else {
@@ -1551,7 +1582,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            PostfixKind::FloatSqrt => {
+            IntrinsicFunction::FloatSqrt => {
                 if let Value::Float(f) = value_ref.borrow().clone() {
                     Value::Float(f.sqrt())
                 } else {
@@ -1559,8 +1590,8 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            PostfixKind::FloatMin(min) => {
-                let min_value = self.evaluate_expression(min)?;
+            IntrinsicFunction::FloatMin => {
+                let min_value = self.evaluate_expression(&arguments[0])?;
                 if let (Value::Float(f), Value::Float(min_f)) =
                     (value_ref.borrow().clone(), min_value)
                 {
@@ -1570,8 +1601,8 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            PostfixKind::FloatMax(max) => {
-                let max_value = self.evaluate_expression(max)?;
+            IntrinsicFunction::FloatMax => {
+                let max_value = self.evaluate_expression(&arguments[0])?;
                 if let (Value::Float(f), Value::Float(max_f)) =
                     (value_ref.borrow().clone(), max_value)
                 {
@@ -1581,8 +1612,8 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            PostfixKind::FloatAtan2(x) => {
-                let x_value = self.evaluate_expression(x)?;
+            IntrinsicFunction::FloatAtan2 => {
+                let x_value = self.evaluate_expression(&arguments[0])?;
                 if let (Value::Float(_y_f), Value::Float(_x_f)) =
                     (value_ref.borrow().clone(), x_value)
                 {
@@ -1592,9 +1623,9 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            PostfixKind::FloatClamp(min, max) => {
-                let min_value = self.evaluate_expression(min)?;
-                let max_value = self.evaluate_expression(max)?;
+            IntrinsicFunction::FloatClamp => {
+                let min_value = self.evaluate_expression(&arguments[0])?;
+                let max_value = self.evaluate_expression(&arguments[1])?;
                 if let (Value::Float(f), Value::Float(min_f), Value::Float(max_f)) =
                     (value_ref.borrow().clone(), min_value, max_value)
                 {
@@ -1604,7 +1635,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            PostfixKind::FloatRnd => {
+            IntrinsicFunction::FloatRnd => {
                 if let Value::Float(f) = value_ref.borrow().clone() {
                     let new_raw = squirrel_prng::squirrel_noise5(f.inner() as u32, 0);
                     Value::Int(new_raw as i32)
@@ -1613,7 +1644,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            PostfixKind::IntAbs => {
+            IntrinsicFunction::IntAbs => {
                 if let Value::Int(i) = value_ref.borrow().clone() {
                     Value::Int(i.abs())
                 } else {
@@ -1621,9 +1652,9 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            PostfixKind::IntClamp(min, max) => {
-                let min_value = self.evaluate_expression(min)?;
-                let max_value = self.evaluate_expression(max)?;
+            IntrinsicFunction::IntClamp => {
+                let min_value = self.evaluate_expression(&arguments[0])?;
+                let max_value = self.evaluate_expression(&arguments[1])?;
                 if let (Value::Int(i), Value::Int(min_i), Value::Int(max_i)) =
                     (value_ref.borrow().clone(), min_value, max_value)
                 {
@@ -1633,8 +1664,8 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            PostfixKind::IntMin(max) => {
-                let max_value = self.evaluate_expression(max)?;
+            IntrinsicFunction::IntMin => {
+                let max_value = self.evaluate_expression(&arguments[0])?;
                 if let (Value::Int(i), Value::Int(min_i)) = (value_ref.borrow().clone(), max_value)
                 {
                     Value::Int(i.min(min_i))
@@ -1643,8 +1674,8 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            PostfixKind::IntMax(max) => {
-                let max_value = self.evaluate_expression(max)?;
+            IntrinsicFunction::IntMax => {
+                let max_value = self.evaluate_expression(&arguments[0])?;
                 if let (Value::Int(i), Value::Int(max_i)) = (value_ref.borrow().clone(), max_value)
                 {
                     Value::Int(i.max(max_i))
@@ -1653,7 +1684,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            PostfixKind::IntRnd => {
+            IntrinsicFunction::IntRnd => {
                 if let Value::Int(i) = value_ref.borrow().clone() {
                     Value::Int(squirrel_prng::squirrel_noise5(i as u32, 0) as i32)
                 } else {
@@ -1661,7 +1692,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            PostfixKind::IntToFloat => {
+            IntrinsicFunction::IntToFloat => {
                 if let Value::Int(i) = value_ref.borrow().clone() {
                     Value::Float(Fp::from(i as i16))
                 } else {
@@ -1669,7 +1700,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            PostfixKind::StringLen => {
+            IntrinsicFunction::StringLen => {
                 if let Value::String(s) = value_ref.borrow().clone() {
                     Value::Int(s.len().try_into().expect("string len overflow"))
                 } else {
@@ -1677,7 +1708,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            PostfixKind::Tuple2FloatMagnitude => {
+            IntrinsicFunction::Float2Magnitude => {
                 if let Value::Tuple(_tuple_ref, values) = value_ref.borrow().clone() {
                     if values.len() != 2 {
                         return Err(self.create_err(
@@ -1711,7 +1742,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            _ => todo!(),
+            _ => todo!("{intrinsic_function:?} not implemented"),
         };
 
         Ok(val)
@@ -1878,10 +1909,20 @@ impl<'a, C> Interpreter<'a, C> {
                     is_mutable = false;
                     is_uncertain = true;
                 }
-                _ => {
-                    val_ref = Rc::new(RefCell::new(self.eval_internal_postfix(&val_ref, part)?));
+                PostfixKind::IntrinsicCall(intrinsic_fn, arguments) => {
+                    val_ref = Rc::new(RefCell::new(self.eval_intrinsic_postfix(
+                        &part.node,
+                        &val_ref,
+                        intrinsic_fn,
+                        arguments,
+                    )?));
                     is_mutable = false;
                 }
+                PostfixKind::IntrinsicCallEx(intrinsic_fn, arguments) => {
+                    //val_ref = Rc::new(RefCell::new(self.eval_intrinsic_postfix_ex(&val_ref, part, intrinsic_fn, arguments)?));
+                    is_mutable = false;
+                }
+                _ => {}
             }
         }
 

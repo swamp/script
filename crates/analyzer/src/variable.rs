@@ -10,7 +10,7 @@ use swamp_script_semantic::{
 };
 use tracing::error;
 
-impl<'a> Analyzer<'a> {
+impl Analyzer<'_> {
     fn try_find_local_variable(&self, node: &Node) -> Option<&VariableRef> {
         let current_scope = self
             .scope
