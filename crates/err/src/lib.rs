@@ -575,6 +575,9 @@ pub fn build_execute_error(err: &ExecuteError) -> Builder<usize> {
     let span = &err.node.span;
     match &err.kind {
         ExecuteErrorKind::ExpectedInt => Report::build(Kind::Error, 104, "expected int", span),
+        ExecuteErrorKind::UnknownMutIntrinsic => {
+            Report::build(Kind::Error, 104, "unknown mut intrinsic", span)
+        }
         ExecuteErrorKind::ExpectedString => {
             Report::build(Kind::Error, 104, "expected string", span)
         }

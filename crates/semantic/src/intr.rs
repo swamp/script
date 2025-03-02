@@ -42,6 +42,9 @@ pub enum IntrinsicFunction {
     VecIter,
     VecIterMut,
 
+    VecSelfPush,
+    VecSelfExtend,
+
     // Map
     MapCreate,
     MapFromSlicePair,
@@ -119,6 +122,9 @@ impl fmt::Display for IntrinsicFunction {
             Self::VecIterMut => "vec_iter_mut",
             Self::VecLen => "vec_len",
             Self::VecIsEmpty => "vec_is_empty",
+
+            Self::VecSelfPush => "vec_self_push",
+            Self::VecSelfExtend => "vec_self_extend",
 
             // Map
             Self::MapCreate => "map_create",

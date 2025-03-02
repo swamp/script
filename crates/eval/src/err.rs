@@ -58,4 +58,5 @@ pub enum ExecuteErrorKind {
     DivideByZero,
     MapKeyAlreadyExists,
     CouldNotConvertFromSignal,
+    UnknownMutIntrinsic,
 }

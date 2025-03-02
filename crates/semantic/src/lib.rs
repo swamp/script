@@ -794,56 +794,8 @@ pub enum PostfixKind {
     OptionUnwrap, // ? operator
     NoneCoalesce(Expression),
 
-    // --- sparse built in
     IntrinsicCallEx(IntrinsicFunction, Vec<ArgumentExpressionOrLocation>),
     IntrinsicCall(IntrinsicFunction, Vec<Expression>),
-    /*
-    // TODO: Have a better interface for these "engine" member calls
-    SparseAdd(Box<Expression>),
-    SparseRemove(Box<Expression>),
-    SparseAccess(Box<Expression>),
-
-    ArrayRemoveIndex(Box<Expression>),
-    ArrayAdd(Box<Expression>),
-    ArrayClear,
-
-    // Map built in
-    MapRemove(Box<Expression>, MapTypeRef),
-    MapHas(Box<Expression>),
-
-    // Integer built in
-    IntAbs,
-    IntRnd,
-    IntToFloat,
-    IntClamp(Box<Expression>, Box<Expression>),
-    IntMin(Box<Expression>),
-    IntMax(Box<Expression>),
-
-    // Float built in
-    FloatRound,
-    FloatFloor,
-    FloatSign,
-    FloatAbs,
-    FloatRnd,
-    FloatCos,
-    FloatSin,
-    FloatAcos,
-    FloatAsin,
-    FloatAtan2(Box<Expression>),
-    FloatSqrt,
-    FloatClamp(Box<Expression>, Box<Expression>),
-    FloatMin(Box<Expression>),
-    FloatMax(Box<Expression>),
-
-    // String built in
-    StringLen,
-
-    // Tuple built in
-    Tuple2FloatMagnitude,
-    ArrayLen,
-    ArrayIsEmpty,
-
-     */
 }
 
 #[derive(Debug)]
@@ -1040,10 +992,11 @@ pub enum ExpressionKind {
     // --------------------------------------------------------------------
     // Built In members
     // --------------------------------------------------------------------
-
-    // array built in
-    ArrayExtend(SingleMutLocationExpression, Box<Expression>), // Extends an array with another array
-    ArrayPush(SingleMutLocationExpression, Box<Expression>),   // Adds an item to an array
+    IntrinsicCallMut(
+        IntrinsicFunction,
+        SingleMutLocationExpression,
+        Vec<Expression>,
+    ),
 
     // Sparse Built in
     SparseNew(ExternalTypeRef, Type), // item type

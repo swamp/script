@@ -16,7 +16,7 @@ use swamp_script_core_extra::value::{
     convert_vec_to_rc_refcell, format_value, to_rust_value, SourceMapLookup, Value,
 };
 use swamp_script_semantic::prelude::*;
-use swamp_script_semantic::{same_array_ref, Postfix};
+use swamp_script_semantic::{same_array_ref, Postfix, SingleMutLocationExpression};
 use swamp_script_semantic::{
     same_struct_ref, BinaryOperatorKind, CompoundOperatorKind, ConstantId, ForPattern, Function,
     MutOrImmutableExpression, NormalPattern, PatternElement, PostfixKind, SingleLocationExpression,
@@ -961,35 +961,9 @@ impl<'a, C> Interpreter<'a, C> {
 
                 Value::Unit
             }
-            ExpressionKind::ArrayExtend(location, source_expression) => {
-                let source_val = self.evaluate_expression(source_expression)?;
 
-                let array_val_ref = self.evaluate_location(&location.0)?;
-                if let Value::Array(_type_id, ref mut vector) = &mut *array_val_ref.borrow_mut() {
-                    if let Value::Array(_, items) = source_val {
-                        vector.extend(items);
-                    } else {
-                        Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, &expr.node))?;
-                    }
-                } else {
-                    todo!("handle error")
-                }
-
-                // array_val_ref.borrow().clone()
-                Value::Unit
-            }
-
-            ExpressionKind::ArrayPush(location, source_expression) => {
-                let source_val = self.evaluate_expression(source_expression)?;
-                let array_val_ref = self.evaluate_location(&location.0)?;
-
-                if let Value::Array(_type_id, ref mut vector) = &mut *array_val_ref.borrow_mut() {
-                    vector.push(Rc::new(RefCell::new(source_val)));
-                } else {
-                    Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, &expr.node))?;
-                }
-                //array_val_ref.borrow().clone()
-                Value::Unit
+            ExpressionKind::IntrinsicCallMut(intrinsic, location, arguments) => {
+                self.evaluate_intrinsic_mut(&expr.node, intrinsic, location, arguments)?
             }
 
             ExpressionKind::MapAssignment(map, index, value) => {
@@ -2599,6 +2573,49 @@ impl<'a, C> Interpreter<'a, C> {
             node: node.clone(),
             kind,
         }
+    }
+
+    fn evaluate_intrinsic_mut(
+        &mut self,
+        node: &Node,
+        intrinsic_fn: &IntrinsicFunction,
+        location: &SingleMutLocationExpression,
+        arguments: &Vec<Expression>,
+    ) -> Result<Value, ExecuteError> {
+        let val = match intrinsic_fn {
+            IntrinsicFunction::VecSelfPush => {
+                let source_val = self.evaluate_expression(&arguments[0])?;
+                let array_val_ref = self.evaluate_location(&location.0)?;
+
+                if let Value::Array(_type_id, ref mut vector) = &mut *array_val_ref.borrow_mut() {
+                    vector.push(Rc::new(RefCell::new(source_val)));
+                } else {
+                    Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, &node))?;
+                }
+                //array_val_ref.borrow().clone()
+                Value::Unit
+            }
+            IntrinsicFunction::VecSelfExtend => {
+                let source_val = self.evaluate_expression(&arguments[0])?;
+
+                let array_val_ref = self.evaluate_location(&location.0)?;
+                if let Value::Array(_type_id, ref mut vector) = &mut *array_val_ref.borrow_mut() {
+                    if let Value::Array(_, items) = source_val {
+                        vector.extend(items);
+                    } else {
+                        Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, &node))?;
+                    }
+                } else {
+                    todo!("handle error")
+                }
+
+                // array_val_ref.borrow().clone()
+                Value::Unit
+            }
+            _ => return Err(self.create_err(ExecuteErrorKind::UnknownMutIntrinsic, &node)),
+        };
+
+        Ok(val)
     }
 }
 

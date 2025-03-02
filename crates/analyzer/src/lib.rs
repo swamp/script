@@ -2462,9 +2462,10 @@ impl<'a> Analyzer<'a> {
                         LocationSide::Rhs,
                     )?);
                     let resolved_source = self.analyze_expression(source, &source_type_context)?;
-                    return Ok(Option::from(ExpressionKind::ArrayPush(
+                    return Ok(Option::from(ExpressionKind::IntrinsicCallMut(
+                        IntrinsicFunction::VecSelfPush,
                         target_location,
-                        Box::from(resolved_source),
+                        vec![resolved_source],
                     )));
                 } else if *op == CompoundOperatorKind::Add
                     && source_type.compatible_with(target_type)
@@ -2476,9 +2477,10 @@ impl<'a> Analyzer<'a> {
                         LocationSide::Rhs,
                     )?);
                     let resolved_source = self.analyze_expression(source, &source_type_context)?;
-                    return Ok(Option::from(ExpressionKind::ArrayExtend(
+                    return Ok(Option::from(ExpressionKind::IntrinsicCallMut(
+                        IntrinsicFunction::VecSelfExtend,
                         target_location,
-                        Box::from(resolved_source),
+                        vec![resolved_source],
                     )));
                 }
             }
