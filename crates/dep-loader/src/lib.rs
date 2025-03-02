@@ -3,17 +3,15 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 pub mod prelude;
-
 use seq_map::SeqMap;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::{env, io};
 use swamp_script_ast::prelude::*;
 use swamp_script_ast::Function;
-use swamp_script_parser::{AstParser, ParseError, SpecificError};
+use swamp_script_parser::{AstParser, SpecificError};
 use swamp_script_source_map::{FileId, SourceMap};
-use tracing::info;
-use tracing::{debug, Span};
+use tracing::debug;
 pub struct ParseRoot;
 
 #[derive(Debug)]
@@ -184,7 +182,7 @@ pub fn get_all_local_paths(
                         .to_string();
                     sections.push(import_path);
                 }
-                info!(?sections, "detected mod dependency!");
+
                 imports.push(sections);
             }
             _ => continue,

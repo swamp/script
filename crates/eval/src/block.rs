@@ -98,6 +98,7 @@ impl BlockScopes {
         }
     }
 
+    /*
     #[inline]
     pub fn init_var(&mut self, variable: &VariableRef, value: &Value) {
         self.initialize_var(
@@ -107,6 +108,8 @@ impl BlockScopes {
             variable.is_mutable(),
         );
     }
+
+     */
 
     #[inline]
     pub fn init_var_ref(&mut self, variable: &VariableRef, value_ref: &ValueRef) {
@@ -240,11 +243,15 @@ impl BlockScopes {
      */
 
     // Overwrite ============================
+
+    /*
     #[inline]
     pub fn set_local_var_value(&mut self, var: &VariableRef, value: Value) {
         assert!(var.mutable_node.is_none());
         self.set_local_var(var.variable_index, VariableValue::Value(value));
     }
+
+     */
     /*
 
 

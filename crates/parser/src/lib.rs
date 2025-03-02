@@ -221,6 +221,7 @@ impl AstParser {
         Ok(LocalTypeIdentifier::new(self.to_node(&pair)))
     }
 
+    /*
     fn expect_qualified_type_identifier_next<'a>(
         &self,
         inner_pairs: &mut impl Iterator<Item = Pair<'a, Rule>>,
@@ -246,6 +247,8 @@ impl AstParser {
             )),
         }
     }
+
+     */
 
     fn convert_into_iterator<'a>(pair: &'a Pair<'a, Rule>) -> impl Iterator<Item = Pair<'a, Rule>> {
         pair.clone().into_inner()

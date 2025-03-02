@@ -12,7 +12,6 @@ use swamp_script_semantic::prelude::Modules;
 use swamp_script_semantic::symtbl::SymbolTable;
 use swamp_script_semantic::{Expression, ProgramState};
 use swamp_script_source_map::SourceMap;
-use tracing::info;
 
 #[derive(Debug)]
 pub enum EvalLoaderError {
@@ -39,7 +38,6 @@ pub fn analyze_module(
     source_map: &SourceMap,
     ast_module: &ParsedAstModule,
 ) -> Result<(SymbolTable, Option<Expression>), Error> {
-    info!(?ast_module, "Analyzing module");
     let mut resolver = Analyzer::new(state, modules, source_map, ast_module.file_id);
     if !auto_use_modules.modules.is_empty() {
         let target = &mut resolver.shared.lookup_table;
@@ -77,7 +75,6 @@ pub fn analyze_modules_in_order(
 ) -> Result<(), Error> {
     for module_path in module_paths_in_order {
         if let Some(parse_module) = parsed_modules.get_parsed_module(module_path) {
-            info!(?module_path, "analyzing module");
             let (analyzed_symbol_table, maybe_expression) =
                 analyze_module(state, auto_use, modules, source_map, parse_module)?;
             let analyzed_module = Module::new(module_path, analyzed_symbol_table, maybe_expression);
@@ -101,8 +98,6 @@ pub fn compile_and_analyze_all_modules(
         &mut dependency_parser,
         source_map,
     )?;
-
-    info!(?module_paths_in_order, "official analysis order");
 
     analyze_modules_in_order(
         &mut resolved_program.state,

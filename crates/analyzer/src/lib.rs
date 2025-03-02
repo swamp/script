@@ -16,14 +16,11 @@ pub mod prelude;
 mod structure;
 pub mod types;
 pub mod variable;
-
 use crate::err::{Error, ErrorKind};
 use seq_map::SeqMap;
 use std::mem::take;
 use std::num::{ParseFloatError, ParseIntError};
 use std::rc::Rc;
-
-use swamp_script_ast::MutableOrImmutableExpression;
 use swamp_script_semantic::modules::ModuleRef;
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::symtbl::{FuncDef, Symbol, SymbolTable, SymbolTableRef};
@@ -1725,7 +1722,7 @@ impl<'a> Analyzer<'a> {
         let mut resolved_arms = Vec::with_capacity(arms.len());
 
         for arm in arms {
-            let (resolved_arm, anyone_wants_mutable) = self.analyze_arm(
+            let (resolved_arm, _anyone_wants_mutable) = self.analyze_arm(
                 arm,
                 &resolved_scrutinee,
                 &own_context.with_expected_type(known_type.as_ref()),
@@ -1862,7 +1859,6 @@ impl<'a> Analyzer<'a> {
     ) -> Result<(&SymbolTable, String), Error> {
         let path = self.get_module_path(type_identifier.module_path.as_ref());
         let name = self.get_text(&type_identifier.name.0).to_string();
-        info!(?path, ?name, "get symbol table");
 
         let maybe_symbol_table = self.shared.get_symbol_table(&path);
         maybe_symbol_table.map_or_else(
@@ -2045,7 +2041,6 @@ impl<'a> Analyzer<'a> {
             }
         }
 
-        info!(?context, ?true_expr, "when true expression");
         let resolved_true = self.analyze_expression(true_expr, context)?;
         let block_type = resolved_true.ty.clone();
 
@@ -2175,8 +2170,6 @@ impl<'a> Analyzer<'a> {
         } else {
             None
         };
-
-        info!(?ty, "create variable maybe annotation");
 
         let unsure_arg_context = TypeContext::new_unsure_argument(ty.as_ref());
 
