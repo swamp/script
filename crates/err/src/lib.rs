@@ -488,6 +488,7 @@ pub fn build_analyze_error(err: &Error) -> Builder<usize> {
         ErrorKind::WrongEnumVariantContainer(_) => todo!(),
         ErrorKind::VariableIsNotMutable => Report::build(Kind::Error, 75301, "Variable is not mutable", span),
         ErrorKind::ArgumentIsNotMutable => Report::build(Kind::Error, 1401, "Argument is not mutable", span),
+        ErrorKind::ParameterIsNotMutable => Report::build(Kind::Error, 1401, "Parameter is not mutable", span),
         ErrorKind::WrongNumberOfTupleDeconstructVariables => todo!(),
         ErrorKind::UnknownTypeReference => {
             Report::build(Kind::Error, 101, "Unknown type reference", span)

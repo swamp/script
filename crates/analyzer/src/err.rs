@@ -122,6 +122,7 @@ pub enum ErrorKind {
     EmptyMatch,
     MatchArmsMustHaveTypes,
     ContinueOutsideLoop,
+    ParameterIsNotMutable,
 }
 
 impl From<SemanticError> for Error {

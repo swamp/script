@@ -1221,8 +1221,8 @@ impl AstParser {
     }
 
     fn parse_assignment_op(&self, pair: &Pair<Rule>) -> Result<AssignmentOperatorKind, ParseError> {
-        assert!(pair.as_rule() == Rule::assign_op);
-        let sub = Self::right_alternative(&pair)?;
+        assert_eq!(pair.as_rule(), Rule::assign_op);
+        let sub = Self::right_alternative(pair)?;
         let op = match sub.as_rule() {
             Rule::compound_assign_op => {
                 AssignmentOperatorKind::Compound(Self::parse_compound_assign_op(&sub)?)

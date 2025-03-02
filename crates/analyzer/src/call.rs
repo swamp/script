@@ -21,10 +21,22 @@ impl<'a> Analyzer<'a> {
         let context = TypeContext::new_argument(&fn_parameter.resolved_type);
 
         let mut_or_immutable = if fn_parameter.is_mutable {
+            if argument_expr.is_mutable.is_none() {
+                return Err(self.create_err(
+                    ErrorKind::ArgumentIsNotMutable,
+                    &argument_expr.expression.node,
+                ));
+            }
             let mut_location =
                 self.analyze_to_location(&argument_expr.expression, &context, LocationSide::Rhs)?;
             ArgumentExpressionOrLocation::Location(mut_location)
         } else {
+            if argument_expr.is_mutable.is_some() {
+                return Err(self.create_err(
+                    ErrorKind::ParameterIsNotMutable,
+                    &argument_expr.expression.node,
+                ));
+            }
             let resolved_expr = self.analyze_expression(&argument_expr.expression, &context)?;
             ArgumentExpressionOrLocation::Expression(resolved_expr)
         };

@@ -2235,6 +2235,10 @@ impl<'a> Analyzer<'a> {
             return Err(self.create_err(ErrorKind::NotValidLocationStartingPoint, &chain.base.node));
         };
 
+        if !start_variable.is_mutable() {
+            return Err(self.create_err(ErrorKind::VariableIsNotMutable, &chain.base.node));
+        }
+
         let mut ty = start_variable.resolved_type.clone();
         for (i, item) in chain.postfixes.iter().enumerate() {
             match &item {
