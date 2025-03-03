@@ -7,7 +7,7 @@ use std::path::Path;
 use std::rc::Rc;
 use swamp_script_analyzer::Analyzer;
 use swamp_script_analyzer::prelude::Error;
-use swamp_script_error_report::show_analyzer_error;
+//use swamp_script_error_report::show_analyzer_error;
 use swamp_script_parser::AstParser;
 use swamp_script_semantic::ProgramState;
 use swamp_script_semantic::modules::{Module, Modules};

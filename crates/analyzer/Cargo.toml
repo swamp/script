@@ -19,4 +19,4 @@ swamp-script-source-map = { path = "../source-map", version = "0.0.14" }
 [dev-dependencies]
 swamp-script-parser = { path = "../parser", version = "0.0.14" }
 test-log = { version = "0.2.16", features = ["trace", "log", "color"] }
-swamp-script-error-report = { path = "../err", version = "0.0.14" }
+# swamp-script-error-report = { path = "../err", version = "0.0.14" }
