@@ -17,75 +17,28 @@ use swamp_script_semantic::{
 use tracing::info;
 
 impl<'a> Analyzer<'a> {
-    fn analyze_mod_definition(
+    fn general_import(
         &mut self,
-        mod_definition: &swamp_script_ast::Mod,
+        path: &[String],
+        import_items: &[swamp_script_ast::ImportItem],
+        node: &swamp_script_ast::Node,
     ) -> Result<(), Error> {
-        let mut path = Vec::new();
-        for ast_node in &mod_definition.module_path.0 {
-            path.push(self.get_text(ast_node).to_string());
-        }
-
-        let mut nodes_copy = path.clone();
-        nodes_copy.insert(0, "crate".to_string());
-
-        if let Some(found_namespace) = self.shared.modules.get(&nodes_copy) {
-            self.shared
-                .lookup_table
-                .add_module_link(nodes_copy.last().unwrap(), found_namespace.clone())
-                .map_err(|err| {
-                    self.create_err(
-                        ErrorKind::SemanticError(err),
-                        &mod_definition.module_path.0[0],
-                    )
-                })?;
-            Ok(())
-        } else {
-            let first = &mod_definition.module_path.0[0];
-            Err(self.create_err(ErrorKind::UnknownModule, first))
-        }
-    }
-
-    fn analyze_use_definition(
-        &mut self,
-        use_definition: &swamp_script_ast::Use,
-    ) -> Result<(), Error> {
-        let mut nodes = Vec::new();
-        for ast_node in &use_definition.module_path.0 {
-            nodes.push(self.to_node(ast_node));
-        }
-
-        let path: Vec<String> = nodes
-            .iter()
-            .map(|node| {
-                let text = self.get_text_resolved(node);
-                text.to_string()
-            })
-            .collect();
-
         let found_module = self
             .shared
             .get_module(&path)
-            .ok_or_else(|| {
-                self.create_err(ErrorKind::UnknownModule, &use_definition.module_path.0[0])
-            })?
+            .ok_or_else(|| self.create_err(ErrorKind::UnknownModule, &node))?
             .clone();
-        if use_definition.items.is_empty() {
+        if import_items.is_empty() {
             let last_name = path.last().unwrap();
             self.shared
                 .lookup_table
                 .add_module_link(last_name, found_module.clone())
-                .map_err(|err| {
-                    self.create_err(
-                        ErrorKind::SemanticError(err),
-                        &use_definition.module_path.0[0],
-                    )
-                })?;
+                .map_err(|err| self.create_err(ErrorKind::SemanticError(err), &node))?;
         }
 
-        for ast_items in &use_definition.items {
+        for ast_items in import_items {
             match ast_items {
-                swamp_script_ast::UseItem::Identifier(node) => {
+                swamp_script_ast::ImportItem::Identifier(node) => {
                     let ident_resolved_node = self.to_node(&node.0);
                     let ident = UseItem::Identifier(ident_resolved_node.clone());
                     let ident_text = self.get_text_resolved(&ident_resolved_node).to_string();
@@ -106,7 +59,7 @@ impl<'a> Analyzer<'a> {
                     }
                     ident
                 }
-                swamp_script_ast::UseItem::Type(node) => {
+                swamp_script_ast::ImportItem::Type(node) => {
                     let ident_resolved_node = self.to_node(&node.0);
                     let ident_text = self.get_text_resolved(&ident_resolved_node).to_string();
                     if let Some(found_symbol) =
@@ -128,6 +81,71 @@ impl<'a> Analyzer<'a> {
                 }
             };
         }
+
+        Ok(())
+    }
+
+    fn analyze_mod_definition(
+        &mut self,
+        mod_definition: &swamp_script_ast::Mod,
+    ) -> Result<(), Error> {
+        let mut path = Vec::new();
+        for ast_node in &mod_definition.module_path.0 {
+            path.push(self.get_text(ast_node).to_string());
+        }
+
+        let mut nodes_copy = path.clone();
+        nodes_copy.insert(0, "crate".to_string());
+
+        info!(?nodes_copy, items=?mod_definition.items, "mod again");
+        Ok(self.general_import(
+            &nodes_copy,
+            &mod_definition.items,
+            &mod_definition.module_path.0[0],
+        )?)
+
+        /*
+        if let Some(found_namespace) = self.shared.modules.get(&nodes_copy) {
+            self.shared
+                .lookup_table
+                .add_module_link(nodes_copy.last().unwrap(), found_namespace.clone())
+                .map_err(|err| {
+                    self.create_err(
+                        ErrorKind::SemanticError(err),
+                        &mod_definition.module_path.0[0],
+                    )
+                })?;
+            Ok(())
+        } else {
+            let first = &mod_definition.module_path.0[0];
+            Err(self.create_err(ErrorKind::UnknownModule, first))
+        }
+
+         */
+    }
+
+    fn analyze_use_definition(
+        &mut self,
+        use_definition: &swamp_script_ast::Use,
+    ) -> Result<(), Error> {
+        let mut nodes = Vec::new();
+        for ast_node in &use_definition.module_path.0 {
+            nodes.push(self.to_node(ast_node));
+        }
+
+        let path: Vec<String> = nodes
+            .iter()
+            .map(|node| {
+                let text = self.get_text_resolved(node);
+                text.to_string()
+            })
+            .collect();
+
+        self.general_import(
+            &path,
+            &use_definition.items,
+            &use_definition.module_path.0[0],
+        );
 
         Ok(())
     }
@@ -186,7 +204,6 @@ impl<'a> Analyzer<'a> {
                 }
                 swamp_script_ast::EnumVariantType::Tuple(variant_name_node, types) => {
                     let debug_text = self.get_text(variant_name_node);
-                    info!(?debug_text, ?types, "tuple");
                     let mut vec = Vec::new();
                     for tuple_type in types {
                         let resolved_type = self.analyze_type(tuple_type)?;

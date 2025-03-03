@@ -340,7 +340,7 @@ impl AstParser {
             Rule::struct_def => self.parse_struct_def(&inner_pair),
             Rule::type_def => self.parse_type_def(&inner_pair),
             Rule::function_def => self.parse_function_def(&inner_pair),
-            Rule::import_def => self.parse_use(&inner_pair),
+            Rule::use_def => self.parse_use(&inner_pair),
             Rule::mod_def => self.parse_mod(&inner_pair),
             Rule::enum_def => self.parse_enum_def(&inner_pair),
             _ => todo!(),
@@ -363,7 +363,10 @@ impl AstParser {
         })
     }
 
-    fn parse_use(&self, pair: &Pair<Rule>) -> Result<Definition, ParseError> {
+    fn module_path_and_items(
+        &self,
+        pair: &Pair<Rule>,
+    ) -> Result<(Vec<Node>, Vec<ImportItem>), ParseError> {
         let mut inner = Self::convert_into_iterator(pair);
         let import_path = Self::next_pair(&mut inner)?;
 
@@ -380,10 +383,10 @@ impl AstParser {
 
                     let import_item = match item.as_rule() {
                         Rule::identifier => {
-                            UseItem::Identifier(LocalIdentifier::new(self.to_node(&item)))
+                            ImportItem::Identifier(LocalIdentifier::new(self.to_node(&item)))
                         }
                         Rule::type_identifier => {
-                            UseItem::Type(LocalTypeIdentifier::new(self.to_node(&item)))
+                            ImportItem::Type(LocalTypeIdentifier::new(self.to_node(&item)))
                         }
                         _ => {
                             return Err(
@@ -400,6 +403,12 @@ impl AstParser {
             _ => Vec::new(),
         };
 
+        Ok((segments, items))
+    }
+
+    fn parse_use(&self, pair: &Pair<Rule>) -> Result<Definition, ParseError> {
+        let (segments, items) = self.module_path_and_items(&pair)?;
+
         Ok(Definition::Use(Use {
             module_path: ModulePath(segments),
             items,
@@ -407,16 +416,13 @@ impl AstParser {
     }
 
     fn parse_mod(&self, pair: &Pair<Rule>) -> Result<Definition, ParseError> {
-        let mut inner = Self::convert_into_iterator(pair);
-        let import_path = Self::next_pair(&mut inner)?;
+        let (segments, items) = self.module_path_and_items(&pair)?;
 
-        let mut segments = Vec::new();
-        for pair in import_path.into_inner() {
-            segments.push(self.to_node(&pair));
-        }
+        info!(?segments, ?items, "mod");
 
         Ok(Definition::Mod(Mod {
             module_path: ModulePath(segments),
+            items,
         }))
     }
 
@@ -1577,7 +1583,6 @@ impl AstParser {
         let mut has_rest = false;
 
         for field_pair in field_list_pair.clone().into_inner() {
-            info!(rule=?field_pair.as_rule(), "field rule");
             match field_pair.as_rule() {
                 Rule::struct_field => {
                     let mut field_inner = field_pair.into_inner();

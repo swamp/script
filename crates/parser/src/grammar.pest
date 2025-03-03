@@ -225,7 +225,7 @@ module_segments           = { (identifier ~ SCOPE_OPERATOR)+ }
 program = { SOI ~ (definition | expression)* ~ EOI }
 
 definition = {
-    (import_def | mod_def | type_def | struct_def | enum_def | function_def | impl_def | const_def | trait_def)
+    (use_def | mod_def | type_def | struct_def | enum_def | function_def | impl_def | const_def | trait_def)
 }
 
 /*
@@ -288,12 +288,12 @@ const_def = {
     "const" ~ constant_identifier ~ "=" ~ expression
 }
 
-import_def = {
+use_def = {
     "use" ~ import_path ~ ("::" ~ "{" ~ import_list ~ "}")?
 }
 
 mod_def = {
-    "mod" ~ import_path
+    "mod" ~ import_path ~ ("::" ~ "{" ~ import_list ~ "}")?
 }
 
 import_path = { identifier ~ ("::" ~ identifier)* }

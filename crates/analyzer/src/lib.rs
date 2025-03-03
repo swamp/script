@@ -1114,7 +1114,6 @@ impl<'a> Analyzer<'a> {
                 .get_index(&field_name_str)
                 .expect("checked earlier");
 
-            info!(?index, ?field_name_str, ?tv, "found field index");
             return Ok((
                 anon_struct_ref.clone(),
                 index,

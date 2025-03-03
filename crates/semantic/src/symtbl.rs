@@ -15,6 +15,7 @@ use std::cell::RefCell;
 use std::fmt::Debug;
 use std::rc::Rc;
 use tiny_ver::TinyVersion;
+use tracing::info;
 
 #[derive(Debug, Clone)]
 pub enum FuncDef {
@@ -332,6 +333,7 @@ impl SymbolTable {
     }
 
     pub fn add_symbol(&mut self, name: &str, symbol: Symbol) -> Result<(), SemanticError> {
+        info!(name, ?symbol, "add_symbol");
         self.symbols
             .insert(name.to_string(), symbol)
             .map_err(|_| SemanticError::DuplicateSymbolName)

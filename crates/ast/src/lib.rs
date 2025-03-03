@@ -146,7 +146,7 @@ impl ModulePath {
 }
 
 #[derive(Debug)]
-pub enum UseItem {
+pub enum ImportItem {
     Identifier(LocalIdentifier),
     Type(LocalTypeIdentifier),
 }
@@ -154,13 +154,13 @@ pub enum UseItem {
 #[derive(Debug)]
 pub struct Mod {
     pub module_path: ModulePath,
+    pub items: Vec<ImportItem>,
 }
 
 #[derive(Debug)]
 pub struct Use {
     pub module_path: ModulePath,
-    //    pub assigned_path: Vec<String>,
-    pub items: Vec<UseItem>,
+    pub items: Vec<ImportItem>,
 }
 
 #[derive(Debug, Eq, PartialEq)]
