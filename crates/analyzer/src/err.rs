@@ -8,7 +8,6 @@ use std::num::{ParseFloatError, ParseIntError};
 use swamp_script_semantic::{
     AnonymousStructType, EnumVariantTypeRef, Node, SemanticError, Span, StructTypeRef, Type,
 };
-use swamp_script_semantic::AnonymousStructTypeRef;
 
 #[derive(Debug)]
 pub struct Error {
@@ -36,7 +35,7 @@ pub enum ErrorKind {
     Unknown(String),
     UnknownImplTargetTypeReference(swamp_script_ast::LocalTypeIdentifier),
     WrongFieldCountInStructInstantiation(StructTypeRef, usize),
-    MissingFieldInStructInstantiation(Vec<String>, AnonymousStructTypeRef),
+    MissingFieldInStructInstantiation(Vec<String>, AnonymousStructType),
     ExpectedFunctionExpression,
     CouldNotFindMember(Node, Node),
     UnknownVariable,

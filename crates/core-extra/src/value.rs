@@ -12,7 +12,7 @@ use std::fmt::{Debug, Display};
 use std::hash::Hash;
 use std::rc::Rc;
 use swamp_script_semantic::{
-    AnonymousStructTypeRef, ArrayTypeRef, EnumVariantSimpleTypeRef, EnumVariantStructTypeRef,
+    AnonymousStructType, ArrayTypeRef, EnumVariantSimpleTypeRef, EnumVariantStructTypeRef,
     EnumVariantTupleTypeRef, ExternalFunctionDefinitionRef, ExternalTypeRef, FormatSpecifierKind,
     InternalFunctionDefinitionRef, MapTypeRef, Node, PrecisionType, RangeMode, Span, StructTypeRef,
     TupleTypeRef, TypeNumber,
@@ -92,7 +92,7 @@ pub enum Value {
     Map(MapTypeRef, SeqMap<Value, ValueRef>), // Do not change to HashMap, the order is important for it to be deterministic
     Tuple(TupleTypeRef, Vec<ValueRef>),
     NamedStruct(StructTypeRef, Vec<ValueRef>), // type of the struct, and the fields themselves in strict order
-    AnonymousStruct(AnonymousStructTypeRef, Vec<ValueRef>), // type of the struct, and the fields themselves in strict order
+    AnonymousStruct(AnonymousStructType, Vec<ValueRef>), // type of the struct, and the fields themselves in strict order
 
     EnumVariantSimple(EnumVariantSimpleTypeRef),
     EnumVariantTuple(EnumVariantTupleTypeRef, Vec<ValueRef>),
@@ -515,9 +515,7 @@ impl Value {
         }
     }
 
-    pub fn expect_anon_struct(
-        &self,
-    ) -> Result<(AnonymousStructTypeRef, &Vec<ValueRef>), ValueError> {
+    pub fn expect_anon_struct(&self) -> Result<(AnonymousStructType, &Vec<ValueRef>), ValueError> {
         match self {
             Self::NamedStruct(struct_ref, fields) => {
                 Ok((struct_ref.borrow().anon_struct_type.clone(), fields))
@@ -696,7 +694,7 @@ impl Display for Value {
                 let fields = struct_type_ref
                     .borrow()
                     .anon_struct_type
-                    .defined_fields
+                    .field_name_sorted_fields
                     .keys()
                     .cloned()
                     .collect::<Vec<_>>();
@@ -713,7 +711,7 @@ impl Display for Value {
                 write!(f, "{{ ")?;
 
                 let fields = anonymous_struct
-                    .defined_fields
+                    .field_name_sorted_fields
                     .keys()
                     .cloned()
                     .collect::<Vec<_>>();
@@ -753,7 +751,7 @@ impl Display for Value {
             Self::EnumVariantStruct(struct_variant, values) => {
                 let decorated_values: Vec<(String, ValueRef)> = struct_variant
                     .anon_struct
-                    .defined_fields
+                    .field_name_sorted_fields
                     .keys()
                     .cloned()
                     .zip(values.clone())

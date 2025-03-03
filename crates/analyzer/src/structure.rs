@@ -4,12 +4,13 @@
  */
 use crate::err::{Error, ErrorKind};
 use crate::{Analyzer, TypeContext};
+use seq_map::SeqMap;
 use seq_set::SeqSet;
 use swamp_script_semantic::{
     AnonymousStructType, ArgumentExpressionOrLocation, Expression, ExpressionKind, FunctionRef,
     LocationAccess, LocationAccessKind, MutOrImmutableExpression, Node, SingleLocationExpression,
-    SingleLocationExpressionKind, SingleMutLocationExpression, StructInstantiation, StructTypeRef,
-    Type,
+    SingleLocationExpressionKind, SingleMutLocationExpression, StructInstantiation,
+    StructTypeField, StructTypeRef, Type,
 };
 
 impl<'a> Analyzer<'a> {
@@ -58,8 +59,10 @@ impl<'a> Analyzer<'a> {
 
             let field_expression_type = field_source_expression.ty.clone();
 
-            let kind =
-                LocationAccessKind::FieldIndex(struct_to_instantiate.clone(), field_target_index);
+            let kind = LocationAccessKind::FieldIndex(
+                struct_to_instantiate.borrow().anon_struct_type.clone(),
+                field_target_index,
+            );
 
             let single_chain = vec![LocationAccess {
                 node: resolved_field_name_node,
@@ -116,11 +119,11 @@ impl<'a> Analyzer<'a> {
 
             for missing_field_name in missing_fields {
                 let field = borrowed_anon_type
-                    .defined_fields
+                    .field_name_sorted_fields
                     .get(&missing_field_name)
                     .expect("should have been verified by helper function");
                 let field_index = borrowed_anon_type
-                    .defined_fields
+                    .field_name_sorted_fields
                     .get_index(&missing_field_name)
                     .expect("should have been verified earlier");
 
@@ -140,6 +143,73 @@ impl<'a> Analyzer<'a> {
             ty,
             &node,
         ))
+    }
+
+    /*
+    pub(crate) fn analyze_struct_instantiation(
+        &mut self,
+        qualified_type_identifier: &swamp_script_ast::QualifiedTypeIdentifier,
+        ast_fields: &Vec<swamp_script_ast::FieldExpression>,
+        has_rest: bool,
+    ) -> Result<Expression, Error> {
+        let struct_to_instantiate = self.get_struct_type(qualified_type_identifier)?;
+
+        let (source_order_expressions, missing_fields) = self
+            .analyze_anon_struct_instantiation_helper(
+                &struct_to_instantiate.borrow().anon_struct_type,
+                ast_fields,
+            )?;
+
+        Ok(self.create_expr(
+            ExpressionKind::AnonymouosStructLiteral(StructInstantiation {
+                source_order_expressions,
+            }),
+            Type::NamedStruct(struct_to_instantiate),
+            &qualified_type_identifier.name,
+        ))
+    }
+
+
+     */
+    pub fn analyze_anonymous_struct_literal(
+        &mut self,
+        ast_fields: &Vec<swamp_script_ast::FieldExpression>,
+    ) -> Result<(AnonymousStructType, Vec<(usize, Expression)>), Error> {
+        let mut field_name_and_expression = SeqMap::new();
+        let mut map_for_creating_type = SeqMap::new();
+
+        for field in ast_fields {
+            let field_name = self.get_text(&field.field_name.0).to_string();
+            let resolved_node = self.to_node(&field.field_name.0);
+
+            let field_type_context = TypeContext::new_anything_argument();
+            let resolved_expression =
+                self.analyze_expression(&field.expression, &field_type_context)?;
+
+            let expression_type = resolved_expression.ty.clone();
+            field_name_and_expression.insert(field_name.clone(), resolved_expression);
+            let field = StructTypeField {
+                identifier: Some(resolved_node),
+                field_type: expression_type,
+            };
+
+            map_for_creating_type.insert(field_name.clone(), field);
+        }
+
+        let anon_struct_type = AnonymousStructType::new_and_sort_fields(map_for_creating_type);
+
+        let mut source_order_expressions = Vec::new();
+
+        for (field_name, expr) in field_name_and_expression {
+            let index = anon_struct_type
+                .field_name_sorted_fields
+                .get_index(&field_name)
+                .unwrap();
+
+            source_order_expressions.push((index, expr))
+        }
+
+        Ok((anon_struct_type, source_order_expressions))
     }
 
     pub(crate) fn analyze_struct_instantiation(
@@ -215,7 +285,7 @@ impl<'a> Analyzer<'a> {
         ast_fields: &Vec<swamp_script_ast::FieldExpression>,
     ) -> Result<(Vec<(usize, Node, Expression)>, SeqSet<String>), Error> {
         let mut missing_fields: SeqSet<String> = struct_to_instantiate
-            .defined_fields
+            .field_name_sorted_fields
             .keys()
             .cloned()
             .collect();
@@ -229,7 +299,7 @@ impl<'a> Analyzer<'a> {
             // If we can't remove it from missing_fields, it's either a duplicate or unknown field
             if !missing_fields.remove(&field_name) {
                 return if struct_to_instantiate
-                    .defined_fields
+                    .field_name_sorted_fields
                     .contains_key(&field_name)
                 {
                     Err(self.create_err(
@@ -242,12 +312,12 @@ impl<'a> Analyzer<'a> {
             }
 
             let looked_up_field = struct_to_instantiate
-                .defined_fields
+                .field_name_sorted_fields
                 .get(&field_name)
                 .expect("field existence checked above");
 
             let field_index_in_definition = struct_to_instantiate
-                .defined_fields
+                .field_name_sorted_fields
                 .get_index(&field_name)
                 .expect("field_name is checked earlier");
 
@@ -264,6 +334,15 @@ impl<'a> Analyzer<'a> {
 
         Ok((source_order_expressions, missing_fields))
     }
+
+    /*
+    fn analyze_true_anon_struct_instantiation_helper(
+        &mut self,
+        ast_fields: &Vec<swamp_script_ast::FieldExpression>,
+    ) -> Result<(Vec<(usize, Node, Expression)>, SeqSet<String>), Error> {
+    }
+
+     */
 
     pub(crate) fn analyze_anon_struct_instantiation(
         &mut self,
@@ -284,12 +363,12 @@ impl<'a> Analyzer<'a> {
             // Call `default()` for the missing fields
             for missing_field_name in missing_fields {
                 let field = struct_to_instantiate
-                    .defined_fields
+                    .field_name_sorted_fields
                     .get(&missing_field_name)
                     .expect("field must exist in struct definition");
 
                 let field_index = struct_to_instantiate
-                    .defined_fields
+                    .field_name_sorted_fields
                     .get_index(&missing_field_name)
                     .expect("field must exist in struct definition");
 

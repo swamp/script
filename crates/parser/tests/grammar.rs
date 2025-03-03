@@ -1239,7 +1239,8 @@ fn enum_match_tuple_basic() {
     check(
         r#"
            match v {
-                Tuple(i, s, b) => { // Tuple is an imaginary enum variant with name Tuple
+Tuple(i, s, b) => {
+// Tuple is an imaginary enum variant with name Tuple
                     print("Tuple:")
                     print(i)
                     print(s)
@@ -1639,7 +1640,7 @@ fn check_prefix_and_generic() {
     check(
         r"
         struct Logic {
-            tick_count: Int, /// how many ticks have passed
+tick_count: Int, /// how many ticks have passed
             explosions: std::Sparse<Explosion>,
          }
 ",
@@ -1682,7 +1683,7 @@ fn check_boolean_expression_no_block() {
 fn documentation_comment() {
     check(
         r"
-        /// This is a doc comment
+/// This is a doc comment
 x = if true 2 else 4
 ",
         r"
@@ -1695,7 +1696,7 @@ VariableAssignment(<35:1>, If(Literal(Bool(<42:4>)), Literal(Int(<47:1>)), Some(
 fn external_function() {
     check(
         r"
-        /// This is a doc comment
+/// This is a doc comment
 external fn something(i: Int) -> Float
 ",
         r"
@@ -2827,7 +2828,6 @@ StructDef(StructDef { identifier: LocalTypeIdentifier(<8:10>), struct_type: Stru
 ",
     );
 }
-
 
 #[test_log::test]
 fn enum_variant_anonymous_struct() {

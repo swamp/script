@@ -178,7 +178,7 @@ impl<'a> Analyzer<'a> {
                                         // Check if the field exists
                                         let field_index = struct_type
                                             .anon_struct
-                                            .defined_fields
+                                            .field_name_sorted_fields
                                             .get_index(&var_name_str)
                                             .ok_or_else(|| {
                                                 self.create_err(ErrorKind::UnknownField, &var.name)
@@ -186,7 +186,7 @@ impl<'a> Analyzer<'a> {
 
                                         let field_type = struct_type
                                             .anon_struct
-                                            .defined_fields
+                                            .field_name_sorted_fields
                                             .get(&var_name_str)
                                             .ok_or_else(|| {
                                                 self.create_err(ErrorKind::UnknownField, &var.name)

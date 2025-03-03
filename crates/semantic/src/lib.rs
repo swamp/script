@@ -184,7 +184,7 @@ pub enum Type {
     Array(ArrayTypeRef),
     Tuple(TupleTypeRef),
     NamedStruct(StructTypeRef),
-    AnonymousStruct(AnonymousStructTypeRef),
+    AnonymousStruct(AnonymousStructType),
     Map(MapTypeRef),
 
     Enum(EnumTypeRef),
@@ -365,17 +365,18 @@ fn compare_struct_types(a: &StructTypeRef, b: &StructTypeRef) -> bool {
         return false;
     }
 
-    if a_borrow.anon_struct_type.defined_fields.len()
-        != b_borrow.anon_struct_type.defined_fields.len()
-    {
+    compare_anonymous_struct_types(&a_borrow.anon_struct_type, &b_borrow.anon_struct_type)
+}
+
+fn compare_anonymous_struct_types(a: &AnonymousStructType, b: &AnonymousStructType) -> bool {
+    if a.field_name_sorted_fields.len() != b.field_name_sorted_fields.len() {
         return false;
     }
 
-    for ((a_name, a_type), (b_name, b_type)) in a_borrow
-        .anon_struct_type
-        .defined_fields
+    for ((a_name, a_type), (b_name, b_type)) in a
+        .field_name_sorted_fields
         .iter()
-        .zip(b_borrow.anon_struct_type.defined_fields.clone())
+        .zip(b.field_name_sorted_fields.clone())
     {
         if *a_name != b_name {
             return false;
@@ -729,6 +730,12 @@ pub struct StructInstantiation {
     pub struct_type_ref: StructTypeRef,
 }
 
+#[derive(Debug)]
+pub struct AnonymousStructLiteral {
+    pub source_order_expressions: Vec<(usize, Expression)>,
+    pub anonymous_struct_type: AnonymousStructType,
+}
+
 #[derive(Debug, Eq, PartialEq)]
 pub enum CompoundOperatorKind {
     Add,
@@ -787,7 +794,7 @@ pub struct Range {
 
 #[derive(Debug)]
 pub enum PostfixKind {
-    StructField(AnonymousStructTypeRef, usize),
+    StructField(AnonymousStructType, usize),
     ArrayIndex(ArrayTypeRef, Expression),
     ArrayRangeIndex(ArrayTypeRef, Range),
     StringIndex(Expression),
@@ -805,7 +812,7 @@ pub enum PostfixKind {
 
 #[derive(Debug)]
 pub enum LocationAccessKind {
-    FieldIndex(AnonymousStructTypeRef, usize),
+    FieldIndex(AnonymousStructType, usize),
     ArrayIndex(ArrayTypeRef, Expression),
     ArrayRange(ArrayTypeRef, Range),
     StringIndex(Expression),
@@ -962,6 +969,7 @@ pub enum ExpressionKind {
     VariableReassignment(VariableRef, Box<MutOrImmutableExpression>),
 
     StructInstantiation(StructInstantiation),
+    AnonymousStructLiteral(AnonymousStructLiteral),
     Array(ArrayInstantiation),
     Tuple(Vec<Expression>),
     Literal(Literal),
@@ -1059,7 +1067,11 @@ pub struct ModulePathItem(pub Node);
 
 pub type StructTypeRef = Rc<RefCell<NamedStructType>>;
 
-pub fn same_struct_ref(a: &StructTypeRef, b: &StructTypeRef) -> bool {
+pub fn same_anon_struct_ref(a: &AnonymousStructType, b: &AnonymousStructType) -> bool {
+    compare_anonymous_struct_types(a, b)
+}
+
+pub fn same_named_struct_ref(a: &StructTypeRef, b: &StructTypeRef) -> bool {
     Rc::ptr_eq(a, b)
 }
 
@@ -1090,7 +1102,7 @@ pub type AliasTypeRef = Rc<AliasType>;
 pub struct NamedStructType {
     pub name: Node,
     pub assigned_name: String,
-    pub anon_struct_type: AnonymousStructTypeRef,
+    pub anon_struct_type: AnonymousStructType,
 
     //
     pub functions: SeqMap<String, FunctionRef>,
@@ -1103,7 +1115,7 @@ impl Debug for NamedStructType {
 }
 
 impl NamedStructType {
-    pub fn new(name: Node, assigned_name: &str, anon_struct_type: AnonymousStructTypeRef) -> Self {
+    pub fn new(name: Node, assigned_name: &str, anon_struct_type: AnonymousStructType) -> Self {
         Self {
             //defined_in_module,
             anon_struct_type,
@@ -1115,7 +1127,7 @@ impl NamedStructType {
 
     pub fn field_index(&self, field_name: &str) -> Option<usize> {
         self.anon_struct_type
-            .defined_fields
+            .field_name_sorted_fields
             .get_index(&field_name.to_string())
     }
 
@@ -1177,16 +1189,58 @@ pub struct MapType {
 
 pub type EnumVariantStructTypeRef = Rc<EnumVariantStructType>;
 
-#[derive(Clone, Eq, PartialEq)]
-pub struct AnonymousStructType {
-    pub defined_fields: SeqMap<String, StructTypeField>,
+/*
+pub fn sort_struct_fields(
+    unordered_seq_map: &SeqMap<String, StructTypeField>,
+) -> SeqMap<String, StructTypeField> {
+    let mut sorted_pairs: Vec<(&String, &StructTypeField)> = unordered_seq_map.iter().collect();
+    sorted_pairs.sort_by(|a, b| a.0.cmp(b.0));
+    let mut ordered_seq_map = SeqMap::new();
+
+    for (name, field) in sorted_pairs {
+        ordered_seq_map.insert(name, field).unwrap() // We know already that the key fields are unique
+    }
+
+    ordered_seq_map
 }
 
-pub type AnonymousStructTypeRef = Rc<AnonymousStructType>;
+ */
+
+pub fn sort_struct_fields2(
+    unordered_seq_map: &SeqMap<String, StructTypeField>,
+) -> SeqMap<String, StructTypeField> {
+    let mut sorted_pairs: Vec<(&String, &StructTypeField)> = unordered_seq_map.iter().collect();
+    sorted_pairs.sort_by(|a, b| a.0.cmp(b.0));
+
+    sorted_pairs
+        .into_iter()
+        .map(|(name, field)| (name.clone(), field.clone()))
+        .collect()
+}
+
+#[derive(Clone, Eq, PartialEq)]
+pub struct AnonymousStructType {
+    //pub source_ordered_fields: SeqMap<String, StructTypeField>,
+    pub field_name_sorted_fields: SeqMap<String, StructTypeField>,
+}
 
 impl Debug for AnonymousStructType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        write!(f, "{}", comma_seq(&self.defined_fields))
+        write!(f, "{}", comma_seq(&self.field_name_sorted_fields))
+    }
+}
+
+impl AnonymousStructType {
+    pub fn new_and_sort_fields(source_ordered_fields: SeqMap<String, StructTypeField>) -> Self {
+        Self {
+            field_name_sorted_fields: sort_struct_fields2(&source_ordered_fields),
+        }
+    }
+
+    pub fn new(defined_order: SeqMap<String, StructTypeField>) -> Self {
+        Self {
+            field_name_sorted_fields: defined_order,
+        }
     }
 }
 

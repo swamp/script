@@ -31,17 +31,17 @@ pub fn overwrite_struct(
     for ((field_name, target_field_type), target_field_value) in target_struct_type_ref
         .borrow()
         .anon_struct_type
-        .defined_fields
+        .field_name_sorted_fields
         .iter()
         .zip(target_values)
     {
-        if let Some(source_field_type) = source_anon_type.defined_fields.get(field_name) {
+        if let Some(source_field_type) = source_anon_type.field_name_sorted_fields.get(field_name) {
             if source_field_type
                 .field_type
                 .compatible_with(&target_field_type.field_type)
             {
                 let index = source_anon_type
-                    .defined_fields
+                    .field_name_sorted_fields
                     .get_index(field_name)
                     .expect("should work, we checked get()");
                 *target_field_value.borrow_mut() = source_values[index].borrow().clone();

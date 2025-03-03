@@ -301,7 +301,9 @@ pub fn build_parse_error(err: &SpecificError, span: &Span) -> Builder<usize> {
         SpecificError::ExpectedImportPath => todo!(),
         SpecificError::ExpectedIdentifier => todo!(),
         SpecificError::ExpectedIdentifierAfterPath => todo!(),
-        SpecificError::ExpectedFieldOrRest => todo!(),
+        SpecificError::ExpectedFieldOrRest => {
+            Report::build(Kind::Error, 32241, "expected field or rest", span)
+        }
         SpecificError::UnknownTerm(_) => Report::build(Kind::Error, 32241, "UnknownTerm", span),
         SpecificError::UnknownExpr(_) => todo!(),
         &swamp_script_parser::SpecificError::CouldNotMoveDown

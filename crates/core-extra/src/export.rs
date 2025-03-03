@@ -77,7 +77,7 @@ impl SwampExport for bool {
     fn from_swamp_value(value: &Value) -> Result<Self, String> {
         match value {
             Value::Bool(b) => Ok(*b),
-            _ => Err("Expected Bool value".to_string()),
+            _ => Err(format!("Expected Bool value {value}")),
         }
     }
 }

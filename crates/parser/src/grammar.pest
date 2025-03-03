@@ -47,8 +47,8 @@ string_lit     = @{ "\"" ~ ("\\\"" | !"\"" ~ ANY)* ~ "\"" }
 bool_lit       =  { "true" | "false" }
 tuple_lit      =  { "(" ~ expression ~ (COMMA ~ expression)* ~ ")" }
 enum_literal   =  { qualified_type_identifier ~ SCOPE_OPERATOR ~ type_identifier ~ (struct_fields_lit | tuple_fields)? }
-struct_literal =  { qualified_type_identifier ~ "{" ~ struct_field_list? ~ "}" }
-
+struct_literal =  { qualified_type_identifier ~ anonymous_struct_literal }
+anonymous_struct_literal = {  "{" ~ struct_field_list? ~ "}" }
 struct_fields_lit = { "{" ~ struct_field ~ (COMMA ~ struct_field)* ~ TRAILING_COMMA ~ "}" }
 struct_field      = { field_label ~ expression }
 tuple_fields      = { "(" ~ expression ~ (COMMA ~ expression)* ~ TRAILING_COMMA ~ ")" }
@@ -414,6 +414,7 @@ term = {
   | identifier_reference
   | constant_reference
   | struct_literal
+  | anonymous_struct_literal
   | interpolated_string
 }
 

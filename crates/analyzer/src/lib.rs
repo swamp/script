@@ -25,9 +25,10 @@ use swamp_script_semantic::modules::ModuleRef;
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::symtbl::{FuncDef, Symbol, SymbolTable, SymbolTableRef};
 use swamp_script_semantic::{
-    ArgumentExpressionOrLocation, LocationAccess, LocationAccessKind, MutOrImmutableExpression,
-    NormalPattern, Postfix, PostfixKind, RangeMode, SingleLocationExpression,
-    SingleLocationExpressionKind, SingleMutLocationExpression, TypeWithMut, WhenBinding,
+    AnonymousStructLiteral, ArgumentExpressionOrLocation, LocationAccess, LocationAccessKind,
+    MutOrImmutableExpression, NormalPattern, Postfix, PostfixKind, RangeMode,
+    SingleLocationExpression, SingleLocationExpressionKind, SingleMutLocationExpression,
+    TypeWithMut, WhenBinding,
 };
 use swamp_script_source_map::SourceMap;
 use tracing::error;
@@ -804,6 +805,18 @@ impl<'a> Analyzer<'a> {
                 has_rest,
             ) => self.analyze_struct_instantiation(struct_identifier, fields, *has_rest)?,
 
+            swamp_script_ast::ExpressionKind::AnonymousStructLiteral(fields) => {
+                let (anon_struct_type, mapped) = self.analyze_anonymous_struct_literal(fields)?;
+                self.create_expr(
+                    ExpressionKind::AnonymousStructLiteral(AnonymousStructLiteral {
+                        source_order_expressions: mapped,
+                        anonymous_struct_type: anon_struct_type.clone(),
+                    }),
+                    Type::AnonymousStruct(anon_struct_type.clone()),
+                    &ast_expression.node,
+                )
+            }
+
             swamp_script_ast::ExpressionKind::Range(min_value, max_value, range_mode) => {
                 let range = self.analyze_range(min_value, max_value, range_mode)?;
                 self.create_expr(
@@ -1091,20 +1104,25 @@ impl<'a> Analyzer<'a> {
         &mut self,
         field_name: &swamp_script_ast::Node,
         tv: Type,
-    ) -> Result<(AnonymousStructTypeRef, usize, Type), Error> {
+    ) -> Result<(AnonymousStructType, usize, Type), Error> {
         let field_name_str = self.get_text(field_name).to_string();
 
         let anon_struct_ref = match &tv {
-            Type::NamedStruct(struct_type) => struct_type.borrow().anon_struct_type,
+            Type::NamedStruct(struct_type) => struct_type.borrow().anon_struct_type.clone(),
             Type::AnonymousStruct(anon_struct) => anon_struct.clone(),
+            _ => return Err(self.create_err(ErrorKind::UnknownStructField, field_name)),
         };
 
-        if let Some(found_field) = anon_struct_ref.defined_fields.get(&field_name_str) {
+        if let Some(found_field) = anon_struct_ref
+            .field_name_sorted_fields
+            .get(&field_name_str)
+        {
             let index = anon_struct_ref
-                .defined_fields
+                .field_name_sorted_fields
                 .get_index(&field_name_str)
                 .expect("checked earlier");
 
+            info!(?index, ?field_name_str, ?tv, "found field index");
             return Ok((
                 anon_struct_ref.clone(),
                 index,
@@ -2794,12 +2812,16 @@ impl<'a> Analyzer<'a> {
                 )?;
                 vec![postfix]
             }
-            _ => match binding.anon_struct_type.defined_fields.get(&field_name_str) {
+            _ => match binding
+                .anon_struct_type
+                .field_name_sorted_fields
+                .get(&field_name_str)
+            {
                 Some(found_field) => {
                     if let Type::Function(signature) = &found_field.field_type {
                         let index = binding
                             .anon_struct_type
-                            .defined_fields
+                            .field_name_sorted_fields
                             .get_index(&field_name_str)
                             .expect("should work");
                         self.analyze_postfix_field_call(

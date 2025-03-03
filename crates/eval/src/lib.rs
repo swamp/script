@@ -13,16 +13,16 @@ use swamp_script_core_extra::extra::{SparseValueId, SparseValueMap};
 use swamp_script_core_extra::prelude::ValueError;
 use swamp_script_core_extra::value::ValueRef;
 use swamp_script_core_extra::value::{
-    convert_vec_to_rc_refcell, format_value, to_rust_value, SourceMapLookup, Value,
+    SourceMapLookup, Value, convert_vec_to_rc_refcell, format_value, to_rust_value,
 };
 use swamp_script_semantic::prelude::*;
-use swamp_script_semantic::{same_array_ref, Postfix, SingleMutLocationExpression};
-use swamp_script_semantic::{
-    same_struct_ref, BinaryOperatorKind, CompoundOperatorKind, ConstantId, ForPattern,
-    Function, MutOrImmutableExpression, NormalPattern, PatternElement, PostfixKind,
-    SingleLocationExpression, SingleLocationExpressionKind, UnaryOperatorKind,
-};
 use swamp_script_semantic::{ArgumentExpressionOrLocation, LocationAccess, LocationAccessKind};
+use swamp_script_semantic::{
+    BinaryOperatorKind, CompoundOperatorKind, ConstantId, ForPattern, Function,
+    MutOrImmutableExpression, NormalPattern, PatternElement, PostfixKind, SingleLocationExpression,
+    SingleLocationExpressionKind, UnaryOperatorKind, same_anon_struct_ref,
+};
+use swamp_script_semantic::{Postfix, SingleMutLocationExpression, same_array_ref};
 use tracing::{error, info};
 
 pub mod err;
@@ -929,6 +929,27 @@ impl<'a, C> Interpreter<'a, C> {
                 )
             }
 
+            ExpressionKind::AnonymousStructLiteral(struct_instantiation) => {
+                // Evaluate all field expressions and validate types
+                let mut field_values =
+                    Vec::with_capacity(struct_instantiation.source_order_expressions.len());
+                field_values.resize_with(
+                    struct_instantiation.source_order_expressions.len(),
+                    Default::default,
+                );
+
+                // They are evaluated in source order, but an array_index is provided for the definition order
+                for (array_index, field_expr) in &struct_instantiation.source_order_expressions {
+                    let value = self.evaluate_expression(field_expr)?;
+                    field_values[*array_index] = value;
+                }
+
+                Value::AnonymousStruct(
+                    struct_instantiation.anonymous_struct_type.clone(),
+                    convert_vec_to_rc_refcell(field_values),
+                )
+            }
+
             ExpressionKind::Range(start, end, range_mode) => {
                 let start_val = self.evaluate_expression(start)?;
                 let end_val = self.evaluate_expression(end)?;
@@ -1828,7 +1849,7 @@ impl<'a, C> Interpreter<'a, C> {
                         (struct_ref.clone(), fields_ref.clone())
                     };
 
-                    assert!(same_struct_ref(
+                    assert!(same_anon_struct_ref(
                         &encountered_struct_type,
                         expected_struct_type
                     ));

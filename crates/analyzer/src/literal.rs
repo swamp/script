@@ -91,14 +91,17 @@ impl<'a> Analyzer<'a> {
                                 &*variant_ref
                             {
                                 if anonym_struct_field_and_expressions.len()
-                                    != resolved_variant_struct_ref.anon_struct.defined_fields.len()
+                                    != resolved_variant_struct_ref
+                                        .anon_struct
+                                        .field_name_sorted_fields
+                                        .len()
                                 {
                                     return Err(self.create_err(
                                         ErrorKind::WrongNumberOfArguments(
                                             anonym_struct_field_and_expressions.len(),
                                             resolved_variant_struct_ref
                                                 .anon_struct
-                                                .defined_fields
+                                                .field_name_sorted_fields
                                                 .len(),
                                         ),
                                         &variant.0,

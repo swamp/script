@@ -3,8 +3,8 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use crate::err::{Error, ErrorKind};
 use crate::Analyzer;
+use crate::err::{Error, ErrorKind};
 use seq_map::SeqMap;
 use std::rc::Rc;
 use swamp_script_semantic::{
@@ -14,7 +14,6 @@ use swamp_script_semantic::{
     LocalIdentifier, LocalTypeIdentifier, NamedStructType, ParameterNode, Signature,
     StructTypeField, StructTypeRef, Type, TypeForParameter, UseItem,
 };
-use swamp_script_semantic::AnonymousStructTypeRef;
 
 impl<'a> Analyzer<'a> {
     fn analyze_mod_definition(
@@ -226,9 +225,7 @@ impl<'a> Analyzer<'a> {
 
                     let enum_variant_struct_type = EnumVariantStructType {
                         common,
-                        anon_struct: AnonymousStructType {
-                            defined_fields: fields,
-                        },
+                        anon_struct: AnonymousStructType::new(fields),
                     };
 
                     let enum_variant_struct_type_ref = Rc::new(enum_variant_struct_type);
@@ -281,11 +278,22 @@ impl<'a> Analyzer<'a> {
 
     pub fn analyze_anonymous_struct_type(
         &mut self,
-        ast_struct: &swamp_script_ast::StructType,
-    ) -> Result<AnonymousStructTypeRef, Error> {
+        ast_struct: &swamp_script_ast::AnonymousStructType,
+    ) -> Result<AnonymousStructType, Error> {
+        let resolved_fields = self.analyze_anonymous_struct_type_fields(&ast_struct.fields)?;
+
+        let resolved_anon_struct = AnonymousStructType::new_and_sort_fields(resolved_fields);
+
+        Ok(resolved_anon_struct.into())
+    }
+
+    pub fn analyze_anonymous_struct_type_fields(
+        &mut self,
+        ast_struct_fields: &[swamp_script_ast::StructTypeField],
+    ) -> Result<SeqMap<String, StructTypeField>, Error> {
         let mut resolved_fields = SeqMap::new();
 
-        for (_index, field_name_and_type) in ast_struct.fields.iter().enumerate() {
+        for (_index, field_name_and_type) in ast_struct_fields.iter().enumerate() {
             let resolved_type = self.analyze_type(&field_name_and_type.field_type)?;
             let name_string = self.get_text(&field_name_and_type.field_name.0).to_string();
 
@@ -304,23 +312,21 @@ impl<'a> Analyzer<'a> {
                 })?;
         }
 
-        let resolved_anon_struct = AnonymousStructType {
-            defined_fields: resolved_fields,
-        };
-
-        Ok(resolved_anon_struct.into())
+        Ok(resolved_fields)
     }
 
     /// # Errors
     ///
-    pub fn analyze_struct_type_definition(
+    pub fn analyze_named_struct_type_definition(
         &mut self,
-        ast_struct_def: &swamp_script_ast::StructDef,
+        ast_struct_def: &swamp_script_ast::NamedStructDef,
     ) -> Result<(), Error> {
         let struct_name_str = self.get_text(&ast_struct_def.identifier.0).to_string();
 
-        let analyzed_anonymous_struct =
-            self.analyze_anonymous_struct_type(&ast_struct_def.struct_type)?;
+        let fields =
+            self.analyze_anonymous_struct_type_fields(&ast_struct_def.struct_type.fields)?;
+
+        let analyzed_anonymous_struct = AnonymousStructType::new(fields); // the order encountered in source should be kept
 
         let named_struct_type = NamedStructType {
             name: self.to_node(&ast_struct_def.identifier.0),
@@ -458,8 +464,8 @@ impl<'a> Analyzer<'a> {
         ast_def: &swamp_script_ast::Definition,
     ) -> Result<(), Error> {
         let resolved_def = match ast_def {
-            swamp_script_ast::Definition::StructDef(ast_struct) => {
-                self.analyze_struct_type_definition(ast_struct)?
+            swamp_script_ast::Definition::NamedStructDef(ast_struct) => {
+                self.analyze_named_struct_type_definition(ast_struct)?
             }
             swamp_script_ast::Definition::AliasDef(alias_def) => {
                 self.analyze_alias_type_definition(alias_def)?;

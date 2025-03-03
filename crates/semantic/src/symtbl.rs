@@ -231,7 +231,7 @@ impl SymbolTable {
         let struct_type = NamedStructType {
             name: Node::default(),
             assigned_name: name.to_string(),
-            anon_struct_type: Rc::new(AnonymousStructType { defined_fields }),
+            anon_struct_type: AnonymousStructType::new(defined_fields),
             functions: SeqMap::default(),
         };
 

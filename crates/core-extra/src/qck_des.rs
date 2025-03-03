@@ -73,7 +73,7 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
             for struct_field_type in struct_type_ref
                 .borrow()
                 .anon_struct_type
-                .defined_fields
+                .field_name_sorted_fields
                 .values()
             {
                 let (value, octet_size) =

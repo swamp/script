@@ -6,15 +6,15 @@ pub mod prelude;
 
 use pest::error::{Error, ErrorVariant, InputLocation};
 use pest::iterators::Pair;
-use pest::Parser;
+use pest::{Parser, Position};
 use pest_derive::Parser;
 use std::iter::Peekable;
 use std::str::Chars;
 use swamp_script_ast::{
-    prelude::*, AssignmentOperatorKind, BinaryOperatorKind, CompoundOperator,
-    CompoundOperatorKind, EnumVariantLiteral, ExpressionKind, FieldExpression, FieldName, ForPattern,
-    ForVar, IterableExpression, Mod, PatternElement, QualifiedIdentifier, RangeMode,
-    SpanWithoutFileId, StructDef, StructTypeField, TypeForParameter, VariableBinding,
+    AssignmentOperatorKind, BinaryOperatorKind, CompoundOperator, CompoundOperatorKind,
+    EnumVariantLiteral, ExpressionKind, FieldExpression, FieldName, ForPattern, ForVar,
+    IterableExpression, Mod, NamedStructDef, PatternElement, QualifiedIdentifier, RangeMode,
+    SpanWithoutFileId, StructTypeField, TypeForParameter, VariableBinding, prelude::*,
 };
 use swamp_script_ast::{Function, WhenBinding};
 use swamp_script_ast::{LiteralKind, MutableOrImmutableExpression};
@@ -142,7 +142,7 @@ impl AstParser {
                 ErrorVariant::CustomError {
                     message: "Expected more tokens".into(),
                 },
-                pest::Position::from_start(""),
+                Position::from_start(""),
             )
         })?)
     }
@@ -729,24 +729,34 @@ impl AstParser {
         Ok(fields)
     }
 
-    fn parse_struct_type(&self, pair: &Pair<Rule>) -> Result<StructType, ParseError> {
+    fn parse_struct_type(&self, pair: &Pair<Rule>) -> Result<AnonymousStructType, ParseError> {
         assert_eq!(pair.as_rule(), Rule::struct_type);
         let fields = Self::right_alternative(pair)?;
         let fields = self.parse_struct_type_fields(&fields)?;
-        let struct_type = StructType::new(fields);
+        let struct_type = AnonymousStructType::new(fields);
         Ok(struct_type)
     }
 
     fn parse_struct_def(&self, pair: &Pair<Rule>) -> Result<Definition, ParseError> {
         let mut inner = Self::convert_into_iterator(pair);
 
-        let struct_name = self.expect_local_type_identifier_next(&mut inner)?;
+        let struct_name = self.parse_local_type_identifier(&inner.next().unwrap())?;
 
-        let field_definitions_pair_result = Self::next_pair(&mut inner)?;
+        // struct_type is optional
+        // it is valid syntax to just do:
+        // `struct SomeStruct`
+        let struct_type_pair_option = inner.next();
+        let struct_type_result = match struct_type_pair_option {
+            Some(struct_type_pair) => Some(self.parse_struct_type(&struct_type_pair)?),
+            None => None,
+        };
 
-        let struct_type = self.parse_struct_type(&field_definitions_pair_result)?;
+        let struct_type = struct_type_result.map_or_else(
+            || AnonymousStructType::new(vec![]),
+            |found_result| found_result,
+        );
 
-        Ok(Definition::StructDef(StructDef {
+        Ok(Definition::NamedStructDef(NamedStructDef {
             identifier: struct_name,
             struct_type,
         }))
@@ -1548,17 +1558,14 @@ impl AstParser {
         }
     }
 
-    fn parse_struct_literal(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
-        let mut inner = Self::convert_into_iterator(pair);
-
-        let type_pair = inner.next().unwrap();
-
-        let struct_name = self.parse_qualified_type_identifier(&type_pair)?;
-
+    fn parse_optional_struct_fields_expressions<'a>(
+        &self,
+        iterator: &mut impl Iterator<Item = Pair<'a, Rule>>,
+    ) -> Result<(Vec<FieldExpression>, bool), ParseError> {
         let mut fields = Vec::new();
         let mut has_rest = false;
 
-        if let Some(field_list) = inner.next() {
+        if let Some(field_list) = iterator.next() {
             for field_pair in field_list.into_inner() {
                 match field_pair.as_rule() {
                     Rule::struct_field => {
@@ -1583,6 +1590,25 @@ impl AstParser {
                 }
             }
         }
+
+        Ok((fields, has_rest))
+    }
+
+    fn parse_anonymous_struct_literal(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
+        let mut inner = Self::convert_into_iterator(pair);
+
+        let (fields, has_rest) = self.parse_optional_struct_fields_expressions(&mut inner)?;
+        Ok(self.create_expr(ExpressionKind::AnonymousStructLiteral(fields), pair))
+    }
+
+    fn parse_struct_literal(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
+        let mut inner = Self::convert_into_iterator(pair);
+
+        let type_pair = inner.next().unwrap();
+
+        let struct_name = self.parse_qualified_type_identifier(&type_pair)?;
+
+        let (fields, has_rest) = self.parse_optional_struct_fields_expressions(&mut inner)?;
 
         Ok(self.create_expr(
             ExpressionKind::StructLiteral(struct_name, fields, has_rest),
@@ -1640,6 +1666,7 @@ impl AstParser {
                 Ok(self.create_expr_span(ExpressionKind::Literal(literal), node))
             }
             Rule::struct_literal => self.parse_struct_literal(sub),
+            Rule::anonymous_struct_literal => self.parse_anonymous_struct_literal(sub),
 
             Rule::interpolated_string => self.parse_interpolated_string(sub),
             /*
@@ -2157,7 +2184,7 @@ impl AstParser {
 
             Rule::struct_type => {
                 let element_type = self.parse_struct_type(&pair)?;
-                Ok(Type::Struct(element_type))
+                Ok(Type::AnonymousStruct(element_type))
             }
 
             _ => Err(self.create_error_pair(SpecificError::UnexpectedTypeRule, &pair)),
