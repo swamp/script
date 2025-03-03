@@ -288,12 +288,14 @@ const_def = {
     "const" ~ constant_identifier ~ "=" ~ expression
 }
 
+all_imports = { "*" }
+
 use_def = {
-    "use" ~ import_path ~ ("::" ~ "{" ~ import_list ~ "}")?
+    "use" ~ import_path ~ ("::" ~ (all_imports | "{" ~ import_list ~ "}"))?
 }
 
 mod_def = {
-    "mod" ~ import_path ~ ("::" ~ "{" ~ import_list ~ "}")?
+    "mod" ~ import_path ~ ("::" ~ (all_imports | "{" ~ import_list ~ "}"))?
 }
 
 import_path = { identifier ~ ("::" ~ identifier)* }

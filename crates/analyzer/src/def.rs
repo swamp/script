@@ -20,7 +20,7 @@ impl<'a> Analyzer<'a> {
     fn general_import(
         &mut self,
         path: &[String],
-        import_items: &[swamp_script_ast::ImportItem],
+        import_items: &swamp_script_ast::ImportItems,
         node: &swamp_script_ast::Node,
     ) -> Result<(), Error> {
         let found_module = self
@@ -28,58 +28,69 @@ impl<'a> Analyzer<'a> {
             .get_module(&path)
             .ok_or_else(|| self.create_err(ErrorKind::UnknownModule, &node))?
             .clone();
-        if import_items.is_empty() {
-            let last_name = path.last().unwrap();
-            self.shared
-                .lookup_table
-                .add_module_link(last_name, found_module.clone())
-                .map_err(|err| self.create_err(ErrorKind::SemanticError(err), &node))?;
-        }
 
-        for ast_items in import_items {
-            match ast_items {
-                swamp_script_ast::ImportItem::Identifier(node) => {
-                    let ident_resolved_node = self.to_node(&node.0);
-                    let ident = UseItem::Identifier(ident_resolved_node.clone());
-                    let ident_text = self.get_text_resolved(&ident_resolved_node).to_string();
-                    if let Some(found_symbol) =
-                        found_module.namespace.symbol_table.get_symbol(&ident_text)
-                    {
-                        self.shared
-                            .lookup_table
-                            .add_symbol(&ident_text, found_symbol.clone())
-                            .map_err(|err| {
-                                self.create_err(ErrorKind::SemanticError(err), &node.0)
-                            })?;
-                    } else {
-                        return Err(self.create_err_resolved(
-                            ErrorKind::UnknownTypeReference,
-                            &ident_resolved_node,
-                        ));
-                    }
-                    ident
+        match import_items {
+            swamp_script_ast::ImportItems::Nothing => {
+                let last_name = path.last().unwrap();
+                self.shared
+                    .lookup_table
+                    .add_module_link(last_name, found_module.clone())
+                    .map_err(|err| self.create_err(ErrorKind::SemanticError(err), &node))?;
+            }
+            swamp_script_ast::ImportItems::Items(items) => {
+                for ast_items in items {
+                    match ast_items {
+                        swamp_script_ast::ImportItem::Identifier(node) => {
+                            let ident_resolved_node = self.to_node(&node.0);
+                            let ident = UseItem::Identifier(ident_resolved_node.clone());
+                            let ident_text =
+                                self.get_text_resolved(&ident_resolved_node).to_string();
+                            if let Some(found_symbol) =
+                                found_module.namespace.symbol_table.get_symbol(&ident_text)
+                            {
+                                self.shared
+                                    .lookup_table
+                                    .add_symbol(&ident_text, found_symbol.clone())
+                                    .map_err(|err| {
+                                        self.create_err(ErrorKind::SemanticError(err), &node.0)
+                                    })?;
+                            } else {
+                                return Err(self.create_err_resolved(
+                                    ErrorKind::UnknownTypeReference,
+                                    &ident_resolved_node,
+                                ));
+                            }
+                            ident
+                        }
+                        swamp_script_ast::ImportItem::Type(node) => {
+                            let ident_resolved_node = self.to_node(&node.0);
+                            let ident_text =
+                                self.get_text_resolved(&ident_resolved_node).to_string();
+                            if let Some(found_symbol) =
+                                found_module.namespace.symbol_table.get_symbol(&ident_text)
+                            {
+                                self.shared
+                                    .lookup_table
+                                    .add_symbol(&ident_text, found_symbol.clone())
+                                    .map_err(|err| {
+                                        self.create_err(ErrorKind::SemanticError(err), &node.0)
+                                    })?;
+                            } else {
+                                return Err(self.create_err_resolved(
+                                    ErrorKind::UnknownTypeReference,
+                                    &ident_resolved_node,
+                                ));
+                            }
+                            UseItem::TypeIdentifier(self.to_node(&node.0))
+                        }
+                    };
                 }
-                swamp_script_ast::ImportItem::Type(node) => {
-                    let ident_resolved_node = self.to_node(&node.0);
-                    let ident_text = self.get_text_resolved(&ident_resolved_node).to_string();
-                    if let Some(found_symbol) =
-                        found_module.namespace.symbol_table.get_symbol(&ident_text)
-                    {
-                        self.shared
-                            .lookup_table
-                            .add_symbol(&ident_text, found_symbol.clone())
-                            .map_err(|err| {
-                                self.create_err(ErrorKind::SemanticError(err), &node.0)
-                            })?;
-                    } else {
-                        return Err(self.create_err_resolved(
-                            ErrorKind::UnknownTypeReference,
-                            &ident_resolved_node,
-                        ));
-                    }
-                    UseItem::TypeIdentifier(self.to_node(&node.0))
-                }
-            };
+            }
+            swamp_script_ast::ImportItems::All => {
+                self.shared
+                    .lookup_table
+                    .extend_from(&found_module.namespace.symbol_table);
+            }
         }
 
         Ok(())

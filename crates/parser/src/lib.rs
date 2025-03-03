@@ -13,8 +13,8 @@ use std::str::Chars;
 use swamp_script_ast::{
     AssignmentOperatorKind, BinaryOperatorKind, CompoundOperator, CompoundOperatorKind,
     EnumVariantLiteral, ExpressionKind, FieldExpression, FieldName, ForPattern, ForVar,
-    IterableExpression, Mod, NamedStructDef, PatternElement, QualifiedIdentifier, RangeMode,
-    SpanWithoutFileId, StructTypeField, TypeForParameter, VariableBinding, prelude::*,
+    ImportItems, IterableExpression, Mod, NamedStructDef, PatternElement, QualifiedIdentifier,
+    RangeMode, SpanWithoutFileId, StructTypeField, TypeForParameter, VariableBinding, prelude::*,
 };
 use swamp_script_ast::{Function, WhenBinding};
 use swamp_script_ast::{LiteralKind, MutableOrImmutableExpression};
@@ -366,7 +366,7 @@ impl AstParser {
     fn module_path_and_items(
         &self,
         pair: &Pair<Rule>,
-    ) -> Result<(Vec<Node>, Vec<ImportItem>), ParseError> {
+    ) -> Result<(Vec<Node>, ImportItems), ParseError> {
         let mut inner = Self::convert_into_iterator(pair);
         let import_path = Self::next_pair(&mut inner)?;
 
@@ -376,31 +376,37 @@ impl AstParser {
         }
 
         let items = match inner.next() {
-            Some(import_list) => {
-                let mut imported_items = Vec::new();
-                for list_item in import_list.into_inner() {
-                    let item = Self::next_pair(&mut list_item.into_inner())?;
+            Some(found_rule) => match found_rule.as_rule() {
+                Rule::all_imports => ImportItems::All,
+                Rule::import_list => {
+                    let mut imported_items = Vec::new();
+                    for list_item in found_rule.into_inner() {
+                        let item = Self::next_pair(&mut list_item.into_inner())?;
 
-                    let import_item = match item.as_rule() {
-                        Rule::identifier => {
-                            ImportItem::Identifier(LocalIdentifier::new(self.to_node(&item)))
-                        }
-                        Rule::type_identifier => {
-                            ImportItem::Type(LocalTypeIdentifier::new(self.to_node(&item)))
-                        }
-                        _ => {
-                            return Err(
-                                self.create_error_pair(SpecificError::ExpectedIdentifier, &item)
-                            );
-                        }
-                    };
+                        let import_item = match item.as_rule() {
+                            Rule::identifier => {
+                                ImportItem::Identifier(LocalIdentifier::new(self.to_node(&item)))
+                            }
+                            Rule::type_identifier => {
+                                ImportItem::Type(LocalTypeIdentifier::new(self.to_node(&item)))
+                            }
+                            _ => {
+                                return Err(self
+                                    .create_error_pair(SpecificError::ExpectedIdentifier, &item));
+                            }
+                        };
 
-                    imported_items.push(import_item);
+                        imported_items.push(import_item);
+                    }
+                    if imported_items.is_empty() {
+                        ImportItems::Nothing
+                    } else {
+                        ImportItems::Items(imported_items)
+                    }
                 }
-
-                imported_items
-            }
-            _ => Vec::new(),
+                _ => panic!("was not all_imports or import_list"),
+            },
+            None => ImportItems::Nothing,
         };
 
         Ok((segments, items))

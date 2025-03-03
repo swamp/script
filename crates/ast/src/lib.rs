@@ -152,15 +152,22 @@ pub enum ImportItem {
 }
 
 #[derive(Debug)]
+pub enum ImportItems {
+    Nothing,
+    Items(Vec<ImportItem>),
+    All,
+}
+
+#[derive(Debug)]
 pub struct Mod {
     pub module_path: ModulePath,
-    pub items: Vec<ImportItem>,
+    pub items: ImportItems,
 }
 
 #[derive(Debug)]
 pub struct Use {
     pub module_path: ModulePath,
-    pub items: Vec<ImportItem>,
+    pub items: ImportItems,
 }
 
 #[derive(Debug, Eq, PartialEq)]
