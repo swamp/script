@@ -183,7 +183,8 @@ pub enum Type {
     // Containers
     Array(ArrayTypeRef),
     Tuple(TupleTypeRef),
-    Struct(StructTypeRef),
+    NamedStruct(StructTypeRef),
+    AnonymousStruct(AnonymousStructTypeRef),
     Map(MapTypeRef),
 
     Enum(EnumTypeRef),
@@ -214,8 +215,11 @@ impl Debug for Type {
             Self::Never => write!(f, "!"),
             Self::Array(array_type_ref) => write!(f, "[{:?}]", array_type_ref.item_type),
             Self::Tuple(tuple_type_ref) => write!(f, "( {:?} )", tuple_type_ref.0),
-            Self::Struct(struct_type_ref) => {
+            Self::NamedStruct(struct_type_ref) => {
                 write!(f, "{}", struct_type_ref.borrow().assigned_name)
+            }
+            Self::AnonymousStruct(anonymous_struct_type) => {
+                write!(f, "{:?}", anonymous_struct_type)
             }
             Self::Map(map_type_ref) => write!(
                 f,
@@ -245,7 +249,8 @@ impl Display for Type {
             Self::Never => write!(f, "!"),
             Self::Array(array_ref) => write!(f, "[{}]", &array_ref.item_type.to_string()),
             Self::Tuple(tuple) => write!(f, "({})", comma(&tuple.0)),
-            Self::Struct(struct_ref) => write!(f, "{}", struct_ref.borrow().assigned_name),
+            Self::NamedStruct(struct_ref) => write!(f, "{}", struct_ref.borrow().assigned_name),
+            Self::AnonymousStruct(struct_ref) => write!(f, "{:?}", struct_ref),
             Self::Map(map_ref) => write!(f, "[{}:{}]", map_ref.key_type, map_ref.value_type),
             Self::Generic(base_type, params) => write!(f, "{base_type}<{}>", comma(params)),
             Self::Enum(enum_type) => write!(f, "{}", enum_type.borrow().assigned_name),
@@ -283,7 +288,7 @@ pub enum SemanticError {
 impl Type {
     pub fn expect_struct_type(&self) -> Result<StructTypeRef, SemanticError> {
         match self {
-            Type::Struct(struct_type_ref) => Ok(struct_type_ref.clone()),
+            Type::NamedStruct(struct_type_ref) => Ok(struct_type_ref.clone()),
             _ => Err(SemanticError::ResolveNotStruct),
         }
     }
@@ -313,7 +318,7 @@ impl Type {
                 a.key_type.compatible_with(&b.key_type)
                     && a.value_type.compatible_with(&b.value_type)
             }
-            (Self::Struct(a), Self::Struct(b)) => compare_struct_types(a, b),
+            (Self::NamedStruct(a), Self::NamedStruct(b)) => compare_struct_types(a, b),
             (Self::Tuple(a), Self::Tuple(b)) => {
                 if a.0.len() != b.0.len() {
                     return false;
@@ -782,7 +787,7 @@ pub struct Range {
 
 #[derive(Debug)]
 pub enum PostfixKind {
-    StructField(StructTypeRef, usize),
+    StructField(AnonymousStructTypeRef, usize),
     ArrayIndex(ArrayTypeRef, Expression),
     ArrayRangeIndex(ArrayTypeRef, Range),
     StringIndex(Expression),
@@ -800,7 +805,7 @@ pub enum PostfixKind {
 
 #[derive(Debug)]
 pub enum LocationAccessKind {
-    FieldIndex(StructTypeRef, usize),
+    FieldIndex(AnonymousStructTypeRef, usize),
     ArrayIndex(ArrayTypeRef, Expression),
     ArrayRange(ArrayTypeRef, Range),
     StringIndex(Expression),
@@ -1052,7 +1057,7 @@ impl Display for ForPattern {
 #[derive(Debug, Eq, PartialEq)]
 pub struct ModulePathItem(pub Node);
 
-pub type StructTypeRef = Rc<RefCell<StructType>>;
+pub type StructTypeRef = Rc<RefCell<NamedStructType>>;
 
 pub fn same_struct_ref(a: &StructTypeRef, b: &StructTypeRef) -> bool {
     Rc::ptr_eq(a, b)
@@ -1082,23 +1087,23 @@ pub struct AliasType {
 pub type AliasTypeRef = Rc<AliasType>;
 
 #[derive(Eq, PartialEq)]
-pub struct StructType {
+pub struct NamedStructType {
     pub name: Node,
     pub assigned_name: String,
-    pub anon_struct_type: AnonymousStructType,
+    pub anon_struct_type: AnonymousStructTypeRef,
 
     //
     pub functions: SeqMap<String, FunctionRef>,
 }
 
-impl Debug for StructType {
+impl Debug for NamedStructType {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "struct {:?}", self.assigned_name)
     }
 }
 
-impl StructType {
-    pub fn new(name: Node, assigned_name: &str, anon_struct_type: AnonymousStructType) -> Self {
+impl NamedStructType {
+    pub fn new(name: Node, assigned_name: &str, anon_struct_type: AnonymousStructTypeRef) -> Self {
         Self {
             //defined_in_module,
             anon_struct_type,
@@ -1176,6 +1181,8 @@ pub type EnumVariantStructTypeRef = Rc<EnumVariantStructType>;
 pub struct AnonymousStructType {
     pub defined_fields: SeqMap<String, StructTypeField>,
 }
+
+pub type AnonymousStructTypeRef = Rc<AnonymousStructType>;
 
 impl Debug for AnonymousStructType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {

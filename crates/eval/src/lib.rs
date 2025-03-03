@@ -13,16 +13,16 @@ use swamp_script_core_extra::extra::{SparseValueId, SparseValueMap};
 use swamp_script_core_extra::prelude::ValueError;
 use swamp_script_core_extra::value::ValueRef;
 use swamp_script_core_extra::value::{
-    SourceMapLookup, Value, convert_vec_to_rc_refcell, format_value, to_rust_value,
+    convert_vec_to_rc_refcell, format_value, to_rust_value, SourceMapLookup, Value,
 };
 use swamp_script_semantic::prelude::*;
-use swamp_script_semantic::{ArgumentExpressionOrLocation, LocationAccess, LocationAccessKind};
+use swamp_script_semantic::{same_array_ref, Postfix, SingleMutLocationExpression};
 use swamp_script_semantic::{
-    BinaryOperatorKind, CompoundOperatorKind, ConstantId, ForPattern, Function,
-    MutOrImmutableExpression, NormalPattern, PatternElement, PostfixKind, SingleLocationExpression,
-    SingleLocationExpressionKind, UnaryOperatorKind, same_struct_ref,
+    same_struct_ref, BinaryOperatorKind, CompoundOperatorKind, ConstantId, ForPattern,
+    Function, MutOrImmutableExpression, NormalPattern, PatternElement, PostfixKind,
+    SingleLocationExpression, SingleLocationExpressionKind, UnaryOperatorKind,
 };
-use swamp_script_semantic::{Postfix, SingleMutLocationExpression, same_array_ref};
+use swamp_script_semantic::{ArgumentExpressionOrLocation, LocationAccess, LocationAccessKind};
 use tracing::{error, info};
 
 pub mod err;
@@ -923,7 +923,7 @@ impl<'a, C> Interpreter<'a, C> {
                     field_values[*array_index] = value;
                 }
 
-                Value::Struct(
+                Value::NamedStruct(
                     struct_instantiation.struct_type_ref.clone(),
                     convert_vec_to_rc_refcell(field_values),
                 )
@@ -1822,7 +1822,7 @@ impl<'a, C> Interpreter<'a, C> {
                 PostfixKind::StructField(expected_struct_type, index) => {
                     let (encountered_struct_type, fields) = {
                         let brw = val_ref.borrow();
-                        let (struct_ref, fields_ref) = brw.expect_struct().map_err(|_| {
+                        let (struct_ref, fields_ref) = brw.expect_anon_struct().map_err(|_| {
                             self.create_err(ExecuteErrorKind::PostfixChainError, &part.node)
                         })?;
                         (struct_ref.clone(), fields_ref.clone())

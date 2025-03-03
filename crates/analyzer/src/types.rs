@@ -3,8 +3,8 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use crate::Analyzer;
 use crate::err::Error;
+use crate::Analyzer;
 use std::rc::Rc;
 use swamp_script_semantic::{
     ArrayType, ArrayTypeRef, MapType, MapTypeRef, Signature, TupleType, Type, TypeForParameter,
@@ -66,8 +66,8 @@ impl<'a> Analyzer<'a> {
             swamp_script_ast::Type::Bool(_) => Type::Bool,
             swamp_script_ast::Type::Unit(_) => Type::Unit,
             swamp_script_ast::Type::Struct(ast_struct) => {
-                let struct_ref = self.get_struct_type(ast_struct)?;
-                Type::Struct(struct_ref)
+                let struct_ref = self.analyze_anonymous_struct_type(ast_struct)?;
+                Type::AnonymousStruct(struct_ref.into())
             }
             swamp_script_ast::Type::Array(ast_type) => {
                 Type::Array(self.analyze_array_type(ast_type)?)

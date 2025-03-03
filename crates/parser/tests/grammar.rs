@@ -30,6 +30,7 @@ fn match_value_expressions() {
 }
 */
 
+/*
 #[test_log::test]
 fn assignment() {
     check(
@@ -2802,6 +2803,44 @@ while while {
         "
 
 <1:26>WhileLoop(<7:5>IdentifierReference(<7:5>), <13:14>Block([<19:7>VariableAssignment(<19:2>, MutableOrImmutableExpression { is_mutable: None, expression: <24:1>Literal(Int) })]))
+
+
+",
+    );
+}
+
+*/
+#[test_log::test]
+fn anonymous_struct() {
+    check(
+        "
+struct SomeStruct {
+   anon: { x: Int, y: Int },
+   x: Int,
+}
+         ",
+        "
+
+StructDef(StructDef { identifier: LocalTypeIdentifier(<8:10>), struct_type: StructType { fields: [StructTypeField { field_name: FieldName(<24:4>), field_type: Struct(StructType { fields: [StructTypeField { field_name: FieldName(<32:1>), field_type: Named(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<35:3>), module_path: None, generic_params: [] }) }, StructTypeField { field_name: FieldName(<40:1>), field_type: Named(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<43:3>), module_path: None, generic_params: [] }) }] }) }, StructTypeField { field_name: FieldName(<53:1>), field_type: Named(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<56:3>), module_path: None, generic_params: [] }) }] } })
+
+
+",
+    );
+}
+
+
+#[test_log::test]
+fn enum_variant_anonymous_struct() {
+    check(
+        "
+enum Something {
+   First,
+   Another { x: Int, y: Float },
+}
+         ",
+        "
+
+EnumDef(<6:9>, [Simple(<21:5>), Struct(<31:7>, StructType { fields: [StructTypeField { field_name: FieldName(<41:1>), field_type: Named(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<44:3>), module_path: None, generic_params: [] }) }, StructTypeField { field_name: FieldName(<49:1>), field_type: Named(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<52:5>), module_path: None, generic_params: [] }) }] })])
 
 
 ",

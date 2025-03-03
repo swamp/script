@@ -901,7 +901,7 @@ impl<'a> Analyzer<'a> {
     ) -> Result<StructTypeRef, Error> {
         let maybe_struct_type = self.analyze_named_type(qualified_type_identifier)?;
         match maybe_struct_type {
-            Type::Struct(struct_type) => Ok(struct_type),
+            Type::NamedStruct(struct_type) => Ok(struct_type),
             _ => Err(self.create_err(
                 // For other Type variants that are not Struct
                 ErrorKind::UnknownStructTypeReference,
@@ -1011,7 +1011,7 @@ impl<'a> Analyzer<'a> {
             }
             Type::Optional(_optional_type) => ExpressionKind::Literal(Literal::NoneLiteral),
 
-            Type::Struct(struct_ref) => self.create_default_static_call(node, struct_ref)?,
+            Type::NamedStruct(struct_ref) => self.create_default_static_call(node, struct_ref)?,
             _ => {
                 return Err(
                     self.create_err(ErrorKind::NoDefaultImplemented(field_type.clone()), node)
@@ -1091,25 +1091,25 @@ impl<'a> Analyzer<'a> {
         &mut self,
         field_name: &swamp_script_ast::Node,
         tv: Type,
-    ) -> Result<(StructTypeRef, usize, Type), Error> {
+    ) -> Result<(AnonymousStructTypeRef, usize, Type), Error> {
         let field_name_str = self.get_text(field_name).to_string();
 
-        if let Type::Struct(struct_type) = &tv {
-            if let Some(found_field) = struct_type
-                .borrow()
-                .anon_struct_type
-                .defined_fields
-                .get(&field_name_str)
-            {
-                let index = struct_type
-                    .borrow()
-                    .anon_struct_type
-                    .defined_fields
-                    .get_index(&field_name_str)
-                    .expect("checked earlier");
+        let anon_struct_ref = match &tv {
+            Type::NamedStruct(struct_type) => struct_type.borrow().anon_struct_type,
+            Type::AnonymousStruct(anon_struct) => anon_struct.clone(),
+        };
 
-                return Ok((struct_type.clone(), index, found_field.field_type.clone()));
-            }
+        if let Some(found_field) = anon_struct_ref.defined_fields.get(&field_name_str) {
+            let index = anon_struct_ref
+                .defined_fields
+                .get_index(&field_name_str)
+                .expect("checked earlier");
+
+            return Ok((
+                anon_struct_ref.clone(),
+                index,
+                found_field.field_type.clone(),
+            ));
         }
 
         Err(self.create_err(ErrorKind::UnknownStructField, field_name))
@@ -1173,7 +1173,7 @@ impl<'a> Analyzer<'a> {
                         tv.resolved_type = found_internal.ty.clone();
                         tv.is_mutable = false;
                         suffixes.push(found_internal);
-                    } else if let Type::Struct(struct_type) = &tv.resolved_type.clone() {
+                    } else if let Type::NamedStruct(struct_type) = &tv.resolved_type.clone() {
                         let return_type = self.analyze_postfix_member_call(
                             struct_type,
                             tv.is_mutable,
@@ -2712,7 +2712,7 @@ impl<'a> Analyzer<'a> {
         let self_type = &signature.parameters[0];
         if !self_type
             .resolved_type
-            .compatible_with(&Type::Struct(struct_type.clone()))
+            .compatible_with(&Type::NamedStruct(struct_type.clone()))
             || self_type.is_mutable && !is_mutable
         {
             return Err(self.create_err_resolved(ErrorKind::SelfNotCorrectType, resolved_node));
@@ -2745,7 +2745,8 @@ impl<'a> Analyzer<'a> {
     ) -> Result<Vec<Postfix>, Error> {
         let mut suffixes = Vec::new();
         //let field_name_str = self.get_text(member_name).to_string();
-        let struct_field_kind = PostfixKind::StructField(struct_type.clone(), index);
+        let struct_field_kind =
+            PostfixKind::StructField(struct_type.borrow().anon_struct_type.clone(), index);
 
         let struct_field_postfix = Postfix {
             node: resolved_node.clone(),

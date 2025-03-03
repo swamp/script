@@ -27,7 +27,7 @@ impl<'a> Analyzer<'a> {
         let temp_var = self.create_local_variable_generated(
             "__generated",
             true,
-            &Type::Struct(struct_to_instantiate.clone()),
+            &Type::NamedStruct(struct_to_instantiate.clone()),
         )?;
 
         // temp_var = StructType::default()
@@ -130,7 +130,7 @@ impl<'a> Analyzer<'a> {
             }
         }
 
-        let ty = Type::Struct(struct_to_instantiate.clone());
+        let ty = Type::NamedStruct(struct_to_instantiate.clone());
 
         Ok(self.create_expr(
             ExpressionKind::StructInstantiation(StructInstantiation {
@@ -183,7 +183,7 @@ impl<'a> Analyzer<'a> {
                 }
             }
         } else if missing_fields.is_empty() {
-            let ty = Type::Struct(struct_to_instantiate.clone());
+            let ty = Type::NamedStruct(struct_to_instantiate.clone());
             let node = qualified_type_identifier.name.0.clone();
             let mapped: Vec<(usize, Expression)> = source_order_expressions
                 .into_iter()
@@ -303,7 +303,7 @@ impl<'a> Analyzer<'a> {
             return Err(self.create_err(
                 ErrorKind::MissingFieldInStructInstantiation(
                     missing_fields.to_vec(),
-                    struct_to_instantiate.clone(),
+                    struct_to_instantiate.clone().into(),
                 ),
                 node,
             ));

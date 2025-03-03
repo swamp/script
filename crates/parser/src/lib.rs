@@ -4,17 +4,17 @@
  */
 pub mod prelude;
 
-use pest::Parser;
 use pest::error::{Error, ErrorVariant, InputLocation};
 use pest::iterators::Pair;
+use pest::Parser;
 use pest_derive::Parser;
 use std::iter::Peekable;
 use std::str::Chars;
 use swamp_script_ast::{
-    AssignmentOperatorKind, BinaryOperatorKind, CompoundOperator, CompoundOperatorKind,
-    EnumVariantLiteral, ExpressionKind, FieldExpression, FieldName, FieldType, ForPattern, ForVar,
-    IterableExpression, Mod, PatternElement, QualifiedIdentifier, RangeMode, SpanWithoutFileId,
-    TypeForParameter, VariableBinding, prelude::*,
+    prelude::*, AssignmentOperatorKind, BinaryOperatorKind, CompoundOperator,
+    CompoundOperatorKind, EnumVariantLiteral, ExpressionKind, FieldExpression, FieldName, ForPattern,
+    ForVar, IterableExpression, Mod, PatternElement, QualifiedIdentifier, RangeMode,
+    SpanWithoutFileId, StructDef, StructTypeField, TypeForParameter, VariableBinding,
 };
 use swamp_script_ast::{Function, WhenBinding};
 use swamp_script_ast::{LiteralKind, MutableOrImmutableExpression};
@@ -701,33 +701,55 @@ impl AstParser {
         Ok(Definition::AliasDef(alias_type))
     }
 
+    fn parse_struct_type_field(&self, pair: &Pair<Rule>) -> Result<StructTypeField, ParseError> {
+        assert_eq!(pair.as_rule(), Rule::struct_type_field);
+
+        let mut field_inner = Self::convert_into_iterator(&pair);
+        let field_name = self.expect_field_label_next(&mut field_inner)?;
+        let field_type = self.parse_type(Self::next_pair(&mut field_inner)?)?;
+        let struct_type_field = StructTypeField {
+            field_name,
+            field_type,
+        };
+
+        Ok(struct_type_field)
+    }
+
+    fn parse_struct_type_fields(
+        &self,
+        pair: &Pair<Rule>,
+    ) -> Result<Vec<StructTypeField>, ParseError> {
+        assert_eq!(pair.as_rule(), Rule::struct_type_fields);
+        let mut fields = Vec::new();
+        for field_def in Self::convert_into_iterator(pair) {
+            let anonymous_struct_field = self.parse_struct_type_field(&field_def)?;
+
+            fields.push(anonymous_struct_field);
+        }
+        Ok(fields)
+    }
+
+    fn parse_struct_type(&self, pair: &Pair<Rule>) -> Result<StructType, ParseError> {
+        assert_eq!(pair.as_rule(), Rule::struct_type);
+        let fields = Self::right_alternative(pair)?;
+        let fields = self.parse_struct_type_fields(&fields)?;
+        let struct_type = StructType::new(fields);
+        Ok(struct_type)
+    }
+
     fn parse_struct_def(&self, pair: &Pair<Rule>) -> Result<Definition, ParseError> {
         let mut inner = Self::convert_into_iterator(pair);
 
         let struct_name = self.expect_local_type_identifier_next(&mut inner)?;
 
-        let field_definitions_pair_result = Self::next_pair(&mut inner);
-        let mut fields = Vec::new();
+        let field_definitions_pair_result = Self::next_pair(&mut inner)?;
 
-        if let Ok(field_definitions) = field_definitions_pair_result {
-            for field_def in Self::convert_into_iterator(&field_definitions) {
-                let mut field_parts = Self::convert_into_iterator(&field_def);
+        let struct_type = self.parse_struct_type(&field_definitions_pair_result)?;
 
-                let field_name = self.expect_field_label_next(&mut field_parts)?;
-                let field_type = self.parse_type(Self::next_pair(&mut field_parts)?)?;
-
-                let anonymous_struct_field = FieldType {
-                    field_name,
-                    field_type,
-                };
-
-                fields.push(anonymous_struct_field);
-            }
-        }
-
-        let struct_def = StructType::new(struct_name, fields);
-
-        Ok(Definition::StructDef(struct_def))
+        Ok(Definition::StructDef(StructDef {
+            identifier: struct_name,
+            struct_type,
+        }))
     }
 
     fn parse_function_def(&self, pair: &Pair<Rule>) -> Result<Definition, ParseError> {
@@ -1031,7 +1053,9 @@ impl AstParser {
                 )
             }
             _ => {
-                return Err(self.create_error_pair(SpecificError::InvalidForPattern, &inner_pattern));
+                return Err(
+                    self.create_error_pair(SpecificError::InvalidForPattern, &inner_pattern)
+                );
             }
         };
 
@@ -2131,6 +2155,11 @@ impl AstParser {
                 Ok(Type::Array(Box::new(element_type)))
             }
 
+            Rule::struct_type => {
+                let element_type = self.parse_struct_type(&pair)?;
+                Ok(Type::Struct(element_type))
+            }
+
             _ => Err(self.create_error_pair(SpecificError::UnexpectedTypeRule, &pair)),
         }
     }
@@ -2225,21 +2254,8 @@ impl AstParser {
                 let mut inner = Self::convert_into_iterator(pair);
                 let name = self.expect_local_type_identifier_next(&mut inner)?;
 
-                let mut fields = Vec::new();
-
-                for field_pair in inner {
-                    let mut field_inner = Self::convert_into_iterator(&field_pair);
-                    let field_name = self.expect_field_label_next(&mut field_inner)?;
-                    let field_type = self.parse_type(Self::next_pair(&mut field_inner)?)?;
-                    let anonymous_enum_variant_field = FieldType {
-                        field_name,
-                        field_type,
-                    };
-                    fields.push(anonymous_enum_variant_field);
-                }
-
-                let anon = AnonymousStructType { fields };
-                EnumVariantType::Struct(name.0, anon)
+                let struct_type = self.parse_struct_type(&inner.next().unwrap())?;
+                EnumVariantType::Struct(name.0, struct_type)
             }
             _ => {
                 return Err(self.create_error_pair(

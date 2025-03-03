@@ -67,7 +67,7 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
             }
             (Value::Tuple(tuple_type_ref.clone(), values), offset)
         }
-        Type::Struct(struct_type_ref) => {
+        Type::NamedStruct(struct_type_ref) => {
             let mut values = Vec::new();
             let mut offset = 0;
             for struct_field_type in struct_type_ref
@@ -81,7 +81,10 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
                 values.push(Rc::new(RefCell::new(value)));
                 offset += octet_size;
             }
-            (Value::Struct(struct_type_ref.clone(), values), offset)
+            (Value::NamedStruct(struct_type_ref.clone(), values), offset)
+        }
+        Type::AnonymousStruct(anon_struct_type) => {
+            todo!()
         }
         Type::Map(map_type_ref) => {
             let mut offset = 0;

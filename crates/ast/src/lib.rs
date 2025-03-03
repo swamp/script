@@ -169,16 +169,15 @@ pub struct AliasType {
     pub referenced_type: Type,
 }
 
-#[derive(Debug, Eq, PartialEq, Default)]
+#[derive(Debug, Eq, PartialEq, Hash, Default)]
 pub struct StructType {
-    pub identifier: LocalTypeIdentifier,
-    pub fields: Vec<FieldType>,
+    pub fields: Vec<StructTypeField>,
 }
 
 impl StructType {
     #[must_use]
-    pub const fn new(identifier: LocalTypeIdentifier, fields: Vec<FieldType>) -> Self {
-        Self { identifier, fields }
+    pub const fn new(fields: Vec<StructTypeField>) -> Self {
+        Self { fields }
     }
 }
 
@@ -189,9 +188,15 @@ pub struct ConstantInfo {
 }
 
 #[derive(Debug)]
+pub struct StructDef {
+    pub identifier: LocalTypeIdentifier,
+    pub struct_type: StructType,
+}
+
+#[derive(Debug)]
 pub enum Definition {
     AliasDef(AliasType),
-    StructDef(StructType),
+    StructDef(StructDef),
     EnumDef(Node, Vec<EnumVariantType>),
     FunctionDef(Function),
     ImplDef(Node, Vec<Function>),
@@ -432,8 +437,8 @@ pub struct FieldExpression {
     pub expression: Expression,
 }
 
-#[derive(Debug, Eq, PartialEq)]
-pub struct FieldType {
+#[derive(Debug, Eq, Hash, PartialEq)]
+pub struct StructTypeField {
     pub field_name: FieldName,
     pub field_type: Type,
 }
@@ -453,16 +458,11 @@ pub enum EnumVariantLiteral {
     ),
 }
 
-#[derive(Debug, Default)]
-pub struct AnonymousStructType {
-    pub fields: Vec<FieldType>,
-}
-
 #[derive(Debug)]
 pub enum EnumVariantType {
     Simple(Node),
     Tuple(Node, Vec<Type>),
-    Struct(Node, AnonymousStructType),
+    Struct(Node, StructType),
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -482,8 +482,8 @@ pub enum Type {
 
     // Composite
     Generic(Box<Type>, Vec<Type>),
-    Struct(QualifiedTypeIdentifier),
     Array(Box<Type>),
+    Struct(StructType),
     Map(Box<Type>, Box<Type>),
     Tuple(Vec<Type>),
     Enum(QualifiedTypeIdentifier),
