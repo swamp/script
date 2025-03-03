@@ -65,7 +65,10 @@ impl<'a> Analyzer<'a> {
         let found_module = self
             .shared
             .get_module(&path)
-            .ok_or_else(|| self.create_err(ErrorKind::UnknownModule, &use_definition.module_path.0[0]))?.clone();
+            .ok_or_else(|| {
+                self.create_err(ErrorKind::UnknownModule, &use_definition.module_path.0[0])
+            })?
+            .clone();
         if use_definition.items.is_empty() {
             let last_name = path.last().unwrap();
             self.shared
@@ -455,7 +458,7 @@ impl<'a> Analyzer<'a> {
         ast_def: &swamp_script_ast::Definition,
     ) -> Result<(), Error> {
         let resolved_def = match ast_def {
-            swamp_script_ast::Definition::StructDef(ref ast_struct) => {
+            swamp_script_ast::Definition::StructDef(ast_struct) => {
                 self.analyze_struct_type_definition(ast_struct)?
             }
             swamp_script_ast::Definition::AliasDef(alias_def) => {

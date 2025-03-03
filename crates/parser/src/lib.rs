@@ -515,14 +515,13 @@ impl AstParser {
 
         let variable = self.parse_variable_item(&inner.next().expect("variable missing"))?;
 
-        let expression = if let Some(expr_pair) = inner.next() {
-            self.parse_mutable_or_immutable_expression(&expr_pair)?
-        } else {
-            MutableOrImmutableExpression {
+        let expression = match inner.next() {
+            Some(expr_pair) => self.parse_mutable_or_immutable_expression(&expr_pair)?,
+            _ => MutableOrImmutableExpression {
                 expression: self
                     .create_expr(ExpressionKind::IdentifierReference(variable.clone()), pair),
                 is_mutable: None,
-            }
+            },
         };
 
         Ok(VariableBinding {
@@ -536,10 +535,9 @@ impl AstParser {
 
         let variable = self.parse_variable_item(&inner.next().expect("variable missing"))?;
 
-        let expression = if let Some(expr_pair) = inner.next() {
-            Some(self.parse_mutable_or_immutable_expression(&expr_pair)?)
-        } else {
-            None
+        let expression = match inner.next() {
+            Some(expr_pair) => Some(self.parse_mutable_or_immutable_expression(&expr_pair)?),
+            _ => None,
         };
 
         Ok(WhenBinding {
@@ -1656,14 +1654,15 @@ impl AstParser {
                         }
                     };
 
-                    let format = if let Some(fmt) = Self::convert_into_iterator(&part_pair).nth(1) {
-                        if fmt.as_rule() == Rule::format_specifier {
-                            Some(self.parse_format_specifier(&fmt)?)
-                        } else {
-                            None
+                    let format = match Self::convert_into_iterator(&part_pair).nth(1) {
+                        Some(fmt) => {
+                            if fmt.as_rule() == Rule::format_specifier {
+                                Some(self.parse_format_specifier(&fmt)?)
+                            } else {
+                                None
+                            }
                         }
-                    } else {
-                        None
+                        _ => None,
                     };
 
                     parts.push(StringPart::Interpolation(Box::new(expr), format));
@@ -1721,8 +1720,8 @@ impl AstParser {
         let variant_type_identifier = LocalTypeIdentifier::new(self.to_node(&variant_pair));
 
         // Parse fields if they exist
-        let enum_variant_literal = if let Some(fields_pair) = inner.next() {
-            match fields_pair.as_rule() {
+        let enum_variant_literal = match inner.next() {
+            Some(fields_pair) => match fields_pair.as_rule() {
                 Rule::struct_fields_lit => {
                     let mut fields = Vec::new();
                     for field in Self::convert_into_iterator(&fields_pair) {
@@ -1753,9 +1752,8 @@ impl AstParser {
                         self.create_error_pair(SpecificError::UnexpectedVariantField, &fields_pair)
                     );
                 }
-            }
-        } else {
-            EnumVariantLiteral::Simple(enum_type, variant_type_identifier)
+            },
+            _ => EnumVariantLiteral::Simple(enum_type, variant_type_identifier),
         };
 
         Ok(LiteralKind::EnumVariant(enum_variant_literal))

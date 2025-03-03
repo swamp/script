@@ -2782,38 +2782,45 @@ impl<'a> Analyzer<'a> {
 
         let resolved_node = self.to_node(member_name);
         let binding = struct_type.borrow();
-        let postfixes = if let Some(found_function_member) = binding.functions.get(&field_name_str)
-        {
-            let postfix = self.analyze_postfix_member_func_call(
-                &resolved_node,
-                found_function_member,
-                struct_type,
-                is_mutable,
-                arguments,
-            )?;
-            vec![postfix]
-        } else if let Some(found_field) =
-            binding.anon_struct_type.defined_fields.get(&field_name_str)
-        {
-            if let Type::Function(signature) = &found_field.field_type {
-                let index = binding
-                    .anon_struct_type
-                    .defined_fields
-                    .get_index(&field_name_str)
-                    .expect("should work");
-                self.analyze_postfix_field_call(
+        let postfixes = match binding.functions.get(&field_name_str) {
+            Some(found_function_member) => {
+                let postfix = self.analyze_postfix_member_func_call(
                     &resolved_node,
+                    found_function_member,
                     struct_type,
-                    found_field,
-                    index,
-                    signature,
+                    is_mutable,
                     arguments,
-                )?
-            } else {
-                return Err(self.create_err(ErrorKind::NotValidLocationStartingPoint, member_name));
+                )?;
+                vec![postfix]
             }
-        } else {
-            return Err(self.create_err(ErrorKind::NotValidLocationStartingPoint, member_name));
+            _ => match binding.anon_struct_type.defined_fields.get(&field_name_str) {
+                Some(found_field) => {
+                    if let Type::Function(signature) = &found_field.field_type {
+                        let index = binding
+                            .anon_struct_type
+                            .defined_fields
+                            .get_index(&field_name_str)
+                            .expect("should work");
+                        self.analyze_postfix_field_call(
+                            &resolved_node,
+                            struct_type,
+                            found_field,
+                            index,
+                            signature,
+                            arguments,
+                        )?
+                    } else {
+                        return Err(
+                            self.create_err(ErrorKind::NotValidLocationStartingPoint, member_name)
+                        );
+                    }
+                }
+                _ => {
+                    return Err(
+                        self.create_err(ErrorKind::NotValidLocationStartingPoint, member_name)
+                    );
+                }
+            },
         };
 
         let last_type = postfixes.last().unwrap().ty.clone();

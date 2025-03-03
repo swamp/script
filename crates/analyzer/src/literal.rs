@@ -50,7 +50,7 @@ impl<'a> Analyzer<'a> {
                 };
                 (Literal::BoolLiteral(bool_val), Type::Bool)
             }
-            swamp_script_ast::LiteralKind::EnumVariant(ref enum_literal) => {
+            swamp_script_ast::LiteralKind::EnumVariant(enum_literal) => {
                 let (enum_name, variant_name) = match enum_literal {
                     swamp_script_ast::EnumVariantLiteral::Simple(enum_name, variant_name) => {
                         (enum_name, variant_name)
