@@ -7,8 +7,8 @@ use fixed32::Fp;
 use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::rc::Rc;
-use swamp_script_core::prelude::Value;
-use swamp_script_core::qck_des::quick_deserialize;
+use swamp_script_core_extra::prelude::Value;
+use swamp_script_core_extra::qck_des::quick_deserialize;
 use swamp_script_eval::values_to_value_refs_owned;
 use swamp_script_semantic::{
     ResolvedAnonymousStructFieldType, ResolvedAnonymousStructType, ResolvedNode,

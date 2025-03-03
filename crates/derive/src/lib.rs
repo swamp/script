@@ -127,7 +127,7 @@ pub fn swamp_fn(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
         mod #module_name {
             use super::*;
-            use swamp_script_core::prelude::*;
+            use swamp_script_core_extra::prelude::*;
 
             pub struct Function {
                 pub name: &'static str,

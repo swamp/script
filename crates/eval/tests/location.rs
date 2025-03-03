@@ -1,7 +1,7 @@
 mod util;
 
 use crate::util::{check, eval};
-use swamp_script_core::prelude::Value;
+use swamp_script_core_extra::prelude::Value;
 
 #[test_log::test]
 fn mutable_location_field_access() {
@@ -61,18 +61,18 @@ fn field_chain_problem_output() {
         struct Inner {
             v: Int
         }
-        
+
         struct SomeStruct {
             something: Int,
            inner: Inner
         }
-        
+
         mut s = SomeStruct { something: 3, inner: Inner { v : 4 } }
-        
+
         print(s)
-        
+
         s.inner.v = 5
-        
+
         print(s)
     ",
         "

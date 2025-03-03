@@ -4,17 +4,16 @@
  */
 
 use std::path::Path;
-use swamp_script_analyzer::lookup::NameLookup;
 use swamp_script_analyzer::prelude::Error;
 use swamp_script_analyzer::Analyzer;
-use swamp_script_core::prelude::Value;
+use swamp_script_core_extra::prelude::Value;
 use swamp_script_eval::prelude::{ExecuteError, VariableValue};
 use swamp_script_eval::{eval_constants, eval_module, Constants, ExternalFunctions};
 use swamp_script_parser::AstParser;
-use swamp_script_semantic::modules::ResolvedModules;
+use swamp_script_semantic::modules::Modules;
 use swamp_script_semantic::{
-    ExternalFunctionId, ResolvedExpression, ResolvedExternalFunctionDefinition,
-    ResolvedProgramState, ResolvedType, ResolvedTypeForParameter, SemanticError, Signature,
+    ExternalFunctionId, Expression, ExternalFunctionDefinition,
+    ProgramState, Type, TypeForParameter, SemanticError, Signature,
 };
 use swamp_script_source_map::SourceMap;
 use swamp_script_source_map_lookup::SourceMapWrapper;
@@ -48,14 +47,16 @@ impl From<ExecuteError> for EvalTestError {
 fn internal_compile(
     script: &str,
     target_namespace: &[String],
-    modules: &mut ResolvedModules,
-) -> Result<(Option<ResolvedExpression>, SourceMap), Error> {
+    modules: &mut Modules,
+) -> Result<(Option<Expression>, SourceMap), Error> {
+    todo!()
+    /*
     let parser = AstParser {};
 
     let program = parser.parse_module(script).expect("Failed to parse script");
 
-    let mut state = ResolvedProgramState::new();
-    // let modules = ResolvedModules::new();
+    let mut state = ProgramState::new();
+    // let modules = Modules::new();
 
     let mut source_map = SourceMap::new(Path::new("tests/fixtures/"));
     let file_id = 0xffff;
@@ -80,24 +81,28 @@ fn internal_compile(
         .transpose()?;
 
     Ok((maybe_resolved_expression, source_map))
+
+     */
 }
 
 fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError> {
-    let mut modules = ResolvedModules::new();
+    todo!()
+    /*
+    let mut modules = Modules::new();
     let resolved_path_str = vec!["test".to_string()];
     let main_module = modules.add_empty_module(&resolved_path_str);
 
-    let external_print = ResolvedExternalFunctionDefinition {
+    let external_print = ExternalFunctionDefinition {
         name: None,
         assigned_name: "print".to_string(),
         signature: Signature {
-            parameters: vec![ResolvedTypeForParameter {
+            parameters: vec![TypeForParameter {
                 name: String::new(),
                 resolved_type: None,
                 is_mutable: false,
                 node: None,
             }],
-            return_type: Box::from(ResolvedType::Unit),
+            return_type: Box::from(Type::Unit),
         },
         id: 1,
     };
@@ -136,6 +141,8 @@ fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError>
     )?;
 
     Ok((value, context.output))
+    
+     */
 }
 
 pub struct TestContext {

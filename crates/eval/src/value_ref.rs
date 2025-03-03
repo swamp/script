@@ -27,7 +27,7 @@ impl ValueReference {
     pub(crate) fn into_iter_mut(self) -> Result<Box<dyn Iterator<Item = ValueRef>>, ValueError> {
         let inner = self.0.borrow();
         let result = match &*inner {
-            Value::RustValue(ref rust_type_ref, ref _rust_value) => {
+            Value::RustValue(rust_type_ref, _rust_value) => {
                 Box::new(match rust_type_ref.number {
                     SPARSE_TYPE_ID => {
                         let sparse_map = inner
@@ -47,7 +47,7 @@ impl ValueReference {
                     _ => return Err(ValueError::CanNotCoerceToIterator),
                 })
             }
-            Value::Map(ref _type_ref, seq_map) => {
+            Value::Map(_type_ref, seq_map) => {
                 // Clone each Rc<RefCell<Value>> and collect into a Vec
                 let cloned_rc: Vec<ValueRef> = seq_map.values().cloned().collect();
 
@@ -76,7 +76,7 @@ impl ValueReference {
     ) -> Result<Box<dyn Iterator<Item = (Value, Self)>>, ValueError> {
         let inner = self.0.borrow();
         let result = match &*inner {
-            Value::RustValue(ref rust_type_ref, ref _rust_value) => {
+            Value::RustValue(rust_type_ref, _rust_value) => {
                 Box::new(match rust_type_ref.number {
                     SPARSE_TYPE_ID => {
                         let sparse_map = inner

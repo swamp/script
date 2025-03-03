@@ -157,19 +157,19 @@ impl<'a> Analyzer<'a> {
             )?;
 
         if has_rest {
-            if let Some(function) = struct_to_instantiate
+            match struct_to_instantiate
                 .clone()
                 .borrow()
                 .functions
                 .get(&"default".to_string())
-            {
+            { Some(function) => {
                 self.analyze_struct_init_calling_default(
                     function,
                     struct_to_instantiate,
                     source_order_expressions,
                     &qualified_type_identifier.name.0,
                 )
-            } else {
+            } _ => {
                 let mapped: Vec<(usize, Expression)> = source_order_expressions
                     .into_iter()
                     .map(|(a, _b, c)| (a, c))
@@ -180,7 +180,7 @@ impl<'a> Analyzer<'a> {
                     missing_fields,
                     &qualified_type_identifier.name.0,
                 )
-            }
+            }}
         } else if missing_fields.is_empty() {
             let ty = Type::Struct(struct_to_instantiate.clone());
             let node = qualified_type_identifier.name.0.clone();
