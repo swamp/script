@@ -387,7 +387,7 @@ impl<'a, C> Interpreter<'a, C> {
                         let borrowed = value_ref.borrow();
 
                         let (_struct_ref, fields) = borrowed
-                            .expect_struct()
+                            .expect_anon_struct()
                             .map_err(|_| self.create_err(ExecuteErrorKind::ExpectedStruct, node))?;
                         fields[*index].clone()
                     }

@@ -806,15 +806,7 @@ impl<'a> Analyzer<'a> {
             ) => self.analyze_struct_instantiation(struct_identifier, fields, *has_rest)?,
 
             swamp_script_ast::ExpressionKind::AnonymousStructLiteral(fields) => {
-                let (anon_struct_type, mapped) = self.analyze_anonymous_struct_literal(fields)?;
-                self.create_expr(
-                    ExpressionKind::AnonymousStructLiteral(AnonymousStructLiteral {
-                        source_order_expressions: mapped,
-                        anonymous_struct_type: anon_struct_type.clone(),
-                    }),
-                    Type::AnonymousStruct(anon_struct_type.clone()),
-                    &ast_expression.node,
-                )
+                self.analyze_anonymous_struct_literal(&ast_expression.node, fields, context)?
             }
 
             swamp_script_ast::ExpressionKind::Range(min_value, max_value, range_mode) => {

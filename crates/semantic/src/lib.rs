@@ -319,6 +319,9 @@ impl Type {
                     && a.value_type.compatible_with(&b.value_type)
             }
             (Self::NamedStruct(a), Self::NamedStruct(b)) => compare_struct_types(a, b),
+            (Self::AnonymousStruct(a), Self::AnonymousStruct(b)) => {
+                compare_anonymous_struct_types(a, b)
+            }
             (Self::Tuple(a), Self::Tuple(b)) => {
                 if a.0.len() != b.0.len() {
                     return false;

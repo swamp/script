@@ -7,10 +7,10 @@ use crate::{Analyzer, TypeContext};
 use seq_map::SeqMap;
 use seq_set::SeqSet;
 use swamp_script_semantic::{
-    AnonymousStructType, ArgumentExpressionOrLocation, Expression, ExpressionKind, FunctionRef,
-    LocationAccess, LocationAccessKind, MutOrImmutableExpression, Node, SingleLocationExpression,
-    SingleLocationExpressionKind, SingleMutLocationExpression, StructInstantiation,
-    StructTypeField, StructTypeRef, Type,
+    AnonymousStructLiteral, AnonymousStructType, ArgumentExpressionOrLocation, Expression,
+    ExpressionKind, FunctionRef, LocationAccess, LocationAccessKind, MutOrImmutableExpression,
+    Node, SingleLocationExpression, SingleLocationExpressionKind, SingleMutLocationExpression,
+    StructInstantiation, StructTypeField, StructTypeRef, Type,
 };
 
 impl<'a> Analyzer<'a> {
@@ -145,37 +145,13 @@ impl<'a> Analyzer<'a> {
         ))
     }
 
-    /*
-    pub(crate) fn analyze_struct_instantiation(
-        &mut self,
-        qualified_type_identifier: &swamp_script_ast::QualifiedTypeIdentifier,
-        ast_fields: &Vec<swamp_script_ast::FieldExpression>,
-        has_rest: bool,
-    ) -> Result<Expression, Error> {
-        let struct_to_instantiate = self.get_struct_type(qualified_type_identifier)?;
-
-        let (source_order_expressions, missing_fields) = self
-            .analyze_anon_struct_instantiation_helper(
-                &struct_to_instantiate.borrow().anon_struct_type,
-                ast_fields,
-            )?;
-
-        Ok(self.create_expr(
-            ExpressionKind::AnonymouosStructLiteral(StructInstantiation {
-                source_order_expressions,
-            }),
-            Type::NamedStruct(struct_to_instantiate),
-            &qualified_type_identifier.name,
-        ))
-    }
-
-
-     */
     pub fn analyze_anonymous_struct_literal(
         &mut self,
+        node: &swamp_script_ast::Node,
         ast_fields: &Vec<swamp_script_ast::FieldExpression>,
-    ) -> Result<(AnonymousStructType, Vec<(usize, Expression)>), Error> {
-        let mut field_name_and_expression = SeqMap::new();
+        context: &TypeContext,
+    ) -> Result<Expression, Error> {
+        //let mut field_name_and_expression = SeqMap::new();
         let mut map_for_creating_type = SeqMap::new();
 
         for field in ast_fields {
@@ -187,7 +163,7 @@ impl<'a> Analyzer<'a> {
                 self.analyze_expression(&field.expression, &field_type_context)?;
 
             let expression_type = resolved_expression.ty.clone();
-            field_name_and_expression.insert(field_name.clone(), resolved_expression);
+            //field_name_and_expression.insert(field_name.clone(), resolved_expression);
             let field = StructTypeField {
                 identifier: Some(resolved_node),
                 field_type: expression_type,
@@ -196,20 +172,19 @@ impl<'a> Analyzer<'a> {
             map_for_creating_type.insert(field_name.clone(), field);
         }
 
-        let anon_struct_type = AnonymousStructType::new_and_sort_fields(map_for_creating_type);
+        let struct_to_instantiate = AnonymousStructType::new_and_sort_fields(map_for_creating_type);
 
-        let mut source_order_expressions = Vec::new();
+        let mapped =
+            self.analyze_anon_struct_instantiation(node, &struct_to_instantiate, ast_fields, true)?;
 
-        for (field_name, expr) in field_name_and_expression {
-            let index = anon_struct_type
-                .field_name_sorted_fields
-                .get_index(&field_name)
-                .unwrap();
-
-            source_order_expressions.push((index, expr))
-        }
-
-        Ok((anon_struct_type, source_order_expressions))
+        Ok(self.create_expr(
+            ExpressionKind::AnonymousStructLiteral(AnonymousStructLiteral {
+                source_order_expressions: mapped,
+                anonymous_struct_type: struct_to_instantiate.clone(),
+            }),
+            Type::AnonymousStruct(struct_to_instantiate),
+            &node,
+        ))
     }
 
     pub(crate) fn analyze_struct_instantiation(
