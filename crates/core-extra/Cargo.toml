@@ -11,7 +11,7 @@ description = "core parts for swamp evaluator"
 swamp-script-semantic = { path = "../semantic", version = "0.0.12" }
 fixed32 = "0.0.17"
 seq-map = "0.0.13"
-sparse-slot =  { path = "../../../../piot/sparse-slot", version = "0.0.4"}
+sparse-slot =  { version = "0.0.4"}
 tracing = "0.1.40"
 
 [dev-dependencies]

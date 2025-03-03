@@ -62,7 +62,10 @@ impl<'a> Analyzer<'a> {
             })
             .collect();
 
-        let found_module = self.shared.get_module(&path).unwrap().clone();
+        let found_module = self
+            .shared
+            .get_module(&path)
+            .ok_or_else(|| self.create_err(ErrorKind::UnknownModule, &use_definition.module_path.0[0]))?.clone();
         if use_definition.items.is_empty() {
             let last_name = path.last().unwrap();
             self.shared

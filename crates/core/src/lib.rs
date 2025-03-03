@@ -1,3 +1,4 @@
+/*
 use std::rc::Rc;
 use swamp_script_modules::modules::Module;
 use swamp_script_modules::symtbl::{GeneratorKind, Symbol, SymbolTable, TypeGenerator};
@@ -985,4 +986,6 @@ fn add_external_types(symbol_table: &mut SymbolTable) {
         )
         .expect("TODO: panic message");
 }
+*/
+
 */

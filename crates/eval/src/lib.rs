@@ -1892,7 +1892,7 @@ impl<'a, C> Interpreter<'a, C> {
                     )?));
                     is_mutable = false;
                 }
-                PostfixKind::IntrinsicCallEx(intrinsic_fn, arguments) => {
+                PostfixKind::IntrinsicCallEx(_intrinsic_fn, _arguments) => {
                     //val_ref = Rc::new(RefCell::new(self.eval_intrinsic_postfix_ex(&val_ref, part, intrinsic_fn, arguments)?));
                     is_mutable = false;
                 }

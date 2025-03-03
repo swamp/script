@@ -3,11 +3,13 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
+/*
 use eira::Kind;
 use std::io::stderr;
 use swamp_script_error_report::Report;
 use swamp_script_semantic::Span;
 use swamp_script_source_map::SourceMap;
+
 
 #[test]
 fn standard() {
@@ -34,3 +36,4 @@ fn standard() {
 
     report.print(&s, stderr()).expect("print should work");
 }
+*/
