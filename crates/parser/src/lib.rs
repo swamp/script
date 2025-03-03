@@ -4,21 +4,22 @@
  */
 pub mod prelude;
 
-use pest::Parser;
 use pest::error::{Error, ErrorVariant, InputLocation};
 use pest::iterators::Pair;
+use pest::{Parser, Position};
 use pest_derive::Parser;
 use std::iter::Peekable;
 use std::str::Chars;
 use swamp_script_ast::{
     AssignmentOperatorKind, BinaryOperatorKind, CompoundOperator, CompoundOperatorKind,
-    EnumVariantLiteral, ExpressionKind, FieldExpression, FieldName, FieldType, ForPattern, ForVar,
-    IterableExpression, Mod, PatternElement, QualifiedIdentifier, RangeMode, SpanWithoutFileId,
-    TypeForParameter, VariableBinding, prelude::*,
+    EnumVariantLiteral, ExpressionKind, FieldExpression, FieldName, ForPattern, ForVar,
+    IterableExpression, Mod, NamedStructDef, PatternElement, QualifiedIdentifier, RangeMode,
+    SpanWithoutFileId, StructTypeField, TypeForParameter, VariableBinding, prelude::*,
 };
 use swamp_script_ast::{Function, WhenBinding};
 use swamp_script_ast::{LiteralKind, MutableOrImmutableExpression};
 use swamp_script_ast::{Postfix, PostfixChain};
+use tracing::info;
 
 pub struct ParseResult<'a> {
     #[allow(dead_code)]
@@ -142,7 +143,7 @@ impl AstParser {
                 ErrorVariant::CustomError {
                     message: "Expected more tokens".into(),
                 },
-                pest::Position::from_start(""),
+                Position::from_start(""),
             )
         })?)
     }
@@ -701,33 +702,75 @@ impl AstParser {
         Ok(Definition::AliasDef(alias_type))
     }
 
+    fn parse_struct_type_field(&self, pair: &Pair<Rule>) -> Result<StructTypeField, ParseError> {
+        assert_eq!(pair.as_rule(), Rule::struct_type_field);
+
+        let mut field_inner = Self::convert_into_iterator(&pair);
+        let field_name = self.expect_field_label_next(&mut field_inner)?;
+        let field_type = self.parse_type(Self::next_pair(&mut field_inner)?)?;
+        let struct_type_field = StructTypeField {
+            field_name,
+            field_type,
+        };
+
+        Ok(struct_type_field)
+    }
+
+    fn parse_struct_type_fields(
+        &self,
+        pair: &Pair<Rule>,
+    ) -> Result<Vec<StructTypeField>, ParseError> {
+        assert_eq!(pair.as_rule(), Rule::struct_type_fields);
+        let mut fields = Vec::new();
+        for field_def in Self::convert_into_iterator(pair) {
+            let anonymous_struct_field = self.parse_struct_type_field(&field_def)?;
+
+            fields.push(anonymous_struct_field);
+        }
+        Ok(fields)
+    }
+
+    fn parse_struct_type(&self, pair: &Pair<Rule>) -> Result<AnonymousStructType, ParseError> {
+        assert_eq!(pair.as_rule(), Rule::struct_type);
+        let fields = Self::right_alternative(pair)?;
+        let fields = self.parse_struct_type_fields(&fields)?;
+        let struct_type = AnonymousStructType::new(fields);
+        Ok(struct_type)
+    }
+
+    fn parse_tuple_type_elements(&self, pair: &Pair<Rule>) -> Result<Vec<Type>, ParseError> {
+        assert_eq!(pair.as_rule(), Rule::tuple_type);
+        let mut types = Vec::new();
+        for type_pair in pair.clone().into_inner() {
+            let type_value = self.parse_type(type_pair)?;
+            types.push(type_value);
+        }
+        Ok(types)
+    }
+
     fn parse_struct_def(&self, pair: &Pair<Rule>) -> Result<Definition, ParseError> {
         let mut inner = Self::convert_into_iterator(pair);
 
-        let struct_name = self.expect_local_type_identifier_next(&mut inner)?;
+        let struct_name = self.parse_local_type_identifier(&inner.next().unwrap())?;
 
-        let field_definitions_pair_result = Self::next_pair(&mut inner);
-        let mut fields = Vec::new();
+        // struct_type is optional
+        // it is valid syntax to just do:
+        // `struct SomeStruct`
+        let struct_type_pair_option = inner.next();
+        let struct_type_result = match struct_type_pair_option {
+            Some(struct_type_pair) => Some(self.parse_struct_type(&struct_type_pair)?),
+            None => None,
+        };
 
-        if let Ok(field_definitions) = field_definitions_pair_result {
-            for field_def in Self::convert_into_iterator(&field_definitions) {
-                let mut field_parts = Self::convert_into_iterator(&field_def);
+        let struct_type = struct_type_result.map_or_else(
+            || AnonymousStructType::new(vec![]),
+            |found_result| found_result,
+        );
 
-                let field_name = self.expect_field_label_next(&mut field_parts)?;
-                let field_type = self.parse_type(Self::next_pair(&mut field_parts)?)?;
-
-                let anonymous_struct_field = FieldType {
-                    field_name,
-                    field_type,
-                };
-
-                fields.push(anonymous_struct_field);
-            }
-        }
-
-        let struct_def = StructType::new(struct_name, fields);
-
-        Ok(Definition::StructDef(struct_def))
+        Ok(Definition::NamedStructDef(NamedStructDef {
+            identifier: struct_name,
+            struct_type,
+        }))
     }
 
     fn parse_function_def(&self, pair: &Pair<Rule>) -> Result<Definition, ParseError> {
@@ -1526,6 +1569,73 @@ impl AstParser {
         }
     }
 
+    fn parse_struct_fields_expressions<'a>(
+        &self,
+        field_list_pair: &Pair<Rule>,
+    ) -> Result<(Vec<FieldExpression>, bool), ParseError> {
+        let mut fields = Vec::new();
+        let mut has_rest = false;
+
+        for field_pair in field_list_pair.clone().into_inner() {
+            info!(rule=?field_pair.as_rule(), "field rule");
+            match field_pair.as_rule() {
+                Rule::struct_field => {
+                    let mut field_inner = field_pair.into_inner();
+                    let ident = self.expect_field_label_next(&mut field_inner)?;
+                    let field_name = FieldName(ident.0);
+                    let field_value = self.parse_expression(&field_inner.next().unwrap())?;
+
+                    fields.push(FieldExpression {
+                        field_name,
+                        expression: field_value,
+                    });
+                }
+                Rule::rest_fields => {
+                    has_rest = true;
+                }
+                _ => {
+                    return Err(
+                        self.create_error_pair(SpecificError::ExpectedFieldOrRest, &field_pair)
+                    );
+                }
+            }
+        }
+
+        Ok((fields, has_rest))
+    }
+
+    fn parse_anonymous_struct_literal(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
+        let (fields, has_rest) = self.parse_anonymous_struct_literal_fields(&pair)?;
+        Ok(self.create_expr(ExpressionKind::AnonymousStructLiteral(fields), pair))
+    }
+
+    fn parse_anonymous_struct_literal_fields(
+        &self,
+        pair: &Pair<Rule>,
+    ) -> Result<(Vec<FieldExpression>, bool), ParseError> {
+        assert_eq!(pair.as_rule(), Rule::anonymous_struct_literal);
+        let mut inner = Self::convert_into_iterator(pair);
+        let (field_expressions, detected_rest) =
+            self.parse_struct_fields_expressions(&inner.next().unwrap())?;
+
+        Ok((field_expressions, detected_rest))
+    }
+
+    fn parse_struct_literal_optional_fields(
+        &self,
+        pair: &Pair<Rule>,
+    ) -> Result<(Vec<FieldExpression>, bool), ParseError> {
+        assert_eq!(pair.as_rule(), Rule::struct_literal_optional_field_list);
+        let mut inner = Self::convert_into_iterator(pair);
+        let (field_expressions, detected_rest) = if let Some(field_list) = inner.next() {
+            self.parse_struct_fields_expressions(&field_list)?
+        } else {
+            (vec![], false)
+        };
+
+        Ok((field_expressions, detected_rest))
+    }
+
     fn parse_struct_literal(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
         let mut inner = Self::convert_into_iterator(pair);
 
@@ -1533,34 +1643,9 @@ impl AstParser {
 
         let struct_name = self.parse_qualified_type_identifier(&type_pair)?;
 
-        let mut fields = Vec::new();
-        let mut has_rest = false;
+        let anon_fields = inner.next().unwrap();
 
-        if let Some(field_list) = inner.next() {
-            for field_pair in field_list.into_inner() {
-                match field_pair.as_rule() {
-                    Rule::struct_field => {
-                        let mut field_inner = field_pair.into_inner();
-                        let ident = self.expect_field_label_next(&mut field_inner)?;
-                        let field_name = FieldName(ident.0);
-                        let field_value = self.parse_expression(&field_inner.next().unwrap())?;
-
-                        fields.push(FieldExpression {
-                            field_name,
-                            expression: field_value,
-                        });
-                    }
-                    Rule::rest_fields => {
-                        has_rest = true;
-                    }
-                    _ => {
-                        return Err(
-                            self.create_error_pair(SpecificError::ExpectedFieldOrRest, &field_pair)
-                        );
-                    }
-                }
-            }
-        }
+        let (fields, has_rest) = self.parse_struct_literal_optional_fields(&anon_fields)?;
 
         Ok(self.create_expr(
             ExpressionKind::StructLiteral(struct_name, fields, has_rest),
@@ -1618,6 +1703,7 @@ impl AstParser {
                 Ok(self.create_expr_span(ExpressionKind::Literal(literal), node))
             }
             Rule::struct_literal => self.parse_struct_literal(sub),
+            Rule::anonymous_struct_literal => self.parse_anonymous_struct_literal(sub),
 
             Rule::interpolated_string => self.parse_interpolated_string(sub),
             /*
@@ -1724,21 +1810,9 @@ impl AstParser {
         // Parse fields if they exist
         let enum_variant_literal = match inner.next() {
             Some(fields_pair) => match fields_pair.as_rule() {
-                Rule::struct_fields_lit => {
+                Rule::anonymous_struct_literal => {
                     let mut fields = Vec::new();
-                    for field in Self::convert_into_iterator(&fields_pair) {
-                        if field.as_rule() == Rule::struct_field {
-                            let mut field_inner = Self::convert_into_iterator(&field);
-                            let field_name = self.expect_field_label_next(&mut field_inner)?;
-                            let field_expression =
-                                self.parse_expression(&Self::next_pair(&mut field_inner)?)?;
-                            let anonymous_struct_field = FieldExpression {
-                                field_name,
-                                expression: field_expression,
-                            };
-                            fields.push(anonymous_struct_field);
-                        }
-                    }
+                    let anonym_fields = self.parse_anonymous_struct_literal(&pair)?;
                     EnumVariantLiteral::Struct(enum_type, variant_type_identifier, fields)
                 }
                 Rule::tuple_fields => {
@@ -2113,12 +2187,8 @@ impl AstParser {
                 Ok(Type::Named(qualified_id))
             }
             Rule::tuple_type => {
-                let mut types = Vec::new();
-                for type_pair in pair.into_inner() {
-                    let type_value = self.parse_type(type_pair)?;
-                    types.push(type_value);
-                }
-                Ok(Type::Tuple(types))
+                let elements = self.parse_tuple_type_elements(&pair)?;
+                Ok(Type::Tuple(elements))
             }
             Rule::map_type => {
                 let mut inner = pair.into_inner();
@@ -2131,6 +2201,11 @@ impl AstParser {
                 let inner = self.next_inner_pair(&pair)?;
                 let element_type = self.parse_type(inner)?;
                 Ok(Type::Array(Box::new(element_type)))
+            }
+
+            Rule::struct_type => {
+                let element_type = self.parse_struct_type(&pair)?;
+                Ok(Type::AnonymousStruct(element_type))
             }
 
             _ => Err(self.create_error_pair(SpecificError::UnexpectedTypeRule, &pair)),
@@ -2216,32 +2291,16 @@ impl AstParser {
                 let mut inner = Self::convert_into_iterator(pair);
                 let name = self.expect_local_type_identifier_next(&mut inner)?;
 
-                let mut types = Vec::new();
-                for type_pair in inner {
-                    types.push(self.parse_type(type_pair)?);
-                }
+                let tuple_elements = self.parse_tuple_type_elements(&inner.next().unwrap())?;
 
-                EnumVariantType::Tuple(name.0, types)
+                EnumVariantType::Tuple(name.0, tuple_elements)
             }
             Rule::struct_variant => {
                 let mut inner = Self::convert_into_iterator(pair);
                 let name = self.expect_local_type_identifier_next(&mut inner)?;
 
-                let mut fields = Vec::new();
-
-                for field_pair in inner {
-                    let mut field_inner = Self::convert_into_iterator(&field_pair);
-                    let field_name = self.expect_field_label_next(&mut field_inner)?;
-                    let field_type = self.parse_type(Self::next_pair(&mut field_inner)?)?;
-                    let anonymous_enum_variant_field = FieldType {
-                        field_name,
-                        field_type,
-                    };
-                    fields.push(anonymous_enum_variant_field);
-                }
-
-                let anon = AnonymousStructType { fields };
-                EnumVariantType::Struct(name.0, anon)
+                let struct_type = self.parse_struct_type(&inner.next().unwrap())?;
+                EnumVariantType::Struct(name.0, struct_type)
             }
             _ => {
                 return Err(self.create_error_pair(

@@ -11,9 +11,10 @@ use swamp_script_semantic::{
     AliasType, AliasTypeRef, AnonymousStructType, EnumType, EnumTypeRef, EnumVariantCommon,
     EnumVariantSimpleType, EnumVariantSimpleTypeRef, EnumVariantStructType, EnumVariantTupleType,
     EnumVariantType, ExternalFunctionDefinition, Function, InternalFunctionDefinition,
-    LocalIdentifier, LocalTypeIdentifier, ParameterNode, Signature, StructType, StructTypeField,
-    StructTypeRef, Type, TypeForParameter, UseItem,
+    LocalIdentifier, LocalTypeIdentifier, NamedStructType, ParameterNode, Signature,
+    StructTypeField, StructTypeRef, Type, TypeForParameter, UseItem,
 };
+use tracing::info;
 
 impl<'a> Analyzer<'a> {
     fn analyze_mod_definition(
@@ -183,7 +184,9 @@ impl<'a> Analyzer<'a> {
                     let simple_ref = EnumVariantSimpleType { common };
                     EnumVariantType::Nothing(EnumVariantSimpleTypeRef::from(simple_ref))
                 }
-                swamp_script_ast::EnumVariantType::Tuple(_variant_name_node, types) => {
+                swamp_script_ast::EnumVariantType::Tuple(variant_name_node, types) => {
+                    let debug_text = self.get_text(variant_name_node);
+                    info!(?debug_text, ?types, "tuple");
                     let mut vec = Vec::new();
                     for tuple_type in types {
                         let resolved_type = self.analyze_type(tuple_type)?;
@@ -225,9 +228,7 @@ impl<'a> Analyzer<'a> {
 
                     let enum_variant_struct_type = EnumVariantStructType {
                         common,
-                        anon_struct: AnonymousStructType {
-                            defined_fields: fields,
-                        },
+                        anon_struct: AnonymousStructType::new(fields),
                     };
 
                     let enum_variant_struct_type_ref = Rc::new(enum_variant_struct_type);
@@ -278,14 +279,24 @@ impl<'a> Analyzer<'a> {
         Ok(resolved_alias_ref)
     }
 
-    pub fn analyze_struct_type(
+    pub fn analyze_anonymous_struct_type(
         &mut self,
-        assigned_name: &str,
-        ast_struct: &swamp_script_ast::StructType,
-    ) -> Result<StructType, Error> {
+        ast_struct: &swamp_script_ast::AnonymousStructType,
+    ) -> Result<AnonymousStructType, Error> {
+        let resolved_fields = self.analyze_anonymous_struct_type_fields(&ast_struct.fields)?;
+
+        let resolved_anon_struct = AnonymousStructType::new_and_sort_fields(resolved_fields);
+
+        Ok(resolved_anon_struct.into())
+    }
+
+    pub fn analyze_anonymous_struct_type_fields(
+        &mut self,
+        ast_struct_fields: &[swamp_script_ast::StructTypeField],
+    ) -> Result<SeqMap<String, StructTypeField>, Error> {
         let mut resolved_fields = SeqMap::new();
 
-        for (_index, field_name_and_type) in ast_struct.fields.iter().enumerate() {
+        for (_index, field_name_and_type) in ast_struct_fields.iter().enumerate() {
             let resolved_type = self.analyze_type(&field_name_and_type.field_type)?;
             let name_string = self.get_text(&field_name_and_type.field_name.0).to_string();
 
@@ -304,44 +315,42 @@ impl<'a> Analyzer<'a> {
                 })?;
         }
 
-        let resolved_anon_struct = AnonymousStructType {
-            defined_fields: resolved_fields,
-        };
-
-        //let unique_id = self.shared.state.allocate_number();
-        let resolved_struct = StructType::new(
-            self.to_node(&ast_struct.identifier.0),
-            assigned_name,
-            //unique_id,
-            resolved_anon_struct,
-        );
-
-        Ok(resolved_struct)
+        Ok(resolved_fields)
     }
 
     /// # Errors
     ///
-    pub fn analyze_struct_type_definition(
+    pub fn analyze_named_struct_type_definition(
         &mut self,
-        ast_struct: &swamp_script_ast::StructType,
+        ast_struct_def: &swamp_script_ast::NamedStructDef,
     ) -> Result<(), Error> {
-        let struct_name_str = self.get_text(&ast_struct.identifier.0).to_string();
+        let struct_name_str = self.get_text(&ast_struct_def.identifier.0).to_string();
 
-        let analyzed_struct = self.analyze_struct_type(&struct_name_str, ast_struct)?;
+        let fields =
+            self.analyze_anonymous_struct_type_fields(&ast_struct_def.struct_type.fields)?;
+
+        let analyzed_anonymous_struct = AnonymousStructType::new(fields); // the order encountered in source should be kept
+
+        let named_struct_type = NamedStructType {
+            name: self.to_node(&ast_struct_def.identifier.0),
+            anon_struct_type: analyzed_anonymous_struct,
+            assigned_name: struct_name_str,
+            functions: SeqMap::default(),
+        };
 
         let struct_ref = self
             .shared
             .definition_table
-            .add_struct(analyzed_struct)
+            .add_struct(named_struct_type)
             .map_err(|err| {
-                self.create_err(ErrorKind::SemanticError(err), &ast_struct.identifier.0)
+                self.create_err(ErrorKind::SemanticError(err), &ast_struct_def.identifier.0)
             })?;
 
         self.shared
             .lookup_table
             .add_struct_link(struct_ref)
             .map_err(|err| {
-                self.create_err(ErrorKind::SemanticError(err), &ast_struct.identifier.0)
+                self.create_err(ErrorKind::SemanticError(err), &ast_struct_def.identifier.0)
             })?;
 
         Ok(())
@@ -458,8 +467,8 @@ impl<'a> Analyzer<'a> {
         ast_def: &swamp_script_ast::Definition,
     ) -> Result<(), Error> {
         let resolved_def = match ast_def {
-            swamp_script_ast::Definition::StructDef(ast_struct) => {
-                self.analyze_struct_type_definition(ast_struct)?
+            swamp_script_ast::Definition::NamedStructDef(ast_struct) => {
+                self.analyze_named_struct_type_definition(ast_struct)?
             }
             swamp_script_ast::Definition::AliasDef(alias_def) => {
                 self.analyze_alias_type_definition(alias_def)?;
@@ -526,7 +535,7 @@ impl<'a> Analyzer<'a> {
             self.stop_function();
         }
 
-        Ok(Type::Struct(found_struct))
+        Ok(Type::NamedStruct(found_struct))
     }
 
     fn analyze_impl_func(
@@ -539,7 +548,7 @@ impl<'a> Analyzer<'a> {
                 let mut parameters = Vec::new();
 
                 if let Some(found_self) = &function_data.declaration.self_parameter {
-                    let resolved_type = Type::Struct(found_struct.clone());
+                    let resolved_type = Type::NamedStruct(found_struct.clone());
                     parameters.push(TypeForParameter {
                         name: self.get_text(&found_self.self_node).to_string(),
                         resolved_type,
@@ -598,7 +607,7 @@ impl<'a> Analyzer<'a> {
                 let mut parameters = Vec::new();
 
                 if let Some(found_self) = &signature.self_parameter {
-                    let resolved_type = Type::Struct(found_struct.clone());
+                    let resolved_type = Type::NamedStruct(found_struct.clone());
                     parameters.push(TypeForParameter {
                         name: self.get_text(&found_self.self_node).to_string(),
                         resolved_type,

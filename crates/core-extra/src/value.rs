@@ -12,8 +12,8 @@ use std::fmt::{Debug, Display};
 use std::hash::Hash;
 use std::rc::Rc;
 use swamp_script_semantic::{
-    ArrayTypeRef, EnumVariantSimpleTypeRef, EnumVariantStructTypeRef, EnumVariantTupleTypeRef,
-    ExternalFunctionDefinitionRef, ExternalTypeRef, FormatSpecifierKind,
+    AnonymousStructType, ArrayTypeRef, EnumVariantSimpleTypeRef, EnumVariantStructTypeRef,
+    EnumVariantTupleTypeRef, ExternalFunctionDefinitionRef, ExternalTypeRef, FormatSpecifierKind,
     InternalFunctionDefinitionRef, MapTypeRef, Node, PrecisionType, RangeMode, Span, StructTypeRef,
     TupleTypeRef, TypeNumber,
 };
@@ -91,7 +91,8 @@ pub enum Value {
     Array(ArrayTypeRef, Vec<ValueRef>),
     Map(MapTypeRef, SeqMap<Value, ValueRef>), // Do not change to HashMap, the order is important for it to be deterministic
     Tuple(TupleTypeRef, Vec<ValueRef>),
-    Struct(StructTypeRef, Vec<ValueRef>), // type of the struct, and the fields themselves in strict order
+    NamedStruct(StructTypeRef, Vec<ValueRef>), // type of the struct, and the fields themselves in strict order
+    AnonymousStruct(AnonymousStructType, Vec<ValueRef>), // type of the struct, and the fields themselves in strict order
 
     EnumVariantSimple(EnumVariantSimpleTypeRef),
     EnumVariantTuple(EnumVariantTupleTypeRef, Vec<ValueRef>),
@@ -215,7 +216,7 @@ impl Value {
                 offset
             }
 
-            Self::Struct(_struct_type, values) => {
+            Self::NamedStruct(_struct_type, values) => {
                 let mut offset = 0;
                 for value in values {
                     let size = value
@@ -224,6 +225,10 @@ impl Value {
                     offset += size;
                 }
                 offset
+            }
+
+            Self::AnonymousStruct(_anon, _values) => {
+                todo!("anonymous structs not supported")
             }
 
             Self::EnumVariantSimple(enum_variant) => {
@@ -303,8 +308,11 @@ impl Clone for Value {
                 Self::Tuple(resolved_ref.clone(), deep_clone_valrefs(vec_refs))
             }
 
-            Self::Struct(resolved_ref, vec_refs) => {
-                Self::Struct(resolved_ref.clone(), deep_clone_valrefs(vec_refs))
+            Self::NamedStruct(resolved_ref, vec_refs) => {
+                Self::NamedStruct(resolved_ref.clone(), deep_clone_valrefs(vec_refs))
+            }
+            Self::AnonymousStruct(resolved_ref, vec_refs) => {
+                Self::AnonymousStruct(resolved_ref.clone(), deep_clone_valrefs(vec_refs))
             }
 
             Self::EnumVariantSimple(resolved_ref) => Self::EnumVariantSimple(resolved_ref.clone()),
@@ -502,7 +510,19 @@ impl Value {
 
     pub fn expect_struct(&self) -> Result<(StructTypeRef, &Vec<ValueRef>), ValueError> {
         match self {
-            Self::Struct(struct_ref, fields) => Ok((struct_ref.clone(), fields)),
+            Self::NamedStruct(struct_ref, fields) => Ok((struct_ref.clone(), fields)),
+            _ => Err(ValueError::ConversionError("Expected struct value".into())),
+        }
+    }
+
+    pub fn expect_anon_struct(&self) -> Result<(AnonymousStructType, &Vec<ValueRef>), ValueError> {
+        match self {
+            Self::NamedStruct(struct_ref, fields) => {
+                Ok((struct_ref.borrow().anon_struct_type.clone(), fields))
+            }
+            Self::AnonymousStruct(anon_struct_type, fields) => {
+                Ok((anon_struct_type.clone(), fields))
+            }
             _ => Err(ValueError::ConversionError("Expected struct value".into())),
         }
     }
@@ -601,7 +621,7 @@ impl Value {
     #[must_use]
     pub fn downcast_hidden_rust<T: RustType + 'static>(&self) -> Option<Rc<RefCell<Box<T>>>> {
         match self {
-            Self::Struct(_struct_ref, fields) => fields[0].borrow().downcast_rust(),
+            Self::NamedStruct(_struct_ref, fields) => fields[0].borrow().downcast_rust(),
             _ => None,
         }
     }
@@ -620,7 +640,7 @@ impl Value {
         value: T,
     ) -> Self {
         let rust_value = Rc::new(RefCell::new(Self::new_rust_value(rust_description, value)));
-        Self::Struct(struct_type, vec![rust_value])
+        Self::NamedStruct(struct_type, vec![rust_value])
     }
 }
 
@@ -668,13 +688,30 @@ impl Display for Value {
                 }
                 write!(f, ")")
             }
-            Self::Struct(struct_type_ref, fields_in_strict_order) => {
+            Self::NamedStruct(struct_type_ref, fields_in_strict_order) => {
                 write!(f, "{} {{ ", struct_type_ref.borrow().assigned_name)?;
 
                 let fields = struct_type_ref
                     .borrow()
                     .anon_struct_type
-                    .defined_fields
+                    .field_name_sorted_fields
+                    .keys()
+                    .cloned()
+                    .collect::<Vec<_>>();
+                for (i, val) in fields_in_strict_order.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    let field_name = &fields[i];
+                    write!(f, "{field_name}: {}", val.borrow())?;
+                }
+                write!(f, " }}")
+            }
+            Self::AnonymousStruct(anonymous_struct, fields_in_strict_order) => {
+                write!(f, "{{ ")?;
+
+                let fields = anonymous_struct
+                    .field_name_sorted_fields
                     .keys()
                     .cloned()
                     .collect::<Vec<_>>();
@@ -714,7 +751,7 @@ impl Display for Value {
             Self::EnumVariantStruct(struct_variant, values) => {
                 let decorated_values: Vec<(String, ValueRef)> = struct_variant
                     .anon_struct
-                    .defined_fields
+                    .field_name_sorted_fields
                     .keys()
                     .cloned()
                     .zip(values.clone())
@@ -784,8 +821,14 @@ impl Hash for Value {
             Self::Unit => (),
             Self::Option(_wrapped) => {}
             Self::Array(_, _arr) => {}
-            Self::Struct(type_ref, values) => {
+            Self::NamedStruct(type_ref, values) => {
                 type_ref.borrow().name().span.hash(state);
+                for v in values {
+                    v.borrow().hash(state);
+                }
+            }
+            Self::AnonymousStruct(type_ref, values) => {
+                // TODO: Not correct hash
                 for v in values {
                     v.borrow().hash(state);
                 }

@@ -20,7 +20,7 @@ use swamp_script_semantic::{ArgumentExpressionOrLocation, LocationAccess, Locati
 use swamp_script_semantic::{
     BinaryOperatorKind, CompoundOperatorKind, ConstantId, ForPattern, Function,
     MutOrImmutableExpression, NormalPattern, PatternElement, PostfixKind, SingleLocationExpression,
-    SingleLocationExpressionKind, UnaryOperatorKind, same_struct_ref,
+    SingleLocationExpressionKind, UnaryOperatorKind, same_anon_struct_ref,
 };
 use swamp_script_semantic::{Postfix, SingleMutLocationExpression, same_array_ref};
 use tracing::{error, info};
@@ -387,7 +387,7 @@ impl<'a, C> Interpreter<'a, C> {
                         let borrowed = value_ref.borrow();
 
                         let (_struct_ref, fields) = borrowed
-                            .expect_struct()
+                            .expect_anon_struct()
                             .map_err(|_| self.create_err(ExecuteErrorKind::ExpectedStruct, node))?;
                         fields[*index].clone()
                     }
@@ -923,8 +923,29 @@ impl<'a, C> Interpreter<'a, C> {
                     field_values[*array_index] = value;
                 }
 
-                Value::Struct(
+                Value::NamedStruct(
                     struct_instantiation.struct_type_ref.clone(),
+                    convert_vec_to_rc_refcell(field_values),
+                )
+            }
+
+            ExpressionKind::AnonymousStructLiteral(struct_instantiation) => {
+                // Evaluate all field expressions and validate types
+                let mut field_values =
+                    Vec::with_capacity(struct_instantiation.source_order_expressions.len());
+                field_values.resize_with(
+                    struct_instantiation.source_order_expressions.len(),
+                    Default::default,
+                );
+
+                // They are evaluated in source order, but an array_index is provided for the definition order
+                for (array_index, field_expr) in &struct_instantiation.source_order_expressions {
+                    let value = self.evaluate_expression(field_expr)?;
+                    field_values[*array_index] = value;
+                }
+
+                Value::AnonymousStruct(
+                    struct_instantiation.anonymous_struct_type.clone(),
                     convert_vec_to_rc_refcell(field_values),
                 )
             }
@@ -1822,13 +1843,13 @@ impl<'a, C> Interpreter<'a, C> {
                 PostfixKind::StructField(expected_struct_type, index) => {
                     let (encountered_struct_type, fields) = {
                         let brw = val_ref.borrow();
-                        let (struct_ref, fields_ref) = brw.expect_struct().map_err(|_| {
+                        let (struct_ref, fields_ref) = brw.expect_anon_struct().map_err(|_| {
                             self.create_err(ExecuteErrorKind::PostfixChainError, &part.node)
                         })?;
                         (struct_ref.clone(), fields_ref.clone())
                     };
 
-                    assert!(same_struct_ref(
+                    assert!(same_anon_struct_ref(
                         &encountered_struct_type,
                         expected_struct_type
                     ));

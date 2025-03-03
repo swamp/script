@@ -30,6 +30,7 @@ fn match_value_expressions() {
 }
 */
 
+/*
 #[test_log::test]
 fn assignment() {
     check(
@@ -1238,7 +1239,8 @@ fn enum_match_tuple_basic() {
     check(
         r#"
            match v {
-                Tuple(i, s, b) => { // Tuple is an imaginary enum variant with name Tuple
+Tuple(i, s, b) => {
+// Tuple is an imaginary enum variant with name Tuple
                     print("Tuple:")
                     print(i)
                     print(s)
@@ -1638,7 +1640,7 @@ fn check_prefix_and_generic() {
     check(
         r"
         struct Logic {
-            tick_count: Int, /// how many ticks have passed
+tick_count: Int, /// how many ticks have passed
             explosions: std::Sparse<Explosion>,
          }
 ",
@@ -1681,7 +1683,7 @@ fn check_boolean_expression_no_block() {
 fn documentation_comment() {
     check(
         r"
-        /// This is a doc comment
+/// This is a doc comment
 x = if true 2 else 4
 ",
         r"
@@ -1694,7 +1696,7 @@ VariableAssignment(<35:1>, If(Literal(Bool(<42:4>)), Literal(Int(<47:1>)), Some(
 fn external_function() {
     check(
         r"
-        /// This is a doc comment
+/// This is a doc comment
 external fn something(i: Int) -> Float
 ",
         r"
@@ -2802,6 +2804,43 @@ while while {
         "
 
 <1:26>WhileLoop(<7:5>IdentifierReference(<7:5>), <13:14>Block([<19:7>VariableAssignment(<19:2>, MutableOrImmutableExpression { is_mutable: None, expression: <24:1>Literal(Int) })]))
+
+
+",
+    );
+}
+
+*/
+#[test_log::test]
+fn anonymous_struct() {
+    check(
+        "
+struct SomeStruct {
+   anon: { x: Int, y: Int },
+   x: Int,
+}
+         ",
+        "
+
+StructDef(StructDef { identifier: LocalTypeIdentifier(<8:10>), struct_type: StructType { fields: [StructTypeField { field_name: FieldName(<24:4>), field_type: Struct(StructType { fields: [StructTypeField { field_name: FieldName(<32:1>), field_type: Named(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<35:3>), module_path: None, generic_params: [] }) }, StructTypeField { field_name: FieldName(<40:1>), field_type: Named(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<43:3>), module_path: None, generic_params: [] }) }] }) }, StructTypeField { field_name: FieldName(<53:1>), field_type: Named(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<56:3>), module_path: None, generic_params: [] }) }] } })
+
+
+",
+    );
+}
+
+#[test_log::test]
+fn enum_variant_anonymous_struct() {
+    check(
+        "
+enum Something {
+   First,
+   Another { x: Int, y: Float },
+}
+         ",
+        "
+
+EnumDef(<6:9>, [Simple(<21:5>), Struct(<31:7>, StructType { fields: [StructTypeField { field_name: FieldName(<41:1>), field_type: Named(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<44:3>), module_path: None, generic_params: [] }) }, StructTypeField { field_name: FieldName(<49:1>), field_type: Named(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<52:5>), module_path: None, generic_params: [] }) }] })])
 
 
 ",

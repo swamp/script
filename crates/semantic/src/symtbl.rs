@@ -7,8 +7,8 @@ use crate::modules::ModuleRef;
 use crate::{
     AliasType, AliasTypeRef, AnonymousStructType, Constant, ConstantRef, EnumType, EnumTypeRef,
     EnumVariantType, EnumVariantTypeRef, ExternalFunctionDefinition, ExternalFunctionDefinitionRef,
-    ExternalType, ExternalTypeRef, InternalFunctionDefinition, InternalFunctionDefinitionRef, Node,
-    SemanticError, StructType, StructTypeField, StructTypeRef, Type,
+    ExternalType, ExternalTypeRef, InternalFunctionDefinition, InternalFunctionDefinitionRef,
+    NamedStructType, Node, SemanticError, StructTypeField, StructTypeRef, Type,
 };
 use seq_map::SeqMap;
 use std::cell::RefCell;
@@ -92,7 +92,7 @@ impl SymbolTable {
 
         for (name, symbol) in &self.symbols {
             if let Symbol::Type(ty) = symbol {
-                if let Type::Struct(struct_ref) = ty {
+                if let Type::NamedStruct(struct_ref) = ty {
                     structs
                         .insert(name.to_string(), struct_ref.clone())
                         .unwrap();
@@ -199,7 +199,10 @@ impl SymbolTable {
 
     /// # Errors
     ///
-    pub fn add_struct(&mut self, struct_type: StructType) -> Result<StructTypeRef, SemanticError> {
+    pub fn add_struct(
+        &mut self,
+        struct_type: NamedStructType,
+    ) -> Result<StructTypeRef, SemanticError> {
         let struct_ref = Rc::new(RefCell::new(struct_type));
         self.add_struct_link(struct_ref.clone())?;
         Ok(struct_ref)
@@ -225,10 +228,10 @@ impl SymbolTable {
                 .unwrap();
         }
 
-        let struct_type = StructType {
+        let struct_type = NamedStructType {
             name: Node::default(),
             assigned_name: name.to_string(),
-            anon_struct_type: AnonymousStructType { defined_fields },
+            anon_struct_type: AnonymousStructType::new(defined_fields),
             functions: SeqMap::default(),
         };
 
@@ -244,7 +247,10 @@ impl SymbolTable {
     pub fn add_struct_link(&mut self, struct_type_ref: StructTypeRef) -> Result<(), SemanticError> {
         let name = struct_type_ref.borrow().assigned_name.clone();
         self.symbols
-            .insert(name.clone(), Symbol::Type(Type::Struct(struct_type_ref)))
+            .insert(
+                name.clone(),
+                Symbol::Type(Type::NamedStruct(struct_type_ref)),
+            )
             .map_err(|_| SemanticError::DuplicateStructName(name))?;
         Ok(())
     }
@@ -343,7 +349,7 @@ impl SymbolTable {
 
     pub fn get_struct(&self, name: &str) -> Option<&StructTypeRef> {
         match self.get_type(name)? {
-            Type::Struct(struct_ref) => Some(struct_ref),
+            Type::NamedStruct(struct_ref) => Some(struct_ref),
             _ => None,
         }
     }

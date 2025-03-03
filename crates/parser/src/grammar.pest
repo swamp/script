@@ -46,10 +46,12 @@ float_lit      = @{ ("+" | "-")? ~ ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT+ }
 string_lit     = @{ "\"" ~ ("\\\"" | !"\"" ~ ANY)* ~ "\"" }
 bool_lit       =  { "true" | "false" }
 tuple_lit      =  { "(" ~ expression ~ (COMMA ~ expression)* ~ ")" }
-enum_literal   =  { qualified_type_identifier ~ SCOPE_OPERATOR ~ type_identifier ~ (struct_fields_lit | tuple_fields)? }
-struct_literal =  { qualified_type_identifier ~ "{" ~ struct_field_list? ~ "}" }
+enum_literal   =  { qualified_type_identifier ~ SCOPE_OPERATOR ~ type_identifier ~ (struct_literal_optional_field_list | tuple_fields)? }
+struct_literal =  { qualified_type_identifier ~ struct_literal_optional_field_list }
 
-struct_fields_lit = { "{" ~ struct_field ~ (COMMA ~ struct_field)* ~ TRAILING_COMMA ~ "}" }
+struct_literal_optional_field_list = {  "{" ~ struct_field_list? ~ "}" }
+anonymous_struct_literal = {  "{" ~ struct_field_list ~ "}" }
+
 struct_field      = { field_label ~ expression }
 tuple_fields      = { "(" ~ expression ~ (COMMA ~ expression)* ~ TRAILING_COMMA ~ ")" }
 struct_field_list = {
@@ -174,16 +176,24 @@ base_type       = {
   | map_type
   | array_type
   | tuple_type
+  | struct_type
   | unit_type
 }
 
-//built_in_type = @{ "Int" | "Float" | "String" | "Bool" }
 array_type    = { "[" ~ type_name ~ "]" }
 map_type      = { "[" ~ type_name ~ ":" ~ type_name ~ "]" }
+
 tuple_type    = { "(" ~ type_name ~ (COMMA ~ type_name)* ~ ")" }
+//  "(" ~ type_name ~ (COMMA ~ type_name)* ~ ")"
+
+struct_type    = { ("{" ~ struct_type_fields ~ "}") }
+struct_type_fields = { (struct_type_field ~ (COMMA ~ struct_type_field)* ~ TRAILING_COMMA)? }
+struct_type_field         = { field_label ~ type_name }
+// "{" ~ struct_type_field ~ (COMMA ~ struct_type_field)* ~ TRAILING_COMMA? ~ "}"
+// struct_type_field = { field_label ~ type_name }
+
 unit_type     = { "()" }
 
-struct_type_field = { field_label ~ type_name }
 field_label       = { identifier ~ ":" }
 
 generic_params  = { "<" ~ type_name ~ (COMMA ~ type_name)* ~ ">" }
@@ -233,9 +243,7 @@ impl_def = {
 
 impl_item = { normal_member_function | external_member_function }
 
-struct_def        = { "struct" ~ type_identifier ~ ("{" ~ field_definitions? ~ "}")? }
-field_definitions = { (field_def ~ (COMMA ~ field_def)* ~ TRAILING_COMMA)? }
-field_def         = { field_label ~ type_name }
+struct_def = { "struct" ~ type_identifier ~ struct_type? }
 
 type_def = { "type" ~ type_identifier ~ "=" ~ type_name }
 
@@ -252,8 +260,8 @@ enum_variant = {
 }
 
 simple_variant = { type_identifier }
-tuple_variant  = { type_identifier ~ "(" ~ type_name ~ (COMMA ~ type_name)* ~ ")" }
-struct_variant = { type_identifier ~ "{" ~ struct_type_field ~ (COMMA ~ struct_type_field)* ~ TRAILING_COMMA? ~ "}" }
+tuple_variant  = { type_identifier ~ tuple_type }
+struct_variant = { type_identifier ~ struct_type }
 
 function_def = {
     external_function
@@ -408,6 +416,7 @@ term = {
   | identifier_reference
   | constant_reference
   | struct_literal
+  | anonymous_struct_literal
   | interpolated_string
 }
 

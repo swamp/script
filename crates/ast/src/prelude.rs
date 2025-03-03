@@ -7,6 +7,6 @@ pub use crate::{
     EnumVariantType, Expression, FormatSpecifier, FunctionDeclaration, FunctionWithBody,
     GuardClause, GuardExpr, LiteralKind, LocalIdentifier, LocalTypeIdentifier, MatchArm, Module,
     ModulePath, Node, NormalPattern, Parameter, Pattern, PrecisionType, QualifiedTypeIdentifier,
-    SelfParameter, StringPart, StructType, Type, TypeForParameter, UnaryOperator, Use, UseItem,
-    Variable, VariableBinding,
+    SelfParameter, StringPart, Type, TypeForParameter, UnaryOperator, Use, UseItem, Variable,
+    VariableBinding,
 };

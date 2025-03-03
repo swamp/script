@@ -169,16 +169,15 @@ pub struct AliasType {
     pub referenced_type: Type,
 }
 
-#[derive(Debug, Eq, PartialEq, Default)]
-pub struct StructType {
-    pub identifier: LocalTypeIdentifier,
-    pub fields: Vec<FieldType>,
+#[derive(Debug, Eq, PartialEq, Hash, Default)]
+pub struct AnonymousStructType {
+    pub fields: Vec<StructTypeField>,
 }
 
-impl StructType {
+impl AnonymousStructType {
     #[must_use]
-    pub const fn new(identifier: LocalTypeIdentifier, fields: Vec<FieldType>) -> Self {
-        Self { identifier, fields }
+    pub const fn new(fields: Vec<StructTypeField>) -> Self {
+        Self { fields }
     }
 }
 
@@ -189,9 +188,15 @@ pub struct ConstantInfo {
 }
 
 #[derive(Debug)]
+pub struct NamedStructDef {
+    pub identifier: LocalTypeIdentifier,
+    pub struct_type: AnonymousStructType,
+}
+
+#[derive(Debug)]
 pub enum Definition {
     AliasDef(AliasType),
-    StructDef(StructType),
+    NamedStructDef(NamedStructDef),
     EnumDef(Node, Vec<EnumVariantType>),
     FunctionDef(Function),
     ImplDef(Node, Vec<Function>),
@@ -401,6 +406,7 @@ pub enum ExpressionKind {
     InterpolatedString(Vec<StringPart>),
 
     // Literals
+    AnonymousStructLiteral(Vec<FieldExpression>),
     StructLiteral(QualifiedTypeIdentifier, Vec<FieldExpression>, bool),
     Range(Box<Expression>, Box<Expression>, RangeMode),
     Literal(LiteralKind),
@@ -432,8 +438,8 @@ pub struct FieldExpression {
     pub expression: Expression,
 }
 
-#[derive(Debug, Eq, PartialEq)]
-pub struct FieldType {
+#[derive(Debug, Eq, Hash, PartialEq)]
+pub struct StructTypeField {
     pub field_name: FieldName,
     pub field_type: Type,
 }
@@ -451,11 +457,6 @@ pub enum EnumVariantLiteral {
         LocalTypeIdentifier,
         Vec<FieldExpression>,
     ),
-}
-
-#[derive(Debug, Default)]
-pub struct AnonymousStructType {
-    pub fields: Vec<FieldType>,
 }
 
 #[derive(Debug)]
@@ -482,8 +483,8 @@ pub enum Type {
 
     // Composite
     Generic(Box<Type>, Vec<Type>),
-    Struct(QualifiedTypeIdentifier),
     Array(Box<Type>),
+    AnonymousStruct(AnonymousStructType),
     Map(Box<Type>, Box<Type>),
     Tuple(Vec<Type>),
     Enum(QualifiedTypeIdentifier),

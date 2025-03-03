@@ -25,9 +25,10 @@ use swamp_script_semantic::modules::ModuleRef;
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::symtbl::{FuncDef, Symbol, SymbolTable, SymbolTableRef};
 use swamp_script_semantic::{
-    ArgumentExpressionOrLocation, LocationAccess, LocationAccessKind, MutOrImmutableExpression,
-    NormalPattern, Postfix, PostfixKind, RangeMode, SingleLocationExpression,
-    SingleLocationExpressionKind, SingleMutLocationExpression, TypeWithMut, WhenBinding,
+    AnonymousStructLiteral, ArgumentExpressionOrLocation, LocationAccess, LocationAccessKind,
+    MutOrImmutableExpression, NormalPattern, Postfix, PostfixKind, RangeMode,
+    SingleLocationExpression, SingleLocationExpressionKind, SingleMutLocationExpression,
+    TypeWithMut, WhenBinding,
 };
 use swamp_script_source_map::SourceMap;
 use tracing::error;
@@ -804,6 +805,10 @@ impl<'a> Analyzer<'a> {
                 has_rest,
             ) => self.analyze_struct_instantiation(struct_identifier, fields, *has_rest)?,
 
+            swamp_script_ast::ExpressionKind::AnonymousStructLiteral(fields) => {
+                self.analyze_anonymous_struct_literal(&ast_expression.node, fields, context)?
+            }
+
             swamp_script_ast::ExpressionKind::Range(min_value, max_value, range_mode) => {
                 let range = self.analyze_range(min_value, max_value, range_mode)?;
                 self.create_expr(
@@ -901,7 +906,7 @@ impl<'a> Analyzer<'a> {
     ) -> Result<StructTypeRef, Error> {
         let maybe_struct_type = self.analyze_named_type(qualified_type_identifier)?;
         match maybe_struct_type {
-            Type::Struct(struct_type) => Ok(struct_type),
+            Type::NamedStruct(struct_type) => Ok(struct_type),
             _ => Err(self.create_err(
                 // For other Type variants that are not Struct
                 ErrorKind::UnknownStructTypeReference,
@@ -1011,7 +1016,7 @@ impl<'a> Analyzer<'a> {
             }
             Type::Optional(_optional_type) => ExpressionKind::Literal(Literal::NoneLiteral),
 
-            Type::Struct(struct_ref) => self.create_default_static_call(node, struct_ref)?,
+            Type::NamedStruct(struct_ref) => self.create_default_static_call(node, struct_ref)?,
             _ => {
                 return Err(
                     self.create_err(ErrorKind::NoDefaultImplemented(field_type.clone()), node)
@@ -1091,25 +1096,30 @@ impl<'a> Analyzer<'a> {
         &mut self,
         field_name: &swamp_script_ast::Node,
         tv: Type,
-    ) -> Result<(StructTypeRef, usize, Type), Error> {
+    ) -> Result<(AnonymousStructType, usize, Type), Error> {
         let field_name_str = self.get_text(field_name).to_string();
 
-        if let Type::Struct(struct_type) = &tv {
-            if let Some(found_field) = struct_type
-                .borrow()
-                .anon_struct_type
-                .defined_fields
-                .get(&field_name_str)
-            {
-                let index = struct_type
-                    .borrow()
-                    .anon_struct_type
-                    .defined_fields
-                    .get_index(&field_name_str)
-                    .expect("checked earlier");
+        let anon_struct_ref = match &tv {
+            Type::NamedStruct(struct_type) => struct_type.borrow().anon_struct_type.clone(),
+            Type::AnonymousStruct(anon_struct) => anon_struct.clone(),
+            _ => return Err(self.create_err(ErrorKind::UnknownStructField, field_name)),
+        };
 
-                return Ok((struct_type.clone(), index, found_field.field_type.clone()));
-            }
+        if let Some(found_field) = anon_struct_ref
+            .field_name_sorted_fields
+            .get(&field_name_str)
+        {
+            let index = anon_struct_ref
+                .field_name_sorted_fields
+                .get_index(&field_name_str)
+                .expect("checked earlier");
+
+            info!(?index, ?field_name_str, ?tv, "found field index");
+            return Ok((
+                anon_struct_ref.clone(),
+                index,
+                found_field.field_type.clone(),
+            ));
         }
 
         Err(self.create_err(ErrorKind::UnknownStructField, field_name))
@@ -1173,7 +1183,7 @@ impl<'a> Analyzer<'a> {
                         tv.resolved_type = found_internal.ty.clone();
                         tv.is_mutable = false;
                         suffixes.push(found_internal);
-                    } else if let Type::Struct(struct_type) = &tv.resolved_type.clone() {
+                    } else if let Type::NamedStruct(struct_type) = &tv.resolved_type.clone() {
                         let return_type = self.analyze_postfix_member_call(
                             struct_type,
                             tv.is_mutable,
@@ -2712,7 +2722,7 @@ impl<'a> Analyzer<'a> {
         let self_type = &signature.parameters[0];
         if !self_type
             .resolved_type
-            .compatible_with(&Type::Struct(struct_type.clone()))
+            .compatible_with(&Type::NamedStruct(struct_type.clone()))
             || self_type.is_mutable && !is_mutable
         {
             return Err(self.create_err_resolved(ErrorKind::SelfNotCorrectType, resolved_node));
@@ -2745,7 +2755,8 @@ impl<'a> Analyzer<'a> {
     ) -> Result<Vec<Postfix>, Error> {
         let mut suffixes = Vec::new();
         //let field_name_str = self.get_text(member_name).to_string();
-        let struct_field_kind = PostfixKind::StructField(struct_type.clone(), index);
+        let struct_field_kind =
+            PostfixKind::StructField(struct_type.borrow().anon_struct_type.clone(), index);
 
         let struct_field_postfix = Postfix {
             node: resolved_node.clone(),
@@ -2793,12 +2804,16 @@ impl<'a> Analyzer<'a> {
                 )?;
                 vec![postfix]
             }
-            _ => match binding.anon_struct_type.defined_fields.get(&field_name_str) {
+            _ => match binding
+                .anon_struct_type
+                .field_name_sorted_fields
+                .get(&field_name_str)
+            {
                 Some(found_field) => {
                     if let Type::Function(signature) = &found_field.field_type {
                         let index = binding
                             .anon_struct_type
-                            .defined_fields
+                            .field_name_sorted_fields
                             .get_index(&field_name_str)
                             .expect("should work");
                         self.analyze_postfix_field_call(
