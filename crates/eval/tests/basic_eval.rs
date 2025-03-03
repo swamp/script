@@ -10,10 +10,7 @@ use std::rc::Rc;
 use swamp_script_core_extra::prelude::Value;
 use swamp_script_core_extra::qck_des::quick_deserialize;
 use swamp_script_eval::values_to_value_refs_owned;
-use swamp_script_semantic::{
-    ResolvedAnonymousStructFieldType, ResolvedAnonymousStructType, ResolvedNode,
-    ResolvedStructType, ResolvedType,
-};
+use swamp_script_semantic::{StructTypeField, AnonymousStructType, Node, StructType, Type};
 
 mod util;
 
@@ -698,7 +695,7 @@ fn serialize_octets() {
     assert_eq!(buf[0], 2);
 
     let (deserialized_value, deserialized_octet_size) =
-        quick_deserialize(&ResolvedType::Int, &buf, 0);
+        quick_deserialize(&Type::Int, &buf, 0);
     assert_eq!(deserialized_value, v);
     assert_eq!(size, deserialized_octet_size);
 }
@@ -713,35 +710,35 @@ fn serialize_struct_octets() {
     defined_fields
         .insert(
             "a".to_string(),
-            ResolvedAnonymousStructFieldType {
+            StructTypeField {
                 identifier: None,
-                field_type: ResolvedType::Int,
+                field_type: Type::Int,
             },
         )
         .expect("");
     defined_fields
         .insert(
             "b".to_string(),
-            ResolvedAnonymousStructFieldType {
+            StructTypeField {
                 identifier: None,
-                field_type: ResolvedType::String,
+                field_type: Type::String,
             },
         )
         .expect("");
     defined_fields
         .insert(
             "c".to_string(),
-            ResolvedAnonymousStructFieldType {
+            StructTypeField {
                 identifier: None,
-                field_type: ResolvedType::Float,
+                field_type: Type::Float,
             },
         )
         .expect("");
 
-    let struct_type = ResolvedStructType {
-        name: ResolvedNode::default(),
+    let struct_type = StructType {
+        name: Node::default(),
         assigned_name: "SomeStructType".to_string(),
-        anon_struct_type: ResolvedAnonymousStructType { defined_fields },
+        anon_struct_type: AnonymousStructType { defined_fields },
         functions: SeqMap::default(),
     };
     let struct_type_ref = Rc::new(RefCell::new(struct_type));
@@ -753,7 +750,7 @@ fn serialize_struct_octets() {
     let size = struct_value.quick_serialize(&mut buf, 0);
     assert_eq!(size, 21);
 
-    let complete_struct_type = ResolvedType::Struct(struct_type_ref);
+    let complete_struct_type = Type::Struct(struct_type_ref);
 
     let (deserialized_value, deserialized_octet_size) =
         quick_deserialize(&complete_struct_type, &buf, 0);
