@@ -1,7 +1,7 @@
 [package]
 name = "eira"
 version = "0.0.14"
-edition = "2021"
+edition = "2024"
 license = "MIT"
 description = "Ansi-colored error reporting output"
 repository = "https://github.com/piot/eira"
