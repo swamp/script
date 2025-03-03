@@ -46,9 +46,12 @@ float_lit      = @{ ("+" | "-")? ~ ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT+ }
 string_lit     = @{ "\"" ~ ("\\\"" | !"\"" ~ ANY)* ~ "\"" }
 bool_lit       =  { "true" | "false" }
 tuple_lit      =  { "(" ~ expression ~ (COMMA ~ expression)* ~ ")" }
-enum_literal   =  { qualified_type_identifier ~ SCOPE_OPERATOR ~ type_identifier ~ (anonymous_struct_literal | tuple_fields)? }
-struct_literal =  { qualified_type_identifier ~ anonymous_struct_literal }
+enum_literal   =  { qualified_type_identifier ~ SCOPE_OPERATOR ~ type_identifier ~ (struct_literal_optional_field_list | tuple_fields)? }
+struct_literal =  { qualified_type_identifier ~ struct_literal_optional_field_list }
+
+struct_literal_optional_field_list = {  "{" ~ struct_field_list? ~ "}" }
 anonymous_struct_literal = {  "{" ~ struct_field_list ~ "}" }
+
 struct_field      = { field_label ~ expression }
 tuple_fields      = { "(" ~ expression ~ (COMMA ~ expression)* ~ TRAILING_COMMA ~ ")" }
 struct_field_list = {

@@ -14,6 +14,7 @@ use swamp_script_semantic::{
     LocalIdentifier, LocalTypeIdentifier, NamedStructType, ParameterNode, Signature,
     StructTypeField, StructTypeRef, Type, TypeForParameter, UseItem,
 };
+use tracing::info;
 
 impl<'a> Analyzer<'a> {
     fn analyze_mod_definition(
@@ -183,7 +184,9 @@ impl<'a> Analyzer<'a> {
                     let simple_ref = EnumVariantSimpleType { common };
                     EnumVariantType::Nothing(EnumVariantSimpleTypeRef::from(simple_ref))
                 }
-                swamp_script_ast::EnumVariantType::Tuple(_variant_name_node, types) => {
+                swamp_script_ast::EnumVariantType::Tuple(variant_name_node, types) => {
+                    let debug_text = self.get_text(variant_name_node);
+                    info!(?debug_text, ?types, "tuple");
                     let mut vec = Vec::new();
                     for tuple_type in types {
                         let resolved_type = self.analyze_type(tuple_type)?;

@@ -495,7 +495,9 @@ pub fn build_analyze_error(err: &Error) -> Builder<usize> {
         ErrorKind::ExpressionsNotAllowedInLetPattern => todo!(),
         ErrorKind::UnknownField => todo!(),
         ErrorKind::EnumVariantHasNoFields => todo!(),
-        ErrorKind::TooManyTupleFields { .. } => todo!(),
+        ErrorKind::TooManyTupleFields { .. } => {
+            Report::build(Kind::Error, 102, "too many tuple fields", span)
+        }
         ErrorKind::NotInFunction => todo!(),
         ErrorKind::ExpectedBooleanExpression => {
             Report::build(Kind::Error, 102, "Expected a boolean expression", span)

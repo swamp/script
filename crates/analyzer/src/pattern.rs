@@ -8,6 +8,7 @@ use crate::err::{Error, ErrorKind};
 use swamp_script_semantic::{
     EnumVariantType, EnumVariantTypeRef, NormalPattern, Pattern, PatternElement, Type,
 };
+use tracing::info;
 
 impl<'a> Analyzer<'a> {
     fn find_variant_in_pattern(
@@ -120,6 +121,7 @@ impl<'a> Analyzer<'a> {
                     match &*enum_variant_type_ref {
                         EnumVariantType::Tuple(tuple_type) => {
                             // For tuples, elements must be in order but can be partial
+                            info!(?elements, x = ?tuple_type.fields_in_order, "this is wrong");
                             if elements.len() > tuple_type.fields_in_order.len() {
                                 return Err(self.create_err(
                                     ErrorKind::TooManyTupleFields {
