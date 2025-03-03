@@ -3,8 +3,8 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use crate::err::{Error, ErrorKind};
 use crate::Analyzer;
+use crate::err::{Error, ErrorKind};
 use swamp_script_semantic::{
     EnumVariantType, EnumVariantTypeRef, NormalPattern, Pattern, PatternElement, Type,
 };

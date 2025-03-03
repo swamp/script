@@ -1015,7 +1015,7 @@ impl<'a> Analyzer<'a> {
             _ => {
                 return Err(
                     self.create_err(ErrorKind::NoDefaultImplemented(field_type.clone()), node)
-                )
+                );
             }
         };
 
@@ -1413,7 +1413,7 @@ impl<'a> Analyzer<'a> {
                 &expression.node,
             ),
             _ => {
-                return Err(self.create_err(ErrorKind::ExpectedBooleanExpression, &expression.node))
+                return Err(self.create_err(ErrorKind::ExpectedBooleanExpression, &expression.node));
             }
         };
 

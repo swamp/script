@@ -13,16 +13,16 @@ use swamp_script_core_extra::extra::{SparseValueId, SparseValueMap};
 use swamp_script_core_extra::prelude::ValueError;
 use swamp_script_core_extra::value::ValueRef;
 use swamp_script_core_extra::value::{
-    convert_vec_to_rc_refcell, format_value, to_rust_value, SourceMapLookup, Value,
+    SourceMapLookup, Value, convert_vec_to_rc_refcell, format_value, to_rust_value,
 };
 use swamp_script_semantic::prelude::*;
-use swamp_script_semantic::{same_array_ref, Postfix, SingleMutLocationExpression};
-use swamp_script_semantic::{
-    same_struct_ref, BinaryOperatorKind, CompoundOperatorKind, ConstantId, ForPattern, Function,
-    MutOrImmutableExpression, NormalPattern, PatternElement, PostfixKind, SingleLocationExpression,
-    SingleLocationExpressionKind, UnaryOperatorKind,
-};
 use swamp_script_semantic::{ArgumentExpressionOrLocation, LocationAccess, LocationAccessKind};
+use swamp_script_semantic::{
+    BinaryOperatorKind, CompoundOperatorKind, ConstantId, ForPattern, Function,
+    MutOrImmutableExpression, NormalPattern, PatternElement, PostfixKind, SingleLocationExpression,
+    SingleLocationExpressionKind, UnaryOperatorKind, same_struct_ref,
+};
+use swamp_script_semantic::{Postfix, SingleMutLocationExpression, same_array_ref};
 use tracing::{error, info};
 
 pub mod err;
@@ -434,35 +434,44 @@ impl<'a, C> Interpreter<'a, C> {
                                 })?;
                             seq_map_mutable.get(&key).cloned()
                         };
-                        match found_memory { Some(found) => {
-                            found
-                        } _ => {
-                            let (_, seq_map_mutable) =
-                                borrowed_mut.expect_map_mut().map_err(|_| {
-                                    self.create_err(ExecuteErrorKind::ExpectedMap, node)
-                                })?;
-                            let default_value = Rc::new(RefCell::new(Value::Unit));
-                            seq_map_mutable
-                                .insert(key, default_value.clone())
-                                .expect("insert should work");
-                            default_value
-                        }}
+                        match found_memory {
+                            Some(found) => found,
+                            _ => {
+                                let (_, seq_map_mutable) =
+                                    borrowed_mut.expect_map_mut().map_err(|_| {
+                                        self.create_err(ExecuteErrorKind::ExpectedMap, node)
+                                    })?;
+                                let default_value = Rc::new(RefCell::new(Value::Unit));
+                                seq_map_mutable
+                                    .insert(key, default_value.clone())
+                                    .expect("insert should work");
+                                default_value
+                            }
+                        }
                     }
 
                     LocationAccessKind::ExternalTypeIndex(_rust_type_ref, key_expr) => {
                         let key_expr_value = self.evaluate_expression(key_expr)?;
-                        match key_expr_value.downcast_rust::<SparseValueId>()
-                        { Some(found_sparse_id) => {
-                            match value_ref.borrow_mut().downcast_rust::<SparseValueMap>()
-                            { Some(sparse_value_map) => {
-                                let inner_map = sparse_value_map.borrow_mut();
-                                wrap_in_option(inner_map.get(&found_sparse_id.borrow()).clone())
-                            } _ => {
+                        match key_expr_value.downcast_rust::<SparseValueId>() {
+                            Some(found_sparse_id) => {
+                                match value_ref.borrow_mut().downcast_rust::<SparseValueMap>() {
+                                    Some(sparse_value_map) => {
+                                        let inner_map = sparse_value_map.borrow_mut();
+                                        wrap_in_option(
+                                            inner_map.get(&found_sparse_id.borrow()).clone(),
+                                        )
+                                    }
+                                    _ => {
+                                        return Err(
+                                            self.create_err(ExecuteErrorKind::ExpectedArray, node)
+                                        )?;
+                                    }
+                                }
+                            }
+                            _ => {
                                 return Err(self.create_err(ExecuteErrorKind::ExpectedArray, node))?;
-                            }}
-                        } _ => {
-                            return Err(self.create_err(ExecuteErrorKind::ExpectedArray, node))?;
-                        }}
+                            }
+                        }
                     }
                 }
             };
@@ -620,7 +629,7 @@ impl<'a, C> Interpreter<'a, C> {
             self.evaluate_mut_or_immutable_expression(&iterator_expr.resolved_expression)?;
         let iterator_value = match iterator_value_mem {
             VariableValue::Value(_) => {
-                return Err(self.create_err(ExecuteErrorKind::ArgumentIsNotMutable, &body.node))
+                return Err(self.create_err(ExecuteErrorKind::ArgumentIsNotMutable, &body.node));
             }
             VariableValue::Reference(value_ref) => value_ref,
         };
@@ -806,29 +815,34 @@ impl<'a, C> Interpreter<'a, C> {
                 let mut all_expressions = Vec::new();
                 for binding in bindings {
                     let source = self.evaluate_mut_or_immutable_expression(&binding.expr)?;
-                    match source.to_value() { Value::Option(boxed_val) => {
-                        match boxed_val { Some(found_val) => {
-                            let variable_value = match source {
-                                VariableValue::Value(_) => {
-                                    // Source was not created mut, so copy value
-                                    VariableValue::Value(found_val.borrow().clone())
+                    match source.to_value() {
+                        Value::Option(boxed_val) => {
+                            match boxed_val {
+                                Some(found_val) => {
+                                    let variable_value = match source {
+                                        VariableValue::Value(_) => {
+                                            // Source was not created mut, so copy value
+                                            VariableValue::Value(found_val.borrow().clone())
+                                        }
+                                        VariableValue::Reference(_var_ref) => {
+                                            // It was `mut`
+                                            VariableValue::Reference(found_val)
+                                        }
+                                    };
+                                    all_expressions.push(variable_value);
                                 }
-                                VariableValue::Reference(_var_ref) => {
-                                    // It was `mut`
-                                    VariableValue::Reference(found_val)
+                                _ => {
+                                    all_are_some = false;
+                                    //warn!(?source, "Not ALL ARE SOME!");
+                                    break;
                                 }
-                            };
-                            all_expressions.push(variable_value);
-                        } _ => {
-                            all_are_some = false;
-                            //warn!(?source, "Not ALL ARE SOME!");
-                            break;
-                        }}
-                    } _ => {
-                        return Err(
-                            self.create_err(ExecuteErrorKind::ExpectedOptional, &true_block.node)
-                        );
-                    }}
+                            }
+                        }
+                        _ => {
+                            return Err(self
+                                .create_err(ExecuteErrorKind::ExpectedOptional, &true_block.node));
+                        }
+                    }
                 }
 
                 if all_are_some {
@@ -969,15 +983,18 @@ impl<'a, C> Interpreter<'a, C> {
                 let index_val = self.evaluate_expression(index)?;
                 let new_val = self.evaluate_expression(value)?;
 
-                match &mut *map_val.borrow_mut() { Value::Map(_type_id, elements) => {
-                    elements
-                        .insert(index_val, Rc::new(RefCell::new(new_val)))
-                        .map_err(|_| {
-                            self.create_err(ExecuteErrorKind::MapKeyAlreadyExists, &expr.node)
-                        })?;
-                } _ => {
-                    Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, &expr.node))?;
-                }}
+                match &mut *map_val.borrow_mut() {
+                    Value::Map(_type_id, elements) => {
+                        elements
+                            .insert(index_val, Rc::new(RefCell::new(new_val)))
+                            .map_err(|_| {
+                                self.create_err(ExecuteErrorKind::MapKeyAlreadyExists, &expr.node)
+                            })?;
+                    }
+                    _ => {
+                        Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, &expr.node))?;
+                    }
+                }
 
                 Value::Unit
             }
@@ -1146,7 +1163,7 @@ impl<'a, C> Interpreter<'a, C> {
                     _ => {
                         return Err(
                             self.create_err(ExecuteErrorKind::CoerceOptionToBoolFailed, &expr.node)
-                        )
+                        );
                     }
                 }
             }
@@ -1168,18 +1185,21 @@ impl<'a, C> Interpreter<'a, C> {
                 let mut all_expressions = Vec::new();
                 for binding in bindings {
                     let source = self.evaluate_mut_or_immutable_expression(&binding.expr)?;
-                    match source.to_value() { Value::Option(boxed_val) => {
-                        match boxed_val { Some(found_val) => {
-                            all_expressions.push(found_val.borrow().clone());
-                        } _ => {
-                            all_are_some = false;
-                            break;
-                        }}
-                    } _ => {
-                        return Err(
-                            self.create_err(ExecuteErrorKind::ExpectedOptional, &true_block.node)
-                        );
-                    }}
+                    match source.to_value() {
+                        Value::Option(boxed_val) => match boxed_val {
+                            Some(found_val) => {
+                                all_expressions.push(found_val.borrow().clone());
+                            }
+                            _ => {
+                                all_are_some = false;
+                                break;
+                            }
+                        },
+                        _ => {
+                            return Err(self
+                                .create_err(ExecuteErrorKind::ExpectedOptional, &true_block.node));
+                        }
+                    }
                 }
 
                 if all_are_some {
@@ -1366,61 +1386,71 @@ impl<'a, C> Interpreter<'a, C> {
                     return Err(self.create_err(ExecuteErrorKind::ArgumentIsNotMutable, node));
                 };
 
-                match &mut *value_ref.borrow_mut() { Value::Array(_type_id, vector) => {
-                    vector.remove(index as usize);
-                } _ => {
-                    Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, node))?;
-                }}
+                match &mut *value_ref.borrow_mut() {
+                    Value::Array(_type_id, vector) => {
+                        vector.remove(index as usize);
+                    }
+                    _ => {
+                        Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, node))?;
+                    }
+                }
 
                 value_ref.borrow().clone()
             }
 
             IntrinsicFunction::VecClear => {
-                match &mut *value_ref.borrow_mut() { Value::Array(_type_id, vector) => {
-                    vector.clear();
-                } _ => {
-                    Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, node))?;
-                }}
+                match &mut *value_ref.borrow_mut() {
+                    Value::Array(_type_id, vector) => {
+                        vector.clear();
+                    }
+                    _ => {
+                        Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, node))?;
+                    }
+                }
                 Value::Unit
             }
 
             IntrinsicFunction::VecPush => {
-                match &mut *value_ref.borrow_mut() { Value::Array(_type_id, vector) => {
-                    let value_to_add = self.evaluate_expression(&arguments[0])?;
-                    vector.push(Rc::new(RefCell::new(value_to_add)));
-                } _ => {
-                    Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, node))?;
-                }}
+                match &mut *value_ref.borrow_mut() {
+                    Value::Array(_type_id, vector) => {
+                        let value_to_add = self.evaluate_expression(&arguments[0])?;
+                        vector.push(Rc::new(RefCell::new(value_to_add)));
+                    }
+                    _ => {
+                        Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, node))?;
+                    }
+                }
                 Value::Unit
             }
 
-            IntrinsicFunction::VecLen => {
-                match &mut *value_ref.borrow_mut() { Value::Array(_type_id, vector) => {
+            IntrinsicFunction::VecLen => match &mut *value_ref.borrow_mut() {
+                Value::Array(_type_id, vector) => {
                     let length = vector.len();
                     Value::Int(length as i32)
-                } _ => {
-                    Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, node))?
-                }}
-            }
+                }
+                _ => Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, node))?,
+            },
 
-            IntrinsicFunction::VecPop => {
-                match &mut *value_ref.borrow_mut() { Value::Array(_type_id, vector) => {
+            IntrinsicFunction::VecPop => match &mut *value_ref.borrow_mut() {
+                Value::Array(_type_id, vector) => {
                     let maybe_val = vector.pop();
                     Value::Option(maybe_val)
-                } _ => {
-                    Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, node))?
-                }}
-            }
+                }
+                _ => Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, node))?,
+            },
 
             IntrinsicFunction::MapHas => {
                 let index_val = self.evaluate_expression(&arguments[0])?;
 
-                match value_ref.borrow().clone() { Value::Map(_type_id, ref seq_map) => {
-                    let has_key = seq_map.contains_key(&index_val);
-                    Value::Bool(has_key)
-                } _ => {
-                    return Err(self.create_err(ExecuteErrorKind::NotAMap, node));
-                }}
+                match value_ref.borrow().clone() {
+                    Value::Map(_type_id, ref seq_map) => {
+                        let has_key = seq_map.contains_key(&index_val);
+                        Value::Bool(has_key)
+                    }
+                    _ => {
+                        return Err(self.create_err(ExecuteErrorKind::NotAMap, node));
+                    }
+                }
             }
 
             IntrinsicFunction::MapRemove => {
@@ -1428,12 +1458,18 @@ impl<'a, C> Interpreter<'a, C> {
 
                 let result = {
                     let mut borrowed = value_ref.borrow_mut();
-                    match &mut *borrowed { Value::Map(_type_id, seq_map) => {
-                        let x = seq_map.remove(&index_val);
-                        x.map_or_else(|| Value::Option(None), |v| Value::Option(Some(v.clone())))
-                    } _ => {
-                        return Err(self.create_err(ExecuteErrorKind::NotAMap, node));
-                    }}
+                    match &mut *borrowed {
+                        Value::Map(_type_id, seq_map) => {
+                            let x = seq_map.remove(&index_val);
+                            x.map_or_else(
+                                || Value::Option(None),
+                                |v| Value::Option(Some(v.clone())),
+                            )
+                        }
+                        _ => {
+                            return Err(self.create_err(ExecuteErrorKind::NotAMap, node));
+                        }
+                    }
                 };
                 result
             }
@@ -1442,14 +1478,17 @@ impl<'a, C> Interpreter<'a, C> {
                 let borrowed = value_ref.borrow();
 
                 let sparse_value_map = borrowed.downcast_rust::<SparseValueMap>();
-                match sparse_value_map { Some(found) => {
-                    let resolved_value = self.evaluate_expression(&arguments[0])?;
-                    let id_value = found.borrow_mut().add(resolved_value);
+                match sparse_value_map {
+                    Some(found) => {
+                        let resolved_value = self.evaluate_expression(&arguments[0])?;
+                        let id_value = found.borrow_mut().add(resolved_value);
 
-                    id_value
-                } _ => {
-                    return Err(self.create_err(ExecuteErrorKind::NotSparseValue, node));
-                }}
+                        id_value
+                    }
+                    _ => {
+                        return Err(self.create_err(ExecuteErrorKind::NotSparseValue, node));
+                    }
+                }
             }
 
             IntrinsicFunction::SparseRemove => {
@@ -1458,50 +1497,54 @@ impl<'a, C> Interpreter<'a, C> {
                 let sparse_value_map = borrowed.downcast_rust::<SparseValueMap>();
                 if let Some(found) = sparse_value_map {
                     let id_value = self.evaluate_expression(&arguments[0])?;
-                    match id_value.downcast_rust::<SparseValueId>() { Some(found_id) => {
-                        found.borrow_mut().remove(&found_id.borrow());
-                    } _ => {
-                        return Err(self.create_err(ExecuteErrorKind::NotSparseValue, node));
-                    }}
+                    match id_value.downcast_rust::<SparseValueId>() {
+                        Some(found_id) => {
+                            found.borrow_mut().remove(&found_id.borrow());
+                        }
+                        _ => {
+                            return Err(self.create_err(ExecuteErrorKind::NotSparseValue, node));
+                        }
+                    }
                 }
 
                 Value::Unit
             }
             IntrinsicFunction::SparseSubscript => {
                 let sparse_value_map = value_ref.borrow_mut().downcast_rust::<SparseValueMap>();
-                match sparse_value_map { Some(found) => {
-                    let id_value = self.evaluate_expression(&arguments[0])?; // id
-                    match id_value.downcast_rust::<SparseValueId>() { Some(found_id) => {
-                        match found.borrow_mut().get(&found_id.borrow()) { Some(found_value) => {
-                            Value::Option(Some(found_value.clone()))
-                        } _ => {
-                            Value::Option(None)
-                        }}
-                    } _ => {
+                match sparse_value_map {
+                    Some(found) => {
+                        let id_value = self.evaluate_expression(&arguments[0])?; // id
+                        match id_value.downcast_rust::<SparseValueId>() {
+                            Some(found_id) => match found.borrow_mut().get(&found_id.borrow()) {
+                                Some(found_value) => Value::Option(Some(found_value.clone())),
+                                _ => Value::Option(None),
+                            },
+                            _ => {
+                                return Err(self.create_err(ExecuteErrorKind::NotSparseId, node));
+                            }
+                        }
+                    }
+                    _ => {
                         return Err(self.create_err(ExecuteErrorKind::NotSparseId, node));
-                    }}
-                } _ => {
-                    return Err(self.create_err(ExecuteErrorKind::NotSparseId, node));
-                }}
+                    }
+                }
             }
 
-            IntrinsicFunction::FloatRound => {
-                match value_ref.borrow().clone() { Value::Float(f) => {
-                    Value::Int(f.round().into())
-                } _ => {
+            IntrinsicFunction::FloatRound => match value_ref.borrow().clone() {
+                Value::Float(f) => Value::Int(f.round().into()),
+                _ => {
                     return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
-                }}
-            }
-            IntrinsicFunction::FloatFloor => {
-                match value_ref.borrow().clone() { Value::Float(f) => {
-                    Value::Int(f.floor().into())
-                } _ => {
+                }
+            },
+            IntrinsicFunction::FloatFloor => match value_ref.borrow().clone() {
+                Value::Float(f) => Value::Int(f.floor().into()),
+                _ => {
                     return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
-                }}
-            }
+                }
+            },
 
-            IntrinsicFunction::FloatSign => {
-                match value_ref.borrow().clone() { Value::Float(f) => {
+            IntrinsicFunction::FloatSign => match value_ref.borrow().clone() {
+                Value::Float(f) => {
                     let signum = if f.inner() < 0 {
                         -1
                     } else if f.inner() > 0 {
@@ -1510,173 +1553,171 @@ impl<'a, C> Interpreter<'a, C> {
                         0
                     };
                     Value::Float(Fp::from(signum as i16))
-                } _ => {
+                }
+                _ => {
                     return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
-                }}
-            }
-            IntrinsicFunction::FloatAbs => {
-                match value_ref.borrow().clone() { Value::Float(f) => {
-                    Value::Float(f.abs())
-                } _ => {
+                }
+            },
+            IntrinsicFunction::FloatAbs => match value_ref.borrow().clone() {
+                Value::Float(f) => Value::Float(f.abs()),
+                _ => {
                     return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
-                }}
-            }
+                }
+            },
 
-            IntrinsicFunction::FloatCos => {
-                match value_ref.borrow().clone() { Value::Float(f) => {
-                    Value::Float(f.cos())
-                } _ => {
+            IntrinsicFunction::FloatCos => match value_ref.borrow().clone() {
+                Value::Float(f) => Value::Float(f.cos()),
+                _ => {
                     return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
-                }}
-            }
+                }
+            },
 
-            IntrinsicFunction::FloatAcos => {
-                match value_ref.borrow().clone() { Value::Float(f) => {
-                    Value::Float(f.acos())
-                } _ => {
+            IntrinsicFunction::FloatAcos => match value_ref.borrow().clone() {
+                Value::Float(f) => Value::Float(f.acos()),
+                _ => {
                     return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
-                }}
-            }
+                }
+            },
 
-            IntrinsicFunction::FloatSin => {
-                match value_ref.borrow().clone() { Value::Float(f) => {
-                    Value::Float(f.sin())
-                } _ => {
+            IntrinsicFunction::FloatSin => match value_ref.borrow().clone() {
+                Value::Float(f) => Value::Float(f.sin()),
+                _ => {
                     return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
-                }}
-            }
+                }
+            },
 
-            IntrinsicFunction::FloatAsin => {
-                match value_ref.borrow().clone() { Value::Float(f) => {
-                    Value::Float(f.asin())
-                } _ => {
+            IntrinsicFunction::FloatAsin => match value_ref.borrow().clone() {
+                Value::Float(f) => Value::Float(f.asin()),
+                _ => {
                     return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
-                }}
-            }
+                }
+            },
 
-            IntrinsicFunction::FloatSqrt => {
-                match value_ref.borrow().clone() { Value::Float(f) => {
-                    Value::Float(f.sqrt())
-                } _ => {
+            IntrinsicFunction::FloatSqrt => match value_ref.borrow().clone() {
+                Value::Float(f) => Value::Float(f.sqrt()),
+                _ => {
                     return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
-                }}
-            }
+                }
+            },
 
             IntrinsicFunction::FloatMin => {
                 let min_value = self.evaluate_expression(&arguments[0])?;
-                match (value_ref.borrow().clone(), min_value)
-                { (Value::Float(f), Value::Float(min_f)) => {
-                    Value::Float(f.min(min_f))
-                } _ => {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
-                }}
+                match (value_ref.borrow().clone(), min_value) {
+                    (Value::Float(f), Value::Float(min_f)) => Value::Float(f.min(min_f)),
+                    _ => {
+                        return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
+                    }
+                }
             }
 
             IntrinsicFunction::FloatMax => {
                 let max_value = self.evaluate_expression(&arguments[0])?;
-                match (value_ref.borrow().clone(), max_value)
-                { (Value::Float(f), Value::Float(max_f)) => {
-                    Value::Float(f.max(max_f))
-                } _ => {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
-                }}
+                match (value_ref.borrow().clone(), max_value) {
+                    (Value::Float(f), Value::Float(max_f)) => Value::Float(f.max(max_f)),
+                    _ => {
+                        return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
+                    }
+                }
             }
 
             IntrinsicFunction::FloatAtan2 => {
                 let x_value = self.evaluate_expression(&arguments[0])?;
-                match (value_ref.borrow().clone(), x_value)
-                { (Value::Float(_y_f), Value::Float(_x_f)) => {
-                    Value::Float(Fp::from(-9999)) //y_f.atan2(x_f)) // TODO: Implement atan2
-                } _ => {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
-                }}
+                match (value_ref.borrow().clone(), x_value) {
+                    (Value::Float(_y_f), Value::Float(_x_f)) => {
+                        Value::Float(Fp::from(-9999)) //y_f.atan2(x_f)) // TODO: Implement atan2
+                    }
+                    _ => {
+                        return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
+                    }
+                }
             }
 
             IntrinsicFunction::FloatClamp => {
                 let min_value = self.evaluate_expression(&arguments[0])?;
                 let max_value = self.evaluate_expression(&arguments[1])?;
-                match (value_ref.borrow().clone(), min_value, max_value)
-                { (Value::Float(f), Value::Float(min_f), Value::Float(max_f)) => {
-                    Value::Float(f.clamp(min_f, max_f))
-                } _ => {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
-                }}
+                match (value_ref.borrow().clone(), min_value, max_value) {
+                    (Value::Float(f), Value::Float(min_f), Value::Float(max_f)) => {
+                        Value::Float(f.clamp(min_f, max_f))
+                    }
+                    _ => {
+                        return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
+                    }
+                }
             }
 
-            IntrinsicFunction::FloatRnd => {
-                match value_ref.borrow().clone() { Value::Float(f) => {
+            IntrinsicFunction::FloatRnd => match value_ref.borrow().clone() {
+                Value::Float(f) => {
                     let new_raw = squirrel_prng::squirrel_noise5(f.inner() as u32, 0);
                     Value::Int(new_raw as i32)
-                } _ => {
+                }
+                _ => {
                     return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
-                }}
-            }
+                }
+            },
 
-            IntrinsicFunction::IntAbs => {
-                match value_ref.borrow().clone() { Value::Int(i) => {
-                    Value::Int(i.abs())
-                } _ => {
+            IntrinsicFunction::IntAbs => match value_ref.borrow().clone() {
+                Value::Int(i) => Value::Int(i.abs()),
+                _ => {
                     return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
-                }}
-            }
+                }
+            },
 
             IntrinsicFunction::IntClamp => {
                 let min_value = self.evaluate_expression(&arguments[0])?;
                 let max_value = self.evaluate_expression(&arguments[1])?;
-                match (value_ref.borrow().clone(), min_value, max_value)
-                { (Value::Int(i), Value::Int(min_i), Value::Int(max_i)) => {
-                    Value::Int(i.clamp(min_i, max_i))
-                } _ => {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedInt, node));
-                }}
+                match (value_ref.borrow().clone(), min_value, max_value) {
+                    (Value::Int(i), Value::Int(min_i), Value::Int(max_i)) => {
+                        Value::Int(i.clamp(min_i, max_i))
+                    }
+                    _ => {
+                        return Err(self.create_err(ExecuteErrorKind::ExpectedInt, node));
+                    }
+                }
             }
 
             IntrinsicFunction::IntMin => {
                 let max_value = self.evaluate_expression(&arguments[0])?;
-                match (value_ref.borrow().clone(), max_value)
-                { (Value::Int(i), Value::Int(min_i)) => {
-                    Value::Int(i.min(min_i))
-                } _ => {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedInt, node));
-                }}
+                match (value_ref.borrow().clone(), max_value) {
+                    (Value::Int(i), Value::Int(min_i)) => Value::Int(i.min(min_i)),
+                    _ => {
+                        return Err(self.create_err(ExecuteErrorKind::ExpectedInt, node));
+                    }
+                }
             }
 
             IntrinsicFunction::IntMax => {
                 let max_value = self.evaluate_expression(&arguments[0])?;
-                match (value_ref.borrow().clone(), max_value)
-                { (Value::Int(i), Value::Int(max_i)) => {
-                    Value::Int(i.max(max_i))
-                } _ => {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedInt, node));
-                }}
+                match (value_ref.borrow().clone(), max_value) {
+                    (Value::Int(i), Value::Int(max_i)) => Value::Int(i.max(max_i)),
+                    _ => {
+                        return Err(self.create_err(ExecuteErrorKind::ExpectedInt, node));
+                    }
+                }
             }
 
-            IntrinsicFunction::IntRnd => {
-                match value_ref.borrow().clone() { Value::Int(i) => {
-                    Value::Int(squirrel_prng::squirrel_noise5(i as u32, 0) as i32)
-                } _ => {
+            IntrinsicFunction::IntRnd => match value_ref.borrow().clone() {
+                Value::Int(i) => Value::Int(squirrel_prng::squirrel_noise5(i as u32, 0) as i32),
+                _ => {
                     return Err(self.create_err(ExecuteErrorKind::ExpectedInt, node));
-                }}
-            }
+                }
+            },
 
-            IntrinsicFunction::IntToFloat => {
-                match value_ref.borrow().clone() { Value::Int(i) => {
-                    Value::Float(Fp::from(i as i16))
-                } _ => {
+            IntrinsicFunction::IntToFloat => match value_ref.borrow().clone() {
+                Value::Int(i) => Value::Float(Fp::from(i as i16)),
+                _ => {
                     return Err(self.create_err(ExecuteErrorKind::ExpectedInt, node));
-                }}
-            }
+                }
+            },
 
-            IntrinsicFunction::StringLen => {
-                match value_ref.borrow().clone() { Value::String(s) => {
-                    Value::Int(s.len().try_into().expect("string len overflow"))
-                } _ => {
+            IntrinsicFunction::StringLen => match value_ref.borrow().clone() {
+                Value::String(s) => Value::Int(s.len().try_into().expect("string len overflow")),
+                _ => {
                     return Err(self.create_err(ExecuteErrorKind::ExpectedString, node));
-                }}
-            }
+                }
+            },
 
-            IntrinsicFunction::Float2Magnitude => {
-                match value_ref.borrow().clone() { Value::Tuple(_tuple_ref, values) => {
+            IntrinsicFunction::Float2Magnitude => match value_ref.borrow().clone() {
+                Value::Tuple(_tuple_ref, values) => {
                     if values.len() != 2 {
                         return Err(self.create_err(
                             ExecuteErrorKind::WrongNumberOfArguments(2, values.len()),
@@ -1704,10 +1745,11 @@ impl<'a, C> Interpreter<'a, C> {
                             );
                         }
                     }
-                } _ => {
+                }
+                _ => {
                     return Err(self.create_err(ExecuteErrorKind::ExpectedTwoFloatTuple, node));
-                }}
-            }
+                }
+            },
 
             _ => todo!("{intrinsic_function:?} not implemented"),
         };
@@ -1751,16 +1793,20 @@ impl<'a, C> Interpreter<'a, C> {
                 val_ref = {
                     let borrowed = val_ref.borrow();
 
-                    match borrowed.clone() { Value::Option(found_option) => {
-                        match found_option { Some(some_value) => {
-                            some_value
-                        } _ => {
-                            let default_value = self.evaluate_expression(default_expression)?;
-                            Rc::new(RefCell::new(default_value))
-                        }}
-                    } _ => {
-                        return Err(self.create_err(ExecuteErrorKind::ExpectedOptional, &part.node));
-                    }}
+                    match borrowed.clone() {
+                        Value::Option(found_option) => match found_option {
+                            Some(some_value) => some_value,
+                            _ => {
+                                let default_value = self.evaluate_expression(default_expression)?;
+                                Rc::new(RefCell::new(default_value))
+                            }
+                        },
+                        _ => {
+                            return Err(
+                                self.create_err(ExecuteErrorKind::ExpectedOptional, &part.node)
+                            );
+                        }
+                    }
                 };
 
                 is_mutable = false;
@@ -1824,19 +1870,23 @@ impl<'a, C> Interpreter<'a, C> {
                 PostfixKind::ExternalTypeIndexRef(_rust_type_ref, map_expr) => {
                     let key_expr_value = self.evaluate_expression(map_expr)?;
                     val_ref = {
-                        match key_expr_value.downcast_rust::<SparseValueId>()
-                        { Some(found_sparse_id) => {
-                            match val_ref.borrow_mut().downcast_rust::<SparseValueMap>()
-                            { Some(sparse_value_map) => {
-                                wrap_in_option(
-                                    sparse_value_map.borrow_mut().get(&found_sparse_id.borrow()),
-                                )
-                            } _ => {
-                                panic!("internal error");
-                            }}
-                        } _ => {
-                            panic!("todo");
-                        }}
+                        match key_expr_value.downcast_rust::<SparseValueId>() {
+                            Some(found_sparse_id) => {
+                                match val_ref.borrow_mut().downcast_rust::<SparseValueMap>() {
+                                    Some(sparse_value_map) => wrap_in_option(
+                                        sparse_value_map
+                                            .borrow_mut()
+                                            .get(&found_sparse_id.borrow()),
+                                    ),
+                                    _ => {
+                                        panic!("internal error");
+                                    }
+                                }
+                            }
+                            _ => {
+                                panic!("todo");
+                            }
+                        }
                     };
                 }
                 PostfixKind::MemberCall(function_ref, arguments) => {
@@ -1856,19 +1906,21 @@ impl<'a, C> Interpreter<'a, C> {
                     val_ref = {
                         let borrowed = val_ref.borrow();
 
-                        match borrowed.clone() { Value::Option(found_option) => {
-                            match found_option { Some(some_value) => {
-                                some_value
-                            } _ => {
-                                is_undefined = true;
+                        match borrowed.clone() {
+                            Value::Option(found_option) => match found_option {
+                                Some(some_value) => some_value,
+                                _ => {
+                                    is_undefined = true;
 
-                                Rc::new(RefCell::new(Value::Option(None)))
-                            }}
-                        } _ => {
-                            return Err(
-                                self.create_err(ExecuteErrorKind::ExpectedOptional, &part.node)
-                            );
-                        }}
+                                    Rc::new(RefCell::new(Value::Option(None)))
+                                }
+                            },
+                            _ => {
+                                return Err(
+                                    self.create_err(ExecuteErrorKind::ExpectedOptional, &part.node)
+                                );
+                            }
+                        }
                     };
 
                     is_mutable = false;
@@ -1893,10 +1945,12 @@ impl<'a, C> Interpreter<'a, C> {
 
         if is_uncertain {
             let binding = val_ref.borrow().clone();
-            match binding { Value::Option(_) => {
-            } _ => {
-                val_ref = Rc::new(RefCell::new(Value::Option(Some(val_ref))));
-            }}
+            match binding {
+                Value::Option(_) => {}
+                _ => {
+                    val_ref = Rc::new(RefCell::new(Value::Option(Some(val_ref))));
+                }
+            }
         }
 
         Ok(val_ref)
@@ -2578,11 +2632,14 @@ impl<'a, C> Interpreter<'a, C> {
                 let source_val = self.evaluate_expression(&arguments[0])?;
                 let array_val_ref = self.evaluate_location(&location.0)?;
 
-                match &mut *array_val_ref.borrow_mut() { Value::Array(_type_id, vector) => {
-                    vector.push(Rc::new(RefCell::new(source_val)));
-                } _ => {
-                    Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, &node))?;
-                }}
+                match &mut *array_val_ref.borrow_mut() {
+                    Value::Array(_type_id, vector) => {
+                        vector.push(Rc::new(RefCell::new(source_val)));
+                    }
+                    _ => {
+                        Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, &node))?;
+                    }
+                }
                 //array_val_ref.borrow().clone()
                 Value::Unit
             }
@@ -2590,15 +2647,19 @@ impl<'a, C> Interpreter<'a, C> {
                 let source_val = self.evaluate_expression(&arguments[0])?;
 
                 let array_val_ref = self.evaluate_location(&location.0)?;
-                match &mut *array_val_ref.borrow_mut() { Value::Array(_type_id, vector) => {
-                    match source_val { Value::Array(_, items) => {
-                        vector.extend(items);
-                    } _ => {
-                        Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, &node))?;
-                    }}
-                } _ => {
-                    todo!("handle error")
-                }}
+                match &mut *array_val_ref.borrow_mut() {
+                    Value::Array(_type_id, vector) => match source_val {
+                        Value::Array(_, items) => {
+                            vector.extend(items);
+                        }
+                        _ => {
+                            Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, &node))?;
+                        }
+                    },
+                    _ => {
+                        todo!("handle error")
+                    }
+                }
 
                 // array_val_ref.borrow().clone()
                 Value::Unit

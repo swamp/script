@@ -3,10 +3,6 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 pub use crate::{
-    comma_seq,
-    intr::{IntrinsicFunction, IntrinsicFunctionDefinition, IntrinsicFunctionDefinitionRef},
-    modules::Modules,
-    symtbl::SymbolTable,
     AliasType, AliasTypeRef, AnonymousStructType, ArrayItem, ArrayItemRef, ArrayType, ArrayTypeRef,
     BinaryOperator, BooleanExpression, CompoundOperator, CompoundOperatorKind, Constant,
     ConstantRef, EnumLiteralData, EnumType, EnumTypeRef, EnumVariantCommon, EnumVariantSimpleType,
@@ -19,5 +15,8 @@ pub use crate::{
     LocalTypeIdentifier, Match, MatchArm, MemberCall, MutVariable, Node, ParameterNode, Pattern,
     PrecisionType, ProgramState, SemanticError, Signature, Span, StringPart, StructInstantiation,
     StructType, StructTypeField, StructTypeRef, TupleType, TupleTypeRef, Type, TypeForParameter,
-    TypeNumber, UnaryOperator, Variable, VariableRef,
+    TypeNumber, UnaryOperator, Variable, VariableRef, comma_seq,
+    intr::{IntrinsicFunction, IntrinsicFunctionDefinition, IntrinsicFunctionDefinitionRef},
+    modules::Modules,
+    symtbl::SymbolTable,
 };

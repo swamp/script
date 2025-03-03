@@ -2,5 +2,8 @@
 name = "swamp-script-examples"
 version = "0.0.1"
 edition = "2024"
+license = "MIT"
+repository = "https://github.com/swamp/script"
+description = "Swamp integration examples"
 
 [dependencies]

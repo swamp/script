@@ -782,7 +782,10 @@ fn deconstructing_struct() {
 #[test_log::test]
 fn operator_precedence() {
     let script = "z = y * 2 - x";
-    check(script, "VariableAssignment(<0:1>, BinaryOp(BinaryOp(VariableAccess(<4:1>), Multiply(<6:1>), Literal(Int(<8:1>))), Subtract(<10:1>), VariableAccess(<12:1>)))");
+    check(
+        script,
+        "VariableAssignment(<0:1>, BinaryOp(BinaryOp(VariableAccess(<4:1>), Multiply(<6:1>), Literal(Int(<8:1>))), Subtract(<10:1>), VariableAccess(<12:1>)))",
+    );
 }
 
 #[test_log::test]

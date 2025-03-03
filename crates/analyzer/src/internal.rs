@@ -4,7 +4,7 @@
  */
 
 use crate::err::{Error, ErrorKind};
-use crate::{Analyzer, TypeContext, SPARSE_TYPE_ID};
+use crate::{Analyzer, SPARSE_TYPE_ID, TypeContext};
 use swamp_script_semantic::prelude::IntrinsicFunction;
 use swamp_script_semantic::{ArrayTypeRef, MapTypeRef, Postfix, PostfixKind, TupleTypeRef};
 use swamp_script_semantic::{Expression, Type};
@@ -104,14 +104,14 @@ impl<'a> Analyzer<'a> {
                 _ => {
                     return Err(
                         self.create_err(ErrorKind::UnknownMemberFunction, ast_member_function_name)
-                    )
+                    );
                 }
             },
             _ => {
                 return Err(self.create_err(
                     ErrorKind::WrongNumberOfArguments(99, tuple_type.0.len()),
                     ast_member_function_name,
-                ))
+                ));
             }
         };
 
@@ -193,7 +193,7 @@ impl<'a> Analyzer<'a> {
             _ => {
                 return Err(
                     self.create_err(ErrorKind::UnknownMemberFunction, ast_member_function_name)
-                )
+                );
             }
         };
         Ok(expr)
@@ -314,7 +314,7 @@ impl<'a> Analyzer<'a> {
             _ => {
                 return Err(
                     self.create_err(ErrorKind::UnknownMemberFunction, &ast_member_function_name)
-                )
+                );
             }
         };
 
@@ -493,7 +493,7 @@ impl<'a> Analyzer<'a> {
             _ => {
                 return Err(
                     self.create_err(ErrorKind::UnknownMemberFunction, &ast_member_function_name)
-                )
+                );
             }
         };
 
@@ -593,7 +593,7 @@ impl<'a> Analyzer<'a> {
             _ => {
                 return Err(
                     self.create_err(ErrorKind::UnknownMemberFunction, &ast_member_function_name)
-                )
+                );
             }
         };
 

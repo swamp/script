@@ -570,7 +570,7 @@ impl Value {
                 return Err(ValueError::ConversionError(format!(
                     "Expected bool value {}",
                     self
-                )))
+                )));
             }
         };
 

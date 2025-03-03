@@ -4,16 +4,16 @@
  */
 
 use std::path::Path;
-use swamp_script_analyzer::prelude::Error;
 use swamp_script_analyzer::Analyzer;
+use swamp_script_analyzer::prelude::Error;
 use swamp_script_core_extra::prelude::Value;
 use swamp_script_eval::prelude::{ExecuteError, VariableValue};
-use swamp_script_eval::{eval_constants, eval_module, Constants, ExternalFunctions};
+use swamp_script_eval::{Constants, ExternalFunctions, eval_constants, eval_module};
 use swamp_script_parser::AstParser;
 use swamp_script_semantic::modules::Modules;
 use swamp_script_semantic::{
-    ExternalFunctionId, Expression, ExternalFunctionDefinition,
-    ProgramState, Type, TypeForParameter, SemanticError, Signature,
+    Expression, ExternalFunctionDefinition, ExternalFunctionId, ProgramState, SemanticError,
+    Signature, Type, TypeForParameter,
 };
 use swamp_script_source_map::SourceMap;
 use swamp_script_source_map_lookup::SourceMapWrapper;
@@ -141,7 +141,7 @@ fn compile_and_eval(script: &str) -> Result<(Value, Vec<String>), EvalTestError>
     )?;
 
     Ok((value, context.output))
-    
+
      */
 }
 

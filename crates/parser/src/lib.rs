@@ -4,17 +4,17 @@
  */
 pub mod prelude;
 
+use pest::Parser;
 use pest::error::{Error, ErrorVariant, InputLocation};
 use pest::iterators::Pair;
-use pest::Parser;
 use pest_derive::Parser;
 use std::iter::Peekable;
 use std::str::Chars;
 use swamp_script_ast::{
-    prelude::*, AssignmentOperatorKind, BinaryOperatorKind, CompoundOperator, CompoundOperatorKind,
+    AssignmentOperatorKind, BinaryOperatorKind, CompoundOperator, CompoundOperatorKind,
     EnumVariantLiteral, ExpressionKind, FieldExpression, FieldName, FieldType, ForPattern, ForVar,
     IterableExpression, Mod, PatternElement, QualifiedIdentifier, RangeMode, SpanWithoutFileId,
-    TypeForParameter, VariableBinding,
+    TypeForParameter, VariableBinding, prelude::*,
 };
 use swamp_script_ast::{Function, WhenBinding};
 use swamp_script_ast::{LiteralKind, MutableOrImmutableExpression};
@@ -453,7 +453,7 @@ impl AstParser {
                             pair.as_rule()
                         )),
                         &pair,
-                    ))
+                    ));
                 }
             }
         }
@@ -867,7 +867,7 @@ impl AstParser {
                     _ => {
                         return Err(
                             self.create_error_pair(SpecificError::ExpectedImplItem, &inner_item)
-                        )
+                        );
                     }
                 }
             }
@@ -1031,7 +1031,7 @@ impl AstParser {
                 )
             }
             _ => {
-                return Err(self.create_error_pair(SpecificError::InvalidForPattern, &inner_pattern))
+                return Err(self.create_error_pair(SpecificError::InvalidForPattern, &inner_pattern));
             }
         };
 
@@ -1233,7 +1233,7 @@ impl AstParser {
                 return Err(Self::to_err(
                     SpecificError::UnknownAssignmentOperator("strange".to_string()),
                     &sub,
-                ))
+                ));
             }
         };
 
@@ -1554,7 +1554,7 @@ impl AstParser {
                     _ => {
                         return Err(
                             self.create_error_pair(SpecificError::ExpectedFieldOrRest, &field_pair)
-                        )
+                        );
                     }
                 }
             }
@@ -1650,7 +1650,7 @@ impl AstParser {
                             return Err(self.create_error_pair(
                                 SpecificError::ExpectedExpressionInInterpolation,
                                 &inner,
-                            ))
+                            ));
                         }
                     };
 
@@ -1671,7 +1671,7 @@ impl AstParser {
                     return Err(self.create_error_pair(
                         SpecificError::UnexpectedRuleInInterpolation,
                         &part_pair,
-                    ))
+                    ));
                 }
             }
         }
@@ -1696,7 +1696,7 @@ impl AstParser {
                     _ => {
                         return Err(
                             self.create_error_pair(SpecificError::InvalidPrecisionType, pair)
-                        )?
+                        )?;
                     }
                 };
                 Ok(FormatSpecifier::Precision(
@@ -2245,7 +2245,7 @@ impl AstParser {
                 return Err(self.create_error_pair(
                     SpecificError::UnknownEnumVariant(Self::pair_to_rule(pair)),
                     pair,
-                ))
+                ));
             }
         };
 
@@ -2325,7 +2325,7 @@ impl AstParser {
                 return Err(Self::to_err(
                     SpecificError::UnknownExpr("guard_clause".to_string()),
                     &pair,
-                ))?
+                ))?;
             }
         };
 

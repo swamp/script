@@ -7,6 +7,5 @@ use std::io;
 
 #[test_log::test]
 fn test() -> io::Result<()> {
-
     Ok(())
 }

@@ -3,8 +3,8 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use crate::err::{Error, ErrorKind};
 use crate::TypeContext;
+use crate::err::{Error, ErrorKind};
 use crate::{Analyzer, LocationSide, SPARSE_TYPE_ID};
 use std::rc::Rc;
 use swamp_script_semantic::{

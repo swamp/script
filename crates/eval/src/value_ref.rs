@@ -76,34 +76,32 @@ impl ValueReference {
     ) -> Result<Box<dyn Iterator<Item = (Value, Self)>>, ValueError> {
         let inner = self.0.borrow();
         let result = match &*inner {
-            Value::RustValue(rust_type_ref, _rust_value) => {
-                Box::new(match rust_type_ref.number {
-                    SPARSE_TYPE_ID => {
-                        let sparse_map = inner
-                            .downcast_rust::<SparseValueMap>()
-                            .expect("must be sparsemap");
+            Value::RustValue(rust_type_ref, _rust_value) => Box::new(match rust_type_ref.number {
+                SPARSE_TYPE_ID => {
+                    let sparse_map = inner
+                        .downcast_rust::<SparseValueMap>()
+                        .expect("must be sparsemap");
 
-                        let id_type_ref = sparse_map.borrow().rust_type_ref_for_id.clone();
+                    let id_type_ref = sparse_map.borrow().rust_type_ref_for_id.clone();
 
-                        let pairs: Vec<_> = sparse_map
-                            .borrow_mut()
-                            .iter_mut()
-                            .map(|(k, v)| {
-                                (
-                                    Value::RustValue(
-                                        id_type_ref.clone(),
-                                        Rc::new(RefCell::new(Box::new(SparseValueId(k)))),
-                                    ),
-                                    Self(v.clone()),
-                                )
-                            })
-                            .collect();
+                    let pairs: Vec<_> = sparse_map
+                        .borrow_mut()
+                        .iter_mut()
+                        .map(|(k, v)| {
+                            (
+                                Value::RustValue(
+                                    id_type_ref.clone(),
+                                    Rc::new(RefCell::new(Box::new(SparseValueId(k)))),
+                                ),
+                                Self(v.clone()),
+                            )
+                        })
+                        .collect();
 
-                        Box::new(pairs.into_iter()) as Box<dyn Iterator<Item = (Value, Self)>>
-                    }
-                    _ => return Err(ValueError::CanNotCoerceToIterator),
-                })
-            }
+                    Box::new(pairs.into_iter()) as Box<dyn Iterator<Item = (Value, Self)>>
+                }
+                _ => return Err(ValueError::CanNotCoerceToIterator),
+            }),
             _ => todo!(),
         };
         Ok(result)

@@ -2,8 +2,8 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use crate::symtbl::{SymbolTable, SymbolTableRef};
 use crate::Type;
+use crate::symtbl::{SymbolTable, SymbolTableRef};
 use std::fmt::Debug;
 use std::rc::Rc;
 

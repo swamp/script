@@ -146,7 +146,7 @@ impl<'a> Analyzer<'a> {
                                 return Err(self.create_err(
                                     ErrorKind::EmptyArrayCanOnlyBeMapOrArray,
                                     &ast_node,
-                                ))
+                                ));
                             }
                         }
                     } else {

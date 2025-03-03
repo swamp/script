@@ -162,25 +162,26 @@ impl<'a> Analyzer<'a> {
                 .borrow()
                 .functions
                 .get(&"default".to_string())
-            { Some(function) => {
-                self.analyze_struct_init_calling_default(
+            {
+                Some(function) => self.analyze_struct_init_calling_default(
                     function,
                     struct_to_instantiate,
                     source_order_expressions,
                     &qualified_type_identifier.name.0,
-                )
-            } _ => {
-                let mapped: Vec<(usize, Expression)> = source_order_expressions
-                    .into_iter()
-                    .map(|(a, _b, c)| (a, c))
-                    .collect::<Vec<_>>();
-                self.analyze_struct_init_field_by_field(
-                    struct_to_instantiate,
-                    mapped,
-                    missing_fields,
-                    &qualified_type_identifier.name.0,
-                )
-            }}
+                ),
+                _ => {
+                    let mapped: Vec<(usize, Expression)> = source_order_expressions
+                        .into_iter()
+                        .map(|(a, _b, c)| (a, c))
+                        .collect::<Vec<_>>();
+                    self.analyze_struct_init_field_by_field(
+                        struct_to_instantiate,
+                        mapped,
+                        missing_fields,
+                        &qualified_type_identifier.name.0,
+                    )
+                }
+            }
         } else if missing_fields.is_empty() {
             let ty = Type::Struct(struct_to_instantiate.clone());
             let node = qualified_type_identifier.name.0.clone();

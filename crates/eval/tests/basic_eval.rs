@@ -10,7 +10,7 @@ use std::rc::Rc;
 use swamp_script_core_extra::prelude::Value;
 use swamp_script_core_extra::qck_des::quick_deserialize;
 use swamp_script_eval::values_to_value_refs_owned;
-use swamp_script_semantic::{StructTypeField, AnonymousStructType, Node, StructType, Type};
+use swamp_script_semantic::{AnonymousStructType, Node, StructType, StructTypeField, Type};
 
 mod util;
 
@@ -195,12 +195,15 @@ fn basic_eval_7() {
     ",
     );
 
-    match result { Value::Tuple(_, values) => {
-        let owned_values: Vec<_> = values.iter().map(|item| item.borrow().clone()).collect();
-        assert_eq!(owned_values, vec![Value::Int(10), Value::Int(5)]);
-    } _ => {
-        panic!()
-    }}
+    match result {
+        Value::Tuple(_, values) => {
+            let owned_values: Vec<_> = values.iter().map(|item| item.borrow().clone()).collect();
+            assert_eq!(owned_values, vec![Value::Int(10), Value::Int(5)]);
+        }
+        _ => {
+            panic!()
+        }
+    }
 }
 
 #[test_log::test]
@@ -347,7 +350,7 @@ fn basic_eval_14() {
         ]
 
     "#,
-        "[Button { position: Position { x: -49, y: 101 }, layer: 1 }, Button { position: Position { x: 20, y: -88 }, layer: 44 }]"
+        "[Button { position: Position { x: -49, y: 101 }, layer: 1 }, Button { position: Position { x: 20, y: -88 }, layer: 44 }]",
     );
 }
 
@@ -378,7 +381,8 @@ fn _basic_eval_15() {
         ]
 
         find_closest_button(buttons, Position { x: 20, y: -88 })
-    "#,  "[Button { position: Position { x: -49, y: 101 }, layer: 1 }, Button { position: Position { x: 20, y: -88 }, layer: 44 }]"
+    "#,
+        "[Button { position: Position { x: -49, y: 101 }, layer: 1 }, Button { position: Position { x: 20, y: -88 }, layer: 44 }]",
     );
 }
 
@@ -694,8 +698,7 @@ fn serialize_octets() {
     assert_eq!(size, 4);
     assert_eq!(buf[0], 2);
 
-    let (deserialized_value, deserialized_octet_size) =
-        quick_deserialize(&Type::Int, &buf, 0);
+    let (deserialized_value, deserialized_octet_size) = quick_deserialize(&Type::Int, &buf, 0);
     assert_eq!(deserialized_value, v);
     assert_eq!(size, deserialized_octet_size);
 }
