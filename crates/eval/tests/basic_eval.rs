@@ -195,12 +195,12 @@ fn basic_eval_7() {
     ",
     );
 
-    if let Value::Tuple(_, values) = result {
+    match result { Value::Tuple(_, values) => {
         let owned_values: Vec<_> = values.iter().map(|item| item.borrow().clone()).collect();
         assert_eq!(owned_values, vec![Value::Int(10), Value::Int(5)]);
-    } else {
+    } _ => {
         panic!()
-    }
+    }}
 }
 
 #[test_log::test]
