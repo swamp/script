@@ -1031,7 +1031,9 @@ impl AstParser {
                 )
             }
             _ => {
-                return Err(self.create_error_pair(SpecificError::InvalidForPattern, &inner_pattern));
+                return Err(
+                    self.create_error_pair(SpecificError::InvalidForPattern, &inner_pattern)
+                );
             }
         };
 

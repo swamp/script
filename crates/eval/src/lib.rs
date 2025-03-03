@@ -165,10 +165,10 @@ pub fn eval_module<C>(
     let mut interpreter = Interpreter::<C>::new(externals, constants, context);
     interpreter.debug_source_map = debug_source_map;
     let value_with_signal = interpreter.evaluate_expression_with_signal(root_expression)?;
-    Ok(value_with_signal.try_into().map_err(|_| ExecuteError {
-        node: Default::default(),
+    value_with_signal.try_into().map_err(|_| ExecuteError {
+        node: Node::default(),
         kind: ExecuteErrorKind::CouldNotConvertFromSignal,
-    })?)
+    })
 }
 
 pub fn eval_constants<C>(
