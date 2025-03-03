@@ -576,29 +576,42 @@ pub fn build_execute_error(err: &ExecuteError) -> Builder<usize> {
         ExecuteErrorKind::ExpectedString => {
             Report::build(Kind::Error, 104, "expected string", span)
         }
-        ExecuteErrorKind::ConversionError(_) => todo!(),
-        ExecuteErrorKind::ValueError(_) => todo!(),
+        ExecuteErrorKind::ValueError(_) => Report::build(Kind::Error, 104, "value error", span),
         ExecuteErrorKind::ArgumentIsNotMutable => {
             Report::build(Kind::Error, 104, "argument is not mutable", span)
         }
-        ExecuteErrorKind::CanNotUnwrap => todo!(),
-        ExecuteErrorKind::IllegalIterator => todo!(),
-        ExecuteErrorKind::ExpectedOptional => todo!(),
-        ExecuteErrorKind::NonUniqueKeysInMapLiteralDetected => todo!(),
-        ExecuteErrorKind::NotAnArray => todo!(),
-        ExecuteErrorKind::ValueIsNotMutable => todo!(),
-        ExecuteErrorKind::NotSparseValue => todo!(),
-        ExecuteErrorKind::CoerceOptionToBoolFailed => todo!(),
-        ExecuteErrorKind::VariableWasNotMutable => todo!(),
-        ExecuteErrorKind::ContinueNotAllowedHere => todo!(),
-        ExecuteErrorKind::BreakNotAllowedHere => todo!(),
-        ExecuteErrorKind::NotMutLocationFound => todo!(),
-        ExecuteErrorKind::IndexWasNotInteger => todo!(),
-        ExecuteErrorKind::NotAMap => todo!(),
-        ExecuteErrorKind::MissingExternalFunction(_) => todo!(),
-        ExecuteErrorKind::WrongNumberOfArguments(_, _) => todo!(),
-        ExecuteErrorKind::IncompatibleTypes => todo!(),
-        ExecuteErrorKind::RangeItemMustBeInt => todo!(),
+        ExecuteErrorKind::ExpectedOptional => {
+            Report::build(Kind::Error, 104, "expected optional", span)
+        }
+        ExecuteErrorKind::NonUniqueKeysInMapLiteralDetected => {
+            Report::build(Kind::Error, 104, "non unique map", span)
+        }
+        ExecuteErrorKind::NotAnArray => Report::build(Kind::Error, 104, "not an array", span),
+        ExecuteErrorKind::NotSparseValue => {
+            Report::build(Kind::Error, 104, "not sparse value", span)
+        }
+        ExecuteErrorKind::CoerceOptionToBoolFailed => {
+            Report::build(Kind::Error, 104, "coercion to bool failed", span)
+        }
+        ExecuteErrorKind::VariableWasNotMutable => {
+            Report::build(Kind::Error, 104, "variable was not mutable", span)
+        }
+        ExecuteErrorKind::ContinueNotAllowedHere => {
+            Report::build(Kind::Error, 104, "continue not allowed here", span)
+        }
+        ExecuteErrorKind::BreakNotAllowedHere => {
+            Report::build(Kind::Error, 104, "break not allowed here", span)
+        }
+        ExecuteErrorKind::NotAMap => Report::build(Kind::Error, 104, "not a map", span),
+        ExecuteErrorKind::MissingExternalFunction(_) => {
+            Report::build(Kind::Error, 104, "external function missing", span)
+        }
+        ExecuteErrorKind::WrongNumberOfArguments(_, _) => {
+            Report::build(Kind::Error, 104, "wrong number of arguments", span)
+        }
+        ExecuteErrorKind::RangeItemMustBeInt => {
+            Report::build(Kind::Error, 104, "range item must be Int", span)
+        }
         ExecuteErrorKind::OperationRequiresArray => todo!(),
         ExecuteErrorKind::ExpectedFloat => todo!(),
         ExecuteErrorKind::ExpectedTwoFloatTuple => todo!(),
@@ -610,10 +623,10 @@ pub fn build_execute_error(err: &ExecuteError) -> Builder<usize> {
         }
         ExecuteErrorKind::ExpectedArray => todo!(),
         ExecuteErrorKind::ExpectedMap => todo!(),
-        &swamp_script_eval::err::ExecuteErrorKind::PostfixChainError => todo!(),
-        &swamp_script_eval::err::ExecuteErrorKind::IndexOutOfBounds => todo!(),
+        ExecuteErrorKind::PostfixChainError => todo!(),
+        ExecuteErrorKind::IndexOutOfBounds => todo!(),
         &ExecuteErrorKind::DivideByZero | &ExecuteErrorKind::MapKeyAlreadyExists => todo!(),
-        &swamp_script_eval::err::ExecuteErrorKind::MustHaveGuardArmThatMatches => todo!(),
+        ExecuteErrorKind::MustHaveGuardArmThatMatches => todo!(),
         ExecuteErrorKind::CouldNotConvertFromSignal => todo!(),
     }
 }
