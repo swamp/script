@@ -1,5 +1,44 @@
 # Changelog
 
+## 🔖 [v0.0.16](https://github.com/swamp/script/releases/tag/v0.0.16) (2025-03-04)
+
+
+### General
+
+* 🐞 `impl` can be added to intrinsic types, named structs and enum. Previously it only worked on named structs.
+
+## 🔖 [v0.0.15](https://github.com/swamp/script/releases/tag/v0.0.15) (2025-03-04)
+
+
+### General
+
+* ✨ anonymous structs allowed in named struct definitions. e.g.
+```swamp
+struct Something { pos: { x : Int, y : Int } }
+```
+* ✨ anonymous structs coercion to named structs. e.g.
+
+```swamp
+Position { x: 10 }
+```
+can be written as
+
+```swamp
+{ x : 10}
+```
+if the type is known.
+* ✨ import all in `use` and `mod` with specifying "*". e.g.
+
+```swamp
+mod some_module::*
+```
+* 🐞 `mut` in struct pattern now works as intended
+* 🛠️ `mod` allows for import items just as `use` does. e.g.
+
+```swamp
+mod some_module::{something, Another}`
+```
+
 ## 🔖 [v0.0.8](https://github.com/swamp/script/releases/tag/v0.0.8) (2024-12-30)
 
 
