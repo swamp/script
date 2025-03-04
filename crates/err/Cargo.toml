@@ -1,18 +1,18 @@
 [package]
 name = "swamp-script-error-report"
-version = "0.0.15"
+version = "0.0.16"
 edition = "2024"
 license = "MIT"
 description = "Swamp script error report"
 repository = "https://github.com/swamp/script"
 
 [dependencies]
-swamp-script-semantic = { path = "../semantic", version = "0.0.15" }
-swamp-script-source-map = { path = "../source-map", version = "0.0.15" }
-swamp-script-dep-loader = { path = "../dep-loader", version = "0.0.15" }
-swamp-script-eval-loader = { path = "../eval-loader", version = "0.0.15" }
+swamp-script-semantic = { path = "../semantic", version = "0.0.16" }
+swamp-script-source-map = { path = "../source-map", version = "0.0.16" }
+swamp-script-dep-loader = { path = "../dep-loader", version = "0.0.16" }
+swamp-script-eval-loader = { path = "../eval-loader", version = "0.0.16" }
 
-swamp-script-eval = { path = "../eval", version = "0.0.15" }
-swamp-script-analyzer = { path = "../analyzer", version = "0.0.15" }
-swamp-script-parser = { path = "../parser", version = "0.0.15" }
-eira = { path = "../eira", version = "0.0.15" }
+swamp-script-eval = { path = "../eval", version = "0.0.16" }
+swamp-script-analyzer = { path = "../analyzer", version = "0.0.16" }
+swamp-script-parser = { path = "../parser", version = "0.0.16" }
+eira = { path = "../eira", version = "0.0.16" }
