@@ -6,8 +6,8 @@
 use crate::err::{Error, ErrorKind};
 use crate::{Analyzer, SPARSE_TYPE_ID, TypeContext};
 use swamp_script_semantic::prelude::IntrinsicFunction;
-use swamp_script_semantic::{ArrayTypeRef, MapTypeRef, Postfix, PostfixKind, TupleTypeRef};
 use swamp_script_semantic::{Expression, Type};
+use swamp_script_semantic::{Postfix, PostfixKind};
 
 impl Analyzer<'_> {
     pub(crate) fn check_for_internal_member_call(
@@ -18,7 +18,7 @@ impl Analyzer<'_> {
         ast_arguments: &[&swamp_script_ast::Expression],
     ) -> Result<Option<Postfix>, Error> {
         match &ty {
-            Type::Array(array_type_ref) => {
+            Type::Vec(array_type_ref) => {
                 let resolved = self.analyze_array_member_call(
                     array_type_ref,
                     is_mutable,
@@ -28,9 +28,10 @@ impl Analyzer<'_> {
                 Ok(Some(resolved))
             }
 
-            Type::Map(map_type_ref) => {
+            Type::Map(key, value) => {
                 let resolved = self.analyze_map_member_call(
-                    map_type_ref,
+                    key,
+                    value,
                     is_mutable,
                     ast_member_function_name,
                     ast_arguments,
@@ -70,20 +71,20 @@ impl Analyzer<'_> {
     }
     fn analyze_tuple_member_call(
         &mut self,
-        tuple_type: &TupleTypeRef,
+        tuple_type: &[Type],
         ast_member_function_name: &swamp_script_ast::Node,
         arguments: &[&swamp_script_ast::Expression],
     ) -> Result<Postfix, Error> {
-        if tuple_type.0.len() != 2 {
+        if tuple_type.len() != 2 {
             return Err(self.create_err(
-                ErrorKind::WrongNumberOfArguments(2, tuple_type.0.len()),
+                ErrorKind::WrongNumberOfArguments(2, tuple_type.len()),
                 ast_member_function_name,
             ));
         }
 
         let member_function_name_str = self.get_text(ast_member_function_name);
 
-        let resolved_expr = match (&tuple_type.0[0], &tuple_type.0[1]) {
+        let resolved_expr = match (&tuple_type[0], &tuple_type[1]) {
             (Type::Float, Type::Float) => match member_function_name_str {
                 "magnitude" => {
                     if !arguments.is_empty() {
@@ -106,7 +107,7 @@ impl Analyzer<'_> {
             },
             _ => {
                 return Err(self.create_err(
-                    ErrorKind::WrongNumberOfArguments(99, tuple_type.0.len()),
+                    ErrorKind::WrongNumberOfArguments(99, tuple_type.len()),
                     ast_member_function_name,
                 ));
             }
@@ -144,13 +145,14 @@ impl Analyzer<'_> {
 
     fn analyze_map_member_call(
         &mut self,
-        map_type: &MapTypeRef,
+        key_type: &Type,
+        value_type: &Type,
         is_mutable: bool,
         ast_member_function_name: &swamp_script_ast::Node,
         ast_arguments: &[&swamp_script_ast::Expression],
     ) -> Result<Postfix, Error> {
         let member_function_name_str = self.get_text(ast_member_function_name);
-        let key_arg_context = TypeContext::new_argument(&map_type.key_type);
+        let key_arg_context = TypeContext::new_argument(&key_type);
         let expr = match member_function_name_str {
             "remove" => {
                 self.check_mutable(is_mutable, ast_member_function_name)?;
@@ -198,7 +200,7 @@ impl Analyzer<'_> {
 
     fn analyze_array_member_call(
         &mut self,
-        array_type_ref: &ArrayTypeRef,
+        array_type_ref: &Type,
         is_mutable: bool,
         ast_member_function_name: &swamp_script_ast::Node,
         ast_arguments: &[&swamp_script_ast::Expression],
@@ -233,7 +235,7 @@ impl Analyzer<'_> {
                     ));
                 }
 
-                let element_type_context = TypeContext::new_argument(&array_type_ref.item_type);
+                let element_type_context = TypeContext::new_argument(&array_type_ref);
                 let value_expr =
                     self.analyze_expression(ast_arguments[0], &element_type_context)?;
 
@@ -256,7 +258,7 @@ impl Analyzer<'_> {
 
                 self.create_postfix(
                     PostfixKind::IntrinsicCall(IntrinsicFunction::VecPop, vec![]),
-                    &Type::Optional(Box::from(array_type_ref.item_type.clone())),
+                    &Type::Optional(Box::from(array_type_ref.clone())),
                     ast_member_function_name,
                 )
             }

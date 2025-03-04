@@ -363,7 +363,7 @@ pub fn build_analyze_error(err: &Error) -> Builder<usize> {
         ErrorKind::CanNotDestructure => {
             Report::build(Kind::Error, 4203, "Can Not Destructure", span)
         }
-        ErrorKind::EmptyArrayCanOnlyBeMapOrArray => Report::build(
+        ErrorKind::EmptySliceCanOnlyBeMapOrArray => Report::build(
             Kind::Error,
             903,
             "EmptyArrayCanOnlyBeMapOrArray",

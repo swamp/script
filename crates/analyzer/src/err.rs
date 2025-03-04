@@ -6,7 +6,7 @@
 use seq_map::SeqMapError;
 use std::num::{ParseFloatError, ParseIntError};
 use swamp_script_semantic::{
-    AnonymousStructType, EnumVariantTypeRef, Node, SemanticError, Span, StructTypeRef, Type,
+    AnonymousStructType, EnumVariantTypeRef, NamedStructTypeRef, Node, SemanticError, Span, Type,
 };
 
 #[derive(Debug)]
@@ -26,7 +26,7 @@ pub enum ErrorKind {
     TooManyDestructureVariables,
     EmptyBlockWrongType,
     CanNotDestructure,
-    EmptyArrayCanOnlyBeMapOrArray,
+    EmptySliceCanOnlyBeMapOrArray,
     //NamespaceError(NamespaceError),
     CanNotFindModule(Vec<String>),
     UnknownStructTypeReference,
@@ -34,7 +34,7 @@ pub enum ErrorKind {
     DuplicateFieldName,
     Unknown(String),
     UnknownImplTargetTypeReference(swamp_script_ast::LocalTypeIdentifier),
-    WrongFieldCountInStructInstantiation(StructTypeRef, usize),
+    WrongFieldCountInStructInstantiation(NamedStructTypeRef, usize),
     MissingFieldInStructInstantiation(Vec<String>, AnonymousStructType),
     ExpectedFunctionExpression,
     CouldNotFindMember(Node, Node),
@@ -98,7 +98,7 @@ pub enum ErrorKind {
     WasNotFieldMutRef,
     UnknownFunction,
     NoDefaultImplemented(Type),
-    NoDefaultImplementedForStruct(StructTypeRef),
+    NoDefaultImplementedForStruct(NamedStructTypeRef),
     UnknownConstant,
     ExpectedFunctionTypeForFunctionCall,
     TypeDoNotSupportIndexAccess,

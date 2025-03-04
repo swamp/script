@@ -414,7 +414,7 @@ pub enum ExpressionKind {
 
     // Literals
     AnonymousStructLiteral(Vec<FieldExpression>, bool),
-    StructLiteral(QualifiedTypeIdentifier, Vec<FieldExpression>, bool),
+    NamedStructLiteral(QualifiedTypeIdentifier, Vec<FieldExpression>, bool),
     Range(Box<Expression>, Box<Expression>, RangeMode),
     Literal(LiteralKind),
 }
@@ -434,9 +434,9 @@ pub enum LiteralKind {
     Bool,
     EnumVariant(EnumVariantLiteral),
     Tuple(Vec<Expression>),
-    Array(Vec<Expression>),
-    Map(Vec<(Expression, Expression)>),
-    None, // none
+    Slice(Vec<Expression>),
+    SlicePair(Vec<(Expression, Expression)>),
+    None,
 }
 
 #[derive(Debug)]
@@ -481,24 +481,17 @@ pub struct TypeForParameter {
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub enum Type {
-    // Primitives
-    Unit(Node),
-    Int(Node),
-    Float(Node),
-    String(Node),
-    Bool(Node),
-
     // Composite
-    Generic(Box<Type>, Vec<Type>),
-    Array(Box<Type>),
+    Slice(Box<Type>),                // Value array
+    SlicePair(Box<Type>, Box<Type>), // Key : Value
     AnonymousStruct(AnonymousStructType),
-    Map(Box<Type>, Box<Type>),
     Tuple(Vec<Type>),
-    Enum(QualifiedTypeIdentifier),
-    Optional(Box<Type>, Node),
     Function(Vec<TypeForParameter>, Box<Type>),
 
     Named(QualifiedTypeIdentifier),
+
+    Generic(Box<Type>, Vec<Type>),
+    Optional(Box<Type>, Node),
 }
 
 #[derive(Debug)]
@@ -621,7 +614,7 @@ impl Debug for Module {
 
 impl Module {
     #[must_use]
-    pub fn new(definitions: Vec<Definition>, expression: Option<Expression>) -> Self {
+    pub const fn new(definitions: Vec<Definition>, expression: Option<Expression>) -> Self {
         Self {
             expression,
             definitions,

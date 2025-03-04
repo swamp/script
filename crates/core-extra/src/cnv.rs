@@ -1,6 +1,6 @@
 use crate::value::Value;
 use crate::value::ValueRef;
-use swamp_script_semantic::StructTypeRef;
+use swamp_script_semantic::NamedStructTypeRef;
 
 pub fn overwrite_value(target: &ValueRef, source: Value) {
     if let Value::NamedStruct(ref mut target_struct_type_ref, ref mut target_fields) =
@@ -20,9 +20,9 @@ pub fn overwrite_value(target: &ValueRef, source: Value) {
 /// # Panics
 ///
 pub fn overwrite_struct(
-    target_struct_type_ref: StructTypeRef,
+    target_struct_type_ref: NamedStructTypeRef,
     target_values: &mut Vec<ValueRef>,
-    source_struct: StructTypeRef,
+    source_struct: NamedStructTypeRef,
     source_values: Vec<ValueRef>,
 ) {
     let borrowed_source_struct_type = source_struct.borrow();

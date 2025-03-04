@@ -12,10 +12,10 @@ use std::fmt::{Debug, Display};
 use std::hash::Hash;
 use std::rc::Rc;
 use swamp_script_semantic::{
-    AnonymousStructType, ArrayTypeRef, EnumVariantSimpleTypeRef, EnumVariantStructTypeRef,
+    AnonymousStructType, EnumVariantSimpleTypeRef, EnumVariantStructTypeRef,
     EnumVariantTupleTypeRef, ExternalFunctionDefinitionRef, ExternalTypeRef, FormatSpecifierKind,
-    InternalFunctionDefinitionRef, MapTypeRef, Node, PrecisionType, RangeMode, Span, StructTypeRef,
-    TupleTypeRef, TypeNumber,
+    InternalFunctionDefinitionRef, NamedStructTypeRef, Node, PrecisionType, RangeMode, Span, Type,
+    TypeNumber,
 };
 
 pub type ValueRef = Rc<RefCell<Value>>;
@@ -88,10 +88,10 @@ pub enum Value {
     Option(Option<ValueRef>),
 
     // Containers
-    Array(ArrayTypeRef, Vec<ValueRef>),
-    Map(MapTypeRef, SeqMap<Value, ValueRef>), // Do not change to HashMap, the order is important for it to be deterministic
-    Tuple(TupleTypeRef, Vec<ValueRef>),
-    NamedStruct(StructTypeRef, Vec<ValueRef>), // type of the struct, and the fields themselves in strict order
+    Vec(Type, Vec<ValueRef>),
+    Map(Type, Type, SeqMap<Value, ValueRef>), // Do not change to HashMap, the order is important for it to be deterministic
+    Tuple(Vec<Type>, Vec<ValueRef>),
+    NamedStruct(NamedStructTypeRef, Vec<ValueRef>), // type of the struct, and the fields themselves in strict order
     AnonymousStruct(AnonymousStructType, Vec<ValueRef>), // type of the struct, and the fields themselves in strict order
 
     EnumVariantSimple(EnumVariantSimpleTypeRef),
@@ -170,7 +170,7 @@ impl Value {
                     1 + inner_size
                 }
             },
-            Self::Array(_array_ref, values) => {
+            Self::Vec(_array_ref, values) => {
                 let mut offset = 0;
 
                 let count: u16 = values.len() as u16;
@@ -187,7 +187,7 @@ impl Value {
                 }
                 offset
             }
-            Self::Map(_map_ref, values) => {
+            Self::Map(_key, _value, values) => {
                 let mut offset = 0;
 
                 let count: u16 = values.len() as u16;
@@ -291,17 +291,17 @@ impl Clone for Value {
             }
 
             // Containers
-            Self::Array(resolved_ref, vec_refs) => {
-                Self::Array(resolved_ref.clone(), deep_clone_valrefs(vec_refs))
+            Self::Vec(resolved_ref, vec_refs) => {
+                Self::Vec(resolved_ref.clone(), deep_clone_valrefs(vec_refs))
             }
 
-            Self::Map(resolved_ref, seq_map) => {
+            Self::Map(key, value, seq_map) => {
                 let cloned_seq_map = seq_map
                     .iter()
                     .map(|(key, val_ref)| (key.clone(), deep_clone_valref(val_ref)))
                     .collect();
 
-                Self::Map(resolved_ref.clone(), cloned_seq_map)
+                Self::Map(key.clone(), value.clone(), cloned_seq_map)
             }
 
             Self::Tuple(resolved_ref, vec_refs) => {
@@ -384,7 +384,7 @@ impl Value {
     pub fn into_iter(self) -> Result<Box<dyn Iterator<Item = Self>>, ValueError> {
         match self {
             // TODO: Self::Reference(value_ref) => value_ref.borrow().clone().into_iter(is_mutable),
-            Self::Array(_, values) => Ok(Box::new(
+            Self::Vec(_, values) => Ok(Box::new(
                 values.into_iter().map(|item| item.borrow().clone()),
             )),
             Self::String(values) => Ok(Box::new(
@@ -394,7 +394,7 @@ impl Value {
                     .collect::<Vec<Self>>()
                     .into_iter(),
             )),
-            Self::Map(_, seq_map) => Ok(Box::new(
+            Self::Map(_key, _value, seq_map) => Ok(Box::new(
                 seq_map.into_values().map(|item| item.borrow().clone()),
             )),
             Self::RustValue(ref rust_type_ref, _) => match rust_type_ref.number {
@@ -430,7 +430,7 @@ impl Value {
     ///
     pub fn into_iter_pairs(self) -> Result<Box<dyn Iterator<Item = (Self, Self)>>, ValueError> {
         let values = match self {
-            Self::Map(_, seq_map) => {
+            Self::Map(_, _, seq_map) => {
                 Box::new(seq_map.into_iter().map(|(k, v)| (k, v.borrow().clone())))
             }
             Self::Tuple(_type_ref, elements) => {
@@ -440,7 +440,7 @@ impl Value {
                     .map(move |(i, v)| (Self::Int(i as i32), v.borrow().clone()));
                 Box::new(iter) as Box<dyn Iterator<Item = (Self, Self)>>
             }
-            Self::Array(_type_ref, array) => {
+            Self::Vec(_type_ref, array) => {
                 let iter = array
                     .into_iter()
                     .enumerate()
@@ -508,7 +508,7 @@ impl Value {
         }
     }
 
-    pub fn expect_struct(&self) -> Result<(StructTypeRef, &Vec<ValueRef>), ValueError> {
+    pub fn expect_struct(&self) -> Result<(NamedStructTypeRef, &Vec<ValueRef>), ValueError> {
         match self {
             Self::NamedStruct(struct_ref, fields) => Ok((struct_ref.clone(), fields)),
             _ => Err(ValueError::ConversionError("Expected struct value".into())),
@@ -527,29 +527,25 @@ impl Value {
         }
     }
 
-    pub fn expect_array(&self) -> Result<(ArrayTypeRef, &Vec<ValueRef>), ValueError> {
+    pub fn expect_array(&self) -> Result<(Type, &Vec<ValueRef>), ValueError> {
         match self {
-            Self::Array(resolved_array_ref, fields) => Ok((resolved_array_ref.clone(), fields)),
+            Self::Vec(resolved_array_ref, fields) => Ok((resolved_array_ref.clone(), fields)),
             _ => Err(ValueError::ConversionError("Expected array value".into())),
         }
     }
 
-    pub fn expect_map(&self) -> Result<(MapTypeRef, &SeqMap<Value, ValueRef>), ValueError> {
+    pub fn expect_map(&self) -> Result<(Type, Type, &SeqMap<Value, ValueRef>), ValueError> {
         match self {
-            Self::Map(resolved_map_type_ref, seq_map) => {
-                Ok((resolved_map_type_ref.clone(), seq_map))
-            }
+            Self::Map(key, value, seq_map) => Ok((key.clone(), value.clone(), seq_map)),
             _ => Err(ValueError::ConversionError("Expected map value".into())),
         }
     }
 
     pub fn expect_map_mut(
         &mut self,
-    ) -> Result<(MapTypeRef, &mut SeqMap<Value, ValueRef>), ValueError> {
+    ) -> Result<(Type, Type, &mut SeqMap<Value, ValueRef>), ValueError> {
         match self {
-            Self::Map(resolved_map_type_ref, seq_map) => {
-                Ok((resolved_map_type_ref.clone(), seq_map))
-            }
+            Self::Map(key, value, seq_map) => Ok((key.clone(), value.clone(), seq_map)),
             _ => Err(ValueError::ConversionError("Expected map value".into())),
         }
     }
@@ -635,7 +631,7 @@ impl Value {
     }
 
     pub fn new_hidden_rust_struct<T: RustType + 'static + PartialEq>(
-        struct_type: StructTypeRef,
+        struct_type: NamedStructTypeRef,
         rust_description: ExternalTypeRef,
         value: T,
     ) -> Self {
@@ -657,7 +653,7 @@ impl Display for Value {
             Self::Float(n) => write!(f, "{n}"),
             Self::String(s) => write!(f, "\"{s}\""),
             Self::Bool(b) => write!(f, "{b}"),
-            Self::Array(_item_type, arr) => {
+            Self::Vec(_item_type, arr) => {
                 write!(f, "[")?;
                 for (i, val) in arr.iter().enumerate() {
                     if i > 0 {
@@ -667,7 +663,7 @@ impl Display for Value {
                 }
                 write!(f, "]")
             }
-            Self::Map(_map_type_ref, items) => {
+            Self::Map(_key, _value, items) => {
                 write!(f, "[")?;
                 for (i, (key, val)) in items.iter().enumerate() {
                     if i > 0 {
@@ -820,7 +816,7 @@ impl Hash for Value {
             Self::Bool(b) => b.hash(state),
             Self::Unit => (),
             Self::Option(_wrapped) => {}
-            Self::Array(_, _arr) => {}
+            Self::Vec(_, _arr) => {}
             Self::NamedStruct(type_ref, values) => {
                 type_ref.borrow().name().span.hash(state);
                 for v in values {
@@ -833,7 +829,7 @@ impl Hash for Value {
                     v.borrow().hash(state);
                 }
             }
-            Self::Map(_, _items) => {}
+            Self::Map(_, _, _items) => {}
             Self::Tuple(_, _arr) => {}
             Self::EnumVariantSimple(_) => (),
             Self::EnumVariantTuple(_, _fields) => todo!(),

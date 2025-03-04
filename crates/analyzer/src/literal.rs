@@ -6,8 +6,7 @@ use crate::err::{Error, ErrorKind};
 use crate::{Analyzer, TypeContext};
 use std::rc::Rc;
 use swamp_script_semantic::{
-    EnumLiteralData, EnumVariantType, Expression, Fp, Literal, MapType, MapTypeRef, Node,
-    TupleType, TupleTypeRef, Type,
+    EnumLiteralData, EnumVariantType, Expression, Fp, Literal, Node, Type,
 };
 use tracing::error;
 
@@ -133,44 +132,61 @@ impl Analyzer<'_> {
                 return Err(self.create_err(ErrorKind::UnknownEnumType, ast_node));
             }
 
-            swamp_script_ast::LiteralKind::Array(items) => {
-                if items.len() == 0 {
+            swamp_script_ast::LiteralKind::Slice(items) => {
+                if items.is_empty() {
                     if let Some(found_expected_type) = context.expected_type {
                         match found_expected_type {
-                            Type::Map(map_type_ref) => (
-                                Literal::Map(map_type_ref.clone(), vec![]),
+                            Type::Map(key, value) => (
+                                Literal::Map(*key.clone(), *value.clone(), vec![]),
                                 found_expected_type.clone(),
                             ),
-                            Type::Array(array_type_ref) => (
-                                Literal::Array(array_type_ref.clone(), vec![]),
+                            Type::Vec(element_type) => (
+                                Literal::Vec(*element_type.clone(), vec![]),
                                 found_expected_type.clone(),
                             ),
                             _ => {
                                 return Err(self.create_err(
-                                    ErrorKind::EmptyArrayCanOnlyBeMapOrArray,
+                                    ErrorKind::EmptySliceCanOnlyBeMapOrArray,
                                     ast_node,
                                 ));
                             }
                         }
                     } else {
                         return Err(
-                            self.create_err(ErrorKind::EmptyArrayCanOnlyBeMapOrArray, ast_node)
+                            self.create_err(ErrorKind::EmptySliceCanOnlyBeMapOrArray, ast_node)
                         );
                     }
                 } else {
-                    let (array_type_ref, resolved_items) =
-                        self.analyze_array_type_helper(ast_node, items, context.expected_type)?;
-                    (
-                        Literal::Array(array_type_ref.clone(), resolved_items),
-                        Type::Array(array_type_ref),
-                    )
+                    let (element_type, resolved_items) =
+                        self.analyze_slice_type_helper(ast_node, items, context.expected_type)?;
+                    if let Some(found_expected_type) = context.expected_type {
+                        match found_expected_type {
+                            Type::Vec(_) => (
+                                Literal::Vec(element_type.clone(), resolved_items),
+                                Type::Vec(Box::from(element_type)),
+                            ),
+                            _ => (
+                                Literal::Slice(element_type.clone(), resolved_items),
+                                Type::Slice(Box::from(element_type)),
+                            ),
+                        }
+                    } else {
+                        (
+                            Literal::Slice(element_type.clone(), resolved_items),
+                            Type::Slice(Box::from(element_type)),
+                        )
+                    }
                 }
             }
 
-            swamp_script_ast::LiteralKind::Map(entries) => {
-                let (map_literal, map_type_ref) = self.analyze_map_literal(ast_node, &entries)?;
+            swamp_script_ast::LiteralKind::SlicePair(entries) => {
+                let (map_literal, key_type, value_type) =
+                    self.analyze_map_literal(ast_node, &entries)?;
 
-                (map_literal, Type::Map(map_type_ref))
+                (
+                    map_literal,
+                    Type::Map(Box::from(key_type.clone()), Box::from(value_type.clone())),
+                )
             }
 
             swamp_script_ast::LiteralKind::Tuple(expressions) => {
@@ -196,7 +212,7 @@ impl Analyzer<'_> {
     fn analyze_tuple_literal(
         &mut self,
         items: &[swamp_script_ast::Expression],
-    ) -> Result<(TupleTypeRef, Vec<Expression>), Error> {
+    ) -> Result<(Vec<Type>, Vec<Expression>), Error> {
         let expressions = self.analyze_argument_expressions(None, items)?;
         let mut tuple_types = Vec::new();
         for expr in &expressions {
@@ -204,18 +220,14 @@ impl Analyzer<'_> {
             tuple_types.push(item_type);
         }
 
-        let tuple_type = TupleType(tuple_types);
-
-        let tuple_type_ref = Rc::new(tuple_type);
-
-        Ok((tuple_type_ref, expressions))
+        Ok((tuple_types, expressions))
     }
 
     fn analyze_map_literal(
         &mut self,
         node: &swamp_script_ast::Node,
         entries: &[(swamp_script_ast::Expression, swamp_script_ast::Expression)],
-    ) -> Result<(Literal, MapTypeRef), Error> {
+    ) -> Result<(Literal, Type, Type), Error> {
         if entries.is_empty() {
             return Err(self.create_err(ErrorKind::EmptyMapLiteral, node));
         }
@@ -262,15 +274,8 @@ impl Analyzer<'_> {
             resolved_entries.push((resolved_key, resolved_value));
         }
 
-        let resolved_map_type = MapType {
-            key_type,
-            value_type,
-        };
-
-        let resolved_map_type_ref = Rc::new(resolved_map_type);
-
-        let literal = Literal::Map(resolved_map_type_ref.clone(), resolved_entries);
-        Ok((literal, resolved_map_type_ref))
+        let literal = Literal::Map(key_type.clone(), value_type.clone(), resolved_entries);
+        Ok((literal, key_type, value_type))
     }
 
     #[must_use]

@@ -33,7 +33,7 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
         Type::Bool => (Value::Bool(buf[0] != 0), 1),
         Type::Unit => (Value::Unit, 0),
         Type::Never => panic!("can not deserialize never type"),
-        Type::Array(array_type_ref) => {
+        Type::Vec(element_type) => {
             let mut offset = 0;
             let count = u16::from_le_bytes(
                 buf[offset..offset + 2]
@@ -42,7 +42,7 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
             );
             offset += 2;
 
-            let item_ref = &array_type_ref.item_type;
+            let item_ref = &element_type;
 
             let mut values = Vec::new();
             for _index in 0..count {
@@ -54,18 +54,18 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
                 values.push(Rc::new(RefCell::new(value)));
             }
 
-            (Value::Array(array_type_ref.clone(), values), offset)
+            (Value::Vec(*element_type.clone(), values), offset)
         }
-        Type::Tuple(tuple_type_ref) => {
+        Type::Tuple(tuple_types) => {
             let mut offset = 0;
             let mut values = Vec::new();
-            for tuple_item_type in &tuple_type_ref.0 {
+            for tuple_item_type in tuple_types {
                 let (value, item_octet_size) =
                     quick_deserialize(tuple_item_type, &buf[offset..], depth + 1);
                 values.push(Rc::new(RefCell::new(value)));
                 offset += item_octet_size;
             }
-            (Value::Tuple(tuple_type_ref.clone(), values), offset)
+            (Value::Tuple(tuple_types.clone(), values), offset)
         }
         Type::NamedStruct(struct_type_ref) => {
             let mut values = Vec::new();
@@ -86,7 +86,7 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
         Type::AnonymousStruct(anon_struct_type) => {
             todo!()
         }
-        Type::Map(map_type_ref) => {
+        Type::Map(key_type, value_type) => {
             let mut offset = 0;
             let count = u16::from_le_bytes(
                 buf[offset..offset + 2]
@@ -94,9 +94,6 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
                     .expect("should work with u16"),
             );
             offset += 2;
-
-            let key_type = &map_type_ref.key_type;
-            let value_type = &map_type_ref.value_type;
 
             let mut seq_map = SeqMap::new(); //SeqMap<Value, ValueRef>
             for _map_index in 0..count {
@@ -114,7 +111,10 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
                     .insert(key_val, value_ref)
                     .expect("should work to insert");
             }
-            (Value::Map(map_type_ref.clone(), seq_map), offset)
+            (
+                Value::Map(*key_type.clone(), *value_type.clone(), seq_map),
+                offset,
+            )
         }
         Type::Enum(enum_type) => {
             let mut offset = 0;
@@ -191,6 +191,12 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
         }
         Type::Iterable(_) => {
             panic!("can not serialize iterables")
+        }
+        Type::Slice(_) => {
+            panic!("can not serialize slice")
+        }
+        Type::SlicePair(_, _) => {
+            panic!("can not serialize slice pair")
         }
         Type::Optional(optional_type_ref) => {
             let mut offset = 0;

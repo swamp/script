@@ -6,7 +6,7 @@ use crate::Analyzer;
 use crate::TypeContext;
 use crate::err::{Error, ErrorKind};
 use swamp_script_semantic::{
-    ArrayTypeRef, Expression, ExpressionKind, Function, FunctionRef, Range, RangeMode, Type,
+    Expression, ExpressionKind, Function, FunctionRef, Range, RangeMode, Type,
 };
 use tracing::info;
 
@@ -104,14 +104,14 @@ impl Analyzer<'_> {
     pub fn analyze_array_range_access(
         &mut self,
         base_expression: Expression,
-        array_type_ref: &ArrayTypeRef,
+        array_type_ref: &Type,
         range: Range,
     ) -> Result<Expression, Error> {
         let node = &base_expression.node.clone();
 
         Ok(self.create_expr_resolved(
             ExpressionKind::ArrayRangeAccess(Box::from(base_expression), Box::from(range)),
-            Type::Array(array_type_ref.clone()),
+            Type::Vec(Box::from(array_type_ref.clone())),
             &node,
         ))
     }

@@ -47,7 +47,7 @@ impl ValueReference {
                     _ => return Err(ValueError::CanNotCoerceToIterator),
                 })
             }
-            Value::Map(_type_ref, seq_map) => {
+            Value::Map(_type_ref, _value_type, seq_map) => {
                 // Clone each Rc<RefCell<Value>> and collect into a Vec
                 let cloned_rc: Vec<ValueRef> = seq_map.values().cloned().collect();
 

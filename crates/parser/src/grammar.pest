@@ -173,15 +173,15 @@ optional_marker = { "?" }
 base_type       = {
   qualified_type_identifier
   | function_type
-  | map_type
-  | array_type
+  | slice_pair_type
+  | slice_type
   | tuple_type
   | struct_type
   | unit_type
 }
 
-array_type    = { "[" ~ type_name ~ "]" }
-map_type      = { "[" ~ type_name ~ ":" ~ type_name ~ "]" }
+slice_type    = { "[" ~ type_name ~ "]" }
+slice_pair_type      = { "[" ~ type_name ~ ":" ~ type_name ~ "]" }
 
 tuple_type    = { "(" ~ type_name ~ (COMMA ~ type_name)* ~ ")" }
 //  "(" ~ type_name ~ (COMMA ~ type_name)* ~ ")"

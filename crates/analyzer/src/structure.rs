@@ -9,15 +9,15 @@ use seq_set::SeqSet;
 use swamp_script_semantic::{
     AnonymousStructLiteral, AnonymousStructType, ArgumentExpressionOrLocation, Expression,
     ExpressionKind, FunctionRef, LocationAccess, LocationAccessKind, MutOrImmutableExpression,
-    Node, SingleLocationExpression, SingleLocationExpressionKind, SingleMutLocationExpression,
-    StructInstantiation, StructTypeField, StructTypeRef, Type,
+    NamedStructTypeRef, Node, SingleLocationExpression, SingleLocationExpressionKind,
+    SingleMutLocationExpression, StructInstantiation, StructTypeField, Type,
 };
 
 impl Analyzer<'_> {
     fn analyze_struct_init_calling_default(
         &mut self,
         function: &FunctionRef,
-        struct_to_instantiate: StructTypeRef,
+        struct_to_instantiate: NamedStructTypeRef,
         source_order_expressions: Vec<(usize, Node, Expression)>,
         node: &swamp_script_ast::Node,
     ) -> Result<Expression, Error> {
@@ -110,7 +110,7 @@ impl Analyzer<'_> {
 
     fn analyze_struct_init_field_by_field(
         &mut self,
-        struct_to_instantiate: StructTypeRef,
+        struct_to_instantiate: NamedStructTypeRef,
         mut source_order_expressions: Vec<(usize, Expression)>,
         missing_fields: SeqSet<String>,
         node: &swamp_script_ast::Node,
@@ -157,7 +157,7 @@ impl Analyzer<'_> {
         rest_was_specified: bool,
         context: &TypeContext,
     ) -> Result<Expression, Error> {
-        let mut maybe_named_struct: Option<StructTypeRef> = None;
+        let mut maybe_named_struct: Option<NamedStructTypeRef> = None;
 
         let struct_to_instantiate = if let Some(expected_type) = context.expected_type {
             match expected_type {

@@ -8,7 +8,7 @@ use crate::{
     AliasType, AliasTypeRef, AnonymousStructType, Constant, ConstantRef, EnumType, EnumTypeRef,
     EnumVariantType, EnumVariantTypeRef, ExternalFunctionDefinition, ExternalFunctionDefinitionRef,
     ExternalType, ExternalTypeRef, InternalFunctionDefinition, InternalFunctionDefinitionRef,
-    NamedStructType, Node, SemanticError, StructTypeField, StructTypeRef, Type, TypeNumber,
+    NamedStructType, NamedStructTypeRef, Node, SemanticError, StructTypeField, Type, TypeNumber,
 };
 use seq_map::SeqMap;
 use std::cell::RefCell;
@@ -87,7 +87,7 @@ impl SymbolTable {
         &self.symbols
     }
 
-    pub fn structs(&self) -> SeqMap<String, StructTypeRef> {
+    pub fn structs(&self) -> SeqMap<String, NamedStructTypeRef> {
         let mut structs = SeqMap::new();
 
         for (name, symbol) in &self.symbols {
@@ -202,7 +202,7 @@ impl SymbolTable {
     pub fn add_struct(
         &mut self,
         struct_type: NamedStructType,
-    ) -> Result<StructTypeRef, SemanticError> {
+    ) -> Result<NamedStructTypeRef, SemanticError> {
         let struct_ref = Rc::new(RefCell::new(struct_type));
         self.add_struct_link(struct_ref.clone())?;
         Ok(struct_ref)
@@ -215,7 +215,7 @@ impl SymbolTable {
         name: &str,
         fields: &[(&str, Type)],
         type_id: TypeNumber,
-    ) -> Result<StructTypeRef, SemanticError> {
+    ) -> Result<NamedStructTypeRef, SemanticError> {
         let mut defined_fields = SeqMap::new();
         for (name, field_type) in fields {
             defined_fields
@@ -245,7 +245,10 @@ impl SymbolTable {
 
     /// # Errors
     ///
-    pub fn add_struct_link(&mut self, struct_type_ref: StructTypeRef) -> Result<(), SemanticError> {
+    pub fn add_struct_link(
+        &mut self,
+        struct_type_ref: NamedStructTypeRef,
+    ) -> Result<(), SemanticError> {
         let name = struct_type_ref.borrow().assigned_name.clone();
         self.symbols
             .insert(
@@ -348,7 +351,7 @@ impl SymbolTable {
         None
     }
 
-    pub fn get_struct(&self, name: &str) -> Option<&StructTypeRef> {
+    pub fn get_struct(&self, name: &str) -> Option<&NamedStructTypeRef> {
         match self.get_type(name)? {
             Type::NamedStruct(struct_ref) => Some(struct_ref),
             _ => None,

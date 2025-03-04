@@ -1660,7 +1660,7 @@ impl AstParser {
         let (fields, has_rest) = self.parse_struct_literal_optional_fields(&anon_fields)?;
 
         Ok(self.create_expr(
-            ExpressionKind::StructLiteral(struct_name, fields, has_rest),
+            ExpressionKind::NamedStructLiteral(struct_name, fields, has_rest),
             pair,
         ))
     }
@@ -2026,7 +2026,7 @@ impl AstParser {
         for element in Self::convert_into_iterator(pair) {
             elements.push(self.parse_expression(&element)?);
         }
-        Ok(self.create_expr(ExpressionKind::Literal(LiteralKind::Array(elements)), pair))
+        Ok(self.create_expr(ExpressionKind::Literal(LiteralKind::Slice(elements)), pair))
     }
 
     fn parse_map_literal(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
@@ -2041,7 +2041,10 @@ impl AstParser {
             }
         }
 
-        Ok(self.create_expr(ExpressionKind::Literal(LiteralKind::Map(entries)), pair))
+        Ok(self.create_expr(
+            ExpressionKind::Literal(LiteralKind::SlicePair(entries)),
+            pair,
+        ))
     }
 
     fn parse_mutable_or_immutable_expression(
@@ -2202,17 +2205,17 @@ impl AstParser {
                 let elements = self.parse_tuple_type_elements(&pair)?;
                 Ok(Type::Tuple(elements))
             }
-            Rule::map_type => {
+            Rule::slice_pair_type => {
                 let mut inner = pair.into_inner();
                 let key_type = self.parse_type(Self::next_pair(&mut inner)?)?;
                 let value_type = self.parse_type(Self::next_pair(&mut inner)?)?;
-                Ok(Type::Map(Box::new(key_type), Box::new(value_type)))
+                Ok(Type::SlicePair(Box::new(key_type), Box::new(value_type)))
             }
 
-            Rule::array_type => {
+            Rule::slice_type => {
                 let inner = self.next_inner_pair(&pair)?;
                 let element_type = self.parse_type(inner)?;
-                Ok(Type::Array(Box::new(element_type)))
+                Ok(Type::Slice(Box::new(element_type)))
             }
 
             Rule::struct_type => {

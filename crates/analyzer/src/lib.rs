@@ -759,7 +759,7 @@ impl<'a> Analyzer<'a> {
             }
 
             // Creation
-            swamp_script_ast::ExpressionKind::StructLiteral(
+            swamp_script_ast::ExpressionKind::NamedStructLiteral(
                 struct_identifier,
                 fields,
                 has_rest,
@@ -865,7 +865,7 @@ impl<'a> Analyzer<'a> {
     fn get_struct_type(
         &mut self,
         qualified_type_identifier: &swamp_script_ast::QualifiedTypeIdentifier,
-    ) -> Result<StructTypeRef, Error> {
+    ) -> Result<NamedStructTypeRef, Error> {
         let maybe_struct_type = self.analyze_named_type(qualified_type_identifier)?;
         match maybe_struct_type {
             Type::NamedStruct(struct_type) => Ok(struct_type),
@@ -940,19 +940,19 @@ impl<'a> Analyzer<'a> {
             Type::Int => ExpressionKind::Literal(Literal::IntLiteral(0)),
             Type::Float => ExpressionKind::Literal(Literal::FloatLiteral(Fp::zero())),
             Type::String => ExpressionKind::Literal(Literal::StringLiteral(String::new())),
-            Type::Array(array_type_ref) => {
-                ExpressionKind::Literal(Literal::Array(array_type_ref.clone(), vec![]))
+            Type::Vec(array_type_ref) => {
+                ExpressionKind::Literal(Literal::Vec(*array_type_ref.clone(), vec![]))
             }
             Type::Tuple(tuple_type_ref) => {
                 let mut expressions = Vec::new();
-                for resolved_type in &tuple_type_ref.0 {
+                for resolved_type in tuple_type_ref {
                     let expr = self.create_default_value_for_type(node, resolved_type)?;
                     expressions.push(expr);
                 }
                 ExpressionKind::Literal(Literal::TupleLiteral(tuple_type_ref.clone(), expressions))
             }
-            Type::Map(map_type_ref) => {
-                ExpressionKind::Literal(Literal::Map(map_type_ref.clone(), vec![]))
+            Type::Map(key, value) => {
+                ExpressionKind::Literal(Literal::Map(*key.clone(), *value.clone(), vec![]))
             }
             Type::Optional(_optional_type) => ExpressionKind::Literal(Literal::NoneLiteral),
 
@@ -1194,7 +1194,7 @@ impl<'a> Analyzer<'a> {
                             tv.is_mutable = false;
                         }
 
-                        Type::Array(array_type_ref) => {
+                        Type::Vec(array_type_ref) => {
                             if let swamp_script_ast::ExpressionKind::Range(
                                 min_expr,
                                 max_expr,
@@ -1205,7 +1205,7 @@ impl<'a> Analyzer<'a> {
 
                                 self.add_postfix(
                                     &mut suffixes,
-                                    PostfixKind::ArrayRangeIndex(array_type_ref.clone(), range),
+                                    PostfixKind::ArrayRangeIndex(*array_type_ref.clone(), range),
                                     collection_type.clone(),
                                     &index_expr.node,
                                 );
@@ -1218,29 +1218,31 @@ impl<'a> Analyzer<'a> {
                                 self.add_postfix(
                                     &mut suffixes,
                                     PostfixKind::ArrayIndex(
-                                        array_type_ref.clone(),
+                                        *array_type_ref.clone(),
                                         resolved_index_expr,
                                     ),
-                                    array_type_ref.item_type.clone(),
+                                    *array_type_ref.clone(),
                                     &index_expr.node,
                                 );
 
-                                tv.resolved_type = array_type_ref.item_type.clone();
+                                tv.resolved_type = *array_type_ref.clone();
                             }
 
                             tv.is_mutable = false;
                         }
 
-                        Type::Map(map_type_ref) => {
-                            let key_type_context =
-                                TypeContext::new_argument(&map_type_ref.key_type);
+                        Type::Map(key_type, value_type) => {
+                            let key_type_context = TypeContext::new_argument(&key_type);
                             let resolved_key_expr =
                                 self.analyze_expression(index_expr, &key_type_context)?;
-                            let return_type =
-                                Type::Optional(Box::from(map_type_ref.value_type.clone()));
+                            let return_type = Type::Optional(Box::from(value_type.clone()));
                             self.add_postfix(
                                 &mut suffixes,
-                                PostfixKind::MapIndex(map_type_ref.clone(), resolved_key_expr),
+                                PostfixKind::MapIndex(
+                                    *key_type.clone(),
+                                    *value_type.clone(),
+                                    resolved_key_expr,
+                                ),
                                 return_type.clone(),
                                 &index_expr.node,
                             );
@@ -1397,11 +1399,8 @@ impl<'a> Analyzer<'a> {
 
         let resolved_type = &resolved_expression.ty().clone();
         let (key_type, value_type): (Option<Type>, Type) = match resolved_type {
-            Type::Array(array_type) => (Some(Type::Int), array_type.item_type.clone()),
-            Type::Map(map_type_ref) => (
-                Some(map_type_ref.key_type.clone()),
-                map_type_ref.value_type.clone(),
-            ),
+            Type::Vec(array_type) => (Some(Type::Int), *array_type.clone()),
+            Type::Map(key, value) => (Some(*key.clone()), *value.clone()),
             Type::String => (Some(Type::Int), Type::String),
             Type::Iterable(item_type) => (None, *item_type.clone()),
             Type::Generic(_base_type, params) => {
@@ -1595,18 +1594,18 @@ impl<'a> Analyzer<'a> {
         Ok(lookup_expression)
     }
 
-    fn analyze_array_type_helper(
+    fn analyze_slice_type_helper(
         &mut self,
         node: &swamp_script_ast::Node,
         items: &[swamp_script_ast::Expression],
         expected_type: Option<&Type>,
-    ) -> Result<(ArrayTypeRef, Vec<Expression>), Error> {
+    ) -> Result<(Type, Vec<Expression>), Error> {
         let expressions = self.analyze_argument_expressions(None, items)?;
-        let item_type = if expressions.is_empty() {
+        let element_type = if expressions.is_empty() {
             if let Some(found_expected_type) = expected_type {
                 info!(?found_expected_type, "found array type");
-                if let Type::Array(found) = found_expected_type {
-                    found.item_type.clone()
+                if let Type::Vec(found) = found_expected_type {
+                    found.clone()
                 } else {
                     return Err(self.create_err(ErrorKind::NotAnArray, node));
                 }
@@ -1614,14 +1613,10 @@ impl<'a> Analyzer<'a> {
                 return Err(self.create_err(ErrorKind::NotAnArray, node));
             }
         } else {
-            expressions[0].ty.clone()
+            Box::from(expressions[0].ty.clone())
         };
 
-        let array_type = ArrayType { item_type };
-
-        let array_type_ref = Rc::new(array_type);
-
-        Ok((array_type_ref, expressions))
+        Ok((*element_type, expressions))
     }
 
     fn push_block_scope(&mut self, _debug_str: &str) {
@@ -2239,22 +2234,21 @@ impl<'a> Analyzer<'a> {
                             ty = Type::String;
                         }
 
-                        Type::Array(array_type) => {
+                        Type::Vec(array_type) => {
                             let int_argument_context = TypeContext::new_argument(&Type::Int);
                             let index_expr =
                                 self.analyze_expression(lookup_expr, &int_argument_context)?; // TODO: Support slice (range)
                             self.add_location_item(
                                 &mut items,
-                                LocationAccessKind::ArrayIndex(array_type.clone(), index_expr),
-                                array_type.item_type.clone(),
+                                LocationAccessKind::ArrayIndex(*array_type.clone(), index_expr),
+                                *array_type.clone(),
                                 &lookup_expr.node,
                             );
-                            ty = array_type.item_type.clone();
+                            ty = *array_type.clone();
                         }
 
-                        Type::Map(map_type) => {
-                            let key_type_argument_context =
-                                TypeContext::new_argument(&map_type.key_type);
+                        Type::Map(key_type, value_type) => {
+                            let key_type_argument_context = TypeContext::new_argument(&key_type);
                             let key_expr =
                                 self.analyze_expression(lookup_expr, &key_type_argument_context)?;
                             let is_last = i == chain.postfixes.len() - 1;
@@ -2264,16 +2258,21 @@ impl<'a> Analyzer<'a> {
                                 // the type is `value_type` since this lookup is safe. we can create a memory location if there wasn't one
                                 (
                                     LocationAccessKind::MapIndexInsertIfNonExisting(
-                                        map_type.clone(),
+                                        *key_type.clone(),
+                                        *value_type.clone(),
                                         key_expr,
                                     ),
-                                    map_type.value_type.clone(),
+                                    *value_type.clone(),
                                 )
                             } else {
                                 let optional_value_type =
-                                    Type::Optional(Box::from(map_type.value_type.clone()));
+                                    Type::Optional(Box::from(value_type.clone()));
                                 (
-                                    LocationAccessKind::MapIndex(map_type.clone(), key_expr),
+                                    LocationAccessKind::MapIndex(
+                                        *key_type.clone(),
+                                        *value_type.clone(),
+                                        key_expr,
+                                    ),
                                     optional_value_type,
                                 )
                             };
@@ -2401,12 +2400,10 @@ impl<'a> Analyzer<'a> {
         source_type: &Type,
     ) -> Result<Option<ExpressionKind>, Error> {
         match &target_type {
-            Type::Array(array_type) => {
+            Type::Vec(array_type) => {
                 let target_type_context = TypeContext::new_argument(target_type);
                 let source_type_context = TypeContext::new_argument(source_type);
-                if *op == CompoundOperatorKind::Add
-                    && source_type.compatible_with(&array_type.item_type)
-                {
+                if *op == CompoundOperatorKind::Add && source_type.compatible_with(&array_type) {
                     // Handle ArrayPush
                     let target_location = SingleMutLocationExpression(self.analyze_to_location(
                         target_expression,
@@ -2634,10 +2631,10 @@ impl<'a> Analyzer<'a> {
 
         let mut variable_refs = Vec::new();
         if let Type::Tuple(tuple) = tuple_expr_type.clone() {
-            if target_ast_variables.len() > tuple.0.len() {
+            if target_ast_variables.len() > tuple.len() {
                 return Err(self.create_err(ErrorKind::TooManyDestructureVariables, node));
             }
-            for (variable_ref, tuple_type) in target_ast_variables.iter().zip(tuple.0.clone()) {
+            for (variable_ref, tuple_type) in target_ast_variables.iter().zip(tuple.clone()) {
                 let (variable_ref, _is_reassignment) =
                     self.set_or_overwrite_variable_with_type(variable_ref, &tuple_type)?;
                 variable_refs.push(variable_ref);
@@ -2689,7 +2686,7 @@ impl<'a> Analyzer<'a> {
     fn analyze_postfix_field_call(
         &mut self,
         resolved_node: &Node,
-        struct_type: &StructTypeRef,
+        struct_type: &NamedStructTypeRef,
         field: &StructTypeField,
         index: usize,
         signature: &Signature,

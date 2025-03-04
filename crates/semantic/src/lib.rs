@@ -178,23 +178,27 @@ pub enum Type {
     String,
     Bool,
 
+    Slice(Box<Type>),
+    SlicePair(Box<Type>, Box<Type>),
+
     Unit,  // Empty or nothing
     Never, // Not even empty since control flow has escaped with break or return.
 
     // Containers
-    Array(ArrayTypeRef),
-    Tuple(TupleTypeRef),
-    NamedStruct(StructTypeRef),
+    Vec(Box<Type>),
+    Tuple(Vec<Type>),
+    NamedStruct(NamedStructTypeRef),
     AnonymousStruct(AnonymousStructType),
-    Map(MapTypeRef),
+    Map(Box<Type>, Box<Type>),
 
     Enum(EnumTypeRef),
-    Generic(Box<Type>, Vec<Type>),
 
     Function(Signature),
     Iterable(Box<Type>),
 
     Optional(Box<Type>),
+
+    Generic(Box<Type>, Vec<Type>),
     External(ExternalTypeRef),
 }
 
@@ -228,19 +232,17 @@ impl Debug for Type {
             Self::Bool => write!(f, "Bool"),
             Self::Unit => write!(f, "Unit"),
             Self::Never => write!(f, "!"),
-            Self::Array(array_type_ref) => write!(f, "[{:?}]", array_type_ref.item_type),
-            Self::Tuple(tuple_type_ref) => write!(f, "( {:?} )", tuple_type_ref.0),
+            Self::Slice(ty) => write!(f, "Slice<{:?}>", ty),
+            Self::SlicePair(key, value) => write!(f, "Slice<{:?}, {:?}>", key, value),
+            Self::Vec(element_type) => write!(f, "[{:?}]", element_type),
+            Self::Tuple(tuple_type_ref) => write!(f, "( {:?} )", tuple_type_ref),
             Self::NamedStruct(struct_type_ref) => {
                 write!(f, "{}", struct_type_ref.borrow().assigned_name)
             }
             Self::AnonymousStruct(anonymous_struct_type) => {
                 write!(f, "{:?}", anonymous_struct_type)
             }
-            Self::Map(map_type_ref) => write!(
-                f,
-                "[{:?}:{:?}]",
-                map_type_ref.key_type, map_type_ref.value_type
-            ),
+            Self::Map(key, value) => write!(f, "[{:?}:{:?}]", key, value),
             Self::Generic(base, parameters) => write!(f, "{base:?}<{parameters:?}>"),
             Self::Enum(enum_type_ref) => write!(f, "{:?}", enum_type_ref.borrow().assigned_name),
             Self::Function(function_type_signature) => {
@@ -262,11 +264,13 @@ impl Display for Type {
             Self::Bool => write!(f, "Bool"),
             Self::Unit => write!(f, "Unit"),
             Self::Never => write!(f, "!"),
-            Self::Array(array_ref) => write!(f, "[{}]", &array_ref.item_type.to_string()),
-            Self::Tuple(tuple) => write!(f, "({})", comma(&tuple.0)),
+            Self::Slice(ty) => write!(f, "Slice<{ty}>"),
+            Self::SlicePair(key, value) => write!(f, "Slice<{key}, {value}>"),
+            Self::Vec(element_type) => write!(f, "[{}]", &element_type.to_string()),
+            Self::Tuple(tuple) => write!(f, "({})", comma(&tuple)),
             Self::NamedStruct(struct_ref) => write!(f, "{}", struct_ref.borrow().assigned_name),
             Self::AnonymousStruct(struct_ref) => write!(f, "{:?}", struct_ref),
-            Self::Map(map_ref) => write!(f, "[{}:{}]", map_ref.key_type, map_ref.value_type),
+            Self::Map(key, value) => write!(f, "[{key}:{value}]"),
             Self::Generic(base_type, params) => write!(f, "{base_type}<{}>", comma(params)),
             Self::Enum(enum_type) => write!(f, "{}", enum_type.borrow().assigned_name),
             Self::Function(signature) => write!(f, "function {signature}"),
@@ -302,7 +306,7 @@ pub enum SemanticError {
 }
 
 impl Type {
-    pub fn expect_struct_type(&self) -> Result<StructTypeRef, SemanticError> {
+    pub fn expect_struct_type(&self) -> Result<NamedStructTypeRef, SemanticError> {
         match self {
             Type::NamedStruct(struct_type_ref) => Ok(struct_type_ref.clone()),
             _ => Err(SemanticError::ResolveNotStruct),
@@ -329,22 +333,19 @@ impl Type {
             (Self::String, Self::String) => true,
             (Self::Bool, Self::Bool) => true,
             (Self::Unit, Self::Unit) => true,
-            (Self::Array(_), Self::Array(_)) => true,
-            (Self::Map(a), Self::Map(b)) => {
-                a.key_type.compatible_with(&b.key_type)
-                    && a.value_type.compatible_with(&b.value_type)
+            (Self::Vec(_), Self::Vec(_)) => true,
+            (Self::Map(a_key, a_value), Self::Map(b_key, b_value)) => {
+                a_key.compatible_with(&b_key) && a_value.compatible_with(&b_value)
             }
             (Self::NamedStruct(a), Self::NamedStruct(b)) => compare_struct_types(a, b),
             (Self::AnonymousStruct(a), Self::AnonymousStruct(b)) => {
                 compare_anonymous_struct_types(a, b)
             }
             (Self::Tuple(a), Self::Tuple(b)) => {
-                if a.0.len() != b.0.len() {
+                if a.len() != b.len() {
                     return false;
                 }
-                a.0.iter()
-                    .zip(b.0.iter())
-                    .all(|(a, b)| a.compatible_with(b))
+                a.iter().zip(b.iter()).all(|(a, b)| a.compatible_with(b))
             }
             (Self::Enum(_), Self::Enum(_)) => true,
             (Self::Iterable(a), Self::Iterable(b)) => a.compatible_with(b),
@@ -377,7 +378,7 @@ impl Type {
     }
 }
 
-fn compare_struct_types(a: &StructTypeRef, b: &StructTypeRef) -> bool {
+fn compare_struct_types(a: &NamedStructTypeRef, b: &NamedStructTypeRef) -> bool {
     let a_borrow = a.borrow();
     let b_borrow = b.borrow();
     if a_borrow.assigned_name != b_borrow.assigned_name {
@@ -639,15 +640,6 @@ impl Display for StructTypeField {
 }
 
 #[derive(Debug)]
-pub struct MapIndexLookup {
-    pub map_type: Type,
-    pub item_type: Type,
-    pub map_type_ref: MapTypeRef,
-    pub index_expression: Box<Expression>,
-    pub map_expression: Box<Expression>,
-}
-
-#[derive(Debug)]
 pub struct ArrayItem {
     pub item_type: Type,
     pub int_expression: Expression,
@@ -777,7 +769,7 @@ pub struct Iterable {
 #[derive(Debug)]
 pub struct StructInstantiation {
     pub source_order_expressions: Vec<(usize, Expression)>,
-    pub struct_type_ref: StructTypeRef,
+    pub struct_type_ref: NamedStructTypeRef,
 }
 
 #[derive(Debug)]
@@ -845,11 +837,11 @@ pub struct Range {
 #[derive(Debug)]
 pub enum PostfixKind {
     StructField(AnonymousStructType, usize),
-    ArrayIndex(ArrayTypeRef, Expression),
-    ArrayRangeIndex(ArrayTypeRef, Range),
+    ArrayIndex(Type, Expression),
+    ArrayRangeIndex(Type, Range),
     StringIndex(Expression),
     StringRangeIndex(Range),
-    MapIndex(MapTypeRef, Expression),
+    MapIndex(Type, Type, Expression),
     ExternalTypeIndexRef(ExternalTypeRef, Expression),
     MemberCall(FunctionRef, Vec<ArgumentExpressionOrLocation>),
     FunctionCall(Vec<ArgumentExpressionOrLocation>),
@@ -863,12 +855,12 @@ pub enum PostfixKind {
 #[derive(Debug)]
 pub enum LocationAccessKind {
     FieldIndex(AnonymousStructType, usize),
-    ArrayIndex(ArrayTypeRef, Expression),
-    ArrayRange(ArrayTypeRef, Range),
+    ArrayIndex(Type, Expression),
+    ArrayRange(Type, Range),
     StringIndex(Expression),
     StringRange(Range),
-    MapIndex(MapTypeRef, Expression),
-    MapIndexInsertIfNonExisting(MapTypeRef, Expression),
+    MapIndex(Type, Type, Expression),
+    MapIndexInsertIfNonExisting(Type, Type, Expression),
     ExternalTypeIndex(ExternalTypeRef, Expression),
 }
 
@@ -895,9 +887,9 @@ pub struct SingleMutLocationExpression(pub SingleLocationExpression);
 #[derive(Debug)]
 pub enum SingleLocationExpressionKind {
     MutVariableRef,
-    MutStructFieldRef(StructTypeRef, usize),
-    MutArrayIndexRef(ArrayTypeRef),
-    MutMapIndexRef(MapTypeRef),
+    MutStructFieldRef(NamedStructTypeRef, usize),
+    MutArrayIndexRef(Type),
+    MutMapIndexRef(Type, Type),
     MutExternalTypeIndexRef(ExternalTypeRef),
 }
 
@@ -974,10 +966,10 @@ pub enum ExpressionKind {
     FieldAccess(Box<Expression>, usize),
     ArrayAccess(
         Box<Expression>,
-        ArrayTypeRef,
+        Type,
         Box<Expression>, // int index lookup
     ), // Read from an array: arr[3]
-    MapIndexAccess(Box<Expression>, MapTypeRef, Box<Expression>),
+    MapIndexAccess(Box<Expression>, Type, Type, Box<Expression>),
     StringRangeAccess(Box<Expression>, Box<Range>),
     ArrayRangeAccess(Box<Expression>, Box<Range>),
 
@@ -1042,7 +1034,7 @@ pub enum ExpressionKind {
 
     When(Vec<WhenBinding>, Box<Expression>, Option<Box<Expression>>),
 
-    TupleDestructuring(Vec<VariableRef>, TupleTypeRef, Box<Expression>),
+    TupleDestructuring(Vec<VariableRef>, Vec<Type>, Box<Expression>),
 
     Assignment(Box<SingleMutLocationExpression>, Box<Expression>),
     AssignmentSlice(Box<SliceLocationExpression>, Box<Expression>),
@@ -1077,9 +1069,13 @@ pub enum Literal {
     BoolLiteral(bool),
 
     EnumVariantLiteral(EnumVariantTypeRef, EnumLiteralData),
-    TupleLiteral(TupleTypeRef, Vec<Expression>),
-    Array(ArrayTypeRef, Vec<Expression>),
-    Map(MapTypeRef, Vec<(Expression, Expression)>),
+    TupleLiteral(Vec<Type>, Vec<Expression>),
+
+    Vec(Type, Vec<Expression>),
+    Map(Type, Type, Vec<(Expression, Expression)>),
+
+    Slice(Type, Vec<Expression>),
+    SlicePair(Type, Type, Vec<(Expression, Expression)>),
 }
 
 #[derive(Debug)]
@@ -1087,7 +1083,7 @@ pub struct ArrayInstantiation {
     pub expressions: Vec<Expression>,
     pub item_type: Type,
     pub array_type: Type,
-    pub array_type_ref: ArrayTypeRef,
+    pub array_type_ref: Type,
 }
 
 #[derive(Debug)]
@@ -1115,13 +1111,13 @@ impl Display for ForPattern {
 #[derive(Debug, Eq, PartialEq)]
 pub struct ModulePathItem(pub Node);
 
-pub type StructTypeRef = Rc<RefCell<NamedStructType>>;
+pub type NamedStructTypeRef = Rc<RefCell<NamedStructType>>;
 
 pub fn same_anon_struct_ref(a: &AnonymousStructType, b: &AnonymousStructType) -> bool {
     compare_anonymous_struct_types(a, b)
 }
 
-pub fn same_named_struct_ref(a: &StructTypeRef, b: &StructTypeRef) -> bool {
+pub fn same_named_struct_ref(a: &NamedStructTypeRef, b: &NamedStructTypeRef) -> bool {
     Rc::ptr_eq(a, b)
 }
 
@@ -1196,25 +1192,6 @@ pub struct OptionType {
     pub item_type: Type,
 }
 
-pub type ArrayTypeRef = Rc<ArrayType>;
-
-pub fn same_array_ref(a: &ArrayTypeRef, b: &ArrayTypeRef) -> bool {
-    Rc::ptr_eq(a, b)
-}
-
-#[derive(Debug, Eq, PartialEq)]
-pub struct ArrayType {
-    pub item_type: Type,
-}
-
-pub type MapTypeRef = Rc<MapType>;
-
-#[derive(Debug, Eq, PartialEq)]
-pub struct MapType {
-    pub key_type: Type,
-    pub value_type: Type,
-}
-
 pub type EnumVariantStructTypeRef = Rc<EnumVariantStructType>;
 
 /*
@@ -1284,17 +1261,6 @@ pub type EnumVariantTupleTypeRef = Rc<EnumVariantTupleType>;
 pub struct EnumVariantTupleType {
     pub common: EnumVariantCommon,
     pub fields_in_order: Vec<Type>,
-}
-
-pub type TupleTypeRef = Rc<TupleType>;
-
-#[derive(Debug, Eq, PartialEq)]
-pub struct TupleType(pub Vec<Type>);
-
-impl TupleType {
-    pub fn new(types: Vec<Type>) -> Self {
-        Self(types)
-    }
 }
 
 pub type EnumTypeRef = Rc<RefCell<EnumType>>;
@@ -1554,7 +1520,7 @@ impl AssociatedImpls {
 
     pub fn add_external_struct_member_function(
         &mut self,
-        named_struct_type: &StructTypeRef,
+        named_struct_type: &NamedStructTypeRef,
         func: Function,
     ) -> Result<(), SemanticError> {
         self.add_member_function(
@@ -1566,7 +1532,7 @@ impl AssociatedImpls {
 
     pub fn add_external_struct_member_function_external(
         &mut self,
-        named_struct_type: StructTypeRef,
+        named_struct_type: NamedStructTypeRef,
         func: ExternalFunctionDefinition,
     ) -> Result<(), SemanticError> {
         self.add_member_function(
@@ -1578,7 +1544,7 @@ impl AssociatedImpls {
 
     pub fn add_external_struct_member_function_external_ref(
         &mut self,
-        named_struct_type: StructTypeRef,
+        named_struct_type: NamedStructTypeRef,
         func: ExternalFunctionDefinitionRef,
     ) -> Result<(), SemanticError> {
         self.add_member_function(
@@ -1592,7 +1558,6 @@ impl AssociatedImpls {
 // Mutable part
 #[derive(Debug)]
 pub struct ProgramState {
-    pub array_types: Vec<ArrayTypeRef>,
     pub number: TypeNumber,
     pub external_function_number: ExternalFunctionId,
     // It is just so we don't have to do another dependency check of the
@@ -1612,7 +1577,6 @@ impl ProgramState {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            array_types: Vec::new(),
             number: 0,
             external_function_number: 0,
             constants_in_dependency_order: Vec::new(),
