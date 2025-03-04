@@ -2,78 +2,63 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
+use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::path::Path;
 use std::rc::Rc;
-use swamp_script_analyzer::Analyzer;
 use swamp_script_analyzer::prelude::Error;
+use swamp_script_analyzer::{Analyzer, TypeContext};
 //use swamp_script_error_report::show_analyzer_error;
 use swamp_script_parser::AstParser;
 use swamp_script_semantic::ProgramState;
 use swamp_script_semantic::modules::{Module, Modules};
 use swamp_script_semantic::ns::Namespace;
 use swamp_script_source_map::SourceMap;
-use tracing::warn;
+use tracing::{error, warn};
 
 fn internal_compile(script: &str) -> Result<Module, Error> {
-    /*
     let parser = AstParser {};
 
     let program = parser.parse_module(script).expect("Failed to parse script");
 
-    let mut state = ProgramState::new();
-    let mut modules = Modules::new();
-
-    let mut source_map = SourceMap::new(Path::new("tests/fixtures/"));
+    let mut source_map = SourceMap::new(&SeqMap::default()).unwrap();
     let file_id = 0xffff;
 
-    source_map.add_manual(file_id, Path::new("some_path/main"), script);
+    source_map.add_manual(file_id, "crate", Path::new("some_path/main"), script);
     let resolved_path_str = vec!["test".to_string()];
-    let _own_module = modules.add_empty_module(&resolved_path_str);
 
-    let mut name_lookup = NameLookup::new(resolved_path_str, &mut modules);
+    let mut state = ProgramState::new();
+    let modules = Modules::new();
+    let mut analyzer = Analyzer::new(&mut state, &modules, &source_map, file_id);
 
-    let mut resolver = Analyzer::new(&mut state, &mut name_lookup, &source_map, file_id);
-
-    let mut resolved_definitions = Vec::new();
     for definition in &program.definitions {
-        let resolved_definition = resolver.analyze_definition(definition)?;
-        resolved_definitions.push(resolved_definition);
+        analyzer.analyze_definition(definition)?;
     }
 
     let expression = &program.expression;
+    let any_context = TypeContext::new_anything_argument();
     let maybe_resolved_expression = match expression {
         Some(unwrapped_expression) => {
-            let result = resolver.analyze_expression(unwrapped_expression, None);
+            let result = analyzer.analyze_expression(unwrapped_expression, &any_context);
             if let Ok(expression) = result {
                 Some(expression)
             } else {
                 let err = result.err().unwrap();
-                show_error(&err, &source_map);
+                error!(?err, "found error");
                 return Err(err)?;
             }
         }
         None => None,
     };
 
-    let ns_ref = Rc::new(RefCell::new(ModuleNamespace::new(&[])));
+    let ns_ref = Namespace::new(resolved_path_str, analyzer.shared.definition_table);
 
     let resolved_module = Module {
-        definitions: resolved_definitions,
         expression: maybe_resolved_expression,
         namespace: ns_ref,
     };
 
     Ok(resolved_module)
-
-     */
-    Ok(Module {
-        namespace: Namespace {
-            symbol_table: Rc::new(Default::default()),
-            path: vec![],
-        },
-        expression: None,
-    })
 }
 
 /// # Panics

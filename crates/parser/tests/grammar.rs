@@ -2830,7 +2830,7 @@ StructDef(StructDef { identifier: LocalTypeIdentifier(<8:10>), struct_type: Stru
 }
 
 #[test_log::test]
-fn enum_variant_anonymous_struct() {
+fn test_enum_variant_anonymous_struct() {
     check(
         "
 enum Something {

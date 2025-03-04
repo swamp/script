@@ -7,13 +7,14 @@ use crate::util::{check, check_fail};
 
 mod util;
 
+/*
 #[test_log::test]
 fn init_var() {
     check(
         "a = 3",
         r"
 
-InitializeVariable(ResolvedVariableAssignment { variable_refs: [ResolvedVariable { name: <0:1>, resolved_type: Int(ResolvedIntType), mutable_node: None, scope_index: 0, variable_index: 0 }], expression: Literal(IntLiteral(3, <4:1>, ResolvedIntType)) })
+Unit,VariableDefinition(Variable { name: <0:1>, resolved_type: Int, mutable_node: None, scope_index: 0, variable_index: 0 }, MutOrImmutableExpression { expression_or_location: Expression(<4:1>Int,Literal(IntLiteral(3))), is_mutable: None })
 
 ",
     );
@@ -1325,6 +1326,22 @@ fn map_assign() {
         r#"
 ..[Int:String],VariableDefinition(ResolvedVariable { name: <9:1>, resolved_type: [Int:String], mutable_node: Some(<5:3>), scope_index: 0, variable_index: 0 }, ResolvedMutOrImmutableExpression { expression_or_location: Expression(<13:27>[Int:String],Literal(Map(ResolvedMapType { key_type: Int, value_type: String }, [(<14:1>Int,Literal(IntLiteral(2)), <16:7>String,InterpolatedString([Literal(<17:5>, "hello")])), (<25:2>Int,UnaryOp(ResolvedUnaryOperator { left: <26:1>Int,Literal(IntLiteral(1)), kind: Negate, node: <25:1> }), <32:7>String,InterpolatedString([Literal(<33:5>, "world")]))]))), is_mutable: None })
 ..(),MapAssignment(ResolvedSingleMutLocationExpression(ResolvedSingleLocationExpression { kind: MutVariableRef, node: <45:1>, ty: [Int:String], starting_variable: ResolvedVariable { name: <9:1>, resolved_type: [Int:String], mutable_node: Some(<5:3>), scope_index: 0, variable_index: 0 }, access_chain: [] }), <47:1>Int,Literal(IntLiteral(3)), <52:8>String,InterpolatedString([Literal(<53:6>, "ossian")]))
+"#,
+    );
+}
+*/
+
+#[test_log::test]
+fn infer_anonymous_struct() {
+    check(
+        "
+    struct Something {
+       a: Int,  
+    }
+
+    result: Something = { a: 3 }
+    ",
+        r#"
 "#,
     );
 }

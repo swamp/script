@@ -641,39 +641,16 @@ impl<'a> Analyzer<'a> {
         if let Some(found_expected_type) = context.expected_type {
             if found_expected_type.compatible_with(&encountered_type) {
                 return Ok(expr);
-            } else if !matches!(encountered_type, Type::Optional(_)) {
-                // If an optional is expected, we can wrap it
-                if let Type::Optional(expected_inner_type) = found_expected_type {
-                    if encountered_type.compatible_with(expected_inner_type) {
-                        let wrapped = self.create_expr(
-                            ExpressionKind::Option(Option::from(Box::new(expr))),
-                            found_expected_type.clone(),
-                            &ast_expression.node,
-                        );
-                        return Ok(wrapped);
-                    }
-                }
-            } else if matches!(found_expected_type, &Type::Bool) {
-                if let Type::Optional(_inner_type) = encountered_type {
-                    let wrapped = self.create_expr(
-                        ExpressionKind::CoerceOptionToBool(Box::from(expr)),
-                        Type::Bool,
-                        &ast_expression.node,
-                    );
-                    return Ok(wrapped);
-                }
             }
 
-            error!(?expr, ?ast_expression, "expr");
-            error!(
-                ?found_expected_type,
-                ?encountered_type,
-                "incompatible types"
-            );
-            return Err(self.create_err(
-                ErrorKind::IncompatibleTypes(found_expected_type.clone(), encountered_type),
+            let result = self.coerce_expression(
+                expr,
+                found_expected_type,
+                &encountered_type,
                 &ast_expression.node,
-            ));
+            )?;
+
+            return Ok(result);
         }
 
         Ok(expr)
@@ -2904,5 +2881,44 @@ impl<'a> Analyzer<'a> {
             return Err(self.create_err(ErrorKind::ContinueOutsideLoop, node));
         }
         Ok(self.create_expr(ExpressionKind::Continue, Type::Never, node))
+    }
+
+    fn coerce_expression(
+        &self,
+        expr: Expression,
+        expected_type: &Type,
+        encountered_type: &Type,
+        node: &swamp_script_ast::Node,
+    ) -> Result<Expression, Error> {
+        if !matches!(encountered_type, Type::Optional(_)) {
+            // If an optional is expected, we can wrap it
+            if let Type::Optional(expected_inner_type) = expected_type {
+                if encountered_type.compatible_with(expected_inner_type) {
+                    let wrapped = self.create_expr(
+                        ExpressionKind::Option(Option::from(Box::new(expr))),
+                        expected_type.clone(),
+                        node,
+                    );
+                    return Ok(wrapped);
+                }
+            }
+        } else if matches!(expected_type, &Type::Bool) {
+            if let Type::Optional(_inner_type) = encountered_type {
+                let wrapped = self.create_expr(
+                    ExpressionKind::CoerceOptionToBool(Box::from(expr)),
+                    Type::Bool,
+                    node,
+                );
+                return Ok(wrapped);
+            }
+        }
+
+        error!(?expr, "expr");
+        error!(?expected_type, ?encountered_type, "incompatible types");
+
+        Err(self.create_err(
+            ErrorKind::IncompatibleTypes(expected_type.clone(), encountered_type.clone()),
+            node,
+        ))
     }
 }
