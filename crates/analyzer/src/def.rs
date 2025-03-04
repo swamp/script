@@ -12,9 +12,8 @@ use swamp_script_semantic::{
     EnumVariantSimpleType, EnumVariantSimpleTypeRef, EnumVariantStructType, EnumVariantTupleType,
     EnumVariantType, ExternalFunctionDefinition, Function, InternalFunctionDefinition,
     LocalIdentifier, LocalTypeIdentifier, NamedStructType, ParameterNode, Signature,
-    StructTypeField, StructTypeRef, Type, TypeForParameter, UseItem,
+    StructTypeField, Type, TypeForParameter, UseItem,
 };
-use tracing::info;
 
 impl Analyzer<'_> {
     fn general_import(
@@ -108,7 +107,6 @@ impl Analyzer<'_> {
         let mut nodes_copy = path.clone();
         nodes_copy.insert(0, "crate".to_string());
 
-        info!(?nodes_copy, items=?mod_definition.items, "mod again");
         self.general_import(
             &nodes_copy,
             &mod_definition.items,
@@ -153,7 +151,7 @@ impl Analyzer<'_> {
             name: LocalTypeIdentifier(self.to_node(&enum_type_name.0)),
             assigned_name: self.get_text(&enum_type_name.0).to_string(),
             module_path: vec![],
-            number: parent_number,
+            type_id: parent_number,
             variants: SeqMap::default(),
         };
 
@@ -344,7 +342,7 @@ impl Analyzer<'_> {
             name: self.to_node(&ast_struct_def.identifier.0),
             anon_struct_type: analyzed_anonymous_struct,
             assigned_name: struct_name_str,
-            functions: SeqMap::default(),
+            type_id: self.shared.state.allocate_number(),
         };
 
         let struct_ref = self
@@ -400,7 +398,7 @@ impl Analyzer<'_> {
                     },
                     body: statements,
                     name: LocalIdentifier(self.to_node(&function_data.declaration.name)),
-                    //assigned_name: self.get_text(&function_data.declaration.name).to_string(),
+                    assigned_name: self.get_text(&function_data.declaration.name).to_string(),
                 };
 
                 let function_ref = self
@@ -509,16 +507,31 @@ impl Analyzer<'_> {
 
     fn analyze_impl_definition(
         &mut self,
-        attached_to_type: &swamp_script_ast::Node,
-        functions: &Vec<swamp_script_ast::Function>,
-    ) -> Result<Type, Error> {
-        let fake_qualified_type_name = swamp_script_ast::QualifiedTypeIdentifier {
-            name: swamp_script_ast::LocalTypeIdentifier(attached_to_type.clone()),
+        named_type_node: &swamp_script_ast::Node,
+        functions: &[swamp_script_ast::Function],
+    ) -> Result<(), Error> {
+        let qualified = swamp_script_ast::QualifiedTypeIdentifier {
+            name: swamp_script_ast::LocalTypeIdentifier(named_type_node.clone()),
             module_path: None,
             generic_params: vec![],
         };
 
-        let found_struct = self.get_struct_type(&fake_qualified_type_name)?;
+        let type_to_attach_to = self.analyze_named_type(&qualified)?;
+        let function_refs: Vec<&swamp_script_ast::Function> = functions.iter().collect();
+        self.analyze_impl_functions(&type_to_attach_to, &function_refs)?;
+
+        Ok(())
+    }
+
+    pub fn analyze_impl_functions(
+        &mut self,
+        type_to_attach_to: &Type,
+        functions: &[&swamp_script_ast::Function],
+    ) -> Result<(), Error> {
+        self.shared
+            .state
+            .associated_impls
+            .prepare(type_to_attach_to);
 
         for function in functions {
             let new_return_type = self.analyze_return_type(function)?;
@@ -533,34 +546,37 @@ impl Analyzer<'_> {
 
             let function_name_str = self.get_text(&function_name.name).to_string();
 
-            let resolved_function = self.analyze_impl_func(function, &found_struct)?;
+            let resolved_function = self.analyze_impl_func(function, type_to_attach_to)?;
+
             let resolved_function_ref = Rc::new(resolved_function);
 
-            found_struct
-                .borrow_mut()
-                .functions
-                .insert(function_name_str, resolved_function_ref)
-                .map_err(|_| self.create_err(ErrorKind::DuplicateFieldName, attached_to_type))?;
             self.stop_function();
+
+            self.shared
+                .state
+                .associated_impls
+                .add_member_function(type_to_attach_to, &function_name_str, resolved_function_ref)
+                .map_err(|err| {
+                    self.create_err(ErrorKind::SemanticError(err), &function_name.name)
+                })?;
         }
 
-        Ok(Type::NamedStruct(found_struct))
+        Ok(())
     }
 
     fn analyze_impl_func(
         &mut self,
         function: &swamp_script_ast::Function,
-        found_struct: &StructTypeRef,
+        self_type: &Type,
     ) -> Result<Function, Error> {
         let resolved_fn = match function {
             swamp_script_ast::Function::Internal(function_data) => {
                 let mut parameters = Vec::new();
 
                 if let Some(found_self) = &function_data.declaration.self_parameter {
-                    let resolved_type = Type::NamedStruct(found_struct.clone());
                     parameters.push(TypeForParameter {
                         name: self.get_text(&found_self.self_node).to_string(),
-                        resolved_type,
+                        resolved_type: self_type.clone(),
                         is_mutable: found_self.is_mutable.is_some(),
                         node: Option::from(ParameterNode {
                             name: self.to_node(&found_self.self_node),
@@ -605,6 +621,7 @@ impl Analyzer<'_> {
                     },
                     body: statements,
                     name: LocalIdentifier(self.to_node(&function_data.declaration.name)),
+                    assigned_name: self.get_text(&function_data.declaration.name).to_string(),
                 };
 
                 let internal_ref = Rc::new(internal);
@@ -616,10 +633,9 @@ impl Analyzer<'_> {
                 let mut parameters = Vec::new();
 
                 if let Some(found_self) = &signature.self_parameter {
-                    let resolved_type = Type::NamedStruct(found_struct.clone());
                     parameters.push(TypeForParameter {
                         name: self.get_text(&found_self.self_node).to_string(),
-                        resolved_type,
+                        resolved_type: self_type.clone(),
                         is_mutable: found_self.is_mutable.is_some(),
                         node: Option::from(ParameterNode {
                             name: self.to_node(&found_self.self_node),

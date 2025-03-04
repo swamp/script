@@ -34,7 +34,8 @@ impl Analyzer<'_> {
         // temp_var = StructType::default()
         let return_type = *function.signature().return_type.clone();
 
-        let default_call_kind = self.create_default_static_call(node, &struct_to_instantiate)?;
+        let default_call_kind = self
+            .create_default_static_call(node, &Type::NamedStruct(struct_to_instantiate.clone()))?;
 
         let static_call = self.create_expr(default_call_kind, return_type, node);
 
@@ -241,14 +242,20 @@ impl Analyzer<'_> {
             )?;
 
         if has_rest {
-            if let Some(function) = struct_to_instantiate
-                .clone()
-                .borrow()
-                .functions
-                .get(&"default".to_string())
-            {
+            let maybe_default = {
+                self.shared
+                    .state
+                    .associated_impls
+                    .get_member_function(
+                        &Type::NamedStruct(struct_to_instantiate.clone()),
+                        "default",
+                    )
+                    .cloned()
+            };
+
+            if let Some(function) = maybe_default {
                 self.analyze_struct_init_calling_default(
-                    function,
+                    &function,
                     struct_to_instantiate,
                     source_order_expressions,
                     &qualified_type_identifier.name.0,

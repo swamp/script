@@ -8,7 +8,7 @@ use seq_map::SeqMap;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
-use tracing::info;
+use tracing::{info, trace};
 
 pub mod prelude;
 
@@ -173,12 +173,10 @@ impl SourceMap {
      */
 
     fn to_file_system_path(&self, mount_name: &str, relative_path: &str) -> io::Result<PathBuf> {
-        info!(?mount_name, ?relative_path, "to_file_system_path");
         let base_path = self.base_path(mount_name).to_path_buf();
         let mut path_buf = base_path;
 
         path_buf.push(relative_path);
-        //path_buf.set_extension("swamp");
 
         path_buf.canonicalize().map_err(|_| {
             io::Error::new(

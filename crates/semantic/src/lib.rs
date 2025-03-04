@@ -11,13 +11,14 @@ pub mod symtbl;
 use crate::intr::IntrinsicFunction;
 pub use fixed32::Fp;
 use seq_fmt::comma;
-use seq_map::{SeqMap, SeqMapError};
+use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::cmp::PartialEq;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
 use std::rc::Rc;
+use tracing::{error, info};
 
 #[derive(Clone, Eq, PartialEq, Default)]
 pub struct Node {
@@ -202,6 +203,20 @@ impl Type {
     pub const fn is_concrete(&self) -> bool {
         !matches!(self, Self::Unit | Self::Never)
     }
+
+    pub fn id(&self) -> Option<TypeNumber> {
+        let found_id = match self {
+            Self::Unit => 0,
+            Self::Int => 1,
+            Self::Bool => 2,
+            Self::Float => 3,
+            Self::String => 4,
+            Self::NamedStruct(struct_ref) => struct_ref.borrow().type_id,
+            Self::Enum(enum_type) => enum_type.borrow().type_id,
+            _ => return None,
+        };
+        Some(found_id)
+    }
 }
 
 impl Debug for Type {
@@ -283,6 +298,7 @@ pub enum SemanticError {
     DuplicateSymbolName,
     DuplicateNamespaceLink(String),
     MismatchedTypes { expected: Type, found: Vec<Type> },
+    UnknownImplOnType,
 }
 
 impl Type {
@@ -434,6 +450,7 @@ pub struct LocalIdentifier(pub Node);
 pub struct InternalFunctionDefinition {
     pub body: Expression,
     pub name: LocalIdentifier,
+    pub assigned_name: String,
     pub signature: Signature,
 }
 
@@ -677,7 +694,15 @@ pub enum Function {
 
 impl Function {
     #[must_use]
-    pub fn name(&self) -> Option<&Node> {
+    pub fn name(&self) -> String {
+        match self {
+            Self::Internal(x) => x.assigned_name.clone(),
+            Self::External(y) => y.assigned_name.clone(),
+        }
+    }
+
+    #[must_use]
+    pub fn maybe_node(&self) -> Option<&Node> {
         match self {
             Self::Internal(x) => Some(&x.name.0),
             Self::External(y) => y.name.as_ref(),
@@ -1128,9 +1153,7 @@ pub struct NamedStructType {
     pub name: Node,
     pub assigned_name: String,
     pub anon_struct_type: AnonymousStructType,
-
-    //
-    pub functions: SeqMap<String, FunctionRef>,
+    pub type_id: TypeNumber,
 }
 
 impl Debug for NamedStructType {
@@ -1140,13 +1163,18 @@ impl Debug for NamedStructType {
 }
 
 impl NamedStructType {
-    pub fn new(name: Node, assigned_name: &str, anon_struct_type: AnonymousStructType) -> Self {
+    pub fn new(
+        name: Node,
+        assigned_name: &str,
+        anon_struct_type: AnonymousStructType,
+        type_id: TypeNumber,
+    ) -> Self {
         Self {
             //defined_in_module,
             anon_struct_type,
             name,
             assigned_name: assigned_name.to_string(),
-            functions: SeqMap::default(),
+            type_id,
         }
     }
 
@@ -1158,31 +1186,6 @@ impl NamedStructType {
 
     pub fn name(&self) -> &Node {
         &self.name
-    }
-
-    pub fn add_external_member_function(
-        &mut self,
-        external_func: ExternalFunctionDefinitionRef,
-    ) -> Result<(), SeqMapError> {
-        let name = external_func.assigned_name.clone();
-        let func = Function::External(external_func);
-        self.functions.insert(name, func.into())?;
-        Ok(())
-    }
-
-    pub fn get_member_function(&self, function_name: &str) -> Option<&FunctionRef> {
-        self.functions.get(&function_name.to_string())
-    }
-
-    pub fn get_internal_member_function(
-        &self,
-        function_name: &str,
-    ) -> Option<InternalFunctionDefinitionRef> {
-        let func = self.functions.get(&function_name.to_string())?;
-        match &**func {
-            Function::Internal(fn_def) => Some(fn_def.clone()),
-            _ => None,
-        }
     }
 }
 
@@ -1301,7 +1304,7 @@ pub struct EnumType {
     pub name: LocalTypeIdentifier,
     pub assigned_name: String,
     pub module_path: Vec<String>,
-    pub number: TypeNumber,
+    pub type_id: TypeNumber,
 
     pub variants: SeqMap<String, EnumVariantTypeRef>,
 }
@@ -1332,7 +1335,7 @@ impl EnumType {
             name,
             assigned_name: assigned_name.to_string(),
             module_path,
-            number,
+            type_id: number,
             variants: SeqMap::new(),
         }
     }
@@ -1444,25 +1447,179 @@ pub struct Use {
     pub items: Vec<UseItem>,
 }
 
+#[derive(Debug)]
+pub struct ImplFunctions {
+    pub functions: SeqMap<String, FunctionRef>,
+}
+
+impl Default for ImplFunctions {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ImplFunctions {
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            functions: SeqMap::default(),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct AssociatedImpls {
+    pub functions: SeqMap<TypeNumber, ImplFunctions>,
+}
+
+impl Default for AssociatedImpls {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl AssociatedImpls {
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            functions: SeqMap::default(),
+        }
+    }
+}
+
+impl AssociatedImpls {
+    pub fn prepare(&mut self, ty: &Type) {
+        let type_id = ty.id().expect("type can not be attached to");
+        info!(%ty, %type_id, "prepare type");
+        self.functions
+            .insert(type_id, ImplFunctions::new())
+            .expect("should work");
+    }
+    #[must_use]
+    pub fn get_member_function(&self, ty: &Type, function_name: &str) -> Option<&FunctionRef> {
+        let type_id = ty.id().expect("type can not be attached to");
+        info!(%ty, %type_id, ?function_name, "looking up member function");
+        let maybe_found_impl = self.functions.get(&type_id);
+        if let Some(found_impl) = maybe_found_impl {
+            if let Some(func) = found_impl.functions.get(&function_name.to_string()) {
+                return Some(func);
+            }
+        }
+        None
+    }
+
+    pub fn get_internal_member_function(
+        &self,
+        ty: &Type,
+        function_name: &str,
+    ) -> Option<&InternalFunctionDefinitionRef> {
+        if let Some(found) = self.get_member_function(ty, function_name) {
+            if let Function::Internal(int_fn) = &**found {
+                return Some(int_fn);
+            }
+        }
+        None
+    }
+
+    pub fn add_member_function(
+        &mut self,
+        ty: &Type,
+        name: &str,
+        func: FunctionRef,
+    ) -> Result<(), SemanticError> {
+        let type_id = ty.id().expect("type can not have associated functions");
+        info!(%ty, %type_id, ?name, "adding member function");
+        let maybe_found_impl = self.functions.get_mut(&type_id);
+
+        if let Some(found_impl) = maybe_found_impl {
+            found_impl
+                .functions
+                .insert(name.to_string(), func)
+                .expect("todo");
+            Ok(())
+        } else {
+            error!(%ty, %type_id, ?name, "wasn't prepared");
+            Err(SemanticError::UnknownImplOnType)
+        }
+    }
+
+    pub fn add_external_member_function(
+        &mut self,
+        ty: &Type,
+        func: ExternalFunctionDefinition,
+    ) -> Result<(), SemanticError> {
+        self.add_member_function(
+            ty,
+            &func.assigned_name.clone(),
+            Function::External(func.into()).into(),
+        )
+    }
+
+    pub fn add_external_struct_member_function(
+        &mut self,
+        named_struct_type: &StructTypeRef,
+        func: Function,
+    ) -> Result<(), SemanticError> {
+        self.add_member_function(
+            &Type::NamedStruct(named_struct_type.clone()),
+            &func.name().clone(),
+            func.into(),
+        )
+    }
+
+    pub fn add_external_struct_member_function_external(
+        &mut self,
+        named_struct_type: StructTypeRef,
+        func: ExternalFunctionDefinition,
+    ) -> Result<(), SemanticError> {
+        self.add_member_function(
+            &Type::NamedStruct(named_struct_type.clone()),
+            &func.assigned_name.clone(),
+            Function::External(func.into()).into(),
+        )
+    }
+
+    pub fn add_external_struct_member_function_external_ref(
+        &mut self,
+        named_struct_type: StructTypeRef,
+        func: ExternalFunctionDefinitionRef,
+    ) -> Result<(), SemanticError> {
+        self.add_member_function(
+            &Type::NamedStruct(named_struct_type.clone()),
+            &func.assigned_name.clone(),
+            Function::External(func.into()).into(),
+        )
+    }
+}
+
 // Mutable part
 #[derive(Debug)]
 pub struct ProgramState {
     pub array_types: Vec<ArrayTypeRef>,
     pub number: TypeNumber,
     pub external_function_number: ExternalFunctionId,
-    // It is just so we don't have to do another dendency check of the
+    // It is just so we don't have to do another dependency check of the
     // modules, we know that these constants have been
     // evaluated in order already
     pub constants_in_dependency_order: Vec<ConstantRef>,
+    pub associated_impls: AssociatedImpls,
+}
+
+impl Default for ProgramState {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ProgramState {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             array_types: Vec::new(),
             number: 0,
             external_function_number: 0,
             constants_in_dependency_order: Vec::new(),
+            associated_impls: AssociatedImpls::new(),
         }
     }
 

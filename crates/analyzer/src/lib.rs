@@ -956,7 +956,9 @@ impl<'a> Analyzer<'a> {
             }
             Type::Optional(_optional_type) => ExpressionKind::Literal(Literal::NoneLiteral),
 
-            Type::NamedStruct(struct_ref) => self.create_default_static_call(node, struct_ref)?,
+            Type::NamedStruct(struct_ref) => {
+                self.create_default_static_call(node, &Type::NamedStruct(struct_ref.clone()))?
+            }
             _ => {
                 return Err(
                     self.create_err(ErrorKind::NoDefaultImplemented(field_type.clone()), node)
@@ -971,44 +973,35 @@ impl<'a> Analyzer<'a> {
     fn create_default_static_call(
         &mut self,
         node: &swamp_script_ast::Node,
-        struct_ref_borrow: &StructTypeRef,
+        ty: &Type,
     ) -> Result<ExpressionKind, Error> {
-        struct_ref_borrow
-            .borrow()
-            .functions
-            .get(&"default".to_string())
-            .map_or_else(
-                || {
-                    Err(self.create_err(
-                        ErrorKind::NoDefaultImplementedForStruct(struct_ref_borrow.clone()),
-                        node,
-                    ))
-                },
-                |function| {
-                    let kind = match &**function {
-                        Function::Internal(internal_function) => {
-                            ExpressionKind::InternalFunctionAccess(internal_function.clone())
-                        }
-                        Function::External(external_function) => {
-                            ExpressionKind::ExternalFunctionAccess(external_function.clone())
-                        }
-                    };
+        self.lookup_associated_function(ty, "default").map_or_else(
+            || Err(self.create_err(ErrorKind::NoDefaultImplementedForType(ty.clone()), node)),
+            |function| {
+                let kind = match &*function {
+                    Function::Internal(internal_function) => {
+                        ExpressionKind::InternalFunctionAccess(internal_function.clone())
+                    }
+                    Function::External(external_function) => {
+                        ExpressionKind::ExternalFunctionAccess(external_function.clone())
+                    }
+                };
 
-                    let base_expr =
-                        self.create_expr(kind, Type::Function(function.signature().clone()), node);
+                let base_expr =
+                    self.create_expr(kind, Type::Function(function.signature().clone()), node);
 
-                    let empty_call_postfix = Postfix {
-                        node: self.to_node(node),
-                        ty: *function.signature().return_type.clone(),
-                        kind: PostfixKind::FunctionCall(vec![]),
-                    };
+                let empty_call_postfix = Postfix {
+                    node: self.to_node(node),
+                    ty: *function.signature().return_type.clone(),
+                    kind: PostfixKind::FunctionCall(vec![]),
+                };
 
-                    let kind =
-                        ExpressionKind::PostfixChain(Box::new(base_expr), vec![empty_call_postfix]);
+                let kind =
+                    ExpressionKind::PostfixChain(Box::new(base_expr), vec![empty_call_postfix]);
 
-                    Ok(kind)
-                },
-            )
+                Ok(kind)
+            },
+        )
     }
 
     fn add_postfix(
@@ -1122,22 +1115,31 @@ impl<'a> Analyzer<'a> {
                         tv.resolved_type = found_internal.ty.clone();
                         tv.is_mutable = false;
                         suffixes.push(found_internal);
-                    } else if let Type::NamedStruct(struct_type) = &tv.resolved_type.clone() {
-                        let return_type = self.analyze_postfix_member_call(
-                            struct_type,
-                            tv.is_mutable,
-                            member_name,
-                            ast_arguments,
-                            &mut suffixes,
-                        )?;
-
-                        //self.add_postfix(&mut suffixes, kind, return_type.clone(), member_name);
-                        tv.resolved_type = return_type.clone();
-                        tv.is_mutable = false;
                     } else {
-                        return Err(
-                            self.create_err(ErrorKind::NotValidLocationStartingPoint, member_name)
-                        );
+                        let member_name_str = self.get_text(member_name).to_string();
+
+                        if let Some(found_member) = self
+                            .shared
+                            .state
+                            .associated_impls
+                            .get_member_function(&tv.resolved_type, &member_name_str)
+                        {
+                            let return_type = self.analyze_postfix_member_call(
+                                &tv.resolved_type,
+                                tv.is_mutable,
+                                member_name,
+                                ast_arguments,
+                                &mut suffixes,
+                            )?;
+
+                            //self.add_postfix(&mut suffixes, kind, return_type.clone(), member_name);
+                            tv.resolved_type = return_type.clone();
+                            tv.is_mutable = false;
+                        } else {
+                            return Err(
+                                self.create_err(ErrorKind::UnknownMemberFunction, member_name)
+                            );
+                        }
                     }
                 }
                 swamp_script_ast::Postfix::FunctionCall(node, arguments) => {
@@ -2653,7 +2655,7 @@ impl<'a> Analyzer<'a> {
         &mut self,
         resolved_node: &Node,
         found_function: &FunctionRef,
-        struct_type: &StructTypeRef,
+        encountered_self_type: &Type,
         is_mutable: bool,
         arguments: &[swamp_script_ast::MutableOrImmutableExpression],
     ) -> Result<Postfix, Error> {
@@ -2662,7 +2664,7 @@ impl<'a> Analyzer<'a> {
         let self_type = &signature.parameters[0];
         if !self_type
             .resolved_type
-            .compatible_with(&Type::NamedStruct(struct_type.clone()))
+            .compatible_with(&encountered_self_type)
             || self_type.is_mutable && !is_mutable
         {
             return Err(self.create_err_resolved(ErrorKind::SelfNotCorrectType, resolved_node));
@@ -2723,7 +2725,7 @@ impl<'a> Analyzer<'a> {
 
     fn analyze_postfix_member_call(
         &mut self,
-        struct_type: &StructTypeRef,
+        type_that_member_is_on: &Type,
         is_mutable: bool,
         member_name: &swamp_script_ast::Node,
         arguments: &[swamp_script_ast::MutableOrImmutableExpression],
@@ -2732,50 +2734,66 @@ impl<'a> Analyzer<'a> {
         let field_name_str = self.get_text(member_name).to_string();
 
         let resolved_node = self.to_node(member_name);
-        let binding = struct_type.borrow();
-        let postfixes = match binding.functions.get(&field_name_str) {
+
+        let maybe_function = self
+            .shared
+            .state
+            .associated_impls
+            .get_member_function(&type_that_member_is_on, &field_name_str)
+            .cloned();
+
+        let postfixes = match maybe_function {
             Some(found_function_member) => {
                 let postfix = self.analyze_postfix_member_func_call(
                     &resolved_node,
-                    found_function_member,
-                    struct_type,
+                    &found_function_member,
+                    type_that_member_is_on,
                     is_mutable,
                     arguments,
                 )?;
                 vec![postfix]
             }
-            _ => match binding
-                .anon_struct_type
-                .field_name_sorted_fields
-                .get(&field_name_str)
-            {
-                Some(found_field) => {
-                    if let Type::Function(signature) = &found_field.field_type {
-                        let index = binding
-                            .anon_struct_type
-                            .field_name_sorted_fields
-                            .get_index(&field_name_str)
-                            .expect("should work");
-                        self.analyze_postfix_field_call(
-                            &resolved_node,
-                            struct_type,
-                            found_field,
-                            index,
-                            signature,
-                            arguments,
-                        )?
-                    } else {
-                        return Err(
-                            self.create_err(ErrorKind::NotValidLocationStartingPoint, member_name)
-                        );
-                    }
-                }
-                _ => {
-                    return Err(
-                        self.create_err(ErrorKind::NotValidLocationStartingPoint, member_name)
-                    );
-                }
-            },
+            _ => {
+                return Err(self.create_err(ErrorKind::NotValidLocationStartingPoint, member_name));
+            } // TODO: Support function calls
+              /*
+              if let Type::NamedStruct(found_struct) = type_that_member_is_on {
+                  let binding = found_struct.borrow();
+                  match binding
+                      .anon_struct_type
+                      .field_name_sorted_fields
+                      .get(&field_name_str)
+                  {
+                      Some(found_field) => {
+                          if let Type::Function(signature) = &found_field.field_type {
+                              let index = binding
+                                  .anon_struct_type
+                                  .field_name_sorted_fields
+                                  .get_index(&field_name_str)
+                                  .expect("should work");
+                              self.analyze_postfix_field_call(
+                                  &resolved_node,
+                                  found_struct,
+                                  found_field,
+                                  index,
+                                  signature,
+                                  arguments,
+                              )?
+                          } else {
+                              return Err(
+                                  self.create_err(ErrorKind::NotValidLocationStartingPoint, member_name)
+                              );
+                          }
+                      }
+                      _ => {
+                          return Err(
+                              self.create_err(ErrorKind::NotValidLocationStartingPoint, member_name)
+                          );
+                      }
+                  },
+              }
+
+               */
         };
 
         let last_type = postfixes.last().unwrap().ty.clone();

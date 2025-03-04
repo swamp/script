@@ -424,8 +424,6 @@ impl AstParser {
     fn parse_mod(&self, pair: &Pair<Rule>) -> Result<Definition, ParseError> {
         let (segments, items) = self.module_path_and_items(&pair)?;
 
-        info!(?segments, ?items, "mod");
-
         Ok(Definition::Mod(Mod {
             module_path: ModulePath(segments),
             items,

@@ -124,6 +124,7 @@ pub enum ErrorKind {
     ContinueOutsideLoop,
     ParameterIsNotMutable,
     CouldNotCoerceTo(Type),
+    NoDefaultImplementedForType(Type),
 }
 
 impl From<SemanticError> for Error {

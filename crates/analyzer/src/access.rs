@@ -8,39 +8,64 @@ use crate::err::{Error, ErrorKind};
 use swamp_script_semantic::{
     ArrayTypeRef, Expression, ExpressionKind, Function, FunctionRef, Range, RangeMode, Type,
 };
+use tracing::info;
 
 impl Analyzer<'_> {
-    fn convert_to_function_access(function: &FunctionRef) -> Expression {
-        match &**function {
-            Function::Internal(x) => Expression {
-                ty: Type::Function(x.signature.clone()),
-                node: function.node(),
-                kind: ExpressionKind::InternalFunctionAccess(x.clone()),
-            },
-            Function::External(y) => Expression {
-                ty: Type::Function(y.signature.clone()),
-                node: function.node(),
-                kind: ExpressionKind::ExternalFunctionAccess(y.clone()),
-            },
+    pub fn convert_to_function_access_kind(function_ref: &FunctionRef) -> ExpressionKind {
+        match &**function_ref {
+            Function::Internal(internal_function) => {
+                ExpressionKind::InternalFunctionAccess(internal_function.clone())
+            }
+            Function::External(external_function) => {
+                ExpressionKind::ExternalFunctionAccess(external_function.clone())
+            }
         }
+    }
+
+    #[must_use]
+    pub fn lookup_associated_function(
+        &self,
+        ty: &Type,
+        function_name: &str,
+    ) -> Option<FunctionRef> {
+        info!(%ty, ?function_name, "looking up member function");
+        self.shared
+            .state
+            .associated_impls
+            .get_member_function(ty, function_name)
+            .cloned()
+    }
+
+    #[must_use]
+    pub fn convert_to_function_access_expr(
+        &self,
+        associated_function_info: &FunctionRef,
+        ast_node: &swamp_script_ast::Node,
+    ) -> Expression {
+        let kind = Self::convert_to_function_access_kind(associated_function_info);
+        self.create_expr(
+            kind,
+            Type::Function(associated_function_info.signature().clone()),
+            ast_node,
+        )
     }
 
     pub(crate) fn analyze_static_member_access(
         &mut self,
-        struct_reference: &swamp_script_ast::QualifiedTypeIdentifier,
+        named_type: &swamp_script_ast::QualifiedTypeIdentifier,
         member_name_node: &swamp_script_ast::Node,
     ) -> Result<Expression, Error> {
-        let struct_type = self.get_struct_type(struct_reference)?;
+        let some_type = self.analyze_named_type(named_type)?;
         let member_name = self.get_text(member_name_node);
-        let binding = struct_type.borrow();
-        let member_function = binding
-            .functions
-            .get(&member_name.to_string())
-            .ok_or_else(|| self.create_err(ErrorKind::UnknownMemberFunction, member_name_node))?;
-
-        let expr = Self::convert_to_function_access(member_function);
-
-        Ok(expr)
+        self.lookup_associated_function(&some_type, member_name)
+            .map_or_else(
+                || Err(self.create_err(ErrorKind::UnknownMemberFunction, member_name_node)),
+                |member_function| {
+                    let expr =
+                        self.convert_to_function_access_expr(&member_function, member_name_node);
+                    Ok(expr)
+                },
+            )
     }
 
     pub(crate) fn analyze_min_max_expr(

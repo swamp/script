@@ -8,14 +8,13 @@ use crate::{
     AliasType, AliasTypeRef, AnonymousStructType, Constant, ConstantRef, EnumType, EnumTypeRef,
     EnumVariantType, EnumVariantTypeRef, ExternalFunctionDefinition, ExternalFunctionDefinitionRef,
     ExternalType, ExternalTypeRef, InternalFunctionDefinition, InternalFunctionDefinitionRef,
-    NamedStructType, Node, SemanticError, StructTypeField, StructTypeRef, Type,
+    NamedStructType, Node, SemanticError, StructTypeField, StructTypeRef, Type, TypeNumber,
 };
 use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::fmt::Debug;
 use std::rc::Rc;
 use tiny_ver::TinyVersion;
-use tracing::info;
 
 #[derive(Debug, Clone)]
 pub enum FuncDef {
@@ -215,6 +214,7 @@ impl SymbolTable {
         &mut self,
         name: &str,
         fields: &[(&str, Type)],
+        type_id: TypeNumber,
     ) -> Result<StructTypeRef, SemanticError> {
         let mut defined_fields = SeqMap::new();
         for (name, field_type) in fields {
@@ -233,7 +233,7 @@ impl SymbolTable {
             name: Node::default(),
             assigned_name: name.to_string(),
             anon_struct_type: AnonymousStructType::new(defined_fields),
-            functions: SeqMap::default(),
+            type_id,
         };
 
         let struct_ref = Rc::new(RefCell::new(struct_type));
@@ -333,7 +333,6 @@ impl SymbolTable {
     }
 
     pub fn add_symbol(&mut self, name: &str, symbol: Symbol) -> Result<(), SemanticError> {
-        info!(name, ?symbol, "add_symbol");
         self.symbols
             .insert(name.to_string(), symbol)
             .map_err(|_| SemanticError::DuplicateSymbolName)

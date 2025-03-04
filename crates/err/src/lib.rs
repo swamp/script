@@ -333,6 +333,10 @@ pub fn build_analyze_error(err: &Error) -> Builder<usize> {
 
         ErrorKind::EmptyMatch => Report::build(Kind::Error, 4243, "empty match", span),
 
+        ErrorKind::NoDefaultImplementedForType(_ty) => {
+            Report::build(Kind::Error, 4243, "no default implemented for type", span)
+        }
+
         ErrorKind::UnusedVariablesCanNotBeMut => {
             Report::build(Kind::Error, 4243, "unused variables can not be mut", span)
         }
