@@ -1490,7 +1490,6 @@ impl AssociatedImpls {
 impl AssociatedImpls {
     pub fn prepare(&mut self, ty: &Type) {
         let type_id = ty.id().expect("type can not be attached to");
-        info!(%ty, %type_id, "prepare type");
         self.functions
             .insert(type_id, ImplFunctions::new())
             .expect("should work");
@@ -1498,7 +1497,6 @@ impl AssociatedImpls {
     #[must_use]
     pub fn get_member_function(&self, ty: &Type, function_name: &str) -> Option<&FunctionRef> {
         let type_id = ty.id().expect("type can not be attached to");
-        info!(%ty, %type_id, ?function_name, "looking up member function");
         let maybe_found_impl = self.functions.get(&type_id);
         if let Some(found_impl) = maybe_found_impl {
             if let Some(func) = found_impl.functions.get(&function_name.to_string()) {
@@ -1528,7 +1526,6 @@ impl AssociatedImpls {
         func: FunctionRef,
     ) -> Result<(), SemanticError> {
         let type_id = ty.id().expect("type can not have associated functions");
-        info!(%ty, %type_id, ?name, "adding member function");
         let maybe_found_impl = self.functions.get_mut(&type_id);
 
         if let Some(found_impl) = maybe_found_impl {

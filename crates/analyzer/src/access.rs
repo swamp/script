@@ -28,7 +28,6 @@ impl Analyzer<'_> {
         ty: &Type,
         function_name: &str,
     ) -> Option<FunctionRef> {
-        info!(%ty, ?function_name, "looking up member function");
         self.shared
             .state
             .associated_impls
