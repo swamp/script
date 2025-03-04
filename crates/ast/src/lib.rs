@@ -413,7 +413,7 @@ pub enum ExpressionKind {
     InterpolatedString(Vec<StringPart>),
 
     // Literals
-    AnonymousStructLiteral(Vec<FieldExpression>),
+    AnonymousStructLiteral(Vec<FieldExpression>, bool),
     StructLiteral(QualifiedTypeIdentifier, Vec<FieldExpression>, bool),
     Range(Box<Expression>, Box<Expression>, RangeMode),
     Literal(LiteralKind),

@@ -149,42 +149,77 @@ impl<'a> Analyzer<'a> {
         &mut self,
         node: &swamp_script_ast::Node,
         ast_fields: &Vec<swamp_script_ast::FieldExpression>,
+        rest_was_specified: bool,
         context: &TypeContext,
     ) -> Result<Expression, Error> {
-        //let mut field_name_and_expression = SeqMap::new();
-        let mut map_for_creating_type = SeqMap::new();
+        let mut maybe_named_struct: Option<StructTypeRef> = None;
 
-        for field in ast_fields {
-            let field_name = self.get_text(&field.field_name.0).to_string();
-            let resolved_node = self.to_node(&field.field_name.0);
+        let struct_to_instantiate = if let Some(expected_type) = context.expected_type {
+            match expected_type {
+                Type::NamedStruct(named_struct) => {
+                    maybe_named_struct = Some(named_struct.clone());
+                    named_struct.borrow().anon_struct_type.clone()
+                }
+                Type::AnonymousStruct(anonymous_struct) => anonymous_struct.clone(),
+                _ => {
+                    return Err(
+                        self.create_err(ErrorKind::CouldNotCoerceTo(expected_type.clone()), node)
+                    );
+                }
+            }
+        } else {
+            //let mut field_name_and_expression = SeqMap::new();
+            let mut map_for_creating_type = SeqMap::new();
 
-            let field_type_context = TypeContext::new_anything_argument();
-            let resolved_expression =
-                self.analyze_expression(&field.expression, &field_type_context)?;
+            for field in ast_fields {
+                let field_name = self.get_text(&field.field_name.0).to_string();
+                let resolved_node = self.to_node(&field.field_name.0);
 
-            let expression_type = resolved_expression.ty.clone();
-            //field_name_and_expression.insert(field_name.clone(), resolved_expression);
-            let field = StructTypeField {
-                identifier: Some(resolved_node),
-                field_type: expression_type,
-            };
+                let field_type_context = TypeContext::new_anything_argument();
+                let resolved_expression =
+                    self.analyze_expression(&field.expression, &field_type_context)?;
 
-            map_for_creating_type.insert(field_name.clone(), field);
-        }
+                let expression_type = resolved_expression.ty.clone();
+                //field_name_and_expression.insert(field_name.clone(), resolved_expression);
+                let field = StructTypeField {
+                    identifier: Some(resolved_node),
+                    field_type: expression_type,
+                };
 
-        let struct_to_instantiate = AnonymousStructType::new_and_sort_fields(map_for_creating_type);
+                map_for_creating_type
+                    .insert(field_name.clone(), field)
+                    .expect("TODO: panic message");
+            }
 
-        let mapped =
-            self.analyze_anon_struct_instantiation(node, &struct_to_instantiate, ast_fields, true)?;
+            AnonymousStructType::new_and_sort_fields(map_for_creating_type)
+        };
 
-        Ok(self.create_expr(
-            ExpressionKind::AnonymousStructLiteral(AnonymousStructLiteral {
-                source_order_expressions: mapped,
-                anonymous_struct_type: struct_to_instantiate.clone(),
-            }),
-            Type::AnonymousStruct(struct_to_instantiate),
-            &node,
-        ))
+        let mapped = self.analyze_anon_struct_instantiation(
+            node,
+            &struct_to_instantiate,
+            ast_fields,
+            rest_was_specified,
+        )?;
+
+        let (kind, ty) = if let Some(named_struct) = maybe_named_struct {
+            (
+                ExpressionKind::StructInstantiation(StructInstantiation {
+                    source_order_expressions: mapped,
+                    struct_type_ref: named_struct.clone(),
+                }),
+                Type::NamedStruct(named_struct),
+            )
+        } else {
+            (
+                ExpressionKind::AnonymousStructLiteral(AnonymousStructLiteral {
+                    source_order_expressions: mapped,
+                    anonymous_struct_type: struct_to_instantiate.clone(),
+                }),
+                Type::AnonymousStruct(struct_to_instantiate),
+            )
+        };
+
+        Ok(self.create_expr(kind, ty, &node))
     }
 
     pub(crate) fn analyze_struct_instantiation(

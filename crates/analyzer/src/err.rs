@@ -123,6 +123,7 @@ pub enum ErrorKind {
     MatchArmsMustHaveTypes,
     ContinueOutsideLoop,
     ParameterIsNotMutable,
+    CouldNotCoerceTo(Type),
 }
 
 impl From<SemanticError> for Error {

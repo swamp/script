@@ -3,10 +3,8 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use crate::util::{check, check_fail};
-
 mod util;
-
+use crate::util::check;
 /*
 #[test_log::test]
 fn init_var() {
@@ -1342,6 +1340,8 @@ fn infer_anonymous_struct() {
     result: Something = { a: 3 }
     ",
         r#"
+Unit,VariableDefinition(Variable { name: <52:6>, resolved_type: Something, mutable_node: None, scope_index: 0, variable_index: 0 }, MutOrImmutableExpression { expression_or_location: Expression(<72:8>Something,StructInstantiation(StructInstantiation { source_order_expressions: [(0, <77:1>Int,Literal(IntLiteral(3)))], struct_type_ref: RefCell { value: struct "Something" } })), is_mutable: None })
+
 "#,
     );
 }

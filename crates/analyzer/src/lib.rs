@@ -28,7 +28,7 @@ use swamp_script_semantic::{
     AnonymousStructLiteral, ArgumentExpressionOrLocation, LocationAccess, LocationAccessKind,
     MutOrImmutableExpression, NormalPattern, Postfix, PostfixKind, RangeMode,
     SingleLocationExpression, SingleLocationExpressionKind, SingleMutLocationExpression,
-    TypeWithMut, WhenBinding,
+    TypeWithMut, WhenBinding, check_assignable_anonymous_struct_types, same_anon_struct_ref,
 };
 use swamp_script_source_map::SourceMap;
 use tracing::error;
@@ -782,9 +782,15 @@ impl<'a> Analyzer<'a> {
                 has_rest,
             ) => self.analyze_struct_instantiation(struct_identifier, fields, *has_rest)?,
 
-            swamp_script_ast::ExpressionKind::AnonymousStructLiteral(fields) => {
-                self.analyze_anonymous_struct_literal(&ast_expression.node, fields, context)?
-            }
+            swamp_script_ast::ExpressionKind::AnonymousStructLiteral(
+                fields,
+                rest_was_specified,
+            ) => self.analyze_anonymous_struct_literal(
+                &ast_expression.node,
+                fields,
+                *rest_was_specified,
+                context,
+            )?,
 
             swamp_script_ast::ExpressionKind::Range(min_value, max_value, range_mode) => {
                 let range = self.analyze_range(min_value, max_value, range_mode)?;
@@ -2921,4 +2927,37 @@ impl<'a> Analyzer<'a> {
             node,
         ))
     }
+
+    /*
+    fn try_coerce_anonymous_struct_literal(
+        &self,
+        original_expr: &AnonymousStructLiteral,
+        expected_named_struct: &NamedStructType,
+        encountered_anon_struct: &AnonymousStructType,
+        node: &swamp_script_ast::Node,
+    ) -> Option<Expression> {
+        if !check_assignable_anonymous_struct_types(&expected_named_struct.anon_struct_type, encountered_anon_struct) {
+            return None;
+        }
+
+        let mut source_order_expressions = Vec::new();
+        for (name, encountered_field) in &encountered_anon_struct.field_name_sorted_fields {
+            let expected_field = expected_named_struct.anon_struct_type.field_name_sorted_fields.get(name).unwrap();
+            let target_index = expected_named_struct.anon_struct_type.field_name_sorted_fields.get_index(name).unwrap();
+
+
+            source_order_expressions.push((target_index, ))
+        }
+
+        self.create_expr(ExpressionKind::AnonymousStructLiteral(AnonymousStructLiteral {
+            source_order_expressions: Vec < (usize, Expression) >,
+            anonymous_struct_type: AnonymousStructType,
+        }),
+                         Type::NamedStruct(expected_named_struct),
+                         node);
+
+        original_expr
+    }
+
+     */
 }

@@ -1617,7 +1617,10 @@ impl AstParser {
 
     fn parse_anonymous_struct_literal(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
         let (fields, has_rest) = self.parse_anonymous_struct_literal_fields(&pair)?;
-        Ok(self.create_expr(ExpressionKind::AnonymousStructLiteral(fields), pair))
+        Ok(self.create_expr(
+            ExpressionKind::AnonymousStructLiteral(fields, has_rest),
+            pair,
+        ))
     }
 
     fn parse_anonymous_struct_literal_fields(

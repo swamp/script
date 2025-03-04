@@ -393,6 +393,28 @@ fn compare_anonymous_struct_types(a: &AnonymousStructType, b: &AnonymousStructTy
     true
 }
 
+#[must_use]
+pub fn check_assignable_anonymous_struct_types(
+    a: &AnonymousStructType,
+    b: &AnonymousStructType,
+) -> bool {
+    if a.field_name_sorted_fields.len() != b.field_name_sorted_fields.len() {
+        return false;
+    }
+
+    for (name, field) in &a.field_name_sorted_fields {
+        if let Some(found_field) = b.field_name_sorted_fields.get(name) {
+            if !found_field.field_type.compatible_with(&field.field_type) {
+                return false;
+            }
+        } else {
+            return false;
+        }
+    }
+
+    true
+}
+
 impl Node {
     pub fn new_unknown() -> Self {
         Self {

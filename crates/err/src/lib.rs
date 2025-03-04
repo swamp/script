@@ -486,6 +486,11 @@ pub fn build_analyze_error(err: &Error) -> Builder<usize> {
             //.with_label("first_type", a.clone())
             //.with_note(&format!("second_type {b:?}"))
         }
+        ErrorKind::CouldNotCoerceTo(_a) => {
+            Report::build(Kind::Error, 102, "could not coerce", span)
+            //.with_label("first_type", a.clone())
+            //.with_note(&format!("second_type {b:?}"))
+        }
         ErrorKind::ExpectedArray(_) => Report::build(Kind::Error, 102, "ExpectedArray", span),
         ErrorKind::UnknownMemberFunction => {
             Report::build(Kind::Error, 101, "Unknown member function", span)
