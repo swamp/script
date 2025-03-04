@@ -10,7 +10,7 @@ use swamp_script_semantic::{
 };
 use tracing::debug;
 
-impl<'a> Analyzer<'a> {
+impl Analyzer<'_> {
     pub(crate) fn analyze_binary_op(
         &mut self,
         ast_left: &swamp_script_ast::Expression,

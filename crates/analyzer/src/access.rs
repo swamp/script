@@ -9,7 +9,7 @@ use swamp_script_semantic::{
     ArrayTypeRef, Expression, ExpressionKind, Function, FunctionRef, Range, RangeMode, Type,
 };
 
-impl<'a> Analyzer<'a> {
+impl Analyzer<'_> {
     fn convert_to_function_access(function: &FunctionRef) -> Expression {
         match &**function {
             Function::Internal(x) => Expression {

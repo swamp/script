@@ -7,7 +7,7 @@ use crate::err::{Error, ErrorKind};
 use crate::{Analyzer, TypeContext};
 use swamp_script_semantic::{Constant, ConstantRef, Expression, ExpressionKind};
 
-impl<'a> Analyzer<'a> {
+impl Analyzer<'_> {
     fn analyze_constant(&mut self, constant: &swamp_script_ast::ConstantInfo) -> Result<(), Error> {
         let context = TypeContext::new_anything_argument();
         let resolved_expr = self.analyze_expression(&constant.expression, &context)?;
@@ -66,6 +66,7 @@ impl<'a> Analyzer<'a> {
         )
     }
 
+    #[must_use]
     pub fn try_find_constant(
         &self,
         constant_identifier: &swamp_script_ast::ConstantIdentifier,

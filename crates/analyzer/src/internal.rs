@@ -9,7 +9,7 @@ use swamp_script_semantic::prelude::IntrinsicFunction;
 use swamp_script_semantic::{ArrayTypeRef, MapTypeRef, Postfix, PostfixKind, TupleTypeRef};
 use swamp_script_semantic::{Expression, Type};
 
-impl<'a> Analyzer<'a> {
+impl Analyzer<'_> {
     pub(crate) fn check_for_internal_member_call(
         &mut self,
         ty: &Type,
@@ -25,19 +25,17 @@ impl<'a> Analyzer<'a> {
                     ast_member_function_name,
                     ast_arguments,
                 )?;
-                return Ok(Some(resolved));
+                Ok(Some(resolved))
             }
 
             Type::Map(map_type_ref) => {
-                //if let ExpressionKind::VariableAccess(var_ref) = resolved_expr {
                 let resolved = self.analyze_map_member_call(
-                    &map_type_ref,
+                    map_type_ref,
                     is_mutable,
                     ast_member_function_name,
                     ast_arguments,
                 )?;
                 Ok(Some(resolved))
-                //}
             }
 
             Type::Float => {
@@ -57,7 +55,7 @@ impl<'a> Analyzer<'a> {
             }
             Type::Tuple(tuple_type) => {
                 let found = self.analyze_tuple_member_call(
-                    &tuple_type,
+                    tuple_type,
                     ast_member_function_name,
                     ast_arguments,
                 )?;
@@ -76,7 +74,6 @@ impl<'a> Analyzer<'a> {
         ast_member_function_name: &swamp_script_ast::Node,
         arguments: &[&swamp_script_ast::Expression],
     ) -> Result<Postfix, Error> {
-        //let resolved_node = self.to_node(ast_member_function_name);
         if tuple_type.0.len() != 2 {
             return Err(self.create_err(
                 ErrorKind::WrongNumberOfArguments(2, tuple_type.0.len()),
@@ -123,10 +120,10 @@ impl<'a> Analyzer<'a> {
         is_mutable: bool,
         node: &swamp_script_ast::Node,
     ) -> Result<(), Error> {
-        if !is_mutable {
-            Err(self.create_err(ErrorKind::ExpectedMutableLocation, node))
-        } else {
+        if is_mutable {
             Ok(())
+        } else {
+            Err(self.create_err(ErrorKind::ExpectedMutableLocation, node))
         }
     }
 
@@ -156,7 +153,7 @@ impl<'a> Analyzer<'a> {
         let key_arg_context = TypeContext::new_argument(&map_type.key_type);
         let expr = match member_function_name_str {
             "remove" => {
-                self.check_mutable(is_mutable, &ast_member_function_name)?;
+                self.check_mutable(is_mutable, ast_member_function_name)?;
 
                 if ast_arguments.len() != 1 {
                     return Err(self.create_err(
@@ -165,7 +162,7 @@ impl<'a> Analyzer<'a> {
                     ));
                 }
 
-                let key_expr = self.analyze_expression(&ast_arguments[0], &key_arg_context)?;
+                let key_expr = self.analyze_expression(ast_arguments[0], &key_arg_context)?;
 
                 self.create_postfix(
                     PostfixKind::IntrinsicCall(IntrinsicFunction::MapRemove, vec![key_expr]),
@@ -182,7 +179,7 @@ impl<'a> Analyzer<'a> {
                     ));
                 }
 
-                let key_expr = self.analyze_expression(&ast_arguments[0], &key_arg_context)?;
+                let key_expr = self.analyze_expression(ast_arguments[0], &key_arg_context)?;
 
                 self.create_postfix(
                     PostfixKind::IntrinsicCall(IntrinsicFunction::MapHas, vec![key_expr]),
@@ -209,7 +206,7 @@ impl<'a> Analyzer<'a> {
         let member_function_name_str = self.get_text(ast_member_function_name);
         let resolved_postfix = match member_function_name_str {
             "remove" => {
-                self.check_mutable(is_mutable, &ast_member_function_name)?;
+                self.check_mutable(is_mutable, ast_member_function_name)?;
 
                 if ast_arguments.len() != 1 {
                     return Err(self.create_err(
@@ -217,7 +214,7 @@ impl<'a> Analyzer<'a> {
                         ast_member_function_name,
                     ));
                 }
-                let index_expr = self.analyze_usize_index(&ast_arguments[0])?;
+                let index_expr = self.analyze_usize_index(ast_arguments[0])?;
 
                 self.create_postfix(
                     PostfixKind::IntrinsicCall(IntrinsicFunction::VecRemoveIndex, vec![index_expr]),
@@ -265,7 +262,7 @@ impl<'a> Analyzer<'a> {
             }
 
             "clear" => {
-                self.check_mutable(is_mutable, &ast_member_function_name)?;
+                self.check_mutable(is_mutable, ast_member_function_name)?;
 
                 if !ast_arguments.is_empty() {
                     return Err(self.create_err(
@@ -329,11 +326,10 @@ impl<'a> Analyzer<'a> {
         if ast_arguments.len() != 1 {
             return Err(self.create_err(
                 ErrorKind::WrongNumberOfArguments(ast_arguments.len(), 1),
-                &node,
+                node,
             ));
         }
-        let float_expression =
-            { self.analyze_immutable_argument(&ast_arguments[0], &Type::Float)? };
+        let float_expression = { self.analyze_immutable_argument(ast_arguments[0], &Type::Float)? };
 
         Ok(float_expression)
     }
@@ -349,7 +345,7 @@ impl<'a> Analyzer<'a> {
                 &node,
             ));
         }
-        let expr2 = self.analyze_immutable_argument(&ast_arguments[0], &Type::Int)?;
+        let expr2 = self.analyze_immutable_argument(ast_arguments[0], &Type::Int)?;
 
         Ok(expr2)
     }
@@ -365,8 +361,8 @@ impl<'a> Analyzer<'a> {
                 &node,
             ));
         }
-        let expr2 = self.analyze_immutable_argument(&ast_arguments[0], &Type::Float)?;
-        let expr3 = self.analyze_immutable_argument(&ast_arguments[1], &Type::Float)?;
+        let expr2 = self.analyze_immutable_argument(ast_arguments[0], &Type::Float)?;
+        let expr3 = self.analyze_immutable_argument(ast_arguments[1], &Type::Float)?;
 
         Ok((expr2, expr3))
     }
@@ -386,7 +382,7 @@ impl<'a> Analyzer<'a> {
                 if !ast_arguments.is_empty() {
                     return Err(self.create_err(
                         ErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
-                        &ast_member_function_name,
+                        ast_member_function_name,
                     ));
                 }
                 PostfixKind::IntrinsicCall(IntrinsicFunction::FloatRound, vec![])
@@ -395,7 +391,7 @@ impl<'a> Analyzer<'a> {
                 if !ast_arguments.is_empty() {
                     return Err(self.create_err(
                         ErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
-                        &ast_member_function_name,
+                        ast_member_function_name,
                     ));
                 }
                 resulting_type = &Type::Int;
@@ -405,7 +401,7 @@ impl<'a> Analyzer<'a> {
                 if !ast_arguments.is_empty() {
                     return Err(self.create_err(
                         ErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
-                        &ast_member_function_name,
+                        ast_member_function_name,
                     ));
                 }
                 PostfixKind::IntrinsicCall(IntrinsicFunction::FloatSqrt, vec![])
@@ -414,7 +410,7 @@ impl<'a> Analyzer<'a> {
                 if !ast_arguments.is_empty() {
                     return Err(self.create_err(
                         ErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
-                        &ast_member_function_name,
+                        ast_member_function_name,
                     ));
                 }
                 PostfixKind::IntrinsicCall(IntrinsicFunction::FloatSign, vec![])
@@ -423,7 +419,7 @@ impl<'a> Analyzer<'a> {
                 if !ast_arguments.is_empty() {
                     return Err(self.create_err(
                         ErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
-                        &ast_member_function_name,
+                        ast_member_function_name,
                     ));
                 }
                 PostfixKind::IntrinsicCall(IntrinsicFunction::FloatAbs, vec![])
@@ -432,7 +428,7 @@ impl<'a> Analyzer<'a> {
                 if !ast_arguments.is_empty() {
                     return Err(self.create_err(
                         ErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
-                        &ast_member_function_name,
+                        ast_member_function_name,
                     ));
                 }
                 resulting_type = &Type::Int;
@@ -442,7 +438,7 @@ impl<'a> Analyzer<'a> {
                 if !ast_arguments.is_empty() {
                     return Err(self.create_err(
                         ErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
-                        &ast_member_function_name,
+                        ast_member_function_name,
                     ));
                 }
                 PostfixKind::IntrinsicCall(IntrinsicFunction::FloatCos, vec![])
@@ -451,7 +447,7 @@ impl<'a> Analyzer<'a> {
                 if !ast_arguments.is_empty() {
                     return Err(self.create_err(
                         ErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
-                        &ast_member_function_name,
+                        ast_member_function_name,
                     ));
                 }
                 PostfixKind::IntrinsicCall(IntrinsicFunction::FloatSin, vec![])
@@ -460,7 +456,7 @@ impl<'a> Analyzer<'a> {
                 if !ast_arguments.is_empty() {
                     return Err(self.create_err(
                         ErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
-                        &ast_member_function_name,
+                        ast_member_function_name,
                     ));
                 }
                 PostfixKind::IntrinsicCall(IntrinsicFunction::FloatAcos, vec![])
@@ -469,7 +465,7 @@ impl<'a> Analyzer<'a> {
                 if !ast_arguments.is_empty() {
                     return Err(self.create_err(
                         ErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
-                        &ast_member_function_name,
+                        ast_member_function_name,
                     ));
                 }
                 PostfixKind::IntrinsicCall(IntrinsicFunction::FloatAsin, vec![])
@@ -492,12 +488,12 @@ impl<'a> Analyzer<'a> {
             }
             _ => {
                 return Err(
-                    self.create_err(ErrorKind::UnknownMemberFunction, &ast_member_function_name)
+                    self.create_err(ErrorKind::UnknownMemberFunction, ast_member_function_name)
                 );
             }
         };
 
-        Ok(self.create_postfix(kind, resulting_type, &ast_member_function_name))
+        Ok(self.create_postfix(kind, resulting_type, ast_member_function_name))
     }
 
     fn analyze_string_member_call(
@@ -506,7 +502,7 @@ impl<'a> Analyzer<'a> {
         ast_arguments: &[&swamp_script_ast::Expression],
     ) -> Result<Postfix, Error> {
         let function_name_str = self.get_text(ast_member_function_name);
-        let node = self.to_node(&ast_member_function_name);
+        let node = self.to_node(ast_member_function_name);
 
         match function_name_str {
             "len" => {
@@ -532,7 +528,7 @@ impl<'a> Analyzer<'a> {
         ast_arguments: &[&swamp_script_ast::Expression],
     ) -> Result<Postfix, Error> {
         let function_name_str = self.get_text(ast_member_function_name);
-        let node = self.to_node(&ast_member_function_name);
+        let node = self.to_node(ast_member_function_name);
 
         let (kind, resolved_type) = match function_name_str {
             "abs" => {
@@ -562,7 +558,7 @@ impl<'a> Analyzer<'a> {
 
             "max" => {
                 let int_argument =
-                    self.analyze_single_int_expression(&ast_member_function_name, ast_arguments)?;
+                    self.analyze_single_int_expression(ast_member_function_name, ast_arguments)?;
                 (
                     PostfixKind::IntrinsicCall(IntrinsicFunction::IntMax, vec![int_argument]),
                     Type::Int,
@@ -592,7 +588,7 @@ impl<'a> Analyzer<'a> {
             }
             _ => {
                 return Err(
-                    self.create_err(ErrorKind::UnknownMemberFunction, &ast_member_function_name)
+                    self.create_err(ErrorKind::UnknownMemberFunction, ast_member_function_name)
                 );
             }
         };

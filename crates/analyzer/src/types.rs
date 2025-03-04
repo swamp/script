@@ -10,7 +10,7 @@ use swamp_script_semantic::{
     ArrayType, ArrayTypeRef, MapType, MapTypeRef, Signature, TupleType, Type, TypeForParameter,
 };
 
-impl<'a> Analyzer<'a> {
+impl Analyzer<'_> {
     /// # Errors
     ///
     pub fn analyze_map_type(

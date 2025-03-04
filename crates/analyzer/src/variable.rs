@@ -186,6 +186,7 @@ impl Analyzer<'_> {
         Ok(variable_ref)
     }
 
+    #[allow(clippy::unnecessary_wraps)]
     pub(crate) fn create_local_variable_generated(
         &mut self,
         variable_str: &str,
@@ -234,7 +235,7 @@ impl Analyzer<'_> {
             ExpressionKind::VariableDefinition(variable_ref, Box::from(converted_expression));
 
         let expr = self.create_expr(expr_kind, expression_type, &ast_variable.name);
-        //        };
+
         Ok(expr)
     }
 }

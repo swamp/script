@@ -10,7 +10,7 @@ use swamp_script_semantic::{
 };
 use tracing::info;
 
-impl<'a> Analyzer<'a> {
+impl Analyzer<'_> {
     fn find_variant_in_pattern(
         &self,
         expression_type: &Type,
@@ -49,7 +49,7 @@ impl<'a> Analyzer<'a> {
                     match guard_clause {
                         swamp_script_ast::GuardClause::Wildcard(_) => None,
                         swamp_script_ast::GuardClause::Expression(clause_expr) => {
-                            Some(self.analyze_bool_argument_expression(&clause_expr)?)
+                            Some(self.analyze_bool_argument_expression(clause_expr)?)
                         }
                     }
                 } else {

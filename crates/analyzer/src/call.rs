@@ -12,7 +12,9 @@ use swamp_script_semantic::{
     MutOrImmutableExpression, Node, Type, TypeForParameter,
 };
 
-impl<'a> Analyzer<'a> {
+impl Analyzer<'_> {
+    /// # Errors
+    ///
     pub fn analyze_argument(
         &mut self,
         fn_parameter: &TypeForParameter,
@@ -44,6 +46,8 @@ impl<'a> Analyzer<'a> {
         Ok(mut_or_immutable)
     }
 
+    /// # Errors
+    ///
     pub fn analyze_and_verify_parameters(
         &mut self,
         node: &Node,
@@ -62,8 +66,6 @@ impl<'a> Analyzer<'a> {
             let mut_or_immutable = self.analyze_argument(fn_parameter, argument_expr)?;
             resolved_arguments.push(mut_or_immutable);
         }
-
-        //Self::verify_arguments(span, fn_parameters, &resolved_arguments)?;
 
         Ok(resolved_arguments)
     }
@@ -125,6 +127,8 @@ impl<'a> Analyzer<'a> {
         Ok(None)
     }
 
+    /// # Errors
+    ///
     pub fn analyze_mut_or_immutable_expression(
         &mut self,
         expr: &swamp_script_ast::MutableOrImmutableExpression,

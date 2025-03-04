@@ -9,7 +9,6 @@ pub mod def;
 pub mod err;
 pub mod internal;
 pub mod literal;
-pub mod lookup;
 pub mod operator;
 pub mod pattern;
 pub mod prelude;
@@ -217,7 +216,8 @@ impl<'a> TypeContext<'a> {
         }
     }
 
-    pub fn new_function(required_type: &'a Type) -> Self {
+    #[must_use]
+    pub const fn new_function(required_type: &'a Type) -> Self {
         Self {
             expected_type: Some(required_type),
             return_type: Some(required_type),
@@ -509,14 +509,13 @@ impl<'a> Analyzer<'a> {
         Ok(resolved_return_type)
     }
 
-    fn analyze_statements_in_function(
+    fn analyze_function_body_expression(
         &mut self,
         expression: &swamp_script_ast::Expression,
         return_type: &Type,
     ) -> Result<Expression, Error> {
-        let function_context = TypeContext::new_function(return_type);
-        let resolved_statement = self.analyze_expression(expression, &function_context)?;
-        //let wrapped_expr = Self::check_and_wrap_return_value(resolved_statement, return_type)?;
+        let context = TypeContext::new_function(return_type);
+        let resolved_statement = self.analyze_expression(expression, &context)?;
 
         Ok(resolved_statement)
     }
@@ -584,11 +583,8 @@ impl<'a> Analyzer<'a> {
         Ok(resolved_parameters)
     }
 
-    #[must_use]
-    pub fn is_empty_array_literal(ast_expression: &swamp_script_ast::Expression) -> bool {
-        matches!(&ast_expression.kind, swamp_script_ast::ExpressionKind::Literal(swamp_script_ast::LiteralKind::Array(items)) if items.is_empty())
-    }
-
+    /// # Errors
+    ///
     pub fn analyze_immutable_argument(
         &mut self,
         ast_expression: &swamp_script_ast::Expression,
@@ -598,6 +594,8 @@ impl<'a> Analyzer<'a> {
         self.analyze_expression(ast_expression, &context)
     }
 
+    /// # Errors
+    ///
     pub fn analyze_start_chain_expression_get_mutability(
         &mut self,
         ast_expression: &swamp_script_ast::Expression,
@@ -613,18 +611,6 @@ impl<'a> Analyzer<'a> {
         Ok((resolved, mutability))
     }
 
-    fn analyze_function_body_expression(
-        &mut self,
-        expression: &swamp_script_ast::Expression,
-        return_type: &Type,
-    ) -> Result<Expression, Error> {
-        let context = TypeContext::new_function(return_type);
-        let resolved_statement = self.analyze_expression(expression, &context)?;
-        //let wrapped_expr = Self::check_and_wrap_return_value(resolved_statement, return_type)?;
-
-        Ok(resolved_statement)
-    }
-
     /// # Errors
     ///
     #[allow(clippy::too_many_lines)]
@@ -637,7 +623,6 @@ impl<'a> Analyzer<'a> {
 
         let encountered_type = expr.ty.clone();
 
-        // If there's an expected type, check compatibility and handle coercions
         if let Some(found_expected_type) = context.expected_type {
             if found_expected_type.compatible_with(&encountered_type) {
                 return Ok(expr);
@@ -664,12 +649,10 @@ impl<'a> Analyzer<'a> {
         ast_expression: &swamp_script_ast::Expression,
         context: &TypeContext,
     ) -> Result<Expression, Error> {
-        //info!(?ast_expression, "resolving");
         let expression = match &ast_expression.kind {
             swamp_script_ast::ExpressionKind::Break => {
                 self.analyze_break(context, &ast_expression.node)?
             }
-
             swamp_script_ast::ExpressionKind::Return(optional_expression) => self.analyze_return(
                 context,
                 optional_expression.as_deref(),
@@ -811,13 +794,9 @@ impl<'a> Analyzer<'a> {
                 )
             }
 
-            swamp_script_ast::ExpressionKind::ForLoop(
-                pattern,
-                iteratable_expression,
-                statements,
-            ) => {
+            swamp_script_ast::ExpressionKind::ForLoop(pattern, iterable_expression, statements) => {
                 let resolved_iterator =
-                    self.analyze_iterable(pattern.any_mut(), &iteratable_expression.expression)?;
+                    self.analyze_iterable(pattern.any_mut(), &iterable_expression.expression)?;
 
                 self.push_block_scope("for_loop");
                 let pattern = self.analyze_for_pattern(
@@ -898,6 +877,8 @@ impl<'a> Analyzer<'a> {
         }
     }
 
+    // TODO: add to core symbol table
+    #[must_use]
     pub fn check_built_in_type(s: &str) -> Option<Type> {
         let found = match s {
             "Int" => Type::Int,
@@ -948,30 +929,6 @@ impl<'a> Analyzer<'a> {
 
         Ok(result_type)
     }
-
-    /*
-        fn analyze_named_type(
-        &self,
-        type_name_to_find: &QualifiedTypeIdentifier,
-    ) -> Result<Type, Error> {
-        let (path, text) = self.get_path(type_name_to_find);
-
-        let resolved_type = if let Some(found) = self.shared.lookup.get_struct(&path, &text) {
-            Type::Struct(found)
-        } else if let Some(found) = self.shared.lookup.get_enum(&path, &text) {
-            Type::Enum(found)
-        } else if let Some(found) = self.shared.lookup.get_rust_type(&path, &text) {
-            Type::RustType(found)
-        } else {
-            Err(self.create_err(
-                ErrorKind::UnknownTypeReference,
-                &type_name_to_find.name.0,
-            ))?
-        };
-
-        Ok(resolved_type)
-    }
-     */
 
     fn create_default_value_for_type(
         &mut self,
@@ -2121,6 +2078,8 @@ impl<'a> Analyzer<'a> {
         )
     }
 
+    /// # Errors
+    ///
     pub fn analyze_variable_assignment(
         &mut self,
         variable: &swamp_script_ast::Variable,
@@ -2408,7 +2367,6 @@ impl<'a> Analyzer<'a> {
         context: &TypeContext,
         location_type: LocationSide,
     ) -> Result<SingleLocationExpression, Error> {
-        //let resolved_expr = self.analyze_expression(expr, Some(&expected_type))?;
         match &expr.kind {
             swamp_script_ast::ExpressionKind::PostfixChain(chain) => {
                 self.analyze_chain_to_location(chain, context, location_type)
@@ -2839,8 +2797,8 @@ impl<'a> Analyzer<'a> {
             mode: convert_range_mode(range_mode),
         }
     }
-
      */
+
     fn analyze_break(
         &self,
         context: &TypeContext,
@@ -2927,37 +2885,4 @@ impl<'a> Analyzer<'a> {
             node,
         ))
     }
-
-    /*
-    fn try_coerce_anonymous_struct_literal(
-        &self,
-        original_expr: &AnonymousStructLiteral,
-        expected_named_struct: &NamedStructType,
-        encountered_anon_struct: &AnonymousStructType,
-        node: &swamp_script_ast::Node,
-    ) -> Option<Expression> {
-        if !check_assignable_anonymous_struct_types(&expected_named_struct.anon_struct_type, encountered_anon_struct) {
-            return None;
-        }
-
-        let mut source_order_expressions = Vec::new();
-        for (name, encountered_field) in &encountered_anon_struct.field_name_sorted_fields {
-            let expected_field = expected_named_struct.anon_struct_type.field_name_sorted_fields.get(name).unwrap();
-            let target_index = expected_named_struct.anon_struct_type.field_name_sorted_fields.get_index(name).unwrap();
-
-
-            source_order_expressions.push((target_index, ))
-        }
-
-        self.create_expr(ExpressionKind::AnonymousStructLiteral(AnonymousStructLiteral {
-            source_order_expressions: Vec < (usize, Expression) >,
-            anonymous_struct_type: AnonymousStructType,
-        }),
-                         Type::NamedStruct(expected_named_struct),
-                         node);
-
-        original_expr
-    }
-
-     */
 }

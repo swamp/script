@@ -13,7 +13,7 @@ use swamp_script_semantic::{
     StructInstantiation, StructTypeField, StructTypeRef, Type,
 };
 
-impl<'a> Analyzer<'a> {
+impl Analyzer<'_> {
     fn analyze_struct_init_calling_default(
         &mut self,
         function: &FunctionRef,
@@ -145,6 +145,10 @@ impl<'a> Analyzer<'a> {
         ))
     }
 
+    /// # Errors
+    ///
+    /// # Panics
+    ///
     pub fn analyze_anonymous_struct_literal(
         &mut self,
         node: &swamp_script_ast::Node,
@@ -237,30 +241,29 @@ impl<'a> Analyzer<'a> {
             )?;
 
         if has_rest {
-            match struct_to_instantiate
+            if let Some(function) = struct_to_instantiate
                 .clone()
                 .borrow()
                 .functions
                 .get(&"default".to_string())
             {
-                Some(function) => self.analyze_struct_init_calling_default(
+                self.analyze_struct_init_calling_default(
                     function,
                     struct_to_instantiate,
                     source_order_expressions,
                     &qualified_type_identifier.name.0,
-                ),
-                _ => {
-                    let mapped: Vec<(usize, Expression)> = source_order_expressions
-                        .into_iter()
-                        .map(|(a, _b, c)| (a, c))
-                        .collect::<Vec<_>>();
-                    self.analyze_struct_init_field_by_field(
-                        struct_to_instantiate,
-                        mapped,
-                        missing_fields,
-                        &qualified_type_identifier.name.0,
-                    )
-                }
+                )
+            } else {
+                let mapped: Vec<(usize, Expression)> = source_order_expressions
+                    .into_iter()
+                    .map(|(a, _b, c)| (a, c))
+                    .collect::<Vec<_>>();
+                self.analyze_struct_init_field_by_field(
+                    struct_to_instantiate,
+                    mapped,
+                    missing_fields,
+                    &qualified_type_identifier.name.0,
+                )
             }
         } else if missing_fields.is_empty() {
             let ty = Type::NamedStruct(struct_to_instantiate.clone());
@@ -345,15 +348,6 @@ impl<'a> Analyzer<'a> {
         Ok((source_order_expressions, missing_fields))
     }
 
-    /*
-    fn analyze_true_anon_struct_instantiation_helper(
-        &mut self,
-        ast_fields: &Vec<swamp_script_ast::FieldExpression>,
-    ) -> Result<(Vec<(usize, Node, Expression)>, SeqSet<String>), Error> {
-    }
-
-     */
-
     pub(crate) fn analyze_anon_struct_instantiation(
         &mut self,
         node: &swamp_script_ast::Node,
@@ -392,7 +386,7 @@ impl<'a> Analyzer<'a> {
             return Err(self.create_err(
                 ErrorKind::MissingFieldInStructInstantiation(
                     missing_fields.to_vec(),
-                    struct_to_instantiate.clone().into(),
+                    struct_to_instantiate.clone(),
                 ),
                 node,
             ));

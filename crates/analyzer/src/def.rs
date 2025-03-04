@@ -16,7 +16,7 @@ use swamp_script_semantic::{
 };
 use tracing::info;
 
-impl<'a> Analyzer<'a> {
+impl Analyzer<'_> {
     fn general_import(
         &mut self,
         path: &[String],
@@ -25,8 +25,8 @@ impl<'a> Analyzer<'a> {
     ) -> Result<(), Error> {
         let found_module = self
             .shared
-            .get_module(&path)
-            .ok_or_else(|| self.create_err(ErrorKind::UnknownModule, &node))?
+            .get_module(path)
+            .ok_or_else(|| self.create_err(ErrorKind::UnknownModule, node))?
             .clone();
 
         match import_items {
@@ -35,7 +35,7 @@ impl<'a> Analyzer<'a> {
                 self.shared
                     .lookup_table
                     .add_module_link(last_name, found_module.clone())
-                    .map_err(|err| self.create_err(ErrorKind::SemanticError(err), &node))?;
+                    .map_err(|err| self.create_err(ErrorKind::SemanticError(err), node))?;
             }
             swamp_script_ast::ImportItems::Items(items) => {
                 for ast_items in items {
@@ -89,7 +89,7 @@ impl<'a> Analyzer<'a> {
             swamp_script_ast::ImportItems::All => {
                 self.shared
                     .lookup_table
-                    .extend_from(&found_module.namespace.symbol_table);
+                    .extend_from(&found_module.namespace.symbol_table)?;
             }
         }
 
@@ -109,30 +109,11 @@ impl<'a> Analyzer<'a> {
         nodes_copy.insert(0, "crate".to_string());
 
         info!(?nodes_copy, items=?mod_definition.items, "mod again");
-        Ok(self.general_import(
+        self.general_import(
             &nodes_copy,
             &mod_definition.items,
             &mod_definition.module_path.0[0],
-        )?)
-
-        /*
-        if let Some(found_namespace) = self.shared.modules.get(&nodes_copy) {
-            self.shared
-                .lookup_table
-                .add_module_link(nodes_copy.last().unwrap(), found_namespace.clone())
-                .map_err(|err| {
-                    self.create_err(
-                        ErrorKind::SemanticError(err),
-                        &mod_definition.module_path.0[0],
-                    )
-                })?;
-            Ok(())
-        } else {
-            let first = &mod_definition.module_path.0[0];
-            Err(self.create_err(ErrorKind::UnknownModule, first))
-        }
-
-         */
+        )
     }
 
     fn analyze_use_definition(
@@ -156,9 +137,7 @@ impl<'a> Analyzer<'a> {
             &path,
             &use_definition.items,
             &use_definition.module_path.0[0],
-        );
-
-        Ok(())
+        )
     }
 
     fn analyze_enum_type_definition(
@@ -200,10 +179,7 @@ impl<'a> Analyzer<'a> {
             let common = EnumVariantCommon {
                 name: LocalTypeIdentifier(self.to_node(variant_name_node)),
                 number,
-                //module_path: ModulePath(vec![]), // TODO:
-                //variant_name: LocalTypeIdentifier(self.to_node(variant_name_node)),
                 assigned_name: self.get_text(variant_name_node).to_string(),
-                //enum_ref: parent_ref.clone(),
                 container_index: container_index_usize as u8,
                 owner: parent_ref.clone(),
             };
@@ -214,7 +190,6 @@ impl<'a> Analyzer<'a> {
                     EnumVariantType::Nothing(EnumVariantSimpleTypeRef::from(simple_ref))
                 }
                 swamp_script_ast::EnumVariantType::Tuple(variant_name_node, types) => {
-                    let debug_text = self.get_text(variant_name_node);
                     let mut vec = Vec::new();
                     for tuple_type in types {
                         let resolved_type = self.analyze_type(tuple_type)?;
@@ -277,6 +252,8 @@ impl<'a> Analyzer<'a> {
         Ok(parent_ref)
     }
 
+    /// # Errors
+    ///
     pub fn analyze_alias_type_definition(
         &mut self,
         ast_alias: &swamp_script_ast::AliasType,
@@ -307,6 +284,8 @@ impl<'a> Analyzer<'a> {
         Ok(resolved_alias_ref)
     }
 
+    /// # Errors
+    ///
     pub fn analyze_anonymous_struct_type(
         &mut self,
         ast_struct: &swamp_script_ast::AnonymousStructType,
@@ -315,9 +294,11 @@ impl<'a> Analyzer<'a> {
 
         let resolved_anon_struct = AnonymousStructType::new_and_sort_fields(resolved_fields);
 
-        Ok(resolved_anon_struct.into())
+        Ok(resolved_anon_struct)
     }
 
+    /// # Errors
+    ///
     pub fn analyze_anonymous_struct_type_fields(
         &mut self,
         ast_struct_fields: &[swamp_script_ast::StructTypeField],
@@ -494,7 +475,7 @@ impl<'a> Analyzer<'a> {
         &mut self,
         ast_def: &swamp_script_ast::Definition,
     ) -> Result<(), Error> {
-        let resolved_def = match ast_def {
+        match ast_def {
             swamp_script_ast::Definition::NamedStructDef(ast_struct) => {
                 self.analyze_named_struct_type_definition(ast_struct)?
             }
@@ -519,11 +500,11 @@ impl<'a> Analyzer<'a> {
             swamp_script_ast::Definition::Mod(mod_info) => self.analyze_mod_definition(mod_info)?,
             swamp_script_ast::Definition::Use(use_info) => self.analyze_use_definition(use_info)?,
             swamp_script_ast::Definition::Constant(const_info) => {
-                self.analyze_constant_definition(const_info)?
+                self.analyze_constant_definition(const_info)?;
             }
         };
 
-        Ok(resolved_def)
+        Ok(())
     }
 
     fn analyze_impl_definition(
@@ -615,7 +596,7 @@ impl<'a> Analyzer<'a> {
                 }
 
                 let statements =
-                    self.analyze_statements_in_function(&function_data.body, &return_type)?;
+                    self.analyze_function_body_expression(&function_data.body, &return_type)?;
 
                 let internal = InternalFunctionDefinition {
                     signature: Signature {

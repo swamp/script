@@ -11,7 +11,7 @@ use swamp_script_semantic::{
 };
 use tracing::error;
 
-impl<'a> Analyzer<'a> {
+impl Analyzer<'_> {
     #[allow(clippy::too_many_lines)]
     pub(crate) fn analyze_literal(
         &mut self,
@@ -19,7 +19,7 @@ impl<'a> Analyzer<'a> {
         ast_literal_kind: &swamp_script_ast::LiteralKind,
         context: &TypeContext,
     ) -> Result<(Literal, Type), Error> {
-        let node_text = self.get_text(&ast_node);
+        let node_text = self.get_text(ast_node);
         let resolved_literal = match &ast_literal_kind {
             swamp_script_ast::LiteralKind::Int => (
                 Literal::IntLiteral(Self::str_to_int(node_text).map_err(|int_conversion_err| {
@@ -148,7 +148,7 @@ impl<'a> Analyzer<'a> {
                             _ => {
                                 return Err(self.create_err(
                                     ErrorKind::EmptyArrayCanOnlyBeMapOrArray,
-                                    &ast_node,
+                                    ast_node,
                                 ));
                             }
                         }
@@ -170,14 +170,14 @@ impl<'a> Analyzer<'a> {
             swamp_script_ast::LiteralKind::Map(entries) => {
                 let (map_literal, map_type_ref) = self.analyze_map_literal(ast_node, &entries)?;
 
-                (map_literal, Type::Map(map_type_ref.clone()))
+                (map_literal, Type::Map(map_type_ref))
             }
 
             swamp_script_ast::LiteralKind::Tuple(expressions) => {
                 let (tuple_type_ref, resolved_items) = self.analyze_tuple_literal(&expressions)?;
                 (
                     Literal::TupleLiteral(tuple_type_ref.clone(), resolved_items),
-                    Type::Tuple(tuple_type_ref.clone()),
+                    Type::Tuple(tuple_type_ref),
                 )
             }
             swamp_script_ast::LiteralKind::None => {
@@ -243,7 +243,7 @@ impl<'a> Analyzer<'a> {
                 return Err(self.create_err(
                     ErrorKind::MapKeyTypeMismatch {
                         expected: key_type,
-                        found: resolved_key.ty.clone(),
+                        found: resolved_key.ty,
                     },
                     node,
                 ));
@@ -253,7 +253,7 @@ impl<'a> Analyzer<'a> {
                 return Err(self.create_err(
                     ErrorKind::MapValueTypeMismatch {
                         expected: value_type,
-                        found: resolved_value.ty.clone(),
+                        found: resolved_value.ty,
                     },
                     node,
                 ));
