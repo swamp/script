@@ -1122,7 +1122,11 @@ pub fn same_anon_struct_ref(a: &AnonymousStructType, b: &AnonymousStructType) ->
 }
 
 pub fn same_named_struct_ref(a: &StructTypeRef, b: &StructTypeRef) -> bool {
-    Rc::ptr_eq(a, b)
+    if a.borrow().assigned_name != b.borrow().assigned_name {
+        return false;
+    }
+
+    compare_anonymous_struct_types(&a.borrow().anon_struct_type, &b.borrow().anon_struct_type)
 }
 
 pub type TypeNumber = u32;
@@ -1198,8 +1202,8 @@ pub struct OptionType {
 
 pub type ArrayTypeRef = Rc<ArrayType>;
 
-pub fn same_array_ref(a: &ArrayTypeRef, b: &ArrayTypeRef) -> bool {
-    Rc::ptr_eq(a, b)
+pub fn compatible_arrays(a: &ArrayTypeRef, b: &ArrayTypeRef) -> bool {
+    a.item_type.compatible_with(&b.item_type)
 }
 
 #[derive(Debug, Eq, PartialEq)]

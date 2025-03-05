@@ -13,16 +13,16 @@ use swamp_script_core_extra::extra::{SparseValueId, SparseValueMap};
 use swamp_script_core_extra::prelude::ValueError;
 use swamp_script_core_extra::value::ValueRef;
 use swamp_script_core_extra::value::{
-    SourceMapLookup, Value, convert_vec_to_rc_refcell, format_value, to_rust_value,
+    convert_vec_to_rc_refcell, format_value, to_rust_value, SourceMapLookup, Value,
 };
 use swamp_script_semantic::prelude::*;
-use swamp_script_semantic::{ArgumentExpressionOrLocation, LocationAccess, LocationAccessKind};
+use swamp_script_semantic::{compatible_arrays, Postfix, SingleMutLocationExpression};
 use swamp_script_semantic::{
-    BinaryOperatorKind, CompoundOperatorKind, ConstantId, ForPattern, Function,
-    MutOrImmutableExpression, NormalPattern, PatternElement, PostfixKind, SingleLocationExpression,
-    SingleLocationExpressionKind, UnaryOperatorKind, same_anon_struct_ref,
+    same_anon_struct_ref, BinaryOperatorKind, CompoundOperatorKind, ConstantId, ForPattern,
+    Function, MutOrImmutableExpression, NormalPattern, PatternElement, PostfixKind,
+    SingleLocationExpression, SingleLocationExpressionKind, UnaryOperatorKind,
 };
-use swamp_script_semantic::{Postfix, SingleMutLocationExpression, same_array_ref};
+use swamp_script_semantic::{ArgumentExpressionOrLocation, LocationAccess, LocationAccessKind};
 use tracing::{error, info};
 
 pub mod err;
@@ -1863,7 +1863,10 @@ impl<'a, C> Interpreter<'a, C> {
                         })?;
                         (array_ref.clone(), fields_ref.clone())
                     };
-                    assert!(same_array_ref(&encountered_array_type, expected_array_type));
+                    assert!(compatible_arrays(
+                        &encountered_array_type,
+                        expected_array_type
+                    ));
 
                     let index =
                         self.evaluate_expression(index_expr)?
