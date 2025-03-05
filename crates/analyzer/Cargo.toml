@@ -1,6 +1,6 @@
 [package]
 name = "swamp-script-analyzer"
-version = "0.0.17"
+version = "0.0.18"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/swamp/script"
@@ -11,13 +11,13 @@ tracing = "0.1.40"
 seq-map = "0.0.13"
 seq-set = "0.0.2"
 
-swamp-script-semantic = { path = "../semantic", version = "0.0.17" }
-swamp-script-ast = { path = "../ast", version = "0.0.17" }
-swamp-script-source-map = { path = "../source-map", version = "0.0.17" }
+swamp-script-semantic = { path = "../semantic", version = "0.0.18" }
+swamp-script-ast = { path = "../ast", version = "0.0.18" }
+swamp-script-source-map = { path = "../source-map", version = "0.0.18" }
 
 
 [dev-dependencies]
-swamp-script-parser = { path = "../parser", version = "0.0.17" }
+swamp-script-parser = { path = "../parser", version = "0.0.18" }
 test-log = { version = "0.2.16", features = ["trace", "log", "color"] }
-swamp-script-source-map-lookup = { path = "../source-map-lookup", version = "0.0.17" }
+swamp-script-source-map-lookup = { path = "../source-map-lookup", version = "0.0.18" }
 # swamp-script-error-report = { path = "../err", version = "0.0.14" }

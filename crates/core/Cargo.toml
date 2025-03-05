@@ -1,10 +1,10 @@
 [package]
 name = "swamp-script-core"
-version = "0.0.17"
+version = "0.0.18"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/swamp/script"
 description = "core module for Swamp"
 
 [dependencies]
-swamp-script-semantic = { path = "../semantic", version = "0.0.17" }
+swamp-script-semantic = { path = "../semantic", version = "0.0.18" }
