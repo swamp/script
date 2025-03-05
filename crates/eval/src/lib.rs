@@ -13,16 +13,16 @@ use swamp_script_core_extra::extra::{SparseValueId, SparseValueMap};
 use swamp_script_core_extra::prelude::ValueError;
 use swamp_script_core_extra::value::ValueRef;
 use swamp_script_core_extra::value::{
-    convert_vec_to_rc_refcell, format_value, to_rust_value, SourceMapLookup, Value,
+    SourceMapLookup, Value, convert_vec_to_rc_refcell, format_value, to_rust_value,
 };
 use swamp_script_semantic::prelude::*;
-use swamp_script_semantic::{compatible_arrays, Postfix, SingleMutLocationExpression};
-use swamp_script_semantic::{
-    same_anon_struct_ref, BinaryOperatorKind, CompoundOperatorKind, ConstantId, ForPattern,
-    Function, MutOrImmutableExpression, NormalPattern, PatternElement, PostfixKind,
-    SingleLocationExpression, SingleLocationExpressionKind, UnaryOperatorKind,
-};
 use swamp_script_semantic::{ArgumentExpressionOrLocation, LocationAccess, LocationAccessKind};
+use swamp_script_semantic::{
+    BinaryOperatorKind, CompoundOperatorKind, ConstantId, ForPattern, Function,
+    MutOrImmutableExpression, NormalPattern, PatternElement, PostfixKind, SingleLocationExpression,
+    SingleLocationExpressionKind, UnaryOperatorKind, same_anon_struct_ref,
+};
+use swamp_script_semantic::{Postfix, SingleMutLocationExpression, compatible_arrays};
 use tracing::{error, info};
 
 pub mod err;

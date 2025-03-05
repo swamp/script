@@ -802,10 +802,34 @@ impl PartialEq for Value {
             (Self::Float(a), Self::Float(b)) => a == b,
             (Self::String(a), Self::String(b)) => a == b,
             (Self::Bool(a), Self::Bool(b)) => a == b,
-            (Self::EnumVariantSimple(a), Self::EnumVariantSimple(b)) => a == b,
-            // TODO: Add more comparisons
             (Self::Unit, Self::Unit) => true,
-            (Self::Option(r1), Self::Option(r2)) => r1 == r2,
+            (Self::EnumVariantSimple(a), Self::EnumVariantSimple(b)) => a == b,
+            (Self::EnumVariantTuple(a, a_values), Self::EnumVariantTuple(b, b_values)) => {
+                (a == b) && a_values == b_values
+            }
+            (Self::EnumVariantStruct(a, a_values), Self::EnumVariantStruct(b, b_values)) => {
+                (a == b) && a_values == b_values
+            }
+            (Self::Option(a), Self::Option(b)) => a == b,
+            (Self::Array(a, a_values), Self::Array(b, b_values)) => {
+                (a == b) && a_values == b_values
+            }
+            (Self::Map(a, a_values), Self::Map(b, b_values)) => (a == b) && a_values == b_values,
+            (Self::Tuple(a, a_values), Self::Tuple(b, b_values)) => {
+                (a == b) && a_values == b_values
+            }
+            (Self::NamedStruct(a, a_values), Self::NamedStruct(b, b_values)) => {
+                (a == b) && a_values == b_values
+            }
+            (Self::AnonymousStruct(a, a_values), Self::AnonymousStruct(b, b_values)) => {
+                (a == b) && a_values == b_values
+            }
+            (Self::InternalFunction(a), Self::InternalFunction(b)) => a == b,
+            (Self::ExternalFunction(a), Self::ExternalFunction(b)) => a.id == b.id,
+            (Self::RustValue(a, a_val), Self::RustValue(b, b_val)) => {
+                a_val.borrow().eq_dyn(&**b_val.borrow())
+            }
+
             _ => false,
         }
     }
