@@ -668,9 +668,6 @@ impl<'a> Analyzer<'a> {
                 self.analyze_postfix_chain(postfix_chain)?
             }
 
-            swamp_script_ast::ExpressionKind::IdentifierReference(variable) => {
-                self.analyze_identifier_reference(&variable.name)?
-            }
             swamp_script_ast::ExpressionKind::VariableDefinition(
                 variable,
                 coerce_type,
@@ -691,6 +688,9 @@ impl<'a> Analyzer<'a> {
             swamp_script_ast::ExpressionKind::StaticFunctionReference(qualified_identifier) => {
                 self.analyze_static_function_access(qualified_identifier)?
             }
+            swamp_script_ast::ExpressionKind::IdentifierReference(variable) => {
+                self.analyze_identifier_reference(&variable.name)?
+            }
 
             swamp_script_ast::ExpressionKind::StaticMemberFunctionReference(
                 type_identifier,
@@ -699,10 +699,6 @@ impl<'a> Analyzer<'a> {
 
             swamp_script_ast::ExpressionKind::ConstantReference(constant_identifier) => {
                 self.analyze_constant_access(constant_identifier)?
-            }
-
-            swamp_script_ast::ExpressionKind::FunctionReference(qualified_identifier) => {
-                self.analyze_static_function_access(qualified_identifier)?
             }
 
             swamp_script_ast::ExpressionKind::Assignment(location, source) => {
@@ -1159,7 +1155,9 @@ impl<'a> Analyzer<'a> {
 
                         tv.resolved_type = *signature.return_type.clone();
                         tv.is_mutable = false;
-                    };
+                    } else {
+                        panic!("{}", &format!("what is this type {:?} ", tv.resolved_type))
+                    }
                 }
 
                 swamp_script_ast::Postfix::Subscript(index_expr) => {
@@ -1511,14 +1509,14 @@ impl<'a> Analyzer<'a> {
 
         if let Some(found_table) = self.shared.get_symbol_table(&path) {
             if let Some(found_func) = found_table.get_function(function_name) {
-                let (kind, return_type) = match found_func {
+                let (kind, signature) = match found_func {
                     FuncDef::Internal(internal_fn) => (
                         ExpressionKind::InternalFunctionAccess(internal_fn.clone()),
-                        &internal_fn.signature.return_type,
+                        &internal_fn.signature,
                     ),
                     FuncDef::External(external_fn) => (
                         ExpressionKind::ExternalFunctionAccess(external_fn.clone()),
-                        &external_fn.signature.return_type,
+                        &external_fn.signature,
                     ),
                     // Can not have a reference to an intrinsic function
                     FuncDef::Intrinsic(_) => {
@@ -1528,7 +1526,11 @@ impl<'a> Analyzer<'a> {
                     }
                 };
 
-                return Ok(self.create_expr(kind, *return_type.clone(), &qualified_func_name.name));
+                return Ok(self.create_expr(
+                    kind,
+                    Type::Function(signature.clone()),
+                    &qualified_func_name.name,
+                ));
             }
         }
         Err(self.create_err(ErrorKind::UnknownFunction, &qualified_func_name.name))
