@@ -724,25 +724,30 @@ impl Display for Value {
                 }
                 write!(f, " }}")
             }
-            Self::InternalFunction(_reference) => write!(f, "<function>"), // TODO:
+            Self::InternalFunction(internal_fn) => write!(f, "[fn {}]", internal_fn.assigned_name),
             Self::Unit => write!(f, "()"),
             Self::Range(start, end, range_mode) => match range_mode {
                 RangeMode::Exclusive => write!(f, "{start}..{end}"),
                 RangeMode::Inclusive => write!(f, "{start}..={end}"),
             },
 
-            Self::ExternalFunction(_) => write!(f, "<external>"), // TODO:
+            Self::ExternalFunction(external_function) => {
+                write!(f, "[external_fn {}]", external_function.assigned_name)
+            }
 
             // Enums ----
             Self::EnumVariantTuple(enum_name, fields_in_order) => {
                 write!(
                     f,
-                    "{:?}::{:?}",
-                    enum_name.common.owner.borrow().name,
+                    "{}::{}",
+                    enum_name.common.owner.borrow().assigned_name,
                     enum_name.common.assigned_name,
                 )?;
 
-                for field in fields_in_order {
+                for (index, field) in fields_in_order.iter().enumerate() {
+                    if index > 0 {
+                        write!(f, ", ")?;
+                    }
                     write!(f, "{}", field.borrow())?;
                 }
 
@@ -759,8 +764,8 @@ impl Display for Value {
 
                 write!(
                     f,
-                    "{:?}::{:?}",
-                    struct_variant.common.owner.borrow().name,
+                    "{}::{}",
+                    struct_variant.common.owner.borrow().assigned_name,
                     struct_variant.common.assigned_name,
                 )?;
 
@@ -774,8 +779,8 @@ impl Display for Value {
             Self::EnumVariantSimple(enum_variant_type_ref) => {
                 write!(
                     f,
-                    "{:?}::{:?}",
-                    enum_variant_type_ref.common.owner.borrow().name,
+                    "{}::{}",
+                    enum_variant_type_ref.common.owner.borrow().assigned_name,
                     enum_variant_type_ref.common.assigned_name,
                 )
             }
