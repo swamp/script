@@ -802,6 +802,8 @@ impl PartialEq for Value {
             (Self::Float(a), Self::Float(b)) => a == b,
             (Self::String(a), Self::String(b)) => a == b,
             (Self::Bool(a), Self::Bool(b)) => a == b,
+            (Self::EnumVariantSimple(a), Self::EnumVariantSimple(b)) => a == b,
+            // TODO: Add more comparisons
             (Self::Unit, Self::Unit) => true,
             (Self::Option(r1), Self::Option(r2)) => r1 == r2,
             _ => false,
