@@ -623,8 +623,7 @@ pub enum ExpressionKind {
         Vec<Expression>,
     ),
 
-    // Sparse Built in
-    SparseNew(ExternalTypeRef, Type), // item type
+    IntrinsicCallGeneric(IntrinsicFunction, Vec<Type>, Vec<Expression>),
 }
 
 #[derive(Debug)]

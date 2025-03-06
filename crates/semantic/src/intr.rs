@@ -74,6 +74,7 @@ pub enum IntrinsicFunction {
     SparseAdd,
     VecLen,
     VecIsEmpty,
+    SparseNew,
 }
 
 pub type IntrinsicFunctionDefinitionRef = Rc<IntrinsicFunctionDefinition>;
@@ -142,6 +143,7 @@ impl fmt::Display for IntrinsicFunction {
             Self::MapIterMut => "map_iter_mut",
 
             // Sparse
+            Self::SparseNew => "sparse_new",
             Self::SparseCreate => "sparse_create",
             Self::SparseFromSlice => "sparse_from_slice",
             Self::SparseAdd => "sparse_add",

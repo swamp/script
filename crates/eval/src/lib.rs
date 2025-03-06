@@ -11,7 +11,7 @@ use std::fmt::Debug;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use swamp_script_core_extra::extra::{SparseValueId, SparseValueMap};
 use swamp_script_core_extra::prelude::ValueError;
-use swamp_script_core_extra::value::ValueRef;
+use swamp_script_core_extra::value::{SPARSE_ID_TYPE_ID, SPARSE_TYPE_ID, ValueRef};
 use swamp_script_core_extra::value::{
     SourceMapLookup, Value, convert_vec_to_rc_refcell, format_value, to_rust_value,
 };
@@ -25,7 +25,7 @@ use swamp_script_semantic::{
 };
 use swamp_script_semantic::{ExternalFunctionId, Postfix, SingleMutLocationExpression};
 use swamp_script_types::{
-    EnumVariantType, EnumVariantTypeRef, TypeForParameter, same_anon_struct_ref,
+    EnumVariantType, EnumVariantTypeRef, ExternalType, Type, TypeForParameter, same_anon_struct_ref,
 };
 use tracing::{error, info};
 
@@ -1007,6 +1007,10 @@ impl<'a, C> Interpreter<'a, C> {
                 self.evaluate_intrinsic_mut(&expr.node, intrinsic, location, arguments)?
             }
 
+            ExpressionKind::IntrinsicCallGeneric(intrinsic, type_parameters, arguments) => {
+                self.evaluate_intrinsic_generic(&expr.node, intrinsic, type_parameters, arguments)?
+            }
+
             ExpressionKind::MapAssignment(map, index, value) => {
                 let map_val = self.evaluate_location(&map.0)?;
                 let index_val = self.evaluate_expression(index)?;
@@ -1177,14 +1181,6 @@ impl<'a, C> Interpreter<'a, C> {
             },
 
             // --------------- SPECIAL FUNCTIONS
-            ExpressionKind::SparseNew(sparse_id_rust_type_ref, resolved_value_item_type) => {
-                let sparse_value_map = SparseValueMap::new(
-                    sparse_id_rust_type_ref.clone(),
-                    resolved_value_item_type.clone(),
-                );
-                to_rust_value(sparse_id_rust_type_ref.clone(), sparse_value_map)
-            }
-
             ExpressionKind::CoerceOptionToBool(expression) => {
                 let value = self.evaluate_expression(expression)?;
                 match value {
@@ -1992,6 +1988,7 @@ impl<'a, C> Interpreter<'a, C> {
                     //val_ref = Rc::new(RefCell::new(self.eval_intrinsic_postfix_ex(&val_ref, part, intrinsic_fn, arguments)?));
                     is_mutable = false;
                 }
+
                 _ => {}
             }
         }
@@ -2721,6 +2718,33 @@ impl<'a, C> Interpreter<'a, C> {
         };
 
         Ok(val)
+    }
+
+    fn evaluate_intrinsic_generic(
+        &self,
+        node: &Node,
+        intrinsic: &IntrinsicFunction,
+        type_parameters: &Vec<Type>,
+        arguments: &Vec<Expression>,
+    ) -> Result<Value, ExecuteError> {
+        let value = match intrinsic {
+            IntrinsicFunction::SparseNew => {
+                let sparse_id_external = ExternalType {
+                    type_name: "SparseId".to_string(), // To identify the specific Rust type
+                    number: SPARSE_ID_TYPE_ID,
+                };
+                let sparse_value_map =
+                    SparseValueMap::new(sparse_id_external.into(), type_parameters[0].clone());
+                let sparse_external = ExternalType {
+                    type_name: "Sparse".to_string(), // To identify the specific Rust type
+                    number: SPARSE_TYPE_ID,
+                };
+                to_rust_value(sparse_external.into(), sparse_value_map)
+            }
+            _ => return Err(self.create_err(ExecuteErrorKind::UnknownGenericIntrinsic, &node)),
+        };
+
+        Ok(value)
     }
 }
 

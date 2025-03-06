@@ -8,6 +8,7 @@ use crate::err::{Error, ErrorKind};
 use crate::{Analyzer, LocationSide, SPARSE_TYPE_ID};
 use std::rc::Rc;
 use swamp_script_node::Node;
+use swamp_script_semantic::intr::IntrinsicFunction;
 use swamp_script_semantic::{
     ArgumentExpressionOrLocation, Expression, ExpressionKind, MutOrImmutableExpression,
 };
@@ -80,49 +81,56 @@ impl Analyzer<'_> {
         let (type_name_text, function_name_text) = {
             (
                 self.get_text(&type_name.name.0).to_string(),
-                self.get_text(function_name),
+                self.get_text(function_name).to_string(),
             )
         };
 
-        if type_name_text == "Sparse" && function_name_text == "new" {
-            if !arguments.is_empty() {
-                return Err(self.create_err(
-                    ErrorKind::WrongNumberOfArguments(arguments.len(), 0),
-                    function_name,
-                ));
-            }
+        if !type_name.generic_params.is_empty() {
             let resolved_generic_type_parameters = self.analyze_types(&type_name.generic_params)?;
-            if resolved_generic_type_parameters.len() != 1 {
-                return Err(self.create_err(
-                    ErrorKind::WrongNumberOfTypeArguments(
-                        resolved_generic_type_parameters.len(),
-                        1,
+
+            if type_name_text == "Sparse" && function_name_text == "new" {
+                if !arguments.is_empty() {
+                    return Err(self.create_err(
+                        ErrorKind::WrongNumberOfArguments(arguments.len(), 0),
+                        function_name,
+                    ));
+                }
+                if resolved_generic_type_parameters.len() != 1 {
+                    return Err(self.create_err(
+                        ErrorKind::WrongNumberOfTypeArguments(
+                            resolved_generic_type_parameters.len(),
+                            1,
+                        ),
+                        function_name,
+                    ));
+                }
+
+                let rust_type_ref = Rc::new(ExternalType {
+                    type_name: type_name_text,
+                    number: SPARSE_TYPE_ID, // TODO: FIX hardcoded number
+                });
+
+                let rust_type_base = Type::External(rust_type_ref.clone());
+
+                let generic_specific_type = Type::Generic(
+                    Box::from(rust_type_base.clone()),
+                    resolved_generic_type_parameters.clone(),
+                );
+
+                let value_item_type = resolved_generic_type_parameters[0].clone();
+
+                let expr = self.create_expr(
+                    ExpressionKind::IntrinsicCallGeneric(
+                        IntrinsicFunction::SparseNew,
+                        resolved_generic_type_parameters,
+                        vec![],
                     ),
-                    function_name,
-                ));
+                    generic_specific_type,
+                    &type_name.name.0,
+                );
+
+                return Ok(Some(expr));
             }
-
-            let rust_type_ref = Rc::new(ExternalType {
-                type_name: type_name_text,
-                number: SPARSE_TYPE_ID, // TODO: FIX hardcoded number
-            });
-
-            let rust_type_base = Type::External(rust_type_ref.clone());
-
-            let generic_specific_type = Type::Generic(
-                Box::from(rust_type_base.clone()),
-                resolved_generic_type_parameters.clone(),
-            );
-
-            let value_item_type = resolved_generic_type_parameters[0].clone();
-
-            let expr = self.create_expr(
-                ExpressionKind::SparseNew(rust_type_ref, value_item_type),
-                generic_specific_type,
-                &type_name.name.0,
-            );
-
-            return Ok(Some(expr));
         }
 
         Ok(None)

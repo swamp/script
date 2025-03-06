@@ -53,4 +53,5 @@ pub enum ExecuteErrorKind {
     MapKeyAlreadyExists,
     CouldNotConvertFromSignal,
     UnknownMutIntrinsic,
+    UnknownGenericIntrinsic,
 }

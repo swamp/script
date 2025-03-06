@@ -586,6 +586,9 @@ pub fn build_execute_error(err: &ExecuteError) -> Builder<usize> {
         ExecuteErrorKind::UnknownMutIntrinsic => {
             Report::build(Kind::Error, 104, "unknown mut intrinsic", span)
         }
+        ExecuteErrorKind::UnknownGenericIntrinsic => {
+            Report::build(Kind::Error, 104, "unknown generic intrinsic", span)
+        }
         ExecuteErrorKind::ExpectedString => {
             Report::build(Kind::Error, 104, "expected string", span)
         }
