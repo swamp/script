@@ -1118,7 +1118,11 @@ pub fn same_anon_struct_ref(a: &AnonymousStructType, b: &AnonymousStructType) ->
 }
 
 pub fn same_named_struct_ref(a: &NamedStructTypeRef, b: &NamedStructTypeRef) -> bool {
-    Rc::ptr_eq(a, b)
+    if a.borrow().assigned_name != b.borrow().assigned_name {
+        return false;
+    }
+
+    compare_anonymous_struct_types(&a.borrow().anon_struct_type, &b.borrow().anon_struct_type)
 }
 
 pub type TypeNumber = u32;
@@ -1190,6 +1194,25 @@ pub type OptionTypeRef = Rc<crate::OptionType>;
 #[derive(Debug)]
 pub struct OptionType {
     pub item_type: Type,
+}
+
+pub type ArrayTypeRef = Rc<ArrayType>;
+
+pub fn compatible_arrays(a: &ArrayTypeRef, b: &ArrayTypeRef) -> bool {
+    a.item_type.compatible_with(&b.item_type)
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub struct ArrayType {
+    pub item_type: Type,
+}
+
+pub type MapTypeRef = Rc<MapType>;
+
+#[derive(Debug, Eq, PartialEq)]
+pub struct MapType {
+    pub key_type: Type,
+    pub value_type: Type,
 }
 
 pub type EnumVariantStructTypeRef = Rc<EnumVariantStructType>;
@@ -1455,14 +1478,14 @@ impl AssociatedImpls {
 
 impl AssociatedImpls {
     pub fn prepare(&mut self, ty: &Type) {
-        let type_id = ty.id().expect("type can not be attached to");
+        let type_id = ty.id().expect(&format!("type can not be attached to {ty}"));
         self.functions
             .insert(type_id, ImplFunctions::new())
             .expect("should work");
     }
     #[must_use]
     pub fn get_member_function(&self, ty: &Type, function_name: &str) -> Option<&FunctionRef> {
-        let type_id = ty.id().expect("type can not be attached to");
+        let type_id = ty.id().expect(&format!("type can not be attached to {ty}"));
         let maybe_found_impl = self.functions.get(&type_id);
         if let Some(found_impl) = maybe_found_impl {
             if let Some(func) = found_impl.functions.get(&function_name.to_string()) {

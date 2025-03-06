@@ -378,7 +378,7 @@ pub enum ExpressionKind {
     // References
     IdentifierReference(Variable),
     ConstantReference(ConstantIdentifier),
-    FunctionReference(QualifiedIdentifier),
+    //FunctionReference(QualifiedIdentifier),
     StaticMemberFunctionReference(QualifiedTypeIdentifier, Node),
     StaticFunctionReference(QualifiedIdentifier),
 

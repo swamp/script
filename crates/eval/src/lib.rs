@@ -22,7 +22,7 @@ use swamp_script_semantic::{
     MutOrImmutableExpression, NormalPattern, PatternElement, PostfixKind, SingleLocationExpression,
     SingleLocationExpressionKind, UnaryOperatorKind, same_anon_struct_ref,
 };
-use swamp_script_semantic::{Postfix, SingleMutLocationExpression};
+use swamp_script_semantic::{Postfix, SingleMutLocationExpression, compatible_arrays};
 use tracing::{error, info};
 
 pub mod err;
@@ -409,12 +409,12 @@ impl<'a, C> Interpreter<'a, C> {
                     LocationAccessKind::StringIndex(_) => todo!(),
                     LocationAccessKind::StringRange(_) => todo!(),
 
-                    LocationAccessKind::MapIndex(_key_type, _map_type_ref, key_expr) => {
+                    LocationAccessKind::MapIndex(_map_type_ref, _value_type, key_expr) => {
                         let key_expr_value = self.evaluate_expression(key_expr)?;
 
                         let borrowed = value_ref.borrow();
 
-                        let (_key_type, _map_type_ref, seq_map) = borrowed
+                        let (_map_type_ref, _value_type, seq_map) = borrowed
                             .expect_map()
                             .map_err(|_| self.create_err(ExecuteErrorKind::ExpectedMap, node))?;
 
@@ -424,8 +424,8 @@ impl<'a, C> Interpreter<'a, C> {
                     }
 
                     LocationAccessKind::MapIndexInsertIfNonExisting(
-                        _key_type,
                         _map_type_ref,
+                        _value_type,
                         key_expr,
                     ) => {
                         let key_expr_value = self.evaluate_expression(key_expr)?;
@@ -1009,7 +1009,7 @@ impl<'a, C> Interpreter<'a, C> {
                 let new_val = self.evaluate_expression(value)?;
 
                 match &mut *map_val.borrow_mut() {
-                    Value::Map(_key_type, _type_id, elements) => {
+                    Value::Map(_type_id, value_type, elements) => {
                         elements
                             .insert(index_val, Rc::new(RefCell::new(new_val)))
                             .map_err(|_| {
@@ -1300,9 +1300,9 @@ impl<'a, C> Interpreter<'a, C> {
                 x
             }
 
-            ExpressionKind::MapIndexAccess(expr, _key_type, _map_type_ref, key_expr) => {
+            ExpressionKind::MapIndexAccess(expr, _map_type_ref, _value_type, key_expr) => {
                 let resolved_expr = self.evaluate_expression(expr)?;
-                let (_key_type, _map_type, seq_map) = resolved_expr
+                let (_map_type, _value_type, seq_map) = resolved_expr
                     .expect_map()
                     .map_err(|_| self.create_err(ExecuteErrorKind::ExpectedMap, &expr.node))?;
 
@@ -1332,9 +1332,6 @@ impl<'a, C> Interpreter<'a, C> {
             Literal::FloatLiteral(f) => Value::Float(*f),
             Literal::StringLiteral(s) => Value::String(s.clone()),
             Literal::BoolLiteral(b) => Value::Bool(*b),
-
-            Literal::Slice(_v, _expr) => todo!(),
-            Literal::SlicePair(_k, _v, _expr) => todo!(),
 
             Literal::EnumVariantLiteral(enum_variant_type, data) => {
                 let variant_container_value: Value = match &**enum_variant_type {
@@ -1376,6 +1373,12 @@ impl<'a, C> Interpreter<'a, C> {
                 let values = self.evaluate_expressions(expressions)?;
                 Value::Vec(array_type.clone(), convert_vec_to_rc_refcell(values))
             }
+
+            Literal::Slice(element_type, expressions) => {
+                let values = self.evaluate_expressions(expressions)?;
+                Value::Slice(element_type.clone(), convert_vec_to_rc_refcell(values))
+            }
+
             Literal::Map(key_type, value_type, expressions) => {
                 let mut items = SeqMap::new();
                 for (key, value) in expressions {
@@ -1392,6 +1395,24 @@ impl<'a, C> Interpreter<'a, C> {
                 }
                 Value::Map(key_type.clone(), value_type.clone(), items)
             }
+
+            Literal::SlicePair(key_type, value_type, expressions) => {
+                let mut items = SeqMap::new();
+                for (key, value) in expressions {
+                    let key_val = self.evaluate_expression(key)?;
+                    let value_val = self.evaluate_expression(value)?;
+                    items
+                        .insert(key_val, Rc::new(RefCell::new(value_val)))
+                        .map_err(|_err| {
+                            self.create_err(
+                                ExecuteErrorKind::NonUniqueKeysInMapLiteralDetected,
+                                &node,
+                            )
+                        })?;
+                }
+                Value::SlicePair(key_type.clone(), value_type.clone(), items)
+            }
+
             Literal::NoneLiteral => Value::Option(None),
         };
         Ok(v)
@@ -1471,7 +1492,7 @@ impl<'a, C> Interpreter<'a, C> {
                 let index_val = self.evaluate_expression(&arguments[0])?;
 
                 match value_ref.borrow().clone() {
-                    Value::Map(_key_type, _type_id, ref seq_map) => {
+                    Value::Map(_key_type, _value_type, ref seq_map) => {
                         let has_key = seq_map.contains_key(&index_val);
                         Value::Bool(has_key)
                     }
@@ -1487,7 +1508,7 @@ impl<'a, C> Interpreter<'a, C> {
                 let result = {
                     let mut borrowed = value_ref.borrow_mut();
                     match &mut *borrowed {
-                        Value::Map(_key_type, _type_id, seq_map) => {
+                        Value::Map(_key_type, _value_type, seq_map) => {
                             let x = seq_map.remove(&index_val);
                             x.map_or_else(
                                 || Value::Option(None),
@@ -1862,15 +1883,15 @@ impl<'a, C> Interpreter<'a, C> {
                     ));
                     val_ref = fields[*index].clone();
                 }
-                PostfixKind::ArrayIndex(expected_array_type, index_expr) => {
-                    let (encountered_array_type, fields) = {
+                PostfixKind::ArrayIndex(expected_element_type, index_expr) => {
+                    let (encountered_element_type, fields) = {
                         let brw = val_ref.borrow();
                         let (array_ref, fields_ref) = brw.expect_array().map_err(|_| {
                             self.create_err(ExecuteErrorKind::PostfixChainError, &part.node)
                         })?;
                         (array_ref.clone(), fields_ref.clone())
                     };
-                    assert!(&encountered_array_type.compatible_with(expected_array_type));
+                    assert!(expected_element_type.compatible_with(&encountered_element_type));
 
                     let index =
                         self.evaluate_expression(index_expr)?
@@ -1883,13 +1904,13 @@ impl<'a, C> Interpreter<'a, C> {
                     }
                     val_ref = fields[index].clone();
                 }
-                PostfixKind::MapIndex(key, value, key_expr) => {
-                    let (_key_type, _encountered_map_type, seq_map) = {
+                PostfixKind::MapIndex(_key_type, _value_type, key_expr) => {
+                    let seq_map = {
                         let brw = val_ref.borrow();
                         let (key_type, value_type, seq_map) = brw.expect_map().map_err(|_| {
                             self.create_err(ExecuteErrorKind::PostfixChainError, &part.node)
                         })?;
-                        (key_type.clone(), value_type.clone(), seq_map.clone())
+                        seq_map.clone()
                     };
                     let key_val = self.evaluate_expression(key_expr)?;
 
@@ -2593,12 +2614,12 @@ impl<'a, C> Interpreter<'a, C> {
         ) -> Result<Value, ExecuteError> {
             let array_value = self.evaluate_expression(base_expr)?;
 
-            if let Value::Array(_, values) = array_value {
+            if let Value::Vec(_, values) = array_value {
                 let (adjusted_start, adjusted_end) =
                     self.evaluate_and_calculate_range(min_expr, max_expr, mode, values.len())?;
 
                 let slice = &values.as_slice()[adjusted_start..adjusted_end];
-                Ok(Value::Array(array_type_ref.clone(), Vec::from(slice)))
+                Ok(Value::Vec(array_type_ref.clone(), Vec::from(slice)))
             } else {
                 Err(self.create_err(ExecuteErrorKind::NotAnArray, &base_expr.node))
             }

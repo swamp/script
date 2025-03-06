@@ -85,6 +85,9 @@ pub enum Value {
     #[default]
     Unit, // Means 'no value' ()
 
+    Slice(Type, Vec<ValueRef>),
+    SlicePair(Type, Type, SeqMap<Value, ValueRef>), // Do not change to HashMap, the order is important for it to be deterministic
+
     Option(Option<ValueRef>),
 
     // Containers
@@ -264,6 +267,14 @@ impl Value {
                 todo!("range is not supported yet")
             }
 
+            Self::SlicePair(_key, _value, _values) => {
+                panic!("slice pair is not supported ")
+            }
+
+            Self::Slice(_element_type, _values) => {
+                panic!("slice is not supported ")
+            }
+
             Self::InternalFunction(_) => {
                 todo!("internal_functions are not supported yet")
             }
@@ -302,6 +313,19 @@ impl Clone for Value {
                     .collect();
 
                 Self::Map(key.clone(), value.clone(), cloned_seq_map)
+            }
+
+            Self::Slice(resolved_ref, vec_refs) => {
+                Self::Slice(resolved_ref.clone(), deep_clone_valrefs(vec_refs))
+            }
+
+            Self::SlicePair(key, value, seq_map) => {
+                let cloned_seq_map = seq_map
+                    .iter()
+                    .map(|(key, val_ref)| (key.clone(), deep_clone_valref(val_ref)))
+                    .collect();
+
+                Self::SlicePair(key.clone(), value.clone(), cloned_seq_map)
             }
 
             Self::Tuple(resolved_ref, vec_refs) => {
@@ -674,6 +698,27 @@ impl Display for Value {
                 write!(f, "]")
             }
 
+            Self::Slice(_item_type, arr) => {
+                write!(f, "Slice[")?;
+                for (i, val) in arr.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", val.borrow())?;
+                }
+                write!(f, "]")
+            }
+            Self::SlicePair(_key, _value, items) => {
+                write!(f, "SlicePair[")?;
+                for (i, (key, val)) in items.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{key}: {}", val.borrow())?;
+                }
+                write!(f, "]")
+            }
+
             Self::Tuple(_tuple_type, arr) => {
                 write!(f, "(")?;
                 for (i, val) in arr.iter().enumerate() {
@@ -720,25 +765,30 @@ impl Display for Value {
                 }
                 write!(f, " }}")
             }
-            Self::InternalFunction(_reference) => write!(f, "<function>"), // TODO:
+            Self::InternalFunction(internal_fn) => write!(f, "[fn {}]", internal_fn.assigned_name),
             Self::Unit => write!(f, "()"),
             Self::Range(start, end, range_mode) => match range_mode {
                 RangeMode::Exclusive => write!(f, "{start}..{end}"),
                 RangeMode::Inclusive => write!(f, "{start}..={end}"),
             },
 
-            Self::ExternalFunction(_) => write!(f, "<external>"), // TODO:
+            Self::ExternalFunction(external_function) => {
+                write!(f, "[external_fn {}]", external_function.assigned_name)
+            }
 
             // Enums ----
             Self::EnumVariantTuple(enum_name, fields_in_order) => {
                 write!(
                     f,
-                    "{:?}::{:?}",
-                    enum_name.common.owner.borrow().name,
+                    "{}::{}",
+                    enum_name.common.owner.borrow().assigned_name,
                     enum_name.common.assigned_name,
                 )?;
 
-                for field in fields_in_order {
+                for (index, field) in fields_in_order.iter().enumerate() {
+                    if index > 0 {
+                        write!(f, ", ")?;
+                    }
                     write!(f, "{}", field.borrow())?;
                 }
 
@@ -755,8 +805,8 @@ impl Display for Value {
 
                 write!(
                     f,
-                    "{:?}::{:?}",
-                    struct_variant.common.owner.borrow().name,
+                    "{}::{}",
+                    struct_variant.common.owner.borrow().assigned_name,
                     struct_variant.common.assigned_name,
                 )?;
 
@@ -770,8 +820,8 @@ impl Display for Value {
             Self::EnumVariantSimple(enum_variant_type_ref) => {
                 write!(
                     f,
-                    "{:?}::{:?}",
-                    enum_variant_type_ref.common.owner.borrow().name,
+                    "{}::{}",
+                    enum_variant_type_ref.common.owner.borrow().assigned_name,
                     enum_variant_type_ref.common.assigned_name,
                 )
             }
@@ -799,7 +849,33 @@ impl PartialEq for Value {
             (Self::String(a), Self::String(b)) => a == b,
             (Self::Bool(a), Self::Bool(b)) => a == b,
             (Self::Unit, Self::Unit) => true,
-            (Self::Option(r1), Self::Option(r2)) => r1 == r2,
+            (Self::EnumVariantSimple(a), Self::EnumVariantSimple(b)) => a == b,
+            (Self::EnumVariantTuple(a, a_values), Self::EnumVariantTuple(b, b_values)) => {
+                (a == b) && a_values == b_values
+            }
+            (Self::EnumVariantStruct(a, a_values), Self::EnumVariantStruct(b, b_values)) => {
+                (a == b) && a_values == b_values
+            }
+            (Self::Option(a), Self::Option(b)) => a == b,
+            (Self::Vec(a, a_values), Self::Vec(b, b_values)) => (a == b) && a_values == b_values,
+            (Self::Map(a, a2, a_values), Self::Map(b, b2, b_values)) => {
+                (a == b) && (a2 == b2) && a_values == b_values
+            }
+            (Self::Tuple(a, a_values), Self::Tuple(b, b_values)) => {
+                (a == b) && a_values == b_values
+            }
+            (Self::NamedStruct(a, a_values), Self::NamedStruct(b, b_values)) => {
+                (a == b) && a_values == b_values
+            }
+            (Self::AnonymousStruct(a, a_values), Self::AnonymousStruct(b, b_values)) => {
+                (a == b) && a_values == b_values
+            }
+            (Self::InternalFunction(a), Self::InternalFunction(b)) => a == b,
+            (Self::ExternalFunction(a), Self::ExternalFunction(b)) => a.id == b.id,
+            (Self::RustValue(a, a_val), Self::RustValue(b, b_val)) => {
+                a_val.borrow().eq_dyn(&**b_val.borrow())
+            }
+
             _ => false,
         }
     }
@@ -817,6 +893,7 @@ impl Hash for Value {
             Self::Unit => (),
             Self::Option(_wrapped) => {}
             Self::Vec(_, _arr) => {}
+            Self::Slice(_, _arr) => {}
             Self::NamedStruct(type_ref, values) => {
                 type_ref.borrow().name().span.hash(state);
                 for v in values {
@@ -830,6 +907,7 @@ impl Hash for Value {
                 }
             }
             Self::Map(_, _, _items) => {}
+            Self::SlicePair(_, _, _items) => {}
             Self::Tuple(_, _arr) => {}
             Self::EnumVariantSimple(_) => (),
             Self::EnumVariantTuple(_, _fields) => todo!(),

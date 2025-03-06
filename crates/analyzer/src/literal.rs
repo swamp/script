@@ -171,22 +171,80 @@ impl Analyzer<'_> {
                             ),
                         }
                     } else {
+                        // If no type is expected, assume that the slice is a `Vec`.
                         (
-                            Literal::Slice(element_type.clone(), resolved_items),
-                            Type::Slice(Box::from(element_type)),
+                            Literal::Vec(element_type.clone(), resolved_items),
+                            Type::Vec(Box::from(element_type)),
                         )
                     }
                 }
             }
 
             swamp_script_ast::LiteralKind::SlicePair(entries) => {
-                let (map_literal, key_type, value_type) =
-                    self.analyze_map_literal(ast_node, &entries)?;
+                let (expressions_tuple, encountered_key_type, encountered_value_type) =
+                    self.analyze_slice_pair_literal(ast_node, &entries)?;
 
-                (
-                    map_literal,
-                    Type::Map(Box::from(key_type.clone()), Box::from(value_type.clone())),
-                )
+                if let Some(found_expected_type) = context.expected_type {
+                    match found_expected_type {
+                        Type::Map(expected_key_type, expected_value_type) => {
+                            if !expected_key_type.compatible_with(&encountered_key_type) {
+                                return Err(self.create_err(
+                                    ErrorKind::IncompatibleTypes(
+                                        *expected_key_type.clone(),
+                                        encountered_key_type.clone(),
+                                    ),
+                                    ast_node,
+                                ));
+                            }
+
+                            if !expected_value_type.compatible_with(&encountered_value_type) {
+                                return Err(self.create_err(
+                                    ErrorKind::IncompatibleTypes(
+                                        *expected_key_type.clone(),
+                                        encountered_key_type.clone(),
+                                    ),
+                                    ast_node,
+                                ));
+                            }
+
+                            (
+                                Literal::Map(
+                                    encountered_key_type.clone(),
+                                    encountered_value_type.clone(),
+                                    expressions_tuple,
+                                ),
+                                Type::Map(
+                                    Box::from(encountered_key_type),
+                                    Box::from(encountered_value_type),
+                                ),
+                            )
+                        }
+                        _ => (
+                            Literal::SlicePair(
+                                encountered_key_type.clone(),
+                                encountered_value_type.clone(),
+                                expressions_tuple,
+                            ),
+                            Type::SlicePair(
+                                Box::from(encountered_key_type),
+                                Box::from(encountered_value_type),
+                            ),
+                        ),
+                    }
+                } else {
+                    // If no type is expected, assume that the slice-pair is a `Map`.
+                    (
+                        Literal::Map(
+                            encountered_key_type.clone(),
+                            encountered_value_type.clone(),
+                            expressions_tuple,
+                        ),
+                        Type::Map(
+                            Box::from(encountered_key_type),
+                            Box::from(encountered_value_type),
+                        ),
+                    )
+                }
             }
 
             swamp_script_ast::LiteralKind::Tuple(expressions) => {
@@ -223,11 +281,11 @@ impl Analyzer<'_> {
         Ok((tuple_types, expressions))
     }
 
-    fn analyze_map_literal(
+    fn analyze_slice_pair_literal(
         &mut self,
         node: &swamp_script_ast::Node,
         entries: &[(swamp_script_ast::Expression, swamp_script_ast::Expression)],
-    ) -> Result<(Literal, Type, Type), Error> {
+    ) -> Result<(Vec<(Expression, Expression)>, Type, Type), Error> {
         if entries.is_empty() {
             return Err(self.create_err(ErrorKind::EmptyMapLiteral, node));
         }
@@ -274,8 +332,7 @@ impl Analyzer<'_> {
             resolved_entries.push((resolved_key, resolved_value));
         }
 
-        let literal = Literal::Map(key_type.clone(), value_type.clone(), resolved_entries);
-        Ok((literal, key_type, value_type))
+        Ok((resolved_entries, key_type, value_type))
     }
 
     #[must_use]
