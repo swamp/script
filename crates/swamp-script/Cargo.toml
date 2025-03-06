@@ -10,9 +10,8 @@ description = "script language for embedding"
 
 swamp-script-source-map = { path = "../source-map", version = "0.0.18" }
 
-# Ast and Parser
-swamp-script-parser = { path = "../parser", version = "0.0.18" }
-swamp-script-ast = { path = "../ast", version = "0.0.18" }
+# Parser
+swamp-script-parser = { path = "../parser", version = "0.0.18" } # TODO: This is only for an error. parser should not be a dependency
 
 # Semantic and Analyzer
 swamp-script-semantic = { path = "../semantic", version = "0.0.18" }

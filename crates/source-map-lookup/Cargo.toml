@@ -7,7 +7,6 @@ repository = "https://github.com/swamp/script"
 description = "Source map lookup for Swamp"
 
 [dependencies]
-swamp-script-semantic = { path = "../semantic", version = "0.0.18" }
 swamp-script-node = { path = "../node", version = "0.0.18" }
 swamp-script-source-map = { path = "../source-map", version = "0.0.18" }
 swamp-script-core-extra = { path = "../core-extra", version = "0.0.18" }

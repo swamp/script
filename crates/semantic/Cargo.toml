@@ -9,8 +9,6 @@ description = "semantic types for swamp script"
 [dependencies]
 seq-map = "0.0.13"
 fixed32 = "0.0.17"
-seq-fmt = "0.0.1"
-seq-set = "0.0.2"
 tracing = "0.1.40"
 tiny-ver = "0.1.2"
 swamp-script-node = { path = "../node", version = "0.0.18" }
