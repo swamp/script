@@ -877,7 +877,7 @@ impl PartialEq for Value {
             }
             (Self::InternalFunction(a), Self::InternalFunction(b)) => a == b,
             (Self::ExternalFunction(a), Self::ExternalFunction(b)) => a.id == b.id,
-            (Self::RustValue(a, a_val), Self::RustValue(b, b_val)) => {
+            (Self::RustValue(_a, a_val), Self::RustValue(_b, b_val)) => {
                 a_val.borrow().eq_dyn(&**b_val.borrow())
             }
 
@@ -905,7 +905,7 @@ impl Hash for Value {
                     v.borrow().hash(state);
                 }
             }
-            Self::AnonymousStruct(type_ref, values) => {
+            Self::AnonymousStruct(_type_ref, values) => {
                 // TODO: Not correct hash
                 for v in values {
                     v.borrow().hash(state);

@@ -19,7 +19,6 @@ use swamp_script_ast::{
 use swamp_script_ast::{Function, WhenBinding};
 use swamp_script_ast::{LiteralKind, MutableOrImmutableExpression};
 use swamp_script_ast::{Postfix, PostfixChain};
-use tracing::info;
 
 pub struct ParseResult<'a> {
     #[allow(dead_code)]
@@ -1823,9 +1822,14 @@ impl AstParser {
         let enum_variant_literal = match inner.next() {
             Some(fields_pair) => match fields_pair.as_rule() {
                 Rule::anonymous_struct_literal => {
-                    let mut fields = Vec::new();
-                    let anonym_fields = self.parse_anonymous_struct_literal(&pair)?;
-                    EnumVariantLiteral::Struct(enum_type, variant_type_identifier, fields)
+                    let (field_expressions, detected_rest) =
+                        self.parse_anonymous_struct_literal_fields(pair)?;
+                    EnumVariantLiteral::Struct(
+                        enum_type,
+                        variant_type_identifier,
+                        field_expressions,
+                        detected_rest,
+                    )
                 }
                 Rule::tuple_fields => {
                     let mut expressions = vec![];

@@ -6,7 +6,7 @@ use crate::err::{Error, ErrorKind};
 use crate::{Analyzer, TypeContext};
 use seq_map::SeqMap;
 use seq_set::SeqSet;
-use swamp_script_node::{Node, Span};
+use swamp_script_node::Node;
 use swamp_script_semantic::{
     AnonymousStructLiteral, ArgumentExpressionOrLocation, Expression, ExpressionKind, FunctionRef,
     LocationAccess, LocationAccessKind, MutOrImmutableExpression, SingleLocationExpression,

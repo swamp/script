@@ -6,7 +6,6 @@
 use crate::typereg::TypeRegistry;
 use crate::value::Value;
 use fixed32::Fp;
-use swamp_script_semantic::prelude::*;
 use swamp_script_types::prelude::*;
 
 pub trait SwampExport: Sized {

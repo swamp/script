@@ -147,7 +147,7 @@ impl Analyzer<'_> {
     fn analyze_map_member_call(
         &mut self,
         key_type: &Type,
-        value_type: &Type,
+        _value_type: &Type,
         is_mutable: bool,
         ast_member_function_name: &swamp_script_ast::Node,
         ast_arguments: &[&swamp_script_ast::Expression],

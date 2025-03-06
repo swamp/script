@@ -5,7 +5,7 @@
 use crate::err::{Error, ErrorKind};
 use crate::{Analyzer, BlockScopeMode};
 use std::rc::Rc;
-use swamp_script_node::{Node, Span};
+use swamp_script_node::Node;
 use swamp_script_semantic::{
     Expression, ExpressionKind, MutOrImmutableExpression, Variable, VariableRef,
 };

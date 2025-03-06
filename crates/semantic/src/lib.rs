@@ -10,17 +10,14 @@ pub mod symtbl;
 
 use crate::intr::IntrinsicFunction;
 pub use fixed32::Fp;
-use seq_fmt::comma;
 use seq_map::SeqMap;
-use std::cell::RefCell;
 use std::cmp::PartialEq;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
-use std::hash::Hash;
 use std::rc::Rc;
 use swamp_script_node::Node;
 use swamp_script_types::prelude::*;
-use tracing::{error, info};
+use tracing::error;
 
 #[derive(Debug, Clone)]
 pub struct TypeWithMut {

@@ -7,7 +7,6 @@ use crate::TypeContext;
 use crate::err::{Error, ErrorKind};
 use swamp_script_semantic::{Expression, ExpressionKind, Function, FunctionRef, Range, RangeMode};
 use swamp_script_types::prelude::*;
-use tracing::info;
 
 impl Analyzer<'_> {
     pub fn convert_to_function_access_kind(function_ref: &FunctionRef) -> ExpressionKind {

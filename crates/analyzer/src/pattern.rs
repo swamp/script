@@ -7,7 +7,6 @@ use crate::Analyzer;
 use crate::err::{Error, ErrorKind};
 use swamp_script_semantic::{NormalPattern, Pattern, PatternElement};
 use swamp_script_types::prelude::*;
-use tracing::info;
 
 impl Analyzer<'_> {
     fn find_variant_in_pattern(

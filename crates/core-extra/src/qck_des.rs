@@ -88,7 +88,7 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
             }
             (Value::NamedStruct(struct_type_ref.clone(), values), offset)
         }
-        Type::AnonymousStruct(anon_struct_type) => {
+        Type::AnonymousStruct(_anon_struct_type) => {
             todo!()
         }
         Type::Map(key_type, value_type) => {

@@ -25,10 +25,9 @@ use swamp_script_semantic::modules::ModuleRef;
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::symtbl::{FuncDef, Symbol, SymbolTable, SymbolTableRef};
 use swamp_script_semantic::{
-    AnonymousStructLiteral, ArgumentExpressionOrLocation, LocationAccess, LocationAccessKind,
-    MutOrImmutableExpression, NormalPattern, Postfix, PostfixKind, RangeMode,
-    SingleLocationExpression, SingleLocationExpressionKind, SingleMutLocationExpression,
-    TypeWithMut, WhenBinding,
+    ArgumentExpressionOrLocation, LocationAccess, LocationAccessKind, MutOrImmutableExpression,
+    NormalPattern, Postfix, PostfixKind, RangeMode, SingleLocationExpression,
+    SingleLocationExpressionKind, SingleMutLocationExpression, TypeWithMut, WhenBinding,
 };
 use swamp_script_source_map::SourceMap;
 use swamp_script_types::prelude::*;
@@ -1116,7 +1115,7 @@ impl<'a> Analyzer<'a> {
                     } else {
                         let member_name_str = self.get_text(member_name).to_string();
 
-                        if let Some(found_member) = self
+                        if let Some(_found_member) = self
                             .shared
                             .state
                             .associated_impls

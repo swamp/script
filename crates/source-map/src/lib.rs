@@ -8,7 +8,7 @@ use seq_map::SeqMap;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
-use tracing::{info, trace};
+use tracing::info;
 
 pub mod prelude;
 

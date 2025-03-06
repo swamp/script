@@ -1013,7 +1013,7 @@ impl<'a, C> Interpreter<'a, C> {
                 let new_val = self.evaluate_expression(value)?;
 
                 match &mut *map_val.borrow_mut() {
-                    Value::Map(_type_id, value_type, elements) => {
+                    Value::Map(_key_type, _value_type, elements) => {
                         elements
                             .insert(index_val, Rc::new(RefCell::new(new_val)))
                             .map_err(|_| {

@@ -5,7 +5,6 @@
 
 use seq_map::SeqMap;
 use std::cell::RefCell;
-use swamp_script_semantic::prelude::*;
 use swamp_script_types::prelude::*;
 
 #[derive(Debug)]

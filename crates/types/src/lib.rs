@@ -14,7 +14,6 @@ use std::hash::Hash;
 use std::rc::Rc;
 use swamp_script_node::Node;
 
-
 #[derive(Clone, Eq, PartialEq)]
 pub enum Type {
     // Primitives
@@ -46,7 +45,6 @@ pub enum Type {
     Generic(Box<Type>, Vec<Type>),
     External(ExternalTypeRef),
 }
-
 
 pub type NamedStructTypeRef = Rc<RefCell<NamedStructType>>;
 
@@ -292,11 +290,11 @@ impl Type {
 fn compare_struct_types(a: &NamedStructTypeRef, b: &NamedStructTypeRef) -> bool {
     let a_borrow = a.borrow();
     let b_borrow = b.borrow();
-    
+
     if a_borrow.type_id != b.borrow().type_id {
         return false;
     }
-    
+
     if a_borrow.assigned_name != b_borrow.assigned_name {
         return false;
     }

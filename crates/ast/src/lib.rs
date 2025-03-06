@@ -463,6 +463,7 @@ pub enum EnumVariantLiteral {
         QualifiedTypeIdentifier,
         LocalTypeIdentifier,
         Vec<FieldExpression>,
+        bool,
     ),
 }
 

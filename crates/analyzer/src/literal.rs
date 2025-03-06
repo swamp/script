@@ -4,7 +4,6 @@
  */
 use crate::err::{Error, ErrorKind};
 use crate::{Analyzer, TypeContext};
-use std::rc::Rc;
 use swamp_script_node::Node;
 use swamp_script_semantic::{EnumLiteralData, Expression, Fp, Literal};
 use swamp_script_types::prelude::*;
@@ -57,7 +56,7 @@ impl Analyzer<'_> {
                     swamp_script_ast::EnumVariantLiteral::Tuple(enum_name, variant_name, _) => {
                         (enum_name, variant_name)
                     }
-                    swamp_script_ast::EnumVariantLiteral::Struct(enum_name, variant_name, _) => {
+                    swamp_script_ast::EnumVariantLiteral::Struct(enum_name, variant_name, _, _) => {
                         (enum_name, variant_name)
                     }
                 };
@@ -85,6 +84,7 @@ impl Analyzer<'_> {
                             _qualified_type_identifier,
                             variant,
                             anonym_struct_field_and_expressions,
+                            detected_rest,
                         ) => {
                             if let EnumVariantType::Struct(resolved_variant_struct_ref) =
                                 &*variant_ref
@@ -111,7 +111,7 @@ impl Analyzer<'_> {
                                     &variant.0.clone(),
                                     &resolved_variant_struct_ref.anon_struct,
                                     anonym_struct_field_and_expressions,
-                                    false,
+                                    *detected_rest,
                                 )?;
 
                                 EnumLiteralData::Struct(resolved)
