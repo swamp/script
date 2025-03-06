@@ -3,20 +3,13 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use std::path::Path;
-use swamp_script_analyzer::Analyzer;
 use swamp_script_analyzer::prelude::Error;
 use swamp_script_core_extra::prelude::Value;
+use swamp_script_eval::ExternalFunctions;
 use swamp_script_eval::prelude::{ExecuteError, VariableValue};
-use swamp_script_eval::{Constants, ExternalFunctions, eval_constants, eval_module};
-use swamp_script_parser::AstParser;
 use swamp_script_semantic::modules::Modules;
-use swamp_script_semantic::{
-    Expression, ExternalFunctionDefinition, ExternalFunctionId, ProgramState, SemanticError,
-    Signature, Type, TypeForParameter,
-};
+use swamp_script_semantic::{Expression, ExternalFunctionId, SemanticError};
 use swamp_script_source_map::SourceMap;
-use swamp_script_source_map_lookup::SourceMapWrapper;
 
 #[derive(Debug)]
 #[allow(dead_code)]

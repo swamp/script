@@ -288,7 +288,7 @@ impl Analyzer<'_> {
     ) -> Result<AnonymousStructType, Error> {
         let resolved_fields = self.analyze_anonymous_struct_type_fields(&ast_struct.fields)?;
 
-        let resolved_anon_struct = AnonymousStructType::new_and_sort_fields(resolved_fields);
+        let resolved_anon_struct = AnonymousStructType::new_and_sort_fields(&resolved_fields);
 
         Ok(resolved_anon_struct)
     }

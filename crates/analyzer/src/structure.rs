@@ -18,7 +18,7 @@ impl Analyzer<'_> {
     fn analyze_struct_init_calling_default(
         &mut self,
         function: &FunctionRef,
-        struct_to_instantiate: NamedStructTypeRef,
+        struct_to_instantiate: &NamedStructTypeRef,
         source_order_expressions: Vec<(usize, Node, Expression)>,
         node: &swamp_script_ast::Node,
     ) -> Result<Expression, Error> {
@@ -197,7 +197,7 @@ impl Analyzer<'_> {
                     .expect("TODO: panic message");
             }
 
-            AnonymousStructType::new_and_sort_fields(map_for_creating_type)
+            AnonymousStructType::new_and_sort_fields(&map_for_creating_type)
         };
 
         let mapped = self.analyze_anon_struct_instantiation(
@@ -257,7 +257,7 @@ impl Analyzer<'_> {
             if let Some(function) = maybe_default {
                 self.analyze_struct_init_calling_default(
                     &function,
-                    struct_to_instantiate,
+                    &struct_to_instantiate,
                     source_order_expressions,
                     &qualified_type_identifier.name.0,
                 )

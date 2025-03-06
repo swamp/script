@@ -157,24 +157,37 @@ impl Analyzer<'_> {
                         );
                     }
                 } else {
-                    let (element_type, resolved_items) =
+                    let (encountered_element_type, resolved_items) =
                         self.analyze_slice_type_helper(ast_node, items, context.expected_type)?;
                     if let Some(found_expected_type) = context.expected_type {
                         match found_expected_type {
-                            Type::Vec(_) => (
-                                Literal::Vec(element_type.clone(), resolved_items),
-                                Type::Vec(Box::from(element_type)),
-                            ),
+                            Type::Vec(required_element_type) => {
+                                if !encountered_element_type.compatible_with(required_element_type)
+                                {
+                                    return Err(self.create_err(
+                                        ErrorKind::IncompatibleTypes(
+                                            *required_element_type.clone(),
+                                            encountered_element_type,
+                                        ),
+                                        ast_node,
+                                    ));
+                                }
+
+                                (
+                                    Literal::Vec(encountered_element_type.clone(), resolved_items),
+                                    Type::Vec(Box::from(encountered_element_type)),
+                                )
+                            }
                             _ => (
-                                Literal::Slice(element_type.clone(), resolved_items),
-                                Type::Slice(Box::from(element_type)),
+                                Literal::Slice(encountered_element_type.clone(), resolved_items),
+                                Type::Slice(Box::from(encountered_element_type)),
                             ),
                         }
                     } else {
                         // If no type is expected, assume that the slice is a `Vec`.
                         (
-                            Literal::Vec(element_type.clone(), resolved_items),
-                            Type::Vec(Box::from(element_type)),
+                            Literal::Vec(encountered_element_type.clone(), resolved_items),
+                            Type::Vec(Box::from(encountered_element_type)),
                         )
                     }
                 }
@@ -186,22 +199,22 @@ impl Analyzer<'_> {
 
                 if let Some(found_expected_type) = context.expected_type {
                     match found_expected_type {
-                        Type::Map(expected_key_type, expected_value_type) => {
-                            if !expected_key_type.compatible_with(&encountered_key_type) {
+                        Type::Map(required_key_type, required_value_type) => {
+                            if !required_key_type.compatible_with(&encountered_key_type) {
                                 return Err(self.create_err(
                                     ErrorKind::IncompatibleTypes(
-                                        *expected_key_type.clone(),
-                                        encountered_key_type.clone(),
+                                        *required_key_type.clone(),
+                                        encountered_key_type,
                                     ),
                                     ast_node,
                                 ));
                             }
 
-                            if !expected_value_type.compatible_with(&encountered_value_type) {
+                            if !required_value_type.compatible_with(&encountered_value_type) {
                                 return Err(self.create_err(
                                     ErrorKind::IncompatibleTypes(
-                                        *expected_key_type.clone(),
-                                        encountered_key_type.clone(),
+                                        *required_key_type.clone(),
+                                        encountered_key_type,
                                     ),
                                     ast_node,
                                 ));

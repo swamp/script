@@ -5,11 +5,11 @@
 
 pub mod prelude;
 
+use fmt::{Debug, Display};
 use seq_fmt::comma;
 use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::fmt;
-use std::fmt::{Debug, Display, Formatter};
 use std::hash::Hash;
 use std::rc::Rc;
 use swamp_script_node::Node;
@@ -55,7 +55,7 @@ pub struct ParameterNode {
 }
 
 impl Debug for ParameterNode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Parameter")
     }
 }
@@ -85,7 +85,7 @@ pub struct TypeForParameter {
 }
 
 impl Display for TypeForParameter {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(
             f,
             "{}{}: {:?}",
@@ -113,13 +113,14 @@ pub struct Signature {
 }
 
 impl Display for Signature {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(f, "({})->{}", comma(&self.parameters), self.return_type)
     }
 }
 
 impl Signature {
-    pub fn same_type(&self, other: &Signature) -> bool {
+    #[must_use]
+    pub fn same_type(&self, other: &Self) -> bool {
         if self.parameters.len() != other.parameters.len()
             || !self.return_type.compatible_with(&other.return_type)
         {
@@ -149,6 +150,7 @@ impl Type {
         !matches!(self, Self::Unit | Self::Never)
     }
 
+    #[must_use]
     pub fn id(&self) -> Option<TypeNumber> {
         let found_id = match self {
             Self::Unit => 0,
@@ -165,7 +167,7 @@ impl Type {
 }
 
 impl Debug for Type {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Int => write!(f, "Int"),
             Self::Float => write!(f, "Float"),
@@ -173,21 +175,21 @@ impl Debug for Type {
             Self::Bool => write!(f, "Bool"),
             Self::Unit => write!(f, "Unit"),
             Self::Never => write!(f, "!"),
-            Self::Slice(ty) => write!(f, "Slice<{:?}>", ty),
-            Self::SlicePair(key, value) => write!(f, "Slice<{:?}, {:?}>", key, value),
-            Self::Vec(element_type) => write!(f, "[{:?}]", element_type),
-            Self::Tuple(tuple_type_ref) => write!(f, "( {:?} )", tuple_type_ref),
+            Self::Slice(ty) => write!(f, "Slice<{ty:?}>"),
+            Self::SlicePair(key, value) => write!(f, "Slice<{key:?}, {value:?}>"),
+            Self::Vec(element_type) => write!(f, "[{element_type:?}]"),
+            Self::Tuple(tuple_type_ref) => write!(f, "( {tuple_type_ref:?} )"),
             Self::NamedStruct(struct_type_ref) => {
                 write!(f, "{}", struct_type_ref.borrow().assigned_name)
             }
             Self::AnonymousStruct(anonymous_struct_type) => {
-                write!(f, "{:?}", anonymous_struct_type)
+                write!(f, "{anonymous_struct_type:?}")
             }
-            Self::Map(key, value) => write!(f, "[{:?}:{:?}]", key, value),
+            Self::Map(key, value) => write!(f, "[{key:?}:{value:?}]"),
             Self::Generic(base, parameters) => write!(f, "{base:?}<{parameters:?}>"),
             Self::Enum(enum_type_ref) => write!(f, "{:?}", enum_type_ref.borrow().assigned_name),
             Self::Function(function_type_signature) => {
-                write!(f, "{:?}", function_type_signature)
+                write!(f, "{function_type_signature:?}")
             }
             Self::Iterable(type_generated) => write!(f, "Iterable<{type_generated:?}>"),
             Self::Optional(base_type) => write!(f, "{base_type:?}?"),
@@ -197,7 +199,7 @@ impl Debug for Type {
 }
 
 impl Display for Type {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         match self {
             Self::Int => write!(f, "Int"),
             Self::Float => write!(f, "Float"),
@@ -208,9 +210,9 @@ impl Display for Type {
             Self::Slice(ty) => write!(f, "Slice<{ty}>"),
             Self::SlicePair(key, value) => write!(f, "Slice<{key}, {value}>"),
             Self::Vec(element_type) => write!(f, "[{}]", &element_type.to_string()),
-            Self::Tuple(tuple) => write!(f, "({})", comma(&tuple)),
+            Self::Tuple(tuple) => write!(f, "({})", comma(tuple)),
             Self::NamedStruct(struct_ref) => write!(f, "{}", struct_ref.borrow().assigned_name),
-            Self::AnonymousStruct(struct_ref) => write!(f, "{:?}", struct_ref),
+            Self::AnonymousStruct(struct_ref) => write!(f, "{struct_ref:?}"),
             Self::Map(key, value) => write!(f, "[{key}:{value}]"),
             Self::Generic(base_type, params) => write!(f, "{base_type}<{}>", comma(params)),
             Self::Enum(enum_type) => write!(f, "{}", enum_type.borrow().assigned_name),
@@ -223,7 +225,8 @@ impl Display for Type {
 }
 
 impl Type {
-    pub fn assignable_type(&self, other: &Type) -> bool {
+    #[must_use]
+    pub fn assignable_type(&self, other: &Self) -> bool {
         if self.compatible_with(other) {
             true
         } else if let Self::Optional(inner_type) = self {
@@ -237,15 +240,16 @@ impl Type {
     pub fn compatible_with(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Function(a), Self::Function(b)) => a.same_type(b),
-            (_, Self::Never) => true,
-            (Self::Int, Self::Int) => true,
-            (Self::Float, Self::Float) => true,
-            (Self::String, Self::String) => true,
-            (Self::Bool, Self::Bool) => true,
-            (Self::Unit, Self::Unit) => true,
-            (Self::Vec(_), Self::Vec(_)) => true,
+            (_, Self::Never)
+            | (Self::Int, Self::Int)
+            | (Self::Float, Self::Float)
+            | (Self::String, Self::String)
+            | (Self::Bool, Self::Bool)
+            | (Self::Unit, Self::Unit)
+            | (Self::Vec(_), Self::Vec(_))
+            | (Self::Enum(_), Self::Enum(_)) => true,
             (Self::Map(a_key, a_value), Self::Map(b_key, b_value)) => {
-                a_key.compatible_with(&b_key) && a_value.compatible_with(&b_value)
+                a_key.compatible_with(b_key) && a_value.compatible_with(b_value)
             }
             (Self::NamedStruct(a), Self::NamedStruct(b)) => compare_struct_types(a, b),
             (Self::AnonymousStruct(a), Self::AnonymousStruct(b)) => {
@@ -257,7 +261,6 @@ impl Type {
                 }
                 a.iter().zip(b.iter()).all(|(a, b)| a.compatible_with(b))
             }
-            (Self::Enum(_), Self::Enum(_)) => true,
             (Self::Iterable(a), Self::Iterable(b)) => a.compatible_with(b),
             (Self::Optional(inner_type_a), Self::Optional(inner_type_b)) => {
                 inner_type_a.compatible_with(inner_type_b)
@@ -302,6 +305,7 @@ fn compare_struct_types(a: &NamedStructTypeRef, b: &NamedStructTypeRef) -> bool 
     compare_anonymous_struct_types(&a_borrow.anon_struct_type, &b_borrow.anon_struct_type)
 }
 
+#[must_use]
 pub fn same_anon_struct_ref(a: &AnonymousStructType, b: &AnonymousStructType) -> bool {
     compare_anonymous_struct_types(a, b)
 }
@@ -314,6 +318,7 @@ pub fn same_named_struct_ref(a: &NamedStructTypeRef, b: &NamedStructTypeRef) -> 
     compare_anonymous_struct_types(&a.borrow().anon_struct_type, &b.borrow().anon_struct_type)
 }
 
+#[must_use]
 pub fn compare_anonymous_struct_types(a: &AnonymousStructType, b: &AnonymousStructType) -> bool {
     if a.field_name_sorted_fields.len() != b.field_name_sorted_fields.len() {
         return false;
@@ -370,13 +375,14 @@ pub fn comma_seq<K: Clone + Hash + Eq + Display, V: Display>(values: &SeqMap<K, 
     result
 }
 
+#[must_use]
 pub fn comma_seq_nl<K: Clone + Hash + Eq + Display, V: Display>(
     values: &SeqMap<K, V>,
     prefix: &str,
 ) -> String {
     let mut result = String::new();
     for (key, value) in values.iter() {
-        result.push_str(format!("{}{}: {}\n", prefix, key, value).as_str());
+        result.push_str(format!("{prefix}{key}: {value}\n").as_str());
     }
     result
 }
@@ -388,7 +394,7 @@ pub struct StructTypeField {
 }
 
 impl Display for StructTypeField {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(f, "{:?}:{}", self.identifier, self.field_type)
     }
 }
@@ -400,11 +406,12 @@ pub struct AnonymousStructType {
 }
 
 impl Debug for AnonymousStructType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(f, "{}", comma_seq(&self.field_name_sorted_fields))
     }
 }
 
+#[must_use]
 pub fn sort_struct_fields2(
     unordered_seq_map: &SeqMap<String, StructTypeField>,
 ) -> SeqMap<String, StructTypeField> {
@@ -418,13 +425,15 @@ pub fn sort_struct_fields2(
 }
 
 impl AnonymousStructType {
-    pub fn new_and_sort_fields(source_ordered_fields: SeqMap<String, StructTypeField>) -> Self {
+    #[must_use]
+    pub fn new_and_sort_fields(source_ordered_fields: &SeqMap<String, StructTypeField>) -> Self {
         Self {
-            field_name_sorted_fields: sort_struct_fields2(&source_ordered_fields),
+            field_name_sorted_fields: sort_struct_fields2(source_ordered_fields),
         }
     }
 
-    pub fn new(defined_order: SeqMap<String, StructTypeField>) -> Self {
+    #[must_use]
+    pub const fn new(defined_order: SeqMap<String, StructTypeField>) -> Self {
         Self {
             field_name_sorted_fields: defined_order,
         }
@@ -458,7 +467,7 @@ pub struct EnumType {
 }
 
 impl Debug for EnumType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(f, "{}", self.assigned_name)?;
         let s = comma(
             &self
@@ -493,10 +502,12 @@ impl EnumType {
         &self.name
     }
 
+    #[must_use]
     pub fn get_variant(&self, name: &str) -> Option<&EnumVariantTypeRef> {
         self.variants.get(&name.to_string())
     }
 
+    #[must_use]
     pub fn get_variant_from_index(&self, index: usize) -> Option<&EnumVariantTypeRef> {
         Some(self.variants.values().collect::<Vec<_>>()[index])
     }
@@ -514,7 +525,7 @@ pub struct EnumVariantCommon {
 }
 
 impl Debug for EnumVariantCommon {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(
             f,
             "<{}>{}::{}",
@@ -563,6 +574,7 @@ pub enum EnumVariantType {
     Nothing(EnumVariantSimpleTypeRef),
 }
 impl EnumVariantType {
+    #[must_use]
     pub fn common(&self) -> &EnumVariantCommon {
         match self {
             Self::Tuple(tuple) => &tuple.common,
@@ -573,7 +585,7 @@ impl EnumVariantType {
 }
 
 impl Debug for EnumVariantType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         match self {
             Self::Struct(x) => write!(f, "{{ {x:?} }}"),
             Self::Tuple(x) => write!(f, "({x:?})"),
@@ -599,7 +611,7 @@ pub struct NamedStructType {
 }
 
 impl Debug for NamedStructType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "struct {:?}", self.assigned_name)
     }
 }
@@ -607,6 +619,7 @@ impl Debug for NamedStructType {
 pub type TypeNumber = u32;
 
 impl NamedStructType {
+    #[must_use]
     pub fn new(
         name: Node,
         assigned_name: &str,
@@ -622,13 +635,15 @@ impl NamedStructType {
         }
     }
 
+    #[must_use]
     pub fn field_index(&self, field_name: &str) -> Option<usize> {
         self.anon_struct_type
             .field_name_sorted_fields
             .get_index(&field_name.to_string())
     }
 
-    pub fn name(&self) -> &Node {
+    #[must_use]
+    pub const fn name(&self) -> &Node {
         &self.name
     }
 }

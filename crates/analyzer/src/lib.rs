@@ -188,6 +188,7 @@ impl<'a> TypeContext<'a> {
         }
     }
 
+    #[must_use]
     pub const fn new_argument(required_type: &'a Type) -> Self {
         Self {
             expected_type: Some(required_type),
@@ -671,11 +672,11 @@ impl<'a> Analyzer<'a> {
 
             swamp_script_ast::ExpressionKind::VariableDefinition(
                 variable,
-                coerce_type,
+                maybe_annotation,
                 source_expression,
             ) => self.analyze_create_variable(
                 variable,
-                Option::from(coerce_type),
+                Option::from(maybe_annotation),
                 source_expression,
             )?,
 
@@ -910,6 +911,7 @@ impl<'a> Analyzer<'a> {
                 .clone()
         };
 
+        /*
         let mut analyzed_types = Vec::new();
 
         for analyzed_type in &type_name_to_find.generic_params {
@@ -917,6 +919,8 @@ impl<'a> Analyzer<'a> {
 
             analyzed_types.push(ty);
         }
+
+         */
 
         let result_type = match symbol {
             Symbol::Type(base_type) => base_type,
@@ -1231,10 +1235,10 @@ impl<'a> Analyzer<'a> {
                         }
 
                         Type::Map(key_type, value_type) => {
-                            let key_type_context = TypeContext::new_argument(&key_type);
+                            let key_type_context = TypeContext::new_argument(key_type);
                             let resolved_key_expr =
                                 self.analyze_expression(index_expr, &key_type_context)?;
-                            let return_type = Type::Optional(Box::from(value_type.clone()));
+                            let return_type = Type::Optional(value_type.clone());
                             self.add_postfix(
                                 &mut suffixes,
                                 PostfixKind::MapIndex(
@@ -2140,7 +2144,7 @@ impl<'a> Analyzer<'a> {
         let var_ref = self.create_local_variable(
             &var.name,
             Option::from(&var.is_mutable),
-            &resolved_source.ty(),
+            resolved_source.ty(),
         )?;
 
         let resolved_type = resolved_source.ty().clone();
@@ -2251,7 +2255,7 @@ impl<'a> Analyzer<'a> {
                         }
 
                         Type::Map(key_type, value_type) => {
-                            let key_type_argument_context = TypeContext::new_argument(&key_type);
+                            let key_type_argument_context = TypeContext::new_argument(key_type);
                             let key_expr =
                                 self.analyze_expression(lookup_expr, &key_type_argument_context)?;
                             let is_last = i == chain.postfixes.len() - 1;
@@ -2358,7 +2362,7 @@ impl<'a> Analyzer<'a> {
         let location = SingleLocationExpression {
             kind: SingleLocationExpressionKind::MutVariableRef,
             node: self.to_node(&chain.base.node),
-            ty: ty.clone(),
+            ty,
             starting_variable: start_variable,
             access_chain: items,
         };
@@ -2406,7 +2410,7 @@ impl<'a> Analyzer<'a> {
             Type::Vec(array_type) => {
                 let target_type_context = TypeContext::new_argument(target_type);
                 let source_type_context = TypeContext::new_argument(source_type);
-                if *op == CompoundOperatorKind::Add && source_type.compatible_with(&array_type) {
+                if *op == CompoundOperatorKind::Add && source_type.compatible_with(array_type) {
                     // Handle ArrayPush
                     let target_location = SingleMutLocationExpression(self.analyze_to_location(
                         target_expression,
@@ -2664,7 +2668,7 @@ impl<'a> Analyzer<'a> {
         let self_type = &signature.parameters[0];
         if !self_type
             .resolved_type
-            .compatible_with(&encountered_self_type)
+            .compatible_with(encountered_self_type)
             || self_type.is_mutable && !is_mutable
         {
             return Err(self.create_err_resolved(ErrorKind::SelfNotCorrectType, resolved_node));
@@ -2739,7 +2743,7 @@ impl<'a> Analyzer<'a> {
             .shared
             .state
             .associated_impls
-            .get_member_function(&type_that_member_is_on, &field_name_str)
+            .get_member_function(type_that_member_is_on, &field_name_str)
             .cloned();
 
         let postfixes = match maybe_function {

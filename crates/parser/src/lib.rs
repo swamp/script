@@ -1360,7 +1360,7 @@ impl AstParser {
         let variable_item = Self::next_pair(&mut inner)?;
         let found_var = self.parse_variable_item(&variable_item)?;
 
-        let type_coercion = if let Some(peeked) = inner.peek() {
+        let maybe_annotation = if let Some(peeked) = inner.peek() {
             if peeked.as_rule() == Rule::type_coerce {
                 let type_coerce_pair = inner.next().unwrap();
                 let mut type_inner = type_coerce_pair.clone().into_inner();
@@ -1377,9 +1377,13 @@ impl AstParser {
 
         let rhs_expr = self.parse_mutable_or_immutable_expression(&Self::next_pair(&mut inner)?)?;
 
-        if type_coercion.is_some() || found_var.is_mutable.is_some() {
+        if maybe_annotation.is_some() || found_var.is_mutable.is_some() {
             Ok(self.create_expr(
-                ExpressionKind::VariableDefinition(found_var, type_coercion, Box::from(rhs_expr)),
+                ExpressionKind::VariableDefinition(
+                    found_var,
+                    maybe_annotation,
+                    Box::from(rhs_expr),
+                ),
                 pair,
             ))
         } else {

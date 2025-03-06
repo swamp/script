@@ -9,6 +9,7 @@ use swamp_script_semantic::{Expression, ExpressionKind, Function, FunctionRef, R
 use swamp_script_types::prelude::*;
 
 impl Analyzer<'_> {
+    #[must_use]
     pub fn convert_to_function_access_kind(function_ref: &FunctionRef) -> ExpressionKind {
         match &**function_ref {
             Function::Internal(internal_function) => {
@@ -78,6 +79,8 @@ impl Analyzer<'_> {
         Ok((resolved_min, resolved_max))
     }
 
+    /// # Errors
+    ///
     pub fn analyze_range(
         &mut self,
         min_expr: &swamp_script_ast::Expression,
@@ -110,7 +113,7 @@ impl Analyzer<'_> {
         Ok(self.create_expr_resolved(
             ExpressionKind::ArrayRangeAccess(Box::from(base_expression), Box::from(range)),
             Type::Vec(Box::from(array_type_ref.clone())),
-            &node,
+            node,
         ))
     }
 
