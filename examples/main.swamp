@@ -1,0 +1,227 @@
+/// This is a doc comment
+
+// Primitive types and literals
+int_val = 42
+float_val = 3.14
+string_val = "normal string"
+interpolated = 'value is {int_val}'
+bool_val = true
+unit_val = ()
+
+// Arrays
+numbers = [1, 2, 3, 4, 5]
+first = numbers[0]
+
+// Tuples
+point = (10, "hello", 3.14)
+
+
+// Struct definition
+struct Vector2 {
+    x: Float,
+    y: Float,
+}
+
+// Implementation block
+impl Vector2 {
+    fn sqr_len(self) -> Float {
+        self.x * self.x + self.y * self.y
+    }
+
+    fn scale(mut self, factor: Float) -> Vector2 {
+        self.x = self.x * factor
+        self.y = self.y * factor
+        self
+    }
+
+    fn new(x: Float, y: Float) -> Vector2 {
+        Vector2 { x: x, y: y }
+    }
+}
+
+//type Position = (Float, Float)
+
+fn new_position(x: Float, y: Float) -> (Float, Float) {
+    ( x, y )
+}
+
+
+// Enum
+enum Shape {
+    Circle(Float),
+    Rectangle { width: Float, height: Float },
+    Point,
+}
+
+
+// Function definition
+fn calculate_area(shape: Shape) -> Float {
+    match shape {
+        Circle radius => 3.14 * radius * radius,
+        Rectangle width, height => width * height,
+        Point => 0.0,
+    }
+}
+
+
+// Loops
+mut sum = 0
+for i in 0..5 {
+    sum = sum + i
+}
+print('loop sum: {sum}') // loops 0 to 4, so result is 10. (0, 1, 1+2, 3+3, 6+4)
+
+
+mut counter = 0
+while counter < 8 {
+    if counter == 2 {
+        counter = counter + 1
+        print('I continued at {counter}') // Should be 3
+        continue
+    }
+    if counter == 4 {
+        break
+    }
+    counter = counter + 1
+}
+print('counter after while is: {counter}') // Should be 4
+
+
+struct Player {
+    name: String,
+    health: Int,
+    position: Vector2
+}
+
+player = Player {
+    name: "Hero",
+    health: 100,
+    position: Vector2::new(10.0, 20.0)
+}
+print('player:{player}')
+
+position = new_position(10.0, 20.0)
+print('position type alias: {position}')
+
+
+// Pattern matching with multiple patterns
+status = match player.health {
+    100 => "Full health",
+    health => 'Critical: {health}'
+}
+print('status:{status}')
+
+
+/// Attempts to find a player by their name
+/// Returns: Some(Player) if found, none otherwise
+fn find_player_by_name(name: String) -> Player? {
+    if name == "Hero" {
+        Player {
+            name: "Hero",
+            health: 100,
+            position: Vector2::new(-13.0, -46.0)
+        }
+    } else {
+        none
+    }
+}
+
+
+// Option example
+struct Stats {
+    power: Int,
+    durability: Int,
+}
+
+struct Weapon {
+    name: String,
+    stats: Stats,
+    enchantment: String?,
+}
+
+fn find_weapon_in_inventory(slot: Int) -> Weapon? {
+    if slot == 0 {
+        Weapon {
+            name: "Ancient Sword",
+            stats: Stats { power: 50, durability: 100 },
+            enchantment: "Fire",
+        }
+    } else {
+        none
+    }
+}
+
+fn get_enchanted_power(weapon: Weapon?) -> Int? {
+    if weapon? {
+        if enchantment = weapon.enchantment? {
+            if enchantment == "Fire" {
+                weapon.stats.power * 2  // Fire enchantment doubles power
+            } else {
+                weapon.stats.power
+            }
+        } else {
+            weapon.stats.power  // No enchantment, return base power
+        }
+    } else {
+        none
+    }
+}
+
+// Basic optional handling
+weapon = find_weapon_in_inventory(0)
+if weapon? {
+    print('slot 0: Found weapon: {weapon.name}')
+}
+
+// Optional unwrapping with assignment
+if equipped = find_weapon_in_inventory(0)? {
+    print('slot 0: Equipped {equipped.name} with {equipped.stats.power} power')
+}
+
+// Chaining optional operations
+if total_power = get_enchanted_power(find_weapon_in_inventory(0))? {
+    print('slot 0: Weapon total power with enchantments: {total_power}')
+} else {
+    print('slot 0: No weapon found')
+}
+
+// Chaining optional operations
+if total_power = get_enchanted_power(find_weapon_in_inventory(1))? {
+    print('slot1: Weapon total power with enchantments: {total_power}')
+} else {
+    print('slot 1: No weapon found')
+}
+
+
+shapes = [
+    Shape::Circle(5.0),
+    Shape::Rectangle { width: 10.0, height: 20.0 },
+    Shape::Point
+]
+print('area:{calculate_area(shapes[1])}') // Should be 200
+
+mut vec = Vector2 { x: 1.0, y: 2.0 }
+length = vec.scale(2.0).sqr_len()  // 2*2 + 4*4 = 20
+
+print('Final sqr-length: {length}') // 20
+
+// Return the last expression
+length
+
+// Expected output
+//
+// loop sum: 10
+// I continued at 3
+// counter after while is: 4
+// player:Player { name: Hero, health: 100, position: Vector2 { x: 10.00, y: 20.00 } }
+// position type alias: (10.00, 20.00)
+// status:"Full health"
+// slot 0: Found weapon: "Ancient Sword"
+// slot 0: Equipped "Ancient Sword" with 50 power
+// slot 0: Weapon total power with enchantments: 100
+// slot 1: No weapon found
+// Found player at position: Vector2 { x: -13.00, y: -46.00 }
+// Found player "Hero" with health: 100
+// area:200.00
+// Final sqr-length: 20.00
+// 20.00

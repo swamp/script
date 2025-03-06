@@ -1,0 +1,123 @@
+repo: swamp/script
+
+# added
+# changed
+# fixed
+# workaround
+# optimization
+# examples
+# test
+# removed
+# improved
+# breaking
+# deprecated
+# refactor
+# experimental
+# docs
+# known issue
+# style
+# unreleased
+# security
+
+releases:
+  v0.0.16:
+    date: "2025-03-04"
+    notice:
+    sections:
+      General:
+        changes:
+          fixed:
+            - '`impl` can be added to intrinsic types, named structs and enum. Previously it only worked on named structs.'
+  v0.0.15:
+    date: "2025-03-04"
+    notice:
+    sections:
+      General:
+        changes:
+          fixed:
+            - '`mut` in struct pattern now works as intended'
+
+          added:
+            - |
+              anonymous structs allowed in named struct definitions. e.g.
+              ```swamp
+              struct Something { pos: { x : Int, y : Int } }
+              ```
+
+            - |
+              anonymous structs coercion to named structs. e.g.
+
+              ```swamp
+              Position { x: 10 }
+              ```
+              can be written as
+
+              ```swamp
+              { x : 10}
+              ```
+              if the type is known.
+
+            - |
+              import all in `use` and `mod` with specifying "*". e.g.
+
+              ```swamp
+              mod some_module::*
+              ```
+
+          changed:
+            - |
+              `mod` allows for import items just as `use` does. e.g.
+
+              ```swamp
+              mod some_module::{something, Another}`
+              ```
+
+  v0.0.8:
+    date: "2024-12-30"
+    notice:
+    sections:
+      General:
+        changes:
+          fixed:
+            - Wrapping Option values for assignments when needed
+            - Do not wrap `none` with option
+            - Enum variant structs, `ResolvedEnumLiteralData::Struct`, handle fields in source code order
+
+          added:
+            - Keyword `use` reads and parses the specified files.
+            - Add `MutStructFieldRef` for location of mutable struct field reference
+
+          improved:
+            - More errors have `Span` information
+
+          refactor:
+            - Use `Rc<RefCell<T>>` for `Value` containers, to easier give out locations (MutRef).
+            - Pest errors should not leak through the codebase.
+            - Reference separate from Value to have a clear distinction between mutable references and normal values (and to avoid infinite accidental recursion).
+
+          test:
+            - Add more test to have better coverage for parser and analyzer
+
+          removed:
+            - Type aliases
+
+  v0.0.5:
+    date: "2024-12-06"
+    notice: |
+      - Array extends, push, remove and clear.
+      - Fixed bug where empty parameters caused return type to be `Unit`.
+      - Map assignment and map type.
+      - Optional operator in if statements and if-expressions.
+      - `none` keyword
+
+  v0.0.4:
+    date: "2024-12-03"
+    notice: |
+      - Add context to Interpreter
+      - Separate out external functions
+      - Split up resolve_definition and insert_definition
+
+  v0.0.3:
+    date: "2024-12-02"
+    notice: |
+      Static calls (`StructType::function(parameters)`), type alias (`type MyAlias = (Int, Float)`) and unification of external, internal and member functions.
