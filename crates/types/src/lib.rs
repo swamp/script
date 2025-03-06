@@ -9,6 +9,40 @@ use std::hash::Hash;
 use std::rc::Rc;
 use swamp_script_node::Node;
 
+
+#[derive(Clone, Eq, PartialEq)]
+pub enum Type {
+    // Primitives
+    Int,
+    Float,
+    String,
+    Bool,
+
+    Slice(Box<Type>),
+    SlicePair(Box<Type>, Box<Type>),
+
+    Unit,  // Empty or nothing
+    Never, // Not even empty since control flow has escaped with break or return.
+
+    // Containers
+    Vec(Box<Type>),
+    Tuple(Vec<Type>),
+    NamedStruct(NamedStructTypeRef),
+    AnonymousStruct(AnonymousStructType),
+    Map(Box<Type>, Box<Type>),
+
+    Enum(EnumTypeRef),
+
+    Function(Signature),
+    Iterable(Box<Type>),
+
+    Optional(Box<Type>),
+
+    Generic(Box<Type>, Vec<Type>),
+    External(ExternalTypeRef),
+}
+
+
 pub type NamedStructTypeRef = Rc<RefCell<NamedStructType>>;
 
 #[derive(Clone, Eq, PartialEq)]
@@ -106,38 +140,6 @@ impl Signature {
     }
 }
 
-#[derive(Clone, Eq, PartialEq)]
-pub enum Type {
-    // Primitives
-    Int,
-    Float,
-    String,
-    Bool,
-
-    Slice(Box<Type>),
-    SlicePair(Box<Type>, Box<Type>),
-
-    Unit,  // Empty or nothing
-    Never, // Not even empty since control flow has escaped with break or return.
-
-    // Containers
-    Vec(Box<Type>),
-    Tuple(Vec<Type>),
-    NamedStruct(NamedStructTypeRef),
-    AnonymousStruct(AnonymousStructType),
-    Map(Box<Type>, Box<Type>),
-
-    Enum(EnumTypeRef),
-
-    Function(Signature),
-    Iterable(Box<Type>),
-
-    Optional(Box<Type>),
-
-    Generic(Box<Type>, Vec<Type>),
-    External(ExternalTypeRef),
-}
-
 impl Type {
     #[must_use]
     pub const fn is_concrete(&self) -> bool {
@@ -218,16 +220,6 @@ impl Display for Type {
 }
 
 impl Type {
-    /*
-    pub fn expect_struct_type(&self) -> Result<NamedStructTypeRef, SemanticError> {
-        match self {
-            Type::NamedStruct(struct_type_ref) => Ok(struct_type_ref.clone()),
-            _ => Err(SemanticError::ResolveNotStruct),
-        }
-    }
-
-     */
-
     pub fn assignable_type(&self, other: &Type) -> bool {
         if self.compatible_with(other) {
             true
@@ -239,7 +231,7 @@ impl Type {
     }
 
     #[must_use]
-    pub fn compatible_with(&self, other: &Type) -> bool {
+    pub fn compatible_with(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Function(a), Self::Function(b)) => a.same_type(b),
             (_, Self::Never) => true,
@@ -264,7 +256,6 @@ impl Type {
             }
             (Self::Enum(_), Self::Enum(_)) => true,
             (Self::Iterable(a), Self::Iterable(b)) => a.compatible_with(b),
-            //(Self::EnumVariant(a), Self::EnumVariant(b)) => a.owner.number == b.owner.number,
             (Self::Optional(inner_type_a), Self::Optional(inner_type_b)) => {
                 inner_type_a.compatible_with(inner_type_b)
             }
@@ -296,6 +287,11 @@ impl Type {
 fn compare_struct_types(a: &NamedStructTypeRef, b: &NamedStructTypeRef) -> bool {
     let a_borrow = a.borrow();
     let b_borrow = b.borrow();
+    
+    if a_borrow.type_id != b.borrow().type_id {
+        return false;
+    }
+    
     if a_borrow.assigned_name != b_borrow.assigned_name {
         return false;
     }

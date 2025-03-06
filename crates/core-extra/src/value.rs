@@ -780,7 +780,7 @@ impl Display for Value {
             Self::EnumVariantTuple(enum_name, fields_in_order) => {
                 write!(
                     f,
-                    "{}::{}",
+                    "{}::{}(",
                     enum_name.common.owner.borrow().assigned_name,
                     enum_name.common.assigned_name,
                 )?;
@@ -791,6 +791,8 @@ impl Display for Value {
                     }
                     write!(f, "{}", field.borrow())?;
                 }
+
+                write!(f, ")")?;
 
                 Ok(())
             }
@@ -805,16 +807,19 @@ impl Display for Value {
 
                 write!(
                     f,
-                    "{}::{}",
+                    "{}::{}{{",
                     struct_variant.common.owner.borrow().assigned_name,
                     struct_variant.common.assigned_name,
                 )?;
 
-                for (field_name, value) in &decorated_values {
+                for (index, (field_name, value)) in decorated_values.iter().enumerate() {
+                    if index > 0 {
+                        write!(f, ", ")?;
+                    }
                     write!(f, "{field_name}: {}", value.borrow())?;
                 }
 
-                write!(f, " }}")?;
+                write!(f, "}}")?;
                 Ok(())
             }
             Self::EnumVariantSimple(enum_variant_type_ref) => {
@@ -835,7 +840,7 @@ impl Display for Value {
                     "none"
                 };
                 write!(f, "Option({inner_str})")
-            } // TODO: Fix this. It is recursing now
+            }
         }
     }
 }
