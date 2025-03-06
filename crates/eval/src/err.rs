@@ -4,7 +4,8 @@
  */
 
 use swamp_script_core_extra::value::ValueError;
-use swamp_script_semantic::{ExternalFunctionId, Node};
+use swamp_script_node::Node;
+use swamp_script_semantic::ExternalFunctionId;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ConversionError {

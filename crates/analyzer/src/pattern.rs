@@ -5,9 +5,8 @@
 
 use crate::Analyzer;
 use crate::err::{Error, ErrorKind};
-use swamp_script_semantic::{
-    EnumVariantType, EnumVariantTypeRef, NormalPattern, Pattern, PatternElement, Type,
-};
+use swamp_script_semantic::{NormalPattern, Pattern, PatternElement};
+use swamp_script_types::prelude::*;
 use tracing::info;
 
 impl Analyzer<'_> {

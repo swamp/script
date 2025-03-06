@@ -6,12 +6,13 @@ use crate::err::{Error, ErrorKind};
 use crate::{Analyzer, TypeContext};
 use seq_map::SeqMap;
 use seq_set::SeqSet;
+use swamp_script_node::{Node, Span};
 use swamp_script_semantic::{
-    AnonymousStructLiteral, AnonymousStructType, ArgumentExpressionOrLocation, Expression,
-    ExpressionKind, FunctionRef, LocationAccess, LocationAccessKind, MutOrImmutableExpression,
-    NamedStructTypeRef, Node, SingleLocationExpression, SingleLocationExpressionKind,
-    SingleMutLocationExpression, StructInstantiation, StructTypeField, Type,
+    AnonymousStructLiteral, ArgumentExpressionOrLocation, Expression, ExpressionKind, FunctionRef,
+    LocationAccess, LocationAccessKind, MutOrImmutableExpression, SingleLocationExpression,
+    SingleLocationExpressionKind, SingleMutLocationExpression, StructInstantiation,
 };
+use swamp_script_types::prelude::*;
 
 impl Analyzer<'_> {
     fn analyze_struct_init_calling_default(

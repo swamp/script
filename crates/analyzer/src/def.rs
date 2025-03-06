@@ -8,12 +8,10 @@ use crate::err::{Error, ErrorKind};
 use seq_map::SeqMap;
 use std::rc::Rc;
 use swamp_script_semantic::{
-    AliasType, AliasTypeRef, AnonymousStructType, EnumType, EnumTypeRef, EnumVariantCommon,
-    EnumVariantSimpleType, EnumVariantSimpleTypeRef, EnumVariantStructType, EnumVariantTupleType,
-    EnumVariantType, ExternalFunctionDefinition, Function, InternalFunctionDefinition,
-    LocalIdentifier, LocalTypeIdentifier, NamedStructType, ParameterNode, Signature,
-    StructTypeField, Type, TypeForParameter, UseItem,
+    ExternalFunctionDefinition, Function, InternalFunctionDefinition, LocalIdentifier, UseItem,
 };
+
+use swamp_script_types::prelude::*;
 
 impl Analyzer<'_> {
     fn general_import(
@@ -148,7 +146,7 @@ impl Analyzer<'_> {
         let parent_number = self.shared.state.allocate_number();
 
         let enum_parent = EnumType {
-            name: LocalTypeIdentifier(self.to_node(&enum_type_name.0)),
+            name: self.to_node(&enum_type_name.0),
             assigned_name: self.get_text(&enum_type_name.0).to_string(),
             module_path: vec![],
             type_id: parent_number,
@@ -175,7 +173,7 @@ impl Analyzer<'_> {
             let number = self.shared.state.allocate_number();
 
             let common = EnumVariantCommon {
-                name: LocalTypeIdentifier(self.to_node(variant_name_node)),
+                name: self.to_node(variant_name_node),
                 number,
                 assigned_name: self.get_text(variant_name_node).to_string(),
                 container_index: container_index_usize as u8,

@@ -11,7 +11,7 @@ use sparse_slot::{Id, SparseSlot};
 use std::cell::RefCell;
 use std::fmt::{Debug, Display, Formatter};
 use std::rc::Rc;
-use swamp_script_semantic::{ExternalTypeRef, Type};
+use swamp_script_types::{ExternalTypeRef, Type};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct SparseValueId(pub Id);

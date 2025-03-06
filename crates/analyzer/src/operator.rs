@@ -5,9 +5,8 @@
 
 use crate::err::{Error, ErrorKind};
 use crate::{Analyzer, TypeContext};
-use swamp_script_semantic::{
-    BinaryOperator, BinaryOperatorKind, Type, UnaryOperator, UnaryOperatorKind,
-};
+use swamp_script_semantic::{BinaryOperator, BinaryOperatorKind, UnaryOperator, UnaryOperatorKind};
+use swamp_script_types::prelude::*;
 use tracing::debug;
 
 impl Analyzer<'_> {

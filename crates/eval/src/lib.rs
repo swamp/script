@@ -15,14 +15,18 @@ use swamp_script_core_extra::value::ValueRef;
 use swamp_script_core_extra::value::{
     SourceMapLookup, Value, convert_vec_to_rc_refcell, format_value, to_rust_value,
 };
+use swamp_script_node::Node;
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{ArgumentExpressionOrLocation, LocationAccess, LocationAccessKind};
 use swamp_script_semantic::{
     BinaryOperatorKind, CompoundOperatorKind, ConstantId, ForPattern, Function,
     MutOrImmutableExpression, NormalPattern, PatternElement, PostfixKind, SingleLocationExpression,
-    SingleLocationExpressionKind, UnaryOperatorKind, same_anon_struct_ref,
+    SingleLocationExpressionKind, UnaryOperatorKind,
 };
-use swamp_script_semantic::{Postfix, SingleMutLocationExpression, compatible_arrays};
+use swamp_script_semantic::{ExternalFunctionId, Postfix, SingleMutLocationExpression};
+use swamp_script_types::{
+    EnumVariantType, EnumVariantTypeRef, TypeForParameter, same_anon_struct_ref,
+};
 use tracing::{error, info};
 
 pub mod err;

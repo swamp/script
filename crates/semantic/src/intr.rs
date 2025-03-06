@@ -1,6 +1,6 @@
-use crate::Signature;
 use std::fmt;
 use std::rc::Rc;
+use swamp_script_types::prelude::*;
 
 #[derive(Debug, Hash, Clone)]
 pub enum IntrinsicFunction {

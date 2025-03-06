@@ -5,11 +5,12 @@
 use crate::err::{Error, ErrorKind};
 use crate::{Analyzer, BlockScopeMode};
 use std::rc::Rc;
+use swamp_script_node::{Node, Span};
 use swamp_script_semantic::{
-    Expression, ExpressionKind, MutOrImmutableExpression, Node, Type, Variable, VariableRef,
+    Expression, ExpressionKind, MutOrImmutableExpression, Variable, VariableRef,
 };
+use swamp_script_types::prelude::*;
 use tracing::error;
-
 impl Analyzer<'_> {
     fn try_find_local_variable(&self, node: &Node) -> Option<&VariableRef> {
         let current_scope = self

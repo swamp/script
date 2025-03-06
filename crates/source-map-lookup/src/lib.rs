@@ -1,5 +1,5 @@
 use swamp_script_core_extra::prelude::SourceMapLookup;
-use swamp_script_semantic::{Node, Span};
+use swamp_script_node::{Node, Span};
 use swamp_script_source_map::SourceMap;
 
 #[derive(Debug)]

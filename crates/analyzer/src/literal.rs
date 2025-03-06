@@ -5,9 +5,9 @@
 use crate::err::{Error, ErrorKind};
 use crate::{Analyzer, TypeContext};
 use std::rc::Rc;
-use swamp_script_semantic::{
-    EnumLiteralData, EnumVariantType, Expression, Fp, Literal, Node, Type,
-};
+use swamp_script_node::Node;
+use swamp_script_semantic::{EnumLiteralData, Expression, Fp, Literal};
+use swamp_script_types::prelude::*;
 use tracing::error;
 
 impl Analyzer<'_> {

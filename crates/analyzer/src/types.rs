@@ -5,7 +5,7 @@
 
 use crate::Analyzer;
 use crate::err::Error;
-use swamp_script_semantic::{Signature, Type, TypeForParameter};
+use swamp_script_types::{Signature, Type, TypeForParameter};
 
 impl Analyzer<'_> {
     /// # Errors

@@ -13,8 +13,8 @@ use swamp_script_dep_loader::{DepLoaderError, DependencyError, ParseRootError, P
 use swamp_script_eval::err::ExecuteErrorKind;
 use swamp_script_eval::prelude::ExecuteError;
 use swamp_script_eval_loader::EvalLoaderError;
+use swamp_script_node::Span;
 use swamp_script_parser::SpecificError;
-use swamp_script_semantic::Span;
 use swamp_script_source_map::{FileId, SourceMap};
 
 pub struct SourceLinesWrap<'a> {

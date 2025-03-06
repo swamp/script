@@ -20,6 +20,7 @@ use seq_map::SeqMap;
 use std::mem::take;
 use std::num::{ParseFloatError, ParseIntError};
 use std::rc::Rc;
+use swamp_script_node::{FileId, Node, Span};
 use swamp_script_semantic::modules::ModuleRef;
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::symtbl::{FuncDef, Symbol, SymbolTable, SymbolTableRef};
@@ -27,9 +28,10 @@ use swamp_script_semantic::{
     AnonymousStructLiteral, ArgumentExpressionOrLocation, LocationAccess, LocationAccessKind,
     MutOrImmutableExpression, NormalPattern, Postfix, PostfixKind, RangeMode,
     SingleLocationExpression, SingleLocationExpressionKind, SingleMutLocationExpression,
-    TypeWithMut, WhenBinding, check_assignable_anonymous_struct_types, same_anon_struct_ref,
+    TypeWithMut, WhenBinding,
 };
 use swamp_script_source_map::SourceMap;
+use swamp_script_types::prelude::*;
 use tracing::error;
 use tracing::info;
 

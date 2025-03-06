@@ -5,9 +5,10 @@
 
 use crate::err::{Error, ErrorKind};
 use crate::{Analyzer, SPARSE_TYPE_ID, TypeContext};
+use swamp_script_semantic::Expression;
 use swamp_script_semantic::prelude::IntrinsicFunction;
-use swamp_script_semantic::{Expression, Type};
 use swamp_script_semantic::{Postfix, PostfixKind};
+use swamp_script_types::prelude::*;
 
 impl Analyzer<'_> {
     pub(crate) fn check_for_internal_member_call(

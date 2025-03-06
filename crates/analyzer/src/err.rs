@@ -5,9 +5,9 @@
 
 use seq_map::SeqMapError;
 use std::num::{ParseFloatError, ParseIntError};
-use swamp_script_semantic::{
-    AnonymousStructType, EnumVariantTypeRef, NamedStructTypeRef, Node, SemanticError, Span, Type,
-};
+use swamp_script_node::{Node, Span};
+use swamp_script_semantic::SemanticError;
+use swamp_script_types::prelude::*;
 
 #[derive(Debug)]
 pub struct Error {

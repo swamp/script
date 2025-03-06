@@ -9,6 +9,8 @@ description = "core parts for swamp evaluator"
 
 [dependencies]
 swamp-script-semantic = { path = "../semantic", version = "0.0.18" }
+swamp-script-types = { path = "../types", version = "0.0.18"}
+swamp-script-node = { path = "../node", version = "0.0.18"}
 fixed32 = "0.0.17"
 seq-map = "0.0.13"
 sparse-slot =  { version = "0.0.4"}

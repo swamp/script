@@ -8,3 +8,4 @@ description = "standard library for swamp"
 
 [dependencies]
 swamp-script-semantic = { path = "../semantic", version = "0.0.18" }
+swamp-script-types = { path = "../types", version = "0.0.18"}

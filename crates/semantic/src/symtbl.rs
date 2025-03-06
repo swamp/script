@@ -7,13 +7,14 @@ use crate::modules::ModuleRef;
 use crate::{
     AliasType, AliasTypeRef, AnonymousStructType, Constant, ConstantRef, EnumType, EnumTypeRef,
     EnumVariantType, EnumVariantTypeRef, ExternalFunctionDefinition, ExternalFunctionDefinitionRef,
-    ExternalType, ExternalTypeRef, InternalFunctionDefinition, InternalFunctionDefinitionRef,
-    NamedStructType, NamedStructTypeRef, Node, SemanticError, StructTypeField, Type, TypeNumber,
+    InternalFunctionDefinition, InternalFunctionDefinitionRef, NamedStructType, Node,
+    SemanticError, StructTypeField, Type, TypeNumber,
 };
 use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::fmt::Debug;
 use std::rc::Rc;
+use swamp_script_types::prelude::*;
 use tiny_ver::TinyVersion;
 
 #[derive(Debug, Clone)]

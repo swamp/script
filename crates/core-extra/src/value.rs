@@ -11,12 +11,12 @@ use std::cell::RefCell;
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
 use std::rc::Rc;
+use swamp_script_node::{Node, Span};
 use swamp_script_semantic::{
-    AnonymousStructType, EnumVariantSimpleTypeRef, EnumVariantStructTypeRef,
-    EnumVariantTupleTypeRef, ExternalFunctionDefinitionRef, ExternalTypeRef, FormatSpecifierKind,
-    InternalFunctionDefinitionRef, NamedStructTypeRef, Node, PrecisionType, RangeMode, Span, Type,
-    TypeNumber,
+    ExternalFunctionDefinitionRef, FormatSpecifierKind, InternalFunctionDefinitionRef,
+    PrecisionType, RangeMode,
 };
+use swamp_script_types::prelude::*;
 
 pub type ValueRef = Rc<RefCell<Value>>;
 

@@ -9,7 +9,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use swamp_script_core_extra::prelude::Value;
 use swamp_script_core_extra::value::ValueRef;
-use swamp_script_semantic::{Node, VariableRef};
+use swamp_script_node::Node;
+use swamp_script_semantic::VariableRef;
 
 #[derive(Debug, Clone)]
 pub struct BlockScope {
