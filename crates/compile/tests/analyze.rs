@@ -1401,7 +1401,8 @@ Unit,VariableDefinition(Variable { name: <5:1>, resolved_type: "Sparse"?<[Int]>,
 "#,
     );
 }
-*/
+
+
 #[test_log::test]
 fn blueprint_add() {
     check(
@@ -1410,9 +1411,28 @@ fn blueprint_add() {
     }
     ",
         r#"
-Namespace { path: ["test"], symbol_table: SymbolTable { symbols: SeqMap() } }
-Unit,VariableDefinition(Variable { name: <5:1>, resolved_type: "Sparse"?<[Int]>, mutable_node: None, scope_index: 0, variable_index: 0 }, MutOrImmutableExpression { expression_or_location: Expression(<9:6>RustType Sparse<Int>,IntrinsicCallGeneric(SparseNew, [Int], [])), is_mutable: None })
+Namespace { path: ["test"], symbol_table: SymbolTable { symbols: SeqMap("JustTest": Blueprint(ParameterizedTypeBlueprint { kind: Struct(struct "JustTest"), type_variables: ["T"] })) } }
+"#,
+    );
+}
 
+*/
+#[test_log::test]
+fn blueprint_add_with_field() {
+    check(
+        "
+    struct JustTest<T> {
+        some_field: T,
+    }
+
+    impl JustTest<T> {
+        external fn new() -> T
+    }
+
+    a = JustTest<Int>::new()
+    ",
+        r#"
+Namespace { path: ["test"], symbol_table: SymbolTable { symbols: SeqMap("JustTest": Blueprint(ParameterizedTypeBlueprint { kind: Struct(struct JustTest anon: some_field: Some(<34:10>):<|T|>), type_variables: ["T"] })) } }
 "#,
     );
 }

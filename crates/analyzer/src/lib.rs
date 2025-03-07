@@ -34,8 +34,8 @@ use swamp_script_semantic::{
     SingleLocationExpressionKind, SingleMutLocationExpression, TypeWithMut, WhenBinding,
 };
 use swamp_script_source_map::SourceMap;
-use swamp_script_types::prelude::*;
 use swamp_script_types::ParameterizedTypeBlueprint;
+use swamp_script_types::prelude::*;
 use tracing::error;
 use tracing::info;
 
@@ -328,6 +328,7 @@ pub struct SharedState<'a> {
     pub source_map: &'a SourceMap,
     pub file_id: FileId,
     pub core_symbol_table: SymbolTableRef,
+    type_variables: Option<TypeVariableScope>,
 }
 
 impl<'a> SharedState<'a> {
@@ -412,6 +413,7 @@ impl<'a> Analyzer<'a> {
             core_symbol_table,
             source_map,
             file_id,
+            type_variables: None,
         };
         Self {
             scope: FunctionScopeState::new(Type::Unit),
@@ -897,6 +899,15 @@ impl<'a> Analyzer<'a> {
         type_name_to_find: &swamp_script_ast::QualifiedTypeIdentifier,
     ) -> Result<Type, Error> {
         let (path, name) = self.get_path(type_name_to_find);
+
+        if path.is_empty() {
+            // Check if it is a type variable first!
+            if let Some(found_scope) = &self.shared.type_variables {
+                if let Some(found_type) = found_scope.type_variables.get(&name) {
+                    return Ok(found_type.clone());
+                }
+            }
+        }
 
         let symbol = {
             let maybe_symbol_table = self.shared.get_symbol_table(&path);

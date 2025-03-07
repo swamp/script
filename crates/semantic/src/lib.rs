@@ -5,8 +5,8 @@
 pub mod intr;
 pub mod prelude;
 
-use crate::prelude::IntrinsicFunctionDefinitionRef;
 use crate::intr::IntrinsicFunction;
+use crate::prelude::IntrinsicFunctionDefinitionRef;
 pub use fixed32::Fp;
 use seq_map::SeqMap;
 use std::cmp::PartialEq;
@@ -101,12 +101,6 @@ impl Debug for ExternalFunctionDefinition {
 }
 
 pub type ExternalFunctionDefinitionRef = Rc<crate::ExternalFunctionDefinition>;
-
-
-
-
-
-
 
 #[derive(Debug)]
 pub struct Variable {
@@ -418,7 +412,7 @@ pub enum PostfixKind {
     StringRangeIndex(Range),
     MapIndex(Type, Type, Expression),
     SparseIndex(Type, Expression),
-//    ExternalTypeIndexRef(ExternalTypeRef, Expression),
+    //    ExternalTypeIndexRef(ExternalTypeRef, Expression),
     MemberCall(FunctionRef, Vec<ArgumentExpressionOrLocation>),
     FunctionCall(Vec<ArgumentExpressionOrLocation>),
     OptionUnwrap, // ? operator

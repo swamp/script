@@ -11,9 +11,9 @@ use std::rc::Rc;
 use swamp_script_node::Node;
 //use swamp_script_semantic::{ConstantRef, ExternalFunctionDefinitionRef, InternalFunctionDefinitionRef};
 use swamp_script_semantic::prelude::*;
+use swamp_script_types::ParameterizedTypeBlueprint;
 use swamp_script_types::prelude::*;
 use tiny_ver::TinyVersion;
-use swamp_script_types::ParameterizedTypeBlueprint;
 
 #[derive(Debug, Clone)]
 pub enum FuncDef {
@@ -199,6 +199,30 @@ impl SymbolTable {
             .insert(name.clone(), Symbol::Alias(alias_type_ref.clone()))
             .map_err(|_| SemanticError::DuplicateStructName(name))?;
 
+        Ok(())
+    }
+
+    /// # Errors
+    ///
+    pub fn add_blueprint(
+        &mut self,
+        blueprint: ParameterizedTypeBlueprint,
+    ) -> Result<ParameterizedTypeBlueprint, SemanticError> {
+        //let struct_ref = Rc::new(blueprint);
+        self.add_blueprint_link(blueprint.clone())?;
+        Ok(blueprint)
+    }
+
+    /// # Errors
+    ///
+    pub fn add_blueprint_link(
+        &mut self,
+        blueprint_ref: ParameterizedTypeBlueprint,
+    ) -> Result<(), SemanticError> {
+        let name = blueprint_ref.name().clone();
+        self.symbols
+            .insert(name.clone(), Symbol::Blueprint(blueprint_ref))
+            .map_err(|_| SemanticError::DuplicateStructName(name))?;
         Ok(())
     }
 

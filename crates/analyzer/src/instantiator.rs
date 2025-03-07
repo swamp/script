@@ -1,9 +1,9 @@
+use crate::err::ErrorKind;
+use crate::prelude::Error;
 use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::rc::Rc;
 use swamp_script_semantic::SemanticError;
-use crate::err::ErrorKind;
-use crate::prelude::Error;
 use swamp_script_types::{
     AnonymousStructType, NamedStructType, ParameterizedTypeBlueprint, ParameterizedTypeKind,
     StructTypeField, Type,

@@ -45,7 +45,7 @@ pub struct Module {
 impl Debug for Module {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         writeln!(f, " {:?}", self.namespace)?;
-        
+
         if let Some(resolved_expression) = &self.expression {
             pretty_print(f, resolved_expression, 0)?;
         }

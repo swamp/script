@@ -5,8 +5,8 @@
 
 use crate::err::{Error, ErrorKind};
 use crate::{Analyzer, TypeContext};
-use swamp_script_semantic::prelude::IntrinsicFunction;
 use swamp_script_semantic::Expression;
+use swamp_script_semantic::prelude::IntrinsicFunction;
 use swamp_script_semantic::{Postfix, PostfixKind};
 use swamp_script_types::prelude::*;
 

@@ -7,7 +7,7 @@ use std::path::Path;
 use swamp_script_analyzer::{Analyzer, TypeContext};
 use swamp_script_compile::bootstrap_modules;
 use swamp_script_dep_loader::swamp_registry_path;
-use swamp_script_error_report::{show_script_resolve_error, ScriptResolveError};
+use swamp_script_error_report::{ScriptResolveError, show_script_resolve_error};
 use swamp_script_modules::prelude::{Module, Modules, Namespace};
 use swamp_script_parser::AstParser;
 use swamp_script_source_map::SourceMap;

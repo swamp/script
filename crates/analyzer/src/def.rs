@@ -5,13 +5,15 @@
 
 use crate::Analyzer;
 use crate::err::{Error, ErrorKind};
+use crate::instantiator::TypeVariableScope;
 use seq_map::SeqMap;
 use std::rc::Rc;
+use swamp_script_ast::QualifiedTypeIdentifier;
 use swamp_script_semantic::{
     ExternalFunctionDefinition, Function, InternalFunctionDefinition, LocalIdentifier, UseItem,
 };
-
 use swamp_script_types::prelude::*;
+use swamp_script_types::{ParameterizedTypeBlueprint, ParameterizedTypeKind};
 
 impl Analyzer<'_> {
     fn general_import(
@@ -138,7 +140,7 @@ impl Analyzer<'_> {
 
     fn analyze_enum_type_definition(
         &mut self,
-        enum_type_name: &swamp_script_ast::LocalTypeIdentifier,
+        enum_type_name: &swamp_script_ast::LocalTypeIdentifierWithOptionalTypeVariables,
         ast_variants: &[swamp_script_ast::EnumVariantType],
     ) -> Result<EnumTypeRef, Error> {
         let mut resolved_variants = SeqMap::new();
@@ -146,8 +148,8 @@ impl Analyzer<'_> {
         let parent_number = self.shared.state.allocate_number();
 
         let enum_parent = EnumType {
-            name: self.to_node(&enum_type_name.0),
-            assigned_name: self.get_text(&enum_type_name.0).to_string(),
+            name: self.to_node(&enum_type_name.name),
+            assigned_name: self.get_text(&enum_type_name.name).to_string(),
             module_path: vec![],
             type_id: parent_number,
             variants: SeqMap::default(),
@@ -157,11 +159,11 @@ impl Analyzer<'_> {
             .shared
             .definition_table
             .add_enum_type(enum_parent)
-            .map_err(|err| self.create_err(ErrorKind::SemanticError(err), &enum_type_name.0))?;
+            .map_err(|err| self.create_err(ErrorKind::SemanticError(err), &enum_type_name.name))?;
         self.shared
             .lookup_table
             .add_enum_type_link(parent_ref.clone())
-            .map_err(|err| self.create_err(ErrorKind::SemanticError(err), &enum_type_name.0))?;
+            .map_err(|err| self.create_err(ErrorKind::SemanticError(err), &enum_type_name.name))?;
 
         for (container_index_usize, ast_variant_type) in ast_variants.iter().enumerate() {
             let variant_name_node = match ast_variant_type {
@@ -323,13 +325,51 @@ impl Analyzer<'_> {
         Ok(resolved_fields)
     }
 
+    pub fn convert_to_type_variables(
+        &mut self,
+        ast_type_variables: &[swamp_script_ast::TypeVariable],
+    ) -> Vec<String> {
+        let mut types = Vec::new();
+        for ast_type_variable in ast_type_variables {
+            let name = self.get_text(&ast_type_variable.0).to_string();
+            types.push(name);
+        }
+        types
+    }
+
+    /// # Panics
+    ///
+    pub fn set_type_variables_to_extra_symbol_table(&mut self, type_variables: &[String]) {
+        let mut types = SeqMap::new();
+        for type_variable in type_variables {
+            types
+                .insert(
+                    type_variable.to_string(),
+                    Type::Variable(type_variable.clone()),
+                )
+                .unwrap();
+        }
+
+        let type_variables = TypeVariableScope::new(types);
+
+        self.shared.type_variables = Some(type_variables);
+    }
+
     /// # Errors
     ///
     pub fn analyze_named_struct_type_definition(
         &mut self,
         ast_struct_def: &swamp_script_ast::NamedStructDef,
     ) -> Result<(), Error> {
-        let struct_name_str = self.get_text(&ast_struct_def.identifier.0).to_string();
+        let has_type_variables = !ast_struct_def.identifier.type_variables.is_empty();
+
+        let type_variables =
+            self.convert_to_type_variables(&ast_struct_def.identifier.type_variables);
+        if has_type_variables {
+            self.set_type_variables_to_extra_symbol_table(&type_variables);
+        }
+
+        let struct_name_str = self.get_text(&ast_struct_def.identifier.name).to_string();
 
         let fields =
             self.analyze_anonymous_struct_type_fields(&ast_struct_def.struct_type.fields)?;
@@ -337,25 +377,63 @@ impl Analyzer<'_> {
         let analyzed_anonymous_struct = AnonymousStructType::new(fields); // the order encountered in source should be kept
 
         let named_struct_type = NamedStructType {
-            name: self.to_node(&ast_struct_def.identifier.0),
+            name: self.to_node(&ast_struct_def.identifier.name),
             anon_struct_type: analyzed_anonymous_struct,
             assigned_name: struct_name_str,
             type_id: self.shared.state.allocate_number(),
         };
+
+        if has_type_variables {
+            // It is a blueprint! Store it in the definition
+
+            self.shared.type_variables = None;
+
+            let blueprint_ref = self
+                .shared
+                .definition_table
+                .add_blueprint(ParameterizedTypeBlueprint {
+                    kind: ParameterizedTypeKind::Struct(named_struct_type),
+                    type_variables,
+                })
+                .map_err(|err| {
+                    self.create_err(
+                        ErrorKind::SemanticError(err),
+                        &ast_struct_def.identifier.name,
+                    )
+                })?;
+
+            self.shared
+                .lookup_table
+                .add_blueprint_link(blueprint_ref)
+                .map_err(|err| {
+                    self.create_err(
+                        ErrorKind::SemanticError(err),
+                        &ast_struct_def.identifier.name,
+                    )
+                })?;
+
+            return Ok(());
+        }
 
         let struct_ref = self
             .shared
             .definition_table
             .add_struct(named_struct_type)
             .map_err(|err| {
-                self.create_err(ErrorKind::SemanticError(err), &ast_struct_def.identifier.0)
+                self.create_err(
+                    ErrorKind::SemanticError(err),
+                    &ast_struct_def.identifier.name,
+                )
             })?;
 
         self.shared
             .lookup_table
             .add_struct_link(struct_ref)
             .map_err(|err| {
-                self.create_err(ErrorKind::SemanticError(err), &ast_struct_def.identifier.0)
+                self.create_err(
+                    ErrorKind::SemanticError(err),
+                    &ast_struct_def.identifier.name,
+                )
             })?;
 
         Ok(())
@@ -479,10 +557,7 @@ impl Analyzer<'_> {
                 self.analyze_alias_type_definition(alias_def)?;
             }
             swamp_script_ast::Definition::EnumDef(identifier, variants) => {
-                self.analyze_enum_type_definition(
-                    &swamp_script_ast::LocalTypeIdentifier(identifier.clone()),
-                    variants,
-                )?;
+                self.analyze_enum_type_definition(&identifier, variants)?;
             }
             swamp_script_ast::Definition::FunctionDef(function) => {
                 let resolved_return_type = self.analyze_return_type(function)?;
@@ -505,18 +580,43 @@ impl Analyzer<'_> {
 
     fn analyze_impl_definition(
         &mut self,
-        named_type_node: &swamp_script_ast::Node,
+        attached_to_type: &swamp_script_ast::LocalTypeIdentifierWithOptionalTypeVariables,
         functions: &[swamp_script_ast::Function],
     ) -> Result<(), Error> {
+        let converted_type_variables_to_ast_types = attached_to_type
+            .type_variables
+            .iter()
+            .map(|x| {
+                swamp_script_ast::Type::Named(QualifiedTypeIdentifier {
+                    name: swamp_script_ast::LocalTypeIdentifier(x.0.clone()),
+                    module_path: None,
+                    generic_params: vec![],
+                })
+            })
+            .collect();
+
         let qualified = swamp_script_ast::QualifiedTypeIdentifier {
-            name: swamp_script_ast::LocalTypeIdentifier(named_type_node.clone()),
+            name: swamp_script_ast::LocalTypeIdentifier(attached_to_type.name.clone()),
             module_path: None,
-            generic_params: vec![],
+            generic_params: converted_type_variables_to_ast_types,
         };
 
+        let is_parameterized = !attached_to_type.type_variables.is_empty();
+
+        if is_parameterized {
+            let type_variables = self.convert_to_type_variables(&attached_to_type.type_variables);
+            self.set_type_variables_to_extra_symbol_table(&type_variables);
+        }
+
         let type_to_attach_to = self.analyze_named_type(&qualified)?;
+
         let function_refs: Vec<&swamp_script_ast::Function> = functions.iter().collect();
+
         self.analyze_impl_functions(&type_to_attach_to, &function_refs)?;
+
+        if is_parameterized {
+            self.shared.type_variables = None;
+        }
 
         Ok(())
     }

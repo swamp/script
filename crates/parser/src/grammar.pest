@@ -237,17 +237,20 @@ trait_def = {
     "trait" ~ type_identifier ~ "{" ~ impl_item* ~ "}"
 }
 
+type_identifier_optional_type_params = { type_identifier ~ generic_type_params? }
+generic_type_params  = { "<" ~ type_identifier ~ (COMMA ~ type_identifier)* ~ ">" }
+
 impl_def = {
-    "impl" ~ type_identifier ~ "{" ~ (impl_item)* ~ "}"
+    "impl" ~ type_identifier_optional_type_params ~ "{" ~ (impl_item)* ~ "}"
 }
 
 impl_item = { normal_member_function | external_member_function }
 
-struct_def = { "struct" ~ type_identifier ~ struct_type? }
+struct_def = { "struct" ~ type_identifier_optional_type_params ~ struct_type? }
 
 type_def = { "type" ~ type_identifier ~ "=" ~ type_name }
 
-enum_def = { "enum" ~ type_identifier ~ "{" ~ enum_variants? ~ "}" }
+enum_def = { "enum" ~ type_identifier_optional_type_params ~ "{" ~ enum_variants? ~ "}" }
 
 enum_variants = { enum_variant ~ (COMMA ~ enum_variant)* ~ TRAILING_COMMA }
 

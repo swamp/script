@@ -6,7 +6,7 @@
 use eira::{Color, Kind, Pos, PosSpan, SourceLines};
 use std::fmt::Display;
 use std::io;
-use std::io::{stderr, Write};
+use std::io::{Write, stderr};
 use std::path::Path;
 use swamp_script_analyzer::err::ErrorKind;
 use swamp_script_analyzer::prelude::Error;

@@ -5,7 +5,7 @@
 use swamp_script_analyzer::prelude::{Error, Program};
 use swamp_script_analyzer::{Analyzer, AutoUseModules, TypeContext, TypeContextScope};
 use swamp_script_dep_loader::{
-    parse_local_modules_and_get_order, DependencyParser, ParsedAstModule,
+    DependencyParser, ParsedAstModule, parse_local_modules_and_get_order,
 };
 use swamp_script_modules::prelude::*;
 use swamp_script_semantic::{Expression, ProgramState, SemanticError};

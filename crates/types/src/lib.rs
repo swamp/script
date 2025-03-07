@@ -64,10 +64,33 @@ pub enum ParameterizedTypeKind {
     Enum(EnumTypeRef),
 }
 
+impl ParameterizedTypeKind {
+    pub(crate) fn same_type(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Struct(a), Self::Struct(b)) => a.type_id == b.type_id,
+            (Self::Enum(a), Self::Enum(b)) => a.borrow().type_id == b.borrow().type_id,
+            _ => false,
+        }
+    }
+
+    pub fn name(&self) -> String {
+        match self {
+            Self::Struct(struct_type_ref) => struct_type_ref.assigned_name.clone(),
+            Self::Enum(enum_type_ref) => enum_type_ref.borrow().assigned_name.clone(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ParameterizedTypeBlueprint {
     pub kind: ParameterizedTypeKind,
     pub type_variables: Vec<String>,
+}
+
+impl ParameterizedTypeBlueprint {
+    pub fn name(&self) -> String {
+        self.kind.name()
+    }
 }
 
 pub type NamedStructTypeRef = Rc<RefCell<NamedStructType>>;
@@ -251,8 +274,10 @@ impl Display for Type {
             Self::Iterable(generating_type) => write!(f, "Iterable<{generating_type}>"),
             Self::Optional(base_type) => write!(f, "{base_type}?"),
             Self::External(rust_type) => write!(f, "RustType {}", rust_type.type_name),
-            &Type::Variable(_) => todo!(),
-            &Type::Generic(_, _) => todo!(),
+            Self::Variable(variable_name) => write!(f, "<|{variable_name}|>"),
+            Self::Generic(blueprint, non_concrete_arguments) => {
+                write!(f, "{blueprint:?}<{non_concrete_arguments:?}>")
+            }
         }
     }
 }
@@ -631,7 +656,11 @@ pub struct NamedStructType {
 
 impl Debug for NamedStructType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "struct {:?}", self.assigned_name)
+        write!(
+            f,
+            "struct {} anon: {:?}",
+            self.assigned_name, self.anon_struct_type
+        )
     }
 }
 

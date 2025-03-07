@@ -27,7 +27,7 @@ impl ValueReference {
     pub(crate) fn into_iter_mut(self) -> Result<Box<dyn Iterator<Item = ValueRef>>, ValueError> {
         let mut inner = self.0.borrow_mut();
         let result = match &mut *inner {
-            Value::Sparse( _rust_type_ref, sparse_map) => {
+            Value::Sparse(_rust_type_ref, sparse_map) => {
                 let pairs: Vec<_> = sparse_map.iter_mut().map(|(_k, v)| v.clone()).collect();
 
                 Box::new(pairs.into_iter()) as Box<dyn Iterator<Item = ValueRef>>

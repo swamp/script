@@ -5,7 +5,7 @@
 
 use crate::idx_gen::IndexAllocator;
 use crate::qck_des::quick_deserialize;
-use crate::value::{to_rust_value, QuickDeserialize, Value};
+use crate::value::{QuickDeserialize, Value, to_rust_value};
 use crate::value::{QuickSerialize, ValueRef};
 use sparse_slot::{Id, SparseSlot};
 use std::cell::RefCell;

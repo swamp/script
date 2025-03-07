@@ -8,12 +8,12 @@ use std::io;
 use std::path::Path;
 use std::rc::Rc;
 use std::str::FromStr;
-use swamp_script_analyzer::prelude::{Error, Program};
 use swamp_script_analyzer::Analyzer;
+use swamp_script_analyzer::prelude::{Error, Program};
 use swamp_script_dep_loader::{
-    parse_local_modules_and_get_order, parse_single_module, DependencyParser, ParsedAstModule,
+    DependencyParser, ParsedAstModule, parse_local_modules_and_get_order, parse_single_module,
 };
-use swamp_script_error_report::{show_script_resolve_error, ScriptResolveError};
+use swamp_script_error_report::{ScriptResolveError, show_script_resolve_error};
 use swamp_script_eval_loader::analyze_modules_in_order;
 use swamp_script_modules::modules::Modules;
 use swamp_script_modules::symtbl::{SymbolTable, SymbolTableRef};

@@ -106,6 +106,15 @@ impl LocalTypeIdentifier {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, Hash, Default, Clone)]
+pub struct TypeVariable(pub Node);
+
+#[derive(Debug, PartialEq, Eq, Hash, Default, Clone)]
+pub struct LocalTypeIdentifierWithOptionalTypeVariables {
+    pub name: Node,
+    pub type_variables: Vec<TypeVariable>,
+}
+
 #[derive(PartialEq, Eq, Hash, Debug, Clone)]
 pub struct LocalIdentifier(pub Node);
 
@@ -196,7 +205,7 @@ pub struct ConstantInfo {
 
 #[derive(Debug, Clone)]
 pub struct NamedStructDef {
-    pub identifier: LocalTypeIdentifier,
+    pub identifier: LocalTypeIdentifierWithOptionalTypeVariables,
     pub struct_type: AnonymousStructType,
 }
 
@@ -204,9 +213,12 @@ pub struct NamedStructDef {
 pub enum Definition {
     AliasDef(AliasType),
     NamedStructDef(NamedStructDef),
-    EnumDef(Node, Vec<EnumVariantType>),
+    EnumDef(
+        LocalTypeIdentifierWithOptionalTypeVariables,
+        Vec<EnumVariantType>,
+    ),
     FunctionDef(Function),
-    ImplDef(Node, Vec<Function>),
+    ImplDef(LocalTypeIdentifierWithOptionalTypeVariables, Vec<Function>),
     Mod(Mod),
     Use(Use),
     // Other
@@ -342,7 +354,7 @@ pub struct MutableOrImmutableExpression {
     pub expression: Expression,
 }
 
-#[derive( Clone)]
+#[derive(Clone)]
 pub struct Expression {
     pub kind: ExpressionKind,
     pub node: Node,
