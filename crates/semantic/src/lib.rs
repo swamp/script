@@ -252,7 +252,7 @@ pub enum StringPart {
 
 pub type FunctionRef = Rc<Function>;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, Clone, PartialEq)]
 pub enum Function {
     Internal(InternalFunctionDefinitionRef),
     External(ExternalFunctionDefinitionRef),

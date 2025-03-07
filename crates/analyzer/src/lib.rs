@@ -15,6 +15,8 @@ pub mod prelude;
 mod structure;
 pub mod types;
 pub mod variable;
+mod instantiator;
+
 use crate::err::{Error, ErrorKind};
 use seq_map::SeqMap;
 use std::mem::take;
@@ -379,10 +381,16 @@ impl FunctionScopeState {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct TypeVariables {
+    pub variables: SeqMap<String, Type>,
+}
+
 pub struct Analyzer<'a> {
     pub shared: SharedState<'a>,
     scope: FunctionScopeState,
     global: FunctionScopeState,
+    type_variables: TypeVariables,
 }
 
 impl<'a> Analyzer<'a> {
@@ -897,37 +905,60 @@ impl<'a> Analyzer<'a> {
                 .clone()
         };
 
-        let mut analyzed_types = Vec::new();
+        let mut analyzed_type_parameters = Vec::new();
 
         for analyzed_type in &type_name_to_find.generic_params {
             let ty = self.analyze_type(analyzed_type)?;
 
-            analyzed_types.push(ty);
+            analyzed_type_parameters.push(ty);
         }
 
         let result_type = match symbol {
             Symbol::Type(base_type) => base_type,
 
             Symbol::Alias(alias_type) => alias_type.referenced_type.clone(),
+            Symbol::Blueprint(blueprint) => {
+                let stored_variables = self.type_variables.clone();
+
+                // Create a new analyzer context
+                for (type_parameter_name, concrete_type) in blueprint.type_parameter_names.iter().zip(analyzed_type_parameters) {
+                   self.type_variables.variables.insert(type_parameter_name.assigned_name.clone(), concrete_type).unwrap();
+                }
+
+                let concrete_fields = self.analyze_named_type()?;
+
+                let anonymous_struct_type = AnonymousStructType {
+                    field_name_sorted_fields: concrete_fields,
+                };
+
+                let concrete_struct_type  = NamedStructType {
+                    name: Node::default(),
+                    assigned_name: "concrete".to_string(),
+                    anon_struct_type: anonymous_struct_type,
+                    type_id: self.shared.state.allocate_number(),
+                };
+
+                Type::Int
+            }
             Symbol::TypeGenerator(generator) => {
-                if analyzed_types.len() != generator.arity {
+                if analyzed_type_parameters.len() != generator.arity {
                     return Err(self.create_err(
                         ErrorKind::WrongNumberOfTypeArguments(
                             generator.arity,
-                            analyzed_types.len(),
+                            analyzed_type_parameters.len(),
                         ),
                         &type_name_to_find.name.0,
                     ));
                 }
 
                 match generator.kind {
-                    GeneratorKind::Slice => Type::Slice(Box::from(analyzed_types[0].clone())),
+                    GeneratorKind::Slice => Type::Slice(Box::from(analyzed_type_parameters[0].clone())),
                     GeneratorKind::SlicePair => Type::SlicePair(
-                        Box::from(analyzed_types[0].clone()),
-                        Box::from(analyzed_types[1].clone()),
+                        Box::from(analyzed_type_parameters[0].clone()),
+                        Box::from(analyzed_type_parameters[1].clone()),
                     ),
                     GeneratorKind::Sparse => {
-                        let value_type = &analyzed_types[0];
+                        let value_type = &analyzed_type_parameters[0];
                         /*
                         let key_sparse_id_type = self
                             .shared
@@ -941,14 +972,14 @@ impl<'a> Analyzer<'a> {
                          */
 
                         let instantiated_sparse = Type::Sparse(Box::new(value_type.clone()));
-                        
-                        
-                        
+
+
+
                         instantiated_sparse
                     }
 
                     GeneratorKind::Vec => {
-                        let value_type = &analyzed_types[0];
+                        let value_type = &analyzed_type_parameters[0];
 
                         //let struct_type = self.generate_vec_struct(value_type);
 
@@ -956,15 +987,15 @@ impl<'a> Analyzer<'a> {
                     }
 
                     GeneratorKind::Map => {
-                        let key_type = &analyzed_types[0];
-                        let value_type = &analyzed_types[1];
+                        let key_type = &analyzed_type_parameters[0];
+                        let value_type = &analyzed_type_parameters[1];
 
                         //let struct_type = self.generate_map_struct(key_type, value_type);
 
                         Type::Map(Box::from(key_type.clone()), Box::from(value_type.clone()))
                     }
                     GeneratorKind::Grid => {
-                        let value_type = &analyzed_types[0];
+                        let value_type = &analyzed_type_parameters[0];
                         Type::Grid(Box::from(value_type.clone()))
                     }
                 }

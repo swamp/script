@@ -125,6 +125,8 @@ pub enum ErrorKind {
     ParameterIsNotMutable,
     CouldNotCoerceTo(Type),
     NoDefaultImplementedForType(Type),
+    UnknownTypeVariable,
+    WrongParameterCount(usize, usize),
 }
 
 impl From<SemanticError> for Error {

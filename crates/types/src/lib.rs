@@ -44,8 +44,17 @@ pub enum Type {
 
     Optional(Box<Type>),
 
-    //Generic(Box<Type>, Vec<Type>),
+    Generic(Box<Type>, Vec<Type>),
+    Variable(String),
+
     External(ExternalTypeRef),
+}
+
+
+#[derive(Debug)]
+pub enum ParameterizedTypeKind {
+    Struct(NamedStructType),
+    Enum(EnumTypeRef),
 }
 
 pub type NamedStructTypeRef = Rc<RefCell<NamedStructType>>;
@@ -200,6 +209,8 @@ impl Debug for Type {
             Self::Iterable(type_generated) => write!(f, "Iterable<{type_generated:?}>"),
             Self::Optional(base_type) => write!(f, "{base_type:?}?"),
             Self::External(rust_type) => write!(f, "{:?}?", rust_type.type_name),
+            &Type::Variable(_) => todo!(),
+            &Type::Generic(_, _) => todo!(),
         }
     }
 }
@@ -227,6 +238,8 @@ impl Display for Type {
             Self::Iterable(generating_type) => write!(f, "Iterable<{generating_type}>"),
             Self::Optional(base_type) => write!(f, "{base_type}?"),
             Self::External(rust_type) => write!(f, "RustType {}", rust_type.type_name),
+            &Type::Variable(_) => todo!(),
+            &Type::Generic(_, _) => todo!(),
         }
     }
 }

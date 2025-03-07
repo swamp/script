@@ -8,11 +8,11 @@ use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::fmt::Debug;
 use std::rc::Rc;
-use swamp_script_types::prelude::*;
-use tiny_ver::TinyVersion;
 use swamp_script_node::Node;
 //use swamp_script_semantic::{ConstantRef, ExternalFunctionDefinitionRef, InternalFunctionDefinitionRef};
 use swamp_script_semantic::prelude::*;
+use swamp_script_types::prelude::*;
+use tiny_ver::TinyVersion;
 
 #[derive(Debug, Clone)]
 pub enum FuncDef {
@@ -37,6 +37,32 @@ pub struct TypeGenerator {
     pub arity: usize,
 }
 
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub struct TypeParameterName {
+    pub resolved_node: Node,
+    pub assigned_name: String,
+}
+
+#[derive(Debug)]
+pub struct TypeParameter {
+    pub ty: Type,
+    pub debug_name: String,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum ParameterizedTypeKind {
+    Struct(NamedStructType),
+    Enum(EnumTypeRef),
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub struct ParameterizedTypeBlueprint {
+    pub kind: ParameterizedTypeKind,
+    pub type_variables: Vec<String>,
+}
+
+pub type ParameterizedTypeBlueprintRef = Rc<ParameterizedTypeBlueprint>;
+
 #[derive(Clone, Debug)]
 pub enum Symbol {
     Type(Type),
@@ -46,6 +72,7 @@ pub enum Symbol {
     FunctionDefinition(FuncDef),
     Alias(AliasTypeRef),
     TypeGenerator(TypeGenerator),
+    Blueprint(ParameterizedTypeBlueprintRef),
 }
 
 impl Symbol {

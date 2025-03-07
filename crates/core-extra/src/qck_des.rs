@@ -231,7 +231,9 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
                 }
                 _ => panic!("can not deserialize rust types {}", rust_type_ref.type_name),
             }
-        }
+        },
+        &swamp_script_types::Type::Variable(_) => todo!(),
+        &swamp_script_types::Type::Generic(_, _) => todo!()
     };
 
     (val, octet_size)
