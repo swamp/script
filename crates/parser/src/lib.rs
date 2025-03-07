@@ -172,6 +172,14 @@ impl AstParser {
         Ok(LocalIdentifier::new(self.to_node(&pair)))
     }
 
+    fn expect_function_identifier_next<'a>(
+        &self,
+        pairs: &mut impl Iterator<Item = Pair<'a, Rule>>,
+    ) -> Result<LocalIdentifier, ParseError> {
+        let pair = Self::expect_next(pairs, Rule::function_identifier)?;
+        Ok(LocalIdentifier::new(self.to_node(&pair)))
+    }
+
     fn expect_constant_identifier_next<'a>(
         &self,
         pairs: &mut impl Iterator<Item = Pair<'a, Rule>>,
@@ -530,7 +538,7 @@ impl AstParser {
             Some(expr_pair) => self.parse_mutable_or_immutable_expression(&expr_pair)?,
             _ => MutableOrImmutableExpression {
                 expression: self
-                    .create_expr(ExpressionKind::IdentifierReference(variable.clone()), pair),
+                    .create_expr(ExpressionKind::VariableReference(variable.clone()), pair),
                 is_mutable: None,
             },
         };
@@ -835,7 +843,7 @@ impl AstParser {
 
         let mut inner = pair.clone().into_inner();
 
-        let function_name = self.expect_identifier_next(&mut inner)?;
+        let function_name = self.expect_function_identifier_next(&mut inner)?;
 
         let next_token = inner.next();
         let (parameters, return_type) = match next_token {
@@ -942,7 +950,7 @@ impl AstParser {
 
         let mut inner = pair.clone().into_inner();
 
-        let name = self.expect_identifier_next(&mut inner)?;
+        let name = self.expect_function_identifier_next(&mut inner)?;
 
         let mut parameters = Vec::new();
         let mut self_parameter = None;
@@ -1145,8 +1153,8 @@ impl AstParser {
                 self.parse_expression(&inner)
             }
 
-            Rule::identifier_reference => Ok(self.create_expr(
-                ExpressionKind::IdentifierReference(Variable::new(self.to_node(sub), None)),
+            Rule::qualified_identifier => Ok(self.create_expr(
+                ExpressionKind::VariableReference(Variable::new(self.to_node(sub), None)),
                 sub,
             )),
             Rule::block => self.parse_block(sub),
@@ -1550,6 +1558,70 @@ impl AstParser {
         }
     }
 
+    fn parse_qualified_identifier(
+        &self,
+        pair: &Pair<Rule>,
+    ) -> Result<QualifiedIdentifier, ParseError> {
+        let mut inner_pairs = pair.clone().into_inner();
+        let mut generic_types = Vec::new();
+
+        let first = inner_pairs
+            .next()
+            .ok_or_else(|| self.create_error_pair(SpecificError::ExpectedIdentifier, pair))?;
+
+        match first.as_rule() {
+            Rule::module_segments => {
+                let module_path = self.parse_module_segments(first.clone());
+                let id = inner_pairs.next().ok_or_else(|| {
+                    self.create_error_pair(SpecificError::ExpectedIdentifierAfterPath, &first)
+                })?;
+
+                let identifier = self.to_node(&id);
+
+                // TODO: Maybe loop and check for generic params
+                if let Some(generic_params) = inner_pairs.next() {
+                    if generic_params.as_rule() == Rule::generic_params {
+                        generic_types = self.parse_generic_params(&generic_params)?;
+                    }
+                }
+
+                Ok(QualifiedIdentifier::new_with_generics(
+                    identifier,
+                    module_path,
+                    generic_types,
+                ))
+            }
+            Rule::identifier => {
+                let type_identifier = self.to_node(&first);
+
+                // TODO: Maybe loop and check for generic params
+                if let Some(generic_params) = inner_pairs.next() {
+                    if generic_params.as_rule() == Rule::generic_params {
+                        generic_types = self.parse_generic_params(&generic_params)?;
+                    }
+                }
+
+                Ok(QualifiedIdentifier::new_with_generics(
+                    type_identifier,
+                    Vec::new(),
+                    generic_types,
+                ))
+            }
+            _ => Err(self.create_error_pair(SpecificError::ExpectedIdentifier, &first)),
+        }
+    }
+
+    fn parse_qualified_identifier_expression(
+        &self,
+        pair: &Pair<Rule>,
+    ) -> Result<Expression, ParseError> {
+        let qualified_identifier = self.parse_qualified_identifier(pair)?;
+        Ok(self.create_expr(
+            ExpressionKind::IdentifierReference(qualified_identifier),
+            pair,
+        ))
+    }
+
     fn parse_generic_params(&self, pair: &Pair<Rule>) -> Result<Vec<Type>, ParseError> {
         let inner_pairs = pair.clone().into_inner();
         let mut generic_types = Vec::new();
@@ -1616,32 +1688,6 @@ impl AstParser {
             name: name.0,
             type_variables,
         })
-    }
-
-    #[allow(unused)] // TODO: Use this again
-    fn parse_qualified_identifier(
-        &self,
-        pair: &Pair<Rule>,
-    ) -> Result<QualifiedIdentifier, ParseError> {
-        let mut inner_pairs = pair.clone().into_inner();
-
-        let first = inner_pairs
-            .next()
-            .ok_or_else(|| self.create_error_pair(SpecificError::ExpectedIdentifier, pair))?;
-
-        match first.as_rule() {
-            Rule::module_segments => {
-                let module_path = self.parse_module_segments(first.clone());
-                let id = inner_pairs.next().ok_or_else(|| {
-                    self.create_error_pair(SpecificError::ExpectedIdentifierAfterPath, &first)
-                })?;
-
-                let identifier = self.to_node(&id);
-                Ok(QualifiedIdentifier::new(identifier, module_path))
-            }
-            Rule::identifier => Ok(QualifiedIdentifier::new(self.to_node(&first), Vec::new())),
-            _ => Err(self.create_error_pair(SpecificError::ExpectedIdentifier, &first)),
-        }
     }
 
     fn parse_struct_fields_expressions<'a>(
@@ -1742,31 +1788,16 @@ impl AstParser {
         ))
     }
 
-    fn parse_static_function_reference(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
-        let mut inner = pair.clone().into_inner();
-
-        let qualified_identifier = self.parse_qualified_identifier(&inner.next().unwrap())?;
-
-        Ok(self.create_expr(
-            ExpressionKind::StaticFunctionReference(qualified_identifier),
-            pair,
-        ))
-    }
-
     fn parse_term(&self, pair2: &Pair<Rule>) -> Result<Expression, ParseError> {
         assert_eq!(pair2.as_rule(), Rule::term);
         let sub = &Self::right_alternative(pair2)?;
         match sub.as_rule() {
-            Rule::static_function_reference => self.parse_static_function_reference(sub),
+            Rule::qualified_identifier => self.parse_qualified_identifier_expression(sub),
             Rule::static_member_reference => self.parse_static_member_reference(sub),
 
             Rule::enum_literal => {
                 Ok(self.create_expr(ExpressionKind::Literal(self.parse_enum_literal(sub)?), sub))
             }
-            Rule::identifier_reference => Ok(self.create_expr(
-                ExpressionKind::IdentifierReference(Variable::new(self.to_node(sub), None)),
-                sub,
-            )),
             Rule::constant_reference => Ok(self.create_expr(
                 ExpressionKind::ConstantReference(ConstantIdentifier(self.to_node(sub))),
                 sub,

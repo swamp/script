@@ -416,10 +416,10 @@ parenthesized = { "(" ~ expression ~ ")" }
 
 term = {
     static_member_reference
-  | qualified_identifier
   | enum_literal
   | parenthesized
   | basic_literal // must be before identifier_reference
+  | qualified_identifier
   | constant_reference
   | struct_literal
   | anonymous_struct_literal

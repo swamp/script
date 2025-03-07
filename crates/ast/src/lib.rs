@@ -81,6 +81,7 @@ impl QualifiedTypeIdentifier {
 pub struct QualifiedIdentifier {
     pub name: Node,
     pub module_path: Option<ModulePath>,
+    pub generic_params: Vec<Type>,
 }
 
 impl QualifiedIdentifier {
@@ -92,7 +93,30 @@ impl QualifiedIdentifier {
             Some(ModulePath(module_path))
         };
 
-        Self { name, module_path }
+        Self {
+            name,
+            module_path,
+            generic_params: vec![],
+        }
+    }
+
+    #[must_use]
+    pub fn new_with_generics(
+        name: Node,
+        module_path: Vec<Node>,
+        generic_params: Vec<Type>,
+    ) -> Self {
+        let module_path = if module_path.is_empty() {
+            None
+        } else {
+            Some(ModulePath(module_path))
+        };
+
+        Self {
+            name,
+            module_path,
+            generic_params,
+        }
     }
 }
 
@@ -389,11 +413,11 @@ pub enum ExpressionKind {
     PostfixChain(PostfixChain),
 
     // References
-    IdentifierReference(Variable),
+    VariableReference(Variable),
     ConstantReference(ConstantIdentifier),
     //FunctionReference(QualifiedIdentifier),
     StaticMemberFunctionReference(QualifiedTypeIdentifier, Node),
-    StaticFunctionReference(QualifiedIdentifier),
+    IdentifierReference(QualifiedIdentifier),
 
     // Assignments
     VariableDefinition(Variable, Option<Type>, Box<MutableOrImmutableExpression>),

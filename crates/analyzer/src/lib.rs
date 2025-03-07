@@ -706,11 +706,11 @@ impl<'a> Analyzer<'a> {
                 self.analyze_destructuring(&ast_expression.node, variables, expression)?
             }
 
-            swamp_script_ast::ExpressionKind::StaticFunctionReference(qualified_identifier) => {
-                self.analyze_static_function_access(qualified_identifier)?
+            swamp_script_ast::ExpressionKind::IdentifierReference(qualified_identifier) => {
+                self.analyze_identifier(qualified_identifier)?
             }
-            swamp_script_ast::ExpressionKind::IdentifierReference(variable) => {
-                self.analyze_identifier_reference(&variable.name)?
+            swamp_script_ast::ExpressionKind::VariableReference(variable) => {
+                self.analyze_variable_reference(&variable.name)?
             }
 
             swamp_script_ast::ExpressionKind::StaticMemberFunctionReference(
@@ -1514,10 +1514,24 @@ impl<'a> Analyzer<'a> {
         Ok(resolved_parts)
     }
 
-    pub(crate) fn analyze_static_function_access(
+    pub(crate) fn analyze_identifier(
         &self,
         qualified_func_name: &swamp_script_ast::QualifiedIdentifier,
     ) -> Result<Expression, Error> {
+        // Must check variable first, since that is more intuitive for the user.
+        // local variables before other functions
+        if qualified_func_name.module_path.is_none()
+            && qualified_func_name.generic_params.is_empty()
+        {
+            if let Some(found_variable) = self.try_find_variable(&qualified_func_name.name) {
+                return Ok(self.create_expr(
+                    ExpressionKind::VariableAccess(found_variable.clone()),
+                    found_variable.resolved_type.clone(),
+                    &qualified_func_name.name,
+                ));
+            }
+        }
+
         let path = self.get_module_path(qualified_func_name.module_path.as_ref());
         let function_name = self.get_text(&qualified_func_name.name);
 
@@ -1533,11 +1547,10 @@ impl<'a> Analyzer<'a> {
                         &external_fn.signature,
                     ),
                     // Can not have a reference to an intrinsic function
-                    FuncDef::Intrinsic(_) => {
-                        return Err(
-                            self.create_err(ErrorKind::UnknownFunction, &qualified_func_name.name)
-                        );
-                    }
+                    FuncDef::Intrinsic(intrinsic_fn) => (
+                        ExpressionKind::IntrinsicFunctionAccess(intrinsic_fn.clone()),
+                        &intrinsic_fn.signature,
+                    ),
                 };
 
                 return Ok(self.create_expr(
@@ -1551,51 +1564,51 @@ impl<'a> Analyzer<'a> {
     }
 
     // The ast assumes it is something similar to a variable, but it can be a function reference as well.
-    fn analyze_identifier_reference(
+    fn analyze_variable_reference(
         &self,
         var_node: &swamp_script_ast::Node,
     ) -> Result<Expression, Error> {
         let text = self.get_text(var_node);
 
-        // Must check variable first, since that is more intuitive for the user.
-        // local variables before other functions
-        if let Some(found_variable) = self.try_find_variable(var_node) {
+        if let Some(found_variable) = self.try_find_variable(&var_node) {
             return Ok(self.create_expr(
                 ExpressionKind::VariableAccess(found_variable.clone()),
                 found_variable.resolved_type.clone(),
-                var_node,
+                &var_node,
             ));
         }
+        /*
 
-        if let Some(found_symbol) = self.shared.lookup_table.get_symbol(text) {
-            let expr = match found_symbol {
-                Symbol::FunctionDefinition(func) => match func {
-                    FuncDef::External(found_external_function) => self.create_expr(
-                        ExpressionKind::ExternalFunctionAccess(found_external_function.clone()),
-                        Type::Function(found_external_function.signature.clone()),
-                        var_node,
-                    ),
-                    FuncDef::Internal(found_internal_function) => self.create_expr(
-                        ExpressionKind::InternalFunctionAccess(found_internal_function.clone()),
-                        Type::Function(found_internal_function.signature.clone()),
-                        var_node,
-                    ),
-                    FuncDef::Intrinsic(found_intrinsic_function) => self.create_expr(
-                        ExpressionKind::IntrinsicFunctionAccess(found_intrinsic_function.clone()),
-                        Type::Function(found_intrinsic_function.signature.clone()),
-                        var_node,
-                    ),
-                },
+                if let Some(found_symbol) = self.shared.lookup_table.get_symbol(text) {
+                    let expr = match found_symbol {
+                        Symbol::FunctionDefinition(func) => match func {
+                            FuncDef::External(found_external_function) => self.create_expr(
+                                ExpressionKind::ExternalFunctionAccess(found_external_function.clone()),
+                                Type::Function(found_external_function.signature.clone()),
+                                var_node,
+                            ),
+                            FuncDef::Internal(found_internal_function) => self.create_expr(
+                                ExpressionKind::InternalFunctionAccess(found_internal_function.clone()),
+                                Type::Function(found_internal_function.signature.clone()),
+                                var_node,
+                            ),
+                            FuncDef::Intrinsic(found_intrinsic_function) => self.create_expr(
+                                ExpressionKind::IntrinsicFunctionAccess(found_intrinsic_function.clone()),
+                                Type::Function(found_intrinsic_function.signature.clone()),
+                                var_node,
+                            ),
+                        },
 
-                _ => {
-                    return Err(self.create_err(ErrorKind::UnknownIdentifier, var_node));
+                        _ => {
+                            return Err(self.create_err(ErrorKind::UnknownIdentifier, var_node));
+                        }
+                    };
+                    return Ok(expr);
                 }
-            };
-            return Ok(expr);
-        }
-
+        */
         Err(self.create_err(ErrorKind::UnknownIdentifier, var_node))
     }
+
     fn analyze_usize_index(
         &mut self,
         usize_expression: &swamp_script_ast::Expression,
@@ -2385,7 +2398,7 @@ impl<'a> Analyzer<'a> {
             swamp_script_ast::ExpressionKind::PostfixChain(chain) => {
                 self.analyze_chain_to_location(chain, context, location_type)
             }
-            swamp_script_ast::ExpressionKind::IdentifierReference(variable) => {
+            swamp_script_ast::ExpressionKind::VariableReference(variable) => {
                 let var = self.find_variable(variable)?;
                 if var.is_mutable() {
                     Ok(SingleLocationExpression {
