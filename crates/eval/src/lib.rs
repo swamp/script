@@ -461,21 +461,17 @@ impl<'a, C> Interpreter<'a, C> {
                     LocationAccessKind::SparseIndex(_element_type, key_expr) => {
                         let key_expr_value = self.evaluate_expression(key_expr)?;
                         match key_expr_value.downcast_rust::<SparseValueId>() {
-                            Some(found_sparse_id) => {
-                                match value_ref.borrow_mut().downcast_rust::<SparseValueMap>() {
-                                    Some(sparse_value_map) => {
-                                        let inner_map = sparse_value_map.borrow_mut();
-                                        wrap_in_option(
-                                            inner_map.get(&found_sparse_id.borrow()).clone(),
-                                        )
-                                    }
-                                    _ => {
-                                        return Err(
-                                            self.create_err(ExecuteErrorKind::ExpectedArray, node)
-                                        )?;
-                                    }
+                            Some(found_sparse_id) => match &*value_ref.borrow_mut() {
+                                Value::Sparse(_type, sparse_value_map) => {
+                                    let inner_map = sparse_value_map;
+                                    wrap_in_option(inner_map.get(&found_sparse_id.borrow()).clone())
                                 }
-                            }
+                                _ => {
+                                    return Err(
+                                        self.create_err(ExecuteErrorKind::ExpectedArray, node)
+                                    )?;
+                                }
+                            },
                             _ => {
                                 return Err(self.create_err(ExecuteErrorKind::ExpectedArray, node))?;
                             }
@@ -1525,13 +1521,12 @@ impl<'a, C> Interpreter<'a, C> {
             }
 
             IntrinsicFunction::SparseAdd => {
-                let borrowed = value_ref.borrow();
+                let mut borrowed = value_ref.borrow_mut();
 
-                let sparse_value_map = borrowed.downcast_rust::<SparseValueMap>();
-                match sparse_value_map {
-                    Some(found) => {
+                match &mut *borrowed {
+                    Value::Sparse(_type, found) => {
                         let resolved_value = self.evaluate_expression(&arguments[0])?;
-                        let id_value = found.borrow_mut().add(resolved_value);
+                        let id_value = found.add(resolved_value);
 
                         id_value
                     }
@@ -1542,30 +1537,35 @@ impl<'a, C> Interpreter<'a, C> {
             }
 
             IntrinsicFunction::SparseRemove => {
-                let borrowed = value_ref.borrow();
+                let mut borrowed = value_ref.borrow_mut();
 
-                let sparse_value_map = borrowed.downcast_rust::<SparseValueMap>();
-                if let Some(found) = sparse_value_map {
-                    let id_value = self.evaluate_expression(&arguments[0])?;
-                    match id_value.downcast_rust::<SparseValueId>() {
-                        Some(found_id) => {
-                            found.borrow_mut().remove(&found_id.borrow());
+                match &mut *borrowed {
+                    Value::Sparse(_type, found) => {
+                        let id_value = self.evaluate_expression(&arguments[0])?;
+                        match id_value.downcast_rust::<SparseValueId>() {
+                            Some(found_id) => {
+                                found.remove(&found_id.borrow());
+                            }
+                            _ => {
+                                return Err(self.create_err(ExecuteErrorKind::NotSparseValue, node));
+                            }
                         }
-                        _ => {
-                            return Err(self.create_err(ExecuteErrorKind::NotSparseValue, node));
-                        }
+                    }
+                    _ => {
+                        return Err(self.create_err(ExecuteErrorKind::NotSparseValue, node));
                     }
                 }
 
                 Value::Unit
             }
             IntrinsicFunction::SparseSubscript => {
-                let sparse_value_map = value_ref.borrow_mut().downcast_rust::<SparseValueMap>();
-                match sparse_value_map {
-                    Some(found) => {
+                let borrowed = value_ref.borrow();
+
+                match &*borrowed {
+                    Value::Sparse(_type, found) => {
                         let id_value = self.evaluate_expression(&arguments[0])?; // id
                         match id_value.downcast_rust::<SparseValueId>() {
-                            Some(found_id) => match found.borrow_mut().get(&found_id.borrow()) {
+                            Some(found_id) => match found.get(&found_id.borrow()) {
                                 Some(found_value) => Value::Option(Some(found_value.clone())),
                                 _ => Value::Option(None),
                             },
@@ -1917,6 +1917,7 @@ impl<'a, C> Interpreter<'a, C> {
 
                     val_ref = Rc::new(RefCell::new(Value::Option(seq_map.get(&key_val).cloned())));
                 }
+                /*
                 PostfixKind::ExternalTypeIndexRef(_rust_type_ref, map_expr) => {
                     let key_expr_value = self.evaluate_expression(map_expr)?;
                     val_ref = {
@@ -1939,6 +1940,8 @@ impl<'a, C> Interpreter<'a, C> {
                         }
                     };
                 }
+
+                 */
                 PostfixKind::MemberCall(function_ref, arguments) => {
                     let val =
                         self.eval_member_call(node, &val_ref, is_mutable, function_ref, arguments)?;
@@ -2721,6 +2724,7 @@ impl<'a, C> Interpreter<'a, C> {
         Ok(val)
     }
 
+
     fn evaluate_intrinsic_generic(
         &self,
         node: &Node,
@@ -2728,6 +2732,7 @@ impl<'a, C> Interpreter<'a, C> {
         type_parameters: &Vec<Type>,
         arguments: &Vec<Expression>,
     ) -> Result<Value, ExecuteError> {
+        /*
         let value = match intrinsic {
             IntrinsicFunction::SparseNew => {
                 let sparse_id_external = ExternalType {
@@ -2742,10 +2747,10 @@ impl<'a, C> Interpreter<'a, C> {
                 };
                 to_rust_value(sparse_external.into(), sparse_value_map)
             }
-            _ => return Err(self.create_err(ExecuteErrorKind::UnknownGenericIntrinsic, &node)),
-        };
+            _ => */ return Err(self.create_err(ExecuteErrorKind::UnknownGenericIntrinsic, &node)); //,
+        //};
 
-        Ok(value)
+        //Ok(value)
     }
 }
 

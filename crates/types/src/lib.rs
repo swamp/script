@@ -14,7 +14,7 @@ use std::hash::Hash;
 use std::rc::Rc;
 use swamp_script_node::Node;
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone)]
 pub enum Type {
     // Primitives
     Int,
@@ -44,17 +44,30 @@ pub enum Type {
 
     Optional(Box<Type>),
 
-    Generic(Box<Type>, Vec<Type>),
+    Generic(ParameterizedTypeBlueprint, Vec<Type>),
     Variable(String),
 
     External(ExternalTypeRef),
 }
 
+impl Eq for Type {}
 
-#[derive(Debug)]
+impl PartialEq for Type {
+    fn eq(&self, other: &Self) -> bool {
+        self.id().unwrap() == other.id().unwrap()
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum ParameterizedTypeKind {
     Struct(NamedStructType),
     Enum(EnumTypeRef),
+}
+
+#[derive(Debug, Clone)]
+pub struct ParameterizedTypeBlueprint {
+    pub kind: ParameterizedTypeKind,
+    pub type_variables: Vec<String>,
 }
 
 pub type NamedStructTypeRef = Rc<RefCell<NamedStructType>>;
@@ -117,7 +130,7 @@ impl PartialEq for TypeForParameter {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Signature {
     pub parameters: Vec<TypeForParameter>,
     pub return_type: Box<Type>,
@@ -393,7 +406,7 @@ pub fn comma_seq_nl<K: Clone + Hash + Eq + Display, V: Display>(
     result
 }
 
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct StructTypeField {
     pub identifier: Option<Node>,
     pub field_type: Type,
@@ -446,7 +459,7 @@ impl AnonymousStructType {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EnumVariantStructType {
     pub common: EnumVariantCommon,
     pub anon_struct: AnonymousStructType,
@@ -454,7 +467,7 @@ pub struct EnumVariantStructType {
 
 pub type EnumVariantTupleTypeRef = Rc<EnumVariantTupleType>;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EnumVariantTupleType {
     pub common: EnumVariantCommon,
     pub fields_in_order: Vec<Type>,
@@ -462,7 +475,7 @@ pub struct EnumVariantTupleType {
 
 pub type EnumTypeRef = Rc<RefCell<EnumType>>;
 
-#[derive(Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct EnumType {
     pub name: Node,
     pub assigned_name: String,
@@ -521,7 +534,7 @@ impl EnumType {
 
 pub type EnumVariantTypeRef = Rc<EnumVariantType>;
 
-#[derive(Eq, PartialEq, Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct EnumVariantCommon {
     pub name: Node,
     pub assigned_name: String,
@@ -564,7 +577,7 @@ pub struct EnumVariantTupleFieldType {
     pub field_index: usize,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EnumVariantSimpleType {
     pub common: EnumVariantCommon,
 }
@@ -608,7 +621,7 @@ pub struct AliasType {
 }
 pub type AliasTypeRef = Rc<AliasType>;
 
-#[derive(Eq, PartialEq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct NamedStructType {
     pub name: Node,
     pub assigned_name: String,

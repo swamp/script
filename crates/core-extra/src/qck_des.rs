@@ -161,16 +161,11 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
                 number: SPARSE_ID_TYPE_ID, // TODO: FIX hardcoded number
             });
 
-     
-            let (internal_map, sparse_value_map_octet_size) =
-                SparseValueMap::quick_deserialize(
-                    sparse_type_id_rust_type,
-                    *value_type.clone(),
-                    buf,
-                );
-
-            let wrapped_internal_map: Rc<RefCell<Box<dyn RustType>>> =
-                Rc::new(RefCell::new(Box::new(internal_map)));
+            let (internal_map, sparse_value_map_octet_size) = SparseValueMap::quick_deserialize(
+                sparse_type_id_rust_type,
+                *value_type.clone(),
+                buf,
+            );
 
             let sparse_collection_rust_type = Rc::new(ExternalType {
                 type_name: "Sparse".to_string(),
@@ -178,10 +173,12 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
             });
 
             (
-                Value::RustValue(sparse_collection_rust_type, wrapped_internal_map),
+                Value::Sparse(
+                    swamp_script_types::Type::External(sparse_collection_rust_type),
+                    internal_map,
+                ),
                 sparse_value_map_octet_size,
             )
-
         }
         Type::Grid(type_parameter) => {
             todo!()
@@ -231,9 +228,9 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
                 }
                 _ => panic!("can not deserialize rust types {}", rust_type_ref.type_name),
             }
-        },
+        }
         &swamp_script_types::Type::Variable(_) => todo!(),
-        &swamp_script_types::Type::Generic(_, _) => todo!()
+        &swamp_script_types::Type::Generic(_, _) => todo!(),
     };
 
     (val, octet_size)

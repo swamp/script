@@ -363,8 +363,8 @@ impl Clone for Value {
 
             Self::RustValue(resolved_rust_ref, rust_type_rc) => {
                 Self::RustValue(resolved_rust_ref.clone(), rust_type_rc.clone())
-            },
-            Self::Sparse(_, _) => todo!()
+            }
+            Self::Sparse(_, _) => todo!(),
         }
     }
 }
@@ -424,21 +424,17 @@ impl Value {
             Self::Map(_key, _value, seq_map) => Ok(Box::new(
                 seq_map.into_values().map(|item| item.borrow().clone()),
             )),
-            Self::RustValue(ref rust_type_ref, _) => match rust_type_ref.number {
-                SPARSE_TYPE_ID => {
-                    let sparse_map = self
-                        .downcast_rust::<SparseValueMap>()
-                        .expect("must be sparsemap");
-                    let values: Vec<_> = sparse_map
-                        .borrow()
-                        .values()
-                        .iter()
-                        .map(|item| item.borrow().clone())
-                        .collect();
-                    Ok(Box::new(values.into_iter()))
-                }
-                _ => Err(ValueError::NotSparseMap),
-            },
+            Self::Sparse(_x, sparse_map) => {
+                let values: Vec<_> = sparse_map
+                    .values()
+                    .iter()
+                    .map(|item| item.borrow().clone())
+                    .collect();
+                Ok(Box::new(values.into_iter()))
+            }
+            Self::RustValue(ref rust_type_ref, _) => {
+                todo!()
+            }
             Self::Range(start_val, max_val, range_mode) => {
                 let start = *start_val;
                 let end = *max_val;
@@ -483,35 +479,25 @@ impl Value {
                     .into_iter();
                 Box::new(iter) as Box<dyn Iterator<Item = (Self, Self)> + 'static>
             }
-            Self::RustValue(ref rust_type_ref, ref _rust_value) => {
-                Box::new(match rust_type_ref.number {
-                    SPARSE_TYPE_ID => {
-                        let sparse_map = self
-                            .downcast_rust::<SparseValueMap>()
-                            .expect("must be sparsemap");
+            Self::Sparse(ref _rust_type_ref, ref sparse_map) => {
+                let id_type_ref = sparse_map.rust_type_ref_for_id.clone();
 
-                        let id_type_ref = sparse_map.borrow().rust_type_ref_for_id.clone();
+                let pairs: Vec<_> = sparse_map
+                    .iter()
+                    .map(|(k, v)| {
+                        (
+                            Self::RustValue(
+                                id_type_ref.clone(),
+                                Rc::new(RefCell::new(Box::new(SparseValueId(k)))),
+                            ),
+                            v.borrow().clone(),
+                        )
+                    })
+                    .collect();
 
-                        let pairs: Vec<_> = sparse_map
-                            .borrow()
-                            .iter()
-                            .map(|(k, v)| {
-                                (
-                                    Self::RustValue(
-                                        id_type_ref.clone(),
-                                        Rc::new(RefCell::new(Box::new(SparseValueId(k)))),
-                                    ),
-                                    v.borrow().clone(),
-                                )
-                            })
-                            .collect();
-
-                        Box::new(pairs.into_iter()) as Box<dyn Iterator<Item = (Self, Self)>>
-                    }
-
-                    _ => return Err(ValueError::NotSparseMap),
-                })
+                Box::new(pairs.into_iter()) as Box<dyn Iterator<Item = (Self, Self)>>
             }
+
             _ => return Err(ValueError::NotAnIterator),
         };
 
@@ -843,8 +829,8 @@ impl Display for Value {
                     "none"
                 };
                 write!(f, "Option({inner_str})")
-            },
-            Self::Sparse(_, _) => todo!()
+            }
+            Self::Sparse(_, _) => todo!(),
         }
     }
 }

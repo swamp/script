@@ -7,6 +7,7 @@ pub mod call;
 pub mod constant;
 pub mod def;
 pub mod err;
+mod instantiator;
 pub mod internal;
 pub mod literal;
 pub mod operator;
@@ -15,13 +16,14 @@ pub mod prelude;
 mod structure;
 pub mod types;
 pub mod variable;
-mod instantiator;
 
 use crate::err::{Error, ErrorKind};
+use crate::instantiator::{Instantiator, TypeVariableScope};
 use seq_map::SeqMap;
 use std::mem::take;
 use std::num::{ParseFloatError, ParseIntError};
 use std::rc::Rc;
+use std::time::Instant;
 use swamp_script_modules::prelude::*;
 use swamp_script_modules::symtbl::GeneratorKind;
 use swamp_script_node::{FileId, Node, Span};
@@ -33,6 +35,7 @@ use swamp_script_semantic::{
 };
 use swamp_script_source_map::SourceMap;
 use swamp_script_types::prelude::*;
+use swamp_script_types::ParameterizedTypeBlueprint;
 use tracing::error;
 use tracing::info;
 
@@ -414,6 +417,9 @@ impl<'a> Analyzer<'a> {
             scope: FunctionScopeState::new(Type::Unit),
             global: FunctionScopeState::new(Type::Unit),
             shared,
+            type_variables: TypeVariables {
+                variables: Default::default(),
+            },
         }
     }
 
@@ -913,94 +919,22 @@ impl<'a> Analyzer<'a> {
             analyzed_type_parameters.push(ty);
         }
 
-        let result_type = match symbol {
-            Symbol::Type(base_type) => base_type,
-
-            Symbol::Alias(alias_type) => alias_type.referenced_type.clone(),
-            Symbol::Blueprint(blueprint) => {
-                let stored_variables = self.type_variables.clone();
-
-                // Create a new analyzer context
-                for (type_parameter_name, concrete_type) in blueprint.type_parameter_names.iter().zip(analyzed_type_parameters) {
-                   self.type_variables.variables.insert(type_parameter_name.assigned_name.clone(), concrete_type).unwrap();
-                }
-
-                let concrete_fields = self.analyze_named_type()?;
-
-                let anonymous_struct_type = AnonymousStructType {
-                    field_name_sorted_fields: concrete_fields,
-                };
-
-                let concrete_struct_type  = NamedStructType {
-                    name: Node::default(),
-                    assigned_name: "concrete".to_string(),
-                    anon_struct_type: anonymous_struct_type,
-                    type_id: self.shared.state.allocate_number(),
-                };
-
-                Type::Int
-            }
-            Symbol::TypeGenerator(generator) => {
-                if analyzed_type_parameters.len() != generator.arity {
-                    return Err(self.create_err(
-                        ErrorKind::WrongNumberOfTypeArguments(
-                            generator.arity,
-                            analyzed_type_parameters.len(),
-                        ),
-                        &type_name_to_find.name.0,
-                    ));
-                }
-
-                match generator.kind {
-                    GeneratorKind::Slice => Type::Slice(Box::from(analyzed_type_parameters[0].clone())),
-                    GeneratorKind::SlicePair => Type::SlicePair(
-                        Box::from(analyzed_type_parameters[0].clone()),
-                        Box::from(analyzed_type_parameters[1].clone()),
-                    ),
-                    GeneratorKind::Sparse => {
-                        let value_type = &analyzed_type_parameters[0];
-                        /*
-                        let key_sparse_id_type = self
-                            .shared
-                            .core_symbol_table
-                            .get_type("SparseId")
-                            .unwrap()
-                            .clone();
-
-                        let struct_type =
-                        self.generate_sparse_struct(&key_sparse_id_type, value_type);
-                         */
-
-                        let instantiated_sparse = Type::Sparse(Box::new(value_type.clone()));
-
-
-
-                        instantiated_sparse
-                    }
-
-                    GeneratorKind::Vec => {
-                        let value_type = &analyzed_type_parameters[0];
-
-                        //let struct_type = self.generate_vec_struct(value_type);
-
-                        Type::Vec(Box::new(value_type.clone()))
-                    }
-
-                    GeneratorKind::Map => {
-                        let key_type = &analyzed_type_parameters[0];
-                        let value_type = &analyzed_type_parameters[1];
-
-                        //let struct_type = self.generate_map_struct(key_type, value_type);
-
-                        Type::Map(Box::from(key_type.clone()), Box::from(value_type.clone()))
-                    }
-                    GeneratorKind::Grid => {
-                        let value_type = &analyzed_type_parameters[0];
-                        Type::Grid(Box::from(value_type.clone()))
-                    }
+        let result_type = if !analyzed_type_parameters.is_empty() {
+            self.analyze_generic_type(
+                &symbol,
+                &analyzed_type_parameters,
+                &type_name_to_find.name.0,
+            )?
+        } else {
+            match symbol {
+                Symbol::Type(base_type) => base_type,
+                Symbol::Alias(alias_type) => alias_type.referenced_type.clone(),
+                _ => {
+                    return Err(
+                        self.create_err(ErrorKind::UnexpectedType, &type_name_to_find.name.0)
+                    );
                 }
             }
-            _ => return Err(self.create_err(ErrorKind::UnknownSymbol, &type_name_to_find.name.0)),
         };
 
         Ok(result_type)
@@ -2968,4 +2902,121 @@ impl<'a> Analyzer<'a> {
             node,
         ))
     }
+
+    fn analyze_generic_type(
+        &mut self,
+        symbol: &Symbol,
+        analyzed_type_parameters: &[Type],
+        node: &swamp_script_ast::Node,
+    ) -> Result<Type, Error> {
+        let ty = match symbol {
+            //            Symbol::Type(base_type) => base_type.clone(),
+            //          Symbol::Alias(alias_type) => alias_type.referenced_type.clone(),
+            Symbol::Blueprint(blueprint) => {
+                if all_types_are_concrete(analyzed_type_parameters) {
+                    self.instantiate_blueprint(blueprint, analyzed_type_parameters, node)?
+                } else {
+                    Type::Int
+                }
+            }
+            Symbol::TypeGenerator(generator) => {
+                if analyzed_type_parameters.len() != generator.arity {
+                    return Err(self.create_err(
+                        ErrorKind::WrongNumberOfTypeArguments(
+                            generator.arity,
+                            analyzed_type_parameters.len(),
+                        ),
+                        &node,
+                    ));
+                }
+
+                match generator.kind {
+                    GeneratorKind::Slice => {
+                        Type::Slice(Box::from(analyzed_type_parameters[0].clone()))
+                    }
+                    GeneratorKind::SlicePair => Type::SlicePair(
+                        Box::from(analyzed_type_parameters[0].clone()),
+                        Box::from(analyzed_type_parameters[1].clone()),
+                    ),
+                    GeneratorKind::Sparse => {
+                        let value_type = &analyzed_type_parameters[0];
+                        /*
+                        let key_sparse_id_type = self
+                            .shared
+                            .core_symbol_table
+                            .get_type("SparseId")
+                            .unwrap()
+                            .clone();
+
+                        let struct_type =
+                        self.generate_sparse_struct(&key_sparse_id_type, value_type);
+                         */
+
+                        let instantiated_sparse = Type::Sparse(Box::new(value_type.clone()));
+
+                        instantiated_sparse
+                    }
+
+                    GeneratorKind::Vec => {
+                        let value_type = &analyzed_type_parameters[0];
+
+                        //let struct_type = self.generate_vec_struct(value_type);
+
+                        Type::Vec(Box::new(value_type.clone()))
+                    }
+
+                    GeneratorKind::Map => {
+                        let key_type = &analyzed_type_parameters[0];
+                        let value_type = &analyzed_type_parameters[1];
+
+                        //let struct_type = self.generate_map_struct(key_type, value_type);
+
+                        Type::Map(Box::from(key_type.clone()), Box::from(value_type.clone()))
+                    }
+                    GeneratorKind::Grid => {
+                        let value_type = &analyzed_type_parameters[0];
+                        Type::Grid(Box::from(value_type.clone()))
+                    }
+                }
+            }
+            _ => return Err(self.create_err(ErrorKind::UnknownSymbol, &node)),
+        };
+
+        Ok(ty)
+    }
+
+    fn instantiate_blueprint(
+        &mut self,
+        blueprint: &ParameterizedTypeBlueprint,
+        concrete_types: &[Type],
+        node: &swamp_script_ast::Node,
+    ) -> Result<Type, Error> {
+        //let stored_variables = self.type_variables.clone();
+
+        let mut variable_scope_seq_map = SeqMap::new();
+        // Create a new analyzer context
+        for (type_parameter_name, concrete_type) in
+            blueprint.type_variables.iter().zip(concrete_types)
+        {
+            variable_scope_seq_map
+                .insert(type_parameter_name.clone(), concrete_type.clone())
+                .unwrap();
+        }
+
+        let scope = TypeVariableScope::new(variable_scope_seq_map);
+
+        let (_ignore_if_changed, instantiated_type) =
+            Instantiator::instantiate(blueprint, concrete_types, &scope)?;
+
+        Ok(instantiated_type)
+    }
+}
+
+fn all_types_are_concrete(types: &[Type]) -> bool {
+    for ty in types {
+        if !ty.is_concrete() {
+            return false;
+        }
+    }
+    true
 }

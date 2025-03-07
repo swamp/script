@@ -45,6 +45,7 @@ pub enum SemanticError {
     DuplicateNamespaceLink(String),
     MismatchedTypes { expected: Type, found: Vec<Type> },
     UnknownImplOnType,
+    UnknownTypeVariable,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -417,7 +418,7 @@ pub enum PostfixKind {
     StringRangeIndex(Range),
     MapIndex(Type, Type, Expression),
     SparseIndex(Type, Expression),
-    ExternalTypeIndexRef(ExternalTypeRef, Expression),
+//    ExternalTypeIndexRef(ExternalTypeRef, Expression),
     MemberCall(FunctionRef, Vec<ArgumentExpressionOrLocation>),
     FunctionCall(Vec<ArgumentExpressionOrLocation>),
     OptionUnwrap, // ? operator

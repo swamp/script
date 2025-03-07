@@ -1,13 +1,13 @@
-use std::cell::RefCell;
 use seq_map::SeqMap;
+use std::cell::RefCell;
 use std::rc::Rc;
-
+use swamp_script_semantic::SemanticError;
 use crate::err::ErrorKind;
 use crate::prelude::Error;
-use swamp_script_modules::symtbl::{
-    ParameterizedTypeBlueprint, ParameterizedTypeBlueprintRef, ParameterizedTypeKind,
+use swamp_script_types::{
+    AnonymousStructType, NamedStructType, ParameterizedTypeBlueprint, ParameterizedTypeKind,
+    StructTypeField, Type,
 };
-use swamp_script_types::{AnonymousStructType, NamedStructType, StructTypeField, Type};
 
 #[derive(Debug)]
 pub struct TypeVariableScope {
@@ -67,7 +67,7 @@ impl Instantiator {
     }
 
     pub(crate) fn instantiate_blueprint(
-        blueprint: &ParameterizedTypeBlueprintRef,
+        blueprint: &ParameterizedTypeBlueprint,
         concrete_types: &[Type],
     ) -> Result<(bool, Type), Error> {
         let scope = Self::create_type_parameter_scope_from_variables(
@@ -95,7 +95,7 @@ impl Instantiator {
             resolved_params.push(resolved);
         }
 
-        Self::instantiate_blueprint(&blue_print, &resolved_params)
+        Self::instantiate_blueprint(blue_print, &resolved_params)
     }
 
     fn instantiate_type_if_needed(
@@ -110,8 +110,8 @@ impl Instantiator {
             Type::Variable(type_variable) => {
                 let found_type = type_variables
                     .type_variables
-                    .get(&type_variable.name)
-                    .ok_or(ErrorKind::UnknownTypeVariable)?;
+                    .get(&type_variable)
+                    .ok_or(SemanticError::UnknownTypeVariable)?;
                 (true, found_type.clone())
             }
 

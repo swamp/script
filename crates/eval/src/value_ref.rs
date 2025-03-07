@@ -25,27 +25,12 @@ impl ValueReference {
     }
 
     pub(crate) fn into_iter_mut(self) -> Result<Box<dyn Iterator<Item = ValueRef>>, ValueError> {
-        let inner = self.0.borrow();
-        let result = match &*inner {
-            Value::RustValue(rust_type_ref, _rust_value) => {
-                Box::new(match rust_type_ref.number {
-                    SPARSE_TYPE_ID => {
-                        let sparse_map = inner
-                            .downcast_rust::<SparseValueMap>()
-                            .expect("must be sparsemap");
+        let mut inner = self.0.borrow_mut();
+        let result = match &mut *inner {
+            Value::Sparse( _rust_type_ref, sparse_map) => {
+                let pairs: Vec<_> = sparse_map.iter_mut().map(|(_k, v)| v.clone()).collect();
 
-                        //let id_type_ref = sparse_map.borrow().rust_type_ref_for_id.clone();
-
-                        let pairs: Vec<_> = sparse_map
-                            .borrow_mut()
-                            .iter_mut()
-                            .map(|(_k, v)| v.clone())
-                            .collect();
-
-                        Box::new(pairs.into_iter()) as Box<dyn Iterator<Item = ValueRef>>
-                    }
-                    _ => return Err(ValueError::CanNotCoerceToIterator),
-                })
+                Box::new(pairs.into_iter()) as Box<dyn Iterator<Item = ValueRef>>
             }
             Value::Map(_type_ref, _value_type, seq_map) => {
                 // Clone each Rc<RefCell<Value>> and collect into a Vec
@@ -74,35 +59,27 @@ impl ValueReference {
     pub fn into_iter_mut_pairs(
         self,
     ) -> Result<Box<dyn Iterator<Item = (Value, Self)>>, ValueError> {
-        let inner = self.0.borrow();
-        let result = match &*inner {
-            Value::RustValue(rust_type_ref, _rust_value) => Box::new(match rust_type_ref.number {
-                SPARSE_TYPE_ID => {
-                    let sparse_map = inner
-                        .downcast_rust::<SparseValueMap>()
-                        .expect("must be sparsemap");
+        let mut inner = self.0.borrow_mut();
+        let result = match &mut *inner {
+            Value::Sparse(_rust_type_ref, sparse_map) => {
+                let id_type_ref = sparse_map.rust_type_ref_for_id.clone();
 
-                    let id_type_ref = sparse_map.borrow().rust_type_ref_for_id.clone();
+                let pairs: Vec<_> = sparse_map
+                    .iter_mut()
+                    .map(|(k, v)| {
+                        (
+                            Value::RustValue(
+                                id_type_ref.clone(),
+                                Rc::new(RefCell::new(Box::new(SparseValueId(k)))),
+                            ),
+                            Self(v.clone()),
+                        )
+                    })
+                    .collect();
 
-                    let pairs: Vec<_> = sparse_map
-                        .borrow_mut()
-                        .iter_mut()
-                        .map(|(k, v)| {
-                            (
-                                Value::RustValue(
-                                    id_type_ref.clone(),
-                                    Rc::new(RefCell::new(Box::new(SparseValueId(k)))),
-                                ),
-                                Self(v.clone()),
-                            )
-                        })
-                        .collect();
-
-                    Box::new(pairs.into_iter()) as Box<dyn Iterator<Item = (Value, Self)>>
-                }
-                _ => return Err(ValueError::CanNotCoerceToIterator),
-            }),
-            _ => todo!(),
+                Box::new(pairs.into_iter()) as Box<dyn Iterator<Item = (Value, Self)>>
+            }
+            _ => return Err(ValueError::CanNotCoerceToIterator),
         };
         Ok(result)
     }

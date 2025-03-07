@@ -127,6 +127,7 @@ pub enum ErrorKind {
     NoDefaultImplementedForType(Type),
     UnknownTypeVariable,
     WrongParameterCount(usize, usize),
+    UnexpectedType,
 }
 
 impl From<SemanticError> for Error {

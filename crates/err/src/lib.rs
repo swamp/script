@@ -565,6 +565,7 @@ pub fn build_semantic_error(err: &SemanticError, span: &Span) -> Builder<usize> 
         }
         &swamp_script_semantic::SemanticError::DuplicateSymbolName(_)
         | &swamp_script_semantic::SemanticError::MismatchedTypes { .. } => todo!(),
+        &swamp_script_semantic::SemanticError::UnknownTypeVariable => todo!(),
     }
 }
 

@@ -13,6 +13,7 @@ use swamp_script_node::Node;
 use swamp_script_semantic::prelude::*;
 use swamp_script_types::prelude::*;
 use tiny_ver::TinyVersion;
+use swamp_script_types::ParameterizedTypeBlueprint;
 
 #[derive(Debug, Clone)]
 pub enum FuncDef {
@@ -49,20 +50,6 @@ pub struct TypeParameter {
     pub debug_name: String,
 }
 
-#[derive(Debug, Eq, PartialEq)]
-pub enum ParameterizedTypeKind {
-    Struct(NamedStructType),
-    Enum(EnumTypeRef),
-}
-
-#[derive(Debug, Eq, PartialEq)]
-pub struct ParameterizedTypeBlueprint {
-    pub kind: ParameterizedTypeKind,
-    pub type_variables: Vec<String>,
-}
-
-pub type ParameterizedTypeBlueprintRef = Rc<ParameterizedTypeBlueprint>;
-
 #[derive(Clone, Debug)]
 pub enum Symbol {
     Type(Type),
@@ -72,7 +59,7 @@ pub enum Symbol {
     FunctionDefinition(FuncDef),
     Alias(AliasTypeRef),
     TypeGenerator(TypeGenerator),
-    Blueprint(ParameterizedTypeBlueprintRef),
+    Blueprint(ParameterizedTypeBlueprint),
 }
 
 impl Symbol {
