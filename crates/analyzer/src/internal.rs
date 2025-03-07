@@ -174,6 +174,23 @@ impl Analyzer<'_> {
                 )
             }
 
+            "len" => {
+                //                self.check_mutable(is_mutable, ast_member_function_name)?;
+
+                if ast_arguments.len() != 0 {
+                    return Err(self.create_err(
+                        ErrorKind::WrongNumberOfArguments(ast_arguments.len(), 0),
+                        ast_member_function_name,
+                    ));
+                }
+
+                self.create_postfix(
+                    PostfixKind::IntrinsicCall(IntrinsicFunction::MapLen, vec![]),
+                    &Type::Int,
+                    ast_member_function_name,
+                )
+            }
+
             "has" => {
                 if ast_arguments.len() != 1 {
                     return Err(self.create_err(

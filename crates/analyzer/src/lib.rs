@@ -1194,7 +1194,7 @@ impl<'a> Analyzer<'a> {
                                 );
                             }
                             tv.resolved_type = Type::String;
-                            tv.is_mutable = false;
+                            //tv.is_mutable = false;
                         }
 
                         Type::Vec(array_type_ref) => {
@@ -1231,7 +1231,7 @@ impl<'a> Analyzer<'a> {
                                 tv.resolved_type = *array_type_ref.clone();
                             }
 
-                            tv.is_mutable = false;
+                            //tv.is_mutable = false;
                         }
 
                         Type::Map(key_type, value_type) => {
@@ -1251,7 +1251,7 @@ impl<'a> Analyzer<'a> {
                             );
 
                             tv.resolved_type = return_type;
-                            tv.is_mutable = false;
+                            //tv.is_mutable = false;
                         }
 
                         Type::Generic(base, generic_type_parameters) => match &**base {
@@ -1282,7 +1282,7 @@ impl<'a> Analyzer<'a> {
                                     );
 
                                     tv.resolved_type = return_type;
-                                    tv.is_mutable = false;
+                                    //tv.is_mutable = false;
                                 } else {
                                     panic!("unknown generic type lookup")
                                 }

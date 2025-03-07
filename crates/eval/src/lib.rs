@@ -1523,6 +1523,14 @@ impl<'a, C> Interpreter<'a, C> {
                 result
             }
 
+            IntrinsicFunction::MapLen => match &mut *value_ref.borrow_mut() {
+                Value::Map(_key_type, _value_type, seq_map) => {
+                    let length = seq_map.len();
+                    Value::Int(length as i32)
+                }
+                _ => Err(self.create_err(ExecuteErrorKind::NotAMap, node))?,
+            },
+
             IntrinsicFunction::SparseAdd => {
                 let borrowed = value_ref.borrow();
 

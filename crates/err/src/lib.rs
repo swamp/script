@@ -559,7 +559,9 @@ pub fn build_analyze_error(err: &Error) -> Builder<usize> {
         &swamp_script_analyzer::err::ErrorKind::CallsCanNotBePartOfChain
         | &swamp_script_analyzer::err::ErrorKind::UnwrapCanNotBePartOfChain
         | &swamp_script_analyzer::err::ErrorKind::NoneCoalesceCanNotBePartOfChain => todo!(),
-        &swamp_script_analyzer::err::ErrorKind::SelfNotCorrectType => todo!(),
+        &swamp_script_analyzer::err::ErrorKind::SelfNotCorrectType => {
+            Report::build(Kind::Error, 140, "self of wrong type", span)
+        }
         &swamp_script_analyzer::err::ErrorKind::IllegalIndexInChain => {
             Report::build(Kind::Error, 140, "illegal index in chain", span)
         }

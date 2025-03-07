@@ -439,9 +439,28 @@ impl Value {
             Self::Range(start_val, max_val, range_mode) => {
                 let start = *start_val;
                 let end = *max_val;
-                match range_mode {
-                    RangeMode::Exclusive => Ok(Box::new((start..end).map(Value::Int))),
-                    RangeMode::Inclusive => Ok(Box::new((start..=end).map(Value::Int))),
+                if start <= end {
+                    match range_mode {
+                        RangeMode::Exclusive => Ok(Box::new((start..end).map(Value::Int))),
+                        RangeMode::Inclusive => Ok(Box::new((start..=end).map(Value::Int))),
+                    }
+                } else {
+                    match range_mode {
+                        RangeMode::Exclusive => Ok(Box::new(
+                            (end..start)
+                                .rev()
+                                .map(|x| Value::Int(x))
+                                .collect::<Vec<_>>()
+                                .into_iter(),
+                        )),
+                        RangeMode::Inclusive => Ok(Box::new(
+                            (end..=start)
+                                .rev()
+                                .map(|x| Value::Int(x))
+                                .collect::<Vec<_>>()
+                                .into_iter(),
+                        )),
+                    }
                 }
             }
             _ => Err(ValueError::CanNotCoerceToIterator),
