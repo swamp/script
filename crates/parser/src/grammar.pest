@@ -159,9 +159,6 @@ static_member_reference = {
     qualified_type_identifier ~ SCOPE_OPERATOR ~ identifier
 }
 
-static_function_reference = {
-    qualified_identifier
-}
 
 /*
     =============================================================
@@ -210,11 +207,13 @@ function_params = {
     =============================================================
 */
 qualified_identifier      = {
-    module_segments ~ identifier
+    module_segments? ~ identifier ~ generic_params?
 }
+
 qualified_type_identifier = {
     module_segments? ~ type_identifier ~ generic_params?
 }
+
 module_segments           = { (identifier ~ SCOPE_OPERATOR)+ }
 
 /*
@@ -234,23 +233,23 @@ definition = {
     =============================================================
 */
 trait_def = {
-    "trait" ~ type_identifier ~ "{" ~ impl_item* ~ "}"
+    "trait"  ~ type_identifier ~ "{" ~ impl_item* ~ "}"
 }
 
 type_identifier_optional_type_params = { type_identifier ~ generic_type_params? }
 generic_type_params  = { "<" ~ type_identifier ~ (COMMA ~ type_identifier)* ~ ">" }
 
 impl_def = {
-    "impl" ~ type_identifier_optional_type_params ~ "{" ~ (impl_item)* ~ "}"
+    "impl"  ~ type_identifier_optional_type_params ~ "{" ~ (impl_item)* ~ "}"
 }
 
 impl_item = { normal_member_function | external_member_function }
 
-struct_def = { "struct" ~ type_identifier_optional_type_params ~ struct_type? }
+struct_def = { "struct"  ~ type_identifier_optional_type_params ~ struct_type? }
 
-type_def = { "type" ~ type_identifier ~ "=" ~ type_name }
+type_def = { "type"  ~ type_identifier ~ "=" ~ type_name }
 
-enum_def = { "enum" ~ type_identifier_optional_type_params ~ "{" ~ enum_variants? ~ "}" }
+enum_def = { "enum"  ~ type_identifier_optional_type_params ~ "{" ~ enum_variants? ~ "}" }
 
 enum_variants = { enum_variant ~ (COMMA ~ enum_variant)* ~ TRAILING_COMMA }
 
@@ -272,7 +271,7 @@ function_def = {
 }
 
 external_function = {
-    "external" ~ function_signature
+     "external" ~  WHITESPACE+ ~ function_signature
 }
 
 normal_function = {
@@ -280,7 +279,7 @@ normal_function = {
 }
 
 external_member_function = {
-    "external" ~ member_signature
+   "external"  ~ member_signature
 }
 
 normal_member_function = {
@@ -288,17 +287,17 @@ normal_member_function = {
 }
 
 const_def = {
-    "const" ~ constant_identifier ~ "=" ~ expression
+     "const"  ~ constant_identifier ~ "=" ~ expression
 }
 
 all_imports = { "*" }
 
 use_def = {
-    "use" ~ import_path ~ ("::" ~ (all_imports | "{" ~ import_list ~ "}"))?
+   "use"  ~ import_path ~ ("::" ~ (all_imports | "{" ~ import_list ~ "}"))?
 }
 
 mod_def = {
-    "mod" ~ import_path ~ ("::" ~ (all_imports | "{" ~ import_list ~ "}"))?
+   "mod"  ~ import_path ~ ("::" ~ (all_imports | "{" ~ import_list ~ "}"))?
 }
 
 import_path = { identifier ~ ("::" ~ identifier)* }
@@ -314,12 +313,16 @@ import_item = { type_identifier | identifier }
     Function Parameters and Signatures
     =============================================================
 */
+
+
+function_identifier = { identifier ~ generic_type_params? }
+
 function_signature = {
-    "fn" ~ identifier ~ "(" ~ (parameter_list ~ TRAILING_COMMA)? ~ ")" ~ return_type?
+   "fn"   ~ function_identifier ~ "(" ~ (parameter_list ~ TRAILING_COMMA)? ~ ")" ~ return_type?
 }
 
 member_signature = {
-    "fn" ~ identifier ~ "(" ~ (self_parameter ~ (COMMA ~ parameter_list)? | parameter_list)? ~ ")" ~ return_type?
+   "fn"   ~ function_identifier ~ "(" ~ (self_parameter ~ (COMMA ~ parameter_list)? | parameter_list)? ~ ")" ~ return_type?
 }
 
 self_identifier = { "self" }
@@ -329,7 +332,7 @@ self_parameter  = {
 
 parameter_list = { parameter ~ (COMMA ~ parameter)* }
 parameter      = { maybe_mut_identifier ~ ":" ~ type_name }
-mut_keyword    = { "mut" }
+mut_keyword    = { "mut"  }
 return_type    = { "->" ~ type_name }
 
 /*
@@ -337,18 +340,18 @@ return_type    = { "->" ~ type_name }
     Loop Constructs and Control Flow
     =============================================================
 */
-for_loop    = { "for" ~ for_pattern ~ "in" ~ mut_expression ~ expression }
+for_loop    = {  "for"  ~ for_pattern   ~ "in"  ~ mut_expression ~ expression }
 for_pattern = { for_pair | maybe_mut_identifier }
 for_pair    = { maybe_mut_identifier ~ COMMA ~ maybe_mut_identifier }
 
-while_loop = { "while" ~ expression ~ expression }
+while_loop = { "while"  ~ expression ~ expression }
 
 /*
     =============================================================
     Return/Control Statements
     =============================================================
 */
-return_expr   = { "return" ~ expression }
+return_expr   = { "return"  ~ expression }
 continue_expr = { "continue" }
 break_expr    = { "break" }
 
@@ -413,19 +416,16 @@ parenthesized = { "(" ~ expression ~ ")" }
 
 term = {
     static_member_reference
-  | static_function_reference
+  | qualified_identifier
   | enum_literal
   | parenthesized
   | basic_literal // must be before identifier_reference
-
-  | identifier_reference
   | constant_reference
   | struct_literal
   | anonymous_struct_literal
   | interpolated_string
 }
 
-identifier_reference = { identifier }
 // variable or function
 constant_reference = { constant_identifier }
 
