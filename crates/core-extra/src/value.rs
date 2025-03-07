@@ -94,6 +94,7 @@ pub enum Value {
     Vec(Type, Vec<ValueRef>),
     Map(Type, Type, SeqMap<Value, ValueRef>), // Do not change to HashMap, the order is important for it to be deterministic
     Tuple(Vec<Type>, Vec<ValueRef>),
+    Sparse(Type, SparseValueMap),
     NamedStruct(NamedStructTypeRef, Vec<ValueRef>), // type of the struct, and the fields themselves in strict order
     AnonymousStruct(AnonymousStructType, Vec<ValueRef>), // type of the struct, and the fields themselves in strict order
 
@@ -283,6 +284,7 @@ impl Value {
             }
 
             Self::RustValue(_rust_value, rust_value) => rust_value.borrow().quick_serialize(octets),
+            Self::Sparse(_, _) => todo!(),
         }
     }
 }
@@ -361,7 +363,8 @@ impl Clone for Value {
 
             Self::RustValue(resolved_rust_ref, rust_type_rc) => {
                 Self::RustValue(resolved_rust_ref.clone(), rust_type_rc.clone())
-            }
+            },
+            Self::Sparse(_, _) => todo!()
         }
     }
 }
@@ -840,7 +843,8 @@ impl Display for Value {
                     "none"
                 };
                 write!(f, "Option({inner_str})")
-            }
+            },
+            Self::Sparse(_, _) => todo!()
         }
     }
 }
@@ -924,6 +928,7 @@ impl Hash for Value {
             Self::RustValue(_rust_type, _rust_val) => (),
             Self::InternalFunction(_) => (),
             Self::ExternalFunction(_) => (),
+            Self::Sparse(_, _) => todo!(),
         }
     }
 }

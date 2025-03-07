@@ -3,20 +3,17 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use seq_map::SeqMap;
-use std::cell::RefCell;
 use std::path::Path;
-use std::rc::Rc;
-use swamp_script_analyzer::prelude::Error;
 use swamp_script_analyzer::{Analyzer, TypeContext};
-//use swamp_script_error_report::show_analyzer_error;
+use swamp_script_compile::bootstrap_modules;
+use swamp_script_dep_loader::swamp_registry_path;
+use swamp_script_error_report::{show_script_resolve_error, ScriptResolveError};
+use swamp_script_modules::prelude::{Module, Modules, Namespace};
 use swamp_script_parser::AstParser;
-use swamp_script_semantic::ProgramState;
-use swamp_script_semantic::modules::{Module, Modules};
-use swamp_script_semantic::ns::Namespace;
 use swamp_script_source_map::SourceMap;
-use tracing::{error, warn};
+use tracing::{error, info, warn};
 
-fn internal_compile(script: &str) -> Result<Module, Error> {
+fn internal_compile(script: &str) -> Result<Module, ScriptResolveError> {
     let parser = AstParser {};
 
     let program = parser.parse_module(script).expect("Failed to parse script");
@@ -27,9 +24,24 @@ fn internal_compile(script: &str) -> Result<Module, Error> {
     source_map.add_manual(file_id, "crate", Path::new("some_path/main"), script);
     let resolved_path_str = vec!["test".to_string()];
 
-    let mut state = ProgramState::new();
-    let modules = Modules::new();
-    let mut analyzer = Analyzer::new(&mut state, &modules, &source_map, file_id);
+    let registry_path = swamp_registry_path().unwrap();
+    source_map.add_mount("registry", &registry_path).unwrap();
+
+    let mut bootstrap_result = bootstrap_modules(&mut source_map).inspect_err(|err| {
+        show_script_resolve_error(err, &source_map, Path::new(""));
+    })?;
+    let core_symbol_table = bootstrap_result.core_symbol_table;
+
+    let mut analyzer = Analyzer::new(
+        &mut bootstrap_result.state,
+        &bootstrap_result.modules,
+        core_symbol_table.into(),
+        &source_map,
+        file_id,
+    );
+
+    info!(def_tbl=?bootstrap_result.default_symbol_table, "default");
+    analyzer.shared.lookup_table = bootstrap_result.default_symbol_table;
 
     for definition in &program.definitions {
         analyzer.analyze_definition(definition)?;

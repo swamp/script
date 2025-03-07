@@ -2,20 +2,17 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use crate::intr::IntrinsicFunctionDefinitionRef;
 use crate::modules::ModuleRef;
-use crate::{
-    AliasType, AliasTypeRef, AnonymousStructType, Constant, ConstantRef, EnumType, EnumTypeRef,
-    EnumVariantType, EnumVariantTypeRef, ExternalFunctionDefinition, ExternalFunctionDefinitionRef,
-    InternalFunctionDefinition, InternalFunctionDefinitionRef, NamedStructType, Node,
-    SemanticError, StructTypeField, Type, TypeNumber,
-};
+
 use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::fmt::Debug;
 use std::rc::Rc;
 use swamp_script_types::prelude::*;
 use tiny_ver::TinyVersion;
+use swamp_script_node::Node;
+//use swamp_script_semantic::{ConstantRef, ExternalFunctionDefinitionRef, InternalFunctionDefinitionRef};
+use swamp_script_semantic::prelude::*;
 
 #[derive(Debug, Clone)]
 pub enum FuncDef {
@@ -29,6 +26,7 @@ pub enum GeneratorKind {
     Slice,
     SlicePair,
     Sparse,
+    Grid,
     Map,
     Vec,
 }
@@ -47,13 +45,16 @@ pub enum Symbol {
     Constant(ConstantRef),
     FunctionDefinition(FuncDef),
     Alias(AliasTypeRef),
-    //TypeGenerator(TypeGenerator),
+    TypeGenerator(TypeGenerator),
 }
 
 impl Symbol {
     #[must_use]
     pub const fn is_basic_type(&self) -> bool {
-        matches!(self, Self::Type(..))
+        matches!(
+            self,
+            Self::Type(..) | Self::Alias(..) | Self::TypeGenerator(..)
+        )
     }
 }
 
@@ -119,6 +120,20 @@ impl SymbolTable {
         for (name, symbol) in symbol_table.symbols() {
             if symbol.is_basic_type() {
                 self.add_symbol(name, symbol.clone())?;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn extend_intrinsic_functions_from(
+        &mut self,
+        symbol_table: &Self,
+    ) -> Result<(), SemanticError> {
+        for (name, symbol) in symbol_table.symbols() {
+            if let Symbol::FunctionDefinition(func_def) = symbol {
+                if let FuncDef::Intrinsic(intrinsic_def) = func_def {
+                    self.add_symbol(name, symbol.clone())?;
+                }
             }
         }
         Ok(())
@@ -339,7 +354,7 @@ impl SymbolTable {
     pub fn add_symbol(&mut self, name: &str, symbol: Symbol) -> Result<(), SemanticError> {
         self.symbols
             .insert(name.to_string(), symbol)
-            .map_err(|_| SemanticError::DuplicateSymbolName)
+            .map_err(|_| SemanticError::DuplicateSymbolName(name.to_string()))
     }
 
     pub fn get_type(&self, name: &str) -> Option<&Type> {
@@ -446,7 +461,7 @@ impl SymbolTable {
     fn insert_symbol(&mut self, name: &str, symbol: Symbol) -> Result<(), SemanticError> {
         self.symbols
             .insert(name.to_string(), symbol)
-            .map_err(|_| SemanticError::DuplicateSymbolName)
+            .map_err(|_| SemanticError::DuplicateSymbolName(name.to_string()))
     }
 
     pub fn add_external_function_declaration(
@@ -478,5 +493,39 @@ impl SymbolTable {
         self.insert_symbol(name, Symbol::Module(ns))
             .map_err(|_| SemanticError::DuplicateNamespaceLink(name.to_string()))?;
         Ok(())
+    }
+
+    pub fn add_package_version(
+        &mut self,
+        name: &str,
+        version: TinyVersion,
+    ) -> Result<(), SemanticError> {
+        self.insert_symbol(name, Symbol::PackageVersion(version))
+            .map_err(|_| SemanticError::DuplicateNamespaceLink(name.to_string()))?;
+        Ok(())
+    }
+
+    pub fn add_type_generator(
+        &mut self,
+        name: &str,
+        type_generator: TypeGenerator,
+    ) -> Result<(), SemanticError> {
+        self.insert_symbol(name, Symbol::TypeGenerator(type_generator))
+            .map_err(|_| SemanticError::DuplicateSymbolName(name.to_string()))?;
+        Ok(())
+    }
+
+    pub fn add_intrinsic_function(
+        &mut self,
+        function: IntrinsicFunctionDefinition,
+    ) -> Result<IntrinsicFunctionDefinitionRef, SemanticError> {
+        let function_ref = Rc::new(function);
+        self.symbols
+            .insert(
+                function_ref.name.clone(),
+                Symbol::FunctionDefinition(FuncDef::Intrinsic(function_ref.clone())),
+            )
+            .expect("todo: add seqmap error handling");
+        Ok(function_ref)
     }
 }

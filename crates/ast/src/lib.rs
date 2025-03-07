@@ -491,7 +491,6 @@ pub enum Type {
 
     Named(QualifiedTypeIdentifier),
 
-    Generic(Box<Type>, Vec<Type>),
     Optional(Box<Type>, Node),
 }
 

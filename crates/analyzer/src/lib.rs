@@ -20,10 +20,10 @@ use seq_map::SeqMap;
 use std::mem::take;
 use std::num::{ParseFloatError, ParseIntError};
 use std::rc::Rc;
+use swamp_script_modules::prelude::*;
+use swamp_script_modules::symtbl::GeneratorKind;
 use swamp_script_node::{FileId, Node, Span};
-use swamp_script_semantic::modules::ModuleRef;
 use swamp_script_semantic::prelude::*;
-use swamp_script_semantic::symtbl::{FuncDef, Symbol, SymbolTable, SymbolTableRef};
 use swamp_script_semantic::{
     ArgumentExpressionOrLocation, LocationAccess, LocationAccessKind, MutOrImmutableExpression,
     NormalPattern, Postfix, PostfixKind, RangeMode, SingleLocationExpression,
@@ -322,6 +322,7 @@ pub struct SharedState<'a> {
     pub modules: &'a Modules,
     pub source_map: &'a SourceMap,
     pub file_id: FileId,
+    pub core_symbol_table: SymbolTableRef,
 }
 
 impl<'a> SharedState<'a> {
@@ -388,6 +389,7 @@ impl<'a> Analyzer<'a> {
     pub fn new(
         state: &'a mut ProgramState,
         modules: &'a Modules,
+        core_symbol_table: SymbolTableRef,
         source_map: &'a SourceMap,
         file_id: FileId,
     ) -> Self {
@@ -396,6 +398,7 @@ impl<'a> Analyzer<'a> {
             lookup_table: SymbolTable::default(),
             definition_table: SymbolTable::default(),
             modules,
+            core_symbol_table,
             source_map,
             file_id,
         };
@@ -875,28 +878,11 @@ impl<'a> Analyzer<'a> {
         }
     }
 
-    // TODO: add to core symbol table
-    #[must_use]
-    pub fn check_built_in_type(s: &str) -> Option<Type> {
-        let found = match s {
-            "Int" => Type::Int,
-            "Float" => Type::Float,
-            "Bool" => Type::Bool,
-            "String" => Type::String,
-            _ => return None,
-        };
-        Some(found)
-    }
-
     pub(crate) fn analyze_named_type(
         &mut self,
         type_name_to_find: &swamp_script_ast::QualifiedTypeIdentifier,
     ) -> Result<Type, Error> {
         let (path, name) = self.get_path(type_name_to_find);
-        // TODO: the built in should be put in the symbol table
-        if let Some(ty) = Self::check_built_in_type(&name) {
-            return Ok(ty);
-        }
 
         let symbol = {
             let maybe_symbol_table = self.shared.get_symbol_table(&path);
@@ -911,7 +897,6 @@ impl<'a> Analyzer<'a> {
                 .clone()
         };
 
-        /*
         let mut analyzed_types = Vec::new();
 
         for analyzed_type in &type_name_to_find.generic_params {
@@ -920,11 +905,70 @@ impl<'a> Analyzer<'a> {
             analyzed_types.push(ty);
         }
 
-         */
-
         let result_type = match symbol {
             Symbol::Type(base_type) => base_type,
+
             Symbol::Alias(alias_type) => alias_type.referenced_type.clone(),
+            Symbol::TypeGenerator(generator) => {
+                if analyzed_types.len() != generator.arity {
+                    return Err(self.create_err(
+                        ErrorKind::WrongNumberOfTypeArguments(
+                            generator.arity,
+                            analyzed_types.len(),
+                        ),
+                        &type_name_to_find.name.0,
+                    ));
+                }
+
+                match generator.kind {
+                    GeneratorKind::Slice => Type::Slice(Box::from(analyzed_types[0].clone())),
+                    GeneratorKind::SlicePair => Type::SlicePair(
+                        Box::from(analyzed_types[0].clone()),
+                        Box::from(analyzed_types[1].clone()),
+                    ),
+                    GeneratorKind::Sparse => {
+                        let value_type = &analyzed_types[0];
+                        /*
+                        let key_sparse_id_type = self
+                            .shared
+                            .core_symbol_table
+                            .get_type("SparseId")
+                            .unwrap()
+                            .clone();
+
+                        let struct_type =
+                        self.generate_sparse_struct(&key_sparse_id_type, value_type);
+                         */
+
+                        let instantiated_sparse = Type::Sparse(Box::new(value_type.clone()));
+                        
+                        
+                        
+                        instantiated_sparse
+                    }
+
+                    GeneratorKind::Vec => {
+                        let value_type = &analyzed_types[0];
+
+                        //let struct_type = self.generate_vec_struct(value_type);
+
+                        Type::Vec(Box::new(value_type.clone()))
+                    }
+
+                    GeneratorKind::Map => {
+                        let key_type = &analyzed_types[0];
+                        let value_type = &analyzed_types[1];
+
+                        //let struct_type = self.generate_map_struct(key_type, value_type);
+
+                        Type::Map(Box::from(key_type.clone()), Box::from(value_type.clone()))
+                    }
+                    GeneratorKind::Grid => {
+                        let value_type = &analyzed_types[0];
+                        Type::Grid(Box::from(value_type.clone()))
+                    }
+                }
+            }
             _ => return Err(self.create_err(ErrorKind::UnknownSymbol, &type_name_to_find.name.0)),
         };
 
@@ -1063,6 +1107,7 @@ impl<'a> Analyzer<'a> {
         &mut self,
         chain: &swamp_script_ast::PostfixChain,
     ) -> Result<Expression, Error> {
+        /*
         if let swamp_script_ast::ExpressionKind::StaticMemberFunctionReference(
             qualified_type_reference,
             member_name,
@@ -1074,6 +1119,8 @@ impl<'a> Analyzer<'a> {
                 return Ok(found_expr);
             }
         }
+
+             */
 
         let (start, is_mutable) =
             self.analyze_start_chain_expression_get_mutability(&chain.base, None)?;
@@ -1254,41 +1301,30 @@ impl<'a> Analyzer<'a> {
                             tv.is_mutable = false;
                         }
 
-                        Type::Generic(base, generic_type_parameters) => match &**base {
-                            Type::External(found_rust_type) => {
-                                if found_rust_type.number == SPARSE_TYPE_ID {
-                                    let sparse_id = self
-                                        .shared
-                                        .lookup_table
-                                        .get_external_type("SparseId")
-                                        .expect("SparseId is missing");
-                                    let binding = Type::External(sparse_id.clone());
-                                    let sparse_id_context = TypeContext::new_argument(&binding);
-                                    let contained_type = &generic_type_parameters[0];
-                                    let resolved_key =
-                                        self.analyze_expression(index_expr, &sparse_id_context)?;
+                        Type::Sparse(contained_type) => {
+                            let sparse_id = self
+                                .shared
+                                .lookup_table
+                                .get_external_type("SparseId")
+                                .expect("SparseId is missing");
+                            let binding = Type::External(sparse_id.clone());
+                            let sparse_id_context = TypeContext::new_argument(&binding);
+                            let resolved_key =
+                                self.analyze_expression(index_expr, &sparse_id_context)?;
 
-                                    let return_type =
-                                        Type::Optional(Box::new(contained_type.clone()));
+                            let return_type = Type::Optional(Box::new(*contained_type.clone()));
 
-                                    self.add_postfix(
-                                        &mut suffixes,
-                                        PostfixKind::ExternalTypeIndexRef(
-                                            found_rust_type.clone(),
-                                            resolved_key,
-                                        ),
-                                        return_type.clone(),
-                                        &index_expr.node,
-                                    );
+                            self.add_postfix(
+                                &mut suffixes,
+                                PostfixKind::SparseIndex(*contained_type.clone(), resolved_key),
+                                return_type.clone(),
+                                &index_expr.node,
+                            );
 
-                                    tv.resolved_type = return_type;
-                                    tv.is_mutable = false;
-                                } else {
-                                    panic!("unknown generic type lookup")
-                                }
-                            }
-                            _ => panic!("not supported"),
-                        },
+                            tv.resolved_type = return_type;
+                            tv.is_mutable = false;
+                        }
+
                         _ => {
                             return Err(self.create_err(
                                 ErrorKind::ExpectedArray(collection_type),
@@ -1404,20 +1440,18 @@ impl<'a> Analyzer<'a> {
         let (key_type, value_type): (Option<Type>, Type) = match resolved_type {
             Type::Vec(array_type) => (Some(Type::Int), *array_type.clone()),
             Type::Map(key, value) => (Some(*key.clone()), *value.clone()),
-            Type::String => (Some(Type::Int), Type::String),
-            Type::Iterable(item_type) => (None, *item_type.clone()),
-            Type::Generic(_base_type, params) => {
-                // TODO: HACK: We assume it is a container that iterates over the type parameters
-                // TODO: HACK: We assume that it is a sparse map
-                // TODO: HACK: Remove hardcoded number
-                let rust_type_ref_for_id = self
+            Type::Sparse(value) => {
+                let sparse_id_type = self
                     .shared
                     .lookup_table
                     .get_external_type("SparseId")
                     .expect("SparseId was missing");
-                let rust_id_type = Type::External(rust_type_ref_for_id.clone());
-                (Some(rust_id_type), params[0].clone())
+                let rust_id_type = Type::External(sparse_id_type.clone());
+                (Some(rust_id_type), *value.clone())
             }
+            Type::String => (Some(Type::Int), Type::String),
+            Type::Iterable(item_type) => (None, *item_type.clone()),
+
             _ => return Err(self.create_err(ErrorKind::NotAnIterator, &expression.expression.node)),
         };
 
@@ -1570,7 +1604,11 @@ impl<'a> Analyzer<'a> {
                         Type::Function(found_internal_function.signature.clone()),
                         var_node,
                     ),
-                    FuncDef::Intrinsic(_) => todo!(),
+                    FuncDef::Intrinsic(found_intrinsic_function) => self.create_expr(
+                        ExpressionKind::IntrinsicFunctionAccess(found_intrinsic_function.clone()),
+                        Type::Function(found_intrinsic_function.signature.clone()),
+                        var_node,
+                    ),
                 },
 
                 _ => {
@@ -2293,35 +2331,27 @@ impl<'a> Analyzer<'a> {
                             ty = lookup_type;
                         }
 
-                        Type::Generic(collection_type, generic_params) => {
-                            if let Type::External(rust_type) = &**collection_type {
-                                let val_type = generic_params[0].clone();
-                                if rust_type.number == SPARSE_TYPE_ID {
-                                    let sparse_id_type = self
-                                        .shared
-                                        .lookup_table
-                                        .get_external_type("SparseId")
-                                        .expect("should have SparseId");
+                        Type::Sparse(val_type) => {
+                            let sparse_id_type = self
+                                .shared
+                                .lookup_table
+                                .get_external_type("SparseId")
+                                .expect("should have SparseId");
 
-                                    let key_type = Type::External(sparse_id_type.clone());
-                                    let key_type_context = TypeContext::new_argument(&key_type);
+                            let key_type = Type::External(sparse_id_type.clone());
+                            let key_type_context = TypeContext::new_argument(&key_type);
 
-                                    let key_expr =
-                                        self.analyze_expression(lookup_expr, &key_type_context)?;
+                            let key_expr =
+                                self.analyze_expression(lookup_expr, &key_type_context)?;
 
-                                    self.add_location_item(
-                                        &mut items,
-                                        LocationAccessKind::ExternalTypeIndex(
-                                            rust_type.clone(),
-                                            key_expr,
-                                        ),
-                                        key_type.clone(),
-                                        &lookup_expr.node,
-                                    );
+                            self.add_location_item(
+                                &mut items,
+                                LocationAccessKind::SparseIndex(*val_type.clone(), key_expr),
+                                key_type.clone(),
+                                &lookup_expr.node,
+                            );
 
-                                    ty = Type::Optional(Box::from(val_type.clone()));
-                                }
-                            }
+                            ty = Type::Optional(Box::from(val_type.clone()));
                         }
 
                         _ => {

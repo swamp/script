@@ -11,10 +11,10 @@ use pest_derive::Parser;
 use std::iter::Peekable;
 use std::str::Chars;
 use swamp_script_ast::{
-    AssignmentOperatorKind, BinaryOperatorKind, CompoundOperator, CompoundOperatorKind,
-    EnumVariantLiteral, ExpressionKind, FieldExpression, FieldName, ForPattern, ForVar,
-    ImportItems, IterableExpression, Mod, NamedStructDef, PatternElement, QualifiedIdentifier,
-    RangeMode, SpanWithoutFileId, StructTypeField, TypeForParameter, VariableBinding, prelude::*,
+    prelude::*, AssignmentOperatorKind, BinaryOperatorKind, CompoundOperator,
+    CompoundOperatorKind, EnumVariantLiteral, ExpressionKind, FieldExpression, FieldName, ForPattern,
+    ForVar, ImportItems, IterableExpression, Mod, NamedStructDef, PatternElement,
+    QualifiedIdentifier, RangeMode, SpanWithoutFileId, StructTypeField, TypeForParameter, VariableBinding,
 };
 use swamp_script_ast::{Function, WhenBinding};
 use swamp_script_ast::{LiteralKind, MutableOrImmutableExpression};
@@ -2149,19 +2149,7 @@ impl AstParser {
                 let first = inner.next().unwrap();
                 let base_type = self.parse_type(first)?;
 
-                if let Some(generic_params) = inner.next() {
-                    if generic_params.as_rule() == Rule::generic_params {
-                        let mut generic_types = Vec::new();
-                        for param in Self::convert_into_iterator(&generic_params) {
-                            generic_types.push(self.parse_type(param)?);
-                        }
-                        Ok(Type::Generic(Box::new(base_type), generic_types))
-                    } else {
-                        Ok(base_type)
-                    }
-                } else {
-                    Ok(base_type)
-                }
+                Ok(base_type)
             }
             Rule::function_type => {
                 let mut function_inner = pair.into_inner();
@@ -2192,21 +2180,6 @@ impl AstParser {
 
             Rule::qualified_type_identifier => {
                 let qualified_id = self.parse_qualified_type_identifier(&pair)?;
-
-                // Check for generic parameters
-                let remaining_pairs = pair.into_inner();
-                for next_pair in remaining_pairs {
-                    if next_pair.as_rule() == Rule::generic_params {
-                        let mut generic_types = Vec::new();
-                        for param in Self::convert_into_iterator(&next_pair) {
-                            generic_types.push(self.parse_type(param)?);
-                        }
-                        return Ok(Type::Generic(
-                            Box::new(Type::Named(qualified_id)),
-                            generic_types,
-                        ));
-                    }
-                }
                 Ok(Type::Named(qualified_id))
             }
             Rule::tuple_type => {
@@ -2234,26 +2207,6 @@ impl AstParser {
             _ => Err(self.create_error_pair(SpecificError::UnexpectedTypeRule, &pair)),
         }
     }
-    /*
-
-    fn parse_type_from_str<'a>(
-        &self,
-        mut iterator: &mut impl Iterator<Item = Pair<'a, Rule>>,
-        pair: &Pair<Rule>,
-    ) -> Result<Type, ParseError> {
-        let node = self.to_node(pair);
-        match pair.as_str() {
-            "Int" => Ok(Type::Int(node)),
-            "Float" => Ok(Type::Float(node)),
-            "String" => Ok(Type::String(node)),
-            "Bool" => Ok(Type::Bool(node)),
-            _ => Ok(Type::Named(
-                self.expect_qualified_type_identifier_next(&mut iterator)?,
-            )),
-        }
-    }
-
-     */
 
     #[allow(unused)] // TODO: Use this again
     fn parse_local_type_identifier(

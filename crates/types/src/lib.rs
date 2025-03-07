@@ -30,6 +30,8 @@ pub enum Type {
 
     // Containers
     Vec(Box<Type>),
+    Grid(Box<Type>),
+    Sparse(Box<Type>),
     Tuple(Vec<Type>),
     NamedStruct(NamedStructTypeRef),
     AnonymousStruct(AnonymousStructType),
@@ -42,7 +44,7 @@ pub enum Type {
 
     Optional(Box<Type>),
 
-    Generic(Box<Type>, Vec<Type>),
+    //Generic(Box<Type>, Vec<Type>),
     External(ExternalTypeRef),
 }
 
@@ -158,6 +160,9 @@ impl Type {
             Self::Bool => 2,
             Self::Float => 3,
             Self::String => 4,
+            Self::Grid(inner) => 0x1000 | inner.id().unwrap(),
+            Self::Sparse(inner) => 0x2000 | inner.id().unwrap(),
+            Self::External(external) => external.number,
             Self::NamedStruct(struct_ref) => struct_ref.borrow().type_id,
             Self::Enum(enum_type) => enum_type.borrow().type_id,
             _ => return None,
@@ -178,6 +183,8 @@ impl Debug for Type {
             Self::Slice(ty) => write!(f, "Slice<{ty:?}>"),
             Self::SlicePair(key, value) => write!(f, "Slice<{key:?}, {value:?}>"),
             Self::Vec(element_type) => write!(f, "[{element_type:?}]"),
+            Self::Grid(element_type) => write!(f, "[Grid {element_type:?}]"),
+            Self::Sparse(element_type) => write!(f, "[Sparse {element_type:?}]"),
             Self::Tuple(tuple_type_ref) => write!(f, "( {tuple_type_ref:?} )"),
             Self::NamedStruct(struct_type_ref) => {
                 write!(f, "{}", struct_type_ref.borrow().assigned_name)
@@ -186,7 +193,6 @@ impl Debug for Type {
                 write!(f, "{anonymous_struct_type:?}")
             }
             Self::Map(key, value) => write!(f, "[{key:?}:{value:?}]"),
-            Self::Generic(base, parameters) => write!(f, "{base:?}<{parameters:?}>"),
             Self::Enum(enum_type_ref) => write!(f, "{:?}", enum_type_ref.borrow().assigned_name),
             Self::Function(function_type_signature) => {
                 write!(f, "{function_type_signature:?}")
@@ -210,11 +216,12 @@ impl Display for Type {
             Self::Slice(ty) => write!(f, "Slice<{ty}>"),
             Self::SlicePair(key, value) => write!(f, "Slice<{key}, {value}>"),
             Self::Vec(element_type) => write!(f, "[{}]", &element_type.to_string()),
+            Self::Grid(element_type) => write!(f, "[Grid {}]", &element_type.to_string()),
+            Self::Sparse(element_type) => write!(f, "[Sparse {}]", &element_type.to_string()),
             Self::Tuple(tuple) => write!(f, "({})", comma(tuple)),
             Self::NamedStruct(struct_ref) => write!(f, "{}", struct_ref.borrow().assigned_name),
             Self::AnonymousStruct(struct_ref) => write!(f, "{struct_ref:?}"),
             Self::Map(key, value) => write!(f, "[{key}:{value}]"),
-            Self::Generic(base_type, params) => write!(f, "{base_type}<{}>", comma(params)),
             Self::Enum(enum_type) => write!(f, "{}", enum_type.borrow().assigned_name),
             Self::Function(signature) => write!(f, "function {signature}"),
             Self::Iterable(generating_type) => write!(f, "Iterable<{generating_type}>"),
@@ -246,8 +253,10 @@ impl Type {
             | (Self::String, Self::String)
             | (Self::Bool, Self::Bool)
             | (Self::Unit, Self::Unit)
-            | (Self::Vec(_), Self::Vec(_))
             | (Self::Enum(_), Self::Enum(_)) => true,
+            (Self::Vec(a), Self::Vec(b)) => a.compatible_with(b),
+            (Self::Sparse(a), Self::Sparse(b)) => a.compatible_with(b),
+            (Self::Grid(a), Self::Grid(b)) => a.compatible_with(b),
             (Self::Map(a_key, a_value), Self::Map(b_key, b_value)) => {
                 a_key.compatible_with(b_key) && a_value.compatible_with(b_value)
             }
@@ -269,22 +278,6 @@ impl Type {
                 type_ref_a.number == type_ref_b.number
             }
 
-            (Self::Generic(base_a, params_a), Self::Generic(base_b, params_b)) => {
-                if !base_a.compatible_with(base_b) {
-                    return false;
-                }
-
-                if params_a.len() != params_b.len() {
-                    return false;
-                }
-
-                for (param_a, param_b) in params_a.iter().zip(params_b) {
-                    if !param_a.compatible_with(param_b) {
-                        return false;
-                    }
-                }
-                true
-            }
             _ => false,
         }
     }

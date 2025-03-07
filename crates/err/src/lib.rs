@@ -6,16 +6,48 @@
 use eira::{Color, Kind, Pos, PosSpan, SourceLines};
 use std::fmt::Display;
 use std::io;
-use std::io::{Write, stderr};
+use std::io::{stderr, Write};
+use std::path::Path;
 use swamp_script_analyzer::err::ErrorKind;
 use swamp_script_analyzer::prelude::Error;
-use swamp_script_dep_loader::{DepLoaderError, DependencyError, ParseRootError, ParserError};
-use swamp_script_eval::err::ExecuteErrorKind;
-use swamp_script_eval::prelude::ExecuteError;
-use swamp_script_eval_loader::EvalLoaderError;
+use swamp_script_dep_loader::{DepLoaderError, DependencyError};
+use swamp_script_eval_loader::LoaderErr;
 use swamp_script_node::Span;
 use swamp_script_parser::SpecificError;
+use swamp_script_semantic::SemanticError;
 use swamp_script_source_map::{FileId, SourceMap};
+
+#[derive(Debug)]
+pub enum ScriptResolveError {
+    ResolveError(Error),
+    DepLoaderError(DepLoaderError),
+    DependencyError(DependencyError),
+    LoaderError(LoaderErr),
+}
+
+impl From<DependencyError> for ScriptResolveError {
+    fn from(err: DependencyError) -> Self {
+        Self::DependencyError(err)
+    }
+}
+
+impl From<Error> for ScriptResolveError {
+    fn from(err: Error) -> Self {
+        Self::ResolveError(err)
+    }
+}
+
+impl From<DepLoaderError> for ScriptResolveError {
+    fn from(err: DepLoaderError) -> Self {
+        Self::DepLoaderError(err)
+    }
+}
+
+impl From<LoaderErr> for ScriptResolveError {
+    fn from(err: LoaderErr) -> Self {
+        Self::LoaderError(err)
+    }
+}
 
 pub struct SourceLinesWrap<'a> {
     pub file_id: FileId,
@@ -50,7 +82,12 @@ impl<C: Display + Clone> Report<C> {
 
     /// # Errors
     ///
-    pub fn print(&self, source_map: &SourceMap, mut writer: impl Write) -> io::Result<()> {
+    pub fn print(
+        &self,
+        source_map: &SourceMap,
+        current_dir: &Path,
+        mut writer: impl Write,
+    ) -> io::Result<()> {
         let header = eira::Header {
             header_kind: self.config.kind,
             code: self.config.error_code.clone(),
@@ -60,10 +97,10 @@ impl<C: Display + Clone> Report<C> {
         let primary_span = &self.config.primary_span;
         let (row, col) =
             source_map.get_span_location_utf8(primary_span.file_id, primary_span.offset as usize);
-        let filename = source_map.fetch_relative_filename(primary_span.file_id);
+        let filename = source_map.get_relative_path_to(primary_span.file_id, current_dir)?;
 
         eira::FileSpanMessage::write(
-            filename,
+            filename.to_str().unwrap(),
             &PosSpan {
                 pos: Pos { x: col, y: row },
                 length: primary_span.length as usize,
@@ -152,60 +189,30 @@ impl<C: Display + Clone> Builder<C> {
 }
 
 /// # Panics
-///
-pub fn show_execute_error(err: &ExecuteError, source_map: &SourceMap) {
-    let builder = build_execute_error(err);
-    let report = builder.build();
-    report.print(source_map, stderr()).unwrap();
-}
 
 /// # Panics
 ///
-pub fn show_parse_error_internal(err: &SpecificError, span: &Span, source_map: &SourceMap) {
+pub fn show_parse_error(
+    err: &SpecificError,
+    span: &Span,
+    source_map: &SourceMap,
+    current_dir: &Path,
+) {
     let builder = build_parse_error(err, span);
     let report = builder.build();
-    report.print(source_map, stderr()).unwrap();
+    report.print(source_map, current_dir, stderr()).unwrap();
 }
 
 /// # Panics
 ///
-pub fn show_parser_error(err: &ParserError, source_map: &SourceMap) {
-    let span = Span {
-        file_id: err.file_id,
-        offset: err.node.span.offset,
-        length: err.node.span.length,
-    };
-    show_parse_error_internal(&err.specific, &span, source_map);
-}
-
-pub fn show_eval_loader_error(err: &EvalLoaderError, source_map: &SourceMap) {
-    match err {
-        EvalLoaderError::DepLoaderError(err) => show_dep_loader_error(err, source_map),
-        EvalLoaderError::AnalyzerError(err) => show_analyzer_error(err, source_map),
-    }
-}
-
-pub fn show_dep_loader_error(err: &DepLoaderError, source_map: &SourceMap) {
-    match err {
-        DepLoaderError::DependencyError(err) => show_dependency_error(err, source_map),
-    }
-}
-
-pub fn show_dependency_error(err: &DependencyError, source_map: &SourceMap) {
-    match err {
-        DependencyError::CircularDependency(x) => {
-            eprintln!("{}", format!("circular dependency {:?}", x))
-        }
-        DependencyError::ParseRootError(err) => show_parse_root_error(err, source_map),
-        DependencyError::IoError(_) => {}
-    }
-}
-
-fn show_parse_root_error(err: &ParseRootError, source_map: &SourceMap) {
-    match err {
-        ParseRootError::IoError(_) => {}
-        ParseRootError::ParserError(err) => show_parser_error(err, source_map),
-    }
+pub fn show_script_resolve_error(
+    err: &ScriptResolveError,
+    source_map: &SourceMap,
+    current_dir: &Path,
+) {
+    let builder = build_script_error(err, source_map);
+    let report = builder.build();
+    report.print(source_map, current_dir, stderr()).unwrap();
 }
 
 #[must_use]
@@ -301,9 +308,7 @@ pub fn build_parse_error(err: &SpecificError, span: &Span) -> Builder<usize> {
         SpecificError::ExpectedImportPath => todo!(),
         SpecificError::ExpectedIdentifier => todo!(),
         SpecificError::ExpectedIdentifierAfterPath => todo!(),
-        SpecificError::ExpectedFieldOrRest => {
-            Report::build(Kind::Error, 32241, "expected field or rest", span)
-        }
+        SpecificError::ExpectedFieldOrRest => todo!(),
         SpecificError::UnknownTerm(_) => Report::build(Kind::Error, 32241, "UnknownTerm", span),
         SpecificError::UnknownExpr(_) => todo!(),
         &swamp_script_parser::SpecificError::CouldNotMoveDown
@@ -314,40 +319,18 @@ pub fn build_parse_error(err: &SpecificError, span: &Span) -> Builder<usize> {
 
 /// # Panics
 ///
-pub fn show_analyzer_error(err: &Error, source_map: &SourceMap) {
-    let builder = build_analyze_error(err);
+pub fn show_error(err: &Error, source_map: &SourceMap, current_dir: &Path) {
+    let builder = build_resolve_error(err);
     let report = builder.build();
-    report.print(source_map, stderr()).unwrap();
+    report.print(source_map, current_dir, stderr()).unwrap();
 }
 
 #[must_use]
 #[allow(clippy::too_many_lines)]
-pub fn build_analyze_error(err: &Error) -> Builder<usize> {
+pub fn build_resolve_error(err: &Error) -> Builder<usize> {
     let span = &err.node.span;
     match &err.kind {
-        ErrorKind::BreakOutsideLoop => Report::build(Kind::Error, 4243, "break outside loop", span),
-
-        ErrorKind::ReturnOutsideCompare => {
-            Report::build(Kind::Error, 4243, "return outside compare", span)
-        }
-
-        ErrorKind::EmptyMatch => Report::build(Kind::Error, 4243, "empty match", span),
-
-        ErrorKind::NoDefaultImplementedForType(_ty) => {
-            Report::build(Kind::Error, 4243, "no default implemented for type", span)
-        }
-
-        ErrorKind::UnusedVariablesCanNotBeMut => {
-            Report::build(Kind::Error, 4243, "unused variables can not be mut", span)
-        }
-        ErrorKind::MatchArmsMustHaveTypes => {
-            Report::build(Kind::Error, 4243, "arms must have types", span)
-        }
-
-        ErrorKind::ContinueOutsideLoop => {
-            Report::build(Kind::Error, 4243, "continue outside loop", span)
-        }
-
+        &swamp_script_analyzer::err::ErrorKind::UnknownEnumType => todo!(),
         ErrorKind::TypeDoNotSupportRangeAccess => {
             Report::build(Kind::Error, 4253, "type do not support range access", span)
         }
@@ -363,37 +346,17 @@ pub fn build_analyze_error(err: &Error) -> Builder<usize> {
         ErrorKind::CanNotDestructure => {
             Report::build(Kind::Error, 4203, "Can Not Destructure", span)
         }
-        ErrorKind::EmptySliceCanOnlyBeMapOrArray => Report::build(
-            Kind::Error,
-            903,
-            "EmptyArrayCanOnlyBeMapOrArray",
-            &Span::default(),
-        ),
         ErrorKind::UnknownConstant => Report::build(Kind::Error, 903, "Unknown constant", span),
-        ErrorKind::CanNotFindModule(x) => Report::build(
-            Kind::Error,
-            902,
-            &format!("Can not find module {x:?}"),
-            &Span::default(),
-        ),
         ErrorKind::UnknownStructTypeReference => {
             Report::build(Kind::Error, 105, "Unknown Struct Type Reference", span)
         }
-        ErrorKind::UnknownLocalStructTypeReference(_) => todo!(),
         ErrorKind::DuplicateFieldName => todo!(),
-        ErrorKind::Unknown(_) => todo!(),
-        ErrorKind::UnknownImplTargetTypeReference(_) => todo!(),
-        ErrorKind::WrongFieldCountInStructInstantiation(_, _) => todo!(),
         ErrorKind::MissingFieldInStructInstantiation(fields, _struct_type) => {
             Report::build(Kind::Error, 903, "missing fields in instantiation", span)
                 .with_note(&format!("fields: {fields:?}"))
         }
-        ErrorKind::ExpectedFunctionExpression => todo!(),
-        ErrorKind::CouldNotFindMember(_, _) => todo!(),
         ErrorKind::UnknownVariable => Report::build(Kind::Error, 105, "Unknown variable", span),
-        ErrorKind::UnknownIdentifier => Report::build(Kind::Error, 105, "Unknown identifier", span),
         ErrorKind::NotAnArray => Report::build(Kind::Error, 5405, "was not an array", span),
-        ErrorKind::ArrayIndexMustBeInt(_) => todo!(),
         ErrorKind::OverwriteVariableWithAnotherType => Report::build(
             Kind::Error,
             14505,
@@ -402,9 +365,6 @@ pub fn build_analyze_error(err: &Error) -> Builder<usize> {
         ),
         ErrorKind::WrongNumberOfArguments(_expected, _encountered) => {
             Report::build(Kind::Error, 105, "wrong number of arguments", span)
-        }
-        ErrorKind::IncompatibleArguments(_a, _b) => {
-            Report::build(Kind::Error, 904, "Incompatible arguments", span)
         }
         //    .with_label("first_type", a.to_string())
         //.with_label("second_type", b.to_string())
@@ -415,21 +375,12 @@ pub fn build_analyze_error(err: &Error) -> Builder<usize> {
             "Variable needs to be mut to overwrite",
             span,
         ),
-        ErrorKind::OverwriteVariableNotAllowedHere => Report::build(
-            Kind::Error,
-            90423,
-            "overwrite variable is not allowed here",
-            span,
-        ),
-        ErrorKind::NotNamedStruct(_) => todo!(),
         ErrorKind::UnknownEnumVariantType => {
             Report::build(Kind::Error, 903, "Unknown enum variant type", span)
         }
-        ErrorKind::WasNotStructType => Report::build(Kind::Error, 903, "Not a struct type", span),
         ErrorKind::UnknownStructField => {
             Report::build(Kind::Error, 106, "Unknown Struct Field Reference", span)
         }
-        ErrorKind::MustBeEnumType(_) => todo!(),
         ErrorKind::UnknownEnumVariantTypeInPattern => Report::build(
             Kind::Error,
             106,
@@ -444,20 +395,11 @@ pub fn build_analyze_error(err: &Error) -> Builder<usize> {
         ErrorKind::ArgumentIsNotMutable => {
             Report::build(Kind::Error, 1401, "Argument is not mutable", span)
         }
-        ErrorKind::ParameterIsNotMutable => {
-            Report::build(Kind::Error, 1401, "Parameter is not mutable", span)
-        }
         ErrorKind::WrongNumberOfTupleDeconstructVariables => todo!(),
         ErrorKind::UnknownTypeReference => {
             Report::build(Kind::Error, 101, "Unknown type reference", span)
         }
-        ErrorKind::SemanticError(a) => Report::build(
-            Kind::Error,
-            141,
-            &format!("semantic error {a:?}"),
-            &Span::dummy(),
-        ),
-        ErrorKind::SeqMapError(_) => todo!(),
+        ErrorKind::SemanticError(semantic_error) => build_semantic_error(semantic_error, span),
         ErrorKind::ExpectedMemberCall => todo!(),
         ErrorKind::CouldNotFindStaticMember(x, _y) => {
             Report::build(Kind::Error, 9101, "Could not find static member", &x.span)
@@ -471,7 +413,7 @@ pub fn build_analyze_error(err: &Error) -> Builder<usize> {
                 &format!(
                     "Field initialization expression is of wrong type. expected {expected_type}, encountered: {encountered_type}"
                 ),
-                &span,
+                span,
             )
         }
         ErrorKind::ExpectedOptional => {
@@ -490,23 +432,18 @@ pub fn build_analyze_error(err: &Error) -> Builder<usize> {
             //.with_label("first_type", a.clone())
             //.with_note(&format!("second_type {b:?}"))
         }
-        ErrorKind::CouldNotCoerceTo(_a) => {
-            Report::build(Kind::Error, 102, "could not coerce", span)
-            //.with_label("first_type", a.clone())
-            //.with_note(&format!("second_type {b:?}"))
-        }
         ErrorKind::ExpectedArray(_) => Report::build(Kind::Error, 102, "ExpectedArray", span),
         ErrorKind::UnknownMemberFunction => {
             Report::build(Kind::Error, 101, "Unknown member function", span)
         }
-        ErrorKind::WrongNumberOfTypeArguments(_, _) => todo!(),
+        ErrorKind::WrongNumberOfTypeArguments(_, _) => {
+            Report::build(Kind::Error, 101, "WrongNumberOfTypeArguments", span)
+        }
         ErrorKind::OnlyVariablesAllowedInEnumPattern => todo!(),
         ErrorKind::ExpressionsNotAllowedInLetPattern => todo!(),
         ErrorKind::UnknownField => todo!(),
         ErrorKind::EnumVariantHasNoFields => todo!(),
-        ErrorKind::TooManyTupleFields { .. } => {
-            Report::build(Kind::Error, 102, "too many tuple fields", span)
-        }
+        ErrorKind::TooManyTupleFields { .. } => todo!(),
         ErrorKind::NotInFunction => todo!(),
         ErrorKind::ExpectedBooleanExpression => {
             Report::build(Kind::Error, 102, "Expected a boolean expression", span)
@@ -520,23 +457,13 @@ pub fn build_analyze_error(err: &Error) -> Builder<usize> {
         ErrorKind::FloatConversionError(_) => todo!(),
         ErrorKind::BoolConversionError => todo!(),
         ErrorKind::DuplicateFieldInStructInstantiation(_) => todo!(),
-        ErrorKind::InternalError(_) => todo!(),
         ErrorKind::WasNotFieldMutRef => todo!(),
         ErrorKind::UnknownFunction => Report::build(Kind::Error, 1026, "Unknown function", span),
         ErrorKind::NoDefaultImplemented(_resolved_type) => {
             Report::build(Kind::Error, 104, "No default() function", span)
         }
-        ErrorKind::NoDefaultImplementedForStruct(_) => todo!(),
-        ErrorKind::ExpectedFunctionTypeForFunctionCall => Report::build(
-            Kind::Error,
-            4404,
-            "expected function type for function call",
-            span,
-        ),
-        &ErrorKind::TypeDoNotSupportIndexAccess => todo!(),
-        ErrorKind::ExpectedMutableLocation => {
-            Report::build(Kind::Error, 104, "expected mutable location", span)
-        }
+        ErrorKind::NoDefaultImplementedForType(_) => todo!(),
+        ErrorKind::TypeDoNotSupportIndexAccess => todo!(),
         ErrorKind::GuardHasNoType => Report::build(Kind::Error, 105, "guard has no type", span),
         ErrorKind::EmptyBlockWrongType => {
             Report::build(Kind::Error, 106, "empty block wrong type", span)
@@ -556,78 +483,123 @@ pub fn build_analyze_error(err: &Error) -> Builder<usize> {
         ErrorKind::ExpectedImmutableExpression => {
             Report::build(Kind::Error, 112, "expected immutable expression", span)
         }
-        &swamp_script_analyzer::err::ErrorKind::CallsCanNotBePartOfChain
-        | &swamp_script_analyzer::err::ErrorKind::UnwrapCanNotBePartOfChain
-        | &swamp_script_analyzer::err::ErrorKind::NoneCoalesceCanNotBePartOfChain => todo!(),
-        &swamp_script_analyzer::err::ErrorKind::SelfNotCorrectType => todo!(),
-        &swamp_script_analyzer::err::ErrorKind::IllegalIndexInChain => {
+        ErrorKind::CallsCanNotBePartOfChain
+        | ErrorKind::UnwrapCanNotBePartOfChain
+        | ErrorKind::NoneCoalesceCanNotBePartOfChain => todo!(),
+        ErrorKind::SelfNotCorrectType => todo!(),
+        ErrorKind::IllegalIndexInChain => {
             Report::build(Kind::Error, 140, "illegal index in chain", span)
         }
-        &swamp_script_analyzer::err::ErrorKind::CanNotNoneCoalesce => todo!(),
+        ErrorKind::CanNotNoneCoalesce => todo!(),
         &ErrorKind::GuardCanNotHaveMultipleWildcards
         | &ErrorKind::WildcardMustBeLastInGuard
         | &ErrorKind::GuardMustHaveWildcard => todo!(),
-        &swamp_script_analyzer::err::ErrorKind::UnknownSymbol
-        | &swamp_script_analyzer::err::ErrorKind::UnknownEnumType
-        | &swamp_script_analyzer::err::ErrorKind::UnknownModule => {
-            Report::build(Kind::Error, 140, "some error", span)
-        }
-        &swamp_script_analyzer::err::ErrorKind::VariableTypeMustBeConcrete => {
-            Report::build(Kind::Error, 143, "VariableCanNotBeUnit", span)
-        }
+        ErrorKind::UnknownModule => Report::build(Kind::Error, 140, "Unknown module", span),
+        ErrorKind::UnknownSymbol => Report::build(Kind::Error, 140, "some error", span),
+        _ => todo!(),
     }
 }
 
+#[must_use]
+pub fn build_script_error(err: &ScriptResolveError, _source_map: &SourceMap) -> Builder<usize> {
+    match err {
+        ScriptResolveError::ResolveError(err) => build_resolve_error(err),
+        ScriptResolveError::DepLoaderError(err) => panic!("{}", format!("err: {:?}", err)),
+        ScriptResolveError::DependencyError(err) => panic!("{}", format!("err: {:?}", err)),
+        ScriptResolveError::LoaderError(err) => panic!("{}", format!("err: {:?}", err)),
+    }
+}
+
+#[must_use]
+pub fn build_semantic_error(err: &SemanticError, span: &Span) -> Builder<usize> {
+    match err {
+        SemanticError::CouldNotInsertStruct => {
+            Report::build(Kind::Error, 140, "CouldNotInsertStruct", span)
+        }
+        SemanticError::DuplicateTypeAlias(_) => {
+            Report::build(Kind::Error, 140, "DuplicateTypeAlias", span)
+        }
+        SemanticError::CanOnlyUseStructForMemberFunctions => {
+            Report::build(Kind::Error, 140, "CanOnlyUseStructForMemberFunctions", span)
+        }
+        SemanticError::ResolveNotStruct => {
+            Report::build(Kind::Error, 140, "ResolveNotStruct", span)
+        }
+        SemanticError::DuplicateStructName(_) => {
+            Report::build(Kind::Error, 140, "DuplicateStructName", span)
+        }
+        SemanticError::DuplicateEnumType(_) => {
+            Report::build(Kind::Error, 140, "DuplicateEnumType", span)
+        }
+        SemanticError::DuplicateEnumVariantType(_, _) => {
+            Report::build(Kind::Error, 140, "DuplicateEnumVariantType", span)
+        }
+        SemanticError::DuplicateFieldName(_) => {
+            Report::build(Kind::Error, 140, "DuplicateFieldName", span)
+        }
+        SemanticError::DuplicateExternalFunction(_) => {
+            Report::build(Kind::Error, 140, "DuplicateExternalFunction", span)
+        }
+        SemanticError::DuplicateRustType(_) => {
+            Report::build(Kind::Error, 140, "DuplicateRustType", span)
+        }
+        SemanticError::DuplicateConstName(_) => {
+            Report::build(Kind::Error, 140, "DuplicateConstName", span)
+        }
+        SemanticError::CircularConstantDependency(_) => {
+            Report::build(Kind::Error, 140, "CircularConstantDependency", span)
+        }
+        SemanticError::DuplicateConstantId(_) => {
+            Report::build(Kind::Error, 140, "DuplicateConstantId", span)
+        }
+        SemanticError::IncompatibleTypes => {
+            Report::build(Kind::Error, 140, "IncompatibleTypes", span)
+        }
+        SemanticError::WasNotImmutable => Report::build(Kind::Error, 140, "WasNotImmutable", span),
+        SemanticError::WasNotMutable => Report::build(Kind::Error, 140, "WasNotMutable", span),
+        SemanticError::UnknownImplOnType => {
+            Report::build(Kind::Error, 140, "UnknownImplOnType", span)
+        }
+        SemanticError::DuplicateNamespaceLink(_) => {
+            Report::build(Kind::Error, 140, "DuplicateNamespaceLink", span)
+        }
+        &swamp_script_semantic::SemanticError::DuplicateSymbolName(_)
+        | &swamp_script_semantic::SemanticError::MismatchedTypes { .. } => todo!(),
+    }
+}
+
+/*
 #[must_use]
 pub fn build_execute_error(err: &ExecuteError) -> Builder<usize> {
     let span = &err.node.span;
     match &err.kind {
         ExecuteErrorKind::ExpectedInt => Report::build(Kind::Error, 104, "expected int", span),
-        ExecuteErrorKind::UnknownMutIntrinsic => {
-            Report::build(Kind::Error, 104, "unknown mut intrinsic", span)
-        }
-        ExecuteErrorKind::UnknownGenericIntrinsic => {
-            Report::build(Kind::Error, 104, "unknown generic intrinsic", span)
-        }
         ExecuteErrorKind::ExpectedString => {
             Report::build(Kind::Error, 104, "expected string", span)
         }
-        ExecuteErrorKind::ValueError(_) => Report::build(Kind::Error, 104, "value error", span),
+        ExecuteErrorKind::ConversionError(_) => todo!(),
+        ExecuteErrorKind::ValueError(_) => todo!(),
         ExecuteErrorKind::ArgumentIsNotMutable => {
             Report::build(Kind::Error, 104, "argument is not mutable", span)
         }
-        ExecuteErrorKind::ExpectedOptional => {
-            Report::build(Kind::Error, 104, "expected optional", span)
-        }
-        ExecuteErrorKind::NonUniqueKeysInMapLiteralDetected => {
-            Report::build(Kind::Error, 104, "non unique map", span)
-        }
-        ExecuteErrorKind::NotAnArray => Report::build(Kind::Error, 104, "not an array", span),
-        ExecuteErrorKind::NotSparseValue => {
-            Report::build(Kind::Error, 104, "not sparse value", span)
-        }
-        ExecuteErrorKind::CoerceOptionToBoolFailed => {
-            Report::build(Kind::Error, 104, "coercion to bool failed", span)
-        }
-        ExecuteErrorKind::VariableWasNotMutable => {
-            Report::build(Kind::Error, 104, "variable was not mutable", span)
-        }
-        ExecuteErrorKind::ContinueNotAllowedHere => {
-            Report::build(Kind::Error, 104, "continue not allowed here", span)
-        }
-        ExecuteErrorKind::BreakNotAllowedHere => {
-            Report::build(Kind::Error, 104, "break not allowed here", span)
-        }
-        ExecuteErrorKind::NotAMap => Report::build(Kind::Error, 104, "not a map", span),
-        ExecuteErrorKind::MissingExternalFunction(_) => {
-            Report::build(Kind::Error, 104, "external function missing", span)
-        }
-        ExecuteErrorKind::WrongNumberOfArguments(_, _) => {
-            Report::build(Kind::Error, 104, "wrong number of arguments", span)
-        }
-        ExecuteErrorKind::RangeItemMustBeInt => {
-            Report::build(Kind::Error, 104, "range item must be Int", span)
-        }
+        ExecuteErrorKind::CanNotUnwrap => todo!(),
+        ExecuteErrorKind::IllegalIterator => todo!(),
+        ExecuteErrorKind::ExpectedOptional => todo!(),
+        ExecuteErrorKind::NonUniqueKeysInMapLiteralDetected => todo!(),
+        ExecuteErrorKind::NotAnArray => todo!(),
+        ExecuteErrorKind::ValueIsNotMutable => todo!(),
+        ExecuteErrorKind::NotSparseValue => todo!(),
+        ExecuteErrorKind::CoerceOptionToBoolFailed => todo!(),
+        ExecuteErrorKind::VariableWasNotMutable => todo!(),
+        ExecuteErrorKind::ContinueNotAllowedHere => todo!(),
+        ExecuteErrorKind::BreakNotAllowedHere => todo!(),
+        ExecuteErrorKind::NotMutLocationFound => todo!(),
+        ExecuteErrorKind::IndexWasNotInteger => todo!(),
+        ExecuteErrorKind::NotAMap => todo!(),
+        ExecuteErrorKind::MissingExternalFunction(_) => todo!(),
+        ExecuteErrorKind::WrongNumberOfArguments(_, _) => todo!(),
+        ExecuteErrorKind::IncompatibleTypes => todo!(),
+        ExecuteErrorKind::RangeItemMustBeInt => todo!(),
         ExecuteErrorKind::OperationRequiresArray => todo!(),
         ExecuteErrorKind::ExpectedFloat => todo!(),
         ExecuteErrorKind::ExpectedTwoFloatTuple => todo!(),
@@ -639,10 +611,20 @@ pub fn build_execute_error(err: &ExecuteError) -> Builder<usize> {
         }
         ExecuteErrorKind::ExpectedArray => todo!(),
         ExecuteErrorKind::ExpectedMap => todo!(),
-        ExecuteErrorKind::PostfixChainError => todo!(),
-        ExecuteErrorKind::IndexOutOfBounds => todo!(),
+        &swamp_script_eval::err::ExecuteErrorKind::PostfixChainError => todo!(),
+        &swamp_script_eval::err::ExecuteErrorKind::IndexOutOfBounds => todo!(),
         &ExecuteErrorKind::DivideByZero | &ExecuteErrorKind::MapKeyAlreadyExists => todo!(),
-        ExecuteErrorKind::MustHaveGuardArmThatMatches => todo!(),
+        &swamp_script_eval::err::ExecuteErrorKind::MustHaveGuardArmThatMatches => todo!(),
         ExecuteErrorKind::CouldNotConvertFromSignal => todo!(),
+        &swamp_script_eval::err::ExecuteErrorKind::InvalidIntrinsic => todo!(),
     }
 }
+
+///
+pub fn show_execute_error(err: &ExecuteError, source_map: &SourceMap) {
+    let builder = build_execute_error(err);
+    let report = builder.build();
+    report.print(source_map, stderr()).unwrap();
+}
+
+*/

@@ -11,10 +11,10 @@ use std::fmt::Debug;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use swamp_script_core_extra::extra::{SparseValueId, SparseValueMap};
 use swamp_script_core_extra::prelude::ValueError;
-use swamp_script_core_extra::value::{SPARSE_ID_TYPE_ID, SPARSE_TYPE_ID, ValueRef};
 use swamp_script_core_extra::value::{
-    SourceMapLookup, Value, convert_vec_to_rc_refcell, format_value, to_rust_value,
+    convert_vec_to_rc_refcell, format_value, to_rust_value, SourceMapLookup, Value,
 };
+use swamp_script_core_extra::value::{ValueRef, SPARSE_ID_TYPE_ID, SPARSE_TYPE_ID};
 use swamp_script_node::Node;
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{ArgumentExpressionOrLocation, LocationAccess, LocationAccessKind};
@@ -25,7 +25,7 @@ use swamp_script_semantic::{
 };
 use swamp_script_semantic::{ExternalFunctionId, Postfix, SingleMutLocationExpression};
 use swamp_script_types::{
-    EnumVariantType, EnumVariantTypeRef, ExternalType, Type, TypeForParameter, same_anon_struct_ref,
+    same_anon_struct_ref, EnumVariantType, EnumVariantTypeRef, ExternalType, Type, TypeForParameter,
 };
 use tracing::{error, info};
 
@@ -458,7 +458,7 @@ impl<'a, C> Interpreter<'a, C> {
                         }
                     }
 
-                    LocationAccessKind::ExternalTypeIndex(_rust_type_ref, key_expr) => {
+                    LocationAccessKind::SparseIndex(_element_type, key_expr) => {
                         let key_expr_value = self.evaluate_expression(key_expr)?;
                         match key_expr_value.downcast_rust::<SparseValueId>() {
                             Some(found_sparse_id) => {
@@ -1318,6 +1318,7 @@ impl<'a, C> Interpreter<'a, C> {
                 let x = value_ref.borrow().clone();
                 x
             }
+            ExpressionKind::IntrinsicFunctionAccess(_) => todo!(),
         };
 
         self.depth -= 1;

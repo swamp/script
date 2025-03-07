@@ -3,8 +3,8 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use crate::TypeContext;
 use crate::err::{Error, ErrorKind};
+use crate::TypeContext;
 use crate::{Analyzer, LocationSide, SPARSE_TYPE_ID};
 use std::rc::Rc;
 use swamp_script_node::Node;
@@ -72,6 +72,7 @@ impl Analyzer<'_> {
         Ok(resolved_arguments)
     }
 
+    /*
     pub(crate) fn check_for_internal_static_call(
         &mut self,
         type_name: &swamp_script_ast::QualifiedTypeIdentifier,
@@ -117,8 +118,6 @@ impl Analyzer<'_> {
                     resolved_generic_type_parameters.clone(),
                 );
 
-                let value_item_type = resolved_generic_type_parameters[0].clone();
-
                 let expr = self.create_expr(
                     ExpressionKind::IntrinsicCallGeneric(
                         IntrinsicFunction::SparseNew,
@@ -130,12 +129,35 @@ impl Analyzer<'_> {
                 );
 
                 return Ok(Some(expr));
+            } else if type_name_text == "Grid" && function_name_text == "new" {
+                if resolved_generic_type_parameters.len() != 1 {
+                    return Err(self.create_err(
+                        ErrorKind::WrongNumberOfTypeArguments(
+                            resolved_generic_type_parameters.len(),
+                            1,
+                        ),
+                        function_name,
+                    ));
+                }
+
+                let expr = self.create_expr(
+                    ExpressionKind::IntrinsicCallGeneric(
+                        IntrinsicFunction::GridCreate,
+                        resolved_generic_type_parameters.clone(),
+                        vec![],
+                    ),
+                    Type::Grid(Box::new(resolved_generic_type_parameters[0].clone())),
+                    &type_name.name.0,
+                );
+                return Ok(Some(expr));
             }
         }
 
         Ok(None)
     }
 
+
+     */
     /// # Errors
     ///
     pub fn analyze_mut_or_immutable_expression(

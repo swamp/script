@@ -8,5 +8,5 @@ pub use {
     swamp_script_eval::prelude::*, swamp_script_eval_loader::EvalLoaderError, swamp_script_node::*,
     swamp_script_parser::prelude::*, swamp_script_semantic::prelude::*,
     swamp_script_source_map::prelude::*, swamp_script_source_map_lookup::SourceMapWrapper,
-    swamp_script_std::prelude::*, swamp_script_types::prelude::*,
+    swamp_script_std::prelude::*, swamp_script_types::prelude::*, swamp_script_core::*, swamp_script_modules::prelude::*,
 };

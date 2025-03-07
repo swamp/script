@@ -1334,7 +1334,7 @@ fn infer_anonymous_struct() {
     check(
         "
     struct Something {
-       a: Int,  
+       a: Int,
     }
 
     result: Something = { a: 3 }
@@ -1353,7 +1353,7 @@ fn impl_on_enum() {
     enum State {
        StartingUp,
        NotWorking(Int),
-       Operational { duration: Int },  
+       Operational { duration: Int },
     }
 
     impl State {
@@ -1372,7 +1372,6 @@ Unit,VariableDefinition(Variable { name: <52:6>, resolved_type: Something, mutab
 "#,
     );
 }
-*/
 
 #[test_log::test]
 fn annotation() {
@@ -1382,6 +1381,22 @@ fn annotation() {
     ",
         r#"
 Unit,VariableDefinition(Variable { name: <52:6>, resolved_type: Something, mutable_node: None, scope_index: 0, variable_index: 0 }, MutOrImmutableExpression { expression_or_location: Expression(<72:8>Something,StructInstantiation(StructInstantiation { source_order_expressions: [(0, <77:1>Int,Literal(IntLiteral(3)))], struct_type_ref: RefCell { value: struct "Something" } })), is_mutable: None })
+
+"#,
+    );
+}
+*/
+
+
+#[test_log::test]
+fn type_generator() {
+    check(
+        "
+    a = Sparse<Int>::new()
+    ",
+        r#"
+Namespace { path: ["test"], symbol_table: SymbolTable { symbols: SeqMap() } }
+Unit,VariableDefinition(Variable { name: <5:1>, resolved_type: "Sparse"?<[Int]>, mutable_node: None, scope_index: 0, variable_index: 0 }, MutOrImmutableExpression { expression_or_location: Expression(<9:6>RustType Sparse<Int>,IntrinsicCallGeneric(SparseNew, [Int], [])), is_mutable: None })
 
 "#,
     );

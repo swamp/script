@@ -79,7 +79,7 @@ pub enum ErrorKind {
     IncompatibleTypes(Type, Type),
     ExpectedArray(Type),
     UnknownMemberFunction,
-    WrongNumberOfTypeArguments(usize, i32),
+    WrongNumberOfTypeArguments(usize, usize),
     OnlyVariablesAllowedInEnumPattern,
     ExpressionsNotAllowedInLetPattern,
     UnknownField,

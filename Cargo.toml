@@ -27,6 +27,8 @@ members = [
 
     # "crates/extra", # Not used yet
     "crates/err",
+    "crates/compile",
+    "crates/modules",
 
     "crates/source-map", # Move this later
     "crates/eira",

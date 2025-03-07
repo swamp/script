@@ -6,8 +6,8 @@
 pub mod collections;
 pub mod prelude;
 
-use swamp_script_semantic::{modules::Module, symtbl::SymbolTable};
 use swamp_script_types::{ExternalType, TypeNumber};
+/*
 pub const SPARSE_TYPE_ID: TypeNumber = 999;
 pub const SPARSE_ID_TYPE_ID: TypeNumber = 998;
 
@@ -33,7 +33,18 @@ pub fn create_std_module() -> Module {
             .expect("could not register SparseId type");
     }
 
+    {
+        let sparse_rust_type = ExternalType {
+            type_name: "Grid".to_string(),
+            number: SPARSE_TYPE_ID,
+        };
+        symbol_table
+            .add_external_type(sparse_rust_type)
+            .expect("could not register Grid type");
+    }
+
     let std_module = Module::new(&["std".to_string()], symbol_table, None);
 
     std_module
 }
+*/

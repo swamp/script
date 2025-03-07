@@ -155,42 +155,38 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
 
             (val, offset)
         }
-        Type::Generic(base_type, type_parameters) => {
-            if let Type::External(found_rust_type) = &**base_type {
-                if found_rust_type.number == SPARSE_TYPE_ID {
-                    let sparse_type_id_rust_type = Rc::new(ExternalType {
-                        type_name: "SparseId".to_string(),
-                        number: SPARSE_ID_TYPE_ID, // TODO: FIX hardcoded number
-                    });
+        Type::Sparse(value_type) => {
+            let sparse_type_id_rust_type = Rc::new(ExternalType {
+                type_name: "SparseId".to_string(),
+                number: SPARSE_ID_TYPE_ID, // TODO: FIX hardcoded number
+            });
 
-                    let value_type = &type_parameters[0];
+     
+            let (internal_map, sparse_value_map_octet_size) =
+                SparseValueMap::quick_deserialize(
+                    sparse_type_id_rust_type,
+                    *value_type.clone(),
+                    buf,
+                );
 
-                    let (internal_map, sparse_value_map_octet_size) =
-                        SparseValueMap::quick_deserialize(
-                            sparse_type_id_rust_type,
-                            value_type.clone(),
-                            buf,
-                        );
+            let wrapped_internal_map: Rc<RefCell<Box<dyn RustType>>> =
+                Rc::new(RefCell::new(Box::new(internal_map)));
 
-                    let wrapped_internal_map: Rc<RefCell<Box<dyn RustType>>> =
-                        Rc::new(RefCell::new(Box::new(internal_map)));
+            let sparse_collection_rust_type = Rc::new(ExternalType {
+                type_name: "Sparse".to_string(),
+                number: SPARSE_TYPE_ID, // TODO: FIX hardcoded number
+            });
 
-                    let sparse_collection_rust_type = Rc::new(ExternalType {
-                        type_name: "Sparse".to_string(),
-                        number: SPARSE_TYPE_ID, // TODO: FIX hardcoded number
-                    });
+            (
+                Value::RustValue(sparse_collection_rust_type, wrapped_internal_map),
+                sparse_value_map_octet_size,
+            )
 
-                    (
-                        Value::RustValue(sparse_collection_rust_type, wrapped_internal_map),
-                        sparse_value_map_octet_size,
-                    )
-                } else {
-                    panic!("unknown generic type");
-                }
-            } else {
-                panic!("unknown generic type")
-            }
         }
+        Type::Grid(type_parameter) => {
+            todo!()
+        }
+
         Type::Function(_) => {
             panic!("can not serialize function")
         }

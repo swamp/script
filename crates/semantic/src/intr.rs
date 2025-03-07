@@ -4,6 +4,7 @@
  */
 
 use std::fmt;
+use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
 use swamp_script_types::prelude::*;
 
@@ -70,6 +71,14 @@ pub enum IntrinsicFunction {
     SparseHas,
     SparseRemove,
 
+    // Grid
+    GridCreate,
+    GridFromSlice,
+    //GridIter,
+    //GridIterMut,
+    GridSubscript,
+    GridSubscriptMut,
+
     Float2Magnitude,
     SparseAdd,
     VecLen,
@@ -84,6 +93,8 @@ pub struct IntrinsicFunctionDefinition {
     pub signature: Signature,
     pub intrinsic: IntrinsicFunction,
 }
+
+
 
 impl fmt::Display for IntrinsicFunction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -153,6 +164,12 @@ impl fmt::Display for IntrinsicFunction {
             Self::SparseSubscript => "sparse_subscript",
             Self::SparseIter => "sparse_iter",
             Self::SparseIterMut => "sparse_iter_mut",
+
+            // Grid
+            Self::GridCreate => "grid_new",
+            Self::GridSubscript => "grid_subscript",
+            Self::GridSubscriptMut => "grid_subscript_mut",
+            Self::GridFromSlice => "grid_from_slice",
 
             // Other
             Self::Float2Magnitude => "float2_magnitude",

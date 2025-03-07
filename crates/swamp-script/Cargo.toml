@@ -18,6 +18,8 @@ swamp-script-semantic = { path = "../semantic", version = "0.0.19" }
 swamp-script-types = { path = "../types", version = "0.0.19" }
 swamp-script-node = { path = "../node", version = "0.0.19" }
 swamp-script-analyzer = { path = "../analyzer", version = "0.0.19" }
+swamp-script-core = { path = "../core", version = "0.0.19" }
+swamp-script-modules = { path = "../modules", version = "0.0.19" }
 
 swamp-script-error-report = { path = "../err", version = "0.0.19" }
 

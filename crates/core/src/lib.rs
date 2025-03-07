@@ -1,13 +1,12 @@
-/*
-use std::rc::Rc;
 use swamp_script_modules::modules::Module;
-use swamp_script_modules::symtbl::{GeneratorKind, Symbol, SymbolTable, TypeGenerator};
-use swamp_script_semantic::Type;
-use swamp_script_semantic::{
-    AliasType, IntrinsicFunction, IntrinsicFunctionDefinition, Signature, TypeForParameter,
-};
-use swamp_script_semantic::{ExternalType, Node, TYPE_NUMBER_FFI_VALUE};
+use swamp_script_modules::symtbl::{GeneratorKind, SymbolTable, TypeGenerator};
+use swamp_script_node::Node;
+use swamp_script_semantic::prelude::{IntrinsicFunction, IntrinsicFunctionDefinition};
+use swamp_script_types::{AliasType, ExternalType, Signature, Type, TypeForParameter, TypeNumber};
 use tiny_ver::TinyVersion;
+
+//pub const SPARSE_TYPE_ID: TypeNumber = 999;
+pub const SPARSE_ID_TYPE_ID: TypeNumber = 998;
 
 pub const PACKAGE_NAME: &str = "core";
 fn add_intrinsic_types(core_ns: &mut SymbolTable) {
@@ -39,6 +38,7 @@ fn add_intrinsic_types(core_ns: &mut SymbolTable) {
     };
     core_ns.add_alias(bool_alias).unwrap();
 
+    /*
     let value_type = ExternalType {
         type_name: "Value".to_string(),
         number: TYPE_NUMBER_FFI_VALUE,
@@ -46,23 +46,7 @@ fn add_intrinsic_types(core_ns: &mut SymbolTable) {
     let value_type = Symbol::Type(Type::External(Rc::new(value_type)));
     core_ns.add_symbol("Value", value_type).unwrap();
 
-    let slice_type_generator = TypeGenerator {
-        kind: GeneratorKind::Slice,
-        arity: 1,
-    };
-
-    core_ns
-        .add_type_generator("Slice", slice_type_generator)
-        .unwrap();
-
-    let slice_type_generator = TypeGenerator {
-        kind: GeneratorKind::SlicePair,
-        arity: 2,
-    };
-
-    core_ns
-        .add_type_generator("SlicePair", slice_type_generator)
-        .unwrap();
+     */
 }
 
 #[allow(clippy::too_many_lines)]
@@ -70,10 +54,10 @@ fn add_intrinsic_functions(core_ns: &mut SymbolTable) {
     add_intrinsic_float_functions(core_ns);
     add_intrinsic_int_functions(core_ns);
     add_intrinsic_string_functions(core_ns);
-    let value_type = core_ns.get_type("Value").unwrap().clone();
-    add_intrinsic_vec_functions(core_ns, &value_type);
-    add_intrinsic_map_functions(core_ns, &value_type);
-    add_intrinsic_sparse_functions(core_ns, &value_type);
+    //let value_type = core_ns.get_type("Value").unwrap().clone();
+    //add_intrinsic_vec_functions(core_ns, &value_type);
+    //add_intrinsic_map_functions(core_ns, &value_type);
+    //add_intrinsic_sparse_functions(core_ns, &value_type);
 }
 
 #[allow(clippy::too_many_lines)]
@@ -625,7 +609,7 @@ fn add_intrinsic_vec_functions(core_ns: &mut SymbolTable, value_type: &Type) {
         return_type: Box::new(Type::Optional(Box::new(value_type.clone()))),
     };
 
-    let self_int_to_optional_value_functions = [IntrinsicFunction::VecRemove];
+    let self_int_to_optional_value_functions = [IntrinsicFunction::VecRemoveIndex];
 
     for intrinsic_fn in self_int_to_optional_value_functions {
         let name = intrinsic_fn.to_string();
@@ -948,44 +932,48 @@ pub fn create_module(tiny_version: &TinyVersion) -> Module {
     let mut intrinsic_types_symbol_table = SymbolTable::new();
     let canonical_core_path = [tiny_version.versioned_name(PACKAGE_NAME).unwrap()];
     add_intrinsic_types(&mut intrinsic_types_symbol_table);
-    add_external_types(&mut intrinsic_types_symbol_table);
+    add_intrinsic_type_generators(&mut intrinsic_types_symbol_table);
     add_intrinsic_functions(&mut intrinsic_types_symbol_table);
 
     Module::new(&canonical_core_path, intrinsic_types_symbol_table, None)
 }
 
-/*
+fn add_intrinsic_type_generators(core_ns: &mut SymbolTable) {
+    let slice_type_generator = TypeGenerator {
+        kind: GeneratorKind::Slice,
+        arity: 1,
+    };
+    core_ns
+        .add_type_generator("Slice", slice_type_generator)
+        .unwrap();
 
-fn add_external_types(symbol_table: &mut SymbolTable) {
-    symbol_table
-        .add_type_generator(
-            "Sparse",
-            TypeGenerator {
-                arity: 1,
-                kind: GeneratorKind::Sparse,
-            },
-        )
-        .expect("TODO: panic message");
+    let slice_type_generator = TypeGenerator {
+        kind: GeneratorKind::SlicePair,
+        arity: 2,
+    };
+    core_ns
+        .add_type_generator("SlicePair", slice_type_generator)
+        .unwrap();
 
-    symbol_table
-        .add_type_generator(
-            "Vec",
-            TypeGenerator {
-                arity: 1,
-                kind: GeneratorKind::Vec,
-            },
-        )
-        .expect("TODO: panic message");
-    symbol_table
-        .add_type_generator(
-            "Map",
-            TypeGenerator {
-                arity: 2,
-                kind: GeneratorKind::Map,
-            },
-        )
-        .expect("TODO: panic message");
+    let external_sparse_id = ExternalType {
+        type_name: "SparseId".to_string(),
+        number: SPARSE_ID_TYPE_ID,
+    };
+    core_ns.add_external_type(external_sparse_id).unwrap();
+
+    let slice_type_generator = TypeGenerator {
+        kind: GeneratorKind::Sparse,
+        arity: 1,
+    };
+    core_ns
+        .add_type_generator("Sparse", slice_type_generator)
+        .unwrap();
+
+    let slice_type_generator = TypeGenerator {
+        kind: GeneratorKind::Grid,
+        arity: 1,
+    };
+    core_ns
+        .add_type_generator("Grid", slice_type_generator)
+        .unwrap();
 }
-*/
-
-*/

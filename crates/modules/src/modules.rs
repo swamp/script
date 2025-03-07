@@ -3,13 +3,11 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use crate::ns::Namespace;
-use crate::ns::NamespacePath;
-use crate::symtbl::SymbolTable;
-use crate::{Expression, ExpressionKind};
+use crate::symtbl::{SymbolTable, SymbolTableRef};
 use seq_map::SeqMap;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
+use swamp_script_semantic::{Expression, ExpressionKind};
 
 #[derive(Debug)]
 pub struct Modules {
@@ -22,6 +20,23 @@ impl Default for Modules {
     }
 }
 
+type NamespacePath = Vec<String>;
+
+#[derive(Debug)]
+pub struct Namespace {
+    pub path: NamespacePath,
+    pub symbol_table: SymbolTableRef,
+}
+
+impl Namespace {
+    pub fn new(path: NamespacePath, symbol_table: SymbolTable) -> Self {
+        Self {
+            path,
+            symbol_table: Rc::new(symbol_table),
+        }
+    }
+}
+
 pub struct Module {
     pub namespace: Namespace,
     pub expression: Option<Expression>,
@@ -29,6 +44,8 @@ pub struct Module {
 
 impl Debug for Module {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, " {:?}", self.namespace)?;
+        
         if let Some(resolved_expression) = &self.expression {
             pretty_print(f, resolved_expression, 0)?;
         }

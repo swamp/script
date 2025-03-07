@@ -45,10 +45,10 @@ impl Analyzer<'_> {
                 Type::Map(Box::from(key_type), Box::from(value_type))
             }
             swamp_script_ast::Type::Tuple(types) => Type::Tuple(self.analyze_types(types)?),
-            swamp_script_ast::Type::Generic(base_type, generic_types) => {
-                let base_type = self.analyze_type(base_type)?;
-                Type::Generic(Box::new(base_type), self.analyze_types(generic_types)?)
-            }
+//            swamp_script_ast::Type::Generic(base_type, generic_types) => {
+  //              let base_type = self.analyze_type(base_type)?;
+                //Type::Generic(Box::new(base_type), self.analyze_types(generic_types)?)
+    //        }
             swamp_script_ast::Type::Named(ast_type_reference) => {
                 self.analyze_named_type(ast_type_reference)?
             }

@@ -16,9 +16,11 @@ swamp-script-ast = { path = "../ast", version = "0.0.19" }
 swamp-script-source-map = { path = "../source-map", version = "0.0.19" }
 swamp-script-types = { path = "../types", version = "0.0.19" }
 swamp-script-node = { path = "../node", version = "0.0.19" }
+swamp-script-modules = { path = "../modules", version = "0.0.19"}
 
 [dev-dependencies]
 swamp-script-parser = { path = "../parser", version = "0.0.19" }
 test-log = { version = "0.2.16", features = ["trace", "log", "color"] }
 swamp-script-source-map-lookup = { path = "../source-map-lookup", version = "0.0.19" }
+swamp-script-compile = { path = "../compile", version = "0.0.19"}
 # swamp-script-error-report = { path = "../err", version = "0.0.14" }

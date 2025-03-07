@@ -352,6 +352,12 @@ impl SourceFileSection {
                 Self::source_code_pad(label.start.x - 1 - current_pos, &mut writer)?;
             }
 
+            if label.character_count == 0 {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "character_count is too low",
+                ));
+            }
             let middle = (label.character_count - 1) / 2;
             let underline: String = (0..label.character_count)
                 .map(|i| if i == middle { '┬' } else { '─' })

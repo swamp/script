@@ -3,12 +3,13 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 pub mod prelude;
+use dirs::home_dir;
 use seq_map::SeqMap;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::{env, io};
-use swamp_script_ast::Function;
 use swamp_script_ast::prelude::*;
+use swamp_script_ast::Function;
 use swamp_script_parser::{AstParser, SpecificError};
 use swamp_script_source_map::{FileId, SourceMap};
 use tracing::debug;
@@ -373,61 +374,29 @@ impl From<DependencyError> for DepLoaderError {
     }
 }
 
-pub fn os_cache_path(project_name: &str, directory_name: &str) -> io::Result<PathBuf> {
-    if cfg!(target_os = "windows") {
-        match env::var("LOCALAPPDATA") {
-            Ok(app_data) => {
-                let mut path = PathBuf::from(app_data);
-                path.push(project_name);
-                path.push(directory_name);
-                Ok(path)
-            }
-            Err(err) => {
-                eprintln!("Error: LOCALAPPDATA environment variable not found.");
-                Err(io::Error::new(io::ErrorKind::Other, err.to_string()))
-            }
-        }
-    } else if cfg!(target_os = "macos") {
-        match env::var("HOME") {
-            Ok(home_dir) => {
-                let mut path = PathBuf::from(home_dir);
-                path.push("Library");
-                path.push("Caches");
-                path.push(project_name);
-                path.push(directory_name);
-                Ok(path)
-            }
-            Err(err) => {
-                eprintln!("Error: HOME environment variable not found.");
-                Err(io::Error::new(io::ErrorKind::Other, err.to_string()))
-            }
-        }
-    } else if cfg!(target_os = "linux") {
-        let xdg_cache_home = env::var("XDG_CACHE_HOME").ok();
-        let cache_dir = xdg_cache_home.as_deref().unwrap_or("$HOME/.cache");
-
-        match env::var("HOME") {
-            Ok(home_dir) => {
-                let mut path = PathBuf::from(cache_dir.replace("$HOME", &home_dir));
-                path.push(project_name);
-                path.push(directory_name);
-                Ok(path)
-            }
-            Err(err) => {
-                eprintln!("Error: HOME environment variable not found.");
-                Err(io::Error::new(io::ErrorKind::Other, err.to_string()))
-            }
-        }
-    } else {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "unknown operating system",
-        ))
-    }
+/// # Errors
+///
+pub fn os_home_relative_path(project_name: &str, directory_name: &str) -> io::Result<PathBuf> {
+    home_dir().map_or_else(
+        || {
+            Err(io::Error::new(
+                io::ErrorKind::Other,
+                "Could not determine home directory",
+            ))
+        },
+        |home_path| {
+            let mut path = home_path;
+            path.push(format!(".{project_name}"));
+            path.push(directory_name);
+            Ok(path)
+        },
+    )
 }
 
+/// # Errors
+///
 pub fn swamp_registry_path() -> io::Result<PathBuf> {
-    os_cache_path("swamp", "registry")
+    os_home_relative_path("swamp", "packages")
 }
 
 pub fn parse_local_modules_and_get_order(

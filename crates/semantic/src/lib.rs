@@ -3,11 +3,9 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 pub mod intr;
-pub mod modules;
-pub mod ns;
 pub mod prelude;
-pub mod symtbl;
 
+use crate::prelude::IntrinsicFunctionDefinitionRef;
 use crate::intr::IntrinsicFunction;
 pub use fixed32::Fp;
 use seq_map::SeqMap;
@@ -43,7 +41,7 @@ pub enum SemanticError {
     IncompatibleTypes,
     WasNotImmutable,
     WasNotMutable,
-    DuplicateSymbolName,
+    DuplicateSymbolName(String),
     DuplicateNamespaceLink(String),
     MismatchedTypes { expected: Type, found: Vec<Type> },
     UnknownImplOnType,
@@ -102,6 +100,12 @@ impl Debug for ExternalFunctionDefinition {
 }
 
 pub type ExternalFunctionDefinitionRef = Rc<crate::ExternalFunctionDefinition>;
+
+
+
+
+
+
 
 #[derive(Debug)]
 pub struct Variable {
@@ -412,6 +416,7 @@ pub enum PostfixKind {
     StringIndex(Expression),
     StringRangeIndex(Range),
     MapIndex(Type, Type, Expression),
+    SparseIndex(Type, Expression),
     ExternalTypeIndexRef(ExternalTypeRef, Expression),
     MemberCall(FunctionRef, Vec<ArgumentExpressionOrLocation>),
     FunctionCall(Vec<ArgumentExpressionOrLocation>),
@@ -430,8 +435,8 @@ pub enum LocationAccessKind {
     StringIndex(Expression),
     StringRange(Range),
     MapIndex(Type, Type, Expression),
+    SparseIndex(Type, Expression),
     MapIndexInsertIfNonExisting(Type, Type, Expression),
-    ExternalTypeIndex(ExternalTypeRef, Expression),
 }
 
 #[derive(Debug)]
@@ -544,6 +549,7 @@ pub enum ExpressionKind {
     ArrayRangeAccess(Box<Expression>, Box<Range>),
 
     // ----
+    IntrinsicFunctionAccess(IntrinsicFunctionDefinitionRef),
     InternalFunctionAccess(InternalFunctionDefinitionRef),
     ExternalFunctionAccess(ExternalFunctionDefinitionRef),
 

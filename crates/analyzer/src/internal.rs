@@ -4,9 +4,9 @@
  */
 
 use crate::err::{Error, ErrorKind};
-use crate::{Analyzer, SPARSE_TYPE_ID, TypeContext};
-use swamp_script_semantic::Expression;
+use crate::{Analyzer, TypeContext};
 use swamp_script_semantic::prelude::IntrinsicFunction;
+use swamp_script_semantic::Expression;
 use swamp_script_semantic::{Postfix, PostfixKind};
 use swamp_script_types::prelude::*;
 
@@ -39,22 +39,24 @@ impl Analyzer<'_> {
                 )?;
                 Ok(Some(resolved))
             }
+            /*
+                       Type::Float => {
+                           let resolved =
+                               self.analyze_float_member_call(ast_member_function_name, ast_arguments)?;
+                           Ok(Some(resolved))
+                       }
+                       Type::Int => {
+                           let resolved =
+                               self.analyze_int_member_call(ast_member_function_name, ast_arguments)?;
+                           Ok(Some(resolved))
+                       }
+                       Type::String => {
+                           let resolved =
+                               self.analyze_string_member_call(ast_member_function_name, ast_arguments)?;
+                           Ok(Some(resolved))
+                       }
 
-            Type::Float => {
-                let resolved =
-                    self.analyze_float_member_call(ast_member_function_name, ast_arguments)?;
-                Ok(Some(resolved))
-            }
-            Type::Int => {
-                let resolved =
-                    self.analyze_int_member_call(ast_member_function_name, ast_arguments)?;
-                Ok(Some(resolved))
-            }
-            Type::String => {
-                let resolved =
-                    self.analyze_string_member_call(ast_member_function_name, ast_arguments)?;
-                Ok(Some(resolved))
-            }
+            */
             Type::Tuple(tuple_type) => {
                 let found = self.analyze_tuple_member_call(
                     tuple_type,
@@ -63,11 +65,7 @@ impl Analyzer<'_> {
                 )?;
                 Ok(Some(found))
             }
-            _ => self.check_for_internal_member_call_extra(
-                ty,
-                ast_member_function_name,
-                ast_arguments,
-            ),
+            _ => Ok(None),
         }
     }
     fn analyze_tuple_member_call(
@@ -599,6 +597,7 @@ impl Analyzer<'_> {
         Ok(self.create_postfix(kind, &resolved_type, ast_member_function_name))
     }
 
+    /*
     fn check_for_internal_member_call_extra(
         &mut self,
         ty: &Type,
@@ -674,4 +673,6 @@ impl Analyzer<'_> {
 
         Ok(None)
     }
+
+     */
 }

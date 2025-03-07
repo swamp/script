@@ -1,0 +1,14 @@
+[package]
+name = "swamp-script-modules"
+version = "0.0.19"
+edition = "2024"
+
+[dependencies]
+swamp-script-semantic = { path = "../semantic", version = "0.0.19" }
+swamp-script-types = { path = "../types", version = "0.0.19"}
+swamp-script-node = { path = "../node", version = "0.0.19"}
+swamp-script-ast = { path = "../ast", version = "0.0.19"}
+seq-map = "0.0.13"
+seq-fmt = "0.0.1"
+tracing = "0.1.40"
+tiny-ver = "0.1.2"
