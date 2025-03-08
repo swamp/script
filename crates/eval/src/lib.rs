@@ -395,88 +395,103 @@ impl<'a, C> Interpreter<'a, C> {
                             .map_err(|_| self.create_err(ExecuteErrorKind::ExpectedStruct, node))?;
                         fields[*index].clone()
                     }
-                    LocationAccessKind::ArrayIndex(_array_type_ref, index_expr) => {
-                        let index = self
-                            .evaluate_expression(index_expr)?
-                            .expect_int()
-                            .map_err(|_| self.create_err(ExecuteErrorKind::ExpectedArray, node))?;
+                    LocationAccessKind::IntrinsicCallMut(intrinsic_fn, arguments) => {
+                        self.eval_intrinsic_postfix_mut_return(
+                            &node,
+                            &value_ref,
+                            intrinsic_fn,
+                            arguments,
+                        )?
 
-                        let borrowed = value_ref.borrow();
+                        //val_ref = Rc::new(RefCell::new(val));
+                        //is_mutable = false;
+                        //val
+                    } /*
+                      LocationAccessKind::ArrayIndex(_array_type_ref, index_expr) => {
+                          let index = self
+                              .evaluate_expression(index_expr)?
+                              .expect_int()
+                              .map_err(|_| self.create_err(ExecuteErrorKind::ExpectedArray, node))?;
 
-                        let (_array_ref, fields) = borrowed
-                            .expect_array()
-                            .map_err(|_| self.create_err(ExecuteErrorKind::ExpectedArray, node))?;
-                        fields[index as usize].clone()
-                    }
+                          let borrowed = value_ref.borrow();
 
-                    LocationAccessKind::ArrayRange(_, _) => todo!(),
-                    LocationAccessKind::StringIndex(_) => todo!(),
-                    LocationAccessKind::StringRange(_) => todo!(),
+                          let (_array_ref, fields) = borrowed
+                              .expect_array()
+                              .map_err(|_| self.create_err(ExecuteErrorKind::ExpectedArray, node))?;
+                          fields[index as usize].clone()
+                      }
 
-                    LocationAccessKind::MapIndex(_map_type_ref, _value_type, key_expr) => {
-                        let key_expr_value = self.evaluate_expression(key_expr)?;
+                       */
 
-                        let borrowed = value_ref.borrow();
+                      /*
 
-                        let (_map_type_ref, _value_type, seq_map) = borrowed
-                            .expect_map()
-                            .map_err(|_| self.create_err(ExecuteErrorKind::ExpectedMap, node))?;
+                      LocationAccessKind::MapIndex(_map_type_ref, _value_type, key_expr) => {
+                          let key_expr_value = self.evaluate_expression(key_expr)?;
 
-                        let maybe_found = seq_map.get(&key_expr_value);
+                          let borrowed = value_ref.borrow();
 
-                        wrap_in_option(maybe_found)
-                    }
+                          let (_map_type_ref, _value_type, seq_map) = borrowed
+                              .expect_map()
+                              .map_err(|_| self.create_err(ExecuteErrorKind::ExpectedMap, node))?;
 
-                    LocationAccessKind::MapIndexInsertIfNonExisting(
-                        _map_type_ref,
-                        _value_type,
-                        key_expr,
-                    ) => {
-                        let key_expr_value = self.evaluate_expression(key_expr)?;
-                        let key = key_expr_value.clone();
-                        let mut borrowed_mut = value_ref.borrow_mut();
-                        let found_memory = {
-                            let (_, _, seq_map_mutable) =
-                                borrowed_mut.expect_map_mut().map_err(|_| {
-                                    self.create_err(ExecuteErrorKind::ExpectedMap, node)
-                                })?;
-                            seq_map_mutable.get(&key).cloned()
-                        };
-                        match found_memory {
-                            Some(found) => found,
-                            _ => {
-                                let (_, _, seq_map_mutable) =
-                                    borrowed_mut.expect_map_mut().map_err(|_| {
-                                        self.create_err(ExecuteErrorKind::ExpectedMap, node)
-                                    })?;
-                                let default_value = Rc::new(RefCell::new(Value::Unit));
-                                seq_map_mutable
-                                    .insert(key, default_value.clone())
-                                    .expect("insert should work");
-                                default_value
-                            }
-                        }
-                    }
+                          let maybe_found = seq_map.get(&key_expr_value);
 
-                    LocationAccessKind::SparseIndex(_element_type, key_expr) => {
-                        let key_expr_value = self.evaluate_expression(key_expr)?;
-                        match key_expr_value.downcast_rust::<SparseValueId>() {
-                            Some(found_sparse_id) => match &*value_ref.borrow_mut() {
-                                Value::Sparse(_type, sparse_value_map) => {
-                                    let inner_map = sparse_value_map;
-                                    wrap_in_option(inner_map.get(&found_sparse_id.borrow()).clone())
-                                }
-                                _ => {
-                                    return Err(
-                                        self.create_err(ExecuteErrorKind::ExpectedArray, node)
-                                    )?;
-                                }
-                            },
-                            _ => {
-                                return Err(self.create_err(ExecuteErrorKind::ExpectedArray, node))?;
-                            }
-                        }
-                    }
+                          wrap_in_option(maybe_found)
+                      }
+
+                      LocationAccessKind::MapIndexInsertIfNonExisting(
+                          _map_type_ref,
+                          _value_type,
+                          key_expr,
+                      ) => {
+                          let key_expr_value = self.evaluate_expression(key_expr)?;
+                          let key = key_expr_value.clone();
+                          let mut borrowed_mut = value_ref.borrow_mut();
+                          let found_memory = {
+                              let (_, _, seq_map_mutable) =
+                                  borrowed_mut.expect_map_mut().map_err(|_| {
+                                      self.create_err(ExecuteErrorKind::ExpectedMap, node)
+                                  })?;
+                              seq_map_mutable.get(&key).cloned()
+                          };
+                          match found_memory {
+                              Some(found) => found,
+                              _ => {
+                                  let (_, _, seq_map_mutable) =
+                                      borrowed_mut.expect_map_mut().map_err(|_| {
+                                          self.create_err(ExecuteErrorKind::ExpectedMap, node)
+                                      })?;
+                                  let default_value = Rc::new(RefCell::new(Value::Unit));
+                                  seq_map_mutable
+                                      .insert(key, default_value.clone())
+                                      .expect("insert should work");
+                                  default_value
+                              }
+                          }
+                      }
+
+
+                      LocationAccessKind::SparseIndex(_element_type, key_expr) => {
+                          let key_expr_value = self.evaluate_expression(key_expr)?;
+                          match key_expr_value.downcast_rust::<SparseValueId>() {
+                              Some(found_sparse_id) => match &*value_ref.borrow_mut() {
+                                  Value::Sparse(_type, sparse_value_map) => {
+                                      let inner_map = sparse_value_map;
+                                      wrap_in_option(inner_map.get(&found_sparse_id.borrow()).clone())
+                                  }
+                                  _ => {
+                                      return Err(
+                                          self.create_err(ExecuteErrorKind::ExpectedArray, node)
+                                      )?;
+                                  }
+                              },
+                              _ => {
+                                  return Err(self.create_err(ExecuteErrorKind::ExpectedArray, node))?;
+                              }
+                          }
+                      }
+
+                       */
                 }
             };
         }
@@ -1075,6 +1090,7 @@ impl<'a, C> Interpreter<'a, C> {
                 self.evaluate_function_call(expr, arguments)?
             }
 
+            /*
             ExpressionKind::MemberCall(resolved_member_call) => {
                 let parameters = match &*resolved_member_call.function {
                     Function::Internal(function_data) => &function_data.signature.parameters,
@@ -1120,6 +1136,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
+             */
             ExpressionKind::Block(statements) => {
                 self.evaluate_block(statements)?.try_into().unwrap() // TODO: Error handling
             }
@@ -1391,6 +1408,33 @@ impl<'a, C> Interpreter<'a, C> {
             Literal::NoneLiteral => Value::Option(None),
         };
         Ok(v)
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn eval_intrinsic_postfix_mut_return(
+        &mut self,
+        node: &Node,
+        value_ref: &ValueRef,
+        //        resolved_postfix: &Postfix,
+        intrinsic_function: &IntrinsicFunction,
+        arguments: &[Expression],
+    ) -> Result<ValueRef, ExecuteError> {
+        //let node = &resolved_postfix.node;
+        let val = match &intrinsic_function {
+            IntrinsicFunction::VecSubscriptMut => match &mut *value_ref.borrow_mut() {
+                Value::Vec(_type_id, vector) => {
+                    let index = self.evaluate_expression(&arguments[0])?;
+                    let index_int = index.expect_int()?;
+                    vector[index_int as usize].clone()
+                }
+                _ => {
+                    return Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, node))?;
+                }
+            },
+            _ => panic!("intrinsic can not return mut"),
+        };
+
+        Ok(val)
     }
 
     #[allow(clippy::too_many_lines)]
@@ -1862,6 +1906,7 @@ impl<'a, C> Interpreter<'a, C> {
                     ));
                     val_ref = fields[*index].clone();
                 }
+                /*
                 PostfixKind::ArrayIndex(expected_element_type, index_expr) => {
                     let (encountered_element_type, fields) = {
                         let brw = val_ref.borrow();
@@ -1895,6 +1940,8 @@ impl<'a, C> Interpreter<'a, C> {
 
                     val_ref = Rc::new(RefCell::new(Value::Option(seq_map.get(&key_val).cloned())));
                 }
+
+                 */
                 /*
                 PostfixKind::ExternalTypeIndexRef(_rust_type_ref, map_expr) => {
                     let key_expr_value = self.evaluate_expression(map_expr)?;

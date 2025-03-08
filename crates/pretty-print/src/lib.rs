@@ -570,11 +570,6 @@ impl SourceMapDisplay<'_> {
                     .clone();
                 write!(f, ".{}", name.bright_blue())
             }
-            PostfixKind::ArrayIndex(_, _) => todo!(),
-            PostfixKind::ArrayRangeIndex(_, _) => todo!(),
-            PostfixKind::StringIndex(_) => todo!(),
-            PostfixKind::StringRangeIndex(_) => todo!(),
-            PostfixKind::MapIndex(_, _, _) => todo!(),
             PostfixKind::MemberCall(_function_ref, b) => write!(f, "membercall {b:?}"),
             PostfixKind::FunctionCall(arguments) => {
                 write!(f, "[call:")?;
@@ -583,9 +578,7 @@ impl SourceMapDisplay<'_> {
             }
             PostfixKind::OptionUnwrap => todo!(),
             PostfixKind::NoneCoalesce(_) => todo!(),
-            &swamp_script_semantic::PostfixKind::SparseIndex(_, _)
-            | &swamp_script_semantic::PostfixKind::IntrinsicCallEx(_, _)
-            | &swamp_script_semantic::PostfixKind::IntrinsicCall(_, _) => todo!(),
+            PostfixKind::IntrinsicCallEx(_, _) | PostfixKind::IntrinsicCall(_, _) => todo!(),
         }
     }
 

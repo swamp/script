@@ -1214,6 +1214,31 @@ impl<'a> Analyzer<'a> {
 
                 swamp_script_ast::Postfix::Subscript(index_expr) => {
                     let collection_type = tv.resolved_type.clone();
+                    if let Some(found) = self
+                        .shared
+                        .state
+                        .associated_impls
+                        .get_member_function(&tv.resolved_type, "subscript")
+                        .cloned()
+                    {
+                        let cloned = found.clone();
+                        let required_type = &found.signature().parameters[1].resolved_type;
+                        let subscript_lookup_context = TypeContext::new_argument(&required_type);
+                        let analyzed_expr =
+                            self.analyze_expression(index_expr, &subscript_lookup_context)?;
+                        let argument = ArgumentExpressionOrLocation::Expression(analyzed_expr);
+                        self.add_postfix(
+                            &mut suffixes,
+                            PostfixKind::MemberCall(cloned, vec![argument]),
+                            collection_type.clone(),
+                            &index_expr.node,
+                        );
+                    } else {
+                        return Err(
+                            self.create_err(ErrorKind::MissingSubscriptMember, &index_expr.node)
+                        );
+                    }
+                    /*
                     match &collection_type {
                         Type::String => {
                             if let swamp_script_ast::ExpressionKind::Range(min, max, mode) =
@@ -1245,12 +1270,11 @@ impl<'a> Analyzer<'a> {
                         }
 
                         _ => {
-                            return Err(self.create_err(
-                                ErrorKind::ExpectedArray(collection_type),
-                                &index_expr.node,
-                            ));
+
                         }
                     }
+
+                     */
                 }
 
                 swamp_script_ast::Postfix::NoneCoalesce(default_expr) => {
@@ -2160,6 +2184,56 @@ impl<'a> Analyzer<'a> {
                     ty = return_type.clone();
                 }
                 swamp_script_ast::Postfix::Subscript(lookup_expr) => {
+                    let collection_type = ty.clone();
+
+                    if let Some(found) = self
+                        .shared
+                        .state
+                        .associated_impls
+                        .get_internal_member_function(&ty, "subscript_mut")
+                        .cloned()
+                    {
+                        let intrinsic_to_call = match &found.body.kind {
+                            ExpressionKind::Block(expressions) => {
+                                assert_eq!(expressions.len(), 1);
+                                let first_kind = &expressions[0].kind;
+                                if let ExpressionKind::PostfixChain(start, args) = first_kind {
+                                    info!(?start, "first");
+                                    match &start.kind {
+                                        ExpressionKind::IntrinsicFunctionAccess(intrinsic_def) => {
+                                            intrinsic_def.intrinsic.clone()
+                                        }
+                                        _ => panic!("illegal subscript_mut"),
+                                    }
+                                } else {
+                                    panic!("must be postfix");
+                                }
+                            }
+                            _ => panic!("illegal subscript_mut"),
+                        };
+
+                        let cloned = found.clone();
+                        let required_type = &found.signature.parameters[1].resolved_type;
+                        let subscript_lookup_context = TypeContext::new_argument(&required_type);
+                        let analyzed_expr =
+                            self.analyze_expression(lookup_expr, &subscript_lookup_context)?;
+                        //let argument = ArgumentExpressionOrLocation::Expression(analyzed_expr);
+                        self.add_location_item(
+                            &mut items,
+                            LocationAccessKind::IntrinsicCallMut(
+                                intrinsic_to_call,
+                                vec![analyzed_expr],
+                            ),
+                            *found.signature.return_type.clone(),
+                            &lookup_expr.node,
+                        );
+                    } else {
+                        return Err(
+                            self.create_err(ErrorKind::MissingSubscriptMember, &lookup_expr.node)
+                        );
+                    }
+
+                    /*
                     let is_range = if let swamp_script_ast::ExpressionKind::Range(min, max, mode) =
                         &lookup_expr.kind
                     {
@@ -2190,12 +2264,13 @@ impl<'a> Analyzer<'a> {
                             ty = Type::String;
                         }
 
+
                         _ => {
                             return Err(
                                 self.create_err(ErrorKind::IllegalIndexInChain, &lookup_expr.node)
                             );
                         }
-                    }
+                     */
                 }
 
                 swamp_script_ast::Postfix::MemberCall(node, _) => {
@@ -2961,9 +3036,8 @@ impl<'a> Analyzer<'a> {
                     .associated_impls
                     .get_internal_member_function(found_expected_type, "new_from_slice")
                 {
-                    if encountered_element_type
-                        .compatible_with(&found.signature.parameters[0].resolved_type)
-                    {
+                    let required_type = &found.signature.parameters[0].resolved_type;
+                    if encountered_element_type.compatible_with(required_type) {
                         let slice_literal = Literal::Slice(
                             encountered_element_type.clone(),
                             resolved_items.clone(),
@@ -2985,7 +3059,12 @@ impl<'a> Analyzer<'a> {
                         let call_expr = self.create_expr(call_kind, slice_type.clone(), ast_node);
                         Some(call_expr)
                     } else {
-                        panic!("missing new_from_slice");
+                        error!(
+                            ?encountered_element_type,
+                            ?required_type,
+                            "incompatible types"
+                        );
+                        panic!("incompatible types new_from_slice");
                     }
                 } else {
                     todo!()
@@ -3038,7 +3117,7 @@ impl<'a> Analyzer<'a> {
                         );
                         let arg = ArgumentExpressionOrLocation::Expression(expr);
                         let call_kind = self.create_static_call(
-                            "new_from_slice",
+                            "new_from_slice_pair",
                             &[arg],
                             ast_node,
                             &slice_type.clone(),
@@ -3047,7 +3126,7 @@ impl<'a> Analyzer<'a> {
                         let call_expr = self.create_expr(call_kind, slice_type.clone(), ast_node);
                         Some(call_expr)
                     } else {
-                        panic!("missing new_from_slice");
+                        panic!("missing new_from_slice_pair");
                     }
                 } else {
                     todo!()

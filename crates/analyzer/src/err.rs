@@ -16,6 +16,7 @@ pub struct Error {
 }
 #[derive(Debug)]
 pub enum ErrorKind {
+    MissingSubscriptMember,
     UnusedVariablesCanNotBeMut,
     UnknownIdentifier,
     VariableTypeMustBeConcrete,

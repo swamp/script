@@ -409,12 +409,6 @@ pub struct Range {
 #[derive(Debug, Clone)]
 pub enum PostfixKind {
     StructField(AnonymousStructType, usize),
-    ArrayIndex(Type, Expression),
-    ArrayRangeIndex(Type, Range),
-    StringIndex(Expression),
-    StringRangeIndex(Range),
-    MapIndex(Type, Type, Expression),
-    SparseIndex(Type, Expression),
     //    ExternalTypeIndexRef(ExternalTypeRef, Expression),
     MemberCall(FunctionRef, Vec<ArgumentExpressionOrLocation>),
     FunctionCall(Vec<ArgumentExpressionOrLocation>),
@@ -428,13 +422,7 @@ pub enum PostfixKind {
 #[derive(Debug, Clone)]
 pub enum LocationAccessKind {
     FieldIndex(AnonymousStructType, usize),
-    ArrayIndex(Type, Expression),
-    ArrayRange(Type, Range),
-    StringIndex(Expression),
-    StringRange(Range),
-    MapIndex(Type, Type, Expression),
-    SparseIndex(Type, Expression),
-    MapIndexInsertIfNonExisting(Type, Type, Expression),
+    IntrinsicCallMut(IntrinsicFunction, Vec<Expression>),
 }
 
 #[derive(Debug, Clone)]
@@ -575,7 +563,7 @@ pub enum ExpressionKind {
         Vec<ArgumentExpressionOrLocation>,
     ),
 
-    MemberCall(MemberCall),
+    //MemberCall(MemberCall),
     InterpolatedString(Vec<StringPart>),
 
     // Constructing

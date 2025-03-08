@@ -316,8 +316,8 @@ impl Vec<T> {
     /// If the index is outside of the vector, it panics.
     ///
     /// Uses intrinsic function `vec_subscript_mut` to fetch the mutable value.
-    fn subscript_mut(mut self, index: Int, mut out_value: T) {
-        vec_subscript_mut(self, index, mut out_value)
+    fn subscript_mut(mut self, index: Int) -> T {
+        vec_subscript_mut(self, index)
     }
 
     /// Removes an element at a specific index.
@@ -403,8 +403,8 @@ impl Map<K, V> {
     /// - `out_value`: The value to modify
     ///
     /// Uses intrinsic function `map_subscript_mut` to fetch the mutable value.
-    fn subscript_mut(mut self, key: K, mut out_value: V?) {
-        map_subscript_mut(self, key, mut out_value)
+    fn subscript_mut(mut self, key: K) -> V? {
+        map_subscript_mut(self, key)
     }
 
     /// Checks if the map contains a key.

@@ -379,12 +379,6 @@ fn add_intrinsic_map_functions(core_ns: &mut SymbolTable) {
                 is_mutable: false,
                 node: None,
             },
-            TypeForParameter {
-                name: "value".to_string(),
-                resolved_type: Type::Never,
-                is_mutable: true,
-                node: None,
-            },
         ]
         .into(),
         return_type: Box::new(Type::Never),
@@ -564,12 +558,6 @@ fn add_intrinsic_vec_functions(core_ns: &mut SymbolTable) {
                 name: "i".to_string(),
                 resolved_type: Type::Int,
                 is_mutable: false,
-                node: None,
-            },
-            TypeForParameter {
-                name: "v".to_string(),
-                resolved_type: Type::Never,
-                is_mutable: true,
                 node: None,
             },
         ]
