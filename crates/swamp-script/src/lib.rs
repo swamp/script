@@ -3,10 +3,11 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use swamp_script_analyzer::prelude::Error;
-use swamp_script_analyzer::prelude::Program;
 use swamp_script_dep_loader::DepLoaderError;
 use swamp_script_source_map::SourceMap;
 pub mod prelude;
+use swamp_script_analyzer::Program;
+use swamp_script_error_report::ScriptResolveError;
 use swamp_script_semantic::SemanticError;
 
 #[derive(Debug)]
@@ -41,8 +42,7 @@ impl From<Error> for LoaderErr {
 }
 pub fn compile_and_analyze(
     module_path: &[String],
-    resolved_program: &mut Program,
     source_map: &mut SourceMap,
-) -> Result<(), LoaderErr> {
-    swamp_script_compile::compile_and_analyze_all_modules(module_path, resolved_program, source_map)
+) -> Result<Program, ScriptResolveError> {
+    swamp_script_compile::bootstrap_and_compile(source_map, module_path)
 }

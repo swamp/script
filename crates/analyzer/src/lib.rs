@@ -36,8 +36,7 @@ use swamp_script_semantic::{
 use swamp_script_source_map::SourceMap;
 use swamp_script_types::ParameterizedTypeBlueprint;
 use swamp_script_types::prelude::*;
-use tracing::error;
-use tracing::info;
+use tracing::{error, info, trace};
 
 #[must_use]
 pub fn convert_range_mode(range_mode: &swamp_script_ast::RangeMode) -> RangeMode {
@@ -634,6 +633,18 @@ impl<'a> Analyzer<'a> {
         Ok((resolved, mutability))
     }
 
+    pub fn debug_expression(&self, expr: &swamp_script_ast::Expression) {
+        let (line, col) = self
+            .shared
+            .source_map
+            .get_span_location_utf8(self.shared.file_id, expr.node.span.offset as usize);
+        let source_line = self
+            .shared
+            .source_map
+            .get_source_line(self.shared.file_id, line);
+        trace!(?line, ?col, ?source_line, "analyzing");
+    }
+
     /// # Errors
     ///
     #[allow(clippy::too_many_lines)]
@@ -642,6 +653,8 @@ impl<'a> Analyzer<'a> {
         ast_expression: &swamp_script_ast::Expression,
         context: &TypeContext,
     ) -> Result<Expression, Error> {
+        self.debug_expression(&ast_expression);
+
         let expr = self.analyze_expression_internal(ast_expression, context)?;
 
         let encountered_type = expr.ty.clone();
@@ -1143,6 +1156,7 @@ impl<'a> Analyzer<'a> {
                         suffixes.push(found_internal);
                     } else {
                         let member_name_str = self.get_text(member_name).to_string();
+                        info!(?member_name_str, ?tv.resolved_type, "looking for member");
 
                         if let Some(_found_member) = self
                             .shared

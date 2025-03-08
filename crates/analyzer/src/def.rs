@@ -13,7 +13,7 @@ use swamp_script_semantic::{
 };
 use swamp_script_types::prelude::*;
 use swamp_script_types::{ParameterizedTypeBlueprint, ParameterizedTypeKind};
-use tracing::info;
+use tracing::{info, trace};
 
 impl Analyzer<'_> {
     fn general_import(
@@ -544,12 +544,28 @@ impl Analyzer<'_> {
         Ok(func)
     }
 
+    pub fn debug_definition(&self, definition: &swamp_script_ast::Definition) {
+        /*
+        let (line, col) = self
+            .shared
+            .source_map
+            .get_span_location_utf8(self.shared.file_id, definition.node.span.offset as usize);
+        let source_line = self
+            .shared
+            .source_map
+            .get_source_line(self.shared.file_id, line);
+
+         */
+        trace!(?definition, "analyzing definition");
+    }
+
     /// # Errors
     ///
     pub fn analyze_definition(
         &mut self,
         ast_def: &swamp_script_ast::Definition,
     ) -> Result<(), Error> {
+        self.debug_definition(ast_def);
         match ast_def {
             swamp_script_ast::Definition::NamedStructDef(ast_struct) => {
                 self.analyze_named_struct_type_definition(ast_struct)?;
@@ -585,7 +601,7 @@ impl Analyzer<'_> {
         functions: &[swamp_script_ast::Function],
     ) -> Result<(), Error> {
         let debug_text = self.get_text(&attached_to_type.name);
-        info!(?debug_text, "impl start");
+        trace!(?debug_text, "impl start");
 
         let converted_type_variables_to_ast_types = attached_to_type
             .type_variables
@@ -615,7 +631,7 @@ impl Analyzer<'_> {
         let type_to_attach_to = self.analyze_named_type(&qualified)?;
 
         let type_id = type_to_attach_to.id().unwrap();
-        info!(?type_to_attach_to, ?type_id, "impl type to attach to");
+        trace!(?type_to_attach_to, ?type_id, "impl type to attach to");
 
         let function_refs: Vec<&swamp_script_ast::Function> = functions.iter().collect();
 

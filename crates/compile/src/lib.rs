@@ -289,61 +289,18 @@ pub fn compile_and_analyze(
 
 /// # Errors
 ///
+/// # Panics
+///
 pub fn bootstrap_and_compile(
-    mut source_map: &mut SourceMap,
+    source_map: &mut SourceMap,
     root_path: &[String],
-) -> Result<ModuleRef, ScriptResolveError> {
+) -> Result<Program, ScriptResolveError> {
     let registry_path = swamp_registry_path().unwrap();
     source_map.add_mount("registry", &registry_path).unwrap();
 
     let bootstrap_result = bootstrap_modules(source_map).inspect_err(|err| {
         show_script_resolve_error(err, source_map, Path::new(""));
     })?;
-
-    /*
-    let core_symbol_table = bootstrap_result.core_symbol_table;
-    let mut analyzer = Analyzer::new(
-        &mut bootstrap_result.state,
-        &bootstrap_result.modules,
-        core_symbol_table.into(),
-        &source_map,
-        file_id,
-    );
-
-     */
-
-    /*
-    info!(def_tbl=?bootstrap_result.default_symbol_table, "default");
-    analyzer.shared.lookup_table = bootstrap_result.default_symbol_table;
-
-    for definition in &program.definitions {
-        analyzer.analyze_definition(definition)?;
-    }
-
-    let expression = &program.expression;
-    let any_context = TypeContext::new_anything_argument();
-    let maybe_resolved_expression = match expression {
-        Some(unwrapped_expression) => {
-            let result = analyzer.analyze_expression(unwrapped_expression, &any_context);
-            if let Ok(expression) = result {
-                Some(expression)
-            } else {
-                let err = result.err().unwrap();
-                error!(?err, "found error");
-                return Err(err)?;
-            }
-        }
-        None => None,
-    };
-
-    let ns_ref = Namespace::new(resolved_path_str, analyzer.shared.definition_table);
-
-    let resolved_module = Module {
-        expression: maybe_resolved_expression,
-        namespace: ns_ref,
-    };
-
-     */
 
     let mut program = bootstrap_result.program;
 
@@ -357,7 +314,50 @@ pub fn bootstrap_and_compile(
         show_script_resolve_error(err, source_map, Path::new(""));
     })?;
 
-    let module = program.modules.get(root_path).unwrap();
-
-    Ok(module.clone())
+    Ok(program)
 }
+
+/*
+let core_symbol_table = bootstrap_result.core_symbol_table;
+let mut analyzer = Analyzer::new(
+    &mut bootstrap_result.state,
+    &bootstrap_result.modules,
+    core_symbol_table.into(),
+    &source_map,
+    file_id,
+);
+
+ */
+
+/*
+info!(def_tbl=?bootstrap_result.default_symbol_table, "default");
+analyzer.shared.lookup_table = bootstrap_result.default_symbol_table;
+
+for definition in &program.definitions {
+    analyzer.analyze_definition(definition)?;
+}
+
+let expression = &program.expression;
+let any_context = TypeContext::new_anything_argument();
+let maybe_resolved_expression = match expression {
+    Some(unwrapped_expression) => {
+        let result = analyzer.analyze_expression(unwrapped_expression, &any_context);
+        if let Ok(expression) = result {
+            Some(expression)
+        } else {
+            let err = result.err().unwrap();
+            error!(?err, "found error");
+            return Err(err)?;
+        }
+    }
+    None => None,
+};
+
+let ns_ref = Namespace::new(resolved_path_str, analyzer.shared.definition_table);
+
+let resolved_module = Module {
+    expression: maybe_resolved_expression,
+    namespace: ns_ref,
+};
+
+ */
