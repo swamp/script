@@ -2,9 +2,9 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-
 use crate::Analyzer;
 use crate::err::Error;
+use crate::instantiator::Instantiator;
 use swamp_script_types::{Signature, Type, TypeForParameter};
 
 impl Analyzer<'_> {
@@ -38,11 +38,27 @@ impl Analyzer<'_> {
                 Type::AnonymousStruct(struct_ref.into())
             }
             swamp_script_ast::Type::Slice(ast_type) => {
-                Type::Vec(Box::from(self.analyze_slice_type(ast_type)?))
+                let analyzed_element_type = self.analyze_slice_type(ast_type)?;
+                let vec_blueprint = self.shared.core_symbol_table.get_blueprint("Vec").unwrap();
+                let scope = Instantiator::create_type_parameter_scope_from_variables(
+                    &vec_blueprint.type_variables,
+                    &[analyzed_element_type],
+                )?;
+                let (_ignore, instantiated_vec) =
+                    Instantiator::instantiate_blueprint(&vec_blueprint, &scope)?;
+                instantiated_vec
             }
             swamp_script_ast::Type::SlicePair(key_type, value_type) => {
-                let (key_type, value_type) = self.analyze_map_type(key_type, value_type)?;
-                Type::Map(Box::from(key_type), Box::from(value_type))
+                let analyzed_key_type = self.analyze_slice_type(key_type)?;
+                let analyzed_value_type = self.analyze_slice_type(value_type)?;
+                let map_blueprint = self.shared.core_symbol_table.get_blueprint("Map").unwrap();
+                let scope = Instantiator::create_type_parameter_scope_from_variables(
+                    &map_blueprint.type_variables,
+                    &[analyzed_key_type, analyzed_value_type],
+                )?;
+                let (_ignore, instantiated_vec) =
+                    Instantiator::instantiate_blueprint(&map_blueprint, &scope)?;
+                instantiated_vec
             }
             swamp_script_ast::Type::Tuple(types) => Type::Tuple(self.analyze_types(types)?),
             //            swamp_script_ast::Type::Generic(base_type, generic_types) => {

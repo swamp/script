@@ -222,6 +222,17 @@ impl SymbolTable {
         Ok(())
     }
 
+    #[must_use]
+    pub fn get_blueprint(&self, name: &str) -> Option<&ParameterizedTypeBlueprint> {
+        if let Some(found_symbol) = self.get_symbol(name) {
+            if let Symbol::Blueprint(type_ref) = found_symbol {
+                return Some(type_ref);
+            }
+        }
+
+        None
+    }
+
     pub fn add_external_type(
         &mut self,
         external: ExternalType,
