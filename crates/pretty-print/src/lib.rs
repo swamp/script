@@ -219,15 +219,23 @@ impl SourceMapDisplay<'_> {
     ) -> std::fmt::Result {
         write!(
             f,
-            "{} {{",
+            "{} ",
             struct_type.borrow().assigned_name.bright_magenta()
         )?;
 
-        for (field_name, field) in &struct_type
-            .borrow()
-            .anon_struct_type
-            .field_name_sorted_fields
-        {
+        self.show_anon_struct(f, &struct_type.borrow().anon_struct_type, tabs)?;
+
+        Ok(())
+    }
+
+    pub fn show_anon_struct(
+        &self,
+        f: &mut Formatter<'_>,
+        anon_struct_type: &AnonymousStructType,
+        tabs: usize,
+    ) -> std::fmt::Result {
+        write!(f, "{{")?;
+        for (field_name, field) in &anon_struct_type.field_name_sorted_fields {
             Self::new_line_and_tab(f, tabs + 1)?;
 
             write!(f, "{}: ", field_name.cyan())?;
@@ -236,9 +244,7 @@ impl SourceMapDisplay<'_> {
         }
         Self::new_line_and_tab(f, tabs)?;
 
-        write!(f, "}}")?;
-
-        Ok(())
+        write!(f, "}}")
     }
 
     /// # Errors
@@ -642,6 +648,8 @@ impl SourceMapDisplay<'_> {
             Type::Bool => write!(f, "{}", "Bool".bright_blue()),
             Type::Unit => write!(f, "{}", "()".bright_blue()),
 
+            Type::Iterable(_) => write!(f, "{}", "iterable"),
+
             Type::Tuple(tuple_type) => {
                 write!(f, "(")?;
                 for (index, item_type) in tuple_type.iter().enumerate() {
@@ -654,6 +662,7 @@ impl SourceMapDisplay<'_> {
             }
 
             Type::NamedStruct(struct_ref) => self.show_struct(f, struct_ref, tabs),
+            Type::AnonymousStruct(struct_ref) => self.show_anon_struct(f, struct_ref, tabs),
 
             Type::Enum(enum_type) => write!(f, "{}", enum_type.borrow().assigned_name),
             //Type::EnumVariant(variant) => write!(
@@ -673,7 +682,19 @@ impl SourceMapDisplay<'_> {
             }
             Type::Blueprint(blueprint) => self.show_blueprint(f, blueprint, tabs),
             Type::Variable(var) => self.show_type_variable(f, var, tabs),
-            _ => todo!(),
+            Type::Vec(inner_type) => {
+                self.show_parameterized_like(f, "Vec", &[*inner_type.clone()], tabs)
+            }
+            Type::Sparse(inner_type) => {
+                self.show_parameterized_like(f, "Sparse", &[*inner_type.clone()], tabs)
+            }
+            Type::Grid(inner_type) => {
+                self.show_parameterized_like(f, "Grid", &[*inner_type.clone()], tabs)
+            }
+            Type::Map(key, value) => {
+                self.show_parameterized_like(f, "Map", &[*key.clone(), *value.clone()], tabs)
+            }
+            Type::Never => write!(f, "!"),
         }
     }
 

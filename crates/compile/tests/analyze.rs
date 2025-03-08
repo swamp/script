@@ -1443,6 +1443,11 @@ fn blueprint_add_with_field() {
 
     42.to_float()
 
+	fn shuffle_int_list(mut list : [Int]) -> [Int] {
+        a = list.len()
+        list
+    }
+
     ",
         r#"
 Namespace { path: ["test"], symbol_table: SymbolTable { symbols: SeqMap("JustTest": Blueprint(ParameterizedTypeBlueprint { kind: Struct(struct JustTest anon: some_field: Some(<34:10>):<|T|>), type_variables: ["T"], type_id: 22 })) } }

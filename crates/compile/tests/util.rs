@@ -4,6 +4,7 @@
  */
 use seq_map::SeqMap;
 use std::path::Path;
+use swamp_script_analyzer::Program;
 use swamp_script_compile::bootstrap_and_compile;
 use swamp_script_error_report::ScriptResolveError;
 use swamp_script_modules::modules::pretty_print;
@@ -13,7 +14,7 @@ use swamp_script_source_map::SourceMap;
 use swamp_script_source_map_lookup::SourceMapWrapper;
 use tracing::{info, warn};
 
-fn internal_compile(script: &str) -> Result<ModuleRef, ScriptResolveError> {
+fn internal_compile(script: &str) -> Result<Program, ScriptResolveError> {
     let mut source_map = SourceMap::new(&SeqMap::default()).unwrap();
     let file_id = 0xffff;
 
@@ -22,21 +23,23 @@ fn internal_compile(script: &str) -> Result<ModuleRef, ScriptResolveError> {
 
     let resolved_path_str = vec!["crate".to_string(), "test".to_string()];
 
-    let resolved_module = bootstrap_and_compile(&mut source_map, &resolved_path_str)?;
+    let program = bootstrap_and_compile(&mut source_map, &resolved_path_str)?;
 
     let source_map_lookup = SourceMapWrapper { source_map };
     let pretty_printer = SourceMapDisplay {
         source_map: &source_map_lookup,
     };
 
+    let test_module = program.modules.get(&resolved_path_str).unwrap();
+
     let symbol_table_display = SymbolTableDisplay {
-        symbol_table: &resolved_module.namespace.symbol_table,
+        symbol_table: &test_module.namespace.symbol_table,
         source_map_display: &pretty_printer,
     };
 
-    info!(%symbol_table_display, "default symbol table");
+    info!(%symbol_table_display, "symbol table");
 
-    Ok(resolved_module)
+    Ok(program)
 }
 
 /// # Panics
