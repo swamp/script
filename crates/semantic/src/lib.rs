@@ -15,7 +15,7 @@ use std::fmt::{Debug, Display, Formatter};
 use std::rc::Rc;
 use swamp_script_node::Node;
 use swamp_script_types::prelude::*;
-use tracing::error;
+use tracing::{error, info};
 
 #[derive(Debug, Clone)]
 pub struct TypeWithMut {
@@ -777,13 +777,16 @@ impl AssociatedImpls {
     }
     #[must_use]
     pub fn get_member_function(&self, ty: &Type, function_name: &str) -> Option<&FunctionRef> {
-        let type_id = ty.id().expect(&format!("type can not be attached to {ty}"));
+        let type_id = ty
+            .id()
+            .unwrap_or_else(|| panic!("type can not be attached to {ty}"));
         let maybe_found_impl = self.functions.get(&type_id);
         if let Some(found_impl) = maybe_found_impl {
             if let Some(func) = found_impl.functions.get(&function_name.to_string()) {
                 return Some(func);
             }
         }
+        info!(?self.functions, "could not find member, this is what I have");
         None
     }
 

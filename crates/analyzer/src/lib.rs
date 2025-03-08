@@ -2795,6 +2795,72 @@ impl<'a> Analyzer<'a> {
         ))
     }
 
+    fn instantiate_blueprint_and_members(
+        &mut self,
+        blueprint: &ParameterizedTypeBlueprint,
+        analyzed_type_parameters: &[Type],
+    ) -> Result<Type, Error> {
+        assert!(all_types_are_concrete(analyzed_type_parameters));
+        let scope = Instantiator::create_type_parameter_scope_from_variables(
+            &blueprint.type_variables,
+            analyzed_type_parameters,
+        )?;
+        let instantiated_type = self.instantiate_blueprint(blueprint, &scope)?;
+        let new_impls = {
+            let mut new_impls = SeqMap::new();
+            let maybe_member_functions = self
+                .shared
+                .state
+                .associated_impls
+                .functions
+                .get(&blueprint.type_id);
+            if let Some(found_member_functions) = maybe_member_functions {
+                for (func_name, func_ref) in &found_member_functions.functions {
+                    let (_replaced, new_signature) = Instantiator::instantiate_signature(
+                        func_ref.signature().clone(),
+                        &instantiated_type,
+                        &scope,
+                    )?;
+                    let new_func = match &**func_ref {
+                        Function::Internal(internal) => {
+                            let func_ref = Rc::new(InternalFunctionDefinition {
+                                body: internal.body.clone(),
+                                name: LocalIdentifier(Default::default()),
+                                assigned_name: "".to_string(),
+                                signature: new_signature,
+                            });
+                            Function::Internal(func_ref)
+                        }
+                        Function::External(blueprint_external) => {
+                            let func_ref = Rc::new(ExternalFunctionDefinition {
+                                name: None,
+                                assigned_name: "".to_string(),
+                                signature: new_signature,
+                                id: blueprint_external.id,
+                            });
+                            Function::External(func_ref)
+                        }
+                    };
+                    new_impls.insert(func_name.clone(), new_func).unwrap();
+                }
+            }
+            new_impls
+        };
+
+        self.shared
+            .state
+            .associated_impls
+            .prepare(&instantiated_type);
+        for (name, func) in &new_impls {
+            self.shared.state.associated_impls.add_member_function(
+                &instantiated_type,
+                &*name,
+                func.clone().into(),
+            )?;
+        }
+        Ok(instantiated_type)
+    }
+
     #[allow(clippy::too_many_lines)]
     fn analyze_generic_type(
         &mut self,
@@ -2807,65 +2873,7 @@ impl<'a> Analyzer<'a> {
             //          Symbol::Alias(alias_type) => alias_type.referenced_type.clone(),
             Symbol::Blueprint(blueprint) => {
                 if all_types_are_concrete(analyzed_type_parameters) {
-                    let scope = Instantiator::create_type_parameter_scope_from_variables(
-                        &blueprint.type_variables,
-                        analyzed_type_parameters,
-                    )?;
-                    let instantiated_type = self.instantiate_blueprint(blueprint, &scope, node)?;
-                    let new_impls = {
-                        let mut new_impls = SeqMap::new();
-                        let maybe_member_functions = self
-                            .shared
-                            .state
-                            .associated_impls
-                            .functions
-                            .get(&blueprint.type_id);
-                        if let Some(found_member_functions) = maybe_member_functions {
-                            for (func_name, func_ref) in &found_member_functions.functions {
-                                let (_replaced, new_signature) =
-                                    Instantiator::instantiate_signature(
-                                        func_ref.signature().clone(),
-                                        &instantiated_type,
-                                        &scope,
-                                    )?;
-                                let new_func = match &**func_ref {
-                                    Function::Internal(internal) => {
-                                        let func_ref = Rc::new(InternalFunctionDefinition {
-                                            body: internal.body.clone(),
-                                            name: LocalIdentifier(Default::default()),
-                                            assigned_name: "".to_string(),
-                                            signature: new_signature,
-                                        });
-                                        Function::Internal(func_ref)
-                                    }
-                                    Function::External(blueprint_external) => {
-                                        let func_ref = Rc::new(ExternalFunctionDefinition {
-                                            name: None,
-                                            assigned_name: "".to_string(),
-                                            signature: new_signature,
-                                            id: blueprint_external.id,
-                                        });
-                                        Function::External(func_ref)
-                                    }
-                                };
-                                new_impls.insert(func_name.clone(), new_func).unwrap();
-                            }
-                        }
-                        new_impls
-                    };
-
-                    self.shared
-                        .state
-                        .associated_impls
-                        .prepare(&instantiated_type);
-                    for (name, func) in &new_impls {
-                        self.shared.state.associated_impls.add_member_function(
-                            &instantiated_type,
-                            &*name,
-                            func.clone().into(),
-                        )?;
-                    }
-                    instantiated_type
+                    self.instantiate_blueprint_and_members(blueprint, analyzed_type_parameters)?
                 } else {
                     Type::Blueprint(blueprint.clone())
                     //Type::Generic(blueprint.clone(), analyzed_type_parameters.to_vec())
@@ -2902,7 +2910,6 @@ impl<'a> Analyzer<'a> {
         &mut self,
         blueprint: &ParameterizedTypeBlueprint,
         scope: &TypeVariableScope,
-        node: &swamp_script_ast::Node,
     ) -> Result<Type, Error> {
         info!(?blueprint, ?scope, "instantiate blueprint!");
 

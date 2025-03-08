@@ -119,7 +119,7 @@ impl Instantiator {
             return_type: Box::new(instantiated_return_type),
         };
 
-        info!(?new_signature, ?signature, "instantiated signature");
+        info!(?new_signature, "instantiated signature");
 
         Ok((was_replaced, new_signature))
     }
