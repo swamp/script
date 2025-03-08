@@ -271,7 +271,7 @@ function_def = {
 }
 
 external_function = {
-     "external" ~  WHITESPACE+ ~ function_signature
+     "external" ~  function_signature
 }
 
 normal_function = {

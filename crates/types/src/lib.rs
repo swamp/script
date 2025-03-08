@@ -9,12 +9,13 @@ use fmt::{Debug, Display};
 use seq_fmt::comma;
 use seq_map::SeqMap;
 use std::cell::RefCell;
+use std::cmp::PartialEq;
 use std::fmt;
 use std::hash::Hash;
 use std::rc::Rc;
 use swamp_script_node::Node;
 
-#[derive(Clone)]
+#[derive(Eq, Clone, PartialEq)]
 pub enum Type {
     // Primitives
     Int,
@@ -45,20 +46,13 @@ pub enum Type {
     Optional(Box<Type>),
 
     Generic(ParameterizedTypeBlueprint, Vec<Type>),
+    Blueprint(ParameterizedTypeBlueprint),
     Variable(String),
 
     External(ExternalTypeRef),
 }
 
-impl Eq for Type {}
-
-impl PartialEq for Type {
-    fn eq(&self, other: &Self) -> bool {
-        self.id().unwrap() == other.id().unwrap()
-    }
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParameterizedTypeKind {
     Struct(NamedStructType),
     Enum(EnumTypeRef),
@@ -81,10 +75,11 @@ impl ParameterizedTypeKind {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct ParameterizedTypeBlueprint {
     pub kind: ParameterizedTypeKind,
     pub type_variables: Vec<String>,
+    pub type_id: TypeNumber,
 }
 
 impl ParameterizedTypeBlueprint {
@@ -153,7 +148,7 @@ impl PartialEq for TypeForParameter {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct Signature {
     pub parameters: Vec<TypeForParameter>,
     pub return_type: Box<Type>,
@@ -194,9 +189,11 @@ impl Signature {
 impl Type {
     #[must_use]
     pub const fn is_concrete(&self) -> bool {
-        !matches!(self, Self::Unit | Self::Never)
+        !matches!(self, Self::Unit | Self::Never | Self::Variable(_))
     }
 
+    /// # Panics
+    ///
     #[must_use]
     pub fn id(&self) -> Option<TypeNumber> {
         let found_id = match self {
@@ -210,6 +207,7 @@ impl Type {
             Self::External(external) => external.number,
             Self::NamedStruct(struct_ref) => struct_ref.borrow().type_id,
             Self::Enum(enum_type) => enum_type.borrow().type_id,
+            Self::Blueprint(blueprint) => blueprint.type_id,
             _ => return None,
         };
         Some(found_id)
@@ -245,8 +243,13 @@ impl Debug for Type {
             Self::Iterable(type_generated) => write!(f, "Iterable<{type_generated:?}>"),
             Self::Optional(base_type) => write!(f, "{base_type:?}?"),
             Self::External(rust_type) => write!(f, "{:?}?", rust_type.type_name),
-            &Type::Variable(_) => todo!(),
-            &Type::Generic(_, _) => todo!(),
+            Self::Variable(variable_name) => write!(f, "<|{variable_name}|>"),
+            Self::Generic(blueprint, non_concrete_arguments) => {
+                write!(f, "{blueprint:?}<{non_concrete_arguments:?}>")
+            }
+            Self::Blueprint(blueprint) => {
+                write!(f, "{blueprint:?}")
+            }
         }
     }
 }
@@ -278,6 +281,9 @@ impl Display for Type {
             Self::Generic(blueprint, non_concrete_arguments) => {
                 write!(f, "{blueprint:?}<{non_concrete_arguments:?}>")
             }
+            Self::Blueprint(blueprint) => {
+                write!(f, "{blueprint:?}")
+            }
         }
     }
 }
@@ -305,26 +311,39 @@ impl Type {
             | (Self::Bool, Self::Bool)
             | (Self::Unit, Self::Unit)
             | (Self::Enum(_), Self::Enum(_)) => true,
-            (Self::Vec(a), Self::Vec(b)) => a.compatible_with(b),
-            (Self::Sparse(a), Self::Sparse(b)) => a.compatible_with(b),
-            (Self::Grid(a), Self::Grid(b)) => a.compatible_with(b),
+
+            (Self::Vec(a), Self::Vec(b))
+            | (Self::Sparse(a), Self::Sparse(b))
+            | (Self::Grid(a), Self::Grid(b))
+            | (Self::Iterable(a), Self::Iterable(b)) => a.compatible_with(b),
+
             (Self::Map(a_key, a_value), Self::Map(b_key, b_value)) => {
                 a_key.compatible_with(b_key) && a_value.compatible_with(b_value)
             }
+
             (Self::NamedStruct(a), Self::NamedStruct(b)) => compare_struct_types(a, b),
+
             (Self::AnonymousStruct(a), Self::AnonymousStruct(b)) => {
                 compare_anonymous_struct_types(a, b)
             }
+
             (Self::Tuple(a), Self::Tuple(b)) => {
                 if a.len() != b.len() {
                     return false;
                 }
                 a.iter().zip(b.iter()).all(|(a, b)| a.compatible_with(b))
             }
-            (Self::Iterable(a), Self::Iterable(b)) => a.compatible_with(b),
+
             (Self::Optional(inner_type_a), Self::Optional(inner_type_b)) => {
                 inner_type_a.compatible_with(inner_type_b)
             }
+
+            (Self::Generic(blueprint_a, args_a), Self::Generic(blueprint_b, args_b)) => {
+                blueprint_a == blueprint_b && (args_a == args_b)
+            }
+
+            (Self::Variable(a), Self::Variable(b)) => a == b,
+
             (Self::External(type_ref_a), Self::External(type_ref_b)) => {
                 type_ref_a.number == type_ref_b.number
             }

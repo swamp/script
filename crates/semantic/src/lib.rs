@@ -897,7 +897,7 @@ impl ProgramState {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            number: 0,
+            number: 16,
             external_function_number: 0,
             constants_in_dependency_order: Vec::new(),
             associated_impls: AssociatedImpls::new(),

@@ -1426,13 +1426,20 @@ fn blueprint_add_with_field() {
     }
 
     impl JustTest<T> {
-        external fn new() -> T
+         fn new(t: T) -> T {
+            t
+         }
+
+        external fn something(self)
     }
 
-    a = JustTest<Int>::new()
+    a = JustTest<Int> {
+        some_field: 42,
+    }
     ",
         r#"
-Namespace { path: ["test"], symbol_table: SymbolTable { symbols: SeqMap("JustTest": Blueprint(ParameterizedTypeBlueprint { kind: Struct(struct JustTest anon: some_field: Some(<34:10>):<|T|>), type_variables: ["T"] })) } }
+Namespace { path: ["test"], symbol_table: SymbolTable { symbols: SeqMap("JustTest": Blueprint(ParameterizedTypeBlueprint { kind: Struct(struct JustTest anon: some_field: Some(<34:10>):<|T|>), type_variables: ["T"], type_id: 18 })) } }
+Unit,VariableDefinition(Variable { name: <181:1>, resolved_type: JustTest<Int>, mutable_node: None, scope_index: 0, variable_index: 0 }, MutOrImmutableExpression { expression_or_location: Expression(<185:8>JustTest<Int>,StructInstantiation(StructInstantiation { source_order_expressions: [(0, <221:2>Int,Literal(IntLiteral(42)))], struct_type_ref: RefCell { value: struct JustTest<Int> anon: some_field: Some(<34:10>):Int } })), is_mutable: None })
 "#,
     );
 }

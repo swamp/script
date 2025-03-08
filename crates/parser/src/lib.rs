@@ -20,6 +20,7 @@ use swamp_script_ast::{
 use swamp_script_ast::{Function, WhenBinding};
 use swamp_script_ast::{LiteralKind, MutableOrImmutableExpression};
 use swamp_script_ast::{Postfix, PostfixChain};
+use tracing::info;
 
 pub struct ParseResult<'a> {
     #[allow(dead_code)]
@@ -921,7 +922,8 @@ impl AstParser {
                 let inner_item = self.next_inner_pair(&item_pair)?;
                 match inner_item.as_rule() {
                     Rule::external_member_function => {
-                        let signature = self.parse_member_signature(&inner_item)?;
+                        let inner_inner_item = self.next_inner_pair(&inner_item)?;
+                        let signature = self.parse_member_signature(&inner_inner_item)?;
                         functions.push(Function::External(signature));
                     }
                     Rule::normal_member_function => {
@@ -944,9 +946,7 @@ impl AstParser {
     }
 
     fn parse_member_signature(&self, pair: &Pair<Rule>) -> Result<FunctionDeclaration, ParseError> {
-        if pair.as_rule() != Rule::member_signature {
-            return Err(self.create_error_pair(SpecificError::ExpectedMemberSignature, pair));
-        }
+        assert_eq!(pair.as_rule(), Rule::member_signature);
 
         let mut inner = pair.clone().into_inner();
 

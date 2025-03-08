@@ -9,11 +9,13 @@ use crate::instantiator::TypeVariableScope;
 use seq_map::SeqMap;
 use std::rc::Rc;
 use swamp_script_ast::QualifiedTypeIdentifier;
+use swamp_script_modules::symtbl::Symbol;
 use swamp_script_semantic::{
     ExternalFunctionDefinition, Function, InternalFunctionDefinition, LocalIdentifier, UseItem,
 };
 use swamp_script_types::prelude::*;
 use swamp_script_types::{ParameterizedTypeBlueprint, ParameterizedTypeKind};
+use tracing::info;
 
 impl Analyzer<'_> {
     fn general_import(
@@ -394,6 +396,7 @@ impl Analyzer<'_> {
                 .add_blueprint(ParameterizedTypeBlueprint {
                     kind: ParameterizedTypeKind::Struct(named_struct_type),
                     type_variables,
+                    type_id: self.shared.state.allocate_number(),
                 })
                 .map_err(|err| {
                     self.create_err(
@@ -583,6 +586,9 @@ impl Analyzer<'_> {
         attached_to_type: &swamp_script_ast::LocalTypeIdentifierWithOptionalTypeVariables,
         functions: &[swamp_script_ast::Function],
     ) -> Result<(), Error> {
+        let debug_text = self.get_text(&attached_to_type.name);
+        info!(?debug_text, "impl start");
+
         let converted_type_variables_to_ast_types = attached_to_type
             .type_variables
             .iter()
@@ -609,6 +615,9 @@ impl Analyzer<'_> {
         }
 
         let type_to_attach_to = self.analyze_named_type(&qualified)?;
+
+        let type_id = type_to_attach_to.id().unwrap();
+        info!(?type_to_attach_to, ?type_id, "impl type to attach to");
 
         let function_refs: Vec<&swamp_script_ast::Function> = functions.iter().collect();
 

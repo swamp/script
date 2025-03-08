@@ -937,8 +937,8 @@ impl<'a> Analyzer<'a> {
                 &type_name_to_find.name.0,
             )?
         } else {
-            match symbol {
-                Symbol::Type(base_type) => base_type,
+            match &symbol {
+                Symbol::Type(base_type) => base_type.clone(),
                 Symbol::Alias(alias_type) => alias_type.referenced_type.clone(),
                 _ => {
                     return Err(
@@ -2940,7 +2940,8 @@ impl<'a> Analyzer<'a> {
                 if all_types_are_concrete(analyzed_type_parameters) {
                     self.instantiate_blueprint(blueprint, analyzed_type_parameters, node)?
                 } else {
-                    Type::Int
+                    Type::Blueprint(blueprint.clone())
+                    //Type::Generic(blueprint.clone(), analyzed_type_parameters.to_vec())
                 }
             }
             Symbol::TypeGenerator(generator) => {
@@ -2950,7 +2951,7 @@ impl<'a> Analyzer<'a> {
                             generator.arity,
                             analyzed_type_parameters.len(),
                         ),
-                        &node,
+                        node,
                     ));
                 }
 
@@ -3015,8 +3016,8 @@ impl<'a> Analyzer<'a> {
         concrete_types: &[Type],
         node: &swamp_script_ast::Node,
     ) -> Result<Type, Error> {
-        //let stored_variables = self.type_variables.clone();
-
+        info!(?blueprint, ?concrete_types, "instantiate blueprint!");
+        assert!(all_types_are_concrete(concrete_types));
         let mut variable_scope_seq_map = SeqMap::new();
         // Create a new analyzer context
         for (type_parameter_name, concrete_type) in
@@ -3031,6 +3032,8 @@ impl<'a> Analyzer<'a> {
 
         let (_ignore_if_changed, instantiated_type) =
             Instantiator::instantiate(blueprint, concrete_types, &scope)?;
+
+        info!(?instantiated_type, "instantiated");
 
         Ok(instantiated_type)
     }

@@ -31,7 +31,7 @@ impl TypeRegistry {
         Self {
             array_types: RefCell::new(SeqMap::new()),
             struct_types: RefCell::new(SeqMap::new()),
-            next_type_number: RefCell::new(0),
+            next_type_number: RefCell::new(16),
         }
     }
 
