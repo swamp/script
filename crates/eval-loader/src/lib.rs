@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use swamp_script_analyzer::prelude::{Error, Program};
-use swamp_script_analyzer::{Analyzer, AutoUseModules, TypeContext, TypeContextScope};
+use swamp_script_analyzer::{Analyzer, SymbolTables, TypeContext, TypeContextScope};
 use swamp_script_dep_loader::{
     DependencyParser, ParsedAstModule, parse_local_modules_and_get_order,
 };
@@ -26,7 +26,7 @@ impl From<Error> for LoaderErr {
 
 pub fn analyze_module(
     state: &mut ProgramState,
-    auto_use_modules: &AutoUseModules,
+    default_lookup_symbol_table: &SymbolTable,
     modules: &mut Modules,
     core_symbol_table: &SymbolTableRef,
     source_map: &SourceMap,
@@ -39,16 +39,8 @@ pub fn analyze_module(
         source_map,
         ast_module.file_id,
     );
-    if !auto_use_modules.modules.is_empty() {
-        let target = &mut resolver.shared.lookup_table;
-        for symbol_table in &auto_use_modules.modules {
-            for (name, symbol) in symbol_table.symbols() {
-                target
-                    .add_symbol(name, symbol.clone())
-                    .map_err(|err| LoaderErr::SemanticError(err))?;
-            }
-        }
-    }
+
+    resolver.shared.lookup_table = default_lookup_symbol_table.clone();
 
     let outside_context = TypeContext::new(None, None, TypeContextScope::ArgumentOrOutsideFunction);
     let statements = {
@@ -69,7 +61,7 @@ pub fn analyze_module(
 
 pub fn analyze_modules_in_order(
     state: &mut ProgramState,
-    auto_use: &AutoUseModules,
+    default_lookup_symbol_table: &SymbolTable,
     modules: &mut Modules,
     core_symbol_table: SymbolTableRef,
     source_map: &SourceMap,
@@ -80,7 +72,7 @@ pub fn analyze_modules_in_order(
         if let Some(parse_module) = parsed_modules.get_parsed_module(module_path) {
             let (analyzed_symbol_table, maybe_expression) = analyze_module(
                 state,
-                auto_use,
+                default_lookup_symbol_table,
                 modules,
                 &core_symbol_table,
                 source_map,
@@ -109,7 +101,7 @@ pub fn compile_and_analyze_all_modules(
 
     analyze_modules_in_order(
         &mut resolved_program.state,
-        &resolved_program.auto_use_modules,
+        &resolved_program.default_symbol_table,
         &mut resolved_program.modules,
         core_symbol_table,
         source_map,

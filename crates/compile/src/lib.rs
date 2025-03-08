@@ -93,9 +93,10 @@ pub fn create_registry_source_map(registry_path: &Path) -> io::Result<SourceMap>
 
 #[derive(Debug)]
 pub struct BootstrapResult {
-    pub modules: Modules,
-    pub default_symbol_table: SymbolTable,
-    pub state: ProgramState,
+    //pub modules: Modules,
+    //pub default_symbol_table: SymbolTable,
+    //pub state: ProgramState,
+    pub program: Program,
     pub core_module_path: Vec<String>,
     pub core_symbol_table: SymbolTable,
 }
@@ -141,7 +142,9 @@ pub fn bootstrap_modules(
         &core_module.namespace.path,
     )?;
 
-    core_analyzed_symbol_table.extend_intrinsic_functions_from(&core_symbol_table);
+    core_analyzed_symbol_table
+        .extend_intrinsic_functions_from(&core_symbol_table)
+        .unwrap();
 
     core_module.namespace.symbol_table = Rc::new(core_analyzed_symbol_table);
 
@@ -151,25 +154,20 @@ pub fn bootstrap_modules(
 
     // Add `core` module without the version number, so they can be referenced from code
     default_symbol_table
-        .add_package_version(swamp_script_core::PACKAGE_NAME, compiler_version.clone())
+        .add_package_version(swamp_script_core::PACKAGE_NAME, compiler_version)
         .expect("should work");
 
+    let program = Program::new(state, modules, default_symbol_table);
+
     let result = BootstrapResult {
-        modules,
-        default_symbol_table,
-        state,
+        program,
         core_module_path: core_module_ref.namespace.path.clone(),
         core_symbol_table,
     };
     Ok(result)
 }
 
-pub fn init(_root_path: &Path) -> Result<Program, ScriptResolveError> {
-    let resolved_program = Program::new();
-
-    Ok(resolved_program)
-}
-
+/*
 pub fn compile_and_resolve(
     module_path: &[String],
     source_map: &mut SourceMap,
@@ -188,7 +186,7 @@ pub fn compile_and_resolve(
     let mut resolved_program = Program::new();
     analyze_modules_in_order(
         &mut resolved_program.state,
-        &resolved_program.auto_use_modules,
+        &resolved_program.default_symbol_table,
         &mut resolved_program.modules,
         core_symbol_table,
         source_map,
@@ -198,6 +196,8 @@ pub fn compile_and_resolve(
 
     Ok(resolved_program)
 }
+
+ */
 
 pub fn compile_and_analyze_all_modules(
     module_path: &[String],
@@ -215,7 +215,7 @@ pub fn compile_and_analyze_all_modules(
 
     analyze_modules_in_order(
         &mut resolved_program.state,
-        &resolved_program.auto_use_modules,
+        &resolved_program.default_symbol_table,
         &mut resolved_program.modules,
         core_symbol_table,
         source_map,
@@ -345,7 +345,7 @@ pub fn bootstrap_and_compile(
 
      */
 
-    let mut program = Program::new();
+    let mut program = bootstrap_result.program;
 
     compile_and_analyze_all_modules(
         root_path,

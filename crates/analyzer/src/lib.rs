@@ -54,32 +54,34 @@ pub enum LocationSide {
 }
 
 #[derive(Debug)]
-pub struct AutoUseModules {
-    pub modules: Vec<SymbolTableRef>,
+pub struct SymbolTables {
+    pub symbol_tables: Vec<SymbolTableRef>,
 }
 
 #[derive(Debug)]
 pub struct Program {
     pub state: ProgramState,
     pub modules: Modules,
-    pub auto_use_modules: AutoUseModules,
+    pub default_symbol_table: SymbolTable,
 }
 
 impl Default for Program {
     fn default() -> Self {
-        Self::new()
+        Self::new(ProgramState::new(), Modules::new(), SymbolTable::new())
     }
 }
 
 impl Program {
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new(
+        state: ProgramState,
+        modules: Modules,
+        default_symbol_table: SymbolTable,
+    ) -> Self {
         Self {
-            state: ProgramState::new(),
-            modules: Modules::new(),
-            auto_use_modules: AutoUseModules {
-                modules: Vec::new(),
-            },
+            state,
+            modules,
+            default_symbol_table,
         }
     }
 }
