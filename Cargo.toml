@@ -32,5 +32,6 @@ members = [
 
     "crates/source-map", # Move this later
     "crates/eira",
+    "crates/pretty-print",
     "crates/source-map-lookup", "crates/core", "crates/types", "crates/node", # Move this later
 ]
