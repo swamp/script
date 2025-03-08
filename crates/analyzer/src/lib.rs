@@ -2412,7 +2412,28 @@ impl<'a> Analyzer<'a> {
                     Err(self.create_err(ErrorKind::VariableIsNotMutable, &expr.node))
                 }
             }
-            _ => Err(self.create_err(ErrorKind::NotValidLocationStartingPoint, &expr.node)),
+            swamp_script_ast::ExpressionKind::IdentifierReference(qualified_identifier) => {
+                let generated_var = swamp_script_ast::Variable {
+                    name: qualified_identifier.name.clone(),
+                    is_mutable: None,
+                };
+                let var = self.find_variable(&generated_var)?;
+                if var.is_mutable() {
+                    Ok(SingleLocationExpression {
+                        kind: SingleLocationExpressionKind::MutVariableRef,
+                        node: self.to_node(&generated_var.name),
+                        ty: var.resolved_type.clone(),
+                        starting_variable: var,
+                        access_chain: vec![],
+                    })
+                } else {
+                    Err(self.create_err(ErrorKind::VariableIsNotMutable, &expr.node))
+                }
+            }
+            _ => {
+                error!(?expr.kind, "error");
+                Err(self.create_err(ErrorKind::NotValidLocationStartingPoint, &expr.node))
+            }
         }
     }
 

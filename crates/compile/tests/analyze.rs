@@ -1439,12 +1439,15 @@ fn blueprint_add_with_field() {
 
     b: Int = a.something()
 
-    c: Int = a.calc(2.3)
+    c: Float = a.calc(2.3)
 
     ",
         r#"
-Namespace { path: ["test"], symbol_table: SymbolTable { symbols: SeqMap("JustTest": Blueprint(ParameterizedTypeBlueprint { kind: Struct(struct JustTest anon: some_field: Some(<34:10>):<|T|>), type_variables: ["T"], type_id: 18 })) } }
-Unit,VariableDefinition(Variable { name: <181:1>, resolved_type: JustTest<Int>, mutable_node: None, scope_index: 0, variable_index: 0 }, MutOrImmutableExpression { expression_or_location: Expression(<185:8>JustTest<Int>,StructInstantiation(StructInstantiation { source_order_expressions: [(0, <221:2>Int,Literal(IntLiteral(42)))], struct_type_ref: RefCell { value: struct JustTest<Int> anon: some_field: Some(<34:10>):Int } })), is_mutable: None })
+Namespace { path: ["test"], symbol_table: SymbolTable { symbols: SeqMap("JustTest": Blueprint(ParameterizedTypeBlueprint { kind: Struct(struct JustTest anon: some_field: Some(<34:10>):<|T|>), type_variables: ["T"], type_id: 22 })) } }
+..Unit,VariableDefinition(Variable { name: <208:1>, resolved_type: JustTest<Int>, mutable_node: None, scope_index: 1, variable_index: 0 }, MutOrImmutableExpression { expression_or_location: Expression(<212:8>JustTest<Int>,StructInstantiation(StructInstantiation { source_order_expressions: [(0, <248:2>Int,Literal(IntLiteral(42)))], struct_type_ref: RefCell { value: struct JustTest<Int> anon: some_field: Some(<34:10>):Int } })), is_mutable: None })
+..Unit,VariableDefinition(Variable { name: <263:1>, resolved_type: Int, mutable_node: None, scope_index: 1, variable_index: 1 }, MutOrImmutableExpression { expression_or_location: Expression(<272:1>Int,PostfixChain(<272:1>JustTest<Int>,VariableAccess(Variable { name: <208:1>, resolved_type: JustTest<Int>, mutable_node: None, scope_index: 1, variable_index: 0 }), [Postfix { node: <274:9>, ty: Int, kind: MemberCall(External(external fn), []) }])), is_mutable: None })
+..Unit,VariableDefinition(Variable { name: <291:1>, resolved_type: Float, mutable_node: None, scope_index: 1, variable_index: 2 }, MutOrImmutableExpression { expression_or_location: Expression(<302:1>Float,PostfixChain(<302:1>JustTest<Int>,VariableAccess(Variable { name: <208:1>, resolved_type: JustTest<Int>, mutable_node: None, scope_index: 1, variable_index: 0 }), [Postfix { node: <304:4>, ty: Float, kind: MemberCall(Internal(Signature { parameters: [TypeForParameter { name: "self", resolved_type: JustTest<Int>, is_mutable: false, node: Some(Parameter) }, TypeForParameter { name: "f", resolved_type: Float, is_mutable: false, node: Some(Parameter) }], return_type: Float }
+<120:32>Float,Block([<134:17>Float,BinaryOp(BinaryOperator { left: <134:1>Float,VariableAccess(Variable { name: <101:1>, resolved_type: Float, mutable_node: None, scope_index: 0, variable_index: 1 }), right: <138:4>Float,Literal(FloatLiteral(fp:42.400 (2778726))), kind: Add, node: <136:1> })])), [Expression(<309:3>Float,Literal(FloatLiteral(fp:2.300 (150732))))]) }])), is_mutable: None })
 "#,
     );
 }

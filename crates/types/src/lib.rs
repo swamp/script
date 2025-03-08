@@ -304,18 +304,26 @@ impl Type {
     pub fn compatible_with(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Function(a), Self::Function(b)) => a.same_type(b),
+
             (_, Self::Never)
+            | (Self::Never, _)
             | (Self::Int, Self::Int)
             | (Self::Float, Self::Float)
             | (Self::String, Self::String)
             | (Self::Bool, Self::Bool)
-            | (Self::Unit, Self::Unit)
-            | (Self::Enum(_), Self::Enum(_)) => true,
+            | (Self::Unit, Self::Unit) => true,
+
+            (Self::Enum(a), Self::Enum(b)) => a == b,
 
             (Self::Vec(a), Self::Vec(b))
             | (Self::Sparse(a), Self::Sparse(b))
             | (Self::Grid(a), Self::Grid(b))
+            | (Self::Slice(a), Self::Slice(b))
             | (Self::Iterable(a), Self::Iterable(b)) => a.compatible_with(b),
+
+            (Self::SlicePair(a1, a2), Self::SlicePair(b1, b2)) => {
+                a1.compatible_with(b1) && a2.compatible_with(b2)
+            }
 
             (Self::Map(a_key, a_value), Self::Map(b_key, b_value)) => {
                 a_key.compatible_with(b_key) && a_value.compatible_with(b_value)
