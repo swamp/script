@@ -8,6 +8,7 @@ use swamp_script_types::{
     AnonymousStructType, NamedStructType, ParameterizedTypeBlueprint, ParameterizedTypeKind,
     Signature, StructTypeField, Type, TypeForParameter,
 };
+use tracing::info;
 
 #[derive(Debug)]
 pub struct TypeVariableScope {
@@ -82,36 +83,43 @@ impl Instantiator {
 
     pub fn instantiate_signature(
         signature: Signature,
-        type_variables: &TypeVariableScope,
+        self_type: &Type,
+        scope: &TypeVariableScope,
     ) -> Result<(bool, Signature), Error> {
         let mut was_replaced = false;
-        let mut resolved_type_for_parameters = Vec::new();
-        for type_for_parameter in signature.parameters {
-            let (type_was_replaced, resolved) = Self::instantiate_type_if_needed(
-                &type_for_parameter.resolved_type,
-                type_variables,
-            )?;
+        let mut instantiated_type_for_parameters = Vec::new();
+        for type_for_parameter in &signature.parameters {
+            let (type_was_replaced, resolved) =
+                if let Type::Blueprint(_blueprint) = &type_for_parameter.resolved_type {
+                    // HACK: Assume blueprints are self
+                    (false, self_type.clone())
+                } else {
+                    Self::instantiate_type_if_needed(&type_for_parameter.resolved_type, scope)?
+                };
+
             if type_was_replaced {
-                was_replaced = true
+                was_replaced = true;
             }
-            resolved_type_for_parameters.push(TypeForParameter {
-                name: type_for_parameter.name,
+            instantiated_type_for_parameters.push(TypeForParameter {
+                name: type_for_parameter.name.clone(),
                 resolved_type: resolved,
                 is_mutable: type_for_parameter.is_mutable,
                 node: type_for_parameter.node.clone(),
-            })
+            });
         }
 
         let (return_type_was_replaced, instantiated_return_type) =
-            Self::instantiate_type_if_needed(&signature.return_type, type_variables)?;
+            Self::instantiate_type_if_needed(&signature.return_type, scope)?;
         if return_type_was_replaced {
-            was_replaced = true
+            was_replaced = true;
         }
 
         let new_signature = Signature {
-            parameters: resolved_type_for_parameters,
+            parameters: instantiated_type_for_parameters,
             return_type: Box::new(instantiated_return_type),
         };
+
+        info!(?new_signature, ?signature, "instantiated signature");
 
         Ok((was_replaced, new_signature))
     }

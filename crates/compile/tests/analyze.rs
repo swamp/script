@@ -1426,18 +1426,21 @@ fn blueprint_add_with_field() {
     }
 
     impl JustTest<T> {
-         fn new(t: T) -> T {
-            t
-         }
+        fn calc(self, f: Float) -> Float {
+            f + 42.4
+        }
 
-        external fn something(self)
+        external fn something(self) -> Int
     }
 
     a = JustTest<Int> {
         some_field: 42,
     }
 
-    a.something()
+    b: Int = a.something()
+
+    c: Int = a.calc(2.3)
+
     ",
         r#"
 Namespace { path: ["test"], symbol_table: SymbolTable { symbols: SeqMap("JustTest": Blueprint(ParameterizedTypeBlueprint { kind: Struct(struct JustTest anon: some_field: Some(<34:10>):<|T|>), type_variables: ["T"], type_id: 18 })) } }

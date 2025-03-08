@@ -2690,6 +2690,7 @@ impl<'a> Analyzer<'a> {
             .compatible_with(encountered_self_type)
             || self_type.is_mutable && !is_mutable
         {
+            info!(?encountered_self_type, ?self_type, "types encountered");
             return Err(self.create_err_resolved(ErrorKind::SelfNotCorrectType, resolved_node));
         }
 
@@ -2957,6 +2958,7 @@ impl<'a> Analyzer<'a> {
                                 let (_replaced, new_signature) =
                                     Instantiator::instantiate_signature(
                                         func_ref.signature().clone(),
+                                        &instantiated_type,
                                         &scope,
                                     )?;
                                 let new_func = match &**func_ref {
