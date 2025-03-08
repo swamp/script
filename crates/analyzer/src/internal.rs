@@ -19,6 +19,8 @@ impl Analyzer<'_> {
         ast_arguments: &[&swamp_script_ast::Expression],
     ) -> Result<Option<Postfix>, Error> {
         match &ty {
+            /*
+
             Type::Vec(array_type_ref) => {
                 let resolved = self.analyze_array_member_call(
                     array_type_ref,
@@ -39,7 +41,6 @@ impl Analyzer<'_> {
                 )?;
                 Ok(Some(resolved))
             }
-            /*
                        Type::Float => {
                            let resolved =
                                self.analyze_float_member_call(ast_member_function_name, ast_arguments)?;
@@ -141,6 +142,8 @@ impl Analyzer<'_> {
             kind,
         }
     }
+
+    /*
 
     fn analyze_map_member_call(
         &mut self,
@@ -319,6 +322,8 @@ impl Analyzer<'_> {
         Ok(resolved_postfix)
     }
 
+     */
+
     fn analyze_single_float_expression(
         &mut self,
         node: &swamp_script_ast::Node,
@@ -368,6 +373,7 @@ impl Analyzer<'_> {
         Ok((expr2, expr3))
     }
 
+    /*
     #[allow(clippy::too_many_lines)]
     fn analyze_float_member_call(
         &mut self,
@@ -596,6 +602,8 @@ impl Analyzer<'_> {
 
         Ok(self.create_postfix(kind, &resolved_type, ast_member_function_name))
     }
+
+     */
 
     /*
     fn check_for_internal_member_call_extra(

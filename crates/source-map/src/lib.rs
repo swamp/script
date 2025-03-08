@@ -26,6 +26,7 @@ pub struct FileInfo {
 pub struct SourceMap {
     pub mounts: SeqMap<String, PathBuf>,
     pub cache: SeqMap<FileId, FileInfo>,
+    pub file_cache: SeqMap<(String, String), FileId>,
     pub next_file_id: FileId,
 }
 
@@ -60,6 +61,7 @@ impl SourceMap {
         Ok(Self {
             mounts: canonical_mounts,
             cache: SeqMap::new(),
+            file_cache: SeqMap::new(),
             next_file_id: 1,
         })
     }
@@ -89,6 +91,11 @@ impl SourceMap {
     }
 
     pub fn read_file(&mut self, path: &Path, mount_name: &str) -> io::Result<(FileId, String)> {
+        info!(
+            ?path,
+            ?mount_name,
+            "actually reading file from secondary storage"
+        );
         let found_base_path = self.base_path(mount_name);
         let relative_path = diff_paths(path, found_base_path)
             .unwrap_or_else(|| panic!("could not find relative path {path:?} {found_base_path:?}"));
@@ -101,6 +108,25 @@ impl SourceMap {
         self.add_manual(id, mount_name, &relative_path, &contents);
 
         Ok((id, contents))
+    }
+
+    pub fn add_to_cache(
+        &mut self,
+        mount_name: &str,
+        relative_path: &Path,
+        contents: &str,
+        file_id: FileId,
+    ) {
+        self.add_manual(file_id, mount_name, relative_path, contents);
+        self.file_cache
+            .insert(
+                (
+                    mount_name.to_string(),
+                    relative_path.to_str().unwrap().to_string(),
+                ),
+                file_id,
+            )
+            .unwrap();
     }
 
     pub fn add_manual(
@@ -154,6 +180,20 @@ impl SourceMap {
         mount_name: &str,
         relative_path: &str,
     ) -> io::Result<(FileId, String)> {
+        info!(
+            ?mount_name,
+            ?relative_path,
+            "requested relative path in mount"
+        );
+
+        if let Some(found_in_cache) = self
+            .file_cache
+            .get(&(mount_name.to_string(), relative_path.to_string()))
+        {
+            let contents = self.cache.get(found_in_cache).unwrap().contents.clone();
+            return Ok((found_in_cache.clone(), contents));
+        }
+
         let buf = self.to_file_system_path(mount_name, relative_path)?;
         self.read_file(&buf, mount_name)
     }

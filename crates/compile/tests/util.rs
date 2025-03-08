@@ -4,71 +4,22 @@
  */
 use seq_map::SeqMap;
 use std::path::Path;
-use swamp_script_analyzer::{Analyzer, TypeContext};
-use swamp_script_compile::bootstrap_modules;
-use swamp_script_dep_loader::swamp_registry_path;
-use swamp_script_error_report::{ScriptResolveError, show_script_resolve_error};
-use swamp_script_modules::prelude::{Module, Modules, Namespace};
-use swamp_script_parser::AstParser;
+use swamp_script_compile::bootstrap_and_compile;
+use swamp_script_error_report::ScriptResolveError;
+use swamp_script_modules::prelude::ModuleRef;
 use swamp_script_source_map::SourceMap;
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 
-fn internal_compile(script: &str) -> Result<Module, ScriptResolveError> {
-    let parser = AstParser {};
-
-    let program = parser.parse_module(script).expect("Failed to parse script");
-
+fn internal_compile(script: &str) -> Result<ModuleRef, ScriptResolveError> {
     let mut source_map = SourceMap::new(&SeqMap::default()).unwrap();
     let file_id = 0xffff;
 
-    source_map.add_manual(file_id, "crate", Path::new("some_path/main"), script);
-    let resolved_path_str = vec!["test".to_string()];
+    source_map.add_mount("crate", Path::new("/tmp/")).unwrap();
+    source_map.add_to_cache("crate", Path::new("test.swamp"), script, file_id);
 
-    let registry_path = swamp_registry_path().unwrap();
-    source_map.add_mount("registry", &registry_path).unwrap();
+    let resolved_path_str = vec!["crate".to_string(), "test".to_string()];
 
-    let mut bootstrap_result = bootstrap_modules(&mut source_map).inspect_err(|err| {
-        show_script_resolve_error(err, &source_map, Path::new(""));
-    })?;
-    let core_symbol_table = bootstrap_result.core_symbol_table;
-
-    let mut analyzer = Analyzer::new(
-        &mut bootstrap_result.state,
-        &bootstrap_result.modules,
-        core_symbol_table.into(),
-        &source_map,
-        file_id,
-    );
-
-    info!(def_tbl=?bootstrap_result.default_symbol_table, "default");
-    analyzer.shared.lookup_table = bootstrap_result.default_symbol_table;
-
-    for definition in &program.definitions {
-        analyzer.analyze_definition(definition)?;
-    }
-
-    let expression = &program.expression;
-    let any_context = TypeContext::new_anything_argument();
-    let maybe_resolved_expression = match expression {
-        Some(unwrapped_expression) => {
-            let result = analyzer.analyze_expression(unwrapped_expression, &any_context);
-            if let Ok(expression) = result {
-                Some(expression)
-            } else {
-                let err = result.err().unwrap();
-                error!(?err, "found error");
-                return Err(err)?;
-            }
-        }
-        None => None,
-    };
-
-    let ns_ref = Namespace::new(resolved_path_str, analyzer.shared.definition_table);
-
-    let resolved_module = Module {
-        expression: maybe_resolved_expression,
-        namespace: ns_ref,
-    };
+    let resolved_module = bootstrap_and_compile(&mut source_map, &resolved_path_str)?;
 
     Ok(resolved_module)
 }
