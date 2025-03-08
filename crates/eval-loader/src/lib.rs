@@ -31,6 +31,7 @@ pub fn analyze_module(
     modules: &mut Modules,
     core_symbol_table: &SymbolTableRef,
     source_map: &SourceMap,
+    module_path: &[String],
     ast_module: &ParsedAstModule,
 ) -> Result<(SymbolTable, Option<Expression>), LoaderErr> {
     let mut resolver = Analyzer::new(
@@ -38,6 +39,7 @@ pub fn analyze_module(
         modules,
         core_symbol_table.clone(),
         source_map,
+        module_path,
         ast_module.file_id,
     );
 
@@ -81,6 +83,7 @@ pub fn analyze_modules_in_order(
                 modules,
                 &core_symbol_table,
                 source_map,
+                module_path,
                 parse_module,
             )?;
             let analyzed_module = Module::new(module_path, analyzed_symbol_table, maybe_expression);

@@ -2,11 +2,14 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
+pub mod inst_cache;
 pub mod intr;
 pub mod prelude;
 
+use crate::inst_cache::InstantiationCache;
 use crate::intr::IntrinsicFunction;
 use crate::prelude::IntrinsicFunctionDefinitionRef;
+
 pub use fixed32::Fp;
 use seq_map::SeqMap;
 use std::cmp::PartialEq;
@@ -873,16 +876,34 @@ impl AssociatedImpls {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct TypeIdGenerator {
+    number: TypeNumber,
+}
+
+impl TypeIdGenerator {
+    pub fn new(start_number: TypeNumber) -> Self {
+        Self {
+            number: start_number,
+        }
+    }
+    pub fn allocate(&mut self) -> TypeNumber {
+        self.number += 1;
+        self.number
+    }
+}
+
 // Mutable part
 #[derive(Debug, Clone)]
 pub struct ProgramState {
-    pub number: TypeNumber,
+    pub type_id_generator: TypeIdGenerator,
     pub external_function_number: ExternalFunctionId,
     // It is just so we don't have to do another dependency check of the
     // modules, we know that these constants have been
     // evaluated in order already
     pub constants_in_dependency_order: Vec<ConstantRef>,
     pub associated_impls: AssociatedImpls,
+    pub instantiation_cache: InstantiationCache,
 }
 
 impl Default for ProgramState {
@@ -895,16 +916,20 @@ impl ProgramState {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            number: 16,
+            type_id_generator: TypeIdGenerator::new(16),
             external_function_number: 0,
             constants_in_dependency_order: Vec::new(),
             associated_impls: AssociatedImpls::new(),
+            instantiation_cache: InstantiationCache::new(),
         }
     }
 
     pub fn allocate_number(&mut self) -> TypeNumber {
-        self.number += 1;
-        self.number
+        self.type_id_generator.allocate()
+    }
+
+    pub fn type_id_generator_mut(&mut self) -> &mut TypeIdGenerator {
+        &mut self.type_id_generator
     }
 
     pub fn allocate_external_function_id(&mut self) -> ExternalFunctionId {

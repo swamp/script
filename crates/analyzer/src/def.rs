@@ -395,6 +395,7 @@ impl Analyzer<'_> {
                     kind: ParameterizedTypeKind::Struct(named_struct_type),
                     type_variables,
                     type_id: self.shared.state.allocate_number(),
+                    defined_in_module_path: self.module_path.clone(),
                 })
                 .map_err(|err| {
                     self.create_err(

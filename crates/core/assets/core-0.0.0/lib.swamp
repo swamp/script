@@ -340,6 +340,13 @@ impl Vec<T> {
     fn clear(self) {
         vec_clear(self)
     }
+
+    /// Gets the length of the vector.
+    ///
+    /// Uses intrinsic function `vec_len` to get the length.
+    fn len(self) -> Int {
+        vec_len(self)
+    }
 }
 
 

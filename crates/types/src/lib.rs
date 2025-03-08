@@ -76,6 +76,7 @@ pub struct ParameterizedTypeBlueprint {
     pub kind: ParameterizedTypeKind,
     pub type_variables: Vec<String>,
     pub type_id: TypeNumber,
+    pub defined_in_module_path: Vec<String>,
 }
 
 impl ParameterizedTypeBlueprint {

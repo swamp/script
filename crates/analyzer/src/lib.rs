@@ -35,7 +35,7 @@ use swamp_script_semantic::{
 use swamp_script_source_map::SourceMap;
 use swamp_script_types::ParameterizedTypeBlueprint;
 use swamp_script_types::prelude::*;
-use tracing::{error, info, trace};
+use tracing::{debug, error, info, trace};
 
 #[must_use]
 pub fn convert_range_mode(range_mode: &swamp_script_ast::RangeMode) -> RangeMode {
@@ -385,16 +385,11 @@ impl FunctionScopeState {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct TypeVariables {
-    pub variables: SeqMap<String, Type>,
-}
-
 pub struct Analyzer<'a> {
     pub shared: SharedState<'a>,
     scope: FunctionScopeState,
     global: FunctionScopeState,
-    type_variables: TypeVariables,
+    module_path: Vec<String>,
 }
 
 impl<'a> Analyzer<'a> {
@@ -403,6 +398,7 @@ impl<'a> Analyzer<'a> {
         modules: &'a Modules,
         core_symbol_table: SymbolTableRef,
         source_map: &'a SourceMap,
+        module_path: &[String],
         file_id: FileId,
     ) -> Self {
         let shared = SharedState {
@@ -419,9 +415,7 @@ impl<'a> Analyzer<'a> {
             scope: FunctionScopeState::new(Type::Unit),
             global: FunctionScopeState::new(Type::Unit),
             shared,
-            type_variables: TypeVariables {
-                variables: Default::default(),
-            },
+            module_path: module_path.to_vec(),
         }
     }
 
@@ -2801,11 +2795,26 @@ impl<'a> Analyzer<'a> {
         analyzed_type_parameters: &[Type],
     ) -> Result<Type, Error> {
         assert!(all_types_are_concrete(analyzed_type_parameters));
+
+        if let Some(existing) = self.shared.state.instantiation_cache.get(
+            &blueprint.defined_in_module_path,
+            &blueprint.name(),
+            analyzed_type_parameters,
+        ) {
+            debug!(?blueprint, "found existing type");
+            return Ok(existing.clone());
+        }
+
         let scope = Instantiator::create_type_parameter_scope_from_variables(
             &blueprint.type_variables,
             analyzed_type_parameters,
         )?;
-        let instantiated_type = self.instantiate_blueprint(blueprint, &scope)?;
+        let (_ignore_if_changed, instantiated_type) = Instantiator::instantiate_blueprint(
+            blueprint,
+            &scope,
+            self.shared.state.type_id_generator_mut(),
+        )?;
+
         let new_impls = {
             let mut new_impls = SeqMap::new();
             let maybe_member_functions = self
@@ -2815,11 +2824,13 @@ impl<'a> Analyzer<'a> {
                 .functions
                 .get(&blueprint.type_id);
             if let Some(found_member_functions) = maybe_member_functions {
+                let type_id_generator = &mut self.shared.state.type_id_generator;
                 for (func_name, func_ref) in &found_member_functions.functions {
                     let (_replaced, new_signature) = Instantiator::instantiate_signature(
                         func_ref.signature().clone(),
                         &instantiated_type,
                         &scope,
+                        type_id_generator,
                     )?;
                     let new_func = match &**func_ref {
                         Function::Internal(internal) => {
@@ -2852,12 +2863,25 @@ impl<'a> Analyzer<'a> {
             .associated_impls
             .prepare(&instantiated_type);
         for (name, func) in &new_impls {
+            info!(?name, ?func, id=?instantiated_type.id().unwrap(), "ADDING");
             self.shared.state.associated_impls.add_member_function(
                 &instantiated_type,
                 &*name,
                 func.clone().into(),
             )?;
         }
+
+        self.shared
+            .state
+            .instantiation_cache
+            .add(
+                &blueprint.defined_in_module_path,
+                &blueprint.name(),
+                instantiated_type.clone(),
+                analyzed_type_parameters,
+            )
+            .unwrap();
+
         Ok(instantiated_type)
     }
 
@@ -2904,21 +2928,6 @@ impl<'a> Analyzer<'a> {
         };
 
         Ok(ty)
-    }
-
-    fn instantiate_blueprint(
-        &mut self,
-        blueprint: &ParameterizedTypeBlueprint,
-        scope: &TypeVariableScope,
-    ) -> Result<Type, Error> {
-        info!(?blueprint, ?scope, "instantiate blueprint!");
-
-        let (_ignore_if_changed, instantiated_type) =
-            Instantiator::instantiate_blueprint(blueprint, &scope)?;
-
-        info!(?instantiated_type, "instantiated");
-
-        Ok(instantiated_type)
     }
 
     #[allow(clippy::too_many_lines)]

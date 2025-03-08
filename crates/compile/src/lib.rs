@@ -54,7 +54,7 @@ pub fn analyze_single_module(
         modules,
         core_symbol_table,
         source_map,
-        //versioned_module_path,
+        versioned_module_path,
         parsed_ast_module.file_id,
     );
 

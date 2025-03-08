@@ -3,7 +3,7 @@ use crate::prelude::Error;
 use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::rc::Rc;
-use swamp_script_semantic::SemanticError;
+use swamp_script_semantic::{SemanticError, TypeIdGenerator};
 use swamp_script_types::{
     AnonymousStructType, NamedStructType, ParameterizedTypeBlueprint, ParameterizedTypeKind,
     Signature, StructTypeField, Type, TypeForParameter,
@@ -72,10 +72,11 @@ impl Instantiator {
     pub(crate) fn instantiate_blueprint(
         blueprint: &ParameterizedTypeBlueprint,
         scope: &TypeVariableScope,
+        type_id_generator: &mut TypeIdGenerator,
     ) -> Result<(bool, Type), Error> {
         match &blueprint.kind {
             ParameterizedTypeKind::Struct(struct_ref) => {
-                Self::instantiate_struct(struct_ref, scope)
+                Self::instantiate_struct(struct_ref, scope, type_id_generator)
             }
             ParameterizedTypeKind::Enum(_) => todo!(),
         }
@@ -85,6 +86,7 @@ impl Instantiator {
         signature: Signature,
         self_type: &Type,
         scope: &TypeVariableScope,
+        type_id_generator: &mut TypeIdGenerator,
     ) -> Result<(bool, Signature), Error> {
         let mut was_replaced = false;
         let mut instantiated_type_for_parameters = Vec::new();
@@ -94,7 +96,11 @@ impl Instantiator {
                     // HACK: Assume blueprints are self
                     (false, self_type.clone())
                 } else {
-                    Self::instantiate_type_if_needed(&type_for_parameter.resolved_type, scope)?
+                    Self::instantiate_type_if_needed(
+                        &type_for_parameter.resolved_type,
+                        scope,
+                        type_id_generator,
+                    )?
                 };
 
             if type_was_replaced {
@@ -109,7 +115,7 @@ impl Instantiator {
         }
 
         let (return_type_was_replaced, instantiated_return_type) =
-            Self::instantiate_type_if_needed(&signature.return_type, scope)?;
+            Self::instantiate_type_if_needed(&signature.return_type, scope, type_id_generator)?;
         if return_type_was_replaced {
             was_replaced = true;
         }
@@ -127,6 +133,7 @@ impl Instantiator {
     fn instantiate_type_if_needed(
         ty: &Type,
         type_variables: &TypeVariableScope,
+        type_id_generator: &mut TypeIdGenerator,
     ) -> Result<(bool, Type), Error> {
         let (replaced, result_type) = match ty {
             Type::Generic(parameterized_type, arguments) => {
@@ -134,7 +141,7 @@ impl Instantiator {
                     &parameterized_type.type_variables,
                     arguments,
                 )?;
-                Self::instantiate_blueprint(parameterized_type, &new_scope)?
+                Self::instantiate_blueprint(parameterized_type, &new_scope, type_id_generator)?
             }
 
             Type::Variable(type_variable) => {
@@ -163,12 +170,16 @@ impl Instantiator {
     fn instantiate_struct(
         struct_type: &NamedStructType,
         type_variables: &TypeVariableScope,
+        type_id_generator: &mut TypeIdGenerator,
     ) -> Result<(bool, Type), Error> {
         let mut was_any_replaced = false;
         let mut new_fields = SeqMap::new();
         for (name, field) in &struct_type.anon_struct_type.field_name_sorted_fields {
-            let (was_replaced, new_type) =
-                Self::instantiate_type_if_needed(&field.field_type, type_variables)?;
+            let (was_replaced, new_type) = Self::instantiate_type_if_needed(
+                &field.field_type,
+                type_variables,
+                type_id_generator,
+            )?;
             was_any_replaced |= was_replaced;
             let new_field = StructTypeField {
                 identifier: field.identifier.clone(),
@@ -186,7 +197,7 @@ impl Instantiator {
             anon_struct_type: AnonymousStructType {
                 field_name_sorted_fields: new_fields,
             },
-            type_id: 0, // TODO: generate unique number
+            type_id: type_id_generator.allocate(),
         };
 
         let new_struct_ref = Rc::new(RefCell::new(new_struct));
