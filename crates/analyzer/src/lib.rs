@@ -817,13 +817,7 @@ impl<'a> Analyzer<'a> {
             }
 
             swamp_script_ast::ExpressionKind::Literal(literal) => {
-                let (literal, resolved_type) =
-                    self.analyze_literal(&ast_expression.node, literal, context)?;
-                self.create_expr(
-                    ExpressionKind::Literal(literal),
-                    resolved_type,
-                    &ast_expression.node,
-                )
+                self.analyze_literal(&ast_expression.node, literal, context)?
             }
 
             swamp_script_ast::ExpressionKind::ForLoop(pattern, iterable_expression, statements) => {
@@ -976,9 +970,6 @@ impl<'a> Analyzer<'a> {
             Type::Int => ExpressionKind::Literal(Literal::IntLiteral(0)),
             Type::Float => ExpressionKind::Literal(Literal::FloatLiteral(Fp::zero())),
             Type::String => ExpressionKind::Literal(Literal::StringLiteral(String::new())),
-            Type::Vec(array_type_ref) => {
-                ExpressionKind::Literal(Literal::Vec(*array_type_ref.clone(), vec![]))
-            }
             Type::Tuple(tuple_type_ref) => {
                 let mut expressions = Vec::new();
                 for resolved_type in tuple_type_ref {
@@ -986,9 +977,6 @@ impl<'a> Analyzer<'a> {
                     expressions.push(expr);
                 }
                 ExpressionKind::Literal(Literal::TupleLiteral(tuple_type_ref.clone(), expressions))
-            }
-            Type::Map(key, value) => {
-                ExpressionKind::Literal(Literal::Map(*key.clone(), *value.clone(), vec![]))
             }
             Type::Optional(_optional_type) => ExpressionKind::Literal(Literal::NoneLiteral),
 
@@ -1006,38 +994,49 @@ impl<'a> Analyzer<'a> {
         Ok(expr)
     }
 
+    fn create_static_call(
+        &mut self,
+        function_name: &str,
+        arguments: &[ArgumentExpressionOrLocation],
+        node: &swamp_script_ast::Node,
+        ty: &Type,
+    ) -> Result<ExpressionKind, Error> {
+        self.lookup_associated_function(ty, function_name)
+            .map_or_else(
+                || Err(self.create_err(ErrorKind::NoDefaultImplementedForType(ty.clone()), node)),
+                |function| {
+                    let kind = match &*function {
+                        Function::Internal(internal_function) => {
+                            ExpressionKind::InternalFunctionAccess(internal_function.clone())
+                        }
+                        Function::External(external_function) => {
+                            ExpressionKind::ExternalFunctionAccess(external_function.clone())
+                        }
+                    };
+
+                    let base_expr =
+                        self.create_expr(kind, Type::Function(function.signature().clone()), node);
+
+                    let empty_call_postfix = Postfix {
+                        node: self.to_node(node),
+                        ty: *function.signature().return_type.clone(),
+                        kind: PostfixKind::FunctionCall(arguments.to_vec()),
+                    };
+
+                    let kind =
+                        ExpressionKind::PostfixChain(Box::new(base_expr), vec![empty_call_postfix]);
+
+                    Ok(kind)
+                },
+            )
+    }
+
     fn create_default_static_call(
         &mut self,
         node: &swamp_script_ast::Node,
         ty: &Type,
     ) -> Result<ExpressionKind, Error> {
-        self.lookup_associated_function(ty, "default").map_or_else(
-            || Err(self.create_err(ErrorKind::NoDefaultImplementedForType(ty.clone()), node)),
-            |function| {
-                let kind = match &*function {
-                    Function::Internal(internal_function) => {
-                        ExpressionKind::InternalFunctionAccess(internal_function.clone())
-                    }
-                    Function::External(external_function) => {
-                        ExpressionKind::ExternalFunctionAccess(external_function.clone())
-                    }
-                };
-
-                let base_expr =
-                    self.create_expr(kind, Type::Function(function.signature().clone()), node);
-
-                let empty_call_postfix = Postfix {
-                    node: self.to_node(node),
-                    ty: *function.signature().return_type.clone(),
-                    kind: PostfixKind::FunctionCall(vec![]),
-                };
-
-                let kind =
-                    ExpressionKind::PostfixChain(Box::new(base_expr), vec![empty_call_postfix]);
-
-                Ok(kind)
-            },
-        )
+        self.create_static_call("default", &[], node, ty)
     }
 
     fn add_postfix(
@@ -1236,87 +1235,6 @@ impl<'a> Analyzer<'a> {
                             tv.is_mutable = false;
                         }
 
-                        Type::Vec(array_type_ref) => {
-                            if let swamp_script_ast::ExpressionKind::Range(
-                                min_expr,
-                                max_expr,
-                                mode,
-                            ) = &index_expr.kind
-                            {
-                                let range = self.analyze_range(min_expr, max_expr, mode)?;
-
-                                self.add_postfix(
-                                    &mut suffixes,
-                                    PostfixKind::ArrayRangeIndex(*array_type_ref.clone(), range),
-                                    collection_type.clone(),
-                                    &index_expr.node,
-                                );
-
-                                tv.resolved_type = collection_type.clone();
-                            } else {
-                                let int_argument_context = TypeContext::new_argument(&Type::Int);
-                                let resolved_index_expr =
-                                    self.analyze_expression(index_expr, &int_argument_context)?;
-                                self.add_postfix(
-                                    &mut suffixes,
-                                    PostfixKind::ArrayIndex(
-                                        *array_type_ref.clone(),
-                                        resolved_index_expr,
-                                    ),
-                                    *array_type_ref.clone(),
-                                    &index_expr.node,
-                                );
-
-                                tv.resolved_type = *array_type_ref.clone();
-                            }
-
-                            tv.is_mutable = false;
-                        }
-
-                        Type::Map(key_type, value_type) => {
-                            let key_type_context = TypeContext::new_argument(key_type);
-                            let resolved_key_expr =
-                                self.analyze_expression(index_expr, &key_type_context)?;
-                            let return_type = Type::Optional(value_type.clone());
-                            self.add_postfix(
-                                &mut suffixes,
-                                PostfixKind::MapIndex(
-                                    *key_type.clone(),
-                                    *value_type.clone(),
-                                    resolved_key_expr,
-                                ),
-                                return_type.clone(),
-                                &index_expr.node,
-                            );
-
-                            tv.resolved_type = return_type;
-                            tv.is_mutable = false;
-                        }
-
-                        Type::Sparse(contained_type) => {
-                            let sparse_id = self
-                                .shared
-                                .lookup_table
-                                .get_external_type("SparseId")
-                                .expect("SparseId is missing");
-                            let binding = Type::External(sparse_id.clone());
-                            let sparse_id_context = TypeContext::new_argument(&binding);
-                            let resolved_key =
-                                self.analyze_expression(index_expr, &sparse_id_context)?;
-
-                            let return_type = Type::Optional(Box::new(*contained_type.clone()));
-
-                            self.add_postfix(
-                                &mut suffixes,
-                                PostfixKind::SparseIndex(*contained_type.clone(), resolved_key),
-                                return_type.clone(),
-                                &index_expr.node,
-                            );
-
-                            tv.resolved_type = return_type;
-                            tv.is_mutable = false;
-                        }
-
                         _ => {
                             return Err(self.create_err(
                                 ErrorKind::ExpectedArray(collection_type),
@@ -1430,17 +1348,6 @@ impl<'a> Analyzer<'a> {
 
         let resolved_type = &resolved_expression.ty().clone();
         let (key_type, value_type): (Option<Type>, Type) = match resolved_type {
-            Type::Vec(array_type) => (Some(Type::Int), *array_type.clone()),
-            Type::Map(key, value) => (Some(*key.clone()), *value.clone()),
-            Type::Sparse(value) => {
-                let sparse_id_type = self
-                    .shared
-                    .lookup_table
-                    .get_external_type("SparseId")
-                    .expect("SparseId was missing");
-                let rust_id_type = Type::External(sparse_id_type.clone());
-                (Some(rust_id_type), *value.clone())
-            }
             Type::String => (Some(Type::Int), Type::String),
             Type::Iterable(item_type) => (None, *item_type.clone()),
 
@@ -1648,25 +1555,15 @@ impl<'a> Analyzer<'a> {
         &mut self,
         node: &swamp_script_ast::Node,
         items: &[swamp_script_ast::Expression],
-        expected_type: Option<&Type>,
     ) -> Result<(Type, Vec<Expression>), Error> {
         let expressions = self.analyze_argument_expressions(None, items)?;
         let element_type = if expressions.is_empty() {
-            if let Some(found_expected_type) = expected_type {
-                info!(?found_expected_type, "found array type");
-                if let Type::Vec(found) = found_expected_type {
-                    found.clone()
-                } else {
-                    return Err(self.create_err(ErrorKind::NotAnArray, node));
-                }
-            } else {
-                return Err(self.create_err(ErrorKind::NotAnArray, node));
-            }
+            Type::Slice(Box::from(Type::Unit))
         } else {
-            Box::from(expressions[0].ty.clone())
+            Type::Slice(Box::from(expressions[0].ty.clone()))
         };
 
-        Ok((*element_type, expressions))
+        Ok((element_type, expressions))
     }
 
     fn push_block_scope(&mut self, _debug_str: &str) {
@@ -1806,17 +1703,16 @@ impl<'a> Analyzer<'a> {
         expected_condition_type: &Type,
     ) -> Result<NormalPattern, Error> {
         let required_condition_type_context = TypeContext::new_argument(expected_condition_type);
-        let (resolved_literal, literal_type) =
-            self.analyze_literal(node, ast_literal, &required_condition_type_context)?;
+        let expr = self.analyze_literal(node, ast_literal, &required_condition_type_context)?;
 
-        if !literal_type.compatible_with(expected_condition_type) {
+        if !expr.ty.compatible_with(expected_condition_type) {
             return Err(self.create_err(
-                ErrorKind::IncompatibleTypes(literal_type, expected_condition_type.clone()),
+                ErrorKind::IncompatibleTypes(expr.ty, expected_condition_type.clone()),
                 node,
             ));
         }
 
-        Ok(NormalPattern::Literal(resolved_literal))
+        Ok(NormalPattern::Literal(expr))
     }
 
     const fn to_node(&self, node: &swamp_script_ast::Node) -> Node {
@@ -2284,81 +2180,6 @@ impl<'a> Analyzer<'a> {
                             ty = Type::String;
                         }
 
-                        Type::Vec(array_type) => {
-                            let int_argument_context = TypeContext::new_argument(&Type::Int);
-                            let index_expr =
-                                self.analyze_expression(lookup_expr, &int_argument_context)?; // TODO: Support slice (range)
-                            self.add_location_item(
-                                &mut items,
-                                LocationAccessKind::ArrayIndex(*array_type.clone(), index_expr),
-                                *array_type.clone(),
-                                &lookup_expr.node,
-                            );
-                            ty = *array_type.clone();
-                        }
-
-                        Type::Map(key_type, value_type) => {
-                            let key_type_argument_context = TypeContext::new_argument(key_type);
-                            let key_expr =
-                                self.analyze_expression(lookup_expr, &key_type_argument_context)?;
-                            let is_last = i == chain.postfixes.len() - 1;
-                            let allow_auto_insert = is_last && location_side == LocationSide::Lhs;
-                            let (kind, lookup_type) = if allow_auto_insert {
-                                // If this is the last postfix in the chain, then it is a "bare" access and auto-insert is allowed
-                                // the type is `value_type` since this lookup is safe. we can create a memory location if there wasn't one
-                                (
-                                    LocationAccessKind::MapIndexInsertIfNonExisting(
-                                        *key_type.clone(),
-                                        *value_type.clone(),
-                                        key_expr,
-                                    ),
-                                    *value_type.clone(),
-                                )
-                            } else {
-                                let optional_value_type =
-                                    Type::Optional(Box::from(value_type.clone()));
-                                (
-                                    LocationAccessKind::MapIndex(
-                                        *key_type.clone(),
-                                        *value_type.clone(),
-                                        key_expr,
-                                    ),
-                                    optional_value_type,
-                                )
-                            };
-
-                            self.add_location_item(
-                                &mut items,
-                                kind,
-                                lookup_type.clone(),
-                                &lookup_expr.node,
-                            );
-                            ty = lookup_type;
-                        }
-
-                        Type::Sparse(val_type) => {
-                            let sparse_id_type = self
-                                .shared
-                                .lookup_table
-                                .get_external_type("SparseId")
-                                .expect("should have SparseId");
-
-                            let key_type = Type::External(sparse_id_type.clone());
-                            let key_type_context = TypeContext::new_argument(&key_type);
-
-                            let key_expr =
-                                self.analyze_expression(lookup_expr, &key_type_context)?;
-
-                            self.add_location_item(
-                                &mut items,
-                                LocationAccessKind::SparseIndex(*val_type.clone(), key_expr),
-                                key_type.clone(),
-                                &lookup_expr.node,
-                            );
-
-                            ty = Type::Optional(Box::from(val_type.clone()));
-                        }
-
                         _ => {
                             return Err(
                                 self.create_err(ErrorKind::IllegalIndexInChain, &lookup_expr.node)
@@ -2453,6 +2274,7 @@ impl<'a> Analyzer<'a> {
         }
     }
 
+    /*
     #[allow(clippy::single_match)]
     fn check_special_assignment_compound(
         &mut self,
@@ -2502,6 +2324,8 @@ impl<'a> Analyzer<'a> {
         Ok(None)
     }
 
+     */
+
     fn analyze_assignment_compound(
         &mut self,
         target_expression: &swamp_script_ast::Expression,
@@ -2519,21 +2343,11 @@ impl<'a> Analyzer<'a> {
             LocationSide::Rhs,
         )?);
 
-        let kind = if let Some(found_special) = self.check_special_assignment_compound(
-            target_expression,
-            &resolved_location.0.ty,
-            &resolved_op.kind,
-            ast_source_expression,
-            &source_expr.ty,
-        )? {
-            found_special
-        } else {
-            ExpressionKind::CompoundAssignment(
-                resolved_location,
-                resolved_op.kind,
-                Box::from(source_expr),
-            )
-        };
+        let kind = ExpressionKind::CompoundAssignment(
+            resolved_location,
+            resolved_op.kind,
+            Box::from(source_expr),
+        );
 
         let expr = self.create_expr(kind, Type::Unit, &target_expression.node);
 
@@ -3060,45 +2874,6 @@ impl<'a> Analyzer<'a> {
                         Box::from(analyzed_type_parameters[0].clone()),
                         Box::from(analyzed_type_parameters[1].clone()),
                     ),
-                    GeneratorKind::Sparse => {
-                        let value_type = &analyzed_type_parameters[0];
-                        /*
-                        let key_sparse_id_type = self
-                            .shared
-                            .core_symbol_table
-                            .get_type("SparseId")
-                            .unwrap()
-                            .clone();
-
-                        let struct_type =
-                        self.generate_sparse_struct(&key_sparse_id_type, value_type);
-                         */
-
-                        let instantiated_sparse = Type::Sparse(Box::new(value_type.clone()));
-
-                        instantiated_sparse
-                    }
-
-                    GeneratorKind::Vec => {
-                        let value_type = &analyzed_type_parameters[0];
-
-                        //let struct_type = self.generate_vec_struct(value_type);
-
-                        Type::Vec(Box::new(value_type.clone()))
-                    }
-
-                    GeneratorKind::Map => {
-                        let key_type = &analyzed_type_parameters[0];
-                        let value_type = &analyzed_type_parameters[1];
-
-                        //let struct_type = self.generate_map_struct(key_type, value_type);
-
-                        Type::Map(Box::from(key_type.clone()), Box::from(value_type.clone()))
-                    }
-                    GeneratorKind::Grid => {
-                        let value_type = &analyzed_type_parameters[0];
-                        Type::Grid(Box::from(value_type.clone()))
-                    }
                 }
             }
             _ => return Err(self.create_err(ErrorKind::UnknownSymbol, &node)),

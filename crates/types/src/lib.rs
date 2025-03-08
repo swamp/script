@@ -30,13 +30,9 @@ pub enum Type {
     Never, // Not even empty since control flow has escaped with break or return.
 
     // Containers
-    Vec(Box<Type>),
-    Grid(Box<Type>),
-    Sparse(Box<Type>),
     Tuple(Vec<Type>),
     NamedStruct(NamedStructTypeRef),
     AnonymousStruct(AnonymousStructType),
-    Map(Box<Type>, Box<Type>),
 
     Enum(EnumTypeRef),
 
@@ -202,8 +198,6 @@ impl Type {
             Self::Bool => 2,
             Self::Float => 3,
             Self::String => 4,
-            Self::Grid(inner) => 0x1000 | inner.id().unwrap(),
-            Self::Sparse(inner) => 0x2000 | inner.id().unwrap(),
             Self::External(external) => external.number,
             Self::NamedStruct(struct_ref) => struct_ref.borrow().type_id,
             Self::Enum(enum_type) => enum_type.borrow().type_id,
@@ -225,9 +219,6 @@ impl Debug for Type {
             Self::Never => write!(f, "!"),
             Self::Slice(ty) => write!(f, "Slice<{ty:?}>"),
             Self::SlicePair(key, value) => write!(f, "Slice<{key:?}, {value:?}>"),
-            Self::Vec(element_type) => write!(f, "[{element_type:?}]"),
-            Self::Grid(element_type) => write!(f, "[Grid {element_type:?}]"),
-            Self::Sparse(element_type) => write!(f, "[Sparse {element_type:?}]"),
             Self::Tuple(tuple_type_ref) => write!(f, "( {tuple_type_ref:?} )"),
             Self::NamedStruct(struct_type_ref) => {
                 write!(f, "{}", struct_type_ref.borrow().assigned_name)
@@ -235,7 +226,6 @@ impl Debug for Type {
             Self::AnonymousStruct(anonymous_struct_type) => {
                 write!(f, "{anonymous_struct_type:?}")
             }
-            Self::Map(key, value) => write!(f, "[{key:?}:{value:?}]"),
             Self::Enum(enum_type_ref) => write!(f, "{:?}", enum_type_ref.borrow().assigned_name),
             Self::Function(function_type_signature) => {
                 write!(f, "{function_type_signature:?}")
@@ -265,13 +255,9 @@ impl Display for Type {
             Self::Never => write!(f, "!"),
             Self::Slice(ty) => write!(f, "Slice<{ty}>"),
             Self::SlicePair(key, value) => write!(f, "Slice<{key}, {value}>"),
-            Self::Vec(element_type) => write!(f, "[{}]", &element_type.to_string()),
-            Self::Grid(element_type) => write!(f, "[Grid {}]", &element_type.to_string()),
-            Self::Sparse(element_type) => write!(f, "[Sparse {}]", &element_type.to_string()),
             Self::Tuple(tuple) => write!(f, "({})", comma(tuple)),
             Self::NamedStruct(struct_ref) => write!(f, "{}", struct_ref.borrow().assigned_name),
             Self::AnonymousStruct(struct_ref) => write!(f, "{struct_ref:?}"),
-            Self::Map(key, value) => write!(f, "[{key}:{value}]"),
             Self::Enum(enum_type) => write!(f, "{}", enum_type.borrow().assigned_name),
             Self::Function(signature) => write!(f, "function {signature}"),
             Self::Iterable(generating_type) => write!(f, "Iterable<{generating_type}>"),
@@ -315,18 +301,12 @@ impl Type {
 
             (Self::Enum(a), Self::Enum(b)) => a == b,
 
-            (Self::Vec(a), Self::Vec(b))
-            | (Self::Sparse(a), Self::Sparse(b))
-            | (Self::Grid(a), Self::Grid(b))
-            | (Self::Slice(a), Self::Slice(b))
-            | (Self::Iterable(a), Self::Iterable(b)) => a.compatible_with(b),
+            (Self::Slice(a), Self::Slice(b)) | (Self::Iterable(a), Self::Iterable(b)) => {
+                a.compatible_with(b)
+            }
 
             (Self::SlicePair(a1, a2), Self::SlicePair(b1, b2)) => {
                 a1.compatible_with(b1) && a2.compatible_with(b2)
-            }
-
-            (Self::Map(a_key, a_value), Self::Map(b_key, b_value)) => {
-                a_key.compatible_with(b_key) && a_value.compatible_with(b_value)
             }
 
             (Self::NamedStruct(a), Self::NamedStruct(b)) => compare_struct_types(a, b),

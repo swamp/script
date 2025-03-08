@@ -1366,31 +1366,9 @@ impl<'a, C> Interpreter<'a, C> {
                 Value::Tuple(tuple_type.clone(), convert_vec_to_rc_refcell(values))
             }
 
-            Literal::Vec(array_type, expressions) => {
-                let values = self.evaluate_expressions(expressions)?;
-                Value::Vec(array_type.clone(), convert_vec_to_rc_refcell(values))
-            }
-
             Literal::Slice(element_type, expressions) => {
                 let values = self.evaluate_expressions(expressions)?;
                 Value::Slice(element_type.clone(), convert_vec_to_rc_refcell(values))
-            }
-
-            Literal::Map(key_type, value_type, expressions) => {
-                let mut items = SeqMap::new();
-                for (key, value) in expressions {
-                    let key_val = self.evaluate_expression(key)?;
-                    let value_val = self.evaluate_expression(value)?;
-                    items
-                        .insert(key_val, Rc::new(RefCell::new(value_val)))
-                        .map_err(|_err| {
-                            self.create_err(
-                                ExecuteErrorKind::NonUniqueKeysInMapLiteralDetected,
-                                &node,
-                            )
-                        })?;
-                }
-                Value::Map(key_type.clone(), value_type.clone(), items)
             }
 
             Literal::SlicePair(key_type, value_type, expressions) => {

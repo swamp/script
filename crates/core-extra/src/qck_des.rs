@@ -38,6 +38,8 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
         Type::Bool => (Value::Bool(buf[0] != 0), 1),
         Type::Unit => (Value::Unit, 0),
         Type::Never => panic!("can not deserialize never type"),
+
+        /*
         Type::Vec(element_type) => {
             let mut offset = 0;
             let count = u16::from_le_bytes(
@@ -61,6 +63,8 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
 
             (Value::Vec(*element_type.clone(), values), offset)
         }
+
+         */
         Type::Tuple(tuple_types) => {
             let mut offset = 0;
             let mut values = Vec::new();
@@ -91,6 +95,7 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
         Type::AnonymousStruct(_anon_struct_type) => {
             todo!()
         }
+        /*
         Type::Map(key_type, value_type) => {
             let mut offset = 0;
             let count = u16::from_le_bytes(
@@ -121,6 +126,8 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
                 offset,
             )
         }
+
+         */
         Type::Enum(enum_type) => {
             let mut offset = 0;
             let enum_lookup_index = buf[offset];
@@ -155,6 +162,7 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
 
             (val, offset)
         }
+        /*
         Type::Sparse(value_type) => {
             let sparse_type_id_rust_type = Rc::new(ExternalType {
                 type_name: "SparseId".to_string(),
@@ -184,6 +192,7 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
             todo!()
         }
 
+         */
         Type::Function(_) => {
             panic!("can not serialize function")
         }

@@ -516,12 +516,12 @@ impl SourceMapDisplay<'_> {
                 self.show_expressions(f, expressions, tabs + 1)?;
                 write!(f, ")")
             }
-            Literal::Vec(_array_type, expressions) => {
+            Literal::Slice(_array_type, expressions) => {
                 write!(f, "[")?;
                 self.show_expressions(f, expressions, tabs + 1)?;
                 write!(f, "]")
             }
-            Literal::Map(_map_type, _value, tuple_expressions) => {
+            Literal::SlicePair(_map_type, _value, tuple_expressions) => {
                 write!(f, "[|")?;
                 for (key, value) in tuple_expressions {
                     self.show_expression(f, key, tabs + 1)?;
@@ -682,18 +682,6 @@ impl SourceMapDisplay<'_> {
             }
             Type::Blueprint(blueprint) => self.show_blueprint(f, blueprint, tabs),
             Type::Variable(var) => self.show_type_variable(f, var, tabs),
-            Type::Vec(inner_type) => {
-                self.show_parameterized_like(f, "Vec", &[*inner_type.clone()], tabs)
-            }
-            Type::Sparse(inner_type) => {
-                self.show_parameterized_like(f, "Sparse", &[*inner_type.clone()], tabs)
-            }
-            Type::Grid(inner_type) => {
-                self.show_parameterized_like(f, "Grid", &[*inner_type.clone()], tabs)
-            }
-            Type::Map(key, value) => {
-                self.show_parameterized_like(f, "Map", &[*key.clone(), *value.clone()], tabs)
-            }
             Type::Never => write!(f, "!"),
         }
     }

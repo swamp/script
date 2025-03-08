@@ -5,7 +5,10 @@
 use crate::err::{Error, ErrorKind};
 use crate::{Analyzer, TypeContext};
 use swamp_script_node::Node;
-use swamp_script_semantic::{EnumLiteralData, Expression, Fp, Literal};
+use swamp_script_semantic::ExpressionKind;
+use swamp_script_semantic::{
+    ArgumentExpressionOrLocation, EnumLiteralData, Expression, Fp, Literal,
+};
 use swamp_script_types::prelude::*;
 use tracing::error;
 
@@ -16,7 +19,7 @@ impl Analyzer<'_> {
         ast_node: &swamp_script_ast::Node,
         ast_literal_kind: &swamp_script_ast::LiteralKind,
         context: &TypeContext,
-    ) -> Result<(Literal, Type), Error> {
+    ) -> Result<Expression, Error> {
         let node_text = self.get_text(ast_node);
         let resolved_literal = match &ast_literal_kind {
             swamp_script_ast::LiteralKind::Int => (
@@ -133,131 +136,66 @@ impl Analyzer<'_> {
             }
 
             swamp_script_ast::LiteralKind::Slice(items) => {
-                if items.is_empty() {
-                    if let Some(found_expected_type) = context.expected_type {
-                        match found_expected_type {
-                            Type::Map(key, value) => (
-                                Literal::Map(*key.clone(), *value.clone(), vec![]),
-                                found_expected_type.clone(),
-                            ),
-                            Type::Vec(element_type) => (
-                                Literal::Vec(*element_type.clone(), vec![]),
-                                found_expected_type.clone(),
-                            ),
-                            _ => {
-                                return Err(self.create_err(
-                                    ErrorKind::EmptySliceCanOnlyBeMapOrArray,
-                                    ast_node,
-                                ));
-                            }
+                let (encountered_element_type, resolved_items) =
+                    self.analyze_slice_type_helper(ast_node, items)?;
+
+                if let Some(found_expected_type) = context.expected_type {
+                    if let Type::Slice(some_type) = found_expected_type {
+                        if some_type.compatible_with(&encountered_element_type) {
+                            let slice_literal =
+                                Literal::Slice(encountered_element_type.clone(), resolved_items);
+                            let expr = self.create_expr(
+                                ExpressionKind::Literal(slice_literal),
+                                encountered_element_type.clone(),
+                                ast_node,
+                            );
+                            // If it was just a slice, then we are done
+                            (expr, Type::Slice(Box::from(encountered_element_type)))
+                        } else {
+                            todo!()
+                        }
+                    } else if let Some(found) = self
+                        .shared
+                        .state
+                        .associated_impls
+                        .get_internal_member_function(found_expected_type, "new_from_slice")
+                    {
+                        if encountered_element_type
+                            .compatible_with(&found.signature.parameters[0].resolved_type)
+                        {
+                            let slice_literal =
+                                Literal::Slice(encountered_element_type.clone(), resolved_items);
+                            let slice_type = Type::Slice(encountered_element_type.into());
+                            let expr = self.create_expr(
+                                ExpressionKind::Literal(slice_literal),
+                                slice_type.clone(),
+                                ast_node,
+                            );
+                            let arg = ArgumentExpressionOrLocation::Expression(expr);
+                            let call_kind = self.create_static_call(
+                                "new_from_slice",
+                                &[arg],
+                                ast_node,
+                                &slice_type.clone(),
+                            )?;
+
+                            let call_expr =
+                                self.create_expr(call_kind, slice_type.clone(), ast_node);
+                            (call_expr, found_expected_type.clone())
+                        } else {
+                            todo!()
                         }
                     } else {
-                        return Err(
-                            self.create_err(ErrorKind::EmptySliceCanOnlyBeMapOrArray, ast_node)
-                        );
+                        todo!()
                     }
                 } else {
-                    let (encountered_element_type, resolved_items) =
-                        self.analyze_slice_type_helper(ast_node, items, context.expected_type)?;
-                    if let Some(found_expected_type) = context.expected_type {
-                        match found_expected_type {
-                            Type::Vec(required_element_type) => {
-                                if !encountered_element_type.compatible_with(required_element_type)
-                                {
-                                    return Err(self.create_err(
-                                        ErrorKind::IncompatibleTypes(
-                                            *required_element_type.clone(),
-                                            encountered_element_type,
-                                        ),
-                                        ast_node,
-                                    ));
-                                }
-
-                                (
-                                    Literal::Vec(encountered_element_type.clone(), resolved_items),
-                                    Type::Vec(Box::from(encountered_element_type)),
-                                )
-                            }
-                            _ => (
-                                Literal::Slice(encountered_element_type.clone(), resolved_items),
-                                Type::Slice(Box::from(encountered_element_type)),
-                            ),
-                        }
-                    } else {
-                        // If no type is expected, assume that the slice is a `Vec`.
-                        (
-                            Literal::Vec(encountered_element_type.clone(), resolved_items),
-                            Type::Vec(Box::from(encountered_element_type)),
-                        )
-                    }
+                    todo!()
                 }
             }
 
             swamp_script_ast::LiteralKind::SlicePair(entries) => {
                 let (expressions_tuple, encountered_key_type, encountered_value_type) =
                     self.analyze_slice_pair_literal(ast_node, &entries)?;
-
-                if let Some(found_expected_type) = context.expected_type {
-                    match found_expected_type {
-                        Type::Map(required_key_type, required_value_type) => {
-                            if !required_key_type.compatible_with(&encountered_key_type) {
-                                return Err(self.create_err(
-                                    ErrorKind::IncompatibleTypes(
-                                        *required_key_type.clone(),
-                                        encountered_key_type,
-                                    ),
-                                    ast_node,
-                                ));
-                            }
-
-                            if !required_value_type.compatible_with(&encountered_value_type) {
-                                return Err(self.create_err(
-                                    ErrorKind::IncompatibleTypes(
-                                        *required_key_type.clone(),
-                                        encountered_key_type,
-                                    ),
-                                    ast_node,
-                                ));
-                            }
-
-                            (
-                                Literal::Map(
-                                    encountered_key_type.clone(),
-                                    encountered_value_type.clone(),
-                                    expressions_tuple,
-                                ),
-                                Type::Map(
-                                    Box::from(encountered_key_type),
-                                    Box::from(encountered_value_type),
-                                ),
-                            )
-                        }
-                        _ => (
-                            Literal::SlicePair(
-                                encountered_key_type.clone(),
-                                encountered_value_type.clone(),
-                                expressions_tuple,
-                            ),
-                            Type::SlicePair(
-                                Box::from(encountered_key_type),
-                                Box::from(encountered_value_type),
-                            ),
-                        ),
-                    }
-                } else {
-                    // If no type is expected, assume that the slice-pair is a `Map`.
-                    (
-                        Literal::Map(
-                            encountered_key_type.clone(),
-                            encountered_value_type.clone(),
-                            expressions_tuple,
-                        ),
-                        Type::Map(
-                            Box::from(encountered_key_type),
-                            Box::from(encountered_value_type),
-                        ),
-                    )
-                }
             }
 
             swamp_script_ast::LiteralKind::Tuple(expressions) => {

@@ -102,23 +102,6 @@ impl Analyzer<'_> {
 
     /// # Errors
     ///
-    pub fn analyze_array_range_access(
-        &mut self,
-        base_expression: Expression,
-        array_type_ref: &Type,
-        range: Range,
-    ) -> Result<Expression, Error> {
-        let node = &base_expression.node.clone();
-
-        Ok(self.create_expr_resolved(
-            ExpressionKind::ArrayRangeAccess(Box::from(base_expression), Box::from(range)),
-            Type::Vec(Box::from(array_type_ref.clone())),
-            node,
-        ))
-    }
-
-    /// # Errors
-    ///
     pub fn analyze_string_range_access(
         &mut self,
         base_expr: Expression,

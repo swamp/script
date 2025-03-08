@@ -960,20 +960,4 @@ fn add_intrinsic_type_generators(core_ns: &mut SymbolTable) {
         number: SPARSE_ID_TYPE_ID,
     };
     core_ns.add_external_type(external_sparse_id).unwrap();
-
-    let slice_type_generator = TypeGenerator {
-        kind: GeneratorKind::Sparse,
-        arity: 1,
-    };
-    core_ns
-        .add_type_generator("Sparse", slice_type_generator)
-        .unwrap();
-
-    let slice_type_generator = TypeGenerator {
-        kind: GeneratorKind::Grid,
-        arity: 1,
-    };
-    core_ns
-        .add_type_generator("Grid", slice_type_generator)
-        .unwrap();
 }

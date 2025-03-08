@@ -639,9 +639,6 @@ pub enum Literal {
     EnumVariantLiteral(EnumVariantTypeRef, EnumLiteralData),
     TupleLiteral(Vec<Type>, Vec<Expression>),
 
-    Vec(Type, Vec<Expression>),
-    Map(Type, Type, Vec<(Expression, Expression)>),
-
     Slice(Type, Vec<Expression>),
     SlicePair(Type, Type, Vec<(Expression, Expression)>),
 }
