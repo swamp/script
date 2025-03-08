@@ -1436,6 +1436,8 @@ fn blueprint_add_with_field() {
     a = JustTest<Int> {
         some_field: 42,
     }
+
+    a.something()
     ",
         r#"
 Namespace { path: ["test"], symbol_table: SymbolTable { symbols: SeqMap("JustTest": Blueprint(ParameterizedTypeBlueprint { kind: Struct(struct JustTest anon: some_field: Some(<34:10>):<|T|>), type_variables: ["T"], type_id: 18 })) } }

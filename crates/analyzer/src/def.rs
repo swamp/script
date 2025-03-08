@@ -8,8 +8,6 @@ use crate::err::{Error, ErrorKind};
 use crate::instantiator::TypeVariableScope;
 use seq_map::SeqMap;
 use std::rc::Rc;
-use swamp_script_ast::QualifiedTypeIdentifier;
-use swamp_script_modules::symtbl::Symbol;
 use swamp_script_semantic::{
     ExternalFunctionDefinition, Function, InternalFunctionDefinition, LocalIdentifier, UseItem,
 };
@@ -210,7 +208,7 @@ impl Analyzer<'_> {
                 ) => {
                     let mut fields = SeqMap::new();
 
-                    for (_index, field_with_type) in ast_struct_fields.fields.iter().enumerate() {
+                    for field_with_type in &ast_struct_fields.fields {
                         // TODO: Check the index
                         let resolved_type = self.analyze_type(&field_with_type.field_type)?;
                         let field_name_str =
@@ -305,7 +303,7 @@ impl Analyzer<'_> {
     ) -> Result<SeqMap<String, StructTypeField>, Error> {
         let mut resolved_fields = SeqMap::new();
 
-        for (_index, field_name_and_type) in ast_struct_fields.iter().enumerate() {
+        for field_name_and_type in ast_struct_fields {
             let resolved_type = self.analyze_type(&field_name_and_type.field_type)?;
             let name_string = self.get_text(&field_name_and_type.field_name.0).to_string();
 
@@ -554,13 +552,13 @@ impl Analyzer<'_> {
     ) -> Result<(), Error> {
         match ast_def {
             swamp_script_ast::Definition::NamedStructDef(ast_struct) => {
-                self.analyze_named_struct_type_definition(ast_struct)?
+                self.analyze_named_struct_type_definition(ast_struct)?;
             }
             swamp_script_ast::Definition::AliasDef(alias_def) => {
                 self.analyze_alias_type_definition(alias_def)?;
             }
             swamp_script_ast::Definition::EnumDef(identifier, variants) => {
-                self.analyze_enum_type_definition(&identifier, variants)?;
+                self.analyze_enum_type_definition(identifier, variants)?;
             }
             swamp_script_ast::Definition::FunctionDef(function) => {
                 let resolved_return_type = self.analyze_return_type(function)?;
@@ -593,7 +591,7 @@ impl Analyzer<'_> {
             .type_variables
             .iter()
             .map(|x| {
-                swamp_script_ast::Type::Named(QualifiedTypeIdentifier {
+                swamp_script_ast::Type::Named(swamp_script_ast::QualifiedTypeIdentifier {
                     name: swamp_script_ast::LocalTypeIdentifier(x.0.clone()),
                     module_path: None,
                     generic_params: vec![],
@@ -630,6 +628,8 @@ impl Analyzer<'_> {
         Ok(())
     }
 
+    /// # Errors
+    ///
     pub fn analyze_impl_functions(
         &mut self,
         type_to_attach_to: &Type,

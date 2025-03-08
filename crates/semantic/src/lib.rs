@@ -23,7 +23,7 @@ pub struct TypeWithMut {
     pub is_mutable: bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum SemanticError {
     CouldNotInsertStruct,
     DuplicateTypeAlias(String),
@@ -51,7 +51,7 @@ pub enum SemanticError {
 #[derive(Debug, Eq, PartialEq)]
 pub struct LocalIdentifier(pub Node);
 
-//#[derive(Debug)]
+//#[derive(Debug,Clone)]
 pub struct InternalFunctionDefinition {
     pub body: Expression,
     pub name: LocalIdentifier,
@@ -102,7 +102,7 @@ impl Debug for ExternalFunctionDefinition {
 
 pub type ExternalFunctionDefinitionRef = Rc<crate::ExternalFunctionDefinition>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Variable {
     pub name: Node,
     pub resolved_type: Type,
@@ -121,14 +121,14 @@ impl Variable {
 
 pub type VariableRef = Rc<Variable>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MutVariable {
     pub variable_ref: VariableRef,
 }
 
 //type MutVariableRef = Rc<MutVariable>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum BinaryOperatorKind {
     Add,
     Subtract,
@@ -146,7 +146,7 @@ pub enum BinaryOperatorKind {
     RangeExclusive,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BinaryOperator {
     pub left: Box<Expression>,
     pub right: Box<Expression>,
@@ -154,12 +154,12 @@ pub struct BinaryOperator {
     pub node: Node,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum UnaryOperatorKind {
     Not,
     Negate,
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct UnaryOperator {
     pub left: Box<Expression>,
     pub kind: UnaryOperatorKind,
@@ -184,7 +184,7 @@ impl Debug for InternalFunctionCall {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ExternalFunctionCall {
     pub arguments: Vec<ArgumentExpressionOrLocation>,
     pub function_definition: ExternalFunctionDefinitionRef,
@@ -202,13 +202,13 @@ pub fn comma_tuple_ref<K: Display, V: Display>(values: &[(&K, &V)]) -> String {
     result
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MemberCall {
     pub function: FunctionRef,
     pub arguments: Vec<ArgumentExpressionOrLocation>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ArrayItem {
     pub item_type: Type,
     pub int_expression: Expression,
@@ -218,13 +218,13 @@ pub struct ArrayItem {
 
 pub type ArrayItemRef = Rc<ArrayItem>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum PrecisionType {
     Float,
     String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum FormatSpecifierKind {
     LowerHex,                            // :x
     UpperHex,                            // :X
@@ -233,13 +233,13 @@ pub enum FormatSpecifierKind {
     Precision(u32, Node, PrecisionType), // :..2f or :..5s
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FormatSpecifier {
     pub node: Node,
     pub kind: FormatSpecifierKind,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum StringPart {
     Literal(Node, String),
     Interpolation(Expression, Option<FormatSpecifier>),
@@ -287,19 +287,19 @@ impl Function {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BooleanExpression {
     #[allow(unused)]
     pub expression: Box<Expression>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Match {
     pub arms: Vec<MatchArm>,
     pub expression: Box<MutOrImmutableExpression>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MatchArm {
     #[allow(unused)]
     pub pattern: Pattern,
@@ -307,27 +307,27 @@ pub struct MatchArm {
     pub expression_type: Type,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Pattern {
     Normal(NormalPattern, Option<BooleanExpression>),
     Wildcard(Node),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum NormalPattern {
     PatternList(Vec<PatternElement>),
     EnumPattern(EnumVariantTypeRef, Option<Vec<PatternElement>>),
     Literal(Literal),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum PatternElement {
     Variable(VariableRef),
     VariableWithFieldIndex(VariableRef, usize),
     Wildcard(Node),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Iterable {
     pub key_type: Option<Type>, // It does not have to support a key type
     pub value_type: Type,
@@ -335,19 +335,19 @@ pub struct Iterable {
     pub resolved_expression: Box<MutOrImmutableExpression>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct StructInstantiation {
     pub source_order_expressions: Vec<(usize, Expression)>,
     pub struct_type_ref: NamedStructTypeRef,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AnonymousStructLiteral {
     pub source_order_expressions: Vec<(usize, Expression)>,
     pub anonymous_struct_type: AnonymousStructType,
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum CompoundOperatorKind {
     Add,
     Sub,
@@ -356,13 +356,13 @@ pub enum CompoundOperatorKind {
     Modulo,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CompoundOperator {
     pub node: Node,
     pub kind: CompoundOperatorKind,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VariableCompoundAssignment {
     pub variable_ref: VariableRef, // compound only support single variable
     pub expression: Box<Expression>,
@@ -377,7 +377,7 @@ pub fn create_rust_type(name: &str, type_number: TypeNumber) -> ExternalTypeRef 
     Rc::new(rust_type)
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Guard {
     pub condition: Option<BooleanExpression>,
     pub result: Expression,
@@ -389,21 +389,21 @@ pub enum RangeMode {
     Exclusive,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Postfix {
     pub node: Node,
     pub ty: Type,
     pub kind: PostfixKind,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Range {
     pub min: Expression,
     pub max: Expression,
     pub mode: RangeMode,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum PostfixKind {
     StructField(AnonymousStructType, usize),
     ArrayIndex(Type, Expression),
@@ -422,7 +422,7 @@ pub enum PostfixKind {
     IntrinsicCall(IntrinsicFunction, Vec<Expression>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum LocationAccessKind {
     FieldIndex(AnonymousStructType, usize),
     ArrayIndex(Type, Expression),
@@ -434,14 +434,14 @@ pub enum LocationAccessKind {
     MapIndexInsertIfNonExisting(Type, Type, Expression),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LocationAccess {
     pub node: Node,
     pub ty: Type,
     pub kind: LocationAccessKind,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SingleLocationExpression {
     pub kind: SingleLocationExpressionKind,
     pub node: Node,
@@ -451,10 +451,10 @@ pub struct SingleLocationExpression {
     pub access_chain: Vec<LocationAccess>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SingleMutLocationExpression(pub SingleLocationExpression);
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum SingleLocationExpressionKind {
     MutVariableRef,
     MutStructFieldRef(NamedStructTypeRef, usize),
@@ -463,7 +463,7 @@ pub enum SingleLocationExpressionKind {
     MutExternalTypeIndexRef(ExternalTypeRef),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SliceLocationExpression {
     pub start: Box<Expression>,
     pub range_start: Box<Expression>,
@@ -472,13 +472,11 @@ pub struct SliceLocationExpression {
     pub ty: Type,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MutOrImmutableExpression {
     pub expression_or_location: ArgumentExpressionOrLocation,
     pub is_mutable: Option<Node>,
 }
-
-impl MutOrImmutableExpression {}
 
 impl MutOrImmutableExpression {
     pub fn expect_immutable(self) -> Result<Expression, SemanticError> {
@@ -503,13 +501,13 @@ impl MutOrImmutableExpression {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ArgumentExpressionOrLocation {
     Expression(Expression),
     Location(SingleLocationExpression),
 }
 
-#[derive()]
+#[derive(Clone)]
 pub struct Expression {
     pub ty: Type,
     pub node: Node,
@@ -522,13 +520,13 @@ impl Debug for Expression {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WhenBinding {
     pub variable: VariableRef,
     pub expr: MutOrImmutableExpression,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ExpressionKind {
     // Access Lookup values
     ConstantAccess(ConstantRef),
@@ -627,10 +625,10 @@ pub enum ExpressionKind {
     IntrinsicCallGeneric(IntrinsicFunction, Vec<Type>, Vec<Expression>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct StringConst(pub Node);
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Literal {
     FloatLiteral(Fp),
     NoneLiteral,
@@ -648,7 +646,7 @@ pub enum Literal {
     SlicePair(Type, Type, Vec<(Expression, Expression)>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ArrayInstantiation {
     pub expressions: Vec<Expression>,
     pub item_type: Type,
@@ -656,7 +654,7 @@ pub struct ArrayInstantiation {
     pub array_type_ref: Type,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ForPattern {
     Single(VariableRef),
     Pair(VariableRef, VariableRef),
@@ -684,7 +682,7 @@ pub struct ModulePathItem(pub Node);
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct LocalTypeIdentifier(pub Node);
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Constant {
     pub name: Node,
     pub assigned_name: String,
@@ -696,7 +694,7 @@ pub type ConstantRef = Rc<Constant>;
 
 pub type OptionTypeRef = Rc<crate::OptionType>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct OptionType {
     pub item_type: Type,
 }
@@ -718,22 +716,22 @@ pub fn sort_struct_fields(
 
  */
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ImplMember {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum UseItem {
     Identifier(Node),
     TypeIdentifier(Node),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Use {
     pub path: Vec<Node>,
     pub items: Vec<UseItem>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ImplFunctions {
     pub functions: SeqMap<String, FunctionRef>,
 }
@@ -753,7 +751,7 @@ impl ImplFunctions {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AssociatedImpls {
     pub functions: SeqMap<TypeNumber, ImplFunctions>,
 }
@@ -876,7 +874,7 @@ impl AssociatedImpls {
 }
 
 // Mutable part
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ProgramState {
     pub number: TypeNumber,
     pub external_function_number: ExternalFunctionId,
@@ -915,7 +913,7 @@ impl ProgramState {
     }
 }
 
-#[derive()]
+#[derive(Clone)]
 pub enum EnumLiteralData {
     Nothing,
     Tuple(Vec<Expression>),

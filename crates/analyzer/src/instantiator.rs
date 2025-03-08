@@ -1,4 +1,4 @@
-use crate::err::ErrorKind;
+use crate::all_types_are_concrete;
 use crate::prelude::Error;
 use seq_map::SeqMap;
 use std::cell::RefCell;
@@ -6,7 +6,7 @@ use std::rc::Rc;
 use swamp_script_semantic::SemanticError;
 use swamp_script_types::{
     AnonymousStructType, NamedStructType, ParameterizedTypeBlueprint, ParameterizedTypeKind,
-    StructTypeField, Type,
+    Signature, StructTypeField, Type, TypeForParameter,
 };
 
 #[derive(Debug)]
@@ -52,14 +52,16 @@ impl Instantiator {
 
     pub fn create_type_parameter_scope_from_variables(
         variables: &[String],
-        concrete: &[Type],
+        concrete_types: &[Type],
     ) -> Result<TypeVariableScope, Error> {
-        if variables.len() != concrete.len() {
+        if variables.len() != concrete_types.len() {
             panic!("wrong parameter count")
         }
 
+        assert!(all_types_are_concrete(concrete_types));
+
         let mut scope = SeqMap::new();
-        for (param, concrete) in variables.iter().zip(concrete) {
+        for (param, concrete) in variables.iter().zip(concrete_types) {
             scope.insert(param.clone(), concrete.clone()).unwrap();
         }
 
@@ -68,34 +70,50 @@ impl Instantiator {
 
     pub(crate) fn instantiate_blueprint(
         blueprint: &ParameterizedTypeBlueprint,
-        concrete_types: &[Type],
+        scope: &TypeVariableScope,
     ) -> Result<(bool, Type), Error> {
-        let scope = Self::create_type_parameter_scope_from_variables(
-            &blueprint.type_variables,
-            concrete_types,
-        )?;
-
         match &blueprint.kind {
             ParameterizedTypeKind::Struct(struct_ref) => {
-                Self::instantiate_struct(struct_ref, &scope)
+                Self::instantiate_struct(struct_ref, scope)
             }
             ParameterizedTypeKind::Enum(_) => todo!(),
         }
     }
 
-    pub fn instantiate(
-        blue_print: &ParameterizedTypeBlueprint,
-        arguments: &[Type],
+    pub fn instantiate_signature(
+        signature: Signature,
         type_variables: &TypeVariableScope,
-    ) -> Result<(bool, Type), Error> {
-        let mut resolved_params = Vec::new();
-        for (i, param) in arguments.iter().enumerate() {
-            let (_was_replaced, resolved) =
-                Self::instantiate_type_if_needed(param, type_variables)?;
-            resolved_params.push(resolved);
+    ) -> Result<(bool, Signature), Error> {
+        let mut was_replaced = false;
+        let mut resolved_type_for_parameters = Vec::new();
+        for type_for_parameter in signature.parameters {
+            let (type_was_replaced, resolved) = Self::instantiate_type_if_needed(
+                &type_for_parameter.resolved_type,
+                type_variables,
+            )?;
+            if type_was_replaced {
+                was_replaced = true
+            }
+            resolved_type_for_parameters.push(TypeForParameter {
+                name: type_for_parameter.name,
+                resolved_type: resolved,
+                is_mutable: type_for_parameter.is_mutable,
+                node: type_for_parameter.node.clone(),
+            })
         }
 
-        Self::instantiate_blueprint(blue_print, &resolved_params)
+        let (return_type_was_replaced, instantiated_return_type) =
+            Self::instantiate_type_if_needed(&signature.return_type, type_variables)?;
+        if return_type_was_replaced {
+            was_replaced = true
+        }
+
+        let new_signature = Signature {
+            parameters: resolved_type_for_parameters,
+            return_type: Box::new(instantiated_return_type),
+        };
+
+        Ok((was_replaced, new_signature))
     }
 
     fn instantiate_type_if_needed(
@@ -104,7 +122,11 @@ impl Instantiator {
     ) -> Result<(bool, Type), Error> {
         let (replaced, result_type) = match ty {
             Type::Generic(parameterized_type, arguments) => {
-                Self::instantiate(parameterized_type, arguments, type_variables)?
+                let new_scope = Self::create_type_parameter_scope_from_variables(
+                    &parameterized_type.type_variables,
+                    arguments,
+                )?;
+                Self::instantiate_blueprint(parameterized_type, &new_scope)?
             }
 
             Type::Variable(type_variable) => {
