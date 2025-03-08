@@ -19,7 +19,7 @@ impl Analyzer<'_> {
         ast_node: &swamp_script_ast::Node,
         ast_literal_kind: &swamp_script_ast::LiteralKind,
         context: &TypeContext,
-    ) -> Result<Expression, Error> {
+    ) -> Result<(Literal, Type), Error> {
         let node_text = self.get_text(ast_node);
         let resolved_literal = match &ast_literal_kind {
             swamp_script_ast::LiteralKind::Int => (
@@ -138,64 +138,27 @@ impl Analyzer<'_> {
             swamp_script_ast::LiteralKind::Slice(items) => {
                 let (encountered_element_type, resolved_items) =
                     self.analyze_slice_type_helper(ast_node, items)?;
-
-                if let Some(found_expected_type) = context.expected_type {
-                    if let Type::Slice(some_type) = found_expected_type {
-                        if some_type.compatible_with(&encountered_element_type) {
-                            let slice_literal =
-                                Literal::Slice(encountered_element_type.clone(), resolved_items);
-                            let expr = self.create_expr(
-                                ExpressionKind::Literal(slice_literal),
-                                encountered_element_type.clone(),
-                                ast_node,
-                            );
-                            // If it was just a slice, then we are done
-                            (expr, Type::Slice(Box::from(encountered_element_type)))
-                        } else {
-                            todo!()
-                        }
-                    } else if let Some(found) = self
-                        .shared
-                        .state
-                        .associated_impls
-                        .get_internal_member_function(found_expected_type, "new_from_slice")
-                    {
-                        if encountered_element_type
-                            .compatible_with(&found.signature.parameters[0].resolved_type)
-                        {
-                            let slice_literal =
-                                Literal::Slice(encountered_element_type.clone(), resolved_items);
-                            let slice_type = Type::Slice(encountered_element_type.into());
-                            let expr = self.create_expr(
-                                ExpressionKind::Literal(slice_literal),
-                                slice_type.clone(),
-                                ast_node,
-                            );
-                            let arg = ArgumentExpressionOrLocation::Expression(expr);
-                            let call_kind = self.create_static_call(
-                                "new_from_slice",
-                                &[arg],
-                                ast_node,
-                                &slice_type.clone(),
-                            )?;
-
-                            let call_expr =
-                                self.create_expr(call_kind, slice_type.clone(), ast_node);
-                            (call_expr, found_expected_type.clone())
-                        } else {
-                            todo!()
-                        }
-                    } else {
-                        todo!()
-                    }
-                } else {
-                    todo!()
-                }
+                (
+                    Literal::Slice(encountered_element_type.clone(), resolved_items),
+                    Type::Slice(Box::from(encountered_element_type)),
+                )
             }
 
             swamp_script_ast::LiteralKind::SlicePair(entries) => {
-                let (expressions_tuple, encountered_key_type, encountered_value_type) =
+                let (resolved_items, encountered_key_type, encountered_value_type) =
                     self.analyze_slice_pair_literal(ast_node, &entries)?;
+
+                (
+                    Literal::SlicePair(
+                        encountered_key_type.clone(),
+                        encountered_value_type.clone(),
+                        resolved_items,
+                    ),
+                    Type::SlicePair(
+                        Box::from(encountered_key_type),
+                        Box::from(encountered_value_type),
+                    ),
+                )
             }
 
             swamp_script_ast::LiteralKind::Tuple(expressions) => {

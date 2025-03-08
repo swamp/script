@@ -63,6 +63,8 @@ impl SourceMapDisplay<'_> {
         Ok(())
     }
 
+    /// # Errors
+    ///
     pub fn pretty_print_symbol(
         &self,
         f: &mut Formatter<'_>,
@@ -86,7 +88,9 @@ impl SourceMapDisplay<'_> {
             Symbol::Constant(constant_ref) => self.show_constant(f, constant_ref, tabs),
             Symbol::FunctionDefinition(func_def) => match func_def {
                 FuncDef::Internal(internal_fn) => self.show_internal_function(f, internal_fn, tabs),
-                FuncDef::Intrinsic(intrinsic_fn) => write!(f, "intrinsic {intrinsic_fn:?}"),
+                FuncDef::Intrinsic(intrinsic_fn) => {
+                    self.show_intrinsic_function(f, intrinsic_fn, tabs)
+                }
                 FuncDef::External(external_fn) => {
                     self.show_external_function_declaration(f, external_fn, tabs)
                 }
@@ -121,8 +125,9 @@ impl SourceMapDisplay<'_> {
         blueprint: &ParameterizedTypeBlueprint,
         tabs: usize,
     ) -> std::fmt::Result {
-        self.show_parameterized_type_kind(f, &blueprint.kind, tabs)?;
-        self.show_type_variables(f, &blueprint.type_variables, tabs)
+        self.show_type_variables(f, &blueprint.type_variables, tabs)?;
+        write!(f, " ")?;
+        self.show_blueprint_kind(f, &blueprint.kind, tabs)
     }
 }
 
@@ -584,7 +589,7 @@ impl SourceMapDisplay<'_> {
         }
     }
 
-    fn show_parameterized_type_kind(
+    fn show_blueprint_kind(
         &self,
         f: &mut Formatter,
         kind: &ParameterizedTypeKind,
@@ -598,17 +603,17 @@ impl SourceMapDisplay<'_> {
         }
     }
 
-    fn show_parameterized_type(
+    fn show_generic(
         &self,
         f: &mut Formatter,
         parameterized_type: &ParameterizedTypeBlueprint,
         types: &[Type],
         tabs: usize,
     ) -> std::fmt::Result {
-        self.show_parameterized_type_kind(f, &parameterized_type.kind, tabs)?;
+        self.show_blueprint_kind(f, &parameterized_type.kind, tabs)?;
         write!(f, "{}", "<".bright_white())?;
 
-        self.show_types(f, &types, tabs)?;
+        self.show_types(f, types, tabs)?;
 
         write!(f, "{}", ">".bright_white())?;
         Ok(())
@@ -678,7 +683,7 @@ impl SourceMapDisplay<'_> {
                 self.show_parameterized_like(f, "SlicePair", &[*key.clone(), *value.clone()], tabs)
             }
             Type::Generic(blueprint, concrete_types) => {
-                self.show_parameterized_type(f, blueprint, concrete_types, tabs)
+                self.show_generic(f, blueprint, concrete_types, tabs)
             }
             Type::Blueprint(blueprint) => self.show_blueprint(f, blueprint, tabs),
             Type::Variable(var) => self.show_type_variable(f, var, tabs),
@@ -775,6 +780,16 @@ impl SourceMapDisplay<'_> {
         self.show_signature(f, &internal_func.signature, tabs)?;
         Self::new_line_and_tab(f, tabs)?;
         self.show_expression(f, &internal_func.body, tabs)
+    }
+
+    fn show_intrinsic_function(
+        &self,
+        f: &mut Formatter,
+        intrinsic_fn: &IntrinsicFunctionDefinitionRef,
+        tabs: usize,
+    ) -> std::fmt::Result {
+        self.show_signature(f, &intrinsic_fn.signature, tabs)?;
+        write!(f, " ==> {}", intrinsic_fn.intrinsic.blue())
     }
 
     pub fn show_internal_functions(
@@ -898,10 +913,13 @@ impl SourceMapDisplay<'_> {
         type_variables: &[String],
         tabs: usize,
     ) -> std::fmt::Result {
-        for variable in type_variables {
+        write!(f, "{}", "<".white())?;
+        for (index, variable) in type_variables.iter().enumerate() {
+            if index > 0 {
+                write!(f, "{}", ", ".white())?;
+            }
             self.show_type_variable(f, variable, tabs)?;
-            write!(f, "{}", ", ".white())?;
         }
-        Ok(())
+        write!(f, "{}", ">".white())
     }
 }

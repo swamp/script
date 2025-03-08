@@ -23,7 +23,6 @@ use seq_map::SeqMap;
 use std::mem::take;
 use std::num::{ParseFloatError, ParseIntError};
 use std::rc::Rc;
-use std::time::Instant;
 use swamp_script_modules::prelude::*;
 use swamp_script_modules::symtbl::GeneratorKind;
 use swamp_script_node::{FileId, Node, Span};
@@ -817,7 +816,23 @@ impl<'a> Analyzer<'a> {
             }
 
             swamp_script_ast::ExpressionKind::Literal(literal) => {
-                self.analyze_literal(&ast_expression.node, literal, context)?
+                let (lit, lit_type) =
+                    self.analyze_literal(&ast_expression.node, literal, context)?;
+                if let Some(expected_type) = context.expected_type {
+                    if let Some(new_expr) =
+                        self.analyze_literal_expression(&lit, &ast_expression.node, expected_type)?
+                    {
+                        new_expr
+                    } else {
+                        self.create_expr(
+                            ExpressionKind::Literal(lit),
+                            lit_type,
+                            &ast_expression.node,
+                        )
+                    }
+                } else {
+                    self.create_expr(ExpressionKind::Literal(lit), lit_type, &ast_expression.node)
+                }
             }
 
             swamp_script_ast::ExpressionKind::ForLoop(pattern, iterable_expression, statements) => {
@@ -1703,16 +1718,17 @@ impl<'a> Analyzer<'a> {
         expected_condition_type: &Type,
     ) -> Result<NormalPattern, Error> {
         let required_condition_type_context = TypeContext::new_argument(expected_condition_type);
-        let expr = self.analyze_literal(node, ast_literal, &required_condition_type_context)?;
+        let (literal, ty) =
+            self.analyze_literal(node, ast_literal, &required_condition_type_context)?;
 
-        if !expr.ty.compatible_with(expected_condition_type) {
+        if !ty.compatible_with(expected_condition_type) {
             return Err(self.create_err(
-                ErrorKind::IncompatibleTypes(expr.ty, expected_condition_type.clone()),
+                ErrorKind::IncompatibleTypes(ty, expected_condition_type.clone()),
                 node,
             ));
         }
 
-        Ok(NormalPattern::Literal(expr))
+        Ok(NormalPattern::Literal(literal))
     }
 
     const fn to_node(&self, node: &swamp_script_ast::Node) -> Node {
@@ -2896,6 +2912,135 @@ impl<'a> Analyzer<'a> {
         info!(?instantiated_type, "instantiated");
 
         Ok(instantiated_type)
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn analyze_literal_expression(
+        &mut self,
+        literal: &Literal,
+        ast_node: &swamp_script_ast::Node,
+        found_expected_type: &Type,
+    ) -> Result<Option<Expression>, Error> {
+        let new_expr = match literal {
+            Literal::Slice(encountered_element_type, resolved_items) => {
+                if let Type::Slice(some_type) = found_expected_type {
+                    if some_type.compatible_with(encountered_element_type) {
+                        let slice_literal = Literal::Slice(
+                            encountered_element_type.clone(),
+                            resolved_items.clone(),
+                        );
+                        let expr = self.create_expr(
+                            ExpressionKind::Literal(slice_literal),
+                            encountered_element_type.clone(),
+                            ast_node,
+                        );
+                        // If it was just a slice, then we are done
+                        Some(expr)
+                    } else {
+                        todo!()
+                    }
+                } else if let Some(found) = self
+                    .shared
+                    .state
+                    .associated_impls
+                    .get_internal_member_function(found_expected_type, "new_from_slice")
+                {
+                    if encountered_element_type
+                        .compatible_with(&found.signature.parameters[0].resolved_type)
+                    {
+                        let slice_literal = Literal::Slice(
+                            encountered_element_type.clone(),
+                            resolved_items.clone(),
+                        );
+                        let slice_type = Type::Slice(encountered_element_type.clone().into());
+                        let expr = self.create_expr(
+                            ExpressionKind::Literal(slice_literal),
+                            slice_type.clone(),
+                            ast_node,
+                        );
+                        let arg = ArgumentExpressionOrLocation::Expression(expr);
+                        let call_kind = self.create_static_call(
+                            "new_from_slice",
+                            &[arg],
+                            ast_node,
+                            &slice_type.clone(),
+                        )?;
+
+                        let call_expr = self.create_expr(call_kind, slice_type.clone(), ast_node);
+                        Some(call_expr)
+                    } else {
+                        panic!("missing new_from_slice");
+                    }
+                } else {
+                    todo!()
+                }
+            }
+            Literal::SlicePair(encountered_key_type, encountered_value_type, resolved_items) => {
+                if let Type::SlicePair(key_type, value_type) = found_expected_type {
+                    if key_type.compatible_with(&encountered_key_type)
+                        && value_type.compatible_with(&encountered_value_type)
+                    {
+                        let slice_literal = Literal::SlicePair(
+                            *key_type.clone(),
+                            *value_type.clone(),
+                            resolved_items.clone(),
+                        );
+                        let expr = self.create_expr(
+                            ExpressionKind::Literal(slice_literal),
+                            found_expected_type.clone(),
+                            ast_node,
+                        );
+                        // If it was just a slice, then we are done
+                        Some(expr)
+                    } else {
+                        todo!()
+                    }
+                } else if let Some(found) = self
+                    .shared
+                    .state
+                    .associated_impls
+                    .get_internal_member_function(found_expected_type, "new_from_slice")
+                {
+                    if encountered_key_type
+                        .compatible_with(&found.signature.parameters[0].resolved_type)
+                        && encountered_value_type
+                            .compatible_with(&found.signature.parameters[1].resolved_type)
+                    {
+                        let slice_literal = Literal::SlicePair(
+                            encountered_key_type.clone(),
+                            encountered_value_type.clone(),
+                            resolved_items.clone(),
+                        );
+                        let slice_type = Type::SlicePair(
+                            encountered_key_type.clone().into(),
+                            encountered_value_type.clone().into(),
+                        );
+                        let expr = self.create_expr(
+                            ExpressionKind::Literal(slice_literal),
+                            slice_type.clone(),
+                            ast_node,
+                        );
+                        let arg = ArgumentExpressionOrLocation::Expression(expr);
+                        let call_kind = self.create_static_call(
+                            "new_from_slice",
+                            &[arg],
+                            ast_node,
+                            &slice_type.clone(),
+                        )?;
+
+                        let call_expr = self.create_expr(call_kind, slice_type.clone(), ast_node);
+                        Some(call_expr)
+                    } else {
+                        panic!("missing new_from_slice");
+                    }
+                } else {
+                    todo!()
+                }
+            }
+            _ => None,
+        };
+
+        Ok(new_expr)
     }
 }
 

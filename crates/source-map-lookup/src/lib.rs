@@ -8,11 +8,11 @@ use swamp_script_node::{Node, Span};
 use swamp_script_source_map::SourceMap;
 
 #[derive(Debug)]
-pub struct SourceMapWrapper {
-    pub source_map: SourceMap,
+pub struct SourceMapWrapper<'a> {
+    pub source_map: &'a SourceMap,
 }
 
-impl SourceMapLookup for SourceMapWrapper {
+impl SourceMapLookup for SourceMapWrapper<'_> {
     fn get_text(&self, resolved_node: &Node) -> &str {
         self.source_map.get_span_source(
             resolved_node.span.file_id,

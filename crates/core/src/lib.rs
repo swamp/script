@@ -271,8 +271,8 @@ fn add_intrinsic_sparse_functions(core_ns: &mut SymbolTable) {
 fn add_intrinsic_map_functions(core_ns: &mut SymbolTable) {
     let slice_to_self = Signature {
         parameters: [TypeForParameter {
-            name: "slice".to_string(),
-            resolved_type: Type::Slice(Box::from(Type::Never)),
+            name: "slice_pair".to_string(),
+            resolved_type: Type::SlicePair(Box::from(Type::Never), Box::from(Type::Never)),
             is_mutable: false,
             node: None,
         }]

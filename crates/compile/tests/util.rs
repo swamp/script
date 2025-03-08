@@ -7,8 +7,6 @@ use std::path::Path;
 use swamp_script_analyzer::Program;
 use swamp_script_compile::bootstrap_and_compile;
 use swamp_script_error_report::ScriptResolveError;
-use swamp_script_modules::modules::pretty_print;
-use swamp_script_modules::prelude::ModuleRef;
 use swamp_script_pretty_print::{SourceMapDisplay, SymbolTableDisplay};
 use swamp_script_source_map::SourceMap;
 use swamp_script_source_map_lookup::SourceMapWrapper;
@@ -25,7 +23,9 @@ fn internal_compile(script: &str) -> Result<Program, ScriptResolveError> {
 
     let program = bootstrap_and_compile(&mut source_map, &resolved_path_str)?;
 
-    let source_map_lookup = SourceMapWrapper { source_map };
+    let source_map_lookup = SourceMapWrapper {
+        source_map: &source_map,
+    };
     let pretty_printer = SourceMapDisplay {
         source_map: &source_map_lookup,
     };

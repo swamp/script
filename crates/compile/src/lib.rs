@@ -19,10 +19,12 @@ use swamp_script_eval_loader::analyze_modules_in_order;
 use swamp_script_modules::modules::{Module, Modules, Namespace};
 use swamp_script_modules::prelude::ModuleRef;
 use swamp_script_modules::symtbl::{SymbolTable, SymbolTableRef};
+use swamp_script_pretty_print::{SourceMapDisplay, SymbolTableDisplay};
 use swamp_script_semantic::ProgramState;
 use swamp_script_source_map::SourceMap;
+use swamp_script_source_map_lookup::SourceMapWrapper;
 use tiny_ver::TinyVersion;
-use tracing::{error, info, trace};
+use tracing::{debug, error, info, trace};
 
 const COMPILER_VERSION: &str = "0.0.0";
 
@@ -93,12 +95,8 @@ pub fn create_registry_source_map(registry_path: &Path) -> io::Result<SourceMap>
 
 #[derive(Debug)]
 pub struct BootstrapResult {
-    //pub modules: Modules,
-    //pub default_symbol_table: SymbolTable,
-    //pub state: ProgramState,
     pub program: Program,
     pub core_module_path: Vec<String>,
-    pub core_symbol_table: SymbolTable,
 }
 
 /// Bootstraps the core and ffi modules and creates a default symbol table
@@ -108,7 +106,7 @@ pub struct BootstrapResult {
 /// # Panics
 /// In theory it can panic, but should be safe.
 pub fn bootstrap_modules(
-    source_map: &mut SourceMap,
+    mut source_map: &mut SourceMap,
 ) -> Result<BootstrapResult, ScriptResolveError> {
     let compiler_version = TinyVersion::from_str(COMPILER_VERSION).unwrap();
     trace!(%compiler_version, "booting up compiler");
@@ -142,9 +140,23 @@ pub fn bootstrap_modules(
         &core_module.namespace.path,
     )?;
 
+    debug!("analyzed core module");
+
     core_analyzed_symbol_table
         .extend_intrinsic_functions_from(&core_symbol_table)
         .unwrap();
+
+    let source_map_lookup = SourceMapWrapper { source_map };
+    let pretty_printer = SourceMapDisplay {
+        source_map: &source_map_lookup,
+    };
+
+    let symbol_table_display = SymbolTableDisplay {
+        symbol_table: &core_analyzed_symbol_table,
+        source_map_display: &pretty_printer,
+    };
+
+    info!(%symbol_table_display, "core symbol table");
 
     core_module.namespace.symbol_table = Rc::new(core_analyzed_symbol_table);
 
@@ -162,7 +174,6 @@ pub fn bootstrap_modules(
     let result = BootstrapResult {
         program,
         core_module_path: core_module_ref.namespace.path.clone(),
-        core_symbol_table,
     };
     Ok(result)
 }
@@ -304,15 +315,18 @@ pub fn bootstrap_and_compile(
 
     let mut program = bootstrap_result.program;
 
-    compile_and_analyze_all_modules(
-        root_path,
-        &mut program,
-        source_map,
-        SymbolTableRef::from(bootstrap_result.core_symbol_table),
-    )
-    .inspect_err(|err| {
-        show_script_resolve_error(err, source_map, Path::new(""));
-    })?;
+    let core_symbol_table = program
+        .modules
+        .get(&bootstrap_result.core_module_path)
+        .unwrap()
+        .namespace
+        .symbol_table
+        .clone();
+
+    compile_and_analyze_all_modules(root_path, &mut program, source_map, core_symbol_table)
+        .inspect_err(|err| {
+            show_script_resolve_error(err, source_map, Path::new(""));
+        })?;
 
     Ok(program)
 }
