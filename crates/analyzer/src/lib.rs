@@ -3011,6 +3011,7 @@ impl<'a> Analyzer<'a> {
                     .get_internal_member_function(found_expected_type, "new_from_slice")
                 {
                     let required_type = &found.signature.parameters[0].resolved_type;
+                    info!(?found.signature, "found signature");
                     if slice_type.compatible_with(required_type) {
                         let slice_literal =
                             Literal::Slice(slice_type.clone(), resolved_items.clone());
@@ -3031,7 +3032,11 @@ impl<'a> Analyzer<'a> {
                         let call_expr = self.create_expr(call_kind, slice_type.clone(), ast_node);
                         Some(call_expr)
                     } else {
-                        error!(?slice_type, ?required_type, "incompatible types");
+                        error!(
+                            ?slice_type,
+                            ?required_type,
+                            "incompatible types new_from_slice"
+                        );
                         panic!("incompatible types new_from_slice");
                     }
                 } else {

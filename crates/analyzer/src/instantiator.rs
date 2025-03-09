@@ -154,7 +154,10 @@ impl Instantiator {
         type_id_generator: &mut TypeIdGenerator,
     ) -> Result<(bool, Type), Error> {
         match ty {
-            Type::Blueprint(_blueprint) => Ok((false, self_type.clone())), // HACK: assume self if there is a blueprint here
+            Type::Blueprint(blueprint) => {
+                info!(?blueprint, "is this really self?");
+                Ok((false, self_type.clone()))
+            } // HACK: assume self if there is a blueprint here
             _ => Self::instantiate_type_if_needed(ty, type_variables, type_id_generator),
         }
     }

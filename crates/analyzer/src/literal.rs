@@ -145,12 +145,15 @@ impl Analyzer<'_> {
 
                 let (encountered_element_type, resolved_items) =
                     self.analyze_slice_type_helper(ast_node, items)?;
+
+                let slice_type = self.instantiate_blueprint_and_members(
+                    &slice_blueprint.clone(),
+                    &[encountered_element_type],
+                )?;
+
                 (
-                    Literal::Slice(encountered_element_type.clone(), resolved_items),
-                    self.instantiate_blueprint_and_members(
-                        &slice_blueprint.clone(),
-                        &[encountered_element_type],
-                    )?,
+                    Literal::Slice(slice_type.clone(), resolved_items),
+                    slice_type,
                 )
             }
 
@@ -165,12 +168,14 @@ impl Analyzer<'_> {
                 let (resolved_items, encountered_key_type, encountered_value_type) =
                     self.analyze_slice_pair_literal(ast_node, &entries)?;
 
+                let slice_pair_type = self.instantiate_blueprint_and_members(
+                    &slice_pair_blueprint.clone(),
+                    &[encountered_key_type, encountered_value_type],
+                )?;
+
                 (
-                    Literal::SlicePair(encountered_value_type.clone(), resolved_items),
-                    self.instantiate_blueprint_and_members(
-                        &slice_pair_blueprint.clone(),
-                        &[encountered_key_type, encountered_value_type],
-                    )?,
+                    Literal::SlicePair(slice_pair_type.clone(), resolved_items),
+                    slice_pair_type,
                 )
             }
 
