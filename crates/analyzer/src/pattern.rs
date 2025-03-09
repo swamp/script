@@ -13,7 +13,7 @@ impl Analyzer<'_> {
         &self,
         expression_type: &Type,
         ast_name: &swamp_script_ast::Node,
-    ) -> Result<EnumVariantTypeRef, Error> {
+    ) -> Result<EnumVariantType, Error> {
         let enum_type_ref = match expression_type {
             Type::Enum(enum_type_ref) => enum_type_ref,
             _ => Err(self.create_err(ErrorKind::ExpectedEnumInPattern, ast_name))?,
@@ -21,13 +21,10 @@ impl Analyzer<'_> {
 
         let variant_name = self.get_text(ast_name).to_string();
 
-        enum_type_ref
-            .borrow()
-            .get_variant(&variant_name)
-            .map_or_else(
-                || Err(self.create_err(ErrorKind::UnknownEnumVariantTypeInPattern, ast_name)),
-                |found_variant| Ok(found_variant.clone()),
-            )
+        enum_type_ref.get_variant(&variant_name).map_or_else(
+            || Err(self.create_err(ErrorKind::UnknownEnumVariantTypeInPattern, ast_name)),
+            |found_variant| Ok(found_variant.clone()),
+        )
     }
 
     pub(crate) fn analyze_pattern(
@@ -116,8 +113,8 @@ impl Analyzer<'_> {
 
                 if let Some(elements) = maybe_elements {
                     let mut resolved_elements = Vec::new();
-                    match &*enum_variant_type_ref {
-                        EnumVariantType::Tuple(tuple_type) => {
+                    match enum_variant_type_ref {
+                        EnumVariantType::Tuple(ref tuple_type) => {
                             // For tuples, elements must be in order but can be partial
                             if elements.len() > tuple_type.fields_in_order.len() {
                                 return Err(self.create_err(
@@ -164,7 +161,7 @@ impl Analyzer<'_> {
                                 }
                             }
                         }
-                        EnumVariantType::Struct(struct_type) => {
+                        EnumVariantType::Struct(ref struct_type) => {
                             if !scope_was_pushed {
                                 self.push_block_scope("enum struct");
                                 scope_was_pushed = true;

@@ -1,12 +1,12 @@
-use crate::all_types_are_concrete;
 use crate::prelude::Error;
 use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::rc::Rc;
-use swamp_script_semantic::{SemanticError, TypeIdGenerator};
+use swamp_script_semantic::SemanticError;
+use swamp_script_semantic::prelude::InstantiationCache;
 use swamp_script_types::{
     AnonymousStructType, NamedStructType, ParameterizedTypeBlueprint, ParameterizedTypeKind,
-    Signature, StructTypeField, Type, TypeForParameter,
+    Signature, StructTypeField, Type, TypeForParameter, all_types_are_concrete,
 };
 use tracing::{error, info};
 
@@ -72,11 +72,10 @@ impl Instantiator {
     pub(crate) fn instantiate_blueprint(
         blueprint: &ParameterizedTypeBlueprint,
         scope: &TypeVariableScope,
-        type_id_generator: &mut TypeIdGenerator,
     ) -> Result<(bool, Type), Error> {
         match &blueprint.kind {
             ParameterizedTypeKind::Struct(struct_ref) => {
-                Self::instantiate_struct(struct_ref, scope, type_id_generator)
+                Self::instantiate_struct(struct_ref, scope)
             }
             ParameterizedTypeKind::Enum(_) => todo!(),
         }
@@ -86,7 +85,6 @@ impl Instantiator {
         signature: Signature,
         self_type: &Type,
         scope: &TypeVariableScope,
-        type_id_generator: &mut TypeIdGenerator,
     ) -> Result<(bool, Signature), Error> {
         let mut was_replaced = false;
         let mut instantiated_type_for_parameters = Vec::new();
@@ -95,7 +93,6 @@ impl Instantiator {
                 self_type,
                 &type_for_parameter.resolved_type,
                 scope,
-                type_id_generator,
             )?;
 
             if type_was_replaced {
@@ -110,12 +107,7 @@ impl Instantiator {
         }
 
         let (return_type_was_replaced, instantiated_return_type) =
-            Self::instantiate_type_if_needed_with_self(
-                self_type,
-                &signature.return_type,
-                scope,
-                type_id_generator,
-            )?;
+            Self::instantiate_type_if_needed_with_self(self_type, &signature.return_type, scope)?;
         if return_type_was_replaced {
             was_replaced = true;
         }
@@ -133,13 +125,12 @@ impl Instantiator {
     fn instantiate_types_if_needed(
         types: &[Type],
         type_variables: &TypeVariableScope,
-        type_id_generator: &mut TypeIdGenerator,
     ) -> Result<(bool, Vec<Type>), Error> {
         let mut converted = Vec::new();
 
         for ty in types {
             let (_was_converted, instantiated_type) =
-                Self::instantiate_type_if_needed(ty, type_variables, type_id_generator)?;
+                Self::instantiate_type_if_needed(ty, type_variables)?;
 
             converted.push(instantiated_type);
         }
@@ -151,29 +142,24 @@ impl Instantiator {
         self_type: &Type,
         ty: &Type,
         type_variables: &TypeVariableScope,
-        type_id_generator: &mut TypeIdGenerator,
     ) -> Result<(bool, Type), Error> {
         match ty {
             Type::Blueprint(blueprint) => {
                 info!(?blueprint, "is this really self?");
                 Ok((false, self_type.clone()))
             } // HACK: assume self if there is a blueprint here
-            _ => Self::instantiate_type_if_needed(ty, type_variables, type_id_generator),
+            _ => Self::instantiate_type_if_needed(ty, type_variables),
         }
     }
 
     fn instantiate_type_if_needed(
         ty: &Type,
         type_variables: &TypeVariableScope,
-        type_id_generator: &mut TypeIdGenerator,
     ) -> Result<(bool, Type), Error> {
         let (replaced, result_type) = match ty {
             Type::Generic(parameterized_type, arguments) => {
-                let (_was_replaced, new_arguments) = Self::instantiate_types_if_needed(
-                    arguments,
-                    type_variables,
-                    type_id_generator,
-                )?;
+                let (_was_replaced, new_arguments) =
+                    Self::instantiate_types_if_needed(arguments, type_variables)?;
 
                 info!(
                     ?parameterized_type,
@@ -186,7 +172,7 @@ impl Instantiator {
                         &parameterized_type.type_variables,
                         &new_arguments,
                     )?;
-                    Self::instantiate_blueprint(parameterized_type, &new_scope, type_id_generator)?
+                    Self::instantiate_blueprint(parameterized_type, &new_scope)?
                 } else {
                     panic!("can we leave generics")
                 }
@@ -223,16 +209,12 @@ impl Instantiator {
     fn instantiate_struct(
         struct_type: &NamedStructType,
         type_variables: &TypeVariableScope,
-        type_id_generator: &mut TypeIdGenerator,
     ) -> Result<(bool, Type), Error> {
         let mut was_any_replaced = false;
         let mut new_fields = SeqMap::new();
         for (name, field) in &struct_type.anon_struct_type.field_name_sorted_fields {
-            let (was_replaced, new_type) = Self::instantiate_type_if_needed(
-                &field.field_type,
-                type_variables,
-                type_id_generator,
-            )?;
+            let (was_replaced, new_type) =
+                Self::instantiate_type_if_needed(&field.field_type, type_variables)?;
             was_any_replaced |= was_replaced;
             let new_field = StructTypeField {
                 identifier: field.identifier.clone(),
@@ -250,11 +232,8 @@ impl Instantiator {
             anon_struct_type: AnonymousStructType {
                 field_name_sorted_fields: new_fields,
             },
-            type_id: type_id_generator.allocate(),
         };
 
-        let new_struct_ref = Rc::new(RefCell::new(new_struct));
-
-        Ok((was_any_replaced, Type::NamedStruct(new_struct_ref)))
+        Ok((was_any_replaced, Type::NamedStruct(new_struct)))
     }
 }

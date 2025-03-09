@@ -11,7 +11,8 @@ use sparse_slot::{Id, SparseSlot};
 use std::cell::RefCell;
 use std::fmt::{Debug, Display, Formatter};
 use std::rc::Rc;
-use swamp_script_types::{ExternalTypeRef, Type};
+use swamp_script_types::ExternalType;
+use swamp_script_types::Type;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct SparseValueId(pub Id);
@@ -63,7 +64,7 @@ pub struct SparseValueMap {
     pub sparse_slot: SparseSlot<Rc<RefCell<Value>>>,
     pub id_generator: IndexAllocator,
     pub value_item_type: Type,
-    pub rust_type_ref_for_id: ExternalTypeRef,
+    pub rust_type_ref_for_id: ExternalType,
 }
 
 impl Debug for SparseValueMap {
@@ -111,7 +112,7 @@ impl SparseValueMap {
     ///
     #[must_use]
     pub fn quick_deserialize(
-        key_type: ExternalTypeRef,
+        key_type: ExternalType,
         value_item_type: Type,
         octets: &[u8],
     ) -> (Self, usize) {
@@ -172,7 +173,7 @@ impl Display for SparseValueMap {
 
 impl SparseValueMap {
     #[must_use]
-    pub fn new(rust_type_ref_for_id: ExternalTypeRef, value_item_type: Type) -> Self {
+    pub fn new(rust_type_ref_for_id: ExternalType, value_item_type: Type) -> Self {
         /* let type_parameter = match &resolved_type {
             Type::Generic(_, parameters) => parameters[0].clone(),
             _ => panic!("illegal sparse type. not generic"),

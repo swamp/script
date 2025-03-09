@@ -18,7 +18,7 @@ impl Analyzer<'_> {
     fn analyze_struct_init_calling_default(
         &mut self,
         function: &FunctionRef,
-        struct_to_instantiate: &NamedStructTypeRef,
+        struct_to_instantiate: &NamedStructType,
         source_order_expressions: Vec<(usize, Node, Expression)>,
         node: &swamp_script_ast::Node,
     ) -> Result<Expression, Error> {
@@ -62,7 +62,7 @@ impl Analyzer<'_> {
             let field_expression_type = field_source_expression.ty.clone();
 
             let kind = LocationAccessKind::FieldIndex(
-                struct_to_instantiate.borrow().anon_struct_type.clone(),
+                struct_to_instantiate.anon_struct_type.clone(),
                 field_target_index,
             );
 
@@ -111,13 +111,13 @@ impl Analyzer<'_> {
 
     fn analyze_struct_init_field_by_field(
         &mut self,
-        struct_to_instantiate: NamedStructTypeRef,
+        struct_to_instantiate: NamedStructType,
         mut source_order_expressions: Vec<(usize, Expression)>,
         missing_fields: SeqSet<String>,
         node: &swamp_script_ast::Node,
     ) -> Result<Expression, Error> {
         {
-            let borrowed_anon_type = &struct_to_instantiate.borrow().anon_struct_type;
+            let borrowed_anon_type = &struct_to_instantiate.anon_struct_type;
 
             for missing_field_name in missing_fields {
                 let field = borrowed_anon_type
@@ -158,13 +158,13 @@ impl Analyzer<'_> {
         rest_was_specified: bool,
         context: &TypeContext,
     ) -> Result<Expression, Error> {
-        let mut maybe_named_struct: Option<NamedStructTypeRef> = None;
+        let mut maybe_named_struct: Option<NamedStructType> = None;
 
         let struct_to_instantiate = if let Some(expected_type) = context.expected_type {
             match expected_type {
                 Type::NamedStruct(named_struct) => {
                     maybe_named_struct = Some(named_struct.clone());
-                    named_struct.borrow().anon_struct_type.clone()
+                    named_struct.anon_struct_type.clone()
                 }
                 Type::AnonymousStruct(anonymous_struct) => anonymous_struct.clone(),
                 _ => {
@@ -238,7 +238,7 @@ impl Analyzer<'_> {
 
         let (source_order_expressions, missing_fields) = self
             .analyze_anon_struct_instantiation_helper(
-                &struct_to_instantiate.borrow().anon_struct_type,
+                &struct_to_instantiate.anon_struct_type,
                 ast_fields,
             )?;
 
@@ -293,7 +293,7 @@ impl Analyzer<'_> {
             Err(self.create_err(
                 ErrorKind::MissingFieldInStructInstantiation(
                     missing_fields.to_vec(),
-                    struct_to_instantiate.borrow().anon_struct_type.clone(),
+                    struct_to_instantiate.anon_struct_type.clone(),
                 ),
                 &node,
             ))

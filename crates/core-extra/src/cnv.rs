@@ -5,7 +5,7 @@
 
 use crate::value::Value;
 use crate::value::ValueRef;
-use swamp_script_types::NamedStructTypeRef;
+use swamp_script_types::NamedStructType;
 
 pub fn overwrite_value(target: &ValueRef, source: Value) {
     if let Value::NamedStruct(ref mut target_struct_type_ref, ref mut target_fields) =
@@ -25,16 +25,15 @@ pub fn overwrite_value(target: &ValueRef, source: Value) {
 /// # Panics
 ///
 pub fn overwrite_struct(
-    target_struct_type_ref: NamedStructTypeRef,
+    target_struct_type_ref: NamedStructType,
     target_values: &mut Vec<ValueRef>,
-    source_struct: NamedStructTypeRef,
+    source_struct: NamedStructType,
     source_values: Vec<ValueRef>,
 ) {
-    let borrowed_source_struct_type = source_struct.borrow();
+    let borrowed_source_struct_type = source_struct.clone();
     let source_anon_type = &borrowed_source_struct_type.anon_struct_type;
 
     for ((field_name, target_field_type), target_field_value) in target_struct_type_ref
-        .borrow()
         .anon_struct_type
         .field_name_sorted_fields
         .iter()

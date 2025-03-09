@@ -2,11 +2,11 @@ use swamp_script_modules::modules::Module;
 use swamp_script_modules::symtbl::SymbolTable;
 use swamp_script_node::Node;
 use swamp_script_semantic::prelude::{IntrinsicFunction, IntrinsicFunctionDefinition};
-use swamp_script_types::{AliasType, Signature, Type, TypeForParameter, TypeNumber};
+use swamp_script_types::{AliasType, Signature, Type, TypeForParameter};
 use tiny_ver::TinyVersion;
 
 //pub const SPARSE_TYPE_ID: TypeNumber = 999;
-pub const SPARSE_ID_TYPE_ID: TypeNumber = 998;
+//pub const SPARSE_ID_TYPE_ID: TypeNumber = 998;
 
 pub const PACKAGE_NAME: &str = "core";
 fn add_intrinsic_types(core_ns: &mut SymbolTable) {

@@ -41,7 +41,7 @@ pub enum Symbol {
     PackageVersion(TinyVersion),
     Constant(ConstantRef),
     FunctionDefinition(FuncDef),
-    Alias(AliasTypeRef),
+    Alias(AliasType),
     Blueprint(ParameterizedTypeBlueprint),
 }
 
@@ -83,7 +83,7 @@ impl SymbolTable {
         &self.symbols
     }
 
-    pub fn structs(&self) -> SeqMap<String, NamedStructTypeRef> {
+    pub fn structs(&self) -> SeqMap<String, NamedStructType> {
         let mut structs = SeqMap::new();
 
         for (name, symbol) in &self.symbols {
@@ -165,15 +165,14 @@ impl SymbolTable {
 
     /// # Errors
     ///
-    pub fn add_alias(&mut self, alias_type: AliasType) -> Result<AliasTypeRef, SemanticError> {
-        let alias_ref = Rc::new(alias_type);
-        self.add_alias_link(alias_ref.clone())?;
-        Ok(alias_ref)
+    pub fn add_alias(&mut self, alias_type: AliasType) -> Result<AliasType, SemanticError> {
+        self.add_alias_link(alias_type.clone())?;
+        Ok(alias_type)
     }
 
     /// # Errors
     ///
-    pub fn add_alias_link(&mut self, alias_type_ref: AliasTypeRef) -> Result<(), SemanticError> {
+    pub fn add_alias_link(&mut self, alias_type_ref: AliasType) -> Result<(), SemanticError> {
         let name = alias_type_ref.assigned_name.clone();
         self.symbols
             .insert(name.clone(), Symbol::Alias(alias_type_ref.clone()))
@@ -220,17 +219,16 @@ impl SymbolTable {
     pub fn add_external_type(
         &mut self,
         external: ExternalType,
-    ) -> Result<ExternalTypeRef, SemanticError> {
-        let external_ref = Rc::new(external);
-        self.add_external_type_link(external_ref.clone())?;
-        Ok(external_ref)
+    ) -> Result<ExternalType, SemanticError> {
+        self.add_external_type_link(external.clone())?;
+        Ok(external)
     }
 
     /// # Errors
     ///
     pub fn add_external_type_link(
         &mut self,
-        external_type_ref: ExternalTypeRef,
+        external_type_ref: ExternalType,
     ) -> Result<(), SemanticError> {
         let name = external_type_ref.type_name.clone();
         self.symbols
@@ -247,10 +245,9 @@ impl SymbolTable {
     pub fn add_struct(
         &mut self,
         struct_type: NamedStructType,
-    ) -> Result<NamedStructTypeRef, SemanticError> {
-        let struct_ref = Rc::new(RefCell::new(struct_type));
-        self.add_struct_link(struct_ref.clone())?;
-        Ok(struct_ref)
+    ) -> Result<NamedStructType, SemanticError> {
+        self.add_struct_link(struct_type.clone())?;
+        Ok(struct_type)
     }
 
     /// # Errors
@@ -259,8 +256,7 @@ impl SymbolTable {
         &mut self,
         name: &str,
         fields: &[(&str, Type)],
-        type_id: TypeNumber,
-    ) -> Result<NamedStructTypeRef, SemanticError> {
+    ) -> Result<NamedStructType, SemanticError> {
         let mut defined_fields = SeqMap::new();
         for (name, field_type) in fields {
             defined_fields
@@ -278,23 +274,20 @@ impl SymbolTable {
             name: Node::default(),
             assigned_name: name.to_string(),
             anon_struct_type: AnonymousStructType::new(defined_fields),
-            type_id,
         };
 
-        let struct_ref = Rc::new(RefCell::new(struct_type));
+        self.add_struct_link(struct_type.clone())?;
 
-        self.add_struct_link(struct_ref.clone())?;
-
-        Ok(struct_ref)
+        Ok(struct_type)
     }
 
     /// # Errors
     ///
     pub fn add_struct_link(
         &mut self,
-        struct_type_ref: NamedStructTypeRef,
+        struct_type_ref: NamedStructType,
     ) -> Result<(), SemanticError> {
-        let name = struct_type_ref.borrow().assigned_name.clone();
+        let name = struct_type_ref.assigned_name.clone();
         self.symbols
             .insert(
                 name.clone(),
@@ -304,34 +297,26 @@ impl SymbolTable {
         Ok(())
     }
 
-    pub fn add_enum_type(&mut self, enum_type: EnumType) -> Result<EnumTypeRef, SemanticError> {
-        let enum_type_ref = Rc::new(RefCell::new(enum_type));
-        self.add_enum_type_link(enum_type_ref.clone())?;
-        Ok(enum_type_ref)
+    pub fn add_enum_type(&mut self, enum_type: EnumType) -> Result<EnumType, SemanticError> {
+        self.add_enum_type_link(enum_type.clone())?;
+        Ok(enum_type)
     }
 
-    pub fn add_enum_type_link(&mut self, enum_type_ref: EnumTypeRef) -> Result<(), SemanticError> {
+    pub fn add_enum_type_link(&mut self, enum_type_ref: EnumType) -> Result<(), SemanticError> {
         let ty = Type::Enum(enum_type_ref.clone());
         self.symbols
-            .insert(
-                enum_type_ref.borrow().assigned_name.clone(),
-                Symbol::Type(ty),
-            )
-            .map_err(|_| {
-                SemanticError::DuplicateEnumType(enum_type_ref.borrow().assigned_name.clone())
-            })?;
+            .insert(enum_type_ref.assigned_name.clone(), Symbol::Type(ty))
+            .map_err(|_| SemanticError::DuplicateEnumType(enum_type_ref.assigned_name.clone()))?;
 
         Ok(())
     }
 
     pub fn add_enum_variant(
         &mut self,
-        enum_type_name: EnumTypeRef,
-        enum_variant: EnumVariantType,
-    ) -> Result<EnumVariantTypeRef, SemanticError> {
-        let enum_variant_ref = Rc::new(enum_variant);
+        enum_type_name: &mut EnumType,
+        enum_variant_ref: EnumVariantType,
+    ) -> Result<EnumVariantType, SemanticError> {
         enum_type_name
-            .borrow_mut()
             .variants
             .insert(
                 enum_variant_ref.common().assigned_name.clone(),
@@ -339,7 +324,7 @@ impl SymbolTable {
             )
             .map_err(|_err| {
                 SemanticError::DuplicateEnumVariantType(
-                    enum_type_name.borrow().assigned_name.clone(),
+                    enum_type_name.assigned_name.clone(),
                     enum_variant_ref.common().assigned_name.clone(),
                 )
             })?;
@@ -396,14 +381,14 @@ impl SymbolTable {
         None
     }
 
-    pub fn get_struct(&self, name: &str) -> Option<&NamedStructTypeRef> {
+    pub fn get_struct(&self, name: &str) -> Option<&NamedStructType> {
         match self.get_type(name)? {
             Type::NamedStruct(struct_ref) => Some(struct_ref),
             _ => None,
         }
     }
 
-    pub fn get_enum(&self, name: &str) -> Option<&EnumTypeRef> {
+    pub fn get_enum(&self, name: &str) -> Option<&EnumType> {
         match self.get_type(name)? {
             Type::Enum(enum_type) => Some(enum_type),
             _ => None,
@@ -415,16 +400,10 @@ impl SymbolTable {
         &self,
         enum_type_name: &str,
         variant_name: &str,
-    ) -> Option<EnumVariantTypeRef> {
+    ) -> Option<EnumVariantType> {
         self.get_enum(enum_type_name).as_ref().map_or_else(
             || None,
-            |found_enum| {
-                found_enum
-                    .borrow()
-                    .variants
-                    .get(&variant_name.to_string())
-                    .cloned()
-            },
+            |found_enum| found_enum.variants.get(&variant_name.to_string()).cloned(),
         )
     }
 
@@ -480,7 +459,7 @@ impl SymbolTable {
         }
     }
 
-    pub fn get_external_type(&self, name: &str) -> Option<&ExternalTypeRef> {
+    pub fn get_external_type(&self, name: &str) -> Option<&ExternalType> {
         match self.get_type(name)? {
             Type::External(ext_type) => Some(ext_type),
             _ => None,

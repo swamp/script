@@ -20,6 +20,7 @@ pub mod variable;
 use crate::err::{Error, ErrorKind};
 use crate::instantiator::{Instantiator, TypeVariableScope};
 use seq_map::SeqMap;
+use std::any::Any;
 use std::mem::take;
 use std::num::{ParseFloatError, ParseIntError};
 use std::rc::Rc;
@@ -32,8 +33,8 @@ use swamp_script_semantic::{
     SingleLocationExpressionKind, SingleMutLocationExpression, TypeWithMut, WhenBinding,
 };
 use swamp_script_source_map::SourceMap;
-use swamp_script_types::ParameterizedTypeBlueprint;
 use swamp_script_types::prelude::*;
+use swamp_script_types::{ParameterizedTypeBlueprint, all_types_are_concrete};
 use tracing::{debug, error, info, trace};
 
 #[must_use]
@@ -91,9 +92,6 @@ pub const fn convert_span(without: &swamp_script_ast::SpanWithoutFileId, file_id
         length: without.length,
     }
 }
-
-pub const SPARSE_TYPE_ID: TypeNumber = 999;
-pub const SPARSE_ID_TYPE_ID: TypeNumber = 998;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TypeContextScope {
@@ -899,7 +897,7 @@ impl<'a> Analyzer<'a> {
     fn get_struct_type(
         &mut self,
         qualified_type_identifier: &swamp_script_ast::QualifiedTypeIdentifier,
-    ) -> Result<NamedStructTypeRef, Error> {
+    ) -> Result<NamedStructType, Error> {
         let maybe_struct_type = self.analyze_named_type(qualified_type_identifier)?;
         match maybe_struct_type {
             Type::NamedStruct(struct_type) => Ok(struct_type),
@@ -1011,7 +1009,12 @@ impl<'a> Analyzer<'a> {
     ) -> Result<ExpressionKind, Error> {
         self.lookup_associated_function(ty, function_name)
             .map_or_else(
-                || Err(self.create_err(ErrorKind::NoDefaultImplementedForType(ty.clone()), node)),
+                || {
+                    Err(self.create_err(
+                        ErrorKind::NoAssociatedFunction(ty.clone(), function_name.to_string()),
+                        node,
+                    ))
+                },
                 |function| {
                     let kind = match &*function {
                         Function::Internal(internal_function) => {
@@ -1076,7 +1079,7 @@ impl<'a> Analyzer<'a> {
         let field_name_str = self.get_text(field_name).to_string();
 
         let anon_struct_ref = match &tv {
-            Type::NamedStruct(struct_type) => struct_type.borrow().anon_struct_type.clone(),
+            Type::NamedStruct(struct_type) => struct_type.anon_struct_type.clone(),
             Type::AnonymousStruct(anon_struct) => anon_struct.clone(),
             _ => return Err(self.create_err(ErrorKind::UnknownStructField, field_name)),
         };
@@ -1627,7 +1630,7 @@ impl<'a> Analyzer<'a> {
         &self,
         qualified_type_identifier: &swamp_script_ast::QualifiedTypeIdentifier,
         variant_name: &swamp_script_ast::LocalTypeIdentifier,
-    ) -> Result<EnumVariantTypeRef, Error> {
+    ) -> Result<EnumVariantType, Error> {
         let variant_name_string = self.get_text(&variant_name.0).to_string();
         self.get_enum_variant_type(qualified_type_identifier, &variant_name_string)
     }
@@ -1775,7 +1778,7 @@ impl<'a> Analyzer<'a> {
         &self,
         qualified_type_identifier: &swamp_script_ast::QualifiedTypeIdentifier,
         variant_name: &str,
-    ) -> Result<EnumVariantTypeRef, Error> {
+    ) -> Result<EnumVariantType, Error> {
         let (symbol_table, enum_name) =
             self.get_symbol_table_and_name(qualified_type_identifier)?;
         symbol_table
@@ -2651,7 +2654,7 @@ impl<'a> Analyzer<'a> {
     fn analyze_postfix_field_call(
         &mut self,
         resolved_node: &Node,
-        struct_type: &NamedStructTypeRef,
+        struct_type: &NamedStructType,
         field: &StructTypeField,
         index: usize,
         signature: &Signature,
@@ -2660,7 +2663,7 @@ impl<'a> Analyzer<'a> {
         let mut suffixes = Vec::new();
         //let field_name_str = self.get_text(member_name).to_string();
         let struct_field_kind =
-            PostfixKind::StructField(struct_type.borrow().anon_struct_type.clone(), index);
+            PostfixKind::StructField(struct_type.anon_struct_type.clone(), index);
 
         let struct_field_postfix = Postfix {
             node: resolved_node.clone(),
@@ -2857,13 +2860,17 @@ impl<'a> Analyzer<'a> {
             }
         }
 
+        Ok(expr)
+        /*
         error!(?expr, "expr");
-        error!(?expected_type, ?encountered_type, "incompatible types");
+        error!(?expected_type, ?encountered_type, "coerce incompatible types");
 
         Err(self.create_err(
             ErrorKind::IncompatibleTypes(expected_type.clone(), encountered_type.clone()),
             node,
         ))
+
+         */
     }
 
     fn instantiate_blueprint_and_members(
@@ -2886,11 +2893,8 @@ impl<'a> Analyzer<'a> {
             &blueprint.type_variables,
             analyzed_type_parameters,
         )?;
-        let (_ignore_if_changed, instantiated_type) = Instantiator::instantiate_blueprint(
-            blueprint,
-            &scope,
-            self.shared.state.type_id_generator_mut(),
-        )?;
+        let (_ignore_if_changed, instantiated_type) =
+            Instantiator::instantiate_blueprint(blueprint, &scope)?;
 
         let new_impls = {
             let mut new_impls = SeqMap::new();
@@ -2899,15 +2903,13 @@ impl<'a> Analyzer<'a> {
                 .state
                 .associated_impls
                 .functions
-                .get(&blueprint.type_id);
+                .get(&Type::Blueprint(blueprint.clone()));
             if let Some(found_member_functions) = maybe_member_functions {
-                let type_id_generator = &mut self.shared.state.type_id_generator;
                 for (func_name, func_ref) in &found_member_functions.functions {
                     let (_replaced, new_signature) = Instantiator::instantiate_signature(
                         func_ref.signature().clone(),
                         &instantiated_type,
                         &scope,
-                        type_id_generator,
                     )?;
                     let new_func = match &**func_ref {
                         Function::Internal(internal) => {
@@ -2940,7 +2942,7 @@ impl<'a> Analyzer<'a> {
             .associated_impls
             .prepare(&instantiated_type);
         for (name, func) in &new_impls {
-            info!(?name, ?func, id=?instantiated_type.id().unwrap(), "ADDING");
+            info!(?name, ?func, id=?instantiated_type, "ADDING");
             self.shared.state.associated_impls.add_member_function(
                 &instantiated_type,
                 &*name,
@@ -2976,8 +2978,7 @@ impl<'a> Analyzer<'a> {
                 if all_types_are_concrete(analyzed_type_parameters) {
                     self.instantiate_blueprint_and_members(blueprint, analyzed_type_parameters)?
                 } else {
-                    Type::Blueprint(blueprint.clone())
-                    //Type::Generic(blueprint.clone(), analyzed_type_parameters.to_vec())
+                    Type::Generic(blueprint.clone(), analyzed_type_parameters.to_vec())
                 }
             }
             _ => return Err(self.create_err(ErrorKind::UnknownSymbol, &node)),
@@ -3091,13 +3092,4 @@ impl<'a> Analyzer<'a> {
 
         Ok(new_expr)
     }
-}
-
-fn all_types_are_concrete(types: &[Type]) -> bool {
-    for ty in types {
-        if !ty.is_concrete() {
-            return false;
-        }
-    }
-    true
 }

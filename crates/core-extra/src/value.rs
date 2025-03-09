@@ -95,12 +95,12 @@ pub enum Value {
     Map(Type, Type, SeqMap<Value, ValueRef>), // Do not change to HashMap, the order is important for it to be deterministic
     Tuple(Vec<Type>, Vec<ValueRef>),
     Sparse(Type, SparseValueMap),
-    NamedStruct(NamedStructTypeRef, Vec<ValueRef>), // type of the struct, and the fields themselves in strict order
+    NamedStruct(NamedStructType, Vec<ValueRef>), // type of the struct, and the fields themselves in strict order
     AnonymousStruct(AnonymousStructType, Vec<ValueRef>), // type of the struct, and the fields themselves in strict order
 
-    EnumVariantSimple(EnumVariantSimpleTypeRef),
-    EnumVariantTuple(EnumVariantTupleTypeRef, Vec<ValueRef>),
-    EnumVariantStruct(EnumVariantStructTypeRef, Vec<ValueRef>),
+    EnumVariantSimple(EnumVariantSimpleType),
+    EnumVariantTuple(EnumVariantTupleType, Vec<ValueRef>),
+    EnumVariantStruct(EnumVariantStructType, Vec<ValueRef>),
 
     // Number generators
     Range(Box<i32>, Box<i32>, RangeMode),
@@ -110,7 +110,7 @@ pub enum Value {
     ExternalFunction(ExternalFunctionDefinitionRef),
 
     // Other
-    RustValue(ExternalTypeRef, Rc<RefCell<Box<dyn RustType>>>),
+    RustValue(ExternalType, Rc<RefCell<Box<dyn RustType>>>),
 }
 
 #[allow(unused)]
@@ -380,7 +380,7 @@ fn deep_clone_valref(val_ref: &ValueRef) -> ValueRef {
     Rc::new(RefCell::new(cloned_value))
 }
 
-pub fn to_rust_value<T: RustType + 'static>(type_ref: ExternalTypeRef, value: T) -> Value {
+pub fn to_rust_value<T: RustType + 'static>(type_ref: ExternalType, value: T) -> Value {
     Value::RustValue(
         type_ref,
         Rc::new(RefCell::new(Box::new(value) as Box<dyn RustType>)),
@@ -397,8 +397,8 @@ pub enum ValueError {
     TypeError(String),
 }
 
-pub const SPARSE_TYPE_ID: TypeNumber = 999;
-pub const SPARSE_ID_TYPE_ID: TypeNumber = 998;
+//pub const SPARSE_TYPE_ID: TypeNumber = 999;
+//pub const SPARSE_ID_TYPE_ID: TypeNumber = 998;
 
 // Iterators
 
@@ -521,7 +521,7 @@ impl Value {
         }
     }
 
-    pub fn expect_struct(&self) -> Result<(NamedStructTypeRef, &Vec<ValueRef>), ValueError> {
+    pub fn expect_struct(&self) -> Result<(NamedStructType, &Vec<ValueRef>), ValueError> {
         match self {
             Self::NamedStruct(struct_ref, fields) => Ok((struct_ref.clone(), fields)),
             _ => Err(ValueError::ConversionError("Expected struct value".into())),
@@ -531,7 +531,7 @@ impl Value {
     pub fn expect_anon_struct(&self) -> Result<(AnonymousStructType, &Vec<ValueRef>), ValueError> {
         match self {
             Self::NamedStruct(struct_ref, fields) => {
-                Ok((struct_ref.borrow().anon_struct_type.clone(), fields))
+                Ok((struct_ref.anon_struct_type.clone(), fields))
             }
             Self::AnonymousStruct(anon_struct_type, fields) => {
                 Ok((anon_struct_type.clone(), fields))
@@ -636,7 +636,7 @@ impl Value {
     }
 
     pub fn new_rust_value<T: RustType + 'static + PartialEq>(
-        rust_type_ref: ExternalTypeRef,
+        rust_type_ref: ExternalType,
         value: T,
     ) -> Self {
         let boxed = Box::new(Box::new(value)) as Box<dyn RustType>;
@@ -644,8 +644,8 @@ impl Value {
     }
 
     pub fn new_hidden_rust_struct<T: RustType + 'static + PartialEq>(
-        struct_type: NamedStructTypeRef,
-        rust_description: ExternalTypeRef,
+        struct_type: NamedStructType,
+        rust_description: ExternalType,
         value: T,
     ) -> Self {
         let rust_value = Rc::new(RefCell::new(Self::new_rust_value(rust_description, value)));
@@ -719,10 +719,9 @@ impl Display for Value {
                 write!(f, ")")
             }
             Self::NamedStruct(struct_type_ref, fields_in_strict_order) => {
-                write!(f, "{} {{ ", struct_type_ref.borrow().assigned_name)?;
+                write!(f, "{} {{ ", struct_type_ref.assigned_name)?;
 
                 let fields = struct_type_ref
-                    .borrow()
                     .anon_struct_type
                     .field_name_sorted_fields
                     .keys()
@@ -770,8 +769,7 @@ impl Display for Value {
                 write!(
                     f,
                     "{}::{}(",
-                    enum_name.common.owner.borrow().assigned_name,
-                    enum_name.common.assigned_name,
+                    enum_name.common.owner.assigned_name, enum_name.common.assigned_name,
                 )?;
 
                 for (index, field) in fields_in_order.iter().enumerate() {
@@ -797,8 +795,7 @@ impl Display for Value {
                 write!(
                     f,
                     "{}::{}{{",
-                    struct_variant.common.owner.borrow().assigned_name,
-                    struct_variant.common.assigned_name,
+                    struct_variant.common.owner.assigned_name, struct_variant.common.assigned_name,
                 )?;
 
                 for (index, (field_name, value)) in decorated_values.iter().enumerate() {
@@ -815,7 +812,7 @@ impl Display for Value {
                 write!(
                     f,
                     "{}::{}",
-                    enum_variant_type_ref.common.owner.borrow().assigned_name,
+                    enum_variant_type_ref.common.owner.assigned_name,
                     enum_variant_type_ref.common.assigned_name,
                 )
             }
@@ -890,7 +887,7 @@ impl Hash for Value {
             Self::Vec(_, _arr) => {}
             Self::Slice(_, _arr) => {}
             Self::NamedStruct(type_ref, values) => {
-                type_ref.borrow().name().span.hash(state);
+                type_ref.name().span.hash(state);
                 for v in values {
                     v.borrow().hash(state);
                 }

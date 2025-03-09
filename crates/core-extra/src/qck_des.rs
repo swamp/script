@@ -3,11 +3,10 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use crate::extra::{SparseValueId, SparseValueMap};
+use crate::extra::SparseValueId;
 use crate::prelude::Value;
-use crate::value::{QuickDeserialize, RustType, SPARSE_ID_TYPE_ID, SPARSE_TYPE_ID};
+use crate::value::{QuickDeserialize, RustType};
 use fixed32::Fp;
-use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::rc::Rc;
 use swamp_script_types::{EnumVariantType, ExternalType, Type};
@@ -80,7 +79,6 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
             let mut values = Vec::new();
             let mut offset = 0;
             for struct_field_type in struct_type_ref
-                .borrow()
                 .anon_struct_type
                 .field_name_sorted_fields
                 .values()
@@ -134,13 +132,13 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
             offset += 1;
             assert!(enum_lookup_index < 8);
 
-            let borrowed_enum = enum_type.borrow();
+            let borrowed_enum = enum_type.clone();
 
             let variant_type = borrowed_enum
                 .get_variant_from_index(enum_lookup_index as usize)
                 .expect("should be able to find variant");
 
-            let val = match &**variant_type {
+            let val = match &*variant_type {
                 EnumVariantType::Struct(_) => {
                     todo!("struct containers not done yet")
                 }
@@ -214,10 +212,10 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
         Type::External(rust_type_ref) => {
             match rust_type_ref.number {
                 SPARSE_ID_TYPE_ID => {
-                    let sparse_id_rust_type = Rc::new(ExternalType {
+                    let sparse_id_rust_type = ExternalType {
                         type_name: "SparseId".to_string(),
                         number: SPARSE_ID_TYPE_ID, // TODO: FIX hardcoded number
-                    });
+                    };
 
                     let (sparse_value_id, octet_size) = SparseValueId::quick_deserialize(buf);
                     (

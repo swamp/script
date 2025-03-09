@@ -6,7 +6,7 @@
 use std::fmt;
 use std::fmt::{Debug, Formatter};
 
-#[derive(Clone, Eq, PartialEq, Default)]
+#[derive(Clone, Eq, PartialEq, Default, Hash)]
 pub struct Node {
     pub span: Span,
 }

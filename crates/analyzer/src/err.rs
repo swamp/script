@@ -16,6 +16,7 @@ pub struct Error {
 }
 #[derive(Debug)]
 pub enum ErrorKind {
+    NoAssociatedFunction(Type, String),
     MissingSubscriptMember,
     UnusedVariablesCanNotBeMut,
     UnknownIdentifier,
@@ -35,7 +36,7 @@ pub enum ErrorKind {
     DuplicateFieldName,
     Unknown(String),
     UnknownImplTargetTypeReference(swamp_script_ast::LocalTypeIdentifier),
-    WrongFieldCountInStructInstantiation(NamedStructTypeRef, usize),
+    WrongFieldCountInStructInstantiation(NamedStructType, usize),
     MissingFieldInStructInstantiation(Vec<String>, AnonymousStructType),
     ExpectedFunctionExpression,
     CouldNotFindMember(Node, Node),
@@ -56,7 +57,7 @@ pub enum ErrorKind {
     MustBeEnumType(swamp_script_ast::Pattern),
     UnknownEnumVariantTypeInPattern,
     ExpectedEnumInPattern,
-    WrongEnumVariantContainer(EnumVariantTypeRef),
+    WrongEnumVariantContainer(EnumVariantType),
     VariableIsNotMutable,
     ArgumentIsNotMutable,
     WrongNumberOfTupleDeconstructVariables,
@@ -99,7 +100,7 @@ pub enum ErrorKind {
     WasNotFieldMutRef,
     UnknownFunction,
     NoDefaultImplemented(Type),
-    NoDefaultImplementedForStruct(NamedStructTypeRef),
+    NoDefaultImplementedForStruct(NamedStructType),
     UnknownConstant,
     ExpectedFunctionTypeForFunctionCall,
     TypeDoNotSupportIndexAccess,
@@ -129,6 +130,7 @@ pub enum ErrorKind {
     UnknownTypeVariable,
     WrongParameterCount(usize, usize),
     UnexpectedType,
+    CanNotAttachFunctionsToType,
 }
 
 impl From<SemanticError> for Error {

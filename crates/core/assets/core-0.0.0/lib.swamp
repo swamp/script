@@ -256,7 +256,7 @@ impl String {
 
 struct Slice<T>
 
-struct SlicePair<T>
+struct SlicePair<K, V>
 
 struct Vec<T> {
 }

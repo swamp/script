@@ -1,7 +1,5 @@
 use seq_map::SeqMap;
-use std::cell::RefCell;
 use std::fmt::{Display, Formatter};
-use std::rc::Rc;
 use swamp_script_core_extra::prelude::SourceMapLookup;
 use swamp_script_modules::modules::{ModuleRef, Modules};
 use swamp_script_modules::symtbl::{FuncDef, Symbol, SymbolTable};
@@ -200,11 +198,11 @@ impl SourceMapDisplay<'_> {
     pub fn show_structs(
         &self,
         f: &mut Formatter<'_>,
-        structs: &SeqMap<String, NamedStructTypeRef>,
+        structs: &SeqMap<String, NamedStructType>,
         tabs: usize,
     ) -> std::fmt::Result {
         for (_struct_name, struct_type) in structs {
-            writeln!(f, "{}: ", struct_type.borrow().assigned_name.yellow())?;
+            writeln!(f, "{}: ", struct_type.assigned_name.yellow())?;
             self.show_struct(f, struct_type, tabs)?;
         }
         Ok(())
@@ -215,16 +213,12 @@ impl SourceMapDisplay<'_> {
     pub fn show_struct(
         &self,
         f: &mut Formatter<'_>,
-        struct_type: &NamedStructTypeRef,
+        struct_type: &NamedStructType,
         tabs: usize,
     ) -> std::fmt::Result {
-        write!(
-            f,
-            "{} ",
-            struct_type.borrow().assigned_name.bright_magenta()
-        )?;
+        write!(f, "{} ", struct_type.assigned_name.bright_magenta())?;
 
-        self.show_anon_struct(f, &struct_type.borrow().anon_struct_type, tabs)?;
+        self.show_anon_struct(f, &struct_type.anon_struct_type, tabs)?;
 
         Ok(())
     }
@@ -289,7 +283,7 @@ impl SourceMapDisplay<'_> {
     pub fn show_aliases(
         &self,
         f: &mut Formatter<'_>,
-        aliases: &SeqMap<String, AliasTypeRef>,
+        aliases: &SeqMap<String, AliasType>,
     ) -> std::fmt::Result {
         for (_constant_name, alias) in aliases {
             //            writeln!(f, "  {}:  ", constant.assigned_name.yellow())?;
@@ -301,7 +295,7 @@ impl SourceMapDisplay<'_> {
 
     /// # Errors
     ///
-    pub fn show_alias(&self, f: &mut Formatter<'_>, alias: &AliasTypeRef) -> std::fmt::Result {
+    pub fn show_alias(&self, f: &mut Formatter<'_>, alias: &AliasType) -> std::fmt::Result {
         write!(f, "{} ==> ", alias.assigned_name.blue(),)?;
 
         self.show_type(f, &alias.referenced_type, 0)?;
@@ -583,9 +577,7 @@ impl SourceMapDisplay<'_> {
         tabs: usize,
     ) -> std::fmt::Result {
         match kind {
-            ParameterizedTypeKind::Struct(struct_ref) => {
-                self.show_struct(f, &Rc::new(RefCell::new(struct_ref.clone())), tabs)
-            }
+            ParameterizedTypeKind::Struct(struct_ref) => self.show_struct(f, &struct_ref, tabs),
             ParameterizedTypeKind::Enum(enum_ref) => self.show_enum_type_name(f, &enum_ref),
         }
     }
@@ -656,7 +648,7 @@ impl SourceMapDisplay<'_> {
             Type::NamedStruct(struct_ref) => self.show_struct(f, struct_ref, tabs),
             Type::AnonymousStruct(struct_ref) => self.show_anon_struct(f, struct_ref, tabs),
 
-            Type::Enum(enum_type) => write!(f, "{}", enum_type.borrow().assigned_name),
+            Type::Enum(enum_type) => write!(f, "{}", enum_type.assigned_name),
             //Type::EnumVariant(variant) => write!(
             //  f,
             //"{}::{}",
@@ -798,17 +790,13 @@ impl SourceMapDisplay<'_> {
         }
     }
 
-    pub fn show_enum_type_name(
-        &self,
-        f: &mut Formatter,
-        enum_type: &EnumTypeRef,
-    ) -> std::fmt::Result {
-        write!(f, "{}", &enum_type.borrow().assigned_name.bright_red())
+    pub fn show_enum_type_name(&self, f: &mut Formatter, enum_type: &EnumType) -> std::fmt::Result {
+        write!(f, "{}", &enum_type.assigned_name.bright_red())
     }
     pub fn show_enums(
         &self,
         f: &mut Formatter,
-        enums: &SeqMap<String, EnumTypeRef>,
+        enums: &SeqMap<String, EnumType>,
     ) -> std::fmt::Result {
         for (_name, enum_type) in enums {
             self.show_enum_type_name(f, enum_type)?;
@@ -856,14 +844,10 @@ impl SourceMapDisplay<'_> {
         write!(
             f,
             "{} {{",
-            struct_instantiation
-                .struct_type_ref
-                .borrow()
-                .assigned_name
-                .green()
+            struct_instantiation.struct_type_ref.assigned_name.green()
         )?;
         for (index, expression) in &struct_instantiation.source_order_expressions {
-            let borrow = struct_instantiation.struct_type_ref.borrow();
+            let borrow = struct_instantiation.struct_type_ref.clone();
             let (name, _struct_field) = borrow
                 .anon_struct_type
                 .field_name_sorted_fields

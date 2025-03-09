@@ -8,14 +8,16 @@ pub mod prelude;
 use fmt::{Debug, Display};
 use seq_fmt::comma;
 use seq_map::SeqMap;
+use std::any::Any;
 use std::cell::RefCell;
 use std::cmp::PartialEq;
 use std::fmt;
 use std::hash::Hash;
 use std::rc::Rc;
 use swamp_script_node::Node;
+use tracing::info;
 
-#[derive(Eq, Clone, PartialEq)]
+#[derive(Eq, PartialEq, Hash, Clone)]
 pub enum Type {
     // Primitives
     Int,
@@ -28,10 +30,10 @@ pub enum Type {
 
     // Containers
     Tuple(Vec<Type>),
-    NamedStruct(NamedStructTypeRef),
+    NamedStruct(NamedStructType),
     AnonymousStruct(AnonymousStructType),
 
-    Enum(EnumTypeRef),
+    Enum(EnumType),
 
     Function(Signature),
     Iterable(Box<Type>),
@@ -42,37 +44,29 @@ pub enum Type {
     Blueprint(ParameterizedTypeBlueprint),
     Variable(String),
 
-    External(ExternalTypeRef),
+    External(ExternalType),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ParameterizedTypeKind {
     Struct(NamedStructType),
-    Enum(EnumTypeRef),
+    Enum(EnumType),
 }
 
 impl ParameterizedTypeKind {
-    pub(crate) fn same_type(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Struct(a), Self::Struct(b)) => a.type_id == b.type_id,
-            (Self::Enum(a), Self::Enum(b)) => a.borrow().type_id == b.borrow().type_id,
-            _ => false,
-        }
-    }
-
     pub fn name(&self) -> String {
         match self {
             Self::Struct(struct_type_ref) => struct_type_ref.assigned_name.clone(),
-            Self::Enum(enum_type_ref) => enum_type_ref.borrow().assigned_name.clone(),
+            Self::Enum(enum_type_ref) => enum_type_ref.assigned_name.clone(),
         }
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct ParameterizedTypeBlueprint {
     pub kind: ParameterizedTypeKind,
     pub type_variables: Vec<String>,
-    pub type_id: TypeNumber,
+
     pub defined_in_module_path: Vec<String>,
 }
 
@@ -82,9 +76,7 @@ impl ParameterizedTypeBlueprint {
     }
 }
 
-pub type NamedStructTypeRef = Rc<RefCell<NamedStructType>>;
-
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Hash)]
 pub struct ParameterNode {
     pub name: Node,
     pub is_mutable: Option<Node>,
@@ -104,15 +96,13 @@ impl ParameterNode {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct ExternalType {
     pub type_name: String, // To identify the specific Rust type
     pub number: u32,       // For type comparison
 }
 
-pub type ExternalTypeRef = Rc<ExternalType>;
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub struct TypeForParameter {
     pub name: String,
     pub resolved_type: Type,
@@ -142,7 +132,7 @@ impl PartialEq for TypeForParameter {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq, Clone, Hash)]
 pub struct Signature {
     pub parameters: Vec<TypeForParameter>,
     pub return_type: Box<Type>,
@@ -185,25 +175,6 @@ impl Type {
     pub const fn is_concrete(&self) -> bool {
         !matches!(self, Self::Unit | Self::Never | Self::Variable(_))
     }
-
-    /// # Panics
-    ///
-    #[must_use]
-    pub fn id(&self) -> Option<TypeNumber> {
-        let found_id = match self {
-            Self::Unit => 0,
-            Self::Int => 1,
-            Self::Bool => 2,
-            Self::Float => 3,
-            Self::String => 4,
-            Self::External(external) => external.number,
-            Self::NamedStruct(struct_ref) => struct_ref.borrow().type_id,
-            Self::Enum(enum_type) => enum_type.borrow().type_id,
-            Self::Blueprint(blueprint) => blueprint.type_id,
-            _ => return None,
-        };
-        Some(found_id)
-    }
 }
 
 impl Debug for Type {
@@ -217,12 +188,12 @@ impl Debug for Type {
             Self::Never => write!(f, "!"),
             Self::Tuple(tuple_type_ref) => write!(f, "( {tuple_type_ref:?} )"),
             Self::NamedStruct(struct_type_ref) => {
-                write!(f, "{}", struct_type_ref.borrow().assigned_name)
+                write!(f, "{}", struct_type_ref.assigned_name)
             }
             Self::AnonymousStruct(anonymous_struct_type) => {
                 write!(f, "{anonymous_struct_type:?}")
             }
-            Self::Enum(enum_type_ref) => write!(f, "{:?}", enum_type_ref.borrow().assigned_name),
+            Self::Enum(enum_type_ref) => write!(f, "{:?}", enum_type_ref.assigned_name),
             Self::Function(function_type_signature) => {
                 write!(f, "{function_type_signature:?}")
             }
@@ -250,9 +221,9 @@ impl Display for Type {
             Self::Unit => write!(f, "Unit"),
             Self::Never => write!(f, "!"),
             Self::Tuple(tuple) => write!(f, "({})", comma(tuple)),
-            Self::NamedStruct(struct_ref) => write!(f, "{}", struct_ref.borrow().assigned_name),
+            Self::NamedStruct(struct_ref) => write!(f, "{}", struct_ref.assigned_name),
             Self::AnonymousStruct(struct_ref) => write!(f, "{struct_ref:?}"),
-            Self::Enum(enum_type) => write!(f, "{}", enum_type.borrow().assigned_name),
+            Self::Enum(enum_type) => write!(f, "{}", enum_type.assigned_name),
             Self::Function(signature) => write!(f, "function {signature}"),
             Self::Iterable(generating_type) => write!(f, "Iterable<{generating_type}>"),
             Self::Optional(base_type) => write!(f, "{base_type}?"),
@@ -316,6 +287,8 @@ impl Type {
                 blueprint_a == blueprint_b && (args_a == args_b)
             }
 
+            (Self::Blueprint(a), Self::Blueprint(b)) => a == b,
+
             (Self::Variable(a), Self::Variable(b)) => a == b,
 
             (Self::External(type_ref_a), Self::External(type_ref_b)) => {
@@ -327,15 +300,12 @@ impl Type {
     }
 }
 
-fn compare_struct_types(a: &NamedStructTypeRef, b: &NamedStructTypeRef) -> bool {
-    let a_borrow = a.borrow();
-    let b_borrow = b.borrow();
-
-    if a_borrow.type_id != b.borrow().type_id {
-        return false;
-    }
+fn compare_struct_types(a: &NamedStructType, b: &NamedStructType) -> bool {
+    let a_borrow = a;
+    let b_borrow = b;
 
     if a_borrow.assigned_name != b_borrow.assigned_name {
+        info!("names different");
         return false;
     }
 
@@ -347,17 +317,18 @@ pub fn same_anon_struct_ref(a: &AnonymousStructType, b: &AnonymousStructType) ->
     compare_anonymous_struct_types(a, b)
 }
 
-pub fn same_named_struct_ref(a: &NamedStructTypeRef, b: &NamedStructTypeRef) -> bool {
-    if a.borrow().assigned_name != b.borrow().assigned_name {
+pub fn same_named_struct_ref(a: &NamedStructType, b: &NamedStructType) -> bool {
+    if a.assigned_name != b.assigned_name {
         return false;
     }
 
-    compare_anonymous_struct_types(&a.borrow().anon_struct_type, &b.borrow().anon_struct_type)
+    compare_anonymous_struct_types(&a.anon_struct_type, &b.anon_struct_type)
 }
 
 #[must_use]
 pub fn compare_anonymous_struct_types(a: &AnonymousStructType, b: &AnonymousStructType) -> bool {
     if a.field_name_sorted_fields.len() != b.field_name_sorted_fields.len() {
+        info!("different lengths");
         return false;
     }
 
@@ -367,10 +338,13 @@ pub fn compare_anonymous_struct_types(a: &AnonymousStructType, b: &AnonymousStru
         .zip(b.field_name_sorted_fields.clone())
     {
         if *a_name != b_name {
+            info!(?a_name, ?b_name, "different field names");
+
             return false;
         }
 
         if !a_type.field_type.compatible_with(&b_type.field_type) {
+            info!(?a_type.field_type, ?b_type.field_type, "different field types");
             return false;
         }
     }
@@ -424,7 +398,7 @@ pub fn comma_seq_nl<K: Clone + Hash + Eq + Display, V: Display>(
     result
 }
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Hash)]
 pub struct StructTypeField {
     pub identifier: Option<Node>,
     pub field_type: Type,
@@ -436,7 +410,7 @@ impl Display for StructTypeField {
     }
 }
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Hash)]
 pub struct AnonymousStructType {
     //pub source_ordered_fields: SeqMap<String, StructTypeField>,
     pub field_name_sorted_fields: SeqMap<String, StructTypeField>,
@@ -477,30 +451,25 @@ impl AnonymousStructType {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct EnumVariantStructType {
     pub common: EnumVariantCommon,
     pub anon_struct: AnonymousStructType,
 }
 
-pub type EnumVariantTupleTypeRef = Rc<EnumVariantTupleType>;
-
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct EnumVariantTupleType {
     pub common: EnumVariantCommon,
     pub fields_in_order: Vec<Type>,
 }
 
-pub type EnumTypeRef = Rc<RefCell<EnumType>>;
-
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Hash)]
 pub struct EnumType {
     pub name: Node,
     pub assigned_name: String,
     pub module_path: Vec<String>,
-    pub type_id: TypeNumber,
 
-    pub variants: SeqMap<String, EnumVariantTypeRef>,
+    pub variants: SeqMap<String, EnumVariantType>,
 }
 
 impl Debug for EnumType {
@@ -519,17 +488,11 @@ impl Debug for EnumType {
 
 impl EnumType {
     #[must_use]
-    pub fn new(
-        name: Node,
-        assigned_name: &str,
-        module_path: Vec<String>,
-        number: TypeNumber,
-    ) -> Self {
+    pub fn new(name: Node, assigned_name: &str, module_path: Vec<String>) -> Self {
         Self {
             name,
             assigned_name: assigned_name.to_string(),
             module_path,
-            type_id: number,
             variants: SeqMap::new(),
         }
     }
@@ -540,75 +503,58 @@ impl EnumType {
     }
 
     #[must_use]
-    pub fn get_variant(&self, name: &str) -> Option<&EnumVariantTypeRef> {
+    pub fn get_variant(&self, name: &str) -> Option<&EnumVariantType> {
         self.variants.get(&name.to_string())
     }
 
     #[must_use]
-    pub fn get_variant_from_index(&self, index: usize) -> Option<&EnumVariantTypeRef> {
+    pub fn get_variant_from_index(&self, index: usize) -> Option<&EnumVariantType> {
         Some(self.variants.values().collect::<Vec<_>>()[index])
     }
 }
 
-pub type EnumVariantTypeRef = Rc<EnumVariantType>;
-
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Hash)]
 pub struct EnumVariantCommon {
     pub name: Node,
     pub assigned_name: String,
-    pub number: TypeNumber,
     pub container_index: u8,
-    pub owner: EnumTypeRef,
+    pub owner: EnumType,
 }
 
 impl Debug for EnumVariantCommon {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(
-            f,
-            "<{}>{}::{}",
-            self.number,
-            self.owner.borrow().assigned_name,
-            self.assigned_name
-        )
+        write!(f, "{}::{}", self.owner.assigned_name, self.assigned_name)
     }
 }
-
-pub type EnumVariantStructFieldTypeRef = Rc<EnumVariantStructFieldType>;
 
 #[derive(Debug)]
 pub struct EnumVariantStructFieldType {
     pub name: Node,
-    pub enum_variant: EnumVariantTypeRef,
+    pub enum_variant: EnumVariantType,
     pub resolved_type: Type,
 
     pub field_index: usize,
 }
-
-pub type EnumVariantTupleFieldTypeRef = Rc<EnumVariantTupleFieldType>;
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct EnumVariantTupleFieldType {
     pub name: Node,
-    pub enum_variant: EnumVariantTypeRef,
+    pub enum_variant: EnumVariantType,
     pub resolved_type: Type,
 
     pub field_index: usize,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct EnumVariantSimpleType {
     pub common: EnumVariantCommon,
 }
 
-pub type EnumVariantStructTypeRef = Rc<EnumVariantStructType>;
-
-pub type EnumVariantSimpleTypeRef = Rc<EnumVariantSimpleType>;
-
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Hash)]
 pub enum EnumVariantType {
-    Struct(EnumVariantStructTypeRef),
-    Tuple(EnumVariantTupleTypeRef),
-    Nothing(EnumVariantSimpleTypeRef),
+    Struct(EnumVariantStructType),
+    Tuple(EnumVariantTupleType),
+    Nothing(EnumVariantSimpleType),
 }
 impl EnumVariantType {
     #[must_use]
@@ -631,20 +577,18 @@ impl Debug for EnumVariantType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AliasType {
     pub name: Node,
     pub assigned_name: String,
     pub referenced_type: Type,
 }
-pub type AliasTypeRef = Rc<AliasType>;
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct NamedStructType {
     pub name: Node,
     pub assigned_name: String,
     pub anon_struct_type: AnonymousStructType,
-    pub type_id: TypeNumber,
 }
 
 impl Debug for NamedStructType {
@@ -657,22 +601,14 @@ impl Debug for NamedStructType {
     }
 }
 
-pub type TypeNumber = u32;
-
 impl NamedStructType {
     #[must_use]
-    pub fn new(
-        name: Node,
-        assigned_name: &str,
-        anon_struct_type: AnonymousStructType,
-        type_id: TypeNumber,
-    ) -> Self {
+    pub fn new(name: Node, assigned_name: &str, anon_struct_type: AnonymousStructType) -> Self {
         Self {
             //defined_in_module,
             anon_struct_type,
             name,
             assigned_name: assigned_name.to_string(),
-            type_id,
         }
     }
 
@@ -687,4 +623,23 @@ impl NamedStructType {
     pub const fn name(&self) -> &Node {
         &self.name
     }
+}
+
+pub fn all_types_are_concrete(types: &[Type]) -> bool {
+    for ty in types {
+        if !ty.is_concrete() {
+            return false;
+        }
+    }
+    true
+}
+
+pub fn all_types_are_variables(types: &[Type]) -> bool {
+    for ty in types {
+        if let Type::Variable(_) = ty {
+        } else {
+            return false;
+        }
+    }
+    true
 }

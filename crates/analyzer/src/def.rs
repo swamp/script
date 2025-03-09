@@ -142,20 +142,17 @@ impl Analyzer<'_> {
         &mut self,
         enum_type_name: &swamp_script_ast::LocalTypeIdentifierWithOptionalTypeVariables,
         ast_variants: &[swamp_script_ast::EnumVariantType],
-    ) -> Result<EnumTypeRef, Error> {
+    ) -> Result<EnumType, Error> {
         let mut resolved_variants = SeqMap::new();
-
-        let parent_number = self.shared.state.allocate_number();
 
         let enum_parent = EnumType {
             name: self.to_node(&enum_type_name.name),
             assigned_name: self.get_text(&enum_type_name.name).to_string(),
             module_path: vec![],
-            type_id: parent_number,
             variants: SeqMap::default(),
         };
 
-        let parent_ref = self
+        let mut parent_ref = self
             .shared
             .definition_table
             .add_enum_type(enum_parent)
@@ -172,11 +169,8 @@ impl Analyzer<'_> {
                 swamp_script_ast::EnumVariantType::Struct(name, _) => name,
             };
 
-            let number = self.shared.state.allocate_number();
-
             let common = EnumVariantCommon {
                 name: self.to_node(variant_name_node),
-                number,
                 assigned_name: self.get_text(variant_name_node).to_string(),
                 container_index: container_index_usize as u8,
                 owner: parent_ref.clone(),
@@ -185,7 +179,7 @@ impl Analyzer<'_> {
             let variant_type = match ast_variant_type {
                 swamp_script_ast::EnumVariantType::Simple(_variant_name_node) => {
                     let simple_ref = EnumVariantSimpleType { common };
-                    EnumVariantType::Nothing(EnumVariantSimpleTypeRef::from(simple_ref))
+                    EnumVariantType::Nothing(EnumVariantSimpleType::from(simple_ref))
                 }
                 swamp_script_ast::EnumVariantType::Tuple(_variant_name_node, types) => {
                     let mut vec = Vec::new();
@@ -198,9 +192,8 @@ impl Analyzer<'_> {
                         common,
                         fields_in_order: vec,
                     };
-                    let resolved_tuple_type_ref = Rc::new(resolved_tuple_type);
 
-                    EnumVariantType::Tuple(resolved_tuple_type_ref)
+                    EnumVariantType::Tuple(resolved_tuple_type)
                 }
                 swamp_script_ast::EnumVariantType::Struct(
                     _variant_name_node,
@@ -232,9 +225,7 @@ impl Analyzer<'_> {
                         anon_struct: AnonymousStructType::new(fields),
                     };
 
-                    let enum_variant_struct_type_ref = Rc::new(enum_variant_struct_type);
-
-                    EnumVariantType::Struct(enum_variant_struct_type_ref)
+                    EnumVariantType::Struct(enum_variant_struct_type)
                 }
             };
 
@@ -245,7 +236,7 @@ impl Analyzer<'_> {
                 .map_err(|_| self.create_err(ErrorKind::DuplicateFieldName, variant_name_node))?;
         }
 
-        parent_ref.borrow_mut().variants = resolved_variants;
+        parent_ref.variants = resolved_variants;
 
         Ok(parent_ref)
     }
@@ -255,7 +246,7 @@ impl Analyzer<'_> {
     pub fn analyze_alias_type_definition(
         &mut self,
         ast_alias: &swamp_script_ast::AliasType,
-    ) -> Result<AliasTypeRef, Error> {
+    ) -> Result<AliasType, Error> {
         let resolved_type = self.analyze_type(&ast_alias.referenced_type)?;
 
         let alias_name_str = self.get_text(&ast_alias.identifier.0).to_string();
@@ -380,7 +371,6 @@ impl Analyzer<'_> {
             name: self.to_node(&ast_struct_def.identifier.name),
             anon_struct_type: analyzed_anonymous_struct,
             assigned_name: struct_name_str,
-            type_id: self.shared.state.allocate_number(),
         };
 
         if has_type_variables {
@@ -394,7 +384,6 @@ impl Analyzer<'_> {
                 .add_blueprint(ParameterizedTypeBlueprint {
                     kind: ParameterizedTypeKind::Struct(named_struct_type),
                     type_variables,
-                    type_id: self.shared.state.allocate_number(),
                     defined_in_module_path: self.module_path.clone(),
                 })
                 .map_err(|err| {
@@ -601,8 +590,8 @@ impl Analyzer<'_> {
         attached_to_type: &swamp_script_ast::LocalTypeIdentifierWithOptionalTypeVariables,
         functions: &[swamp_script_ast::Function],
     ) -> Result<(), Error> {
-        let debug_text = self.get_text(&attached_to_type.name);
-        trace!(?debug_text, "impl start");
+        let type_name_text = self.get_text(&attached_to_type.name).to_string();
+        trace!(?type_name_text, "impl start");
 
         let converted_type_variables_to_ast_types = attached_to_type
             .type_variables
@@ -622,40 +611,48 @@ impl Analyzer<'_> {
             generic_params: converted_type_variables_to_ast_types,
         };
 
-        let is_parameterized = !attached_to_type.type_variables.is_empty();
+        let is_parameterized = !qualified.generic_params.is_empty();
 
-        if is_parameterized {
+        let maybe_type_to_attach_to = if is_parameterized {
             let type_variables = self.convert_to_type_variables(&attached_to_type.type_variables);
             self.set_type_variables_to_extra_symbol_table(&type_variables);
+            if let Some(found_blueprint) = self.shared.lookup_table.get_blueprint(&type_name_text) {
+                Some(Type::Blueprint(found_blueprint.clone()))
+            } else {
+                panic!("must be something");
+            }
+        } else {
+            Some(self.analyze_named_type(&qualified)?)
+        };
+
+        if let Some(type_to_attach_to) = maybe_type_to_attach_to {
+            trace!(?type_to_attach_to, "impl type to attach to");
+
+            let function_refs: Vec<&swamp_script_ast::Function> = functions.iter().collect();
+
+            self.analyze_impl_functions(type_to_attach_to, &function_refs)?;
+
+            if is_parameterized {
+                self.shared.type_variables = None;
+            }
+
+            Ok(())
+        } else {
+            Err(self.create_err(
+                ErrorKind::CanNotAttachFunctionsToType,
+                &attached_to_type.name,
+            ))
         }
-
-        let type_to_attach_to = self.analyze_named_type(&qualified)?;
-
-        let type_id = type_to_attach_to.id().unwrap();
-        trace!(?type_to_attach_to, ?type_id, "impl type to attach to");
-
-        let function_refs: Vec<&swamp_script_ast::Function> = functions.iter().collect();
-
-        self.analyze_impl_functions(&type_to_attach_to, &function_refs)?;
-
-        if is_parameterized {
-            self.shared.type_variables = None;
-        }
-
-        Ok(())
     }
 
     /// # Errors
     ///
     pub fn analyze_impl_functions(
         &mut self,
-        type_to_attach_to: &Type,
+        attach_to_type: Type, // Needed for self
         functions: &[&swamp_script_ast::Function],
     ) -> Result<(), Error> {
-        self.shared
-            .state
-            .associated_impls
-            .prepare(type_to_attach_to);
+        self.shared.state.associated_impls.prepare(&attach_to_type);
 
         for function in functions {
             let new_return_type = self.analyze_return_type(function)?;
@@ -670,7 +667,7 @@ impl Analyzer<'_> {
 
             let function_name_str = self.get_text(&function_name.name).to_string();
 
-            let resolved_function = self.analyze_impl_func(function, type_to_attach_to)?;
+            let resolved_function = self.analyze_impl_func(function, &attach_to_type)?;
 
             let resolved_function_ref = Rc::new(resolved_function);
 
@@ -679,7 +676,7 @@ impl Analyzer<'_> {
             self.shared
                 .state
                 .associated_impls
-                .add_member_function(type_to_attach_to, &function_name_str, resolved_function_ref)
+                .add_member_function(&attach_to_type, &function_name_str, resolved_function_ref)
                 .map_err(|err| {
                     self.create_err(ErrorKind::SemanticError(err), &function_name.name)
                 })?;

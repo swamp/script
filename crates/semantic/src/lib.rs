@@ -319,7 +319,7 @@ pub enum Pattern {
 #[derive(Debug, Clone)]
 pub enum NormalPattern {
     PatternList(Vec<PatternElement>),
-    EnumPattern(EnumVariantTypeRef, Option<Vec<PatternElement>>),
+    EnumPattern(EnumVariantType, Option<Vec<PatternElement>>),
     Literal(Literal),
 }
 
@@ -341,7 +341,7 @@ pub struct Iterable {
 #[derive(Debug, Clone)]
 pub struct StructInstantiation {
     pub source_order_expressions: Vec<(usize, Expression)>,
-    pub struct_type_ref: NamedStructTypeRef,
+    pub struct_type_ref: NamedStructType,
 }
 
 #[derive(Debug, Clone)]
@@ -372,12 +372,11 @@ pub struct VariableCompoundAssignment {
     pub compound_operator: CompoundOperator,
 }
 
-pub fn create_rust_type(name: &str, type_number: TypeNumber) -> ExternalTypeRef {
-    let rust_type = ExternalType {
+pub fn create_rust_type(name: &str, external_number: u32) -> ExternalType {
+    ExternalType {
         type_name: name.to_string(),
-        number: type_number,
-    };
-    Rc::new(rust_type)
+        number: external_number,
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -448,10 +447,10 @@ pub struct SingleMutLocationExpression(pub SingleLocationExpression);
 #[derive(Debug, Clone)]
 pub enum SingleLocationExpressionKind {
     MutVariableRef,
-    MutStructFieldRef(NamedStructTypeRef, usize),
+    MutStructFieldRef(NamedStructType, usize),
     MutArrayIndexRef(Type),
     MutMapIndexRef(Type, Type),
-    MutExternalTypeIndexRef(ExternalTypeRef),
+    MutExternalTypeIndexRef(ExternalType),
 }
 
 #[derive(Debug, Clone)]
@@ -627,7 +626,7 @@ pub enum Literal {
     StringLiteral(String),
     BoolLiteral(bool),
 
-    EnumVariantLiteral(EnumVariantTypeRef, EnumLiteralData),
+    EnumVariantLiteral(EnumVariantType, EnumLiteralData),
     TupleLiteral(Vec<Type>, Vec<Expression>),
 
     Slice(Type, Vec<Expression>),
@@ -741,7 +740,7 @@ impl ImplFunctions {
 
 #[derive(Debug, Clone)]
 pub struct AssociatedImpls {
-    pub functions: SeqMap<TypeNumber, ImplFunctions>,
+    pub functions: SeqMap<Type, ImplFunctions>,
 }
 
 impl Default for AssociatedImpls {
@@ -761,17 +760,13 @@ impl AssociatedImpls {
 
 impl AssociatedImpls {
     pub fn prepare(&mut self, ty: &Type) {
-        let type_id = ty.id().expect(&format!("type can not be attached to {ty}"));
         self.functions
-            .insert(type_id, ImplFunctions::new())
+            .insert(ty.clone(), ImplFunctions::new())
             .expect("should work");
     }
     #[must_use]
     pub fn get_member_function(&self, ty: &Type, function_name: &str) -> Option<&FunctionRef> {
-        let type_id = ty
-            .id()
-            .unwrap_or_else(|| panic!("type can not be attached to {ty}"));
-        let maybe_found_impl = self.functions.get(&type_id);
+        let maybe_found_impl = self.functions.get(&ty);
         if let Some(found_impl) = maybe_found_impl {
             if let Some(func) = found_impl.functions.get(&function_name.to_string()) {
                 return Some(func);
@@ -800,8 +795,7 @@ impl AssociatedImpls {
         name: &str,
         func: FunctionRef,
     ) -> Result<(), SemanticError> {
-        let type_id = ty.id().expect("type can not have associated functions");
-        let maybe_found_impl = self.functions.get_mut(&type_id);
+        let maybe_found_impl = self.functions.get_mut(&ty);
 
         if let Some(found_impl) = maybe_found_impl {
             found_impl
@@ -810,7 +804,7 @@ impl AssociatedImpls {
                 .expect("todo");
             Ok(())
         } else {
-            error!(%ty, %type_id, ?name, "wasn't prepared");
+            error!(%ty, ?name, "wasn't prepared");
             Err(SemanticError::UnknownImplOnType)
         }
     }
@@ -829,7 +823,7 @@ impl AssociatedImpls {
 
     pub fn add_external_struct_member_function(
         &mut self,
-        named_struct_type: &NamedStructTypeRef,
+        named_struct_type: &NamedStructType,
         func: Function,
     ) -> Result<(), SemanticError> {
         self.add_member_function(
@@ -841,7 +835,7 @@ impl AssociatedImpls {
 
     pub fn add_external_struct_member_function_external(
         &mut self,
-        named_struct_type: NamedStructTypeRef,
+        named_struct_type: NamedStructType,
         func: ExternalFunctionDefinition,
     ) -> Result<(), SemanticError> {
         self.add_member_function(
@@ -853,7 +847,7 @@ impl AssociatedImpls {
 
     pub fn add_external_struct_member_function_external_ref(
         &mut self,
-        named_struct_type: NamedStructTypeRef,
+        named_struct_type: NamedStructType,
         func: ExternalFunctionDefinitionRef,
     ) -> Result<(), SemanticError> {
         self.add_member_function(
@@ -864,27 +858,9 @@ impl AssociatedImpls {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct TypeIdGenerator {
-    number: TypeNumber,
-}
-
-impl TypeIdGenerator {
-    pub fn new(start_number: TypeNumber) -> Self {
-        Self {
-            number: start_number,
-        }
-    }
-    pub fn allocate(&mut self) -> TypeNumber {
-        self.number += 1;
-        self.number
-    }
-}
-
 // Mutable part
 #[derive(Debug, Clone)]
 pub struct ProgramState {
-    pub type_id_generator: TypeIdGenerator,
     pub external_function_number: ExternalFunctionId,
     // It is just so we don't have to do another dependency check of the
     // modules, we know that these constants have been
@@ -904,20 +880,11 @@ impl ProgramState {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            type_id_generator: TypeIdGenerator::new(16),
             external_function_number: 0,
             constants_in_dependency_order: Vec::new(),
             associated_impls: AssociatedImpls::new(),
             instantiation_cache: InstantiationCache::new(),
         }
-    }
-
-    pub fn allocate_number(&mut self) -> TypeNumber {
-        self.type_id_generator.allocate()
-    }
-
-    pub fn type_id_generator_mut(&mut self) -> &mut TypeIdGenerator {
-        &mut self.type_id_generator
     }
 
     pub fn allocate_external_function_id(&mut self) -> ExternalFunctionId {

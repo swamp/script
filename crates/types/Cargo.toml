@@ -11,3 +11,4 @@ description = "types used in Swamp"
 seq-fmt = "0.0.1"
 seq-map = "0.0.13"
 swamp-script-node = { path = "../node", version = "0.0.19" }
+tracing = "0.1.40"

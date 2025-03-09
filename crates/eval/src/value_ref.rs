@@ -9,8 +9,8 @@ use std::hash::Hash;
 use std::rc::Rc;
 use swamp_script_core_extra::extra::{SparseValueId, SparseValueMap};
 use swamp_script_core_extra::prelude::{Value, ValueError};
+use swamp_script_core_extra::value::RustType;
 use swamp_script_core_extra::value::ValueRef;
-use swamp_script_core_extra::value::{RustType, SPARSE_TYPE_ID};
 use tracing::info;
 
 #[derive(Debug, Clone)]

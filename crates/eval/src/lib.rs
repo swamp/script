@@ -11,7 +11,7 @@ use std::fmt::Debug;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use swamp_script_core_extra::extra::{SparseValueId, SparseValueMap};
 use swamp_script_core_extra::prelude::ValueError;
-use swamp_script_core_extra::value::{SPARSE_ID_TYPE_ID, SPARSE_TYPE_ID, ValueRef};
+use swamp_script_core_extra::value::ValueRef;
 use swamp_script_core_extra::value::{
     SourceMapLookup, Value, convert_vec_to_rc_refcell, format_value, to_rust_value,
 };
@@ -25,7 +25,7 @@ use swamp_script_semantic::{
 };
 use swamp_script_semantic::{ExternalFunctionId, Postfix, SingleMutLocationExpression};
 use swamp_script_types::{
-    EnumVariantType, EnumVariantTypeRef, ExternalType, Type, TypeForParameter, same_anon_struct_ref,
+    EnumVariantType, ExternalType, Type, TypeForParameter, same_anon_struct_ref,
 };
 use tracing::{error, info};
 
@@ -1348,7 +1348,7 @@ impl<'a, C> Interpreter<'a, C> {
             Literal::BoolLiteral(b) => Value::Bool(*b),
 
             Literal::EnumVariantLiteral(enum_variant_type, data) => {
-                let variant_container_value: Value = match &**enum_variant_type {
+                let variant_container_value: Value = match &*enum_variant_type {
                     EnumVariantType::Tuple(tuple_type) => match data {
                         EnumLiteralData::Tuple(tuple_expressions) => {
                             let eval_expressions = self.evaluate_expressions(tuple_expressions)?;
@@ -2284,13 +2284,13 @@ impl<'a, C> Interpreter<'a, C> {
         &mut self,
         maybe_elements: Option<&Vec<PatternElement>>,
         expression_to_evaluate: &Expression,
-        variant_ref: &EnumVariantTypeRef,
+        variant_ref: &EnumVariantType,
         value_ref: ValueRef,
     ) -> Result<Option<Value>, ExecuteError> {
         match value_ref.borrow_mut().clone() {
             Value::EnumVariantTuple(value_tuple_type, values) => {
                 // First check if the variant types match
-                if variant_ref.common().number != value_tuple_type.common.number {
+                if variant_ref.common().container_index != value_tuple_type.common.container_index {
                     return Ok(None); // Try next pattern
                 }
 
@@ -2325,7 +2325,9 @@ impl<'a, C> Interpreter<'a, C> {
                     ?variant_ref,
                     "comparing enum variant struct match arm"
                 );
-                if value_enum_struct_type.common.number == variant_ref.common().number {
+                if value_enum_struct_type.common.container_index
+                    == variant_ref.common().container_index
+                {
                     info!(?value_enum_struct_type, ?variant_ref, "FOUND!");
                     if let Some(elements) = maybe_elements {
                         self.push_block_scope();
@@ -2348,7 +2350,7 @@ impl<'a, C> Interpreter<'a, C> {
             }
 
             Value::EnumVariantSimple(value_variant_ref) => {
-                if value_variant_ref.common.number == variant_ref.common().number
+                if value_variant_ref.common.container_index == variant_ref.common().container_index
                     && maybe_elements.is_none()
                 {
                     return Ok(Some(self.evaluate_expression(&expression_to_evaluate)?));

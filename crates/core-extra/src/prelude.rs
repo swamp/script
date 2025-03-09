@@ -5,9 +5,9 @@
 
 pub use {
     crate::cnv::{overwrite_struct, overwrite_value},
-    crate::export::SwampExport,
+    //crate::export::SwampExport,
     crate::qck_des::quick_deserialize,
-    crate::typereg::TypeRegistry,
+    //crate::typereg::TypeRegistry,
     crate::value::{QuickSerialize, SourceMapLookup, Value, ValueError, ValueRef},
     seq_map::SeqMap,
 };

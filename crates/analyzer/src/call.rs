@@ -5,7 +5,7 @@
 
 use crate::TypeContext;
 use crate::err::{Error, ErrorKind};
-use crate::{Analyzer, LocationSide, SPARSE_TYPE_ID};
+use crate::{Analyzer, LocationSide};
 use std::rc::Rc;
 use swamp_script_node::Node;
 use swamp_script_semantic::intr::IntrinsicFunction;

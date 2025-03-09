@@ -89,8 +89,8 @@ impl Analyzer<'_> {
                             anonym_struct_field_and_expressions,
                             detected_rest,
                         ) => {
-                            if let EnumVariantType::Struct(resolved_variant_struct_ref) =
-                                &*variant_ref
+                            if let EnumVariantType::Struct(ref resolved_variant_struct_ref) =
+                                variant_ref
                             {
                                 if anonym_struct_field_and_expressions.len()
                                     != resolved_variant_struct_ref

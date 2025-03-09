@@ -1426,6 +1426,9 @@ fn blueprint_add_with_field() {
     }
 
     impl JustTest<T> {
+        fn nothing(self) -> JustTest<T> {
+            self
+        }
         fn calc(self, f: Float) -> Float {
             f + 42.4
         }
