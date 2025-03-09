@@ -3,11 +3,12 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use swamp_script_analyzer::prelude::{Error, Program};
-use swamp_script_analyzer::{Analyzer, SymbolTables, TypeContext, TypeContextScope};
+use swamp_script_analyzer::{Analyzer, TypeContext, TypeContextScope};
 use swamp_script_dep_loader::{
     DependencyParser, ParsedAstModule, parse_local_modules_and_get_order,
 };
 use swamp_script_modules::prelude::*;
+use swamp_script_modules::symtbl::SymbolTableRef;
 use swamp_script_semantic::{Expression, ProgramState, SemanticError};
 use swamp_script_source_map::SourceMap;
 use tracing::{Level, debug, span};
@@ -86,7 +87,7 @@ pub fn analyze_modules_in_order(
                 module_path,
                 parse_module,
             )?;
-            let analyzed_module = Module::new(module_path, analyzed_symbol_table, maybe_expression);
+            let analyzed_module = Module::new(analyzed_symbol_table, maybe_expression);
             modules.add(analyzed_module.into());
         } else {
             panic!("could not load")

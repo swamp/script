@@ -45,7 +45,7 @@ impl Analyzer<'_> {
                             let ident_text =
                                 self.get_text_resolved(&ident_resolved_node).to_string();
                             if let Some(found_symbol) =
-                                found_module.namespace.symbol_table.get_symbol(&ident_text)
+                                found_module.symbol_table.get_symbol(&ident_text)
                             {
                                 self.shared
                                     .lookup_table
@@ -66,7 +66,7 @@ impl Analyzer<'_> {
                             let ident_text =
                                 self.get_text_resolved(&ident_resolved_node).to_string();
                             if let Some(found_symbol) =
-                                found_module.namespace.symbol_table.get_symbol(&ident_text)
+                                found_module.symbol_table.get_symbol(&ident_text)
                             {
                                 self.shared
                                     .lookup_table
@@ -88,7 +88,7 @@ impl Analyzer<'_> {
             swamp_script_ast::ImportItems::All => {
                 self.shared
                     .lookup_table
-                    .extend_from(&found_module.namespace.symbol_table)?;
+                    .extend_from(&found_module.symbol_table)?;
             }
         }
 
@@ -371,6 +371,7 @@ impl Analyzer<'_> {
             name: self.to_node(&ast_struct_def.identifier.name),
             anon_struct_type: analyzed_anonymous_struct,
             assigned_name: struct_name_str,
+            module_path: self.shared.definition_table.module_path(),
         };
 
         if has_type_variables {

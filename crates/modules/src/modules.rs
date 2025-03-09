@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use crate::symtbl::{SymbolTable, SymbolTableRef};
+use crate::symtbl::SymbolTable;
 use seq_map::SeqMap;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
@@ -19,32 +19,14 @@ impl Default for Modules {
         Self::new()
     }
 }
-
-type NamespacePath = Vec<String>;
-
-#[derive(Debug)]
-pub struct Namespace {
-    pub path: NamespacePath,
-    pub symbol_table: SymbolTableRef,
-}
-
-impl Namespace {
-    pub fn new(path: NamespacePath, symbol_table: SymbolTable) -> Self {
-        Self {
-            path,
-            symbol_table: Rc::new(symbol_table),
-        }
-    }
-}
-
 pub struct Module {
-    pub namespace: Namespace,
     pub expression: Option<Expression>,
+    pub symbol_table: SymbolTable,
 }
 
 impl Debug for Module {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, " {:?}", self.namespace)?;
+        writeln!(f, " {:?}", self.symbol_table)?;
 
         if let Some(resolved_expression) = &self.expression {
             pretty_print(f, resolved_expression, 0)?;
@@ -79,13 +61,9 @@ pub fn pretty_print(
 pub type ModuleRef = Rc<Module>;
 
 impl Module {
-    pub fn new(
-        module_path: &[String],
-        symbol_table: SymbolTable,
-        expression: Option<Expression>,
-    ) -> Self {
+    pub fn new(symbol_table: SymbolTable, expression: Option<Expression>) -> Self {
         Self {
-            namespace: Namespace::new(NamespacePath::from(module_path), symbol_table),
+            symbol_table,
             expression,
         }
     }
@@ -108,7 +86,7 @@ impl Modules {
     }
 
     pub fn add(&mut self, module: ModuleRef) {
-        let path = module.clone().namespace.path.clone();
+        let path = module.symbol_table.module_path().clone();
 
         self.modules.insert(path, module).expect("could not insert");
     }

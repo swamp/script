@@ -33,7 +33,7 @@ fn internal_compile(script: &str) -> Result<Program, ScriptResolveError> {
     let test_module = program.modules.get(&resolved_path_str).unwrap();
 
     let symbol_table_display = SymbolTableDisplay {
-        symbol_table: &test_module.namespace.symbol_table,
+        symbol_table: &test_module.symbol_table,
         source_map_display: &pretty_printer,
     };
 

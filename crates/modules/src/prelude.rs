@@ -3,6 +3,6 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 pub use crate::{
-    modules::{Module, ModuleRef, Modules, Namespace},
-    symtbl::{FuncDef, Symbol, SymbolTable, SymbolTableRef},
+    modules::{Module, ModuleRef, Modules},
+    symtbl::{FuncDef, Symbol, SymbolTable},
 };

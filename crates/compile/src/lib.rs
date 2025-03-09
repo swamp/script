@@ -16,7 +16,7 @@ use swamp_script_dep_loader::{
 };
 use swamp_script_error_report::{ScriptResolveError, show_script_resolve_error};
 use swamp_script_eval_loader::analyze_modules_in_order;
-use swamp_script_modules::modules::{Module, Modules, Namespace};
+use swamp_script_modules::modules::{Module, Modules};
 use swamp_script_modules::prelude::ModuleRef;
 use swamp_script_modules::symtbl::{SymbolTable, SymbolTableRef};
 use swamp_script_pretty_print::{SourceMapDisplay, SymbolTableDisplay};
@@ -115,20 +115,20 @@ pub fn bootstrap_modules(
 
     let mut core_module = swamp_script_core::create_module(&compiler_version);
 
-    let mut default_symbol_table = SymbolTable::new();
+    let mut default_symbol_table = SymbolTable::new(&[]);
 
     // Prelude for the core module
     // Expose the basic primitive types, like `Int`, `String`, `Float`, `Bool`
     // so they can be references without a `use core::{Int, String, Float, Bool}` statement.
     default_symbol_table
-        .extend_basic_from(&core_module.namespace.symbol_table)
+        .extend_basic_from(&core_module.symbol_table)
         .unwrap();
 
-    let core_ast_module = parse_single_module(source_map, &core_module.namespace.path)?;
+    let core_ast_module = parse_single_module(source_map, &core_module.symbol_table.module_path())?;
 
     let mut state = ProgramState::new();
 
-    let core_symbol_table = core_module.namespace.symbol_table.as_ref().clone();
+    let core_symbol_table = core_module.symbol_table.clone();
 
     let mut core_analyzed_symbol_table = analyze_single_module(
         &mut state,
@@ -137,7 +137,7 @@ pub fn bootstrap_modules(
         core_symbol_table.clone().into(),
         &core_ast_module,
         source_map,
-        &core_module.namespace.path,
+        &core_module.symbol_table.module_path(),
     )?;
 
     debug!("analyzed core module");
@@ -158,7 +158,7 @@ pub fn bootstrap_modules(
 
     info!(%symbol_table_display, "core symbol table");
 
-    core_module.namespace.symbol_table = Rc::new(core_analyzed_symbol_table);
+    core_module.symbol_table = core_analyzed_symbol_table;
 
     // core module is done, so add it read only to the modules
     let core_module_ref = Rc::new(core_module);
@@ -173,7 +173,7 @@ pub fn bootstrap_modules(
 
     let result = BootstrapResult {
         program,
-        core_module_path: core_module_ref.namespace.path.clone(),
+        core_module_path: core_module_ref.symbol_table.module_path().clone(),
     };
     Ok(result)
 }
@@ -319,14 +319,18 @@ pub fn bootstrap_and_compile(
         .modules
         .get(&bootstrap_result.core_module_path)
         .unwrap()
-        .namespace
         .symbol_table
         .clone();
 
-    compile_and_analyze_all_modules(root_path, &mut program, source_map, core_symbol_table)
-        .inspect_err(|err| {
-            show_script_resolve_error(err, source_map, Path::new(""));
-        })?;
+    compile_and_analyze_all_modules(
+        root_path,
+        &mut program,
+        source_map,
+        core_symbol_table.into(),
+    )
+    .inspect_err(|err| {
+        show_script_resolve_error(err, source_map, Path::new(""));
+    })?;
 
     Ok(program)
 }

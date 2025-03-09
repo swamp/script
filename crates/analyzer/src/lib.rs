@@ -25,6 +25,7 @@ use std::mem::take;
 use std::num::{ParseFloatError, ParseIntError};
 use std::rc::Rc;
 use swamp_script_modules::prelude::*;
+use swamp_script_modules::symtbl::SymbolTableRef;
 use swamp_script_node::{FileId, Node, Span};
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
@@ -52,11 +53,6 @@ pub enum LocationSide {
 }
 
 #[derive(Debug)]
-pub struct SymbolTables {
-    pub symbol_tables: Vec<SymbolTableRef>,
-}
-
-#[derive(Debug)]
 pub struct Program {
     pub state: ProgramState,
     pub modules: Modules,
@@ -65,7 +61,7 @@ pub struct Program {
 
 impl Default for Program {
     fn default() -> Self {
-        Self::new(ProgramState::new(), Modules::new(), SymbolTable::new())
+        Self::new(ProgramState::new(), Modules::new(), SymbolTable::new(&[]))
     }
 }
 
@@ -335,7 +331,7 @@ impl<'a> SharedState<'a> {
             return Some(&self.lookup_table);
         }
         self.get_module(path)
-            .map_or(None, |module| Some(&module.namespace.symbol_table))
+            .map_or(None, |module| Some(&module.symbol_table))
     }
 
     #[must_use]

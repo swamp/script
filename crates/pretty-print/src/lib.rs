@@ -338,7 +338,7 @@ impl SourceMapDisplay<'_> {
         f: &mut Formatter<'_>,
         ns: &ModuleRef,
     ) -> std::fmt::Result {
-        self.show_module_path(f, &ns.namespace.path)
+        self.show_module_path(f, &ns.symbol_table.module_path())
     }
 
     fn show_mut_or_not_expression(

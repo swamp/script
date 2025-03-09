@@ -5,7 +5,6 @@
 use crate::modules::ModuleRef;
 
 use seq_map::SeqMap;
-use std::cell::RefCell;
 use std::fmt::Debug;
 use std::rc::Rc;
 use swamp_script_node::Node;
@@ -55,21 +54,29 @@ impl Symbol {
 #[derive(Debug, Clone)]
 pub struct SymbolTable {
     symbols: SeqMap<String, Symbol>,
+    module_path: Vec<String>,
+}
+
+impl SymbolTable {
+    pub fn module_path(&self) -> Vec<String> {
+        self.module_path.clone()
+    }
 }
 
 pub type SymbolTableRef = Rc<SymbolTable>;
 
 impl Default for SymbolTable {
     fn default() -> Self {
-        Self::new()
+        Self::new(&[])
     }
 }
 
 impl SymbolTable {
     #[must_use]
-    pub fn new() -> Self {
+    pub fn new(module_path: &[String]) -> Self {
         Self {
             symbols: SeqMap::default(),
+            module_path: module_path.to_vec(),
         }
     }
 
@@ -274,6 +281,7 @@ impl SymbolTable {
             name: Node::default(),
             assigned_name: name.to_string(),
             anon_struct_type: AnonymousStructType::new(defined_fields),
+            module_path: self.module_path.clone(),
         };
 
         self.add_struct_link(struct_type.clone())?;

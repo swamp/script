@@ -468,7 +468,6 @@ pub struct EnumType {
     pub name: Node,
     pub assigned_name: String,
     pub module_path: Vec<String>,
-
     pub variants: SeqMap<String, EnumVariantType>,
 }
 
@@ -587,6 +586,7 @@ pub struct AliasType {
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct NamedStructType {
     pub name: Node,
+    pub module_path: Vec<String>,
     pub assigned_name: String,
     pub anon_struct_type: AnonymousStructType,
 }
@@ -603,11 +603,17 @@ impl Debug for NamedStructType {
 
 impl NamedStructType {
     #[must_use]
-    pub fn new(name: Node, assigned_name: &str, anon_struct_type: AnonymousStructType) -> Self {
+    pub fn new(
+        name: Node,
+        assigned_name: &str,
+        anon_struct_type: AnonymousStructType,
+        module_path: &[String],
+    ) -> Self {
         Self {
             //defined_in_module,
             anon_struct_type,
             name,
+            module_path: module_path.to_vec(),
             assigned_name: assigned_name.to_string(),
         }
     }

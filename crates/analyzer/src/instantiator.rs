@@ -232,6 +232,7 @@ impl Instantiator {
             anon_struct_type: AnonymousStructType {
                 field_name_sorted_fields: new_fields,
             },
+            module_path: struct_type.module_path.clone(),
         };
 
         Ok((was_any_replaced, Type::NamedStruct(new_struct)))
