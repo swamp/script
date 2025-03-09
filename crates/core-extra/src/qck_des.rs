@@ -199,12 +199,6 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
         Type::Iterable(_) => {
             panic!("can not serialize iterables")
         }
-        Type::Slice(_) => {
-            panic!("can not serialize slice")
-        }
-        Type::SlicePair(_, _) => {
-            panic!("can not serialize slice pair")
-        }
         Type::Optional(optional_type_ref) => {
             let mut offset = 0;
             let has_some = buf[0] != 0;

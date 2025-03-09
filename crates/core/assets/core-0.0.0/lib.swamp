@@ -254,6 +254,10 @@ impl String {
     }
 }
 
+struct Slice<T>
+
+struct SlicePair<T>
+
 struct Vec<T> {
 }
 
@@ -434,7 +438,7 @@ impl Map<K, V> {
     }
 }
 
-// struct SparseId
+struct SparseId
 
 /// Calculates the magnitude of a 2D vector.
 ///

@@ -1,8 +1,8 @@
 use swamp_script_modules::modules::Module;
-use swamp_script_modules::symtbl::{GeneratorKind, SymbolTable, TypeGenerator};
+use swamp_script_modules::symtbl::SymbolTable;
 use swamp_script_node::Node;
 use swamp_script_semantic::prelude::{IntrinsicFunction, IntrinsicFunctionDefinition};
-use swamp_script_types::{AliasType, ExternalType, Signature, Type, TypeForParameter, TypeNumber};
+use swamp_script_types::{AliasType, Signature, Type, TypeForParameter, TypeNumber};
 use tiny_ver::TinyVersion;
 
 //pub const SPARSE_TYPE_ID: TypeNumber = 999;
@@ -65,7 +65,7 @@ fn add_intrinsic_sparse_functions(core_ns: &mut SymbolTable) {
     let slice_to_self = Signature {
         parameters: [TypeForParameter {
             name: "slice".to_string(),
-            resolved_type: Type::Slice(Box::from(Type::Never)),
+            resolved_type: Type::Never,
             is_mutable: false,
             node: None,
         }]
@@ -272,7 +272,7 @@ fn add_intrinsic_map_functions(core_ns: &mut SymbolTable) {
     let slice_to_self = Signature {
         parameters: [TypeForParameter {
             name: "slice_pair".to_string(),
-            resolved_type: Type::SlicePair(Box::from(Type::Never), Box::from(Type::Never)),
+            resolved_type: Type::Never,
             is_mutable: false,
             node: None,
         }]
@@ -661,7 +661,7 @@ fn add_intrinsic_vec_functions(core_ns: &mut SymbolTable) {
     let slice_to_self = Signature {
         parameters: [TypeForParameter {
             name: "slice".to_string(),
-            resolved_type: Type::Slice(Box::from(Type::Never)),
+            resolved_type: Type::Never, // TODO: Should have proper slice generic
             is_mutable: false,
             node: None,
         }]
@@ -944,32 +944,7 @@ pub fn create_module(tiny_version: &TinyVersion) -> Module {
     let mut intrinsic_types_symbol_table = SymbolTable::new();
     let canonical_core_path = [tiny_version.versioned_name(PACKAGE_NAME).unwrap()];
     add_intrinsic_types(&mut intrinsic_types_symbol_table);
-    add_intrinsic_type_generators(&mut intrinsic_types_symbol_table);
     add_intrinsic_functions(&mut intrinsic_types_symbol_table);
 
     Module::new(&canonical_core_path, intrinsic_types_symbol_table, None)
-}
-
-fn add_intrinsic_type_generators(core_ns: &mut SymbolTable) {
-    let slice_type_generator = TypeGenerator {
-        kind: GeneratorKind::Slice,
-        arity: 1,
-    };
-    core_ns
-        .add_type_generator("Slice", slice_type_generator)
-        .unwrap();
-
-    let slice_type_generator = TypeGenerator {
-        kind: GeneratorKind::SlicePair,
-        arity: 2,
-    };
-    core_ns
-        .add_type_generator("SlicePair", slice_type_generator)
-        .unwrap();
-
-    let external_sparse_id = ExternalType {
-        type_name: "SparseId".to_string(),
-        number: SPARSE_ID_TYPE_ID,
-    };
-    core_ns.add_external_type(external_sparse_id).unwrap();
 }

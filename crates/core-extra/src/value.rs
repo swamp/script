@@ -86,7 +86,7 @@ pub enum Value {
     Unit, // Means 'no value' ()
 
     Slice(Type, Vec<ValueRef>),
-    SlicePair(Type, Type, SeqMap<Value, ValueRef>), // Do not change to HashMap, the order is important for it to be deterministic
+    SlicePair(Type, SeqMap<Value, ValueRef>), // Do not change to HashMap, the order is important for it to be deterministic
 
     Option(Option<ValueRef>),
 
@@ -268,7 +268,7 @@ impl Value {
                 todo!("range is not supported yet")
             }
 
-            Self::SlicePair(_key, _value, _values) => {
+            Self::SlicePair(_key, _values) => {
                 panic!("slice pair is not supported ")
             }
 
@@ -321,13 +321,13 @@ impl Clone for Value {
                 Self::Slice(resolved_ref.clone(), deep_clone_valrefs(vec_refs))
             }
 
-            Self::SlicePair(key, value, seq_map) => {
+            Self::SlicePair(key, seq_map) => {
                 let cloned_seq_map = seq_map
                     .iter()
                     .map(|(key, val_ref)| (key.clone(), deep_clone_valref(val_ref)))
                     .collect();
 
-                Self::SlicePair(key.clone(), value.clone(), cloned_seq_map)
+                Self::SlicePair(key.clone(), cloned_seq_map)
             }
 
             Self::Tuple(resolved_ref, vec_refs) => {
@@ -687,7 +687,7 @@ impl Display for Value {
                 write!(f, "]")
             }
 
-            Self::Slice(_item_type, arr) => {
+            Self::Slice(_slice_type, arr) => {
                 write!(f, "Slice[")?;
                 for (i, val) in arr.iter().enumerate() {
                     if i > 0 {
@@ -697,7 +697,7 @@ impl Display for Value {
                 }
                 write!(f, "]")
             }
-            Self::SlicePair(_key, _value, items) => {
+            Self::SlicePair(_ty, items) => {
                 write!(f, "SlicePair[")?;
                 for (i, (key, val)) in items.iter().enumerate() {
                     if i > 0 {
@@ -902,7 +902,7 @@ impl Hash for Value {
                 }
             }
             Self::Map(_, _, _items) => {}
-            Self::SlicePair(_, _, _items) => {}
+            Self::SlicePair(_, _items) => {}
             Self::Tuple(_, _arr) => {}
             Self::EnumVariantSimple(_) => (),
             Self::EnumVariantTuple(_, _fields) => todo!(),

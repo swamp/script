@@ -136,28 +136,41 @@ impl Analyzer<'_> {
             }
 
             swamp_script_ast::LiteralKind::Slice(items) => {
+                let slice_blueprint = self
+                    .shared
+                    .core_symbol_table
+                    .get_blueprint("Slice")
+                    .unwrap()
+                    .clone();
+
                 let (encountered_element_type, resolved_items) =
                     self.analyze_slice_type_helper(ast_node, items)?;
                 (
                     Literal::Slice(encountered_element_type.clone(), resolved_items),
-                    Type::Slice(Box::from(encountered_element_type)),
+                    self.instantiate_blueprint_and_members(
+                        &slice_blueprint.clone(),
+                        &[encountered_element_type],
+                    )?,
                 )
             }
 
             swamp_script_ast::LiteralKind::SlicePair(entries) => {
+                let slice_pair_blueprint = self
+                    .shared
+                    .core_symbol_table
+                    .get_blueprint("SlicePair")
+                    .unwrap()
+                    .clone();
+
                 let (resolved_items, encountered_key_type, encountered_value_type) =
                     self.analyze_slice_pair_literal(ast_node, &entries)?;
 
                 (
-                    Literal::SlicePair(
-                        encountered_key_type.clone(),
-                        encountered_value_type.clone(),
-                        resolved_items,
-                    ),
-                    Type::SlicePair(
-                        Box::from(encountered_key_type),
-                        Box::from(encountered_value_type),
-                    ),
+                    Literal::SlicePair(encountered_value_type.clone(), resolved_items),
+                    self.instantiate_blueprint_and_members(
+                        &slice_pair_blueprint.clone(),
+                        &[encountered_key_type, encountered_value_type],
+                    )?,
                 )
             }
 

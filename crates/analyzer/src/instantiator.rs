@@ -8,7 +8,7 @@ use swamp_script_types::{
     AnonymousStructType, NamedStructType, ParameterizedTypeBlueprint, ParameterizedTypeKind,
     Signature, StructTypeField, Type, TypeForParameter,
 };
-use tracing::info;
+use tracing::{error, info};
 
 #[derive(Debug)]
 pub struct TypeVariableScope {
@@ -91,17 +91,12 @@ impl Instantiator {
         let mut was_replaced = false;
         let mut instantiated_type_for_parameters = Vec::new();
         for type_for_parameter in &signature.parameters {
-            let (type_was_replaced, resolved) =
-                if let Type::Blueprint(_blueprint) = &type_for_parameter.resolved_type {
-                    // HACK: Assume blueprints are self
-                    (false, self_type.clone())
-                } else {
-                    Self::instantiate_type_if_needed(
-                        &type_for_parameter.resolved_type,
-                        scope,
-                        type_id_generator,
-                    )?
-                };
+            let (type_was_replaced, resolved) = Self::instantiate_type_if_needed_with_self(
+                self_type,
+                &type_for_parameter.resolved_type,
+                scope,
+                type_id_generator,
+            )?;
 
             if type_was_replaced {
                 was_replaced = true;
@@ -115,7 +110,12 @@ impl Instantiator {
         }
 
         let (return_type_was_replaced, instantiated_return_type) =
-            Self::instantiate_type_if_needed(&signature.return_type, scope, type_id_generator)?;
+            Self::instantiate_type_if_needed_with_self(
+                self_type,
+                &signature.return_type,
+                scope,
+                type_id_generator,
+            )?;
         if return_type_was_replaced {
             was_replaced = true;
         }
@@ -130,6 +130,35 @@ impl Instantiator {
         Ok((was_replaced, new_signature))
     }
 
+    fn instantiate_types_if_needed(
+        types: &[Type],
+        type_variables: &TypeVariableScope,
+        type_id_generator: &mut TypeIdGenerator,
+    ) -> Result<(bool, Vec<Type>), Error> {
+        let mut converted = Vec::new();
+
+        for ty in types {
+            let (_was_converted, instantiated_type) =
+                Self::instantiate_type_if_needed(ty, type_variables, type_id_generator)?;
+
+            converted.push(instantiated_type);
+        }
+
+        Ok((true, converted))
+    }
+
+    fn instantiate_type_if_needed_with_self(
+        self_type: &Type,
+        ty: &Type,
+        type_variables: &TypeVariableScope,
+        type_id_generator: &mut TypeIdGenerator,
+    ) -> Result<(bool, Type), Error> {
+        match ty {
+            Type::Blueprint(_blueprint) => Ok((false, self_type.clone())), // HACK: assume self if there is a blueprint here
+            _ => Self::instantiate_type_if_needed(ty, type_variables, type_id_generator),
+        }
+    }
+
     fn instantiate_type_if_needed(
         ty: &Type,
         type_variables: &TypeVariableScope,
@@ -137,19 +166,40 @@ impl Instantiator {
     ) -> Result<(bool, Type), Error> {
         let (replaced, result_type) = match ty {
             Type::Generic(parameterized_type, arguments) => {
-                let new_scope = Self::create_type_parameter_scope_from_variables(
-                    &parameterized_type.type_variables,
+                let (_was_replaced, new_arguments) = Self::instantiate_types_if_needed(
                     arguments,
+                    type_variables,
+                    type_id_generator,
                 )?;
-                Self::instantiate_blueprint(parameterized_type, &new_scope, type_id_generator)?
+
+                info!(
+                    ?parameterized_type,
+                    ?new_arguments,
+                    "found a generic! try to instantiate"
+                );
+
+                if all_types_are_concrete(&new_arguments) {
+                    let new_scope = Self::create_type_parameter_scope_from_variables(
+                        &parameterized_type.type_variables,
+                        &new_arguments,
+                    )?;
+                    Self::instantiate_blueprint(parameterized_type, &new_scope, type_id_generator)?
+                } else {
+                    panic!("can we leave generics")
+                }
             }
 
             Type::Variable(type_variable) => {
                 let found_type = type_variables
                     .type_variables
-                    .get(&type_variable)
+                    .get(type_variable)
                     .ok_or(SemanticError::UnknownTypeVariable)?;
                 (true, found_type.clone())
+            }
+
+            Type::Blueprint(blueprint) => {
+                error!(?blueprint, "not allowed with blueprints here for types");
+                panic!("not allowed")
             }
 
             _ => (false, ty.clone()),

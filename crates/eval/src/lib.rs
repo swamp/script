@@ -1388,7 +1388,7 @@ impl<'a, C> Interpreter<'a, C> {
                 Value::Slice(element_type.clone(), convert_vec_to_rc_refcell(values))
             }
 
-            Literal::SlicePair(key_type, value_type, expressions) => {
+            Literal::SlicePair(slice_pair_type, expressions) => {
                 let mut items = SeqMap::new();
                 for (key, value) in expressions {
                     let key_val = self.evaluate_expression(key)?;
@@ -1402,7 +1402,7 @@ impl<'a, C> Interpreter<'a, C> {
                             )
                         })?;
                 }
-                Value::SlicePair(key_type.clone(), value_type.clone(), items)
+                Value::SlicePair(slice_pair_type.clone(), items)
             }
 
             Literal::NoneLiteral => Value::Option(None),

@@ -36,7 +36,6 @@ impl SourceMapDisplay<'_> {
             Symbol::FunctionDefinition(_) => Color::Cyan,
             Symbol::Alias(_) => Color::Red,
             Symbol::Blueprint(_) => Color::Green,
-            Symbol::TypeGenerator(_) => todo!(),
         }
     }
 
@@ -81,9 +80,6 @@ impl SourceMapDisplay<'_> {
             Symbol::Type(ty) => self.show_type(f, ty, tabs + 1),
             Symbol::Module(module_ref) => {
                 write!(f, "{module_ref:?}")
-            }
-            Symbol::TypeGenerator(type_generator) => {
-                write!(f, "{type_generator:?}")
             }
             Symbol::Constant(constant_ref) => self.show_constant(f, constant_ref, tabs),
             Symbol::FunctionDefinition(func_def) => match func_def {
@@ -521,22 +517,20 @@ impl SourceMapDisplay<'_> {
                 self.show_expressions(f, expressions, tabs + 1)?;
                 write!(f, ")")
             }
-            Literal::Slice(_array_type, expressions) => {
+            Literal::Slice(_slice_type, expressions) => {
                 write!(f, "[")?;
                 self.show_expressions(f, expressions, tabs + 1)?;
                 write!(f, "]")
             }
-            Literal::SlicePair(_map_type, _value, tuple_expressions) => {
+            Literal::SlicePair(_slice_pair_type, pairs) => {
                 write!(f, "[|")?;
-                for (key, value) in tuple_expressions {
+                for (key, value) in pairs {
                     self.show_expression(f, key, tabs + 1)?;
                     write!(f, "{}", ":".bright_blue())?;
                     self.show_expression(f, value, tabs + 1)?;
                 }
                 write!(f, "|]")
             }
-            &swamp_script_semantic::Literal::Slice(_, _)
-            | &swamp_script_semantic::Literal::SlicePair(_, _, _) => todo!(),
         }
     }
 
@@ -671,10 +665,6 @@ impl SourceMapDisplay<'_> {
             Type::Function(signature) => write!(f, "function {signature}"),
             Type::Optional(base_type) => write!(f, "{}?", base_type.yellow()),
             Type::External(external_type) => write!(f, "External {}", external_type.type_name),
-            Type::Slice(ty) => self.show_parameterized_like(f, "Slice", &[*ty.clone()], tabs),
-            Type::SlicePair(key, value) => {
-                self.show_parameterized_like(f, "SlicePair", &[*key.clone(), *value.clone()], tabs)
-            }
             Type::Generic(blueprint, concrete_types) => {
                 self.show_generic(f, blueprint, concrete_types, tabs)
             }

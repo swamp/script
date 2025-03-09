@@ -23,9 +23,6 @@ pub enum Type {
     String,
     Bool,
 
-    Slice(Box<Type>),
-    SlicePair(Box<Type>, Box<Type>),
-
     Unit,  // Empty or nothing
     Never, // Not even empty since control flow has escaped with break or return.
 
@@ -218,8 +215,6 @@ impl Debug for Type {
             Self::Bool => write!(f, "Bool"),
             Self::Unit => write!(f, "Unit"),
             Self::Never => write!(f, "!"),
-            Self::Slice(ty) => write!(f, "Slice<{ty:?}>"),
-            Self::SlicePair(key, value) => write!(f, "Slice<{key:?}, {value:?}>"),
             Self::Tuple(tuple_type_ref) => write!(f, "( {tuple_type_ref:?} )"),
             Self::NamedStruct(struct_type_ref) => {
                 write!(f, "{}", struct_type_ref.borrow().assigned_name)
@@ -254,8 +249,6 @@ impl Display for Type {
             Self::Bool => write!(f, "Bool"),
             Self::Unit => write!(f, "Unit"),
             Self::Never => write!(f, "!"),
-            Self::Slice(ty) => write!(f, "Slice<{ty}>"),
-            Self::SlicePair(key, value) => write!(f, "Slice<{key}, {value}>"),
             Self::Tuple(tuple) => write!(f, "({})", comma(tuple)),
             Self::NamedStruct(struct_ref) => write!(f, "{}", struct_ref.borrow().assigned_name),
             Self::AnonymousStruct(struct_ref) => write!(f, "{struct_ref:?}"),
@@ -301,14 +294,6 @@ impl Type {
             | (Self::Unit, Self::Unit) => true,
 
             (Self::Enum(a), Self::Enum(b)) => a == b,
-
-            (Self::Slice(a), Self::Slice(b)) | (Self::Iterable(a), Self::Iterable(b)) => {
-                a.compatible_with(b)
-            }
-
-            (Self::SlicePair(a1, a2), Self::SlicePair(b1, b2)) => {
-                a1.compatible_with(b1) && a2.compatible_with(b2)
-            }
 
             (Self::NamedStruct(a), Self::NamedStruct(b)) => compare_struct_types(a, b),
 

@@ -24,7 +24,6 @@ use std::mem::take;
 use std::num::{ParseFloatError, ParseIntError};
 use std::rc::Rc;
 use swamp_script_modules::prelude::*;
-use swamp_script_modules::symtbl::GeneratorKind;
 use swamp_script_node::{FileId, Node, Span};
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
@@ -1166,12 +1165,14 @@ impl<'a> Analyzer<'a> {
                         let member_name_str = self.get_text(member_name).to_string();
                         info!(?member_name_str, ?tv.resolved_type, "looking for member");
 
-                        if let Some(_found_member) = self
+                        if let Some(found_member) = self
                             .shared
                             .state
                             .associated_impls
                             .get_member_function(&tv.resolved_type, &member_name_str)
                         {
+                            info!(ty=?found_member.signature(), "received signature");
+                            info!(ty=?found_member.signature().return_type, "received return type");
                             let return_type = self.analyze_postfix_member_call(
                                 &tv.resolved_type,
                                 tv.is_mutable,
@@ -1180,6 +1181,7 @@ impl<'a> Analyzer<'a> {
                                 &mut suffixes,
                             )?;
 
+                            info!(?return_type, "received return type");
                             //self.add_postfix(&mut suffixes, kind, return_type.clone(), member_name);
                             tv.resolved_type = return_type.clone();
                             tv.is_mutable = false;
@@ -1230,7 +1232,7 @@ impl<'a> Analyzer<'a> {
                         self.add_postfix(
                             &mut suffixes,
                             PostfixKind::MemberCall(cloned, vec![argument]),
-                            collection_type.clone(),
+                            *found.signature().return_type.clone(),
                             &index_expr.node,
                         );
                     } else {
@@ -1591,9 +1593,9 @@ impl<'a> Analyzer<'a> {
     ) -> Result<(Type, Vec<Expression>), Error> {
         let expressions = self.analyze_argument_expressions(None, items)?;
         let element_type = if expressions.is_empty() {
-            Type::Slice(Box::from(Type::Unit))
+            Type::Unit
         } else {
-            Type::Slice(Box::from(expressions[0].ty.clone()))
+            expressions[0].ty.clone()
         };
 
         Ok((element_type, expressions))
@@ -2626,7 +2628,7 @@ impl<'a> Analyzer<'a> {
             .compatible_with(encountered_self_type)
             || self_type.is_mutable && !is_mutable
         {
-            info!(?encountered_self_type, ?self_type, "types encountered");
+            info!(?encountered_self_type, ty=?self_type.resolved_type, "types encountered");
             return Err(self.create_err_resolved(ErrorKind::SelfNotCorrectType, resolved_node));
         }
 
@@ -2978,27 +2980,6 @@ impl<'a> Analyzer<'a> {
                     //Type::Generic(blueprint.clone(), analyzed_type_parameters.to_vec())
                 }
             }
-            Symbol::TypeGenerator(generator) => {
-                if analyzed_type_parameters.len() != generator.arity {
-                    return Err(self.create_err(
-                        ErrorKind::WrongNumberOfTypeArguments(
-                            generator.arity,
-                            analyzed_type_parameters.len(),
-                        ),
-                        node,
-                    ));
-                }
-
-                match generator.kind {
-                    GeneratorKind::Slice => {
-                        Type::Slice(Box::from(analyzed_type_parameters[0].clone()))
-                    }
-                    GeneratorKind::SlicePair => Type::SlicePair(
-                        Box::from(analyzed_type_parameters[0].clone()),
-                        Box::from(analyzed_type_parameters[1].clone()),
-                    ),
-                }
-            }
             _ => return Err(self.create_err(ErrorKind::UnknownSymbol, &node)),
         };
 
@@ -3013,23 +2994,16 @@ impl<'a> Analyzer<'a> {
         found_expected_type: &Type,
     ) -> Result<Option<Expression>, Error> {
         let new_expr = match literal {
-            Literal::Slice(encountered_element_type, resolved_items) => {
-                if let Type::Slice(some_type) = found_expected_type {
-                    if some_type.compatible_with(encountered_element_type) {
-                        let slice_literal = Literal::Slice(
-                            encountered_element_type.clone(),
-                            resolved_items.clone(),
-                        );
-                        let expr = self.create_expr(
-                            ExpressionKind::Literal(slice_literal),
-                            encountered_element_type.clone(),
-                            ast_node,
-                        );
-                        // If it was just a slice, then we are done
-                        Some(expr)
-                    } else {
-                        todo!()
-                    }
+            Literal::Slice(slice_type, resolved_items) => {
+                if slice_type.compatible_with(found_expected_type) {
+                    let slice_literal = Literal::Slice(slice_type.clone(), resolved_items.clone());
+                    let expr = self.create_expr(
+                        ExpressionKind::Literal(slice_literal),
+                        slice_type.clone(),
+                        ast_node,
+                    );
+                    // If it was just a slice, then we are done
+                    Some(expr)
                 } else if let Some(found) = self
                     .shared
                     .state
@@ -3037,12 +3011,10 @@ impl<'a> Analyzer<'a> {
                     .get_internal_member_function(found_expected_type, "new_from_slice")
                 {
                     let required_type = &found.signature.parameters[0].resolved_type;
-                    if encountered_element_type.compatible_with(required_type) {
-                        let slice_literal = Literal::Slice(
-                            encountered_element_type.clone(),
-                            resolved_items.clone(),
-                        );
-                        let slice_type = Type::Slice(encountered_element_type.clone().into());
+                    if slice_type.compatible_with(required_type) {
+                        let slice_literal =
+                            Literal::Slice(slice_type.clone(), resolved_items.clone());
+
                         let expr = self.create_expr(
                             ExpressionKind::Literal(slice_literal),
                             slice_type.clone(),
@@ -3059,57 +3031,34 @@ impl<'a> Analyzer<'a> {
                         let call_expr = self.create_expr(call_kind, slice_type.clone(), ast_node);
                         Some(call_expr)
                     } else {
-                        error!(
-                            ?encountered_element_type,
-                            ?required_type,
-                            "incompatible types"
-                        );
+                        error!(?slice_type, ?required_type, "incompatible types");
                         panic!("incompatible types new_from_slice");
                     }
                 } else {
                     todo!()
                 }
             }
-            Literal::SlicePair(encountered_key_type, encountered_value_type, resolved_items) => {
-                if let Type::SlicePair(key_type, value_type) = found_expected_type {
-                    if key_type.compatible_with(&encountered_key_type)
-                        && value_type.compatible_with(&encountered_value_type)
-                    {
-                        let slice_literal = Literal::SlicePair(
-                            *key_type.clone(),
-                            *value_type.clone(),
-                            resolved_items.clone(),
-                        );
-                        let expr = self.create_expr(
-                            ExpressionKind::Literal(slice_literal),
-                            found_expected_type.clone(),
-                            ast_node,
-                        );
-                        // If it was just a slice, then we are done
-                        Some(expr)
-                    } else {
-                        todo!()
-                    }
+            Literal::SlicePair(slice_type, resolved_items) => {
+                if slice_type.compatible_with(found_expected_type) {
+                    let slice_literal =
+                        Literal::SlicePair(slice_type.clone(), resolved_items.clone());
+                    let expr = self.create_expr(
+                        ExpressionKind::Literal(slice_literal),
+                        slice_type.clone(),
+                        ast_node,
+                    );
+                    // If it was just a slice, then we are done
+                    Some(expr)
                 } else if let Some(found) = self
                     .shared
                     .state
                     .associated_impls
-                    .get_internal_member_function(found_expected_type, "new_from_slice")
+                    .get_internal_member_function(found_expected_type, "new_from_slice_pair")
                 {
-                    if encountered_key_type
-                        .compatible_with(&found.signature.parameters[0].resolved_type)
-                        && encountered_value_type
-                            .compatible_with(&found.signature.parameters[1].resolved_type)
-                    {
-                        let slice_literal = Literal::SlicePair(
-                            encountered_key_type.clone(),
-                            encountered_value_type.clone(),
-                            resolved_items.clone(),
-                        );
-                        let slice_type = Type::SlicePair(
-                            encountered_key_type.clone().into(),
-                            encountered_value_type.clone().into(),
-                        );
+                    if slice_type.compatible_with(&found.signature.parameters[0].resolved_type) {
+                        let slice_literal =
+                            Literal::SlicePair(slice_type.clone(), resolved_items.clone());
+
                         let expr = self.create_expr(
                             ExpressionKind::Literal(slice_literal),
                             slice_type.clone(),

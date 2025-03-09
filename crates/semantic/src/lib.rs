@@ -631,7 +631,7 @@ pub enum Literal {
     TupleLiteral(Vec<Type>, Vec<Expression>),
 
     Slice(Type, Vec<Expression>),
-    SlicePair(Type, Type, Vec<(Expression, Expression)>),
+    SlicePair(Type, Vec<(Expression, Expression)>),
 }
 
 #[derive(Debug, Clone)]

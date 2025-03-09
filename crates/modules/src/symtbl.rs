@@ -22,18 +22,6 @@ pub enum FuncDef {
     External(ExternalFunctionDefinitionRef),
 }
 
-#[derive(Clone, Debug)]
-pub enum GeneratorKind {
-    Slice,
-    SlicePair,
-}
-
-#[derive(Clone, Debug)]
-pub struct TypeGenerator {
-    pub kind: GeneratorKind,
-    pub arity: usize,
-}
-
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct TypeParameterName {
     pub resolved_node: Node,
@@ -54,17 +42,13 @@ pub enum Symbol {
     Constant(ConstantRef),
     FunctionDefinition(FuncDef),
     Alias(AliasTypeRef),
-    TypeGenerator(TypeGenerator),
     Blueprint(ParameterizedTypeBlueprint),
 }
 
 impl Symbol {
     #[must_use]
     pub const fn is_basic_type(&self) -> bool {
-        matches!(
-            self,
-            Self::Type(..) | Self::Alias(..) | Self::TypeGenerator(..)
-        )
+        matches!(self, Self::Type(..) | Self::Alias(..))
     }
 }
 
@@ -547,16 +531,6 @@ impl SymbolTable {
     ) -> Result<(), SemanticError> {
         self.insert_symbol(name, Symbol::PackageVersion(version))
             .map_err(|_| SemanticError::DuplicateNamespaceLink(name.to_string()))?;
-        Ok(())
-    }
-
-    pub fn add_type_generator(
-        &mut self,
-        name: &str,
-        type_generator: TypeGenerator,
-    ) -> Result<(), SemanticError> {
-        self.insert_symbol(name, Symbol::TypeGenerator(type_generator))
-            .map_err(|_| SemanticError::DuplicateSymbolName(name.to_string()))?;
         Ok(())
     }
 
