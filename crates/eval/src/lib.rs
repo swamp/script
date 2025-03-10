@@ -1337,7 +1337,7 @@ impl<'a, C> Interpreter<'a, C> {
         };
 
         self.depth -= 1;
-        self.debug_expr(expr);
+        //self.debug_expr(expr);
         //info!(?value, "resulted in value");
         Ok(value)
     }
@@ -1521,6 +1521,18 @@ impl<'a, C> Interpreter<'a, C> {
                 Value::Unit
             }
 
+            IntrinsicFunction::VecSubscript => match &mut *value_ref.borrow_mut() {
+                Value::Vec(_type_id, vector) => {
+                    let index = self.evaluate_expression(&arguments[0])?;
+                    let index_int = index.expect_int()?;
+                    let r = vector[index_int as usize].borrow();
+                    r.clone()
+                }
+                _ => {
+                    return Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, node))?;
+                }
+            },
+
             IntrinsicFunction::VecLen => match &mut *value_ref.borrow_mut() {
                 Value::Vec(_type_id, vector) => {
                     let length = vector.len();
@@ -1556,6 +1568,13 @@ impl<'a, C> Interpreter<'a, C> {
                     }
                 }
             }
+
+            IntrinsicFunction::MapLen => match value_ref.borrow().clone() {
+                Value::Map(_key_type, ref seq_map) => Value::Int(seq_map.len() as i32),
+                _ => {
+                    return Err(self.create_err(ExecuteErrorKind::NotAMap, node));
+                }
+            },
 
             IntrinsicFunction::MapRemove => {
                 let index_val = self.evaluate_expression(&arguments[0])?;
