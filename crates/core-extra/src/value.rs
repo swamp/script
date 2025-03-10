@@ -769,7 +769,7 @@ impl Display for Value {
                 write!(
                     f,
                     "{}::{}(",
-                    enum_name.common.owner.assigned_name, enum_name.common.assigned_name,
+                    enum_name.common.assigned_name, enum_name.common.assigned_name,
                 )?;
 
                 for (index, field) in fields_in_order.iter().enumerate() {
@@ -795,7 +795,7 @@ impl Display for Value {
                 write!(
                     f,
                     "{}::{}{{",
-                    struct_variant.common.owner.assigned_name, struct_variant.common.assigned_name,
+                    struct_variant.common.assigned_name, struct_variant.common.assigned_name,
                 )?;
 
                 for (index, (field_name, value)) in decorated_values.iter().enumerate() {
@@ -812,7 +812,7 @@ impl Display for Value {
                 write!(
                     f,
                     "{}::{}",
-                    enum_variant_type_ref.common.owner.assigned_name,
+                    enum_variant_type_ref.common.assigned_name,
                     enum_variant_type_ref.common.assigned_name,
                 )
             }

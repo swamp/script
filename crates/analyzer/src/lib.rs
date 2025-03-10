@@ -1235,6 +1235,7 @@ impl<'a> Analyzer<'a> {
                             &index_expr.node,
                         );
                     } else {
+                        error!(?collection_type, "missing subscript");
                         return Err(
                             self.create_err(ErrorKind::MissingSubscriptMember, &index_expr.node)
                         );
@@ -1385,7 +1386,32 @@ impl<'a> Analyzer<'a> {
             Type::String => (Some(Type::Int), Type::String),
             Type::Iterable(item_type) => (None, *item_type.clone()),
 
-            _ => return Err(self.create_err(ErrorKind::NotAnIterator, &expression.expression.node)),
+            _ => {
+                if let Some(found_iter_fn) = self
+                    .shared
+                    .state
+                    .associated_impls
+                    .get_internal_member_function(resolved_type, "iter")
+                {
+                    let ret_type = found_iter_fn.signature.return_type.clone();
+                    match *ret_type {
+                        Type::Tuple(tuple_items) => {
+                            info!(ty=?tuple_items[1].clone(), "iter value");
+                            (Some(tuple_items[0].clone()), tuple_items[1].clone())
+                        }
+                        _ => {
+                            return Err(self.create_err(
+                                ErrorKind::NotAnIterator,
+                                &expression.expression.node,
+                            ));
+                        }
+                    }
+                } else {
+                    return Err(
+                        self.create_err(ErrorKind::NotAnIterator, &expression.expression.node)
+                    );
+                }
+            }
         };
 
         Ok(Iterable {
@@ -2938,7 +2964,7 @@ impl<'a> Analyzer<'a> {
             .associated_impls
             .prepare(&instantiated_type);
         for (name, func) in &new_impls {
-            info!(?name, ?func, id=?instantiated_type, "ADDING");
+            //info!(?name, ?func, id=?instantiated_type, "ADDING");
             self.shared.state.associated_impls.add_member_function(
                 &instantiated_type,
                 &*name,

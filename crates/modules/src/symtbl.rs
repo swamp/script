@@ -299,9 +299,9 @@ impl SymbolTable {
         Ok(())
     }
 
-    pub fn add_enum_type(&mut self, enum_type: EnumType) -> Result<EnumType, SemanticError> {
+    pub fn add_enum_type(&mut self, enum_type: EnumType) -> Result<(), SemanticError> {
         self.add_enum_type_link(enum_type.clone())?;
-        Ok(enum_type)
+        Ok(())
     }
 
     pub fn add_enum_type_link(&mut self, enum_type_ref: EnumType) -> Result<(), SemanticError> {
@@ -311,27 +311,6 @@ impl SymbolTable {
             .map_err(|_| SemanticError::DuplicateEnumType(enum_type_ref.assigned_name.clone()))?;
 
         Ok(())
-    }
-
-    pub fn add_enum_variant(
-        &mut self,
-        enum_type_name: &mut EnumType,
-        enum_variant_ref: EnumVariantType,
-    ) -> Result<EnumVariantType, SemanticError> {
-        enum_type_name
-            .variants
-            .insert(
-                enum_variant_ref.common().assigned_name.clone(),
-                enum_variant_ref.clone(),
-            )
-            .map_err(|_err| {
-                SemanticError::DuplicateEnumVariantType(
-                    enum_type_name.assigned_name.clone(),
-                    enum_variant_ref.common().assigned_name.clone(),
-                )
-            })?;
-
-        Ok(enum_variant_ref)
     }
 
     pub fn add_internal_function(

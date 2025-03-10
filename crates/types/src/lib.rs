@@ -517,12 +517,11 @@ pub struct EnumVariantCommon {
     pub name: Node,
     pub assigned_name: String,
     pub container_index: u8,
-    pub owner: EnumType,
 }
 
 impl Debug for EnumVariantCommon {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{}::{}", self.owner.assigned_name, self.assigned_name)
+        write!(f, "{}::{}", self.assigned_name, self.assigned_name)
     }
 }
 

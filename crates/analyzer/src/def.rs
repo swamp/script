@@ -142,25 +142,15 @@ impl Analyzer<'_> {
         &mut self,
         enum_type_name: &swamp_script_ast::LocalTypeIdentifierWithOptionalTypeVariables,
         ast_variants: &[swamp_script_ast::EnumVariantType],
-    ) -> Result<EnumType, Error> {
+    ) -> Result<(), Error> {
         let mut resolved_variants = SeqMap::new();
 
-        let enum_parent = EnumType {
+        let mut new_enum_type = EnumType {
             name: self.to_node(&enum_type_name.name),
             assigned_name: self.get_text(&enum_type_name.name).to_string(),
             module_path: vec![],
             variants: SeqMap::default(),
         };
-
-        let mut parent_ref = self
-            .shared
-            .definition_table
-            .add_enum_type(enum_parent)
-            .map_err(|err| self.create_err(ErrorKind::SemanticError(err), &enum_type_name.name))?;
-        self.shared
-            .lookup_table
-            .add_enum_type_link(parent_ref.clone())
-            .map_err(|err| self.create_err(ErrorKind::SemanticError(err), &enum_type_name.name))?;
 
         for (container_index_usize, ast_variant_type) in ast_variants.iter().enumerate() {
             let variant_name_node = match ast_variant_type {
@@ -173,7 +163,6 @@ impl Analyzer<'_> {
                 name: self.to_node(variant_name_node),
                 assigned_name: self.get_text(variant_name_node).to_string(),
                 container_index: container_index_usize as u8,
-                owner: parent_ref.clone(),
             };
 
             let variant_type = match ast_variant_type {
@@ -236,9 +225,19 @@ impl Analyzer<'_> {
                 .map_err(|_| self.create_err(ErrorKind::DuplicateFieldName, variant_name_node))?;
         }
 
-        parent_ref.variants = resolved_variants;
+        new_enum_type.variants = resolved_variants;
 
-        Ok(parent_ref)
+        self.shared
+            .definition_table
+            .add_enum_type(new_enum_type.clone())
+            .map_err(|err| self.create_err(ErrorKind::SemanticError(err), &enum_type_name.name))?;
+
+        self.shared
+            .lookup_table
+            .add_enum_type_link(new_enum_type.clone())
+            .map_err(|err| self.create_err(ErrorKind::SemanticError(err), &enum_type_name.name))?;
+
+        Ok(())
     }
 
     /// # Errors

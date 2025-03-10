@@ -86,6 +86,7 @@ impl Instantiator {
         self_type: &Type,
         scope: &TypeVariableScope,
     ) -> Result<(bool, Signature), Error> {
+        info!(?scope, "START instantiate signature");
         let mut was_replaced = false;
         let mut instantiated_type_for_parameters = Vec::new();
         for type_for_parameter in &signature.parameters {
@@ -156,6 +157,7 @@ impl Instantiator {
         ty: &Type,
         type_variables: &TypeVariableScope,
     ) -> Result<(bool, Type), Error> {
+        info!(?ty, "about to replace");
         let (replaced, result_type) = match ty {
             Type::Generic(parameterized_type, arguments) => {
                 let (_was_replaced, new_arguments) =
@@ -183,12 +185,20 @@ impl Instantiator {
                     .type_variables
                     .get(type_variable)
                     .ok_or(SemanticError::UnknownTypeVariable)?;
+                info!(?found_type, "must lookup variable");
+                assert!(found_type.is_concrete());
                 (true, found_type.clone())
             }
 
             Type::Blueprint(blueprint) => {
                 error!(?blueprint, "not allowed with blueprints here for types");
                 panic!("not allowed")
+            }
+
+            Type::Tuple(types) => {
+                let (was_replaced, new_types) =
+                    Self::instantiate_types_if_needed(types, &type_variables)?;
+                (was_replaced, Type::Tuple(new_types))
             }
 
             _ => (false, ty.clone()),
