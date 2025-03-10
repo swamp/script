@@ -62,6 +62,24 @@ pub struct InternalFunctionDefinition {
     pub signature: Signature,
 }
 
+impl Default for InternalFunctionDefinition {
+    fn default() -> Self {
+        Self {
+            body: Expression {
+                ty: Type::Never,
+                node: Default::default(),
+                kind: ExpressionKind::Break,
+            },
+            name: LocalIdentifier(Default::default()),
+            assigned_name: "".to_string(),
+            signature: Signature {
+                parameters: vec![],
+                return_type: Box::new(Type::Never),
+            },
+        }
+    }
+}
+
 impl Debug for InternalFunctionDefinition {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}\n{:?}", self.signature, self.body)
