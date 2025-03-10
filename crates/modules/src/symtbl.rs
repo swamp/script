@@ -65,12 +65,6 @@ impl SymbolTable {
 
 pub type SymbolTableRef = Rc<SymbolTable>;
 
-impl Default for SymbolTable {
-    fn default() -> Self {
-        Self::new(&[])
-    }
-}
-
 impl SymbolTable {
     #[must_use]
     pub fn new(module_path: &[String]) -> Self {

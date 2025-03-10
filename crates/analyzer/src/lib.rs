@@ -396,8 +396,8 @@ impl<'a> Analyzer<'a> {
     ) -> Self {
         let shared = SharedState {
             state,
-            lookup_table: SymbolTable::default(),
-            definition_table: SymbolTable::default(),
+            lookup_table: SymbolTable::new(&[]),
+            definition_table: SymbolTable::new(module_path),
             modules,
             core_symbol_table,
             source_map,
@@ -3023,7 +3023,7 @@ impl<'a> Analyzer<'a> {
                             "new_from_slice",
                             &[arg],
                             ast_node,
-                            &slice_type.clone(),
+                            &found_expected_type.clone(),
                         )?;
 
                         let call_expr = self.create_expr(call_kind, slice_type.clone(), ast_node);
