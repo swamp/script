@@ -14,6 +14,7 @@ use swamp_script_parser::{AstParser, SpecificError};
 use swamp_script_source_map::{FileId, SourceMap};
 use tracing::debug;
 pub struct ParseRoot;
+use tracing::info;
 
 #[derive(Debug)]
 pub enum ParseRootError {
@@ -101,6 +102,7 @@ impl ParseRoot {
 pub struct ModuleInfo {
     path: Vec<String>,
     imports: Vec<Vec<String>>,
+    uses: Vec<Vec<String>>,
     parsed: bool,
     analyzed: bool,
 }
@@ -165,8 +167,9 @@ pub const LOCAL_ROOT_PACKAGE_PATH: &str = "crate";
 pub fn get_all_local_paths(
     source_map: &SourceMap,
     parsed_module: &ParsedAstModule,
-) -> Vec<Vec<String>> {
+) -> (Vec<Vec<String>>, Vec<Vec<String>>) {
     let mut imports = vec![];
+    let mut uses = vec![];
 
     for def in parsed_module.ast_module.definitions() {
         match def {
@@ -186,11 +189,28 @@ pub fn get_all_local_paths(
 
                 imports.push(sections);
             }
+
+            Definition::Use(import) => {
+                let mut sections = Vec::new();
+                for section_node in &import.module_path.0 {
+                    let import_path = source_map
+                        .get_span_source(
+                            parsed_module.file_id,
+                            section_node.span.offset as usize,
+                            section_node.span.length.into(),
+                        )
+                        .to_string();
+                    sections.push(import_path);
+                }
+                info!(?sections, "USE!!!");
+
+                uses.push(sections);
+            }
             _ => continue,
         }
     }
 
-    imports
+    (imports, uses)
 }
 
 pub fn module_path_to_relative_swamp_file(module_path_vec: &[String]) -> PathBuf {
@@ -235,6 +255,8 @@ pub fn parse_single_module(
     source_map: &mut SourceMap,
     module_path: &[String],
 ) -> Result<ParsedAstModule, DependencyError> {
+    info!(?module_path, "complete path");
+
     let mount_name = mount_name_from_path(&module_path);
 
     let (file_id, script) = source_map.read_file_relative(
@@ -278,8 +300,13 @@ impl DependencyParser {
                         .expect("we just inserted it")
                 };
 
-            let imports = get_all_local_paths(source_map, parsed_module_to_scan);
+            let (imports, uses) = get_all_local_paths(source_map, parsed_module_to_scan);
             let filtered_imports: Vec<Vec<String>> = imports
+                .into_iter()
+                .filter(|import| !self.already_resolved_modules.contains(import))
+                .collect();
+
+            let filtered_uses: Vec<Vec<String>> = uses
                 .into_iter()
                 .filter(|import| !self.already_resolved_modules.contains(import))
                 .collect();
@@ -290,6 +317,7 @@ impl DependencyParser {
                     ModuleInfo {
                         path: path.clone(),
                         imports: filtered_imports.clone(),
+                        uses: filtered_uses.clone(),
                         parsed: false,
                         analyzed: false,
                     },
@@ -297,6 +325,9 @@ impl DependencyParser {
                 .expect("TODO: panic message");
 
             to_parse.extend(filtered_imports.clone());
+
+            info!(?filtered_uses, "These should be done first!");
+            to_parse.extend(filtered_uses.clone()); // filtered uses must be last so it pops first
         }
         Ok(())
     }
@@ -332,6 +363,9 @@ impl DependencyParser {
             temp_visited.insert(Vec::from(path));
 
             if let Some(module) = graph.import_scanned_modules.get(&path.to_vec()) {
+                for import in &module.uses {
+                    visit(graph, import, visited, temp_visited, order)?;
+                }
                 for import in &module.imports {
                     visit(graph, import, visited, temp_visited, order)?;
                 }

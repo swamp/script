@@ -506,7 +506,19 @@ pub fn build_script_error(err: &ScriptResolveError, _source_map: &SourceMap) -> 
         ScriptResolveError::ResolveError(err) => build_resolve_error(err),
         ScriptResolveError::DepLoaderError(err) => panic!("{}", format!("err: {:?}", err)),
         ScriptResolveError::DependencyError(err) => panic!("{}", format!("err: {:?}", err)),
-        ScriptResolveError::LoaderError(err) => panic!("{}", format!("err: {:?}", err)),
+        ScriptResolveError::LoaderError(err) => build_loader_error(err),
+    }
+}
+
+pub fn build_loader_error(err: &LoaderErr) -> Builder<usize> {
+    match err {
+        LoaderErr::CouldNotLoad => {
+            Report::build(Kind::Error, 140, "could not load", &Span::default())
+        }
+        LoaderErr::SemanticError(semantic_err) => {
+            build_semantic_error(semantic_err, &Span::default())
+        }
+        LoaderErr::AnalyzerError(analyzer_err) => build_resolve_error(analyzer_err),
     }
 }
 

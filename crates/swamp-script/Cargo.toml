@@ -7,7 +7,7 @@ repository = "https://github.com/swamp/script"
 description = "script language for embedding"
 
 [dependencies]
-
+tiny-ver = "0.1.2"
 swamp-script-source-map = { path = "../source-map", version = "0.0.19" }
 
 # Parser

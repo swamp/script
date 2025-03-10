@@ -345,8 +345,9 @@ impl<'a> SharedState<'a> {
                     let mut new_path = path.to_vec();
                     let complete_name = format!("{}-{found_version}", path[0]);
                     info!(path=?path[0], found_version, complete_name, "switched out version");
-                    new_path[0] = complete_name;
-                    new_path
+                    // new_path[0] = complete_name;
+                    //new_path
+                    path.to_vec()
                 },
             )
         };

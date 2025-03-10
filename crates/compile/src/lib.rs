@@ -304,6 +304,7 @@ pub fn compile_and_analyze(
 ///
 pub fn bootstrap_and_compile(
     source_map: &mut SourceMap,
+    root_dependencies: SeqMap<String, TinyVersion>,
     root_path: &[String],
 ) -> Result<Program, ScriptResolveError> {
     let registry_path = swamp_registry_path().unwrap();
@@ -321,6 +322,13 @@ pub fn bootstrap_and_compile(
         .unwrap()
         .symbol_table
         .clone();
+
+    for (package_name, tiny_version) in root_dependencies {
+        program
+            .default_symbol_table
+            .add_package_version(&package_name, tiny_version)
+            .unwrap()
+    }
 
     compile_and_analyze_all_modules(
         root_path,
