@@ -772,7 +772,7 @@ impl AssociatedImpls {
                 return Some(func);
             }
         }
-        info!(?self.functions, "could not find member, this is what I have");
+        info!(?ty, function_name, "could not find member, this is what I have");
         None
     }
 
