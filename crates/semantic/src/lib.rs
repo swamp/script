@@ -413,8 +413,7 @@ pub enum PostfixKind {
     FunctionCall(Vec<ArgumentExpressionOrLocation>),
     OptionUnwrap, // ? operator
     NoneCoalesce(Expression),
-
-    IntrinsicCallEx(IntrinsicFunction, Vec<ArgumentExpressionOrLocation>),
+    //IntrinsicCallEx(IntrinsicFunction, Vec<ArgumentExpressionOrLocation>),
     IntrinsicCall(IntrinsicFunction, Vec<Expression>),
 }
 
@@ -612,7 +611,8 @@ pub enum ExpressionKind {
         Vec<Expression>,
     ),
 
-    IntrinsicCallGeneric(IntrinsicFunction, Vec<Type>, Vec<Expression>),
+    //IntrinsicCall(IntrinsicFunction, Vec<Expression>),
+    IntrinsicCallEx(IntrinsicFunction, Vec<ArgumentExpressionOrLocation>),
 }
 
 #[derive(Debug, Clone)]
@@ -772,7 +772,10 @@ impl AssociatedImpls {
                 return Some(func);
             }
         }
-        info!(?ty, function_name, "could not find member, this is what I have");
+        info!(
+            ?ty,
+            function_name, "could not find member, this is what I have"
+        );
         None
     }
 

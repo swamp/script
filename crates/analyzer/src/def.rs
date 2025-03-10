@@ -453,7 +453,10 @@ impl Analyzer<'_> {
                         &param.resolved_type.clone(),
                     )?;
                 }
-                let function_name = self.get_text(&function_data.declaration.name).to_string();
+                let function_name = self
+                    .get_text(&function_data.declaration.name)
+                    .trim()
+                    .to_string();
                 let statements =
                     self.analyze_function_body_expression(&function_data.body, &return_type)?;
                 self.scope.return_type = Type::Unit;

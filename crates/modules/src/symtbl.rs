@@ -13,6 +13,7 @@ use swamp_script_semantic::prelude::*;
 use swamp_script_types::ParameterizedTypeBlueprint;
 use swamp_script_types::prelude::*;
 use tiny_ver::TinyVersion;
+use tracing::info;
 
 #[derive(Debug, Clone)]
 pub enum FuncDef {

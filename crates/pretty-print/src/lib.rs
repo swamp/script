@@ -470,6 +470,10 @@ impl SourceMapDisplay<'_> {
             ExpressionKind::IntrinsicFunctionAccess(intrinsic_func_def) => {
                 write!(f, "intrinsic_access {intrinsic_func_def:?}")
             }
+            ExpressionKind::IntrinsicCallEx(intrinsic_func_def, args) => {
+                write!(f, "intrinsic_call{intrinsic_func_def:?}")?;
+                self.show_arguments(f, args, tabs + 1)
+            }
             _ => todo!(),
         }
     }
@@ -566,7 +570,20 @@ impl SourceMapDisplay<'_> {
             }
             PostfixKind::OptionUnwrap => todo!(),
             PostfixKind::NoneCoalesce(_) => todo!(),
-            PostfixKind::IntrinsicCallEx(_, _) | PostfixKind::IntrinsicCall(_, _) => todo!(),
+            /*
+            PostfixKind::IntrinsicCallEx(intrinsic_fn, arguments) => {
+                write!(f, "[intrinsic_call_ex: {intrinsic_fn:?}")?;
+                self.show_arguments(f, arguments, tabs + 1)?;
+                write!(f, "]")
+            }
+
+
+             */
+            PostfixKind::IntrinsicCall(intrinsic_fn, arguments) => {
+                write!(f, "[intrinsic_call: {intrinsic_fn:?}")?;
+                self.show_expressions(f, arguments, tabs + 1)?;
+                write!(f, "]")
+            }
         }
     }
 

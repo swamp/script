@@ -641,7 +641,7 @@ impl<'a> Analyzer<'a> {
         ast_expression: &swamp_script_ast::Expression,
         context: &TypeContext,
     ) -> Result<Expression, Error> {
-        self.debug_expression(&ast_expression);
+        //self.debug_expression(&ast_expression);
 
         let expr = self.analyze_expression_internal(ast_expression, context)?;
 
@@ -1090,23 +1090,31 @@ impl<'a> Analyzer<'a> {
         &mut self,
         chain: &swamp_script_ast::PostfixChain,
     ) -> Result<Expression, Error> {
-        /*
-        if let swamp_script_ast::ExpressionKind::StaticMemberFunctionReference(
-            qualified_type_reference,
-            member_name,
-        ) = &chain.base.kind
-        {
-            if let Some(found_expr) =
-                self.check_for_internal_static_call(qualified_type_reference, member_name, &[])?
-            {
-                return Ok(found_expr);
-            }
-        }
-
-             */
-
         let (start, is_mutable) =
             self.analyze_start_chain_expression_get_mutability(&chain.base, None)?;
+
+        if let ExpressionKind::IntrinsicFunctionAccess(some_access) = &start.kind {
+            assert_eq!(chain.postfixes.len(), 1);
+            let call_postifx = &chain.postfixes[0];
+            if let swamp_script_ast::Postfix::FunctionCall(member, arguments) = &call_postifx {
+                let resolved_arguments = self.analyze_and_verify_parameters(
+                    &start.node,
+                    &some_access.signature.parameters,
+                    &arguments,
+                )?;
+
+                return Ok(self.create_expr(
+                    ExpressionKind::IntrinsicCallEx(
+                        some_access.intrinsic.clone(),
+                        resolved_arguments,
+                    ),
+                    *some_access.signature.return_type.clone(),
+                    &chain.base.node,
+                ));
+            } else {
+                panic!("not sure here");
+            }
+        }
 
         let mut tv = TypeWithMut {
             resolved_type: start.ty.clone(),
@@ -1185,9 +1193,12 @@ impl<'a> Analyzer<'a> {
                             &signature.parameters,
                             arguments,
                         )?;
+
+                        let call_kind = PostfixKind::FunctionCall(resolved_arguments);
+
                         self.add_postfix(
                             &mut suffixes,
-                            PostfixKind::FunctionCall(resolved_arguments),
+                            call_kind,
                             *signature.return_type.clone(),
                             node,
                         );
@@ -2217,14 +2228,11 @@ impl<'a> Analyzer<'a> {
                             ExpressionKind::Block(expressions) => {
                                 assert_eq!(expressions.len(), 1);
                                 let first_kind = &expressions[0].kind;
-                                if let ExpressionKind::PostfixChain(start, args) = first_kind {
-                                    info!(?start, "first");
-                                    match &start.kind {
-                                        ExpressionKind::IntrinsicFunctionAccess(intrinsic_def) => {
-                                            intrinsic_def.intrinsic.clone()
-                                        }
-                                        _ => panic!("illegal subscript_mut"),
-                                    }
+                                if let ExpressionKind::IntrinsicCallEx(intrinsic_fn, args) =
+                                    first_kind
+                                {
+                                    info!(?intrinsic_fn, "first");
+                                    intrinsic_fn.clone()
                                 } else {
                                     panic!("must be postfix");
                                 }

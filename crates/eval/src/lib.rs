@@ -407,21 +407,21 @@ impl<'a, C> Interpreter<'a, C> {
                         //is_mutable = false;
                         //val
                     } /*
-                      LocationAccessKind::ArrayIndex(_array_type_ref, index_expr) => {
-                          let index = self
-                              .evaluate_expression(index_expr)?
-                              .expect_int()
-                              .map_err(|_| self.create_err(ExecuteErrorKind::ExpectedArray, node))?;
+                        LocationAccessKind::ArrayIndex(_array_type_ref, index_expr) => {
+                            let index = self
+                                .evaluate_expression(index_expr)?
+                                .expect_int()
+                                .map_err(|_| self.create_err(ExecuteErrorKind::ExpectedArray, node))?;
 
-                          let borrowed = value_ref.borrow();
+                            let borrowed = value_ref.borrow();
 
-                          let (_array_ref, fields) = borrowed
-                              .expect_array()
-                              .map_err(|_| self.create_err(ExecuteErrorKind::ExpectedArray, node))?;
-                          fields[index as usize].clone()
-                      }
+                            let (_array_ref, fields) = borrowed
+                                .expect_array()
+                                .map_err(|_| self.create_err(ExecuteErrorKind::ExpectedArray, node))?;
+                            fields[index as usize].clone()
+                        }
 
-                       */
+                         */
 
                       /*
 
@@ -1018,17 +1018,13 @@ impl<'a, C> Interpreter<'a, C> {
                 self.evaluate_intrinsic_mut(&expr.node, intrinsic, location, arguments)?
             }
 
-            ExpressionKind::IntrinsicCallGeneric(intrinsic, type_parameters, arguments) => {
-                self.evaluate_intrinsic_generic(&expr.node, intrinsic, type_parameters, arguments)?
-            }
-
             ExpressionKind::MapAssignment(map, index, value) => {
                 let map_val = self.evaluate_location(&map.0)?;
                 let index_val = self.evaluate_expression(index)?;
                 let new_val = self.evaluate_expression(value)?;
 
                 match &mut *map_val.borrow_mut() {
-                    Value::Map(_key_type, _value_type, elements) => {
+                    Value::Map(_key_type, elements) => {
                         elements
                             .insert(index_val, Rc::new(RefCell::new(new_val)))
                             .map_err(|_| {
@@ -1088,6 +1084,10 @@ impl<'a, C> Interpreter<'a, C> {
             // Calling
             ExpressionKind::FunctionCall(_signature, expr, arguments) => {
                 self.evaluate_function_call(expr, arguments)?
+            }
+
+            ExpressionKind::IntrinsicCallEx(intrinsic, arguments) => {
+                self.eval_intrinsic(&expr.node, intrinsic, arguments)?
             }
 
             /*
@@ -1315,7 +1315,7 @@ impl<'a, C> Interpreter<'a, C> {
 
             ExpressionKind::MapIndexAccess(expr, _map_type_ref, _value_type, key_expr) => {
                 let resolved_expr = self.evaluate_expression(expr)?;
-                let (_map_type, _value_type, seq_map) = resolved_expr
+                let (_map_type, seq_map) = resolved_expr
                     .expect_map()
                     .map_err(|_| self.create_err(ExecuteErrorKind::ExpectedMap, &expr.node))?;
 
@@ -1331,11 +1331,13 @@ impl<'a, C> Interpreter<'a, C> {
                 let x = value_ref.borrow().clone();
                 x
             }
-            ExpressionKind::IntrinsicFunctionAccess(_) => todo!(),
+            ExpressionKind::IntrinsicFunctionAccess(_) => panic!(
+                "Intrinsic Function Access should have been converted to IntrinsicFunctionCalls before eval"
+            ),
         };
 
         self.depth -= 1;
-        //self.debug_expr(expr);
+        self.debug_expr(expr);
         //info!(?value, "resulted in value");
         Ok(value)
     }
@@ -1438,15 +1440,38 @@ impl<'a, C> Interpreter<'a, C> {
     }
 
     #[allow(clippy::too_many_lines)]
-    fn eval_intrinsic_postfix(
+    fn eval_intrinsic(
         &mut self,
         node: &Node,
-        value_ref: &ValueRef,
-        //        resolved_postfix: &Postfix,
         intrinsic_function: &IntrinsicFunction,
-        arguments: &[Expression],
+        arguments: &[ArgumentExpressionOrLocation],
     ) -> Result<Value, ExecuteError> {
-        //let node = &resolved_postfix.node;
+        let self_value = self.evaluate_argument(&arguments[0])?;
+
+        let mut expressions = Vec::new();
+        for arg in &arguments[1..] {
+            match arg {
+                ArgumentExpressionOrLocation::Location(_loc) => panic!("not supported"),
+                ArgumentExpressionOrLocation::Expression(expr) => expressions.push(expr),
+            }
+        }
+
+        self.eval_intrinsic_internal(
+            node,
+            intrinsic_function,
+            self_value.to_value_ref(),
+            &expressions,
+        )
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn eval_intrinsic_internal(
+        &mut self,
+        node: &Node,
+        intrinsic_function: &IntrinsicFunction,
+        value_ref: ValueRef,
+        arguments: &[&Expression],
+    ) -> Result<Value, ExecuteError> {
         let val = match &intrinsic_function {
             IntrinsicFunction::VecRemoveIndex => {
                 let index_val = self.evaluate_expression(&arguments[0])?;
@@ -1478,6 +1503,11 @@ impl<'a, C> Interpreter<'a, C> {
                 Value::Unit
             }
 
+            IntrinsicFunction::VecFromSlice => {
+                let (slice_type, values) = value_ref.borrow().expect_slice()?;
+                Value::Vec(slice_type, values)
+            }
+
             IntrinsicFunction::VecPush => {
                 match &mut *value_ref.borrow_mut() {
                     Value::Vec(_type_id, vector) => {
@@ -1507,11 +1537,17 @@ impl<'a, C> Interpreter<'a, C> {
                 _ => Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, node))?,
             },
 
+            IntrinsicFunction::MapFromSlicePair => {
+                let borrow = value_ref.borrow();
+                let (slice_pair_type, seq_map) = borrow.expect_slice_pair()?;
+                Value::Map(slice_pair_type, seq_map.clone())
+            }
+
             IntrinsicFunction::MapHas => {
                 let index_val = self.evaluate_expression(&arguments[0])?;
 
                 match value_ref.borrow().clone() {
-                    Value::Map(_key_type, _value_type, ref seq_map) => {
+                    Value::Map(_key_type, ref seq_map) => {
                         let has_key = seq_map.contains_key(&index_val);
                         Value::Bool(has_key)
                     }
@@ -1527,7 +1563,7 @@ impl<'a, C> Interpreter<'a, C> {
                 let result = {
                     let mut borrowed = value_ref.borrow_mut();
                     match &mut *borrowed {
-                        Value::Map(_key_type, _value_type, seq_map) => {
+                        Value::Map(_key_type, seq_map) => {
                             let x = seq_map.remove(&index_val);
                             x.map_or_else(
                                 || Value::Option(None),
@@ -1980,6 +2016,7 @@ impl<'a, C> Interpreter<'a, C> {
                     val_ref = Rc::new(RefCell::new(val));
                     is_mutable = false;
                 }
+
                 PostfixKind::OptionUnwrap => {
                     val_ref = {
                         let borrowed = val_ref.borrow();
@@ -2004,6 +2041,7 @@ impl<'a, C> Interpreter<'a, C> {
                     is_mutable = false;
                     is_uncertain = true;
                 }
+                /*
                 PostfixKind::IntrinsicCall(intrinsic_fn, arguments) => {
                     val_ref = Rc::new(RefCell::new(self.eval_intrinsic_postfix(
                         &part.node,
@@ -2018,6 +2056,7 @@ impl<'a, C> Interpreter<'a, C> {
                     is_mutable = false;
                 }
 
+                 */
                 _ => {}
             }
         }

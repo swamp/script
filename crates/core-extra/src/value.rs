@@ -92,7 +92,7 @@ pub enum Value {
 
     // Containers
     Vec(Type, Vec<ValueRef>),
-    Map(Type, Type, SeqMap<Value, ValueRef>), // Do not change to HashMap, the order is important for it to be deterministic
+    Map(Type, SeqMap<Value, ValueRef>), // Do not change to HashMap, the order is important for it to be deterministic
     Tuple(Vec<Type>, Vec<ValueRef>),
     Sparse(Type, SparseValueMap),
     NamedStruct(NamedStructType, Vec<ValueRef>), // type of the struct, and the fields themselves in strict order
@@ -191,7 +191,7 @@ impl Value {
                 }
                 offset
             }
-            Self::Map(_key, _value, values) => {
+            Self::Map(_key, values) => {
                 let mut offset = 0;
 
                 let count: u16 = values.len() as u16;
@@ -308,13 +308,13 @@ impl Clone for Value {
                 Self::Vec(resolved_ref.clone(), deep_clone_valrefs(vec_refs))
             }
 
-            Self::Map(key, value, seq_map) => {
+            Self::Map(key, seq_map) => {
                 let cloned_seq_map = seq_map
                     .iter()
                     .map(|(key, val_ref)| (key.clone(), deep_clone_valref(val_ref)))
                     .collect();
 
-                Self::Map(key.clone(), value.clone(), cloned_seq_map)
+                Self::Map(key.clone(), cloned_seq_map)
             }
 
             Self::Slice(resolved_ref, vec_refs) => {
@@ -421,7 +421,7 @@ impl Value {
                     .collect::<Vec<Self>>()
                     .into_iter(),
             )),
-            Self::Map(_key, _value, seq_map) => Ok(Box::new(
+            Self::Map(_key, seq_map) => Ok(Box::new(
                 seq_map.into_values().map(|item| item.borrow().clone()),
             )),
             Self::Sparse(_x, sparse_map) => {
@@ -453,7 +453,7 @@ impl Value {
     ///
     pub fn into_iter_pairs(self) -> Result<Box<dyn Iterator<Item = (Self, Self)>>, ValueError> {
         let values = match self {
-            Self::Map(_, _, seq_map) => {
+            Self::Map(_, seq_map) => {
                 Box::new(seq_map.into_iter().map(|(k, v)| (k, v.borrow().clone())))
             }
             Self::Tuple(_type_ref, elements) => {
@@ -547,18 +547,16 @@ impl Value {
         }
     }
 
-    pub fn expect_map(&self) -> Result<(Type, Type, &SeqMap<Value, ValueRef>), ValueError> {
+    pub fn expect_map(&self) -> Result<(Type, &SeqMap<Value, ValueRef>), ValueError> {
         match self {
-            Self::Map(key, value, seq_map) => Ok((key.clone(), value.clone(), seq_map)),
+            Self::Map(key, seq_map) => Ok((key.clone(), seq_map)),
             _ => Err(ValueError::ConversionError("Expected map value".into())),
         }
     }
 
-    pub fn expect_map_mut(
-        &mut self,
-    ) -> Result<(Type, Type, &mut SeqMap<Value, ValueRef>), ValueError> {
+    pub fn expect_map_mut(&mut self) -> Result<(Type, &mut SeqMap<Value, ValueRef>), ValueError> {
         match self {
-            Self::Map(key, value, seq_map) => Ok((key.clone(), value.clone(), seq_map)),
+            Self::Map(key, seq_map) => Ok((key.clone(), seq_map)),
             _ => Err(ValueError::ConversionError("Expected map value".into())),
         }
     }
@@ -568,6 +566,24 @@ impl Value {
     pub fn expect_int(&self) -> Result<i32, ValueError> {
         match self {
             Self::Int(v) => Ok(*v),
+            _ => Err(ValueError::ConversionError("Expected int value".into())),
+        }
+    }
+
+    /// # Errors
+    ///
+    pub fn expect_slice(&self) -> Result<(Type, Vec<ValueRef>), ValueError> {
+        match self {
+            Self::Slice(ty, items) => Ok((ty.clone(), items.to_vec())),
+            _ => Err(ValueError::ConversionError("Expected int value".into())),
+        }
+    }
+
+    /// # Errors
+    ///
+    pub fn expect_slice_pair(&self) -> Result<(Type, &SeqMap<Value, ValueRef>), ValueError> {
+        match self {
+            Self::SlicePair(ty, seq_map) => Ok((ty.clone(), seq_map)),
             _ => Err(ValueError::ConversionError("Expected int value".into())),
         }
     }
@@ -676,7 +692,7 @@ impl Display for Value {
                 }
                 write!(f, "]")
             }
-            Self::Map(_key, _value, items) => {
+            Self::Map(_key, items) => {
                 write!(f, "[")?;
                 for (i, (key, val)) in items.iter().enumerate() {
                     if i > 0 {
@@ -850,9 +866,7 @@ impl PartialEq for Value {
             }
             (Self::Option(a), Self::Option(b)) => a == b,
             (Self::Vec(a, a_values), Self::Vec(b, b_values)) => (a == b) && a_values == b_values,
-            (Self::Map(a, a2, a_values), Self::Map(b, b2, b_values)) => {
-                (a == b) && (a2 == b2) && a_values == b_values
-            }
+            (Self::Map(a, a_values), Self::Map(b, b_values)) => (a == b) && a_values == b_values,
             (Self::Tuple(a, a_values), Self::Tuple(b, b_values)) => {
                 (a == b) && a_values == b_values
             }
@@ -898,7 +912,7 @@ impl Hash for Value {
                     v.borrow().hash(state);
                 }
             }
-            Self::Map(_, _, _items) => {}
+            Self::Map(_, _items) => {}
             Self::SlicePair(_, _items) => {}
             Self::Tuple(_, _arr) => {}
             Self::EnumVariantSimple(_) => (),
