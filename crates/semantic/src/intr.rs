@@ -58,6 +58,7 @@ pub enum IntrinsicFunction {
     MapRemove,
     MapIter,
     MapIterMut,
+    MapLen,
     MapSubscript,
     MapSubscriptMut,
 
@@ -150,6 +151,7 @@ impl fmt::Display for IntrinsicFunction {
             Self::MapSubscript => "map_subscript",
             Self::MapIter => "map_iter",
             Self::MapIterMut => "map_iter_mut",
+            Self::MapLen => "map_len",
 
             // Sparse
             Self::SparseNew => "sparse_new",

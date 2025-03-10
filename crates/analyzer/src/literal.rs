@@ -352,7 +352,7 @@ impl Analyzer<'_> {
         entries: &[(swamp_script_ast::Expression, swamp_script_ast::Expression)],
     ) -> Result<(Vec<(Expression, Expression)>, Type, Type), Error> {
         if entries.is_empty() {
-            return Err(self.create_err(ErrorKind::EmptyMapLiteral, node));
+            return Ok((vec![], Type::Unit, Type::Unit));
         }
 
         // Resolve first entry to determine map types

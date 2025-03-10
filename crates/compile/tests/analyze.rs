@@ -1425,6 +1425,8 @@ fn blueprint_add_with_field() {
         some_field: T,
     }
 
+
+
     impl JustTest<T> {
         fn nothing(self) -> JustTest<T> {
             self
@@ -1435,6 +1437,8 @@ fn blueprint_add_with_field() {
 
         external fn something(self) -> Int
     }
+
+    empty = [:]
 
     a = JustTest<Int> {
         some_field: 42,

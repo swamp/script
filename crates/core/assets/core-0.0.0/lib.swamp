@@ -428,6 +428,11 @@ impl Map<K, V> {
         map_has(self, key)
     }
 
+
+    fn len(self) -> Int {
+        map_len(self)
+    }
+
     /// Removes a key-value pair.
     ///
     /// # Parameters
@@ -437,7 +442,7 @@ impl Map<K, V> {
     ///
     /// # Returns
     /// An optional value of type `V` associated with the removed key.
-    fn remove_key(self, key: K) -> V? {
+    fn remove(self, key: K) -> V? {
         map_remove(self, key)
     }
 }
