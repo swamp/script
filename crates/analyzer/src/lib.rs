@@ -35,7 +35,9 @@ use swamp_script_semantic::{
 };
 use swamp_script_source_map::SourceMap;
 use swamp_script_types::prelude::*;
-use swamp_script_types::{ParameterizedTypeBlueprint, all_types_are_concrete};
+use swamp_script_types::{
+    ParameterizedTypeBlueprint, all_types_are_concrete, all_types_are_concrete_or_unit,
+};
 use tracing::{debug, error, info, trace};
 
 #[must_use]
@@ -1211,13 +1213,18 @@ impl<'a> Analyzer<'a> {
                         let subscript_lookup_context = TypeContext::new_argument(&required_type);
                         let analyzed_expr =
                             self.analyze_expression(index_expr, &subscript_lookup_context)?;
+
+                        let return_type = *found.signature().return_type.clone();
+                        info!(?return_type, "SUBSCRIPT RETURNED");
+
                         let argument = ArgumentExpressionOrLocation::Expression(analyzed_expr);
                         self.add_postfix(
                             &mut suffixes,
                             PostfixKind::MemberCall(cloned, vec![argument]),
-                            *found.signature().return_type.clone(),
+                            return_type.clone(),
                             &index_expr.node,
                         );
+                        tv.resolved_type = return_type.clone();
                     } else {
                         error!(?collection_type, "missing subscript");
                         return Err(
@@ -1972,6 +1979,8 @@ impl<'a> Analyzer<'a> {
 
             let ty = mut_expr.ty();
 
+            info!(?ty, "WHEN");
+
             if let Type::Optional(found_ty) = ty {
                 let variable_ref = self.create_variable(&variable_binding.variable, found_ty)?;
 
@@ -2228,6 +2237,8 @@ impl<'a> Analyzer<'a> {
                         let subscript_lookup_context = TypeContext::new_argument(&required_type);
                         let analyzed_expr =
                             self.analyze_expression(lookup_expr, &subscript_lookup_context)?;
+                        let return_type = *found.signature.return_type.clone();
+                        info!(?return_type, "SUBSCRIPT_MUT returned");
                         //let argument = ArgumentExpressionOrLocation::Expression(analyzed_expr);
                         self.add_location_item(
                             &mut items,
@@ -2235,7 +2246,7 @@ impl<'a> Analyzer<'a> {
                                 intrinsic_to_call,
                                 vec![analyzed_expr],
                             ),
-                            *found.signature.return_type.clone(),
+                            return_type,
                             &lookup_expr.node,
                         );
                     } else {
@@ -2884,7 +2895,7 @@ impl<'a> Analyzer<'a> {
         blueprint: &ParameterizedTypeBlueprint,
         analyzed_type_parameters: &[Type],
     ) -> Result<Type, Error> {
-        assert!(all_types_are_concrete(analyzed_type_parameters));
+        assert!(all_types_are_concrete_or_unit(analyzed_type_parameters));
 
         if let Some(existing) = self.shared.state.instantiation_cache.get(
             &blueprint.defined_in_module_path,
@@ -2981,7 +2992,7 @@ impl<'a> Analyzer<'a> {
             //            Symbol::Type(base_type) => base_type.clone(),
             //          Symbol::Alias(alias_type) => alias_type.referenced_type.clone(),
             Symbol::Blueprint(blueprint) => {
-                if all_types_are_concrete(analyzed_type_parameters) {
+                if all_types_are_concrete_or_unit(analyzed_type_parameters) {
                     self.instantiate_blueprint_and_members(blueprint, analyzed_type_parameters)?
                 } else {
                     Type::Generic(blueprint.clone(), analyzed_type_parameters.to_vec())

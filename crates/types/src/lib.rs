@@ -639,6 +639,15 @@ pub fn all_types_are_concrete(types: &[Type]) -> bool {
     true
 }
 
+pub fn all_types_are_concrete_or_unit(types: &[Type]) -> bool {
+    for ty in types {
+        if !ty.is_concrete() && *ty != Type::Unit {
+            return false;
+        }
+    }
+    true
+}
+
 pub fn all_types_are_variables(types: &[Type]) -> bool {
     for ty in types {
         if let Type::Variable(_) = ty {

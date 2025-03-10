@@ -70,7 +70,7 @@ impl Analyzer<'_> {
                 {
                     let required_type = &found.signature.parameters[0].resolved_type;
                     info!(?found.signature, "found signature");
-                    if slice_type.compatible_with(required_type) {
+                    if resolved_items.is_empty() || slice_type.compatible_with(required_type) {
                         let slice_literal =
                             Literal::Slice(slice_type.clone(), resolved_items.clone());
 
@@ -141,7 +141,9 @@ impl Analyzer<'_> {
                     .associated_impls
                     .get_internal_member_function(&found_expected_type, "new_from_slice_pair")
                 {
-                    if slice_pair_type.compatible_with(&found.signature.parameters[0].resolved_type)
+                    if resolved_items.is_empty()
+                        || slice_pair_type
+                            .compatible_with(&found.signature.parameters[0].resolved_type)
                     {
                         let slice_literal =
                             Literal::SlicePair(slice_pair_type.clone(), resolved_items.clone());

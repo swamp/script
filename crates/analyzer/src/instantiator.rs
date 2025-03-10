@@ -7,6 +7,7 @@ use swamp_script_semantic::prelude::InstantiationCache;
 use swamp_script_types::{
     AnonymousStructType, NamedStructType, ParameterizedTypeBlueprint, ParameterizedTypeKind,
     Signature, StructTypeField, Type, TypeForParameter, all_types_are_concrete,
+    all_types_are_concrete_or_unit,
 };
 use tracing::{error, info};
 
@@ -59,7 +60,7 @@ impl Instantiator {
             panic!("wrong parameter count")
         }
 
-        assert!(all_types_are_concrete(concrete_types));
+        assert!(all_types_are_concrete_or_unit(concrete_types));
 
         let mut scope = SeqMap::new();
         for (param, concrete) in variables.iter().zip(concrete_types) {
@@ -199,6 +200,12 @@ impl Instantiator {
                 let (was_replaced, new_types) =
                     Self::instantiate_types_if_needed(types, &type_variables)?;
                 (was_replaced, Type::Tuple(new_types))
+            }
+
+            Type::Optional(inner_type) => {
+                let (was_replaced, new_type) =
+                    Self::instantiate_type_if_needed(inner_type, &type_variables)?;
+                (was_replaced, Type::Optional(Box::new(new_type)))
             }
 
             _ => (false, ty.clone()),
