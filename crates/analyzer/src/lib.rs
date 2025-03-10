@@ -803,23 +803,7 @@ impl<'a> Analyzer<'a> {
             }
 
             swamp_script_ast::ExpressionKind::Literal(literal) => {
-                let (lit, lit_type) =
-                    self.analyze_literal(&ast_expression.node, literal, context)?;
-                if let Some(expected_type) = context.expected_type {
-                    if let Some(new_expr) =
-                        self.analyze_literal_expression(&lit, &ast_expression.node, expected_type)?
-                    {
-                        new_expr
-                    } else {
-                        self.create_expr(
-                            ExpressionKind::Literal(lit),
-                            lit_type,
-                            &ast_expression.node,
-                        )
-                    }
-                } else {
-                    self.create_expr(ExpressionKind::Literal(lit), lit_type, &ast_expression.node)
-                }
+                self.analyze_complex_literal_to_expression(&ast_expression.node, literal, context)?
             }
 
             swamp_script_ast::ExpressionKind::ForLoop(pattern, iterable_expression, statements) => {
@@ -3007,111 +2991,5 @@ impl<'a> Analyzer<'a> {
         };
 
         Ok(ty)
-    }
-
-    #[allow(clippy::too_many_lines)]
-    fn analyze_literal_expression(
-        &mut self,
-        literal: &Literal,
-        ast_node: &swamp_script_ast::Node,
-        found_expected_type: &Type,
-    ) -> Result<Option<Expression>, Error> {
-        let new_expr = match literal {
-            Literal::Slice(slice_type, resolved_items) => {
-                if slice_type.compatible_with(found_expected_type) {
-                    let slice_literal = Literal::Slice(slice_type.clone(), resolved_items.clone());
-                    let expr = self.create_expr(
-                        ExpressionKind::Literal(slice_literal),
-                        slice_type.clone(),
-                        ast_node,
-                    );
-                    // If it was just a slice, then we are done
-                    Some(expr)
-                } else if let Some(found) = self
-                    .shared
-                    .state
-                    .associated_impls
-                    .get_internal_member_function(found_expected_type, "new_from_slice")
-                {
-                    let required_type = &found.signature.parameters[0].resolved_type;
-                    info!(?found.signature, "found signature");
-                    if slice_type.compatible_with(required_type) {
-                        let slice_literal =
-                            Literal::Slice(slice_type.clone(), resolved_items.clone());
-
-                        let expr = self.create_expr(
-                            ExpressionKind::Literal(slice_literal),
-                            slice_type.clone(),
-                            ast_node,
-                        );
-                        let arg = ArgumentExpressionOrLocation::Expression(expr);
-                        let call_kind = self.create_static_call(
-                            "new_from_slice",
-                            &[arg],
-                            ast_node,
-                            &found_expected_type.clone(),
-                        )?;
-
-                        let call_expr = self.create_expr(call_kind, slice_type.clone(), ast_node);
-                        Some(call_expr)
-                    } else {
-                        error!(
-                            ?slice_type,
-                            ?required_type,
-                            "incompatible types new_from_slice"
-                        );
-                        panic!("incompatible types new_from_slice");
-                    }
-                } else {
-                    todo!()
-                }
-            }
-            Literal::SlicePair(slice_type, resolved_items) => {
-                if slice_type.compatible_with(found_expected_type) {
-                    let slice_literal =
-                        Literal::SlicePair(slice_type.clone(), resolved_items.clone());
-                    let expr = self.create_expr(
-                        ExpressionKind::Literal(slice_literal),
-                        slice_type.clone(),
-                        ast_node,
-                    );
-                    // If it was just a slice, then we are done
-                    Some(expr)
-                } else if let Some(found) = self
-                    .shared
-                    .state
-                    .associated_impls
-                    .get_internal_member_function(found_expected_type, "new_from_slice_pair")
-                {
-                    if slice_type.compatible_with(&found.signature.parameters[0].resolved_type) {
-                        let slice_literal =
-                            Literal::SlicePair(slice_type.clone(), resolved_items.clone());
-
-                        let expr = self.create_expr(
-                            ExpressionKind::Literal(slice_literal),
-                            slice_type.clone(),
-                            ast_node,
-                        );
-                        let arg = ArgumentExpressionOrLocation::Expression(expr);
-                        let call_kind = self.create_static_call(
-                            "new_from_slice_pair",
-                            &[arg],
-                            ast_node,
-                            &slice_type.clone(),
-                        )?;
-
-                        let call_expr = self.create_expr(call_kind, slice_type.clone(), ast_node);
-                        Some(call_expr)
-                    } else {
-                        panic!("missing new_from_slice_pair");
-                    }
-                } else {
-                    todo!()
-                }
-            }
-            _ => None,
-        };
-
-        Ok(new_expr)
     }
 }

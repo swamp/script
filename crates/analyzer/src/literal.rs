@@ -10,9 +10,163 @@ use swamp_script_semantic::{
     ArgumentExpressionOrLocation, EnumLiteralData, Expression, Fp, Literal,
 };
 use swamp_script_types::prelude::*;
-use tracing::error;
+use tracing::{error, info};
 
 impl Analyzer<'_> {
+    pub fn analyze_complex_literal_to_expression(
+        &mut self,
+        ast_node: &swamp_script_ast::Node,
+        ast_literal_kind: &swamp_script_ast::LiteralKind,
+        context: &TypeContext,
+    ) -> Result<Expression, Error> {
+        let node_text = self.get_text(ast_node);
+        let expression = match &ast_literal_kind {
+            swamp_script_ast::LiteralKind::Slice(items) => {
+                let slice_blueprint = self
+                    .shared
+                    .core_symbol_table
+                    .get_blueprint("Slice")
+                    .unwrap()
+                    .clone();
+
+                let (encountered_element_type, resolved_items) =
+                    self.analyze_slice_type_helper(ast_node, items)?;
+
+                let slice_type = self.instantiate_blueprint_and_members(
+                    &slice_blueprint.clone(),
+                    &[encountered_element_type],
+                )?;
+
+                if let Some(found_expected_type) = context.expected_type {
+                    if let Some(found) = self
+                        .shared
+                        .state
+                        .associated_impls
+                        .get_internal_member_function(found_expected_type, "new_from_slice")
+                    {
+                        let required_type = &found.signature.parameters[0].resolved_type;
+                        info!(?found.signature, "found signature");
+                        if slice_type.compatible_with(required_type) {
+                            let slice_literal =
+                                Literal::Slice(slice_type.clone(), resolved_items.clone());
+
+                            let expr = self.create_expr(
+                                ExpressionKind::Literal(slice_literal),
+                                slice_type.clone(),
+                                ast_node,
+                            );
+                            let arg = ArgumentExpressionOrLocation::Expression(expr);
+                            let call_kind = self.create_static_call(
+                                "new_from_slice",
+                                &[arg],
+                                ast_node,
+                                &found_expected_type.clone(),
+                            )?;
+
+                            let call_expr =
+                                self.create_expr(call_kind, slice_type.clone(), ast_node);
+
+                            call_expr
+                        } else {
+                            error!(
+                                ?slice_type,
+                                ?required_type,
+                                "incompatible types new_from_slice"
+                            );
+                            panic!("incompatible types new_from_slice");
+                        }
+                    } else {
+                        panic!("missing new_from_slice");
+                    }
+                } else {
+                    let lit_kind = Literal::Slice(slice_type.clone(), resolved_items);
+                    let lit_expr = self.create_expr(
+                        ExpressionKind::Literal(lit_kind),
+                        slice_type.clone(),
+                        ast_node,
+                    );
+                    lit_expr
+                }
+            }
+
+            swamp_script_ast::LiteralKind::SlicePair(entries) => {
+                let slice_pair_blueprint = self
+                    .shared
+                    .core_symbol_table
+                    .get_blueprint("SlicePair")
+                    .unwrap()
+                    .clone();
+
+                let (resolved_items, encountered_key_type, encountered_value_type) =
+                    self.analyze_slice_pair_literal(ast_node, &entries)?;
+
+                let slice_pair_type = self.instantiate_blueprint_and_members(
+                    &slice_pair_blueprint.clone(),
+                    &[encountered_key_type, encountered_value_type],
+                )?;
+
+                if let Some(found_expected_type) = context.expected_type {
+                    if let Some(found) = self
+                        .shared
+                        .state
+                        .associated_impls
+                        .get_internal_member_function(found_expected_type, "new_from_slice_pair")
+                    {
+                        if slice_pair_type
+                            .compatible_with(&found.signature.parameters[0].resolved_type)
+                        {
+                            let slice_literal =
+                                Literal::SlicePair(slice_pair_type.clone(), resolved_items.clone());
+
+                            let expr = self.create_expr(
+                                ExpressionKind::Literal(slice_literal),
+                                slice_pair_type.clone(),
+                                ast_node,
+                            );
+                            let arg = ArgumentExpressionOrLocation::Expression(expr);
+                            let call_kind = self.create_static_call(
+                                "new_from_slice_pair",
+                                &[arg],
+                                ast_node,
+                                &slice_pair_type.clone(),
+                            )?;
+
+                            let call_expr =
+                                self.create_expr(call_kind, slice_pair_type.clone(), ast_node);
+
+                            call_expr
+                        } else {
+                            panic!("missing new_from_slice_pair");
+                        }
+                    } else {
+                        panic!("missing new_from_slice_pair");
+                    }
+                } else {
+                    let lit_kind = Literal::SlicePair(slice_pair_type.clone(), resolved_items);
+                    let lit_expr = self.create_expr(
+                        ExpressionKind::Literal(lit_kind),
+                        slice_pair_type.clone(),
+                        ast_node,
+                    );
+                    lit_expr
+                }
+            }
+
+            _ => {
+                let (lit_kind, literal_type) =
+                    self.analyze_literal(&ast_node, &ast_literal_kind, context)?;
+                let lit_expr = self.create_expr(
+                    ExpressionKind::Literal(lit_kind),
+                    literal_type.clone(),
+                    ast_node,
+                );
+                lit_expr
+            }
+        };
+
+        Ok(expression)
+    }
+
     #[allow(clippy::too_many_lines)]
     pub(crate) fn analyze_literal(
         &mut self,
@@ -135,50 +289,6 @@ impl Analyzer<'_> {
                 return Err(self.create_err(ErrorKind::UnknownEnumType, ast_node));
             }
 
-            swamp_script_ast::LiteralKind::Slice(items) => {
-                let slice_blueprint = self
-                    .shared
-                    .core_symbol_table
-                    .get_blueprint("Slice")
-                    .unwrap()
-                    .clone();
-
-                let (encountered_element_type, resolved_items) =
-                    self.analyze_slice_type_helper(ast_node, items)?;
-
-                let slice_type = self.instantiate_blueprint_and_members(
-                    &slice_blueprint.clone(),
-                    &[encountered_element_type],
-                )?;
-
-                (
-                    Literal::Slice(slice_type.clone(), resolved_items),
-                    slice_type,
-                )
-            }
-
-            swamp_script_ast::LiteralKind::SlicePair(entries) => {
-                let slice_pair_blueprint = self
-                    .shared
-                    .core_symbol_table
-                    .get_blueprint("SlicePair")
-                    .unwrap()
-                    .clone();
-
-                let (resolved_items, encountered_key_type, encountered_value_type) =
-                    self.analyze_slice_pair_literal(ast_node, &entries)?;
-
-                let slice_pair_type = self.instantiate_blueprint_and_members(
-                    &slice_pair_blueprint.clone(),
-                    &[encountered_key_type, encountered_value_type],
-                )?;
-
-                (
-                    Literal::SlicePair(slice_pair_type.clone(), resolved_items),
-                    slice_pair_type,
-                )
-            }
-
             swamp_script_ast::LiteralKind::Tuple(expressions) => {
                 let (tuple_type_ref, resolved_items) = self.analyze_tuple_literal(&expressions)?;
                 (
@@ -194,6 +304,8 @@ impl Analyzer<'_> {
                 }
                 return Err(self.create_err(ErrorKind::NoneNeedsExpectedTypeHint, &ast_node));
             }
+            &&swamp_script_ast::LiteralKind::Slice(_)
+            | &swamp_script_ast::LiteralKind::SlicePair(_) => todo!(),
         };
 
         Ok(resolved_literal)
