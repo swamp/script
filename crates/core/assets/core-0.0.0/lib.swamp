@@ -382,6 +382,10 @@ impl Map<K, V> {
         map_create()
     }
 
+    fn new_from_slice_pair(slice_pair: SlicePair<K, V>) -> Map<K,V> {
+        map_from_slice_pair(slice_pair)
+    }
+
     fn iter(self) -> (K, V) {
         map_iter(self)
     }

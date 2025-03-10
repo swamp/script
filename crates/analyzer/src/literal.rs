@@ -34,58 +34,73 @@ impl Analyzer<'_> {
 
                 let slice_type = self.instantiate_blueprint_and_members(
                     &slice_blueprint.clone(),
-                    &[encountered_element_type],
+                    &[encountered_element_type.clone()],
                 )?;
 
-                if let Some(found_expected_type) = context.expected_type {
-                    if let Some(found) = self
+                /*
+                let lit_kind = Literal::Slice(slice_type.clone(), resolved_items);
+                let lit_expr = self.create_expr(
+                    ExpressionKind::Literal(lit_kind),
+                    slice_type.clone(),
+                    ast_node,
+                );
+
+                 */
+
+                let found_expected_type = if let Some(inner_type) = context.expected_type {
+                    inner_type.clone()
+                } else {
+                    let vec_blueprint = self
                         .shared
-                        .state
-                        .associated_impls
-                        .get_internal_member_function(found_expected_type, "new_from_slice")
-                    {
-                        let required_type = &found.signature.parameters[0].resolved_type;
-                        info!(?found.signature, "found signature");
-                        if slice_type.compatible_with(required_type) {
-                            let slice_literal =
-                                Literal::Slice(slice_type.clone(), resolved_items.clone());
+                        .core_symbol_table
+                        .get_blueprint("Vec")
+                        .unwrap()
+                        .clone();
+                    self.instantiate_blueprint_and_members(
+                        &vec_blueprint,
+                        &[encountered_element_type.clone()],
+                    )?
+                };
 
-                            let expr = self.create_expr(
-                                ExpressionKind::Literal(slice_literal),
-                                slice_type.clone(),
-                                ast_node,
-                            );
-                            let arg = ArgumentExpressionOrLocation::Expression(expr);
-                            let call_kind = self.create_static_call(
-                                "new_from_slice",
-                                &[arg],
-                                ast_node,
-                                &found_expected_type.clone(),
-                            )?;
+                if let Some(found) = self
+                    .shared
+                    .state
+                    .associated_impls
+                    .get_internal_member_function(&found_expected_type, "new_from_slice")
+                {
+                    let required_type = &found.signature.parameters[0].resolved_type;
+                    info!(?found.signature, "found signature");
+                    if slice_type.compatible_with(required_type) {
+                        let slice_literal =
+                            Literal::Slice(slice_type.clone(), resolved_items.clone());
 
-                            let call_expr =
-                                self.create_expr(call_kind, slice_type.clone(), ast_node);
+                        let expr = self.create_expr(
+                            ExpressionKind::Literal(slice_literal),
+                            slice_type.clone(),
+                            ast_node,
+                        );
+                        let return_type = *found.signature.return_type.clone();
+                        let arg = ArgumentExpressionOrLocation::Expression(expr);
+                        let call_kind = self.create_static_call(
+                            "new_from_slice",
+                            &[arg],
+                            ast_node,
+                            &found_expected_type.clone(),
+                        )?;
 
-                            call_expr
-                        } else {
-                            error!(
-                                ?slice_type,
-                                ?required_type,
-                                "incompatible types new_from_slice"
-                            );
-                            panic!("incompatible types new_from_slice");
-                        }
+                        let call_expr = self.create_expr(call_kind, return_type, ast_node);
+
+                        call_expr
                     } else {
-                        panic!("missing new_from_slice");
+                        error!(
+                            ?slice_type,
+                            ?required_type,
+                            "incompatible types new_from_slice"
+                        );
+                        panic!("incompatible types new_from_slice");
                     }
                 } else {
-                    let lit_kind = Literal::Slice(slice_type.clone(), resolved_items);
-                    let lit_expr = self.create_expr(
-                        ExpressionKind::Literal(lit_kind),
-                        slice_type.clone(),
-                        ast_node,
-                    );
-                    lit_expr
+                    panic!("missing new_from_slice");
                 }
             }
 
@@ -102,53 +117,57 @@ impl Analyzer<'_> {
 
                 let slice_pair_type = self.instantiate_blueprint_and_members(
                     &slice_pair_blueprint.clone(),
-                    &[encountered_key_type, encountered_value_type],
+                    &[encountered_key_type.clone(), encountered_value_type.clone()],
                 )?;
 
-                if let Some(found_expected_type) = context.expected_type {
-                    if let Some(found) = self
+                let found_expected_type = if let Some(inner_type) = context.expected_type {
+                    inner_type.clone()
+                } else {
+                    let map_blueprint = self
                         .shared
-                        .state
-                        .associated_impls
-                        .get_internal_member_function(found_expected_type, "new_from_slice_pair")
+                        .core_symbol_table
+                        .get_blueprint("Map")
+                        .unwrap()
+                        .clone();
+                    self.instantiate_blueprint_and_members(
+                        &map_blueprint,
+                        &[encountered_key_type.clone(), encountered_value_type.clone()],
+                    )?
+                };
+
+                if let Some(found) = self
+                    .shared
+                    .state
+                    .associated_impls
+                    .get_internal_member_function(&found_expected_type, "new_from_slice_pair")
+                {
+                    if slice_pair_type.compatible_with(&found.signature.parameters[0].resolved_type)
                     {
-                        if slice_pair_type
-                            .compatible_with(&found.signature.parameters[0].resolved_type)
-                        {
-                            let slice_literal =
-                                Literal::SlicePair(slice_pair_type.clone(), resolved_items.clone());
+                        let slice_literal =
+                            Literal::SlicePair(slice_pair_type.clone(), resolved_items.clone());
 
-                            let expr = self.create_expr(
-                                ExpressionKind::Literal(slice_literal),
-                                slice_pair_type.clone(),
-                                ast_node,
-                            );
-                            let arg = ArgumentExpressionOrLocation::Expression(expr);
-                            let call_kind = self.create_static_call(
-                                "new_from_slice_pair",
-                                &[arg],
-                                ast_node,
-                                &slice_pair_type.clone(),
-                            )?;
+                        let expr = self.create_expr(
+                            ExpressionKind::Literal(slice_literal),
+                            slice_pair_type.clone(),
+                            ast_node,
+                        );
+                        let return_type = *found.signature.return_type.clone();
+                        let arg = ArgumentExpressionOrLocation::Expression(expr);
+                        let call_kind = self.create_static_call(
+                            "new_from_slice_pair",
+                            &[arg],
+                            ast_node,
+                            &found_expected_type.clone(),
+                        )?;
 
-                            let call_expr =
-                                self.create_expr(call_kind, slice_pair_type.clone(), ast_node);
+                        let call_expr = self.create_expr(call_kind, return_type, ast_node);
 
-                            call_expr
-                        } else {
-                            panic!("missing new_from_slice_pair");
-                        }
+                        call_expr
                     } else {
-                        panic!("missing new_from_slice_pair");
+                        panic!("missing new_from_slice_pairsdsss");
                     }
                 } else {
-                    let lit_kind = Literal::SlicePair(slice_pair_type.clone(), resolved_items);
-                    let lit_expr = self.create_expr(
-                        ExpressionKind::Literal(lit_kind),
-                        slice_pair_type.clone(),
-                        ast_node,
-                    );
-                    lit_expr
+                    panic!("missing new_from_slice_pair afasfa");
                 }
             }
 
