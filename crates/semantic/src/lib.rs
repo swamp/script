@@ -100,20 +100,13 @@ pub type ExternalFunctionId = u32;
 
 pub type ConstantId = u32;
 
+#[derive(Eq, PartialEq)]
 pub struct ExternalFunctionDefinition {
     pub name: Option<Node>,
     pub assigned_name: String,
     pub signature: Signature,
     pub id: ExternalFunctionId,
 }
-
-impl PartialEq<Self> for ExternalFunctionDefinition {
-    fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
-    }
-}
-
-impl Eq for ExternalFunctionDefinition {}
 
 impl Debug for ExternalFunctionDefinition {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
