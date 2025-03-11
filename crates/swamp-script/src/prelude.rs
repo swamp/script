@@ -5,7 +5,7 @@
 pub use {
     crate::ScriptError, swamp_script_analyzer::prelude::*, swamp_script_core::*,
     swamp_script_core_extra::prelude::*, swamp_script_dep_loader::prelude::*,
-    swamp_script_error_report::*, swamp_script_eval::prelude::*,
+    swamp_script_error_report::prelude::*, swamp_script_eval::prelude::*,
     swamp_script_eval_loader::LoaderErr, swamp_script_modules::prelude::*, swamp_script_node::*,
     swamp_script_parser::prelude::*, swamp_script_semantic::prelude::*,
     swamp_script_source_map::prelude::*, swamp_script_source_map_lookup::SourceMapWrapper,

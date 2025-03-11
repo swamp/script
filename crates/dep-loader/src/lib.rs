@@ -14,19 +14,12 @@ use swamp_script_ast::prelude::*;
 use swamp_script_parser::{AstParser, SpecificError};
 use swamp_script_source_map::{FileId, SourceMap};
 use tracing::debug;
+
 pub struct ParseRoot;
 
 #[derive(Debug)]
 pub enum ParseRootError {
-    IoError(std::io::Error),
-
     ParserError(ParserError),
-}
-
-impl From<std::io::Error> for ParseRootError {
-    fn from(err: std::io::Error) -> Self {
-        Self::IoError(err)
-    }
 }
 
 #[derive(Debug)]
@@ -147,18 +140,12 @@ impl DependencyParser {
 pub enum DependencyError {
     CircularDependency(Vec<String>),
     ParseRootError(ParseRootError),
-    IoError(io::Error),
+    ReadFileError(io::Error),
 }
 
 impl From<ParseRootError> for DependencyError {
     fn from(err: ParseRootError) -> Self {
         Self::ParseRootError(err)
-    }
-}
-
-impl From<io::Error> for DependencyError {
-    fn from(value: io::Error) -> Self {
-        Self::IoError(value)
     }
 }
 
@@ -253,12 +240,14 @@ pub fn parse_single_module(
     source_map: &mut SourceMap,
     module_path: &[String],
 ) -> Result<ParsedAstModule, DependencyError> {
-    let mount_name = mount_name_from_path(&module_path);
+    let mount_name = mount_name_from_path(module_path);
 
-    let (file_id, script) = source_map.read_file_relative(
-        mount_name,
-        &module_path_to_relative_swamp_file_string(module_path),
-    )?;
+    let (file_id, script) = source_map
+        .read_file_relative(
+            mount_name,
+            &module_path_to_relative_swamp_file_string(module_path),
+        )
+        .map_err(|err| DependencyError::ReadFileError(err))?;
 
     let parse_module = ParseRoot.parse(script, file_id)?;
 

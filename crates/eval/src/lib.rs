@@ -3,9 +3,9 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use crate::block::BlockScopes;
-use crate::err::ExecuteErrorKind;
+use crate::err::RuntimeErrorKind;
+use crate::prelude::RuntimeError;
 use crate::prelude::{ValueReference, VariableValue};
-use err::ExecuteError;
 use seq_map::SeqMap;
 use std::fmt::Debug;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
@@ -28,7 +28,6 @@ use swamp_script_types::{
     EnumVariantType, ExternalType, Type, TypeForParameter, same_anon_struct_ref,
 };
 use tracing::{error, info, warn};
-
 pub mod err;
 
 mod block;
@@ -36,16 +35,16 @@ pub mod prelude;
 pub mod value_both;
 pub mod value_ref;
 
-impl From<ValueError> for ExecuteError {
+impl From<ValueError> for RuntimeError {
     fn from(value: ValueError) -> Self {
         Self {
-            kind: ExecuteErrorKind::ValueError(value),
+            kind: RuntimeErrorKind::ValueError(value),
             node: Default::default(),
         }
     }
 }
 
-type RawFunctionFn<C> = dyn FnMut(&[VariableValue], &mut C) -> Result<Value, ExecuteError>;
+type RawFunctionFn<C> = dyn FnMut(&[VariableValue], &mut C) -> Result<Value, RuntimeError>;
 
 type FunctionFn<C> = Box<RawFunctionFn<C>>;
 
@@ -143,7 +142,7 @@ impl<C> ExternalFunctions<C> {
     pub fn register_external_function(
         &mut self,
         function_id: ExternalFunctionId,
-        handler: impl FnMut(&[VariableValue], &mut C) -> Result<Value, ExecuteError> + 'static,
+        handler: impl FnMut(&[VariableValue], &mut C) -> Result<Value, RuntimeError> + 'static,
     ) -> Result<(), String> {
         let external_func = EvalExternalFunction {
             func: Box::new(handler),
@@ -165,13 +164,13 @@ pub fn eval_module<C>(
     root_expression: &Expression,
     debug_source_map: Option<&dyn SourceMapLookup>,
     context: &mut C,
-) -> Result<Value, ExecuteError> {
+) -> Result<Value, RuntimeError> {
     let mut interpreter = Interpreter::<C>::new(externals, constants, context);
     interpreter.debug_source_map = debug_source_map;
     let value_with_signal = interpreter.evaluate_expression_with_signal(root_expression)?;
-    value_with_signal.try_into().map_err(|_| ExecuteError {
+    value_with_signal.try_into().map_err(|_| RuntimeError {
         node: Node::default(),
-        kind: ExecuteErrorKind::CouldNotConvertFromSignal,
+        kind: RuntimeErrorKind::CouldNotConvertFromSignal,
     })
 }
 
@@ -180,7 +179,7 @@ pub fn eval_constants<C>(
     eval_constants: &mut Constants,
     program_state: &ProgramState,
     context: &mut C,
-) -> Result<(), ExecuteError> {
+) -> Result<(), RuntimeError> {
     for constant in &program_state.constants_in_dependency_order {
         let mut interpreter = Interpreter::<C>::new(externals, eval_constants, context);
         let value = interpreter.evaluate_expression(&constant.expr)?;
@@ -197,7 +196,7 @@ pub fn util_execute_function<C>(
     arguments: &[VariableValue],
     context: &mut C,
     debug_source_map: Option<&dyn SourceMapLookup>,
-) -> Result<Value, ExecuteError> {
+) -> Result<Value, RuntimeError> {
     let mut interpreter = Interpreter::<C>::new(externals, constants, context);
     interpreter.debug_source_map = debug_source_map;
     interpreter.bind_parameters(&func.body.node, &func.signature.parameters, &arguments)?;
@@ -213,7 +212,7 @@ pub fn util_execute_expression<C>(
     expr: &Expression,
     context: &mut C,
     debug_source_map: Option<&dyn SourceMapLookup>,
-) -> Result<Value, ExecuteError> {
+) -> Result<Value, RuntimeError> {
     let mut interpreter = Interpreter::<C>::new(externals, constants, context);
     interpreter.debug_source_map = debug_source_map;
     let value = interpreter.evaluate_expression(expr)?;
@@ -230,7 +229,7 @@ pub fn util_execute_member_function_mut<C>(
     arguments: &[Value],
     context: &mut C,
     debug_source_map: Option<&dyn SourceMapLookup>,
-) -> Result<Value, ExecuteError> {
+) -> Result<Value, RuntimeError> {
     let mut complete_arguments = Vec::new();
     complete_arguments.push(VariableValue::Reference(self_value_ref));
     for arg in arguments {
@@ -308,7 +307,7 @@ impl<'a, C> Interpreter<'a, C> {
         node: &Node,
         params: &[TypeForParameter],
         args: &[VariableValue],
-    ) -> Result<(), ExecuteError> {
+    ) -> Result<(), RuntimeError> {
         for (index, (param, arg)) in params.iter().zip(args).enumerate() {
             let complete_value = if param.is_mutable {
                 match arg {
@@ -316,7 +315,7 @@ impl<'a, C> Interpreter<'a, C> {
                         // For mutable parameters, use the SAME reference
                         arg.clone()
                     }
-                    _ => return Err(self.create_err(ExecuteErrorKind::ArgumentIsNotMutable, node)),
+                    _ => return Err(self.create_err(RuntimeErrorKind::ArgumentIsNotMutable, node)),
                 }
             } else {
                 match arg {
@@ -335,7 +334,7 @@ impl<'a, C> Interpreter<'a, C> {
         &mut self,
         function_expression: &Expression,
         arguments: &[ArgumentExpressionOrLocation],
-    ) -> Result<Value, ExecuteError> {
+    ) -> Result<Value, RuntimeError> {
         let func_val = self.evaluate_expression(function_expression)?;
         let evaluated_args = self.evaluate_args(arguments)?;
 
@@ -363,7 +362,7 @@ impl<'a, C> Interpreter<'a, C> {
                     .external_functions_by_id
                     .get(&external_function_id)
                     .ok_or(self.create_err(
-                        ExecuteErrorKind::MissingExternalFunction(*external_function_id),
+                        RuntimeErrorKind::MissingExternalFunction(*external_function_id),
                         &function_expression.node,
                     ))?
                     .borrow_mut();
@@ -371,7 +370,7 @@ impl<'a, C> Interpreter<'a, C> {
                 (func.func)(&evaluated_args, self.context)
             }
             _ => Err(self.create_err(
-                ExecuteErrorKind::ExpectedFunction,
+                RuntimeErrorKind::ExpectedFunction,
                 &function_expression.node,
             )),
         }
@@ -382,7 +381,7 @@ impl<'a, C> Interpreter<'a, C> {
         node: &Node,
         start_value_reference: ValueRef,
         chain_items: &Vec<LocationAccess>,
-    ) -> Result<ValueRef, ExecuteError> {
+    ) -> Result<ValueRef, RuntimeError> {
         let mut value_ref = start_value_reference;
         for chain in chain_items {
             value_ref = {
@@ -392,7 +391,7 @@ impl<'a, C> Interpreter<'a, C> {
 
                         let (_struct_ref, fields) = borrowed
                             .expect_anon_struct()
-                            .map_err(|_| self.create_err(ExecuteErrorKind::ExpectedStruct, node))?;
+                            .map_err(|_| self.create_err(RuntimeErrorKind::ExpectedStruct, node))?;
                         fields[*index].clone()
                     }
                     LocationAccessKind::IntrinsicCallMut(intrinsic_fn, arguments) => self
@@ -412,7 +411,7 @@ impl<'a, C> Interpreter<'a, C> {
     fn evaluate_location(
         &mut self,
         found_location_expr: &SingleLocationExpression,
-    ) -> Result<ValueRef, ExecuteError> {
+    ) -> Result<ValueRef, RuntimeError> {
         let variable_ref = self
             .current_block_scopes
             .lookup_variable_mut_ref(&found_location_expr.starting_variable)?;
@@ -439,7 +438,7 @@ impl<'a, C> Interpreter<'a, C> {
     fn evaluate_mut_or_immutable_expression(
         &mut self,
         expr: &MutOrImmutableExpression,
-    ) -> Result<VariableValue, ExecuteError> {
+    ) -> Result<VariableValue, RuntimeError> {
         let var_value = match &expr.expression_or_location {
             ArgumentExpressionOrLocation::Location(loc) => {
                 VariableValue::Reference(self.evaluate_location(loc)?)
@@ -454,7 +453,7 @@ impl<'a, C> Interpreter<'a, C> {
     fn evaluate_argument(
         &mut self,
         expr: &ArgumentExpressionOrLocation,
-    ) -> Result<VariableValue, ExecuteError> {
+    ) -> Result<VariableValue, RuntimeError> {
         let var_value = match expr {
             ArgumentExpressionOrLocation::Location(mutable_location) => {
                 VariableValue::Reference(self.evaluate_location(mutable_location)?)
@@ -471,7 +470,7 @@ impl<'a, C> Interpreter<'a, C> {
     fn evaluate_args(
         &mut self,
         args: &[ArgumentExpressionOrLocation],
-    ) -> Result<Vec<VariableValue>, ExecuteError> {
+    ) -> Result<Vec<VariableValue>, RuntimeError> {
         let mut evaluated = Vec::with_capacity(args.len());
 
         for argument_expression in args {
@@ -482,7 +481,7 @@ impl<'a, C> Interpreter<'a, C> {
         Ok(evaluated)
     }
 
-    fn evaluate_expressions(&mut self, exprs: &[Expression]) -> Result<Vec<Value>, ExecuteError> {
+    fn evaluate_expressions(&mut self, exprs: &[Expression]) -> Result<Vec<Value>, RuntimeError> {
         let mut values = vec![];
         for expr in exprs {
             let value = self.evaluate_expression(expr)?;
@@ -496,7 +495,7 @@ impl<'a, C> Interpreter<'a, C> {
         &mut self,
         condition: &BooleanExpression,
         body: &Expression,
-    ) -> Result<ValueWithSignal, ExecuteError> {
+    ) -> Result<ValueWithSignal, RuntimeError> {
         let mut result = Value::Unit;
         while self
             .evaluate_expression(&condition.expression)?
@@ -523,7 +522,7 @@ impl<'a, C> Interpreter<'a, C> {
     fn evaluate_block(
         &mut self,
         expressions: &Vec<Expression>,
-    ) -> Result<ValueWithSignal, ExecuteError> {
+    ) -> Result<ValueWithSignal, RuntimeError> {
         let mut result = Value::Unit;
 
         self.push_block_scope();
@@ -544,14 +543,14 @@ impl<'a, C> Interpreter<'a, C> {
         pattern: &ForPattern,
         iterator_expr: &Iterable,
         body: &Box<Expression>,
-    ) -> Result<ValueWithSignal, ExecuteError> {
+    ) -> Result<ValueWithSignal, RuntimeError> {
         let mut result = Value::Unit;
 
         let iterator_value_mem =
             self.evaluate_mut_or_immutable_expression(&iterator_expr.resolved_expression)?;
         let iterator_value = match iterator_value_mem {
             VariableValue::Value(_) => {
-                return Err(self.create_err(ExecuteErrorKind::ArgumentIsNotMutable, &body.node));
+                return Err(self.create_err(RuntimeErrorKind::ArgumentIsNotMutable, &body.node));
             }
             VariableValue::Reference(value_ref) => value_ref,
         };
@@ -613,7 +612,7 @@ impl<'a, C> Interpreter<'a, C> {
         pattern: &ForPattern,
         iterator_expr: &Iterable,
         body: &Box<Expression>,
-    ) -> Result<ValueWithSignal, ExecuteError> {
+    ) -> Result<ValueWithSignal, RuntimeError> {
         let mut result = Value::Unit;
 
         let iterator_value =
@@ -696,7 +695,7 @@ impl<'a, C> Interpreter<'a, C> {
     fn evaluate_expression_with_signal(
         &mut self,
         expr: &Expression,
-    ) -> Result<ValueWithSignal, ExecuteError> {
+    ) -> Result<ValueWithSignal, RuntimeError> {
         match &expr.kind {
             ExpressionKind::Break => Ok(ValueWithSignal::Break),
             ExpressionKind::Continue => Ok(ValueWithSignal::Continue),
@@ -762,7 +761,7 @@ impl<'a, C> Interpreter<'a, C> {
                         }
                         _ => {
                             return Err(self
-                                .create_err(ExecuteErrorKind::ExpectedOptional, &true_block.node));
+                                .create_err(RuntimeErrorKind::ExpectedOptional, &true_block.node));
                         }
                     }
                 }
@@ -793,18 +792,18 @@ impl<'a, C> Interpreter<'a, C> {
     // ---------------
     #[allow(clippy::too_many_lines)]
     #[inline]
-    fn evaluate_expression(&mut self, expr: &Expression) -> Result<Value, ExecuteError> {
+    fn evaluate_expression(&mut self, expr: &Expression) -> Result<Value, RuntimeError> {
         self.depth += 1;
         let value = match &expr.kind {
             // Illegal in this context
             ExpressionKind::Continue => {
-                return Err(self.create_err(ExecuteErrorKind::ContinueNotAllowedHere, &expr.node));
+                return Err(self.create_err(RuntimeErrorKind::ContinueNotAllowedHere, &expr.node));
             }
             ExpressionKind::Break => {
-                return Err(self.create_err(ExecuteErrorKind::BreakNotAllowedHere, &expr.node));
+                return Err(self.create_err(RuntimeErrorKind::BreakNotAllowedHere, &expr.node));
             }
             ExpressionKind::Return(_maybe_expr) => {
-                return Err(self.create_err(ExecuteErrorKind::ReturnNotAllowedHere, &expr.node));
+                return Err(self.create_err(RuntimeErrorKind::ReturnNotAllowedHere, &expr.node));
             }
 
             ExpressionKind::WhileLoop(_condition, _body) => {
@@ -879,7 +878,7 @@ impl<'a, C> Interpreter<'a, C> {
                     (Value::Int(s), Value::Int(e)) => {
                         Value::Range(Box::new(s), Box::new(e), range_mode.clone())
                     }
-                    _ => Err(self.create_err(ExecuteErrorKind::RangeItemMustBeInt, &expr.node))?,
+                    _ => Err(self.create_err(RuntimeErrorKind::RangeItemMustBeInt, &expr.node))?,
                 }
             }
 
@@ -931,11 +930,11 @@ impl<'a, C> Interpreter<'a, C> {
                         elements
                             .insert(index_val, Rc::new(RefCell::new(new_val)))
                             .map_err(|_| {
-                                self.create_err(ExecuteErrorKind::MapKeyAlreadyExists, &expr.node)
+                                self.create_err(RuntimeErrorKind::MapKeyAlreadyExists, &expr.node)
                             })?;
                     }
                     _ => {
-                        Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, &expr.node))?;
+                        Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, &expr.node))?;
                     }
                 }
 
@@ -1056,7 +1055,7 @@ impl<'a, C> Interpreter<'a, C> {
                     Value::Option(inner) => Value::Bool(inner.is_some()),
                     _ => {
                         return Err(
-                            self.create_err(ExecuteErrorKind::CoerceOptionToBoolFailed, &expr.node)
+                            self.create_err(RuntimeErrorKind::CoerceOptionToBoolFailed, &expr.node)
                         );
                     }
                 }
@@ -1091,7 +1090,7 @@ impl<'a, C> Interpreter<'a, C> {
                         },
                         _ => {
                             return Err(self
-                                .create_err(ExecuteErrorKind::ExpectedOptional, &true_block.node));
+                                .create_err(RuntimeErrorKind::ExpectedOptional, &true_block.node));
                         }
                     }
                 }
@@ -1124,7 +1123,7 @@ impl<'a, C> Interpreter<'a, C> {
                 let value = self.evaluate_expression(expr)?;
                 if let Value::Tuple(_tuple_ref, values) = value {
                     if variable_refs.len() > values.len() {
-                        return Err(self.create_err(ExecuteErrorKind::NotAnArray, &expr.node));
+                        return Err(self.create_err(RuntimeErrorKind::NotAnArray, &expr.node));
                     }
                     for (index, variable_ref) in variable_refs.iter().enumerate() {
                         let value = &values[index].borrow().clone();
@@ -1147,7 +1146,7 @@ impl<'a, C> Interpreter<'a, C> {
                 let resolved_expr = self.evaluate_expression(expr)?;
                 let (_struct_type, values) = resolved_expr
                     .expect_struct()
-                    .map_err(|_| self.create_err(ExecuteErrorKind::ExpectedStruct, &expr.node))?;
+                    .map_err(|_| self.create_err(RuntimeErrorKind::ExpectedStruct, &expr.node))?;
 
                 let x = values[*index].borrow().clone();
                 x
@@ -1157,12 +1156,12 @@ impl<'a, C> Interpreter<'a, C> {
                 let resolved_expr = self.evaluate_expression(expr)?;
                 let (_array_type, values) = resolved_expr
                     .expect_array()
-                    .map_err(|_| self.create_err(ExecuteErrorKind::ExpectedArray, &expr.node))?;
+                    .map_err(|_| self.create_err(RuntimeErrorKind::ExpectedArray, &expr.node))?;
 
                 let index = self
                     .evaluate_expression(index_expr)?
                     .expect_int()
-                    .map_err(|_| self.create_err(ExecuteErrorKind::ExpectedInt, &expr.node))?
+                    .map_err(|_| self.create_err(RuntimeErrorKind::ExpectedInt, &expr.node))?
                     as usize;
 
                 let x = values[index].borrow().clone();
@@ -1173,7 +1172,7 @@ impl<'a, C> Interpreter<'a, C> {
                 let resolved_expr = self.evaluate_expression(expr)?;
                 let (_map_type, seq_map) = resolved_expr
                     .expect_map()
-                    .map_err(|_| self.create_err(ExecuteErrorKind::ExpectedMap, &expr.node))?;
+                    .map_err(|_| self.create_err(RuntimeErrorKind::ExpectedMap, &expr.node))?;
 
                 let key_val = self.evaluate_expression(key_expr)?;
 
@@ -1198,7 +1197,7 @@ impl<'a, C> Interpreter<'a, C> {
         Ok(value)
     }
 
-    fn evaluate_literal(&mut self, node: &Node, lit: &Literal) -> Result<Value, ExecuteError> {
+    fn evaluate_literal(&mut self, node: &Node, lit: &Literal) -> Result<Value, RuntimeError> {
         let v = match lit {
             Literal::IntLiteral(n) => Value::Int(*n),
             Literal::FloatLiteral(f) => Value::Float(*f),
@@ -1255,7 +1254,7 @@ impl<'a, C> Interpreter<'a, C> {
                         .insert(key_val, Rc::new(RefCell::new(value_val)))
                         .map_err(|_err| {
                             self.create_err(
-                                ExecuteErrorKind::NonUniqueKeysInMapLiteralDetected,
+                                RuntimeErrorKind::NonUniqueKeysInMapLiteralDetected,
                                 &node,
                             )
                         })?;
@@ -1276,7 +1275,7 @@ impl<'a, C> Interpreter<'a, C> {
         //        resolved_postfix: &Postfix,
         intrinsic_function: &IntrinsicFunction,
         arguments: &[Expression],
-    ) -> Result<ValueRef, ExecuteError> {
+    ) -> Result<ValueRef, RuntimeError> {
         //let node = &resolved_postfix.node;
         let val = match &intrinsic_function {
             IntrinsicFunction::VecSubscriptMut => match &mut *value_ref.borrow_mut() {
@@ -1286,7 +1285,7 @@ impl<'a, C> Interpreter<'a, C> {
                     vector[index_int as usize].clone()
                 }
                 _ => {
-                    return Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, node))?;
+                    return Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, node))?;
                 }
             },
             IntrinsicFunction::MapSubscriptMut => match &mut *value_ref.borrow_mut() {
@@ -1296,7 +1295,7 @@ impl<'a, C> Interpreter<'a, C> {
                     maybe_value.unwrap().clone()
                 }
                 _ => {
-                    return Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, node))?;
+                    return Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, node))?;
                 }
             },
 
@@ -1315,7 +1314,7 @@ impl<'a, C> Interpreter<'a, C> {
                     }
                     _ => {
                         return Err(
-                            self.create_err(ExecuteErrorKind::OperationRequiresArray, node)
+                            self.create_err(RuntimeErrorKind::OperationRequiresArray, node)
                         )?;
                     }
                 }
@@ -1335,7 +1334,7 @@ impl<'a, C> Interpreter<'a, C> {
         node: &Node,
         intrinsic_function: &IntrinsicFunction,
         arguments: &[ArgumentExpressionOrLocation],
-    ) -> Result<Value, ExecuteError> {
+    ) -> Result<Value, RuntimeError> {
         let self_value = self.evaluate_argument(&arguments[0])?;
 
         let mut expressions = Vec::new();
@@ -1361,12 +1360,12 @@ impl<'a, C> Interpreter<'a, C> {
         intrinsic_function: &IntrinsicFunction,
         value_ref: ValueRef,
         arguments: &[&Expression],
-    ) -> Result<Value, ExecuteError> {
+    ) -> Result<Value, RuntimeError> {
         let val = match &intrinsic_function {
             IntrinsicFunction::VecRemoveIndex => {
                 let index_val = self.evaluate_expression(&arguments[0])?;
                 let Value::Int(index) = index_val else {
-                    return Err(self.create_err(ExecuteErrorKind::ArgumentIsNotMutable, node));
+                    return Err(self.create_err(RuntimeErrorKind::ArgumentIsNotMutable, node));
                 };
 
                 match &mut *value_ref.borrow_mut() {
@@ -1374,7 +1373,7 @@ impl<'a, C> Interpreter<'a, C> {
                         vector.remove(index as usize);
                     }
                     _ => {
-                        Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, node))?;
+                        Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, node))?;
                     }
                 }
 
@@ -1387,7 +1386,7 @@ impl<'a, C> Interpreter<'a, C> {
                         vector.clear();
                     }
                     _ => {
-                        Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, node))?;
+                        Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, node))?;
                     }
                 }
                 Value::Unit
@@ -1405,7 +1404,7 @@ impl<'a, C> Interpreter<'a, C> {
                         vector.push(Rc::new(RefCell::new(value_to_add)));
                     }
                     _ => {
-                        Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, node))?;
+                        Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, node))?;
                     }
                 }
                 Value::Unit
@@ -1419,7 +1418,7 @@ impl<'a, C> Interpreter<'a, C> {
                     r.clone()
                 }
                 _ => {
-                    return Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, node))?;
+                    return Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, node))?;
                 }
             },
 
@@ -1428,7 +1427,7 @@ impl<'a, C> Interpreter<'a, C> {
                     let length = vector.len();
                     Value::Int(length as i32)
                 }
-                _ => Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, node))?,
+                _ => Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, node))?,
             },
 
             IntrinsicFunction::VecPop => match &mut *value_ref.borrow_mut() {
@@ -1436,7 +1435,7 @@ impl<'a, C> Interpreter<'a, C> {
                     let maybe_val = vector.pop();
                     Value::Option(maybe_val)
                 }
-                _ => Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, node))?,
+                _ => Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, node))?,
             },
 
             IntrinsicFunction::MapFromSlicePair => {
@@ -1454,7 +1453,7 @@ impl<'a, C> Interpreter<'a, C> {
                         Value::Bool(has_key)
                     }
                     _ => {
-                        return Err(self.create_err(ExecuteErrorKind::NotAMap, node));
+                        return Err(self.create_err(RuntimeErrorKind::NotAMap, node));
                     }
                 }
             }
@@ -1462,7 +1461,7 @@ impl<'a, C> Interpreter<'a, C> {
             IntrinsicFunction::MapLen => match value_ref.borrow().clone() {
                 Value::Map(_key_type, ref seq_map) => Value::Int(seq_map.len() as i32),
                 _ => {
-                    return Err(self.create_err(ExecuteErrorKind::NotAMap, node));
+                    return Err(self.create_err(RuntimeErrorKind::NotAMap, node));
                 }
             },
 
@@ -1473,7 +1472,7 @@ impl<'a, C> Interpreter<'a, C> {
                     Value::Option(maybe_value.cloned())
                 }
                 _ => {
-                    return Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, node))?;
+                    return Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, node))?;
                 }
             },
 
@@ -1491,7 +1490,7 @@ impl<'a, C> Interpreter<'a, C> {
                             )
                         }
                         _ => {
-                            return Err(self.create_err(ExecuteErrorKind::NotAMap, node));
+                            return Err(self.create_err(RuntimeErrorKind::NotAMap, node));
                         }
                     }
                 };
@@ -1509,7 +1508,7 @@ impl<'a, C> Interpreter<'a, C> {
                         id_value
                     }
                     _ => {
-                        return Err(self.create_err(ExecuteErrorKind::NotSparseValue, node));
+                        return Err(self.create_err(RuntimeErrorKind::NotSparseValue, node));
                     }
                 }
             }
@@ -1525,12 +1524,12 @@ impl<'a, C> Interpreter<'a, C> {
                                 found.remove(&found_id.borrow());
                             }
                             _ => {
-                                return Err(self.create_err(ExecuteErrorKind::NotSparseValue, node));
+                                return Err(self.create_err(RuntimeErrorKind::NotSparseValue, node));
                             }
                         }
                     }
                     _ => {
-                        return Err(self.create_err(ExecuteErrorKind::NotSparseValue, node));
+                        return Err(self.create_err(RuntimeErrorKind::NotSparseValue, node));
                     }
                 }
 
@@ -1548,12 +1547,12 @@ impl<'a, C> Interpreter<'a, C> {
                                 _ => Value::Option(None),
                             },
                             _ => {
-                                return Err(self.create_err(ExecuteErrorKind::NotSparseId, node));
+                                return Err(self.create_err(RuntimeErrorKind::NotSparseId, node));
                             }
                         }
                     }
                     _ => {
-                        return Err(self.create_err(ExecuteErrorKind::NotSparseId, node));
+                        return Err(self.create_err(RuntimeErrorKind::NotSparseId, node));
                     }
                 }
             }
@@ -1561,13 +1560,13 @@ impl<'a, C> Interpreter<'a, C> {
             IntrinsicFunction::FloatRound => match value_ref.borrow().clone() {
                 Value::Float(f) => Value::Int(f.round().into()),
                 _ => {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
+                    return Err(self.create_err(RuntimeErrorKind::ExpectedFloat, node));
                 }
             },
             IntrinsicFunction::FloatFloor => match value_ref.borrow().clone() {
                 Value::Float(f) => Value::Int(f.floor().into()),
                 _ => {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
+                    return Err(self.create_err(RuntimeErrorKind::ExpectedFloat, node));
                 }
             },
 
@@ -1583,48 +1582,48 @@ impl<'a, C> Interpreter<'a, C> {
                     Value::Float(Fp::from(signum as i16))
                 }
                 _ => {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
+                    return Err(self.create_err(RuntimeErrorKind::ExpectedFloat, node));
                 }
             },
             IntrinsicFunction::FloatAbs => match value_ref.borrow().clone() {
                 Value::Float(f) => Value::Float(f.abs()),
                 _ => {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
+                    return Err(self.create_err(RuntimeErrorKind::ExpectedFloat, node));
                 }
             },
 
             IntrinsicFunction::FloatCos => match value_ref.borrow().clone() {
                 Value::Float(f) => Value::Float(f.cos()),
                 _ => {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
+                    return Err(self.create_err(RuntimeErrorKind::ExpectedFloat, node));
                 }
             },
 
             IntrinsicFunction::FloatAcos => match value_ref.borrow().clone() {
                 Value::Float(f) => Value::Float(f.acos()),
                 _ => {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
+                    return Err(self.create_err(RuntimeErrorKind::ExpectedFloat, node));
                 }
             },
 
             IntrinsicFunction::FloatSin => match value_ref.borrow().clone() {
                 Value::Float(f) => Value::Float(f.sin()),
                 _ => {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
+                    return Err(self.create_err(RuntimeErrorKind::ExpectedFloat, node));
                 }
             },
 
             IntrinsicFunction::FloatAsin => match value_ref.borrow().clone() {
                 Value::Float(f) => Value::Float(f.asin()),
                 _ => {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
+                    return Err(self.create_err(RuntimeErrorKind::ExpectedFloat, node));
                 }
             },
 
             IntrinsicFunction::FloatSqrt => match value_ref.borrow().clone() {
                 Value::Float(f) => Value::Float(f.sqrt()),
                 _ => {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
+                    return Err(self.create_err(RuntimeErrorKind::ExpectedFloat, node));
                 }
             },
 
@@ -1633,7 +1632,7 @@ impl<'a, C> Interpreter<'a, C> {
                 match (value_ref.borrow().clone(), min_value) {
                     (Value::Float(f), Value::Float(min_f)) => Value::Float(f.min(min_f)),
                     _ => {
-                        return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
+                        return Err(self.create_err(RuntimeErrorKind::ExpectedFloat, node));
                     }
                 }
             }
@@ -1643,7 +1642,7 @@ impl<'a, C> Interpreter<'a, C> {
                 match (value_ref.borrow().clone(), max_value) {
                     (Value::Float(f), Value::Float(max_f)) => Value::Float(f.max(max_f)),
                     _ => {
-                        return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
+                        return Err(self.create_err(RuntimeErrorKind::ExpectedFloat, node));
                     }
                 }
             }
@@ -1655,7 +1654,7 @@ impl<'a, C> Interpreter<'a, C> {
                         Value::Float(Fp::from(-9999)) //y_f.atan2(x_f)) // TODO: Implement atan2
                     }
                     _ => {
-                        return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
+                        return Err(self.create_err(RuntimeErrorKind::ExpectedFloat, node));
                     }
                 }
             }
@@ -1668,7 +1667,7 @@ impl<'a, C> Interpreter<'a, C> {
                         Value::Float(f.clamp(min_f, max_f))
                     }
                     _ => {
-                        return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
+                        return Err(self.create_err(RuntimeErrorKind::ExpectedFloat, node));
                     }
                 }
             }
@@ -1679,14 +1678,14 @@ impl<'a, C> Interpreter<'a, C> {
                     Value::Int(new_raw as i32)
                 }
                 _ => {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
+                    return Err(self.create_err(RuntimeErrorKind::ExpectedFloat, node));
                 }
             },
 
             IntrinsicFunction::IntAbs => match value_ref.borrow().clone() {
                 Value::Int(i) => Value::Int(i.abs()),
                 _ => {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedFloat, node));
+                    return Err(self.create_err(RuntimeErrorKind::ExpectedFloat, node));
                 }
             },
 
@@ -1698,7 +1697,7 @@ impl<'a, C> Interpreter<'a, C> {
                         Value::Int(i.clamp(min_i, max_i))
                     }
                     _ => {
-                        return Err(self.create_err(ExecuteErrorKind::ExpectedInt, node));
+                        return Err(self.create_err(RuntimeErrorKind::ExpectedInt, node));
                     }
                 }
             }
@@ -1708,7 +1707,7 @@ impl<'a, C> Interpreter<'a, C> {
                 match (value_ref.borrow().clone(), max_value) {
                     (Value::Int(i), Value::Int(min_i)) => Value::Int(i.min(min_i)),
                     _ => {
-                        return Err(self.create_err(ExecuteErrorKind::ExpectedInt, node));
+                        return Err(self.create_err(RuntimeErrorKind::ExpectedInt, node));
                     }
                 }
             }
@@ -1718,7 +1717,7 @@ impl<'a, C> Interpreter<'a, C> {
                 match (value_ref.borrow().clone(), max_value) {
                     (Value::Int(i), Value::Int(max_i)) => Value::Int(i.max(max_i)),
                     _ => {
-                        return Err(self.create_err(ExecuteErrorKind::ExpectedInt, node));
+                        return Err(self.create_err(RuntimeErrorKind::ExpectedInt, node));
                     }
                 }
             }
@@ -1726,21 +1725,21 @@ impl<'a, C> Interpreter<'a, C> {
             IntrinsicFunction::IntRnd => match value_ref.borrow().clone() {
                 Value::Int(i) => Value::Int(squirrel_prng::squirrel_noise5(i as u32, 0) as i32),
                 _ => {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedInt, node));
+                    return Err(self.create_err(RuntimeErrorKind::ExpectedInt, node));
                 }
             },
 
             IntrinsicFunction::IntToFloat => match value_ref.borrow().clone() {
                 Value::Int(i) => Value::Float(Fp::from(i as i16)),
                 _ => {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedInt, node));
+                    return Err(self.create_err(RuntimeErrorKind::ExpectedInt, node));
                 }
             },
 
             IntrinsicFunction::StringLen => match value_ref.borrow().clone() {
                 Value::String(s) => Value::Int(s.len().try_into().expect("string len overflow")),
                 _ => {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedString, node));
+                    return Err(self.create_err(RuntimeErrorKind::ExpectedString, node));
                 }
             },
 
@@ -1748,7 +1747,7 @@ impl<'a, C> Interpreter<'a, C> {
                 Value::Tuple(_tuple_ref, values) => {
                     if values.len() != 2 {
                         return Err(self.create_err(
-                            ExecuteErrorKind::WrongNumberOfArguments(2, values.len()),
+                            RuntimeErrorKind::WrongNumberOfArguments(2, values.len()),
                             &node,
                         ));
                     }
@@ -1769,13 +1768,13 @@ impl<'a, C> Interpreter<'a, C> {
                         }
                         _ => {
                             return Err(
-                                self.create_err(ExecuteErrorKind::ExpectedTwoFloatTuple, node)
+                                self.create_err(RuntimeErrorKind::ExpectedTwoFloatTuple, node)
                             );
                         }
                     }
                 }
                 _ => {
-                    return Err(self.create_err(ExecuteErrorKind::ExpectedTwoFloatTuple, node));
+                    return Err(self.create_err(RuntimeErrorKind::ExpectedTwoFloatTuple, node));
                 }
             },
 
@@ -1791,7 +1790,7 @@ impl<'a, C> Interpreter<'a, C> {
         node: &Node,
         start: &Expression,
         parts: &[Postfix],
-    ) -> Result<ValueRef, ExecuteError> {
+    ) -> Result<ValueRef, RuntimeError> {
         let (mut val_ref, mut is_mutable) = match &start.kind {
             ExpressionKind::VariableAccess(start_var) => {
                 let start_variable_value = self.current_block_scopes.get_var(&start_var);
@@ -1831,7 +1830,7 @@ impl<'a, C> Interpreter<'a, C> {
                         },
                         _ => {
                             return Err(
-                                self.create_err(ExecuteErrorKind::ExpectedOptional, &part.node)
+                                self.create_err(RuntimeErrorKind::ExpectedOptional, &part.node)
                             );
                         }
                     }
@@ -1851,7 +1850,7 @@ impl<'a, C> Interpreter<'a, C> {
                     let (encountered_struct_type, fields) = {
                         let brw = val_ref.borrow();
                         let (struct_ref, fields_ref) = brw.expect_anon_struct().map_err(|_| {
-                            self.create_err(ExecuteErrorKind::PostfixChainError, &part.node)
+                            self.create_err(RuntimeErrorKind::PostfixChainError, &part.node)
                         })?;
                         (struct_ref.clone(), fields_ref.clone())
                     };
@@ -1892,7 +1891,7 @@ impl<'a, C> Interpreter<'a, C> {
                             },
                             _ => {
                                 return Err(
-                                    self.create_err(ExecuteErrorKind::ExpectedOptional, &part.node)
+                                    self.create_err(RuntimeErrorKind::ExpectedOptional, &part.node)
                                 );
                             }
                         }
@@ -1923,7 +1922,7 @@ impl<'a, C> Interpreter<'a, C> {
         node: &Node,
         function_val: &ValueRef,
         arguments: &[ArgumentExpressionOrLocation],
-    ) -> Result<Value, ExecuteError> {
+    ) -> Result<Value, RuntimeError> {
         let resolved_fn = match function_val.borrow().clone() {
             Value::InternalFunction(x) => Function::Internal(x.clone()),
             Value::ExternalFunction(external_fn) => Function::External(external_fn.clone()),
@@ -1972,12 +1971,12 @@ impl<'a, C> Interpreter<'a, C> {
         is_mutable: bool,
         function_ref: &FunctionRef,
         arguments: &[ArgumentExpressionOrLocation],
-    ) -> Result<Value, ExecuteError> {
+    ) -> Result<Value, RuntimeError> {
         let parameters = &function_ref.signature().parameters;
 
         let self_var_value = if parameters[0].is_mutable {
             if !is_mutable {
-                return Err(self.create_err(ExecuteErrorKind::ArgumentIsNotMutable, &node));
+                return Err(self.create_err(RuntimeErrorKind::ArgumentIsNotMutable, &node));
             }
             VariableValue::Reference(self_value_ref.clone())
         } else {
@@ -2016,7 +2015,7 @@ impl<'a, C> Interpreter<'a, C> {
         Ok(result_val)
     }
 
-    fn eval_guard(&mut self, node: &Node, guards: &[Guard]) -> Result<Value, ExecuteError> {
+    fn eval_guard(&mut self, node: &Node, guards: &[Guard]) -> Result<Value, RuntimeError> {
         for guard in guards {
             let should_evaluate = if let Some(found_clause) = &guard.condition {
                 self.evaluate_expression(&found_clause.expression)?
@@ -2030,12 +2029,12 @@ impl<'a, C> Interpreter<'a, C> {
             }
         }
 
-        Err(self.create_err(ExecuteErrorKind::MustHaveGuardArmThatMatches, &node))
+        Err(self.create_err(RuntimeErrorKind::MustHaveGuardArmThatMatches, &node))
     }
 
     #[inline(always)]
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
-    fn eval_match(&mut self, resolved_match: &Match) -> Result<Value, ExecuteError> {
+    fn eval_match(&mut self, resolved_match: &Match) -> Result<Value, RuntimeError> {
         let actual_value = self.evaluate_mut_or_immutable_expression(&resolved_match.expression)?;
         let value_ref = actual_value.to_value_ref();
 
@@ -2110,7 +2109,7 @@ impl<'a, C> Interpreter<'a, C> {
         elements: &[PatternElement],
         expression_to_evaluate: &Expression,
         value_ref: ValueRef,
-    ) -> Result<Value, ExecuteError> {
+    ) -> Result<Value, RuntimeError> {
         // Handle single variable/wildcard patterns that match any value
         if elements.len() == 1 {
             return match &elements[0] {
@@ -2169,7 +2168,7 @@ impl<'a, C> Interpreter<'a, C> {
         expression_to_evaluate: &Expression,
         variant_ref: &EnumVariantType,
         value_ref: ValueRef,
-    ) -> Result<Option<Value>, ExecuteError> {
+    ) -> Result<Option<Value>, RuntimeError> {
         match value_ref.borrow_mut().clone() {
             Value::EnumVariantTuple(value_tuple_type, values) => {
                 // First check if the variant types match
@@ -2265,7 +2264,7 @@ impl<'a, C> Interpreter<'a, C> {
         left_val: Value,
         op: &BinaryOperatorKind,
         right_val: Value,
-    ) -> Result<Value, ExecuteError> {
+    ) -> Result<Value, RuntimeError> {
         let result: Value = match (&left_val, op, &right_val) {
             // Integer operations
             (Value::Int(a), BinaryOperatorKind::Add, Value::Int(b)) => Value::Int(a + b),
@@ -2273,7 +2272,7 @@ impl<'a, C> Interpreter<'a, C> {
             (Value::Int(a), BinaryOperatorKind::Multiply, Value::Int(b)) => Value::Int(a * b),
             (Value::Int(a), BinaryOperatorKind::Divide, Value::Int(b)) => {
                 if *b == 0 {
-                    return Err(self.create_err(ExecuteErrorKind::DivideByZero, node));
+                    return Err(self.create_err(RuntimeErrorKind::DivideByZero, node));
                 }
                 Value::Int(a / b)
             }
@@ -2300,7 +2299,7 @@ impl<'a, C> Interpreter<'a, C> {
             }
             (Value::Float(a), BinaryOperatorKind::Divide, Value::Float(b)) => {
                 if b.abs().inner() <= 400 {
-                    return Err(self.create_err(ExecuteErrorKind::DivideByZero, node));
+                    return Err(self.create_err(RuntimeErrorKind::DivideByZero, node));
                 }
                 Value::Float(*a / *b)
             }
@@ -2392,12 +2391,12 @@ impl<'a, C> Interpreter<'a, C> {
         node: &Node,
         op: &UnaryOperatorKind,
         val: Value,
-    ) -> Result<Value, ExecuteError> {
+    ) -> Result<Value, RuntimeError> {
         match (op, val) {
             (UnaryOperatorKind::Negate, Value::Int(n)) => Ok(Value::Int(-n)),
             (UnaryOperatorKind::Negate, Value::Float(n)) => Ok(Value::Float(-n)),
             (UnaryOperatorKind::Not, Value::Bool(b)) => Ok(Value::Bool(!b)),
-            _ => Err(self.create_err(ExecuteErrorKind::DivideByZero, node)),
+            _ => Err(self.create_err(RuntimeErrorKind::DivideByZero, node)),
         }
     }
 
@@ -2405,7 +2404,7 @@ impl<'a, C> Interpreter<'a, C> {
         &mut self,
         p0: &[Expression],
         p1: &[ValueRef],
-    ) -> Result<bool, ExecuteError> {
+    ) -> Result<bool, RuntimeError> {
         for (a, b_value) in p0.iter().zip(p1.iter()) {
             let a_value = self.evaluate_expression(a)?;
 
@@ -2424,7 +2423,7 @@ impl<'a, C> Interpreter<'a, C> {
         target: &mut Value,
         operator: &CompoundOperatorKind,
         source: &Value,
-    ) -> Result<(), ExecuteError> {
+    ) -> Result<(), RuntimeError> {
         match operator {
             CompoundOperatorKind::Mul => {
                 *target = self.evaluate_binary_op(
@@ -2470,8 +2469,8 @@ impl<'a, C> Interpreter<'a, C> {
         Ok(())
     }
 
-    fn create_err(&self, kind: ExecuteErrorKind, node: &Node) -> ExecuteError {
-        ExecuteError {
+    fn create_err(&self, kind: RuntimeErrorKind, node: &Node) -> RuntimeError {
+        RuntimeError {
             node: node.clone(),
             kind,
         }
@@ -2483,7 +2482,7 @@ impl<'a, C> Interpreter<'a, C> {
         intrinsic_fn: &IntrinsicFunction,
         location: &SingleMutLocationExpression,
         arguments: &Vec<Expression>,
-    ) -> Result<Value, ExecuteError> {
+    ) -> Result<Value, RuntimeError> {
         let val = match intrinsic_fn {
             IntrinsicFunction::VecSelfPush => {
                 let source_val = self.evaluate_expression(&arguments[0])?;
@@ -2494,7 +2493,7 @@ impl<'a, C> Interpreter<'a, C> {
                         vector.push(Rc::new(RefCell::new(source_val)));
                     }
                     _ => {
-                        Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, &node))?;
+                        Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, &node))?;
                     }
                 }
                 //array_val_ref.borrow().clone()
@@ -2510,7 +2509,7 @@ impl<'a, C> Interpreter<'a, C> {
                             vector.extend(items);
                         }
                         _ => {
-                            Err(self.create_err(ExecuteErrorKind::OperationRequiresArray, &node))?;
+                            Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, &node))?;
                         }
                     },
                     _ => {
@@ -2521,7 +2520,7 @@ impl<'a, C> Interpreter<'a, C> {
                 // array_val_ref.borrow().clone()
                 Value::Unit
             }
-            _ => return Err(self.create_err(ExecuteErrorKind::UnknownMutIntrinsic, &node)),
+            _ => return Err(self.create_err(RuntimeErrorKind::UnknownMutIntrinsic, &node)),
         };
 
         Ok(val)

@@ -14,7 +14,7 @@ use swamp_script_dep_loader::{
     DependencyParser, ParsedAstModule, parse_local_modules_and_get_order, parse_single_module,
     swamp_registry_path,
 };
-use swamp_script_error_report::{ScriptResolveError, show_script_resolve_error};
+use swamp_script_error_report::{ScriptResolveError, prelude::show_script_resolve_error};
 use swamp_script_eval_loader::analyze_modules_in_order;
 use swamp_script_modules::modules::{Module, Modules};
 use swamp_script_modules::symtbl::{SymbolTable, SymbolTableRef};

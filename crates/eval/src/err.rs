@@ -14,13 +14,13 @@ pub enum ConversionError {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct ExecuteError {
+pub struct RuntimeError {
     pub node: Node,
-    pub kind: ExecuteErrorKind,
+    pub kind: RuntimeErrorKind,
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum ExecuteErrorKind {
+pub enum RuntimeErrorKind {
     MustHaveGuardArmThatMatches,
     ValueError(ValueError),
     ArgumentIsNotMutable,

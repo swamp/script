@@ -3,7 +3,8 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use crate::err::{ExecuteError, ExecuteErrorKind};
+use crate::err::RuntimeErrorKind;
+use crate::prelude::RuntimeError;
 use crate::prelude::VariableValue;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -176,11 +177,11 @@ impl BlockScopes {
     pub fn lookup_variable_mut_ref(
         &self,
         variable: &VariableRef,
-    ) -> Result<&ValueRef, ExecuteError> {
+    ) -> Result<&ValueRef, RuntimeError> {
         let complete_var = self.lookup_var(variable.scope_index, variable.variable_index);
         match complete_var {
-            VariableValue::Value(_) => Err(ExecuteError {
-                kind: ExecuteErrorKind::VariableWasNotMutable,
+            VariableValue::Value(_) => Err(RuntimeError {
+                kind: RuntimeErrorKind::VariableWasNotMutable,
                 node: variable.name.clone(),
             }),
             VariableValue::Reference(reference) => Ok(reference),
@@ -191,7 +192,7 @@ impl BlockScopes {
         &mut self,
         init_var: &VariableRef,
         source_memory: VariableValue,
-    ) -> Result<(), ExecuteError> {
+    ) -> Result<(), RuntimeError> {
         let is_mutable = init_var.is_mutable();
         match &source_memory {
             VariableValue::Value(normal_value) => {
@@ -229,12 +230,12 @@ impl BlockScopes {
         variable_index: usize,
         memory_value: VariableValue,
         check_is_mut: bool,
-    ) -> Result<(), ExecuteError> {
+    ) -> Result<(), RuntimeError> {
         match memory_value {
             VariableValue::Value(_) => {
                 if check_is_mut {
-                    return Err(ExecuteError {
-                        kind: ExecuteErrorKind::VariableWasNotMutable,
+                    return Err(RuntimeError {
+                        kind: RuntimeErrorKind::VariableWasNotMutable,
                         node: Node::new_unknown(),
                     });
                 }
@@ -251,7 +252,7 @@ impl BlockScopes {
         relative_scope_index: usize,
         variable_index: usize,
         new_value_ref: ValueRef,
-    ) -> Result<(), ExecuteError> {
+    ) -> Result<(), RuntimeError> {
         let existing_var = &mut self.current_block_scopes[relative_scope_index].get(variable_index);
 
         match existing_var {
@@ -259,8 +260,8 @@ impl BlockScopes {
                 *existing_var = &VariableValue::Reference(new_value_ref);
                 Ok(())
             }
-            _ => Err(ExecuteError {
-                kind: ExecuteErrorKind::VariableWasNotMutable,
+            _ => Err(RuntimeError {
+                kind: RuntimeErrorKind::VariableWasNotMutable,
                 node: Node::new_unknown(),
             }),
         }
@@ -272,7 +273,7 @@ impl BlockScopes {
         relative_scope_index: usize,
         variable_index: usize,
         new_value: Value,
-    ) -> Result<(), ExecuteError> {
+    ) -> Result<(), RuntimeError> {
         let existing_var = &mut self.current_block_scopes[relative_scope_index].get(variable_index);
 
         match existing_var {
@@ -280,8 +281,8 @@ impl BlockScopes {
                 *r.borrow_mut() = new_value;
                 Ok(())
             }
-            _ => Err(ExecuteError {
-                kind: ExecuteErrorKind::VariableWasNotMutable,
+            _ => Err(RuntimeError {
+                kind: RuntimeErrorKind::VariableWasNotMutable,
                 node: Node::new_unknown(),
             }),
         }
@@ -292,7 +293,7 @@ impl BlockScopes {
         &mut self,
         variable: &VariableRef,
         variable_value: VariableValue,
-    ) -> Result<(), ExecuteError> {
+    ) -> Result<(), RuntimeError> {
         match variable_value {
             VariableValue::Reference(reference) => self.overwrite_existing_var_ref(
                 variable.scope_index,
