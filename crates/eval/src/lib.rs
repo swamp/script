@@ -1438,7 +1438,6 @@ impl<'a, C> Interpreter<'a, C> {
             },
             IntrinsicFunction::MapSubscriptMut => match &mut *value_ref.borrow_mut() {
                 Value::Map(_type_id, seq_map) => {
-                    info!("SUBSCRIPT MUT!!!");
                     let key_value = self.evaluate_expression(&arguments[0])?;
                     let maybe_value = seq_map.get_mut(&key_value);
                     maybe_value.unwrap().clone()
@@ -1451,7 +1450,6 @@ impl<'a, C> Interpreter<'a, C> {
             IntrinsicFunction::MapSubscriptMutCreateIfNeeded => {
                 match &mut *value_ref.borrow_mut() {
                     Value::Map(_type_id, seq_map) => {
-                        info!("SUBSCRIPT MUT! CREATE_IF_NEEDED!!");
                         let key_value = self.evaluate_expression(&arguments[0])?;
                         let maybe_value = seq_map.get_mut(&key_value);
                         if let Some(ref found) = maybe_value {
@@ -1459,7 +1457,6 @@ impl<'a, C> Interpreter<'a, C> {
                         } else {
                             let empty_value = Rc::new(RefCell::new(Value::Int(0)));
                             seq_map.insert(key_value, empty_value.clone()).unwrap();
-                            warn!(?seq_map, "inserting empty!");
                             empty_value.clone()
                         }
                     }
@@ -1618,7 +1615,6 @@ impl<'a, C> Interpreter<'a, C> {
 
             IntrinsicFunction::MapSubscript => match value_ref.borrow().clone() {
                 Value::Map(_type_id, seq_map) => {
-                    info!("SUBSCRIPT COPY!!!");
                     let key_value = self.evaluate_expression(&arguments[0])?;
                     let maybe_value = seq_map.get(&key_value);
                     Value::Option(maybe_value.cloned())

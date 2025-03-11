@@ -6,12 +6,8 @@
 use crate::TypeContext;
 use crate::err::{Error, ErrorKind};
 use crate::{Analyzer, LocationSide};
-use std::rc::Rc;
 use swamp_script_node::Node;
-use swamp_script_semantic::intr::IntrinsicFunction;
-use swamp_script_semantic::{
-    ArgumentExpressionOrLocation, Expression, ExpressionKind, MutOrImmutableExpression,
-};
+use swamp_script_semantic::{ArgumentExpressionOrLocation, MutOrImmutableExpression};
 use swamp_script_types::prelude::*;
 
 impl Analyzer<'_> {

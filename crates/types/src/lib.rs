@@ -8,12 +8,9 @@ pub mod prelude;
 use fmt::{Debug, Display};
 use seq_fmt::comma;
 use seq_map::SeqMap;
-use std::any::Any;
-use std::cell::RefCell;
 use std::cmp::PartialEq;
 use std::fmt;
 use std::hash::Hash;
-use std::rc::Rc;
 use swamp_script_node::Node;
 use tracing::info;
 

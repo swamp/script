@@ -1984,7 +1984,6 @@ impl<'a> Analyzer<'a> {
 
             let ty = mut_expr.ty();
             let debug_text = self.get_text(&variable_binding.variable.name).to_string();
-            info!(?ty, debug_text, "mut expression returned");
 
             if let Type::Optional(found_ty) = ty {
                 let variable_ref = self.create_variable(&variable_binding.variable, found_ty)?;
@@ -2252,7 +2251,6 @@ impl<'a> Analyzer<'a> {
                         let analyzed_key_expression =
                             self.analyze_expression(key_expression, &subscript_lookup_context)?;
                         let return_type = *found.signature.return_type.clone();
-                        info!(?return_type, "subscript_mut return type");
                         ty = return_type.clone();
                         //let argument = ArgumentExpressionOrLocation::Expression(analyzed_expr);
                         self.add_location_item(

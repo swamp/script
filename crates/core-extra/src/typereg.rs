@@ -3,11 +3,11 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
+/*
 use seq_map::SeqMap;
 use std::cell::RefCell;
 use swamp_script_types::prelude::*;
 
-/*
 #[derive(Debug)]
 pub struct TypeRegistry {
     // Container type constructors

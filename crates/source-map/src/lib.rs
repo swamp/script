@@ -8,7 +8,7 @@ use seq_map::SeqMap;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
-use tracing::info;
+use tracing::trace;
 
 pub mod prelude;
 
@@ -91,7 +91,7 @@ impl SourceMap {
     }
 
     pub fn read_file(&mut self, path: &Path, mount_name: &str) -> io::Result<(FileId, String)> {
-        info!(
+        trace!(
             ?path,
             ?mount_name,
             "actually reading file from secondary storage"
@@ -180,12 +180,6 @@ impl SourceMap {
         mount_name: &str,
         relative_path: &str,
     ) -> io::Result<(FileId, String)> {
-        info!(
-            ?mount_name,
-            ?relative_path,
-            "requested relative path in mount"
-        );
-
         if let Some(found_in_cache) = self
             .file_cache
             .get(&(mount_name.to_string(), relative_path.to_string()))
@@ -322,14 +316,6 @@ impl SourceMap {
         for component in &target_components[common_prefix_len..] {
             relative_path.push(component);
         }
-
-        info!(
-            ?current_dir,
-            ?target,
-            ?relative_path,
-            "minimal relative path"
-        );
-
         Ok(relative_path)
     }
     pub fn get_relative_path_to(&self, file_id: FileId, current_dir: &Path) -> io::Result<PathBuf> {

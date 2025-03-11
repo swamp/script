@@ -4,7 +4,7 @@
  */
 
 use std::fmt;
-use std::fmt::{Debug, Formatter};
+use std::fmt::Debug;
 use std::rc::Rc;
 use swamp_script_types::prelude::*;
 

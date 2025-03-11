@@ -20,7 +20,6 @@ use swamp_script_ast::{
 use swamp_script_ast::{Function, WhenBinding};
 use swamp_script_ast::{LiteralKind, MutableOrImmutableExpression};
 use swamp_script_ast::{Postfix, PostfixChain};
-use tracing::info;
 
 pub struct ParseResult<'a> {
     #[allow(dead_code)]

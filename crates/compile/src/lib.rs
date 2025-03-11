@@ -8,8 +8,8 @@ use std::io;
 use std::path::Path;
 use std::rc::Rc;
 use std::str::FromStr;
+use swamp_script_analyzer::Analyzer;
 use swamp_script_analyzer::prelude::{Error, Program};
-use swamp_script_analyzer::{Analyzer, TypeContext};
 use swamp_script_dep_loader::{
     DependencyParser, ParsedAstModule, parse_local_modules_and_get_order, parse_single_module,
     swamp_registry_path,
@@ -17,14 +17,13 @@ use swamp_script_dep_loader::{
 use swamp_script_error_report::{ScriptResolveError, show_script_resolve_error};
 use swamp_script_eval_loader::analyze_modules_in_order;
 use swamp_script_modules::modules::{Module, Modules};
-use swamp_script_modules::prelude::ModuleRef;
 use swamp_script_modules::symtbl::{SymbolTable, SymbolTableRef};
 use swamp_script_pretty_print::{SourceMapDisplay, SymbolTableDisplay};
 use swamp_script_semantic::ProgramState;
 use swamp_script_source_map::SourceMap;
 use swamp_script_source_map_lookup::SourceMapWrapper;
 use tiny_ver::TinyVersion;
-use tracing::{debug, error, info, trace};
+use tracing::{debug, info, trace};
 
 const COMPILER_VERSION: &str = "0.0.0";
 
@@ -146,6 +145,7 @@ pub fn bootstrap_modules(
         .extend_intrinsic_functions_from(&core_symbol_table)
         .unwrap();
 
+    /*
     let source_map_lookup = SourceMapWrapper { source_map };
     let pretty_printer = SourceMapDisplay {
         source_map: &source_map_lookup,
@@ -157,6 +157,8 @@ pub fn bootstrap_modules(
     };
 
     info!(%symbol_table_display, "core symbol table");
+
+     */
 
     core_module.symbol_table = core_analyzed_symbol_table;
 

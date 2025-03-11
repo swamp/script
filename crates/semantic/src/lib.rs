@@ -18,7 +18,7 @@ use std::fmt::{Debug, Display, Formatter};
 use std::rc::Rc;
 use swamp_script_node::Node;
 use swamp_script_types::prelude::*;
-use tracing::{error, info};
+use tracing::error;
 
 #[derive(Debug, Clone)]
 pub struct TypeWithMut {
@@ -787,10 +787,6 @@ impl AssociatedImpls {
                 return Some(func);
             }
         }
-        info!(
-            ?ty,
-            function_name, "could not find member, this is what I have"
-        );
         None
     }
 

@@ -6,7 +6,8 @@ pub mod prelude;
 use dirs::home_dir;
 use seq_map::SeqMap;
 use std::collections::HashSet;
-use std::path::PathBuf;
+use std::io::ErrorKind;
+use std::path::{Path, PathBuf};
 use std::{env, io};
 use swamp_script_ast::Function;
 use swamp_script_ast::prelude::*;
@@ -14,7 +15,6 @@ use swamp_script_parser::{AstParser, SpecificError};
 use swamp_script_source_map::{FileId, SourceMap};
 use tracing::debug;
 pub struct ParseRoot;
-use tracing::info;
 
 #[derive(Debug)]
 pub enum ParseRootError {
@@ -253,8 +253,6 @@ pub fn parse_single_module(
     source_map: &mut SourceMap,
     module_path: &[String],
 ) -> Result<ParsedAstModule, DependencyError> {
-    info!(?module_path, "complete path");
-
     let mount_name = mount_name_from_path(&module_path);
 
     let (file_id, script) = source_map.read_file_relative(
@@ -407,7 +405,7 @@ impl From<DependencyError> for DepLoaderError {
 
 /// # Errors
 ///
-pub fn os_home_relative_path(project_name: &str, directory_name: &str) -> io::Result<PathBuf> {
+pub fn os_home_relative_path(project_name: &str) -> io::Result<PathBuf> {
     home_dir().map_or_else(
         || {
             Err(io::Error::new(
@@ -418,16 +416,32 @@ pub fn os_home_relative_path(project_name: &str, directory_name: &str) -> io::Re
         |home_path| {
             let mut path = home_path;
             path.push(format!(".{project_name}"));
-            path.push(directory_name);
             Ok(path)
         },
     )
 }
 
+pub fn path_from_environment_variable() -> io::Result<PathBuf> {
+    if let Ok(string_value) = &env::var("SWAMP_HOME") {
+        Ok(Path::new(string_value).to_path_buf())
+    } else {
+        Err(io::Error::new(ErrorKind::InvalidData, "missing SWAMP_HOME"))
+    }
+}
+pub fn swamp_home() -> io::Result<PathBuf> {
+    if let Ok(found_path) = path_from_environment_variable() {
+        Ok(found_path)
+    } else {
+        os_home_relative_path("swamp")
+    }
+}
+
 /// # Errors
 ///
 pub fn swamp_registry_path() -> io::Result<PathBuf> {
-    os_home_relative_path("swamp", "packages")
+    let mut swamp_home = swamp_home()?;
+    swamp_home.push("packages");
+    Ok(swamp_home)
 }
 
 pub fn parse_local_modules_and_get_order(

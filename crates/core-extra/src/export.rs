@@ -3,11 +3,11 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
+/*
 //use crate::typereg::TypeRegistry;
 use crate::value::Value;
 use fixed32::Fp;
 use swamp_script_types::prelude::*;
-/*
 pub trait SwampExport: Sized {
     fn get_resolved_type(registry: &TypeRegistry) -> Type;
     fn to_swamp_value(&self, registry: &TypeRegistry) -> Value; // Added registry parameter

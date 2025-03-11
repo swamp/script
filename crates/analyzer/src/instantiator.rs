@@ -1,15 +1,11 @@
 use crate::prelude::Error;
 use seq_map::SeqMap;
-use std::cell::RefCell;
-use std::rc::Rc;
 use swamp_script_semantic::SemanticError;
-use swamp_script_semantic::prelude::InstantiationCache;
 use swamp_script_types::{
     AnonymousStructType, NamedStructType, ParameterizedTypeBlueprint, ParameterizedTypeKind,
     Signature, StructTypeField, Type, TypeForParameter, all_types_are_concrete,
     all_types_are_concrete_or_unit,
 };
-use tracing::info;
 
 #[derive(Debug)]
 pub struct TypeVariableScope {
@@ -173,7 +169,6 @@ impl Instantiator {
                     .type_variables
                     .get(type_variable)
                     .ok_or(SemanticError::UnknownTypeVariable)?;
-                info!(?found_type, "found type");
                 assert!(found_type.is_concrete());
                 (true, found_type.clone())
             }
