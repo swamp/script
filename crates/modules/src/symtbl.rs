@@ -124,7 +124,7 @@ impl SymbolTable {
     ) -> Result<(), SemanticError> {
         for (name, symbol) in symbol_table.symbols() {
             if let Symbol::FunctionDefinition(func_def) = symbol {
-                if let FuncDef::Intrinsic(intrinsic_def) = func_def {
+                if let FuncDef::Intrinsic(_intrinsic_def) = func_def {
                     self.add_symbol(name, symbol.clone())?;
                 }
             }
