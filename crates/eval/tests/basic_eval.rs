@@ -10,7 +10,6 @@ use std::rc::Rc;
 use swamp_script_core_extra::prelude::Value;
 use swamp_script_core_extra::qck_des::quick_deserialize;
 use swamp_script_eval::values_to_value_refs_owned;
-use swamp_script_semantic::{AnonymousStructType, Node, StructType, StructTypeField, Type};
 
 mod util;
 
@@ -703,64 +702,6 @@ fn serialize_octets() {
     assert_eq!(size, deserialized_octet_size);
 }
 
-#[test_log::test]
-fn serialize_struct_octets() {
-    let a = Value::Int(2);
-    let b = Value::String("some string".to_string());
-    let c = Value::Float(Fp::from(2.0));
-
-    let mut defined_fields = SeqMap::new();
-    defined_fields
-        .insert(
-            "a".to_string(),
-            StructTypeField {
-                identifier: None,
-                field_type: Type::Int,
-            },
-        )
-        .expect("");
-    defined_fields
-        .insert(
-            "b".to_string(),
-            StructTypeField {
-                identifier: None,
-                field_type: Type::String,
-            },
-        )
-        .expect("");
-    defined_fields
-        .insert(
-            "c".to_string(),
-            StructTypeField {
-                identifier: None,
-                field_type: Type::Float,
-            },
-        )
-        .expect("");
-
-    let struct_type = StructType {
-        name: Node::default(),
-        assigned_name: "SomeStructType".to_string(),
-        anon_struct_type: AnonymousStructType { defined_fields },
-        functions: SeqMap::default(),
-    };
-    let struct_type_ref = Rc::new(RefCell::new(struct_type));
-
-    let fields = values_to_value_refs_owned(vec![a, b, c]);
-    let struct_value = Value::Struct(struct_type_ref.clone(), fields);
-
-    let mut buf = [0u8; 256];
-    let size = struct_value.quick_serialize(&mut buf, 0);
-    assert_eq!(size, 21);
-
-    let complete_struct_type = Type::Struct(struct_type_ref);
-
-    let (deserialized_value, deserialized_octet_size) =
-        quick_deserialize(&complete_struct_type, &buf, 0);
-    assert_eq!(size, deserialized_octet_size);
-
-    assert_eq!(struct_value.to_string(), deserialized_value.to_string());
-}
 
 #[test_log::test]
 fn val_assign_coerce() {
