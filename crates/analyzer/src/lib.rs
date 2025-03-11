@@ -652,7 +652,7 @@ impl<'a> Analyzer<'a> {
                 return Ok(expr);
             }
 
-            let result = self.coerce_expression(
+            let result = self.types_did_not_match_try_late_coerce_expression(
                 expr,
                 found_expected_type,
                 &encountered_type,
@@ -2648,7 +2648,7 @@ impl<'a> Analyzer<'a> {
         Ok(self.create_expr(ExpressionKind::Continue, Type::Never, node))
     }
 
-    fn coerce_expression(
+    fn types_did_not_match_try_late_coerce_expression(
         &self,
         expr: Expression,
         expected_type: &Type,
@@ -2678,7 +2678,11 @@ impl<'a> Analyzer<'a> {
             }
         }
 
-        Ok(expr)
+        error!(?expected_type, ?encountered_type, "incompatible types");
+        Err(self.create_err(
+            ErrorKind::IncompatibleTypes(expected_type.clone(), encountered_type.clone()),
+            &node,
+        ))
     }
 
     fn instantiate_blueprint_and_members(

@@ -418,7 +418,7 @@ fn add_intrinsic_map_functions(core_ns: &mut SymbolTable) {
             .unwrap();
     }
 
-    let self_value_to_option_value = Signature {
+    let self_value_to_unit_value = Signature {
         parameters: [
             TypeForParameter {
                 name: "self".to_string(),
@@ -434,7 +434,7 @@ fn add_intrinsic_map_functions(core_ns: &mut SymbolTable) {
             },
         ]
         .into(),
-        return_type: Box::new(Type::Optional(Box::new(Type::Never))),
+        return_type: Box::new(Type::Unit),
     };
 
     let self_value_to_option_value_functions = [IntrinsicFunction::MapRemove];
@@ -445,7 +445,7 @@ fn add_intrinsic_map_functions(core_ns: &mut SymbolTable) {
             .add_intrinsic_function(IntrinsicFunctionDefinition {
                 name,
                 intrinsic: intrinsic_fn,
-                signature: self_value_to_option_value.clone(),
+                signature: self_value_to_unit_value.clone(),
             })
             .unwrap();
     }
@@ -591,7 +591,7 @@ fn add_intrinsic_vec_functions(core_ns: &mut SymbolTable) {
             .unwrap();
     }
 
-    let self_int_to_optional_value = Signature {
+    let self_int_to_unit_value = Signature {
         parameters: [
             TypeForParameter {
                 name: "self".to_string(),
@@ -607,7 +607,7 @@ fn add_intrinsic_vec_functions(core_ns: &mut SymbolTable) {
             },
         ]
         .into(),
-        return_type: Box::new(Type::Optional(Box::new(Type::Never))),
+        return_type: Box::new(Type::Unit),
     };
 
     let self_int_to_optional_value_functions = [IntrinsicFunction::VecRemoveIndex];
@@ -618,7 +618,7 @@ fn add_intrinsic_vec_functions(core_ns: &mut SymbolTable) {
             .add_intrinsic_function(IntrinsicFunctionDefinition {
                 name,
                 intrinsic: intrinsic_fn,
-                signature: self_int_to_optional_value.clone(),
+                signature: self_int_to_unit_value.clone(),
             })
             .unwrap();
     }
@@ -835,19 +835,7 @@ fn add_intrinsic_float_functions(core_ns: &mut SymbolTable) {
         return_type: Box::new(Type::Float),
     };
 
-    let float_to_int = Signature {
-        parameters: [TypeForParameter {
-            name: "self".into(),
-            resolved_type: Type::Float,
-            is_mutable: false,
-            node: None,
-        }]
-        .into(),
-        return_type: Box::new(Type::Int),
-    };
-
     let float_to_float_functions = [
-        IntrinsicFunction::FloatFloor,
         IntrinsicFunction::FloatSqrt,
         IntrinsicFunction::FloatSign,
         IntrinsicFunction::FloatAbs,
@@ -868,7 +856,18 @@ fn add_intrinsic_float_functions(core_ns: &mut SymbolTable) {
             .unwrap();
     }
 
-    let float_to_int_functions = [IntrinsicFunction::FloatRound];
+    let float_to_int = Signature {
+        parameters: [TypeForParameter {
+            name: "self".into(),
+            resolved_type: Type::Float,
+            is_mutable: false,
+            node: None,
+        }]
+        .into(),
+        return_type: Box::new(Type::Int),
+    };
+
+    let float_to_int_functions = [IntrinsicFunction::FloatRound, IntrinsicFunction::FloatFloor];
     for intrinsic_fn in float_to_int_functions {
         let name = intrinsic_fn.to_string();
         core_ns

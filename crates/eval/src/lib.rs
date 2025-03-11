@@ -24,10 +24,8 @@ use swamp_script_semantic::{
     SingleLocationExpressionKind, UnaryOperatorKind,
 };
 use swamp_script_semantic::{ExternalFunctionId, Postfix, SingleMutLocationExpression};
-use swamp_script_types::{
-    EnumVariantType, ExternalType, Type, TypeForParameter, same_anon_struct_ref,
-};
-use tracing::{error, info, warn};
+use swamp_script_types::{EnumVariantType, TypeForParameter, same_anon_struct_ref};
+use tracing::{error, info};
 pub mod err;
 
 mod block;
@@ -426,9 +424,6 @@ impl<'a, C> Interpreter<'a, C> {
             SingleLocationExpressionKind::MutVariableRef => value_ref,
             SingleLocationExpressionKind::MutStructFieldRef(_base_expression, _resolved_access) => {
                 value_ref
-            }
-            _ => {
-                panic!("not sure what this is")
             }
         };
 
@@ -1377,7 +1372,7 @@ impl<'a, C> Interpreter<'a, C> {
                     }
                 }
 
-                value_ref.borrow().clone()
+                Value::Unit
             }
 
             IntrinsicFunction::VecClear => {
@@ -1483,11 +1478,16 @@ impl<'a, C> Interpreter<'a, C> {
                     let mut borrowed = value_ref.borrow_mut();
                     match &mut *borrowed {
                         Value::Map(_key_type, seq_map) => {
-                            let x = seq_map.remove(&index_val);
+                            seq_map.remove(&index_val);
+                            /*
+                            let x =
                             x.map_or_else(
                                 || Value::Option(None),
                                 |v| Value::Option(Some(v.clone())),
                             )
+
+                             */
+                            Value::Unit
                         }
                         _ => {
                             return Err(self.create_err(RuntimeErrorKind::NotAMap, node));

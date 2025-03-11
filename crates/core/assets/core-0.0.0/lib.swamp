@@ -21,7 +21,7 @@ impl Float {
     ///
     /// # Returns
     /// A `Float` representing the floor value.
-    fn floor(self) -> Float {
+    fn floor(self) -> Int {
         float_floor(self)
     }
 
@@ -347,7 +347,7 @@ impl Vec<T> {
     ///
     /// # Returns
     /// An optional value of type `T` representing the removed element.
-    fn remove(mut self, index: Int) -> T? {
+    fn remove(mut self, index: Int) {
         vec_remove(mut self, index)
     }
 
@@ -467,7 +467,7 @@ impl Map<K, V> {
     ///
     /// # Returns
     /// An optional value of type `V` associated with the removed key.
-    fn remove(mut self, key: K) -> V? {
+    fn remove(mut self, key: K) {
         map_remove(mut self, key)
     }
 }

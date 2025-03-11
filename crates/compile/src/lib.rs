@@ -4,8 +4,10 @@
  */
 use regex::Regex;
 use seq_map::SeqMap;
+use std::env::current_dir;
 use std::io;
 use std::path::Path;
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::str::FromStr;
 use swamp_script_analyzer::Analyzer;
@@ -268,6 +270,10 @@ pub fn compile_and_analyze(
     )
 }
 
+pub fn current_path() -> PathBuf {
+    current_dir().unwrap()
+}
+
 /// # Errors
 ///
 /// # Panics
@@ -278,7 +284,7 @@ pub fn bootstrap_and_compile(
     root_path: &[String],
 ) -> Result<Program, ScriptResolveError> {
     let bootstrap_result = bootstrap_modules(source_map).inspect_err(|err| {
-        show_script_resolve_error(err, source_map, Path::new(""));
+        show_script_resolve_error(err, source_map, &current_path());
     })?;
 
     let mut program = bootstrap_result.program;
@@ -307,7 +313,7 @@ pub fn bootstrap_and_compile(
         core_symbol_table.into(),
     )
     .inspect_err(|err| {
-        show_script_resolve_error(err, source_map, Path::new(""));
+        show_script_resolve_error(err, source_map, &current_path());
     })?;
 
     // debug_all_modules(&program.modules, source_map);

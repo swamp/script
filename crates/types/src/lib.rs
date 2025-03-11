@@ -302,7 +302,6 @@ fn compare_struct_types(a: &NamedStructType, b: &NamedStructType) -> bool {
     let b_borrow = b;
 
     if a_borrow.assigned_name != b_borrow.assigned_name {
-        info!("names different");
         return false;
     }
 
