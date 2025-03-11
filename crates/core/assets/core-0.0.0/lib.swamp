@@ -1,0 +1,489 @@
+/// # Swamp Core Module
+/// Welcome to Swamp! This module provides basic implementations for common types.
+/// **Note on Intrinsics:**
+/// Some functions in this module, such as `int_rnd` and `float_rnd`, are not normal functions.
+/// They are compiler intrinsics that are replaced with optimized code during compilation.
+
+impl Bool {
+  fn default() -> Bool {
+    false
+  }
+}
+
+impl Float {
+    fn default() -> Float {
+        0.0
+    }
+
+    /// Rounds the Float value down.
+    ///
+    /// Uses intrinsic function `float_floor` to return the largest integer value not greater than the Float.
+    ///
+    /// # Returns
+    /// A `Float` representing the floor value.
+    fn floor(self) -> Float {
+        float_floor(self)
+    }
+
+    /// Rounds the Float value to the nearest integer.
+    ///
+    /// Uses intrinsic function `float_round` to round the Float.
+    ///
+    /// # Returns
+    /// An `Int` representing the rounded value.
+    fn round(self) -> Int {
+        float_round(self)
+    }
+
+    /// Computes the square root.
+    ///
+    /// Uses intrinsic function `float_sqrt` to calculate the square root of the Float value.
+    ///
+    /// # Returns
+    /// A `Float` representing the square root.
+    fn sqrt(self) -> Float {
+        float_sqrt(self)
+    }
+
+    /// Determines the sign of the Float.
+    ///
+    /// Uses intrinsic function `float_sign` to indicate whether the value is positive or negative.
+    ///
+    /// # Returns
+    /// A `Float` representing the sign.
+    fn sign(self) -> Float {
+        float_sign(self)
+    }
+
+    /// Computes the absolute value.
+    ///
+    /// Uses intrinsic function `float_abs` to return the absolute (non-negative) value of the Float.
+    ///
+    /// # Returns
+    /// A `Float` with the absolute value.
+    fn abs(self) -> Float {
+        float_abs(self)
+    }
+
+    /// Returns a pseudo-random number between 0.0 and 1.0.
+    ///
+    /// Uses intrinsic function `float_rnd` to generate the number.
+    /// **Note:** This function is by design 100% deterministic and not designed for cryptographic or security-sensitive use.
+    ///
+    /// # Returns
+    /// A `Float` between 0.0 and 1.0.
+    fn rnd(self) -> Float {
+        float_rnd(self)
+    }
+
+    /// Calculates the cosine.
+    ///
+    /// Uses intrinsic function `float_cos` to compute the cosine of the `Float` value.
+    ///
+    /// # Returns
+    /// A `Float` representing the cosine.
+    fn cos(self) -> Float {
+        float_cos(self)
+    }
+
+    /// Calculates the sine.
+    ///
+    /// Uses intrinsic function `float_sin` to compute the sine of the Float value.
+    ///
+    /// # Returns
+    /// A `Float` representing the sine.
+    fn sin(self) -> Float {
+        float_sin(self)
+    }
+
+    /// Calculates the arc cosine.
+    ///
+    /// Uses intrinsic function `float_acos` to compute the arc cosine (inverse cosine) of the Float value.
+    ///
+    /// # Returns
+    /// A `Float` representing the arc cosine.
+    fn acos(self) -> Float {
+        float_acos(self)
+    }
+
+    /// Calculates the arc sine.
+    ///
+    /// Uses intrinsic function `float_asin` to compute the arc sine (inverse sine) of the Float value.
+    ///
+    /// # Returns
+    /// A `Float` representing the arc sine.
+    fn asin(self) -> Float {
+        float_asin(self)
+    }
+
+    /// Computes the angle from the x-axis.
+    ///
+    /// # Parameters
+    /// - `x`: The second coordinate as a `Float`.
+    ///
+    /// Uses intrinsic function `float_atan2` to calculate the angle (in radians) from the x-axis to the point `(self, x)`.
+    ///
+    /// # Returns
+    /// A `Float` representing the computed angle.
+    fn atan2(self, x: Float) -> Float {
+        float_atan2(self, x)
+    }
+
+    /// Returns the minimum of two Floats.
+    ///
+    /// # Parameters
+    /// - `x`: Another `Float` to compare.
+    ///
+    /// Uses intrinsic function `float_min` to return the smaller of the two values.
+    ///
+    /// # Returns
+    /// A `Float` representing the minimum value.
+    fn min(self, x: Float) -> Float {
+        float_min(self, x)
+    }
+
+    /// Returns the maximum of two Floats.
+    ///
+    /// # Parameters
+    /// - `x`: Another `Float` to compare.
+    ///
+    /// Uses intrinsic function `float_max` to return the larger of the two values.
+    ///
+    /// # Returns
+    /// A `Float` representing the maximum value.
+    fn max(self, x: Float) -> Float {
+        float_max(self, x)
+    }
+
+    /// Clamps the Float within a range.
+    ///
+    /// # Parameters
+    /// - `min`: The minimum allowed value.
+    /// - `max`: The maximum allowed value.
+    ///
+    /// Uses intrinsic function `float_clamp` to restrict the Float to the given range.
+    ///
+    /// # Returns
+    /// A `Float` that is clamped between `min` and `max`.
+    fn clamp(self, min: Float, max: Float) -> Float {
+        float_clamp(self, min, max)
+    }
+
+}
+
+impl Int {
+    fn default() -> Int {
+        0
+    }
+
+    /// Computes the absolute value.
+    ///
+    /// Uses intrinsic function `int_abs` to return the non-negative value of the Int.
+    ///
+    /// # Returns
+    /// An `Int` with the absolute value.
+    fn abs(self) -> Int {
+        int_abs(self)
+    }
+
+    /// Returns a pseudo-random number between 0 and 32767.
+    ///
+    /// Uses intrinsic function `int_rnd` to generate the number.
+    ///
+    /// **Note:** This function is by design 100% deterministic and not designed for cryptographic or security-sensitive use.
+    ///
+    /// # Returns
+    /// An `Int` between 0 and 32767.
+    fn rnd(self) -> Int {
+        int_rnd(self)
+    }
+
+    /// Returns the maximum of two Int values.
+    ///
+    /// # Parameters
+    /// - `x`: Another `Int` to compare.
+    ///
+    /// Uses intrinsic function `int_max` to return the larger of the two values.
+    ///
+    /// # Returns
+    /// An `Int` representing the maximum value.
+    fn max(self, x: Int) -> Int {
+        int_max(self, x)
+    }
+
+    /// Returns the minimum of two Int values.
+    ///
+    /// # Parameters
+    /// - `x`: Another `Int` to compare.
+    ///
+    /// Uses intrinsic function `int_min` to return the smaller of the two values.
+    ///
+    /// # Returns
+    /// An `Int` representing the minimum value.
+    fn min(self, x: Int) -> Int {
+        int_min(self, x)
+    }
+
+    /// Converts an Int to a Float.
+    ///
+    /// Uses intrinsic function `int_to_float` to convert the integer value to its floating-point representation.
+    ///
+    /// # Returns
+    /// A `Float` representing the integer.
+    fn to_float(self) -> Float {
+        int_to_float(self)
+    }
+}
+
+impl String {
+    fn default() -> String {
+        ""
+    }
+
+    /// Computes the length of a String.
+    ///
+    /// # Parameters
+    /// - `s`: The `String` whose length is to be determined.
+    ///
+    /// Uses intrinsic function `string_len` to return the number of characters in the string.
+    ///
+    /// # Returns
+    /// An `Int` representing the length of the string.
+    fn len(s: String) -> Int {
+        string_len(s)
+    }
+}
+
+struct Slice<T>
+
+struct SlicePair<K, V>
+
+struct Vec<T> {
+}
+
+impl Vec<T> {
+    /// Creates a new vector
+    ///
+    /// Uses intrinsic function `vec_create` to add the value.
+    fn new() -> Vec<T> {
+        vec_create()
+    }
+
+    /// Creates a new vector from a Slice.
+    ///
+    /// # Parameters
+    /// - `slice`: The Slice containing the initial elements.
+    ///
+    /// Uses intrinsic function `vec_from_slice` to create the vector.
+    fn new_from_slice(slice: Slice<T>) -> Vec<T> {
+        vec_from_slice(slice)
+    }
+
+    fn iter(self) -> (Int, T) {
+        vec_iter(self)
+    }
+
+    fn iter_mut(self) -> (Int, T) {
+        vec_iter_mut(self)
+    }
+
+    /// Adds an element at the end of the vector.
+    ///
+    /// # Parameters
+    /// - `value`: The element to be inserted at the end of the vector.
+    ///
+    /// Uses intrinsic function `vec_push` to add the value.
+    fn push(mut self, value: T) {
+        vec_push(mut self, value)
+    }
+
+    /// Gets an element at the specified index
+    ///
+    /// # Parameters
+    /// - `index`: The index of the element to get
+    ///
+    /// # Panics
+    /// If the index is outside of the vector, it panics.
+    ///
+    /// Uses intrinsic function `vec_subscript` to fetch the value.
+    fn subscript(self, index: Int) -> T {
+        vec_subscript(self, index)
+    }
+
+    /// Gets a mutable element at the specified index
+    ///
+    /// # Parameters
+    /// - `index`: The index of the element to get
+    /// - `out_value`: The value to modify
+    ///
+    /// # Panics
+    /// If the index is outside of the vector, it panics.
+    ///
+    /// Uses intrinsic function `vec_subscript_mut` to fetch the mutable value.
+    fn subscript_mut(mut self, index: Int) -> T {
+        vec_subscript_mut(mut self, index)
+    }
+
+
+    /// Gets a mutable element with the specified key. Create a key if it doesn't exist
+    ///
+    /// # Parameters
+    /// - `key`: The key of the element to get
+    /// - `out_value`: The value to modify
+    ///
+    /// Uses intrinsic function `map_subscript_mut_create_if_needed` to fetch the mutable value.
+    fn subscript_mut_create_if_needed(mut self, index: Int) -> T {
+        vec_subscript_mut(mut self, index)
+    }
+
+
+    /// Removes an element at a specific index.
+    ///
+    /// # Parameters
+    /// - `index`: The position from which to remove the element.
+    ///
+    /// Uses intrinsic function `vec_remove` to remove and return the element at the given index.
+    /// Returns `None` if the index is out of bounds.
+    ///
+    /// # Returns
+    /// An optional value of type `T` representing the removed element.
+    fn remove(mut self, index: Int) -> T? {
+        vec_remove(mut self, index)
+    }
+
+    /// Clears all elements.
+    ///
+    /// Uses intrinsic function `vec_clear` to remove all elements from the vector.
+    fn clear(self) {
+        vec_clear(self)
+    }
+
+    /// Gets the length of the vector.
+    ///
+    /// Uses intrinsic function `vec_len` to get the length.
+    fn len(self) -> Int {
+        vec_len(self)
+    }
+}
+
+
+/*
+// Iterator should be traits
+struct IteratorPair<K, V>
+impl MutIterator<K, V> {
+    fn next(mut self, mut out_value: T?) {
+    }
+}
+struct Iterator<T>
+
+struct MutIterator<T>
+
+impl MutIterator<T> {
+    fn next(mut self, mut out_value: T?) {
+    }
+}
+*/
+
+struct Map<K, V> {
+}
+
+impl Map<K, V> {
+    /// Creates a new Map
+    ///
+    /// Uses intrinsic function `map_create` to create the Map value.
+    fn new() -> Map<K, V> {
+        map_create()
+    }
+
+    fn new_from_slice_pair(slice_pair: SlicePair<K, V>) -> Map<K,V> {
+        map_from_slice_pair(slice_pair)
+    }
+
+    fn iter(self) -> (K, V) {
+        map_iter(self)
+    }
+
+    fn iter_mut(self) -> (K, V) {
+        map_iter_mut(self)
+    }
+
+    /// Gets an element with the specified key
+    ///
+    /// # Parameters
+    /// - `key`: The key of the element to get
+    ///
+    /// Uses intrinsic function `map_subscript` to fetch the value.
+    fn subscript(self, key: K) -> V? {
+        map_subscript(self, key)
+    }
+
+    /// Gets a mutable element with the specified key
+    ///
+    /// # Parameters
+    /// - `key`: The key of the element to get
+    /// - `out_value`: The value to modify
+    ///
+    /// Uses intrinsic function `map_subscript_mut` to fetch the mutable value.
+    fn subscript_mut(mut self, key: K) -> V {
+        map_subscript_mut(mut self, key)
+    }
+
+    /// Gets a mutable element with the specified key. Create a key if it doesn't exist
+    ///
+    /// # Parameters
+    /// - `key`: The key of the element to get
+    /// - `out_value`: The value to modify
+    ///
+    /// Uses intrinsic function `map_subscript_mut_create_if_needed` to fetch the mutable value.
+    fn subscript_mut_create_if_needed(mut self, key: K) -> V {
+        map_subscript_mut_create_if_needed(mut self, key)
+    }
+
+
+    /// Checks if the map contains a key.
+    ///
+    /// # Parameters
+    /// - `key`: The key to search for.
+    ///
+    /// Uses intrinsic function `map_has` to determine whether the specified key exists in the map.
+    ///
+    /// # Returns
+    /// A `Bool` indicating the presence of the key.
+    fn has(self, key: K) -> Bool {
+        map_has(self, key)
+    }
+
+
+    fn len(self) -> Int {
+        map_len(self)
+    }
+
+    /// Removes a key-value pair.
+    ///
+    /// # Parameters
+    /// - `key`: The key of the pair to remove.
+    ///
+    /// Uses intrinsic function `map_remove` to remove the key and return the corresponding value if it exists.
+    ///
+    /// # Returns
+    /// An optional value of type `V` associated with the removed key.
+    fn remove(mut self, key: K) -> V? {
+        map_remove(mut self, key)
+    }
+}
+
+struct SparseId
+
+/// Calculates the magnitude of a 2D vector.
+///
+/// # Parameters
+/// - `x`: The x-coordinate of the vector.
+/// - `y`: The y-coordinate of the vector.
+///
+/// Uses intrinsic function `float2_magnitude` to compute the Euclidean distance from the origin to the point `(x, y)`.
+///
+/// # Returns
+/// A `Float` representing the magnitude of the vector.
+fn magnitude(x: Float, y: Float) -> Float {
+    float2_magnitude(x, y)
+}

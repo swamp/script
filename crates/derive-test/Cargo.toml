@@ -1,0 +1,15 @@
+[package]
+name = "swamp-script-derive-tests"
+version = "0.0.19"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/swamp/script"
+description = "tests for swamp macro"
+
+[dependencies]
+swamp-script-derive = { path = "../derive" , version = "0.0.19" }
+
+[dev-dependencies]
+swamp-script-derive = { path = "../derive" , version = "0.0.19" }
+swamp-script-semantic = { path = "../semantic" , version = "0.0.19" }
+swamp-script-core-extra = { path = "../core-extra" , version = "0.0.19" }

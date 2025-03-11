@@ -1,0 +1,9 @@
+[package]
+name = "swamp-script-ast"
+version = "0.0.19"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/swamp/script"
+description = "ast types for swamp script"
+
+[dependencies]

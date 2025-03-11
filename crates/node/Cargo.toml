@@ -1,0 +1,9 @@
+[package]
+name = "swamp-script-node"
+version = "0.0.19"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/swamp/script"
+description = "compiler node with documentation and meta information"
+
+[dependencies]

@@ -1,0 +1,30 @@
+[package]
+name = "swamp-script-eval"
+version = "0.0.19"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/swamp/script"
+description = "interpreter for swamp script"
+
+[dependencies]
+tracing = "0.1.40"
+swamp-script-semantic = { path = "../semantic", version = "0.0.19" }
+swamp-script-types = { path = "../types", version = "0.0.19" }
+swamp-script-node = { path = "../node", version = "0.0.19" }
+fixed32 = "0.0.17"
+seq-map = "0.0.13"
+seq-fmt = "0.0.1"
+
+swamp-script-core-extra = { path = "../core-extra", version = "0.0.19" }
+swamp-script-source-map = { path = "../source-map", version = "0.0.19" }
+squirrel-prng = "0.0.1"
+
+
+[dev-dependencies]
+test-log = { version = "0.2.16", features = ["trace", "log", "color"] }
+
+swamp-script-parser = { path = "../parser", version = "0.0.19" }
+swamp-script-analyzer = { path = "../analyzer", version = "0.0.19" }
+# swamp-script-eval-loader = { path = "../eval-loader", version = "0.0.7" }
+# swamp-script-std = { path = "../std", version = "0.0.7" }
+swamp-script-source-map-lookup = { path = "../source-map-lookup", version = "0.0.19" }

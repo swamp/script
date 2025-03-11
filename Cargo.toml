@@ -1,0 +1,37 @@
+[workspace]
+resolver = "2"
+members = [
+    # Parser
+    "crates/ast",
+    "crates/parser",
+
+    # Analyzer
+    "crates/semantic",
+    "crates/analyzer",
+
+    # Evaluator
+    "crates/eval",
+    # "crates/examples",
+
+    # API tools
+    "crates/derive",
+    "crates/derive-test",
+
+    "crates/dep-loader",
+    "crates/swamp-script",
+    "crates/eval-loader",
+
+    # Core and Std
+    "crates/core-extra",
+    "crates/std",
+
+    # "crates/extra", # Not used yet
+    "crates/err",
+    "crates/compile",
+    "crates/modules",
+
+    "crates/source-map", # Move this later
+    "crates/eira",
+    "crates/pretty-print",
+    "crates/source-map-lookup", "crates/core", "crates/types", "crates/node", # Move this later
+]
