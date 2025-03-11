@@ -1,3 +1,5 @@
+/// DO NOT EDIT!
+
 /// # Swamp Core Module
 /// Welcome to Swamp! This module provides basic implementations for common types.
 /// **Note on Intrinsics:**
@@ -20,7 +22,7 @@ impl Float {
     /// Uses intrinsic function `float_floor` to return the largest integer value not greater than the Float.
     ///
     /// # Returns
-    /// A `Float` representing the floor value.
+    /// An `Int` representing the floor value.
     fn floor(self) -> Int {
         float_floor(self)
     }
@@ -343,10 +345,6 @@ impl Vec<T> {
     /// - `index`: The position from which to remove the element.
     ///
     /// Uses intrinsic function `vec_remove` to remove and return the element at the given index.
-    /// Returns `None` if the index is out of bounds.
-    ///
-    /// # Returns
-    /// An optional value of type `T` representing the removed element.
     fn remove(mut self, index: Int) {
         vec_remove(mut self, index)
     }
@@ -366,23 +364,6 @@ impl Vec<T> {
     }
 }
 
-
-/*
-// Iterator should be traits
-struct IteratorPair<K, V>
-impl MutIterator<K, V> {
-    fn next(mut self, mut out_value: T?) {
-    }
-}
-struct Iterator<T>
-
-struct MutIterator<T>
-
-impl MutIterator<T> {
-    fn next(mut self, mut out_value: T?) {
-    }
-}
-*/
 
 struct Map<K, V> {
 }
@@ -487,3 +468,21 @@ struct SparseId
 fn magnitude(x: Float, y: Float) -> Float {
     float2_magnitude(x, y)
 }
+
+/// TODO:
+/*
+// Iterator should be traits
+struct IteratorPair<K, V>
+impl MutIterator<K, V> {
+    fn next(mut self, mut out_value: T?) {
+    }
+}
+struct Iterator<T>
+
+struct MutIterator<T>
+
+impl MutIterator<T> {
+    fn next(mut self, mut out_value: T?) {
+    }
+}
+*/
