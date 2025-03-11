@@ -702,7 +702,6 @@ fn serialize_octets() {
     assert_eq!(size, deserialized_octet_size);
 }
 
-
 #[test_log::test]
 fn val_assign_coerce() {
     let val = eval(

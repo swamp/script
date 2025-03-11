@@ -5,4 +5,5 @@
 pub use crate::{
     DepLoaderError, DependencyParser, ParsedAstModule, module_path_to_relative_swamp_file,
     module_path_to_relative_swamp_file_string, parse_local_modules_and_get_order,
+    swamp_registry_path,
 };

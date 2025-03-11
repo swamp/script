@@ -277,9 +277,6 @@ pub fn bootstrap_and_compile(
     //root_dependencies: SeqMap<String, TinyVersion>,
     root_path: &[String],
 ) -> Result<Program, ScriptResolveError> {
-    let registry_path = swamp_registry_path().unwrap();
-    source_map.add_mount("registry", &registry_path).unwrap();
-
     let bootstrap_result = bootstrap_modules(source_map).inspect_err(|err| {
         show_script_resolve_error(err, source_map, Path::new(""));
     })?;
