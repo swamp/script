@@ -2,6 +2,9 @@
 name = "swamp-script-modules"
 version = "0.1.0"
 edition = "2024"
+license = "MIT"
+repository = "https://github.com/swamp/script"
+description = "Module support for Swamp"
 
 [dependencies]
 swamp-script-semantic = { path = "../semantic", version = "0.1.0" }
