@@ -1,6 +1,6 @@
 [package]
 name = "swamp-script-analyzer"
-version = "0.0.19"
+version = "0.1.0"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/swamp/script"
@@ -12,16 +12,16 @@ seq-map = "0.0.13"
 seq-set = "0.0.2"
 seq-fmt = "0.0.1"
 
-swamp-script-semantic = { path = "../semantic", version = "0.0.19" }
-swamp-script-ast = { path = "../ast", version = "0.0.19" }
-swamp-script-source-map = { path = "../source-map", version = "0.0.19" }
-swamp-script-types = { path = "../types", version = "0.0.19" }
-swamp-script-node = { path = "../node", version = "0.0.19" }
-swamp-script-modules = { path = "../modules", version = "0.0.19"}
+swamp-script-semantic = { path = "../semantic", version = "0.1.0" }
+swamp-script-ast = { path = "../ast", version = "0.1.0" }
+swamp-script-source-map = { path = "../source-map", version = "0.1.0" }
+swamp-script-types = { path = "../types", version = "0.1.0" }
+swamp-script-node = { path = "../node", version = "0.1.0" }
+swamp-script-modules = { path = "../modules", version = "0.1.0" }
 
 [dev-dependencies]
-swamp-script-parser = { path = "../parser", version = "0.0.19" }
+swamp-script-parser = { path = "../parser", version = "0.1.0" }
 test-log = { version = "0.2.16", features = ["trace", "log", "color"] }
-swamp-script-source-map-lookup = { path = "../source-map-lookup", version = "0.0.19" }
-swamp-script-compile = { path = "../compile", version = "0.0.19"}
+swamp-script-source-map-lookup = { path = "../source-map-lookup", version = "0.1.0" }
+swamp-script-compile = { path = "../compile", version = "0.1.0" }
 # swamp-script-error-report = { path = "../err", version = "0.0.14" }

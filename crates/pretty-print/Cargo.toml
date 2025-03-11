@@ -1,6 +1,6 @@
 [package]
 name = "swamp-script-pretty-print"
-version = "0.0.19"
+version = "0.1.0"
 edition = "2024"
 
 [dependencies]
@@ -8,7 +8,7 @@ tracing = "0.1.40"
 seq-map = "0.0.13"
 yansi = "1.0.1"
 
-swamp-script-semantic = { path = "../semantic", version = "0.0.19" }
-swamp-script-core-extra = { path = "../core-extra", version = "0.0.19"}
-swamp-script-modules = { path = "../modules", version = "0.0.19"}
-swamp-script-types = { path = "../types", version = "0.0.19"}
+swamp-script-semantic = { path = "../semantic", version = "0.1.0" }
+swamp-script-core-extra = { path = "../core-extra", version = "0.1.0" }
+swamp-script-modules = { path = "../modules", version = "0.1.0" }
+swamp-script-types = { path = "../types", version = "0.1.0" }
