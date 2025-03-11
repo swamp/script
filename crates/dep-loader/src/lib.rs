@@ -456,35 +456,3 @@ pub fn parse_local_modules_and_get_order(
 
     Ok(module_paths_in_order)
 }
-
-/*
-pub fn create_parsed_modules(
-    script: &str,
-    source_map: &mut SourceMap,
-    root_path: PathBuf,
-) -> Result<DependencyParser, ParseError> {
-    let parser = AstParser {};
-
-    let file_id = source_map.add_manual_no_id(&*root_path, script);
-    let ast_module_result = parser.parse_module(script);
-    if let Err(some) = ast_module_result {
-        return Err(some);
-    }
-    let ast_module = ast_module_result.unwrap();
-    trace!("ast_module:\n{:?}", ast_module);
-
-    let parse_module = ParseModule {
-        ast_module,
-        file_id,
-    };
-
-    let mut graph = DependencyParser::new();
-    let root = vec!["test".to_string()];
-    graph.add_ast_module(root, parse_module);
-
-    debug!("root path is {root_path:?}");
-
-    Ok(graph)
-}
-
- */

@@ -5,9 +5,6 @@ use swamp_script_semantic::prelude::{IntrinsicFunction, IntrinsicFunctionDefinit
 use swamp_script_types::{AliasType, Signature, Type, TypeForParameter};
 use tiny_ver::TinyVersion;
 
-//pub const SPARSE_TYPE_ID: TypeNumber = 999;
-//pub const SPARSE_ID_TYPE_ID: TypeNumber = 998;
-
 pub const PACKAGE_NAME: &str = "core";
 fn add_intrinsic_types(core_ns: &mut SymbolTable) {
     let int_alias = AliasType {
@@ -37,16 +34,6 @@ fn add_intrinsic_types(core_ns: &mut SymbolTable) {
         referenced_type: Type::Bool,
     };
     core_ns.add_alias(bool_alias).unwrap();
-
-    /*
-    let value_type = ExternalType {
-        type_name: "Value".to_string(),
-        number: TYPE_NUMBER_FFI_VALUE,
-    };
-    let value_type = Symbol::Type(Type::External(Rc::new(value_type)));
-    core_ns.add_symbol("Value", value_type).unwrap();
-
-     */
 }
 
 #[allow(clippy::too_many_lines)]
@@ -54,7 +41,6 @@ fn add_intrinsic_functions(core_ns: &mut SymbolTable) {
     add_intrinsic_float_functions(core_ns);
     add_intrinsic_int_functions(core_ns);
     add_intrinsic_string_functions(core_ns);
-    //let value_type = core_ns.get_type("Value").unwrap().clone();
     add_intrinsic_vec_functions(core_ns);
     add_intrinsic_map_functions(core_ns);
     add_intrinsic_sparse_functions(core_ns);

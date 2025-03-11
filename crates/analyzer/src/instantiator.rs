@@ -139,7 +139,7 @@ impl Instantiator {
         type_variables: &TypeVariableScope,
     ) -> Result<(bool, Type), Error> {
         match ty {
-            Type::Blueprint(blueprint) => Ok((false, self_type.clone())), // HACK: assume self if there is a blueprint here
+            Type::Blueprint(_blueprint) => Ok((false, self_type.clone())), // HACK: assume self if there is a blueprint here
             _ => Self::instantiate_type_if_needed(ty, type_variables),
         }
     }

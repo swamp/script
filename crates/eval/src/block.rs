@@ -99,19 +99,6 @@ impl BlockScopes {
         }
     }
 
-    /*
-    #[inline]
-    pub fn init_var(&mut self, variable: &VariableRef, value: &Value) {
-        self.initialize_var(
-            variable.scope_index,
-            variable.variable_index,
-            value.clone(),
-            variable.is_mutable(),
-        );
-    }
-
-     */
-
     #[inline]
     pub fn init_var_ref(&mut self, variable: &VariableRef, value_ref: &ValueRef) {
         if variable.is_mutable() {
@@ -200,67 +187,6 @@ impl BlockScopes {
         }
     }
 
-    /*
-    #[inline]
-    fn lookup_mut_var(
-        &self,
-        relative_scope_index: usize,
-        variable_index: usize,
-    ) -> Result<Rc<RefCell<Value>>, ExecuteError> {
-        if relative_scope_index >= self.current_block_scopes.len() {
-            panic!(
-                "illegal scope index {relative_scope_index} of {}",
-                self.current_block_scopes.len()
-            );
-        }
-
-        let variables = &self.current_block_scopes[relative_scope_index].variables;
-        if variable_index >= variables.len() {
-            panic!("illegal index");
-        }
-        let existing_var = &variables[variable_index];
-
-        Ok(match existing_var {
-            VariableValue::Reference(reference) => reference.0.clone(),
-            _ => {
-                error!(?existing_var, "was not mutable");
-
-                return Err(ExecuteError {
-                    kind: ExecuteErrorKind::VariableWasNotMutable,
-                    node: Default::default(),
-                });
-            }
-        })
-    }
-
-
-    #[inline]
-    pub fn lookup_mut_variable(
-        &self,
-        variable: &VariableRef,
-    ) -> Result<Rc<RefCell<Value>>, ExecuteError> {
-        self.lookup_mut_var(variable.scope_index, variable.variable_index)
-    }
-     */
-
-    // Overwrite ============================
-
-    /*
-    #[inline]
-    pub fn set_local_var_value(&mut self, var: &VariableRef, value: Value) {
-        assert!(var.mutable_node.is_none());
-        self.set_local_var(var.variable_index, VariableValue::Value(value));
-    }
-
-     */
-    /*
-
-
-
-
-
-
-    */
     pub(crate) fn initialize_var_mem(
         &mut self,
         init_var: &VariableRef,

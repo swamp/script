@@ -395,103 +395,13 @@ impl<'a, C> Interpreter<'a, C> {
                             .map_err(|_| self.create_err(ExecuteErrorKind::ExpectedStruct, node))?;
                         fields[*index].clone()
                     }
-                    LocationAccessKind::IntrinsicCallMut(intrinsic_fn, arguments) => {
-                        self.eval_intrinsic_postfix_mut_return(
+                    LocationAccessKind::IntrinsicCallMut(intrinsic_fn, arguments) => self
+                        .eval_intrinsic_postfix_mut_return(
                             &node,
                             &value_ref,
                             intrinsic_fn,
                             arguments,
-                        )?
-
-                        //val_ref = Rc::new(RefCell::new(val));
-                        //is_mutable = false;
-                        //val
-                    } /*
-                        LocationAccessKind::ArrayIndex(_array_type_ref, index_expr) => {
-                            let index = self
-                                .evaluate_expression(index_expr)?
-                                .expect_int()
-                                .map_err(|_| self.create_err(ExecuteErrorKind::ExpectedArray, node))?;
-
-                            let borrowed = value_ref.borrow();
-
-                            let (_array_ref, fields) = borrowed
-                                .expect_array()
-                                .map_err(|_| self.create_err(ExecuteErrorKind::ExpectedArray, node))?;
-                            fields[index as usize].clone()
-                        }
-
-                         */
-
-                      /*
-
-                      LocationAccessKind::MapIndex(_map_type_ref, _value_type, key_expr) => {
-                          let key_expr_value = self.evaluate_expression(key_expr)?;
-
-                          let borrowed = value_ref.borrow();
-
-                          let (_map_type_ref, _value_type, seq_map) = borrowed
-                              .expect_map()
-                              .map_err(|_| self.create_err(ExecuteErrorKind::ExpectedMap, node))?;
-
-                          let maybe_found = seq_map.get(&key_expr_value);
-
-                          wrap_in_option(maybe_found)
-                      }
-
-                      LocationAccessKind::MapIndexInsertIfNonExisting(
-                          _map_type_ref,
-                          _value_type,
-                          key_expr,
-                      ) => {
-                          let key_expr_value = self.evaluate_expression(key_expr)?;
-                          let key = key_expr_value.clone();
-                          let mut borrowed_mut = value_ref.borrow_mut();
-                          let found_memory = {
-                              let (_, _, seq_map_mutable) =
-                                  borrowed_mut.expect_map_mut().map_err(|_| {
-                                      self.create_err(ExecuteErrorKind::ExpectedMap, node)
-                                  })?;
-                              seq_map_mutable.get(&key).cloned()
-                          };
-                          match found_memory {
-                              Some(found) => found,
-                              _ => {
-                                  let (_, _, seq_map_mutable) =
-                                      borrowed_mut.expect_map_mut().map_err(|_| {
-                                          self.create_err(ExecuteErrorKind::ExpectedMap, node)
-                                      })?;
-                                  let default_value = Rc::new(RefCell::new(Value::Unit));
-                                  seq_map_mutable
-                                      .insert(key, default_value.clone())
-                                      .expect("insert should work");
-                                  default_value
-                              }
-                          }
-                      }
-
-
-                      LocationAccessKind::SparseIndex(_element_type, key_expr) => {
-                          let key_expr_value = self.evaluate_expression(key_expr)?;
-                          match key_expr_value.downcast_rust::<SparseValueId>() {
-                              Some(found_sparse_id) => match &*value_ref.borrow_mut() {
-                                  Value::Sparse(_type, sparse_value_map) => {
-                                      let inner_map = sparse_value_map;
-                                      wrap_in_option(inner_map.get(&found_sparse_id.borrow()).clone())
-                                  }
-                                  _ => {
-                                      return Err(
-                                          self.create_err(ExecuteErrorKind::ExpectedArray, node)
-                                      )?;
-                                  }
-                              },
-                              _ => {
-                                  return Err(self.create_err(ExecuteErrorKind::ExpectedArray, node))?;
-                              }
-                          }
-                      }
-
-                       */
+                        )?,
                 }
             };
         }
@@ -518,16 +428,6 @@ impl<'a, C> Interpreter<'a, C> {
             SingleLocationExpressionKind::MutStructFieldRef(_base_expression, _resolved_access) => {
                 value_ref
             }
-            /*
-            SingleLocationExpressionKind::MutArrayIndexRef(_resolved_array_ref) => {
-                //info!(?base_expression, "base expression for field access");
-                let (_struct, _values) = value_ref.borrow().expect_array().map_err(|_| {
-                    self.create_err(ExecuteErrorKind::ExpectedArray, &found_location_expr.node)
-                })?;
-                value_ref
-            }
-
-             */
             _ => {
                 panic!("not sure what this is")
             }
@@ -1093,53 +993,6 @@ impl<'a, C> Interpreter<'a, C> {
                 self.eval_intrinsic(&expr.node, intrinsic, arguments)?
             }
 
-            /*
-            ExpressionKind::MemberCall(resolved_member_call) => {
-                let parameters = match &*resolved_member_call.function {
-                    Function::Internal(function_data) => &function_data.signature.parameters,
-                    Function::External(external_data) => &external_data.signature.parameters,
-                };
-
-                let mut member_call_arguments = Vec::new();
-                member_call_arguments.extend(self.evaluate_args(&resolved_member_call.arguments)?);
-
-                // Check total number of parameters (including self)
-                if member_call_arguments.len() != parameters.len() {
-                    return Err(self.create_err(
-                        ExecuteErrorKind::WrongNumberOfArguments(
-                            parameters.len(),
-                            member_call_arguments.len(),
-                        ),
-                        &expr.node,
-                    ));
-                }
-
-                match &*resolved_member_call.function {
-                    Function::Internal(internal_function) => {
-                        self.push_function_scope();
-                        self.bind_parameters(
-                            &expr.node,
-                            &internal_function.signature.parameters,
-                            &member_call_arguments,
-                        )?;
-                        let result = self.evaluate_expression(&internal_function.body)?;
-                        self.pop_function_scope();
-
-                        result
-                    }
-                    Function::External(external_func) => {
-                        let mut func = self
-                            .externals
-                            .external_functions_by_id
-                            .get(&external_func.id)
-                            .expect("member call: external function missing")
-                            .borrow_mut();
-                        (func.func)(&member_call_arguments, self.context)?
-                    }
-                }
-            }
-
-             */
             ExpressionKind::Block(statements) => {
                 self.evaluate_block(statements)?.try_into().unwrap() // TODO: Error handling
             }
@@ -2009,67 +1862,7 @@ impl<'a, C> Interpreter<'a, C> {
                     ));
                     val_ref = fields[*index].clone();
                 }
-                /*
-                PostfixKind::ArrayIndex(expected_element_type, index_expr) => {
-                    let (encountered_element_type, fields) = {
-                        let brw = val_ref.borrow();
-                        let (array_ref, fields_ref) = brw.expect_array().map_err(|_| {
-                            self.create_err(ExecuteErrorKind::PostfixChainError, &part.node)
-                        })?;
-                        (array_ref.clone(), fields_ref.clone())
-                    };
-                    assert!(expected_element_type.compatible_with(&encountered_element_type));
 
-                    let index =
-                        self.evaluate_expression(index_expr)?
-                            .expect_int()
-                            .map_err(|_| {
-                                self.create_err(ExecuteErrorKind::PostfixChainError, &part.node)
-                            })? as usize;
-                    if index >= fields.len() {
-                        return Err(self.create_err(ExecuteErrorKind::IndexOutOfBounds, &part.node));
-                    }
-                    val_ref = fields[index].clone();
-                }
-                PostfixKind::MapIndex(_key_type, _value_type, key_expr) => {
-                    let seq_map = {
-                        let brw = val_ref.borrow();
-                        let (key_type, value_type, seq_map) = brw.expect_map().map_err(|_| {
-                            self.create_err(ExecuteErrorKind::PostfixChainError, &part.node)
-                        })?;
-                        seq_map.clone()
-                    };
-                    let key_val = self.evaluate_expression(key_expr)?;
-
-                    val_ref = Rc::new(RefCell::new(Value::Option(seq_map.get(&key_val).cloned())));
-                }
-
-                 */
-                /*
-                PostfixKind::ExternalTypeIndexRef(_rust_type_ref, map_expr) => {
-                    let key_expr_value = self.evaluate_expression(map_expr)?;
-                    val_ref = {
-                        match key_expr_value.downcast_rust::<SparseValueId>() {
-                            Some(found_sparse_id) => {
-                                match val_ref.borrow_mut().downcast_rust::<SparseValueMap>() {
-                                    Some(sparse_value_map) => wrap_in_option(
-                                        sparse_value_map
-                                            .borrow_mut()
-                                            .get(&found_sparse_id.borrow()),
-                                    ),
-                                    _ => {
-                                        panic!("internal error");
-                                    }
-                                }
-                            }
-                            _ => {
-                                panic!("todo");
-                            }
-                        }
-                    };
-                }
-
-                 */
                 PostfixKind::MemberCall(function_ref, arguments) => {
                     let val =
                         self.eval_member_call(node, &val_ref, is_mutable, function_ref, arguments)?;
@@ -2108,22 +1901,6 @@ impl<'a, C> Interpreter<'a, C> {
                     is_mutable = false;
                     is_uncertain = true;
                 }
-                /*
-                PostfixKind::IntrinsicCall(intrinsic_fn, arguments) => {
-                    val_ref = Rc::new(RefCell::new(self.eval_intrinsic_postfix(
-                        &part.node,
-                        &val_ref,
-                        intrinsic_fn,
-                        arguments,
-                    )?));
-                    is_mutable = false;
-                }
-                PostfixKind::IntrinsicCallEx(_intrinsic_fn, _arguments) => {
-                    //val_ref = Rc::new(RefCell::new(self.eval_intrinsic_postfix_ex(&val_ref, part, intrinsic_fn, arguments)?));
-                    is_mutable = false;
-                }
-
-                 */
                 _ => {}
             }
         }
@@ -2693,113 +2470,6 @@ impl<'a, C> Interpreter<'a, C> {
         Ok(())
     }
 
-    /*
-        fn evaluate_range(
-            &mut self,
-            min_expr: &Expression,
-            max_expr: &Expression,
-        ) -> Result<(i32, i32), ExecuteError> {
-            let min_value = self.evaluate_expression_int(&min_expr)?;
-            let max_value = self.evaluate_expression_int(&max_expr)?;
-
-            Ok((min_value, max_value))
-        }
-
-        fn calculate_range(
-            start_val: i32,
-            end_val: i32,
-            len: usize,
-            mode: &RangeMode,
-        ) -> (usize, usize) {
-            let adjusted_min = if start_val < 0 {
-                len + start_val as usize
-            } else {
-                start_val as usize
-            };
-
-            let mut adjusted_max = if end_val < 0 {
-                len + end_val as usize
-            } else {
-                end_val as usize
-            };
-            if RangeMode::Inclusive == mode.clone() {
-                adjusted_max += 1;
-            }
-
-            (adjusted_min, adjusted_max)
-        }
-
-        fn evaluate_and_calculate_range(
-            &mut self,
-            min_expr: &Expression,
-            max_expr: &Expression,
-            mode: &RangeMode,
-            len: usize,
-        ) -> Result<(usize, usize), ExecuteError> {
-            let (start_val, end_val) = self.evaluate_range(min_expr, max_expr)?;
-
-            Ok(Self::calculate_range(start_val, end_val, len, mode))
-        }
-
-        #[inline]
-        fn evaluate_array_range_access(
-            &mut self,
-            base_expr: &Expression,
-            array_type_ref: &ArrayTypeRef,
-            min_expr: &Expression,
-            max_expr: &Expression,
-            mode: &RangeMode,
-        ) -> Result<Value, ExecuteError> {
-            let array_value = self.evaluate_expression(base_expr)?;
-
-            if let Value::Vec(_, values) = array_value {
-                let (adjusted_start, adjusted_end) =
-                    self.evaluate_and_calculate_range(min_expr, max_expr, mode, values.len())?;
-
-                let slice = &values.as_slice()[adjusted_start..adjusted_end];
-                Ok(Value::Vec(array_type_ref.clone(), Vec::from(slice)))
-            } else {
-                Err(self.create_err(ExecuteErrorKind::NotAnArray, &base_expr.node))
-            }
-        }
-
-        fn evaluate_expression_int(
-            &mut self,
-            int_expr: &Expression,
-        ) -> Result<i32, ExecuteError> {
-            let v = self.evaluate_expression(&int_expr)?;
-
-            if let Value::Int(i) = v {
-                Ok(i)
-            } else {
-                Err(self.create_err(ExecuteErrorKind::ExpectedInt, &int_expr.node))
-            }
-        }
-    */
-
-    /*
-    fn evaluate_string_range_access(
-        &mut self,
-        string_expr: &Expression,
-        start_expr: &Expression,
-        end_expr: &Expression,
-        mode: &RangeMode,
-    ) -> Result<Value, ExecuteError> {
-        let string_value = self.evaluate_expression(string_expr)?;
-
-        if let Value::String(string) = string_value {
-            let (adjusted_start, adjusted_end) =
-                self.evaluate_and_calculate_range(start_expr, end_expr, mode, string.len())?;
-            Ok(Value::String(
-                string[adjusted_start..adjusted_end].to_string(),
-            ))
-        } else {
-            Err(self.create_err(ExecuteErrorKind::ExpectedString, &string_expr.node))
-        }
-    }
-
-     */
-
     fn create_err(&self, kind: ExecuteErrorKind, node: &Node) -> ExecuteError {
         ExecuteError {
             node: node.clone(),
@@ -2855,36 +2525,6 @@ impl<'a, C> Interpreter<'a, C> {
         };
 
         Ok(val)
-    }
-
-    fn evaluate_intrinsic_generic(
-        &self,
-        node: &Node,
-        intrinsic: &IntrinsicFunction,
-        type_parameters: &Vec<Type>,
-        arguments: &Vec<Expression>,
-    ) -> Result<Value, ExecuteError> {
-        /*
-        let value = match intrinsic {
-            IntrinsicFunction::SparseNew => {
-                let sparse_id_external = ExternalType {
-                    type_name: "SparseId".to_string(), // To identify the specific Rust type
-                    number: SPARSE_ID_TYPE_ID,
-                };
-                let sparse_value_map =
-                    SparseValueMap::new(sparse_id_external.into(), type_parameters[0].clone());
-                let sparse_external = ExternalType {
-                    type_name: "Sparse".to_string(), // To identify the specific Rust type
-                    number: SPARSE_TYPE_ID,
-                };
-                to_rust_value(sparse_external.into(), sparse_value_map)
-            }
-            _ => */
-        return Err(self.create_err(ExecuteErrorKind::UnknownGenericIntrinsic, &node)); //,
-
-        //};
-
-        //Ok(value)
     }
 }
 

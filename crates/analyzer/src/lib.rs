@@ -1237,43 +1237,6 @@ impl<'a> Analyzer<'a> {
                             self.create_err(ErrorKind::MissingSubscriptMember, &index_expr.node)
                         );
                     }
-                    /*
-                    match &collection_type {
-                        Type::String => {
-                            if let swamp_script_ast::ExpressionKind::Range(min, max, mode) =
-                                &index_expr.kind
-                            {
-                                let range = self.analyze_range(min, max, mode)?;
-
-                                self.add_postfix(
-                                    &mut suffixes,
-                                    PostfixKind::StringRangeIndex(range),
-                                    collection_type.clone(),
-                                    &index_expr.node,
-                                );
-
-                                tv.resolved_type = Type::String;
-                            } else {
-                                let int_argument_context = TypeContext::new_argument(&Type::Int);
-                                let resolved_index_expr =
-                                    self.analyze_expression(index_expr, &int_argument_context)?;
-                                self.add_postfix(
-                                    &mut suffixes,
-                                    PostfixKind::StringIndex(resolved_index_expr),
-                                    Type::String,
-                                    &index_expr.node,
-                                );
-                            }
-                            tv.resolved_type = Type::String;
-                            tv.is_mutable = false;
-                        }
-
-                        _ => {
-
-                        }
-                    }
-
-                     */
                 }
 
                 swamp_script_ast::Postfix::NoneCoalesce(default_expr) => {
@@ -1556,35 +1519,6 @@ impl<'a> Analyzer<'a> {
                 &var_node,
             ));
         }
-        /*
-
-                if let Some(found_symbol) = self.shared.lookup_table.get_symbol(text) {
-                    let expr = match found_symbol {
-                        Symbol::FunctionDefinition(func) => match func {
-                            FuncDef::External(found_external_function) => self.create_expr(
-                                ExpressionKind::ExternalFunctionAccess(found_external_function.clone()),
-                                Type::Function(found_external_function.signature.clone()),
-                                var_node,
-                            ),
-                            FuncDef::Internal(found_internal_function) => self.create_expr(
-                                ExpressionKind::InternalFunctionAccess(found_internal_function.clone()),
-                                Type::Function(found_internal_function.signature.clone()),
-                                var_node,
-                            ),
-                            FuncDef::Intrinsic(found_intrinsic_function) => self.create_expr(
-                                ExpressionKind::IntrinsicFunctionAccess(found_intrinsic_function.clone()),
-                                Type::Function(found_intrinsic_function.signature.clone()),
-                                var_node,
-                            ),
-                        },
-
-                        _ => {
-                            return Err(self.create_err(ErrorKind::UnknownIdentifier, var_node));
-                        }
-                    };
-                    return Ok(expr);
-                }
-        */
         Err(self.create_err(ErrorKind::UnknownIdentifier, var_node))
     }
 
@@ -2354,58 +2288,6 @@ impl<'a> Analyzer<'a> {
         }
     }
 
-    /*
-    #[allow(clippy::single_match)]
-    fn check_special_assignment_compound(
-        &mut self,
-        target_expression: &swamp_script_ast::Expression,
-        target_type: &Type,
-        op: &CompoundOperatorKind,
-        source: &swamp_script_ast::Expression,
-        source_type: &Type,
-    ) -> Result<Option<ExpressionKind>, Error> {
-        match &target_type {
-            Type::Vec(array_type) => {
-                let target_type_context = TypeContext::new_argument(target_type);
-                let source_type_context = TypeContext::new_argument(source_type);
-                if *op == CompoundOperatorKind::Add && source_type.compatible_with(array_type) {
-                    // Handle ArrayPush
-                    let target_location = SingleMutLocationExpression(self.analyze_to_location(
-                        target_expression,
-                        &target_type_context,
-                        LocationSide::Rhs,
-                    )?);
-                    let resolved_source = self.analyze_expression(source, &source_type_context)?;
-                    return Ok(Option::from(ExpressionKind::IntrinsicCallMut(
-                        IntrinsicFunction::VecSelfPush,
-                        target_location,
-                        vec![resolved_source],
-                    )));
-                } else if *op == CompoundOperatorKind::Add
-                    && source_type.compatible_with(target_type)
-                {
-                    // Handle ArrayExtend
-                    let target_location = SingleMutLocationExpression(self.analyze_to_location(
-                        target_expression,
-                        &target_type_context,
-                        LocationSide::Rhs,
-                    )?);
-                    let resolved_source = self.analyze_expression(source, &source_type_context)?;
-                    return Ok(Option::from(ExpressionKind::IntrinsicCallMut(
-                        IntrinsicFunction::VecSelfExtend,
-                        target_location,
-                        vec![resolved_source],
-                    )));
-                }
-            }
-            _ => {}
-        }
-
-        Ok(None)
-    }
-
-     */
-
     fn analyze_assignment_compound(
         &mut self,
         target_expression: &swamp_script_ast::Expression,
@@ -2710,44 +2592,6 @@ impl<'a> Analyzer<'a> {
             _ => {
                 return Err(self.create_err(ErrorKind::NotValidLocationStartingPoint, member_name));
             } // TODO: Support function calls
-              /*
-              if let Type::NamedStruct(found_struct) = type_that_member_is_on {
-                  let binding = found_struct.borrow();
-                  match binding
-                      .anon_struct_type
-                      .field_name_sorted_fields
-                      .get(&field_name_str)
-                  {
-                      Some(found_field) => {
-                          if let Type::Function(signature) = &found_field.field_type {
-                              let index = binding
-                                  .anon_struct_type
-                                  .field_name_sorted_fields
-                                  .get_index(&field_name_str)
-                                  .expect("should work");
-                              self.analyze_postfix_field_call(
-                                  &resolved_node,
-                                  found_struct,
-                                  found_field,
-                                  index,
-                                  signature,
-                                  arguments,
-                              )?
-                          } else {
-                              return Err(
-                                  self.create_err(ErrorKind::NotValidLocationStartingPoint, member_name)
-                              );
-                          }
-                      }
-                      _ => {
-                          return Err(
-                              self.create_err(ErrorKind::NotValidLocationStartingPoint, member_name)
-                          );
-                      }
-                  },
-              }
-
-               */
         };
 
         let last_type = postfixes.last().unwrap().ty.clone();
@@ -2755,21 +2599,6 @@ impl<'a> Analyzer<'a> {
 
         Ok(last_type)
     }
-
-    /*
-    pub fn analyze_range(&mut self, min_value: &Expression, max_value: &Expression, range_mode: &RangeMode) -> Range {
-        let min_expression =
-            self.analyze_expression(min_value, Some(&Type::Int))?;
-        let max_expression =
-            self.analyze_expression(max_value, Some(&Type::Int))?;
-
-        Range {
-            min: min_expression,
-            max: max_expression,
-            mode: convert_range_mode(range_mode),
-        }
-    }
-     */
 
     fn analyze_break(
         &self,
@@ -2850,16 +2679,6 @@ impl<'a> Analyzer<'a> {
         }
 
         Ok(expr)
-        /*
-        error!(?expr, "expr");
-        error!(?expected_type, ?encountered_type, "coerce incompatible types");
-
-        Err(self.create_err(
-            ErrorKind::IncompatibleTypes(expected_type.clone(), encountered_type.clone()),
-            node,
-        ))
-
-         */
     }
 
     fn instantiate_blueprint_and_members(

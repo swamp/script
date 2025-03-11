@@ -180,38 +180,6 @@ pub fn bootstrap_modules(
     Ok(result)
 }
 
-/*
-pub fn compile_and_resolve(
-    module_path: &[String],
-    source_map: &mut SourceMap,
-    parse_module: ParsedAstModule,
-    core_symbol_table: SymbolTableRef,
-) -> Result<Program, ScriptResolveError> {
-    let mut dependency_parser = DependencyParser::new();
-    dependency_parser.add_ast_module(module_path.to_vec(), parse_module);
-
-    let module_paths_in_order = parse_local_modules_and_get_order(
-        module_path.to_vec(),
-        &mut dependency_parser,
-        source_map,
-    )?;
-
-    let mut resolved_program = Program::new();
-    analyze_modules_in_order(
-        &mut resolved_program.state,
-        &resolved_program.default_symbol_table,
-        &mut resolved_program.modules,
-        core_symbol_table,
-        source_map,
-        &module_paths_in_order,
-        &dependency_parser,
-    )?;
-
-    Ok(resolved_program)
-}
-
- */
-
 pub fn compile_and_analyze_all_modules(
     module_path: &[String],
     resolved_program: &mut Program,
@@ -368,48 +336,3 @@ pub fn debug_module(symbol_table: &SymbolTable, source_map: &SourceMap) {
 
     info!(%symbol_table_display, "{:?}", symbol_table.module_path());
 }
-
-/*
-let core_symbol_table = bootstrap_result.core_symbol_table;
-let mut analyzer = Analyzer::new(
-    &mut bootstrap_result.state,
-    &bootstrap_result.modules,
-    core_symbol_table.into(),
-    &source_map,
-    file_id,
-);
-
- */
-
-/*
-info!(def_tbl=?bootstrap_result.default_symbol_table, "default");
-analyzer.shared.lookup_table = bootstrap_result.default_symbol_table;
-
-for definition in &program.definitions {
-    analyzer.analyze_definition(definition)?;
-}
-
-let expression = &program.expression;
-let any_context = TypeContext::new_anything_argument();
-let maybe_resolved_expression = match expression {
-    Some(unwrapped_expression) => {
-        let result = analyzer.analyze_expression(unwrapped_expression, &any_context);
-        if let Ok(expression) = result {
-            Some(expression)
-        } else {
-            let err = result.err().unwrap();
-            error!(?err, "found error");
-            return Err(err)?;
-        }
-    }
-    None => None,
-};
-
-let ns_ref = Namespace::new(resolved_path_str, analyzer.shared.definition_table);
-
-let resolved_module = Module {
-    expression: maybe_resolved_expression,
-    namespace: ns_ref,
-};
-
- */

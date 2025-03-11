@@ -37,16 +37,6 @@ impl Analyzer<'_> {
                     &[encountered_element_type.clone()],
                 )?;
 
-                /*
-                let lit_kind = Literal::Slice(slice_type.clone(), resolved_items);
-                let lit_expr = self.create_expr(
-                    ExpressionKind::Literal(lit_kind),
-                    slice_type.clone(),
-                    ast_node,
-                );
-
-                 */
-
                 let found_expected_type = if let Some(inner_type) = context.expected_type {
                     inner_type.clone()
                 } else {

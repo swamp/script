@@ -39,11 +39,6 @@ impl ValueReference {
                 // Box the iterator from the Vec
                 Box::new(cloned_rc.into_iter()) as Box<dyn Iterator<Item = ValueRef> + 'static>
             }
-
-            /*
-                        Self::Array(_, values) => Ok(Box::new(values.into_iter())),
-            Self::Map(_, seq_map) => Ok(Box::new(seq_map.into_values())),
-             */
             _ => {
                 info!(?inner, "not sure what this is:");
                 todo!()
