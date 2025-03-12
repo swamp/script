@@ -33,8 +33,6 @@ pub fn build_analyzer_error(err: &Error) -> Builder<usize> {
         ErrorKind::WrongNumberOfArguments(_expected, _encountered) => {
             Report::build(Kind::Error, 10, "wrong number of arguments", span)
         }
-        //    .with_label("first_type", a.to_string())
-        //.with_label("second_type", b.to_string())
         ErrorKind::CanOnlyOverwriteVariableWithMut => Report::build(
             Kind::Error,
             11,
@@ -128,7 +126,10 @@ pub fn build_analyzer_error(err: &Error) -> Builder<usize> {
         }
         ErrorKind::CallsCanNotBePartOfChain
         | ErrorKind::UnwrapCanNotBePartOfChain
-        | ErrorKind::NoneCoalesceCanNotBePartOfChain => todo!(),
+        | ErrorKind::NoneCoalesceCanNotBePartOfChain => {
+            Report::build(Kind::Error, 9904, "chain error", span)
+        }
+
         ErrorKind::SelfNotCorrectType => Report::build(Kind::Error, 9901, "chain error", span),
         ErrorKind::CanNotNoneCoalesce => {
             Report::build(Kind::Error, 39, "can not coalesce to none", span)
@@ -140,7 +141,6 @@ pub fn build_analyzer_error(err: &Error) -> Builder<usize> {
         }
         ErrorKind::UnknownModule => Report::build(Kind::Error, 40, "unknown module", span),
         ErrorKind::UnknownSymbol => Report::build(Kind::Error, 41, "unknown symbol", span),
-
         ErrorKind::NoAssociatedFunction(_, _) => {
             Report::build(Kind::Error, 42, "no associated function", span)
         }
@@ -149,6 +149,43 @@ pub fn build_analyzer_error(err: &Error) -> Builder<usize> {
         }
         ErrorKind::UnusedVariablesCanNotBeMut => {
             Report::build(Kind::Error, 44, "unused variables must not be mut", span)
+        }
+        ErrorKind::UnknownIdentifier => Report::build(Kind::Error, 45, "unknown identifier", span),
+        ErrorKind::VariableTypeMustBeConcrete => {
+            Report::build(Kind::Error, 46, "variable type must be concrete", span)
+        }
+        ErrorKind::ArrayIndexMustBeInt(_) => {
+            Report::build(Kind::Error, 47, "array index must be int", span)
+        }
+        ErrorKind::ExpectedMutableLocation => {
+            Report::build(Kind::Error, 48, "expected mutable location", span)
+        }
+        ErrorKind::OverwriteVariableNotAllowedHere => {
+            Report::build(Kind::Error, 49, "overwrite variable not allowed here", span)
+        }
+        ErrorKind::BreakOutsideLoop => Report::build(Kind::Error, 50, "break outside loop", span),
+        ErrorKind::ReturnOutsideCompare => {
+            Report::build(Kind::Error, 51, "return outside compare", span)
+        }
+        ErrorKind::EmptyMatch => Report::build(Kind::Error, 52, "empty match", span),
+        ErrorKind::MatchArmsMustHaveTypes => {
+            Report::build(Kind::Error, 53, "match arms must have types", span)
+        }
+        ErrorKind::ContinueOutsideLoop => {
+            Report::build(Kind::Error, 54, "continue outside loop", span)
+        }
+        ErrorKind::ParameterIsNotMutable => {
+            Report::build(Kind::Error, 55, "parameter is not mutable", span)
+        }
+        ErrorKind::CouldNotCoerceTo(_) => {
+            Report::build(Kind::Error, 56, "could not coerce to", span)
+        }
+        ErrorKind::UnexpectedType => Report::build(Kind::Error, 57, "unexpected type", span),
+        ErrorKind::CanNotAttachFunctionsToType => {
+            Report::build(Kind::Error, 58, "can not attach functions to type", span)
+        }
+        ErrorKind::MissingMemberFunction(_) => {
+            Report::build(Kind::Error, 59, "missing member function", span)
         }
     };
     b.error_module = "A".to_string();
