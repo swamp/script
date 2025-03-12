@@ -149,13 +149,19 @@ impl LocalIdentifier {
     }
 }
 
-#[derive(PartialEq, Eq, Hash, Debug, Clone)]
-pub struct ConstantIdentifier(pub Node);
+#[derive(Debug, PartialEq, Eq, Hash, Default, Clone)]
+pub struct LocalConstantIdentifier(pub Node);
 
-impl ConstantIdentifier {
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+pub struct QualifiedConstantIdentifier {
+    pub name: Node,
+    pub module_path: Option<ModulePath>,
+}
+
+impl QualifiedConstantIdentifier {
     #[must_use]
-    pub const fn new(node: Node) -> Self {
-        Self(node)
+    pub const fn new(name: Node, module_path: Option<ModulePath>) -> Self {
+        Self { name, module_path }
     }
 }
 
@@ -223,7 +229,7 @@ impl AnonymousStructType {
 
 #[derive(Debug, Clone)]
 pub struct ConstantInfo {
-    pub constant_identifier: ConstantIdentifier,
+    pub constant_identifier: LocalConstantIdentifier,
     pub expression: Box<Expression>,
 }
 
@@ -414,8 +420,7 @@ pub enum ExpressionKind {
 
     // References
     VariableReference(Variable),
-    ConstantReference(ConstantIdentifier),
-    //FunctionReference(QualifiedIdentifier),
+    ConstantReference(QualifiedConstantIdentifier),
     StaticMemberFunctionReference(QualifiedTypeIdentifier, Node),
     IdentifierReference(QualifiedIdentifier),
 

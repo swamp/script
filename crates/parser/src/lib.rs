@@ -13,9 +13,10 @@ use std::str::Chars;
 use swamp_script_ast::{
     AssignmentOperatorKind, BinaryOperatorKind, CompoundOperator, CompoundOperatorKind,
     EnumVariantLiteral, ExpressionKind, FieldExpression, FieldName, ForPattern, ForVar,
-    ImportItems, IterableExpression, LocalTypeIdentifierWithOptionalTypeVariables, Mod,
-    NamedStructDef, PatternElement, QualifiedIdentifier, RangeMode, SpanWithoutFileId,
-    StructTypeField, TypeForParameter, TypeVariable, VariableBinding, prelude::*,
+    ImportItems, IterableExpression, LocalConstantIdentifier,
+    LocalTypeIdentifierWithOptionalTypeVariables, Mod, NamedStructDef, PatternElement,
+    QualifiedIdentifier, RangeMode, SpanWithoutFileId, StructTypeField, TypeForParameter,
+    TypeVariable, VariableBinding, prelude::*,
 };
 use swamp_script_ast::{Function, WhenBinding};
 use swamp_script_ast::{LiteralKind, MutableOrImmutableExpression};
@@ -183,9 +184,9 @@ impl AstParser {
     fn expect_constant_identifier_next<'a>(
         &self,
         pairs: &mut impl Iterator<Item = Pair<'a, Rule>>,
-    ) -> Result<ConstantIdentifier, ParseError> {
+    ) -> Result<LocalConstantIdentifier, ParseError> {
         let pair = Self::expect_next(pairs, Rule::constant_identifier)?;
-        Ok(ConstantIdentifier::new(self.to_node(&pair)))
+        Ok(LocalConstantIdentifier(self.to_node(&pair)))
     }
 
     fn _expect_variable_next<'a>(
@@ -1787,6 +1788,25 @@ impl AstParser {
         ))
     }
 
+    fn parse_constant_reference(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
+        assert_eq!(pair.as_rule(), Rule::constant_reference);
+        let mut inner_pairs = pair.clone().into_inner();
+
+        let mut first = inner_pairs.next().unwrap();
+
+        let module_path = if first.as_rule() == Rule::module_segments {
+            let path = self.parse_module_segments(first.clone());
+            first = inner_pairs.next().unwrap();
+            Some(ModulePath(path))
+        } else {
+            None
+        };
+
+        let identifier = QualifiedConstantIdentifier::new(self.to_node(&first), module_path);
+
+        Ok(self.create_expr(ExpressionKind::ConstantReference(identifier), pair))
+    }
+
     fn parse_term(&self, pair2: &Pair<Rule>) -> Result<Expression, ParseError> {
         assert_eq!(pair2.as_rule(), Rule::term);
         let sub = &Self::right_alternative(pair2)?;
@@ -1797,10 +1817,7 @@ impl AstParser {
             Rule::enum_literal => {
                 Ok(self.create_expr(ExpressionKind::Literal(self.parse_enum_literal(sub)?), sub))
             }
-            Rule::constant_reference => Ok(self.create_expr(
-                ExpressionKind::ConstantReference(ConstantIdentifier(self.to_node(sub))),
-                sub,
-            )),
+            Rule::constant_reference => self.parse_constant_reference(sub),
             Rule::parenthesized => {
                 let inner = self.next_inner_pair(sub)?;
                 self.parse_expression(&inner)
@@ -1813,12 +1830,7 @@ impl AstParser {
             Rule::anonymous_struct_literal => self.parse_anonymous_struct_literal(sub),
 
             Rule::interpolated_string => self.parse_interpolated_string(sub),
-            /*
-            Rule::float_lit => {
-                Ok(self.create_expr(ExpressionKind::Literal(LiteralKind::Float), pair))
-            }
 
-             */
             _ => {
                 Err(self
                     .create_error_pair(SpecificError::UnknownTerm(Self::pair_to_rule(sub)), sub))

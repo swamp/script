@@ -8,7 +8,7 @@ use swamp_script_source_map::SourceMap;
 #[must_use]
 pub fn build_runtime_error(err: &RuntimeError) -> Builder<usize> {
     let span = &err.node.span;
-    match &err.kind {
+    let mut b = match &err.kind {
         RuntimeErrorKind::ExpectedInt => Report::build(Kind::Error, 104, "expected int", span),
         RuntimeErrorKind::ExpectedString => {
             Report::build(Kind::Error, 104, "expected string", span)
@@ -48,11 +48,14 @@ pub fn build_runtime_error(err: &RuntimeError) -> Builder<usize> {
         &RuntimeErrorKind::UnknownMutIntrinsic | &RuntimeErrorKind::UnknownGenericIntrinsic => {
             todo!()
         }
-    }
+    };
+
+    b.error_module = "R".to_string();
+    b
 }
 
 ///
 pub fn show_runtime_error(err: &RuntimeError, source_map: &SourceMap, current_path: &Path) {
     let builder = build_runtime_error(err);
-    build_and_print(builder, "R", source_map, current_path)
+    build_and_print(builder, source_map, current_path)
 }

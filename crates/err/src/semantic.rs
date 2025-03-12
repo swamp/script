@@ -7,7 +7,7 @@ use swamp_script_source_map::SourceMap;
 
 #[must_use]
 pub fn build_semantic_error(err: &SemanticError, span: &Span) -> Builder<usize> {
-    match err {
+    let mut b = match err {
         SemanticError::CouldNotInsertStruct => {
             Report::build(Kind::Error, 140, "CouldNotInsertStruct", span)
         }
@@ -61,10 +61,13 @@ pub fn build_semantic_error(err: &SemanticError, span: &Span) -> Builder<usize> 
         &swamp_script_semantic::SemanticError::DuplicateSymbolName(_)
         | &swamp_script_semantic::SemanticError::MismatchedTypes { .. } => todo!(),
         &swamp_script_semantic::SemanticError::UnknownTypeVariable => todo!(),
-    }
+    };
+
+    b.error_module = "S".to_string();
+    b
 }
 
 pub fn show_semantic_error(err: &SemanticError, source_map: &SourceMap, current_dir: &Path) {
     let builder = build_semantic_error(err, &Span::default());
-    build_and_print(builder, "S", source_map, current_dir);
+    build_and_print(builder, source_map, current_dir);
 }

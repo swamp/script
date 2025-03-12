@@ -8,7 +8,7 @@ use swamp_script_source_map::SourceMap;
 
 #[must_use]
 pub fn build_parse_error(err: &SpecificError, span: &Span) -> Builder<usize> {
-    match err {
+    let mut b = match err {
         SpecificError::General(general) => Report::build(
             Kind::Error,
             1,
@@ -105,7 +105,10 @@ pub fn build_parse_error(err: &SpecificError, span: &Span) -> Builder<usize> {
         SpecificError::CouldNotMoveDown
         | SpecificError::CouldNotMoveRight
         | SpecificError::UnexpectedTokenInMutableExpression => todo!(),
-    }
+    };
+
+    b.error_module = "P".to_string();
+    b
 }
 
 pub fn show_parse_error(
@@ -115,7 +118,7 @@ pub fn show_parse_error(
     current_dir: &Path,
 ) {
     let builder = build_parse_error(err, span);
-    build_and_print(builder, "P", source_map, current_dir)
+    build_and_print(builder, source_map, current_dir)
 }
 
 pub fn build_parser_error(err: &ParserError) -> Builder<usize> {
@@ -131,5 +134,5 @@ pub fn build_parser_error(err: &ParserError) -> Builder<usize> {
 
 pub fn show_parser_error(err: &ParserError, source_map: &SourceMap, current_dir: &Path) {
     let builder = build_parser_error(err);
-    build_and_print(builder, "P", source_map, current_dir)
+    build_and_print(builder, source_map, current_dir)
 }

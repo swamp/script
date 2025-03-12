@@ -100,6 +100,7 @@ impl<C: Display + Clone> Report<C> {
         let header = eira::Header {
             header_kind: self.config.kind,
             code: self.config.error_code.clone(),
+            code_prefix: self.config.error_module.clone(),
             message: self.config.error_name.clone(),
         };
         header.write(&mut writer)?;
@@ -151,6 +152,7 @@ impl<C: Display + Clone> Report<C> {
             let header = eira::Header {
                 header_kind: Kind::Note,
                 code: 100,
+                code_prefix: String::new(),
                 message: found_note.to_string(),
             };
             header.write(&mut writer)?;
@@ -198,13 +200,7 @@ impl<C: Display + Clone> Builder<C> {
     }
 }
 
-pub fn build_and_print(
-    mut builder: Builder<usize>,
-    part_of_compiler: &str,
-    source_map: &SourceMap,
-    current_dir: &Path,
-) {
-    builder.error_module = part_of_compiler.to_string();
+pub fn build_and_print(mut builder: Builder<usize>, source_map: &SourceMap, current_dir: &Path) {
     let report = builder.build();
     report.print(source_map, current_dir, stderr()).unwrap();
 }

@@ -21,13 +21,10 @@ swamp-script-modules = { path = "../modules", version = "0.1.1" }
 
 # Core and Std
 swamp-script-core = { path = "../core", version = "0.1.1" }
-# swamp-script-ffi = { path = "../ffi", version = "0.0.12" }
 swamp-script-std = { path = "../std", version = "0.1.1" }
 
 swamp-script-pretty-print = { path = "../pretty-print", version = "0.1.1" }
 
-# Runner
-# swamp-script-eval = { path = "../eval", version = "0.0.12" }
 swamp-script-dep-loader = { path = "../dep-loader", version = "0.1.1" }
 swamp-script-eval-loader = { path = "../eval-loader", version = "0.1.1" }
 swamp-script-source-map-lookup = { path = "../source-map-lookup", version = "0.1.1" }

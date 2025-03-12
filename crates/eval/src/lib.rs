@@ -1463,8 +1463,8 @@ impl<'a, C> Interpreter<'a, C> {
             IntrinsicFunction::MapSubscript => match value_ref.borrow().clone() {
                 Value::Map(_type_id, seq_map) => {
                     let key_value = self.evaluate_expression(&arguments[0])?;
-                    let maybe_value = seq_map.get(&key_value);
-                    Value::Option(maybe_value.cloned())
+                    let found_value = seq_map.get(&key_value).unwrap().borrow().clone();
+                    found_value
                 }
                 _ => {
                     return Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, node))?;

@@ -51,27 +51,39 @@ impl Analyzer<'_> {
 
     pub(crate) fn analyze_constant_access(
         &self,
-        constant_identifier: &swamp_script_ast::ConstantIdentifier,
+        qualified_constant_identifier: &swamp_script_ast::QualifiedConstantIdentifier,
     ) -> Result<Expression, Error> {
-        self.try_find_constant(constant_identifier).map_or_else(
-            || Err(self.create_err(ErrorKind::UnknownConstant, &constant_identifier.0)),
-            |constant_ref| {
-                let ty = constant_ref.resolved_type.clone();
-                Ok(self.create_expr(
-                    ExpressionKind::ConstantAccess(constant_ref.clone()),
-                    ty,
-                    &constant_identifier.0,
-                ))
-            },
-        )
+        self.try_find_constant(qualified_constant_identifier)
+            .map_or_else(
+                || {
+                    Err(self.create_err(
+                        ErrorKind::UnknownConstant,
+                        &qualified_constant_identifier.name,
+                    ))
+                },
+                |constant_ref| {
+                    let ty = constant_ref.resolved_type.clone();
+                    Ok(self.create_expr(
+                        ExpressionKind::ConstantAccess(constant_ref.clone()),
+                        ty,
+                        &qualified_constant_identifier.name,
+                    ))
+                },
+            )
     }
 
     #[must_use]
     pub fn try_find_constant(
         &self,
-        constant_identifier: &swamp_script_ast::ConstantIdentifier,
+        qualified_constant_identifier: &swamp_script_ast::QualifiedConstantIdentifier,
     ) -> Option<&ConstantRef> {
-        let constant_name = self.get_text(&constant_identifier.0);
-        self.shared.lookup_table.get_constant(constant_name)
+        let path = self.get_module_path(qualified_constant_identifier.module_path.as_ref());
+        let constant_name = self.get_text(&qualified_constant_identifier.name);
+
+        let maybe_symbol_table = self.shared.get_symbol_table(&path);
+        maybe_symbol_table.map_or_else(
+            || None,
+            |symbol_table| Some(symbol_table.get_constant(constant_name)),
+        )?
     }
 }

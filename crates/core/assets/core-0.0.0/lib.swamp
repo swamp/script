@@ -394,7 +394,7 @@ impl Map<K, V> {
     /// - `key`: The key of the element to get
     ///
     /// Uses intrinsic function `map_subscript` to fetch the value.
-    fn subscript(self, key: K) -> V? {
+    fn subscript(self, key: K) -> V {
         map_subscript(self, key)
     }
 

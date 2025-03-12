@@ -20,7 +20,6 @@ pub mod variable;
 use crate::err::{Error, ErrorKind};
 use crate::instantiator::{Instantiator, TypeVariableScope};
 use seq_map::SeqMap;
-use std::any::Any;
 use std::mem::take;
 use std::num::{ParseFloatError, ParseIntError};
 use std::rc::Rc;
@@ -1522,25 +1521,6 @@ impl<'a> Analyzer<'a> {
         Err(self.create_err(ErrorKind::UnknownIdentifier, var_node))
     }
 
-    fn analyze_usize_index(
-        &mut self,
-        usize_expression: &swamp_script_ast::Expression,
-    ) -> Result<Expression, Error> {
-        let int_context = TypeContext::new_argument(&Type::Int);
-        let lookup_expression = self.analyze_expression(usize_expression, &int_context)?;
-        let lookup_resolution = lookup_expression.ty.clone();
-
-        match &lookup_resolution {
-            Type::Int => {}
-            _ => Err(self.create_err(
-                ErrorKind::ArrayIndexMustBeInt(lookup_resolution),
-                &usize_expression.node,
-            ))?,
-        }
-
-        Ok(lookup_expression)
-    }
-
     fn analyze_slice_type_helper(
         &mut self,
         node: &swamp_script_ast::Node,
@@ -2520,43 +2500,6 @@ impl<'a> Analyzer<'a> {
         };
 
         Ok(postfix)
-    }
-
-    fn analyze_postfix_field_call(
-        &mut self,
-        resolved_node: &Node,
-        struct_type: &NamedStructType,
-        field: &StructTypeField,
-        index: usize,
-        signature: &Signature,
-        arguments: &[swamp_script_ast::MutableOrImmutableExpression],
-    ) -> Result<Vec<Postfix>, Error> {
-        let mut suffixes = Vec::new();
-        //let field_name_str = self.get_text(member_name).to_string();
-        let struct_field_kind =
-            PostfixKind::StructField(struct_type.anon_struct_type.clone(), index);
-
-        let struct_field_postfix = Postfix {
-            node: resolved_node.clone(),
-            ty: field.field_type.clone(),
-            kind: struct_field_kind,
-        };
-
-        suffixes.push(struct_field_postfix);
-
-        let resolved_arguments =
-            self.analyze_and_verify_parameters(resolved_node, &signature.parameters, arguments)?;
-
-        let call_kind = PostfixKind::FunctionCall(resolved_arguments);
-
-        let call_postfix = Postfix {
-            node: resolved_node.clone(),
-            ty: *signature.return_type.clone(),
-            kind: call_kind,
-        };
-        suffixes.push(call_postfix);
-
-        Ok(suffixes)
     }
 
     fn analyze_postfix_member_call(

@@ -130,6 +130,7 @@ fn main() {
     let header = Header {
         header_kind: Kind::Error,
         code: 2044,
+        code_prefix: "".to_string(),
         message: "Illegal symbol for the type".to_string(),
     };
     header.write(stderr()).expect("header should work");

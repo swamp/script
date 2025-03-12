@@ -13,7 +13,6 @@ swamp-script-types = { path = "../types", version = "0.1.1" }
 swamp-script-node = { path = "../node", version = "0.1.1" }
 fixed32 = "0.0.17"
 seq-map = "0.0.13"
-seq-fmt = "0.0.1"
 
 swamp-script-core-extra = { path = "../core-extra", version = "0.1.1" }
 swamp-script-source-map = { path = "../source-map", version = "0.1.1" }

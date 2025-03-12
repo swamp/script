@@ -99,7 +99,7 @@ pub struct ExternalType {
     pub number: u32,       // For type comparison
 }
 
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Eq, PartialEq, Clone, Hash)]
 pub struct TypeForParameter {
     pub name: String,
     pub resolved_type: Type,
@@ -116,16 +116,6 @@ impl Display for TypeForParameter {
             self.name,
             self.resolved_type
         )
-    }
-}
-
-impl Eq for TypeForParameter {}
-
-impl PartialEq for TypeForParameter {
-    fn eq(&self, other: &Self) -> bool {
-        let types_equal = self.resolved_type.compatible_with(&other.resolved_type);
-
-        types_equal && (self.is_mutable == other.is_mutable)
     }
 }
 

@@ -71,7 +71,7 @@ pub struct PrefixInfo<'a> {
 
 impl SourceFileSection {
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             scopes: vec![],
             labels: vec![],
@@ -534,6 +534,7 @@ impl Display for Kind {
 pub struct Header<C: Display> {
     pub header_kind: Kind,
     pub code: C,
+    pub code_prefix: String,
     pub message: String,
 }
 
@@ -555,7 +556,12 @@ impl<C: Display> Header<C> {
             "{}",
             self.header_kind.fg(Self::color_for_kind(self.header_kind))
         )?;
-        write!(writer, "[{}]", self.code.fg(Color::Blue))?;
+        write!(
+            writer,
+            "[{}{}]",
+            self.code_prefix.fg(Color::White),
+            self.code.fg(Color::Blue)
+        )?;
         write!(writer, ": ")?;
         write!(writer, "{}", self.message.bold())?;
         writeln!(writer)

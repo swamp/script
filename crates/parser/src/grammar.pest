@@ -215,6 +215,8 @@ qualified_type_identifier = {
     module_segments? ~ type_identifier ~ generic_params?
 }
 
+
+
 module_segments           = { (identifier ~ SCOPE_OPERATOR)+ }
 
 /*
@@ -428,7 +430,7 @@ term = {
 }
 
 // variable or function
-constant_reference = { constant_identifier }
+constant_reference = {  module_segments? ~ constant_identifier }
 
 if_expr = { "if" ~ expression ~ expression ~ ("else" ~ (if_expr | expression))? }
 // TODO: is second if_expr needed?

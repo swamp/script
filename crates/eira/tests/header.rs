@@ -11,6 +11,7 @@ fn header_error() {
     let header = Header {
         header_kind: Kind::Error,
         code: 2044,
+        code_prefix: "".to_string(),
         message: "Illegal symbol for the type".to_string(),
     };
 
@@ -36,6 +37,7 @@ fn header_and_file() {
     let header = Header {
         header_kind: Kind::Error,
         code: 2044,
+        code_prefix: "".to_string(),
         message: "Illegal symbol for the type".to_string(),
     };
     header.write(stderr()).expect("could not write header");

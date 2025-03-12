@@ -15,5 +15,3 @@ swamp-script-modules = { path = "../modules", version = "0.1.1" }
 tracing = "0.1.41"
 
 [dev-dependencies]
-test-log = { version = "0.2.16", features = ["trace", "log", "color"] }
-swamp-script-parser = { path = "../parser", version = "0.1.1" }

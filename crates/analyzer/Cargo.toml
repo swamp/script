@@ -10,7 +10,6 @@ description = "analyzer for swamp script"
 tracing = "0.1.40"
 seq-map = "0.0.13"
 seq-set = "0.0.2"
-seq-fmt = "0.0.1"
 
 swamp-script-semantic = { path = "../semantic", version = "0.1.1" }
 swamp-script-ast = { path = "../ast", version = "0.1.1" }
