@@ -1,8 +1,14 @@
 #[repr(u8)]
 pub enum OpCode {
-    LdLocal = 0,
-    StoreLocal = 1,
-    LdImmI32 = 2,
-    AddI32 = 3,
-    End = 4,
+    End = 0,
+    LdLocal = 1,
+    StoreLocal = 2,
+    LdImmI32 = 3,
+    AddI32 = 4,
+    LtI32 = 5,
+    JmpIf = 6,
+    JmpIfNot = 7,
+    Call = 8, // Introduce CallLong if needed
+    Enter = 9,
+    Ret = 10,
 }

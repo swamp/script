@@ -55,6 +55,36 @@ impl InstructionBuilder {
         position
     }
 
+    pub fn add_jmp_if(&mut self, condition_offset: u16, jmp_offset: u16) -> usize {
+        let position = self.instructions.len();
+        self.instructions.push(BinaryInstruction {
+            opcode: OpCode::JmpIf as u8,
+            opcode_count: 2,
+            operands: [condition_offset, jmp_offset, 0, 0],
+        });
+        position
+    }
+
+    pub fn add_jmp_if_not(&mut self, condition_offset: u16, jmp_offset: u16) -> usize {
+        let position = self.instructions.len();
+        self.instructions.push(BinaryInstruction {
+            opcode: OpCode::JmpIfNot as u8,
+            opcode_count: 2,
+            operands: [condition_offset, jmp_offset, 0, 0],
+        });
+        position
+    }
+
+    pub fn add_lt_i32(&mut self, dst_offset: u16, lhs_offset: u16, rhs_offset: u16) -> usize {
+        let position = self.instructions.len();
+        self.instructions.push(BinaryInstruction {
+            opcode: OpCode::LtI32 as u8,
+            opcode_count: 3,
+            operands: [dst_offset, lhs_offset, rhs_offset, 0],
+        });
+        position
+    }
+
     pub fn add_end(&mut self) -> usize {
         let position = self.instructions.len();
         self.instructions.push(BinaryInstruction {

@@ -89,14 +89,22 @@ impl Vm {
             execution_complete: false,
             call_stack: vec![],
             host_functions: vec![],
-            handlers: [const { HandlerType::Args0(Self::handle_unimplemented) }; 256],
+            handlers: [const { HandlerType::Args0(Self::execute_unimplemented) }; 256],
             debug_call_depth: 0,
         };
 
-        vm.handlers[OpCode::LdLocal as usize] = HandlerType::Args2(Self::handle_ld_local);
-        vm.handlers[OpCode::LdImmI32 as usize] = HandlerType::Args3(Self::handle_ld_imm_i32);
-        vm.handlers[OpCode::AddI32 as usize] = HandlerType::Args3(Self::handle_add_i32);
-        vm.handlers[OpCode::End as usize] = HandlerType::Args0(Self::handle_end);
+        vm.handlers[OpCode::LdLocal as usize] = HandlerType::Args2(Self::execute_ld_local);
+        vm.handlers[OpCode::LdImmI32 as usize] = HandlerType::Args3(Self::execute_ld_imm_i32);
+        vm.handlers[OpCode::AddI32 as usize] = HandlerType::Args3(Self::execute_add_i32);
+        vm.handlers[OpCode::LtI32 as usize] = HandlerType::Args3(Self::execute_lt_i32);
+        vm.handlers[OpCode::JmpIf as usize] = HandlerType::Args2(Self::execute_jmp_if);
+        vm.handlers[OpCode::JmpIfNot as usize] = HandlerType::Args2(Self::execute_jmp_if_not);
+        vm.handlers[OpCode::Call as usize] = HandlerType::Args1(Self::execute_call);
+
+        vm.handlers[OpCode::Enter as usize] = HandlerType::Args1(Self::execute_enter);
+        vm.handlers[OpCode::Ret as usize] = HandlerType::Args0(Self::execute_ret);
+
+        vm.handlers[OpCode::End as usize] = HandlerType::Args0(Self::execute_end);
 
         // Optional: Zero out the memory for safety?
         unsafe {
@@ -123,7 +131,7 @@ impl Vm {
         self.execution_complete = false;
     }
 
-    fn handle_ld_imm_i32(&mut self, dst_offset: u16, lower_bits: u16, upper_bits: u16) {
+    fn execute_ld_imm_i32(&mut self, dst_offset: u16, lower_bits: u16, upper_bits: u16) {
         let value = ((upper_bits as i32) << 16) | (lower_bits as i32);
 
         let dst_ptr = self.ptr_at(self.frame_offset + dst_offset as usize) as *mut i32;
@@ -133,7 +141,7 @@ impl Vm {
     }
 
     #[inline]
-    fn handle_add_i32(&mut self, dst_offset: u16, lhs_offset: u16, rhs_offset: u16) {
+    fn execute_add_i32(&mut self, dst_offset: u16, lhs_offset: u16, rhs_offset: u16) {
         let lhs_ptr = self.ptr_at(self.frame_offset + lhs_offset as usize) as *const i32;
         let rhs_ptr = self.ptr_at(self.frame_offset + rhs_offset as usize) as *const i32;
         let dst_ptr = self.ptr_at(self.frame_offset + dst_offset as usize) as *mut i32;
@@ -146,14 +154,43 @@ impl Vm {
     }
 
     #[inline]
-    fn handle_end(&mut self) {
+    fn execute_lt_i32(&mut self, dst_offset: u16, lhs_offset: u16, rhs_offset: u16) {
+        let lhs_ptr = self.frame_ptr_i32_const_at(lhs_offset);
+        let rhs_ptr = self.frame_ptr_i32_const_at(rhs_offset);
+        let dst_ptr = self.frame_ptr_bool_at(dst_offset);
+
+        unsafe {
+            let lhs = *lhs_ptr;
+            let rhs = *rhs_ptr;
+            *dst_ptr = (lhs < rhs) as u8;
+        }
+    }
+
+    #[inline]
+    fn execute_jmp_if(&mut self, condition_offset: u16, jump_offset: u16) {
+        let is_true = self.frame_ptr_bool_const_at(condition_offset);
+        if is_true {
+            self.ip = (self.ip as isize + jump_offset as isize) as usize;
+        }
+    }
+
+    #[inline]
+    fn execute_jmp_if_not(&mut self, condition_offset: u16, jump_offset: u16) {
+        let is_true = self.frame_ptr_bool_const_at(condition_offset);
+        if !is_true {
+            self.ip = (self.ip as isize + jump_offset as isize) as usize;
+        }
+    }
+
+    #[inline]
+    fn execute_end(&mut self) {
         self.execution_complete = true;
     }
 
-    fn handle_unimplemented(&mut self) {}
+    fn execute_unimplemented(&mut self) {}
 
     // Type-specific handlers
-    fn handle_ld_local(&mut self, dst_offset: u16, src_offset: u16) {
+    fn execute_ld_local(&mut self, dst_offset: u16, src_offset: u16) {
         let src_ptr = self.ptr_at(self.frame_offset + src_offset as usize);
         let dst_ptr = self.ptr_at(self.frame_offset + dst_offset as usize);
 
@@ -171,6 +208,30 @@ impl Vm {
     // Helper to get current frame pointer
     const fn frame_ptr(&self) -> *mut u8 {
         self.ptr_at(self.frame_offset)
+    }
+
+    #[inline]
+    fn frame_ptr_i32_at(&self, offset: u16) -> *mut i32 {
+        self.ptr_at(self.frame_offset + offset as usize) as *mut i32
+    }
+
+    #[inline]
+    fn frame_ptr_i32_const_at(&self, offset: u16) -> *const i32 {
+        self.ptr_at(self.frame_offset + offset as usize) as *const i32
+    }
+
+    #[inline]
+    fn frame_ptr_bool_at(&self, offset: u16) -> *mut u8 {
+        self.ptr_at(self.frame_offset + offset as usize) as *mut u8
+    }
+
+    #[inline]
+    fn frame_ptr_bool_const_at(&self, offset: u16) -> bool {
+        unsafe { *self.ptr_at(self.frame_offset + offset as usize) != 0 }
+    }
+
+    const fn frame_ptr_at(&self, offset: u16) -> *mut u8 {
+        self.ptr_at(self.frame_offset + offset as usize)
     }
 
     fn allocate(&mut self, size: usize) -> usize {
@@ -219,7 +280,7 @@ impl Vm {
         }
     }
 
-    fn execute_call(&mut self, target: usize) {
+    fn execute_call(&mut self, target: u16) {
         // Save return information
         let return_info = CallFrame {
             return_address: self.ip + 1,              // Instruction to return to
@@ -231,45 +292,37 @@ impl Vm {
         self.call_stack.push(return_info);
 
         // Jump to function
-        self.ip = target;
+        self.ip = target as usize;
         self.ip -= 1; // Adjust for automatic increment
     }
 
     fn execute_enter(&mut self, frame_size: u16) {
         let aligned_size = (frame_size as usize + ALIGNMENT_REST) & ALIGNMENT_MASK; // 8-byte alignment
 
-        if let Some(frame) = self.call_stack.last_mut() {
-            frame.frame_size = aligned_size;
-        } else {
-            panic!("ENTER instruction without corresponding CALL");
-        }
+        let frame = self.call_stack.last_mut().unwrap();
+        frame.frame_size = aligned_size;
 
+        // the functions frame of reference should be the stack offset
         self.frame_offset = self.stack_offset;
 
+        // and we push the stack with the space of the local variables
         self.stack_offset += aligned_size;
-    }
-
-    fn execute_leave(&mut self) {
-        let frame = self.call_stack.last().unwrap();
-        self.frame_offset = frame.previous_frame_offset;
-        self.stack_offset -= frame.frame_size;
     }
 
     fn execute_ret(&mut self) {
         let frame = self.call_stack.pop().unwrap();
 
+        // Bring back the frame to the old frame
+        self.frame_offset = frame.previous_frame_offset;
+
+        // "pop" the space for the local variables of the stack
+        self.stack_offset -= frame.frame_size;
+
+        // going back to the old instruction
         self.ip = frame.return_address;
         self.ip -= 1; // Adjust for automatic increment
-    }
 
-    fn execute_ld_local(&mut self, dst_offset: u16, src_offset: u16) {
-        unsafe {
-            let frame_ptr = self.frame_ptr();
-            let dst_ptr = frame_ptr.add(dst_offset as usize);
-            let src_ptr = frame_ptr.add(src_offset as usize);
-
-            std::ptr::copy_nonoverlapping(src_ptr, dst_ptr, 4);
-        }
+        // NOTE: Any return value is always at frame_offset + 0
     }
 }
 
