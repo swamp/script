@@ -105,6 +105,9 @@ impl<C: Display + Clone> Report<C> {
         };
         header.write(&mut writer)?;
         let primary_span = &self.config.primary_span;
+        if primary_span.file_id == 0 {
+            eprintln!("{}", format!("header {} {}", header.message, header.code));
+        }
         let (row, col) =
             source_map.get_span_location_utf8(primary_span.file_id, primary_span.offset as usize);
         let filename = source_map.get_relative_path_to(primary_span.file_id, current_dir)?;

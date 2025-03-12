@@ -21,6 +21,9 @@ pub struct RuntimeError {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum RuntimeErrorKind {
+    StackCouldNotBePopped,
+    VecSubscriptNonExisting,
+    MapKeyNonExisting,
     MustHaveGuardArmThatMatches,
     ValueError(ValueError),
     ArgumentIsNotMutable,

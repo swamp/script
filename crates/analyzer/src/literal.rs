@@ -43,6 +43,7 @@ impl Analyzer<'_> {
                 let found_expected_type = if let Some(inner_type) = context.expected_type {
                     inner_type.clone()
                 } else {
+                    info!("no one give me a hint of what this is, so I am guessing Vec");
                     let vec_blueprint = self
                         .shared
                         .core_symbol_table

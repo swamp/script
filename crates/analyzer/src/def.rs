@@ -13,6 +13,7 @@ use swamp_script_semantic::{
 };
 use swamp_script_types::prelude::*;
 use swamp_script_types::{ParameterizedTypeBlueprint, ParameterizedTypeKind};
+use tracing::info;
 use tracing::trace;
 
 impl Analyzer<'_> {
@@ -22,6 +23,7 @@ impl Analyzer<'_> {
         import_items: &swamp_script_ast::ImportItems,
         node: &swamp_script_ast::Node,
     ) -> Result<(), Error> {
+        info!(?path, ?self.shared.modules, "looking for module");
         let found_module = self
             .shared
             .get_module(path)
@@ -31,10 +33,17 @@ impl Analyzer<'_> {
         match import_items {
             swamp_script_ast::ImportItems::Nothing => {
                 let last_name = path.last().unwrap();
-                self.shared
+                if self
+                    .shared
                     .lookup_table
-                    .add_module_link(last_name, found_module.clone())
-                    .map_err(|err| self.create_err(ErrorKind::SemanticError(err), node))?;
+                    .get_module_link(last_name)
+                    .is_none()
+                {
+                    self.shared
+                        .lookup_table
+                        .add_module_link(last_name, found_module.clone())
+                        .map_err(|err| self.create_err(ErrorKind::SemanticError(err), node))?;
+                }
             }
             swamp_script_ast::ImportItems::Items(items) => {
                 for ast_items in items {

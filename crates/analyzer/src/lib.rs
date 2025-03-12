@@ -343,9 +343,9 @@ impl<'a> SharedState<'a> {
                 |found_version| {
                     let mut new_path = path.to_vec();
                     let complete_name = format!("{}-{found_version}", path[0]);
-                    // new_path[0] = complete_name;
-                    //new_path
-                    path.to_vec()
+                    new_path[0] = complete_name;
+                    new_path
+                    //path.to_vec()
                 },
             )
         };

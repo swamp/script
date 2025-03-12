@@ -273,6 +273,8 @@ impl DependencyParser {
                     parsed_module
                 } else if self.already_resolved_modules.contains(module_path_vec) {
                     continue;
+                } else if path == ["core"] {
+                    continue;
                 } else {
                     let parsed_ast_module = parse_single_module(source_map, &path)?;
 

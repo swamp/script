@@ -114,66 +114,78 @@ pub fn bootstrap_modules(
 
     let mut modules = Modules::new();
 
-    let mut core_module = swamp_script_core::create_module(&compiler_version);
+    let mut core_module_with_intrinsics = swamp_script_core::create_module(&compiler_version);
 
-    let mut default_symbol_table = SymbolTable::new(&[]);
+    let core_ast_module = parse_single_module(
+        source_map,
+        &core_module_with_intrinsics.symbol_table.module_path(),
+    )?;
+
+    let mut state = ProgramState::new();
+
+    let half_completed_core_symbol_table = core_module_with_intrinsics.symbol_table.clone();
+    let default_symbol_table_for_core_with_intrinsics = half_completed_core_symbol_table.clone();
+
+    let mut core_analyzed_definition_table = analyze_single_module(
+        &mut state,
+        default_symbol_table_for_core_with_intrinsics.clone(),
+        &modules,
+        half_completed_core_symbol_table.clone().into(),
+        &core_ast_module,
+        source_map,
+        &core_module_with_intrinsics.symbol_table.module_path(),
+    )?;
+    // Overwrite the default lookup table to the definition table
+    core_analyzed_definition_table
+        .extend_intrinsic_functions_from(&default_symbol_table_for_core_with_intrinsics);
+    core_analyzed_definition_table
+        .extend_basic_from(&default_symbol_table_for_core_with_intrinsics);
+
+    let source_map_lookup = SourceMapWrapper { source_map };
+    let pretty_printer = SourceMapDisplay {
+        source_map: &source_map_lookup,
+    };
+
+    let display_core_analyzed_definition_table = SymbolTableDisplay {
+        symbol_table: &core_analyzed_definition_table,
+        source_map_display: &pretty_printer,
+    };
+
+    info!(%display_core_analyzed_definition_table, "core analyzed symbol table");
+
+    core_module_with_intrinsics.symbol_table = core_analyzed_definition_table;
+
+    // core module is done, so add it read only to the modules
+    let core_module_ref = Rc::new(core_module_with_intrinsics);
+    modules.add(core_module_ref.clone());
+
+    let mut default_symbol_table_for_others = SymbolTable::new(&[]);
 
     // Prelude for the core module
     // Expose the basic primitive types, like `Int`, `String`, `Float`, `Bool`
     // so they can be references without a `use core::{Int, String, Float, Bool}` statement.
-    default_symbol_table
-        .extend_basic_from(&core_module.symbol_table)
+    default_symbol_table_for_others
+        .extend_alias_from(&core_module_ref.symbol_table)
         .unwrap();
 
-    let core_ast_module = parse_single_module(source_map, &core_module.symbol_table.module_path())?;
+    // Add `core` module without the version number, so they can be referenced from code
+    default_symbol_table_for_others
+        .add_package_version(swamp_script_core::PACKAGE_NAME, compiler_version)
+        .expect("should work");
 
-    let mut state = ProgramState::new();
-
-    let core_symbol_table = core_module.symbol_table.clone();
-
-    let mut core_analyzed_symbol_table = analyze_single_module(
-        &mut state,
-        core_symbol_table.clone(),
-        &modules,
-        core_symbol_table.clone().into(),
-        &core_ast_module,
-        source_map,
-        &core_module.symbol_table.module_path(),
-    )?;
-
-    debug!("analyzed core module");
-
-    core_analyzed_symbol_table
-        .extend_intrinsic_functions_from(&core_symbol_table)
-        .unwrap();
-
-    /*
     let source_map_lookup = SourceMapWrapper { source_map };
     let pretty_printer = SourceMapDisplay {
         source_map: &source_map_lookup,
     };
 
     let symbol_table_display = SymbolTableDisplay {
-        symbol_table: &core_analyzed_symbol_table,
+        symbol_table: &default_symbol_table_for_others,
         source_map_display: &pretty_printer,
     };
 
-    info!(%symbol_table_display, "core symbol table");
+    info!(%symbol_table_display, "default_symbol_table");
 
-     */
-
-    core_module.symbol_table = core_analyzed_symbol_table;
-
-    // core module is done, so add it read only to the modules
-    let core_module_ref = Rc::new(core_module);
-    modules.add(core_module_ref.clone());
-
-    // Add `core` module without the version number, so they can be referenced from code
-    default_symbol_table
-        .add_package_version(swamp_script_core::PACKAGE_NAME, compiler_version)
-        .expect("should work");
-
-    let program = Program::new(state, modules, default_symbol_table);
+    let program = Program::new(state, modules, default_symbol_table_for_others);
 
     let result = BootstrapResult {
         program,

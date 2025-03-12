@@ -11,6 +11,7 @@ use swamp_script_semantic::prelude::*;
 use swamp_script_types::ParameterizedTypeBlueprint;
 use swamp_script_types::prelude::*;
 use tiny_ver::TinyVersion;
+use tracing::info;
 
 #[derive(Debug, Clone)]
 pub enum FuncDef {
@@ -46,6 +47,10 @@ impl Symbol {
     #[must_use]
     pub const fn is_basic_type(&self) -> bool {
         matches!(self, Self::Type(..) | Self::Alias(..))
+    }
+
+    pub const fn is_alias_type(&self) -> bool {
+        matches!(self, Self::Alias(..))
     }
 }
 
@@ -118,6 +123,17 @@ impl SymbolTable {
         Ok(())
     }
 
+    /// # Errors
+    ///
+    pub fn extend_alias_from(&mut self, symbol_table: &Self) -> Result<(), SemanticError> {
+        for (name, symbol) in symbol_table.symbols() {
+            if symbol.is_alias_type() {
+                self.add_symbol(name, symbol.clone())?;
+            }
+        }
+        Ok(())
+    }
+
     pub fn extend_intrinsic_functions_from(
         &mut self,
         symbol_table: &Self,
@@ -179,7 +195,6 @@ impl SymbolTable {
 
         Ok(())
     }
-
     /// # Errors
     ///
     pub fn add_blueprint(
@@ -187,6 +202,7 @@ impl SymbolTable {
         blueprint: ParameterizedTypeBlueprint,
     ) -> Result<ParameterizedTypeBlueprint, SemanticError> {
         //let struct_ref = Rc::new(blueprint);
+        info!(?blueprint, "add blueprint");
         self.add_blueprint_link(blueprint.clone())?;
         Ok(blueprint)
     }
@@ -392,13 +408,6 @@ impl SymbolTable {
             _ => None,
         }
     }
-    #[must_use]
-    pub fn get_module_link(&self, name: &str) -> Option<&ModuleRef> {
-        match self.get_symbol(name)? {
-            Symbol::Module(module_ref) => Some(module_ref),
-            _ => None,
-        }
-    }
 
     // Functions
 
@@ -480,6 +489,14 @@ impl SymbolTable {
         self.insert_symbol(name, Symbol::Module(ns))
             .map_err(|_| SemanticError::DuplicateNamespaceLink(name.to_string()))?;
         Ok(())
+    }
+
+    #[must_use]
+    pub fn get_module_link(&self, name: &str) -> Option<&ModuleRef> {
+        match self.get_symbol(name)? {
+            Symbol::Module(module_ref) => Some(module_ref),
+            _ => None,
+        }
     }
 
     pub fn add_package_version(

@@ -74,6 +74,9 @@ pub fn analyze_modules_in_order(
 ) -> Result<(), LoaderErr> {
     debug!(?module_paths_in_order, "analyzing modules in order");
     for module_path in module_paths_in_order {
+        if *module_path == ["core"] {
+            continue;
+        }
         if let Some(parse_module) = parsed_modules.get_parsed_module(module_path) {
             let process_span = span!(Level::TRACE, "analyze mod", path = ?module_path);
             let enter_ = process_span.enter();

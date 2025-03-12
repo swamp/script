@@ -260,8 +260,7 @@ struct Slice<T>
 
 struct SlicePair<K, V>
 
-struct Vec<T> {
-}
+struct Vec<T>
 
 impl Vec<T> {
     /// Creates a new vector
@@ -362,11 +361,17 @@ impl Vec<T> {
     fn len(self) -> Int {
         vec_len(self)
     }
+
+    /// Checks if stack is empty
+    ///
+    /// Uses intrinsic function `vec_is_empty`.
+    fn is_empty(self) -> Bool {
+        vec_is_empty(self)
+    }
 }
 
 
-struct Map<K, V> {
-}
+struct Map<K, V>
 
 impl Map<K, V> {
     /// Creates a new Map
@@ -439,6 +444,13 @@ impl Map<K, V> {
         map_len(self)
     }
 
+    /// Checks if map is empty
+    ///
+    /// Uses intrinsic function `map_is_empty`.
+    fn is_empty(self) -> Bool {
+        map_is_empty(self)
+    }
+
     /// Removes a key-value pair.
     ///
     /// # Parameters
@@ -452,6 +464,113 @@ impl Map<K, V> {
         map_remove(mut self, key)
     }
 }
+
+struct Stack<T>
+
+impl Stack<T> {
+    /// Creates a new vector
+    ///
+    /// Uses intrinsic function `vec_create` to add the value.
+    fn new() -> Stack<T> {
+        vec_create()
+    }
+
+    /// Creates a new vector from a Slice.
+    ///
+    /// # Parameters
+    /// - `slice`: The Slice containing the initial elements.
+    ///
+    /// Uses intrinsic function `vec_from_slice` to create the vector.
+    fn new_from_slice(slice: Slice<T>) -> Stack<T> {
+        vec_from_slice(slice)
+    }
+
+    fn iter(self) -> (Int, T) {
+        vec_iter(self)
+    }
+
+    fn iter_mut(self) -> (Int, T) {
+        vec_iter_mut(self)
+    }
+
+    /// Adds an element at the end of the vector.
+    ///
+    /// # Parameters
+    /// - `value`: The element to be inserted at the end of the vector.
+    ///
+    /// Uses intrinsic function `vec_push` to add the value.
+    fn push(mut self, value: T) {
+        vec_push(mut self, value)
+    }
+
+    /// Removed the top most element at the end of the stack.
+    ///
+    /// Uses intrinsic function `vec_pop` to add the value.
+    fn pop(mut self) -> T {
+        vec_pop(mut self)
+    }
+
+    /// Gets an element at the specified index
+    ///
+    /// # Parameters
+    /// - `index`: The index of the element to get
+    ///
+    /// # Panics
+    /// If the index is outside of the vector, it panics.
+    ///
+    /// Uses intrinsic function `vec_subscript` to fetch the value.
+    fn subscript(self, index: Int) -> T {
+        vec_subscript(self, index)
+    }
+
+    /// Gets a mutable element at the specified index
+    ///
+    /// # Parameters
+    /// - `index`: The index of the element to get
+    /// - `out_value`: The value to modify
+    ///
+    /// # Panics
+    /// If the index is outside of the vector, it panics.
+    ///
+    /// Uses intrinsic function `vec_subscript_mut` to fetch the mutable value.
+    fn subscript_mut(mut self, index: Int) -> T {
+        vec_subscript_mut(mut self, index)
+    }
+
+
+    /// Gets a mutable element with the specified key. Create a key if it doesn't exist
+    ///
+    /// # Parameters
+    /// - `key`: The key of the element to get
+    /// - `out_value`: The value to modify
+    ///
+    /// Uses intrinsic function `map_subscript_mut_create_if_needed` to fetch the mutable value.
+    fn subscript_mut_create_if_needed(mut self, index: Int) -> T {
+        vec_subscript_mut(mut self, index)
+    }
+
+    /// Clears all elements.
+    ///
+    /// Uses intrinsic function `vec_clear` to remove all elements from the vector.
+    fn clear(self) {
+        vec_clear(self)
+    }
+
+    /// Gets the length of the vector.
+    ///
+    /// Uses intrinsic function `vec_len` to get the length.
+    fn len(self) -> Int {
+        vec_len(self)
+    }
+
+    /// Checks if stack is empty
+    ///
+    /// Uses intrinsic function `vec_is_empty`.
+    fn is_empty(self) -> Bool {
+        vec_is_empty(self)
+    }
+}
+
 
 struct SparseId
 

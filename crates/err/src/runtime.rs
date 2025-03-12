@@ -9,6 +9,15 @@ use swamp_script_source_map::SourceMap;
 pub fn build_runtime_error(err: &RuntimeError) -> Builder<usize> {
     let span = &err.node.span;
     let mut b = match &err.kind {
+        RuntimeErrorKind::StackCouldNotBePopped => {
+            Report::build(Kind::Error, 104, "stack could not pop", span)
+        }
+        RuntimeErrorKind::VecSubscriptNonExisting => {
+            Report::build(Kind::Error, 104, "vector subscript failed", span)
+        }
+        RuntimeErrorKind::MapKeyNonExisting => {
+            Report::build(Kind::Error, 104, "map key does not exist", span)
+        }
         RuntimeErrorKind::ExpectedInt => Report::build(Kind::Error, 104, "expected int", span),
         RuntimeErrorKind::ExpectedString => {
             Report::build(Kind::Error, 104, "expected string", span)

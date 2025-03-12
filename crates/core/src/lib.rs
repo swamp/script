@@ -473,6 +473,30 @@ fn add_intrinsic_map_functions(core_ns: &mut SymbolTable) {
             })
             .unwrap();
     }
+
+    let self_to_bool = Signature {
+        parameters: [TypeForParameter {
+            name: "self".to_string(),
+            resolved_type: Type::Never,
+            is_mutable: false,
+            node: None,
+        }]
+        .into(),
+        return_type: Box::new(Type::Bool),
+    };
+
+    let self_to_bool_functions = [IntrinsicFunction::MapIsEmpty];
+
+    for intrinsic_fn in self_to_bool_functions {
+        let name = intrinsic_fn.to_string();
+        core_ns
+            .add_intrinsic_function(IntrinsicFunctionDefinition {
+                name,
+                intrinsic: intrinsic_fn,
+                signature: self_to_bool.clone(),
+            })
+            .unwrap();
+    }
 }
 
 #[allow(clippy::too_many_lines)]
@@ -523,6 +547,28 @@ fn add_intrinsic_vec_functions(core_ns: &mut SymbolTable) {
                 name,
                 intrinsic: intrinsic_fn,
                 signature: self_value_to_unit.clone(),
+            })
+            .unwrap();
+    }
+
+    let self_value_to_value = Signature {
+        parameters: [TypeForParameter {
+            name: "self".to_string(),
+            resolved_type: Type::Never,
+            is_mutable: true,
+            node: None,
+        }]
+        .into(),
+        return_type: Box::new(Type::Never),
+    };
+    let self_value_to_option_functions = [IntrinsicFunction::VecPop];
+    for intrinsic_fn in self_value_to_option_functions {
+        let name = intrinsic_fn.to_string();
+        core_ns
+            .add_intrinsic_function(IntrinsicFunctionDefinition {
+                name,
+                intrinsic: intrinsic_fn,
+                signature: self_value_to_value.clone(),
             })
             .unwrap();
     }
@@ -713,6 +759,30 @@ fn add_intrinsic_vec_functions(core_ns: &mut SymbolTable) {
                 name,
                 intrinsic: intrinsic_fn,
                 signature: self_to_int.clone(),
+            })
+            .unwrap();
+    }
+
+    let self_to_bool = Signature {
+        parameters: [TypeForParameter {
+            name: "self".to_string(),
+            resolved_type: Type::Never,
+            is_mutable: false,
+            node: None,
+        }]
+        .into(),
+        return_type: Box::new(Type::Bool),
+    };
+
+    let self_to_bool_functions = [IntrinsicFunction::VecIsEmpty];
+
+    for intrinsic_fn in self_to_bool_functions {
+        let name = intrinsic_fn.to_string();
+        core_ns
+            .add_intrinsic_function(IntrinsicFunctionDefinition {
+                name,
+                intrinsic: intrinsic_fn,
+                signature: self_to_bool.clone(),
             })
             .unwrap();
     }

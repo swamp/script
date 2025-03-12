@@ -1409,8 +1409,14 @@ impl<'a, C> Interpreter<'a, C> {
                 Value::Vec(_type_id, vector) => {
                     let index = self.evaluate_expression(&arguments[0])?;
                     let index_int = index.expect_int()?;
-                    let r = vector[index_int as usize].borrow();
-                    r.clone()
+                    let maybe_value = vector.get(index_int as usize);
+                    if let Some(found_value) = maybe_value {
+                        found_value.borrow().clone()
+                    } else {
+                        return Err(
+                            self.create_err(RuntimeErrorKind::VecSubscriptNonExisting, node)
+                        );
+                    }
                 }
                 _ => {
                     return Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, node))?;
@@ -1425,10 +1431,19 @@ impl<'a, C> Interpreter<'a, C> {
                 _ => Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, node))?,
             },
 
+            IntrinsicFunction::VecIsEmpty => match &mut *value_ref.borrow_mut() {
+                Value::Vec(_type_id, vector) => Value::Bool(vector.len() == 0),
+                _ => Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, node))?,
+            },
+
             IntrinsicFunction::VecPop => match &mut *value_ref.borrow_mut() {
                 Value::Vec(_type_id, vector) => {
                     let maybe_val = vector.pop();
-                    Value::Option(maybe_val)
+                    if let Some(found_value) = maybe_val {
+                        found_value.borrow().clone()
+                    } else {
+                        return Err(self.create_err(RuntimeErrorKind::StackCouldNotBePopped, node));
+                    }
                 }
                 _ => Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, node))?,
             },
@@ -1460,11 +1475,20 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             },
 
+            IntrinsicFunction::MapIsEmpty => match &mut *value_ref.borrow_mut() {
+                Value::Vec(_type_id, seq_map) => Value::Bool(seq_map.len() == 0),
+                _ => Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, node))?,
+            },
+
             IntrinsicFunction::MapSubscript => match value_ref.borrow().clone() {
                 Value::Map(_type_id, seq_map) => {
                     let key_value = self.evaluate_expression(&arguments[0])?;
-                    let found_value = seq_map.get(&key_value).unwrap().borrow().clone();
-                    found_value
+                    let maybe_value = seq_map.get(&key_value);
+                    if let Some(found_value) = maybe_value {
+                        found_value.borrow().clone()
+                    } else {
+                        return Err(self.create_err(RuntimeErrorKind::MapKeyNonExisting, node));
+                    }
                 }
                 _ => {
                     return Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, node))?;
@@ -1846,6 +1870,7 @@ impl<'a, C> Interpreter<'a, C> {
                 PostfixKind::NoneCoalesce(_default_expression) => {
                     // Handled earlier
                 }
+
                 PostfixKind::StructField(expected_struct_type, index) => {
                     let (encountered_struct_type, fields) = {
                         let brw = val_ref.borrow();
@@ -2239,7 +2264,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
             _ => {
-                panic!("could not find it")
+                panic!("could not find enum variant, serious error")
             }
         }
 
