@@ -13,11 +13,9 @@ swamp-script-types = { path = "../types", version = "0.1.2" }
 swamp-script-node = { path = "../node", version = "0.1.2" }
 fixed32 = "0.0.17"
 seq-map = "0.0.13"
-
 swamp-script-core-extra = { path = "../core-extra", version = "0.1.2" }
 swamp-script-source-map = { path = "../source-map", version = "0.1.2" }
 squirrel-prng = "0.0.1"
-
 
 [dev-dependencies]
 test-log = { version = "0.2.16", features = ["trace", "log", "color"] }

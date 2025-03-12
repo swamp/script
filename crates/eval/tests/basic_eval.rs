@@ -4,12 +4,11 @@
  */
 use crate::util::{check, check_fail, check_value, eval, eval_string};
 use fixed32::Fp;
-use seq_map::SeqMap;
 use std::cell::RefCell;
 use std::rc::Rc;
 use swamp_script_core_extra::prelude::Value;
 use swamp_script_core_extra::qck_des::quick_deserialize;
-use swamp_script_eval::values_to_value_refs_owned;
+use swamp_script_types::Type;
 
 mod util;
 
