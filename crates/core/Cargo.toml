@@ -1,17 +1,17 @@
 [package]
 name = "swamp-script-core"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/swamp/script"
 description = "core module for Swamp"
 
 [dependencies]
-swamp-script-semantic = { path = "../semantic", version = "0.1.1" }
+swamp-script-semantic = { path = "../semantic", version = "0.1.2" }
 tiny-ver = "0.1.2"
-swamp-script-types = { path = "../types", version = "0.1.1" }
-swamp-script-node = { path = "../node", version = "0.1.1" }
-swamp-script-modules = { path = "../modules", version = "0.1.1" }
+swamp-script-types = { path = "../types", version = "0.1.2" }
+swamp-script-node = { path = "../node", version = "0.1.2" }
+swamp-script-modules = { path = "../modules", version = "0.1.2" }
 
 [dev-dependencies]
 tracing = "0.1.40"
