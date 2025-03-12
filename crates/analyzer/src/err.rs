@@ -83,6 +83,7 @@ pub enum ErrorKind {
     CouldNotCoerceTo(Type),
     UnexpectedType,
     CanNotAttachFunctionsToType,
+    MissingMemberFunction(String),
 }
 
 impl From<SemanticError> for Error {

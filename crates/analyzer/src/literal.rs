@@ -13,6 +13,9 @@ use swamp_script_types::prelude::*;
 use tracing::{error, info};
 
 impl Analyzer<'_> {
+    /// # Errors
+    ///
+    #[allow(clippy::too_many_lines)]
     pub fn analyze_complex_literal_to_expression(
         &mut self,
         ast_node: &swamp_script_ast::Node,
@@ -77,19 +80,23 @@ impl Analyzer<'_> {
                             &found_expected_type.clone(),
                         )?;
 
-                        let call_expr = self.create_expr(call_kind, return_type, ast_node);
-
-                        call_expr
+                        self.create_expr(call_kind, return_type, ast_node)
                     } else {
                         error!(
                             ?slice_type,
                             ?required_type,
                             "incompatible types new_from_slice"
                         );
-                        panic!("incompatible types new_from_slice");
+                        return Err(self.create_err(
+                            ErrorKind::IncompatibleTypes(slice_type, required_type.clone()),
+                            ast_node,
+                        ));
                     }
                 } else {
-                    panic!("missing new_from_slice");
+                    return Err(self.create_err(
+                        ErrorKind::MissingMemberFunction("new_from_slice".to_string()),
+                        ast_node,
+                    ));
                 }
             }
 
@@ -102,7 +109,7 @@ impl Analyzer<'_> {
                     .clone();
 
                 let (resolved_items, encountered_key_type, encountered_value_type) =
-                    self.analyze_slice_pair_literal(ast_node, &entries)?;
+                    self.analyze_slice_pair_literal(ast_node, entries)?;
 
                 let slice_pair_type = self.instantiate_blueprint_and_members(
                     &slice_pair_blueprint.clone(),
@@ -130,10 +137,8 @@ impl Analyzer<'_> {
                     .associated_impls
                     .get_internal_member_function(&found_expected_type, "new_from_slice_pair")
                 {
-                    if resolved_items.is_empty()
-                        || slice_pair_type
-                            .compatible_with(&found.signature.parameters[0].resolved_type)
-                    {
+                    let required_type = &found.signature.parameters[0].resolved_type;
+                    if resolved_items.is_empty() || slice_pair_type.compatible_with(required_type) {
                         let slice_literal =
                             Literal::SlicePair(slice_pair_type.clone(), resolved_items.clone());
 
@@ -151,26 +156,25 @@ impl Analyzer<'_> {
                             &found_expected_type.clone(),
                         )?;
 
-                        let call_expr = self.create_expr(call_kind, return_type, ast_node);
-
-                        call_expr
+                        self.create_expr(call_kind, return_type, ast_node)
                     } else {
-                        panic!("missing new_from_slice_pairsdsss");
+                        return Err(self.create_err(
+                            ErrorKind::IncompatibleTypes(slice_pair_type, required_type.clone()),
+                            ast_node,
+                        ));
                     }
                 } else {
-                    panic!("missing new_from_slice_pair afasfa");
+                    return Err(self.create_err(
+                        ErrorKind::MissingMemberFunction("new_from_slice_pair".to_string()),
+                        ast_node,
+                    ));
                 }
             }
 
             _ => {
                 let (lit_kind, literal_type) =
-                    self.analyze_literal(&ast_node, &ast_literal_kind, context)?;
-                let lit_expr = self.create_expr(
-                    ExpressionKind::Literal(lit_kind),
-                    literal_type.clone(),
-                    ast_node,
-                );
-                lit_expr
+                    self.analyze_literal(ast_node, ast_literal_kind, context)?;
+                self.create_expr(ExpressionKind::Literal(lit_kind), literal_type, ast_node)
             }
         };
 
