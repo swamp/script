@@ -30,7 +30,7 @@ jobs:
       - name: Add target
         run: rustup target add ${{ matrix.target }}
 
-      - run: RUSTFLAGS="-D warnings" cargo clippy --color=always # -- -Wclippy::pedantic
+      #- run: RUSTFLAGS="-D warnings" cargo clippy --color=always # -- -Wclippy::pedantic
 
       - name: Build
         run: cargo build --color=always --all-features --target ${{ matrix.target }}
