@@ -1,17 +1,17 @@
 [package]
 name = "swamp-script-eval-loader"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2024"
 license = "MIT"
 description = "load swamp-scripts"
 repository = "https://github.com/swamp/script"
 
 [dependencies]
-swamp-script-dep-loader = { path = "../dep-loader", version = "0.1.2" }
-swamp-script-analyzer = { path = "../analyzer", version = "0.1.2" }
-swamp-script-semantic = { path = "../semantic", version = "0.1.2" }
-swamp-script-source-map = { path = "../source-map", version = "0.1.2" }
-swamp-script-modules = { path = "../modules", version = "0.1.2" }
+swamp-script-dep-loader = { path = "../dep-loader", version = "0.1.3" }
+swamp-script-analyzer = { path = "../analyzer", version = "0.1.3" }
+swamp-script-semantic = { path = "../semantic", version = "0.1.3" }
+swamp-script-source-map = { path = "../source-map", version = "0.1.3" }
+swamp-script-modules = { path = "../modules", version = "0.1.3" }
 tracing = "0.1.41"
 
 [dev-dependencies]

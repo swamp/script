@@ -1,15 +1,15 @@
 [package]
 name = "swamp-script-modules"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/swamp/script"
 description = "Module support for Swamp"
 
 [dependencies]
-swamp-script-semantic = { path = "../semantic", version = "0.1.2" }
-swamp-script-types = { path = "../types", version = "0.1.2" }
-swamp-script-node = { path = "../node", version = "0.1.2" }
+swamp-script-semantic = { path = "../semantic", version = "0.1.3" }
+swamp-script-types = { path = "../types", version = "0.1.3" }
+swamp-script-node = { path = "../node", version = "0.1.3" }
 seq-map = "0.0.13"
 tracing = "0.1.40"
 tiny-ver = "0.1.2"
