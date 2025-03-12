@@ -17,21 +17,6 @@ jobs:
             platform: linux
             arch: x86_64
 
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            platform: windows
-            arch: x86_64
-
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            platform: darwin
-            arch: x86_64
-
-          - os: macos-latest
-            target: aarch64-apple-darwin # apple arch variant
-            platform: darwin
-            arch: arm64
-
     steps:
       - uses: actions/checkout@v4
 
@@ -42,52 +27,10 @@ jobs:
       - name: Install Rust 1.85.0
         run: rustup update stable
 
-
       - name: Add target
         run: rustup target add ${{ matrix.target }}
 
-      - name: Install zip (Windows) # Zip is not installed in the runner, love it :)
-        if: matrix.os == 'windows-latest'
-        run: choco install zip
+      - run: RUSTFLAGS="-D warnings" cargo clippy --color=always # -- -Wclippy::pedantic
 
       - name: Build
-        run: cargo build --release --target ${{ matrix.target }}
-
-      - name: Package
-        shell: bash
-        run: |
-          # Strip binary of debug info.
-          if [ "${{ matrix.os }}" != "windows-latest" ]; then
-            strip target/${{ matrix.target }}/release/mangrove
-          fi
-
-          mkdir -p dist
-
-          # Binary is different on Windows...gotta love it
-          BINARY="mangrove"
-          if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            BINARY="mangrove.exe"
-          fi
-
-          # Create archive with what I think is a standard format
-          ARCHIVE="mangrove-${{ matrix.platform }}-${{ matrix.arch }}"
-
-          # Copy binary and create archive. use zip for windows, tar.gz for others. windows is always special.
-          if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            cp "target/${{ matrix.target }}/release/$BINARY" "dist/$BINARY"
-            cd dist
-            zip "../$ARCHIVE.zip" "$BINARY"
-            cd ..
-          else
-            cp "target/${{ matrix.target }}/release/$BINARY" "dist/$BINARY"
-            cd dist
-            tar czf "../$ARCHIVE.tar.gz" "$BINARY"
-            cd ..
-          fi
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: mangrove-${{ matrix.platform }}-${{ matrix.arch }}
-          path: dist/*
-          if-no-files-found: error
+        run: cargo build --color=always --all-features --target ${{ matrix.target }}
