@@ -226,6 +226,10 @@ impl Int {
         int_min(self, x)
     }
 
+    fn clamp(self, min: Int, max: Int) -> Int {
+        int_clamp(self, min, max)
+    }
+
     /// Converts an Int to a Float.
     ///
     /// Uses intrinsic function `int_to_float` to convert the integer value to its floating-point representation.

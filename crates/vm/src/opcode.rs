@@ -11,4 +11,5 @@ pub enum OpCode {
     Call = 8, // Introduce CallLong if needed
     Enter = 9,
     Ret = 10,
+    Jmp = 11,
 }

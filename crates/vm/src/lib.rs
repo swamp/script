@@ -2,6 +2,8 @@ use crate::host::HostFunction;
 use crate::opcode::OpCode;
 
 pub const INT_SIZE: u16 = 4;
+pub const BOOL_SIZE: u16 = 1;
+pub const PTR_SIZE: u16 = 2;
 
 #[repr(C, packed)]
 pub struct BinaryInstruction {

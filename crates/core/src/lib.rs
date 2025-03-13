@@ -872,6 +872,42 @@ fn add_intrinsic_int_functions(core_ns: &mut SymbolTable) {
             .unwrap();
     }
 
+    let int_int_int_to_int = Signature {
+        parameters: [
+            TypeForParameter {
+                name: "self".into(),
+                resolved_type: Type::Int,
+                is_mutable: false,
+                node: None,
+            },
+            TypeForParameter {
+                name: "a".into(),
+                resolved_type: Type::Int,
+                is_mutable: false,
+                node: None,
+            },
+            TypeForParameter {
+                name: "b".into(),
+                resolved_type: Type::Int,
+                is_mutable: false,
+                node: None,
+            },
+        ]
+        .into(),
+        return_type: Box::new(Type::Int),
+    };
+    let int_int_int_to_int_functions = [IntrinsicFunction::IntClamp];
+    for intrinsic_fn in int_int_int_to_int_functions {
+        let name = intrinsic_fn.to_string();
+        core_ns
+            .add_intrinsic_function(IntrinsicFunctionDefinition {
+                name,
+                intrinsic: intrinsic_fn,
+                signature: int_int_int_to_int.clone(),
+            })
+            .unwrap();
+    }
+
     let int_to_float = Signature {
         parameters: [TypeForParameter {
             name: "self".into(),

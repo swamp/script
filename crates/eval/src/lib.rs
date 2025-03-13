@@ -1714,8 +1714,8 @@ impl<'a, C> Interpreter<'a, C> {
             },
 
             IntrinsicFunction::IntClamp => {
-                let min_value = self.evaluate_expression(&arguments[0])?;
-                let max_value = self.evaluate_expression(&arguments[1])?;
+                let min_value = self.evaluate_expression(arguments[0])?;
+                let max_value = self.evaluate_expression(arguments[1])?;
                 match (value_ref.borrow().clone(), min_value, max_value) {
                     (Value::Int(i), Value::Int(min_i), Value::Int(max_i)) => {
                         Value::Int(i.clamp(min_i, max_i))
@@ -1727,7 +1727,7 @@ impl<'a, C> Interpreter<'a, C> {
             }
 
             IntrinsicFunction::IntMin => {
-                let max_value = self.evaluate_expression(&arguments[0])?;
+                let max_value = self.evaluate_expression(arguments[0])?;
                 match (value_ref.borrow().clone(), max_value) {
                     (Value::Int(i), Value::Int(min_i)) => Value::Int(i.min(min_i)),
                     _ => {
