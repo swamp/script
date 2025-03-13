@@ -1,9 +1,19 @@
 use crate::BinaryInstruction;
 use crate::opcode::OpCode;
 
+#[derive(Copy, Clone)]
+pub struct MemoryAddress(pub u16);
+
+#[derive(Debug)]
+pub struct InstructionPosition(pub u16);
+
+#[derive(Debug)]
+pub struct PatchPosition(pub InstructionPosition);
+
 pub struct InstructionBuilder {
     pub instructions: Vec<BinaryInstruction>,
 }
+
 impl Default for InstructionBuilder {
     fn default() -> Self {
         Self::new()
@@ -19,50 +29,62 @@ impl InstructionBuilder {
     }
 
     #[must_use]
-    pub fn position(&self) -> usize {
-        self.instructions.len()
+    pub fn position(&self) -> InstructionPosition {
+        InstructionPosition(self.instructions.len() as u16)
     }
 
-    pub fn add_conditional_jump_placeholder(&mut self, condition_addr: u16) -> usize {
-        let position = self.instructions.len();
+    pub fn add_conditional_jump_placeholder(
+        &mut self,
+        condition_addr: MemoryAddress,
+    ) -> PatchPosition {
+        let position = self.position();
 
-        self.add_instruction(OpCode::JmpIfNot, &[condition_addr, 0]);
+        self.add_instruction(OpCode::JmpIfNot, &[condition_addr.0, 0]);
 
-        position
+        PatchPosition(position)
     }
 
-    pub fn add_jump_placeholder(&mut self) -> usize {
-        let position = self.instructions.len();
+    pub fn add_jump_placeholder(&mut self) -> PatchPosition {
+        let position = self.position();
 
         self.add_instruction(OpCode::Jmp, &[0]);
 
-        position
+        PatchPosition(position)
     }
 
     /// # Panics
     ///
-    pub fn patch_jump(&mut self, jump_position: usize, target_position: u16) {
+    pub fn patch_jump(
+        &mut self,
+        jump_position: PatchPosition,
+        target_position: &InstructionPosition,
+    ) {
         const JMP_IF_NOT: u8 = OpCode::JmpIfNot as u8;
         const JMP: u8 = OpCode::Jmp as u8;
 
-        let instruction = &mut self.instructions[jump_position];
+        let instruction = &mut self.instructions[jump_position.0.0 as usize];
 
         match instruction.opcode {
             JMP_IF_NOT => {
                 // For conditional jump, target ip addr is the second operand
-                instruction.operands[1] = target_position;
+                instruction.operands[1] = target_position.0 as u16;
             }
             JMP => {
                 // For conditional jump, target ip addr is the first operand
                 // TODO: maybe have them both at the first operand?
-                instruction.operands[0] = target_position;
+                instruction.operands[0] = target_position.0 as u16;
             }
-            _ => panic!("Attempted to patch a non-jump instruction at position {jump_position}"),
+            _ => panic!("Attempted to patch a non-jump instruction at position {jump_position:?}"),
         }
     }
 
-    pub fn patch_jump_here(&mut self, jump_position: usize) {
-        self.patch_jump(jump_position, self.position() as u16);
+    // It takes ownership of the patch position
+    pub fn patch_jump_here(&mut self, jump_position: PatchPosition) {
+        self.patch_jump(jump_position, &self.position());
+    }
+
+    pub fn add_jmp(&mut self, ip: InstructionPosition) {
+        self.add_instruction(OpCode::Jmp, &[ip.0]);
     }
 
     pub fn add_ld_local(&mut self, dst_offset: u16, src_offset: u16) {
@@ -79,20 +101,30 @@ impl InstructionBuilder {
         self.add_instruction(OpCode::LdImmI32, &[dst_offset, lower_bits, upper_bits]);
     }
 
-    pub fn add_add_i32(&mut self, dst_offset: u16, lhs_offset: u16, rhs_offset: u16) {
-        self.add_instruction(OpCode::AddI32, &[dst_offset, lhs_offset, rhs_offset]);
+    pub fn add_add_i32(
+        &mut self,
+        dst_offset: MemoryAddress,
+        lhs_offset: MemoryAddress,
+        rhs_offset: MemoryAddress,
+    ) {
+        self.add_instruction(OpCode::AddI32, &[dst_offset.0, lhs_offset.0, rhs_offset.0]);
     }
 
-    pub fn add_jmp_if(&mut self, condition_offset: u16, jmp_offset: u16) {
-        self.add_instruction(OpCode::JmpIf, &[condition_offset, jmp_offset]);
+    pub fn add_jmp_if(&mut self, condition_offset: MemoryAddress, jmp_offset: MemoryAddress) {
+        self.add_instruction(OpCode::JmpIf, &[condition_offset.0, jmp_offset.0]);
     }
 
-    pub fn add_jmp_if_not(&mut self, condition_offset: u16, jmp_offset: u16) {
-        self.add_instruction(OpCode::JmpIfNot, &[condition_offset, jmp_offset]);
+    pub fn add_jmp_if_not(&mut self, condition_offset: MemoryAddress, jmp_offset: MemoryAddress) {
+        self.add_instruction(OpCode::JmpIfNot, &[condition_offset.0, jmp_offset.0]);
     }
 
-    pub fn add_lt_i32(&mut self, dst_offset: u16, lhs_offset: u16, rhs_offset: u16) {
-        self.add_instruction(OpCode::LtI32, &[dst_offset, lhs_offset, rhs_offset]);
+    pub fn add_lt_i32(
+        &mut self,
+        dst_offset: MemoryAddress,
+        lhs_offset: MemoryAddress,
+        rhs_offset: MemoryAddress,
+    ) {
+        self.add_instruction(OpCode::LtI32, &[dst_offset.0, lhs_offset.0, rhs_offset.0]);
     }
 
     pub fn add_end(&mut self) {

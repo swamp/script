@@ -1,23 +1,25 @@
+use swamp_script_vm::instr_bldr::MemoryAddress;
+
 #[derive(Copy, Clone)]
 pub struct TargetInfo {
-    pub addr: u16,
+    pub addr: MemoryAddress,
     pub size: usize,
 }
 
 #[derive(Copy, Clone)]
 pub struct ScopeAllocator {
-    addr: u16,
+    addr: MemoryAddress,
 }
 
 impl ScopeAllocator {
     #[must_use]
-    pub const fn new(start_addr: u16) -> Self {
+    pub const fn new(start_addr: MemoryAddress) -> Self {
         Self { addr: start_addr }
     }
 
-    pub fn allocate(&mut self, size: u16) -> u16 {
+    pub fn allocate(&mut self, size: u16) -> MemoryAddress {
         let addr = self.addr;
-        self.addr += size;
+        self.addr.0 += size;
         addr
     }
 
@@ -34,7 +36,7 @@ impl ScopeAllocator {
     }
 
     #[must_use]
-    pub const fn addr(&self) -> u16 {
+    pub const fn addr(&self) -> MemoryAddress {
         self.addr
     }
 }
