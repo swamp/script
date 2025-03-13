@@ -791,18 +791,6 @@ impl<'a, C> Interpreter<'a, C> {
             // Constructing
             ExpressionKind::Literal(lit) => self.evaluate_literal(&expr.node, lit)?,
 
-            ExpressionKind::Array(array_instantiation) => {
-                let mut values = Vec::new();
-                for element in &array_instantiation.expressions {
-                    values.push(self.evaluate_expression(element)?);
-                }
-
-                Value::Vec(
-                    array_instantiation.array_type_ref.clone(),
-                    convert_vec_to_rc_refcell(values),
-                )
-            }
-
             ExpressionKind::StructInstantiation(struct_instantiation) => {
                 // Evaluate all field expressions and validate types
                 let mut field_values =
@@ -984,7 +972,6 @@ impl<'a, C> Interpreter<'a, C> {
                 Value::ExternalFunction(fetch_function.clone())
             }
 
-            ExpressionKind::Tuple(_) => todo!(),
             ExpressionKind::Option(inner) => match inner {
                 None => Value::Option(None),
                 Some(expression) => {

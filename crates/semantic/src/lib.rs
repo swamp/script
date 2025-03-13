@@ -608,22 +608,25 @@ pub enum ExpressionKind {
         Vec<ArgumentExpressionOrLocation>,
     ),
 
-    //MemberCall(MemberCall),
     InterpolatedString(Vec<StringPart>),
 
     // Constructing
     VariableDefinition(VariableRef, Box<MutOrImmutableExpression>), // First time assignment
     VariableReassignment(VariableRef, Box<MutOrImmutableExpression>),
+    Assignment(Box<SingleMutLocationExpression>, Box<Expression>),
+    CompoundAssignment(
+        SingleMutLocationExpression,
+        CompoundOperatorKind,
+        Box<Expression>,
+    ),
 
     StructInstantiation(StructInstantiation),
     AnonymousStructLiteral(AnonymousStructLiteral),
-    Array(ArrayInstantiation),
-    Tuple(Vec<Expression>),
     Literal(Literal),
     Option(Option<Box<Expression>>), // Wrapping an expression in `Some()`
     Range(Box<Expression>, Box<Expression>, RangeMode),
 
-    // Control
+    // Loops
     ForLoop(ForPattern, Iterable, Box<Expression>),
     WhileLoop(BooleanExpression, Box<Expression>),
 
@@ -633,17 +636,9 @@ pub enum ExpressionKind {
     Match(Match),
     Guard(Vec<Guard>),
     If(BooleanExpression, Box<Expression>, Option<Box<Expression>>),
-
     When(Vec<WhenBinding>, Box<Expression>, Option<Box<Expression>>),
 
     TupleDestructuring(Vec<VariableRef>, Vec<Type>, Box<Expression>),
-
-    Assignment(Box<SingleMutLocationExpression>, Box<Expression>),
-    CompoundAssignment(
-        SingleMutLocationExpression,
-        CompoundOperatorKind,
-        Box<Expression>,
-    ),
 
     // --------------------------------------------------------------------
     // Built In members

@@ -72,8 +72,6 @@ impl CodeGen {
             ExpressionKind::VariableReassignment(_, _) => todo!(),
             ExpressionKind::StructInstantiation(_) => todo!(),
             ExpressionKind::AnonymousStructLiteral(_) => todo!(),
-            ExpressionKind::Array(_) => todo!(),
-            ExpressionKind::Tuple(_) => todo!(),
             ExpressionKind::Literal(_) => todo!(),
             ExpressionKind::Option(_) => todo!(),
             ExpressionKind::Range(_, _, _) => todo!(),
