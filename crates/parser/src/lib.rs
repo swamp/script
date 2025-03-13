@@ -1115,7 +1115,7 @@ impl AstParser {
 
         // Return the ForLoop statement with MutExpression
         Ok(self.create_expr(
-            ExpressionKind::ForLoop(pattern, mut_expression, Box::from(body)),
+            ExpressionKind::ForLoop(pattern, mut_expression, None, Box::from(body)),
             pair,
         ))
     }
@@ -1131,17 +1131,6 @@ impl AstParser {
             ExpressionKind::WhileLoop(Box::from(condition), Box::from(body)),
             pair,
         ))
-    }
-
-    fn parse_return(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
-        let mut inner = Self::convert_into_iterator(pair);
-
-        let expr = match inner.next() {
-            Some(expr_pair) => Some(Box::new(self.parse_expression(&expr_pair)?)),
-            None => None,
-        };
-
-        Ok(self.create_expr(ExpressionKind::Return(expr), pair))
     }
 
     fn parse_expression(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
@@ -1175,9 +1164,6 @@ impl AstParser {
             Rule::map_literal => self.parse_map_literal(sub),
             Rule::array_literal => self.parse_array_literal(sub),
             Rule::guard_expr => self.parse_guard_expr_list(sub),
-            Rule::return_expr => self.parse_return(sub),
-            Rule::break_expr => Ok(self.create_expr(ExpressionKind::Break, sub)),
-            Rule::continue_expr => Ok(self.create_expr(ExpressionKind::Continue, sub)),
             Rule::with_expr => self.parse_with_expr(sub),
             Rule::when_expr => self.parse_when_expr(sub),
             Rule::if_expr => self.parse_if_expression(sub),

@@ -343,20 +343,12 @@ return_type    = { "->" ~ type_name }
     Loop Constructs and Control Flow
     =============================================================
 */
-for_loop    = {  "for"  ~ for_pattern   ~ "in"  ~ mut_expression ~ expression }
+for_loop    = {  "for"  ~ for_pattern   ~ "in"  ~ mut_expression ~ ("|" ~ guard_clause)? ~ expression }
 for_pattern = { for_pair | maybe_mut_identifier }
 for_pair    = { maybe_mut_identifier ~ COMMA ~ maybe_mut_identifier }
 
 while_loop = { "while"  ~ expression ~ expression }
 
-/*
-    =============================================================
-    Return/Control Statements
-    =============================================================
-*/
-return_expr   = { "return"  ~ expression }
-continue_expr = { "continue" }
-break_expr    = { "break" }
 
 /*
     =============================================================
@@ -400,9 +392,6 @@ expression = {
   | match_expr
   | for_loop
   | while_loop
-  | return_expr
-  | break_expr
-  | continue_expr
   | array_literal
   | map_literal
   | destructuring_assignment

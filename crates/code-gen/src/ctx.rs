@@ -1,7 +1,7 @@
 use crate::alloc::{ScopeAllocator, TargetInfo};
 use crate::alloc_util::reserve_space_for_type;
 use swamp_script_types::Type;
-use swamp_script_vm::instr_bldr::MemoryAddress;
+use swamp_script_vm::instr_bldr::{FrameMemoryAddress, MemoryAddress, MemorySize};
 
 pub struct Context {
     target_info: TargetInfo,
@@ -10,10 +10,10 @@ pub struct Context {
 
 impl Context {
     #[must_use]
-    pub const fn new(addr: MemoryAddress, size: usize) -> Self {
+    pub const fn new(addr: FrameMemoryAddress, size: MemorySize) -> Self {
         Self {
             target_info: TargetInfo { addr, size },
-            allocator: ScopeAllocator::new(MemoryAddress(addr.0 + size as u16)),
+            allocator: ScopeAllocator::new(FrameMemoryAddress(addr.0 + size.0)),
         }
     }
 
@@ -24,15 +24,15 @@ impl Context {
             allocator: self.allocator.create_scope(),
         }
     }
-    pub(crate) const fn addr(&self) -> MemoryAddress {
+    pub(crate) const fn addr(&self) -> FrameMemoryAddress {
         self.target_info.addr
     }
-    pub(crate) const fn target_size(&self) -> usize {
+    pub(crate) const fn target_size(&self) -> MemorySize {
         self.target_info.size
     }
 
     #[must_use]
-    pub const fn with_target(&self, addr: MemoryAddress, size: usize) -> Self {
+    pub const fn with_target(&self, addr: FrameMemoryAddress, size: MemorySize) -> Self {
         Self {
             target_info: TargetInfo { addr, size },
             allocator: self.allocator,
@@ -41,6 +41,14 @@ impl Context {
 
     #[must_use]
     pub const fn create_scope(&self) -> Self {
+        Self {
+            target_info: self.target_info,
+            allocator: self.allocator.create_scope(),
+        }
+    }
+
+    #[must_use]
+    pub const fn create_function_scope(&self, return_target: TargetInfo) -> Self {
         Self {
             target_info: self.target_info,
             allocator: self.allocator.create_scope(),

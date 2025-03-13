@@ -428,15 +428,6 @@ impl SourceMapDisplay<'_> {
             ExpressionKind::WhileLoop(_, _) => {
                 write!(f, "WhileLoop()")
             }
-            ExpressionKind::Return(_) => {
-                write!(f, "Return()")
-            }
-            ExpressionKind::Break => {
-                write!(f, "Break")
-            }
-            ExpressionKind::Continue => {
-                write!(f, "Continue")
-            }
             ExpressionKind::Block(expressions) => {
                 for expression in expressions {
                     Self::new_line_and_tab(f, tabs + 1)?;
@@ -463,9 +454,6 @@ impl SourceMapDisplay<'_> {
                 self.show_mut_location(f, &mut_location, tabs)?;
                 write!(f, "=")?;
                 self.show_expression(f, expression, tabs)
-            }
-            ExpressionKind::AssignmentSlice(_, _) => {
-                write!(f, "AssignmentSlice()")
             }
             ExpressionKind::CompoundAssignment(_, _, _) => {
                 write!(f, "CompoundAssignment()")
@@ -679,6 +667,10 @@ impl SourceMapDisplay<'_> {
                 self.show_type_short(f, base_type, tabs);
                 write!(f, "{}", "?".yellow())
             }
+            Type::MutableReference(base_type) => {
+                write!(f, "{}", "mut ref".red());
+                self.show_type_short(f, base_type, tabs)
+            }
             Type::External(external_type) => write!(f, "External {}", external_type.type_name),
             Type::Generic(blueprint, concrete_types) => {
                 self.show_generic(f, blueprint, concrete_types, tabs)
@@ -716,6 +708,10 @@ impl SourceMapDisplay<'_> {
             Type::Enum(enum_type) => write!(f, "{}", enum_type.assigned_name),
             Type::Function(signature) => write!(f, "function {signature}"),
             Type::Optional(base_type) => write!(f, "{}?", base_type.yellow()),
+            Type::MutableReference(base_type) => {
+                write!(f, "{}", "mut ref".red());
+                self.show_type_short(f, base_type, tabs)
+            }
             Type::External(external_type) => write!(f, "External {}", external_type.type_name),
             Type::Generic(blueprint, concrete_types) => {
                 self.show_generic(f, blueprint, concrete_types, tabs)

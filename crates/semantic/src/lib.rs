@@ -68,7 +68,7 @@ impl Default for InternalFunctionDefinition {
             body: Expression {
                 ty: Type::Never,
                 node: Default::default(),
-                kind: ExpressionKind::Break,
+                kind: ExpressionKind::Block(vec![]),
             },
             name: LocalIdentifier(Default::default()),
             assigned_name: "".to_string(),
@@ -116,6 +116,59 @@ impl Debug for ExternalFunctionDefinition {
 
 pub type ExternalFunctionDefinitionRef = Rc<crate::ExternalFunctionDefinition>;
 
+#[derive(Debug, Eq, PartialEq)]
+pub enum BlockScopeMode {
+    Open,
+    Closed,
+}
+
+#[derive(Debug)]
+pub struct BlockScope {
+    pub mode: BlockScopeMode,
+    pub variables: SeqMap<String, VariableRef>,
+}
+
+impl Default for BlockScope {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl BlockScope {
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            mode: BlockScopeMode::Open,
+            variables: SeqMap::new(),
+        }
+    }
+}
+
+pub struct FunctionScopeState {
+    pub block_scope_stack: Vec<BlockScope>,
+    pub return_type: Type,
+    pub variable_index: usize,
+}
+
+impl FunctionScopeState {
+    pub fn gen_variable_index(&mut self) -> usize {
+        let index = self.variable_index;
+        self.variable_index += 1;
+        index
+    }
+}
+
+impl FunctionScopeState {
+    #[must_use]
+    pub fn new(return_type: Type) -> Self {
+        Self {
+            block_scope_stack: vec![BlockScope::new()],
+            return_type,
+            variable_index: 0,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Variable {
     pub name: Node,
@@ -124,6 +177,8 @@ pub struct Variable {
 
     pub scope_index: usize,
     pub variable_index: usize,
+
+    pub unique_id_within_function: usize,
 }
 
 impl Variable {
@@ -543,13 +598,6 @@ pub enum ExpressionKind {
     InternalFunctionAccess(InternalFunctionDefinitionRef),
     ExternalFunctionAccess(ExternalFunctionDefinitionRef),
 
-    // Adding to a collection
-    MapAssignment(
-        Box<SingleMutLocationExpression>,
-        Box<Expression>,
-        Box<Expression>,
-    ), // Motivation: Can not use location since adding is more complex
-
     // Operators
     BinaryOp(BinaryOperator),
     UnaryOp(UnaryOperator),
@@ -587,9 +635,6 @@ pub enum ExpressionKind {
     // Control
     ForLoop(ForPattern, Iterable, Box<Expression>),
     WhileLoop(BooleanExpression, Box<Expression>),
-    Return(Option<Box<Expression>>),
-    Break,
-    Continue, //
 
     Block(Vec<Expression>),
 
@@ -603,7 +648,6 @@ pub enum ExpressionKind {
     TupleDestructuring(Vec<VariableRef>, Vec<Type>, Box<Expression>),
 
     Assignment(Box<SingleMutLocationExpression>, Box<Expression>),
-    AssignmentSlice(Box<SliceLocationExpression>, Box<Expression>),
     CompoundAssignment(
         SingleMutLocationExpression,
         CompoundOperatorKind,

@@ -41,6 +41,8 @@ pub enum Type {
     Blueprint(ParameterizedTypeBlueprint),
     Variable(String),
 
+    MutableReference(Box<Type>),
+
     External(ExternalType),
 }
 
@@ -186,6 +188,7 @@ impl Debug for Type {
             }
             Self::Iterable(type_generated) => write!(f, "Iterable<{type_generated:?}>"),
             Self::Optional(base_type) => write!(f, "{base_type:?}?"),
+            Self::MutableReference(base_type) => write!(f, "mut ref {base_type:?}?"),
             Self::External(rust_type) => write!(f, "{:?}?", rust_type.type_name),
             Self::Variable(variable_name) => write!(f, "<|{variable_name}|>"),
             Self::Generic(blueprint, non_concrete_arguments) => {
@@ -214,6 +217,7 @@ impl Display for Type {
             Self::Function(signature) => write!(f, "function {signature}"),
             Self::Iterable(generating_type) => write!(f, "Iterable<{generating_type}>"),
             Self::Optional(base_type) => write!(f, "{base_type}?"),
+            Self::MutableReference(base_type) => write!(f, "mut ref {base_type:?}?"),
             Self::External(rust_type) => write!(f, "RustType {}", rust_type.type_name),
             Self::Variable(variable_name) => write!(f, "<|{variable_name}|>"),
             Self::Generic(blueprint, non_concrete_arguments) => {
@@ -258,6 +262,7 @@ impl Type {
             (Self::AnonymousStruct(a), Self::AnonymousStruct(b)) => {
                 compare_anonymous_struct_types(a, b)
             }
+            (Self::MutableReference(a), Self::MutableReference(b)) => a.compatible_with(b),
 
             (Self::Tuple(a), Self::Tuple(b)) => {
                 if a.len() != b.len() {

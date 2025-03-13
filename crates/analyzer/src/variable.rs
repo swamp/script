@@ -2,12 +2,12 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
+use crate::Analyzer;
 use crate::err::{Error, ErrorKind};
-use crate::{Analyzer, BlockScopeMode};
 use std::rc::Rc;
 use swamp_script_node::Node;
 use swamp_script_semantic::{
-    Expression, ExpressionKind, MutOrImmutableExpression, Variable, VariableRef,
+    BlockScopeMode, Expression, ExpressionKind, MutOrImmutableExpression, Variable, VariableRef,
 };
 use swamp_script_types::prelude::*;
 use tracing::{error, info};
@@ -83,6 +83,7 @@ impl Analyzer<'_> {
         let mutable_node = self.to_node_option(Option::from(&variable.is_mutable));
         let variable_name_str = self.get_text_resolved(&name).to_string();
 
+        let index_within_function = { self.scope.gen_variable_index() };
         let variables = &mut self
             .scope
             .block_scope_stack
@@ -97,6 +98,7 @@ impl Analyzer<'_> {
             mutable_node,
             scope_index,
             variable_index,
+            unique_id_within_function: index_within_function,
         };
 
         let variable_ref = Rc::new(resolved_variable);
@@ -157,6 +159,8 @@ impl Analyzer<'_> {
 
         let scope_index = self.scope.block_scope_stack.len() - 1;
 
+        let index = { self.scope.gen_variable_index() };
+
         let variables = &mut self
             .scope
             .block_scope_stack
@@ -170,6 +174,7 @@ impl Analyzer<'_> {
             mutable_node: is_mutable.cloned(),
             scope_index,
             variable_index: variables.len(),
+            unique_id_within_function: index,
         };
 
         let variable_ref = Rc::new(resolved_variable);
@@ -196,6 +201,8 @@ impl Analyzer<'_> {
     ) -> Result<VariableRef, Error> {
         let scope_index = self.scope.block_scope_stack.len() - 1;
 
+        let index_within_function = self.scope.gen_variable_index();
+
         let variables = &mut self
             .scope
             .block_scope_stack
@@ -213,6 +220,7 @@ impl Analyzer<'_> {
             },
             scope_index,
             variable_index: variables.len(),
+            unique_id_within_function: index_within_function,
         };
 
         let variable_ref = Rc::new(resolved_variable);

@@ -4,6 +4,44 @@ use crate::opcode::OpCode;
 #[derive(Copy, Clone)]
 pub struct MemoryAddress(pub u16);
 
+#[derive(Copy, Clone)]
+pub struct StackMemoryAddress(pub u16);
+
+impl StackMemoryAddress {
+    #[must_use]
+    pub const fn add(&self, memory_size: MemorySize) -> Self {
+        Self(self.0 + memory_size.0)
+    }
+}
+// relative to the stack pointer
+
+#[derive(Copy, Clone)]
+pub struct FrameMemoryAddress(pub u16); // relative to the frame pointer
+
+impl FrameMemoryAddress {
+    #[must_use]
+    pub const fn add(&self, memory_size: MemorySize) -> Self {
+        Self(self.0 + memory_size.0)
+    }
+    #[must_use]
+    pub const fn as_size(&self) -> FrameMemorySize {
+        FrameMemorySize(self.0)
+    }
+}
+
+impl MemoryAddress {
+    #[must_use]
+    pub const fn add(&self, memory_size: MemorySize) -> Self {
+        Self(self.0 + memory_size.0)
+    }
+}
+
+#[derive(Copy, Clone)]
+pub struct MemorySize(pub u16);
+
+#[derive(Copy, Clone)]
+pub struct FrameMemorySize(pub u16);
+
 #[derive(Debug)]
 pub struct InstructionPosition(pub u16);
 
@@ -35,7 +73,7 @@ impl InstructionBuilder {
 
     pub fn add_conditional_jump_placeholder(
         &mut self,
-        condition_addr: MemoryAddress,
+        condition_addr: FrameMemoryAddress,
     ) -> PatchPosition {
         let position = self.position();
 
@@ -50,6 +88,19 @@ impl InstructionBuilder {
         self.add_instruction(OpCode::Jmp, &[0]);
 
         PatchPosition(position)
+    }
+
+    // Mov is more of a copy. Keeping the name Mov because it is old school and idiomatic.
+    pub fn add_mov(
+        &mut self,
+        target: FrameMemoryAddress,
+        source: FrameMemoryAddress,
+        size: MemorySize,
+    ) {
+        self.add_instruction(OpCode::Mov, &[target.0, source.0]);
+    }
+    pub fn add_ret(&mut self) {
+        self.add_instruction(OpCode::Ret, &[0]);
     }
 
     /// # Panics
@@ -101,28 +152,40 @@ impl InstructionBuilder {
         self.add_instruction(OpCode::LdImmI32, &[dst_offset, lower_bits, upper_bits]);
     }
 
+    pub fn add_load_frame_address(&mut self, dest: FrameMemoryAddress, addr: FrameMemoryAddress) {
+        self.add_instruction(OpCode::LdImm, &[dest.0, addr.0]);
+    }
+
     pub fn add_add_i32(
         &mut self,
-        dst_offset: MemoryAddress,
-        lhs_offset: MemoryAddress,
-        rhs_offset: MemoryAddress,
+        dst_offset: FrameMemoryAddress,
+        lhs_offset: FrameMemoryAddress,
+        rhs_offset: FrameMemoryAddress,
     ) {
         self.add_instruction(OpCode::AddI32, &[dst_offset.0, lhs_offset.0, rhs_offset.0]);
     }
 
-    pub fn add_jmp_if(&mut self, condition_offset: MemoryAddress, jmp_offset: MemoryAddress) {
-        self.add_instruction(OpCode::JmpIf, &[condition_offset.0, jmp_offset.0]);
+    pub fn add_jmp_if(
+        &mut self,
+        condition_offset: FrameMemoryAddress,
+        jmp_target: &InstructionPosition,
+    ) {
+        self.add_instruction(OpCode::JmpIf, &[condition_offset.0, jmp_target.0]);
     }
 
-    pub fn add_jmp_if_not(&mut self, condition_offset: MemoryAddress, jmp_offset: MemoryAddress) {
-        self.add_instruction(OpCode::JmpIfNot, &[condition_offset.0, jmp_offset.0]);
+    pub fn add_jmp_if_not(
+        &mut self,
+        condition_offset: MemoryAddress,
+        jmp_target: InstructionPosition,
+    ) {
+        self.add_instruction(OpCode::JmpIfNot, &[condition_offset.0, jmp_target.0]);
     }
 
     pub fn add_lt_i32(
         &mut self,
-        dst_offset: MemoryAddress,
-        lhs_offset: MemoryAddress,
-        rhs_offset: MemoryAddress,
+        dst_offset: FrameMemoryAddress,
+        lhs_offset: FrameMemoryAddress,
+        rhs_offset: FrameMemoryAddress,
     ) {
         self.add_instruction(OpCode::LtI32, &[dst_offset.0, lhs_offset.0, rhs_offset.0]);
     }

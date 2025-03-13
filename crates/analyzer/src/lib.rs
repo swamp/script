@@ -28,9 +28,10 @@ use swamp_script_modules::symtbl::SymbolTableRef;
 use swamp_script_node::{FileId, Node, Span};
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
-    ArgumentExpressionOrLocation, LocationAccess, LocationAccessKind, MutOrImmutableExpression,
-    NormalPattern, Postfix, PostfixKind, RangeMode, SingleLocationExpression,
-    SingleLocationExpressionKind, SingleMutLocationExpression, TypeWithMut, WhenBinding,
+    ArgumentExpressionOrLocation, BlockScope, BlockScopeMode, FunctionScopeState, LocationAccess,
+    LocationAccessKind, MutOrImmutableExpression, NormalPattern, Postfix, PostfixKind, RangeMode,
+    SingleLocationExpression, SingleLocationExpressionKind, SingleMutLocationExpression,
+    TypeWithMut, WhenBinding,
 };
 use swamp_script_source_map::SourceMap;
 use swamp_script_types::prelude::*;
@@ -286,34 +287,6 @@ impl<'a> TypeContext<'a> {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
-pub enum BlockScopeMode {
-    Open,
-    Closed,
-}
-
-#[derive(Debug)]
-pub struct BlockScope {
-    mode: BlockScopeMode,
-    variables: SeqMap<String, VariableRef>,
-}
-
-impl Default for BlockScope {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl BlockScope {
-    #[must_use]
-    pub fn new() -> Self {
-        Self {
-            mode: BlockScopeMode::Open,
-            variables: SeqMap::new(),
-        }
-    }
-}
-
 pub struct SharedState<'a> {
     pub state: &'a mut ProgramState,
     pub lookup_table: SymbolTable,
@@ -361,21 +334,6 @@ impl<'a> SharedState<'a> {
         }
 
         None
-    }
-}
-
-pub struct FunctionScopeState {
-    pub block_scope_stack: Vec<BlockScope>,
-    pub return_type: Type,
-}
-
-impl FunctionScopeState {
-    #[must_use]
-    pub fn new(return_type: Type) -> Self {
-        Self {
-            block_scope_stack: vec![BlockScope::new()],
-            return_type,
-        }
     }
 }
 
@@ -673,19 +631,6 @@ impl<'a> Analyzer<'a> {
         context: &TypeContext,
     ) -> Result<Expression, Error> {
         let expression = match &ast_expression.kind {
-            swamp_script_ast::ExpressionKind::Break => {
-                self.analyze_break(context, &ast_expression.node)?
-            }
-            swamp_script_ast::ExpressionKind::Return(optional_expression) => self.analyze_return(
-                context,
-                optional_expression.as_deref(),
-                &ast_expression.node,
-            )?,
-
-            swamp_script_ast::ExpressionKind::Continue => {
-                self.analyze_continue(context, &ast_expression.node)?
-            }
-
             // Lookups
             swamp_script_ast::ExpressionKind::PostfixChain(postfix_chain) => {
                 self.analyze_postfix_chain(postfix_chain)?
@@ -807,7 +752,18 @@ impl<'a> Analyzer<'a> {
                 self.analyze_complex_literal_to_expression(&ast_expression.node, literal, context)?
             }
 
-            swamp_script_ast::ExpressionKind::ForLoop(pattern, iterable_expression, statements) => {
+            swamp_script_ast::ExpressionKind::ForLoop(
+                pattern,
+                iterable_expression,
+                guard_expr,
+                statements,
+            ) => {
+                let analyzed_guard = if let Some(found_guard) = guard_expr {
+                    Some(self.analyze_bool_argument_expression(found_guard)?)
+                } else {
+                    None
+                };
+
                 let resolved_iterator =
                     self.analyze_iterable(pattern.any_mut(), &iterable_expression.expression)?;
 
@@ -1875,7 +1831,7 @@ impl<'a> Analyzer<'a> {
                     let loc = SingleLocationExpression {
                         kind: SingleLocationExpressionKind::MutVariableRef,
                         node: self.to_node(&variable_binding.variable.name),
-                        ty: same_var.resolved_type.clone(),
+                        ty: Type::MutableReference(Box::from(same_var.resolved_type.clone())),
                         starting_variable: same_var,
                         access_chain: vec![],
                     };
@@ -2235,7 +2191,7 @@ impl<'a> Analyzer<'a> {
                     Ok(SingleLocationExpression {
                         kind: SingleLocationExpressionKind::MutVariableRef,
                         node: self.to_node(&variable.name),
-                        ty: var.resolved_type.clone(),
+                        ty: Type::MutableReference(Box::from(var.resolved_type.clone())),
                         starting_variable: var,
                         access_chain: vec![],
                     })
@@ -2253,7 +2209,7 @@ impl<'a> Analyzer<'a> {
                     Ok(SingleLocationExpression {
                         kind: SingleLocationExpressionKind::MutVariableRef,
                         node: self.to_node(&generated_var.name),
-                        ty: var.resolved_type.clone(),
+                        ty: Type::MutableReference(Box::from(var.resolved_type.clone())),
                         starting_variable: var,
                         access_chain: vec![],
                     })
@@ -2322,6 +2278,8 @@ impl<'a> Analyzer<'a> {
         Ok(expr)
     }
 
+    /*
+
     #[must_use]
     pub fn create_mut_single_location_expr(
         &self,
@@ -2366,6 +2324,7 @@ impl<'a> Analyzer<'a> {
         }
     }
 
+
     #[must_use]
     pub fn create_single_location_expr_resolved(
         &self,
@@ -2387,6 +2346,8 @@ impl<'a> Analyzer<'a> {
             access_chain: vec![],
         }
     }
+
+
     #[must_use]
     pub fn create_mut_single_location_expr_resolved(
         &self,
@@ -2408,6 +2369,7 @@ impl<'a> Analyzer<'a> {
             access_chain: vec![],
         })
     }
+         */
 
     #[must_use]
     pub const fn create_expr(
@@ -2541,54 +2503,6 @@ impl<'a> Analyzer<'a> {
         suffixes.extend(postfixes);
 
         Ok(last_type)
-    }
-
-    fn analyze_break(
-        &self,
-        context: &TypeContext,
-        node: &swamp_script_ast::Node,
-    ) -> Result<Expression, Error> {
-        if !context.allows_break() {
-            return Err(self.create_err(ErrorKind::BreakOutsideLoop, node));
-        }
-
-        Ok(Expression {
-            kind: ExpressionKind::Break,
-            ty: Type::Never,
-            node: self.to_node(node),
-        })
-    }
-
-    fn analyze_return(
-        &mut self,
-        context: &TypeContext,
-        optional_expression: Option<&swamp_script_ast::Expression>,
-        node: &swamp_script_ast::Node,
-    ) -> Result<Expression, Error> {
-        if !context.allows_return() {
-            return Err(self.create_err(ErrorKind::ReturnOutsideCompare, node));
-        }
-
-        let return_context = context.for_return();
-        let inner = if let Some(expr) = optional_expression {
-            Some(Box::new(self.analyze_expression(expr, &return_context)?))
-        } else {
-            // Empty return
-            None
-        };
-
-        Ok(self.create_expr(ExpressionKind::Return(inner), Type::Never, node))
-    }
-
-    fn analyze_continue(
-        &self,
-        context: &TypeContext,
-        node: &swamp_script_ast::Node,
-    ) -> Result<Expression, Error> {
-        if !context.allows_continue() {
-            return Err(self.create_err(ErrorKind::ContinueOutsideLoop, node));
-        }
-        Ok(self.create_expr(ExpressionKind::Continue, Type::Never, node))
     }
 
     fn types_did_not_match_try_late_coerce_expression(

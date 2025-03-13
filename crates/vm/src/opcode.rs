@@ -12,4 +12,6 @@ pub enum OpCode {
     Enter = 9,
     Ret = 10,
     Jmp = 11,
+    Mov = 12,
+    LdImm = 13,
 }

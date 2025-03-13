@@ -441,11 +441,13 @@ pub enum ExpressionKind {
     When(Vec<WhenBinding>, Box<Expression>, Option<Box<Expression>>),
 
     // Control flow
-    ForLoop(ForPattern, IterableExpression, Box<Expression>),
+    ForLoop(
+        ForPattern,
+        IterableExpression,
+        Option<Box<Expression>>,
+        Box<Expression>,
+    ),
     WhileLoop(Box<Expression>, Box<Expression>),
-    Return(Option<Box<Expression>>),
-    Break,
-    Continue,
 
     // Compare and Matching
     If(Box<Expression>, Box<Expression>, Option<Box<Expression>>),

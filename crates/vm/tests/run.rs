@@ -1,4 +1,4 @@
-use swamp_script_vm::instr_bldr::InstructionBuilder;
+use swamp_script_vm::instr_bldr::{InstructionBuilder, MemoryAddress};
 use swamp_script_vm::{INT_SIZE, Vm};
 
 #[test]
@@ -56,7 +56,7 @@ fn lt() {
 
 #[test]
 fn jmp_if() {
-    let mut mem = 0;
+    let mut mem = MemoryAddress(0);
 
     let mut builder = InstructionBuilder::new();
     builder.add_ld_imm_i32(mem, 42);

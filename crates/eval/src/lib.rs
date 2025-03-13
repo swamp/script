@@ -692,17 +692,6 @@ impl<'a, C> Interpreter<'a, C> {
         expr: &Expression,
     ) -> Result<ValueWithSignal, RuntimeError> {
         match &expr.kind {
-            ExpressionKind::Break => Ok(ValueWithSignal::Break),
-            ExpressionKind::Continue => Ok(ValueWithSignal::Continue),
-
-            ExpressionKind::Return(maybe_expr) => {
-                let value = match maybe_expr {
-                    None => Value::Unit,
-                    Some(expr) => self.evaluate_expression(expr)?,
-                };
-                Ok(ValueWithSignal::Return(value))
-            }
-
             ExpressionKind::WhileLoop(condition, body) => self.evaluate_while_loop(condition, body),
 
             ExpressionKind::ForLoop(pattern, iterator_expr, body) => {
@@ -791,16 +780,6 @@ impl<'a, C> Interpreter<'a, C> {
         self.depth += 1;
         let value = match &expr.kind {
             // Illegal in this context
-            ExpressionKind::Continue => {
-                return Err(self.create_err(RuntimeErrorKind::ContinueNotAllowedHere, &expr.node));
-            }
-            ExpressionKind::Break => {
-                return Err(self.create_err(RuntimeErrorKind::BreakNotAllowedHere, &expr.node));
-            }
-            ExpressionKind::Return(_maybe_expr) => {
-                return Err(self.create_err(RuntimeErrorKind::ReturnNotAllowedHere, &expr.node));
-            }
-
             ExpressionKind::WhileLoop(_condition, _body) => {
                 panic!("should have been handled earlier")
             }
@@ -915,33 +894,10 @@ impl<'a, C> Interpreter<'a, C> {
                 self.evaluate_intrinsic_mut(&expr.node, intrinsic, location, arguments)?
             }
 
-            ExpressionKind::MapAssignment(map, index, value) => {
-                let map_val = self.evaluate_location(&map.0)?;
-                let index_val = self.evaluate_expression(index)?;
-                let new_val = self.evaluate_expression(value)?;
-
-                match &mut *map_val.borrow_mut() {
-                    Value::Map(_key_type, elements) => {
-                        elements
-                            .insert(index_val, Rc::new(RefCell::new(new_val)))
-                            .map_err(|_| {
-                                self.create_err(RuntimeErrorKind::MapKeyAlreadyExists, &expr.node)
-                            })?;
-                    }
-                    _ => {
-                        Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, &expr.node))?;
-                    }
-                }
-
-                Value::Unit
-            }
-
             // ------------- LOOKUP ---------------------
             ExpressionKind::ConstantAccess(constant) => {
                 self.constants.lookup_constant_value(constant.id).clone()
             }
-
-            ExpressionKind::AssignmentSlice(_mut_location, _source) => todo!(),
 
             ExpressionKind::Assignment(mut_location_expr, source_expr) => {
                 let value_ref = self.evaluate_location(&mut_location_expr.0)?;
@@ -1028,7 +984,6 @@ impl<'a, C> Interpreter<'a, C> {
                 Value::ExternalFunction(fetch_function.clone())
             }
 
-            //ExpressionKind::MutMemberCall(_, _) => todo!(),
             ExpressionKind::Tuple(_) => todo!(),
             ExpressionKind::Option(inner) => match inner {
                 None => Value::Option(None),

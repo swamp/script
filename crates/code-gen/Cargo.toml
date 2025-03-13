@@ -7,3 +7,4 @@ edition = "2024"
 swamp-script-vm = { path = "../vm", version = "0.1.3" }
 swamp-script-semantic = { path = "../semantic", version = "0.1.3"}
 swamp-script-types = { path = "../types", version = "0.1.3"}
+seq-map = "0.0.13"
