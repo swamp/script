@@ -99,20 +99,4 @@ impl Analyzer<'_> {
             mode: resolved_range_mode,
         })
     }
-
-    /// # Errors
-    ///
-    pub fn analyze_string_range_access(
-        &mut self,
-        base_expr: Expression,
-        range: Range,
-    ) -> Result<Expression, Error> {
-        let ty = base_expr.ty.clone();
-        let node = base_expr.node.clone();
-        Ok(self.create_expr_resolved(
-            ExpressionKind::StringRangeAccess(Box::from(base_expr), Box::from(range)),
-            ty,
-            &node,
-        ))
-    }
 }

@@ -583,15 +583,6 @@ pub enum ExpressionKind {
     // Access Lookup values
     ConstantAccess(ConstantRef),
     VariableAccess(VariableRef),
-    FieldAccess(Box<Expression>, usize),
-    ArrayAccess(
-        Box<Expression>,
-        Type,
-        Box<Expression>, // int index lookup
-    ), // Read from an array: arr[3]
-    MapIndexAccess(Box<Expression>, Type, Type, Box<Expression>),
-    StringRangeAccess(Box<Expression>, Box<Range>),
-    ArrayRangeAccess(Box<Expression>, Box<Range>),
 
     // ----
     IntrinsicFunctionAccess(IntrinsicFunctionDefinitionRef),

@@ -1092,45 +1092,6 @@ impl<'a, C> Interpreter<'a, C> {
                 assert_ne!(temp, Value::Unit);
                 temp
             }
-            ExpressionKind::FieldAccess(expr, index) => {
-                let resolved_expr = self.evaluate_expression(expr)?;
-                let (_struct_type, values) = resolved_expr
-                    .expect_struct()
-                    .map_err(|_| self.create_err(RuntimeErrorKind::ExpectedStruct, &expr.node))?;
-
-                let x = values[*index].borrow().clone();
-                x
-            }
-
-            ExpressionKind::ArrayAccess(expr, _array, index_expr) => {
-                let resolved_expr = self.evaluate_expression(expr)?;
-                let (_array_type, values) = resolved_expr
-                    .expect_array()
-                    .map_err(|_| self.create_err(RuntimeErrorKind::ExpectedArray, &expr.node))?;
-
-                let index = self
-                    .evaluate_expression(index_expr)?
-                    .expect_int()
-                    .map_err(|_| self.create_err(RuntimeErrorKind::ExpectedInt, &expr.node))?
-                    as usize;
-
-                let x = values[index].borrow().clone();
-                x
-            }
-
-            ExpressionKind::MapIndexAccess(expr, _map_type_ref, _value_type, key_expr) => {
-                let resolved_expr = self.evaluate_expression(expr)?;
-                let (_map_type, seq_map) = resolved_expr
-                    .expect_map()
-                    .map_err(|_| self.create_err(RuntimeErrorKind::ExpectedMap, &expr.node))?;
-
-                let key_val = self.evaluate_expression(key_expr)?;
-
-                let value_val_maybe = seq_map.get(&key_val);
-                Value::Option(value_val_maybe.cloned())
-            }
-            ExpressionKind::StringRangeAccess(_, _) => todo!(),
-            ExpressionKind::ArrayRangeAccess(_, _) => todo!(),
             ExpressionKind::PostfixChain(start, parts) => {
                 let value_ref = self.eval_chain(&expr.node, start, parts)?;
                 let x = value_ref.borrow().clone();

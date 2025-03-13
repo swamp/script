@@ -57,11 +57,6 @@ impl CodeGen {
         match &expr.kind {
             ExpressionKind::ConstantAccess(_) => todo!(),
             ExpressionKind::VariableAccess(_) => todo!(),
-            ExpressionKind::FieldAccess(_, _) => todo!(),
-            ExpressionKind::ArrayAccess(_, _, _) => todo!(),
-            ExpressionKind::MapIndexAccess(_, _, _, _) => todo!(),
-            ExpressionKind::StringRangeAccess(_, _) => todo!(),
-            ExpressionKind::ArrayRangeAccess(_, _) => todo!(),
             ExpressionKind::IntrinsicFunctionAccess(_) => todo!(),
             ExpressionKind::InternalFunctionAccess(_) => todo!(),
             ExpressionKind::ExternalFunctionAccess(_) => todo!(),
