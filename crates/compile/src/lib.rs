@@ -18,7 +18,7 @@ use swamp_script_dep_loader::{
 };
 use swamp_script_error_report::{ScriptResolveError, prelude::show_script_resolve_error};
 use swamp_script_eval_loader::analyze_modules_in_order;
-use swamp_script_modules::modules::{Module, Modules};
+use swamp_script_modules::modules::{Module, ModuleRef, Modules};
 use swamp_script_modules::symtbl::{SymbolTable, SymbolTableRef};
 use swamp_script_pretty_print::{SourceMapDisplay, SymbolTableDisplay};
 use swamp_script_semantic::ProgramState;
@@ -350,4 +350,23 @@ pub fn debug_module(symbol_table: &SymbolTable, source_map: &SourceMap) {
     };
 
     info!(%symbol_table_display, "{:?}", symbol_table.module_path());
+}
+
+pub fn compile_string(script: &str) -> Result<(Program, ModuleRef, SourceMap), ScriptResolveError> {
+    let mut source_map = SourceMap::new(&SeqMap::default()).unwrap();
+    let file_id = 0xffff;
+
+    source_map
+        .add_mount("registry", &swamp_registry_path().unwrap())
+        .unwrap(); // registry must be present, since it reads core .swamp source file
+
+    source_map.add_mount("crate", Path::new("/tmp/")).unwrap();
+    source_map.add_to_cache("crate", Path::new("test.swamp"), script, file_id);
+
+    let resolved_path_str = vec!["crate".to_string(), "test".to_string()];
+
+    let program = bootstrap_and_compile(&mut source_map, &resolved_path_str)?;
+    let main_module = program.modules.get(&resolved_path_str).unwrap().clone();
+
+    Ok((program, main_module, source_map))
 }

@@ -60,6 +60,16 @@ pub struct Vm {
     debug_call_depth: usize,
 }
 
+impl Vm {
+    pub fn memory(&self) -> &[u8] {
+        unsafe { std::slice::from_raw_parts(self.memory, self.memory_size) }
+    }
+
+    pub fn stack_memory(&self) -> &[u8] {
+        unsafe { std::slice::from_raw_parts(self.stack_ptr(), self.memory_size) }
+    }
+}
+
 const ALIGNMENT: usize = 8;
 const ALIGNMENT_REST: usize = ALIGNMENT - 1;
 const ALIGNMENT_MASK: usize = !ALIGNMENT_REST;
@@ -96,16 +106,18 @@ impl Vm {
         };
 
         vm.handlers[OpCode::LdLocal as usize] = HandlerType::Args2(Self::execute_ld_local);
-        vm.handlers[OpCode::LdImmI32 as usize] = HandlerType::Args3(Self::execute_ld_imm_i32);
+        vm.handlers[OpCode::LdImmU32 as usize] = HandlerType::Args3(Self::execute_ld_imm_u32);
         vm.handlers[OpCode::AddI32 as usize] = HandlerType::Args3(Self::execute_add_i32);
         vm.handlers[OpCode::LtI32 as usize] = HandlerType::Args3(Self::execute_lt_i32);
         vm.handlers[OpCode::JmpIf as usize] = HandlerType::Args2(Self::execute_jmp_if);
         vm.handlers[OpCode::JmpIfNot as usize] = HandlerType::Args2(Self::execute_jmp_if_not);
+        vm.handlers[OpCode::Jmp as usize] = HandlerType::Args1(Self::execute_jmp);
         vm.handlers[OpCode::Call as usize] = HandlerType::Args1(Self::execute_call);
 
         vm.handlers[OpCode::Enter as usize] = HandlerType::Args1(Self::execute_enter);
         vm.handlers[OpCode::Ret as usize] = HandlerType::Args0(Self::execute_ret);
         vm.handlers[OpCode::LdImmU8 as usize] = HandlerType::Args2(Self::execute_ld_imm_u8);
+        vm.handlers[OpCode::LdIndirect as usize] = HandlerType::Args4(Self::execute_ld_indirect);
 
         vm.handlers[OpCode::End as usize] = HandlerType::Args0(Self::execute_end);
 
@@ -134,10 +146,10 @@ impl Vm {
         self.execution_complete = false;
     }
 
-    fn execute_ld_imm_i32(&mut self, dst_offset: u16, lower_bits: u16, upper_bits: u16) {
-        let value = ((upper_bits as i32) << 16) | (lower_bits as i32);
+    fn execute_ld_imm_u32(&mut self, dst_offset: u16, lower_bits: u16, upper_bits: u16) {
+        let value = ((upper_bits as u32) << 16) | (lower_bits as u32);
 
-        let dst_ptr = self.ptr_at(self.frame_offset + dst_offset as usize) as *mut i32;
+        let dst_ptr = self.ptr_at(self.frame_offset + dst_offset as usize) as *mut u32;
         unsafe {
             *dst_ptr = value;
         }
@@ -177,18 +189,26 @@ impl Vm {
     }
 
     #[inline]
-    fn execute_jmp_if(&mut self, condition_offset: u16, jump_offset: u16) {
+    fn execute_jmp_if(&mut self, condition_offset: u16, absolute_ip: u16) {
         let is_true = self.frame_ptr_bool_const_at(condition_offset);
         if is_true {
-            self.ip = (self.ip as isize + jump_offset as isize) as usize;
+            self.ip = absolute_ip as usize;
         }
     }
 
     #[inline]
-    fn execute_jmp_if_not(&mut self, condition_offset: u16, jump_offset: u16) {
+    fn execute_jmp_if_not(&mut self, condition_offset: u16, absolute_ip: u16) {
         let is_true = self.frame_ptr_bool_const_at(condition_offset);
         if !is_true {
-            self.ip = (self.ip as isize + jump_offset as isize) as usize;
+            self.ip = absolute_ip as usize;
+        }
+    }
+
+    #[inline]
+    fn execute_jmp(&mut self, absolute_ip: u16) {
+        let is_true = self.frame_ptr_bool_const_at(absolute_ip);
+        if !is_true {
+            self.ip = absolute_ip as usize;
         }
     }
 
@@ -197,7 +217,9 @@ impl Vm {
         self.execution_complete = true;
     }
 
-    fn execute_unimplemented(&mut self) {}
+    fn execute_unimplemented(&mut self) {
+        panic!("unknown OPCODE HALT!");
+    }
 
     // Type-specific handlers
     fn execute_ld_local(&mut self, dst_offset: u16, src_offset: u16) {
@@ -206,6 +228,36 @@ impl Vm {
 
         unsafe {
             std::ptr::copy_nonoverlapping(src_ptr, dst_ptr, 4);
+        }
+    }
+
+    #[inline]
+    fn execute_ld_indirect(
+        &mut self,
+        dst_offset: u16,
+        base_ptr_offset: u16,
+        offset_offset: u16,
+        size: u16,
+    ) {
+        let base_ptr_ptr = self.ptr_at(self.frame_offset + base_ptr_offset as usize) as *const u16;
+        let offset_ptr = self.ptr_at(self.frame_offset + offset_offset as usize) as *const u16;
+
+        // Read the actual base pointer and offset values
+        let base_ptr_value;
+        let offset_value;
+
+        unsafe {
+            base_ptr_value = *base_ptr_ptr;
+            offset_value = *offset_ptr;
+        }
+
+        let src_addr = base_ptr_value as usize + offset_value as usize;
+
+        let src_ptr = self.ptr_at(src_addr);
+        let dst_ptr = self.ptr_at(self.frame_offset + dst_offset as usize);
+
+        unsafe {
+            std::ptr::copy_nonoverlapping(src_ptr, dst_ptr, size as usize);
         }
     }
 
@@ -218,6 +270,10 @@ impl Vm {
     // Helper to get current frame pointer
     const fn frame_ptr(&self) -> *mut u8 {
         self.ptr_at(self.frame_offset)
+    }
+
+    const fn stack_ptr(&self) -> *mut u8 {
+        self.ptr_at(self.stack_offset)
     }
 
     #[inline]
@@ -264,6 +320,7 @@ impl Vm {
         while !self.execution_complete {
             let instruction = &self.instructions[self.ip];
             let opcode = instruction.opcode;
+            eprintln!("opcode: {opcode}");
 
             match self.handlers[opcode as usize] {
                 HandlerType::Args0(handler) => handler(self),

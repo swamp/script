@@ -27,5 +27,5 @@ members = [
     "crates/source-map-lookup",
     "crates/core",
     "crates/types",
-    "crates/node", "crates/vm", "crates/code-gen", # Move this later
+    "crates/node", "crates/vm", "crates/code-gen", "crates/vm-test", # Move this later
 ]

@@ -3,7 +3,7 @@ pub enum OpCode {
     End = 0,
     LdLocal = 1,
     StoreLocal = 2,
-    LdImmI32 = 3,
+    LdImmU32 = 3,
     AddI32 = 4,
     LtI32 = 5,
     JmpIf = 6,
@@ -13,6 +13,8 @@ pub enum OpCode {
     Ret = 10,
     Jmp = 11,
     Mov = 12,
-    LdImm = 13,
+    LdImmU16 = 13,
     LdImmU8 = 14,
+    LtU16,
+    LdIndirect,
 }

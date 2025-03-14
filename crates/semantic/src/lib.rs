@@ -17,6 +17,7 @@ use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::rc::Rc;
 use swamp_script_node::Node;
+use swamp_script_types::Type::Unit;
 use swamp_script_types::prelude::*;
 use tracing::error;
 
@@ -60,6 +61,7 @@ pub struct InternalFunctionDefinition {
     pub name: LocalIdentifier,
     pub assigned_name: String,
     pub signature: Signature,
+    pub variable_scopes: FunctionScopeState,
 }
 
 impl Default for InternalFunctionDefinition {
@@ -76,6 +78,7 @@ impl Default for InternalFunctionDefinition {
                 parameters: vec![],
                 return_type: Box::new(Type::Never),
             },
+            variable_scopes: FunctionScopeState::new(Type::Unit),
         }
     }
 }
@@ -116,13 +119,13 @@ impl Debug for ExternalFunctionDefinition {
 
 pub type ExternalFunctionDefinitionRef = Rc<crate::ExternalFunctionDefinition>;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, Clone, PartialEq)]
 pub enum BlockScopeMode {
     Open,
     Closed,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BlockScope {
     pub mode: BlockScopeMode,
     pub variables: SeqMap<String, VariableRef>,
@@ -144,6 +147,7 @@ impl BlockScope {
     }
 }
 
+#[derive(Clone)]
 pub struct FunctionScopeState {
     pub block_scope_stack: Vec<BlockScope>,
     pub return_type: Type,

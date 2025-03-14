@@ -345,6 +345,12 @@ pub struct Analyzer<'a> {
 }
 
 impl<'a> Analyzer<'a> {
+    pub fn scopes(&self) -> &FunctionScopeState {
+        &self.scope
+    }
+}
+
+impl<'a> Analyzer<'a> {
     pub fn new(
         state: &'a mut ProgramState,
         modules: &'a Modules,
@@ -2587,6 +2593,7 @@ impl<'a> Analyzer<'a> {
                                 name: LocalIdentifier(Default::default()),
                                 assigned_name: "".to_string(),
                                 signature: new_signature,
+                                variable_scopes: self.scope.clone(),
                             });
                             Function::Internal(func_ref)
                         }

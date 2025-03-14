@@ -478,6 +478,7 @@ impl Analyzer<'_> {
                     body: statements,
                     name: LocalIdentifier(self.to_node(&function_data.declaration.name)),
                     assigned_name: self.get_text(&function_data.declaration.name).to_string(),
+                    variable_scopes: self.scope.clone(),
                 };
 
                 let function_ref = self
@@ -582,6 +583,7 @@ impl Analyzer<'_> {
                 let resolved_return_type = self.analyze_return_type(function)?;
                 self.start_function(resolved_return_type);
                 self.analyze_function_definition(function)?;
+
                 self.stop_function();
             }
             swamp_script_ast::Definition::ImplDef(type_identifier, functions) => {
@@ -755,6 +757,7 @@ impl Analyzer<'_> {
                     body: statements,
                     name: LocalIdentifier(self.to_node(&function_data.declaration.name)),
                     assigned_name: self.get_text(&function_data.declaration.name).to_string(),
+                    variable_scopes: self.scope.clone(),
                 };
 
                 let internal_ref = Rc::new(internal);

@@ -7,7 +7,7 @@ use crate::symtbl::SymbolTable;
 use seq_map::SeqMap;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
-use swamp_script_semantic::{Expression, ExpressionKind};
+use swamp_script_semantic::{Expression, ExpressionKind, FunctionScopeState};
 
 #[derive(Debug)]
 pub struct Modules {
@@ -19,8 +19,9 @@ impl Default for Modules {
         Self::new()
     }
 }
+
 pub struct Module {
-    pub expression: Option<Expression>,
+    pub main_expression: Option<InternalMainExpression>,
     pub symbol_table: SymbolTable,
 }
 
@@ -28,8 +29,8 @@ impl Debug for Module {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         writeln!(f, " {:?}", self.symbol_table)?;
 
-        if let Some(resolved_expression) = &self.expression {
-            pretty_print(f, resolved_expression, 0)?;
+        if let Some(internal_main) = &self.main_expression {
+            pretty_print(f, &internal_main.expression, 0)?;
         }
 
         Ok(())
@@ -58,13 +59,18 @@ pub fn pretty_print(
     }
 }
 
+pub struct InternalMainExpression {
+    pub expression: Expression,
+    pub function_scope_state: FunctionScopeState,
+}
+
 pub type ModuleRef = Rc<Module>;
 
 impl Module {
-    pub fn new(symbol_table: SymbolTable, expression: Option<Expression>) -> Self {
+    pub fn new(symbol_table: SymbolTable, expression: Option<InternalMainExpression>) -> Self {
         Self {
             symbol_table,
-            expression,
+            main_expression: expression,
         }
     }
 }

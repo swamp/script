@@ -55,6 +55,10 @@ pub struct InstructionBuilder {
     pub instructions: Vec<BinaryInstruction>,
 }
 
+impl InstructionBuilder {}
+
+impl InstructionBuilder {}
+
 impl Default for InstructionBuilder {
     fn default() -> Self {
         Self::new()
@@ -110,25 +114,25 @@ impl InstructionBuilder {
     ///
     pub fn patch_jump(
         &mut self,
-        jump_position: PatchPosition,
+        patch_position: PatchPosition,
         target_position: &InstructionPosition,
     ) {
         const JMP_IF_NOT: u8 = OpCode::JmpIfNot as u8;
         const JMP: u8 = OpCode::Jmp as u8;
 
-        let instruction = &mut self.instructions[jump_position.0.0 as usize];
+        let instruction = &mut self.instructions[patch_position.0.0 as usize];
 
         match instruction.opcode {
             JMP_IF_NOT => {
                 // For conditional jump, target ip addr is the second operand
-                instruction.operands[1] = target_position.0 as u16;
+                instruction.operands[1] = target_position.0 as u16 - 1;
             }
             JMP => {
                 // For conditional jump, target ip addr is the first operand
                 // TODO: maybe have them both at the first operand?
-                instruction.operands[0] = target_position.0 as u16;
+                instruction.operands[0] = target_position.0 as u16 - 1;
             }
-            _ => panic!("Attempted to patch a non-jump instruction at position {jump_position:?}"),
+            _ => panic!("Attempted to patch a non-jump instruction at position {patch_position:?}"),
         }
     }
 
@@ -149,10 +153,12 @@ impl InstructionBuilder {
     }
 
     pub fn add_ld_imm_i32(&mut self, dst_offset: FrameMemoryAddress, value: i32) {
-        let lower_bits = (value & 0xFFFF) as u16;
-        let upper_bits = ((value >> 16) & 0xFFFF) as u16;
+        let value_u32 = value as u32;
 
-        self.add_instruction(OpCode::LdImmI32, &[dst_offset.0, lower_bits, upper_bits]);
+        let lower_bits = (value_u32 & 0xFFFF) as u16;
+        let upper_bits = (value_u32 >> 16) as u16;
+
+        self.add_instruction(OpCode::LdImmU32, &[dst_offset.0, lower_bits, upper_bits]);
     }
 
     pub fn add_ld_imm_u8(&mut self, dst_offset: FrameMemoryAddress, value: u8) {
@@ -160,7 +166,11 @@ impl InstructionBuilder {
     }
 
     pub fn add_load_frame_address(&mut self, dest: FrameMemoryAddress, addr: FrameMemoryAddress) {
-        self.add_instruction(OpCode::LdImm, &[dest.0, addr.0]);
+        self.add_ld_imm_u16(dest, addr.0);
+    }
+
+    pub fn add_ld_imm_u16(&mut self, dest: FrameMemoryAddress, data: u16) {
+        self.add_instruction(OpCode::LdImmU16, &[dest.0, data]);
     }
 
     pub fn add_add_i32(
@@ -197,13 +207,33 @@ impl InstructionBuilder {
         self.add_instruction(OpCode::LtI32, &[dst_offset.0, lhs_offset.0, rhs_offset.0]);
     }
 
+    pub fn add_lt_u16(
+        &mut self,
+        dest: FrameMemoryAddress,
+        a: FrameMemoryAddress,
+        b: FrameMemoryAddress,
+    ) {
+        self.add_instruction(OpCode::LtU16, &[dest.0, a.0, b.0]);
+    }
+
+    pub fn add_ld_indirect(
+        &mut self,
+        dest: FrameMemoryAddress,
+        base_ptr: FrameMemoryAddress,
+        offset: FrameMemoryAddress,
+        size: u16,
+    ) {
+        self.add_instruction(OpCode::LdIndirect, &[dest.0, base_ptr.0, offset.0, size]);
+    }
+
     pub fn add_end(&mut self) {
         self.add_instruction(OpCode::End, &[]);
     }
 
     fn add_instruction(&mut self, op_code: OpCode, operands: &[u16]) {
         let mut array: [u16; 4] = [0; 4];
-        array.clone_from_slice(operands);
+        let len = operands.len().min(4);
+        array[..len].copy_from_slice(&operands[..len]);
         self.instructions.push(BinaryInstruction {
             opcode: op_code as u8,
             opcode_count: operands.len() as u8,

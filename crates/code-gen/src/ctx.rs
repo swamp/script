@@ -5,7 +5,19 @@ use swamp_script_vm::instr_bldr::{FrameMemoryAddress, MemorySize};
 
 pub struct Context {
     target_info: TargetInfo,
-    allocator: ScopeAllocator,
+    temp_allocator: ScopeAllocator,
+}
+
+impl Context {
+    pub(crate) fn allocate_temp(&mut self, memory_size: MemorySize) -> FrameMemoryAddress {
+        self.temp_allocator.allocate(memory_size)
+    }
+}
+
+impl Context {
+    pub fn reset_temp(&mut self) {
+        self.temp_allocator.reset()
+    }
 }
 
 impl Context {
@@ -15,7 +27,7 @@ impl Context {
                 addr: self.addr().add(offset),
                 size: MemorySize(self.target_info.size.0 - 1),
             },
-            allocator: self.allocator,
+            temp_allocator: self.temp_allocator,
         }
     }
 }
@@ -25,15 +37,15 @@ impl Context {
     pub const fn new(addr: FrameMemoryAddress, size: MemorySize) -> Self {
         Self {
             target_info: TargetInfo { addr, size },
-            allocator: ScopeAllocator::new(FrameMemoryAddress(addr.0 + size.0)),
+            temp_allocator: ScopeAllocator::new(FrameMemoryAddress(addr.0 + size.0)),
         }
     }
 
-    pub(crate) fn context_for_type(&mut self, ty: &Type) -> Self {
-        let new_target_info = reserve_space_for_type(ty, &mut self.allocator);
+    pub(crate) fn temp_space_for_type(&mut self, ty: &Type) -> Self {
+        let new_target_info = reserve_space_for_type(ty, &mut self.temp_allocator);
         Self {
             target_info: new_target_info,
-            allocator: self.allocator.create_scope(),
+            temp_allocator: self.temp_allocator.create_scope(),
         }
     }
     pub(crate) const fn addr(&self) -> FrameMemoryAddress {
@@ -47,7 +59,7 @@ impl Context {
     pub const fn with_target(&self, addr: FrameMemoryAddress, size: MemorySize) -> Self {
         Self {
             target_info: TargetInfo { addr, size },
-            allocator: self.allocator,
+            temp_allocator: self.temp_allocator,
         }
     }
 
@@ -55,7 +67,7 @@ impl Context {
     pub const fn create_scope(&self) -> Self {
         Self {
             target_info: self.target_info,
-            allocator: self.allocator.create_scope(),
+            temp_allocator: self.temp_allocator.create_scope(),
         }
     }
 
@@ -63,7 +75,7 @@ impl Context {
     pub const fn create_function_scope(&self, return_target: TargetInfo) -> Self {
         Self {
             target_info: self.target_info,
-            allocator: self.allocator.create_scope(),
+            temp_allocator: self.temp_allocator.create_scope(),
         }
     }
 }

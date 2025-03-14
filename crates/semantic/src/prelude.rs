@@ -7,7 +7,7 @@ pub use crate::{
     CompoundOperatorKind, Constant, ConstantRef, EnumLiteralData, Expression, ExpressionKind,
     ExternalFunctionCall, ExternalFunctionDefinition, ExternalFunctionDefinitionRef,
     ExternalFunctionId, ForPattern, FormatSpecifier, FormatSpecifierKind, Fp, Function,
-    FunctionRef, Guard, InternalFunctionCall, InternalFunctionDefinition,
+    FunctionRef, FunctionScopeState, Guard, InternalFunctionCall, InternalFunctionDefinition,
     InternalFunctionDefinitionRef, Iterable, Literal, LocalIdentifier, LocalTypeIdentifier, Match,
     MatchArm, MemberCall, MutVariable, Pattern, PrecisionType, ProgramState, SemanticError,
     StringPart, StructInstantiation, UnaryOperator, Variable, VariableRef,

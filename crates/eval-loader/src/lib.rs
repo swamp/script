@@ -7,6 +7,7 @@ use swamp_script_analyzer::{Analyzer, TypeContext, TypeContextScope};
 use swamp_script_dep_loader::{
     DependencyParser, ParsedAstModule, parse_local_modules_and_get_order,
 };
+use swamp_script_modules::modules::InternalMainExpression;
 use swamp_script_modules::prelude::*;
 use swamp_script_modules::symtbl::SymbolTableRef;
 use swamp_script_semantic::{Expression, ProgramState, SemanticError};
@@ -34,7 +35,7 @@ pub fn analyze_module(
     source_map: &SourceMap,
     module_path: &[String],
     ast_module: &ParsedAstModule,
-) -> Result<(SymbolTable, Option<Expression>), LoaderErr> {
+) -> Result<(SymbolTable, Option<InternalMainExpression>), LoaderErr> {
     let mut resolver = Analyzer::new(
         state,
         modules,
@@ -53,7 +54,12 @@ pub fn analyze_module(
         }
 
         let maybe_resolved_expression = if let Some(expr) = ast_module.ast_module.expression() {
-            Some(resolver.analyze_expression(expr, &outside_context)?)
+            let expr = resolver.analyze_expression(expr, &outside_context)?;
+            let internal_main = InternalMainExpression {
+                expression: expr,
+                function_scope_state: resolver.scopes().clone(),
+            };
+            Some(internal_main)
         } else {
             None
         };

@@ -1,9 +1,11 @@
 pub mod alloc;
 pub mod alloc_util;
 pub mod ctx;
+mod vec;
 
 use crate::alloc_util::type_size;
 use crate::ctx::Context;
+use crate::vec::{VECTOR_DATA_PTR_OFFSET, VECTOR_LENGTH_OFFSET};
 use seq_map::SeqMap;
 use std::ops::Deref;
 use swamp_script_semantic::{
@@ -16,11 +18,25 @@ use swamp_script_vm::instr_bldr::{
     FrameMemoryAddress, FrameMemorySize, InstructionBuilder, MemoryOffset, MemorySize,
     PatchPosition,
 };
+use swamp_script_vm::{BinaryInstruction, PTR_SIZE};
 
 pub struct CodeGen {
     builder: InstructionBuilder,
     variable_offsets: SeqMap<usize, FrameMemoryAddress>,
     frame_size: FrameMemorySize,
+}
+
+impl CodeGen {
+    pub fn finalize(&mut self) {
+        self.builder.add_end();
+    }
+}
+
+impl CodeGen {
+    #[must_use]
+    pub fn take_instructions(self) -> Vec<BinaryInstruction> {
+        self.builder.instructions
+    }
 }
 
 impl Default for CodeGen {
@@ -39,7 +55,7 @@ impl CodeGen {
         }
     }
 
-    pub fn layout_variables(&mut self, function_state: &FunctionScopeState) {
+    pub fn layout_variables(&mut self, function_state: &FunctionScopeState) -> Context {
         let mut current_offset = FrameMemoryAddress(type_size(&function_state.return_type).0);
 
         for block_scope in &function_state.block_scope_stack {
@@ -53,9 +69,13 @@ impl CodeGen {
         }
 
         self.frame_size = current_offset.as_size();
+
+        Context::new(current_offset, MemorySize(64000))
     }
 
     pub fn gen_expression(&mut self, expr: &Expression, ctx: &mut Context) {
+        ctx.reset_temp();
+
         match &expr.kind {
             ExpressionKind::ConstantAccess(_) => todo!(),
             ExpressionKind::VariableAccess(_) => todo!(),
@@ -79,11 +99,11 @@ impl CodeGen {
                 self.gen_option_expression(maybe_option.as_deref(), ctx)
             }
             ExpressionKind::Range(_, _, _) => todo!(),
-            ExpressionKind::ForLoop(a, b, c) => self.gen_for_loop(a, b, c),
+            ExpressionKind::ForLoop(a, b, c) => self.gen_for_loop(a, b, c, ctx),
             ExpressionKind::WhileLoop(condition, expression) => {
                 self.gen_while_loop(condition, expression, ctx);
             }
-            ExpressionKind::Block(_) => todo!(),
+            ExpressionKind::Block(expressions) => self.gen_block(expressions, ctx),
             ExpressionKind::Match(_) => todo!(),
             ExpressionKind::Guard(_) => todo!(),
             ExpressionKind::If(conditional, true_expr, false_expr) => {
@@ -105,9 +125,9 @@ impl CodeGen {
         }
     }
 
-    fn gen_binary_operator_i32(&mut self, binary_operator: &BinaryOperator, ctx: &Context) {
-        let mut left_context = ctx.context_for_type(&binary_operator.left.ty);
-        let mut right_context = ctx.context_for_type(&binary_operator.right.ty);
+    fn gen_binary_operator_i32(&mut self, binary_operator: &BinaryOperator, ctx: &mut Context) {
+        let mut left_context = ctx.temp_space_for_type(&binary_operator.left.ty);
+        let mut right_context = ctx.temp_space_for_type(&binary_operator.right.ty);
 
         self.gen_expression(&binary_operator.left, &mut left_context);
         self.gen_expression(&binary_operator.right, &mut right_context);
@@ -126,7 +146,10 @@ impl CodeGen {
             BinaryOperatorKind::LogicalAnd => todo!(),
             BinaryOperatorKind::Equal => todo!(),
             BinaryOperatorKind::NotEqual => todo!(),
-            BinaryOperatorKind::LessThan => todo!(),
+            BinaryOperatorKind::LessThan => {
+                self.builder
+                    .add_lt_i32(ctx.addr(), left_context.addr(), right_context.addr());
+            }
             BinaryOperatorKind::LessEqual => todo!(),
             BinaryOperatorKind::GreaterThan => todo!(),
             BinaryOperatorKind::GreaterEqual => todo!(),
@@ -139,7 +162,7 @@ impl CodeGen {
         condition: &BooleanExpression,
         ctx: &mut Context,
     ) -> (Context, PatchPosition) {
-        let mut condition_ctx = ctx.context_for_type(&Type::Bool);
+        let mut condition_ctx = ctx.temp_space_for_type(&Type::Bool);
         self.gen_expression(&condition.expression, &mut condition_ctx);
 
         let jump_on_false_condition = self
@@ -191,7 +214,7 @@ impl CodeGen {
         let (_condition_ctx, jump_on_false_condition) = self.gen_condition_context(condition, ctx);
 
         // Expression is only for side effects
-        let mut unit_ctx = ctx.context_for_type(&Type::Unit);
+        let mut unit_ctx = ctx.temp_space_for_type(&Type::Unit);
         self.gen_expression(expression, &mut unit_ctx);
 
         // Always jump to the condition again to see if it is true
@@ -364,17 +387,115 @@ impl CodeGen {
         body: &Box<Expression>,
         ctx: &mut Context,
     ) {
-        match for_pattern {
-            ForPattern::Single(_) => {}
-            ForPattern::Pair(_, _) => {}
-        }
-        /*
-                pub key_type: Option<Type>, // It does not have to support a key type
-        pub value_type: Type,
+        // Add check if the collection is empty, to skip everything
 
-        pub resolved_expression: Box<MutOrImmutableExpression>,
-             */
-        let mut unit_expr = ctx.context_for_type(&Type::Unit);
+        // get some kind of iteration pointer
+
+        // check if it has reached its end
+
+        match for_pattern {
+            ForPattern::Single(value_variable) => {}
+            ForPattern::Pair(key_variable, value_variable) => {}
+        }
+
+        let mut unit_expr = ctx.temp_space_for_type(&Type::Unit);
         self.gen_expression(body, &mut unit_expr);
+
+        // advance iterator pointer
+        // jump to check if iterator pointer has reached its end
+    }
+
+    fn gen_for_loop_for_vec(
+        &mut self,
+        element_type: &Type,
+        vector_expr: Expression,
+        ctx: &mut Context,
+    ) {
+        // get the vector that is referenced
+        let mut vector_ctx = ctx.temp_space_for_type(&vector_expr.ty);
+        self.gen_expression(&vector_expr, &mut vector_ctx);
+
+        /*
+        let value_var_addr = match for_pattern {
+            ForPattern::Single(value_variable) => self
+                .variable_offsets
+                .get(&value_variable.unique_id_within_function)
+                .expect("Variable not found"),
+            ForPattern::Pair(_, _) => {
+                panic!("Cannot use key-value pattern with vectors");
+            }
+        };
+
+         */
+
+        let element_size = type_size(element_type);
+
+        // Temporary for the counter
+        let counter_addr = ctx.allocate_temp(MemorySize(2)); // u16 counter
+        self.builder.add_ld_imm_u16(counter_addr, 0);
+
+        let loop_start_pos = self.builder.position();
+
+        // vector length
+        let length_addr = ctx.allocate_temp(MemorySize(2));
+        self.builder.add_mov(
+            length_addr,
+            vector_ctx.addr().add(MemorySize(VECTOR_LENGTH_OFFSET)),
+            MemorySize(2),
+        );
+
+        // Compare counter < length
+        let compare_result_addr = ctx.allocate_temp(MemorySize(1)); // boolean result
+        self.builder
+            .add_lt_u16(compare_result_addr, counter_addr, length_addr);
+
+        // Exit loop if counter >= length
+        let exit_jump = self
+            .builder
+            .add_conditional_jump_placeholder(compare_result_addr);
+
+        let data_ptr_addr = ctx.allocate_temp(MemorySize(2));
+        self.builder.add_mov(
+            data_ptr_addr,
+            vector_ctx.addr().add(MemorySize(VECTOR_DATA_PTR_OFFSET)),
+            MemorySize(PTR_SIZE),
+        );
+
+        /*
+        let offset_addr = ctx.allocate_temp(2);
+        self.builder.add_mul_u16(
+            offset_addr,
+            counter_addr,
+            element_size
+        );
+
+        self.builder.add_ld_indirect(
+            *value_var_addr,     // Destination: loop variable
+            data_ptr_addr,       // Base: vector's data pointer
+            offset_addr,         // Offset: counter * element_size
+            element_size         // Size to copy
+        );
+
+        let mut body_ctx = ctx.temp_space_for_type(&Type::Unit);
+        self.gen_expression(body, &mut body_ctx);
+
+        self.builder.add_inc_u16(counter_addr);
+
+        self.builder.add_jmp_to_position(loop_start_pos);
+
+        let end_pos = self.builder.current_position();
+        self.builder.patch_jump(exit_jump, end_pos);
+
+         */
+    }
+
+    fn gen_block(&mut self, expressions: &[Expression], ctx: &mut Context) {
+        if let Some((last, others)) = expressions.split_last() {
+            for expr in others {
+                let mut temp_context = ctx.temp_space_for_type(&Type::Unit);
+                self.gen_expression(expr, &mut temp_context);
+            }
+            self.gen_expression(last, ctx);
+        }
     }
 }
