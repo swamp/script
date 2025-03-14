@@ -225,7 +225,7 @@ impl Analyzer<'_> {
             )
         };
 
-        Ok(self.create_expr(kind, ty, &node))
+        Ok(self.create_expr(kind, ty, node))
     }
 
     pub(crate) fn analyze_struct_instantiation(

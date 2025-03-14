@@ -37,6 +37,9 @@ impl MemoryAddress {
 }
 
 #[derive(Copy, Clone)]
+pub struct MemoryOffset(pub u16);
+
+#[derive(Copy, Clone)]
 pub struct MemorySize(pub u16);
 
 #[derive(Copy, Clone)]
@@ -138,18 +141,22 @@ impl InstructionBuilder {
         self.add_instruction(OpCode::Jmp, &[ip.0]);
     }
 
-    pub fn add_ld_local(&mut self, dst_offset: u16, src_offset: u16) {
-        self.add_instruction(OpCode::LdLocal, &[dst_offset, src_offset]);
+    pub fn add_ld_local(&mut self, dst_offset: FrameMemoryAddress, src_offset: u16) {
+        self.add_instruction(OpCode::LdLocal, &[dst_offset.0, src_offset]);
     }
-    pub fn add_st_local(&mut self, dst_offset: u16, src_offset: u16) {
-        self.add_instruction(OpCode::StoreLocal, &[dst_offset, src_offset]);
+    pub fn add_st_local(&mut self, dst_offset: FrameMemoryAddress, src_offset: u16) {
+        self.add_instruction(OpCode::StoreLocal, &[dst_offset.0, src_offset]);
     }
 
-    pub fn add_ld_imm_i32(&mut self, dst_offset: u16, value: i32) {
+    pub fn add_ld_imm_i32(&mut self, dst_offset: FrameMemoryAddress, value: i32) {
         let lower_bits = (value & 0xFFFF) as u16;
         let upper_bits = ((value >> 16) & 0xFFFF) as u16;
 
-        self.add_instruction(OpCode::LdImmI32, &[dst_offset, lower_bits, upper_bits]);
+        self.add_instruction(OpCode::LdImmI32, &[dst_offset.0, lower_bits, upper_bits]);
+    }
+
+    pub fn add_ld_imm_u8(&mut self, dst_offset: FrameMemoryAddress, value: u8) {
+        self.add_instruction(OpCode::LdImmU8, &[dst_offset.0, value as u16]);
     }
 
     pub fn add_load_frame_address(&mut self, dest: FrameMemoryAddress, addr: FrameMemoryAddress) {

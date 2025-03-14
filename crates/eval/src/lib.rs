@@ -1103,7 +1103,7 @@ impl<'a, C> Interpreter<'a, C> {
             Literal::BoolLiteral(b) => Value::Bool(*b),
 
             Literal::EnumVariantLiteral(enum_variant_type, data) => {
-                let variant_container_value: Value = match &*enum_variant_type {
+                let variant_container_value: Value = match enum_variant_type {
                     EnumVariantType::Tuple(tuple_type) => match data {
                         EnumLiteralData::Tuple(tuple_expressions) => {
                             let eval_expressions = self.evaluate_expressions(tuple_expressions)?;
@@ -1153,7 +1153,7 @@ impl<'a, C> Interpreter<'a, C> {
                         .map_err(|_err| {
                             self.create_err(
                                 RuntimeErrorKind::NonUniqueKeysInMapLiteralDetected,
-                                &node,
+                                node,
                             )
                         })?;
                 }

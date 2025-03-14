@@ -1,11 +1,23 @@
 use crate::alloc::{ScopeAllocator, TargetInfo};
 use crate::alloc_util::reserve_space_for_type;
 use swamp_script_types::Type;
-use swamp_script_vm::instr_bldr::{FrameMemoryAddress, MemoryAddress, MemorySize};
+use swamp_script_vm::instr_bldr::{FrameMemoryAddress, MemorySize};
 
 pub struct Context {
     target_info: TargetInfo,
     allocator: ScopeAllocator,
+}
+
+impl Context {
+    pub(crate) fn with_offset(&self, offset: MemorySize) -> Self {
+        Self {
+            target_info: TargetInfo {
+                addr: self.addr().add(offset),
+                size: MemorySize(self.target_info.size.0 - 1),
+            },
+            allocator: self.allocator,
+        }
+    }
 }
 
 impl Context {

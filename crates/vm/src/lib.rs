@@ -105,6 +105,7 @@ impl Vm {
 
         vm.handlers[OpCode::Enter as usize] = HandlerType::Args1(Self::execute_enter);
         vm.handlers[OpCode::Ret as usize] = HandlerType::Args0(Self::execute_ret);
+        vm.handlers[OpCode::LdImmU8 as usize] = HandlerType::Args2(Self::execute_ld_imm_u8);
 
         vm.handlers[OpCode::End as usize] = HandlerType::Args0(Self::execute_end);
 
@@ -139,6 +140,13 @@ impl Vm {
         let dst_ptr = self.ptr_at(self.frame_offset + dst_offset as usize) as *mut i32;
         unsafe {
             *dst_ptr = value;
+        }
+    }
+
+    fn execute_ld_imm_u8(&mut self, dst_offset: u16, octet: u16) {
+        let dst_ptr = self.frame_ptr_bool_at(dst_offset);
+        unsafe {
+            *dst_ptr = octet as u8;
         }
     }
 

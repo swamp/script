@@ -5,14 +5,16 @@ pub mod ctx;
 use crate::alloc_util::type_size;
 use crate::ctx::Context;
 use seq_map::SeqMap;
+use std::ops::Deref;
 use swamp_script_semantic::{
     ArgumentExpressionOrLocation, BinaryOperator, BinaryOperatorKind, BooleanExpression,
-    Expression, ExpressionKind, FunctionScopeState, LocationAccessKind, MutOrImmutableExpression,
-    SingleLocationExpression, VariableRef,
+    EnumLiteralData, Expression, ExpressionKind, ForPattern, FunctionScopeState, Iterable, Literal,
+    LocationAccessKind, MutOrImmutableExpression, SingleLocationExpression, VariableRef,
 };
-use swamp_script_types::Type;
+use swamp_script_types::{AnonymousStructType, EnumVariantType, StructTypeField, Type};
 use swamp_script_vm::instr_bldr::{
-    FrameMemoryAddress, FrameMemorySize, InstructionBuilder, PatchPosition,
+    FrameMemoryAddress, FrameMemorySize, InstructionBuilder, MemoryOffset, MemorySize,
+    PatchPosition,
 };
 
 pub struct CodeGen {
@@ -72,10 +74,12 @@ impl CodeGen {
             ExpressionKind::VariableReassignment(_, _) => todo!(),
             ExpressionKind::StructInstantiation(_) => todo!(),
             ExpressionKind::AnonymousStructLiteral(_) => todo!(),
-            ExpressionKind::Literal(_) => todo!(),
-            ExpressionKind::Option(_) => todo!(),
+            ExpressionKind::Literal(basic_literal) => self.gen_literal(basic_literal, ctx),
+            ExpressionKind::Option(maybe_option) => {
+                self.gen_option_expression(maybe_option.as_deref(), ctx)
+            }
             ExpressionKind::Range(_, _, _) => todo!(),
-            ExpressionKind::ForLoop(_, _, _) => todo!(),
+            ExpressionKind::ForLoop(a, b, c) => self.gen_for_loop(a, b, c),
             ExpressionKind::WhileLoop(condition, expression) => {
                 self.gen_while_loop(condition, expression, ctx);
             }
@@ -101,7 +105,7 @@ impl CodeGen {
         }
     }
 
-    fn gen_binary_operator_i32(&mut self, binary_operator: &BinaryOperator, ctx: &mut Context) {
+    fn gen_binary_operator_i32(&mut self, binary_operator: &BinaryOperator, ctx: &Context) {
         let mut left_context = ctx.context_for_type(&binary_operator.left.ty);
         let mut right_context = ctx.context_for_type(&binary_operator.right.ty);
 
@@ -253,5 +257,124 @@ impl CodeGen {
                 }
             }
         }
+    }
+
+    fn gen_tuple(&mut self, expressions: &[Expression], ctx: &Context) {
+        let mut element_ctx = ctx.with_offset(MemorySize(0));
+        for expr in expressions {
+            let memory_size = type_size(&expr.ty);
+            self.gen_expression(expr, &mut element_ctx);
+            element_ctx = element_ctx.with_offset(memory_size); // Move target pointer along
+        }
+    }
+
+    fn get_struct_field_offset(
+        fields: &SeqMap<String, StructTypeField>,
+        index_to_find: usize,
+    ) -> MemoryOffset {
+        let mut offset = 0;
+
+        for (index, (_name, field)) in fields.iter().enumerate() {
+            if index == index_to_find {
+                break;
+            }
+            offset += type_size(&field.field_type).0;
+        }
+
+        MemoryOffset(offset)
+    }
+
+    fn gen_anonymous_struct(
+        &mut self,
+        anon_struct_type: &AnonymousStructType,
+        source_order_expressions: &Vec<(usize, Expression)>,
+        base_context: &mut Context,
+    ) {
+        for (field_index, expression) in source_order_expressions {
+            let field_memory_offset = Self::get_struct_field_offset(
+                &anon_struct_type.field_name_sorted_fields,
+                *field_index,
+            );
+            let mut field_ctx = base_context.with_offset(MemorySize(field_memory_offset.0));
+            self.gen_expression(expression, &mut field_ctx);
+        }
+    }
+
+    fn gen_literal(&mut self, literal: &Literal, ctx: &mut Context) {
+        match literal {
+            Literal::IntLiteral(int) => {
+                self.builder.add_ld_imm_i32(ctx.addr(), *int);
+            }
+            Literal::FloatLiteral(fixed_point) => {
+                self.builder.add_ld_imm_i32(ctx.addr(), fixed_point.inner());
+            }
+            Literal::NoneLiteral => {
+                self.builder.add_ld_imm_u8(ctx.addr(), 0);
+            }
+            Literal::BoolLiteral(truthy) => {
+                self.builder.add_ld_imm_u8(ctx.addr(), u8::from(*truthy));
+            }
+
+            Literal::EnumVariantLiteral(a, b) => {
+                self.builder
+                    .add_ld_imm_u8(ctx.addr(), a.common().container_index);
+                match b {
+                    EnumLiteralData::Nothing => {}
+                    EnumLiteralData::Tuple(expressions) => {
+                        let tuple_ctx = ctx.with_offset(MemorySize(1));
+                        self.gen_tuple(expressions, &tuple_ctx);
+                    }
+                    EnumLiteralData::Struct(sorted_expressions) => {
+                        if let EnumVariantType::Struct(variant_struct_type) = a {
+                            self.gen_anonymous_struct(
+                                &variant_struct_type.anon_struct,
+                                sorted_expressions,
+                                ctx,
+                            );
+                        }
+                    }
+                }
+            }
+            Literal::TupleLiteral(_, _) => {}
+            Literal::StringLiteral(str) => {
+                self.gen_string_literal(str, ctx);
+            }
+            Literal::Slice(_, _) => {}
+            Literal::SlicePair(_, _) => {}
+        }
+    }
+
+    fn gen_string_literal(&self, string: &str, ctx: &mut Context) {}
+
+    fn gen_option_expression(&mut self, maybe_option: Option<&Expression>, ctx: &mut Context) {
+        if let Some(found_value) = maybe_option {
+            self.builder.add_ld_imm_u8(ctx.addr(), 1); // 1 signals `Some`
+            let mut one_offset_ctx = ctx.with_offset(MemorySize(1));
+            self.gen_expression(found_value, &mut one_offset_ctx); // Fills in more of the union
+        } else {
+            self.builder.add_ld_imm_u8(ctx.addr(), 0); // 0 signals `None`
+            // No real need to clear the rest of the memory
+        }
+    }
+
+    fn gen_for_loop(
+        &mut self,
+        for_pattern: &ForPattern,
+        iterable: &Iterable,
+        body: &Box<Expression>,
+        ctx: &mut Context,
+    ) {
+        match for_pattern {
+            ForPattern::Single(_) => {}
+            ForPattern::Pair(_, _) => {}
+        }
+        /*
+                pub key_type: Option<Type>, // It does not have to support a key type
+        pub value_type: Type,
+
+        pub resolved_expression: Box<MutOrImmutableExpression>,
+             */
+        let mut unit_expr = ctx.context_for_type(&Type::Unit);
+        self.gen_expression(body, &mut unit_expr);
     }
 }

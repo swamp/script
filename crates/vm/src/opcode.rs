@@ -14,4 +14,5 @@ pub enum OpCode {
     Jmp = 11,
     Mov = 12,
     LdImm = 13,
+    LdImmU8 = 14,
 }
