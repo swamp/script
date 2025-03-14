@@ -19,6 +19,7 @@ use swamp_script_vm::instr_bldr::{
     PatchPosition,
 };
 use swamp_script_vm::{BinaryInstruction, PTR_SIZE};
+use tracing::info;
 
 pub struct CodeGen {
     builder: InstructionBuilder,
@@ -55,17 +56,20 @@ impl CodeGen {
         }
     }
 
-    pub fn layout_variables(&mut self, function_state: &FunctionScopeState) -> Context {
-        let mut current_offset = FrameMemoryAddress(type_size(&function_state.return_type).0);
+    pub fn layout_variables(
+        &mut self,
+        variables: &Vec<VariableRef>,
+        return_type: &Type,
+    ) -> Context {
+        let mut current_offset = FrameMemoryAddress(type_size(&return_type).0);
 
-        for block_scope in &function_state.block_scope_stack {
-            for (_var_name, var_ref) in &block_scope.variables {
-                self.variable_offsets
-                    .insert(var_ref.unique_id_within_function, current_offset)
-                    .unwrap();
+        for var_ref in variables {
+            info!(?var_ref.assigned_name, "laying out");
+            self.variable_offsets
+                .insert(var_ref.unique_id_within_function, current_offset)
+                .unwrap();
 
-                current_offset = current_offset.add(type_size(&var_ref.resolved_type));
-            }
+            current_offset = current_offset.add(type_size(&var_ref.resolved_type));
         }
 
         self.frame_size = current_offset.as_size();
@@ -78,7 +82,9 @@ impl CodeGen {
 
         match &expr.kind {
             ExpressionKind::ConstantAccess(_) => todo!(),
-            ExpressionKind::VariableAccess(_) => todo!(),
+            ExpressionKind::VariableAccess(variable_ref) => {
+                self.gen_variable_access(variable_ref, ctx)
+            }
             ExpressionKind::IntrinsicFunctionAccess(_) => todo!(),
             ExpressionKind::InternalFunctionAccess(_) => todo!(),
             ExpressionKind::ExternalFunctionAccess(_) => todo!(),
@@ -232,7 +238,7 @@ impl CodeGen {
         let target_relative_frame_pointer = self
             .variable_offsets
             .get(&variable.unique_id_within_function)
-            .unwrap();
+            .unwrap_or_else(|| panic!("{}", variable.assigned_name));
 
         // TODO: the variable size could be stored in cache as well
         let variable_size = type_size(&variable.resolved_type);
@@ -497,5 +503,14 @@ impl CodeGen {
             }
             self.gen_expression(last, ctx);
         }
+    }
+
+    fn gen_variable_access(&mut self, variable: &VariableRef, ctx: &Context) {
+        let frame_address = self
+            .variable_offsets
+            .get(&variable.unique_id_within_function)
+            .unwrap();
+        let size = type_size(&variable.resolved_type);
+        self.builder.add_mov(ctx.addr(), *frame_address, size);
     }
 }

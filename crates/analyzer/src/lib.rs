@@ -23,6 +23,8 @@ use seq_map::SeqMap;
 use std::mem::take;
 use std::num::{ParseFloatError, ParseIntError};
 use std::rc::Rc;
+use std::task::Context;
+use swamp_script_modules::modules::InternalMainExpression;
 use swamp_script_modules::prelude::*;
 use swamp_script_modules::symtbl::SymbolTableRef;
 use swamp_script_node::{FileId, Node, Span};
@@ -91,130 +93,35 @@ pub const fn convert_span(without: &swamp_script_ast::SpanWithoutFileId, file_id
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TypeContextScope {
-    InsideFunction, // Allow return, but not break
-    InsideLoop,     // Allow break and return
-    /// Inside both a function and a loop
-    /// Allows: return, break, and continue
-    InsideBothFunctionAndLoop,
-    ArgumentOrOutsideFunction, // Allow neither break nor return
-}
-
-impl TypeContextScope {
-    /// Returns true if return statements are allowed in this scope
-    #[must_use]
-    pub fn allows_return(&self) -> bool {
-        matches!(self, Self::InsideFunction | Self::InsideBothFunctionAndLoop)
-    }
-
-    /// Returns true if break statements are allowed in this scope
-    #[must_use]
-    pub fn allows_break(&self) -> bool {
-        matches!(self, Self::InsideLoop | Self::InsideBothFunctionAndLoop)
-    }
-
-    /// Returns true if continue statements are allowed in this scope
-    #[must_use]
-    pub fn allows_continue(&self) -> bool {
-        self.allows_break() // Same rules as break
-    }
-
-    /// Creates a new scope when entering a function
-    #[must_use]
-    pub fn enter_function(&self) -> Self {
-        match self {
-            Self::ArgumentOrOutsideFunction => Self::InsideFunction,
-            Self::InsideLoop => Self::InsideBothFunctionAndLoop,
-            _ => *self,
-        }
-    }
-
-    /// Creates a new scope when entering a loop
-    #[must_use]
-    pub fn enter_loop(&self) -> Self {
-        match self {
-            Self::ArgumentOrOutsideFunction => Self::InsideLoop,
-            Self::InsideFunction => Self::InsideBothFunctionAndLoop,
-            _ => *self,
-        }
-    }
-}
-
 /// Type checking context
 #[derive(Debug, Clone)]
 pub struct TypeContext<'a> {
     /// Expected type for the current expression
     pub expected_type: Option<&'a Type>,
-
-    /// Return type of the enclosing function
-    pub return_type: Option<&'a Type>,
-
-    pub scope: TypeContextScope,
-
-    pub is_in_compare_like: bool,
-}
-
-impl TypeContext<'_> {
-    pub(crate) fn allows_continue(&self) -> bool {
-        self.scope.allows_continue() && self.is_in_compare_like
-    }
-}
-
-impl TypeContext<'_> {
-    pub(crate) fn allows_return(&self) -> bool {
-        self.scope.allows_return() && self.is_in_compare_like
-    }
-}
-
-impl TypeContext<'_> {
-    pub(crate) fn allows_break(&self) -> bool {
-        self.scope.allows_break()
-    }
 }
 
 impl<'a> TypeContext<'a> {
     #[must_use]
-    pub const fn new(
-        expected_type: Option<&'a Type>,
-        return_type: Option<&'a Type>,
-        scope: TypeContextScope,
-    ) -> Self {
-        Self {
-            expected_type,
-            return_type,
-            scope,
-            is_in_compare_like: false,
-        }
+    pub const fn new(expected_type: Option<&'a Type>) -> Self {
+        Self { expected_type }
     }
 
     #[must_use]
     pub const fn new_argument(required_type: &'a Type) -> Self {
         Self {
             expected_type: Some(required_type),
-            return_type: None,
-            scope: TypeContextScope::ArgumentOrOutsideFunction,
-            is_in_compare_like: false,
         }
     }
 
     #[must_use]
     pub const fn new_unsure_argument(expected_type: Option<&'a Type>) -> Self {
-        Self {
-            expected_type,
-            return_type: None,
-            scope: TypeContextScope::ArgumentOrOutsideFunction,
-            is_in_compare_like: false,
-        }
+        Self { expected_type }
     }
 
     #[must_use]
     pub const fn new_anything_argument() -> Self {
         Self {
             expected_type: None,
-            return_type: None,
-            scope: TypeContextScope::ArgumentOrOutsideFunction,
-            is_in_compare_like: false,
         }
     }
 
@@ -222,45 +129,22 @@ impl<'a> TypeContext<'a> {
     pub const fn new_function(required_type: &'a Type) -> Self {
         Self {
             expected_type: Some(required_type),
-            return_type: Some(required_type),
-            scope: TypeContextScope::InsideFunction,
-            is_in_compare_like: false,
         }
     }
 
     #[must_use]
     pub const fn with_expected_type(&self, expected_type: Option<&'a Type>) -> Self {
-        Self {
-            expected_type,
-            return_type: self.return_type,
-            scope: self.scope,
-            is_in_compare_like: self.is_in_compare_like,
-        }
+        Self { expected_type }
     }
 
     pub(crate) const fn we_know_expected_type(&self, found_type: &'a Type) -> Self {
         self.with_expected_type(Some(found_type))
     }
 
-    /// # Panics
-    ///
-    #[must_use]
-    pub const fn for_return(&self) -> Self {
-        Self {
-            expected_type: Some(self.return_type.unwrap()),
-            return_type: Some(self.return_type.unwrap()),
-            scope: TypeContextScope::ArgumentOrOutsideFunction,
-            is_in_compare_like: false,
-        }
-    }
-
     #[must_use]
     pub fn enter_function(&self, required_type: &'a Type) -> Self {
         Self {
             expected_type: Some(required_type),
-            return_type: Some(required_type),
-            scope: self.scope.enter_function(),
-            is_in_compare_like: false,
         }
     }
 
@@ -269,9 +153,6 @@ impl<'a> TypeContext<'a> {
     pub fn enter_loop(&self) -> Self {
         Self {
             expected_type: self.expected_type,
-            return_type: self.return_type,
-            scope: self.scope.enter_loop(),
-            is_in_compare_like: self.is_in_compare_like,
         }
     }
 
@@ -280,9 +161,6 @@ impl<'a> TypeContext<'a> {
     pub fn enter_compare(&self) -> Self {
         Self {
             expected_type: self.expected_type,
-            return_type: self.return_type,
-            scope: self.scope.enter_loop(),
-            is_in_compare_like: true,
         }
     }
 }
@@ -340,6 +218,7 @@ impl<'a> SharedState<'a> {
 pub struct Analyzer<'a> {
     pub shared: SharedState<'a>,
     scope: FunctionScopeState,
+    function_variables: Vec<VariableRef>,
     global: FunctionScopeState,
     module_path: Vec<String>,
 }
@@ -374,16 +253,19 @@ impl<'a> Analyzer<'a> {
             global: FunctionScopeState::new(Type::Unit),
             shared,
             module_path: module_path.to_vec(),
+            function_variables: Vec::new(),
         }
     }
 
     fn start_function(&mut self, return_type: Type) {
         self.global.block_scope_stack = take(&mut self.scope.block_scope_stack);
         self.scope = FunctionScopeState::new(return_type);
+        self.function_variables.clear();
     }
 
     fn stop_function(&mut self) {
         self.scope.block_scope_stack = take(&mut self.global.block_scope_stack);
+        self.function_variables.clear();
     }
 
     fn analyze_if_expression(
@@ -594,6 +476,25 @@ impl<'a> Analyzer<'a> {
             .source_map
             .get_source_line(self.shared.file_id, line);
         trace!(?line, ?col, ?source_line, "analyzing");
+    }
+
+    pub fn analyze_main_expression(
+        &mut self,
+        ast_expression: &swamp_script_ast::Expression,
+    ) -> Result<InternalMainExpression, Error> {
+        let expected_type = Type::Unit;
+        self.start_function(expected_type.clone());
+
+        let context = TypeContext::new_argument(&expected_type);
+        let analyzed_expr = self.analyze_expression(ast_expression, &context)?;
+        let main_expr = InternalMainExpression {
+            expression: analyzed_expr,
+            function_scope_state: self.function_variables.clone(),
+        };
+
+        self.stop_function();
+
+        Ok(main_expr)
     }
 
     /// # Errors
@@ -2055,8 +1956,7 @@ impl<'a> Analyzer<'a> {
     ) -> Result<SingleLocationExpression, Error> {
         let mut items = Vec::new();
 
-        let nothing_context =
-            TypeContext::new(None, None, TypeContextScope::ArgumentOrOutsideFunction);
+        let nothing_context = TypeContext::new(None);
 
         let base_expr = self.analyze_expression(&chain.base, &nothing_context)?;
         let ExpressionKind::VariableAccess(start_variable) = base_expr.kind else {

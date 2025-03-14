@@ -176,6 +176,7 @@ impl FunctionScopeState {
 #[derive(Debug, Clone)]
 pub struct Variable {
     pub name: Node,
+    pub assigned_name: String,
     pub resolved_type: Type,
     pub mutable_node: Option<Node>,
 

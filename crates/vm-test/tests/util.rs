@@ -1,5 +1,6 @@
 use swamp_script_code_gen::CodeGen;
 use swamp_script_compile::compile_string;
+use swamp_script_types::Type;
 use swamp_script_vm::Vm;
 
 pub fn exec(code: &str, expected_hex: &str) {
@@ -8,9 +9,14 @@ pub fn exec(code: &str, expected_hex: &str) {
     let mut code_gen = CodeGen::new();
 
     let main_expression = main_module.main_expression.as_ref().unwrap();
-    let mut function_ctx = code_gen.layout_variables(&main_expression.function_scope_state);
+    let mut function_ctx = code_gen.layout_variables(
+        &main_expression.function_scope_state,
+        &main_expression.expression.ty,
+    );
 
-    code_gen.gen_expression(&main_expression.expression, &mut function_ctx);
+    let mut test_ctx = function_ctx.temp_space_for_type(&Type::Unit);
+
+    code_gen.gen_expression(&main_expression.expression, &mut test_ctx);
 
     code_gen.finalize();
 

@@ -94,6 +94,7 @@ impl Analyzer<'_> {
 
         let resolved_variable = Variable {
             name,
+            assigned_name: variable_name_str.clone(),
             resolved_type: variable_type_ref.clone(),
             mutable_node,
             scope_index,
@@ -170,6 +171,8 @@ impl Analyzer<'_> {
 
         let resolved_variable = Variable {
             name: variable.clone(),
+            assigned_name: variable_str.clone(),
+
             resolved_type: variable_type_ref.clone(),
             mutable_node: is_mutable.cloned(),
             scope_index,
@@ -187,6 +190,7 @@ impl Analyzer<'_> {
             variables
                 .insert(variable_str, variable_ref.clone())
                 .expect("should have checked earlier for variable");
+            self.function_variables.push(variable_ref.clone());
         }
 
         Ok(variable_ref)
@@ -212,6 +216,7 @@ impl Analyzer<'_> {
 
         let resolved_variable = Variable {
             name: Node::default(),
+            assigned_name: variable_str.to_string(),
             resolved_type: variable_type_ref.clone(),
             mutable_node: if is_mutable {
                 Some(Node::default())

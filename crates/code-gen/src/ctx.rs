@@ -41,17 +41,17 @@ impl Context {
         }
     }
 
-    pub(crate) fn temp_space_for_type(&mut self, ty: &Type) -> Self {
+    pub fn temp_space_for_type(&mut self, ty: &Type) -> Self {
         let new_target_info = reserve_space_for_type(ty, &mut self.temp_allocator);
         Self {
             target_info: new_target_info,
             temp_allocator: self.temp_allocator.create_scope(),
         }
     }
-    pub(crate) const fn addr(&self) -> FrameMemoryAddress {
+    pub const fn addr(&self) -> FrameMemoryAddress {
         self.target_info.addr
     }
-    pub(crate) const fn target_size(&self) -> MemorySize {
+    pub const fn target_size(&self) -> MemorySize {
         self.target_info.size
     }
 

@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use swamp_script_analyzer::prelude::{Error, Program};
-use swamp_script_analyzer::{Analyzer, TypeContext, TypeContextScope};
+use swamp_script_analyzer::{Analyzer, TypeContext};
 use swamp_script_dep_loader::{
     DependencyParser, ParsedAstModule, parse_local_modules_and_get_order,
 };
@@ -47,18 +47,13 @@ pub fn analyze_module(
 
     resolver.shared.lookup_table = default_lookup_symbol_table.clone();
 
-    let outside_context = TypeContext::new(None, None, TypeContextScope::ArgumentOrOutsideFunction);
     let statements = {
         for ast_def in ast_module.ast_module.definitions() {
             resolver.analyze_definition(ast_def)?;
         }
 
         let maybe_resolved_expression = if let Some(expr) = ast_module.ast_module.expression() {
-            let expr = resolver.analyze_expression(expr, &outside_context)?;
-            let internal_main = InternalMainExpression {
-                expression: expr,
-                function_scope_state: resolver.scopes().clone(),
-            };
+            let internal_main = resolver.analyze_main_expression(expr)?;
             Some(internal_main)
         } else {
             None
