@@ -1,7 +1,7 @@
 use crate::alloc::{ScopeAllocator, TargetInfo};
 use crate::alloc_util::reserve_space_for_type;
 use swamp_script_types::Type;
-use swamp_script_vm::instr_bldr::{FrameMemoryAddress, MemorySize};
+use swamp_vm_types::{FrameMemoryAddress, MemorySize};
 use tracing::info;
 
 pub struct Context {

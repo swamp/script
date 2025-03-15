@@ -1,7 +1,8 @@
 use swamp_script_code_gen::CodeGen;
 use swamp_script_compile::compile_string;
 use swamp_script_types::Type;
-use swamp_script_vm::Vm;
+use swamp_vm::Vm;
+use swamp_vm_disasm::disasm_instructions_color;
 
 pub fn exec_internal(code: &str) -> Vm {
     let (program, main_module, source_map) = compile_string(code).unwrap();
@@ -20,7 +21,16 @@ pub fn exec_internal(code: &str) -> Vm {
 
     code_gen.finalize();
 
-    let mut vm = Vm::new(code_gen.take_instructions(), 32000);
+    let instructions = code_gen.take_instructions();
+
+    /*
+    let disasm_output = disasm_instructions_color(&instructions);
+
+    eprintln!("{disasm_output}");
+
+     */
+
+    let mut vm = Vm::new(instructions, 32000);
 
     vm.execute();
 

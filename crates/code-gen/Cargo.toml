@@ -4,9 +4,10 @@ version = "0.1.3"
 edition = "2024"
 
 [dependencies]
-swamp-script-vm = { path = "../vm", version = "0.1.3" }
-swamp-script-semantic = { path = "../semantic", version = "0.1.3"}
-swamp-script-types = { path = "../types", version = "0.1.3"}
+swamp-vm = { path = "../vm", version = "0.1.3" }
+swamp-vm-types = { path = "../vm-types", version = "0.1.3" }
+swamp-script-semantic = { path = "../semantic", version = "0.1.3" }
+swamp-script-types = { path = "../types", version = "0.1.3" }
 seq-map = "0.0.13"
 
 tracing = "0.1.40"

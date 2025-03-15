@@ -1,0 +1,6 @@
+[package]
+name = "swamp-vm-types"
+version = "0.1.3"
+edition = "2024"
+
+[dependencies]

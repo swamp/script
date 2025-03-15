@@ -1,7 +1,7 @@
 use crate::alloc::{ScopeAllocator, TargetInfo};
 use swamp_script_types::Type;
-use swamp_script_vm::instr_bldr::MemorySize;
-use swamp_script_vm::{BOOL_SIZE, INT_SIZE, PTR_SIZE};
+use swamp_vm::{BOOL_SIZE, INT_SIZE, PTR_SIZE};
+use swamp_vm_types::MemorySize;
 
 pub fn type_size(ty: &Type) -> MemorySize {
     let size = match ty {

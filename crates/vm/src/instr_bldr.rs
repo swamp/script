@@ -1,52 +1,6 @@
 use crate::BinaryInstruction;
-use crate::opcode::OpCode;
-
-#[derive(Copy, Clone)]
-pub struct MemoryAddress(pub u16);
-
-#[derive(Copy, Clone)]
-pub struct StackMemoryAddress(pub u16);
-
-impl StackMemoryAddress {
-    #[must_use]
-    pub const fn add(&self, memory_size: MemorySize) -> Self {
-        Self(self.0 + memory_size.0)
-    }
-}
-// relative to the stack pointer
-
-#[derive(Debug, Copy, Clone)]
-pub struct FrameMemoryAddress(pub u16); // relative to the frame pointer
-
-impl FrameMemoryAddress {
-    #[must_use]
-    pub const fn add(&self, memory_size: MemorySize) -> Self {
-        Self(self.0 + memory_size.0)
-    }
-    #[must_use]
-    pub const fn as_size(&self) -> FrameMemorySize {
-        FrameMemorySize(self.0)
-    }
-}
-
-impl MemoryAddress {
-    #[must_use]
-    pub const fn add(&self, memory_size: MemorySize) -> Self {
-        Self(self.0 + memory_size.0)
-    }
-}
-
-#[derive(Debug, Copy, Clone)]
-pub struct MemoryOffset(pub u16);
-
-#[derive(Debug, Copy, Clone)]
-pub struct MemorySize(pub u16);
-
-#[derive(Copy, Clone)]
-pub struct FrameMemorySize(pub u16);
-
-#[derive(Debug)]
-pub struct InstructionPosition(pub u16);
+use swamp_vm_types::opcode::OpCode;
+use swamp_vm_types::{FrameMemoryAddress, InstructionPosition, MemoryAddress, MemorySize};
 
 #[derive(Debug)]
 pub struct PatchPosition(pub InstructionPosition);
@@ -84,7 +38,7 @@ impl InstructionBuilder {
     ) -> PatchPosition {
         let position = self.position();
 
-        self.add_instruction(OpCode::JmpIfNot, &[condition_addr.0, 0]);
+        self.add_instruction(OpCode::Bz, &[condition_addr.0, 0]);
 
         PatchPosition(position)
     }
@@ -117,7 +71,7 @@ impl InstructionBuilder {
         patch_position: PatchPosition,
         target_position: &InstructionPosition,
     ) {
-        const JMP_IF_NOT: u8 = OpCode::JmpIfNot as u8;
+        const JMP_IF_NOT: u8 = OpCode::Bz as u8;
         const JMP: u8 = OpCode::Jmp as u8;
 
         let instruction = &mut self.instructions[patch_position.0.0 as usize];
@@ -142,7 +96,7 @@ impl InstructionBuilder {
     }
 
     pub fn add_jmp(&mut self, ip: InstructionPosition) {
-        self.add_instruction(OpCode::Jmp, &[ip.0]);
+        self.add_instruction(OpCode::Jmp, &[ip.0 - 1]);
     }
 
     pub fn add_ld_local(&mut self, dst_offset: FrameMemoryAddress, src_offset: u16) {
@@ -187,7 +141,7 @@ impl InstructionBuilder {
         condition_offset: FrameMemoryAddress,
         jmp_target: &InstructionPosition,
     ) {
-        self.add_instruction(OpCode::JmpIf, &[condition_offset.0, jmp_target.0]);
+        self.add_instruction(OpCode::Bnz, &[condition_offset.0, jmp_target.0]);
     }
 
     pub fn add_jmp_if_not(
@@ -195,7 +149,7 @@ impl InstructionBuilder {
         condition_offset: MemoryAddress,
         jmp_target: InstructionPosition,
     ) {
-        self.add_instruction(OpCode::JmpIfNot, &[condition_offset.0, jmp_target.0]);
+        self.add_instruction(OpCode::Bz, &[condition_offset.0, jmp_target.0]);
     }
 
     pub fn add_lt_i32(

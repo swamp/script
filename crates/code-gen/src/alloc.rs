@@ -1,4 +1,4 @@
-use swamp_script_vm::instr_bldr::{FrameMemoryAddress, MemorySize};
+use swamp_vm_types::{FrameMemoryAddress, MemorySize};
 
 const ALIGNMENT: u16 = 8;
 const ALIGNMENT_REST: u16 = ALIGNMENT - 1;

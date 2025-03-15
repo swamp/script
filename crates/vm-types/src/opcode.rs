@@ -8,8 +8,8 @@ pub enum OpCode {
     Ld32 = 3,
     AddI32 = 4,
     LtI32 = 5,
-    JmpIf = 6,
-    JmpIfNot = 7,
+    Bnz = 6,
+    Bz = 7,
     Call = 8, // Introduce CallLong if needed
     Enter = 9,
     Ret = 10,
@@ -33,8 +33,8 @@ impl Display for OpCode {
             Self::Ld32 => write!(f, "ld32"),
 
             Self::AddI32 => write!(f, "sadd32"), // Signed Add
-            Self::JmpIfNot => write!(f, "bz"),   // Branch if Zero (False)
-            Self::JmpIf => write!(f, "bnz"),     // Branch if Not Zero (True)
+            Self::Bz => write!(f, "bz"),         // Branch if Zero (False)
+            Self::Bnz => write!(f, "bnz"),       // Branch if Not Zero (True)
             Self::Call => write!(f, "call"),     // Call function
             Self::Enter => write!(f, "enter"),   // Function prologue
             Self::Ret => write!(f, "ret"),       // Return from function

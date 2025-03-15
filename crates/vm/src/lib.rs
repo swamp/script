@@ -1,20 +1,13 @@
 use crate::host::HostFunction;
-use crate::opcode::OpCode;
+use swamp_vm_types::BinaryInstruction;
+use swamp_vm_types::opcode::OpCode;
 
 pub const INT_SIZE: u16 = 4;
 pub const BOOL_SIZE: u16 = 1;
 pub const PTR_SIZE: u16 = 2;
 
-#[repr(C, packed)]
-pub struct BinaryInstruction {
-    opcode: u8,
-    opcode_count: u8, // It is mainly for alignment, but use it for opcode_couont or maybe checksum or extra flags?
-    operands: [u16; 4],
-}
-
 pub mod host;
 pub mod instr_bldr;
-pub mod opcode;
 
 type Handler0 = fn(&mut Vm);
 type Handler1 = fn(&mut Vm, u16);
@@ -135,8 +128,8 @@ impl Vm {
         vm.handlers[OpCode::Ld32 as usize] = HandlerType::Args3(Self::execute_ld_imm_u32);
         vm.handlers[OpCode::AddI32 as usize] = HandlerType::Args3(Self::execute_add_i32);
         vm.handlers[OpCode::LtI32 as usize] = HandlerType::Args3(Self::execute_lt_i32);
-        vm.handlers[OpCode::JmpIf as usize] = HandlerType::Args2(Self::execute_jmp_if);
-        vm.handlers[OpCode::JmpIfNot as usize] = HandlerType::Args2(Self::execute_jmp_if_not);
+        vm.handlers[OpCode::Bnz as usize] = HandlerType::Args2(Self::execute_jmp_if);
+        vm.handlers[OpCode::Bz as usize] = HandlerType::Args2(Self::execute_jmp_if_not);
         vm.handlers[OpCode::Jmp as usize] = HandlerType::Args1(Self::execute_jmp);
         vm.handlers[OpCode::Call as usize] = HandlerType::Args1(Self::execute_call);
 
@@ -241,7 +234,7 @@ impl Vm {
 
     #[inline]
     fn execute_jmp(&mut self, absolute_ip: u16) {
-            self.ip = absolute_ip as usize;
+        self.ip = absolute_ip as usize;
     }
 
     #[inline]
@@ -346,17 +339,18 @@ impl Vm {
 
     #[inline(always)]
     fn frame_ptr_i32_at(&self, offset: u16) -> *mut i32 {
-        self.ptr_at_i32(self.frame_offset + offset as usize) as *mut i32
+        self.ptr_at_i32(self.frame_offset + offset as usize)
     }
 
     #[inline(always)]
     fn frame_ptr_i32_const_at(&self, offset: u16) -> *const i32 {
-        self.ptr_at_i32(self.frame_offset + offset as usize) as *const i32
+        self.ptr_at_i32(self.frame_offset + offset as usize)
+            .cast_const()
     }
 
     #[inline(always)]
     fn frame_ptr_bool_at(&self, offset: u16) -> *mut u8 {
-        self.ptr_at_u8(self.frame_offset + offset as usize) as *mut u8
+        self.ptr_at_u8(self.frame_offset + offset as usize)
     }
 
     #[inline(always)]

@@ -16,11 +16,12 @@ use swamp_script_semantic::{
     SingleLocationExpression, SingleMutLocationExpression, VariableRef,
 };
 use swamp_script_types::{AnonymousStructType, EnumVariantType, StructTypeField, Type};
-use swamp_script_vm::instr_bldr::{
-    FrameMemoryAddress, FrameMemorySize, InstructionBuilder, MemoryOffset, MemorySize,
-    PatchPosition,
+
+use swamp_vm::PTR_SIZE;
+use swamp_vm::instr_bldr::{InstructionBuilder, PatchPosition};
+use swamp_vm_types::{
+    BinaryInstruction, FrameMemoryAddress, FrameMemorySize, MemoryOffset, MemorySize,
 };
-use swamp_script_vm::{BinaryInstruction, PTR_SIZE};
 use tracing::info;
 
 pub struct CodeGen {
