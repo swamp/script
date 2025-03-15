@@ -146,10 +146,10 @@ impl InstructionBuilder {
     }
 
     pub fn add_ld_local(&mut self, dst_offset: FrameMemoryAddress, src_offset: u16) {
-        self.add_instruction(OpCode::LdLocal, &[dst_offset.0, src_offset]);
+        self.add_instruction(OpCode::Ld, &[dst_offset.0, src_offset]);
     }
     pub fn add_st_local(&mut self, dst_offset: FrameMemoryAddress, src_offset: u16) {
-        self.add_instruction(OpCode::StoreLocal, &[dst_offset.0, src_offset]);
+        self.add_instruction(OpCode::St, &[dst_offset.0, src_offset]);
     }
 
     pub fn add_ld_imm_i32(&mut self, dst_offset: FrameMemoryAddress, value: i32) {
@@ -158,11 +158,11 @@ impl InstructionBuilder {
         let lower_bits = (value_u32 & 0xFFFF) as u16;
         let upper_bits = (value_u32 >> 16) as u16;
 
-        self.add_instruction(OpCode::LdImmU32, &[dst_offset.0, lower_bits, upper_bits]);
+        self.add_instruction(OpCode::Ld32, &[dst_offset.0, lower_bits, upper_bits]);
     }
 
     pub fn add_ld_imm_u8(&mut self, dst_offset: FrameMemoryAddress, value: u8) {
-        self.add_instruction(OpCode::LdImmU8, &[dst_offset.0, value as u16]);
+        self.add_instruction(OpCode::Ld8, &[dst_offset.0, value as u16]);
     }
 
     pub fn add_load_frame_address(&mut self, dest: FrameMemoryAddress, addr: FrameMemoryAddress) {
@@ -170,7 +170,7 @@ impl InstructionBuilder {
     }
 
     pub fn add_ld_imm_u16(&mut self, dest: FrameMemoryAddress, data: u16) {
-        self.add_instruction(OpCode::LdImmU16, &[dest.0, data]);
+        self.add_instruction(OpCode::Ld16, &[dest.0, data]);
     }
 
     pub fn add_add_i32(
@@ -227,7 +227,7 @@ impl InstructionBuilder {
     }
 
     pub fn add_end(&mut self) {
-        self.add_instruction(OpCode::End, &[]);
+        self.add_instruction(OpCode::Hlt, &[]);
     }
 
     fn add_instruction(&mut self, op_code: OpCode, operands: &[u16]) {

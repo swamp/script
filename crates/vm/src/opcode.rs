@@ -2,10 +2,10 @@ use std::fmt::{Display, Formatter};
 
 #[repr(u8)]
 pub enum OpCode {
-    End = 0,
-    LdLocal = 1,
-    StoreLocal = 2,
-    LdImmU32 = 3,
+    Hlt = 0,
+    Ld = 1,
+    St = 2,
+    Ld32 = 3,
     AddI32 = 4,
     LtI32 = 5,
     JmpIf = 6,
@@ -15,8 +15,8 @@ pub enum OpCode {
     Ret = 10,
     Jmp = 11,
     Mov = 12,
-    LdImmU16 = 13,
-    LdImmU8 = 14,
+    Ld16 = 13,
+    Ld8 = 14,
     LtU16,
     LdIndirect,
 }
@@ -24,23 +24,27 @@ pub enum OpCode {
 impl Display for OpCode {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::End => write!(f, "End"),
-            Self::LdLocal => write!(f, "LdLocal"),
-            Self::StoreLocal => write!(f, "StoreLocal"),
-            Self::LdImmU32 => write!(f, "LdImmU32"),
-            Self::AddI32 => write!(f, "AddI32"),
-            Self::LtI32 => write!(f, "LtI32"),
-            Self::JmpIf => write!(f, "JmpIf"),
-            Self::JmpIfNot => write!(f, "JmpIfNot"),
-            Self::Call => write!(f, "Call"),
-            Self::Enter => write!(f, "Enter"),
-            Self::Ret => write!(f, "Ret"),
-            Self::Jmp => write!(f, "Jmp"),
-            Self::Mov => write!(f, "Mov"),
-            Self::LdImmU16 => write!(f, "LdImmU16"),
-            Self::LdImmU8 => write!(f, "LdImmU8"),
-            Self::LtU16 => write!(f, "LtU16"),
-            Self::LdIndirect => write!(f, "LdIndirect"),
+            Self::Hlt => write!(f, "hlt"), // Halt execution
+            Self::Ld => write!(f, "ld"),   // Load
+            Self::St => write!(f, "st"),   // Store
+
+            Self::Ld8 => write!(f, "ld8"),
+            Self::Ld16 => write!(f, "ld16"),
+            Self::Ld32 => write!(f, "ld32"),
+
+            Self::AddI32 => write!(f, "sadd32"), // Signed Add
+            Self::JmpIfNot => write!(f, "bz"),   // Branch if Zero (False)
+            Self::JmpIf => write!(f, "bnz"),     // Branch if Not Zero (True)
+            Self::Call => write!(f, "call"),     // Call function
+            Self::Enter => write!(f, "enter"),   // Function prologue
+            Self::Ret => write!(f, "ret"),       // Return from function
+            Self::Jmp => write!(f, "jmp"),       // Unconditional jump
+            Self::Mov => write!(f, "mov"),       // Move data
+
+            Self::LtU16 => write!(f, "lt16"), // Set Less Than Unsigned
+            Self::LtI32 => write!(f, "slt32"), // Set Less Than
+
+            Self::LdIndirect => write!(f, "ldx"), // Load Indexed/Indirect
         }
     }
 }

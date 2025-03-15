@@ -65,21 +65,21 @@ impl CodeGen {
         variables: &Vec<VariableRef>,
         return_type: &Type,
     ) -> Context {
-        let mut current_offset = FrameMemoryAddress(type_size(&return_type).0);
+        let mut allocator = ScopeAllocator::new(FrameMemoryAddress(0));
+        let mut current_offset = allocator.reserve(type_size(return_type));
 
         for var_ref in variables {
-            info!(?var_ref.assigned_name, "laying out");
+            let var_target = allocator.reserve(type_size(&var_ref.resolved_type));
+            info!(?var_ref.assigned_name, ?var_target, "laying out");
             self.variable_offsets
-                .insert(var_ref.unique_id_within_function, current_offset)
+                .insert(var_ref.unique_id_within_function, var_target.addr)
                 .unwrap();
-
-            current_offset = current_offset.add(type_size(&var_ref.resolved_type));
         }
 
-        self.frame_size = current_offset.as_size();
-        self.extra_frame_allocator = ScopeAllocator::new(FrameMemoryAddress(self.frame_size.0));
+        self.frame_size = allocator.addr().as_size();
+        self.extra_frame_allocator = allocator;
 
-        Context::new(current_offset, MemorySize(64000))
+        Context::new(self.extra_frame_allocator.addr(), MemorySize(64000))
     }
 
     /// # Panics

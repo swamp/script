@@ -1,5 +1,4 @@
-mod util;
-use crate::util::{exec, exec_vars};
+use swamp_script_vm_test::util::{exec, exec_vars};
 
 #[test]
 fn variable_definition() {
@@ -36,12 +35,12 @@ fn while_loop() {
     exec_vars(
         "
         mut a = 1
-        while a < 10 {
+        while a < 32000 {
             a += 1
         }
         ",
         "
-00000000  0A 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  ................
+00000000  00 7D 00 00 00 00 00 00  00 00 00 00 00 00 00 00  .}..............
     ",
     );
 }

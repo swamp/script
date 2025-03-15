@@ -23,7 +23,7 @@ impl<'a> HostArgs<'a> {
         }
 
         let offset = self.args_offset + (self.current_index * 4);
-        let ptr = self.vm.ptr_at(self.vm.frame_offset + offset);
+        let ptr = self.vm.ptr_at_i32(self.vm.frame_offset + offset);
         let value = unsafe { *(ptr as *const i32) };
 
         self.current_index += 1;
