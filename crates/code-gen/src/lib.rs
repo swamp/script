@@ -12,8 +12,9 @@ use std::ops::Deref;
 use swamp_script_semantic::{
     ArgumentExpressionOrLocation, BinaryOperator, BinaryOperatorKind, BooleanExpression,
     CompoundOperatorKind, EnumLiteralData, Expression, ExpressionKind, ForPattern,
-    FunctionScopeState, Iterable, Literal, LocationAccessKind, MutOrImmutableExpression,
-    SingleLocationExpression, SingleMutLocationExpression, VariableRef,
+    FunctionScopeState, InternalFunctionDefinitionRef, Iterable, Literal, LocationAccessKind,
+    MutOrImmutableExpression, Postfix, PostfixKind, SingleLocationExpression,
+    SingleMutLocationExpression, VariableRef,
 };
 use swamp_script_types::{AnonymousStructType, EnumVariantType, StructTypeField, Type};
 
@@ -128,18 +129,22 @@ impl CodeGen {
                 self.gen_variable_access(variable_ref, ctx);
             }
             ExpressionKind::IntrinsicFunctionAccess(_) => todo!(),
-            ExpressionKind::InternalFunctionAccess(_) => todo!(),
+            ExpressionKind::InternalFunctionAccess(function) => {
+                self.internal_function_access(function, ctx)
+            }
             ExpressionKind::ExternalFunctionAccess(_) => todo!(),
             ExpressionKind::BinaryOp(operator) => self.gen_binary_operator(operator, ctx),
             ExpressionKind::UnaryOp(_) => todo!(),
-            ExpressionKind::PostfixChain(_, _) => todo!(),
+            ExpressionKind::PostfixChain(start, chain) => self.gen_postfix_chain(start, chain, ctx),
             ExpressionKind::CoerceOptionToBool(_) => todo!(),
             ExpressionKind::FunctionCall(_, _, _) => todo!(),
             ExpressionKind::InterpolatedString(_) => todo!(),
             ExpressionKind::VariableDefinition(variable, expression) => {
                 self.gen_variable_definition(variable, expression, ctx);
             }
-            ExpressionKind::VariableReassignment(_, _) => todo!(),
+            ExpressionKind::VariableReassignment(variable, expression) => {
+                self.gen_variable_reassignment(variable, expression, ctx);
+            }
             ExpressionKind::StructInstantiation(_) => todo!(),
             ExpressionKind::AnonymousStructLiteral(_) => todo!(),
             ExpressionKind::Literal(basic_literal) => self.gen_literal(basic_literal, ctx),
@@ -270,7 +275,32 @@ impl CodeGen {
         self.builder.patch_jump_here(jump_on_false_condition);
     }
 
-    fn gen_variable_definition(
+    fn gen_argument(&mut self, argument: &ArgumentExpressionOrLocation, ctx: &mut Context) {
+        match &argument {
+            ArgumentExpressionOrLocation::Expression(found_expression) => {
+                self.gen_expression(found_expression, ctx);
+            }
+            ArgumentExpressionOrLocation::Location(location_expression) => {
+                self.gen_location_access(location_expression, ctx);
+            }
+        }
+    }
+
+    fn gen_mut_or_immute(
+        &mut self,
+        mut_or_immutable_expression: &MutOrImmutableExpression,
+        ctx: &mut Context,
+    ) {
+        match &mut_or_immutable_expression.expression_or_location {
+            ArgumentExpressionOrLocation::Expression(found_expression) => {
+                self.gen_expression(found_expression, ctx);
+            }
+            ArgumentExpressionOrLocation::Location(location_expression) => {
+                self.gen_location_access(location_expression, ctx);
+            }
+        }
+    }
+    fn gen_variable_assignment(
         &mut self,
         variable: &VariableRef,
         mut_or_immutable_expression: &MutOrImmutableExpression,
@@ -286,14 +316,25 @@ impl CodeGen {
 
         let mut init_ctx = ctx.with_target(*target_relative_frame_pointer, variable_size);
 
-        match &mut_or_immutable_expression.expression_or_location {
-            ArgumentExpressionOrLocation::Expression(found_expression) => {
-                self.gen_expression(found_expression, &mut init_ctx);
-            }
-            ArgumentExpressionOrLocation::Location(location_expression) => {
-                self.gen_location_access(location_expression, ctx);
-            }
-        }
+        self.gen_mut_or_immute(mut_or_immutable_expression, &mut init_ctx);
+    }
+
+    fn gen_variable_definition(
+        &mut self,
+        variable: &VariableRef,
+        mut_or_immutable_expression: &MutOrImmutableExpression,
+        ctx: &Context,
+    ) {
+        self.gen_variable_assignment(variable, mut_or_immutable_expression, ctx);
+    }
+
+    fn gen_variable_reassignment(
+        &mut self,
+        variable: &VariableRef,
+        mut_or_immutable_expression: &Box<MutOrImmutableExpression>,
+        ctx: &mut Context,
+    ) {
+        self.gen_variable_assignment(variable, mut_or_immutable_expression, ctx);
     }
 
     fn gen_location_access(
@@ -334,6 +375,34 @@ impl CodeGen {
         }
 
          */
+    }
+
+    fn gen_postfix_chain(
+        &mut self,
+        start_expression: &Expression,
+        chain: &[Postfix],
+        ctx: &mut Context,
+    ) {
+        let start_source = self.gen_expression_for_access(start_expression, ctx);
+
+        for element in chain {
+            match &element.kind {
+                PostfixKind::StructField(_, _) => todo!(),
+                PostfixKind::MemberCall(_, _) => todo!(),
+                PostfixKind::FunctionCall(arguments) => {
+                    let mut argument_ctx = self.infinite_above_frame_size();
+                    let mut target = argument_ctx.addr();
+                    for argument in arguments {
+                        let mut arg_ctx = Context::new(target, type_size(&argument.ty()));
+                        self.gen_argument(argument, &mut arg_ctx);
+                    }
+                    //self.builder.add_call(start_expression)
+                }
+                PostfixKind::OptionUnwrap => todo!(),
+                PostfixKind::NoneCoalesce(_) => todo!(),
+                PostfixKind::IntrinsicCall(_, _) => todo!(),
+            }
+        }
     }
 
     fn gen_tuple(&mut self, expressions: &[Expression], ctx: &Context) {
@@ -624,5 +693,18 @@ impl CodeGen {
             CompoundOperatorKind::Div => todo!(),
             CompoundOperatorKind::Modulo => todo!(),
         }
+    }
+
+    fn internal_function_access(
+        &mut self,
+        internal: &InternalFunctionDefinitionRef,
+        ctx: &mut Context,
+    ) {
+        self.builder
+            .add_ld_imm_u16(ctx.addr(), internal.program_unique_id);
+    }
+
+    fn infinite_above_frame_size(&self) -> Context {
+        Context::new(FrameMemoryAddress(self.frame_size.0), MemorySize(1024))
     }
 }

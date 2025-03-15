@@ -23,16 +23,18 @@ pub fn exec_internal(code: &str) -> Vm {
 
     let instructions = code_gen.take_instructions();
 
-    /*
-    let disasm_output = disasm_instructions_color(&instructions);
-
-    eprintln!("{disasm_output}");
-
-     */
-
     let mut vm = Vm::new(instructions, 32000);
 
     vm.execute();
+
+    vm
+}
+
+pub fn exec_internal_debug(code: &str) -> Vm {
+    let vm = exec_internal(code);
+    let disasm_output = disasm_instructions_color(&vm.instructions());
+
+    eprintln!("{disasm_output}");
 
     vm
 }
@@ -46,12 +48,12 @@ fn compare_outputs(memory: &[u8], expected_hex: &str) {
 }
 
 pub fn exec(code: &str, expected_hex: &str) {
-    let vm = exec_internal(code);
+    let vm = exec_internal_debug(code);
 
     compare_outputs(&vm.stack_memory()[..16], expected_hex);
 }
 pub fn exec_vars(code: &str, expected_hex: &str) {
-    let vm = exec_internal(code);
+    let vm = exec_internal_debug(code);
 
     compare_outputs(&vm.frame_memory()[..16], expected_hex);
 }

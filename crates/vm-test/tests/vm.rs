@@ -44,3 +44,21 @@ fn while_loop() {
     ",
     );
 }
+
+#[test_log::test]
+fn call() {
+    exec_vars(
+        "
+        fn another_fn(a: Int, b: Int) -> Int {
+            a+b
+        }
+        mut a = 1
+        while a < 10 {
+            a = another_fn(a, 10)
+        }
+        ",
+        "
+00000000  FF 7F 00 00 00 00 00 00  00 00 00 00 00 00 00 00  ................
+    ",
+    );
+}

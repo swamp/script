@@ -54,6 +54,13 @@ pub struct Vm {
 }
 
 impl Vm {
+    #[must_use]
+    pub fn instructions(&self) -> &[BinaryInstruction] {
+        &self.instructions
+    }
+}
+
+impl Vm {
     pub fn reset(&mut self) {
         self.stack_offset = self.stack_base_offset;
         self.ip = 0;
@@ -446,19 +453,15 @@ impl Vm {
     }
 
     fn execute_call(&mut self, target: u16) {
-        // Save return information
         let return_info = CallFrame {
             return_address: self.ip + 1,              // Instruction to return to
             previous_frame_offset: self.frame_offset, // Previous frame position
             frame_size: 0,                            // Will be filled by ENTER
         };
 
-        // Push to call stack
         self.call_stack.push(return_info);
 
-        // Jump to function
-        self.ip = target as usize;
-        self.ip -= 1; // Adjust for automatic increment
+        self.ip = (target - 1) as usize;
     }
 
     #[inline]

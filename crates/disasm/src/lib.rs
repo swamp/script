@@ -38,7 +38,7 @@ fn memory_kind_color(kind: &DecoratedMemoryKind) -> String {
         DecoratedMemoryKind::Fp32 => "fp32",
     };
 
-    format!("{}", short_string.yellow())
+    format!("{}", short_string.white())
 }
 
 #[must_use]
@@ -63,28 +63,33 @@ pub fn disasm_color(binary_instruction: &BinaryInstruction) -> String {
 
     for operand in decorated.operands {
         let (new_str, comment_str) = match operand.kind {
-            DecoratedOperandKind::ReadFrameAddress(a, b) => {
-                (format!("${}", a.0.green()), memory_kind_color(&b))
-            }
-            DecoratedOperandKind::WriteFrameAddress(a, b) => {
-                (format!("${}", a.0.red()), memory_kind_color(&b))
-            }
-            DecoratedOperandKind::Ip(ip) => {
-                (format!("@{}", format!("{:X}", ip.0).cyan()), String::new())
-            }
+            DecoratedOperandKind::ReadFrameAddress(addr, memory_kind) => (
+                format!("{}{}", "$".green(), format!("{:04X}", addr.0).green()),
+                memory_kind_color(&memory_kind),
+            ),
+            DecoratedOperandKind::WriteFrameAddress(addr, memory_kind) => (
+                format!("{}{}", "$".red(), format!("{:04X}", addr.0).red()),
+                memory_kind_color(&memory_kind),
+            ),
+            DecoratedOperandKind::Ip(ip) => (
+                format!("{}{}", "@".cyan(), format!("{:X}", ip.0).bright_cyan()),
+                String::new(),
+            ),
             DecoratedOperandKind::ImmediateU32(data) => (
                 format!("{}", format!("{data:08X}",).bright_magenta()),
-                format!("int:{}", data as i32),
+                format!("{}{}", "int:".white(), (data as i32).white()),
             ),
         };
         converted_operands.push(new_str);
-        converted_comments.push(comment_str);
+        if !comment_str.is_empty() {
+            converted_comments.push(comment_str);
+        }
     }
 
     let comment_suffix = if converted_comments.is_empty() {
         String::new()
     } else {
-        format!(" # {}", converted_comments.join(", "))
+        format!(" {} {}", "#".white(), converted_comments.join(", "))
     };
 
     format!(

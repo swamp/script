@@ -2478,7 +2478,8 @@ impl<'a> Analyzer<'a> {
                 .state
                 .associated_impls
                 .functions
-                .get(&Type::Blueprint(blueprint.clone()));
+                .get(&Type::Blueprint(blueprint.clone()))
+                .cloned();
             if let Some(found_member_functions) = maybe_member_functions {
                 for (func_name, func_ref) in &found_member_functions.functions {
                     let (_replaced, new_signature) = Instantiator::instantiate_signature(
@@ -2490,17 +2491,21 @@ impl<'a> Analyzer<'a> {
                         Function::Internal(internal) => {
                             let func_ref = Rc::new(InternalFunctionDefinition {
                                 body: internal.body.clone(),
-                                name: LocalIdentifier(Default::default()),
-                                assigned_name: "".to_string(),
+                                name: LocalIdentifier(Node::default()),
+                                assigned_name: String::new(),
                                 signature: new_signature,
                                 variable_scopes: self.scope.clone(),
+                                program_unique_id: self
+                                    .shared
+                                    .state
+                                    .allocate_internal_function_id(),
                             });
                             Function::Internal(func_ref)
                         }
                         Function::External(blueprint_external) => {
                             let func_ref = Rc::new(ExternalFunctionDefinition {
                                 name: None,
-                                assigned_name: "".to_string(),
+                                assigned_name: String::new(),
                                 signature: new_signature,
                                 id: blueprint_external.id,
                             });

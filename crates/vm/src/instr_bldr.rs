@@ -13,6 +13,8 @@ impl InstructionBuilder {}
 
 impl InstructionBuilder {}
 
+impl InstructionBuilder {}
+
 impl Default for InstructionBuilder {
     fn default() -> Self {
         Self::new()
@@ -60,8 +62,13 @@ impl InstructionBuilder {
     ) {
         self.add_instruction(OpCode::Mov, &[target.0, source.0]);
     }
+
     pub fn add_ret(&mut self) {
         self.add_instruction(OpCode::Ret, &[0]);
+    }
+
+    pub fn add_call(&mut self, function_ip: &InstructionPosition) {
+        self.add_instruction(OpCode::Call, &[function_ip.0]);
     }
 
     /// # Panics

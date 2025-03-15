@@ -17,7 +17,6 @@ use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::rc::Rc;
 use swamp_script_node::Node;
-use swamp_script_types::Type::Unit;
 use swamp_script_types::prelude::*;
 use tracing::error;
 
@@ -62,6 +61,7 @@ pub struct InternalFunctionDefinition {
     pub assigned_name: String,
     pub signature: Signature,
     pub variable_scopes: FunctionScopeState,
+    pub program_unique_id: InternalFunctionId,
 }
 
 impl Default for InternalFunctionDefinition {
@@ -69,16 +69,17 @@ impl Default for InternalFunctionDefinition {
         Self {
             body: Expression {
                 ty: Type::Never,
-                node: Default::default(),
+                node: Node::default(),
                 kind: ExpressionKind::Block(vec![]),
             },
-            name: LocalIdentifier(Default::default()),
-            assigned_name: "".to_string(),
+            name: LocalIdentifier(Node::default()),
+            assigned_name: String::new(),
             signature: Signature {
                 parameters: vec![],
                 return_type: Box::new(Type::Never),
             },
             variable_scopes: FunctionScopeState::new(Type::Unit),
+            program_unique_id: 0,
         }
     }
 }
@@ -100,6 +101,8 @@ impl Eq for InternalFunctionDefinition {}
 pub type InternalFunctionDefinitionRef = Rc<InternalFunctionDefinition>;
 
 pub type ExternalFunctionId = u32;
+
+pub type InternalFunctionId = u16;
 
 pub type ConstantId = u32;
 
@@ -564,6 +567,16 @@ pub enum ArgumentExpressionOrLocation {
     Location(SingleLocationExpression),
 }
 
+impl ArgumentExpressionOrLocation {
+    #[must_use]
+    pub fn ty(&self) -> Type {
+        match self {
+            Self::Expression(expr) => expr.ty.clone(),
+            Self::Location(location) => location.ty.clone(),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Expression {
     pub ty: Type,
@@ -927,6 +940,7 @@ impl AssociatedImpls {
 #[derive(Debug, Clone)]
 pub struct ProgramState {
     pub external_function_number: ExternalFunctionId,
+    pub internal_function_number: InternalFunctionId,
     // It is just so we don't have to do another dependency check of the
     // modules, we know that these constants have been
     // evaluated in order already
@@ -946,6 +960,7 @@ impl ProgramState {
     pub fn new() -> Self {
         Self {
             external_function_number: 0,
+            internal_function_number: 0,
             constants_in_dependency_order: Vec::new(),
             associated_impls: AssociatedImpls::new(),
             instantiation_cache: InstantiationCache::new(),
@@ -955,6 +970,11 @@ impl ProgramState {
     pub fn allocate_external_function_id(&mut self) -> ExternalFunctionId {
         self.external_function_number += 1;
         self.external_function_number
+    }
+
+    pub fn allocate_internal_function_id(&mut self) -> InternalFunctionId {
+        self.internal_function_number += 1;
+        self.internal_function_number
     }
 }
 

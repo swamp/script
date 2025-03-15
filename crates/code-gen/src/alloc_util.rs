@@ -15,7 +15,7 @@ pub fn type_size(ty: &Type) -> MemorySize {
         Type::NamedStruct(_) => todo!(),
         Type::AnonymousStruct(_) => todo!(),
         Type::Enum(_) => todo!(),
-        Type::Function(_) => todo!(),
+        Type::Function(_) => 2,
         Type::Iterable(_) => todo!(),
         Type::Optional(_) => todo!(),
         Type::Generic(_, _) => todo!(),

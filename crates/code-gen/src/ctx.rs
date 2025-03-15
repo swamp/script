@@ -11,6 +11,8 @@ pub struct Context {
 
 impl Context {}
 
+impl Context {}
+
 impl Context {
     pub(crate) const fn target(&self) -> TargetInfo {
         self.target_info

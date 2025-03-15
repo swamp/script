@@ -479,6 +479,7 @@ impl Analyzer<'_> {
                     name: LocalIdentifier(self.to_node(&function_data.declaration.name)),
                     assigned_name: self.get_text(&function_data.declaration.name).to_string(),
                     variable_scopes: self.scope.clone(),
+                    program_unique_id: self.shared.state.allocate_internal_function_id(),
                 };
 
                 let function_ref = self
@@ -758,6 +759,7 @@ impl Analyzer<'_> {
                     name: LocalIdentifier(self.to_node(&function_data.declaration.name)),
                     assigned_name: self.get_text(&function_data.declaration.name).to_string(),
                     variable_scopes: self.scope.clone(),
+                    program_unique_id: 0,
                 };
 
                 let internal_ref = Rc::new(internal);
