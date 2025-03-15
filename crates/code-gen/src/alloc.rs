@@ -4,10 +4,17 @@ const ALIGNMENT: u16 = 8;
 const ALIGNMENT_REST: u16 = ALIGNMENT - 1;
 const ALIGNMENT_MASK: u16 = !ALIGNMENT_REST;
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct TargetInfo {
     pub addr: FrameMemoryAddress,
     pub size: MemorySize,
+}
+
+impl TargetInfo {
+    #[must_use]
+    pub fn addr(&self) -> FrameMemoryAddress {
+        self.addr
+    }
 }
 
 #[derive(Copy, Clone)]
@@ -54,6 +61,6 @@ impl ScopeAllocator {
     }
 
     pub fn reset(&mut self) {
-        self.addr = self.initial_addr
+        self.addr = self.initial_addr;
     }
 }

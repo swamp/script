@@ -2,10 +2,19 @@ use crate::alloc::{ScopeAllocator, TargetInfo};
 use crate::alloc_util::reserve_space_for_type;
 use swamp_script_types::Type;
 use swamp_script_vm::instr_bldr::{FrameMemoryAddress, MemorySize};
+use tracing::info;
 
 pub struct Context {
     target_info: TargetInfo,
     temp_allocator: ScopeAllocator,
+}
+
+impl Context {}
+
+impl Context {
+    pub(crate) const fn target(&self) -> TargetInfo {
+        self.target_info
+    }
 }
 
 impl Context {
@@ -16,7 +25,7 @@ impl Context {
 
 impl Context {
     pub fn reset_temp(&mut self) {
-        self.temp_allocator.reset()
+        self.temp_allocator.reset();
     }
 }
 
@@ -43,11 +52,13 @@ impl Context {
 
     pub fn temp_space_for_type(&mut self, ty: &Type) -> Self {
         let new_target_info = reserve_space_for_type(ty, &mut self.temp_allocator);
+        info!(?new_target_info, "creating temporary space");
         Self {
             target_info: new_target_info,
             temp_allocator: self.temp_allocator.create_scope(),
         }
     }
+
     pub const fn addr(&self) -> FrameMemoryAddress {
         self.target_info.addr
     }

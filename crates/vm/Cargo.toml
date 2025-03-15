@@ -4,3 +4,7 @@ version = "0.1.3"
 edition = "2024"
 
 [dependencies]
+
+
+[features]
+debug_vm = []  # Enable VM debug output

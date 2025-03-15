@@ -68,6 +68,10 @@ impl Vm {
     pub fn stack_memory(&self) -> &[u8] {
         unsafe { std::slice::from_raw_parts(self.stack_ptr(), self.memory_size) }
     }
+
+    pub fn frame_memory(&self) -> &[u8] {
+        unsafe { std::slice::from_raw_parts(self.frame_ptr(), self.memory_size) }
+    }
 }
 
 const ALIGNMENT: usize = 8;
@@ -106,6 +110,8 @@ impl Vm {
         };
 
         vm.handlers[OpCode::LdLocal as usize] = HandlerType::Args2(Self::execute_ld_local);
+        vm.handlers[OpCode::LdImmU8 as usize] = HandlerType::Args2(Self::execute_ld_imm_u8);
+        vm.handlers[OpCode::LdImmU16 as usize] = HandlerType::Args2(Self::execute_ld_imm_u16);
         vm.handlers[OpCode::LdImmU32 as usize] = HandlerType::Args3(Self::execute_ld_imm_u32);
         vm.handlers[OpCode::AddI32 as usize] = HandlerType::Args3(Self::execute_add_i32);
         vm.handlers[OpCode::LtI32 as usize] = HandlerType::Args3(Self::execute_lt_i32);
@@ -116,8 +122,8 @@ impl Vm {
 
         vm.handlers[OpCode::Enter as usize] = HandlerType::Args1(Self::execute_enter);
         vm.handlers[OpCode::Ret as usize] = HandlerType::Args0(Self::execute_ret);
-        vm.handlers[OpCode::LdImmU8 as usize] = HandlerType::Args2(Self::execute_ld_imm_u8);
         vm.handlers[OpCode::LdIndirect as usize] = HandlerType::Args4(Self::execute_ld_indirect);
+        vm.handlers[OpCode::Mov as usize] = HandlerType::Args3(Self::execute_mov);
 
         vm.handlers[OpCode::End as usize] = HandlerType::Args0(Self::execute_end);
 
@@ -154,6 +160,12 @@ impl Vm {
             *dst_ptr = value;
         }
     }
+    fn execute_ld_imm_u16(&mut self, dst_offset: u16, data: u16) {
+        let dst_ptr = self.ptr_at(self.frame_offset + dst_offset as usize) as *mut u16;
+        unsafe {
+            *dst_ptr = data;
+        }
+    }
 
     fn execute_ld_imm_u8(&mut self, dst_offset: u16, octet: u16) {
         let dst_ptr = self.frame_ptr_bool_at(dst_offset);
@@ -181,6 +193,9 @@ impl Vm {
         let rhs_ptr = self.frame_ptr_i32_const_at(rhs_offset);
         let dst_ptr = self.frame_ptr_bool_at(dst_offset);
 
+        unsafe {
+            eprintln!("{} < {}", *lhs_ptr, *rhs_ptr);
+        }
         unsafe {
             let lhs = *lhs_ptr;
             let rhs = *rhs_ptr;
@@ -219,6 +234,16 @@ impl Vm {
 
     fn execute_unimplemented(&mut self) {
         panic!("unknown OPCODE HALT!");
+    }
+
+    #[inline]
+    fn execute_mov(&mut self, dst_offset: u16, src_offset: u16, size: u16) {
+        let src_ptr = self.ptr_at(self.frame_offset + src_offset as usize);
+        let dst_ptr = self.ptr_at(self.frame_offset + dst_offset as usize);
+
+        unsafe {
+            std::ptr::copy_nonoverlapping(src_ptr, dst_ptr, size as usize);
+        }
     }
 
     // Type-specific handlers
@@ -313,14 +338,54 @@ impl Vm {
         result_offset
     }
 
+    pub fn debug_opcode(&self, opcode: u8, operands: &[u16; 4]) {
+        eprintln!(
+            "{:8} operands: [{}]",
+            OpCode::from(opcode),
+            match self.handlers[opcode as usize] {
+                HandlerType::Args0(_) => String::new(),
+                HandlerType::Args1(_) => format!("{:04x}", operands[0]),
+                HandlerType::Args2(_) => format!("{:04x}, {:04x}", operands[0], operands[1]),
+                HandlerType::Args3(_) => format!(
+                    "{:04x}, {:04x}, {:04x}",
+                    operands[0], operands[1], operands[2]
+                ),
+                HandlerType::Args4(_) => format!(
+                    "{:04x}, {:04x}, {:04x}, {:04x}",
+                    operands[0], operands[1], operands[2], operands[3]
+                ),
+            }
+        );
+    }
+
+    fn debug_instructions(&self) {
+        for (ip, instruction) in self.instructions.iter().enumerate() {
+            eprint!("|> {ip:04x}: ");
+            let operands = instruction.operands;
+            self.debug_opcode(instruction.opcode, &operands);
+        }
+    }
+
     pub fn execute(&mut self) {
         self.ip = 0;
         self.execution_complete = false;
+        #[cfg(feature = "debug_vm")]
+        {
+            eprintln!("program:");
+            self.debug_instructions();
+            eprintln!("start executing");
+        }
 
         while !self.execution_complete {
             let instruction = &self.instructions[self.ip];
             let opcode = instruction.opcode;
-            eprintln!("opcode: {opcode}");
+
+            #[cfg(feature = "debug_vm")]
+            {
+                let operands = instruction.operands;
+                eprint!("> {:04x}: ", self.ip);
+                self.debug_opcode(opcode, &operands);
+            }
 
             match self.handlers[opcode as usize] {
                 HandlerType::Args0(handler) => handler(self),

@@ -15,7 +15,7 @@ impl StackMemoryAddress {
 }
 // relative to the stack pointer
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct FrameMemoryAddress(pub u16); // relative to the frame pointer
 
 impl FrameMemoryAddress {
@@ -36,10 +36,10 @@ impl MemoryAddress {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct MemoryOffset(pub u16);
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct MemorySize(pub u16);
 
 #[derive(Copy, Clone)]

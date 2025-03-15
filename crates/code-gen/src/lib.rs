@@ -3,6 +3,7 @@ pub mod alloc_util;
 pub mod ctx;
 mod vec;
 
+use crate::alloc::{ScopeAllocator, TargetInfo};
 use crate::alloc_util::type_size;
 use crate::ctx::Context;
 use crate::vec::{VECTOR_DATA_PTR_OFFSET, VECTOR_LENGTH_OFFSET};
@@ -10,8 +11,9 @@ use seq_map::SeqMap;
 use std::ops::Deref;
 use swamp_script_semantic::{
     ArgumentExpressionOrLocation, BinaryOperator, BinaryOperatorKind, BooleanExpression,
-    EnumLiteralData, Expression, ExpressionKind, ForPattern, FunctionScopeState, Iterable, Literal,
-    LocationAccessKind, MutOrImmutableExpression, SingleLocationExpression, VariableRef,
+    CompoundOperatorKind, EnumLiteralData, Expression, ExpressionKind, ForPattern,
+    FunctionScopeState, Iterable, Literal, LocationAccessKind, MutOrImmutableExpression,
+    SingleLocationExpression, SingleMutLocationExpression, VariableRef,
 };
 use swamp_script_types::{AnonymousStructType, EnumVariantType, StructTypeField, Type};
 use swamp_script_vm::instr_bldr::{
@@ -25,6 +27,7 @@ pub struct CodeGen {
     builder: InstructionBuilder,
     variable_offsets: SeqMap<usize, FrameMemoryAddress>,
     frame_size: FrameMemorySize,
+    extra_frame_allocator: ScopeAllocator,
 }
 
 impl CodeGen {
@@ -53,6 +56,7 @@ impl CodeGen {
             builder: InstructionBuilder::default(),
             variable_offsets: SeqMap::default(),
             frame_size: FrameMemorySize(0),
+            extra_frame_allocator: ScopeAllocator::new(FrameMemoryAddress(0)),
         }
     }
 
@@ -73,17 +77,54 @@ impl CodeGen {
         }
 
         self.frame_size = current_offset.as_size();
+        self.extra_frame_allocator = ScopeAllocator::new(FrameMemoryAddress(self.frame_size.0));
 
         Context::new(current_offset, MemorySize(64000))
     }
 
-    pub fn gen_expression(&mut self, expr: &Expression, ctx: &mut Context) {
-        ctx.reset_temp();
+    /// # Panics
+    ///
+    #[allow(clippy::single_match_else)]
+    pub fn gen_expression_for_access(
+        &mut self,
+        expr: &Expression,
+        ctx: &mut Context,
+    ) -> TargetInfo {
+        let size = type_size(&expr.ty);
 
+        match &expr.kind {
+            ExpressionKind::VariableAccess(var_ref) => {
+                let frame_address = self
+                    .variable_offsets
+                    .get(&var_ref.unique_id_within_function)
+                    .unwrap();
+
+                TargetInfo {
+                    addr: *frame_address,
+                    size,
+                }
+            }
+
+            _ => {
+                let mut temp_ctx = ctx.temp_space_for_type(&expr.ty);
+
+                self.gen_expression(expr, &mut temp_ctx);
+
+                temp_ctx.target()
+            }
+        }
+    }
+
+    pub(crate) fn frame_space_for_type(&mut self, ty: &Type) -> Context {
+        let target = self.extra_frame_allocator.reserve(type_size(ty));
+        Context::new(target.addr, target.size)
+    }
+
+    pub fn gen_expression(&mut self, expr: &Expression, ctx: &mut Context) {
         match &expr.kind {
             ExpressionKind::ConstantAccess(_) => todo!(),
             ExpressionKind::VariableAccess(variable_ref) => {
-                self.gen_variable_access(variable_ref, ctx)
+                self.gen_variable_access(variable_ref, ctx);
             }
             ExpressionKind::IntrinsicFunctionAccess(_) => todo!(),
             ExpressionKind::InternalFunctionAccess(_) => todo!(),
@@ -118,7 +159,9 @@ impl CodeGen {
             ExpressionKind::When(_, _, _) => todo!(),
             ExpressionKind::TupleDestructuring(_, _, _) => todo!(),
             ExpressionKind::Assignment(_, _) => todo!(),
-            ExpressionKind::CompoundAssignment(_, _, _) => todo!(),
+            ExpressionKind::CompoundAssignment(target_location, operator_kind, source_expr) => {
+                self.compound_assignment(target_location, operator_kind, source_expr, ctx);
+            }
             ExpressionKind::IntrinsicCallMut(_, _, _) => todo!(),
             ExpressionKind::IntrinsicCallEx(_, _) => todo!(),
         }
@@ -132,16 +175,13 @@ impl CodeGen {
     }
 
     fn gen_binary_operator_i32(&mut self, binary_operator: &BinaryOperator, ctx: &mut Context) {
-        let mut left_context = ctx.temp_space_for_type(&binary_operator.left.ty);
-        let mut right_context = ctx.temp_space_for_type(&binary_operator.right.ty);
-
-        self.gen_expression(&binary_operator.left, &mut left_context);
-        self.gen_expression(&binary_operator.right, &mut right_context);
+        let left_source = self.gen_expression_for_access(&binary_operator.left, ctx);
+        let right_source = self.gen_expression_for_access(&binary_operator.right, ctx);
 
         match binary_operator.kind {
             BinaryOperatorKind::Add => {
                 self.builder
-                    .add_add_i32(ctx.addr(), left_context.addr(), right_context.addr());
+                    .add_add_i32(ctx.addr(), left_source.addr(), right_source.addr());
             }
 
             BinaryOperatorKind::Subtract => todo!(),
@@ -154,7 +194,7 @@ impl CodeGen {
             BinaryOperatorKind::NotEqual => todo!(),
             BinaryOperatorKind::LessThan => {
                 self.builder
-                    .add_lt_i32(ctx.addr(), left_context.addr(), right_context.addr());
+                    .add_lt_i32(ctx.addr(), left_source.addr(), right_source.addr());
             }
             BinaryOperatorKind::LessEqual => todo!(),
             BinaryOperatorKind::GreaterThan => todo!(),
@@ -168,7 +208,7 @@ impl CodeGen {
         condition: &BooleanExpression,
         ctx: &mut Context,
     ) -> (Context, PatchPosition) {
-        let mut condition_ctx = ctx.temp_space_for_type(&Type::Bool);
+        let mut condition_ctx = self.frame_space_for_type(&Type::Bool);
         self.gen_expression(&condition.expression, &mut condition_ctx);
 
         let jump_on_false_condition = self
@@ -250,16 +290,16 @@ impl CodeGen {
                 self.gen_expression(found_expression, &mut init_ctx);
             }
             ArgumentExpressionOrLocation::Location(location_expression) => {
-                self.gen_location_expression(location_expression, ctx);
+                self.gen_location_access(location_expression, ctx);
             }
         }
     }
 
-    fn gen_location_expression(
+    fn gen_location_access(
         &mut self,
         location_expression: &SingleLocationExpression,
         ctx: &Context,
-    ) {
+    ) -> TargetInfo {
         let frame_relative_base_address = self
             .variable_offsets
             .get(
@@ -268,8 +308,13 @@ impl CodeGen {
                     .unique_id_within_function,
             )
             .unwrap();
-        self.builder
-            .add_load_frame_address(ctx.addr(), *frame_relative_base_address);
+
+        TargetInfo {
+            addr: *frame_relative_base_address,
+            size: ctx.target_size(),
+        }
+
+        /*
 
         // Loop over the consecutive accesses until we find the actual location
         for access in &location_expression.access_chain {
@@ -286,6 +331,8 @@ impl CodeGen {
                 }
             }
         }
+
+         */
     }
 
     fn gen_tuple(&mut self, expressions: &[Expression], ctx: &Context) {
@@ -512,5 +559,69 @@ impl CodeGen {
             .unwrap();
         let size = type_size(&variable.resolved_type);
         self.builder.add_mov(ctx.addr(), *frame_address, size);
+    }
+
+    fn referenced_or_not_type(ty: &Type) -> Type {
+        if let Type::MutableReference(inner_type) = ty {
+            *inner_type.clone()
+        } else {
+            ty.clone()
+        }
+    }
+
+    fn compound_assignment(
+        &mut self,
+        target_location: &SingleMutLocationExpression,
+        op: &CompoundOperatorKind,
+        source: &Expression,
+        ctx: &mut Context,
+    ) {
+        let target_location = self.gen_location_access(&target_location.0, ctx);
+
+        let mut source_ctx = ctx.temp_space_for_type(&source.ty);
+        self.gen_expression(source, &mut source_ctx);
+
+        let type_to_consider = Self::referenced_or_not_type(&source.ty);
+
+        match &type_to_consider {
+            Type::Int => {
+                self.gen_compound_assignment_i32(&target_location, op, &source_ctx);
+            }
+            Type::Float => todo!(),
+            Type::String => todo!(),
+            Type::Bool => todo!(),
+            Type::Unit => todo!(),
+            Type::Never => todo!(),
+            Type::Tuple(_) => todo!(),
+            Type::NamedStruct(_) => todo!(),
+            Type::AnonymousStruct(_) => todo!(),
+            Type::Enum(_) => todo!(),
+            Type::Function(_) => todo!(),
+            Type::Iterable(_) => todo!(),
+            Type::Optional(_) => todo!(),
+            Type::Generic(_, _) => todo!(),
+            Type::Blueprint(_) => todo!(),
+            Type::Variable(_) => todo!(),
+            Type::External(_) => todo!(),
+            Type::MutableReference(x) => panic!("should have been checked"),
+        }
+    }
+
+    fn gen_compound_assignment_i32(
+        &mut self,
+        target: &TargetInfo,
+        op: &CompoundOperatorKind,
+        source_ctx: &Context,
+    ) {
+        match op {
+            CompoundOperatorKind::Add => {
+                self.builder
+                    .add_add_i32(target.addr(), target.addr(), source_ctx.addr());
+            }
+            CompoundOperatorKind::Sub => todo!(),
+            CompoundOperatorKind::Mul => todo!(),
+            CompoundOperatorKind::Div => todo!(),
+            CompoundOperatorKind::Modulo => todo!(),
+        }
     }
 }

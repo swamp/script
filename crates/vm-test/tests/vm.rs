@@ -1,5 +1,5 @@
 mod util;
-use crate::util::exec;
+use crate::util::{exec, exec_vars};
 
 #[test]
 fn variable_definition() {
@@ -24,7 +24,7 @@ fn var_def_add() {
 #[test]
 fn var_def_if() {
     exec(
-        "if 3 < 7 { 128 } else { 23 }",
+        "a = if 3 < 7 { 128 } else { 23 }",
         "
 00000000  80 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  ................
     ",
@@ -33,15 +33,15 @@ fn var_def_if() {
 
 #[test_log::test]
 fn while_loop() {
-    exec(
+    exec_vars(
         "
-        mut a = 0
-        while a < 3 {
+        mut a = 1
+        while a < 10 {
             a += 1
         }
         ",
         "
-00000000  80 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  ................
+00000000  0A 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  ................
     ",
     );
 }
