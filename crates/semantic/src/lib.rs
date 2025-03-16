@@ -54,6 +54,12 @@ pub enum SemanticError {
 #[derive(Debug, Eq, PartialEq)]
 pub struct LocalIdentifier(pub Node);
 
+pub struct InternalMainExpression {
+    pub expression: Expression,
+    pub function_scope_state: Vec<VariableRef>,
+    pub program_unique_id: InternalFunctionId,
+}
+
 //#[derive(Debug,Clone)]
 pub struct InternalFunctionDefinition {
     pub body: Expression,
@@ -61,6 +67,7 @@ pub struct InternalFunctionDefinition {
     pub assigned_name: String,
     pub signature: Signature,
     pub variable_scopes: FunctionScopeState,
+    pub function_scope_state: Vec<VariableRef>,
     pub program_unique_id: InternalFunctionId,
 }
 
@@ -79,6 +86,7 @@ impl Default for InternalFunctionDefinition {
                 return_type: Box::new(Type::Never),
             },
             variable_scopes: FunctionScopeState::new(Type::Unit),
+            function_scope_state: Vec::new(),
             program_unique_id: 0,
         }
     }

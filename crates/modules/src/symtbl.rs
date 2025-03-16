@@ -61,6 +61,22 @@ pub struct SymbolTable {
 }
 
 impl SymbolTable {
+    pub fn internal_functions(&self) -> Vec<InternalFunctionDefinitionRef> {
+        let mut v = Vec::new();
+
+        for (_name, sym) in &self.symbols {
+            if let Symbol::FunctionDefinition(func_def) = sym {
+                if let FuncDef::Internal(internal) = func_def {
+                    v.push(internal.clone())
+                }
+            }
+        }
+
+        v
+    }
+}
+
+impl SymbolTable {
     pub fn module_path(&self) -> Vec<String> {
         self.module_path.clone()
     }

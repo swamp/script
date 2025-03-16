@@ -7,10 +7,9 @@ use swamp_script_analyzer::{Analyzer, TypeContext};
 use swamp_script_dep_loader::{
     DependencyParser, ParsedAstModule, parse_local_modules_and_get_order,
 };
-use swamp_script_modules::modules::InternalMainExpression;
 use swamp_script_modules::prelude::*;
 use swamp_script_modules::symtbl::SymbolTableRef;
-use swamp_script_semantic::{Expression, ProgramState, SemanticError};
+use swamp_script_semantic::{Expression, InternalMainExpression, ProgramState, SemanticError};
 use swamp_script_source_map::SourceMap;
 use tracing::{Level, debug, span};
 
@@ -64,6 +63,8 @@ pub fn analyze_module(
     Ok((resolver.shared.definition_table, statements))
 }
 
+/// # Errors
+///
 pub fn analyze_modules_in_order(
     state: &mut ProgramState,
     default_lookup_symbol_table: &SymbolTable,

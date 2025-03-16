@@ -1,4 +1,4 @@
-use swamp_script_code_gen::CodeGen;
+use swamp_script_code_gen::{CodeGenState, FunctionCodeGen};
 use swamp_script_compile::compile_string;
 use swamp_script_types::Type;
 use swamp_vm::Vm;
@@ -7,17 +7,15 @@ use swamp_vm_disasm::disasm_instructions_color;
 pub fn exec_internal(code: &str) -> Vm {
     let (program, main_module, source_map) = compile_string(code).unwrap();
 
-    let mut code_gen = CodeGen::new();
+    let mut code_gen = CodeGenState::new();
 
     let main_expression = main_module.main_expression.as_ref().unwrap();
-    let mut function_ctx = code_gen.layout_variables(
-        &main_expression.function_scope_state,
-        &main_expression.expression.ty,
-    );
 
-    let mut test_ctx = function_ctx.temp_space_for_type(&Type::Unit);
+    code_gen.gen_main_function(&main_expression);
 
-    code_gen.gen_expression(&main_expression.expression, &mut test_ctx);
+    for internal_function_def in main_module.symbol_table.internal_functions() {
+        code_gen.gen_function_def(internal_function_def);
+    }
 
     code_gen.finalize();
 

@@ -24,16 +24,15 @@ use std::mem::take;
 use std::num::{ParseFloatError, ParseIntError};
 use std::rc::Rc;
 use std::task::Context;
-use swamp_script_modules::modules::InternalMainExpression;
 use swamp_script_modules::prelude::*;
 use swamp_script_modules::symtbl::SymbolTableRef;
 use swamp_script_node::{FileId, Node, Span};
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
-    ArgumentExpressionOrLocation, BlockScope, BlockScopeMode, FunctionScopeState, LocationAccess,
-    LocationAccessKind, MutOrImmutableExpression, NormalPattern, Postfix, PostfixKind, RangeMode,
-    SingleLocationExpression, SingleLocationExpressionKind, SingleMutLocationExpression,
-    TypeWithMut, WhenBinding,
+    ArgumentExpressionOrLocation, BlockScope, BlockScopeMode, FunctionScopeState,
+    InternalMainExpression, LocationAccess, LocationAccessKind, MutOrImmutableExpression,
+    NormalPattern, Postfix, PostfixKind, RangeMode, SingleLocationExpression,
+    SingleLocationExpressionKind, SingleMutLocationExpression, TypeWithMut, WhenBinding,
 };
 use swamp_script_source_map::SourceMap;
 use swamp_script_types::prelude::*;
@@ -490,6 +489,7 @@ impl<'a> Analyzer<'a> {
         let main_expr = InternalMainExpression {
             expression: analyzed_expr,
             function_scope_state: self.function_variables.clone(),
+            program_unique_id: self.shared.state.allocate_internal_function_id(),
         };
 
         self.stop_function();
@@ -2495,6 +2495,7 @@ impl<'a> Analyzer<'a> {
                                 assigned_name: String::new(),
                                 signature: new_signature,
                                 variable_scopes: self.scope.clone(),
+                                function_scope_state: self.function_variables.clone(),
                                 program_unique_id: self
                                     .shared
                                     .state

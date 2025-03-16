@@ -12,9 +12,9 @@ use std::ops::Deref;
 use swamp_script_semantic::{
     ArgumentExpressionOrLocation, BinaryOperator, BinaryOperatorKind, BooleanExpression,
     CompoundOperatorKind, EnumLiteralData, Expression, ExpressionKind, ForPattern,
-    FunctionScopeState, InternalFunctionDefinitionRef, Iterable, Literal, LocationAccessKind,
-    MutOrImmutableExpression, Postfix, PostfixKind, SingleLocationExpression,
-    SingleMutLocationExpression, VariableRef,
+    FunctionScopeState, InternalFunctionDefinitionRef, InternalFunctionId, InternalMainExpression,
+    Iterable, Literal, LocationAccessKind, MutOrImmutableExpression, Postfix, PostfixKind,
+    SingleLocationExpression, SingleMutLocationExpression, VariableRef,
 };
 use swamp_script_types::{AnonymousStructType, EnumVariantType, StructTypeField, Type};
 
@@ -25,37 +25,60 @@ use swamp_vm_types::{
 };
 use tracing::info;
 
-pub struct CodeGen {
+pub struct CodeGenState {
     builder: InstructionBuilder,
-    variable_offsets: SeqMap<usize, FrameMemoryAddress>,
-    frame_size: FrameMemorySize,
-    extra_frame_allocator: ScopeAllocator,
 }
 
-impl CodeGen {
+impl CodeGenState {
+    pub fn new() -> Self {
+        Self {
+            builder: Default::default(),
+        }
+    }
     pub fn finalize(&mut self) {
         self.builder.add_end();
     }
-}
-
-impl CodeGen {
     #[must_use]
     pub fn take_instructions(self) -> Vec<BinaryInstruction> {
         self.builder.instructions
     }
-}
 
-impl Default for CodeGen {
-    fn default() -> Self {
-        Self::new()
+    pub fn gen_function_def(&mut self, internal_fn_def: InternalFunctionDefinitionRef) {
+        let mut function_generator = FunctionCodeGen::new(self, internal_fn_def.program_unique_id);
+
+        let mut ctx = Context::new(FrameMemoryAddress(0), MemorySize(512));
+
+        function_generator.layout_variables(
+            &internal_fn_def.function_scope_state,
+            &internal_fn_def.signature.return_type,
+        );
+
+        function_generator.gen_expression(&internal_fn_def.body, &mut ctx);
+    }
+
+    pub fn gen_main_function(&mut self, main: &InternalMainExpression) {
+        let mut function_generator = FunctionCodeGen::new(self, main.program_unique_id);
+
+        let mut ctx =
+            function_generator.layout_variables(&main.function_scope_state, &main.expression.ty);
+        function_generator.gen_expression(&main.expression, &mut ctx);
     }
 }
 
-impl CodeGen {
+pub struct FunctionCodeGen<'a> {
+    state: &'a mut CodeGenState,
+    variable_offsets: SeqMap<usize, FrameMemoryAddress>,
+    frame_size: FrameMemorySize,
+    extra_frame_allocator: ScopeAllocator,
+    fn_id: InternalFunctionId,
+}
+
+impl<'a> FunctionCodeGen<'a> {
     #[must_use]
-    pub fn new() -> Self {
+    pub fn new(state: &'a mut CodeGenState, fn_id: InternalFunctionId) -> Self {
         Self {
-            builder: InstructionBuilder::default(),
+            fn_id,
+            state,
             variable_offsets: SeqMap::default(),
             frame_size: FrameMemorySize(0),
             extra_frame_allocator: ScopeAllocator::new(FrameMemoryAddress(0)),
@@ -186,7 +209,8 @@ impl CodeGen {
 
         match binary_operator.kind {
             BinaryOperatorKind::Add => {
-                self.builder
+                self.state
+                    .builder
                     .add_add_i32(ctx.addr(), left_source.addr(), right_source.addr());
             }
 
@@ -199,7 +223,8 @@ impl CodeGen {
             BinaryOperatorKind::Equal => todo!(),
             BinaryOperatorKind::NotEqual => todo!(),
             BinaryOperatorKind::LessThan => {
-                self.builder
+                self.state
+                    .builder
                     .add_lt_i32(ctx.addr(), left_source.addr(), right_source.addr());
             }
             BinaryOperatorKind::LessEqual => todo!(),
@@ -218,6 +243,7 @@ impl CodeGen {
         self.gen_expression(&condition.expression, &mut condition_ctx);
 
         let jump_on_false_condition = self
+            .state
             .builder
             .add_conditional_jump_placeholder(condition_ctx.addr());
 
@@ -238,17 +264,17 @@ impl CodeGen {
 
         if let Some(false_expr) = maybe_false_expr {
             // we need to help the true expression to jump over false
-            let skip_false_if_true = self.builder.add_jump_placeholder();
+            let skip_false_if_true = self.state.builder.add_jump_placeholder();
 
             // If the expression was false, it should continue here
-            self.builder.patch_jump_here(jump_on_false_condition);
+            self.state.builder.patch_jump_here(jump_on_false_condition);
 
             // Else expression also can just take over our if target
             self.gen_expression(false_expr, ctx);
 
-            self.builder.patch_jump_here(skip_false_if_true);
+            self.state.builder.patch_jump_here(skip_false_if_true);
         } else {
-            self.builder.patch_jump_here(jump_on_false_condition);
+            self.state.builder.patch_jump_here(jump_on_false_condition);
         }
     }
 
@@ -261,7 +287,7 @@ impl CodeGen {
         // `while` loops are only for side effects, make sure that the target size is zero (Unit)
         assert_eq!(ctx.target_size().0, 0);
 
-        let ip_for_condition = self.builder.position();
+        let ip_for_condition = self.state.builder.position();
 
         let (_condition_ctx, jump_on_false_condition) = self.gen_condition_context(condition, ctx);
 
@@ -270,9 +296,9 @@ impl CodeGen {
         self.gen_expression(expression, &mut unit_ctx);
 
         // Always jump to the condition again to see if it is true
-        self.builder.add_jmp(ip_for_condition);
+        self.state.builder.add_jmp(ip_for_condition);
 
-        self.builder.patch_jump_here(jump_on_false_condition);
+        self.state.builder.patch_jump_here(jump_on_false_condition);
     }
 
     fn gen_argument(&mut self, argument: &ArgumentExpressionOrLocation, ctx: &mut Context) {
@@ -396,7 +422,7 @@ impl CodeGen {
                         let mut arg_ctx = Context::new(target, type_size(&argument.ty()));
                         self.gen_argument(argument, &mut arg_ctx);
                     }
-                    //self.builder.add_call(start_expression)
+                    //self.state.builder.add_call(start_expression)
                 }
                 PostfixKind::OptionUnwrap => todo!(),
                 PostfixKind::NoneCoalesce(_) => todo!(),
@@ -449,20 +475,25 @@ impl CodeGen {
     fn gen_literal(&mut self, literal: &Literal, ctx: &mut Context) {
         match literal {
             Literal::IntLiteral(int) => {
-                self.builder.add_ld_imm_i32(ctx.addr(), *int);
+                self.state.builder.add_ld_imm_i32(ctx.addr(), *int);
             }
             Literal::FloatLiteral(fixed_point) => {
-                self.builder.add_ld_imm_i32(ctx.addr(), fixed_point.inner());
+                self.state
+                    .builder
+                    .add_ld_imm_i32(ctx.addr(), fixed_point.inner());
             }
             Literal::NoneLiteral => {
-                self.builder.add_ld_imm_u8(ctx.addr(), 0);
+                self.state.builder.add_ld_imm_u8(ctx.addr(), 0);
             }
             Literal::BoolLiteral(truthy) => {
-                self.builder.add_ld_imm_u8(ctx.addr(), u8::from(*truthy));
+                self.state
+                    .builder
+                    .add_ld_imm_u8(ctx.addr(), u8::from(*truthy));
             }
 
             Literal::EnumVariantLiteral(a, b) => {
-                self.builder
+                self.state
+                    .builder
                     .add_ld_imm_u8(ctx.addr(), a.common().container_index);
                 match b {
                     EnumLiteralData::Nothing => {}
@@ -494,11 +525,11 @@ impl CodeGen {
 
     fn gen_option_expression(&mut self, maybe_option: Option<&Expression>, ctx: &mut Context) {
         if let Some(found_value) = maybe_option {
-            self.builder.add_ld_imm_u8(ctx.addr(), 1); // 1 signals `Some`
+            self.state.builder.add_ld_imm_u8(ctx.addr(), 1); // 1 signals `Some`
             let mut one_offset_ctx = ctx.with_offset(MemorySize(1));
             self.gen_expression(found_value, &mut one_offset_ctx); // Fills in more of the union
         } else {
-            self.builder.add_ld_imm_u8(ctx.addr(), 0); // 0 signals `None`
+            self.state.builder.add_ld_imm_u8(ctx.addr(), 0); // 0 signals `None`
             // No real need to clear the rest of the memory
         }
     }
@@ -555,13 +586,13 @@ impl CodeGen {
 
         // Temporary for the counter
         let counter_addr = ctx.allocate_temp(MemorySize(2)); // u16 counter
-        self.builder.add_ld_imm_u16(counter_addr, 0);
+        self.state.builder.add_ld_imm_u16(counter_addr, 0);
 
-        let loop_start_pos = self.builder.position();
+        let loop_start_pos = self.state.builder.position();
 
         // vector length
         let length_addr = ctx.allocate_temp(MemorySize(2));
-        self.builder.add_mov(
+        self.state.builder.add_mov(
             length_addr,
             vector_ctx.addr().add(MemorySize(VECTOR_LENGTH_OFFSET)),
             MemorySize(2),
@@ -569,16 +600,18 @@ impl CodeGen {
 
         // Compare counter < length
         let compare_result_addr = ctx.allocate_temp(MemorySize(1)); // boolean result
-        self.builder
+        self.state
+            .builder
             .add_lt_u16(compare_result_addr, counter_addr, length_addr);
 
         // Exit loop if counter >= length
         let exit_jump = self
+            .state
             .builder
             .add_conditional_jump_placeholder(compare_result_addr);
 
         let data_ptr_addr = ctx.allocate_temp(MemorySize(2));
-        self.builder.add_mov(
+        self.state.builder.add_mov(
             data_ptr_addr,
             vector_ctx.addr().add(MemorySize(VECTOR_DATA_PTR_OFFSET)),
             MemorySize(PTR_SIZE),
@@ -586,13 +619,13 @@ impl CodeGen {
 
         /*
         let offset_addr = ctx.allocate_temp(2);
-        self.builder.add_mul_u16(
+        self.state.builder.add_mul_u16(
             offset_addr,
             counter_addr,
             element_size
         );
 
-        self.builder.add_ld_indirect(
+        self.state.builder.add_ld_indirect(
             *value_var_addr,     // Destination: loop variable
             data_ptr_addr,       // Base: vector's data pointer
             offset_addr,         // Offset: counter * element_size
@@ -602,12 +635,12 @@ impl CodeGen {
         let mut body_ctx = ctx.temp_space_for_type(&Type::Unit);
         self.gen_expression(body, &mut body_ctx);
 
-        self.builder.add_inc_u16(counter_addr);
+        self.state.builder.add_inc_u16(counter_addr);
 
-        self.builder.add_jmp_to_position(loop_start_pos);
+        self.state.builder.add_jmp_to_position(loop_start_pos);
 
-        let end_pos = self.builder.current_position();
-        self.builder.patch_jump(exit_jump, end_pos);
+        let end_pos = self.state.builder.current_position();
+        self.state.builder.patch_jump(exit_jump, end_pos);
 
          */
     }
@@ -628,7 +661,7 @@ impl CodeGen {
             .get(&variable.unique_id_within_function)
             .unwrap();
         let size = type_size(&variable.resolved_type);
-        self.builder.add_mov(ctx.addr(), *frame_address, size);
+        self.state.builder.add_mov(ctx.addr(), *frame_address, size);
     }
 
     fn referenced_or_not_type(ty: &Type) -> Type {
@@ -685,7 +718,8 @@ impl CodeGen {
     ) {
         match op {
             CompoundOperatorKind::Add => {
-                self.builder
+                self.state
+                    .builder
                     .add_add_i32(target.addr(), target.addr(), source_ctx.addr());
             }
             CompoundOperatorKind::Sub => todo!(),
@@ -700,7 +734,8 @@ impl CodeGen {
         internal: &InternalFunctionDefinitionRef,
         ctx: &mut Context,
     ) {
-        self.builder
+        self.state
+            .builder
             .add_ld_imm_u16(ctx.addr(), internal.program_unique_id);
     }
 

@@ -7,7 +7,7 @@ use crate::symtbl::SymbolTable;
 use seq_map::SeqMap;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
-use swamp_script_semantic::{Expression, ExpressionKind, VariableRef};
+use swamp_script_semantic::{Expression, ExpressionKind, InternalMainExpression};
 
 #[derive(Debug)]
 pub struct Modules {
@@ -57,11 +57,6 @@ pub fn pretty_print(
             tab_str, resolved_expression.ty, resolved_expression.kind
         )
     }
-}
-
-pub struct InternalMainExpression {
-    pub expression: Expression,
-    pub function_scope_state: Vec<VariableRef>,
 }
 
 pub type ModuleRef = Rc<Module>;
