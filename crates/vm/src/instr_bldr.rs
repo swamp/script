@@ -7,7 +7,10 @@ pub struct PatchPosition(pub InstructionPosition);
 
 pub struct InstructionBuilder {
     pub instructions: Vec<BinaryInstruction>,
+    pub comments: Vec<String>,
 }
+
+impl InstructionBuilder {}
 
 impl InstructionBuilder {}
 
@@ -26,6 +29,7 @@ impl InstructionBuilder {
     pub const fn new() -> Self {
         Self {
             instructions: Vec::new(),
+            comments: Vec::new(),
         }
     }
 
@@ -37,18 +41,25 @@ impl InstructionBuilder {
     pub fn add_conditional_jump_placeholder(
         &mut self,
         condition_addr: FrameMemoryAddress,
+        comment: &str,
     ) -> PatchPosition {
         let position = self.position();
 
-        self.add_instruction(OpCode::Bz, &[condition_addr.0, 0]);
+        self.add_instruction(OpCode::Bz, &[condition_addr.0, 0], comment);
 
         PatchPosition(position)
     }
 
-    pub fn add_jump_placeholder(&mut self) -> PatchPosition {
+    pub fn add_call_placeholder(&mut self, comment: &str) -> PatchPosition {
+        let position = self.position();
+        self.add_instruction(OpCode::Call, &[0], comment);
+        PatchPosition(position)
+    }
+
+    pub fn add_jump_placeholder(&mut self, comment: &str) -> PatchPosition {
         let position = self.position();
 
-        self.add_instruction(OpCode::Jmp, &[0]);
+        self.add_instruction(OpCode::Jmp, &[0], comment);
 
         PatchPosition(position)
     }
@@ -59,16 +70,21 @@ impl InstructionBuilder {
         target: FrameMemoryAddress,
         source: FrameMemoryAddress,
         size: MemorySize,
+        comment: &str,
     ) {
-        self.add_instruction(OpCode::Mov, &[target.0, source.0]);
+        self.add_instruction(OpCode::Mov, &[target.0, source.0, size.0], comment);
     }
 
-    pub fn add_ret(&mut self) {
-        self.add_instruction(OpCode::Ret, &[0]);
+    pub fn add_ret(&mut self, comment: &str) {
+        self.add_instruction(OpCode::Ret, &[], comment);
     }
 
-    pub fn add_call(&mut self, function_ip: &InstructionPosition) {
-        self.add_instruction(OpCode::Call, &[function_ip.0]);
+    pub fn add_hlt(&mut self, comment: &str) {
+        self.add_instruction(OpCode::Hlt, &[], comment);
+    }
+
+    pub fn add_call(&mut self, function_ip: &InstructionPosition, comment: &str) {
+        self.add_instruction(OpCode::Call, &[function_ip.0], comment);
     }
 
     /// # Panics
@@ -102,36 +118,60 @@ impl InstructionBuilder {
         self.patch_jump(jump_position, &self.position());
     }
 
-    pub fn add_jmp(&mut self, ip: InstructionPosition) {
-        self.add_instruction(OpCode::Jmp, &[ip.0 - 1]);
+    /// # Panics
+    ///
+    pub fn patch_call(&mut self, patch_position: PatchPosition, ip: &InstructionPosition) {
+        const CALL: u8 = OpCode::Call as u8;
+
+        let instruction = &mut self.instructions[patch_position.0.0 as usize];
+
+        match instruction.opcode {
+            CALL => {
+                instruction.operands[0] = ip.0 as u16 - 1;
+            }
+            _ => panic!("Attempted to patch a non-call instruction at position {patch_position:?}"),
+        }
     }
 
-    pub fn add_ld_local(&mut self, dst_offset: FrameMemoryAddress, src_offset: u16) {
-        self.add_instruction(OpCode::Ld, &[dst_offset.0, src_offset]);
-    }
-    pub fn add_st_local(&mut self, dst_offset: FrameMemoryAddress, src_offset: u16) {
-        self.add_instruction(OpCode::St, &[dst_offset.0, src_offset]);
+    pub fn add_jmp(&mut self, ip: InstructionPosition, comment: &str) {
+        self.add_instruction(OpCode::Jmp, &[ip.0 - 1], comment);
     }
 
-    pub fn add_ld_imm_i32(&mut self, dst_offset: FrameMemoryAddress, value: i32) {
+    pub fn add_ld_local(&mut self, dst_offset: FrameMemoryAddress, src_offset: u16, comment: &str) {
+        self.add_instruction(OpCode::Ld, &[dst_offset.0, src_offset], comment);
+    }
+    pub fn add_st_local(&mut self, dst_offset: FrameMemoryAddress, src_offset: u16, comment: &str) {
+        self.add_instruction(OpCode::St, &[dst_offset.0, src_offset], comment);
+    }
+
+    pub fn add_ld_imm_i32(&mut self, dst_offset: FrameMemoryAddress, value: i32, comment: &str) {
         let value_u32 = value as u32;
 
         let lower_bits = (value_u32 & 0xFFFF) as u16;
         let upper_bits = (value_u32 >> 16) as u16;
 
-        self.add_instruction(OpCode::Ld32, &[dst_offset.0, lower_bits, upper_bits]);
+        self.add_instruction(
+            OpCode::Ld32,
+            &[dst_offset.0, lower_bits, upper_bits],
+            comment,
+        );
     }
 
-    pub fn add_ld_imm_u8(&mut self, dst_offset: FrameMemoryAddress, value: u8) {
-        self.add_instruction(OpCode::Ld8, &[dst_offset.0, value as u16]);
+    pub fn add_ld_imm_u8(&mut self, dst_offset: FrameMemoryAddress, value: u8, comment: &str) {
+        self.add_instruction(OpCode::Ld8, &[dst_offset.0, value as u16], comment);
     }
 
-    pub fn add_load_frame_address(&mut self, dest: FrameMemoryAddress, addr: FrameMemoryAddress) {
-        self.add_ld_imm_u16(dest, addr.0);
+    pub fn add_load_frame_address(
+        &mut self,
+        dest: FrameMemoryAddress,
+        addr: FrameMemoryAddress,
+        comment: &str,
+    ) {
+        self.add_ld_u16(dest, addr.0, comment);
     }
 
-    pub fn add_ld_imm_u16(&mut self, dest: FrameMemoryAddress, data: u16) {
-        self.add_instruction(OpCode::Ld16, &[dest.0, data]);
+    pub fn add_ld_u16(&mut self, dest: FrameMemoryAddress, data: u16, comment: &str) {
+        self.add_instruction(OpCode::Ld16, &[dest.0, data], comment);
     }
 
     pub fn add_add_i32(
@@ -139,24 +179,31 @@ impl InstructionBuilder {
         dst_offset: FrameMemoryAddress,
         lhs_offset: FrameMemoryAddress,
         rhs_offset: FrameMemoryAddress,
+        comment: &str,
     ) {
-        self.add_instruction(OpCode::AddI32, &[dst_offset.0, lhs_offset.0, rhs_offset.0]);
+        self.add_instruction(
+            OpCode::AddI32,
+            &[dst_offset.0, lhs_offset.0, rhs_offset.0],
+            comment,
+        );
     }
 
     pub fn add_jmp_if(
         &mut self,
         condition_offset: FrameMemoryAddress,
         jmp_target: &InstructionPosition,
+        comment: &str,
     ) {
-        self.add_instruction(OpCode::Bnz, &[condition_offset.0, jmp_target.0]);
+        self.add_instruction(OpCode::Bnz, &[condition_offset.0, jmp_target.0], comment);
     }
 
     pub fn add_jmp_if_not(
         &mut self,
         condition_offset: MemoryAddress,
         jmp_target: InstructionPosition,
+        comment: &str,
     ) {
-        self.add_instruction(OpCode::Bz, &[condition_offset.0, jmp_target.0]);
+        self.add_instruction(OpCode::Bz, &[condition_offset.0, jmp_target.0], comment);
     }
 
     pub fn add_lt_i32(
@@ -164,8 +211,13 @@ impl InstructionBuilder {
         dst_offset: FrameMemoryAddress,
         lhs_offset: FrameMemoryAddress,
         rhs_offset: FrameMemoryAddress,
+        comment: &str,
     ) {
-        self.add_instruction(OpCode::LtI32, &[dst_offset.0, lhs_offset.0, rhs_offset.0]);
+        self.add_instruction(
+            OpCode::LtI32,
+            &[dst_offset.0, lhs_offset.0, rhs_offset.0],
+            comment,
+        );
     }
 
     pub fn add_lt_u16(
@@ -173,8 +225,9 @@ impl InstructionBuilder {
         dest: FrameMemoryAddress,
         a: FrameMemoryAddress,
         b: FrameMemoryAddress,
+        comment: &str,
     ) {
-        self.add_instruction(OpCode::LtU16, &[dest.0, a.0, b.0]);
+        self.add_instruction(OpCode::LtU16, &[dest.0, a.0, b.0], comment);
     }
 
     pub fn add_ld_indirect(
@@ -183,15 +236,16 @@ impl InstructionBuilder {
         base_ptr: FrameMemoryAddress,
         offset: FrameMemoryAddress,
         size: u16,
+        comment: &str,
     ) {
-        self.add_instruction(OpCode::LdIndirect, &[dest.0, base_ptr.0, offset.0, size]);
+        self.add_instruction(
+            OpCode::LdIndirect,
+            &[dest.0, base_ptr.0, offset.0, size],
+            comment,
+        );
     }
 
-    pub fn add_end(&mut self) {
-        self.add_instruction(OpCode::Hlt, &[]);
-    }
-
-    fn add_instruction(&mut self, op_code: OpCode, operands: &[u16]) {
+    fn add_instruction(&mut self, op_code: OpCode, operands: &[u16], comment: &str) {
         let mut array: [u16; 4] = [0; 4];
         let len = operands.len().min(4);
         array[..len].copy_from_slice(&operands[..len]);
@@ -200,5 +254,6 @@ impl InstructionBuilder {
             opcode_count: operands.len() as u8,
             operands: array,
         });
+        self.comments.push(comment.to_string());
     }
 }

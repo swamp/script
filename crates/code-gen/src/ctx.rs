@@ -7,6 +7,13 @@ use tracing::info;
 pub struct Context {
     target_info: TargetInfo,
     temp_allocator: ScopeAllocator,
+    comment: String,
+}
+
+impl Context {
+    pub(crate) fn comment(&self) -> &str {
+        &self.comment
+    }
 }
 
 impl Context {}
@@ -39,6 +46,7 @@ impl Context {
                 size: MemorySize(self.target_info.size.0 - 1),
             },
             temp_allocator: self.temp_allocator,
+            comment: "".to_string(),
         }
     }
 }
@@ -49,15 +57,17 @@ impl Context {
         Self {
             target_info: TargetInfo { addr, size },
             temp_allocator: ScopeAllocator::new(FrameMemoryAddress(addr.0 + size.0)),
+            comment: String::new(),
         }
     }
 
-    pub fn temp_space_for_type(&mut self, ty: &Type) -> Self {
+    pub fn temp_space_for_type(&mut self, ty: &Type, comment: &str) -> Self {
         let new_target_info = reserve_space_for_type(ty, &mut self.temp_allocator);
         info!(?new_target_info, "creating temporary space");
         Self {
             target_info: new_target_info,
             temp_allocator: self.temp_allocator.create_scope(),
+            comment: comment.to_string(),
         }
     }
 
@@ -69,26 +79,29 @@ impl Context {
     }
 
     #[must_use]
-    pub const fn with_target(&self, addr: FrameMemoryAddress, size: MemorySize) -> Self {
+    pub fn with_target(&self, addr: FrameMemoryAddress, size: MemorySize, comment: &str) -> Self {
         Self {
             target_info: TargetInfo { addr, size },
             temp_allocator: self.temp_allocator,
+            comment: comment.to_string(),
         }
     }
 
     #[must_use]
-    pub const fn create_scope(&self) -> Self {
+    pub fn create_scope(&self) -> Self {
         Self {
             target_info: self.target_info,
             temp_allocator: self.temp_allocator.create_scope(),
+            comment: self.comment.clone(),
         }
     }
 
     #[must_use]
-    pub const fn create_function_scope(&self, return_target: TargetInfo) -> Self {
+    pub fn create_function_scope(&self, return_target: TargetInfo, comment: &str) -> Self {
         Self {
             target_info: self.target_info,
             temp_allocator: self.temp_allocator.create_scope(),
+            comment: comment.to_string(),
         }
     }
 }

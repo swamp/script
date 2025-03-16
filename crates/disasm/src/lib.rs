@@ -1,3 +1,4 @@
+use seq_map::SeqMap;
 use swamp_vm_types::opcode::OpCode;
 use swamp_vm_types::{BinaryInstruction, FrameMemoryAddress, InstructionPosition};
 use yansi::Paint;
@@ -8,6 +9,8 @@ pub enum DecoratedOperandKind {
     WriteFrameAddress(FrameMemoryAddress, DecoratedMemoryKind),
     Ip(InstructionPosition),
     ImmediateU32(u32),
+    ImmediateU16(u16),
+    MemorySize(u16),
 }
 
 #[derive(Clone, Debug)]
@@ -18,6 +21,7 @@ pub enum DecoratedMemoryKind {
     S32,
     Fp32,
     B8,
+    Octets,
 }
 pub struct DecoratedOperand {
     pub kind: DecoratedOperandKind,
@@ -36,24 +40,64 @@ fn memory_kind_color(kind: &DecoratedMemoryKind) -> String {
         DecoratedMemoryKind::U32 => "u32",
         DecoratedMemoryKind::S32 => "i32",
         DecoratedMemoryKind::Fp32 => "fp32",
+        DecoratedMemoryKind::Octets => "*b8",
     };
 
     format!("{}", short_string.white())
 }
 
 #[must_use]
-pub fn disasm_instructions_color(binary_instruction: &[BinaryInstruction]) -> String {
+pub fn disasm_instructions_color(
+    binary_instruction: &[BinaryInstruction],
+    descriptions: &[String],
+    ip_infos: &SeqMap<InstructionPosition, String>,
+) -> String {
     let mut string = String::new();
 
-    for (ip_index, instruction) in binary_instruction.iter().enumerate() {
-        string += &format!("> {:04X}: {}\n", ip_index, disasm_color(instruction));
+    for (ip_index, (instruction, comment)) in
+        binary_instruction.iter().zip(descriptions).enumerate()
+    {
+        if let Some(found) = ip_infos.get(&InstructionPosition(ip_index as u16)) {
+            string += &format!("------- {} --------\n", found.bright_blue());
+        }
+
+        string += &format!(
+            "> {:04X}: {}\n",
+            ip_index,
+            disasm_color(instruction, comment)
+        );
     }
 
     string
 }
 
 #[must_use]
-pub fn disasm_color(binary_instruction: &BinaryInstruction) -> String {
+pub fn disasm_instructions_no_color(
+    binary_instruction: &[BinaryInstruction],
+    descriptions: &[String],
+    ip_infos: &SeqMap<InstructionPosition, String>,
+) -> String {
+    let mut string = String::new();
+
+    for (ip_index, (instruction, comment)) in
+        binary_instruction.iter().zip(descriptions).enumerate()
+    {
+        if let Some(found) = ip_infos.get(&InstructionPosition(ip_index as u16)) {
+            string += &format!("- {} -\n", found);
+        }
+
+        string += &format!(
+            "> {:04X}: {}\n",
+            ip_index,
+            disasm_no_color(instruction, comment)
+        );
+    }
+
+    string
+}
+
+#[must_use]
+pub fn disasm_color(binary_instruction: &BinaryInstruction, comment: &str) -> String {
     let decorated = disasm(binary_instruction);
 
     let name = format!("{}", decorated.name.blue());
@@ -75,8 +119,16 @@ pub fn disasm_color(binary_instruction: &BinaryInstruction) -> String {
                 format!("{}{}", "@".cyan(), format!("{:X}", ip.0).bright_cyan()),
                 String::new(),
             ),
+            DecoratedOperandKind::MemorySize(data) => (
+                format!("{}", format!("{data:04X}",).bright_yellow()),
+                format!("{}{}", "int:".white(), data.white()),
+            ),
             DecoratedOperandKind::ImmediateU32(data) => (
                 format!("{}", format!("{data:08X}",).bright_magenta()),
+                format!("{}{}", "int:".white(), (data as i32).white()),
+            ),
+            DecoratedOperandKind::ImmediateU16(data) => (
+                format!("{}", format!("{data:04X}",).bright_magenta()),
                 format!("{}{}", "int:".white(), (data as i32).white()),
             ),
         };
@@ -89,15 +141,48 @@ pub fn disasm_color(binary_instruction: &BinaryInstruction) -> String {
     let comment_suffix = if converted_comments.is_empty() {
         String::new()
     } else {
-        format!(" {} {}", "#".white(), converted_comments.join(", "))
+        format!(" ({})", converted_comments.join(", "))
     };
 
-    format!(
-        "{} {}{}",
-        name,
-        converted_operands.join(" "),
-        comment_suffix
-    )
+    let total_comment = format!("{}{}", comment, comment_suffix);
+    let print_comment = if total_comment.is_empty() {
+        String::new()
+    } else {
+        format!(" {} {}", "#".white(), total_comment.white())
+    };
+
+    format!("{} {}{}", name, converted_operands.join(" "), print_comment)
+}
+
+#[must_use]
+pub fn disasm_no_color(binary_instruction: &BinaryInstruction, comment: &str) -> String {
+    let decorated = disasm(binary_instruction);
+
+    let name = format!("{}", decorated.name);
+
+    let mut converted_operands = Vec::new();
+
+    for operand in decorated.operands {
+        let new_str = match operand.kind {
+            DecoratedOperandKind::ReadFrameAddress(addr, memory_kind) => {
+                format!("{}{}", "$", format!("{:04X}", addr.0))
+            }
+            DecoratedOperandKind::WriteFrameAddress(addr, memory_kind) => {
+                format!("{}{}", "$", format!("{:04X}", addr.0))
+            }
+
+            DecoratedOperandKind::MemorySize(data) => format!("{}", format!("{data:04X}",)),
+
+            DecoratedOperandKind::Ip(ip) => {
+                format!("{}{}", "@", format!("{:X}", ip.0))
+            }
+            DecoratedOperandKind::ImmediateU32(data) => format!("{}", format!("{data:08X}",)),
+            DecoratedOperandKind::ImmediateU16(data) => format!("{}", format!("{data:04X}",)),
+        };
+        converted_operands.push(new_str);
+    }
+
+    format!("{} {} # {}", name, converted_operands.join(" "), comment)
 }
 
 pub fn disasm(binary_instruction: &BinaryInstruction) -> DecoratedOpcode {
@@ -106,18 +191,26 @@ pub fn disasm(binary_instruction: &BinaryInstruction) -> DecoratedOpcode {
 
     let operands_slice: &[DecoratedOperandKind] = match opcode {
         OpCode::Hlt => &[],
+        OpCode::Ret => &[],
         OpCode::Ld => todo!(),
         OpCode::St => todo!(),
         OpCode::Ld32 => {
             let data = ((operands[2] as u32) << 16) | operands[1] as u32;
-            //let lower_bits = (value_u32 & 0xFFFF) as u16;
-            //let upper_bits = (value_u32 >> 16) as u16;
 
             &[
                 to_write_frame(operands[0], DecoratedMemoryKind::S32),
                 DecoratedOperandKind::ImmediateU32(data),
             ]
         }
+        OpCode::Ld16 => {
+            let data = operands[1] as u16;
+
+            &[
+                to_write_frame(operands[0], DecoratedMemoryKind::U16),
+                DecoratedOperandKind::ImmediateU16(data),
+            ]
+        }
+
         OpCode::AddI32 => &[
             to_write_frame(operands[0], DecoratedMemoryKind::S32),
             to_read_frame(operands[1], DecoratedMemoryKind::S32),
@@ -136,12 +229,14 @@ pub fn disasm(binary_instruction: &BinaryInstruction) -> DecoratedOpcode {
             to_read_frame(operands[0], DecoratedMemoryKind::B8),
             to_jmp_ip(operands[1]),
         ],
-        OpCode::Call => todo!(),
+        OpCode::Call => &[to_jmp_ip(operands[0])],
         OpCode::Enter => todo!(),
-        OpCode::Ret => todo!(),
         OpCode::Jmp => &[to_jmp_ip(operands[0])],
-        OpCode::Mov => todo!(),
-        OpCode::Ld16 => todo!(),
+        OpCode::Mov => &[
+            to_write_frame(operands[0], DecoratedMemoryKind::Octets),
+            to_read_frame(operands[1], DecoratedMemoryKind::Octets),
+            DecoratedOperandKind::MemorySize(operands[2]),
+        ],
         OpCode::Ld8 => todo!(),
         OpCode::LtU16 => todo!(),
         OpCode::LdIndirect => todo!(),

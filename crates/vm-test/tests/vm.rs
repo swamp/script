@@ -1,4 +1,4 @@
-use swamp_script_vm_test::util::{exec, exec_vars};
+use swamp_script_vm_test::util::{exec, exec_vars, gen_code};
 
 #[test]
 fn variable_definition() {
@@ -47,15 +47,13 @@ fn while_loop() {
 
 #[test_log::test]
 fn call() {
-    exec_vars(
+    gen_code(
         "
         fn another_fn(a: Int, b: Int) -> Int {
             a+b
         }
-        mut a = 1
-        while a < 10 {
-            a = another_fn(a, 10)
-        }
+        a = 20
+        result = another_fn(a, 10)
         ",
         "
 00000000  FF 7F 00 00 00 00 00 00  00 00 00 00 00 00 00 00  ................

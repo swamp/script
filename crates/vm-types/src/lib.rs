@@ -51,5 +51,5 @@ pub struct MemorySize(pub u16);
 #[derive(Copy, Clone)]
 pub struct FrameMemorySize(pub u16);
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct InstructionPosition(pub u16);
