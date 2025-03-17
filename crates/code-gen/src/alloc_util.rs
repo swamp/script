@@ -22,14 +22,14 @@ pub fn type_size(ty: &Type) -> MemorySize {
         Type::Blueprint(_) => todo!(),
         Type::Variable(_) => todo!(),
         Type::External(_) => todo!(),
-        Type::MutableReference(_referenced_type) => PTR_SIZE,
+        Type::MutableReference(referenced_type) => type_size(referenced_type).0,
     };
 
     MemorySize(size)
 }
 
 pub fn type_alignment(ty: &Type) -> MemoryAlignment {
-    let alignment = match ty {
+    match ty {
         Type::Int => MemoryAlignment::U32,
         Type::Float => MemoryAlignment::U32,
         Type::String => MemoryAlignment::U16,
@@ -47,10 +47,8 @@ pub fn type_alignment(ty: &Type) -> MemoryAlignment {
         Type::Blueprint(_) => todo!(),
         Type::Variable(_) => todo!(),
         Type::External(_) => todo!(),
-        Type::MutableReference(_referenced_type) => MemoryAlignment::U16,
-    };
-
-    alignment
+        Type::MutableReference(referenced_type) => type_alignment(referenced_type),
+    }
 }
 
 pub fn type_size_and_alignment(ty: &Type) -> (MemorySize, MemoryAlignment) {

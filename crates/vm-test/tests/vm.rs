@@ -65,14 +65,14 @@ fn call() {
 > 0003: ld32 $0060 0000000A # int literal
 > 0004: call @7 # calling another_fn (frame size: frame size: 0058)
 > 0005: mov $0004 $0058 4 # copy the return value to destination
-> 0006: hlt  # 
+> 0006: hlt  #
 - another_fn -
 > 0007: enter 5C # variables:
   $0004:4 a
   $0008:4 b
 
 > 0008: sadd32 $0000 $0004 $0008 # i32 add
-> 0009: ret  # 
+> 0009: ret  #
     ",
     );
 }
@@ -89,6 +89,24 @@ fn call_exec() {
         ",
         "
 00000000  14 00 00 00 1E 00 00 00  14 00 00 00 00 00 00 00  ................
+    ",
+    );
+}
+
+#[test_log::test]
+fn call_mut_argument() {
+    exec(
+        "
+        fn add_and_overwrite(a: Int, mut b: Int) {
+            b = a+b
+        }
+
+        a = 20
+        mut b = 30
+        add_and_overwrite(a, mut b)
+        ",
+        "
+00000000  14 00 00 00 32 00 00 00  00 00 00 00 00 00 00 00  ....2...........
     ",
     );
 }

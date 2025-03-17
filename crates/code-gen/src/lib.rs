@@ -17,7 +17,7 @@ use swamp_script_semantic::{
     MutOrImmutableExpression, Postfix, PostfixKind, SingleLocationExpression,
     SingleMutLocationExpression, VariableRef,
 };
-use swamp_script_types::{AnonymousStructType, EnumVariantType, StructTypeField, Type};
+use swamp_script_types::{AnonymousStructType, EnumVariantType, Signature, StructTypeField, Type};
 
 use swamp_vm_instr_build::{InstructionBuilder, PTR_SIZE, PatchPosition};
 use swamp_vm_types::{
@@ -174,7 +174,7 @@ impl CodeGenState {
 
 pub struct FunctionCodeGen<'a> {
     state: &'a mut CodeGenState,
-    variable_offsets: SeqMap<usize, FrameMemoryAddress>,
+    variable_offsets: SeqMap<usize, FrameMemoryRegion>,
     frame_size: FrameMemorySize,
     extra_frame_allocator: ScopeAllocator,
     temp_allocator: ScopeAllocator,
@@ -216,7 +216,7 @@ impl<'a> FunctionCodeGen<'a> {
                 var_target.addr.0, var_target.size.0, var_ref.assigned_name
             );
             self.variable_offsets
-                .insert(var_ref.unique_id_within_function, var_target.addr)
+                .insert(var_ref.unique_id_within_function, var_target)
                 .unwrap();
         }
 
@@ -261,10 +261,7 @@ impl<'a> FunctionCodeGen<'a> {
                     .get(&var_ref.unique_id_within_function)
                     .unwrap();
 
-                FrameMemoryRegion {
-                    addr: *frame_address,
-                    size,
-                }
+                *frame_address
             }
 
             _ => {
@@ -449,13 +446,31 @@ impl<'a> FunctionCodeGen<'a> {
         self.state.builder.patch_jump_here(jump_on_false_condition);
     }
 
-    fn gen_argument(&mut self, argument: &ArgumentExpressionOrLocation, ctx: &mut Context) {
+    fn gen_location_argument(
+        &mut self,
+        argument: &SingleLocationExpression,
+        ctx: &mut Context,
+        comment: &str,
+    ) {
+        let region = self.gen_lvalue_address(argument);
+
+        self.state
+            .builder
+            .add_mov(ctx.addr(), region.addr, region.size, comment)
+    }
+
+    fn gen_argument(
+        &mut self,
+        argument: &ArgumentExpressionOrLocation,
+        ctx: &mut Context,
+        comment: &str,
+    ) {
         match &argument {
             ArgumentExpressionOrLocation::Expression(found_expression) => {
                 self.gen_expression(found_expression, ctx);
             }
             ArgumentExpressionOrLocation::Location(location_expression) => {
-                self.gen_location_access(location_expression, ctx);
+                self.gen_location_argument(location_expression, ctx, comment);
             }
         }
     }
@@ -470,7 +485,7 @@ impl<'a> FunctionCodeGen<'a> {
                 self.gen_expression(found_expression, ctx);
             }
             ArgumentExpressionOrLocation::Location(location_expression) => {
-                self.gen_location_access(location_expression, ctx);
+                self.gen_lvalue_address(location_expression);
             }
         }
     }
@@ -485,14 +500,8 @@ impl<'a> FunctionCodeGen<'a> {
             .get(&variable.unique_id_within_function)
             .unwrap_or_else(|| panic!("{}", variable.assigned_name));
 
-        // TODO: the variable size could be stored in cache as well
-        let variable_size = type_size(&variable.resolved_type);
-
-        let mut init_ctx = ctx.with_target(
-            *target_relative_frame_pointer,
-            variable_size,
-            "variable assignment target",
-        );
+        let mut init_ctx =
+            ctx.with_target(*target_relative_frame_pointer, "variable assignment target");
 
         self.gen_mut_or_immute(mut_or_immutable_expression, &mut init_ctx);
     }
@@ -515,10 +524,9 @@ impl<'a> FunctionCodeGen<'a> {
         self.gen_variable_assignment(variable, mut_or_immutable_expression, ctx);
     }
 
-    fn gen_location_access(
+    fn gen_lvalue_address(
         &mut self,
         location_expression: &SingleLocationExpression,
-        ctx: &Context,
     ) -> FrameMemoryRegion {
         let frame_relative_base_address = self
             .variable_offsets
@@ -529,10 +537,7 @@ impl<'a> FunctionCodeGen<'a> {
             )
             .unwrap();
 
-        FrameMemoryRegion {
-            addr: *frame_relative_base_address,
-            size: ctx.target_size(),
-        }
+        *frame_relative_base_address
 
         /*
 
@@ -555,16 +560,51 @@ impl<'a> FunctionCodeGen<'a> {
          */
     }
 
-    fn gen_arguments(&mut self, return_type: &Type, arguments: &Vec<ArgumentExpressionOrLocation>) {
+    fn copy_back_mutable_arguments(
+        &mut self,
+        return_type: &Type,
+        arguments: &Vec<ArgumentExpressionOrLocation>,
+    ) {
         let arguments_memory_region = self.infinite_above_frame_size();
         let mut arguments_allocator = ScopeAllocator::new(arguments_memory_region);
 
         let _argument_addr = Self::reserve(return_type, &mut arguments_allocator);
 
         for argument in arguments {
+            let source_region = Self::reserve(&argument.ty(), &mut arguments_allocator);
+
+            if let ArgumentExpressionOrLocation::Location(found_location) = argument {
+                let argument_target = self.gen_lvalue_address(found_location);
+                self.state.builder.add_mov(
+                    argument_target.addr,
+                    source_region.addr,
+                    source_region.size,
+                    &format!(
+                        "copy back mutable argument {}",
+                        found_location.starting_variable.assigned_name
+                    ),
+                );
+            }
+        }
+    }
+    fn gen_arguments(
+        &mut self,
+        signature: &Signature,
+        arguments: &Vec<ArgumentExpressionOrLocation>,
+    ) {
+        let arguments_memory_region = self.infinite_above_frame_size();
+        let mut arguments_allocator = ScopeAllocator::new(arguments_memory_region);
+
+        let _argument_addr = Self::reserve(&signature.return_type, &mut arguments_allocator);
+
+        for (argument, type_for_parameter) in arguments.iter().zip(&signature.parameters) {
             let argument_target = Self::reserve(&argument.ty(), &mut arguments_allocator);
             let mut arg_ctx = Context::new(argument_target);
-            self.gen_argument(argument, &mut arg_ctx);
+            self.gen_argument(
+                argument,
+                &mut arg_ctx,
+                &format!("argument {}", type_for_parameter.name),
+            );
             // TODO: support more than one argument
         }
     }
@@ -578,16 +618,20 @@ impl<'a> FunctionCodeGen<'a> {
         if let ExpressionKind::InternalFunctionAccess(internal_fn) = &start_expression.kind {
             if chain.len() == 1 {
                 if let PostfixKind::FunctionCall(args) = &chain[0].kind {
-                    self.gen_arguments(&internal_fn.signature.return_type, args);
+                    self.gen_arguments(&internal_fn.signature, args);
                     self.state
                         .add_call(internal_fn, &format!("frame size: {}", self.frame_size)); // will be fixed up later
                     let return_size = type_size(&internal_fn.signature.return_type);
-                    self.state.builder.add_mov(
-                        ctx.addr(),
-                        self.infinite_above_frame_size().addr,
-                        return_size,
-                        "copy the return value to destination",
-                    );
+                    if return_size.0 != 0 {
+                        self.state.builder.add_mov(
+                            ctx.addr(),
+                            self.infinite_above_frame_size().addr,
+                            return_size,
+                            "copy the return value to destination",
+                        );
+                    }
+                    self.copy_back_mutable_arguments(&internal_fn.signature.return_type, args);
+
                     return;
                 }
             }
@@ -861,7 +905,7 @@ impl<'a> FunctionCodeGen<'a> {
         let size = type_size(&variable.resolved_type);
         self.state.builder.add_mov(
             ctx.addr(),
-            *frame_address,
+            frame_address.addr,
             size,
             &format!(
                 "variable access '{}' ({})",
@@ -886,7 +930,7 @@ impl<'a> FunctionCodeGen<'a> {
         source: &Expression,
         ctx: &mut Context,
     ) {
-        let target_location = self.gen_location_access(&target_location.0, ctx);
+        let target_location = self.gen_lvalue_address(&target_location.0);
 
         let source_info = self.gen_expression_for_access(source, ctx);
 

@@ -1,8 +1,5 @@
-use crate::alloc::{FrameMemoryRegion, ScopeAllocator};
-use crate::alloc_util::reserve_space_for_type;
-use swamp_script_types::Type;
-use swamp_vm_types::{FrameMemoryAddress, MemoryAlignment, MemorySize};
-use tracing::info;
+use crate::alloc::FrameMemoryRegion;
+use swamp_vm_types::{FrameMemoryAddress, MemorySize};
 
 pub struct Context {
     target_info: FrameMemoryRegion,
@@ -54,9 +51,9 @@ impl Context {
     }
 
     #[must_use]
-    pub fn with_target(&self, addr: FrameMemoryAddress, size: MemorySize, comment: &str) -> Self {
+    pub fn with_target(&self, target_info: FrameMemoryRegion, comment: &str) -> Self {
         Self {
-            target_info: FrameMemoryRegion { addr, size },
+            target_info,
             comment: comment.to_string(),
         }
     }
