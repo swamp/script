@@ -11,7 +11,7 @@ use seq_map::SeqMap;
 use std::ops::Deref;
 use swamp_script_semantic::{
     ArgumentExpressionOrLocation, BinaryOperator, BinaryOperatorKind, BooleanExpression,
-    CompoundOperatorKind, EnumLiteralData, Expression, ExpressionKind, ForPattern,
+    CompoundOperatorKind, EnumLiteralData, Expression, ExpressionKind, ForPattern, Function,
     FunctionScopeState, InternalFunctionDefinition, InternalFunctionDefinitionRef,
     InternalFunctionId, InternalMainExpression, Iterable, Literal, LocationAccessKind,
     MutOrImmutableExpression, Postfix, PostfixKind, SingleLocationExpression,
@@ -19,7 +19,8 @@ use swamp_script_semantic::{
 };
 use swamp_script_types::{AnonymousStructType, EnumVariantType, Signature, StructTypeField, Type};
 
-use swamp_vm_instr_build::{InstructionBuilder, PTR_SIZE, PatchPosition};
+use swamp_script_semantic::intr::IntrinsicFunction;
+use swamp_vm_instr_build::{InstructionBuilder, PatchPosition, PTR_SIZE};
 use swamp_vm_types::{
     BinaryInstruction, FrameMemoryAddress, FrameMemorySize, InstructionPosition, MemoryAlignment,
     MemoryOffset, MemorySize,
@@ -124,9 +125,11 @@ impl CodeGenState {
 
     pub fn gen_function_def(
         &mut self,
-        internal_fn_def: InternalFunctionDefinitionRef,
+        internal_fn_def: &InternalFunctionDefinitionRef,
         options: &GenOptions,
     ) {
+        //        info!(?internal_fn_def.assigned_name, ?internal_fn_def.program_unique_id, "generating function");
+        assert_ne!(internal_fn_def.program_unique_id, 0);
         self.function_infos
             .insert(
                 internal_fn_def.program_unique_id,
@@ -250,7 +253,7 @@ impl<'a> FunctionCodeGen<'a> {
     pub fn gen_expression_for_access(
         &mut self,
         expr: &Expression,
-        ctx: &mut Context,
+        ctx: &Context,
     ) -> FrameMemoryRegion {
         match &expr.kind {
             ExpressionKind::VariableAccess(var_ref) => {
@@ -277,7 +280,7 @@ impl<'a> FunctionCodeGen<'a> {
         Context::new(target)
     }
 
-    pub fn gen_expression(&mut self, expr: &Expression, ctx: &mut Context) {
+    pub fn gen_expression(&mut self, expr: &Expression, ctx: &Context) {
         match &expr.kind {
             ExpressionKind::ConstantAccess(_) => todo!(),
             ExpressionKind::VariableAccess(variable_ref) => {
@@ -326,18 +329,20 @@ impl<'a> FunctionCodeGen<'a> {
                 self.compound_assignment(target_location, operator_kind, source_expr, ctx);
             }
             ExpressionKind::IntrinsicCallMut(_, _, _) => todo!(),
-            ExpressionKind::IntrinsicCallEx(_, _) => todo!(),
+            ExpressionKind::IntrinsicCallEx(intrinsic_fn, arguments) => {
+                self.gen_intrinsic_call_ex(intrinsic_fn, arguments, ctx);
+            }
         }
     }
 
-    fn gen_binary_operator(&mut self, binary_operator: &BinaryOperator, ctx: &mut Context) {
+    fn gen_binary_operator(&mut self, binary_operator: &BinaryOperator, ctx: &Context) {
         match (&binary_operator.left.ty, &binary_operator.right.ty) {
             (Type::Int, Type::Int) => self.gen_binary_operator_i32(binary_operator, ctx),
             _ => todo!(),
         }
     }
 
-    fn gen_binary_operator_i32(&mut self, binary_operator: &BinaryOperator, ctx: &mut Context) {
+    fn gen_binary_operator_i32(&mut self, binary_operator: &BinaryOperator, ctx: &Context) {
         let left_source = self.gen_expression_for_access(&binary_operator.left, ctx);
         let right_source = self.gen_expression_for_access(&binary_operator.right, ctx);
 
@@ -377,7 +382,7 @@ impl<'a> FunctionCodeGen<'a> {
     fn gen_condition_context(
         &mut self,
         condition: &BooleanExpression,
-        ctx: &mut Context,
+        ctx: &Context,
     ) -> (Context, PatchPosition) {
         let mut condition_ctx = self.extra_frame_space_for_type(&Type::Bool);
         self.gen_expression(&condition.expression, &mut condition_ctx);
@@ -395,7 +400,7 @@ impl<'a> FunctionCodeGen<'a> {
         condition: &BooleanExpression,
         true_expr: &Expression,
         maybe_false_expr: Option<&Expression>,
-        ctx: &mut Context,
+        ctx: &Context,
     ) {
         let (_condition_ctx, jump_on_false_condition) = self.gen_condition_context(condition, ctx);
 
@@ -425,7 +430,7 @@ impl<'a> FunctionCodeGen<'a> {
         &mut self,
         condition: &BooleanExpression,
         expression: &Expression,
-        ctx: &mut Context,
+        ctx: &Context,
     ) {
         // `while` loops are only for side effects, make sure that the target size is zero (Unit)
         assert_eq!(ctx.target_size().0, 0);
@@ -449,7 +454,7 @@ impl<'a> FunctionCodeGen<'a> {
     fn gen_location_argument(
         &mut self,
         argument: &SingleLocationExpression,
-        ctx: &mut Context,
+        ctx: &Context,
         comment: &str,
     ) {
         let region = self.gen_lvalue_address(argument);
@@ -462,7 +467,7 @@ impl<'a> FunctionCodeGen<'a> {
     fn gen_argument(
         &mut self,
         argument: &ArgumentExpressionOrLocation,
-        ctx: &mut Context,
+        ctx: &Context,
         comment: &str,
     ) {
         match &argument {
@@ -519,7 +524,7 @@ impl<'a> FunctionCodeGen<'a> {
         &mut self,
         variable: &VariableRef,
         mut_or_immutable_expression: &Box<MutOrImmutableExpression>,
-        ctx: &mut Context,
+        ctx: &Context,
     ) {
         self.gen_variable_assignment(variable, mut_or_immutable_expression, ctx);
     }
@@ -562,16 +567,32 @@ impl<'a> FunctionCodeGen<'a> {
 
     fn copy_back_mutable_arguments(
         &mut self,
-        return_type: &Type,
+        signature: &Signature,
+        maybe_self: Option<FrameMemoryRegion>,
         arguments: &Vec<ArgumentExpressionOrLocation>,
     ) {
         let arguments_memory_region = self.infinite_above_frame_size();
         let mut arguments_allocator = ScopeAllocator::new(arguments_memory_region);
 
-        let _argument_addr = Self::reserve(return_type, &mut arguments_allocator);
+        let _argument_addr = Self::reserve(&signature.return_type, &mut arguments_allocator);
 
-        for argument in arguments {
-            let source_region = Self::reserve(&argument.ty(), &mut arguments_allocator);
+        let mut parameters = signature.parameters.clone();
+        if let Some(found_self) = maybe_self {
+            let source_region =
+                Self::reserve(&parameters[0].resolved_type, &mut arguments_allocator);
+            self.state.builder.add_mov(
+                found_self.addr,
+                source_region.addr,
+                source_region.size,
+                "copy back to <self>",
+            );
+            parameters.remove(0);
+        }
+        for (parameter, argument) in parameters.iter().zip(arguments) {
+            let source_region = Self::reserve(&parameter.resolved_type, &mut arguments_allocator);
+            if !parameter.is_mutable {
+                continue;
+            }
 
             if let ArgumentExpressionOrLocation::Location(found_location) = argument {
                 let argument_target = self.gen_lvalue_address(found_location);
@@ -584,12 +605,15 @@ impl<'a> FunctionCodeGen<'a> {
                         found_location.starting_variable.assigned_name
                     ),
                 );
+            } else {
+                panic!("internal error. argument is mut but not a location")
             }
         }
     }
     fn gen_arguments(
         &mut self,
         signature: &Signature,
+        self_region: Option<FrameMemoryRegion>,
         arguments: &Vec<ArgumentExpressionOrLocation>,
     ) {
         let arguments_memory_region = self.infinite_above_frame_size();
@@ -597,15 +621,37 @@ impl<'a> FunctionCodeGen<'a> {
 
         let _argument_addr = Self::reserve(&signature.return_type, &mut arguments_allocator);
 
-        for (argument, type_for_parameter) in arguments.iter().zip(&signature.parameters) {
-            let argument_target = Self::reserve(&argument.ty(), &mut arguments_allocator);
-            let mut arg_ctx = Context::new(argument_target);
-            self.gen_argument(
-                argument,
-                &mut arg_ctx,
-                &format!("argument {}", type_for_parameter.name),
+        let mut argument_targets = Vec::new();
+        let mut argument_comments = Vec::new();
+
+        for type_for_parameter in &signature.parameters {
+            let argument_target =
+                Self::reserve(&type_for_parameter.resolved_type, &mut arguments_allocator);
+            let arg_ctx = Context::new(argument_target);
+            argument_targets.push(arg_ctx);
+            argument_comments.push(format!("argument {}", type_for_parameter.name));
+        }
+
+        if let Some(push_self) = self_region {
+            self.state.builder.add_mov(
+                argument_targets[0].addr(),
+                push_self.addr,
+                push_self.size,
+                "<self>",
             );
-            // TODO: support more than one argument
+            argument_targets.remove(0);
+        }
+
+        for ((argument_target_ctx, argument_expr_or_loc), argument_comment) in argument_targets
+            .iter()
+            .zip(arguments)
+            .zip(argument_comments)
+        {
+            self.gen_argument(
+                argument_expr_or_loc,
+                &argument_target_ctx,
+                &argument_comment,
+            );
         }
     }
 
@@ -613,12 +659,12 @@ impl<'a> FunctionCodeGen<'a> {
         &mut self,
         start_expression: &Expression,
         chain: &[Postfix],
-        ctx: &mut Context,
+        ctx: &Context,
     ) {
         if let ExpressionKind::InternalFunctionAccess(internal_fn) = &start_expression.kind {
             if chain.len() == 1 {
                 if let PostfixKind::FunctionCall(args) = &chain[0].kind {
-                    self.gen_arguments(&internal_fn.signature, args);
+                    self.gen_arguments(&internal_fn.signature, None, args);
                     self.state
                         .add_call(internal_fn, &format!("frame size: {}", self.frame_size)); // will be fixed up later
                     let (return_size, _alignment) =
@@ -631,7 +677,7 @@ impl<'a> FunctionCodeGen<'a> {
                             "copy the return value to destination",
                         );
                     }
-                    self.copy_back_mutable_arguments(&internal_fn.signature.return_type, args);
+                    self.copy_back_mutable_arguments(&internal_fn.signature, None, args);
 
                     return;
                 }
@@ -643,7 +689,38 @@ impl<'a> FunctionCodeGen<'a> {
         for element in chain {
             match &element.kind {
                 PostfixKind::StructField(_, _) => todo!(),
-                PostfixKind::MemberCall(function_to_call, arguments) => {}
+                PostfixKind::MemberCall(function_to_call, arguments) => {
+                    match &**function_to_call {
+                        Function::Internal(internal_fn) => {
+                            self.gen_arguments(
+                                &internal_fn.signature,
+                                Some(start_source),
+                                arguments,
+                            );
+                            self.state
+                                .add_call(internal_fn, &format!("frame size: {}", self.frame_size)); // will be fixed up later
+                            let (return_size, _alignment) =
+                                type_size_and_alignment(&internal_fn.signature.return_type);
+                            if return_size.0 != 0 {
+                                self.state.builder.add_mov(
+                                    ctx.addr(),
+                                    self.infinite_above_frame_size().addr,
+                                    return_size,
+                                    "copy the return value to destination",
+                                );
+                            }
+
+                            self.copy_back_mutable_arguments(
+                                &internal_fn.signature,
+                                Some(start_source),
+                                arguments,
+                            );
+                        }
+                        Function::External(external_fn) => {
+                            //self.state.builder.add_host_call(external_fn.id);
+                        }
+                    }
+                }
                 PostfixKind::FunctionCall(arguments) => {
                     //self.gen_arguments(arguments);
                     //self.state.add_call(start_expression)
@@ -686,7 +763,7 @@ impl<'a> FunctionCodeGen<'a> {
         &mut self,
         anon_struct_type: &AnonymousStructType,
         source_order_expressions: &Vec<(usize, Expression)>,
-        base_context: &mut Context,
+        base_context: &Context,
     ) {
         for (field_index, expression) in source_order_expressions {
             let field_memory_offset = Self::get_struct_field_offset(
@@ -698,7 +775,7 @@ impl<'a> FunctionCodeGen<'a> {
         }
     }
 
-    fn gen_literal(&mut self, literal: &Literal, ctx: &mut Context) {
+    fn gen_literal(&mut self, literal: &Literal, ctx: &Context) {
         match literal {
             Literal::IntLiteral(int) => {
                 self.state
@@ -753,9 +830,9 @@ impl<'a> FunctionCodeGen<'a> {
         }
     }
 
-    fn gen_string_literal(&self, string: &str, ctx: &mut Context) {}
+    fn gen_string_literal(&self, string: &str, ctx: &Context) {}
 
-    fn gen_option_expression(&mut self, maybe_option: Option<&Expression>, ctx: &mut Context) {
+    fn gen_option_expression(&mut self, maybe_option: Option<&Expression>, ctx: &Context) {
         if let Some(found_value) = maybe_option {
             self.state
                 .builder
@@ -775,7 +852,7 @@ impl<'a> FunctionCodeGen<'a> {
         for_pattern: &ForPattern,
         iterable: &Iterable,
         body: &Box<Expression>,
-        ctx: &mut Context,
+        ctx: &Context,
     ) {
         // Add check if the collection is empty, to skip everything
 
@@ -890,7 +967,7 @@ impl<'a> FunctionCodeGen<'a> {
          */
     }
 
-    fn gen_block(&mut self, expressions: &[Expression], ctx: &mut Context) {
+    fn gen_block(&mut self, expressions: &[Expression], ctx: &Context) {
         if let Some((last, others)) = expressions.split_last() {
             for expr in others {
                 let mut temp_context = self.temp_space_for_type(&Type::Unit, "block target");
@@ -931,7 +1008,7 @@ impl<'a> FunctionCodeGen<'a> {
         target_location: &SingleMutLocationExpression,
         op: &CompoundOperatorKind,
         source: &Expression,
-        ctx: &mut Context,
+        ctx: &Context,
     ) {
         let target_location = self.gen_lvalue_address(&target_location.0);
 
@@ -988,7 +1065,7 @@ impl<'a> FunctionCodeGen<'a> {
     fn internal_function_access(
         &mut self,
         internal: &InternalFunctionDefinitionRef,
-        ctx: &mut Context,
+        ctx: &Context,
     ) {
         self.state.builder.add_ld_u16(
             ctx.addr(),
@@ -1001,7 +1078,7 @@ impl<'a> FunctionCodeGen<'a> {
         FrameMemoryRegion::new(FrameMemoryAddress(self.frame_size.0), MemorySize(1024))
     }
 
-    fn gen_struct_literal(&mut self, struct_literal: &StructInstantiation, ctx: &mut Context) {
+    fn gen_struct_literal(&mut self, struct_literal: &StructInstantiation, ctx: &Context) {
         let struct_type =
             Type::AnonymousStruct(struct_literal.struct_type_ref.anon_struct_type.clone());
         let (whole_struct_size, whole_struct_alignment) = type_size_and_alignment(&struct_type);
@@ -1012,10 +1089,84 @@ impl<'a> FunctionCodeGen<'a> {
                 *field_index,
                 &struct_literal.struct_type_ref.anon_struct_type,
             );
-            info!(?field_offset, ?field_index, "field offset");
+            //info!(?field_offset, ?field_index, "field offset");
             let new_address = ctx.addr().advance(field_offset);
             let mut field_ctx = Context::new(FrameMemoryRegion::new(new_address, field_size));
             self.gen_expression(expression, &mut field_ctx);
+        }
+    }
+
+    fn gen_intrinsic_call_ex(
+        &self,
+        intrinsic_fn: &IntrinsicFunction,
+        arguments: &Vec<ArgumentExpressionOrLocation>,
+        ctx: &Context,
+    ) {
+        //        info!(?intrinsic_fn, "generating intrinsic call");
+
+        match intrinsic_fn {
+            IntrinsicFunction::FloatRound => {}
+            IntrinsicFunction::FloatFloor => {}
+            IntrinsicFunction::FloatSqrt => {}
+            IntrinsicFunction::FloatSign => {}
+            IntrinsicFunction::FloatAbs => {}
+            IntrinsicFunction::FloatRnd => {}
+            IntrinsicFunction::FloatCos => {}
+            IntrinsicFunction::FloatSin => {}
+            IntrinsicFunction::FloatAcos => {}
+            IntrinsicFunction::FloatAsin => {}
+            IntrinsicFunction::FloatAtan2 => {}
+            IntrinsicFunction::FloatMin => {}
+            IntrinsicFunction::FloatMax => {}
+            IntrinsicFunction::FloatClamp => {}
+            IntrinsicFunction::IntAbs => {}
+            IntrinsicFunction::IntRnd => {}
+            IntrinsicFunction::IntMax => {}
+            IntrinsicFunction::IntMin => {}
+            IntrinsicFunction::IntClamp => {}
+            IntrinsicFunction::IntToFloat => {}
+            IntrinsicFunction::StringLen => {}
+            IntrinsicFunction::VecFromSlice => {}
+            IntrinsicFunction::VecPush => {}
+            IntrinsicFunction::VecPop => {}
+            IntrinsicFunction::VecRemoveIndex => {}
+            IntrinsicFunction::VecClear => {}
+            IntrinsicFunction::VecCreate => {}
+            IntrinsicFunction::VecSubscript => {}
+            IntrinsicFunction::VecSubscriptMut => {}
+            IntrinsicFunction::VecIter => {}
+            IntrinsicFunction::VecIterMut => {}
+            IntrinsicFunction::VecSelfPush => {}
+            IntrinsicFunction::VecSelfExtend => {}
+            IntrinsicFunction::MapCreate => {}
+            IntrinsicFunction::MapFromSlicePair => {}
+            IntrinsicFunction::MapHas => {}
+            IntrinsicFunction::MapRemove => {}
+            IntrinsicFunction::MapIter => {}
+            IntrinsicFunction::MapIterMut => {}
+            IntrinsicFunction::MapLen => {}
+            IntrinsicFunction::MapIsEmpty => {}
+            IntrinsicFunction::MapSubscript => {}
+            IntrinsicFunction::MapSubscriptSet => {}
+            IntrinsicFunction::MapSubscriptMut => {}
+            IntrinsicFunction::MapSubscriptMutCreateIfNeeded => {}
+            IntrinsicFunction::SparseCreate => {}
+            IntrinsicFunction::SparseFromSlice => {}
+            IntrinsicFunction::SparseIter => {}
+            IntrinsicFunction::SparseIterMut => {}
+            IntrinsicFunction::SparseSubscript => {}
+            IntrinsicFunction::SparseSubscriptMut => {}
+            IntrinsicFunction::SparseHas => {}
+            IntrinsicFunction::SparseRemove => {}
+            IntrinsicFunction::GridCreate => {}
+            IntrinsicFunction::GridFromSlice => {}
+            IntrinsicFunction::GridSubscript => {}
+            IntrinsicFunction::GridSubscriptMut => {}
+            IntrinsicFunction::Float2Magnitude => {}
+            IntrinsicFunction::SparseAdd => {}
+            IntrinsicFunction::VecLen => {}
+            IntrinsicFunction::VecIsEmpty => {}
+            IntrinsicFunction::SparseNew => {}
         }
     }
 }
@@ -1030,12 +1181,6 @@ fn struct_field_offset(
     {
         let (field_size, field_alignment) = type_size_and_alignment(&field.field_type);
         let field_start_offset = offset.space(field_size, field_alignment);
-        info!(
-            ?field_index,
-            ?field_size,
-            ?field_start_offset,
-            "advanced to"
-        );
         if field_index == index_to_look_for {
             return (field_start_offset, field_size, field_alignment);
         }

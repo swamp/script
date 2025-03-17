@@ -1,5 +1,7 @@
 use swamp_script_code_gen::{CodeGenState, GenOptions};
 use swamp_script_compile::compile_string;
+use swamp_script_semantic::Function;
+use swamp_script_types::Type;
 use swamp_vm::Vm;
 use swamp_vm_disasm::{disasm_instructions_color, disasm_instructions_no_color};
 
@@ -19,8 +21,31 @@ pub fn gen_internal(code: &str) -> CodeGenState {
         is_halt_function: false,
     };
 
-    for internal_function_def in main_module.symbol_table.internal_functions() {
+    for internal_function_def in &main_module.symbol_table.internal_functions() {
         code_gen.gen_function_def(internal_function_def, &normal_function);
+    }
+
+    for (associated_on_type, impl_functions) in program.state.associated_impls.functions {
+        if !associated_on_type.is_concrete() {
+            continue;
+        }
+        if associated_on_type == Type::Int
+            || associated_on_type == Type::Float
+            || associated_on_type == Type::Bool
+            || associated_on_type == Type::String
+        {
+            continue;
+        }
+
+        for (_name, func) in impl_functions.functions {
+            match &*func {
+                Function::Internal(int_fn) => {
+                    code_gen.gen_function_def(int_fn, &normal_function);
+                }
+
+                Function::External(_ext_fn) => {}
+            }
+        }
     }
 
     code_gen.finalize();

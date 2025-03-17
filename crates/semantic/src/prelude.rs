@@ -10,7 +10,7 @@ pub use crate::{
     FunctionRef, FunctionScopeState, Guard, InternalFunctionCall, InternalFunctionDefinition,
     InternalFunctionDefinitionRef, Iterable, Literal, LocalIdentifier, LocalTypeIdentifier, Match,
     MatchArm, MemberCall, MutVariable, Pattern, PrecisionType, ProgramState, SemanticError,
-    StringPart, StructInstantiation, UnaryOperator, Variable, VariableRef,
+    StringPart, StructInstantiation, UnaryOperator, Variable, VariableRef, 
     inst_cache::InstantiationCache,
     intr::{IntrinsicFunction, IntrinsicFunctionDefinition, IntrinsicFunctionDefinitionRef},
 };

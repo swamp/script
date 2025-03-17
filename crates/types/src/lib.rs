@@ -162,7 +162,10 @@ impl Signature {
 impl Type {
     #[must_use]
     pub const fn is_concrete(&self) -> bool {
-        !matches!(self, Self::Unit | Self::Never | Self::Variable(_))
+        !matches!(
+            self,
+            Self::Unit | Self::Never | Self::Variable(_) | Self::Generic(_, _) | Self::Blueprint(_)
+        )
     }
 }
 

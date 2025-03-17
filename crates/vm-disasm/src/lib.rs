@@ -11,6 +11,7 @@ pub enum DecoratedOperandKind {
     ImmediateU32(u32),
     ImmediateU16(u16),
     MemorySize(u16),
+    ImmediateU8(u16),
 }
 
 #[derive(Clone, Debug)]
@@ -43,7 +44,7 @@ fn memory_kind_color(kind: &DecoratedMemoryKind) -> String {
         DecoratedMemoryKind::Octets => "*b8",
     };
 
-    format!("{}", short_string.white())
+    format!("{}", short_string)
 }
 
 #[must_use]
@@ -120,16 +121,20 @@ pub fn disasm_color(binary_instruction: &BinaryInstruction, comment: &str) -> St
                 String::new(),
             ),
             DecoratedOperandKind::MemorySize(data) => (
-                format!("{}", format!("{data:X}",).bright_yellow()),
-                format!("{}{}", "int:".white(), data.white()),
+                format!("{}", format!("{data:X}",).yellow()),
+                format!("{}{}", "int:", data),
             ),
             DecoratedOperandKind::ImmediateU32(data) => (
-                format!("{}", format!("{data:08X}",).bright_magenta()),
-                format!("{}{}", "int:".white(), (data as i32).white()),
+                format!("{}", format!("{data:08X}",).magenta()),
+                format!("{}{}", "int:", data as i32),
             ),
             DecoratedOperandKind::ImmediateU16(data) => (
-                format!("{}", format!("{data:04X}",).bright_magenta()),
-                format!("{}{}", "int:".white(), (data as i32).white()),
+                format!("{}", format!("{data:04X}",).magenta()),
+                format!("{}{}", "int:", data as i32),
+            ),
+            DecoratedOperandKind::ImmediateU8(data) => (
+                format!("{}", format!("{data:02X}",).magenta()),
+                format!("{}{}", "int:", data as i8),
             ),
         };
         converted_operands.push(new_str);
@@ -148,7 +153,7 @@ pub fn disasm_color(binary_instruction: &BinaryInstruction, comment: &str) -> St
     let print_comment = if total_comment.is_empty() {
         String::new()
     } else {
-        format!(" {} {}", "#".white(), total_comment.white())
+        format!(" {} {}", "#".bright_black(), total_comment.bright_black())
     };
 
     format!("{} {}{}", name, converted_operands.join(" "), print_comment)
@@ -178,6 +183,7 @@ pub fn disasm_no_color(binary_instruction: &BinaryInstruction, comment: &str) ->
             }
             DecoratedOperandKind::ImmediateU32(data) => format!("{}", format!("{data:08X}",)),
             DecoratedOperandKind::ImmediateU16(data) => format!("{}", format!("{data:04X}",)),
+            DecoratedOperandKind::ImmediateU8(data) => format!("{}", format!("{data:02X}",)),
         };
         converted_operands.push(new_str);
     }
@@ -210,6 +216,14 @@ pub fn disasm(binary_instruction: &BinaryInstruction) -> DecoratedOpcode {
                 DecoratedOperandKind::ImmediateU16(data),
             ]
         }
+        OpCode::Ld8 => {
+            let data = operands[1];
+
+            &[
+                to_write_frame(operands[0], DecoratedMemoryKind::U8),
+                DecoratedOperandKind::ImmediateU8(data),
+            ]
+        }
 
         OpCode::AddI32 => &[
             to_write_frame(operands[0], DecoratedMemoryKind::S32),
@@ -237,7 +251,6 @@ pub fn disasm(binary_instruction: &BinaryInstruction) -> DecoratedOpcode {
             to_read_frame(operands[1], DecoratedMemoryKind::Octets),
             DecoratedOperandKind::MemorySize(operands[2]),
         ],
-        OpCode::Ld8 => todo!(),
         OpCode::LtU16 => todo!(),
         OpCode::LdIndirect => todo!(),
     };

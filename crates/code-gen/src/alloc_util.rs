@@ -2,6 +2,7 @@ use crate::alloc::{FrameMemoryRegion, ScopeAllocator};
 use swamp_script_types::{AnonymousStructType, Type};
 use swamp_vm_instr_build::{FLOAT_SIZE, INT_SIZE, STR_SIZE};
 use swamp_vm_types::{MemoryAlignment, MemoryOffset, MemorySize};
+use tracing::error;
 
 pub fn layout_struct(
     anon_struct: &AnonymousStructType,
@@ -39,7 +40,10 @@ pub fn type_size_and_alignment(ty: &Type) -> (MemorySize, MemoryAlignment) {
         Type::Function(_) => (MemorySize(2), MemoryAlignment::U16),
         Type::Iterable(_) => todo!(),
         Type::Optional(_) => todo!(),
-        Type::Generic(_, _) => todo!(),
+        Type::Generic(a, b) => {
+            error!(?a, ?b, "generic can not be generated");
+            panic!("generic is not supported")
+        }
         Type::Blueprint(_) => todo!(),
         Type::Variable(_) => todo!(),
         Type::External(_) => todo!(),

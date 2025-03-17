@@ -128,7 +128,7 @@ fn call_struct_function() {
         add(mut s, 40)
         ",
         "
-00000000  14 00 00 00 32 00 00 00  00 00 00 00 00 00 00 00  ....2...........
+00000000  32 00 00 00 14 00 00 00  28 00 00 00 00 00 00 00  2.......(.......
     ",
     );
 }
@@ -137,21 +137,22 @@ fn call_struct_function() {
 fn call_associated_function() {
     exec(
         "
-        struct Something {
-            a: Int,
-        }
+struct Something {
+    a: Int,
+    b: Bool,
+}
 
-        impl Something {
-            fn add(mut self, b: Int) {
-                self.a += b
-            }
-        }
+impl Something {
+    fn own_add(mut self, b: Int) {
+        self.a += b
+    }
+}
 
-        mut s = Something { a: 10 }
-        s.add(40)
+mut s = Something { a: 10, b: false }
+s.own_add(40)
         ",
         "
-00000000  14 00 00 00 32 00 00 00  00 00 00 00 00 00 00 00  ....2...........
+00000000  32 00 00 00 00 00 00 00  28 00 00 00 00 00 00 00  2.......(.......
     ",
     );
 }

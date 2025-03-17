@@ -761,7 +761,7 @@ impl Analyzer<'_> {
                     assigned_name: self.get_text(&function_data.declaration.name).to_string(),
                     variable_scopes: self.scope.clone(),
                     function_scope_state: self.function_variables.clone(),
-                    program_unique_id: 0,
+                    program_unique_id: self.shared.state.allocate_internal_function_id(),
                 };
 
                 let internal_ref = Rc::new(internal);

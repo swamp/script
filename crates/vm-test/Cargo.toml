@@ -9,7 +9,9 @@ swamp-script-code-gen = { path = "../code-gen", version = "0.1.3" }
 swamp-script-compile = { path = "../compile", version = "0.1.3" }
 hexify = "0.0.3"
 swamp-script-types = { path = "../types", version = "0.1.3" }
+swamp-script-semantic = { path = "../semantic", version = "0.1.3"}
 swamp-vm-disasm = { path = "../vm-disasm", version = "0.1.3"}
+tracing = "0.1.40"
 
 [dev-dependencies]
 test-log = { version = "0.2.16", features = ["trace", "log", "color"] }
