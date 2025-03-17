@@ -120,7 +120,7 @@ pub fn disasm_color(binary_instruction: &BinaryInstruction, comment: &str) -> St
                 String::new(),
             ),
             DecoratedOperandKind::MemorySize(data) => (
-                format!("{}", format!("{data:04X}",).bright_yellow()),
+                format!("{}", format!("{data:X}",).bright_yellow()),
                 format!("{}{}", "int:".white(), data.white()),
             ),
             DecoratedOperandKind::ImmediateU32(data) => (
@@ -171,7 +171,7 @@ pub fn disasm_no_color(binary_instruction: &BinaryInstruction, comment: &str) ->
                 format!("{}{}", "$", format!("{:04X}", addr.0))
             }
 
-            DecoratedOperandKind::MemorySize(data) => format!("{}", format!("{data:04X}",)),
+            DecoratedOperandKind::MemorySize(data) => format!("{}", format!("{data:X}",)),
 
             DecoratedOperandKind::Ip(ip) => {
                 format!("{}{}", "@", format!("{:X}", ip.0))
@@ -230,7 +230,7 @@ pub fn disasm(binary_instruction: &BinaryInstruction) -> DecoratedOpcode {
             to_jmp_ip(operands[1]),
         ],
         OpCode::Call => &[to_jmp_ip(operands[0])],
-        OpCode::Enter => todo!(),
+        OpCode::Enter => &[DecoratedOperandKind::MemorySize(operands[0])],
         OpCode::Jmp => &[to_jmp_ip(operands[0])],
         OpCode::Mov => &[
             to_write_frame(operands[0], DecoratedMemoryKind::Octets),

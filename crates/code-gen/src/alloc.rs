@@ -1,16 +1,38 @@
-use swamp_vm_types::{FrameMemoryAddress, MemorySize};
+use swamp_vm_types::{FrameMemoryAddress, MemoryAlignment, MemorySize, align_frame_addr};
 
 const ALIGNMENT: u16 = 8;
 const ALIGNMENT_REST: u16 = ALIGNMENT - 1;
 const ALIGNMENT_MASK: u16 = !ALIGNMENT_REST;
 
 #[derive(Debug, Copy, Clone)]
-pub struct TargetInfo {
+pub struct FrameMemoryRegion {
     pub addr: FrameMemoryAddress,
     pub size: MemorySize,
 }
 
-impl TargetInfo {
+impl Default for FrameMemoryRegion {
+    fn default() -> Self {
+        Self {
+            addr: FrameMemoryAddress(0),
+            size: MemorySize(0),
+        }
+    }
+}
+
+impl FrameMemoryRegion {
+    pub(crate) fn new(frame_addr: FrameMemoryAddress, size: MemorySize) -> FrameMemoryRegion {
+        Self {
+            addr: frame_addr,
+            size,
+        }
+    }
+
+    pub fn last_valid_end_addr(&self) -> FrameMemoryAddress {
+        self.addr.add(MemorySize(self.size.0 - 1))
+    }
+}
+
+impl FrameMemoryRegion {
     #[must_use]
     pub fn addr(&self) -> FrameMemoryAddress {
         self.addr
@@ -21,28 +43,32 @@ impl TargetInfo {
 pub struct ScopeAllocator {
     initial_addr: FrameMemoryAddress,
     addr: FrameMemoryAddress,
+    target_info: FrameMemoryRegion,
 }
 
 impl ScopeAllocator {
     #[must_use]
-    pub const fn new(start_addr: FrameMemoryAddress) -> Self {
+    pub const fn new(target_info: FrameMemoryRegion) -> Self {
         Self {
-            initial_addr: start_addr,
-            addr: start_addr,
+            initial_addr: target_info.addr,
+            addr: target_info.addr,
+            target_info,
         }
     }
 
-    pub fn allocate(&mut self, size: MemorySize) -> FrameMemoryAddress {
-        self.addr.0 = (self.addr.0 + ALIGNMENT_REST) & ALIGNMENT_MASK;
-        let addr = self.addr;
-        self.addr.0 += size.0;
+    pub fn allocate(&mut self, size: MemorySize, alignment: MemoryAlignment) -> FrameMemoryAddress {
+        let start_addr = align_frame_addr(self.addr, alignment);
 
-        addr
+        self.addr = start_addr.add(size);
+
+        assert!(self.addr.0 <= self.target_info.last_valid_end_addr().0);
+
+        start_addr
     }
 
-    pub fn reserve(&mut self, size: MemorySize) -> TargetInfo {
-        TargetInfo {
-            addr: self.allocate(size),
+    pub fn reserve(&mut self, size: MemorySize, alignment: MemoryAlignment) -> FrameMemoryRegion {
+        FrameMemoryRegion {
+            addr: self.allocate(size, alignment),
             size,
         }
     }
@@ -52,6 +78,7 @@ impl ScopeAllocator {
         Self {
             addr: self.addr,
             initial_addr: self.addr,
+            target_info: self.target_info,
         }
     }
 

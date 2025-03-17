@@ -1,3 +1,7 @@
+use crate::aligner::align;
+use std::fmt::{Display, Formatter};
+
+mod aligner;
 pub mod opcode;
 
 #[repr(C, packed)]
@@ -48,8 +52,50 @@ pub struct MemoryOffset(pub u16);
 #[derive(Debug, Copy, Clone)]
 pub struct MemorySize(pub u16);
 
+#[derive(Debug, Copy, Clone)]
+pub enum MemoryAlignment {
+    U8,
+    U16,
+    U32,
+    U64,
+}
+
+impl Into<usize> for MemoryAlignment {
+    fn into(self) -> usize {
+        match self {
+            Self::U8 => 1,
+            Self::U16 => 2,
+            Self::U32 => 4,
+            Self::U64 => 8,
+        }
+    }
+}
+
+#[must_use]
+pub fn align_frame_addr(
+    memory_address: FrameMemoryAddress,
+    alignment: MemoryAlignment,
+) -> FrameMemoryAddress {
+    let raw_addr = align(memory_address.0 as usize, alignment.into());
+
+    FrameMemoryAddress(raw_addr as u16)
+}
+
 #[derive(Copy, Clone)]
 pub struct FrameMemorySize(pub u16);
+
+impl Display for FrameMemorySize {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "frame size: {:04X}", self.0)
+    }
+}
+
+impl FrameMemorySize {
+    #[must_use]
+    pub const fn add(&self, inc: MemorySize) -> Self {
+        Self(self.0 + inc.0)
+    }
+}
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct InstructionPosition(pub u16);

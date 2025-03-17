@@ -42,7 +42,7 @@ pub fn gen_internal_debug(code: &str) -> CodeGenState {
 }
 
 pub fn exec_internal(code: &str) -> Vm {
-    let code_gen = gen_internal(code);
+    let code_gen = gen_internal_debug(code);
 
     let instructions = code_gen.take_instructions();
 
@@ -74,7 +74,7 @@ fn compare_hex_outputs(memory: &[u8], expected_hex: &str) {
 pub fn exec(code: &str, expected_hex: &str) {
     let vm = exec_internal_debug(code);
 
-    compare_hex_outputs(&vm.stack_memory()[..16], expected_hex);
+    compare_hex_outputs(&vm.stack_base_memory()[..16], expected_hex);
 }
 pub fn exec_vars(code: &str, expected_hex: &str) {
     let vm = exec_internal_debug(code);

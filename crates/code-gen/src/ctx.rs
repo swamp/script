@@ -1,11 +1,11 @@
-use crate::alloc::{ScopeAllocator, TargetInfo};
+use crate::alloc::{FrameMemoryRegion, ScopeAllocator};
 use crate::alloc_util::reserve_space_for_type;
 use swamp_script_types::Type;
-use swamp_vm_types::{FrameMemoryAddress, MemorySize};
+use swamp_vm_types::{FrameMemoryAddress, MemoryAlignment, MemorySize};
 use tracing::info;
 
 pub struct Context {
-    target_info: TargetInfo,
+    target_info: FrameMemoryRegion,
     temp_allocator: ScopeAllocator,
     comment: String,
 }
@@ -21,14 +21,18 @@ impl Context {}
 impl Context {}
 
 impl Context {
-    pub(crate) const fn target(&self) -> TargetInfo {
+    pub(crate) const fn target(&self) -> FrameMemoryRegion {
         self.target_info
     }
 }
 
 impl Context {
-    pub(crate) fn allocate_temp(&mut self, memory_size: MemorySize) -> FrameMemoryAddress {
-        self.temp_allocator.allocate(memory_size)
+    pub(crate) fn allocate_temp(
+        &mut self,
+        memory_size: MemorySize,
+        alignment: MemoryAlignment,
+    ) -> FrameMemoryAddress {
+        self.temp_allocator.allocate(memory_size, alignment)
     }
 }
 
@@ -41,7 +45,7 @@ impl Context {
 impl Context {
     pub(crate) fn with_offset(&self, offset: MemorySize) -> Self {
         Self {
-            target_info: TargetInfo {
+            target_info: FrameMemoryRegion {
                 addr: self.addr().add(offset),
                 size: MemorySize(self.target_info.size.0 - 1),
             },
@@ -53,10 +57,13 @@ impl Context {
 
 impl Context {
     #[must_use]
-    pub const fn new(addr: FrameMemoryAddress, size: MemorySize) -> Self {
+    pub fn new(target_info: FrameMemoryRegion) -> Self {
         Self {
-            target_info: TargetInfo { addr, size },
-            temp_allocator: ScopeAllocator::new(FrameMemoryAddress(addr.0 + size.0)),
+            target_info,
+            temp_allocator: ScopeAllocator::new(FrameMemoryRegion::new(
+                FrameMemoryAddress(target_info.addr.0 + target_info.size.0),
+                MemorySize(1024),
+            )),
             comment: String::new(),
         }
     }
@@ -81,7 +88,7 @@ impl Context {
     #[must_use]
     pub fn with_target(&self, addr: FrameMemoryAddress, size: MemorySize, comment: &str) -> Self {
         Self {
-            target_info: TargetInfo { addr, size },
+            target_info: FrameMemoryRegion { addr, size },
             temp_allocator: self.temp_allocator,
             comment: comment.to_string(),
         }
@@ -97,7 +104,7 @@ impl Context {
     }
 
     #[must_use]
-    pub fn create_function_scope(&self, return_target: TargetInfo, comment: &str) -> Self {
+    pub fn create_function_scope(&self, return_target: FrameMemoryRegion, comment: &str) -> Self {
         Self {
             target_info: self.target_info,
             temp_allocator: self.temp_allocator.create_scope(),

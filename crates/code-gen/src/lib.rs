@@ -3,8 +3,8 @@ pub mod alloc_util;
 pub mod ctx;
 mod vec;
 
-use crate::alloc::{ScopeAllocator, TargetInfo};
-use crate::alloc_util::type_size;
+use crate::alloc::{FrameMemoryRegion, ScopeAllocator};
+use crate::alloc_util::{type_size, type_size_and_alignment};
 use crate::ctx::Context;
 use crate::vec::{VECTOR_DATA_PTR_OFFSET, VECTOR_LENGTH_OFFSET};
 use seq_map::SeqMap;
@@ -19,11 +19,10 @@ use swamp_script_semantic::{
 };
 use swamp_script_types::{AnonymousStructType, EnumVariantType, StructTypeField, Type};
 
-use swamp_vm::PTR_SIZE;
-use swamp_vm::instr_bldr::{InstructionBuilder, PatchPosition};
+use swamp_vm_instr_build::{InstructionBuilder, PTR_SIZE, PatchPosition};
 use swamp_vm_types::{
-    BinaryInstruction, FrameMemoryAddress, FrameMemorySize, InstructionPosition, MemoryOffset,
-    MemorySize,
+    BinaryInstruction, FrameMemoryAddress, FrameMemorySize, InstructionPosition, MemoryAlignment,
+    MemoryOffset, MemorySize,
 };
 use tracing::info;
 
@@ -62,19 +61,13 @@ impl CodeGenState {
 }
 
 impl CodeGenState {
-    pub(crate) fn add_call(&mut self, internal_fn: &InternalFunctionDefinitionRef) {
+    pub(crate) fn add_call(&mut self, internal_fn: &InternalFunctionDefinitionRef, comment: &str) {
+        let call_comment = &format!("calling {} ({})", internal_fn.assigned_name, comment);
+
         if let Some(found) = self.function_infos.get(&internal_fn.program_unique_id) {
-            self.builder.add_call(
-                &found.starts_at_ip,
-                &format!(
-                    "calling {}",
-                    found.internal_function_definition.assigned_name
-                ),
-            );
+            self.builder.add_call(&found.starts_at_ip, call_comment);
         } else {
-            let patch_position = self
-                .builder
-                .add_call_placeholder(&format!("calling {}", internal_fn.assigned_name));
+            let patch_position = self.builder.add_call_placeholder(call_comment);
             self.function_fixups.push(FunctionFixup {
                 patch_position,
                 fn_id: internal_fn.program_unique_id,
@@ -146,7 +139,10 @@ impl CodeGenState {
 
         let mut function_generator = FunctionCodeGen::new(self, internal_fn_def.program_unique_id);
 
-        let mut ctx = Context::new(FrameMemoryAddress(0), MemorySize(512));
+        let mut ctx = Context::new(FrameMemoryRegion::new(
+            FrameMemoryAddress(0),
+            MemorySize(512),
+        ));
 
         function_generator.layout_variables(
             &internal_fn_def.function_scope_state,
@@ -169,10 +165,9 @@ impl CodeGenState {
     pub fn gen_main_function(&mut self, main: &InternalMainExpression, options: &GenOptions) {
         let mut function_generator = FunctionCodeGen::new(self, main.program_unique_id);
 
-        let mut ctx =
-            function_generator.layout_variables(&main.function_scope_state, &main.expression.ty);
-        let mut unit_ctx = ctx.temp_space_for_type(&Type::Unit, "main return (unit)");
-        function_generator.gen_expression(&main.expression, &mut unit_ctx);
+        function_generator.layout_variables(&main.function_scope_state, &main.expression.ty);
+        let mut empty_ctx = Context::new(FrameMemoryRegion::default()); //"main return (unit)");
+        function_generator.gen_expression(&main.expression, &mut empty_ctx);
         self.finalize_function(options);
     }
 }
@@ -193,30 +188,38 @@ impl<'a> FunctionCodeGen<'a> {
             state,
             variable_offsets: SeqMap::default(),
             frame_size: FrameMemorySize(0),
-            extra_frame_allocator: ScopeAllocator::new(FrameMemoryAddress(0)),
+            extra_frame_allocator: ScopeAllocator::new(FrameMemoryRegion::default()),
         }
     }
 
-    pub fn layout_variables(
-        &mut self,
-        variables: &Vec<VariableRef>,
-        return_type: &Type,
-    ) -> Context {
-        let mut allocator = ScopeAllocator::new(FrameMemoryAddress(0));
-        let mut current_offset = allocator.reserve(type_size(return_type));
+    pub fn reserve(ty: &Type, allocator: &mut ScopeAllocator) -> FrameMemoryRegion {
+        let (size, alignment) = type_size_and_alignment(ty);
+        allocator.reserve(size, alignment)
+    }
+
+    pub fn layout_variables(&mut self, variables: &Vec<VariableRef>, return_type: &Type) {
+        let mut allocator = ScopeAllocator::new(FrameMemoryRegion::new(
+            FrameMemoryAddress(0),
+            MemorySize(1024),
+        ));
+        let mut current_offset = Self::reserve(return_type, &mut allocator);
 
         for var_ref in variables {
-            let var_target = allocator.reserve(type_size(&var_ref.resolved_type));
+            let var_target = Self::reserve(&var_ref.resolved_type, &mut allocator);
             info!(?var_ref.assigned_name, ?var_target, "laying out");
             self.variable_offsets
                 .insert(var_ref.unique_id_within_function, var_target.addr)
                 .unwrap();
         }
 
-        self.frame_size = allocator.addr().as_size();
-        self.extra_frame_allocator = allocator;
+        let extra_frame_size = MemorySize(80);
+        let extra_target = FrameMemoryRegion::new(allocator.addr(), extra_frame_size);
+        self.extra_frame_allocator = ScopeAllocator::new(extra_target);
+        self.frame_size = allocator.addr().as_size().add(extra_frame_size);
 
-        Context::new(self.extra_frame_allocator.addr(), MemorySize(64000))
+        self.state.builder.add_enter(self.frame_size, "variables");
+
+        //        self.allocator = allocator;
     }
 
     /// # Panics
@@ -226,7 +229,7 @@ impl<'a> FunctionCodeGen<'a> {
         &mut self,
         expr: &Expression,
         ctx: &mut Context,
-    ) -> TargetInfo {
+    ) -> FrameMemoryRegion {
         let size = type_size(&expr.ty);
 
         match &expr.kind {
@@ -236,7 +239,7 @@ impl<'a> FunctionCodeGen<'a> {
                     .get(&var_ref.unique_id_within_function)
                     .unwrap();
 
-                TargetInfo {
+                FrameMemoryRegion {
                     addr: *frame_address,
                     size,
                 }
@@ -252,9 +255,9 @@ impl<'a> FunctionCodeGen<'a> {
         }
     }
 
-    pub(crate) fn frame_space_for_type(&mut self, ty: &Type) -> Context {
-        let target = self.extra_frame_allocator.reserve(type_size(ty));
-        Context::new(target.addr, target.size)
+    pub(crate) fn extra_frame_space_for_type(&mut self, ty: &Type) -> Context {
+        let target = Self::reserve(ty, &mut self.extra_frame_allocator);
+        Context::new(target)
     }
 
     pub fn gen_expression(&mut self, expr: &Expression, ctx: &mut Context) {
@@ -357,7 +360,7 @@ impl<'a> FunctionCodeGen<'a> {
         condition: &BooleanExpression,
         ctx: &mut Context,
     ) -> (Context, PatchPosition) {
-        let mut condition_ctx = self.frame_space_for_type(&Type::Bool);
+        let mut condition_ctx = self.extra_frame_space_for_type(&Type::Bool);
         self.gen_expression(&condition.expression, &mut condition_ctx);
 
         let jump_on_false_condition = self
@@ -494,7 +497,7 @@ impl<'a> FunctionCodeGen<'a> {
         &mut self,
         location_expression: &SingleLocationExpression,
         ctx: &Context,
-    ) -> TargetInfo {
+    ) -> FrameMemoryRegion {
         let frame_relative_base_address = self
             .variable_offsets
             .get(
@@ -504,7 +507,7 @@ impl<'a> FunctionCodeGen<'a> {
             )
             .unwrap();
 
-        TargetInfo {
+        FrameMemoryRegion {
             addr: *frame_relative_base_address,
             size: ctx.target_size(),
         }
@@ -530,12 +533,15 @@ impl<'a> FunctionCodeGen<'a> {
          */
     }
 
-    fn gen_arguments(&mut self, arguments: &Vec<ArgumentExpressionOrLocation>) {
-        let argument_ctx = self.infinite_above_frame_size();
-        let target = argument_ctx.addr();
+    fn gen_arguments(&mut self, return_type: &Type, arguments: &Vec<ArgumentExpressionOrLocation>) {
+        let arguments_memory_region = self.infinite_above_frame_size();
+        let mut arguments_allocator = ScopeAllocator::new(arguments_memory_region);
+
+        let _argument_addr = Self::reserve(return_type, &mut arguments_allocator);
 
         for argument in arguments {
-            let mut arg_ctx = Context::new(target, type_size(&argument.ty()));
+            let argument_target = Self::reserve(&argument.ty(), &mut arguments_allocator);
+            let mut arg_ctx = Context::new(argument_target);
             self.gen_argument(argument, &mut arg_ctx);
             // TODO: support more than one argument
         }
@@ -550,8 +556,16 @@ impl<'a> FunctionCodeGen<'a> {
         if let ExpressionKind::InternalFunctionAccess(internal_fn) = &start_expression.kind {
             if chain.len() == 1 {
                 if let PostfixKind::FunctionCall(args) = &chain[0].kind {
-                    self.gen_arguments(args);
-                    self.state.add_call(internal_fn); // will be fixed up later
+                    self.gen_arguments(&internal_fn.signature.return_type, args);
+                    self.state
+                        .add_call(internal_fn, &format!("frame size: {}", self.frame_size)); // will be fixed up later
+                    let return_size = type_size(&internal_fn.signature.return_type);
+                    self.state.builder.add_mov(
+                        ctx.addr(),
+                        self.infinite_above_frame_size().addr,
+                        return_size,
+                        "copy the return value to destination",
+                    );
                     return;
                 }
             }
@@ -564,7 +578,7 @@ impl<'a> FunctionCodeGen<'a> {
                 PostfixKind::StructField(_, _) => todo!(),
                 PostfixKind::MemberCall(_, _) => todo!(),
                 PostfixKind::FunctionCall(arguments) => {
-                    self.gen_arguments(arguments);
+                    //self.gen_arguments(arguments);
                     //self.state.add_call(start_expression)
                 }
                 PostfixKind::OptionUnwrap => todo!(),
@@ -736,47 +750,49 @@ impl<'a> FunctionCodeGen<'a> {
          */
 
         let element_size = type_size(element_type);
+        /*
+               // Temporary for the counter
+               let counter_addr = ctx.allocate_temp(MemorySize(2)); // u16 counter
+               self.state
+                   .builder
+                   .add_ld_u16(counter_addr, 0, "temporary counter");
 
-        // Temporary for the counter
-        let counter_addr = ctx.allocate_temp(MemorySize(2)); // u16 counter
-        self.state
-            .builder
-            .add_ld_u16(counter_addr, 0, "temporary counter");
+               let loop_start_pos = self.state.builder.position();
 
-        let loop_start_pos = self.state.builder.position();
+               // vector length
+               let length_addr = ctx.allocate_temp(MemorySize(2));
+               self.state.builder.add_mov(
+                   length_addr,
+                   vector_ctx.addr().add(MemorySize(VECTOR_LENGTH_OFFSET)),
+                   MemorySize(2),
+                   "vector length",
+               );
 
-        // vector length
-        let length_addr = ctx.allocate_temp(MemorySize(2));
-        self.state.builder.add_mov(
-            length_addr,
-            vector_ctx.addr().add(MemorySize(VECTOR_LENGTH_OFFSET)),
-            MemorySize(2),
-            "vector length",
-        );
+               // Compare counter < length
+               let compare_result_addr = ctx.allocate_temp(MemorySize(1)); // boolean result
+               self.state.builder.add_lt_u16(
+                   compare_result_addr,
+                   counter_addr,
+                   length_addr,
+                   "counter < length",
+               );
 
-        // Compare counter < length
-        let compare_result_addr = ctx.allocate_temp(MemorySize(1)); // boolean result
-        self.state.builder.add_lt_u16(
-            compare_result_addr,
-            counter_addr,
-            length_addr,
-            "counter < length",
-        );
+               // Exit loop if counter >= length
+               let exit_jump = self
+                   .state
+                   .builder
+                   .add_conditional_jump_placeholder(compare_result_addr, "counter >= length exit");
 
-        // Exit loop if counter >= length
-        let exit_jump = self
-            .state
-            .builder
-            .add_conditional_jump_placeholder(compare_result_addr, "counter >= length exit");
+               let data_ptr_addr = ctx.allocate_temp(MemorySize(2));
+               self.state.builder.add_mov(
+                   data_ptr_addr,
+                   vector_ctx.addr().add(MemorySize(VECTOR_DATA_PTR_OFFSET)),
+                   MemorySize(PTR_SIZE),
+                   "copy vector data ptr",
+               );
 
-        let data_ptr_addr = ctx.allocate_temp(MemorySize(2));
-        self.state.builder.add_mov(
-            data_ptr_addr,
-            vector_ctx.addr().add(MemorySize(VECTOR_DATA_PTR_OFFSET)),
-            MemorySize(PTR_SIZE),
-            "copy vector data ptr",
-        );
 
+        */
         /*
         let offset_addr = ctx.allocate_temp(2);
         self.state.builder.add_mul_u16(
@@ -880,9 +896,9 @@ impl<'a> FunctionCodeGen<'a> {
 
     fn gen_compound_assignment_i32(
         &mut self,
-        target: &TargetInfo,
+        target: &FrameMemoryRegion,
         op: &CompoundOperatorKind,
-        source_ctx: &TargetInfo,
+        source_ctx: &FrameMemoryRegion,
     ) {
         match op {
             CompoundOperatorKind::Add => {
@@ -912,7 +928,7 @@ impl<'a> FunctionCodeGen<'a> {
         );
     }
 
-    fn infinite_above_frame_size(&self) -> Context {
-        Context::new(FrameMemoryAddress(self.frame_size.0), MemorySize(1024))
+    fn infinite_above_frame_size(&self) -> FrameMemoryRegion {
+        FrameMemoryRegion::new(FrameMemoryAddress(self.frame_size.0), MemorySize(1024))
     }
 }

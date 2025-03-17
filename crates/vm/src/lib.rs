@@ -2,12 +2,7 @@ use crate::host::HostFunction;
 use swamp_vm_types::BinaryInstruction;
 use swamp_vm_types::opcode::OpCode;
 
-pub const INT_SIZE: u16 = 4;
-pub const BOOL_SIZE: u16 = 1;
-pub const PTR_SIZE: u16 = 2;
-
 pub mod host;
-pub mod instr_bldr;
 
 type Handler0 = fn(&mut Vm);
 type Handler1 = fn(&mut Vm, u16);
@@ -89,6 +84,9 @@ impl Vm {
         unsafe { std::slice::from_raw_parts(self.stack_ptr(), self.memory_size) }
     }
 
+    pub fn stack_base_memory(&self) -> &[u8] {
+        unsafe { std::slice::from_raw_parts(self.stack_base_ptr(), self.memory_size) }
+    }
     pub fn frame_memory(&self) -> &[u8] {
         unsafe { std::slice::from_raw_parts(self.frame_ptr(), self.memory_size) }
     }
@@ -145,7 +143,7 @@ impl Vm {
         vm.handlers[OpCode::LdIndirect as usize] = HandlerType::Args4(Self::execute_ld_indirect);
         vm.handlers[OpCode::Mov as usize] = HandlerType::Args3(Self::execute_mov);
 
-        vm.handlers[OpCode::Hlt as usize] = HandlerType::Args0(Self::execute_end);
+        vm.handlers[OpCode::Hlt as usize] = HandlerType::Args0(Self::execute_hlt);
 
         // Optional: Zero out the memory for safety?
         unsafe {
@@ -245,7 +243,7 @@ impl Vm {
     }
 
     #[inline]
-    fn execute_end(&mut self) {
+    fn execute_hlt(&mut self) {
         self.execution_complete = true;
     }
 
@@ -344,6 +342,10 @@ impl Vm {
         self.ptr_at_u8(self.stack_offset)
     }
 
+    fn stack_base_ptr(&self) -> *mut u8 {
+        self.ptr_at_u8(self.stack_base_offset)
+    }
+
     #[inline(always)]
     fn frame_ptr_i32_at(&self, offset: u16) -> *mut i32 {
         self.ptr_at_i32(self.frame_offset + offset as usize)
@@ -416,11 +418,17 @@ impl Vm {
             eprintln!("start executing");
         }
 
+        self.call_stack.push(CallFrame {
+            return_address: 1,
+            previous_frame_offset: 0,
+            frame_size: 0,
+        });
+
         while !self.execution_complete {
             let instruction = &self.instructions[self.ip];
             let opcode = instruction.opcode;
 
-            #[cfg(feature = "debug_vm")]
+            //#[cfg(feature = "debug_vm")]
             {
                 let operands = instruction.operands;
                 eprint!("> {:04x}: ", self.ip);
@@ -465,17 +473,17 @@ impl Vm {
     }
 
     #[inline]
-    fn execute_enter(&mut self, frame_size: u16) {
-        let aligned_size = (frame_size as usize + ALIGNMENT_REST) & ALIGNMENT_MASK; // 8-byte alignment
+    fn execute_enter(&mut self, aligned_size: u16) {
+        //let aligned_size = (frame_size as usize + ALIGNMENT_REST) & ALIGNMENT_MASK; // 8-byte alignment
 
         let frame = self.call_stack.last_mut().unwrap();
-        frame.frame_size = aligned_size;
+        frame.frame_size = aligned_size as usize;
 
         // the functions frame of reference should be the stack offset
         self.frame_offset = self.stack_offset;
 
         // and we push the stack with the space of the local variables
-        self.stack_offset += aligned_size;
+        self.stack_offset += aligned_size as usize;
     }
 
     #[inline]

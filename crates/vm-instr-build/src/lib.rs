@@ -1,6 +1,11 @@
-use crate::BinaryInstruction;
 use swamp_vm_types::opcode::OpCode;
-use swamp_vm_types::{FrameMemoryAddress, InstructionPosition, MemoryAddress, MemorySize};
+use swamp_vm_types::{
+    BinaryInstruction, FrameMemoryAddress, FrameMemorySize, InstructionPosition, MemoryAddress,
+    MemorySize,
+};
+pub const INT_SIZE: u16 = 4;
+pub const BOOL_SIZE: u16 = 1;
+pub const PTR_SIZE: u16 = 2;
 
 #[derive(Debug)]
 pub struct PatchPosition(pub InstructionPosition);
@@ -9,12 +14,6 @@ pub struct InstructionBuilder {
     pub instructions: Vec<BinaryInstruction>,
     pub comments: Vec<String>,
 }
-
-impl InstructionBuilder {}
-
-impl InstructionBuilder {}
-
-impl InstructionBuilder {}
 
 impl InstructionBuilder {}
 
@@ -62,6 +61,10 @@ impl InstructionBuilder {
         self.add_instruction(OpCode::Jmp, &[0], comment);
 
         PatchPosition(position)
+    }
+
+    pub fn add_enter(&mut self, size: FrameMemorySize, comment: &str) {
+        self.add_instruction(OpCode::Enter, &[size.0], comment);
     }
 
     // Mov is more of a copy. Keeping the name Mov because it is old school and idiomatic.
