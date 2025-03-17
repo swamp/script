@@ -1,4 +1,5 @@
 use swamp_vm_types::{FrameMemoryAddress, MemoryAlignment, MemorySize, align_frame_addr};
+use tracing::error;
 
 const ALIGNMENT: u16 = 8;
 const ALIGNMENT_REST: u16 = ALIGNMENT - 1;
@@ -28,7 +29,7 @@ impl FrameMemoryRegion {
     }
 
     pub fn last_valid_end_addr(&self) -> FrameMemoryAddress {
-        self.addr.add(MemorySize(self.size.0 - 1))
+        self.addr.add(MemorySize(self.size.0))
     }
 }
 
@@ -60,6 +61,10 @@ impl ScopeAllocator {
         let start_addr = align_frame_addr(self.addr, alignment);
 
         self.addr = start_addr.add(size);
+
+        if self.addr.0 > self.target_info.last_valid_end_addr().0 {
+            error!("out of alloc memory");
+        }
 
         assert!(self.addr.0 <= self.target_info.last_valid_end_addr().0);
 

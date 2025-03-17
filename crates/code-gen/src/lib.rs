@@ -1,5 +1,6 @@
 pub mod alloc;
 pub mod alloc_util;
+pub mod constants;
 pub mod ctx;
 mod vec;
 
@@ -21,11 +22,12 @@ use swamp_script_semantic::{
 };
 use swamp_script_types::{AnonymousStructType, EnumVariantType, Signature, StructTypeField, Type};
 
+use crate::constants::ConstantsManager;
 use swamp_script_semantic::intr::IntrinsicFunction;
 use swamp_vm_instr_build::{InstructionBuilder, PTR_SIZE, PatchPosition};
 use swamp_vm_types::{
-    BinaryInstruction, FrameMemoryAddress, FrameMemorySize, InstructionPosition, MemoryAlignment,
-    MemoryOffset, MemorySize,
+    BinaryInstruction, FrameMemoryAddress, FrameMemorySize, InstructionPosition, MemoryAddress,
+    MemoryAlignment, MemoryOffset, MemorySize,
 };
 use tracing::{info, trace};
 
@@ -42,6 +44,7 @@ pub struct FunctionFixup {
 
 pub struct CodeGenState {
     builder: InstructionBuilder,
+    constants: ConstantsManager,
     function_infos: SeqMap<InternalFunctionId, FunctionInfo>,
     function_fixups: Vec<FunctionFixup>,
 }
@@ -115,14 +118,15 @@ impl CodeGenState {
     pub fn new() -> Self {
         Self {
             builder: InstructionBuilder::default(),
+            constants: ConstantsManager::new(),
             function_infos: SeqMap::default(),
             function_fixups: vec![],
         }
     }
 
     #[must_use]
-    pub fn take_instructions(self) -> Vec<BinaryInstruction> {
-        self.builder.instructions
+    pub fn take_instructions_and_constants(self) -> (Vec<BinaryInstruction>, Vec<u8>) {
+        (self.builder.instructions, self.constants.take_data())
     }
 
     pub fn gen_function_def(
@@ -735,11 +739,14 @@ impl<'a> FunctionCodeGen<'a> {
     }
 
     fn gen_tuple(&mut self, expressions: &[Expression], ctx: &Context) {
-        let mut element_ctx = ctx.with_offset(MemorySize(0));
+        let mut scope = ScopeAllocator::new(ctx.target());
+
         for expr in expressions {
-            let (memory_size, _alignment) = type_size_and_alignment(&expr.ty);
-            self.gen_expression(expr, &mut element_ctx);
-            element_ctx = element_ctx.with_offset(memory_size); // Move target pointer along
+            let (memory_size, alignment) = type_size_and_alignment(&expr.ty);
+            let start_addr = scope.allocate(memory_size, alignment);
+            let element_region = FrameMemoryRegion::new(start_addr, memory_size);
+            let element_ctx = Context::new(element_region);
+            self.gen_expression(expr, &element_ctx);
         }
     }
 
@@ -849,7 +856,40 @@ impl<'a> FunctionCodeGen<'a> {
         }
     }
 
-    fn gen_string_literal(&self, string: &str, ctx: &Context) {}
+    fn gen_string_literal(&mut self, string: &str, ctx: &Context) {
+        let data_ptr = self
+            .state
+            .constants
+            .allocate(string.as_bytes(), MemoryAlignment::U8);
+        let mem_size = MemorySize(string.len() as u16);
+
+        self.gen_vec_immediate(data_ptr, mem_size, mem_size, "string", ctx);
+    }
+
+    fn gen_vec_immediate(
+        &mut self,
+        data_ptr: MemoryAddress,
+        len: MemorySize,
+        capacity: MemorySize,
+        comment_prefix: &str,
+        ctx: &Context,
+    ) {
+        self.state
+            .builder
+            .add_ld_u16(ctx.addr(), len.0, &format!("{} len", comment_prefix));
+
+        self.state.builder.add_ld_u16(
+            ctx.addr().add(MemorySize(2)),
+            capacity.0,
+            &format!("{} capacity", comment_prefix),
+        );
+
+        self.state.builder.add_ld_u16(
+            ctx.addr().add(MemorySize(4)),
+            data_ptr.0,
+            &format!("{} ptr", comment_prefix),
+        );
+    }
 
     fn gen_option_expression(&mut self, maybe_option: Option<&Expression>, ctx: &Context) {
         if let Some(found_value) = maybe_option {
@@ -1101,6 +1141,9 @@ impl<'a> FunctionCodeGen<'a> {
         let struct_type =
             Type::AnonymousStruct(struct_literal.struct_type_ref.anon_struct_type.clone());
         let (whole_struct_size, whole_struct_alignment) = type_size_and_alignment(&struct_type);
+        if ctx.target_size().0 != whole_struct_size.0 {
+            info!("problem");
+        }
         assert_eq!(ctx.target_size().0, whole_struct_size.0);
 
         for (field_index, expression) in &struct_literal.source_order_expressions {

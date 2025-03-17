@@ -66,7 +66,7 @@ pub fn type_size_and_alignment(ty: &Type) -> (MemorySize, MemoryAlignment) {
         Type::Bool => (MemorySize(1), MemoryAlignment::U8),
         Type::Unit => (MemorySize(0), MemoryAlignment::U8),
         Type::Never => (MemorySize(0), MemoryAlignment::U8),
-        Type::Tuple(types) => todo!(),
+        Type::Tuple(types) => layout_tuple(types),
         Type::NamedStruct(named_struct) => type_size_and_alignment(&Type::AnonymousStruct(
             named_struct.anon_struct_type.clone(),
         )),
@@ -79,16 +79,22 @@ pub fn type_size_and_alignment(ty: &Type) -> (MemorySize, MemoryAlignment) {
             (MemorySize(offset.0 + alignment_octets as u16), alignment)
         }
         Type::Function(_) => (MemorySize(2), MemoryAlignment::U16),
-        Type::Iterable(_) => todo!(),
-        Type::Optional(_) => todo!(),
+        Type::Optional(inner_type) => {
+            let (offset, alignment) = type_size_and_alignment(inner_type);
+
+            let alignment_octets: usize = alignment.into();
+
+            (MemorySize(offset.0 + alignment_octets as u16), alignment)
+        }
         Type::Generic(a, b) => {
             error!(?a, ?b, "generic can not be generated");
             panic!("generic is not supported")
         }
-        Type::Blueprint(_) => todo!(),
-        Type::Variable(_) => todo!(),
-        Type::External(_) => todo!(),
         Type::MutableReference(referenced_type) => type_size_and_alignment(referenced_type),
+        Type::Iterable(_) => panic!("not supported"),
+        Type::Blueprint(_) => panic!("not supported"),
+        Type::Variable(_) => panic!("not supported"),
+        Type::External(_) => todo!(),
     }
 }
 

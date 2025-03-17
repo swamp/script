@@ -97,7 +97,7 @@ const ALIGNMENT_REST: usize = ALIGNMENT - 1;
 const ALIGNMENT_MASK: usize = !ALIGNMENT_REST;
 
 impl Vm {
-    pub fn new(instructions: Vec<BinaryInstruction>, memory_size: usize) -> Self {
+    pub fn new(instructions: Vec<BinaryInstruction>, constants: &[u8], memory_size: usize) -> Self {
         let memory = unsafe {
             std::alloc::alloc(std::alloc::Layout::from_size_align(memory_size, ALIGNMENT).unwrap())
         };
@@ -148,6 +148,15 @@ impl Vm {
         // Optional: Zero out the memory for safety?
         unsafe {
             std::ptr::write_bytes(memory, 0, memory_size);
+        }
+
+        let start_addr = memory_size - constants.len();
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                constants.as_ptr(),
+                memory.add(start_addr),
+                constants.len(),
+            );
         }
 
         vm

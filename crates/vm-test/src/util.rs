@@ -69,9 +69,9 @@ pub fn gen_internal_debug(code: &str) -> CodeGenState {
 pub fn exec_internal(code: &str) -> Vm {
     let code_gen = gen_internal_debug(code);
 
-    let instructions = code_gen.take_instructions();
+    let (instructions, constants) = code_gen.take_instructions_and_constants();
 
-    let mut vm = Vm::new(instructions, 32000);
+    let mut vm = Vm::new(instructions, &constants, 0x1_00_00);
 
     vm.execute();
 
@@ -112,6 +112,14 @@ pub fn exec(code: &str, expected_hex: &str) {
 
     compare_hex_outputs(&vm.stack_base_memory()[..16], expected_hex);
 }
+
+pub fn exec_show_constants(code: &str, expected_hex: &str, expected_constants: &str) {
+    let vm = exec_internal_debug(code);
+
+    compare_hex_outputs(&vm.stack_base_memory()[..16], expected_hex);
+    compare_hex_outputs(&vm.memory()[0xFFF0..], expected_constants);
+}
+
 pub fn exec_vars(code: &str, expected_hex: &str) {
     let vm = exec_internal_debug(code);
 

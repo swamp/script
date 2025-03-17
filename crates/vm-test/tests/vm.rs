@@ -1,4 +1,4 @@
-use swamp_script_vm_test::util::{exec, exec_vars, gen_code};
+use swamp_script_vm_test::util::{exec, exec_show_constants, exec_vars, gen_code};
 
 #[test]
 fn variable_definition() {
@@ -186,7 +186,7 @@ enum Something {
 a = Something::First
         ",
         "
-00000000  01 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  ................
+00000000  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  ................
     ",
     );
 }
@@ -203,7 +203,7 @@ enum Something {
 a = Something::Second(42)
         ",
         "
-00000000  01 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  ................
+00000000  01 00 00 00 2A 00 00 00  00 00 00 00 00 00 00 00  ....*...........
     ",
     );
 }
@@ -261,6 +261,78 @@ a = Something::Third(1,2,3,4,7.6)
         ",
         "
 00000000  02 00 00 00 01 00 00 00  02 00 00 00 03 00 00 00  ................
+    ",
+    );
+}
+
+#[test_log::test]
+fn enum_literal_both_third_sub_struct() {
+    exec(
+        "
+struct SubStruct {
+  x: Int,
+   y: Int,
+}
+
+enum Something {
+    First,
+    Second(SubStruct),
+    Third(Int, Int, Int, Float)
+}
+
+a = Something::Second(SubStruct{x:99, y:128})
+        ",
+        "
+00000000  01 00 00 00 63 00 00 00  80 00 00 00 00 00 00 00  ....c...........
+    ",
+    );
+}
+
+#[test_log::test]
+fn string_literal() {
+    exec_show_constants(
+        r#"
+
+a = "hello"
+        "#,
+        "
+00000000  05 00 05 00 FA FF 00 00  00 00 00 00 00 00 00 00  ................
+
+    ",
+        "
+00000000  00 00 00 00 00 00 00 00  00 00 68 65 6C 6C 6F 00  ..........hello.
+    ",
+    );
+}
+
+#[test_log::test]
+fn string_literal_return() {
+    exec_show_constants(
+        r#"
+fn get_string() -> String {
+    "hello"
+}
+a = get_string()
+        "#,
+        "
+00000000  05 00 05 00 FA FF 00 00  00 00 00 00 00 00 00 00  ................
+
+    ",
+        "
+00000000  00 00 00 00 00 00 00 00  00 00 68 65 6C 6C 6F 00  ..........hello.
+    ",
+    );
+}
+
+#[test_log::test]
+fn vec() {
+    exec(
+        "
+result = [10, 20, -3]
+        ",
+        "
+00000000  05 00 05 00 FA FF 00 00  00 00 00 00 00 00 00 00  ................
+
     ",
     );
 }
