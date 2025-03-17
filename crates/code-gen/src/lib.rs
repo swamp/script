@@ -4,7 +4,9 @@ pub mod ctx;
 mod vec;
 
 use crate::alloc::{FrameMemoryRegion, ScopeAllocator};
-use crate::alloc_util::{reserve_space_for_type, type_size_and_alignment};
+use crate::alloc_util::{
+    layout_struct, layout_tuple, layout_union, reserve_space_for_type, type_size_and_alignment,
+};
 use crate::ctx::Context;
 use crate::vec::{VECTOR_DATA_PTR_OFFSET, VECTOR_LENGTH_OFFSET};
 use seq_map::SeqMap;
@@ -20,7 +22,7 @@ use swamp_script_semantic::{
 use swamp_script_types::{AnonymousStructType, EnumVariantType, Signature, StructTypeField, Type};
 
 use swamp_script_semantic::intr::IntrinsicFunction;
-use swamp_vm_instr_build::{InstructionBuilder, PatchPosition, PTR_SIZE};
+use swamp_vm_instr_build::{InstructionBuilder, PTR_SIZE, PatchPosition};
 use swamp_vm_types::{
     BinaryInstruction, FrameMemoryAddress, FrameMemorySize, InstructionPosition, MemoryAlignment,
     MemoryOffset, MemorySize,
@@ -798,24 +800,41 @@ impl<'a> FunctionCodeGen<'a> {
                     .add_ld_imm_u8(ctx.addr(), u8::from(*truthy), "bool literal");
             }
 
-            Literal::EnumVariantLiteral(a, b) => {
+            Literal::EnumVariantLiteral(enum_type, a, b) => {
                 self.state.builder.add_ld_imm_u8(
                     ctx.addr(),
                     a.common().container_index,
                     &format!("enum variant {} tag", a.common().assigned_name),
                 );
+
+                let starting_offset = MemoryOffset(1);
+
+                let (data_size, data_alignment) = match a {
+                    EnumVariantType::Struct(enum_variant_struct) => {
+                        layout_struct(&enum_variant_struct.anon_struct)
+                    }
+                    EnumVariantType::Tuple(tuple_type) => layout_tuple(&tuple_type.fields_in_order),
+                    EnumVariantType::Nothing(_) => (MemorySize(0), MemoryAlignment::U8),
+                };
+
+                let skip_octets: usize = data_alignment.into();
+                let skip = MemorySize(skip_octets as u16);
+                let inner_addr = ctx.addr().add(skip);
+                let region = FrameMemoryRegion::new(inner_addr, data_size);
+                let inner_ctx = Context::new(region);
+
+                //layout_union(a)
                 match b {
                     EnumLiteralData::Nothing => {}
                     EnumLiteralData::Tuple(expressions) => {
-                        let tuple_ctx = ctx.with_offset(MemorySize(1));
-                        self.gen_tuple(expressions, &tuple_ctx);
+                        self.gen_tuple(expressions, &inner_ctx);
                     }
                     EnumLiteralData::Struct(sorted_expressions) => {
                         if let EnumVariantType::Struct(variant_struct_type) = a {
                             self.gen_anonymous_struct(
                                 &variant_struct_type.anon_struct,
                                 sorted_expressions,
-                                ctx,
+                                &inner_ctx,
                             );
                         }
                     }

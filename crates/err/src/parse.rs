@@ -86,7 +86,9 @@ pub fn build_parse_error(err: &SpecificError, span: &Span) -> Builder<usize> {
         SpecificError::UnknownLiteral => todo!(),
         SpecificError::UnknownPrimary(_) => todo!(),
         SpecificError::InvalidFormatSpecifier => todo!(),
-        SpecificError::UnexpectedVariantField => todo!(),
+        SpecificError::UnexpectedVariantField => {
+            Report::build(Kind::Error, 321, "unexpected variant field", span)
+        }
         SpecificError::MutOnlyForVariables => todo!(),
         SpecificError::UnexpectedTokenInFunctionCall => todo!(),
         SpecificError::ExpectedExpressionInInterpolation => todo!(),

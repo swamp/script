@@ -690,7 +690,7 @@ pub enum Literal {
     StringLiteral(String),
     BoolLiteral(bool),
 
-    EnumVariantLiteral(EnumVariantType, EnumLiteralData),
+    EnumVariantLiteral(EnumType, EnumVariantType, EnumLiteralData),
     TupleLiteral(Vec<Type>, Vec<Expression>),
 
     Slice(Type, Vec<Expression>),

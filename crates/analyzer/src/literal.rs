@@ -235,6 +235,7 @@ impl Analyzer<'_> {
 
                 let (symbol_table, name) = self.get_symbol_table_and_name(enum_name)?;
                 if let Some(enum_type_ref) = symbol_table.get_enum(&name) {
+                    let enum_type_clone = enum_type_ref.clone();
                     let enum_type = Type::Enum(enum_type_ref.clone());
 
                     // Handle enum variant literals in patterns
@@ -297,7 +298,7 @@ impl Analyzer<'_> {
                     };
 
                     return Ok((
-                        Literal::EnumVariantLiteral(variant_ref, resolved_data),
+                        Literal::EnumVariantLiteral(enum_type_clone, variant_ref, resolved_data),
                         enum_type,
                     ));
                 }
@@ -305,7 +306,7 @@ impl Analyzer<'_> {
             }
 
             swamp_script_ast::LiteralKind::Tuple(expressions) => {
-                let (tuple_type_ref, resolved_items) = self.analyze_tuple_literal(&expressions)?;
+                let (tuple_type_ref, resolved_items) = self.analyze_tuple_literal(expressions)?;
                 (
                     Literal::TupleLiteral(tuple_type_ref.clone(), resolved_items),
                     Type::Tuple(tuple_type_ref),

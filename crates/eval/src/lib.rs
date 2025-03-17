@@ -1102,7 +1102,7 @@ impl<'a, C> Interpreter<'a, C> {
             Literal::StringLiteral(s) => Value::String(s.clone()),
             Literal::BoolLiteral(b) => Value::Bool(*b),
 
-            Literal::EnumVariantLiteral(enum_variant_type, data) => {
+            Literal::EnumVariantLiteral(enum_type, enum_variant_type, data) => {
                 let variant_container_value: Value = match enum_variant_type {
                     EnumVariantType::Tuple(tuple_type) => match data {
                         EnumLiteralData::Tuple(tuple_expressions) => {

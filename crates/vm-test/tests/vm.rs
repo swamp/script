@@ -156,3 +156,111 @@ s.own_add(40)
     ",
     );
 }
+
+#[test_log::test]
+fn enum_literal() {
+    exec(
+        "
+enum Something {
+    First,
+    Second,
+}
+
+a = Something::Second
+        ",
+        "
+00000000  01 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  ................
+    ",
+    );
+}
+
+#[test_log::test]
+fn enum_literal_tuple_one() {
+    exec(
+        "
+enum Something {
+    First,
+    Second(Int),
+}
+
+a = Something::First
+        ",
+        "
+00000000  01 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  ................
+    ",
+    );
+}
+
+#[test_log::test]
+fn enum_literal_tuple_second() {
+    exec(
+        "
+enum Something {
+    First,
+    Second(Int),
+}
+
+a = Something::Second(42)
+        ",
+        "
+00000000  01 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  ................
+    ",
+    );
+}
+
+#[test_log::test]
+fn enum_literal_struct() {
+    exec(
+        "
+enum Something {
+    First,
+    Second { x: Int, y: Float },
+}
+
+a = Something::Second {
+    x: 10, y: 2.4,
+     }
+        ",
+        "
+00000000  01 00 00 00 0A 00 00 00  66 66 02 00 00 00 00 00  ........ff......
+    ",
+    );
+}
+
+#[test_log::test]
+fn enum_literal_both() {
+    exec(
+        "
+enum Something {
+    First,
+    Second { x: Int, y: Float },
+    Third(Int, Int, Int, Int, Float)
+}
+
+a = Something::Second {
+    x: 10, y: 2.4,
+     }
+        ",
+        "
+00000000  01 00 00 00 0A 00 00 00  66 66 02 00 00 00 00 00  ........ff......
+    ",
+    );
+}
+
+#[test_log::test]
+fn enum_literal_both_third() {
+    exec(
+        "
+enum Something {
+    First,
+    Second { x: Int, y: Float },
+    Third(Int, Int, Int, Int, Float)
+}
+
+a = Something::Third(1,2,3,4,7.6)
+        ",
+        "
+00000000  02 00 00 00 01 00 00 00  02 00 00 00 03 00 00 00  ................
+    ",
+    );
+}

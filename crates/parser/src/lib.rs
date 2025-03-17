@@ -21,6 +21,7 @@ use swamp_script_ast::{
 use swamp_script_ast::{Function, WhenBinding};
 use swamp_script_ast::{LiteralKind, MutableOrImmutableExpression};
 use swamp_script_ast::{Postfix, PostfixChain};
+use tracing::error;
 
 pub struct ParseResult<'a> {
     #[allow(dead_code)]
@@ -1915,9 +1916,9 @@ impl AstParser {
         // Parse fields if they exist
         let enum_variant_literal = match inner.next() {
             Some(fields_pair) => match fields_pair.as_rule() {
-                Rule::anonymous_struct_literal => {
+                Rule::struct_literal_optional_field_list => {
                     let (field_expressions, detected_rest) =
-                        self.parse_anonymous_struct_literal_fields(pair)?;
+                        self.parse_struct_literal_optional_fields(&fields_pair)?;
                     EnumVariantLiteral::Struct(
                         enum_type,
                         variant_type_identifier,
@@ -1934,6 +1935,7 @@ impl AstParser {
                     EnumVariantLiteral::Tuple(enum_type, variant_type_identifier, expressions)
                 }
                 _ => {
+                    error!("{:?}, {}", fields_pair.as_rule(), "strange");
                     return Err(
                         self.create_error_pair(SpecificError::UnexpectedVariantField, &fields_pair)
                     );

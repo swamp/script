@@ -498,8 +498,8 @@ impl SourceMapDisplay<'_> {
             Literal::BoolLiteral(b) => {
                 write!(f, "{}", b.bright_white())
             }
-            Literal::EnumVariantLiteral(variant, data) => {
-                write!(f, "{:?}::{:?}", variant.blue(), data.green())
+            Literal::EnumVariantLiteral(enum_type, variant, data) => {
+                write!(f, "{:?}::{:?}", enum_type.blue(), data.green())
             }
             Literal::TupleLiteral(_tuple_type, expressions) => {
                 write!(f, "(")?;
