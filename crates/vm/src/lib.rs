@@ -428,11 +428,14 @@ impl Vm {
             let instruction = &self.instructions[self.ip];
             let opcode = instruction.opcode;
 
-            //#[cfg(feature = "debug_vm")]
+            #[cfg(feature = "debug_vm")]
             {
                 let operands = instruction.operands;
                 eprint!("> {:04x}: ", self.ip);
                 self.debug_opcode(opcode, &operands);
+
+                //    let s = hexify::format_hex(&self.frame_memory()[..16]);
+                //  eprintln!("mem: {s}");
             }
 
             match self.handlers[opcode as usize] {
@@ -469,7 +472,7 @@ impl Vm {
 
         self.call_stack.push(return_info);
 
-        self.ip = (target - 1) as usize;
+        self.ip = target as usize;
     }
 
     #[inline]

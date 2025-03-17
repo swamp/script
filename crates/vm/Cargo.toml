@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 swamp-vm-types = { path = "../vm-types", version = "0.1.3" }
+hexify = "0.0.3"
 
 [features]
 debug_vm = []  # Enable VM debug output

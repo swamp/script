@@ -4,7 +4,7 @@ pub mod ctx;
 mod vec;
 
 use crate::alloc::{FrameMemoryRegion, ScopeAllocator};
-use crate::alloc_util::{type_size, type_size_and_alignment};
+use crate::alloc_util::{reserve_space_for_type, type_size, type_size_and_alignment};
 use crate::ctx::Context;
 use crate::vec::{VECTOR_DATA_PTR_OFFSET, VECTOR_LENGTH_OFFSET};
 use seq_map::SeqMap;
@@ -177,6 +177,7 @@ pub struct FunctionCodeGen<'a> {
     variable_offsets: SeqMap<usize, FrameMemoryAddress>,
     frame_size: FrameMemorySize,
     extra_frame_allocator: ScopeAllocator,
+    temp_allocator: ScopeAllocator,
     fn_id: InternalFunctionId,
 }
 
@@ -189,6 +190,7 @@ impl<'a> FunctionCodeGen<'a> {
             variable_offsets: SeqMap::default(),
             frame_size: FrameMemorySize(0),
             extra_frame_allocator: ScopeAllocator::new(FrameMemoryRegion::default()),
+            temp_allocator: ScopeAllocator::new(FrameMemoryRegion::default()),
         }
     }
 
@@ -202,7 +204,7 @@ impl<'a> FunctionCodeGen<'a> {
             FrameMemoryAddress(0),
             MemorySize(1024),
         ));
-        let mut current_offset = Self::reserve(return_type, &mut allocator);
+        let _current_offset = Self::reserve(return_type, &mut allocator);
 
         for var_ref in variables {
             let var_target = Self::reserve(&var_ref.resolved_type, &mut allocator);
@@ -219,7 +221,19 @@ impl<'a> FunctionCodeGen<'a> {
 
         self.state.builder.add_enter(self.frame_size, "variables");
 
-        //        self.allocator = allocator;
+        self.temp_allocator = ScopeAllocator::new(FrameMemoryRegion::new(
+            FrameMemoryAddress(self.frame_size.0),
+            MemorySize(1024),
+        ));
+    }
+
+    pub fn temp_memory_region_for_type(&mut self, ty: &Type, comment: &str) -> FrameMemoryRegion {
+        let new_target_info = reserve_space_for_type(ty, &mut self.temp_allocator);
+        info!(?new_target_info, "creating temporary space");
+        new_target_info
+    }
+    pub fn temp_space_for_type(&mut self, ty: &Type, comment: &str) -> Context {
+        Context::new(self.temp_memory_region_for_type(ty, comment))
     }
 
     /// # Panics
@@ -246,7 +260,7 @@ impl<'a> FunctionCodeGen<'a> {
             }
 
             _ => {
-                let mut temp_ctx = ctx.temp_space_for_type(&expr.ty, "expression");
+                let mut temp_ctx = self.temp_space_for_type(&expr.ty, "expression");
 
                 self.gen_expression(expr, &mut temp_ctx);
 
@@ -416,7 +430,7 @@ impl<'a> FunctionCodeGen<'a> {
         let (_condition_ctx, jump_on_false_condition) = self.gen_condition_context(condition, ctx);
 
         // Expression is only for side effects
-        let mut unit_ctx = ctx.temp_space_for_type(&Type::Unit, "while body expression");
+        let mut unit_ctx = self.temp_space_for_type(&Type::Unit, "while body expression");
         self.gen_expression(expression, &mut unit_ctx);
 
         // Always jump to the condition again to see if it is true
@@ -719,7 +733,7 @@ impl<'a> FunctionCodeGen<'a> {
             ForPattern::Pair(key_variable, value_variable) => {}
         }
 
-        let mut unit_expr = ctx.temp_space_for_type(&Type::Unit, "for loop body");
+        let mut unit_expr = self.temp_space_for_type(&Type::Unit, "for loop body");
         self.gen_expression(body, &mut unit_expr);
 
         // advance iterator pointer
@@ -733,7 +747,7 @@ impl<'a> FunctionCodeGen<'a> {
         ctx: &mut Context,
     ) {
         // get the vector that is referenced
-        let mut vector_ctx = ctx.temp_space_for_type(&vector_expr.ty, "vector space");
+        let mut vector_ctx = self.temp_space_for_type(&vector_expr.ty, "vector space");
         self.gen_expression(&vector_expr, &mut vector_ctx);
 
         /*
@@ -824,7 +838,7 @@ impl<'a> FunctionCodeGen<'a> {
     fn gen_block(&mut self, expressions: &[Expression], ctx: &mut Context) {
         if let Some((last, others)) = expressions.split_last() {
             for expr in others {
-                let mut temp_context = ctx.temp_space_for_type(&Type::Unit, "block target");
+                let mut temp_context = self.temp_space_for_type(&Type::Unit, "block target");
                 self.gen_expression(expr, &mut temp_context);
             }
             self.gen_expression(last, ctx);

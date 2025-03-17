@@ -31,7 +31,7 @@ pub fn gen_internal(code: &str) -> CodeGenState {
 pub fn gen_internal_debug(code: &str) -> CodeGenState {
     let code_gen = gen_internal(code);
     let disassembler_output = disasm_instructions_color(
-        &code_gen.instructions(),
+        code_gen.instructions(),
         code_gen.comments(),
         &code_gen.create_function_sections(),
     );
