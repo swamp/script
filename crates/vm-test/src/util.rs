@@ -59,16 +59,27 @@ pub fn exec_internal_debug(code: &str) -> Vm {
     vm
 }
 
-fn compare_outputs(encountered: &str, expected: &str) {
+fn trim_lines(text: &str) -> String {
+    text.lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn compare_line_outputs(encountered: &str, expected: &str) {
+    let encountered_trimmed = trim_lines(encountered);
+    let expected_trimmed = trim_lines(expected);
+
     eprintln!("{encountered}");
-    assert_eq!(encountered, expected);
+    assert_eq!(encountered_trimmed, expected_trimmed);
 }
 
 fn compare_hex_outputs(memory: &[u8], expected_hex: &str) {
     let encountered_hexed = hexify::format_hex(memory);
     let expected_hex_trimmed = expected_hex.trim();
 
-    compare_outputs(&encountered_hexed, expected_hex_trimmed);
+    compare_line_outputs(&encountered_hexed, expected_hex_trimmed);
 }
 
 pub fn exec(code: &str, expected_hex: &str) {
@@ -91,5 +102,5 @@ pub fn gen_code(code: &str, expected_output: &str) {
         &generator.create_function_sections(),
     );
 
-    compare_outputs(&disassembler_output, expected_output);
+    compare_line_outputs(&disassembler_output, expected_output);
 }

@@ -217,8 +217,6 @@ impl SymbolTable {
         &mut self,
         blueprint: ParameterizedTypeBlueprint,
     ) -> Result<ParameterizedTypeBlueprint, SemanticError> {
-        //let struct_ref = Rc::new(blueprint);
-        info!(?blueprint, "add blueprint");
         self.add_blueprint_link(blueprint.clone())?;
         Ok(blueprint)
     }

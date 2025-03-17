@@ -24,7 +24,7 @@ use swamp_vm_types::{
     BinaryInstruction, FrameMemoryAddress, FrameMemorySize, InstructionPosition, MemoryAlignment,
     MemoryOffset, MemorySize,
 };
-use tracing::info;
+use tracing::{info, trace};
 
 pub struct FunctionInfo {
     pub starts_at_ip: InstructionPosition,
@@ -206,9 +206,15 @@ impl<'a> FunctionCodeGen<'a> {
         ));
         let _current_offset = Self::reserve(return_type, &mut allocator);
 
+        let mut enter_comment = "variables:\n".to_string();
+
         for var_ref in variables {
             let var_target = Self::reserve(&var_ref.resolved_type, &mut allocator);
-            info!(?var_ref.assigned_name, ?var_target, "laying out");
+            trace!(?var_ref.assigned_name, ?var_target, "laying out");
+            enter_comment += &format!(
+                "  ${:04X}:{} {}\n",
+                var_target.addr.0, var_target.size.0, var_ref.assigned_name
+            );
             self.variable_offsets
                 .insert(var_ref.unique_id_within_function, var_target.addr)
                 .unwrap();
@@ -219,7 +225,9 @@ impl<'a> FunctionCodeGen<'a> {
         self.extra_frame_allocator = ScopeAllocator::new(extra_target);
         self.frame_size = allocator.addr().as_size().add(extra_frame_size);
 
-        self.state.builder.add_enter(self.frame_size, "variables");
+        self.state
+            .builder
+            .add_enter(self.frame_size, &enter_comment);
 
         self.temp_allocator = ScopeAllocator::new(FrameMemoryRegion::new(
             FrameMemoryAddress(self.frame_size.0),
@@ -229,7 +237,7 @@ impl<'a> FunctionCodeGen<'a> {
 
     pub fn temp_memory_region_for_type(&mut self, ty: &Type, comment: &str) -> FrameMemoryRegion {
         let new_target_info = reserve_space_for_type(ty, &mut self.temp_allocator);
-        info!(?new_target_info, "creating temporary space");
+        trace!(?new_target_info, "creating temporary space");
         new_target_info
     }
     pub fn temp_space_for_type(&mut self, ty: &Type, comment: &str) -> Context {
