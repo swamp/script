@@ -4,7 +4,7 @@ pub mod ctx;
 mod vec;
 
 use crate::alloc::{FrameMemoryRegion, ScopeAllocator};
-use crate::alloc_util::{reserve_space_for_type, type_size, type_size_and_alignment};
+use crate::alloc_util::{reserve_space_for_type, type_size_and_alignment};
 use crate::ctx::Context;
 use crate::vec::{VECTOR_DATA_PTR_OFFSET, VECTOR_LENGTH_OFFSET};
 use seq_map::SeqMap;
@@ -15,7 +15,7 @@ use swamp_script_semantic::{
     FunctionScopeState, InternalFunctionDefinition, InternalFunctionDefinitionRef,
     InternalFunctionId, InternalMainExpression, Iterable, Literal, LocationAccessKind,
     MutOrImmutableExpression, Postfix, PostfixKind, SingleLocationExpression,
-    SingleMutLocationExpression, VariableRef,
+    SingleMutLocationExpression, StructInstantiation, VariableRef,
 };
 use swamp_script_types::{AnonymousStructType, EnumVariantType, Signature, StructTypeField, Type};
 
@@ -252,8 +252,6 @@ impl<'a> FunctionCodeGen<'a> {
         expr: &Expression,
         ctx: &mut Context,
     ) -> FrameMemoryRegion {
-        let size = type_size(&expr.ty);
-
         match &expr.kind {
             ExpressionKind::VariableAccess(var_ref) => {
                 let frame_address = self
@@ -302,7 +300,9 @@ impl<'a> FunctionCodeGen<'a> {
             ExpressionKind::VariableReassignment(variable, expression) => {
                 self.gen_variable_reassignment(variable, expression, ctx);
             }
-            ExpressionKind::StructInstantiation(_) => todo!(),
+            ExpressionKind::StructInstantiation(struct_literal) => {
+                self.gen_struct_literal(struct_literal, ctx)
+            }
             ExpressionKind::AnonymousStructLiteral(_) => todo!(),
             ExpressionKind::Literal(basic_literal) => self.gen_literal(basic_literal, ctx),
             ExpressionKind::Option(maybe_option) => {
@@ -621,7 +621,8 @@ impl<'a> FunctionCodeGen<'a> {
                     self.gen_arguments(&internal_fn.signature, args);
                     self.state
                         .add_call(internal_fn, &format!("frame size: {}", self.frame_size)); // will be fixed up later
-                    let return_size = type_size(&internal_fn.signature.return_type);
+                    let (return_size, _alignment) =
+                        type_size_and_alignment(&internal_fn.signature.return_type);
                     if return_size.0 != 0 {
                         self.state.builder.add_mov(
                             ctx.addr(),
@@ -642,7 +643,7 @@ impl<'a> FunctionCodeGen<'a> {
         for element in chain {
             match &element.kind {
                 PostfixKind::StructField(_, _) => todo!(),
-                PostfixKind::MemberCall(_, _) => todo!(),
+                PostfixKind::MemberCall(function_to_call, arguments) => {}
                 PostfixKind::FunctionCall(arguments) => {
                     //self.gen_arguments(arguments);
                     //self.state.add_call(start_expression)
@@ -657,7 +658,7 @@ impl<'a> FunctionCodeGen<'a> {
     fn gen_tuple(&mut self, expressions: &[Expression], ctx: &Context) {
         let mut element_ctx = ctx.with_offset(MemorySize(0));
         for expr in expressions {
-            let memory_size = type_size(&expr.ty);
+            let (memory_size, _alignment) = type_size_and_alignment(&expr.ty);
             self.gen_expression(expr, &mut element_ctx);
             element_ctx = element_ctx.with_offset(memory_size); // Move target pointer along
         }
@@ -673,7 +674,9 @@ impl<'a> FunctionCodeGen<'a> {
             if index == index_to_find {
                 break;
             }
-            offset += type_size(&field.field_type).0;
+
+            let (struct_field, struct_field_align) = type_size_and_alignment(&field.field_type);
+            offset += struct_field.0;
         }
 
         MemoryOffset(offset)
@@ -815,8 +818,8 @@ impl<'a> FunctionCodeGen<'a> {
 
          */
 
-        let element_size = type_size(element_type);
         /*
+        let element_size = type_size(element_type);
                // Temporary for the counter
                let counter_addr = ctx.allocate_temp(MemorySize(2)); // u16 counter
                self.state
@@ -902,7 +905,7 @@ impl<'a> FunctionCodeGen<'a> {
             .variable_offsets
             .get(&variable.unique_id_within_function)
             .unwrap();
-        let size = type_size(&variable.resolved_type);
+        let (size, _align) = type_size_and_alignment(&variable.resolved_type);
         self.state.builder.add_mov(
             ctx.addr(),
             frame_address.addr,
@@ -997,4 +1000,46 @@ impl<'a> FunctionCodeGen<'a> {
     fn infinite_above_frame_size(&self) -> FrameMemoryRegion {
         FrameMemoryRegion::new(FrameMemoryAddress(self.frame_size.0), MemorySize(1024))
     }
+
+    fn gen_struct_literal(&mut self, struct_literal: &StructInstantiation, ctx: &mut Context) {
+        let struct_type =
+            Type::AnonymousStruct(struct_literal.struct_type_ref.anon_struct_type.clone());
+        let (whole_struct_size, whole_struct_alignment) = type_size_and_alignment(&struct_type);
+        assert_eq!(ctx.target_size().0, whole_struct_size.0);
+
+        for (field_index, expression) in &struct_literal.source_order_expressions {
+            let (field_offset, field_size, field_alignment) = struct_field_offset(
+                *field_index,
+                &struct_literal.struct_type_ref.anon_struct_type,
+            );
+            info!(?field_offset, ?field_index, "field offset");
+            let new_address = ctx.addr().advance(field_offset);
+            let mut field_ctx = Context::new(FrameMemoryRegion::new(new_address, field_size));
+            self.gen_expression(expression, &mut field_ctx);
+        }
+    }
+}
+
+fn struct_field_offset(
+    index_to_look_for: usize,
+    anon_struct_type: &AnonymousStructType,
+) -> (MemoryOffset, MemorySize, MemoryAlignment) {
+    let mut offset = MemoryOffset(0);
+    for (field_index, (_name, field)) in
+        anon_struct_type.field_name_sorted_fields.iter().enumerate()
+    {
+        let (field_size, field_alignment) = type_size_and_alignment(&field.field_type);
+        let field_start_offset = offset.space(field_size, field_alignment);
+        info!(
+            ?field_index,
+            ?field_size,
+            ?field_start_offset,
+            "advanced to"
+        );
+        if field_index == index_to_look_for {
+            return (field_start_offset, field_size, field_alignment);
+        }
+    }
+
+    panic!("field index is wrong")
 }

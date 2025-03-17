@@ -110,3 +110,48 @@ fn call_mut_argument() {
     ",
     );
 }
+
+#[test_log::test]
+fn call_struct_function() {
+    exec(
+        "
+        struct Something {
+            a: Int,
+            b: Int,
+        }
+
+        fn add(mut s: Something, v: Int) {
+            s.b += v
+        }
+
+        mut s = Something { a: 10, b: 20 }
+        add(mut s, 40)
+        ",
+        "
+00000000  14 00 00 00 32 00 00 00  00 00 00 00 00 00 00 00  ....2...........
+    ",
+    );
+}
+
+#[test_log::test]
+fn call_associated_function() {
+    exec(
+        "
+        struct Something {
+            a: Int,
+        }
+
+        impl Something {
+            fn add(mut self, b: Int) {
+                self.a += b
+            }
+        }
+
+        mut s = Something { a: 10 }
+        s.add(40)
+        ",
+        "
+00000000  14 00 00 00 32 00 00 00  00 00 00 00 00 00 00 00  ....2...........
+    ",
+    );
+}

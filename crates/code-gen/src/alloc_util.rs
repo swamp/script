@@ -1,61 +1,50 @@
 use crate::alloc::{FrameMemoryRegion, ScopeAllocator};
-use swamp_script_types::Type;
-use swamp_vm_instr_build::{BOOL_SIZE, INT_SIZE, PTR_SIZE};
-use swamp_vm_types::{MemoryAlignment, MemorySize};
+use swamp_script_types::{AnonymousStructType, Type};
+use swamp_vm_instr_build::{FLOAT_SIZE, INT_SIZE, STR_SIZE};
+use swamp_vm_types::{MemoryAlignment, MemoryOffset, MemorySize};
 
-pub fn type_size(ty: &Type) -> MemorySize {
-    let size = match ty {
-        Type::Int => INT_SIZE,
-        Type::Float => INT_SIZE,
-        Type::String => PTR_SIZE,
-        Type::Bool => BOOL_SIZE,
-        Type::Unit => 0,
-        Type::Never => 0,
-        Type::Tuple(types) => todo!(),
-        Type::NamedStruct(_) => todo!(),
-        Type::AnonymousStruct(_) => todo!(),
-        Type::Enum(_) => todo!(),
-        Type::Function(_) => 2,
-        Type::Iterable(_) => todo!(),
-        Type::Optional(_) => todo!(),
-        Type::Generic(_, _) => todo!(),
-        Type::Blueprint(_) => todo!(),
-        Type::Variable(_) => todo!(),
-        Type::External(_) => todo!(),
-        Type::MutableReference(referenced_type) => type_size(referenced_type).0,
-    };
-
-    MemorySize(size)
-}
-
-pub fn type_alignment(ty: &Type) -> MemoryAlignment {
-    match ty {
-        Type::Int => MemoryAlignment::U32,
-        Type::Float => MemoryAlignment::U32,
-        Type::String => MemoryAlignment::U16,
-        Type::Bool => MemoryAlignment::U8,
-        Type::Unit => MemoryAlignment::U8,
-        Type::Never => MemoryAlignment::U8,
-        Type::Tuple(types) => todo!(),
-        Type::NamedStruct(_) => todo!(),
-        Type::AnonymousStruct(_) => todo!(),
-        Type::Enum(_) => todo!(),
-        Type::Function(_) => MemoryAlignment::U16,
-        Type::Iterable(_) => todo!(),
-        Type::Optional(_) => todo!(),
-        Type::Generic(_, _) => todo!(),
-        Type::Blueprint(_) => todo!(),
-        Type::Variable(_) => todo!(),
-        Type::External(_) => todo!(),
-        Type::MutableReference(referenced_type) => type_alignment(referenced_type),
+pub fn layout_struct(
+    anon_struct: &AnonymousStructType,
+    memory_offset: MemoryOffset,
+) -> (MemorySize, MemoryAlignment) {
+    let mut calculated_offset = memory_offset;
+    let mut largest_alignment = MemoryAlignment::U8;
+    for (_name, field) in &anon_struct.field_name_sorted_fields {
+        let (field_size, field_alignment) = type_size_and_alignment(&field.field_type);
+        if field_alignment.greater_than(largest_alignment) {
+            largest_alignment = field_alignment;
+        }
+        calculated_offset.space(field_size, field_alignment);
     }
+
+    let total_offset = calculated_offset.space(MemorySize(0), largest_alignment);
+
+    (total_offset.as_size(), largest_alignment)
 }
 
 pub fn type_size_and_alignment(ty: &Type) -> (MemorySize, MemoryAlignment) {
-    let size = type_size(ty);
-    let alignment = type_alignment(ty);
-
-    (size, alignment)
+    match ty {
+        Type::Int => (MemorySize(INT_SIZE), MemoryAlignment::U32),
+        Type::Float => (MemorySize(FLOAT_SIZE), MemoryAlignment::U32),
+        Type::String => (MemorySize(STR_SIZE), MemoryAlignment::U16),
+        Type::Bool => (MemorySize(1), MemoryAlignment::U8),
+        Type::Unit => (MemorySize(0), MemoryAlignment::U8),
+        Type::Never => (MemorySize(0), MemoryAlignment::U8),
+        Type::Tuple(types) => todo!(),
+        Type::NamedStruct(named_struct) => type_size_and_alignment(&Type::AnonymousStruct(
+            named_struct.anon_struct_type.clone(),
+        )),
+        Type::AnonymousStruct(anon_struct) => layout_struct(anon_struct, MemoryOffset(0)),
+        Type::Enum(_) => todo!(),
+        Type::Function(_) => (MemorySize(2), MemoryAlignment::U16),
+        Type::Iterable(_) => todo!(),
+        Type::Optional(_) => todo!(),
+        Type::Generic(_, _) => todo!(),
+        Type::Blueprint(_) => todo!(),
+        Type::Variable(_) => todo!(),
+        Type::External(_) => todo!(),
+        Type::MutableReference(referenced_type) => type_size_and_alignment(referenced_type),
+    }
 }
 
 pub fn reserve_space_for_type(ty: &Type, allocator: &mut ScopeAllocator) -> FrameMemoryRegion {

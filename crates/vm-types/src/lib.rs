@@ -1,7 +1,7 @@
 use crate::aligner::align;
-use std::fmt::{Display, Formatter};
+use std::fmt::{Alignment, Display, Formatter};
 
-mod aligner;
+pub mod aligner;
 pub mod opcode;
 
 #[repr(C, packed)]
@@ -26,7 +26,15 @@ impl StackMemoryAddress {
 // relative to the stack pointer
 
 #[derive(Debug, Copy, Clone)]
-pub struct FrameMemoryAddress(pub u16); // relative to the frame pointer
+pub struct FrameMemoryAddress(pub u16);
+
+impl FrameMemoryAddress {
+    #[must_use]
+    pub fn advance(&self, memory_offset: MemoryOffset) -> FrameMemoryAddress {
+        FrameMemoryAddress(self.0 + memory_offset.0)
+    }
+}
+// relative to the frame pointer
 
 impl FrameMemoryAddress {
     #[must_use]
@@ -41,13 +49,34 @@ impl FrameMemoryAddress {
 
 impl MemoryAddress {
     #[must_use]
-    pub const fn add(&self, memory_size: MemorySize) -> Self {
+    pub const fn space(&self, memory_size: MemorySize, alignment: Alignment) -> Self {
         Self(self.0 + memory_size.0)
     }
 }
 
 #[derive(Debug, Copy, Clone)]
 pub struct MemoryOffset(pub u16);
+
+impl MemoryOffset {
+    pub fn space(&mut self, memory_size: MemorySize, alignment: MemoryAlignment) -> Self {
+        let start = align(self.0 as usize, alignment.into()) as u16;
+        self.0 = start + memory_size.0;
+        MemoryOffset(start)
+    }
+}
+
+impl MemoryOffset {
+    pub fn as_size(&self) -> MemorySize {
+        MemorySize(self.0)
+    }
+}
+
+impl MemoryOffset {
+    pub fn add(&self, size: MemorySize, alignment: MemoryAlignment) -> MemoryOffset {
+        let new_start = align(self.0 as usize, alignment.into());
+        MemoryOffset(new_start as u16 + size.0)
+    }
+}
 
 #[derive(Debug, Copy, Clone)]
 pub struct MemorySize(pub u16);
@@ -58,6 +87,22 @@ pub enum MemoryAlignment {
     U16,
     U32,
     U64,
+}
+
+impl MemoryAlignment {
+    #[must_use]
+    const fn rank(&self) -> usize {
+        match self {
+            Self::U8 => 1,
+            Self::U16 => 2,
+            Self::U32 => 3,
+            Self::U64 => 4,
+        }
+    }
+    #[must_use]
+    pub const fn greater_than(&self, other: MemoryAlignment) -> bool {
+        self.rank() > other.rank()
+    }
 }
 
 impl Into<usize> for MemoryAlignment {
@@ -79,6 +124,13 @@ pub fn align_frame_addr(
     let raw_addr = align(memory_address.0 as usize, alignment.into());
 
     FrameMemoryAddress(raw_addr as u16)
+}
+
+#[must_use]
+pub fn align_offset(memory_address: MemoryOffset, alignment: MemoryAlignment) -> MemoryOffset {
+    let raw_addr = align(memory_address.0 as usize, alignment.into());
+
+    MemoryOffset(raw_addr as u16)
 }
 
 #[derive(Copy, Clone)]
