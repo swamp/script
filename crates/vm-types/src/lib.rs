@@ -11,7 +11,7 @@ pub struct BinaryInstruction {
     pub operands: [u16; 4],
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct MemoryAddress(pub u16);
 
 #[derive(Copy, Clone)]

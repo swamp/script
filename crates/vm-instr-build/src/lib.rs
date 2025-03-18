@@ -1,7 +1,7 @@
 use swamp_vm_types::opcode::OpCode;
 use swamp_vm_types::{
     BinaryInstruction, FrameMemoryAddress, FrameMemorySize, InstructionPosition, MemoryAddress,
-    MemorySize,
+    MemoryOffset, MemorySize,
 };
 pub const INT_SIZE: u16 = 4;
 pub const FLOAT_SIZE: u16 = 4;
@@ -93,6 +93,10 @@ impl InstructionBuilder {
         self.add_instruction(OpCode::Call, &[function_ip.0], comment);
     }
 
+    pub fn add_alloc(&mut self, target: FrameMemoryAddress, size: MemorySize, comment: &str) {
+        self.add_instruction(OpCode::Alloc, &[target.0, size.0], comment);
+    }
+
     /// # Panics
     ///
     pub fn patch_jump(
@@ -143,14 +147,7 @@ impl InstructionBuilder {
         self.add_instruction(OpCode::Jmp, &[ip.0 - 1], comment);
     }
 
-    pub fn add_ld_local(&mut self, dst_offset: FrameMemoryAddress, src_offset: u16, comment: &str) {
-        self.add_instruction(OpCode::Ld, &[dst_offset.0, src_offset], comment);
-    }
-    pub fn add_st_local(&mut self, dst_offset: FrameMemoryAddress, src_offset: u16, comment: &str) {
-        self.add_instruction(OpCode::St, &[dst_offset.0, src_offset], comment);
-    }
-
-    pub fn add_ld_imm_i32(&mut self, dst_offset: FrameMemoryAddress, value: i32, comment: &str) {
+    pub fn add_ld32(&mut self, dst_offset: FrameMemoryAddress, value: i32, comment: &str) {
         let value_u32 = value as u32;
 
         let lower_bits = (value_u32 & 0xFFFF) as u16;
@@ -163,7 +160,7 @@ impl InstructionBuilder {
         );
     }
 
-    pub fn add_ld_imm_u8(&mut self, dst_offset: FrameMemoryAddress, value: u8, comment: &str) {
+    pub fn add_ld8(&mut self, dst_offset: FrameMemoryAddress, value: u8, comment: &str) {
         self.add_instruction(OpCode::Ld8, &[dst_offset.0, value as u16], comment);
     }
 
@@ -178,6 +175,21 @@ impl InstructionBuilder {
 
     pub fn add_ld_u16(&mut self, dest: FrameMemoryAddress, data: u16, comment: &str) {
         self.add_instruction(OpCode::Ld16, &[dest.0, data], comment);
+    }
+
+    pub fn add_stx(
+        &mut self,
+        indirect_target: FrameMemoryAddress,
+        offset: MemoryOffset,
+        source_address: FrameMemoryAddress,
+        size: MemorySize,
+        comment: &str,
+    ) {
+        self.add_instruction(
+            OpCode::Stx,
+            &[indirect_target.0, offset.0, source_address.0, size.0],
+            comment,
+        );
     }
 
     pub fn add_add_i32(
@@ -234,21 +246,6 @@ impl InstructionBuilder {
         comment: &str,
     ) {
         self.add_instruction(OpCode::LtU16, &[dest.0, a.0, b.0], comment);
-    }
-
-    pub fn add_ld_indirect(
-        &mut self,
-        dest: FrameMemoryAddress,
-        base_ptr: FrameMemoryAddress,
-        offset: FrameMemoryAddress,
-        size: u16,
-        comment: &str,
-    ) {
-        self.add_instruction(
-            OpCode::LdIndirect,
-            &[dest.0, base_ptr.0, offset.0, size],
-            comment,
-        );
     }
 
     fn add_instruction(&mut self, op_code: OpCode, operands: &[u16], comment: &str) {

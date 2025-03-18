@@ -159,6 +159,7 @@ impl Analyzer<'_> {
             assigned_name: self.get_text(&enum_type_name.name).to_string(),
             module_path: vec![],
             variants: SeqMap::default(),
+            instantiated_type_parameters: Vec::default(),
         };
 
         for (container_index_usize, ast_variant_type) in ast_variants.iter().enumerate() {
@@ -380,6 +381,7 @@ impl Analyzer<'_> {
             anon_struct_type: analyzed_anonymous_struct,
             assigned_name: struct_name_str,
             module_path: self.shared.definition_table.module_path(),
+            instantiated_type_parameters: Vec::default(),
         };
 
         if has_type_variables {

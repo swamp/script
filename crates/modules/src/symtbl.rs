@@ -304,6 +304,7 @@ impl SymbolTable {
             assigned_name: name.to_string(),
             anon_struct_type: AnonymousStructType::new(defined_fields),
             module_path: self.module_path.clone(),
+            instantiated_type_parameters: Vec::default(),
         };
 
         self.add_struct_link(struct_type.clone())?;

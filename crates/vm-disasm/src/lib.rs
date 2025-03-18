@@ -1,6 +1,9 @@
 use seq_map::SeqMap;
 use swamp_vm_types::opcode::OpCode;
-use swamp_vm_types::{BinaryInstruction, FrameMemoryAddress, InstructionPosition};
+use swamp_vm_types::{
+    BinaryInstruction, FrameMemoryAddress, InstructionPosition, MemoryAddress, MemoryOffset,
+    MemorySize,
+};
 use yansi::Paint;
 
 #[derive(Debug, Clone)]
@@ -10,8 +13,11 @@ pub enum DecoratedOperandKind {
     Ip(InstructionPosition),
     ImmediateU32(u32),
     ImmediateU16(u16),
-    MemorySize(u16),
+    MemorySize(MemorySize),
     ImmediateU8(u16),
+    WriteIndirectMemory(MemoryAddress, MemoryOffset, DecoratedMemoryKind),
+    ReadIndirectMemory(MemoryAddress, MemoryOffset, DecoratedMemoryKind),
+    //PointerOffset(MemoryOffset),
 }
 
 #[derive(Clone, Debug)]
@@ -101,7 +107,7 @@ pub fn disasm_instructions_no_color(
 pub fn disasm_color(binary_instruction: &BinaryInstruction, comment: &str) -> String {
     let decorated = disasm(binary_instruction);
 
-    let name = format!("{}", decorated.name.blue());
+    let name = format!("{:5}", decorated.name.blue());
 
     let mut converted_operands = Vec::new();
     let mut converted_comments = Vec::new();
@@ -116,14 +122,32 @@ pub fn disasm_color(binary_instruction: &BinaryInstruction, comment: &str) -> St
                 format!("{}{}", "$".red(), format!("{:04X}", addr.0).red()),
                 memory_kind_color(&memory_kind),
             ),
+            DecoratedOperandKind::WriteIndirectMemory(addr, memory_offset, memory_kind) => (
+                format!(
+                    "({}{})",
+                    "$".red(),
+                    format!("{:04X}+{}", addr.0, memory_offset.0).red(),
+                ),
+                memory_kind_color(&memory_kind),
+            ),
+            DecoratedOperandKind::ReadIndirectMemory(addr, memory_offset, memory_kind) => (
+                format!(
+                    "({}{})",
+                    "$".green(),
+                    format!("{:04X}+{}", addr.0, memory_offset.0).green()
+                ),
+                memory_kind_color(&memory_kind),
+            ),
+
             DecoratedOperandKind::Ip(ip) => (
                 format!("{}{}", "@".cyan(), format!("{:X}", ip.0).bright_cyan()),
                 String::new(),
             ),
             DecoratedOperandKind::MemorySize(data) => (
-                format!("{}", format!("{data:X}",).yellow()),
-                format!("{}{}", "int:", data),
+                format!("{}", format!("{:X}", data.0).yellow()),
+                format!("{}{}", "int:", data.0),
             ),
+
             DecoratedOperandKind::ImmediateU32(data) => (
                 format!("{}", format!("{data:08X}",).magenta()),
                 format!("{}{}", "int:", data as i32),
@@ -176,7 +200,13 @@ pub fn disasm_no_color(binary_instruction: &BinaryInstruction, comment: &str) ->
                 format!("{}{}", "$", format!("{:04X}", addr.0))
             }
 
-            DecoratedOperandKind::MemorySize(data) => format!("{}", format!("{data:X}",)),
+            DecoratedOperandKind::ReadIndirectMemory(addr, memory_offset, memory_kind) => {
+                format!("({}{})", "$", format!("{:04X}+{}", addr.0, memory_offset.0))
+            }
+            DecoratedOperandKind::WriteIndirectMemory(addr, memory_offset, memory_kind) => {
+                format!("({}{})", "$", format!("{:04X}+{}", addr.0, memory_offset.0))
+            }
+            DecoratedOperandKind::MemorySize(data) => format!("{}", format!("{:X}", data.0)),
 
             DecoratedOperandKind::Ip(ip) => {
                 format!("{}{}", "@", format!("{:X}", ip.0))
@@ -198,8 +228,6 @@ pub fn disasm(binary_instruction: &BinaryInstruction) -> DecoratedOpcode {
     let operands_slice: &[DecoratedOperandKind] = match opcode {
         OpCode::Hlt => &[],
         OpCode::Ret => &[],
-        OpCode::Ld => todo!(),
-        OpCode::St => todo!(),
         OpCode::Ld32 => {
             let data = ((operands[2] as u32) << 16) | operands[1] as u32;
 
@@ -244,15 +272,53 @@ pub fn disasm(binary_instruction: &BinaryInstruction) -> DecoratedOpcode {
             to_jmp_ip(operands[1]),
         ],
         OpCode::Call => &[to_jmp_ip(operands[0])],
-        OpCode::Enter => &[DecoratedOperandKind::MemorySize(operands[0])],
+        OpCode::Enter => &[DecoratedOperandKind::MemorySize(MemorySize(operands[0]))],
         OpCode::Jmp => &[to_jmp_ip(operands[0])],
         OpCode::Mov => &[
             to_write_frame(operands[0], DecoratedMemoryKind::Octets),
             to_read_frame(operands[1], DecoratedMemoryKind::Octets),
-            DecoratedOperandKind::MemorySize(operands[2]),
+            DecoratedOperandKind::MemorySize(MemorySize(operands[2])),
+        ],
+        OpCode::Alloc => &[
+            to_write_frame(operands[0], DecoratedMemoryKind::Octets),
+            DecoratedOperandKind::MemorySize(MemorySize(operands[1])),
         ],
         OpCode::LtU16 => todo!(),
-        OpCode::LdIndirect => todo!(),
+        OpCode::St32x => {
+            let data = ((operands[3] as u32) << 16) | operands[2] as u32;
+            &[
+                DecoratedOperandKind::WriteIndirectMemory(
+                    MemoryAddress(operands[0]),
+                    MemoryOffset(operands[1]),
+                    DecoratedMemoryKind::U32,
+                ),
+                DecoratedOperandKind::ImmediateU32(data),
+            ]
+        }
+        OpCode::Stx => &[
+            DecoratedOperandKind::WriteIndirectMemory(
+                MemoryAddress(operands[0]),
+                MemoryOffset(operands[1]),
+                DecoratedMemoryKind::Octets,
+            ),
+            DecoratedOperandKind::ReadFrameAddress(
+                FrameMemoryAddress(operands[2]),
+                DecoratedMemoryKind::Octets,
+            ),
+            DecoratedOperandKind::MemorySize(MemorySize(operands[3])),
+        ],
+        OpCode::Ldx => &[
+            DecoratedOperandKind::ReadIndirectMemory(
+                MemoryAddress(operands[0]),
+                MemoryOffset(operands[1]),
+                DecoratedMemoryKind::Octets,
+            ),
+            DecoratedOperandKind::ReadFrameAddress(
+                FrameMemoryAddress(operands[2]),
+                DecoratedMemoryKind::Octets,
+            ),
+            DecoratedOperandKind::MemorySize(MemorySize(operands[3])),
+        ],
     };
 
     let converted_operands = operands_slice

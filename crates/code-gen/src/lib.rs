@@ -24,7 +24,7 @@ use swamp_script_types::{AnonymousStructType, EnumVariantType, Signature, Struct
 
 use crate::constants::ConstantsManager;
 use swamp_script_semantic::intr::IntrinsicFunction;
-use swamp_vm_instr_build::{InstructionBuilder, PTR_SIZE, PatchPosition};
+use swamp_vm_instr_build::{InstructionBuilder, PTR_SIZE, PatchPosition, VEC_SIZE};
 use swamp_vm_types::{
     BinaryInstruction, FrameMemoryAddress, FrameMemorySize, InstructionPosition, MemoryAddress,
     MemoryAlignment, MemoryOffset, MemorySize,
@@ -787,28 +787,24 @@ impl<'a> FunctionCodeGen<'a> {
     fn gen_literal(&mut self, literal: &Literal, ctx: &Context) {
         match literal {
             Literal::IntLiteral(int) => {
-                self.state
-                    .builder
-                    .add_ld_imm_i32(ctx.addr(), *int, "int literal");
+                self.state.builder.add_ld32(ctx.addr(), *int, "int literal");
             }
             Literal::FloatLiteral(fixed_point) => {
                 self.state
                     .builder
-                    .add_ld_imm_i32(ctx.addr(), fixed_point.inner(), "float literal");
+                    .add_ld32(ctx.addr(), fixed_point.inner(), "float literal");
             }
             Literal::NoneLiteral => {
-                self.state
-                    .builder
-                    .add_ld_imm_u8(ctx.addr(), 0, "none literal");
+                self.state.builder.add_ld8(ctx.addr(), 0, "none literal");
             }
             Literal::BoolLiteral(truthy) => {
                 self.state
                     .builder
-                    .add_ld_imm_u8(ctx.addr(), u8::from(*truthy), "bool literal");
+                    .add_ld8(ctx.addr(), u8::from(*truthy), "bool literal");
             }
 
             Literal::EnumVariantLiteral(enum_type, a, b) => {
-                self.state.builder.add_ld_imm_u8(
+                self.state.builder.add_ld8(
                     ctx.addr(),
                     a.common().container_index,
                     &format!("enum variant {} tag", a.common().assigned_name),
@@ -847,12 +843,12 @@ impl<'a> FunctionCodeGen<'a> {
                     }
                 }
             }
-            Literal::TupleLiteral(_, _) => {}
+            Literal::TupleLiteral(_, _) => todo!(),
             Literal::StringLiteral(str) => {
                 self.gen_string_literal(str, ctx);
             }
-            Literal::Slice(_, _) => {}
-            Literal::SlicePair(_, _) => {}
+            Literal::Slice(ty, expressions) => self.gen_slice_literal(ty, expressions, ctx),
+            Literal::SlicePair(_, _) => todo!(),
         }
     }
 
@@ -893,15 +889,11 @@ impl<'a> FunctionCodeGen<'a> {
 
     fn gen_option_expression(&mut self, maybe_option: Option<&Expression>, ctx: &Context) {
         if let Some(found_value) = maybe_option {
-            self.state
-                .builder
-                .add_ld_imm_u8(ctx.addr(), 1, "option Some tag"); // 1 signals `Some`
+            self.state.builder.add_ld8(ctx.addr(), 1, "option Some tag"); // 1 signals `Some`
             let mut one_offset_ctx = ctx.with_offset(MemorySize(1));
             self.gen_expression(found_value, &mut one_offset_ctx); // Fills in more of the union
         } else {
-            self.state
-                .builder
-                .add_ld_imm_u8(ctx.addr(), 0, "option None tag"); // 0 signals `None`
+            self.state.builder.add_ld8(ctx.addr(), 0, "option None tag"); // 0 signals `None`
             // No real need to clear the rest of the memory
         }
     }
@@ -1156,6 +1148,55 @@ impl<'a> FunctionCodeGen<'a> {
             let mut field_ctx = Context::new(FrameMemoryRegion::new(new_address, field_size));
             self.gen_expression(expression, &mut field_ctx);
         }
+    }
+
+    fn gen_slice_literal(&mut self, ty: &Type, expressions: &Vec<Expression>, ctx: &Context) {
+        let (element_size, element_alignment) = type_size_and_alignment(ty);
+        let element_count = expressions.len() as u16;
+        let total_slice_size = MemorySize(element_size.0 * element_count);
+
+        let start_frame_address_to_transfer = self
+            .temp_allocator
+            .allocate(total_slice_size, element_alignment);
+        for (index, expr) in expressions.iter().enumerate() {
+            let memory_offset = MemoryOffset((index as u16) * element_size.0);
+            let region = FrameMemoryRegion::new(
+                start_frame_address_to_transfer.advance(memory_offset),
+                element_size,
+            );
+            let element_ctx = Context::new(region);
+            self.gen_expression(expr, &element_ctx);
+        }
+
+        let vec_len_addr = self
+            .extra_frame_allocator
+            .allocate(MemorySize(2), MemoryAlignment::U16);
+        self.state
+            .builder
+            .add_ld_u16(vec_len_addr, element_count, "vec len");
+
+        let vec_capacity_addr = self
+            .extra_frame_allocator
+            .allocate(MemorySize(2), MemoryAlignment::U16);
+        self.state
+            .builder
+            .add_ld_u16(vec_capacity_addr, element_count, "vec capacity");
+
+        let allocated_vec_address = self
+            .extra_frame_allocator
+            .allocate(MemorySize(PTR_SIZE), MemoryAlignment::U16);
+
+        self.state
+            .builder
+            .add_alloc(allocated_vec_address, total_slice_size, "slice literal");
+
+        self.state.builder.add_stx(
+            allocated_vec_address,
+            MemoryOffset(0),
+            start_frame_address_to_transfer,
+            total_slice_size,
+            "copy from slice continuous temporary frame memory to allocated vec ptr heap area",
+        );
     }
 
     fn gen_intrinsic_call_ex(

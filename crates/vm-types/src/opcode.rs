@@ -2,31 +2,47 @@ use std::fmt::{Display, Formatter};
 
 #[repr(u8)]
 pub enum OpCode {
-    Hlt = 0,
-    Ld = 1,
-    St = 2,
-    Ld32 = 3,
-    AddI32 = 4,
-    LtI32 = 5,
-    Bnz = 6,
-    Bz = 7,
-    Call = 8, // Introduce CallLong if needed
-    Enter = 9,
-    Ret = 10,
-    Jmp = 11,
-    Mov = 12,
-    Ld16 = 13,
-    Ld8 = 14,
+    Hlt, // Return to the host
+
+    // Operators
+    AddI32,
+
+    // Comparisons
     LtU16,
-    LdIndirect,
+    LtI32,
+
+    // Conditional branching
+    Bnz,
+    Bz,
+    // Unconditional branching
+    Jmp,
+
+    // Call, frame and return
+    Call, // Introduce CallLong if needed
+    Enter,
+    Ret,
+
+    // Frame copy
+    Mov,
+
+    // Load immediate into frame
+    Ld8,
+    Ld16,
+    Ld32,
+
+    // Indirect operations (using pointer)
+    St32x,
+    Stx,
+    Ldx,
+
+    // Allocate heap
+    Alloc,
 }
 
 impl Display for OpCode {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Hlt => write!(f, "hlt"), // Halt execution
-            Self::Ld => write!(f, "ld"),   // Load
-            Self::St => write!(f, "st"),   // Store
 
             Self::Ld8 => write!(f, "ld8"),
             Self::Ld16 => write!(f, "ld16"),
@@ -44,7 +60,10 @@ impl Display for OpCode {
             Self::LtU16 => write!(f, "lt16"), // Set Less Than Unsigned
             Self::LtI32 => write!(f, "slt32"), // Set Less Than
 
-            Self::LdIndirect => write!(f, "ldx"), // Load Indexed/Indirect
+            Self::Ldx => write!(f, "ldx"),     // Load Indexed/Indirect
+            Self::Stx => write!(f, "stx"),     // Store Indexed/Indirect
+            Self::St32x => write!(f, "st32x"), // Store Indexed/Indirect
+            Self::Alloc => write!(f, "alloc"),
         }
     }
 }

@@ -232,6 +232,11 @@ impl Instantiator {
                 field_name_sorted_fields: new_fields,
             },
             module_path: struct_type.module_path.clone(),
+            instantiated_type_parameters: type_variables
+                .type_variables
+                .values()
+                .cloned()
+                .collect::<Vec<_>>(),
         };
 
         Ok((was_any_replaced, Type::NamedStruct(new_struct)))

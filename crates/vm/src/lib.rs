@@ -127,22 +127,41 @@ impl Vm {
             debug_call_depth: 0,
         };
 
-        vm.handlers[OpCode::Ld as usize] = HandlerType::Args2(Self::execute_ld_local);
-        vm.handlers[OpCode::Ld8 as usize] = HandlerType::Args2(Self::execute_ld_imm_u8);
-        vm.handlers[OpCode::Ld16 as usize] = HandlerType::Args2(Self::execute_ld_imm_u16);
-        vm.handlers[OpCode::Ld32 as usize] = HandlerType::Args3(Self::execute_ld_imm_u32);
-        vm.handlers[OpCode::AddI32 as usize] = HandlerType::Args3(Self::execute_add_i32);
-        vm.handlers[OpCode::LtI32 as usize] = HandlerType::Args3(Self::execute_lt_i32);
-        vm.handlers[OpCode::Bnz as usize] = HandlerType::Args2(Self::execute_jmp_if);
-        vm.handlers[OpCode::Bz as usize] = HandlerType::Args2(Self::execute_jmp_if_not);
-        vm.handlers[OpCode::Jmp as usize] = HandlerType::Args1(Self::execute_jmp);
-        vm.handlers[OpCode::Call as usize] = HandlerType::Args1(Self::execute_call);
+        // Load immediate
+        vm.handlers[OpCode::Ld8 as usize] = HandlerType::Args2(Self::execute_ld8);
+        vm.handlers[OpCode::Ld16 as usize] = HandlerType::Args2(Self::execute_ld16);
+        vm.handlers[OpCode::Ld32 as usize] = HandlerType::Args3(Self::execute_ld32);
 
-        vm.handlers[OpCode::Enter as usize] = HandlerType::Args1(Self::execute_enter);
-        vm.handlers[OpCode::Ret as usize] = HandlerType::Args0(Self::execute_ret);
-        vm.handlers[OpCode::LdIndirect as usize] = HandlerType::Args4(Self::execute_ld_indirect);
+        // Load indirect
+        vm.handlers[OpCode::Ldx as usize] = HandlerType::Args4(Self::execute_ldx);
+        vm.handlers[OpCode::Stx as usize] = HandlerType::Args4(Self::execute_stx);
+        vm.handlers[OpCode::St32x as usize] = HandlerType::Args4(Self::execute_st32x);
+
+        // Alloc
+        vm.handlers[OpCode::Alloc as usize] = HandlerType::Args2(Self::execute_alloc);
+
+        // Copy data in frame memory
         vm.handlers[OpCode::Mov as usize] = HandlerType::Args3(Self::execute_mov);
 
+        // Comparisons
+        vm.handlers[OpCode::LtI32 as usize] = HandlerType::Args3(Self::execute_lt_i32);
+
+        // Conditional jumps
+        vm.handlers[OpCode::Bnz as usize] = HandlerType::Args2(Self::execute_bnz);
+        vm.handlers[OpCode::Bz as usize] = HandlerType::Args2(Self::execute_bz);
+
+        // Unconditional jump
+        vm.handlers[OpCode::Jmp as usize] = HandlerType::Args1(Self::execute_jmp);
+
+        // Operators
+        vm.handlers[OpCode::AddI32 as usize] = HandlerType::Args3(Self::execute_add_i32);
+
+        // Call, enter, ret
+        vm.handlers[OpCode::Call as usize] = HandlerType::Args1(Self::execute_call);
+        vm.handlers[OpCode::Enter as usize] = HandlerType::Args1(Self::execute_enter);
+        vm.handlers[OpCode::Ret as usize] = HandlerType::Args0(Self::execute_ret);
+
+        // Halt - return to host
         vm.handlers[OpCode::Hlt as usize] = HandlerType::Args0(Self::execute_hlt);
 
         // Optional: Zero out the memory for safety?
@@ -180,7 +199,7 @@ impl Vm {
     }
 
     #[inline]
-    fn execute_ld_imm_u32(&mut self, dst_offset: u16, lower_bits: u16, upper_bits: u16) {
+    fn execute_ld32(&mut self, dst_offset: u16, lower_bits: u16, upper_bits: u16) {
         let value = ((upper_bits as u32) << 16) | (lower_bits as u32);
 
         let dst_ptr = self.ptr_at_u32(self.frame_offset + dst_offset as usize) as *mut u32;
@@ -188,8 +207,66 @@ impl Vm {
             *dst_ptr = value;
         }
     }
+
     #[inline]
-    fn execute_ld_imm_u16(&mut self, dst_offset: u16, data: u16) {
+    fn execute_ld32ptr(&mut self, base_offset: u16, offset: u16, lower_bits: u16, upper_bits: u16) {
+        let value = ((upper_bits as u32) << 16) | (lower_bits as u32);
+
+        let ptr_ptr = self.ptr_at_u16(self.frame_offset + base_offset as usize) as *const u16;
+        let ptr = unsafe { *ptr_ptr };
+
+        let addr = ptr + offset;
+
+        let dst_ptr = self.ptr_at_u32(addr as usize) as *mut u32;
+        unsafe {
+            *dst_ptr = value;
+        }
+    }
+    fn execute_ldx(&mut self, dst_offset: u16, base_offset: u16, offset: u16, size: u16) {
+        let ptr_ptr = self.ptr_at_u16(self.frame_offset + base_offset as usize) as *const u16;
+        let ptr = unsafe { *ptr_ptr };
+
+        let src_addr = ptr + offset;
+
+        let src_ptr = self.ptr_at_u8(src_addr as usize);
+        let dst_ptr = self.ptr_at_u8(self.frame_offset + dst_offset as usize);
+
+        unsafe {
+            std::ptr::copy_nonoverlapping(src_ptr, dst_ptr, size as usize);
+        }
+    }
+
+    fn execute_stx(&mut self, base_offset: u16, offset: u16, src_offset: u16, size: u16) {
+        let ptr_ptr = self.ptr_at_u16(self.frame_offset + base_offset as usize) as *const u16;
+        let ptr = unsafe { *ptr_ptr };
+
+        let dst_addr = ptr + offset;
+
+        let src_ptr = self.ptr_at_u8(self.frame_offset + src_offset as usize);
+        let dst_ptr = self.ptr_at_u8(dst_addr as usize);
+
+        unsafe {
+            std::ptr::copy_nonoverlapping(src_ptr, dst_ptr, size as usize);
+        }
+    }
+
+    #[inline]
+    fn execute_st32x(&mut self, base_offset: u16, offset: u16, lower_bits: u16, upper_bits: u16) {
+        let value = ((upper_bits as u32) << 16) | (lower_bits as u32);
+
+        let ptr_ptr = self.ptr_at_u16(self.frame_offset + base_offset as usize) as *const u16;
+        let ptr = unsafe { *ptr_ptr };
+
+        let dst_addr = ptr + offset;
+
+        let dst_ptr = self.ptr_at_u32(dst_addr as usize) as *mut u32;
+        unsafe {
+            *dst_ptr = value;
+        }
+    }
+
+    #[inline]
+    fn execute_ld16(&mut self, dst_offset: u16, data: u16) {
         let dst_ptr = self.ptr_at_u16(self.frame_offset + dst_offset as usize) as *mut u16;
         unsafe {
             *dst_ptr = data;
@@ -197,7 +274,16 @@ impl Vm {
     }
 
     #[inline]
-    fn execute_ld_imm_u8(&mut self, dst_offset: u16, octet: u16) {
+    fn execute_alloc(&mut self, dst_offset: u16, memory_size: u16) {
+        let data_ptr = self.allocate(memory_size as usize);
+        let dst_ptr = self.ptr_at_u16(self.frame_offset + dst_offset as usize) as *mut u16;
+        unsafe {
+            *dst_ptr = data_ptr;
+        }
+    }
+
+    #[inline]
+    fn execute_ld8(&mut self, dst_offset: u16, octet: u16) {
         let dst_ptr = self.frame_ptr_bool_at(dst_offset);
         unsafe {
             *dst_ptr = octet as u8;
@@ -231,7 +317,7 @@ impl Vm {
     }
 
     #[inline]
-    fn execute_jmp_if(&mut self, condition_offset: u16, absolute_ip: u16) {
+    fn execute_bnz(&mut self, condition_offset: u16, absolute_ip: u16) {
         let is_true = self.frame_ptr_bool_const_at(condition_offset);
         if is_true {
             self.ip = absolute_ip as usize;
@@ -239,7 +325,7 @@ impl Vm {
     }
 
     #[inline]
-    fn execute_jmp_if_not(&mut self, condition_offset: u16, absolute_ip: u16) {
+    fn execute_bz(&mut self, condition_offset: u16, absolute_ip: u16) {
         let is_true = self.frame_ptr_bool_const_at(condition_offset);
         if !is_true {
             self.ip = absolute_ip as usize;
@@ -263,47 +349,6 @@ impl Vm {
     #[inline]
     fn execute_mov(&mut self, dst_offset: u16, src_offset: u16, size: u16) {
         let src_ptr = self.ptr_at_u16(self.frame_offset + src_offset as usize);
-        let dst_ptr = self.ptr_at_u16(self.frame_offset + dst_offset as usize);
-
-        unsafe {
-            std::ptr::copy_nonoverlapping(src_ptr, dst_ptr, size as usize);
-        }
-    }
-
-    #[inline]
-    fn execute_ld_local(&mut self, dst_offset: u16, src_offset: u16) {
-        let src_ptr = self.ptr_at_u32(self.frame_offset + src_offset as usize);
-        let dst_ptr = self.ptr_at_u32(self.frame_offset + dst_offset as usize);
-
-        unsafe {
-            std::ptr::copy_nonoverlapping(src_ptr, dst_ptr, 4);
-        }
-    }
-
-    #[inline]
-    fn execute_ld_indirect(
-        &mut self,
-        dst_offset: u16,
-        base_ptr_offset: u16,
-        offset_offset: u16,
-        size: u16,
-    ) {
-        let base_ptr_ptr =
-            self.ptr_at_u16(self.frame_offset + base_ptr_offset as usize) as *const u16;
-        let offset_ptr = self.ptr_at_u16(self.frame_offset + offset_offset as usize) as *const u16;
-
-        // Read the actual base pointer and offset values
-        let base_ptr_value;
-        let offset_value;
-
-        unsafe {
-            base_ptr_value = *base_ptr_ptr;
-            offset_value = *offset_ptr;
-        }
-
-        let src_addr = base_ptr_value as usize + offset_value as usize;
-
-        let src_ptr = self.ptr_at_u16(src_addr);
         let dst_ptr = self.ptr_at_u16(self.frame_offset + dst_offset as usize);
 
         unsafe {
@@ -376,7 +421,7 @@ impl Vm {
         unsafe { *self.ptr_at_u8(self.frame_offset + offset as usize) != 0 }
     }
 
-    fn allocate(&mut self, size: usize) -> usize {
+    fn allocate(&mut self, size: usize) -> u16 {
         let aligned_size = (size + ALIGNMENT_REST) & ALIGNMENT_MASK;
         let result_offset = self.alloc_offset;
 
@@ -386,7 +431,7 @@ impl Vm {
         );
 
         self.alloc_offset += aligned_size;
-        result_offset
+        result_offset as u16
     }
 
     pub fn debug_opcode(&self, opcode: u8, operands: &[u16; 4]) {

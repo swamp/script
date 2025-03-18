@@ -463,6 +463,7 @@ pub struct EnumType {
     pub assigned_name: String,
     pub module_path: Vec<String>,
     pub variants: SeqMap<String, EnumVariantType>,
+    pub instantiated_type_parameters: Vec<Type>,
 }
 
 impl Debug for EnumType {
@@ -487,6 +488,7 @@ impl EnumType {
             assigned_name: assigned_name.to_string(),
             module_path,
             variants: SeqMap::new(),
+            instantiated_type_parameters: Vec::default(),
         }
     }
 
@@ -582,6 +584,7 @@ pub struct NamedStructType {
     pub module_path: Vec<String>,
     pub assigned_name: String,
     pub anon_struct_type: AnonymousStructType,
+    pub instantiated_type_parameters: Vec<Type>,
 }
 
 impl Debug for NamedStructType {
@@ -608,6 +611,7 @@ impl NamedStructType {
             name,
             module_path: module_path.to_vec(),
             assigned_name: assigned_name.to_string(),
+            instantiated_type_parameters: Vec::default(),
         }
     }
 

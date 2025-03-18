@@ -67,9 +67,15 @@ pub fn type_size_and_alignment(ty: &Type) -> (MemorySize, MemoryAlignment) {
         Type::Unit => (MemorySize(0), MemoryAlignment::U8),
         Type::Never => (MemorySize(0), MemoryAlignment::U8),
         Type::Tuple(types) => layout_tuple(types),
-        Type::NamedStruct(named_struct) => type_size_and_alignment(&Type::AnonymousStruct(
-            named_struct.anon_struct_type.clone(),
-        )),
+        Type::NamedStruct(named_struct) => {
+            if named_struct.assigned_name.starts_with("Slice<") {
+                type_size_and_alignment(&named_struct.instantiated_type_parameters[0])
+            } else {
+                type_size_and_alignment(&Type::AnonymousStruct(
+                    named_struct.anon_struct_type.clone(),
+                ))
+            }
+        }
         Type::AnonymousStruct(anon_struct) => layout_struct(anon_struct),
         Type::Enum(enum_type) => {
             let (offset, alignment) = layout_union(&enum_type.variants);
