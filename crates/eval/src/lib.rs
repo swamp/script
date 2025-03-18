@@ -1108,7 +1108,11 @@ impl<'a, C> Interpreter<'a, C> {
                         EnumLiteralData::Tuple(tuple_expressions) => {
                             let eval_expressions = self.evaluate_expressions(tuple_expressions)?;
                             let value_refs = values_to_value_refs_owned(eval_expressions);
-                            Value::EnumVariantTuple(tuple_type.clone(), value_refs)
+                            Value::EnumVariantTuple(
+                                enum_type.clone(),
+                                tuple_type.clone(),
+                                value_refs,
+                            )
                         }
                         _ => panic!("wrong container type"),
                     },
@@ -1123,12 +1127,18 @@ impl<'a, C> Interpreter<'a, C> {
                                 let value = self.evaluate_expression(resolved_expression)?;
                                 field_values[*index] = Rc::new(RefCell::new(value));
                             }
-                            Value::EnumVariantStruct(struct_type_ref.clone(), field_values)
+                            Value::EnumVariantStruct(
+                                enum_type.clone(),
+                                struct_type_ref.clone(),
+                                field_values,
+                            )
                         }
                         _ => panic!("wrong container type"),
                     },
 
-                    EnumVariantType::Nothing(data) => Value::EnumVariantSimple(data.clone()),
+                    EnumVariantType::Nothing(data) => {
+                        Value::EnumVariantSimple(enum_type.clone(), data.clone())
+                    }
                 };
                 variant_container_value
             }
@@ -2098,7 +2108,7 @@ impl<'a, C> Interpreter<'a, C> {
         value_ref: ValueRef,
     ) -> Result<Option<Value>, RuntimeError> {
         match value_ref.borrow_mut().clone() {
-            Value::EnumVariantTuple(value_tuple_type, values) => {
+            Value::EnumVariantTuple(enum_type, value_tuple_type, values) => {
                 // First check if the variant types match
                 if variant_ref.common().container_index != value_tuple_type.common.container_index {
                     return Ok(None); // Try next pattern
@@ -2129,7 +2139,7 @@ impl<'a, C> Interpreter<'a, C> {
                     panic!("not work");
                 }
             }
-            Value::EnumVariantStruct(value_enum_struct_type, values) => {
+            Value::EnumVariantStruct(enum_type, value_enum_struct_type, values) => {
                 info!(
                     ?value_enum_struct_type,
                     ?variant_ref,
@@ -2159,11 +2169,11 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
 
-            Value::EnumVariantSimple(value_variant_ref) => {
+            Value::EnumVariantSimple(_enum_type, value_variant_ref) => {
                 if value_variant_ref.common.container_index == variant_ref.common().container_index
                     && maybe_elements.is_none()
                 {
-                    return Ok(Some(self.evaluate_expression(&expression_to_evaluate)?));
+                    return Ok(Some(self.evaluate_expression(expression_to_evaluate)?));
                 }
             }
             _ => {
@@ -2289,14 +2299,14 @@ impl<'a, C> Interpreter<'a, C> {
 
             // Enum
             (
-                Value::EnumVariantSimple(a),
+                Value::EnumVariantSimple(_a_enum_type, a),
                 BinaryOperatorKind::Equal,
-                Value::EnumVariantSimple(b),
+                Value::EnumVariantSimple(_b_enum_type, b),
             ) => Value::Bool(a == b),
             (
-                Value::EnumVariantSimple(a),
+                Value::EnumVariantSimple(_a_enum_type, a),
                 BinaryOperatorKind::NotEqual,
-                Value::EnumVariantSimple(b),
+                Value::EnumVariantSimple(_b_enum_type, b),
             ) => Value::Bool(a != b),
 
             // Bool

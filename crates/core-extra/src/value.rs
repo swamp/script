@@ -98,9 +98,9 @@ pub enum Value {
     NamedStruct(NamedStructType, Vec<ValueRef>), // type of the struct, and the fields themselves in strict order
     AnonymousStruct(AnonymousStructType, Vec<ValueRef>), // type of the struct, and the fields themselves in strict order
 
-    EnumVariantSimple(EnumVariantSimpleType),
-    EnumVariantTuple(EnumVariantTupleType, Vec<ValueRef>),
-    EnumVariantStruct(EnumVariantStructType, Vec<ValueRef>),
+    EnumVariantSimple(EnumType, EnumVariantSimpleType),
+    EnumVariantTuple(EnumType, EnumVariantTupleType, Vec<ValueRef>),
+    EnumVariantStruct(EnumType, EnumVariantStructType, Vec<ValueRef>),
 
     // Number generators
     Range(Box<i32>, Box<i32>, RangeMode),
@@ -235,11 +235,11 @@ impl Value {
                 todo!("anonymous structs not supported")
             }
 
-            Self::EnumVariantSimple(enum_variant) => {
+            Self::EnumVariantSimple(_, enum_variant) => {
                 octets[0] = enum_variant.common.container_index;
                 1
             }
-            Self::EnumVariantTuple(enum_tuple_ref, values) => {
+            Self::EnumVariantTuple(_, enum_tuple_ref, values) => {
                 let mut offset = 0;
                 octets[offset] = enum_tuple_ref.common.container_index;
                 offset += 1;
@@ -251,7 +251,7 @@ impl Value {
                 }
                 offset
             }
-            Self::EnumVariantStruct(enum_struct_ref, values) => {
+            Self::EnumVariantStruct(_, enum_struct_ref, values) => {
                 let mut offset = 0;
                 octets[offset] = enum_struct_ref.common.container_index;
                 offset += 1;
@@ -341,14 +341,16 @@ impl Clone for Value {
                 Self::AnonymousStruct(resolved_ref.clone(), deep_clone_valrefs(vec_refs))
             }
 
-            Self::EnumVariantSimple(resolved_ref) => Self::EnumVariantSimple(resolved_ref.clone()),
-
-            Self::EnumVariantTuple(resolved_ref, vec_values) => {
-                Self::EnumVariantTuple(resolved_ref.clone(), vec_values.clone())
+            Self::EnumVariantSimple(enum_type, resolved_ref) => {
+                Self::EnumVariantSimple(enum_type.clone(), resolved_ref.clone())
             }
 
-            Self::EnumVariantStruct(resolved_ref, vec_values) => {
-                Self::EnumVariantStruct(resolved_ref.clone(), vec_values.clone())
+            Self::EnumVariantTuple(enum_type, resolved_ref, vec_values) => {
+                Self::EnumVariantTuple(enum_type.clone(), resolved_ref.clone(), vec_values.clone())
+            }
+
+            Self::EnumVariantStruct(enum_type, resolved_ref, vec_values) => {
+                Self::EnumVariantStruct(enum_type.clone(), resolved_ref.clone(), vec_values.clone())
             }
 
             Self::Range(start, end, range_mode) => {
@@ -792,11 +794,11 @@ impl Display for Value {
             }
 
             // Enums ----
-            Self::EnumVariantTuple(enum_name, fields_in_order) => {
+            Self::EnumVariantTuple(enum_type, enum_name, fields_in_order) => {
                 write!(
                     f,
                     "{}::{}(",
-                    enum_name.common.assigned_name, enum_name.common.assigned_name,
+                    enum_type.assigned_name, enum_name.common.assigned_name,
                 )?;
 
                 for (index, field) in fields_in_order.iter().enumerate() {
@@ -810,7 +812,7 @@ impl Display for Value {
 
                 Ok(())
             }
-            Self::EnumVariantStruct(struct_variant, values) => {
+            Self::EnumVariantStruct(enum_type, struct_variant, values) => {
                 let decorated_values: Vec<(String, ValueRef)> = struct_variant
                     .anon_struct
                     .field_name_sorted_fields
@@ -822,7 +824,7 @@ impl Display for Value {
                 write!(
                     f,
                     "{}::{}{{",
-                    struct_variant.common.assigned_name, struct_variant.common.assigned_name,
+                    enum_type.assigned_name, struct_variant.common.assigned_name,
                 )?;
 
                 for (index, (field_name, value)) in decorated_values.iter().enumerate() {
@@ -835,12 +837,11 @@ impl Display for Value {
                 write!(f, "}}")?;
                 Ok(())
             }
-            Self::EnumVariantSimple(enum_variant_type_ref) => {
+            Self::EnumVariantSimple(enum_type, enum_variant_type_ref) => {
                 write!(
                     f,
                     "{}::{}",
-                    enum_variant_type_ref.common.assigned_name,
-                    enum_variant_type_ref.common.assigned_name,
+                    enum_type.assigned_name, enum_variant_type_ref.common.assigned_name,
                 )
             }
             Self::RustValue(_rust_type, rust_type_pointer) => {
@@ -868,13 +869,17 @@ impl PartialEq for Value {
             (Self::String(a), Self::String(b)) => a == b,
             (Self::Bool(a), Self::Bool(b)) => a == b,
             (Self::Unit, Self::Unit) => true,
-            (Self::EnumVariantSimple(a), Self::EnumVariantSimple(b)) => a == b,
-            (Self::EnumVariantTuple(a, a_values), Self::EnumVariantTuple(b, b_values)) => {
-                (a == b) && a_values == b_values
+            (Self::EnumVariantSimple(_enum_type, a), Self::EnumVariantSimple(_enum_type_b, b)) => {
+                a == b
             }
-            (Self::EnumVariantStruct(a, a_values), Self::EnumVariantStruct(b, b_values)) => {
-                (a == b) && a_values == b_values
-            }
+            (
+                Self::EnumVariantTuple(_enum_type, a, a_values),
+                Self::EnumVariantTuple(_enum_type_b, b, b_values),
+            ) => (a == b) && a_values == b_values,
+            (
+                Self::EnumVariantStruct(_enum_type, a, a_values),
+                Self::EnumVariantStruct(_enum_type_b, b, b_values),
+            ) => (a == b) && a_values == b_values,
             (Self::Option(a), Self::Option(b)) => a == b,
             (Self::Vec(a, a_values), Self::Vec(b, b_values)) => (a == b) && a_values == b_values,
             (Self::Map(a, a_values), Self::Map(b, b_values)) => (a == b) && a_values == b_values,
@@ -926,9 +931,9 @@ impl Hash for Value {
             Self::Map(_, _items) => {}
             Self::SlicePair(_, _items) => {}
             Self::Tuple(_, _arr) => {}
-            Self::EnumVariantSimple(_) => (),
-            Self::EnumVariantTuple(_, _fields) => todo!(),
-            Self::EnumVariantStruct(_, _fields) => todo!(),
+            Self::EnumVariantSimple(_, _) => (),
+            Self::EnumVariantTuple(_, _, _fields) => todo!(),
+            Self::EnumVariantStruct(_, _, _fields) => todo!(),
             Self::Range(start, end, _range_mode) => {
                 start.hash(state);
                 end.hash(state);

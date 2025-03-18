@@ -39,6 +39,13 @@ impl ValueReference {
                 // Box the iterator from the Vec
                 Box::new(cloned_rc.into_iter()) as Box<dyn Iterator<Item = ValueRef> + 'static>
             }
+            Value::Vec(_vec_type, values) => {
+                // Clone each Rc<RefCell<Value>> and collect into a Vec
+                let cloned_rc: Vec<ValueRef> = values.iter().cloned().collect();
+
+                // Box the iterator from the Vec
+                Box::new(cloned_rc.into_iter()) as Box<dyn Iterator<Item = ValueRef> + 'static>
+            }
             _ => {
                 info!(?inner, "not sure what this is:");
                 todo!()

@@ -2,6 +2,10 @@
 name = "swamp-vm-disasm"
 version = "0.1.3"
 edition = "2024"
+license = "MIT"
+description = "disassembler for the opcodes in the swamp vm"
+repository = "https://github.com/swamp/script"
+
 
 [dependencies]
 swamp-vm-types = { path = "../vm-types", version = "0.1.3" }

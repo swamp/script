@@ -150,11 +150,15 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
                         vals_in_order.push(Rc::new(RefCell::new(tuple_value)));
                         offset += tuple_octet_size;
                     }
-                    Value::EnumVariantTuple(tuple_type_ref.clone(), vals_in_order)
+                    Value::EnumVariantTuple(
+                        enum_type.clone(),
+                        tuple_type_ref.clone(),
+                        vals_in_order,
+                    )
                 }
                 EnumVariantType::Nothing(x) => {
                     offset += 0;
-                    Value::EnumVariantSimple(x.clone())
+                    Value::EnumVariantSimple(enum_type.clone(), x.clone())
                 }
             };
 
