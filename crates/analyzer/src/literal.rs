@@ -25,20 +25,10 @@ impl Analyzer<'_> {
         let node_text = self.get_text(ast_node);
         let expression = match &ast_literal_kind {
             swamp_script_ast::LiteralKind::Slice(items) => {
-                let slice_blueprint = self
-                    .shared
-                    .core_symbol_table
-                    .get_blueprint("Slice")
-                    .unwrap()
-                    .clone();
-
                 let (encountered_element_type, resolved_items) =
                     self.analyze_slice_type_helper(ast_node, items)?;
 
-                let slice_type = self.instantiate_blueprint_and_members(
-                    &slice_blueprint.clone(),
-                    &[encountered_element_type.clone()],
-                )?;
+                let slice_type = Type::Slice(Box::new(encountered_element_type.clone()));
 
                 let found_expected_type = if let Some(inner_type) = context.expected_type {
                     inner_type.clone()
@@ -102,20 +92,13 @@ impl Analyzer<'_> {
             }
 
             swamp_script_ast::LiteralKind::SlicePair(entries) => {
-                let slice_pair_blueprint = self
-                    .shared
-                    .core_symbol_table
-                    .get_blueprint("SlicePair")
-                    .unwrap()
-                    .clone();
-
                 let (resolved_items, encountered_key_type, encountered_value_type) =
                     self.analyze_slice_pair_literal(ast_node, entries)?;
 
-                let slice_pair_type = self.instantiate_blueprint_and_members(
-                    &slice_pair_blueprint.clone(),
-                    &[encountered_key_type.clone(), encountered_value_type.clone()],
-                )?;
+                let slice_pair_type = Type::SlicePair(
+                    Box::new(encountered_key_type.clone()),
+                    Box::new(encountered_value_type.clone()),
+                );
 
                 let found_expected_type = if let Some(inner_type) = context.expected_type {
                     inner_type.clone()

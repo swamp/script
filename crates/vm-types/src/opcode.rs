@@ -37,6 +37,8 @@ pub enum OpCode {
 
     // Allocate heap
     Alloc,
+    VecPush,
+    Nop,
 }
 
 impl Display for OpCode {
@@ -64,6 +66,8 @@ impl Display for OpCode {
             Self::Stx => write!(f, "stx"),     // Store Indexed/Indirect
             Self::St32x => write!(f, "st32x"), // Store Indexed/Indirect
             Self::Alloc => write!(f, "alloc"),
+            Self::VecPush => write!(f, "vec_push"),
+            Self::Nop => write!(f, "nop"),
         }
     }
 }

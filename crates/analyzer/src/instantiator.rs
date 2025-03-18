@@ -180,14 +180,31 @@ impl Instantiator {
 
             Type::Tuple(types) => {
                 let (was_replaced, new_types) =
-                    Self::instantiate_types_if_needed(types, &type_variables)?;
+                    Self::instantiate_types_if_needed(types, type_variables)?;
                 (was_replaced, Type::Tuple(new_types))
             }
 
             Type::Optional(inner_type) => {
                 let (was_replaced, new_type) =
-                    Self::instantiate_type_if_needed(inner_type, &type_variables)?;
+                    Self::instantiate_type_if_needed(inner_type, type_variables)?;
                 (was_replaced, Type::Optional(Box::new(new_type)))
+            }
+
+            Type::Slice(inner_type) => {
+                let (was_replaced, new_type) =
+                    Self::instantiate_type_if_needed(inner_type, type_variables)?;
+                (was_replaced, Type::Slice(Box::new(new_type)))
+            }
+
+            Type::SlicePair(key_type, value_type) => {
+                let (key_type_was_replaced, new_key_type) =
+                    Self::instantiate_type_if_needed(key_type, type_variables)?;
+                let (value_type_was_replaced, new_value_type) =
+                    Self::instantiate_type_if_needed(value_type, type_variables)?;
+                (
+                    key_type_was_replaced || value_type_was_replaced,
+                    Type::SlicePair(Box::new(new_key_type), Box::new(new_value_type)),
+                )
             }
 
             _ => (false, ty.clone()),

@@ -260,10 +260,6 @@ impl String {
     }
 }
 
-struct Slice<T>
-
-struct SlicePair<K, V>
-
 struct Vec<T>
 
 impl Vec<T> {

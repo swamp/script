@@ -11,7 +11,6 @@ use swamp_script_semantic::prelude::*;
 use swamp_script_types::ParameterizedTypeBlueprint;
 use swamp_script_types::prelude::*;
 use tiny_ver::TinyVersion;
-use tracing::info;
 
 #[derive(Debug, Clone)]
 pub enum FuncDef {
@@ -33,6 +32,18 @@ pub struct TypeParameter {
 }
 
 #[derive(Clone, Debug)]
+pub enum TypeGeneratorKind {
+    Slice,
+    SlicePair,
+}
+
+#[derive(Clone, Debug)]
+pub struct TypeGenerator {
+    pub arity: usize,
+    pub kind: TypeGeneratorKind,
+}
+
+#[derive(Clone, Debug)]
 pub enum Symbol {
     Type(Type),
     Module(ModuleRef),
@@ -41,6 +52,7 @@ pub enum Symbol {
     FunctionDefinition(FuncDef),
     Alias(AliasType),
     Blueprint(ParameterizedTypeBlueprint),
+    TypeGenerator(TypeGenerator),
 }
 
 impl Symbol {
@@ -239,6 +251,41 @@ impl SymbolTable {
         if let Some(found_symbol) = self.get_symbol(name) {
             if let Symbol::Blueprint(type_ref) = found_symbol {
                 return Some(type_ref);
+            }
+        }
+
+        None
+    }
+
+    /// # Errors
+    ///
+    pub fn add_type_generator(
+        &mut self,
+        name: &str,
+        type_generator: TypeGenerator,
+    ) -> Result<TypeGenerator, SemanticError> {
+        self.add_type_generator_link(name, type_generator.clone())?;
+        Ok(type_generator)
+    }
+
+    /// # Errors
+    ///
+    pub fn add_type_generator_link(
+        &mut self,
+        name: &str,
+        type_generator: TypeGenerator,
+    ) -> Result<(), SemanticError> {
+        self.symbols
+            .insert(name.to_string(), Symbol::TypeGenerator(type_generator))
+            .map_err(|_| SemanticError::DuplicateStructName(name.to_string()))?;
+        Ok(())
+    }
+
+    #[must_use]
+    pub fn get_type_generator(&self, name: &str) -> Option<&TypeGenerator> {
+        if let Some(found_symbol) = self.get_symbol(name) {
+            if let Symbol::TypeGenerator(type_gen) = found_symbol {
+                return Some(type_gen);
             }
         }
 

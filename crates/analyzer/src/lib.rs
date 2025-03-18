@@ -25,7 +25,7 @@ use std::num::{ParseFloatError, ParseIntError};
 use std::rc::Rc;
 use std::task::Context;
 use swamp_script_modules::prelude::*;
-use swamp_script_modules::symtbl::SymbolTableRef;
+use swamp_script_modules::symtbl::{SymbolTableRef, TypeGeneratorKind};
 use swamp_script_node::{FileId, Node, Span};
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
@@ -2492,7 +2492,7 @@ impl<'a> Analyzer<'a> {
                             let func_ref = Rc::new(InternalFunctionDefinition {
                                 body: internal.body.clone(),
                                 name: LocalIdentifier(Node::default()),
-                                assigned_name: String::new(),
+                                assigned_name: format!("instantiated {func_name}"),
                                 signature: new_signature,
                                 variable_scopes: self.scope.clone(),
                                 function_scope_state: self.function_variables.clone(),
@@ -2563,7 +2563,21 @@ impl<'a> Analyzer<'a> {
                     Type::Generic(blueprint.clone(), analyzed_type_parameters.to_vec())
                 }
             }
-            _ => return Err(self.create_err(ErrorKind::UnknownSymbol, &node)),
+            Symbol::TypeGenerator(type_gen) => match type_gen.kind {
+                TypeGeneratorKind::Slice => {
+                    //assert!(analyzed_type_parameters[0].is_concrete());
+                    Type::Slice(Box::new(analyzed_type_parameters[0].clone()))
+                }
+                TypeGeneratorKind::SlicePair => {
+                    //assert!(analyzed_type_parameters[0].is_concrete());
+                    //assert!(analyzed_type_parameters[1].is_concrete());
+                    Type::SlicePair(
+                        Box::new(analyzed_type_parameters[0].clone()),
+                        Box::new(analyzed_type_parameters[1].clone()),
+                    )
+                }
+            },
+            _ => return Err(self.create_err(ErrorKind::UnknownSymbol, node)),
         };
 
         Ok(ty)

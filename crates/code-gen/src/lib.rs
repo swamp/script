@@ -25,6 +25,7 @@ use swamp_script_types::{AnonymousStructType, EnumVariantType, Signature, Struct
 use crate::constants::ConstantsManager;
 use swamp_script_semantic::intr::IntrinsicFunction;
 use swamp_vm_instr_build::{InstructionBuilder, PTR_SIZE, PatchPosition, VEC_SIZE};
+use swamp_vm_types::opcode::OpCode;
 use swamp_vm_types::{
     BinaryInstruction, FrameMemoryAddress, FrameMemorySize, InstructionPosition, MemoryAddress,
     MemoryAlignment, MemoryOffset, MemorySize,
@@ -134,7 +135,7 @@ impl CodeGenState {
         internal_fn_def: &InternalFunctionDefinitionRef,
         options: &GenOptions,
     ) {
-        //        info!(?internal_fn_def.assigned_name, ?internal_fn_def.program_unique_id, "generating function");
+        info!(?internal_fn_def.assigned_name, ?internal_fn_def.program_unique_id, "generating function");
         assert_ne!(internal_fn_def.program_unique_id, 0);
         self.function_infos
             .insert(
@@ -1088,6 +1089,8 @@ impl<'a> FunctionCodeGen<'a> {
             Type::Variable(_) => todo!(),
             Type::External(_) => todo!(),
             Type::MutableReference(x) => panic!("should have been checked"),
+            Type::Slice(_) => todo!(),
+            Type::SlicePair(_, _) => todo!(),
         }
     }
 
@@ -1182,10 +1185,16 @@ impl<'a> FunctionCodeGen<'a> {
             .builder
             .add_ld_u16(vec_capacity_addr, element_count, "vec capacity");
 
+        let vec_element_size_addr = self
+            .extra_frame_allocator
+            .allocate(MemorySize(2), MemoryAlignment::U16);
+        self.state
+            .builder
+            .add_ld_u16(vec_element_size_addr, element_size.0, "element size");
+
         let allocated_vec_address = self
             .extra_frame_allocator
             .allocate(MemorySize(PTR_SIZE), MemoryAlignment::U16);
-
         self.state
             .builder
             .add_alloc(allocated_vec_address, total_slice_size, "slice literal");
@@ -1208,68 +1217,85 @@ impl<'a> FunctionCodeGen<'a> {
         //        info!(?intrinsic_fn, "generating intrinsic call");
 
         match intrinsic_fn {
-            IntrinsicFunction::FloatRound => {}
-            IntrinsicFunction::FloatFloor => {}
-            IntrinsicFunction::FloatSqrt => {}
-            IntrinsicFunction::FloatSign => {}
-            IntrinsicFunction::FloatAbs => {}
-            IntrinsicFunction::FloatRnd => {}
-            IntrinsicFunction::FloatCos => {}
-            IntrinsicFunction::FloatSin => {}
-            IntrinsicFunction::FloatAcos => {}
-            IntrinsicFunction::FloatAsin => {}
-            IntrinsicFunction::FloatAtan2 => {}
-            IntrinsicFunction::FloatMin => {}
-            IntrinsicFunction::FloatMax => {}
-            IntrinsicFunction::FloatClamp => {}
-            IntrinsicFunction::IntAbs => {}
-            IntrinsicFunction::IntRnd => {}
-            IntrinsicFunction::IntMax => {}
-            IntrinsicFunction::IntMin => {}
-            IntrinsicFunction::IntClamp => {}
-            IntrinsicFunction::IntToFloat => {}
-            IntrinsicFunction::StringLen => {}
-            IntrinsicFunction::VecFromSlice => {}
+            IntrinsicFunction::FloatRound => todo!(),
+            IntrinsicFunction::FloatFloor => todo!(),
+            IntrinsicFunction::FloatSqrt => todo!(),
+            IntrinsicFunction::FloatSign => todo!(),
+            IntrinsicFunction::FloatAbs => todo!(),
+            IntrinsicFunction::FloatRnd => todo!(),
+            IntrinsicFunction::FloatCos => todo!(),
+            IntrinsicFunction::FloatSin => todo!(),
+            IntrinsicFunction::FloatAcos => todo!(),
+            IntrinsicFunction::FloatAsin => todo!(),
+            IntrinsicFunction::FloatAtan2 => todo!(),
+            IntrinsicFunction::FloatMin => todo!(),
+            IntrinsicFunction::FloatMax => todo!(),
+            IntrinsicFunction::FloatClamp => todo!(),
+            IntrinsicFunction::IntAbs => todo!(),
+            IntrinsicFunction::IntRnd => todo!(),
+            IntrinsicFunction::IntMax => todo!(),
+            IntrinsicFunction::IntMin => todo!(),
+            IntrinsicFunction::IntClamp => todo!(),
+            IntrinsicFunction::IntToFloat => todo!(),
+            IntrinsicFunction::StringLen => todo!(),
+            IntrinsicFunction::VecFromSlice => self.gen_intrinsic_vec_from_slice(arguments, ctx),
             IntrinsicFunction::VecPush => {}
             IntrinsicFunction::VecPop => {}
             IntrinsicFunction::VecRemoveIndex => {}
             IntrinsicFunction::VecClear => {}
-            IntrinsicFunction::VecCreate => {}
+            IntrinsicFunction::VecCreate => self.gen_intrinsic_vec_create(arguments),
             IntrinsicFunction::VecSubscript => {}
             IntrinsicFunction::VecSubscriptMut => {}
-            IntrinsicFunction::VecIter => {}
-            IntrinsicFunction::VecIterMut => {}
-            IntrinsicFunction::VecSelfPush => {}
-            IntrinsicFunction::VecSelfExtend => {}
-            IntrinsicFunction::MapCreate => {}
-            IntrinsicFunction::MapFromSlicePair => {}
-            IntrinsicFunction::MapHas => {}
-            IntrinsicFunction::MapRemove => {}
-            IntrinsicFunction::MapIter => {}
-            IntrinsicFunction::MapIterMut => {}
-            IntrinsicFunction::MapLen => {}
-            IntrinsicFunction::MapIsEmpty => {}
-            IntrinsicFunction::MapSubscript => {}
-            IntrinsicFunction::MapSubscriptSet => {}
-            IntrinsicFunction::MapSubscriptMut => {}
-            IntrinsicFunction::MapSubscriptMutCreateIfNeeded => {}
-            IntrinsicFunction::SparseCreate => {}
-            IntrinsicFunction::SparseFromSlice => {}
-            IntrinsicFunction::SparseIter => {}
-            IntrinsicFunction::SparseIterMut => {}
-            IntrinsicFunction::SparseSubscript => {}
-            IntrinsicFunction::SparseSubscriptMut => {}
-            IntrinsicFunction::SparseHas => {}
-            IntrinsicFunction::SparseRemove => {}
-            IntrinsicFunction::GridCreate => {}
-            IntrinsicFunction::GridFromSlice => {}
-            IntrinsicFunction::GridSubscript => {}
-            IntrinsicFunction::GridSubscriptMut => {}
-            IntrinsicFunction::Float2Magnitude => {}
-            IntrinsicFunction::SparseAdd => {}
+            IntrinsicFunction::VecIter => {} // intentionally disregard, since it is never called
+            IntrinsicFunction::VecIterMut => {} // intentionally disregard, since it is never called
             IntrinsicFunction::VecLen => {}
             IntrinsicFunction::VecIsEmpty => {}
-            IntrinsicFunction::SparseNew => {}
+
+            IntrinsicFunction::VecSelfPush => todo!(),
+            IntrinsicFunction::VecSelfExtend => todo!(),
+            IntrinsicFunction::MapCreate => todo!(),
+            IntrinsicFunction::MapFromSlicePair => todo!(),
+            IntrinsicFunction::MapHas => todo!(),
+            IntrinsicFunction::MapRemove => todo!(),
+            IntrinsicFunction::MapIter => todo!(),
+            IntrinsicFunction::MapIterMut => todo!(),
+            IntrinsicFunction::MapLen => todo!(),
+            IntrinsicFunction::MapIsEmpty => todo!(),
+            IntrinsicFunction::MapSubscript => todo!(),
+            IntrinsicFunction::MapSubscriptSet => todo!(),
+            IntrinsicFunction::MapSubscriptMut => todo!(),
+            IntrinsicFunction::MapSubscriptMutCreateIfNeeded => todo!(),
+            IntrinsicFunction::SparseCreate => todo!(),
+            IntrinsicFunction::SparseFromSlice => todo!(),
+            IntrinsicFunction::SparseIter => todo!(),
+            IntrinsicFunction::SparseIterMut => todo!(),
+            IntrinsicFunction::SparseSubscript => todo!(),
+            IntrinsicFunction::SparseSubscriptMut => todo!(),
+            IntrinsicFunction::SparseHas => todo!(),
+            IntrinsicFunction::SparseRemove => todo!(),
+            IntrinsicFunction::GridCreate => todo!(),
+            IntrinsicFunction::GridFromSlice => todo!(),
+            IntrinsicFunction::GridSubscript => todo!(),
+            IntrinsicFunction::GridSubscriptMut => todo!(),
+            IntrinsicFunction::Float2Magnitude => todo!(),
+            IntrinsicFunction::SparseAdd => todo!(),
+            IntrinsicFunction::SparseNew => todo!(),
+        };
+    }
+
+    fn gen_intrinsic_vec_create(&self, arguments: &Vec<ArgumentExpressionOrLocation>) {
+        for arg in arguments {
+            info!(?arg, "argument");
+        }
+    }
+
+    fn gen_intrinsic_vec_from_slice(
+        &self,
+        arguments: &Vec<ArgumentExpressionOrLocation>,
+        ctx: &Context,
+    ) {
+        for arg in arguments {
+            info!(?arg, "argument");
         }
     }
 }

@@ -2,7 +2,7 @@ use seq_map::SeqMap;
 use std::fmt::{Display, Formatter};
 use swamp_script_core_extra::prelude::SourceMapLookup;
 use swamp_script_modules::modules::{ModuleRef, Modules};
-use swamp_script_modules::symtbl::{FuncDef, Symbol, SymbolTable};
+use swamp_script_modules::symtbl::{FuncDef, Symbol, SymbolTable, TypeGenerator};
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
     ArgumentExpressionOrLocation, AssociatedImpls, MutOrImmutableExpression, Postfix, PostfixKind,
@@ -34,6 +34,7 @@ impl SourceMapDisplay<'_> {
             Symbol::FunctionDefinition(_) => Color::Cyan,
             Symbol::Alias(_) => Color::Red,
             Symbol::Blueprint(_) => Color::Green,
+            Symbol::TypeGenerator(_) => Color::BrightGreen,
         }
     }
 
@@ -94,6 +95,7 @@ impl SourceMapDisplay<'_> {
                 write!(f, "version {version}")
             }
             Symbol::Blueprint(blueprint_ref) => self.show_blueprint(f, blueprint_ref, tabs),
+            Symbol::TypeGenerator(generator) => self.show_type_generator(f, generator, tabs),
         }
     }
 
@@ -122,6 +124,15 @@ impl SourceMapDisplay<'_> {
         self.show_type_variables(f, &blueprint.type_variables, tabs)?;
         write!(f, " ")?;
         self.show_blueprint_kind(f, &blueprint.kind, tabs)
+    }
+
+    fn show_type_generator(
+        &self,
+        f: &mut Formatter,
+        generator: &TypeGenerator,
+        tabs: usize,
+    ) -> std::fmt::Result {
+        write!(f, "{:?}", generator)
     }
 }
 
@@ -676,6 +687,8 @@ impl SourceMapDisplay<'_> {
                 self.show_generic(f, blueprint, concrete_types, tabs)
             }
             Type::Blueprint(blueprint) => self.show_blueprint(f, blueprint, tabs),
+            Type::Slice(value) => todo!(),
+            Type::SlicePair(key, value) => todo!(),
             Type::Variable(var) => self.show_type_variable(f, var, tabs),
             Type::Never => write!(f, "!"),
         }
@@ -717,6 +730,8 @@ impl SourceMapDisplay<'_> {
                 self.show_generic(f, blueprint, concrete_types, tabs)
             }
             Type::Blueprint(blueprint) => self.show_blueprint(f, blueprint, tabs),
+            Type::Slice(value) => todo!(),
+            Type::SlicePair(key, value) => todo!(),
             Type::Variable(var) => self.show_type_variable(f, var, tabs),
             Type::Never => write!(f, "!"),
         }

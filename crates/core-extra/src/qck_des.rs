@@ -37,7 +37,13 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
         Type::Bool => (Value::Bool(buf[0] != 0), 1),
         Type::Unit => (Value::Unit, 0),
         Type::Never => panic!("can not deserialize never type"),
-        &swamp_script_types::Type::MutableReference(_) => todo!(),
+        Type::Slice(value_type) => {
+            todo!()
+        }
+        Type::SlicePair(key_type, value_type) => {
+            todo!()
+        }
+        Type::MutableReference(_) => todo!(),
         /*
         Type::Vec(element_type) => {
             let mut offset = 0;

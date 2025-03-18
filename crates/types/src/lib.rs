@@ -25,6 +25,9 @@ pub enum Type {
     Unit,  // Empty or nothing
     Never, // Not even empty since control flow has escaped with break or return.
 
+    Slice(Box<Type>),
+    SlicePair(Box<Type>, Box<Type>),
+
     // Containers
     Tuple(Vec<Type>),
     NamedStruct(NamedStructType),
@@ -197,6 +200,12 @@ impl Debug for Type {
             Self::Generic(blueprint, non_concrete_arguments) => {
                 write!(f, "{blueprint:?}<{non_concrete_arguments:?}>")
             }
+            Self::Slice(value_type) => {
+                write!(f, "Slice<{value_type:?}>")
+            }
+            Self::SlicePair(key_type, value_type) => {
+                write!(f, "SlicePair<{key_type:?}, {value_type:?}>")
+            }
             Self::Blueprint(blueprint) => {
                 write!(f, "{blueprint:?}")
             }
@@ -225,6 +234,12 @@ impl Display for Type {
             Self::Variable(variable_name) => write!(f, "<|{variable_name}|>"),
             Self::Generic(blueprint, non_concrete_arguments) => {
                 write!(f, "{blueprint:?}<{non_concrete_arguments:?}>")
+            }
+            Self::Slice(value_type) => {
+                write!(f, "Slice<{value_type:?}>")
+            }
+            Self::SlicePair(key_type, value_type) => {
+                write!(f, "SlicePair<{key_type:?}, {value_type:?}>")
             }
             Self::Blueprint(blueprint) => {
                 write!(f, "{blueprint:?}")
@@ -280,6 +295,14 @@ impl Type {
 
             (Self::Generic(blueprint_a, args_a), Self::Generic(blueprint_b, args_b)) => {
                 blueprint_a == blueprint_b && (args_a == args_b)
+            }
+
+            (
+                Self::SlicePair(a_key_type, a_value_type),
+                Self::SlicePair(b_key_type, b_value_type),
+            ) => a_key_type == b_key_type && (a_value_type == b_value_type),
+            (Self::Slice(inner_type_a), Self::Slice(inner_type_b)) => {
+                inner_type_a.compatible_with(inner_type_b)
             }
 
             (Self::Blueprint(a), Self::Blueprint(b)) => a == b,

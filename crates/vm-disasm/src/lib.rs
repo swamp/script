@@ -319,6 +319,11 @@ pub fn disasm(binary_instruction: &BinaryInstruction) -> DecoratedOpcode {
             ),
             DecoratedOperandKind::MemorySize(MemorySize(operands[3])),
         ],
+        OpCode::VecPush => &[
+            to_write_frame(operands[0], DecoratedMemoryKind::Octets),
+            to_read_frame(operands[1], DecoratedMemoryKind::Octets),
+        ],
+        OpCode::Nop => &*vec![],
     };
 
     let converted_operands = operands_slice
