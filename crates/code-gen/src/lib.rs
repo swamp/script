@@ -1209,7 +1209,7 @@ impl<'a> FunctionCodeGen<'a> {
     }
 
     fn gen_intrinsic_call_ex(
-        &self,
+        &mut self,
         intrinsic_fn: &IntrinsicFunction,
         arguments: &Vec<ArgumentExpressionOrLocation>,
         ctx: &Context,
@@ -1290,12 +1290,14 @@ impl<'a> FunctionCodeGen<'a> {
     }
 
     fn gen_intrinsic_vec_from_slice(
-        &self,
+        &mut self,
         arguments: &Vec<ArgumentExpressionOrLocation>,
         ctx: &Context,
     ) {
-        for arg in arguments {
-            info!(?arg, "argument");
+        if let ArgumentExpressionOrLocation::Expression(found_expr) = &arguments[0] {
+            self.gen_expression_for_access(found_expr, ctx);
+        } else {
+            panic!("vec_from_slice");
         }
     }
 }

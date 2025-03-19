@@ -2460,7 +2460,6 @@ impl<'a> Analyzer<'a> {
             &blueprint.name(),
             analyzed_type_parameters,
         ) {
-            debug!(?blueprint, "found existing type");
             return Ok(existing.clone());
         }
 

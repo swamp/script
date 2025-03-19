@@ -35,7 +35,6 @@ impl InstantiationCache {
             panic!("can not add blueprint to cache");
         }
         let converted_name = Self::complete_name(path, name, argument_type);
-        debug!(?converted_name, ?name, ?ty, "adding to instantiation cache");
         self.cache.insert(converted_name, ty)
     }
 
@@ -45,7 +44,6 @@ impl InstantiationCache {
 
     pub fn get(&self, path: &[String], base_name: &str, argument_type: &[Type]) -> Option<&Type> {
         let name = Self::complete_name(path, base_name, argument_type);
-        debug!(?name, ?path, ?base_name, ?argument_type, "checking cache");
 
         self.cache.get(&name)
     }

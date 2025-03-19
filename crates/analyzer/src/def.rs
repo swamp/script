@@ -23,7 +23,7 @@ impl Analyzer<'_> {
         import_items: &swamp_script_ast::ImportItems,
         node: &swamp_script_ast::Node,
     ) -> Result<(), Error> {
-        info!(?path, ?self.shared.modules, "looking for module");
+        trace!(?path, "looking for module");
         let found_module = self
             .shared
             .get_module(path)
