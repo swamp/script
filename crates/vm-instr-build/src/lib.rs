@@ -8,7 +8,7 @@ pub const FLOAT_SIZE: u16 = 4;
 pub const BOOL_SIZE: u16 = 1;
 pub const PTR_SIZE: u16 = 2;
 pub const STR_SIZE: u16 = VEC_SIZE; // TODO: FIX THIS
-pub const VEC_SIZE: u16 = 2 + 2 + 2;
+pub const VEC_SIZE: u16 = 2 + 2 + 2 + 2;
 
 #[derive(Debug)]
 pub struct PatchPosition(pub InstructionPosition);

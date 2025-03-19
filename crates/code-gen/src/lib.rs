@@ -135,7 +135,6 @@ impl CodeGenState {
         internal_fn_def: &InternalFunctionDefinitionRef,
         options: &GenOptions,
     ) {
-        info!(?internal_fn_def.assigned_name, ?internal_fn_def.program_unique_id, "generating function");
         assert_ne!(internal_fn_def.program_unique_id, 0);
         self.function_infos
             .insert(
@@ -159,7 +158,17 @@ impl CodeGenState {
             &internal_fn_def.signature.return_type,
         );
 
-        function_generator.gen_expression(&internal_fn_def.body, &mut ctx);
+        let ExpressionKind::Block(block_expressions) = &internal_fn_def.body.kind else {
+            panic!("function body should be a block")
+        };
+
+        if let ExpressionKind::IntrinsicCallEx(found_intrinsic_fn, _non_instantiated_arguments) =
+            &block_expressions[0].kind
+        {
+            // Intentionally do nothing
+        } else {
+            function_generator.gen_expression(&internal_fn_def.body, &ctx);
+        }
 
         self.finalize_function(options);
     }
@@ -189,6 +198,87 @@ pub struct FunctionCodeGen<'a> {
     extra_frame_allocator: ScopeAllocator,
     temp_allocator: ScopeAllocator,
     fn_id: InternalFunctionId,
+}
+
+impl FunctionCodeGen<'_> {
+    pub(crate) fn gen_single_intrinsic_call(
+        &mut self,
+        intrinsic_fn: &IntrinsicFunction,
+        arguments: &Vec<ArgumentExpressionOrLocation>,
+        ctx: &Context,
+    ) {
+        if arguments.is_empty() {
+            return;
+        }
+        info!(?intrinsic_fn, "generate specific call for intrinsic");
+        match intrinsic_fn {
+            IntrinsicFunction::FloatRound => {}
+            IntrinsicFunction::FloatFloor => {}
+            IntrinsicFunction::FloatSqrt => {}
+            IntrinsicFunction::FloatSign => {}
+            IntrinsicFunction::FloatAbs => {}
+            IntrinsicFunction::FloatRnd => {}
+            IntrinsicFunction::FloatCos => {}
+            IntrinsicFunction::FloatSin => {}
+            IntrinsicFunction::FloatAcos => {}
+            IntrinsicFunction::FloatAsin => {}
+            IntrinsicFunction::FloatAtan2 => {}
+            IntrinsicFunction::FloatMin => {}
+            IntrinsicFunction::FloatMax => {}
+            IntrinsicFunction::FloatClamp => {}
+            IntrinsicFunction::IntAbs => {}
+            IntrinsicFunction::IntRnd => {}
+            IntrinsicFunction::IntMax => {}
+            IntrinsicFunction::IntMin => {}
+            IntrinsicFunction::IntClamp => {}
+            IntrinsicFunction::IntToFloat => {}
+            IntrinsicFunction::StringLen => {}
+            IntrinsicFunction::VecFromSlice => {
+                let slice_variable = &arguments[0];
+                self.gen_argument(slice_variable, ctx, "move slice to target");
+            }
+            IntrinsicFunction::VecPush => {}
+            IntrinsicFunction::VecPop => {}
+            IntrinsicFunction::VecRemoveIndex => {}
+            IntrinsicFunction::VecClear => {}
+            IntrinsicFunction::VecCreate => {}
+            IntrinsicFunction::VecSubscript => {}
+            IntrinsicFunction::VecSubscriptMut => {}
+            IntrinsicFunction::VecIter => {}
+            IntrinsicFunction::VecIterMut => {}
+            IntrinsicFunction::VecSelfPush => {}
+            IntrinsicFunction::VecSelfExtend => {}
+            IntrinsicFunction::MapCreate => {}
+            IntrinsicFunction::MapFromSlicePair => {}
+            IntrinsicFunction::MapHas => {}
+            IntrinsicFunction::MapRemove => {}
+            IntrinsicFunction::MapIter => {}
+            IntrinsicFunction::MapIterMut => {}
+            IntrinsicFunction::MapLen => {}
+            IntrinsicFunction::MapIsEmpty => {}
+            IntrinsicFunction::MapSubscript => {}
+            IntrinsicFunction::MapSubscriptSet => {}
+            IntrinsicFunction::MapSubscriptMut => {}
+            IntrinsicFunction::MapSubscriptMutCreateIfNeeded => {}
+            IntrinsicFunction::SparseCreate => {}
+            IntrinsicFunction::SparseFromSlice => {}
+            IntrinsicFunction::SparseIter => {}
+            IntrinsicFunction::SparseIterMut => {}
+            IntrinsicFunction::SparseSubscript => {}
+            IntrinsicFunction::SparseSubscriptMut => {}
+            IntrinsicFunction::SparseHas => {}
+            IntrinsicFunction::SparseRemove => {}
+            IntrinsicFunction::GridCreate => {}
+            IntrinsicFunction::GridFromSlice => {}
+            IntrinsicFunction::GridSubscript => {}
+            IntrinsicFunction::GridSubscriptMut => {}
+            IntrinsicFunction::Float2Magnitude => {}
+            IntrinsicFunction::SparseAdd => {}
+            IntrinsicFunction::VecLen => {}
+            IntrinsicFunction::VecIsEmpty => {}
+            IntrinsicFunction::SparseNew => {}
+        }
+    }
 }
 
 impl<'a> FunctionCodeGen<'a> {
@@ -264,6 +354,7 @@ impl<'a> FunctionCodeGen<'a> {
     ) -> FrameMemoryRegion {
         match &expr.kind {
             ExpressionKind::VariableAccess(var_ref) => {
+                info!(?var_ref, "variable access");
                 let frame_address = self
                     .variable_offsets
                     .get(&var_ref.unique_id_within_function)
@@ -671,20 +762,24 @@ impl<'a> FunctionCodeGen<'a> {
         if let ExpressionKind::InternalFunctionAccess(internal_fn) = &start_expression.kind {
             if chain.len() == 1 {
                 if let PostfixKind::FunctionCall(args) = &chain[0].kind {
-                    self.gen_arguments(&internal_fn.signature, None, args);
-                    self.state
-                        .add_call(internal_fn, &format!("frame size: {}", self.frame_size)); // will be fixed up later
-                    let (return_size, _alignment) =
-                        type_size_and_alignment(&internal_fn.signature.return_type);
-                    if return_size.0 != 0 {
-                        self.state.builder.add_mov(
-                            ctx.addr(),
-                            self.infinite_above_frame_size().addr,
-                            return_size,
-                            "copy the return value to destination",
-                        );
+                    if let Some(intrinsic_fn) = single_intrinsic_fn(&internal_fn.body) {
+                        self.gen_single_intrinsic_call(intrinsic_fn, args, ctx);
+                    } else {
+                        self.gen_arguments(&internal_fn.signature, None, args);
+                        self.state
+                            .add_call(internal_fn, &format!("frame size: {}", self.frame_size)); // will be fixed up later
+                        let (return_size, _alignment) =
+                            type_size_and_alignment(&internal_fn.signature.return_type);
+                        if return_size.0 != 0 {
+                            self.state.builder.add_mov(
+                                ctx.addr(),
+                                self.infinite_above_frame_size().addr,
+                                return_size,
+                                "copy the ret value to destination",
+                            );
+                        }
+                        self.copy_back_mutable_arguments(&internal_fn.signature, None, args);
                     }
-                    self.copy_back_mutable_arguments(&internal_fn.signature, None, args);
 
                     return;
                 }
@@ -699,13 +794,19 @@ impl<'a> FunctionCodeGen<'a> {
                 PostfixKind::MemberCall(function_to_call, arguments) => {
                     match &**function_to_call {
                         Function::Internal(internal_fn) => {
-                            self.gen_arguments(
-                                &internal_fn.signature,
-                                Some(start_source),
-                                arguments,
-                            );
-                            self.state
-                                .add_call(internal_fn, &format!("frame size: {}", self.frame_size)); // will be fixed up later
+                            if let Some(intrinsic_fn) = single_intrinsic_fn(&internal_fn.body) {
+                                self.gen_single_intrinsic_call(intrinsic_fn, arguments, ctx);
+                            } else {
+                                self.gen_arguments(
+                                    &internal_fn.signature,
+                                    Some(start_source),
+                                    arguments,
+                                );
+                                self.state.add_call(
+                                    internal_fn,
+                                    &format!("frame size: {}", self.frame_size),
+                                ); // will be fixed up later
+                            }
                             let (return_size, _alignment) =
                                 type_size_and_alignment(&internal_fn.signature.return_type);
                             if return_size.0 != 0 {
@@ -1171,30 +1272,22 @@ impl<'a> FunctionCodeGen<'a> {
             self.gen_expression(expr, &element_ctx);
         }
 
-        let vec_len_addr = self
-            .extra_frame_allocator
-            .allocate(MemorySize(2), MemoryAlignment::U16);
+        let vec_len_addr = ctx.addr().advance(MemoryOffset(0));
         self.state
             .builder
             .add_ld_u16(vec_len_addr, element_count, "vec len");
 
-        let vec_capacity_addr = self
-            .extra_frame_allocator
-            .allocate(MemorySize(2), MemoryAlignment::U16);
+        let vec_capacity_addr = ctx.addr().advance(MemoryOffset(2));
         self.state
             .builder
             .add_ld_u16(vec_capacity_addr, element_count, "vec capacity");
 
-        let vec_element_size_addr = self
-            .extra_frame_allocator
-            .allocate(MemorySize(2), MemoryAlignment::U16);
+        let vec_element_size_addr = ctx.addr().advance(MemoryOffset(4));
         self.state
             .builder
             .add_ld_u16(vec_element_size_addr, element_size.0, "element size");
 
-        let allocated_vec_address = self
-            .extra_frame_allocator
-            .allocate(MemorySize(PTR_SIZE), MemoryAlignment::U16);
+        let allocated_vec_address = ctx.addr().advance(MemoryOffset(6));
         self.state
             .builder
             .add_alloc(allocated_vec_address, total_slice_size, "slice literal");
@@ -1299,6 +1392,20 @@ impl<'a> FunctionCodeGen<'a> {
         } else {
             panic!("vec_from_slice");
         }
+    }
+}
+
+fn single_intrinsic_fn(body: &Expression) -> Option<&IntrinsicFunction> {
+    let ExpressionKind::Block(block_expressions) = &body.kind else {
+        panic!("function body should be a block")
+    };
+
+    if let ExpressionKind::IntrinsicCallEx(found_intrinsic_fn, _non_instantiated_arguments) =
+        &block_expressions[0].kind
+    {
+        Some(found_intrinsic_fn)
+    } else {
+        None
     }
 }
 

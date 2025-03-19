@@ -1,9 +1,9 @@
 use crate::alloc::{FrameMemoryRegion, ScopeAllocator};
 use seq_map::SeqMap;
 use swamp_script_types::{AnonymousStructType, EnumVariantType, Type};
-use swamp_vm_instr_build::{FLOAT_SIZE, INT_SIZE, STR_SIZE};
+use swamp_vm_instr_build::{FLOAT_SIZE, INT_SIZE, STR_SIZE, VEC_SIZE};
 use swamp_vm_types::{MemoryAlignment, MemoryOffset, MemorySize};
-use tracing::error;
+use tracing::{error, info};
 
 pub fn layout_struct(anon_struct: &AnonymousStructType) -> (MemorySize, MemoryAlignment) {
     let mut calculated_offset = MemoryOffset(0);
@@ -67,9 +67,17 @@ pub fn type_size_and_alignment(ty: &Type) -> (MemorySize, MemoryAlignment) {
         Type::Unit => (MemorySize(0), MemoryAlignment::U8),
         Type::Never => (MemorySize(0), MemoryAlignment::U8),
         Type::Tuple(types) => layout_tuple(types),
-        Type::NamedStruct(named_struct) => type_size_and_alignment(&Type::AnonymousStruct(
-            named_struct.anon_struct_type.clone(),
-        )),
+        Type::NamedStruct(named_struct) => {
+            if named_struct.module_path == vec!["core-0.0.0".to_string()]
+                && named_struct.assigned_name.starts_with("Vec<")
+            {
+                (MemorySize(VEC_SIZE), MemoryAlignment::U16)
+            } else {
+                type_size_and_alignment(&Type::AnonymousStruct(
+                    named_struct.anon_struct_type.clone(),
+                ))
+            }
+        }
         Type::Slice(value_type) => type_size_and_alignment(value_type),
         Type::SlicePair(key_type, value_type) => {
             layout_tuple(&vec![*key_type.clone(), *value_type.clone()])

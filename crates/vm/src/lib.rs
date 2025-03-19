@@ -111,9 +111,9 @@ impl Vm {
         let stack_base_offset = (constants_offset - stack_size) & ALIGNMENT_MASK;
 
         let mut vm = Self {
-            memory,          // Raw memory pointer
-            memory_size,     // Total memory size
-            alloc_offset: 0, // Heap starts at beginning
+            memory,               // Raw memory pointer
+            memory_size,          // Total memory size
+            alloc_offset: 0x00cd, // Heap starts at beginning. // TODO: Should be 0, other values are for debugging
             stack_base_offset,
             stack_offset: stack_base_offset,
             constants_offset,                // Constants at the end

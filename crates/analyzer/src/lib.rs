@@ -1522,7 +1522,16 @@ impl<'a> Analyzer<'a> {
     }
 
     fn str_to_int(text: &str) -> Result<i32, ParseIntError> {
-        text.parse::<i32>()
+        let text = text.replace('_', "");
+        text.strip_prefix("0x").map_or_else(
+            || {
+                text.strip_prefix("-0x").map_or_else(
+                    || text.parse::<i32>(),
+                    |rest| i32::from_str_radix(rest, 16).map(|x| -x),
+                )
+            },
+            |rest| i32::from_str_radix(rest, 16),
+        )
     }
 
     fn str_to_float(text: &str) -> Result<f32, ParseFloatError> {

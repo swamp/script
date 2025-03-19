@@ -41,7 +41,9 @@ SCOPE_OPERATOR = _{ "::" }
 basic_literal = { tuple_lit | float_lit | int_lit | string_lit | bool_lit | none_lit }
 
 none_lit       =  { "none" }
-int_lit        = @{ "-"? ~ ASCII_DIGIT+ }
+int_lit = @{ "-"? ~ ( hex_int | dec_int ) }
+dec_int = { ASCII_DIGIT ~ ( "_"? ~ ASCII_DIGIT )* }
+hex_int = { "0x" ~ ASCII_HEX_DIGIT ~ ( "_"? ~ ASCII_HEX_DIGIT )* }
 float_lit      = @{ ("+" | "-")? ~ ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT+ }
 string_lit     = @{ "\"" ~ ("\\\"" | !"\"" ~ ANY)* ~ "\"" }
 bool_lit       =  { "true" | "false" }
