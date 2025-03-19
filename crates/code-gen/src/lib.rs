@@ -24,7 +24,7 @@ use swamp_script_types::{AnonymousStructType, EnumVariantType, Signature, Struct
 
 use crate::constants::ConstantsManager;
 use swamp_script_semantic::intr::IntrinsicFunction;
-use swamp_vm_instr_build::{InstructionBuilder, PTR_SIZE, PatchPosition, VEC_SIZE};
+use swamp_vm_instr_build::{InstructionBuilder, PatchPosition, PTR_SIZE, VEC_SIZE};
 use swamp_vm_types::opcode::OpCode;
 use swamp_vm_types::{
     BinaryInstruction, FrameMemoryAddress, FrameMemorySize, InstructionPosition, MemoryAddress,

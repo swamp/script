@@ -64,7 +64,7 @@ fn call() {
 > 0002: mov $005C $0000 4 # variable access 'a' ()
 > 0003: ld32 $0060 0000000A # int literal
 > 0004: call @7 # calling another_fn (frame size: frame size: 0058)
-> 0005: mov $0004 $0058 4 # copy the return value to destination
+> 0005: mov $0004 $0058 4 # copy the ret value to destination
 > 0006: hlt  #
 - another_fn -
 > 0007: enter 5C # variables:
