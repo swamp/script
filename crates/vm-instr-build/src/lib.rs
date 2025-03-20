@@ -1,7 +1,7 @@
 use swamp_vm_types::opcode::OpCode;
 use swamp_vm_types::{
-    BinaryInstruction, FrameMemoryAddress, FrameMemorySize, InstructionPosition, MemoryAddress,
-    MemoryOffset, MemorySize,
+    BinaryInstruction, CountU16, FrameMemoryAddress, FrameMemorySize, InstructionPosition,
+    MemoryAddress, MemoryOffset, MemorySize,
 };
 
 #[derive(Debug)]
@@ -251,7 +251,7 @@ impl InstructionBuilder {
         slice_source_addr: FrameMemoryAddress,
         key_size: MemorySize,
         value_size: MemorySize,
-        count: u16,
+        count: CountU16,
         comment: &str,
     ) {
         self.add_instruction(
@@ -261,7 +261,7 @@ impl InstructionBuilder {
                 slice_source_addr.0,
                 key_size.0,
                 value_size.0,
-                count,
+                count.0,
             ],
             comment,
         );
@@ -269,7 +269,8 @@ impl InstructionBuilder {
 
     fn add_instruction(&mut self, op_code: OpCode, operands: &[u16], comment: &str) {
         let mut array: [u16; 5] = [0; 5];
-        let len = operands.len().min(4);
+        assert!(operands.len() <= 5);
+        let len = operands.len();
         array[..len].copy_from_slice(&operands[..len]);
         self.instructions.push(BinaryInstruction {
             opcode: op_code as u8,

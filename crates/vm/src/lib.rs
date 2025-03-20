@@ -429,8 +429,8 @@ impl Vm {
     }
 
     fn allocate(&mut self, size: usize) -> u16 {
-        let aligned_size = (size + ALIGNMENT_MASK) & !ALIGNMENT_MASK;
-        let aligned_offset = (self.alloc_offset + ALIGNMENT_MASK) & !ALIGNMENT_MASK;
+        let aligned_size = (size + ALIGNMENT_REST) & ALIGNMENT_MASK;
+        let aligned_offset = (self.alloc_offset + ALIGNMENT_REST) & ALIGNMENT_MASK;
 
         assert!(
             aligned_offset + aligned_size <= self.stack_base_offset,

@@ -342,12 +342,32 @@ b = 0x0BAD_CAFE
 fn map() {
     exec(
         "
-result = [10 : 42.0, 20: 99.0, 3: 11.02]
+struct Something {
+    is_cool: Bool,
+    f: Float,
+}
+
+result = [
+    10 : Something { is_cool: true, f: 42.0 }, 
+    20: Something { is_cool: false, f: 99.0 }, 
+    3: Something { is_cool: true, f: 0.33 }
+]
+
 b = 0x0BAD_CAFE
         ",
         "
-00000000  03 00 03 00 04 00 CD 00  FE CA AD 0B 00 00 00 00  ................
+00000000  03 00 08 00 D0 00 04 00  08 00 00 00 FE CA AD 0B  ................
 
     ",
+        // 03 00 - len() of map
+        // 08 00 - number of buckets
+        // 00 0D - bucket pointer
+        // 04 00 - key size
+        // 08 00 - value size
+        // | 0              | length       | u16  | 2            | Number of entries in the map     |
+        // | 2              | capacity     | u16  | 2            | Total bucket count (power of 2)  |
+        // | 4              | buckets_ptr  | u16  | 2            | Pointer to bucket array          |
+        // | 6              | key_size     | u16  | 2            | Key size in bytes                |
+        // | 8              | value_size   | u16  | 2            | Value size in bytes              |
     );
 }

@@ -2,7 +2,7 @@ use crate::alloc::{FrameMemoryRegion, ScopeAllocator};
 use seq_map::SeqMap;
 use swamp_script_types::{AnonymousStructType, EnumVariantType, Type};
 use swamp_vm_types::{
-    FLOAT_SIZE, INT_SIZE, MemoryAlignment, MemoryOffset, MemorySize, STR_SIZE, VEC_SIZE,
+    FLOAT_SIZE, INT_SIZE, MAP_SIZE, MemoryAlignment, MemoryOffset, MemorySize, STR_SIZE, VEC_SIZE,
 };
 use tracing::{error, info};
 
@@ -73,6 +73,10 @@ pub fn type_size_and_alignment(ty: &Type) -> (MemorySize, MemoryAlignment) {
                 && named_struct.assigned_name.starts_with("Vec<")
             {
                 (MemorySize(VEC_SIZE), MemoryAlignment::U16)
+            } else if named_struct.module_path == vec!["core-0.0.0".to_string()]
+                && named_struct.assigned_name.starts_with("Map<")
+            {
+                (MemorySize(MAP_SIZE), MemoryAlignment::U16)
             } else {
                 type_size_and_alignment(&Type::AnonymousStruct(
                     named_struct.anon_struct_type.clone(),

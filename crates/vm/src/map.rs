@@ -44,7 +44,7 @@ impl Vm {
 
         // Map header structure (10 bytes)
         let dst_ptr = self.ptr_at_u16(self.frame_offset + dst_offset as usize);
-        let buckets_ptr_addr = self.allocate((capacity * 2) as usize); // Allocate buckets
+        let buckets_ptr_addr = self.allocate((capacity * PTR_SIZE) as usize); // Allocate buckets
         unsafe {
             *dst_ptr = 0; // Initialize length of map to 0
             *dst_ptr.add(1) = capacity;

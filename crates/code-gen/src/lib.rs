@@ -13,11 +13,11 @@ use crate::vec::{VECTOR_DATA_PTR_OFFSET, VECTOR_LENGTH_OFFSET};
 use seq_map::SeqMap;
 use std::ops::Deref;
 use swamp_script_semantic::{
-    ArgumentExpressionOrLocation, BinaryOperator, BinaryOperatorKind, BooleanExpression,
-    CompoundOperatorKind, EnumLiteralData, Expression, ExpressionKind, ForPattern, Function,
-    FunctionScopeState, InternalFunctionDefinition, InternalFunctionDefinitionRef,
-    InternalFunctionId, InternalMainExpression, Iterable, Literal, LocationAccessKind,
-    MutOrImmutableExpression, Postfix, PostfixKind, SingleLocationExpression,
+    AnonymousStructLiteral, ArgumentExpressionOrLocation, BinaryOperator, BinaryOperatorKind,
+    BooleanExpression, CompoundOperatorKind, EnumLiteralData, Expression, ExpressionKind,
+    ForPattern, Function, FunctionScopeState, InternalFunctionDefinition,
+    InternalFunctionDefinitionRef, InternalFunctionId, InternalMainExpression, Iterable, Literal,
+    LocationAccessKind, MutOrImmutableExpression, Postfix, PostfixKind, SingleLocationExpression,
     SingleMutLocationExpression, StructInstantiation, VariableRef,
 };
 use swamp_script_types::{AnonymousStructType, EnumVariantType, Signature, StructTypeField, Type};
@@ -27,10 +27,18 @@ use swamp_script_semantic::intr::IntrinsicFunction;
 use swamp_vm_instr_build::{InstructionBuilder, PatchPosition};
 use swamp_vm_types::opcode::OpCode;
 use swamp_vm_types::{
-    BinaryInstruction, FrameMemoryAddress, FrameMemorySize, InstructionPosition, MemoryAddress,
-    MemoryAlignment, MemoryOffset, MemorySize,
+    BinaryInstruction, CountU16, FrameMemoryAddress, FrameMemorySize, InstructionPosition,
+    MemoryAddress, MemoryAlignment, MemoryOffset, MemorySize, TempFrameMemoryAddress,
 };
 use tracing::{info, trace};
+
+pub struct SlicePairInfo {
+    pub addr: TempFrameMemoryAddress,
+    pub key_size: MemorySize,
+    pub value_size: MemorySize,
+    pub element_count: CountU16,
+    pub element_size: MemorySize,
+}
 
 pub struct FunctionInfo {
     pub starts_at_ip: InstructionPosition,
@@ -251,13 +259,25 @@ impl FunctionCodeGen<'_> {
             IntrinsicFunction::MapCreate => todo!(),
             IntrinsicFunction::MapFromSlicePair => {
                 let slice_pair_argument = &arguments[0];
-                self.gen_argument(slice_pair_argument, ctx, "move slice-pair to target");
+                let ArgumentExpressionOrLocation::Expression(expr) = slice_pair_argument else {
+                    panic!();
+                };
+
+                let ExpressionKind::Literal(some_lit) = &expr.kind else {
+                    panic!();
+                };
+
+                let Literal::SlicePair(slice_type, expression_pairs) = some_lit else {
+                    panic!();
+                };
+
+                let slice_pair_info = self.gen_slice_pair_literal(slice_type, expression_pairs);
                 self.state.builder.add_map_new_from_slice(
                     ctx.addr(),
-                    ctx.addr(),
-                    MemorySize(10),
-                    MemorySize(10),
-                    32,
+                    slice_pair_info.addr.to_addr(),
+                    slice_pair_info.key_size,
+                    slice_pair_info.value_size,
+                    slice_pair_info.element_count,
                     "create map from temporary slice pair",
                 );
             }
@@ -413,12 +433,14 @@ impl<'a> FunctionCodeGen<'a> {
                 self.gen_variable_reassignment(variable, expression, ctx);
             }
             ExpressionKind::StructInstantiation(struct_literal) => {
-                self.gen_struct_literal(struct_literal, ctx)
+                self.gen_struct_literal(struct_literal, ctx);
             }
-            ExpressionKind::AnonymousStructLiteral(_) => todo!(),
+            ExpressionKind::AnonymousStructLiteral(anon_struct) => {
+                self.gen_anonymous_struct_literal(&anon_struct, ctx);
+            }
             ExpressionKind::Literal(basic_literal) => self.gen_literal(basic_literal, ctx),
             ExpressionKind::Option(maybe_option) => {
-                self.gen_option_expression(maybe_option.as_deref(), ctx)
+                self.gen_option_expression(maybe_option.as_deref(), ctx);
             }
             ExpressionKind::Range(_, _, _) => todo!(),
             ExpressionKind::ForLoop(a, b, c) => self.gen_for_loop(a, b, c, ctx),
@@ -592,7 +614,7 @@ impl<'a> FunctionCodeGen<'a> {
     fn gen_mut_or_immute(
         &mut self,
         mut_or_immutable_expression: &MutOrImmutableExpression,
-        ctx: &mut Context,
+        ctx: &Context,
     ) {
         match &mut_or_immutable_expression.expression_or_location {
             ArgumentExpressionOrLocation::Expression(found_expression) => {
@@ -962,7 +984,7 @@ impl<'a> FunctionCodeGen<'a> {
             }
             Literal::Slice(ty, expressions) => self.gen_slice_literal(ty, expressions, ctx),
             Literal::SlicePair(ty, expression_pairs) => {
-                self.gen_slice_pair_literal(ty, expression_pairs, ctx)
+                todo!()
             }
         }
     }
@@ -1247,23 +1269,45 @@ impl<'a> FunctionCodeGen<'a> {
     }
 
     fn gen_struct_literal(&mut self, struct_literal: &StructInstantiation, ctx: &Context) {
-        let struct_type =
-            Type::AnonymousStruct(struct_literal.struct_type_ref.anon_struct_type.clone());
+        self.gen_struct_literal_helper(
+            &struct_literal.struct_type_ref.anon_struct_type,
+            &struct_literal.source_order_expressions,
+            ctx,
+        );
+    }
+
+    fn gen_anonymous_struct_literal(
+        &mut self,
+        anon_struct_literal: &AnonymousStructLiteral,
+        ctx: &Context,
+    ) {
+        self.gen_struct_literal_helper(
+            &anon_struct_literal.anonymous_struct_type,
+            &anon_struct_literal.source_order_expressions,
+            ctx,
+        );
+    }
+
+    fn gen_struct_literal_helper(
+        &mut self,
+        struct_type_ref: &AnonymousStructType,
+        source_order_expressions: &Vec<(usize, Expression)>,
+        ctx: &Context,
+    ) {
+        let struct_type = Type::AnonymousStruct(struct_type_ref.clone());
         let (whole_struct_size, whole_struct_alignment) = type_size_and_alignment(&struct_type);
         if ctx.target_size().0 != whole_struct_size.0 {
             info!("problem");
         }
         assert_eq!(ctx.target_size().0, whole_struct_size.0);
 
-        for (field_index, expression) in &struct_literal.source_order_expressions {
-            let (field_offset, field_size, field_alignment) = struct_field_offset(
-                *field_index,
-                &struct_literal.struct_type_ref.anon_struct_type,
-            );
+        for (field_index, expression) in source_order_expressions {
+            let (field_offset, field_size, field_alignment) =
+                struct_field_offset(*field_index, struct_type_ref);
             //info!(?field_offset, ?field_index, "field offset");
             let new_address = ctx.addr().advance(field_offset);
-            let mut field_ctx = Context::new(FrameMemoryRegion::new(new_address, field_size));
-            self.gen_expression(expression, &mut field_ctx);
+            let field_ctx = Context::new(FrameMemoryRegion::new(new_address, field_size));
+            self.gen_expression(expression, &field_ctx);
         }
     }
 
@@ -1296,9 +1340,8 @@ impl<'a> FunctionCodeGen<'a> {
     fn gen_slice_pair_literal(
         &mut self,
         slice_type: &Type,
-        expressions: &Vec<(Expression, Expression)>,
-        ctx: &Context,
-    ) {
+        expressions: &[(Expression, Expression)],
+    ) -> SlicePairInfo {
         let Type::SlicePair(key_type, value_type) = slice_type else {
             panic!("should have been slice pair type")
         };
@@ -1306,6 +1349,7 @@ impl<'a> FunctionCodeGen<'a> {
         let constructed_tuple = Type::Tuple(vec![*key_type.clone(), *value_type.clone()]);
 
         let (key_size, key_alignment) = type_size_and_alignment(key_type);
+        let (value_size, value_alignment) = type_size_and_alignment(value_type);
         let (element_size, tuple_alignment) = type_size_and_alignment(&constructed_tuple);
         let element_count = expressions.len() as u16;
         let total_slice_size = MemorySize(element_size.0 * element_count);
@@ -1325,18 +1369,19 @@ impl<'a> FunctionCodeGen<'a> {
 
             let value_region = FrameMemoryRegion::new(
                 start_frame_address_to_transfer.advance(memory_offset.add(key_size, key_alignment)),
-                element_size,
+                value_size,
             );
             let value_ctx = Context::new(value_region);
             self.gen_expression(value_expr, &value_ctx);
         }
 
-        self.gen_slice_helper(
-            start_frame_address_to_transfer,
-            element_count,
+        SlicePairInfo {
+            addr: TempFrameMemoryAddress(start_frame_address_to_transfer),
+            key_size,
+            value_size,
+            element_count: CountU16(element_count),
             element_size,
-            ctx,
-        );
+        }
     }
 
     fn gen_slice_helper(

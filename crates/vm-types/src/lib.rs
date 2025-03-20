@@ -16,6 +16,9 @@ pub struct MemoryAddress(pub u16);
 #[derive(Copy, Clone)]
 pub struct StackMemoryAddress(pub u16);
 
+#[derive(Copy, Clone)]
+pub struct CountU16(pub u16);
+
 impl StackMemoryAddress {
     #[must_use]
     pub const fn add(&self, memory_size: MemorySize) -> Self {
@@ -26,6 +29,16 @@ impl StackMemoryAddress {
 
 #[derive(Debug, Copy, Clone)]
 pub struct FrameMemoryAddress(pub u16);
+
+#[derive(Debug, Copy, Clone)]
+pub struct TempFrameMemoryAddress(pub FrameMemoryAddress);
+
+impl TempFrameMemoryAddress {
+    #[must_use]
+    pub const fn to_addr(&self) -> FrameMemoryAddress {
+        self.0
+    }
+}
 
 impl FrameMemoryAddress {
     #[must_use]
@@ -157,3 +170,4 @@ pub const BOOL_SIZE: u16 = 1;
 pub const PTR_SIZE: u16 = 2;
 pub const STR_SIZE: u16 = VEC_SIZE; // TODO: FIX THIS
 pub const VEC_SIZE: u16 = 2 + 2 + 2 + 2;
+pub const MAP_SIZE: u16 = 2 + 2 + 2 + 2 + 2;
