@@ -7,8 +7,7 @@ pub mod opcode;
 #[repr(C, packed)]
 pub struct BinaryInstruction {
     pub opcode: u8,
-    pub opcode_count: u8, // It is mainly for alignment, but use it for opcode_count or maybe checksum or extra flags?
-    pub operands: [u16; 4],
+    pub operands: [u16; 5],
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -151,3 +150,10 @@ impl FrameMemorySize {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct InstructionPosition(pub u16);
+
+pub const INT_SIZE: u16 = 4;
+pub const FLOAT_SIZE: u16 = 4;
+pub const BOOL_SIZE: u16 = 1;
+pub const PTR_SIZE: u16 = 2;
+pub const STR_SIZE: u16 = VEC_SIZE; // TODO: FIX THIS
+pub const VEC_SIZE: u16 = 2 + 2 + 2 + 2;

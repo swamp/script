@@ -24,7 +24,7 @@ use swamp_script_types::{AnonymousStructType, EnumVariantType, Signature, Struct
 
 use crate::constants::ConstantsManager;
 use swamp_script_semantic::intr::IntrinsicFunction;
-use swamp_vm_instr_build::{InstructionBuilder, PatchPosition, PTR_SIZE, VEC_SIZE};
+use swamp_vm_instr_build::{InstructionBuilder, PatchPosition};
 use swamp_vm_types::opcode::OpCode;
 use swamp_vm_types::{
     BinaryInstruction, FrameMemoryAddress, FrameMemorySize, InstructionPosition, MemoryAddress,
@@ -212,71 +212,82 @@ impl FunctionCodeGen<'_> {
         }
         info!(?intrinsic_fn, "generate specific call for intrinsic");
         match intrinsic_fn {
-            IntrinsicFunction::FloatRound => {}
-            IntrinsicFunction::FloatFloor => {}
-            IntrinsicFunction::FloatSqrt => {}
-            IntrinsicFunction::FloatSign => {}
-            IntrinsicFunction::FloatAbs => {}
-            IntrinsicFunction::FloatRnd => {}
-            IntrinsicFunction::FloatCos => {}
-            IntrinsicFunction::FloatSin => {}
-            IntrinsicFunction::FloatAcos => {}
-            IntrinsicFunction::FloatAsin => {}
-            IntrinsicFunction::FloatAtan2 => {}
-            IntrinsicFunction::FloatMin => {}
-            IntrinsicFunction::FloatMax => {}
-            IntrinsicFunction::FloatClamp => {}
-            IntrinsicFunction::IntAbs => {}
-            IntrinsicFunction::IntRnd => {}
-            IntrinsicFunction::IntMax => {}
-            IntrinsicFunction::IntMin => {}
-            IntrinsicFunction::IntClamp => {}
-            IntrinsicFunction::IntToFloat => {}
-            IntrinsicFunction::StringLen => {}
+            IntrinsicFunction::FloatRound => todo!(),
+            IntrinsicFunction::FloatFloor => todo!(),
+            IntrinsicFunction::FloatSqrt => todo!(),
+            IntrinsicFunction::FloatSign => todo!(),
+            IntrinsicFunction::FloatAbs => todo!(),
+            IntrinsicFunction::FloatRnd => todo!(),
+            IntrinsicFunction::FloatCos => todo!(),
+            IntrinsicFunction::FloatSin => todo!(),
+            IntrinsicFunction::FloatAcos => todo!(),
+            IntrinsicFunction::FloatAsin => todo!(),
+            IntrinsicFunction::FloatAtan2 => todo!(),
+            IntrinsicFunction::FloatMin => todo!(),
+            IntrinsicFunction::FloatMax => todo!(),
+            IntrinsicFunction::FloatClamp => todo!(),
+            IntrinsicFunction::IntAbs => todo!(),
+            IntrinsicFunction::IntRnd => todo!(),
+            IntrinsicFunction::IntMax => todo!(),
+            IntrinsicFunction::IntMin => todo!(),
+            IntrinsicFunction::IntClamp => todo!(),
+            IntrinsicFunction::IntToFloat => todo!(),
+            IntrinsicFunction::StringLen => todo!(),
             IntrinsicFunction::VecFromSlice => {
                 let slice_variable = &arguments[0];
                 self.gen_argument(slice_variable, ctx, "move slice to target");
             }
-            IntrinsicFunction::VecPush => {}
-            IntrinsicFunction::VecPop => {}
-            IntrinsicFunction::VecRemoveIndex => {}
-            IntrinsicFunction::VecClear => {}
-            IntrinsicFunction::VecCreate => {}
-            IntrinsicFunction::VecSubscript => {}
-            IntrinsicFunction::VecSubscriptMut => {}
-            IntrinsicFunction::VecIter => {}
-            IntrinsicFunction::VecIterMut => {}
-            IntrinsicFunction::VecSelfPush => {}
-            IntrinsicFunction::VecSelfExtend => {}
-            IntrinsicFunction::MapCreate => {}
-            IntrinsicFunction::MapFromSlicePair => {}
-            IntrinsicFunction::MapHas => {}
-            IntrinsicFunction::MapRemove => {}
-            IntrinsicFunction::MapIter => {}
-            IntrinsicFunction::MapIterMut => {}
-            IntrinsicFunction::MapLen => {}
-            IntrinsicFunction::MapIsEmpty => {}
-            IntrinsicFunction::MapSubscript => {}
-            IntrinsicFunction::MapSubscriptSet => {}
-            IntrinsicFunction::MapSubscriptMut => {}
-            IntrinsicFunction::MapSubscriptMutCreateIfNeeded => {}
-            IntrinsicFunction::SparseCreate => {}
-            IntrinsicFunction::SparseFromSlice => {}
-            IntrinsicFunction::SparseIter => {}
-            IntrinsicFunction::SparseIterMut => {}
-            IntrinsicFunction::SparseSubscript => {}
-            IntrinsicFunction::SparseSubscriptMut => {}
-            IntrinsicFunction::SparseHas => {}
-            IntrinsicFunction::SparseRemove => {}
-            IntrinsicFunction::GridCreate => {}
-            IntrinsicFunction::GridFromSlice => {}
-            IntrinsicFunction::GridSubscript => {}
-            IntrinsicFunction::GridSubscriptMut => {}
-            IntrinsicFunction::Float2Magnitude => {}
-            IntrinsicFunction::SparseAdd => {}
-            IntrinsicFunction::VecLen => {}
-            IntrinsicFunction::VecIsEmpty => {}
-            IntrinsicFunction::SparseNew => {}
+            IntrinsicFunction::VecPush => todo!(),
+            IntrinsicFunction::VecPop => todo!(),
+            IntrinsicFunction::VecRemoveIndex => todo!(),
+            IntrinsicFunction::VecClear => todo!(),
+            IntrinsicFunction::VecCreate => todo!(),
+            IntrinsicFunction::VecSubscript => todo!(),
+            IntrinsicFunction::VecSubscriptMut => todo!(),
+            IntrinsicFunction::VecIter => todo!(),
+            IntrinsicFunction::VecIterMut => todo!(),
+            IntrinsicFunction::VecSelfPush => todo!(),
+            IntrinsicFunction::VecSelfExtend => todo!(),
+            IntrinsicFunction::MapCreate => todo!(),
+            IntrinsicFunction::MapFromSlicePair => {
+                let slice_pair_argument = &arguments[0];
+                self.gen_argument(slice_pair_argument, ctx, "move slice-pair to target");
+                self.state.builder.add_map_new_from_slice(
+                    ctx.addr(),
+                    ctx.addr(),
+                    MemorySize(10),
+                    MemorySize(10),
+                    32,
+                    "create map from temporary slice pair",
+                );
+            }
+            IntrinsicFunction::MapHas => todo!(),
+            IntrinsicFunction::MapRemove => todo!(),
+            IntrinsicFunction::MapIter => todo!(),
+            IntrinsicFunction::MapIterMut => todo!(),
+            IntrinsicFunction::MapLen => todo!(),
+            IntrinsicFunction::MapIsEmpty => todo!(),
+            IntrinsicFunction::MapSubscript => todo!(),
+            IntrinsicFunction::MapSubscriptSet => todo!(),
+            IntrinsicFunction::MapSubscriptMut => todo!(),
+            IntrinsicFunction::MapSubscriptMutCreateIfNeeded => todo!(),
+            IntrinsicFunction::SparseCreate => todo!(),
+            IntrinsicFunction::SparseFromSlice => todo!(),
+            IntrinsicFunction::SparseIter => todo!(),
+            IntrinsicFunction::SparseIterMut => todo!(),
+            IntrinsicFunction::SparseSubscript => todo!(),
+            IntrinsicFunction::SparseSubscriptMut => todo!(),
+            IntrinsicFunction::SparseHas => todo!(),
+            IntrinsicFunction::SparseRemove => todo!(),
+            IntrinsicFunction::GridCreate => todo!(),
+            IntrinsicFunction::GridFromSlice => todo!(),
+            IntrinsicFunction::GridSubscript => todo!(),
+            IntrinsicFunction::GridSubscriptMut => todo!(),
+            IntrinsicFunction::Float2Magnitude => todo!(),
+            IntrinsicFunction::SparseAdd => todo!(),
+            IntrinsicFunction::VecLen => todo!(),
+            IntrinsicFunction::VecIsEmpty => todo!(),
+            IntrinsicFunction::SparseNew => todo!(),
         }
     }
 }
@@ -950,7 +961,9 @@ impl<'a> FunctionCodeGen<'a> {
                 self.gen_string_literal(str, ctx);
             }
             Literal::Slice(ty, expressions) => self.gen_slice_literal(ty, expressions, ctx),
-            Literal::SlicePair(_, _) => todo!(),
+            Literal::SlicePair(ty, expression_pairs) => {
+                self.gen_slice_pair_literal(ty, expression_pairs, ctx)
+            }
         }
     }
 
@@ -1272,20 +1285,82 @@ impl<'a> FunctionCodeGen<'a> {
             self.gen_expression(expr, &element_ctx);
         }
 
+        self.gen_slice_helper(
+            start_frame_address_to_transfer,
+            element_count,
+            element_size,
+            ctx,
+        );
+    }
+
+    fn gen_slice_pair_literal(
+        &mut self,
+        slice_type: &Type,
+        expressions: &Vec<(Expression, Expression)>,
+        ctx: &Context,
+    ) {
+        let Type::SlicePair(key_type, value_type) = slice_type else {
+            panic!("should have been slice pair type")
+        };
+
+        let constructed_tuple = Type::Tuple(vec![*key_type.clone(), *value_type.clone()]);
+
+        let (key_size, key_alignment) = type_size_and_alignment(key_type);
+        let (element_size, tuple_alignment) = type_size_and_alignment(&constructed_tuple);
+        let element_count = expressions.len() as u16;
+        let total_slice_size = MemorySize(element_size.0 * element_count);
+
+        let start_frame_address_to_transfer = self
+            .temp_allocator
+            .allocate(total_slice_size, tuple_alignment);
+
+        for (index, (key_expr, value_expr)) in expressions.iter().enumerate() {
+            let memory_offset = MemoryOffset((index as u16) * element_size.0);
+            let key_region = FrameMemoryRegion::new(
+                start_frame_address_to_transfer.advance(memory_offset),
+                element_size,
+            );
+            let key_ctx = Context::new(key_region);
+            self.gen_expression(key_expr, &key_ctx);
+
+            let value_region = FrameMemoryRegion::new(
+                start_frame_address_to_transfer.advance(memory_offset.add(key_size, key_alignment)),
+                element_size,
+            );
+            let value_ctx = Context::new(value_region);
+            self.gen_expression(value_expr, &value_ctx);
+        }
+
+        self.gen_slice_helper(
+            start_frame_address_to_transfer,
+            element_count,
+            element_size,
+            ctx,
+        );
+    }
+
+    fn gen_slice_helper(
+        &mut self,
+        start_temp_frame_address_to_transfer: FrameMemoryAddress,
+        element_count: u16,
+        element_size: MemorySize,
+        ctx: &Context,
+    ) {
+        let total_slice_size = MemorySize(element_size.0 * element_count);
         let vec_len_addr = ctx.addr().advance(MemoryOffset(0));
         self.state
             .builder
-            .add_ld_u16(vec_len_addr, element_count, "vec len");
+            .add_ld_u16(vec_len_addr, element_count, "slice len");
 
         let vec_capacity_addr = ctx.addr().advance(MemoryOffset(2));
         self.state
             .builder
-            .add_ld_u16(vec_capacity_addr, element_count, "vec capacity");
+            .add_ld_u16(vec_capacity_addr, element_count, "slice capacity");
 
         let vec_element_size_addr = ctx.addr().advance(MemoryOffset(4));
         self.state
             .builder
-            .add_ld_u16(vec_element_size_addr, element_size.0, "element size");
+            .add_ld_u16(vec_element_size_addr, element_size.0, "slice element size");
 
         let allocated_vec_address = ctx.addr().advance(MemoryOffset(6));
         self.state
@@ -1295,7 +1370,7 @@ impl<'a> FunctionCodeGen<'a> {
         self.state.builder.add_stx(
             allocated_vec_address,
             MemoryOffset(0),
-            start_frame_address_to_transfer,
+            start_temp_frame_address_to_transfer,
             total_slice_size,
             "copy from slice continuous temporary frame memory to allocated vec ptr heap area",
         );

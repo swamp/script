@@ -3,12 +3,14 @@ use swamp_vm_types::BinaryInstruction;
 use swamp_vm_types::opcode::OpCode;
 
 pub mod host;
+mod map;
 
 type Handler0 = fn(&mut Vm);
 type Handler1 = fn(&mut Vm, u16);
 type Handler2 = fn(&mut Vm, u16, u16);
 type Handler3 = fn(&mut Vm, u16, u16, u16);
 type Handler4 = fn(&mut Vm, u16, u16, u16, u16);
+type Handler5 = fn(&mut Vm, u16, u16, u16, u16, u16);
 
 #[derive(Copy, Clone)]
 enum HandlerType {
@@ -17,6 +19,7 @@ enum HandlerType {
     Args2(Handler2),
     Args3(Handler3),
     Args4(Handler4),
+    Args5(Handler5),
 }
 
 pub struct Vm {
@@ -163,6 +166,10 @@ impl Vm {
 
         // Halt - return to host
         vm.handlers[OpCode::Hlt as usize] = HandlerType::Args0(Self::execute_hlt);
+
+        // Intrinsic more advanced instructions
+        vm.handlers[OpCode::MapNewFromPairs as usize] =
+            HandlerType::Args5(Self::execute_map_new_from_pairs);
 
         // Optional: Zero out the memory for safety?
         unsafe {
@@ -422,19 +429,20 @@ impl Vm {
     }
 
     fn allocate(&mut self, size: usize) -> u16 {
-        let aligned_size = (size + ALIGNMENT_REST) & ALIGNMENT_MASK;
-        let result_offset = self.alloc_offset;
+        let aligned_size = (size + ALIGNMENT_MASK) & !ALIGNMENT_MASK;
+        let aligned_offset = (self.alloc_offset + ALIGNMENT_MASK) & !ALIGNMENT_MASK;
 
         assert!(
-            result_offset + aligned_size <= self.stack_base_offset,
+            aligned_offset + aligned_size <= self.stack_base_offset,
             "Out of memory"
         );
 
-        self.alloc_offset += aligned_size;
-        result_offset as u16
+        self.alloc_offset = aligned_offset + aligned_size;
+
+        aligned_offset as u16
     }
 
-    pub fn debug_opcode(&self, opcode: u8, operands: &[u16; 4]) {
+    pub fn debug_opcode(&self, opcode: u8, operands: &[u16; 5]) {
         eprintln!(
             "{:8} [{}]",
             OpCode::from(opcode),
@@ -449,6 +457,10 @@ impl Vm {
                 HandlerType::Args4(_) => format!(
                     "{:04x}, {:04x}, {:04x}, {:04x}",
                     operands[0], operands[1], operands[2], operands[3]
+                ),
+                HandlerType::Args5(_) => format!(
+                    "{:04x}, {:04x}, {:04x}, {:04x}, {:04x}",
+                    operands[0], operands[1], operands[2], operands[3], operands[4],
                 ),
             }
         );
@@ -510,6 +522,14 @@ impl Vm {
                     instruction.operands[1],
                     instruction.operands[2],
                     instruction.operands[3],
+                ),
+                HandlerType::Args5(handler) => handler(
+                    self,
+                    instruction.operands[0],
+                    instruction.operands[1],
+                    instruction.operands[2],
+                    instruction.operands[3],
+                    instruction.operands[4],
                 ),
             };
 

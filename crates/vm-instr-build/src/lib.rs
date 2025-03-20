@@ -3,12 +3,6 @@ use swamp_vm_types::{
     BinaryInstruction, FrameMemoryAddress, FrameMemorySize, InstructionPosition, MemoryAddress,
     MemoryOffset, MemorySize,
 };
-pub const INT_SIZE: u16 = 4;
-pub const FLOAT_SIZE: u16 = 4;
-pub const BOOL_SIZE: u16 = 1;
-pub const PTR_SIZE: u16 = 2;
-pub const STR_SIZE: u16 = VEC_SIZE; // TODO: FIX THIS
-pub const VEC_SIZE: u16 = 2 + 2 + 2 + 2;
 
 #[derive(Debug)]
 pub struct PatchPosition(pub InstructionPosition);
@@ -17,6 +11,8 @@ pub struct InstructionBuilder {
     pub instructions: Vec<BinaryInstruction>,
     pub comments: Vec<String>,
 }
+
+impl InstructionBuilder {}
 
 impl InstructionBuilder {}
 
@@ -248,13 +244,35 @@ impl InstructionBuilder {
         self.add_instruction(OpCode::LtU16, &[dest.0, a.0, b.0], comment);
     }
 
+    // Collection specific
+    pub fn add_map_new_from_slice(
+        &mut self,
+        map_target_addr: FrameMemoryAddress,
+        slice_source_addr: FrameMemoryAddress,
+        key_size: MemorySize,
+        value_size: MemorySize,
+        count: u16,
+        comment: &str,
+    ) {
+        self.add_instruction(
+            OpCode::MapNewFromPairs,
+            &[
+                map_target_addr.0,
+                slice_source_addr.0,
+                key_size.0,
+                value_size.0,
+                count,
+            ],
+            comment,
+        );
+    }
+
     fn add_instruction(&mut self, op_code: OpCode, operands: &[u16], comment: &str) {
-        let mut array: [u16; 4] = [0; 4];
+        let mut array: [u16; 5] = [0; 5];
         let len = operands.len().min(4);
         array[..len].copy_from_slice(&operands[..len]);
         self.instructions.push(BinaryInstruction {
             opcode: op_code as u8,
-            opcode_count: operands.len() as u8,
             operands: array,
         });
         self.comments.push(comment.to_string());

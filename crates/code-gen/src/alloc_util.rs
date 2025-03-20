@@ -1,8 +1,9 @@
 use crate::alloc::{FrameMemoryRegion, ScopeAllocator};
 use seq_map::SeqMap;
 use swamp_script_types::{AnonymousStructType, EnumVariantType, Type};
-use swamp_vm_instr_build::{FLOAT_SIZE, INT_SIZE, STR_SIZE, VEC_SIZE};
-use swamp_vm_types::{MemoryAlignment, MemoryOffset, MemorySize};
+use swamp_vm_types::{
+    FLOAT_SIZE, INT_SIZE, MemoryAlignment, MemoryOffset, MemorySize, STR_SIZE, VEC_SIZE,
+};
 use tracing::{error, info};
 
 pub fn layout_struct(anon_struct: &AnonymousStructType) -> (MemorySize, MemoryAlignment) {

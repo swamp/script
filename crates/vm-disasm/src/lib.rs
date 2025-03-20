@@ -30,6 +30,7 @@ pub enum DecoratedOperandKind {
     ImmediateU8(u16),
     WriteIndirectMemory(MemoryAddress, MemoryOffset, DecoratedMemoryKind),
     ReadIndirectMemory(MemoryAddress, MemoryOffset, DecoratedMemoryKind),
+    CountU16(u16),
     //PointerOffset(MemoryOffset),
 }
 
@@ -201,6 +202,10 @@ pub fn disasm_color(
                 format!("{}", format!("{data:02X}",).magenta()),
                 format!("{}{}", "int:", data as i8),
             ),
+            DecoratedOperandKind::CountU16(data) => (
+                format!("{}", format!("{data:04X}",).yellow()),
+                format!("{}", "count"),
+            ),
         };
         converted_operands.push(new_str);
         if !comment_str.is_empty() {
@@ -259,6 +264,7 @@ pub fn disasm_no_color(
             DecoratedOperandKind::ImmediateU32(data) => format!("{}", format!("{data:08X}",)),
             DecoratedOperandKind::ImmediateU16(data) => format!("{}", format!("{data:04X}",)),
             DecoratedOperandKind::ImmediateU8(data) => format!("{}", format!("{data:02X}",)),
+            DecoratedOperandKind::CountU16(data) => format!("{}", format!("{data:04X}",)),
         };
         converted_operands.push(new_str);
     }
@@ -375,11 +381,19 @@ pub fn disasm(
             ),
             DecoratedOperandKind::MemorySize(MemorySize(operands[3])),
         ],
+        OpCode::Nop => &[],
+
         OpCode::VecPush => &[
             to_write_frame(operands[0], DecoratedMemoryKind::Octets, frame_memory_size),
             to_read_frame(operands[1], DecoratedMemoryKind::Octets, frame_memory_size),
         ],
-        OpCode::Nop => &[],
+        OpCode::MapNewFromPairs => &[
+            to_write_frame(operands[0], DecoratedMemoryKind::Octets, frame_memory_size),
+            to_read_frame(operands[1], DecoratedMemoryKind::Octets, frame_memory_size),
+            DecoratedOperandKind::MemorySize(MemorySize(operands[2])),
+            DecoratedOperandKind::MemorySize(MemorySize(operands[3])),
+            DecoratedOperandKind::CountU16(operands[4]),
+        ],
     };
 
     let converted_operands = operands_slice

@@ -39,6 +39,11 @@ pub enum OpCode {
     Alloc,
     VecPush,
     Nop,
+
+    // Intrinsic more advanced opcodes
+
+    // Collection intrinsics
+    MapNewFromPairs,
 }
 
 impl Display for OpCode {
@@ -68,6 +73,8 @@ impl Display for OpCode {
             Self::Alloc => write!(f, "alloc"),
             Self::VecPush => write!(f, "vec_push"),
             Self::Nop => write!(f, "nop"),
+
+            Self::MapNewFromPairs => write!(f, "map_new_from_pairs"),
         }
     }
 }
