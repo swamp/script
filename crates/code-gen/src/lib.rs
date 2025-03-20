@@ -1353,13 +1353,6 @@ impl<'a> FunctionCodeGen<'a> {
             let element_ctx = Context::new(region);
             self.gen_expression(expr, &element_ctx);
         }
-
-        self.gen_slice_helper(
-            start_frame_address_to_transfer,
-            element_count,
-            element_size,
-            ctx,
-        );
     }
 
     fn gen_slice_pair_literal(

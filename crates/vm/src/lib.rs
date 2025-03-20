@@ -4,6 +4,7 @@ use swamp_vm_types::opcode::OpCode;
 
 pub mod host;
 mod map;
+mod map_open;
 
 type Handler0 = fn(&mut Vm);
 type Handler1 = fn(&mut Vm, u16);
@@ -168,8 +169,10 @@ impl Vm {
         vm.handlers[OpCode::Hlt as usize] = HandlerType::Args0(Self::execute_hlt);
 
         // Intrinsic more advanced instructions
+        //vm.handlers[OpCode::MapNewFromPairs as usize] =
+        //  HandlerType::Args5(Self::execute_map_new_from_pairs);
         vm.handlers[OpCode::MapNewFromPairs as usize] =
-            HandlerType::Args5(Self::execute_map_new_from_pairs);
+            HandlerType::Args5(Self::execute_map_open_addressing_from_slice);
 
         vm.handlers[OpCode::MapRemove as usize] = HandlerType::Args2(Self::execute_map_remove);
 

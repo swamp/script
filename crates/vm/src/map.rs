@@ -122,7 +122,7 @@ impl Vm {
     // Helper function to compare keys
     // Must exist a faster way? memcmp?
     #[inline]
-    fn keys_equal(a: *const u8, b: *const u8, len: usize) -> bool {
+    pub(crate) fn keys_equal(a: *const u8, b: *const u8, len: usize) -> bool {
         for i in 0..len {
             unsafe {
                 if *a.add(i) != *b.add(i) {
@@ -135,7 +135,7 @@ impl Vm {
 
     #[inline]
     // TODO: Replace this simple FNV-1a-like
-    fn hash_bytes(ptr: *const u8, len: usize) -> u16 {
+    pub(crate) fn hash_bytes(ptr: *const u8, len: usize) -> u16 {
         let mut hash: u32 = 2166136261;
         for i in 0..len {
             unsafe {
