@@ -16,6 +16,8 @@ impl InstructionBuilder {}
 
 impl InstructionBuilder {}
 
+impl InstructionBuilder {}
+
 impl Default for InstructionBuilder {
     fn default() -> Self {
         Self::new()
@@ -265,6 +267,15 @@ impl InstructionBuilder {
             ],
             comment,
         );
+    }
+
+    pub fn add_map_remove(
+        &mut self,
+        map_target_addr: FrameMemoryAddress,
+        key_addr: FrameMemoryAddress,
+        comment: &str,
+    ) {
+        self.add_instruction(OpCode::MapRemove, &[map_target_addr.0, key_addr.0], comment);
     }
 
     fn add_instruction(&mut self, op_code: OpCode, operands: &[u16], comment: &str) {

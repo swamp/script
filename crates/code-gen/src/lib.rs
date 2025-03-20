@@ -212,6 +212,7 @@ impl FunctionCodeGen<'_> {
     pub(crate) fn gen_single_intrinsic_call(
         &mut self,
         intrinsic_fn: &IntrinsicFunction,
+        self_addr: Option<FrameMemoryRegion>,
         arguments: &Vec<ArgumentExpressionOrLocation>,
         ctx: &Context,
     ) {
@@ -282,7 +283,12 @@ impl FunctionCodeGen<'_> {
                 );
             }
             IntrinsicFunction::MapHas => todo!(),
-            IntrinsicFunction::MapRemove => todo!(),
+            IntrinsicFunction::MapRemove => {
+                let ArgumentExpressionOrLocation::Expression(key_argument) = &arguments[0] else {
+                    panic!("must be expression for key");
+                };
+                self.gen_intrinsic_map_remove(&self_addr.unwrap(), key_argument, ctx);
+            }
             IntrinsicFunction::MapIter => todo!(),
             IntrinsicFunction::MapIterMut => todo!(),
             IntrinsicFunction::MapLen => todo!(),
@@ -309,6 +315,19 @@ impl FunctionCodeGen<'_> {
             IntrinsicFunction::VecIsEmpty => todo!(),
             IntrinsicFunction::SparseNew => todo!(),
         }
+    }
+
+    fn gen_intrinsic_map_remove(
+        &mut self,
+        map_region: &FrameMemoryRegion,
+        key_expr: &Expression,
+        ctx: &Context,
+    ) {
+        let key_region = self.gen_expression_for_access(key_expr, ctx);
+
+        self.state
+            .builder
+            .add_map_remove(map_region.addr, key_region.addr, "");
     }
 }
 
@@ -796,7 +815,7 @@ impl<'a> FunctionCodeGen<'a> {
             if chain.len() == 1 {
                 if let PostfixKind::FunctionCall(args) = &chain[0].kind {
                     if let Some(intrinsic_fn) = single_intrinsic_fn(&internal_fn.body) {
-                        self.gen_single_intrinsic_call(intrinsic_fn, args, ctx);
+                        self.gen_single_intrinsic_call(intrinsic_fn, None, args, ctx);
                     } else {
                         self.gen_arguments(&internal_fn.signature, None, args);
                         self.state
@@ -828,7 +847,12 @@ impl<'a> FunctionCodeGen<'a> {
                     match &**function_to_call {
                         Function::Internal(internal_fn) => {
                             if let Some(intrinsic_fn) = single_intrinsic_fn(&internal_fn.body) {
-                                self.gen_single_intrinsic_call(intrinsic_fn, arguments, ctx);
+                                self.gen_single_intrinsic_call(
+                                    intrinsic_fn,
+                                    Some(start_source),
+                                    arguments,
+                                    ctx,
+                                );
                             } else {
                                 self.gen_arguments(
                                     &internal_fn.signature,
@@ -839,23 +863,24 @@ impl<'a> FunctionCodeGen<'a> {
                                     internal_fn,
                                     &format!("frame size: {}", self.frame_size),
                                 ); // will be fixed up later
-                            }
-                            let (return_size, _alignment) =
-                                type_size_and_alignment(&internal_fn.signature.return_type);
-                            if return_size.0 != 0 {
-                                self.state.builder.add_mov(
-                                    ctx.addr(),
-                                    self.infinite_above_frame_size().addr,
-                                    return_size,
-                                    "copy the return value to destination",
+
+                                let (return_size, _alignment) =
+                                    type_size_and_alignment(&internal_fn.signature.return_type);
+                                if return_size.0 != 0 {
+                                    self.state.builder.add_mov(
+                                        ctx.addr(),
+                                        self.infinite_above_frame_size().addr,
+                                        return_size,
+                                        "copy the return value to destination",
+                                    );
+                                }
+
+                                self.copy_back_mutable_arguments(
+                                    &internal_fn.signature,
+                                    Some(start_source),
+                                    arguments,
                                 );
                             }
-
-                            self.copy_back_mutable_arguments(
-                                &internal_fn.signature,
-                                Some(start_source),
-                                arguments,
-                            );
                         }
                         Function::External(external_fn) => {
                             //self.state.builder.add_host_call(external_fn.id);

@@ -171,6 +171,8 @@ impl Vm {
         vm.handlers[OpCode::MapNewFromPairs as usize] =
             HandlerType::Args5(Self::execute_map_new_from_pairs);
 
+        vm.handlers[OpCode::MapRemove as usize] = HandlerType::Args2(Self::execute_map_remove);
+
         // Optional: Zero out the memory for safety?
         unsafe {
             std::ptr::write_bytes(memory, 0, memory_size);
@@ -350,7 +352,7 @@ impl Vm {
     }
 
     fn execute_unimplemented(&mut self) {
-        panic!("unknown OPCODE HALT!");
+        panic!("unknown OPCODE!");
     }
 
     #[inline]

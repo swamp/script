@@ -1,4 +1,5 @@
 use crate::Vm;
+use std::ptr;
 use swamp_vm_types::PTR_SIZE;
 
 /// # Map Header Structure
@@ -79,7 +80,7 @@ impl Vm {
                     // Overwrite value - maybe issue warning in the future?
                     let value_ptr = unsafe { entry_key_ptr.add(key_size as usize) };
                     unsafe {
-                        std::ptr::copy_nonoverlapping(
+                        ptr::copy_nonoverlapping(
                             key_ptr.add(key_size as usize),
                             value_ptr,
                             value_size as usize,
@@ -103,7 +104,7 @@ impl Vm {
                 }
 
                 unsafe {
-                    std::ptr::copy_nonoverlapping(
+                    ptr::copy_nonoverlapping(
                         key_ptr,
                         new_entry_u8.add(PTR_SIZE as usize),
                         pair_size as usize,
@@ -143,5 +144,130 @@ impl Vm {
             }
         }
         (hash & 0xFFFF) as u16
+    }
+
+    #[inline]
+    pub fn execute_map_remove(&mut self, map_addr: u16, key_addr: u16) {
+        let dst_ptr = self.ptr_at_u16(self.frame_offset + map_addr as usize);
+
+        let capacity = unsafe { *dst_ptr.add(1) };
+        let buckets_ptr_addr = unsafe { *dst_ptr.add(2) };
+        let key_size = unsafe { *dst_ptr.add(3) };
+
+        let buckets_ptr = self.ptr_at_u16(buckets_ptr_addr as usize);
+
+        let key_ptr = self.ptr_at_u8(self.frame_offset + key_addr as usize);
+
+        let hash = Self::hash_bytes(key_ptr, key_size as usize);
+        let bucket_idx = hash & (capacity - 1);
+
+        let bucket_head_ptr = unsafe { buckets_ptr.add(bucket_idx as usize) };
+        let mut current_entry_ptr = unsafe { *bucket_head_ptr };
+        let mut prev_entry_ptr: *mut u16 = ptr::null_mut();
+
+        // Search through the linked list
+        while current_entry_ptr != 0 {
+            let entry_ptr = self.ptr_at_u8(current_entry_ptr as usize);
+
+            // Compare keys
+            let entry_key_ptr = unsafe { entry_ptr.add(PTR_SIZE as usize) }; // Skip next pointer
+            if Self::keys_equal(key_ptr, entry_key_ptr, key_size as usize) {
+                // Found the key, remove the entry
+                if prev_entry_ptr.is_null() {
+                    // Update bucket head
+                    unsafe {
+                        *bucket_head_ptr = *(entry_ptr as *const u16);
+                    }
+                } else {
+                    // Update previous entry's next pointer
+                    unsafe {
+                        *(prev_entry_ptr as *mut u16) = *(entry_ptr as *const u16);
+                    }
+                }
+
+                // Decrement map length
+                unsafe {
+                    *dst_ptr -= 1;
+                }
+
+                return;
+            }
+
+            prev_entry_ptr = entry_ptr as *mut u16;
+            current_entry_ptr = unsafe { *(entry_ptr as *const u16) };
+        }
+
+        //false
+    }
+
+    #[inline]
+    pub fn execute_map_insert(&mut self, map_addr: u16, key_addr: u16, value_addr: u16) {
+        let dst_ptr = self.ptr_at_u16(self.frame_offset + map_addr as usize);
+
+        let capacity = unsafe { *dst_ptr.add(1) };
+        let buckets_ptr_addr = unsafe { *dst_ptr.add(2) };
+        let key_size = unsafe { *dst_ptr.add(3) };
+        let value_size = unsafe { *dst_ptr.add(4) };
+
+        let buckets_ptr = self.ptr_at_u16(buckets_ptr_addr as usize);
+
+        let key_ptr = self.ptr_at_u8(self.frame_offset + key_addr as usize);
+        let value_ptr = self.ptr_at_u8(self.frame_offset + value_addr as usize);
+
+        let hash = Self::hash_bytes(key_ptr, key_size as usize);
+        let bucket_idx = hash & (capacity - 1);
+
+        let bucket_head_ptr = unsafe { buckets_ptr.add(bucket_idx as usize) };
+        let mut current_entry_ptr = unsafe { *bucket_head_ptr };
+
+        // Search through the linked list
+        let mut found = false;
+        while current_entry_ptr != 0 {
+            let entry_ptr = self.ptr_at_u8(current_entry_ptr as usize);
+
+            let entry_key_ptr = unsafe { entry_ptr.add(2) }; // Skip next pointer
+            if Self::keys_equal(key_ptr, entry_key_ptr, key_size as usize) {
+                let entry_value_ptr = unsafe { entry_key_ptr.add(key_size as usize) };
+                unsafe {
+                    ptr::copy_nonoverlapping(value_ptr, entry_value_ptr, value_size as usize);
+                }
+                found = true;
+                break;
+            }
+
+            // Move to the next entry
+            current_entry_ptr = unsafe { *(entry_ptr as *const u16) };
+        }
+
+        if !found {
+            // Create a new entry: [next_ptr: u16][key][value]
+            let new_entry_size = PTR_SIZE + key_size + value_size;
+            let new_entry_ptr = self.allocate(new_entry_size as usize);
+            let new_entry_u8 = self.ptr_at_u8(new_entry_ptr as usize);
+
+            // Link to existing entries
+            unsafe {
+                *(new_entry_u8 as *mut u16) = *bucket_head_ptr;
+            }
+
+            // Copy key-value pair
+            unsafe {
+                ptr::copy_nonoverlapping(
+                    key_ptr,
+                    new_entry_u8.add(PTR_SIZE as usize),
+                    key_size as usize,
+                );
+                ptr::copy_nonoverlapping(
+                    value_ptr,
+                    new_entry_u8.add(PTR_SIZE as usize + key_size as usize),
+                    value_size as usize,
+                );
+            }
+
+            unsafe {
+                *bucket_head_ptr = new_entry_ptr; // Now the bucket starts with the newly added entry
+                *dst_ptr += 1; // Increment map length
+            }
+        }
     }
 }

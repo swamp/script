@@ -44,6 +44,7 @@ pub enum OpCode {
 
     // Collection intrinsics
     MapNewFromPairs,
+    MapRemove,
 }
 
 impl Display for OpCode {
@@ -75,6 +76,7 @@ impl Display for OpCode {
             Self::Nop => write!(f, "nop"),
 
             Self::MapNewFromPairs => write!(f, "map_new_from_pairs"),
+            Self::MapRemove => write!(f, "map_remove"),
         }
     }
 }
