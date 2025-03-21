@@ -1137,9 +1137,10 @@ impl<'a> FunctionCodeGen<'a> {
             .allocate(string.as_bytes(), MemoryAlignment::U8);
         let mem_size = MemorySize(string.len() as u16);
 
-        self.gen_vec_immediate(data_ptr, mem_size, mem_size, "string", ctx);
+        // self.gen_vec_immediate(data_ptr, mem_size, mem_size, "string", ctx);
     }
 
+    /*
     fn gen_vec_immediate(
         &mut self,
         data_ptr: MemoryAddress,
@@ -1165,6 +1166,8 @@ impl<'a> FunctionCodeGen<'a> {
         );
     }
 
+
+     */
     fn gen_option_expression(&mut self, maybe_option: Option<&Expression>, ctx: &Context) {
         if let Some(found_value) = maybe_option {
             self.state.builder.add_ld8(ctx.addr(), 1, "option Some tag"); // 1 signals `Some`

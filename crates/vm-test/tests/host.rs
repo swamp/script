@@ -5,17 +5,18 @@ fn host_call() {
     exec_with_host_function(
         "
 
-external fn some_test(i: Int)
+external fn some_test(i: Int, b: Int)
 
-some_test(-42)
+some_test(-42, 23)
 
         ",
         "
 > 0000: enter 50
 > 0001: ld32 $0050 0000002A
 > 0002: sneg32 $0050 $0050
-> 0003: host 0001 4
-> 0004: hlt 
+> 0003: ld32 $0054 00000017
+> 0004: host 0001 8
+> 0005: hlt 
 ",
         "
 00000000  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  ................
@@ -23,8 +24,9 @@ some_test(-42)
     ",
         "some_test",
         |mut args| {
-            let argument = args.get_i32();
-            eprintln!("you called me {argument}");
+            let i = args.get_i32();
+            let b = args.get_i32();
+            eprintln!("you called me i:{i} b:{b}");
         },
     );
 }

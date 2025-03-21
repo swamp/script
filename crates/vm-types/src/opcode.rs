@@ -8,7 +8,6 @@ pub enum OpCode {
     AddI32,
 
     // Comparisons
-    LtU16,
     LtI32,
 
     // Conditional branching
@@ -37,6 +36,7 @@ pub enum OpCode {
 
     // Allocate heap
     //Alloc,
+    //     LtU16,
     VecPush,
     Nop,
 
@@ -45,6 +45,7 @@ pub enum OpCode {
     // Collection intrinsics
     MapNewFromPairs,
     MapRemove,
+
     Eq8Imm,
     Tst8,
     GtI32,
@@ -80,7 +81,6 @@ impl Display for OpCode {
             Self::Bnz => write!(f, "bnz"), // Branch if Not Zero (True)
 
             // Comparisons
-            Self::LtU16 => write!(f, "lt16"), // Set Less Than Unsigned
             Self::LtI32 => write!(f, "slt32"), // signed Less Than
             Self::GtI32 => write!(f, "sgt32"), // Set Less Than
             Self::Eq8Imm => write!(f, "eq8"),
@@ -95,12 +95,11 @@ impl Display for OpCode {
 
             Self::Nop => write!(f, "nop"),
             /*
-
+            Self::LtU16 => write!(f, "lt16"), // Set Less Than Unsigned
             Self::Ldx => write!(f, "ldx"),     // Load Indexed/Indirect
             Self::Stx => write!(f, "stx"),     // Store Indexed/Indirect
             Self::St32x => write!(f, "st32x"), // Store Indexed/Indirect
             Self::Alloc => write!(f, "alloc"),
-
              */
         }
     }

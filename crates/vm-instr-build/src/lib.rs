@@ -197,19 +197,6 @@ impl InstructionBuilder {
         self.add_instruction(OpCode::Ld8, &[dst_offset.0, value as u16], comment);
     }
 
-    pub fn add_load_frame_address(
-        &mut self,
-        dest: FrameMemoryAddress,
-        addr: FrameMemoryAddress,
-        comment: &str,
-    ) {
-        self.add_ld_u16(dest, addr.0, comment);
-    }
-
-    pub fn add_ld_u16(&mut self, dest: FrameMemoryAddress, data: u16, comment: &str) {
-        self.add_instruction(OpCode::Ld16, &[dest.0, data], comment);
-    }
-
     pub fn add_add_i32(
         &mut self,
         dst_offset: FrameMemoryAddress,
@@ -269,16 +256,6 @@ impl InstructionBuilder {
         self.add_instruction(OpCode::GtI32, &[lhs_offset.0, rhs_offset.0], comment);
     }
 
-    pub fn add_lt_u16(
-        &mut self,
-        dest: FrameMemoryAddress,
-        a: FrameMemoryAddress,
-        b: FrameMemoryAddress,
-        comment: &str,
-    ) {
-        self.add_instruction(OpCode::LtU16, &[dest.0, a.0, b.0], comment);
-    }
-
     pub fn add_tst8(&mut self, addr: FrameMemoryAddress, comment: &str) {
         self.add_instruction(OpCode::Tst8, &[addr.0], comment);
     }
@@ -326,8 +303,22 @@ impl InstructionBuilder {
         });
         self.comments.push(comment.to_string());
     }
+    pub fn add_ld_u16(&mut self, dest: FrameMemoryAddress, data: u16, comment: &str) {
+        self.add_instruction(OpCode::Ld16, &[dest.0, data], comment);
+    }
 
     /*
+
+        pub fn add_lt_u16(
+        &mut self,
+        dest: FrameMemoryAddress,
+        a: FrameMemoryAddress,
+        b: FrameMemoryAddress,
+        comment: &str,
+    ) {
+        self.add_instruction(OpCode::LtU16, &[dest.0, a.0, b.0], comment);
+    }
+
 
     pub fn add_stx(
         &mut self,
@@ -347,5 +338,15 @@ impl InstructionBuilder {
         self.add_instruction(OpCode::Alloc, &[target.0, size.0], comment);
     }
 
-     */
+
+        pub fn add_load_frame_address(
+        &mut self,
+        dest: FrameMemoryAddress,
+        addr: FrameMemoryAddress,
+        comment: &str,
+    ) {
+        self.add_ld_u16(dest, addr.0, comment);
+    }
+
+    */
 }

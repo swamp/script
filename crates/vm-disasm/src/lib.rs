@@ -322,6 +322,7 @@ pub fn disasm(
                 DecoratedOperandKind::ImmediateU16(data),
             ]
         }
+
         OpCode::Ld8 => {
             let data = operands[1];
 
@@ -378,7 +379,6 @@ pub fn disasm(
             to_read_frame(operands[1], DecoratedMemoryKind::Octets, frame_memory_size),
             DecoratedOperandKind::MemorySize(MemorySize(operands[2])),
         ],
-        OpCode::LtU16 => todo!(),
         OpCode::Nop => &[],
 
         OpCode::VecPush => &[
@@ -402,6 +402,7 @@ pub fn disasm(
             to_write_frame(operands[0], DecoratedMemoryKind::Octets, frame_memory_size),
             DecoratedOperandKind::MemorySize(MemorySize(operands[1])),
         ],
+        OpCode::LtU16 => todo!(),
         OpCode::St32x => {
             let data = ((operands[3] as u32) << 16) | operands[2] as u32;
             &[
