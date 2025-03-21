@@ -143,14 +143,6 @@ impl Vm {
         vm.handlers[OpCode::Ld16 as usize] = HandlerType::Args2(Self::execute_ld16);
         vm.handlers[OpCode::Ld32 as usize] = HandlerType::Args3(Self::execute_ld32);
 
-        // Load indirect
-        vm.handlers[OpCode::Ldx as usize] = HandlerType::Args4(Self::execute_ldx);
-        vm.handlers[OpCode::Stx as usize] = HandlerType::Args4(Self::execute_stx);
-        vm.handlers[OpCode::St32x as usize] = HandlerType::Args4(Self::execute_st32x);
-
-        // Alloc
-        vm.handlers[OpCode::Alloc as usize] = HandlerType::Args2(Self::execute_alloc);
-
         // Copy data in frame memory
         vm.handlers[OpCode::Mov as usize] = HandlerType::Args3(Self::execute_mov);
 
@@ -188,6 +180,18 @@ impl Vm {
             HandlerType::Args5(Self::execute_map_open_addressing_from_slice);
 
         vm.handlers[OpCode::MapRemove as usize] = HandlerType::Args2(Self::execute_map_remove);
+
+        /*
+
+        // Load indirect
+        vm.handlers[OpCode::Ldx as usize] = HandlerType::Args4(Self::execute_ldx);
+        vm.handlers[OpCode::Stx as usize] = HandlerType::Args4(Self::execute_stx);
+        vm.handlers[OpCode::St32x as usize] = HandlerType::Args4(Self::execute_st32x);
+
+        // Alloc
+        vm.handlers[OpCode::Alloc as usize] = HandlerType::Args2(Self::execute_alloc);
+
+         */
 
         // Optional: Zero out the memory for safety?
         unsafe {

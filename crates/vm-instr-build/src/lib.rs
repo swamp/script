@@ -1,7 +1,7 @@
 use swamp_vm_types::opcode::OpCode;
 use swamp_vm_types::{
     BinaryInstruction, CountU16, FrameMemoryAddress, FrameMemorySize, InstructionPosition,
-    MemoryAddress, MemoryOffset, MemorySize,
+    MemoryAddress, MemorySize,
 };
 
 #[derive(Debug)]
@@ -112,10 +112,6 @@ impl InstructionBuilder {
         self.add_instruction(OpCode::Call, &[function_ip.0], comment);
     }
 
-    pub fn add_alloc(&mut self, target: FrameMemoryAddress, size: MemorySize, comment: &str) {
-        self.add_instruction(OpCode::Alloc, &[target.0, size.0], comment);
-    }
-
     /// # Panics
     ///
     pub fn patch_jump(
@@ -195,21 +191,6 @@ impl InstructionBuilder {
 
     pub fn add_ld_u16(&mut self, dest: FrameMemoryAddress, data: u16, comment: &str) {
         self.add_instruction(OpCode::Ld16, &[dest.0, data], comment);
-    }
-
-    pub fn add_stx(
-        &mut self,
-        indirect_target: FrameMemoryAddress,
-        offset: MemoryOffset,
-        source_address: FrameMemoryAddress,
-        size: MemorySize,
-        comment: &str,
-    ) {
-        self.add_instruction(
-            OpCode::Stx,
-            &[indirect_target.0, offset.0, source_address.0, size.0],
-            comment,
-        );
     }
 
     pub fn add_add_i32(
@@ -319,4 +300,26 @@ impl InstructionBuilder {
         });
         self.comments.push(comment.to_string());
     }
+
+    /*
+
+    pub fn add_stx(
+        &mut self,
+        indirect_target: FrameMemoryAddress,
+        offset: MemoryOffset,
+        source_address: FrameMemoryAddress,
+        size: MemorySize,
+        comment: &str,
+    ) {
+        self.add_instruction(
+            OpCode::Stx,
+            &[indirect_target.0, offset.0, source_address.0, size.0],
+            comment,
+        );
+    }
+    pub fn add_alloc(&mut self, target: FrameMemoryAddress, size: MemorySize, comment: &str) {
+        self.add_instruction(OpCode::Alloc, &[target.0, size.0], comment);
+    }
+
+     */
 }

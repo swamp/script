@@ -368,11 +368,30 @@ pub fn disasm(
             to_read_frame(operands[1], DecoratedMemoryKind::Octets, frame_memory_size),
             DecoratedOperandKind::MemorySize(MemorySize(operands[2])),
         ],
-        OpCode::Alloc => &[
+        OpCode::LtU16 => todo!(),
+        OpCode::Nop => &[],
+
+        OpCode::VecPush => &[
+            to_write_frame(operands[0], DecoratedMemoryKind::Octets, frame_memory_size),
+            to_read_frame(operands[1], DecoratedMemoryKind::Octets, frame_memory_size),
+        ],
+        OpCode::MapNewFromPairs => &[
+            to_write_frame(operands[0], DecoratedMemoryKind::Octets, frame_memory_size),
+            to_read_frame(operands[1], DecoratedMemoryKind::Octets, frame_memory_size),
+            DecoratedOperandKind::MemorySize(MemorySize(operands[2])),
+            DecoratedOperandKind::MemorySize(MemorySize(operands[3])),
+            DecoratedOperandKind::CountU16(operands[4]),
+        ],
+
+        OpCode::MapRemove => &[
+            to_write_frame(operands[0], DecoratedMemoryKind::Octets, frame_memory_size),
+            to_read_frame(operands[1], DecoratedMemoryKind::Octets, frame_memory_size),
+        ],
+        /*
+                OpCode::Alloc => &[
             to_write_frame(operands[0], DecoratedMemoryKind::Octets, frame_memory_size),
             DecoratedOperandKind::MemorySize(MemorySize(operands[1])),
         ],
-        OpCode::LtU16 => todo!(),
         OpCode::St32x => {
             let data = ((operands[3] as u32) << 16) | operands[2] as u32;
             &[
@@ -414,24 +433,8 @@ pub fn disasm(
             ),
             DecoratedOperandKind::MemorySize(MemorySize(operands[3])),
         ],
-        OpCode::Nop => &[],
 
-        OpCode::VecPush => &[
-            to_write_frame(operands[0], DecoratedMemoryKind::Octets, frame_memory_size),
-            to_read_frame(operands[1], DecoratedMemoryKind::Octets, frame_memory_size),
-        ],
-        OpCode::MapNewFromPairs => &[
-            to_write_frame(operands[0], DecoratedMemoryKind::Octets, frame_memory_size),
-            to_read_frame(operands[1], DecoratedMemoryKind::Octets, frame_memory_size),
-            DecoratedOperandKind::MemorySize(MemorySize(operands[2])),
-            DecoratedOperandKind::MemorySize(MemorySize(operands[3])),
-            DecoratedOperandKind::CountU16(operands[4]),
-        ],
-
-        OpCode::MapRemove => &[
-            to_write_frame(operands[0], DecoratedMemoryKind::Octets, frame_memory_size),
-            to_read_frame(operands[1], DecoratedMemoryKind::Octets, frame_memory_size),
-        ],
+         */
     };
 
     let converted_operands = operands_slice

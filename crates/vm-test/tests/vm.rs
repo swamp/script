@@ -42,23 +42,24 @@ fn call() {
         result = another_fn(a, 10)
         ",
         "
-> 0000: enter 58 # variables:
-  $0000:4 a
-  $0004:4 result
+> 0000: enter 58 ; variables:
+    ;  $0000:4 a
+    ;  $0004:4 result
 
-> 0001: ld32 $0000 00000014 # int literal
-> 0002: mov $005C $0000 4 # variable access 'a' ()
-> 0003: ld32 $0060 0000000A # int literal
-> 0004: call @7 # calling another_fn (frame size: frame size: 0058)
-> 0005: mov $0004 $0058 4 # copy the ret value to destination
-> 0006: hlt  #
+> 0001: ld32 $0000 00000014 ; int literal
+> 0002: mov $005C $0000 4 ; variable access 'a' ()
+> 0003: ld32 $0060 0000000A ; int literal
+> 0004: call @7 ; calling another_fn (frame size: frame size: 0058)
+> 0005: mov $0004 $0058 4 ; copy the ret value to destination
+> 0006: hlt
+
+
 - another_fn -
-> 0007: enter 5C # variables:
-  $0004:4 a
-  $0008:4 b
-
-> 0008: sadd32 $0000 $0004 $0008 # i32 add
-> 0009: ret  #
+> 0007: enter 5C ; variables:
+    ; $0004:4 a
+    ; $0008:4 b
+> 0008: sadd32 $0000 $0004 $0008 ; i32 add
+> 0009: ret
     ",
     );
 }
@@ -403,14 +404,14 @@ result = (10, true, 0.2)
 
         ",
         "
-> 0000: enter 5C 
+> 0000: enter 5C
 > 0001: ld32 $0000 0000000A     ; int 10
 > 0002: ld8 $0004 01            ; the Bool is aligned to 4 bytes
 > 0003: ld32 $0008 00003333     ; the 0.2 float value 13107 (13107 / 65536)
 > 0004: hlt                     ; return to host
 ",
         "
-00000000  0A 00 00 00 01 00 00 00  33 33 00 00 00 00 00 00  ........33...... ; 0A 00 00 00 is the int, 01 00 00 00 is the bool, and 33 33 00 00 is the float 
+00000000  0A 00 00 00 01 00 00 00  33 33 00 00 00 00 00 00  ........33...... ; 0A 00 00 00 is the int, 01 00 00 00 is the bool, and 33 33 00 00 is the float
 
     ",
     );

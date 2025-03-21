@@ -1495,10 +1495,11 @@ impl<'a> FunctionCodeGen<'a> {
             .builder
             .add_ld_u16(vec_element_size_addr, element_size.0, "slice element size");
 
+        /*
         let allocated_vec_address = ctx.addr().advance(MemoryOffset(6));
         self.state
-            .builder
-            .add_alloc(allocated_vec_address, total_slice_size, "slice literal");
+        .builder
+        add_alloc(allocated_vec_address, total_slice_size, "slice literal");
 
         self.state.builder.add_stx(
             allocated_vec_address,
@@ -1507,6 +1508,8 @@ impl<'a> FunctionCodeGen<'a> {
             total_slice_size,
             "copy from slice continuous temporary frame memory to allocated vec ptr heap area",
         );
+
+         */
     }
 
     fn gen_intrinsic_call_ex(
