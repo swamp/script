@@ -336,6 +336,12 @@ pub fn disasm(
             to_read_frame(operands[1], DecoratedMemoryKind::S32, frame_memory_size),
             to_read_frame(operands[2], DecoratedMemoryKind::S32, frame_memory_size),
         ],
+
+        OpCode::NegI32 => &[
+            to_write_frame(operands[0], DecoratedMemoryKind::S32, frame_memory_size),
+            to_read_frame(operands[1], DecoratedMemoryKind::S32, frame_memory_size),
+        ],
+
         OpCode::LtI32 => &[
             to_read_frame(operands[0], DecoratedMemoryKind::S32, frame_memory_size),
             to_read_frame(operands[1], DecoratedMemoryKind::S32, frame_memory_size),
@@ -361,6 +367,10 @@ pub fn disasm(
         OpCode::Bnz => &[to_jmp_ip(operands[0])],
         OpCode::Bz => &[to_jmp_ip(operands[0])],
         OpCode::Call => &[to_jmp_ip(operands[0])],
+        OpCode::HostCall => &[
+            DecoratedOperandKind::ImmediateU16(operands[0]),
+            DecoratedOperandKind::MemorySize(MemorySize(operands[1])),
+        ],
         OpCode::Enter => &[DecoratedOperandKind::MemorySize(MemorySize(operands[0]))],
         OpCode::Jmp => &[to_jmp_ip(operands[0])],
         OpCode::Mov => &[

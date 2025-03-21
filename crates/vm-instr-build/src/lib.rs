@@ -26,6 +26,10 @@ impl InstructionBuilder {}
 
 impl InstructionBuilder {}
 
+impl InstructionBuilder {}
+
+impl InstructionBuilder {}
+
 impl Default for InstructionBuilder {
     fn default() -> Self {
         Self::new()
@@ -110,6 +114,19 @@ impl InstructionBuilder {
 
     pub fn add_call(&mut self, function_ip: &InstructionPosition, comment: &str) {
         self.add_instruction(OpCode::Call, &[function_ip.0], comment);
+    }
+
+    pub fn add_host_call(
+        &mut self,
+        host_function_id: u16,
+        arguments_size: MemorySize,
+        comment: &str,
+    ) {
+        self.add_instruction(
+            OpCode::HostCall,
+            &[host_function_id, arguments_size.0],
+            comment,
+        );
     }
 
     /// # Panics
@@ -205,6 +222,15 @@ impl InstructionBuilder {
             &[dst_offset.0, lhs_offset.0, rhs_offset.0],
             comment,
         );
+    }
+
+    pub fn add_neg_i32(
+        &mut self,
+        target: FrameMemoryAddress,
+        source: FrameMemoryAddress,
+        comment: &str,
+    ) {
+        self.add_instruction(OpCode::NegI32, &[target.0, source.0], comment);
     }
 
     pub fn add_jmp_if(

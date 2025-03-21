@@ -1,45 +1,37 @@
-use crate::Vm;
-
-pub struct HostArgs<'a> {
-    vm: &'a Vm,
-    args_offset: usize,   // Offset to arguments related to frame offset
-    args_count: u8,       // Number of arguments
+pub struct HostArgs {
     current_index: usize, // Current argument being processed
+    args: Vec<u8>,
 }
 
-impl<'a> HostArgs<'a> {
-    pub const fn new(vm: &'a Vm, args_offset: usize, args_count: u8) -> Self {
+impl HostArgs {
+    pub fn new(args: &[u8]) -> Self {
         Self {
-            vm,
-            args_offset,
-            args_count,
+            args: args.to_vec(),
             current_index: 0,
         }
     }
 
-    pub fn get_i32(&mut self) -> Result<i32, &'static str> {
-        if self.current_index >= self.args_count as usize {
-            return Err("Argument index out of bounds");
-        }
+    /// Reads the next 4 bytes from `args`, interpreting them as a little-endian i32.
+    /// Advances the current index by 4.
+    ///
+    /// # Panics
+    ///
+    /// Panics if there are not enough bytes remaining.
+    pub fn get_i32(&mut self) -> i32 {
+        // Ensure there are enough bytes remaining
+        assert!(
+            self.current_index + 4 <= self.args.len(),
+            "Not enough bytes to read an i32"
+        );
 
-        let offset = self.args_offset + (self.current_index * 4);
-        let ptr = self.vm.ptr_at_i32(self.vm.frame_offset + offset);
-        let value = unsafe { *(ptr as *const i32) };
+        // Get the next four bytes
+        let bytes = &self.args[self.current_index..self.current_index + 4];
 
-        self.current_index += 1;
-        Ok(value)
-    }
+        // Advance the current index
+        self.current_index += 4;
 
-    pub fn get_f32(&mut self) -> Result<f32, &'static str> {
-        todo!()
-    }
-
-    pub fn get_bool(&mut self) -> Result<bool, &'static str> {
-        todo!()
-    }
-
-    pub fn get_ptr(&mut self) -> Result<*const u8, &'static str> {
-        todo!()
+        // Convert the bytes to an i32 (assuming little-endian encoding)
+        i32::from_le_bytes(bytes.try_into().expect("Slice with incorrect length"))
     }
 }
 

@@ -157,16 +157,22 @@ pub fn exec_with_host_function<F>(
     );
     compare_line_outputs(&disassembler_output, expected_assembly);
 
-    let mut vm = exec_code_gen_state(generator);
-
-    let module = program.modules.get(&["test".to_string()]).unwrap();
+    let module = program
+        .modules
+        .get(&["crate".to_string(), "test".to_string()])
+        .unwrap();
 
     let external_id = module
         .symbol_table
         .get_external_function_declaration(id)
         .unwrap();
 
+    let (instructions, constants) = generator.take_instructions_and_constants();
+    let mut vm = Vm::new(instructions, &constants, 0x1_00_00);
+
     vm.add_host_function(external_id.id as u16, callback);
+
+    vm.execute();
 
     compare_hex_outputs(&vm.stack_base_memory()[..16], expected_hex);
 }

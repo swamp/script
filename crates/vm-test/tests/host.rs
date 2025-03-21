@@ -1,4 +1,4 @@
-use swamp_script_vm_test::util::{exec_with_assembly, exec_with_host_function};
+use swamp_script_vm_test::util::exec_with_host_function;
 
 #[test_log::test]
 fn host_call() {
@@ -7,17 +7,24 @@ fn host_call() {
 
 external fn some_test(i: Int)
 
-some_test(42)
+some_test(-42)
 
         ",
         "
-
+> 0000: enter 50
+> 0001: ld32 $0050 0000002A
+> 0002: sneg32 $0050 $0050
+> 0003: host 0001 4
+> 0004: hlt 
 ",
         "
-00000000  17 00 00 00 31 00 00 00  02 00 00 00 00 00 00 00  ....1...........
+00000000  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  ................
 
     ",
         "some_test",
-        |args| {},
+        |mut args| {
+            let argument = args.get_i32();
+            eprintln!("you called me {argument}");
+        },
     );
 }

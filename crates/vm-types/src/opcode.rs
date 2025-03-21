@@ -48,6 +48,8 @@ pub enum OpCode {
     Eq8Imm,
     Tst8,
     GtI32,
+    HostCall,
+    NegI32,
 }
 
 impl Display for OpCode {
@@ -64,11 +66,13 @@ impl Display for OpCode {
             Self::Mov => write!(f, "mov"), // Move data
 
             Self::AddI32 => write!(f, "sadd32"), // Signed Add
+            Self::NegI32 => write!(f, "sneg32"), // Signed negate
 
             // Functions
-            Self::Call => write!(f, "call"),   // Call function
-            Self::Enter => write!(f, "enter"), // Function prologue
-            Self::Ret => write!(f, "ret"),     // Return from function
+            Self::Call => write!(f, "call"),     // Call function
+            Self::Enter => write!(f, "enter"),   // Function prologue
+            Self::Ret => write!(f, "ret"),       // Return from function
+            Self::HostCall => write!(f, "host"), // Call host function
 
             // Branches
             Self::Jmp => write!(f, "jmp"), // Unconditional jump

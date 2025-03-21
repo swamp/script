@@ -19,7 +19,7 @@ use swamp_script_semantic::{
     InternalFunctionDefinitionRef, InternalFunctionId, InternalMainExpression, Iterable, Literal,
     LocationAccessKind, Match, MutOrImmutableExpression, NormalPattern, Pattern, Postfix,
     PostfixKind, SingleLocationExpression, SingleMutLocationExpression, StructInstantiation,
-    VariableRef,
+    UnaryOperator, UnaryOperatorKind, VariableRef,
 };
 use swamp_script_types::{AnonymousStructType, EnumVariantType, Signature, StructTypeField, Type};
 
@@ -411,9 +411,9 @@ impl<'a> FunctionCodeGen<'a> {
             }
 
             _ => {
-                let mut temp_ctx = self.temp_space_for_type(&expr.ty, "expression");
+                let temp_ctx = self.temp_space_for_type(&expr.ty, "expression");
 
-                self.gen_expression(expr, &mut temp_ctx);
+                self.gen_expression(expr, &temp_ctx);
 
                 temp_ctx.target()
             }
@@ -437,7 +437,7 @@ impl<'a> FunctionCodeGen<'a> {
             }
             ExpressionKind::ExternalFunctionAccess(_) => todo!(),
             ExpressionKind::BinaryOp(operator) => self.gen_binary_operator(operator, ctx),
-            ExpressionKind::UnaryOp(_) => todo!(),
+            ExpressionKind::UnaryOp(operator) => self.gen_unary_operator(operator, ctx),
             ExpressionKind::PostfixChain(start, chain) => self.gen_postfix_chain(start, chain, ctx),
             ExpressionKind::CoerceOptionToBool(_) => todo!(),
             ExpressionKind::FunctionCall(_, _, _) => todo!(),
@@ -479,6 +479,21 @@ impl<'a> FunctionCodeGen<'a> {
             ExpressionKind::IntrinsicCallEx(intrinsic_fn, arguments) => {
                 self.gen_intrinsic_call_ex(intrinsic_fn, arguments, ctx);
             }
+        }
+    }
+
+    fn gen_unary_operator(&mut self, unary_operator: &UnaryOperator, ctx: &Context) {
+        match &unary_operator.kind {
+            UnaryOperatorKind::Not => {}
+            UnaryOperatorKind::Negate => match (&unary_operator.left.ty) {
+                Type::Int => {
+                    let left_source = self.gen_expression_for_access(&unary_operator.left);
+                    self.state
+                        .builder
+                        .add_neg_i32(ctx.addr(), left_source.addr, "negate i32");
+                }
+                _ => todo!(),
+            },
         }
     }
 
@@ -832,7 +847,7 @@ impl<'a> FunctionCodeGen<'a> {
         signature: &Signature,
         self_region: Option<FrameMemoryRegion>,
         arguments: &Vec<ArgumentExpressionOrLocation>,
-    ) {
+    ) -> FrameMemoryRegion {
         let arguments_memory_region = self.infinite_above_frame_size();
         let mut arguments_allocator = ScopeAllocator::new(arguments_memory_region);
 
@@ -870,6 +885,14 @@ impl<'a> FunctionCodeGen<'a> {
                 &argument_comment,
             );
         }
+
+        let last_addr = argument_targets[argument_targets.len() - 1]
+            .addr()
+            .add(argument_targets[argument_targets.len() - 1].target_size());
+        FrameMemoryRegion {
+            addr: argument_targets[0].addr(),
+            size: MemorySize(last_addr.0 - argument_targets[0].addr().0),
+        }
     }
 
     fn gen_postfix_chain(
@@ -898,6 +921,31 @@ impl<'a> FunctionCodeGen<'a> {
                             );
                         }
                         self.copy_back_mutable_arguments(&internal_fn.signature, None, args);
+                    }
+
+                    return;
+                }
+            }
+        }
+
+        if let ExpressionKind::ExternalFunctionAccess(external_fn) = &start_expression.kind {
+            if chain.len() == 1 {
+                if let PostfixKind::FunctionCall(args) = &chain[0].kind {
+                    let total_region = self.gen_arguments(&external_fn.signature, None, args);
+                    self.state.builder.add_host_call(
+                        external_fn.id as u16,
+                        total_region.size,
+                        &format!("call external '{}'", external_fn.assigned_name),
+                    );
+                    let (return_size, _alignment) =
+                        type_size_and_alignment(&external_fn.signature.return_type);
+                    if return_size.0 != 0 {
+                        self.state.builder.add_mov(
+                            ctx.addr(),
+                            self.infinite_above_frame_size().addr,
+                            return_size,
+                            "copy the ret value to destination",
+                        );
                     }
 
                     return;

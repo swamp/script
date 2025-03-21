@@ -57,6 +57,7 @@ pub struct Vm {
     debug_call_depth: usize,
 
     pub flags: Flags,
+    last_frame_size: u16,
 }
 
 impl Vm {
@@ -136,6 +137,7 @@ impl Vm {
             host_functions: SeqMap::default(),
             handlers: [const { HandlerType::Args0(Self::execute_unimplemented) }; 256],
             debug_call_depth: 0,
+            last_frame_size: 0,
             flags: Flags { z: false },
         };
 
@@ -165,11 +167,14 @@ impl Vm {
 
         // Operators
         vm.handlers[OpCode::AddI32 as usize] = HandlerType::Args3(Self::execute_add_i32);
+        vm.handlers[OpCode::NegI32 as usize] = HandlerType::Args2(Self::execute_neg_i32);
 
         // Call, enter, ret
         vm.handlers[OpCode::Call as usize] = HandlerType::Args1(Self::execute_call);
         vm.handlers[OpCode::Enter as usize] = HandlerType::Args1(Self::execute_enter);
         vm.handlers[OpCode::Ret as usize] = HandlerType::Args0(Self::execute_ret);
+
+        vm.handlers[OpCode::HostCall as usize] = HandlerType::Args2(Self::execute_host_call);
 
         // Halt - return to host
         vm.handlers[OpCode::Hlt as usize] = HandlerType::Args0(Self::execute_hlt);
@@ -341,6 +346,17 @@ impl Vm {
             let lhs = *lhs_ptr;
             let rhs = *rhs_ptr;
             *dst_ptr = lhs + rhs;
+        }
+    }
+
+    #[inline]
+    fn execute_neg_i32(&mut self, dst_offset: u16, lhs_offset: u16) {
+        let lhs_ptr = self.ptr_at_i32(self.frame_offset + lhs_offset as usize) as *const i32;
+        let dst_ptr = self.ptr_at_i32(self.frame_offset + dst_offset as usize);
+
+        unsafe {
+            let lhs = *lhs_ptr;
+            *dst_ptr = -lhs;
         }
     }
 
@@ -610,11 +626,29 @@ impl Vm {
     }
 
     #[inline]
+    fn execute_host_call(&mut self, function_id: u16, bytes_to_copy_from_frame_ptr: u16) {
+        let callback: &mut Box<dyn FnMut(HostArgs)> =
+            self.host_functions.get_mut(&function_id).unwrap();
+        let offset = self.frame_offset + self.last_frame_size as usize;
+        let num_bytes = bytes_to_copy_from_frame_ptr as usize;
+
+        // SAFETY: We assume that self.memory is a valid pointer to a memory region
+        // of sufficient size. Make sure that offset + num_bytes does not exceed
+        // the allocated memory.
+        let args: Vec<u8> =
+            unsafe { std::slice::from_raw_parts(self.memory.add(offset), num_bytes).to_vec() };
+
+        let host_args = HostArgs::new(&args);
+        callback(host_args);
+    }
+
+    #[inline]
     fn execute_enter(&mut self, aligned_size: u16) {
         //let aligned_size = (frame_size as usize + ALIGNMENT_REST) & ALIGNMENT_MASK; // 8-byte alignment
 
         let frame = self.call_stack.last_mut().unwrap();
         frame.frame_size = aligned_size as usize;
+        self.last_frame_size = aligned_size;
 
         // the functions frame of reference should be the stack offset
         self.frame_offset = self.stack_offset;
