@@ -1,11 +1,13 @@
 use swamp_script_code_gen::{CodeGenState, GenOptions};
+use swamp_script_compile::Program;
 use swamp_script_compile::compile_string;
 use swamp_script_semantic::Function;
 use swamp_script_types::Type;
 use swamp_vm::Vm;
+use swamp_vm::host::HostArgs;
 use swamp_vm_disasm::{disasm_instructions_color, disasm_instructions_no_color};
 
-pub fn gen_internal(code: &str) -> CodeGenState {
+pub fn gen_internal(code: &str) -> (CodeGenState, Program) {
     let (program, main_module, source_map) = compile_string(code).unwrap();
 
     let mut code_gen = CodeGenState::new();
@@ -25,20 +27,20 @@ pub fn gen_internal(code: &str) -> CodeGenState {
         code_gen.gen_function_def(internal_function_def, &normal_function);
     }
 
-    for (associated_on_type, impl_functions) in program.state.associated_impls.functions {
+    for (associated_on_type, impl_functions) in &program.state.associated_impls.functions {
         if !associated_on_type.is_concrete() {
             continue;
         }
-        if associated_on_type == Type::Int
-            || associated_on_type == Type::Float
-            || associated_on_type == Type::Bool
-            || associated_on_type == Type::String
+        if associated_on_type == &Type::Int
+            || associated_on_type == &Type::Float
+            || associated_on_type == &Type::Bool
+            || associated_on_type == &Type::String
         {
             continue;
         }
 
-        for (_name, func) in impl_functions.functions {
-            match &*func {
+        for (_name, func) in &impl_functions.functions {
+            match &**func {
                 Function::Internal(int_fn) => {
                     code_gen.gen_function_def(int_fn, &normal_function);
                 }
@@ -50,11 +52,11 @@ pub fn gen_internal(code: &str) -> CodeGenState {
 
     code_gen.finalize();
 
-    code_gen
+    (code_gen, program)
 }
 
-pub fn gen_internal_debug(code: &str) -> CodeGenState {
-    let code_gen = gen_internal(code);
+pub fn gen_internal_debug(code: &str) -> (CodeGenState, Program) {
+    let (code_gen, program) = gen_internal(code);
     let disassembler_output = disasm_instructions_color(
         code_gen.instructions(),
         code_gen.comments(),
@@ -63,7 +65,7 @@ pub fn gen_internal_debug(code: &str) -> CodeGenState {
 
     eprintln!("{disassembler_output}");
 
-    code_gen
+    (code_gen, program)
 }
 
 pub fn exec_code_gen_state(code_gen_state: CodeGenState) -> Vm {
@@ -77,7 +79,7 @@ pub fn exec_code_gen_state(code_gen_state: CodeGenState) -> Vm {
 }
 
 pub fn exec_internal(code: &str) -> Vm {
-    let code_gen = gen_internal_debug(code);
+    let (code_gen, program) = gen_internal_debug(code);
 
     exec_code_gen_state(code_gen)
 }
@@ -121,7 +123,7 @@ pub fn exec(code: &str, expected_hex: &str) {
 }
 
 pub fn exec_with_assembly(code: &str, expected_assembly: &str, expected_hex: &str) {
-    let generator = gen_internal_debug(code);
+    let (generator, _program) = gen_internal_debug(code);
 
     let disassembler_output = disasm_instructions_no_color(
         generator.instructions(),
@@ -132,6 +134,39 @@ pub fn exec_with_assembly(code: &str, expected_assembly: &str, expected_hex: &st
     compare_line_outputs(&disassembler_output, expected_assembly);
 
     let vm = exec_code_gen_state(generator);
+
+    compare_hex_outputs(&vm.stack_base_memory()[..16], expected_hex);
+}
+
+pub fn exec_with_host_function<F>(
+    code: &str,
+    expected_assembly: &str,
+    expected_hex: &str,
+    id: &str,
+    callback: F,
+) where
+    F: 'static + FnMut(HostArgs),
+{
+    let (generator, program) = gen_internal_debug(code);
+
+    let disassembler_output = disasm_instructions_no_color(
+        generator.instructions(),
+        generator.comments(),
+        &generator.create_function_sections(),
+        false,
+    );
+    compare_line_outputs(&disassembler_output, expected_assembly);
+
+    let mut vm = exec_code_gen_state(generator);
+
+    let module = program.modules.get(&["test".to_string()]).unwrap();
+
+    let external_id = module
+        .symbol_table
+        .get_external_function_declaration(id)
+        .unwrap();
+
+    vm.add_host_function(external_id.id as u16, callback);
 
     compare_hex_outputs(&vm.stack_base_memory()[..16], expected_hex);
 }
@@ -150,7 +185,7 @@ pub fn exec_vars(code: &str, expected_hex: &str) {
 }
 
 pub fn gen_code(code: &str, expected_output: &str) {
-    let generator = gen_internal_debug(code);
+    let (generator, program) = gen_internal_debug(code);
 
     let disassembler_output = disasm_instructions_no_color(
         generator.instructions(),

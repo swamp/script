@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::str::FromStr;
 use swamp_script_analyzer::Analyzer;
-use swamp_script_analyzer::prelude::{Error, Program};
+pub use swamp_script_analyzer::prelude::{Error, Program};
 use swamp_script_dep_loader::{
     DependencyParser, ParsedAstModule, parse_local_modules_and_get_order, parse_single_module,
     swamp_registry_path,

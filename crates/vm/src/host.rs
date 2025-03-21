@@ -43,10 +43,4 @@ impl<'a> HostArgs<'a> {
     }
 }
 
-pub type HostFunctionCallback = fn(&mut Vm, args: HostArgs) -> u64;
-
-pub struct HostFunction {
-    callback: HostFunctionCallback,
-    name: String,  // Only for debugging
-    arg_count: u8, // Expected argument count
-}
+pub type HostFunctionCallback = Box<dyn FnMut(HostArgs)>;

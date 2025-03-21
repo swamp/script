@@ -1,4 +1,5 @@
-use crate::host::HostFunction;
+use crate::host::{HostArgs, HostFunctionCallback};
+use seq_map::SeqMap;
 use swamp_vm_types::BinaryInstruction;
 use swamp_vm_types::opcode::OpCode;
 
@@ -48,7 +49,7 @@ pub struct Vm {
     call_stack: Vec<CallFrame>, // Track function calls
 
     // Host function integration
-    host_functions: Vec<HostFunction>, // Registered host functions
+    host_functions: SeqMap<u16, HostFunctionCallback>,
 
     handlers: [HandlerType; 256],
 
@@ -132,7 +133,7 @@ impl Vm {
             instructions,
             execution_complete: false,
             call_stack: vec![],
-            host_functions: vec![],
+            host_functions: SeqMap::default(),
             handlers: [const { HandlerType::Args0(Self::execute_unimplemented) }; 256],
             debug_call_depth: 0,
             flags: Flags { z: false },
@@ -208,6 +209,17 @@ impl Vm {
         }
 
         vm
+    }
+
+    /// # Panics
+    /// if function already has been added
+    pub fn add_host_function<F>(&mut self, id: u16, callback: F)
+    where
+        F: 'static + FnMut(HostArgs),
+    {
+        self.host_functions
+            .insert(id, Box::new(callback))
+            .expect("should work to insert ");
     }
 
     #[must_use]
