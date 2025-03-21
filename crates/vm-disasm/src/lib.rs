@@ -101,6 +101,7 @@ pub fn disasm_instructions_no_color(
     binary_instruction: &[BinaryInstruction],
     descriptions: &[String],
     ip_infos: &SeqMap<InstructionPosition, String>,
+    include_comments: bool,
 ) -> String {
     let mut string = String::new();
     let mut last_frame_size: u16 = 0;
@@ -115,10 +116,20 @@ pub fn disasm_instructions_no_color(
             string += &format!("- {found} -\n");
         }
 
+        let comment_to_use = if include_comments {
+            comment.clone()
+        } else {
+            String::new()
+        };
+
         string += &format!(
             "> {:04X}: {}\n",
             ip_index,
-            disasm_no_color(instruction, FrameMemorySize(last_frame_size), comment)
+            disasm_no_color(
+                instruction,
+                FrameMemorySize(last_frame_size),
+                &comment_to_use
+            )
         );
     }
 
@@ -223,7 +234,7 @@ pub fn disasm_color(
     let print_comment = if total_comment.is_empty() {
         String::new()
     } else {
-        format!(" {} {}", "#".bright_black(), total_comment.bright_black())
+        format!(" {} {}", ";".bright_black(), total_comment.bright_black())
     };
 
     format!("{} {}{}", name, converted_operands.join(" "), print_comment)
@@ -237,7 +248,7 @@ pub fn disasm_no_color(
 ) -> String {
     let decorated = disasm(binary_instruction, frame_memory_size);
 
-    let name = format!("{}", decorated.name);
+    let name = decorated.name.to_string();
 
     let mut converted_operands = Vec::new();
 
@@ -269,7 +280,18 @@ pub fn disasm_no_color(
         converted_operands.push(new_str);
     }
 
-    format!("{} {} # {}", name, converted_operands.join(" "), comment)
+    let comment_suffix = if comment.is_empty() {
+        String::new()
+    } else {
+        format!(" ; {comment}")
+    };
+
+    format!(
+        "{} {}{}",
+        name,
+        converted_operands.join(" "),
+        comment_suffix
+    )
 }
 
 #[allow(clippy::too_many_lines)]

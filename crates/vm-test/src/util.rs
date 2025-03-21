@@ -66,16 +66,20 @@ pub fn gen_internal_debug(code: &str) -> CodeGenState {
     code_gen
 }
 
-pub fn exec_internal(code: &str) -> Vm {
-    let code_gen = gen_internal_debug(code);
-
-    let (instructions, constants) = code_gen.take_instructions_and_constants();
+pub fn exec_code_gen_state(code_gen_state: CodeGenState) -> Vm {
+    let (instructions, constants) = code_gen_state.take_instructions_and_constants();
 
     let mut vm = Vm::new(instructions, &constants, 0x1_00_00);
 
     vm.execute();
 
     vm
+}
+
+pub fn exec_internal(code: &str) -> Vm {
+    let code_gen = gen_internal_debug(code);
+
+    exec_code_gen_state(code_gen)
 }
 
 pub fn exec_internal_debug(code: &str) -> Vm {
@@ -86,7 +90,10 @@ pub fn exec_internal_debug(code: &str) -> Vm {
 
 fn trim_lines(text: &str) -> String {
     text.lines()
-        .map(str::trim)
+        .map(|line| {
+            // Ignore comments that starts with ;
+            line.split(";").next().unwrap_or("").trim_end()
+        })
         .filter(|line| !line.is_empty())
         .collect::<Vec<_>>()
         .join("\n")
@@ -113,6 +120,22 @@ pub fn exec(code: &str, expected_hex: &str) {
     compare_hex_outputs(&vm.stack_base_memory()[..16], expected_hex);
 }
 
+pub fn exec_with_assembly(code: &str, expected_assembly: &str, expected_hex: &str) {
+    let generator = gen_internal_debug(code);
+
+    let disassembler_output = disasm_instructions_no_color(
+        generator.instructions(),
+        generator.comments(),
+        &generator.create_function_sections(),
+        false,
+    );
+    compare_line_outputs(&disassembler_output, expected_assembly);
+
+    let vm = exec_code_gen_state(generator);
+
+    compare_hex_outputs(&vm.stack_base_memory()[..16], expected_hex);
+}
+
 pub fn exec_show_constants(code: &str, expected_hex: &str, expected_constants: &str) {
     let vm = exec_internal_debug(code);
 
@@ -133,6 +156,7 @@ pub fn gen_code(code: &str, expected_output: &str) {
         generator.instructions(),
         generator.comments(),
         &generator.create_function_sections(),
+        false,
     );
 
     compare_line_outputs(&disassembler_output, expected_output);

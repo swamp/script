@@ -1,3 +1,4 @@
+use swamp_script_vm_test::util::exec_with_assembly;
 use swamp_script_vm_test::util::{exec, exec_show_constants, exec_vars, gen_code};
 
 #[test]
@@ -405,5 +406,27 @@ b = 0x0BAD_CAFE
         // | 4              | buckets_ptr  | u16  | 2            | Pointer to bucket array          |
         // | 6              | key_size     | u16  | 2            | Key size in bytes                |
         // | 8              | value_size   | u16  | 2            | Value size in bytes              |
+    );
+}
+
+#[test_log::test]
+fn tuple() {
+    exec_with_assembly(
+        "
+
+result = (10, true, 0.2)
+
+        ",
+        "
+> 0000: enter 5C 
+> 0001: ld32 $0000 0000000A     ; int 10
+> 0002: ld8 $0004 01            ; the Bool is aligned to 4 bytes
+> 0003: ld32 $0008 00003333     ; the 0.2 float value 13107 (13107 / 65536)
+> 0004: hlt                     ; return to host
+",
+        "
+00000000  0A 00 00 00 01 00 00 00  33 33 00 00 00 00 00 00  ........33...... ; 0A 00 00 00 is the int, 01 00 00 00 is the bool, and 33 33 00 00 is the float 
+
+    ",
     );
 }

@@ -1003,7 +1003,7 @@ impl<'a> FunctionCodeGen<'a> {
                     }
                 }
             }
-            Literal::TupleLiteral(_, _) => todo!(),
+            Literal::TupleLiteral(_tuple_type, expressions) => self.gen_tuple(expressions, ctx),
             Literal::StringLiteral(str) => {
                 self.gen_string_literal(str, ctx);
             }
