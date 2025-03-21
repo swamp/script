@@ -543,9 +543,10 @@ impl<'a> FunctionCodeGen<'a> {
         let frame_memory_region = self.gen_expression_for_access(&condition.expression);
         // HACK:
         if frame_memory_region.size.0 == 1 {
-            self.state
-                .builder
-                .add_tst8(frame_memory_region.addr, "convert to boolean expression");
+            self.state.builder.add_tst8(
+                frame_memory_region.addr,
+                "convert to boolean expression (update z flag)",
+            );
         }
     }
 
@@ -1567,30 +1568,26 @@ impl<'a> FunctionCodeGen<'a> {
             let is_last = index == arm_len_to_consider - 1;
 
             //  Each arm must set the CPU zero flag
-            match &arm.pattern {
-                Pattern::Normal(normal_pattern, maybe_guard) => {
-                    if let Some(guard_found) = maybe_guard {
-                        self.gen_boolean_expression(guard_found);
+            let maybe_guard = match &arm.pattern {
+                Pattern::Normal(normal_pattern, maybe_guard) => match normal_pattern {
+                    NormalPattern::PatternList(_) => None,
+                    NormalPattern::EnumPattern(enum_variant, maybe_patterns) => {
+                        self.state.builder.add_eq_u8_immediate(
+                            region_to_match.addr,
+                            enum_variant.common().container_index,
+                            "check for enum variant",
+                        );
+                        maybe_guard.as_ref()
                     }
-
-                    match normal_pattern {
-                        NormalPattern::PatternList(_) => {}
-                        NormalPattern::EnumPattern(enum_variant, maybe_patterns) => {
-                            self.state.builder.add_eq_u8_immediate(
-                                region_to_match.addr,
-                                enum_variant.common().container_index,
-                                "check for enum variant",
-                            );
-                        }
-                        NormalPattern::Literal(_) => {
-                            todo!()
-                        }
+                    NormalPattern::Literal(_) => {
+                        todo!()
                     }
-                }
+                },
                 Pattern::Wildcard(_) => {
                     // Wildcard is always true, so no comparison code is needed here at all
+                    None
                 }
-            }
+            };
 
             let did_add_comparison = !matches!(arm.pattern, Pattern::Wildcard(_));
 
@@ -1599,6 +1596,19 @@ impl<'a> FunctionCodeGen<'a> {
                     self.state
                         .builder
                         .add_not_equal_jump_placeholder("placeholder for enum match"),
+                )
+            } else {
+                None
+            };
+
+            let maybe_guard_skip = if let Some(guard) = maybe_guard {
+                self.gen_boolean_expression(guard);
+                // z flag should have been updated now
+
+                Some(
+                    self.state
+                        .builder
+                        .add_not_equal_jump_placeholder("placeholder for skip guard"),
                 )
             } else {
                 None
@@ -1614,6 +1624,9 @@ impl<'a> FunctionCodeGen<'a> {
 
             if let Some(skip) = maybe_skip_added {
                 self.state.builder.patch_jump_here(skip);
+            }
+            if let Some(guard_skip) = maybe_guard_skip {
+                self.state.builder.patch_jump_here(guard_skip);
             }
         }
 
