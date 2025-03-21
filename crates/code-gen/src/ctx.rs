@@ -1,5 +1,5 @@
 use crate::alloc::FrameMemoryRegion;
-use swamp_vm_types::{FrameMemoryAddress, MemorySize};
+use swamp_vm_types::{FrameMemoryAddress, MemoryOffset, MemorySize};
 
 pub struct Context {
     target_info: FrameMemoryRegion,
@@ -23,11 +23,11 @@ impl Context {
 }
 
 impl Context {
-    pub(crate) fn with_offset(&self, offset: MemorySize) -> Self {
+    pub(crate) fn with_offset(&self, offset: MemoryOffset, memory_size: MemorySize) -> Self {
         Self {
             target_info: FrameMemoryRegion {
-                addr: self.addr().add(offset),
-                size: MemorySize(self.target_info.size.0 - 1),
+                addr: self.addr().add_offset(offset),
+                size: memory_size,
             },
             comment: "".to_string(),
         }

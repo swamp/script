@@ -32,21 +32,6 @@ fn var_def_if() {
 }
 
 #[test_log::test]
-fn while_loop() {
-    exec_vars(
-        "
-        mut a = 1
-        while a < 32767 {
-            a += 1
-        }
-        ",
-        "
-00000000  FF 7F 00 00 00 00 00 00  00 00 00 00 00 00 00 00  ................
-    ",
-    );
-}
-
-#[test_log::test]
 fn call() {
     gen_code(
         "

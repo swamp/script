@@ -913,19 +913,20 @@ impl<'a> FunctionCodeGen<'a> {
     fn get_struct_field_offset(
         fields: &SeqMap<String, StructTypeField>,
         index_to_find: usize,
-    ) -> MemoryOffset {
+    ) -> (MemoryOffset, MemorySize, MemoryAlignment) {
         let mut offset = 0;
 
         for (index, (_name, field)) in fields.iter().enumerate() {
+            let (struct_field_size, struct_field_align) =
+                type_size_and_alignment(&field.field_type);
             if index == index_to_find {
-                break;
+                return (MemoryOffset(offset), struct_field_size, struct_field_align);
             }
 
-            let (struct_field, struct_field_align) = type_size_and_alignment(&field.field_type);
-            offset += struct_field.0;
+            offset += struct_field_size.0;
         }
 
-        MemoryOffset(offset)
+        panic!("field not found");
     }
 
     fn gen_anonymous_struct(
@@ -935,12 +936,12 @@ impl<'a> FunctionCodeGen<'a> {
         base_context: &Context,
     ) {
         for (field_index, expression) in source_order_expressions {
-            let field_memory_offset = Self::get_struct_field_offset(
+            let (field_memory_offset, field_size, field_alignment) = Self::get_struct_field_offset(
                 &anon_struct_type.field_name_sorted_fields,
                 *field_index,
             );
-            let mut field_ctx = base_context.with_offset(MemorySize(field_memory_offset.0));
-            self.gen_expression(expression, &mut field_ctx);
+            let field_ctx = base_context.with_offset(field_memory_offset, field_size);
+            self.gen_expression(expression, &field_ctx);
         }
     }
 
@@ -1052,7 +1053,9 @@ impl<'a> FunctionCodeGen<'a> {
     fn gen_option_expression(&mut self, maybe_option: Option<&Expression>, ctx: &Context) {
         if let Some(found_value) = maybe_option {
             self.state.builder.add_ld8(ctx.addr(), 1, "option Some tag"); // 1 signals `Some`
-            let mut one_offset_ctx = ctx.with_offset(MemorySize(1));
+            let (inner_size, inner_alignment) = type_size_and_alignment(&found_value.ty);
+            let mut one_offset_ctx = ctx.with_offset(inner_alignment.into(), inner_size);
+
             self.gen_expression(found_value, &mut one_offset_ctx); // Fills in more of the union
         } else {
             self.state.builder.add_ld8(ctx.addr(), 0, "option None tag"); // 0 signals `None`

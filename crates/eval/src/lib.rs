@@ -1103,6 +1103,8 @@ impl<'a, C> Interpreter<'a, C> {
             Literal::BoolLiteral(b) => Value::Bool(*b),
 
             Literal::EnumVariantLiteral(enum_type, enum_variant_type, data) => {
+                info!(?enum_variant_type, "enum variant");
+                info!(?data, "literal data");
                 let variant_container_value: Value = match enum_variant_type {
                     EnumVariantType::Tuple(tuple_type) => match data {
                         EnumLiteralData::Tuple(tuple_expressions) => {
@@ -1114,7 +1116,7 @@ impl<'a, C> Interpreter<'a, C> {
                                 value_refs,
                             )
                         }
-                        _ => panic!("wrong container type"),
+                        _ => panic!("wrong container type {data:?}"),
                     },
 
                     EnumVariantType::Struct(struct_type_ref) => match data {

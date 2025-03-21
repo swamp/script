@@ -53,6 +53,10 @@ impl FrameMemoryAddress {
     pub const fn add(&self, memory_size: MemorySize) -> Self {
         Self(self.0 + memory_size.0)
     }
+
+    pub const fn add_offset(&self, memory_offset: MemoryOffset) -> Self {
+        Self(self.0 + memory_offset.0)
+    }
     #[must_use]
     pub const fn as_size(&self) -> FrameMemorySize {
         FrameMemorySize(self.0)
@@ -125,6 +129,13 @@ impl Into<usize> for MemoryAlignment {
             Self::U32 => 4,
             Self::U64 => 8,
         }
+    }
+}
+
+impl Into<MemoryOffset> for MemoryAlignment {
+    fn into(self) -> MemoryOffset {
+        let octets: usize = self.into();
+        MemoryOffset(octets as u16)
     }
 }
 
