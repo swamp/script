@@ -340,6 +340,10 @@ pub fn disasm(
             to_read_frame(operands[0], DecoratedMemoryKind::S32, frame_memory_size),
             to_read_frame(operands[1], DecoratedMemoryKind::S32, frame_memory_size),
         ],
+        OpCode::GtI32 => &[
+            to_read_frame(operands[0], DecoratedMemoryKind::S32, frame_memory_size),
+            to_read_frame(operands[1], DecoratedMemoryKind::S32, frame_memory_size),
+        ],
         OpCode::Eq8Imm => {
             let data = operands[1];
 

@@ -22,6 +22,10 @@ impl InstructionBuilder {}
 
 impl InstructionBuilder {}
 
+impl InstructionBuilder {}
+
+impl InstructionBuilder {}
+
 impl Default for InstructionBuilder {
     fn default() -> Self {
         Self::new()
@@ -42,7 +46,7 @@ impl InstructionBuilder {
         InstructionPosition(self.instructions.len() as u16)
     }
 
-    pub fn add_conditional_jump_placeholder(&mut self, comment: &str) -> PatchPosition {
+    pub fn add_jmp_if_equal_placeholder(&mut self, comment: &str) -> PatchPosition {
         let position = self.position();
 
         self.add_instruction(OpCode::Bz, &[0], comment);
@@ -50,7 +54,7 @@ impl InstructionBuilder {
         PatchPosition(position)
     }
 
-    pub fn add_not_equal_jump_placeholder(&mut self, comment: &str) -> PatchPosition {
+    pub fn add_jmp_if_not_equal_placeholder(&mut self, comment: &str) -> PatchPosition {
         let position = self.position();
 
         self.add_instruction(OpCode::Bnz, &[0], comment);
@@ -247,6 +251,15 @@ impl InstructionBuilder {
         comment: &str,
     ) {
         self.add_instruction(OpCode::LtI32, &[lhs_offset.0, rhs_offset.0], comment);
+    }
+
+    pub fn add_gt_i32(
+        &mut self,
+        lhs_offset: FrameMemoryAddress,
+        rhs_offset: FrameMemoryAddress,
+        comment: &str,
+    ) {
+        self.add_instruction(OpCode::GtI32, &[lhs_offset.0, rhs_offset.0], comment);
     }
 
     pub fn add_lt_u16(

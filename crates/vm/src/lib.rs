@@ -158,6 +158,8 @@ impl Vm {
         vm.handlers[OpCode::LtI32 as usize] = HandlerType::Args2(Self::execute_lt_i32);
         vm.handlers[OpCode::Eq8Imm as usize] = HandlerType::Args2(Self::execute_eq_8_imm);
 
+        // Logical Operations
+
         // Conditional jumps
         vm.handlers[OpCode::Bnz as usize] = HandlerType::Args1(Self::execute_bnz);
         vm.handlers[OpCode::Bz as usize] = HandlerType::Args1(Self::execute_bz);

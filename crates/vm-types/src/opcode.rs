@@ -47,6 +47,7 @@ pub enum OpCode {
     MapRemove,
     Eq8Imm,
     Tst8,
+    GtI32,
 }
 
 impl Display for OpCode {
@@ -68,7 +69,8 @@ impl Display for OpCode {
             Self::Mov => write!(f, "mov"),       // Move data
 
             Self::LtU16 => write!(f, "lt16"), // Set Less Than Unsigned
-            Self::LtI32 => write!(f, "slt32"), // Set Less Than
+            Self::LtI32 => write!(f, "slt32"), // signed Less Than
+            Self::GtI32 => write!(f, "sgt32"), // Set Less Than
             Self::Eq8Imm => write!(f, "eq8"),
             Self::Tst8 => write!(f, "tst8"),
 

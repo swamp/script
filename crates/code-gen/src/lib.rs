@@ -15,7 +15,7 @@ use std::ops::Deref;
 use swamp_script_semantic::{
     AnonymousStructLiteral, ArgumentExpressionOrLocation, BinaryOperator, BinaryOperatorKind,
     BooleanExpression, CompoundOperatorKind, EnumLiteralData, Expression, ExpressionKind,
-    ForPattern, Function, FunctionScopeState, InternalFunctionDefinition,
+    ForPattern, Function, FunctionScopeState, Guard, InternalFunctionDefinition,
     InternalFunctionDefinitionRef, InternalFunctionId, InternalMainExpression, Iterable, Literal,
     LocationAccessKind, Match, MutOrImmutableExpression, NormalPattern, Pattern, Postfix,
     PostfixKind, SingleLocationExpression, SingleMutLocationExpression, StructInstantiation,
@@ -465,7 +465,7 @@ impl<'a> FunctionCodeGen<'a> {
             }
             ExpressionKind::Block(expressions) => self.gen_block(expressions, ctx),
             ExpressionKind::Match(match_expr) => self.gen_match(match_expr, ctx),
-            ExpressionKind::Guard(_) => todo!(),
+            ExpressionKind::Guard(guards) => self.gen_guard(guards, ctx),
             ExpressionKind::If(conditional, true_expr, false_expr) => {
                 self.gen_if(conditional, true_expr, false_expr.as_deref(), ctx);
             }
@@ -485,6 +485,7 @@ impl<'a> FunctionCodeGen<'a> {
     fn gen_binary_operator(&mut self, binary_operator: &BinaryOperator, ctx: &Context) {
         match (&binary_operator.left.ty, &binary_operator.right.ty) {
             (Type::Int, Type::Int) => self.gen_binary_operator_i32(binary_operator, ctx),
+            (Type::Bool, Type::Bool) => self.gen_binary_operator_bool(binary_operator),
             _ => todo!(),
         }
     }
@@ -517,9 +518,49 @@ impl<'a> FunctionCodeGen<'a> {
                     .add_lt_i32(left_source.addr(), right_source.addr(), "i32 lt");
             }
             BinaryOperatorKind::LessEqual => todo!(),
-            BinaryOperatorKind::GreaterThan => todo!(),
+            BinaryOperatorKind::GreaterThan => {
+                self.state
+                    .builder
+                    .add_gt_i32(left_source.addr(), right_source.addr(), "i32 gt");
+            }
             BinaryOperatorKind::GreaterEqual => todo!(),
             BinaryOperatorKind::RangeExclusive => todo!(),
+        }
+    }
+
+    fn gen_binary_operator_bool(&mut self, binary_operator: &BinaryOperator) {
+        match binary_operator.kind {
+            BinaryOperatorKind::LogicalOr => {
+                // this updates the z flag
+                self.gen_boolean_access(&binary_operator.left);
+
+                let jump_after_patch = self
+                    .state
+                    .builder
+                    .add_jmp_if_equal_placeholder("skip rhs `or` expression");
+
+                // this updates the z flag
+                self.gen_boolean_access(&binary_operator.right);
+
+                self.state.builder.patch_jump_here(jump_after_patch);
+            }
+            BinaryOperatorKind::LogicalAnd => {
+                // this updates the z flag
+                self.gen_boolean_access(&binary_operator.left);
+
+                let jump_after_patch = self
+                    .state
+                    .builder
+                    .add_jmp_if_not_equal_placeholder("skip rhs `and` expression");
+
+                // this updates the z flag
+                self.gen_boolean_access(&binary_operator.right);
+
+                self.state.builder.patch_jump_here(jump_after_patch);
+            }
+            _ => {
+                panic!("unknown operator")
+            }
         }
     }
 
@@ -534,13 +575,14 @@ impl<'a> FunctionCodeGen<'a> {
         let jump_on_false_condition = self
             .state
             .builder
-            .add_conditional_jump_placeholder("jump boolean condition false");
+            .add_jmp_if_equal_placeholder("jump boolean condition false");
 
         (condition_ctx, jump_on_false_condition)
     }
 
-    fn gen_boolean_expression(&mut self, condition: &BooleanExpression) {
-        let frame_memory_region = self.gen_expression_for_access(&condition.expression);
+    fn gen_boolean_access(&mut self, condition: &Expression) {
+        let _frame_memory_region = self.gen_expression_for_access(&condition);
+        /*
         // HACK:
         if frame_memory_region.size.0 == 1 {
             self.state.builder.add_tst8(
@@ -548,6 +590,12 @@ impl<'a> FunctionCodeGen<'a> {
                 "convert to boolean expression (update z flag)",
             );
         }
+
+         */
+    }
+
+    fn gen_boolean_expression(&mut self, condition: &BooleanExpression) {
+        self.gen_boolean_access(&condition.expression)
     }
 
     fn gen_if(
@@ -1595,7 +1643,7 @@ impl<'a> FunctionCodeGen<'a> {
                 Some(
                     self.state
                         .builder
-                        .add_not_equal_jump_placeholder("placeholder for enum match"),
+                        .add_jmp_if_not_equal_placeholder("placeholder for enum match"),
                 )
             } else {
                 None
@@ -1608,7 +1656,7 @@ impl<'a> FunctionCodeGen<'a> {
                 Some(
                     self.state
                         .builder
-                        .add_not_equal_jump_placeholder("placeholder for skip guard"),
+                        .add_jmp_if_not_equal_placeholder("placeholder for skip guard"),
                 )
             } else {
                 None
@@ -1627,6 +1675,31 @@ impl<'a> FunctionCodeGen<'a> {
             }
             if let Some(guard_skip) = maybe_guard_skip {
                 self.state.builder.patch_jump_here(guard_skip);
+            }
+        }
+
+        for placeholder in jump_to_exit_placeholders {
+            self.state.builder.patch_jump_here(placeholder);
+        }
+    }
+
+    fn gen_guard(&mut self, guards: &Vec<Guard>, ctx: &Context) {
+        let mut jump_to_exit_placeholders = Vec::new();
+        for guard in guards {
+            if let Some(condition) = &guard.condition {
+                self.gen_boolean_expression(condition); // update z flag
+                let skip_expression_patch = self
+                    .state
+                    .builder
+                    .add_jmp_if_not_equal_placeholder("guard condition");
+                self.gen_expression(&guard.result, ctx);
+                let jump_to_exit_placeholder =
+                    self.state.builder.add_jump_placeholder("jump to exit");
+                jump_to_exit_placeholders.push(jump_to_exit_placeholder);
+                self.state.builder.patch_jump_here(skip_expression_patch);
+            } else {
+                // _ -> wildcard
+                self.gen_expression(&guard.result, ctx);
             }
         }
 
