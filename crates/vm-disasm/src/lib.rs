@@ -379,6 +379,11 @@ pub fn disasm(
             to_read_frame(operands[1], DecoratedMemoryKind::Octets, frame_memory_size),
             DecoratedOperandKind::MemorySize(MemorySize(operands[2])),
         ],
+        OpCode::MovLp => &[
+            to_write_frame(operands[0], DecoratedMemoryKind::Octets, frame_memory_size),
+            to_read_frame(operands[1], DecoratedMemoryKind::Octets, frame_memory_size),
+            DecoratedOperandKind::MemorySize(MemorySize(operands[2])),
+        ],
         OpCode::Nop => &[],
 
         OpCode::VecPush => &[

@@ -14,22 +14,6 @@ pub struct InstructionBuilder {
 
 impl InstructionBuilder {}
 
-impl InstructionBuilder {}
-
-impl InstructionBuilder {}
-
-impl InstructionBuilder {}
-
-impl InstructionBuilder {}
-
-impl InstructionBuilder {}
-
-impl InstructionBuilder {}
-
-impl InstructionBuilder {}
-
-impl InstructionBuilder {}
-
 impl Default for InstructionBuilder {
     fn default() -> Self {
         Self::new()
@@ -102,6 +86,17 @@ impl InstructionBuilder {
         comment: &str,
     ) {
         self.add_instruction(OpCode::Mov, &[target.0, source.0, size.0], comment);
+    }
+
+    // for overlap moves
+    pub fn add_movlp(
+        &mut self,
+        target: FrameMemoryAddress,
+        source: FrameMemoryAddress,
+        size: MemorySize,
+        comment: &str,
+    ) {
+        self.add_instruction(OpCode::MovLp, &[target.0, source.0, size.0], comment);
     }
 
     pub fn add_ret(&mut self, comment: &str) {

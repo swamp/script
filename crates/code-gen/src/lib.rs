@@ -19,7 +19,7 @@ use swamp_script_semantic::{
     InternalFunctionDefinitionRef, InternalFunctionId, InternalMainExpression, Iterable, Literal,
     LocationAccessKind, Match, MutOrImmutableExpression, NormalPattern, Pattern, Postfix,
     PostfixKind, SingleLocationExpression, SingleMutLocationExpression, StructInstantiation,
-    UnaryOperator, UnaryOperatorKind, VariableRef,
+    UnaryOperator, UnaryOperatorKind, VariableRef, WhenBinding,
 };
 use swamp_script_types::{AnonymousStructType, EnumVariantType, Signature, StructTypeField, Type};
 
@@ -469,7 +469,9 @@ impl<'a> FunctionCodeGen<'a> {
             ExpressionKind::If(conditional, true_expr, false_expr) => {
                 self.gen_if(conditional, true_expr, false_expr.as_deref(), ctx);
             }
-            ExpressionKind::When(_, _, _) => todo!(),
+            ExpressionKind::When(bindings, true_expr, false_expr) => {
+                self.gen_when(bindings, true_expr, false_expr.as_deref(), ctx)
+            }
             ExpressionKind::TupleDestructuring(_, _, _) => todo!(),
             ExpressionKind::Assignment(_, _) => todo!(),
             ExpressionKind::CompoundAssignment(target_location, operator_kind, source_expr) => {
@@ -1311,16 +1313,22 @@ impl<'a> FunctionCodeGen<'a> {
         }
     }
 
-    fn gen_variable_access(&mut self, variable: &VariableRef, ctx: &Context) {
+    fn get_variable_region(&self, variable: &VariableRef) -> (FrameMemoryRegion, MemoryAlignment) {
         let frame_address = self
             .variable_offsets
             .get(&variable.unique_id_within_function)
             .unwrap();
-        let (size, _align) = type_size_and_alignment(&variable.resolved_type);
+        let (_size, align) = type_size_and_alignment(&variable.resolved_type);
+
+        (*frame_address, align)
+    }
+
+    fn gen_variable_access(&mut self, variable: &VariableRef, ctx: &Context) {
+        let (region, alignment) = self.get_variable_region(variable);
         self.state.builder.add_mov(
             ctx.addr(),
-            frame_address.addr,
-            size,
+            region.addr,
+            region.size,
             &format!(
                 "variable access '{}' ({})",
                 variable.assigned_name,
@@ -1759,6 +1767,82 @@ impl<'a> FunctionCodeGen<'a> {
 
         for placeholder in jump_to_exit_placeholders {
             self.state.builder.patch_jump_here(placeholder);
+        }
+    }
+
+    fn gen_when(
+        &mut self,
+        bindings: &Vec<WhenBinding>,
+        true_expr: &Expression,
+        maybe_false_expr: Option<&Expression>,
+        ctx: &Context,
+    ) {
+        let mut all_false_jumps = Vec::new();
+
+        for binding in bindings {
+            let (variable_region, _alignment) = self.get_variable_region(&binding.variable);
+
+            let old_variable_region = self.gen_for_access_or_location(&binding.expr);
+
+            self.state
+                .builder
+                .add_tst8(old_variable_region.addr, "check binding");
+            let patch = self
+                .state
+                .builder
+                .add_jmp_if_not_equal_placeholder("jump if none");
+            all_false_jumps.push(patch);
+        }
+
+        // if we are here all bindings are `Some`
+        for binding in bindings {
+            let (variable_region, alignment) = self.get_variable_region(&binding.variable);
+
+            if binding.has_expression() {
+                let var_ctx = Context::new(variable_region);
+                self.gen_mut_or_immute(&binding.expr, &var_ctx);
+            } else {
+                let ArgumentExpressionOrLocation::Expression(variable_access_expression) =
+                    &binding.expr.expression_or_location
+                else {
+                    panic!("must be expression");
+                };
+                let old_variable_region =
+                    self.gen_expression_for_access(variable_access_expression);
+                let alignment_offset: MemoryOffset = alignment.into();
+                let some_value_region = FrameMemoryRegion::new(
+                    old_variable_region.addr.advance(alignment_offset),
+                    MemorySize(variable_region.size.0),
+                );
+                self.state.builder.add_movlp(
+                    variable_region.addr,
+                    some_value_region.addr,
+                    some_value_region.size,
+                    "move from Some to value",
+                );
+            }
+        }
+
+        self.gen_expression(true_expr, ctx);
+        let maybe_jump_over_false = if let Some(_else_expr) = maybe_false_expr {
+            Some(
+                self.state
+                    .builder
+                    .add_jump_placeholder("jump over false section"),
+            )
+        } else {
+            None
+        };
+
+        for false_jump_patch in all_false_jumps {
+            self.state.builder.patch_jump_here(false_jump_patch);
+        }
+
+        if let Some(else_expr) = maybe_false_expr {
+            self.gen_expression(else_expr, ctx);
+            self.state
+                .builder
+                .patch_jump_here(maybe_jump_over_false.unwrap());
         }
     }
 }

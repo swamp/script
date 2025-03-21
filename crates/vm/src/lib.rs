@@ -148,6 +148,7 @@ impl Vm {
 
         // Copy data in frame memory
         vm.handlers[OpCode::Mov as usize] = HandlerType::Args3(Self::execute_mov);
+        vm.handlers[OpCode::MovLp as usize] = HandlerType::Args3(Self::execute_mov_lp);
 
         // Comparisons
         vm.handlers[OpCode::LtI32 as usize] = HandlerType::Args2(Self::execute_lt_i32);
@@ -431,6 +432,16 @@ impl Vm {
 
         unsafe {
             std::ptr::copy_nonoverlapping(src_ptr, dst_ptr, size as usize);
+        }
+    }
+
+    #[inline]
+    fn execute_mov_lp(&mut self, dst_offset: u16, src_offset: u16, size: u16) {
+        let src_ptr = self.ptr_at_u16(self.frame_offset + src_offset as usize);
+        let dst_ptr = self.ptr_at_u16(self.frame_offset + dst_offset as usize);
+
+        unsafe {
+            std::ptr::copy(src_ptr, dst_ptr, size as usize);
         }
     }
 

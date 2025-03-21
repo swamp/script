@@ -617,6 +617,18 @@ pub struct WhenBinding {
     pub expr: MutOrImmutableExpression,
 }
 
+impl WhenBinding {
+    #[must_use]
+    pub const fn has_expression(&self) -> bool {
+        match &self.expr.expression_or_location {
+            ArgumentExpressionOrLocation::Expression(expr) => {
+                !matches!(expr.kind, ExpressionKind::VariableAccess(_))
+            }
+            ArgumentExpressionOrLocation::Location(_) => true,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum ExpressionKind {
     // Access Lookup values

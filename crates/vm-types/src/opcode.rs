@@ -23,6 +23,7 @@ pub enum OpCode {
 
     // Frame copy
     Mov,
+    MovLp,
 
     // Load immediate into frame
     Ld8,
@@ -64,7 +65,8 @@ impl Display for OpCode {
             Self::Ld32 => write!(f, "ld32"),
 
             // Move data
-            Self::Mov => write!(f, "mov"), // Move data
+            Self::Mov => write!(f, "mov"),     // Move data
+            Self::MovLp => write!(f, "movlp"), // Move data
 
             Self::AddI32 => write!(f, "sadd32"), // Signed Add
             Self::NegI32 => write!(f, "sneg32"), // Signed negate
