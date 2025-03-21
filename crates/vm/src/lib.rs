@@ -156,7 +156,10 @@ impl Vm {
 
         // Comparisons
         vm.handlers[OpCode::LtI32 as usize] = HandlerType::Args2(Self::execute_lt_i32);
+        vm.handlers[OpCode::GtI32 as usize] = HandlerType::Args2(Self::execute_gt_i32);
+
         vm.handlers[OpCode::Eq8Imm as usize] = HandlerType::Args2(Self::execute_eq_8_imm);
+        vm.handlers[OpCode::Tst8 as usize] = HandlerType::Args1(Self::execute_tst8);
 
         // Logical Operations
 
@@ -338,9 +341,27 @@ impl Vm {
     }
 
     #[inline]
+    fn execute_gt_i32(&mut self, lhs_offset: u16, rhs_offset: u16) {
+        let lhs_ptr = self.frame_ptr_i32_const_at(lhs_offset);
+        let rhs_ptr = self.frame_ptr_i32_const_at(rhs_offset);
+
+        unsafe {
+            let lhs = *lhs_ptr;
+            let rhs = *rhs_ptr;
+            self.flags.z = lhs > rhs;
+        }
+    }
+
+    #[inline]
     fn execute_eq_8_imm(&mut self, lhs_offset: u16, rhs_u8_in_u16: u16) {
         let lhs_u8 = self.frame_u8_at(lhs_offset);
         self.flags.z = lhs_u8 < rhs_u8_in_u16 as u8;
+    }
+
+    #[inline]
+    fn execute_tst8(&mut self, lhs_offset: u16) {
+        let lhs_u8 = self.frame_u8_at(lhs_offset);
+        self.flags.z = lhs_u8 == 1;
     }
 
     #[inline]

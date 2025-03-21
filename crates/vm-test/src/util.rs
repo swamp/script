@@ -92,7 +92,7 @@ fn trim_lines(text: &str) -> String {
     text.lines()
         .map(|line| {
             // Ignore comments that starts with ;
-            line.split(";").next().unwrap_or("").trim_end()
+            line.split(';').next().unwrap_or("").trim()
         })
         .filter(|line| !line.is_empty())
         .collect::<Vec<_>>()

@@ -27,11 +27,13 @@ result = match a {
 > 0002: eq8 $0000 01 ; match Another (index 1)
 > 0003: bnz @6
 > 0004: ld32 $0004 00000002 ; result = 2
-> 0005: jmp @9 ; exit
+> 0005: jmp @B ; exit
 > 0006: eq8 $0000 02 ; match Third (index 2)
-> 0007: bnz @9 ; exit
-> 0008: ld32 $0004 00000003 ; r
-> 0009: hlt 
+> 0007: bnz @A ; exit
+> 0008: ld32 $0004 00000003
+> 0009: jmp @B
+> 000A: ld32 $0004 00000000
+> 000B: hlt 
 
 ",
         "

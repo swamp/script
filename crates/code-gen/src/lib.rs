@@ -575,7 +575,7 @@ impl<'a> FunctionCodeGen<'a> {
         let jump_on_false_condition = self
             .state
             .builder
-            .add_jmp_if_equal_placeholder("jump boolean condition false");
+            .add_jmp_if_not_equal_placeholder("jump boolean condition false");
 
         (condition_ctx, jump_on_false_condition)
     }
