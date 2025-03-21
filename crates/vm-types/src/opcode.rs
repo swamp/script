@@ -45,6 +45,8 @@ pub enum OpCode {
     // Collection intrinsics
     MapNewFromPairs,
     MapRemove,
+    Eq8Imm,
+    Tst8,
 }
 
 impl Display for OpCode {
@@ -67,6 +69,8 @@ impl Display for OpCode {
 
             Self::LtU16 => write!(f, "lt16"), // Set Less Than Unsigned
             Self::LtI32 => write!(f, "slt32"), // Set Less Than
+            Self::Eq8Imm => write!(f, "eq8"),
+            Self::Tst8 => write!(f, "tst8"),
 
             Self::Ldx => write!(f, "ldx"),     // Load Indexed/Indirect
             Self::Stx => write!(f, "stx"),     // Store Indexed/Indirect

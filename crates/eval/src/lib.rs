@@ -295,7 +295,7 @@ impl<'a, C> Interpreter<'a, C> {
 
     #[inline]
     fn pop_function_scope(&mut self) {
-        assert_ne!(self.function_scope_stack.len(), 1, "you popped too far");
+        debug_assert_ne!(self.function_scope_stack.len(), 1, "you popped too far");
         let last_one = self.function_scope_stack.pop().expect("pop function scope");
         self.current_block_scopes = last_one.saved_block_scope;
     }
@@ -1090,6 +1090,7 @@ impl<'a, C> Interpreter<'a, C> {
         };
 
         self.depth -= 1;
+
         //self.debug_expr(expr);
         //eprintln!("{value:?} resulted in value");
         Ok(value)
@@ -1103,8 +1104,6 @@ impl<'a, C> Interpreter<'a, C> {
             Literal::BoolLiteral(b) => Value::Bool(*b),
 
             Literal::EnumVariantLiteral(enum_type, enum_variant_type, data) => {
-                info!(?enum_variant_type, "enum variant");
-                info!(?data, "literal data");
                 let variant_container_value: Value = match enum_variant_type {
                     EnumVariantType::Tuple(tuple_type) => match data {
                         EnumLiteralData::Tuple(tuple_expressions) => {
@@ -1795,7 +1794,15 @@ impl<'a, C> Interpreter<'a, C> {
                         (struct_ref.clone(), fields_ref.clone())
                     };
 
-                    assert!(same_anon_struct_ref(
+                    if !same_anon_struct_ref(&encountered_struct_type, expected_struct_type) {
+                        error!(
+                            ?expected_struct_type,
+                            ?encountered_struct_type,
+                            "difference"
+                        );
+                    }
+
+                    debug_assert!(same_anon_struct_ref(
                         &encountered_struct_type,
                         expected_struct_type
                     ));
@@ -1871,7 +1878,7 @@ impl<'a, C> Interpreter<'a, C> {
 
         let parameters = &resolved_fn.signature().parameters;
         // Check total number of parameters (including self)
-        assert_eq!(
+        debug_assert_eq!(
             arguments.len(),
             parameters.len(),
             "wrong number of arguments"
@@ -2070,7 +2077,7 @@ impl<'a, C> Interpreter<'a, C> {
         }
 
         if let Value::Tuple(_tuple_type_ref, values) = value_ref.borrow_mut().clone() {
-            assert_eq!(
+            debug_assert_eq!(
                 elements.len(),
                 values.len(),
                 "must use all elements in tuple"
@@ -2117,7 +2124,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
 
                 if let Some(elements) = maybe_elements {
-                    assert_eq!(elements.len(), values.len());
+                    debug_assert_eq!(elements.len(), values.len());
                     self.push_block_scope();
 
                     for (element, value) in elements.iter().zip(values.iter()) {

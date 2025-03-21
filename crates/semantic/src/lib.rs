@@ -378,10 +378,23 @@ pub struct BooleanExpression {
     pub expression: Box<Expression>,
 }
 
+// TODO: Maybe have different Match types, one specific for enums and one for other values
 #[derive(Debug, Clone)]
 pub struct Match {
     pub arms: Vec<MatchArm>,
     pub expression: Box<MutOrImmutableExpression>,
+}
+
+impl Match {
+    #[must_use]
+    pub fn contains_wildcard(&self) -> bool {
+        for arm in &self.arms {
+            if let Pattern::Wildcard(_) = arm.pattern {
+                return true;
+            }
+        }
+        false
+    }
 }
 
 #[derive(Debug, Clone)]

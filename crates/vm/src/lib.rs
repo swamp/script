@@ -23,6 +23,10 @@ enum HandlerType {
     Args5(Handler5),
 }
 
+pub struct Flags {
+    z: bool,
+}
+
 pub struct Vm {
     // Memory
     memory: *mut u8,
@@ -50,6 +54,8 @@ pub struct Vm {
 
     // TODO: Error state
     debug_call_depth: usize,
+
+    pub flags: Flags,
 }
 
 impl Vm {
@@ -129,6 +135,7 @@ impl Vm {
             host_functions: vec![],
             handlers: [const { HandlerType::Args0(Self::execute_unimplemented) }; 256],
             debug_call_depth: 0,
+            flags: Flags { z: false },
         };
 
         // Load immediate
@@ -148,11 +155,12 @@ impl Vm {
         vm.handlers[OpCode::Mov as usize] = HandlerType::Args3(Self::execute_mov);
 
         // Comparisons
-        vm.handlers[OpCode::LtI32 as usize] = HandlerType::Args3(Self::execute_lt_i32);
+        vm.handlers[OpCode::LtI32 as usize] = HandlerType::Args2(Self::execute_lt_i32);
+        vm.handlers[OpCode::Eq8Imm as usize] = HandlerType::Args2(Self::execute_eq_8_imm);
 
         // Conditional jumps
-        vm.handlers[OpCode::Bnz as usize] = HandlerType::Args2(Self::execute_bnz);
-        vm.handlers[OpCode::Bz as usize] = HandlerType::Args2(Self::execute_bz);
+        vm.handlers[OpCode::Bnz as usize] = HandlerType::Args1(Self::execute_bnz);
+        vm.handlers[OpCode::Bz as usize] = HandlerType::Args1(Self::execute_bz);
 
         // Unconditional jump
         vm.handlers[OpCode::Jmp as usize] = HandlerType::Args1(Self::execute_jmp);
@@ -316,30 +324,33 @@ impl Vm {
     }
 
     #[inline]
-    fn execute_lt_i32(&mut self, dst_offset: u16, lhs_offset: u16, rhs_offset: u16) {
+    fn execute_lt_i32(&mut self, lhs_offset: u16, rhs_offset: u16) {
         let lhs_ptr = self.frame_ptr_i32_const_at(lhs_offset);
         let rhs_ptr = self.frame_ptr_i32_const_at(rhs_offset);
-        let dst_ptr = self.frame_ptr_bool_at(dst_offset);
 
         unsafe {
             let lhs = *lhs_ptr;
             let rhs = *rhs_ptr;
-            *dst_ptr = (lhs < rhs) as u8;
+            self.flags.z = lhs < rhs;
         }
     }
 
     #[inline]
-    fn execute_bnz(&mut self, condition_offset: u16, absolute_ip: u16) {
-        let is_true = self.frame_ptr_bool_const_at(condition_offset);
-        if is_true {
+    fn execute_eq_8_imm(&mut self, lhs_offset: u16, rhs_u8_in_u16: u16) {
+        let lhs_u8 = self.frame_u8_at(lhs_offset);
+        self.flags.z = lhs_u8 < rhs_u8_in_u16 as u8;
+    }
+
+    #[inline]
+    fn execute_bnz(&mut self, absolute_ip: u16) {
+        if !self.flags.z {
             self.ip = absolute_ip as usize;
         }
     }
 
     #[inline]
-    fn execute_bz(&mut self, condition_offset: u16, absolute_ip: u16) {
-        let is_true = self.frame_ptr_bool_const_at(condition_offset);
-        if !is_true {
+    fn execute_bz(&mut self, absolute_ip: u16) {
+        if self.flags.z {
             self.ip = absolute_ip as usize;
         }
     }
@@ -421,6 +432,11 @@ impl Vm {
     fn frame_ptr_i32_const_at(&self, offset: u16) -> *const i32 {
         self.ptr_at_i32(self.frame_offset + offset as usize)
             .cast_const()
+    }
+
+    #[inline(always)]
+    fn frame_u8_at(&self, offset: u16) -> u8 {
+        unsafe { *self.ptr_at_u8(self.frame_offset + offset as usize) }
     }
 
     #[inline(always)]

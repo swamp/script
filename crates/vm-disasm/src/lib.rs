@@ -337,18 +337,25 @@ pub fn disasm(
             to_read_frame(operands[2], DecoratedMemoryKind::S32, frame_memory_size),
         ],
         OpCode::LtI32 => &[
-            to_write_frame(operands[0], DecoratedMemoryKind::B8, frame_memory_size),
+            to_read_frame(operands[0], DecoratedMemoryKind::S32, frame_memory_size),
             to_read_frame(operands[1], DecoratedMemoryKind::S32, frame_memory_size),
-            to_read_frame(operands[2], DecoratedMemoryKind::S32, frame_memory_size),
         ],
-        OpCode::Bnz => &[
-            to_read_frame(operands[0], DecoratedMemoryKind::B8, frame_memory_size),
-            to_jmp_ip(operands[1]),
-        ],
-        OpCode::Bz => &[
-            to_read_frame(operands[0], DecoratedMemoryKind::B8, frame_memory_size),
-            to_jmp_ip(operands[1]),
-        ],
+        OpCode::Eq8Imm => {
+            let data = operands[1];
+
+            &[
+                to_read_frame(operands[0], DecoratedMemoryKind::S32, frame_memory_size),
+                DecoratedOperandKind::ImmediateU8(data),
+            ]
+        }
+        OpCode::Tst8 => &[to_read_frame(
+            operands[0],
+            DecoratedMemoryKind::S32,
+            frame_memory_size,
+        )],
+
+        OpCode::Bnz => &[to_jmp_ip(operands[0])],
+        OpCode::Bz => &[to_jmp_ip(operands[0])],
         OpCode::Call => &[to_jmp_ip(operands[0])],
         OpCode::Enter => &[DecoratedOperandKind::MemorySize(MemorySize(operands[0]))],
         OpCode::Jmp => &[to_jmp_ip(operands[0])],

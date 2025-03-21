@@ -18,6 +18,10 @@ impl InstructionBuilder {}
 
 impl InstructionBuilder {}
 
+impl InstructionBuilder {}
+
+impl InstructionBuilder {}
+
 impl Default for InstructionBuilder {
     fn default() -> Self {
         Self::new()
@@ -38,16 +42,29 @@ impl InstructionBuilder {
         InstructionPosition(self.instructions.len() as u16)
     }
 
-    pub fn add_conditional_jump_placeholder(
-        &mut self,
-        condition_addr: FrameMemoryAddress,
-        comment: &str,
-    ) -> PatchPosition {
+    pub fn add_conditional_jump_placeholder(&mut self, comment: &str) -> PatchPosition {
         let position = self.position();
 
-        self.add_instruction(OpCode::Bz, &[condition_addr.0, 0], comment);
+        self.add_instruction(OpCode::Bz, &[0], comment);
 
         PatchPosition(position)
+    }
+
+    pub fn add_not_equal_jump_placeholder(&mut self, comment: &str) -> PatchPosition {
+        let position = self.position();
+
+        self.add_instruction(OpCode::Bnz, &[0], comment);
+
+        PatchPosition(position)
+    }
+
+    pub fn add_eq_u8_immediate(
+        &mut self,
+        source_addr: FrameMemoryAddress,
+        immediate: u8,
+        comment: &str,
+    ) {
+        self.add_instruction(OpCode::Eq8Imm, &[source_addr.0, immediate as u16], comment);
     }
 
     pub fn add_call_placeholder(&mut self, comment: &str) -> PatchPosition {
@@ -103,18 +120,19 @@ impl InstructionBuilder {
         target_position: &InstructionPosition,
     ) {
         const JMP_IF_NOT: u8 = OpCode::Bz as u8;
+        const JMP_IF: u8 = OpCode::Bnz as u8;
         const JMP: u8 = OpCode::Jmp as u8;
 
         let instruction = &mut self.instructions[patch_position.0.0 as usize];
 
         match instruction.opcode {
             JMP_IF_NOT => {
-                // For conditional jump, target ip addr is the second operand
-                instruction.operands[1] = target_position.0 as u16 - 1;
+                instruction.operands[0] = target_position.0 as u16 - 1;
+            }
+            JMP_IF => {
+                instruction.operands[0] = target_position.0 as u16 - 1;
             }
             JMP => {
-                // For conditional jump, target ip addr is the first operand
-                // TODO: maybe have them both at the first operand?
                 instruction.operands[0] = target_position.0 as u16 - 1;
             }
             _ => panic!("Attempted to patch a non-jump instruction at position {patch_position:?}"),
@@ -224,16 +242,11 @@ impl InstructionBuilder {
 
     pub fn add_lt_i32(
         &mut self,
-        dst_offset: FrameMemoryAddress,
         lhs_offset: FrameMemoryAddress,
         rhs_offset: FrameMemoryAddress,
         comment: &str,
     ) {
-        self.add_instruction(
-            OpCode::LtI32,
-            &[dst_offset.0, lhs_offset.0, rhs_offset.0],
-            comment,
-        );
+        self.add_instruction(OpCode::LtI32, &[lhs_offset.0, rhs_offset.0], comment);
     }
 
     pub fn add_lt_u16(
@@ -244,6 +257,10 @@ impl InstructionBuilder {
         comment: &str,
     ) {
         self.add_instruction(OpCode::LtU16, &[dest.0, a.0, b.0], comment);
+    }
+
+    pub fn add_tst8(&mut self, addr: FrameMemoryAddress, comment: &str) {
+        self.add_instruction(OpCode::Tst8, &[addr.0], comment);
     }
 
     // Collection specific
