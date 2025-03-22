@@ -504,12 +504,10 @@ pub struct Range {
 #[derive(Debug, Clone)]
 pub enum PostfixKind {
     StructField(AnonymousStructType, usize),
-    //    ExternalTypeIndexRef(ExternalTypeRef, Expression),
     MemberCall(FunctionRef, Vec<ArgumentExpressionOrLocation>),
     FunctionCall(Vec<ArgumentExpressionOrLocation>),
     OptionUnwrap, // ? operator
     NoneCoalesce(Expression),
-    //IntrinsicCallEx(IntrinsicFunction, Vec<ArgumentExpressionOrLocation>),
     IntrinsicCall(IntrinsicFunction, Vec<Expression>),
 }
 
@@ -648,7 +646,6 @@ pub enum ExpressionKind {
 
     // Conversion
     // the `?` operator. unwraps the value, unless it is none
-    //NoneCoalesceOperator(Box<Expression>, Box<Expression>),
     CoerceOptionToBool(Box<Expression>),
 
     // Calls
@@ -695,14 +692,18 @@ pub enum ExpressionKind {
     // --------------------------------------------------------------------
     // Built In members
     // --------------------------------------------------------------------
+    IntrinsicCallEx(IntrinsicFunction, Vec<ArgumentExpressionOrLocation>),
+    /*
+    //NoneCoalesceOperator(Box<Expression>, Box<Expression>),
+
     IntrinsicCallMut(
         IntrinsicFunction,
         SingleMutLocationExpression,
         Vec<Expression>,
     ),
 
+     */
     //IntrinsicCall(IntrinsicFunction, Vec<Expression>),
-    IntrinsicCallEx(IntrinsicFunction, Vec<ArgumentExpressionOrLocation>),
 }
 
 #[derive(Debug, Clone)]

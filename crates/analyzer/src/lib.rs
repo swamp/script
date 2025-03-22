@@ -665,7 +665,7 @@ impl<'a> Analyzer<'a> {
                 guard_expr,
                 statements,
             ) => {
-                let analyzed_guard = if let Some(found_guard) = guard_expr {
+                let _analyzed_guard = if let Some(found_guard) = guard_expr {
                     Some(self.analyze_bool_argument_expression(found_guard)?)
                 } else {
                     None
@@ -958,11 +958,11 @@ impl<'a> Analyzer<'a> {
         if let ExpressionKind::IntrinsicFunctionAccess(some_access) = &start.kind {
             assert_eq!(chain.postfixes.len(), 1);
             let call_postifx = &chain.postfixes[0];
-            if let swamp_script_ast::Postfix::FunctionCall(member, arguments) = &call_postifx {
+            if let swamp_script_ast::Postfix::FunctionCall(_member, arguments) = &call_postifx {
                 let resolved_arguments = self.analyze_and_verify_parameters(
                     &start.node,
                     &some_access.signature.parameters,
-                    &arguments,
+                    arguments,
                 )?;
 
                 return Ok(self.create_expr(
@@ -1019,7 +1019,7 @@ impl<'a> Analyzer<'a> {
                     } else {
                         let member_name_str = self.get_text(member_name).to_string();
 
-                        if let Some(found_member) = self
+                        if let Some(_found_member) = self
                             .shared
                             .state
                             .associated_impls
@@ -1372,13 +1372,11 @@ impl<'a> Analyzer<'a> {
         &self,
         var_node: &swamp_script_ast::Node,
     ) -> Result<Expression, Error> {
-        let text = self.get_text(var_node);
-
-        if let Some(found_variable) = self.try_find_variable(&var_node) {
+        if let Some(found_variable) = self.try_find_variable(var_node) {
             return Ok(self.create_expr(
                 ExpressionKind::VariableAccess(found_variable.clone()),
                 found_variable.resolved_type.clone(),
-                &var_node,
+                var_node,
             ));
         }
         Err(self.create_err(ErrorKind::UnknownIdentifier, var_node))
@@ -1386,7 +1384,7 @@ impl<'a> Analyzer<'a> {
 
     fn analyze_slice_type_helper(
         &mut self,
-        node: &swamp_script_ast::Node,
+        _node: &swamp_script_ast::Node,
         items: &[swamp_script_ast::Expression],
     ) -> Result<(Type, Vec<Expression>), Error> {
         let expressions = self.analyze_argument_expressions(None, items)?;
@@ -1770,7 +1768,6 @@ impl<'a> Analyzer<'a> {
             };
 
             let ty = mut_expr.ty();
-            let debug_text = self.get_text(&variable_binding.variable.name).to_string();
 
             if let Type::Optional(found_ty) = ty {
                 let variable_ref = self.create_variable(&variable_binding.variable, found_ty)?;
@@ -2015,7 +2012,7 @@ impl<'a> Analyzer<'a> {
                             ExpressionKind::Block(expressions) => {
                                 assert_eq!(expressions.len(), 1);
                                 let first_kind = &expressions[0].kind;
-                                if let ExpressionKind::IntrinsicCallEx(intrinsic_fn, args) =
+                                if let ExpressionKind::IntrinsicCallEx(intrinsic_fn, _args) =
                                     first_kind
                                 {
                                     intrinsic_fn.clone()

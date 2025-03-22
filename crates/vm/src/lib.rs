@@ -1,7 +1,8 @@
 use crate::host::{HostArgs, HostFunctionCallback};
 use seq_map::SeqMap;
-use swamp_vm_types::BinaryInstruction;
+use std::alloc;
 use swamp_vm_types::opcode::OpCode;
+use swamp_vm_types::{BinaryInstruction, InstructionPosition};
 
 pub mod host;
 mod map;
@@ -30,15 +31,20 @@ pub struct Flags {
 
 pub struct Vm {
     // Memory
-    memory: *mut u8,
-    memory_size: usize,
+    stack_memory: *mut u8,
+    stack_memory_size: usize,
+
+    constant_memory: *mut u8,
+    constant_memory_size: usize,
+
+    heap_memory: *mut u8,
+    heap_memory_size: usize,
 
     // Memory regions (offsets)
-    alloc_offset: usize,      // Current allocation point
-    stack_base_offset: usize, // Base of stack
-    stack_offset: usize,      // Current stack position
-    constants_offset: usize,  // Start of constants region
-    frame_offset: usize,      // Current frame position
+    alloc_offset: usize,          // Current allocation point
+    stack_offset: usize,          // Current stack position
+    frame_offset: usize,          // Current frame position
+    constant_alloc_offset: usize, // Constants
 
     // Execution state
     ip: usize,                            // Instruction pointer
@@ -60,6 +66,10 @@ pub struct Vm {
     last_frame_size: u16,
 }
 
+impl Vm {}
+
+impl Vm {}
+
 impl Vm {
     #[must_use]
     pub fn instructions(&self) -> &[BinaryInstruction] {
@@ -69,9 +79,9 @@ impl Vm {
 
 impl Vm {
     pub fn reset(&mut self) {
-        self.stack_offset = self.stack_base_offset;
-        self.ip = 0;
+        self.stack_offset = 0;
         self.frame_offset = self.stack_offset;
+        self.ip = 0;
         self.execution_complete = false;
         self.call_stack.clear();
     }
@@ -81,26 +91,28 @@ impl Drop for Vm {
     fn drop(&mut self) {
         unsafe {
             // Free the memory that was allocated in new()
-            let layout = std::alloc::Layout::from_size_align(self.memory_size, ALIGNMENT).unwrap();
-            std::alloc::dealloc(self.memory, layout);
+            let layout = alloc::Layout::from_size_align(self.stack_memory_size, ALIGNMENT).unwrap();
+            alloc::dealloc(self.stack_memory, layout);
+            let layout = alloc::Layout::from_size_align(self.heap_memory_size, ALIGNMENT).unwrap();
+            alloc::dealloc(self.heap_memory, layout);
+            let layout =
+                alloc::Layout::from_size_align(self.constant_memory_size, ALIGNMENT).unwrap();
+            alloc::dealloc(self.constant_memory, layout);
         }
     }
 }
 
 impl Vm {
     pub fn memory(&self) -> &[u8] {
-        unsafe { std::slice::from_raw_parts(self.memory, self.memory_size) }
+        unsafe { std::slice::from_raw_parts(self.stack_memory, self.stack_memory_size) }
     }
 
     pub fn stack_memory(&self) -> &[u8] {
-        unsafe { std::slice::from_raw_parts(self.stack_ptr(), self.memory_size) }
+        unsafe { std::slice::from_raw_parts(self.stack_ptr(), self.stack_memory_size) }
     }
 
-    pub fn stack_base_memory(&self) -> &[u8] {
-        unsafe { std::slice::from_raw_parts(self.stack_base_ptr(), self.memory_size) }
-    }
     pub fn frame_memory(&self) -> &[u8] {
-        unsafe { std::slice::from_raw_parts(self.frame_ptr(), self.memory_size) }
+        unsafe { std::slice::from_raw_parts(self.frame_ptr(), self.stack_memory_size) }
     }
 }
 
@@ -108,28 +120,39 @@ const ALIGNMENT: usize = 8;
 const ALIGNMENT_REST: usize = ALIGNMENT - 1;
 const ALIGNMENT_MASK: usize = !ALIGNMENT_REST;
 
+pub struct VmSetup {
+    pub frame_memory_size: usize,
+    pub heap_memory_size: usize,
+    pub constant_memory_size: usize,
+}
+
 impl Vm {
-    pub fn new(instructions: Vec<BinaryInstruction>, constants: &[u8], memory_size: usize) -> Self {
-        let memory = unsafe {
-            std::alloc::alloc(std::alloc::Layout::from_size_align(memory_size, ALIGNMENT).unwrap())
+    pub fn new(instructions: Vec<BinaryInstruction>, setup: VmSetup) -> Self {
+        let frame_memory = unsafe {
+            alloc::alloc(
+                alloc::Layout::from_size_align(setup.frame_memory_size, ALIGNMENT).unwrap(),
+            )
+        };
+        let heap_memory = unsafe {
+            alloc::alloc(alloc::Layout::from_size_align(setup.heap_memory_size, ALIGNMENT).unwrap())
+        };
+        let constant_memory = unsafe {
+            alloc::alloc(
+                alloc::Layout::from_size_align(setup.constant_memory_size, ALIGNMENT).unwrap(),
+            )
         };
 
-        // Reserve 20% for constants at the end
-        let constants_size = (memory_size / 5) & ALIGNMENT_MASK;
-        let constants_offset = memory_size - constants_size;
-
-        // Reserve 30% for stack in the middle
-        let stack_size = (memory_size * 3 / 10) & ALIGNMENT_MASK;
-        let stack_base_offset = (constants_offset - stack_size) & ALIGNMENT_MASK;
-
         let mut vm = Self {
-            memory,               // Raw memory pointer
-            memory_size,          // Total memory size
-            alloc_offset: 0x00cd, // Heap starts at beginning. // TODO: Should be 0, other values are for debugging
-            stack_base_offset,
-            stack_offset: stack_base_offset,
-            constants_offset,                // Constants at the end
-            frame_offset: stack_base_offset, // Frame starts at stack base
+            stack_memory: frame_memory,                 // Raw memory pointer
+            stack_memory_size: setup.frame_memory_size, // Total memory size
+            constant_memory: constant_memory,
+            constant_memory_size: setup.constant_memory_size,
+            heap_memory: heap_memory,
+            heap_memory_size: setup.heap_memory_size,
+            alloc_offset: 0x00cd, // TODO: Should be 0, other values are for debugging
+            stack_offset: 0,
+            constant_alloc_offset: 0,
+            frame_offset: 0,
             ip: 0,
             instructions,
             execution_complete: false,
@@ -206,16 +229,9 @@ impl Vm {
 
         // Optional: Zero out the memory for safety?
         unsafe {
-            std::ptr::write_bytes(memory, 0, memory_size);
-        }
-
-        let start_addr = memory_size - constants.len();
-        unsafe {
-            std::ptr::copy_nonoverlapping(
-                constants.as_ptr(),
-                memory.add(start_addr),
-                constants.len(),
-            );
+            std::ptr::write_bytes(frame_memory, 0, setup.frame_memory_size);
+            std::ptr::write_bytes(heap_memory, 0, setup.frame_memory_size);
+            std::ptr::write_bytes(constant_memory, 0, setup.frame_memory_size);
         }
 
         vm
@@ -479,7 +495,7 @@ impl Vm {
         // Ensure alignment
         debug_assert_eq!(offset % 4, 0, "Unaligned i32 access at offset {}", offset);
         // Inline ptr_at functionality
-        unsafe { self.memory.add(offset) as *mut i32 }
+        unsafe { self.stack_memory.add(offset) as *mut i32 }
     }
 
     #[inline(always)]
@@ -487,7 +503,7 @@ impl Vm {
         // Ensure alignment
         debug_assert_eq!(offset % 4, 0, "Unaligned i32 access at offset {}", offset);
         // Inline ptr_at functionality
-        unsafe { self.memory.add(offset) as *mut u32 }
+        unsafe { self.stack_memory.add(offset) as *mut u32 }
     }
 
     #[inline(always)]
@@ -495,13 +511,13 @@ impl Vm {
         // Ensure alignment
         debug_assert_eq!(offset % 2, 0, "Unaligned u16 access at offset {}", offset);
         // Inline ptr_at functionality
-        unsafe { self.memory.add(offset) as *mut u16 }
+        unsafe { self.stack_memory.add(offset) as *mut u16 }
     }
 
     #[inline(always)]
     fn ptr_at_u8(&self, offset: usize) -> *mut u8 {
         // Inline ptr_at functionality
-        unsafe { self.memory.add(offset) }
+        unsafe { self.stack_memory.add(offset) }
     }
 
     // Helper to get current frame pointer
@@ -511,10 +527,6 @@ impl Vm {
 
     fn stack_ptr(&self) -> *mut u8 {
         self.ptr_at_u8(self.stack_offset)
-    }
-
-    fn stack_base_ptr(&self) -> *mut u8 {
-        self.ptr_at_u8(self.stack_base_offset)
     }
 
     #[inline(always)]
@@ -548,13 +560,27 @@ impl Vm {
         let aligned_offset = (self.alloc_offset + ALIGNMENT_REST) & ALIGNMENT_MASK;
 
         assert!(
-            aligned_offset + aligned_size <= self.stack_base_offset,
+            aligned_offset + aligned_size <= self.heap_memory_size,
             "Out of memory"
         );
 
         self.alloc_offset = aligned_offset + aligned_size;
 
         aligned_offset as u16
+    }
+
+    pub fn allocate_constant(&mut self, size: usize) -> u32 {
+        let aligned_size = (size + ALIGNMENT_REST) & ALIGNMENT_MASK;
+        let aligned_offset = (self.constant_alloc_offset + ALIGNMENT_REST) & ALIGNMENT_MASK;
+
+        assert!(
+            aligned_offset + aligned_size <= self.constant_memory_size,
+            "Out of memory"
+        );
+
+        self.constant_alloc_offset = aligned_offset + aligned_size;
+
+        aligned_offset as u32
     }
 
     pub fn debug_opcode(&self, opcode: u8, operands: &[u16; 5]) {
@@ -590,8 +616,19 @@ impl Vm {
     }
 
     pub fn execute(&mut self) {
-        self.ip = 0;
+        self.execute_from_ip(&InstructionPosition(0));
+    }
+
+    pub fn execute_from_ip(&mut self, ip: &InstructionPosition) {
+        self.ip = ip.0 as usize;
+        self.execute_internal();
+    }
+
+    pub fn execute_internal(&mut self) {
         self.execution_complete = false;
+        self.flags.z = false;
+        self.call_stack.clear();
+
         #[cfg(feature = "debug_vm")]
         {
             eprintln!("program:");
@@ -674,8 +711,9 @@ impl Vm {
         // SAFETY: We assume that self.memory is a valid pointer to a memory region
         // of sufficient size. Make sure that offset + num_bytes does not exceed
         // the allocated memory.
-        let args: Vec<u8> =
-            unsafe { std::slice::from_raw_parts(self.memory.add(offset), num_bytes).to_vec() };
+        let args: Vec<u8> = unsafe {
+            std::slice::from_raw_parts(self.stack_memory.add(offset), num_bytes).to_vec()
+        };
 
         let host_args = HostArgs::new(&args);
         callback(host_args);

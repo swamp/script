@@ -394,7 +394,7 @@ impl<'a, C> Interpreter<'a, C> {
                     }
                     LocationAccessKind::IntrinsicCallMut(intrinsic_fn, arguments) => self
                         .eval_intrinsic_postfix_mut_return(
-                            &node,
+                            node,
                             &value_ref,
                             intrinsic_fn,
                             arguments,
@@ -878,10 +878,12 @@ impl<'a, C> Interpreter<'a, C> {
                 Value::Unit
             }
 
+            /*
             ExpressionKind::IntrinsicCallMut(intrinsic, location, arguments) => {
-                self.evaluate_intrinsic_mut(&expr.node, intrinsic, location, arguments)?
+               self.evaluate_intrinsic_mut(&expr.node, intrinsic, location, arguments)?
             }
 
+             */
             // ------------- LOOKUP ---------------------
             ExpressionKind::ConstantAccess(constant) => {
                 self.constants.lookup_constant_value(constant.id).clone()
@@ -2423,6 +2425,7 @@ impl<'a, C> Interpreter<'a, C> {
         }
     }
 
+    /*
     fn evaluate_intrinsic_mut(
         &mut self,
         node: &Node,
@@ -2472,6 +2475,8 @@ impl<'a, C> Interpreter<'a, C> {
 
         Ok(val)
     }
+
+     */
 }
 
 #[inline]

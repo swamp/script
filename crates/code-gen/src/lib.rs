@@ -26,15 +26,15 @@ use swamp_script_semantic::{
 use swamp_script_types::{AnonymousStructType, EnumVariantType, Signature, StructTypeField, Type};
 use swamp_vm_instr_build::{InstructionBuilder, PatchPosition};
 use swamp_vm_types::{
-    BOOL_SIZE, BinaryInstruction, ConstantMemoryAddress, CountU16, FrameMemoryAddress,
-    FrameMemorySize, INT_SIZE, InstructionPosition, MemoryAlignment, MemoryOffset, MemorySize,
-    TempFrameMemoryAddress,
+    BOOL_SIZE, BinaryInstruction, CountU16, FrameMemoryAddress, FrameMemorySize, INT_SIZE,
+    InstructionPosition, MemoryAlignment, MemoryOffset, MemorySize, TempFrameMemoryAddress,
 };
 use tracing::{error, info, trace};
 
 #[derive(Debug)]
 pub enum ErrorKind {
     IllegalCompoundAssignment,
+    VariableNotUnique,
 }
 
 #[derive(Debug)]
@@ -62,15 +62,41 @@ pub struct FunctionFixup {
     //pub internal_function_definition: InternalFunctionDefinitionRef,
 }
 
+pub struct ConstantInfo {
+    pub ip: InstructionPosition,
+    pub constant_ref: ConstantRef,
+}
+
 pub struct CodeGenState {
     builder: InstructionBuilder,
     constants: ConstantsManager,
     constant_offsets: SeqMap<ConstantId, ConstantMemoryRegion>,
+    constant_functions: SeqMap<ConstantId, ConstantInfo>,
     function_infos: SeqMap<InternalFunctionId, FunctionInfo>,
     function_fixups: Vec<FunctionFixup>,
 }
 
+pub struct GenOptions {
+    pub is_halt_function: bool,
+}
+
 impl CodeGenState {
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            builder: InstructionBuilder::default(),
+            constants: ConstantsManager::new(),
+            constant_offsets: SeqMap::default(),
+            function_infos: SeqMap::default(),
+            constant_functions: SeqMap::default(),
+            function_fixups: vec![],
+        }
+    }
+
+    #[must_use]
+    pub fn instructions(&self) -> &[BinaryInstruction] {
+        &self.builder.instructions
+    }
     pub fn create_function_sections(&self) -> SeqMap<InstructionPosition, String> {
         let mut lookups = SeqMap::new();
         for (_func_id, function_info) in &self.function_infos {
@@ -85,9 +111,13 @@ impl CodeGenState {
 
         lookups
     }
-}
-
-impl CodeGenState {
+    #[must_use]
+    pub fn builder(&self) -> &InstructionBuilder {
+        &self.builder
+    }
+    pub fn constant_functions(&self) -> &SeqMap<ConstantId, ConstantInfo> {
+        &self.constant_functions
+    }
     pub(crate) fn add_call(&mut self, internal_fn: &InternalFunctionDefinitionRef, comment: &str) {
         let call_comment = &format!("calling {} ({})", internal_fn.assigned_name, comment);
 
@@ -101,14 +131,6 @@ impl CodeGenState {
             });
         }
     }
-}
-
-impl CodeGenState {
-    #[must_use]
-    pub fn instructions(&self) -> &[BinaryInstruction] {
-        &self.builder.instructions
-    }
-
     #[must_use]
     pub fn comments(&self) -> &[String] {
         &self.builder.comments
@@ -123,23 +145,6 @@ impl CodeGenState {
             );
         }
     }
-}
-
-pub struct GenOptions {
-    pub is_halt_function: bool,
-}
-
-impl CodeGenState {
-    #[must_use]
-    pub fn new(constants: SeqMap<ConstantId, ConstantMemoryRegion>) -> Self {
-        Self {
-            builder: InstructionBuilder::default(),
-            constants: ConstantsManager::new(),
-            constant_offsets: constants,
-            function_infos: SeqMap::default(),
-            function_fixups: vec![],
-        }
-    }
 
     #[must_use]
     pub fn take_instructions_and_constants(self) -> (Vec<BinaryInstruction>, Vec<u8>) {
@@ -150,7 +155,7 @@ impl CodeGenState {
         &mut self,
         internal_fn_def: &InternalFunctionDefinitionRef,
         options: &GenOptions,
-    ) {
+    ) -> Result<(), Error> {
         assert_ne!(internal_fn_def.program_unique_id, 0);
         self.function_infos
             .insert(
@@ -162,9 +167,9 @@ impl CodeGenState {
             )
             .unwrap();
 
-        let mut function_generator = FunctionCodeGen::new(self, internal_fn_def.program_unique_id);
+        let mut function_generator = FunctionCodeGen::new(self);
 
-        let mut ctx = Context::new(FrameMemoryRegion::new(
+        let ctx = Context::new(FrameMemoryRegion::new(
             FrameMemoryAddress(0),
             MemorySize(512),
         ));
@@ -183,10 +188,12 @@ impl CodeGenState {
         {
             // Intentionally do nothing
         } else {
-            function_generator.gen_expression(&internal_fn_def.body, &ctx);
+            function_generator.gen_expression(&internal_fn_def.body, &ctx)?;
         }
 
         self.finalize_function(options);
+
+        Ok(())
     }
 
     pub fn finalize_function(&mut self, options: &GenOptions) {
@@ -197,13 +204,48 @@ impl CodeGenState {
         }
     }
 
-    pub fn gen_main_function(&mut self, main: &InternalMainExpression, options: &GenOptions) {
-        let mut function_generator = FunctionCodeGen::new(self, main.program_unique_id);
+    pub fn gen_constants_in_order(&mut self, constants: &[ConstantRef]) -> Result<(), Error> {
+        for constant in constants {
+            let (size, _alignment) = type_size_and_alignment(&constant.resolved_type);
+            let ip = self.builder.position();
+            {
+                let mut function_generator = FunctionCodeGen::new(self);
+
+                let empty_ctx = Context::new(FrameMemoryRegion::new(FrameMemoryAddress(0), size));
+                function_generator.gen_expression(&constant.expr, &empty_ctx)?;
+                self.finalize_function(&GenOptions {
+                    is_halt_function: true,
+                });
+            }
+
+            let constant_info = ConstantInfo {
+                ip,
+                //memory_offset:
+                constant_ref: constant.clone(),
+            };
+
+            self.constant_functions
+                .insert(constant.id, constant_info)
+                .unwrap();
+        }
+
+        Ok(())
+    }
+
+    /// # Errors
+    ///
+    pub fn gen_main_function(
+        &mut self,
+        main: &InternalMainExpression,
+        options: &GenOptions,
+    ) -> Result<(), Error> {
+        let mut function_generator = FunctionCodeGen::new(self);
 
         function_generator.layout_variables(&main.function_scope_state, &main.expression.ty);
-        let mut empty_ctx = Context::new(FrameMemoryRegion::default()); //"main return (unit)");
-        function_generator.gen_expression(&main.expression, &mut empty_ctx);
+        let empty_ctx = Context::new(FrameMemoryRegion::default());
+        function_generator.gen_expression(&main.expression, &empty_ctx)?;
         self.finalize_function(options);
+        Ok(())
     }
 }
 
@@ -213,7 +255,19 @@ pub struct FunctionCodeGen<'a> {
     frame_size: FrameMemorySize,
     extra_frame_allocator: ScopeAllocator,
     temp_allocator: ScopeAllocator,
-    fn_id: InternalFunctionId,
+}
+
+impl<'a> FunctionCodeGen<'a> {
+    #[must_use]
+    pub fn new(state: &'a mut CodeGenState) -> Self {
+        Self {
+            state,
+            variable_offsets: SeqMap::default(),
+            frame_size: FrameMemorySize(0),
+            extra_frame_allocator: ScopeAllocator::new(FrameMemoryRegion::default()),
+            temp_allocator: ScopeAllocator::new(FrameMemoryRegion::default()),
+        }
+    }
 }
 
 impl FunctionCodeGen<'_> {
@@ -221,7 +275,7 @@ impl FunctionCodeGen<'_> {
         &mut self,
         intrinsic_fn: &IntrinsicFunction,
         self_addr: Option<FrameMemoryRegion>,
-        arguments: &Vec<ArgumentExpressionOrLocation>,
+        arguments: &[ArgumentExpressionOrLocation],
         ctx: &Context,
     ) {
         if arguments.is_empty() {
@@ -229,6 +283,7 @@ impl FunctionCodeGen<'_> {
         }
         info!(?intrinsic_fn, "generate specific call for intrinsic");
         match intrinsic_fn {
+            // Fixed
             IntrinsicFunction::FloatRound => todo!(),
             IntrinsicFunction::FloatFloor => todo!(),
             IntrinsicFunction::FloatSqrt => todo!(),
@@ -243,13 +298,18 @@ impl FunctionCodeGen<'_> {
             IntrinsicFunction::FloatMin => todo!(),
             IntrinsicFunction::FloatMax => todo!(),
             IntrinsicFunction::FloatClamp => todo!(),
+            // Int
             IntrinsicFunction::IntAbs => todo!(),
             IntrinsicFunction::IntRnd => todo!(),
             IntrinsicFunction::IntMax => todo!(),
             IntrinsicFunction::IntMin => todo!(),
             IntrinsicFunction::IntClamp => todo!(),
             IntrinsicFunction::IntToFloat => todo!(),
+
+            // String
             IntrinsicFunction::StringLen => todo!(),
+
+            // Vec
             IntrinsicFunction::VecFromSlice => {
                 let slice_variable = &arguments[0];
                 self.gen_argument(slice_variable, ctx, "move slice to target");
@@ -265,6 +325,8 @@ impl FunctionCodeGen<'_> {
             IntrinsicFunction::VecIterMut => todo!(),
             IntrinsicFunction::VecSelfPush => todo!(),
             IntrinsicFunction::VecSelfExtend => todo!(),
+
+            // Map
             IntrinsicFunction::MapCreate => todo!(),
             IntrinsicFunction::MapFromSlicePair => {
                 let slice_pair_argument = &arguments[0];
@@ -295,7 +357,7 @@ impl FunctionCodeGen<'_> {
                 let ArgumentExpressionOrLocation::Expression(key_argument) = &arguments[0] else {
                     panic!("must be expression for key");
                 };
-                self.gen_intrinsic_map_remove(&self_addr.unwrap(), key_argument, ctx);
+                self.gen_intrinsic_map_remove(self_addr.unwrap(), key_argument, ctx);
             }
             IntrinsicFunction::MapIter => todo!(),
             IntrinsicFunction::MapIterMut => todo!(),
@@ -305,6 +367,8 @@ impl FunctionCodeGen<'_> {
             IntrinsicFunction::MapSubscriptSet => todo!(),
             IntrinsicFunction::MapSubscriptMut => todo!(),
             IntrinsicFunction::MapSubscriptMutCreateIfNeeded => todo!(),
+
+            // Sparse
             IntrinsicFunction::SparseCreate => todo!(),
             IntrinsicFunction::SparseFromSlice => todo!(),
             IntrinsicFunction::SparseIter => todo!(),
@@ -313,11 +377,15 @@ impl FunctionCodeGen<'_> {
             IntrinsicFunction::SparseSubscriptMut => todo!(),
             IntrinsicFunction::SparseHas => todo!(),
             IntrinsicFunction::SparseRemove => todo!(),
+
+            // Grid
             IntrinsicFunction::GridCreate => todo!(),
             IntrinsicFunction::GridFromSlice => todo!(),
             IntrinsicFunction::GridSubscript => todo!(),
             IntrinsicFunction::GridSubscriptMut => todo!(),
+
             IntrinsicFunction::Float2Magnitude => todo!(),
+
             IntrinsicFunction::SparseAdd => todo!(),
             IntrinsicFunction::VecLen => todo!(),
             IntrinsicFunction::VecIsEmpty => todo!(),
@@ -327,29 +395,17 @@ impl FunctionCodeGen<'_> {
 
     fn gen_intrinsic_map_remove(
         &mut self,
-        map_region: &FrameMemoryRegion,
+        map_region: FrameMemoryRegion,
         key_expr: &Expression,
         ctx: &Context,
-    ) {
-        let key_region = self.gen_expression_for_access(key_expr);
+    ) -> Result<(), Error> {
+        let key_region = self.gen_expression_for_access(key_expr)?;
 
         self.state
             .builder
             .add_map_remove(map_region.addr, key_region.addr, "");
-    }
-}
 
-impl<'a> FunctionCodeGen<'a> {
-    #[must_use]
-    pub fn new(state: &'a mut CodeGenState, fn_id: InternalFunctionId) -> Self {
-        Self {
-            fn_id,
-            state,
-            variable_offsets: SeqMap::default(),
-            frame_size: FrameMemorySize(0),
-            extra_frame_allocator: ScopeAllocator::new(FrameMemoryRegion::default()),
-            temp_allocator: ScopeAllocator::new(FrameMemoryRegion::default()),
-        }
+        Ok(())
     }
 
     pub fn reserve(ty: &Type, allocator: &mut ScopeAllocator) -> FrameMemoryRegion {
@@ -357,7 +413,13 @@ impl<'a> FunctionCodeGen<'a> {
         allocator.reserve(size, alignment)
     }
 
-    pub fn layout_variables(&mut self, variables: &Vec<VariableRef>, return_type: &Type) {
+    /// # Errors
+    ///
+    pub fn layout_variables(
+        &mut self,
+        variables: &Vec<VariableRef>,
+        return_type: &Type,
+    ) -> Result<(), Error> {
         let mut allocator = ScopeAllocator::new(FrameMemoryRegion::new(
             FrameMemoryAddress(0),
             MemorySize(1024),
@@ -375,7 +437,7 @@ impl<'a> FunctionCodeGen<'a> {
             );
             self.variable_offsets
                 .insert(var_ref.unique_id_within_function, var_target)
-                .unwrap();
+                .map_err(|_| self.create_err(ErrorKind::VariableNotUnique, &var_ref.name))?;
         }
 
         let extra_frame_size = MemorySize(80);
@@ -391,6 +453,8 @@ impl<'a> FunctionCodeGen<'a> {
             FrameMemoryAddress(self.frame_size.0),
             MemorySize(1024),
         ));
+
+        Ok(())
     }
 
     pub fn temp_memory_region_for_type(&mut self, ty: &Type, comment: &str) -> FrameMemoryRegion {
@@ -398,6 +462,7 @@ impl<'a> FunctionCodeGen<'a> {
         trace!(?new_target_info, "creating temporary space");
         new_target_info
     }
+
     pub fn temp_space_for_type(&mut self, ty: &Type, comment: &str) -> Context {
         Context::new(self.temp_memory_region_for_type(ty, comment))
     }
@@ -405,8 +470,11 @@ impl<'a> FunctionCodeGen<'a> {
     /// # Panics
     ///
     #[allow(clippy::single_match_else)]
-    pub fn gen_expression_for_access(&mut self, expr: &Expression) -> FrameMemoryRegion {
-        match &expr.kind {
+    pub fn gen_expression_for_access(
+        &mut self,
+        expr: &Expression,
+    ) -> Result<FrameMemoryRegion, Error> {
+        let result = match &expr.kind {
             ExpressionKind::VariableAccess(var_ref) => {
                 info!(?var_ref, "variable access");
                 let frame_address = self
@@ -420,11 +488,13 @@ impl<'a> FunctionCodeGen<'a> {
             _ => {
                 let temp_ctx = self.temp_space_for_type(&expr.ty, "expression");
 
-                self.gen_expression(expr, &temp_ctx);
+                self.gen_expression(expr, &temp_ctx)?;
 
                 temp_ctx.target()
             }
-        }
+        };
+
+        Ok(result)
     }
 
     pub(crate) fn extra_frame_space_for_type(&mut self, ty: &Type) -> Context {
@@ -432,65 +502,64 @@ impl<'a> FunctionCodeGen<'a> {
         Context::new(target)
     }
 
-    pub fn gen_expression(&mut self, expr: &Expression, ctx: &Context) {
+    pub fn gen_expression(&mut self, expr: &Expression, ctx: &Context) -> Result<(), Error> {
         match &expr.kind {
+            ExpressionKind::InterpolatedString(_) => todo!(),
+
             ExpressionKind::ConstantAccess(constant_ref) => {
                 self.gen_constant_access(constant_ref, ctx)
             }
-            ExpressionKind::InterpolatedString(_) => todo!(),
             ExpressionKind::TupleDestructuring(variables, tuple_types, tuple_expression) => {
-                self.gen_tuple_destructuring(variables, tuple_types, tuple_expression);
+                self.gen_tuple_destructuring(variables, tuple_types, tuple_expression)
             }
             ExpressionKind::Range(start, end, mode) => self.gen_range(start, end, mode, ctx),
 
             ExpressionKind::Assignment(target_mut_location_expr, source_expr) => {
-                self.gen_assignment(target_mut_location_expr, source_expr, ctx);
+                self.gen_assignment(target_mut_location_expr, source_expr)
             }
             ExpressionKind::VariableAccess(variable_ref) => {
-                self.gen_variable_access(variable_ref, ctx);
+                self.gen_variable_access(variable_ref, ctx)
             }
             ExpressionKind::InternalFunctionAccess(function) => {
-                self.internal_function_access(function, ctx);
+                self.internal_function_access(function, ctx)
             }
             ExpressionKind::BinaryOp(operator) => self.gen_binary_operator(operator, ctx),
             ExpressionKind::UnaryOp(operator) => self.gen_unary_operator(operator, ctx),
             ExpressionKind::PostfixChain(start, chain) => self.gen_postfix_chain(start, chain, ctx),
             ExpressionKind::VariableDefinition(variable, expression) => {
-                self.gen_variable_definition(variable, expression, ctx);
+                self.gen_variable_definition(variable, expression, ctx)
             }
             ExpressionKind::VariableReassignment(variable, expression) => {
-                self.gen_variable_reassignment(variable, expression, ctx);
+                self.gen_variable_reassignment(variable, expression, ctx)
             }
             ExpressionKind::StructInstantiation(struct_literal) => {
-                self.gen_struct_literal(struct_literal, ctx);
+                self.gen_struct_literal(struct_literal, ctx)
             }
             ExpressionKind::AnonymousStructLiteral(anon_struct) => {
-                self.gen_anonymous_struct_literal(anon_struct, ctx);
+                self.gen_anonymous_struct_literal(anon_struct, ctx)
             }
             ExpressionKind::Literal(basic_literal) => self.gen_literal(basic_literal, ctx),
             ExpressionKind::Option(maybe_option) => {
-                self.gen_option_expression(maybe_option.as_deref(), ctx);
+                self.gen_option_expression(maybe_option.as_deref(), ctx)
             }
             ExpressionKind::ForLoop(a, b, c) => self.gen_for_loop(a, b, c, ctx),
             ExpressionKind::WhileLoop(condition, expression) => {
-                self.gen_while_loop(condition, expression, ctx);
+                self.gen_while_loop(condition, expression, ctx)
             }
-
             ExpressionKind::Block(expressions) => self.gen_block(expressions, ctx),
             ExpressionKind::Match(match_expr) => self.gen_match(match_expr, ctx),
             ExpressionKind::Guard(guards) => self.gen_guard(guards, ctx),
             ExpressionKind::If(conditional, true_expr, false_expr) => {
-                self.gen_if(conditional, true_expr, false_expr.as_deref(), ctx);
+                self.gen_if(conditional, true_expr, false_expr.as_deref(), ctx)
             }
             ExpressionKind::When(bindings, true_expr, false_expr) => {
-                self.gen_when(bindings, true_expr, false_expr.as_deref(), ctx);
+                self.gen_when(bindings, true_expr, false_expr.as_deref(), ctx)
             }
             ExpressionKind::CompoundAssignment(target_location, operator_kind, source_expr) => {
-                self.compound_assignment(target_location, operator_kind, source_expr, ctx);
+                self.compound_assignment(target_location, operator_kind, source_expr, ctx)
             }
-            ExpressionKind::IntrinsicCallMut(_, _, _) => todo!(),
             ExpressionKind::IntrinsicCallEx(intrinsic_fn, arguments) => {
-                self.gen_intrinsic_call_ex(intrinsic_fn, arguments, ctx);
+                self.gen_intrinsic_call_ex(intrinsic_fn, arguments, ctx)
             }
             // --------- Not high prio
             ExpressionKind::CoerceOptionToBool(_) => todo!(),
@@ -502,19 +571,23 @@ impl<'a> FunctionCodeGen<'a> {
         }
     }
 
-    fn gen_unary_operator(&mut self, unary_operator: &UnaryOperator, ctx: &Context) {
+    fn gen_unary_operator(
+        &mut self,
+        unary_operator: &UnaryOperator,
+        ctx: &Context,
+    ) -> Result<(), Error> {
         match &unary_operator.kind {
             UnaryOperatorKind::Not => {}
             UnaryOperatorKind::Negate => match (&unary_operator.left.ty) {
                 Type::Int => {
-                    let left_source = self.gen_expression_for_access(&unary_operator.left);
+                    let left_source = self.gen_expression_for_access(&unary_operator.left)?;
                     self.state
                         .builder
                         .add_neg_i32(ctx.addr(), left_source.addr, "negate i32");
                 }
 
                 Type::Float => {
-                    let left_source = self.gen_expression_for_access(&unary_operator.left);
+                    let left_source = self.gen_expression_for_access(&unary_operator.left)?;
                     self.state
                         .builder
                         .add_neg_f32(ctx.addr(), left_source.addr, "negate f32");
@@ -522,19 +595,31 @@ impl<'a> FunctionCodeGen<'a> {
                 _ => todo!(),
             },
         }
+
+        Ok(())
     }
 
-    fn gen_binary_operator(&mut self, binary_operator: &BinaryOperator, ctx: &Context) {
+    fn gen_binary_operator(
+        &mut self,
+        binary_operator: &BinaryOperator,
+        ctx: &Context,
+    ) -> Result<(), Error> {
         match (&binary_operator.left.ty, &binary_operator.right.ty) {
-            (Type::Int, Type::Int) => self.gen_binary_operator_i32(binary_operator, ctx),
-            (Type::Bool, Type::Bool) => self.gen_binary_operator_bool(binary_operator),
+            (Type::Int, Type::Int) => self.gen_binary_operator_i32(binary_operator, ctx)?,
+            (Type::Bool, Type::Bool) => self.gen_binary_operator_bool(binary_operator)?,
             _ => todo!(),
         }
+
+        Ok(())
     }
 
-    fn gen_binary_operator_i32(&mut self, binary_operator: &BinaryOperator, ctx: &Context) {
-        let left_source = self.gen_expression_for_access(&binary_operator.left);
-        let right_source = self.gen_expression_for_access(&binary_operator.right);
+    fn gen_binary_operator_i32(
+        &mut self,
+        binary_operator: &BinaryOperator,
+        ctx: &Context,
+    ) -> Result<(), Error> {
+        let left_source = self.gen_expression_for_access(&binary_operator.left)?;
+        let right_source = self.gen_expression_for_access(&binary_operator.right)?;
 
         match binary_operator.kind {
             BinaryOperatorKind::Add => {
@@ -575,9 +660,11 @@ impl<'a> FunctionCodeGen<'a> {
             BinaryOperatorKind::GreaterEqual => todo!(),
             BinaryOperatorKind::RangeExclusive => todo!(),
         }
+
+        Ok(())
     }
 
-    fn gen_binary_operator_bool(&mut self, binary_operator: &BinaryOperator) {
+    fn gen_binary_operator_bool(&mut self, binary_operator: &BinaryOperator) -> Result<(), Error> {
         match binary_operator.kind {
             BinaryOperatorKind::LogicalOr => {
                 // this updates the z flag
@@ -611,22 +698,23 @@ impl<'a> FunctionCodeGen<'a> {
                 panic!("unknown operator")
             }
         }
+
+        Ok(())
     }
 
     fn gen_condition_context(
         &mut self,
         condition: &BooleanExpression,
-        ctx: &Context,
-    ) -> (Context, PatchPosition) {
+    ) -> Result<(Context, PatchPosition), Error> {
         let condition_ctx = self.extra_frame_space_for_type(&Type::Bool);
-        self.gen_expression(&condition.expression, &condition_ctx);
+        self.gen_expression(&condition.expression, &condition_ctx)?;
 
         let jump_on_false_condition = self
             .state
             .builder
             .add_jmp_if_not_equal_placeholder("jump boolean condition false");
 
-        (condition_ctx, jump_on_false_condition)
+        Ok((condition_ctx, jump_on_false_condition))
     }
 
     fn gen_boolean_access(&mut self, condition: &Expression) {
@@ -653,11 +741,11 @@ impl<'a> FunctionCodeGen<'a> {
         true_expr: &Expression,
         maybe_false_expr: Option<&Expression>,
         ctx: &Context,
-    ) {
-        let (_condition_ctx, jump_on_false_condition) = self.gen_condition_context(condition, ctx);
+    ) -> Result<(), Error> {
+        let (_condition_ctx, jump_on_false_condition) = self.gen_condition_context(condition)?;
 
         // True expression just takes over our target
-        self.gen_expression(true_expr, ctx);
+        self.gen_expression(true_expr, ctx)?;
 
         if let Some(false_expr) = maybe_false_expr {
             // we need to help the true expression to jump over false
@@ -670,12 +758,14 @@ impl<'a> FunctionCodeGen<'a> {
             self.state.builder.patch_jump_here(jump_on_false_condition);
 
             // Else expression also can just take over our if target
-            self.gen_expression(false_expr, ctx);
+            self.gen_expression(false_expr, ctx)?;
 
             self.state.builder.patch_jump_here(skip_false_if_true);
         } else {
             self.state.builder.patch_jump_here(jump_on_false_condition);
         }
+
+        Ok(())
     }
 
     fn gen_while_loop(
@@ -683,17 +773,17 @@ impl<'a> FunctionCodeGen<'a> {
         condition: &BooleanExpression,
         expression: &Expression,
         ctx: &Context,
-    ) {
+    ) -> Result<(), Error> {
         // `while` loops are only for side effects, make sure that the target size is zero (Unit)
         assert_eq!(ctx.target_size().0, 0);
 
         let ip_for_condition = self.state.builder.position();
 
-        let (_condition_ctx, jump_on_false_condition) = self.gen_condition_context(condition, ctx);
+        let (_condition_ctx, jump_on_false_condition) = self.gen_condition_context(condition)?;
 
         // Expression is only for side effects
         let mut unit_ctx = self.temp_space_for_type(&Type::Unit, "while body expression");
-        self.gen_expression(expression, &mut unit_ctx);
+        self.gen_expression(expression, &mut unit_ctx)?;
 
         // Always jump to the condition again to see if it is true
         self.state
@@ -701,6 +791,8 @@ impl<'a> FunctionCodeGen<'a> {
             .add_jmp(ip_for_condition, "jmp to while condition");
 
         self.state.builder.patch_jump_here(jump_on_false_condition);
+
+        Ok(())
     }
 
     fn gen_location_argument(
@@ -708,12 +800,14 @@ impl<'a> FunctionCodeGen<'a> {
         argument: &SingleLocationExpression,
         ctx: &Context,
         comment: &str,
-    ) {
-        let region = self.gen_lvalue_address(argument);
+    ) -> Result<(), Error> {
+        let region = self.gen_lvalue_address(argument)?;
 
         self.state
             .builder
-            .add_mov(ctx.addr(), region.addr, region.size, comment)
+            .add_mov(ctx.addr(), region.addr, region.size, comment);
+
+        Ok(())
     }
 
     fn gen_argument(
@@ -721,36 +815,39 @@ impl<'a> FunctionCodeGen<'a> {
         argument: &ArgumentExpressionOrLocation,
         ctx: &Context,
         comment: &str,
-    ) {
+    ) -> Result<(), Error> {
         match &argument {
             ArgumentExpressionOrLocation::Expression(found_expression) => {
-                self.gen_expression(found_expression, ctx);
+                self.gen_expression(found_expression, ctx)?;
             }
             ArgumentExpressionOrLocation::Location(location_expression) => {
                 self.gen_location_argument(location_expression, ctx, comment);
             }
         }
+        Ok(())
     }
 
     fn gen_mut_or_immute(
         &mut self,
         mut_or_immutable_expression: &MutOrImmutableExpression,
         ctx: &Context,
-    ) {
+    ) -> Result<(), Error> {
         match &mut_or_immutable_expression.expression_or_location {
             ArgumentExpressionOrLocation::Expression(found_expression) => {
-                self.gen_expression(found_expression, ctx);
+                self.gen_expression(found_expression, ctx)?;
             }
             ArgumentExpressionOrLocation::Location(location_expression) => {
                 self.gen_lvalue_address(location_expression);
             }
         }
+
+        Ok(())
     }
 
     fn gen_for_access_or_location(
         &mut self,
         mut_or_immutable_expression: &MutOrImmutableExpression,
-    ) -> FrameMemoryRegion {
+    ) -> Result<FrameMemoryRegion, Error> {
         match &mut_or_immutable_expression.expression_or_location {
             ArgumentExpressionOrLocation::Expression(found_expression) => {
                 self.gen_expression_for_access(found_expression)
@@ -765,7 +862,7 @@ impl<'a> FunctionCodeGen<'a> {
         variable: &VariableRef,
         mut_or_immutable_expression: &MutOrImmutableExpression,
         ctx: &Context,
-    ) {
+    ) -> Result<(), Error> {
         let target_relative_frame_pointer = self
             .variable_offsets
             .get(&variable.unique_id_within_function)
@@ -774,21 +871,22 @@ impl<'a> FunctionCodeGen<'a> {
         let init_ctx =
             ctx.with_target(*target_relative_frame_pointer, "variable assignment target");
 
-        self.gen_mut_or_immute(mut_or_immutable_expression, &init_ctx);
+        self.gen_mut_or_immute(mut_or_immutable_expression, &init_ctx)
     }
 
     fn gen_assignment(
         &mut self,
         lhs: &SingleMutLocationExpression,
         rhs: &Expression,
-        ctx: &Context,
-    ) {
-        let lhs_addr = self.gen_lvalue_address(&lhs.0);
-        let access = self.gen_expression_for_access(rhs);
+    ) -> Result<(), Error> {
+        let lhs_addr = self.gen_lvalue_address(&lhs.0)?;
+        let access = self.gen_expression_for_access(rhs)?;
 
         self.state
             .builder
             .add_mov(lhs_addr.addr, access.addr, access.size, "assignment");
+
+        Ok(())
     }
 
     fn gen_variable_definition(
@@ -796,8 +894,8 @@ impl<'a> FunctionCodeGen<'a> {
         variable: &VariableRef,
         mut_or_immutable_expression: &MutOrImmutableExpression,
         ctx: &Context,
-    ) {
-        self.gen_variable_assignment(variable, mut_or_immutable_expression, ctx);
+    ) -> Result<(), Error> {
+        self.gen_variable_assignment(variable, mut_or_immutable_expression, ctx)
     }
 
     fn gen_variable_reassignment(
@@ -805,8 +903,8 @@ impl<'a> FunctionCodeGen<'a> {
         variable: &VariableRef,
         mut_or_immutable_expression: &Box<MutOrImmutableExpression>,
         ctx: &Context,
-    ) {
-        self.gen_variable_assignment(variable, mut_or_immutable_expression, ctx);
+    ) -> Result<(), Error> {
+        self.gen_variable_assignment(variable, mut_or_immutable_expression, ctx)
     }
 
     fn copy_back_mutable_arguments(
@@ -814,7 +912,7 @@ impl<'a> FunctionCodeGen<'a> {
         signature: &Signature,
         maybe_self: Option<FrameMemoryRegion>,
         arguments: &Vec<ArgumentExpressionOrLocation>,
-    ) {
+    ) -> Result<(), Error> {
         let arguments_memory_region = self.infinite_above_frame_size();
         let mut arguments_allocator = ScopeAllocator::new(arguments_memory_region);
 
@@ -839,7 +937,7 @@ impl<'a> FunctionCodeGen<'a> {
             }
 
             if let ArgumentExpressionOrLocation::Location(found_location) = argument {
-                let argument_target = self.gen_lvalue_address(found_location);
+                let argument_target = self.gen_lvalue_address(found_location)?;
                 self.state.builder.add_mov(
                     argument_target.addr,
                     source_region.addr,
@@ -853,6 +951,7 @@ impl<'a> FunctionCodeGen<'a> {
                 panic!("internal error. argument is mut but not a location")
             }
         }
+        Ok(())
     }
     fn gen_arguments(
         &mut self,
@@ -910,7 +1009,7 @@ impl<'a> FunctionCodeGen<'a> {
     fn gen_lvalue_address(
         &mut self,
         location_expression: &SingleLocationExpression,
-    ) -> FrameMemoryRegion {
+    ) -> Result<FrameMemoryRegion, Error> {
         let mut frame_relative_base_address = *self
             .variable_offsets
             .get(
@@ -951,7 +1050,7 @@ impl<'a> FunctionCodeGen<'a> {
             }
         }
 
-        frame_relative_base_address
+        Ok(frame_relative_base_address)
     }
 
     #[allow(clippy::too_many_lines)]
@@ -960,7 +1059,7 @@ impl<'a> FunctionCodeGen<'a> {
         start_expression: &Expression,
         chain: &[Postfix],
         ctx: &Context,
-    ) {
+    ) -> Result<(), Error> {
         if let ExpressionKind::InternalFunctionAccess(internal_fn) = &start_expression.kind {
             if chain.len() == 1 {
                 if let PostfixKind::FunctionCall(args) = &chain[0].kind {
@@ -983,7 +1082,7 @@ impl<'a> FunctionCodeGen<'a> {
                         self.copy_back_mutable_arguments(&internal_fn.signature, None, args);
                     }
 
-                    return;
+                    return Ok(());
                 }
             }
         }
@@ -1008,12 +1107,12 @@ impl<'a> FunctionCodeGen<'a> {
                         );
                     }
 
-                    return;
+                    return Ok(());
                 }
             }
         }
 
-        let mut start_source = self.gen_expression_for_access(start_expression);
+        let mut start_source = self.gen_expression_for_access(start_expression)?;
 
         for element in chain {
             match &element.kind {
@@ -1087,9 +1186,11 @@ impl<'a> FunctionCodeGen<'a> {
                 PostfixKind::IntrinsicCall(_, _) => todo!(),
             }
         }
+
+        Ok(())
     }
 
-    fn gen_tuple(&mut self, expressions: &[Expression], ctx: &Context) {
+    fn gen_tuple(&mut self, expressions: &[Expression], ctx: &Context) -> Result<(), Error> {
         let mut scope = ScopeAllocator::new(ctx.target());
 
         for expr in expressions {
@@ -1097,8 +1198,10 @@ impl<'a> FunctionCodeGen<'a> {
             let start_addr = scope.allocate(memory_size, alignment);
             let element_region = FrameMemoryRegion::new(start_addr, memory_size);
             let element_ctx = Context::new(element_region);
-            self.gen_expression(expr, &element_ctx);
+            self.gen_expression(expr, &element_ctx)?;
         }
+
+        Ok(())
     }
 
     fn get_struct_field_offset(
@@ -1125,18 +1228,20 @@ impl<'a> FunctionCodeGen<'a> {
         anon_struct_type: &AnonymousStructType,
         source_order_expressions: &Vec<(usize, Expression)>,
         base_context: &Context,
-    ) {
+    ) -> Result<(), Error> {
         for (field_index, expression) in source_order_expressions {
-            let (field_memory_offset, field_size, field_alignment) = Self::get_struct_field_offset(
+            let (field_memory_offset, field_size, _field_alignment) = Self::get_struct_field_offset(
                 &anon_struct_type.field_name_sorted_fields,
                 *field_index,
             );
             let field_ctx = base_context.with_offset(field_memory_offset, field_size);
-            self.gen_expression(expression, &field_ctx);
+            self.gen_expression(expression, &field_ctx)?;
         }
+
+        Ok(())
     }
 
-    fn gen_literal(&mut self, literal: &Literal, ctx: &Context) {
+    fn gen_literal(&mut self, literal: &Literal, ctx: &Context) -> Result<(), Error> {
         match literal {
             Literal::IntLiteral(int) => {
                 self.state.builder.add_ld32(ctx.addr(), *int, "int literal");
@@ -1182,7 +1287,7 @@ impl<'a> FunctionCodeGen<'a> {
                 match b {
                     EnumLiteralData::Nothing => {}
                     EnumLiteralData::Tuple(expressions) => {
-                        self.gen_tuple(expressions, &inner_ctx);
+                        self.gen_tuple(expressions, &inner_ctx)?;
                     }
                     EnumLiteralData::Struct(sorted_expressions) => {
                         if let EnumVariantType::Struct(variant_struct_type) = a {
@@ -1190,12 +1295,12 @@ impl<'a> FunctionCodeGen<'a> {
                                 &variant_struct_type.anon_struct,
                                 sorted_expressions,
                                 &inner_ctx,
-                            );
+                            )?;
                         }
                     }
                 }
             }
-            Literal::TupleLiteral(_tuple_type, expressions) => self.gen_tuple(expressions, ctx),
+            Literal::TupleLiteral(_tuple_type, expressions) => self.gen_tuple(expressions, ctx)?,
             Literal::StringLiteral(str) => {
                 self.gen_string_literal(str, ctx);
             }
@@ -1204,6 +1309,8 @@ impl<'a> FunctionCodeGen<'a> {
                 todo!()
             }
         }
+
+        Ok(())
     }
 
     fn gen_string_literal(&mut self, string: &str, ctx: &Context) {
@@ -1244,17 +1351,23 @@ impl<'a> FunctionCodeGen<'a> {
 
 
      */
-    fn gen_option_expression(&mut self, maybe_option: Option<&Expression>, ctx: &Context) {
+    fn gen_option_expression(
+        &mut self,
+        maybe_option: Option<&Expression>,
+        ctx: &Context,
+    ) -> Result<(), Error> {
         if let Some(found_value) = maybe_option {
             self.state.builder.add_ld8(ctx.addr(), 1, "option Some tag"); // 1 signals `Some`
             let (inner_size, inner_alignment) = type_size_and_alignment(&found_value.ty);
             let mut one_offset_ctx = ctx.with_offset(inner_alignment.into(), inner_size);
 
-            self.gen_expression(found_value, &mut one_offset_ctx); // Fills in more of the union
+            self.gen_expression(found_value, &mut one_offset_ctx)?; // Fills in more of the union
         } else {
             self.state.builder.add_ld8(ctx.addr(), 0, "option None tag"); // 0 signals `None`
             // No real need to clear the rest of the memory
         }
+
+        Ok(())
     }
 
     fn gen_for_loop(
@@ -1263,7 +1376,7 @@ impl<'a> FunctionCodeGen<'a> {
         iterable: &Iterable,
         body: &Box<Expression>,
         ctx: &Context,
-    ) {
+    ) -> Result<(), Error> {
         // Add check if the collection is empty, to skip everything
 
         // get some kind of iteration pointer
@@ -1276,7 +1389,7 @@ impl<'a> FunctionCodeGen<'a> {
         }
 
         let mut unit_expr = self.temp_space_for_type(&Type::Unit, "for loop body");
-        self.gen_expression(body, &mut unit_expr);
+        self.gen_expression(body, &mut unit_expr)
 
         // advance iterator pointer
         // jump to check if iterator pointer has reached its end
@@ -1287,10 +1400,10 @@ impl<'a> FunctionCodeGen<'a> {
         element_type: &Type,
         vector_expr: Expression,
         ctx: &mut Context,
-    ) {
+    ) -> Result<(), Error> {
         // get the vector that is referenced
         let mut vector_ctx = self.temp_space_for_type(&vector_expr.ty, "vector space");
-        self.gen_expression(&vector_expr, &mut vector_ctx);
+        self.gen_expression(&vector_expr, &mut vector_ctx)
 
         /*
         let value_var_addr = match for_pattern {
@@ -1377,14 +1490,16 @@ impl<'a> FunctionCodeGen<'a> {
          */
     }
 
-    fn gen_block(&mut self, expressions: &[Expression], ctx: &Context) {
+    fn gen_block(&mut self, expressions: &[Expression], ctx: &Context) -> Result<(), Error> {
         if let Some((last, others)) = expressions.split_last() {
             for expr in others {
                 let temp_context = self.temp_space_for_type(&Type::Unit, "block target");
-                self.gen_expression(expr, &temp_context);
+                self.gen_expression(expr, &temp_context)?;
             }
-            self.gen_expression(last, ctx);
+            self.gen_expression(last, ctx)?;
         }
+
+        Ok(())
     }
 
     fn get_variable_region(&self, variable: &VariableRef) -> (FrameMemoryRegion, MemoryAlignment) {
@@ -1397,7 +1512,7 @@ impl<'a> FunctionCodeGen<'a> {
         (*frame_address, align)
     }
 
-    fn gen_variable_access(&mut self, variable: &VariableRef, ctx: &Context) {
+    fn gen_variable_access(&mut self, variable: &VariableRef, ctx: &Context) -> Result<(), Error> {
         let (region, alignment) = self.get_variable_region(variable);
         self.state.builder.add_mov(
             ctx.addr(),
@@ -1409,6 +1524,8 @@ impl<'a> FunctionCodeGen<'a> {
                 ctx.comment()
             ),
         );
+
+        Ok(())
     }
 
     fn referenced_or_not_type(ty: &Type) -> Type {
@@ -1426,9 +1543,9 @@ impl<'a> FunctionCodeGen<'a> {
         source: &Expression,
         ctx: &Context,
     ) -> Result<(), Error> {
-        let target_location = self.gen_lvalue_address(&target_location.0);
+        let target_location = self.gen_lvalue_address(&target_location.0)?;
 
-        let source_info = self.gen_expression_for_access(source);
+        let source_info = self.gen_expression_for_access(source)?;
 
         let type_to_consider = Self::referenced_or_not_type(&source.ty);
 
@@ -1494,36 +1611,41 @@ impl<'a> FunctionCodeGen<'a> {
         &mut self,
         internal: &InternalFunctionDefinitionRef,
         ctx: &Context,
-    ) {
+    ) -> Result<(), Error> {
         self.state.builder.add_ld_u16(
             ctx.addr(),
             internal.program_unique_id,
             &format!("function access '{}'", internal.assigned_name),
         );
+        Ok(())
     }
 
     fn infinite_above_frame_size(&self) -> FrameMemoryRegion {
         FrameMemoryRegion::new(FrameMemoryAddress(self.frame_size.0), MemorySize(1024))
     }
 
-    fn gen_struct_literal(&mut self, struct_literal: &StructInstantiation, ctx: &Context) {
+    fn gen_struct_literal(
+        &mut self,
+        struct_literal: &StructInstantiation,
+        ctx: &Context,
+    ) -> Result<(), Error> {
         self.gen_struct_literal_helper(
             &struct_literal.struct_type_ref.anon_struct_type,
             &struct_literal.source_order_expressions,
             ctx,
-        );
+        )
     }
 
     fn gen_anonymous_struct_literal(
         &mut self,
         anon_struct_literal: &AnonymousStructLiteral,
         ctx: &Context,
-    ) {
+    ) -> Result<(), Error> {
         self.gen_struct_literal_helper(
             &anon_struct_literal.anonymous_struct_type,
             &anon_struct_literal.source_order_expressions,
             ctx,
-        );
+        )
     }
 
     fn gen_struct_literal_helper(
@@ -1531,7 +1653,7 @@ impl<'a> FunctionCodeGen<'a> {
         struct_type_ref: &AnonymousStructType,
         source_order_expressions: &Vec<(usize, Expression)>,
         ctx: &Context,
-    ) {
+    ) -> Result<(), Error> {
         let struct_type = Type::AnonymousStruct(struct_type_ref.clone());
         let (whole_struct_size, whole_struct_alignment) = type_size_and_alignment(&struct_type);
         if ctx.target_size().0 != whole_struct_size.0 {
@@ -1545,8 +1667,10 @@ impl<'a> FunctionCodeGen<'a> {
             //info!(?field_offset, ?field_index, "field offset");
             let new_address = ctx.addr().advance(field_offset);
             let field_ctx = Context::new(FrameMemoryRegion::new(new_address, field_size));
-            self.gen_expression(expression, &field_ctx);
+            self.gen_expression(expression, &field_ctx)?;
         }
+
+        Ok(())
     }
 
     fn gen_slice_literal(&mut self, ty: &Type, expressions: &Vec<Expression>, ctx: &Context) {
@@ -1660,7 +1784,7 @@ impl<'a> FunctionCodeGen<'a> {
         intrinsic_fn: &IntrinsicFunction,
         arguments: &Vec<ArgumentExpressionOrLocation>,
         ctx: &Context,
-    ) {
+    ) -> Result<(), Error> {
         //        info!(?intrinsic_fn, "generating intrinsic call");
 
         match intrinsic_fn {
@@ -1742,6 +1866,8 @@ impl<'a> FunctionCodeGen<'a> {
             // Other
             IntrinsicFunction::Float2Magnitude => todo!(),
         };
+
+        Ok(())
     }
 
     fn gen_intrinsic_vec_create(&self, arguments: &Vec<ArgumentExpressionOrLocation>) {
@@ -1762,8 +1888,8 @@ impl<'a> FunctionCodeGen<'a> {
         }
     }
 
-    fn gen_match(&mut self, match_expr: &Match, ctx: &Context) {
-        let region_to_match = self.gen_for_access_or_location(&match_expr.expression);
+    fn gen_match(&mut self, match_expr: &Match, ctx: &Context) -> Result<(), Error> {
+        let region_to_match = self.gen_for_access_or_location(&match_expr.expression)?;
 
         let mut jump_to_exit_placeholders = Vec::new();
 
@@ -1822,7 +1948,7 @@ impl<'a> FunctionCodeGen<'a> {
                 None
             };
 
-            self.gen_expression(&arm.expression, ctx);
+            self.gen_expression(&arm.expression, ctx)?;
 
             if !is_last {
                 let jump_to_exit_placeholder =
@@ -1841,9 +1967,11 @@ impl<'a> FunctionCodeGen<'a> {
         for placeholder in jump_to_exit_placeholders {
             self.state.builder.patch_jump_here(placeholder);
         }
+
+        Ok(())
     }
 
-    fn gen_guard(&mut self, guards: &Vec<Guard>, ctx: &Context) {
+    fn gen_guard(&mut self, guards: &Vec<Guard>, ctx: &Context) -> Result<(), Error> {
         let mut jump_to_exit_placeholders = Vec::new();
         for guard in guards {
             if let Some(condition) = &guard.condition {
@@ -1852,20 +1980,22 @@ impl<'a> FunctionCodeGen<'a> {
                     .state
                     .builder
                     .add_jmp_if_not_equal_placeholder("guard condition");
-                self.gen_expression(&guard.result, ctx);
+                self.gen_expression(&guard.result, ctx)?;
                 let jump_to_exit_placeholder =
                     self.state.builder.add_jump_placeholder("jump to exit");
                 jump_to_exit_placeholders.push(jump_to_exit_placeholder);
                 self.state.builder.patch_jump_here(skip_expression_patch);
             } else {
                 // _ -> wildcard
-                self.gen_expression(&guard.result, ctx);
+                self.gen_expression(&guard.result, ctx)?;
             }
         }
 
         for placeholder in jump_to_exit_placeholders {
             self.state.builder.patch_jump_here(placeholder);
         }
+
+        Ok(())
     }
 
     fn gen_when(
@@ -1874,13 +2004,13 @@ impl<'a> FunctionCodeGen<'a> {
         true_expr: &Expression,
         maybe_false_expr: Option<&Expression>,
         ctx: &Context,
-    ) {
+    ) -> Result<(), Error> {
         let mut all_false_jumps = Vec::new();
 
         for binding in bindings {
             let (variable_region, _alignment) = self.get_variable_region(&binding.variable);
 
-            let old_variable_region = self.gen_for_access_or_location(&binding.expr);
+            let old_variable_region = self.gen_for_access_or_location(&binding.expr)?;
 
             self.state
                 .builder
@@ -1898,7 +2028,7 @@ impl<'a> FunctionCodeGen<'a> {
 
             if binding.has_expression() {
                 let var_ctx = Context::new(variable_region);
-                self.gen_mut_or_immute(&binding.expr, &var_ctx);
+                self.gen_mut_or_immute(&binding.expr, &var_ctx)?;
             } else {
                 let ArgumentExpressionOrLocation::Expression(variable_access_expression) =
                     &binding.expr.expression_or_location
@@ -1906,7 +2036,7 @@ impl<'a> FunctionCodeGen<'a> {
                     panic!("must be expression");
                 };
                 let old_variable_region =
-                    self.gen_expression_for_access(variable_access_expression);
+                    self.gen_expression_for_access(variable_access_expression)?;
                 let alignment_offset: MemoryOffset = alignment.into();
                 let some_value_region = FrameMemoryRegion::new(
                     old_variable_region.addr.advance(alignment_offset),
@@ -1921,7 +2051,7 @@ impl<'a> FunctionCodeGen<'a> {
             }
         }
 
-        self.gen_expression(true_expr, ctx);
+        self.gen_expression(true_expr, ctx)?;
         let maybe_jump_over_false = if let Some(_else_expr) = maybe_false_expr {
             Some(
                 self.state
@@ -1942,14 +2072,22 @@ impl<'a> FunctionCodeGen<'a> {
                 .builder
                 .patch_jump_here(maybe_jump_over_false.unwrap());
         }
+
+        Ok(())
     }
 
-    fn gen_range(&mut self, start: &Expression, end: &Expression, mode: &RangeMode, ctx: &Context) {
+    fn gen_range(
+        &mut self,
+        start: &Expression,
+        end: &Expression,
+        mode: &RangeMode,
+        ctx: &Context,
+    ) -> Result<(), Error> {
         let start_ctx = ctx.with_offset(MemoryOffset(0), MemorySize(INT_SIZE));
-        self.gen_expression(start, &start_ctx);
+        self.gen_expression(start, &start_ctx)?;
 
         let end_ctx = ctx.with_offset(MemoryOffset(INT_SIZE), MemorySize(INT_SIZE));
-        self.gen_expression(end, &end_ctx);
+        self.gen_expression(end, &end_ctx)?;
 
         let mode_ctx = ctx.with_offset(MemoryOffset(INT_SIZE + INT_SIZE), MemorySize(BOOL_SIZE));
         let val = match &mode {
@@ -1959,6 +2097,8 @@ impl<'a> FunctionCodeGen<'a> {
         self.state
             .builder
             .add_ld8(mode_ctx.addr(), val, "range mode");
+
+        Ok(())
     }
 
     fn create_err(&mut self, kind: ErrorKind, node: &Node) -> Error {
@@ -1974,8 +2114,8 @@ impl<'a> FunctionCodeGen<'a> {
         target_variables: &Vec<VariableRef>,
         tuple_type: &Vec<Type>,
         source_tuple_expression: &Expression,
-    ) {
-        let source_region = self.gen_expression_for_access(source_tuple_expression);
+    ) -> Result<(), Error> {
+        let source_region = self.gen_expression_for_access(source_tuple_expression)?;
 
         let (total_size, max_alignment, element_offsets) = layout_tuple_elements(tuple_type);
         assert_eq!(total_size.0, source_region.size.0);
@@ -2003,9 +2143,15 @@ impl<'a> FunctionCodeGen<'a> {
                 );
             }
         }
+
+        Ok(())
     }
 
-    fn gen_constant_access(&mut self, constant_reference: &ConstantRef, ctx: &Context) {
+    fn gen_constant_access(
+        &mut self,
+        constant_reference: &ConstantRef,
+        ctx: &Context,
+    ) -> Result<(), Error> {
         let constant_region = self
             .state
             .constant_offsets
@@ -2019,6 +2165,8 @@ impl<'a> FunctionCodeGen<'a> {
             constant_region.size,
             &format!("load constant '{}'", constant_reference.assigned_name),
         );
+
+        Ok(())
     }
 }
 

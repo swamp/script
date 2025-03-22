@@ -22,7 +22,6 @@ impl Analyzer<'_> {
         ast_literal_kind: &swamp_script_ast::LiteralKind,
         context: &TypeContext,
     ) -> Result<Expression, Error> {
-        let node_text = self.get_text(ast_node);
         let expression = match &ast_literal_kind {
             swamp_script_ast::LiteralKind::Slice(items) => {
                 let (encountered_element_type, resolved_items) =

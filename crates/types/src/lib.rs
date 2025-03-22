@@ -575,7 +575,7 @@ pub enum EnumVariantType {
 }
 impl EnumVariantType {
     #[must_use]
-    pub fn common(&self) -> &EnumVariantCommon {
+    pub const fn common(&self) -> &EnumVariantCommon {
         match self {
             Self::Tuple(tuple) => &tuple.common,
             Self::Struct(c) => &c.common,
