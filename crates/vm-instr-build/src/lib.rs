@@ -243,6 +243,15 @@ impl InstructionBuilder {
         self.add_instruction(OpCode::NegI32, &[target.0, source.0], comment);
     }
 
+    pub fn add_neg_f32(
+        &mut self,
+        target: FrameMemoryAddress,
+        source: FrameMemoryAddress,
+        comment: &str,
+    ) {
+        self.add_instruction(OpCode::NegF32, &[target.0, source.0], comment);
+    }
+
     pub fn add_jmp_if(
         &mut self,
         condition_offset: FrameMemoryAddress,

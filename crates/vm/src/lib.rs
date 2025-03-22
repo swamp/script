@@ -171,6 +171,9 @@ impl Vm {
         vm.handlers[OpCode::MulI32 as usize] = HandlerType::Args3(Self::execute_mul_i32);
         vm.handlers[OpCode::NegI32 as usize] = HandlerType::Args2(Self::execute_neg_i32);
 
+        // fixed
+        vm.handlers[OpCode::NegF32 as usize] = HandlerType::Args2(Self::execute_neg_f32);
+
         // Call, enter, ret
         vm.handlers[OpCode::Call as usize] = HandlerType::Args1(Self::execute_call);
         vm.handlers[OpCode::Enter as usize] = HandlerType::Args1(Self::execute_enter);
@@ -396,6 +399,17 @@ impl Vm {
             let lhs = *lhs_ptr;
             let rhs = *rhs_ptr;
             self.flags.z = lhs > rhs;
+        }
+    }
+
+    #[inline]
+    fn execute_neg_f32(&mut self, dst_offset: u16, lhs_offset: u16) {
+        let lhs_ptr = self.ptr_at_i32(self.frame_offset + lhs_offset as usize) as *const i32;
+        let dst_ptr = self.ptr_at_i32(self.frame_offset + dst_offset as usize);
+
+        unsafe {
+            let lhs = *lhs_ptr;
+            *dst_ptr = -lhs;
         }
     }
 

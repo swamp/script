@@ -2331,9 +2331,12 @@ impl<'a> Analyzer<'a> {
             if target_ast_variables.len() > tuple.len() {
                 return Err(self.create_err(ErrorKind::TooManyDestructureVariables, node));
             }
-            for (variable_ref, tuple_type) in target_ast_variables.iter().zip(tuple.clone()) {
-                let (variable_ref, _is_reassignment) =
-                    self.set_or_overwrite_variable_with_type(variable_ref, &tuple_type)?;
+            for (ast_variable, tuple_type) in target_ast_variables.iter().zip(tuple.clone()) {
+                let variable_ref = self.create_local_variable(
+                    &ast_variable.name,
+                    ast_variable.is_mutable.as_ref(),
+                    &tuple_type,
+                )?;
                 variable_refs.push(variable_ref);
             }
             let expr_kind =

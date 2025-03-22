@@ -22,6 +22,7 @@ pub fn layout_struct(anon_struct: &AnonymousStructType) -> (MemorySize, MemoryAl
     (total_offset.as_size(), largest_alignment)
 }
 
+#[must_use]
 pub fn layout_tuple(types: &Vec<Type>) -> (MemorySize, MemoryAlignment) {
     let mut calculated_offset = MemoryOffset(0);
     let mut largest_alignment = MemoryAlignment::U8;
@@ -34,6 +35,26 @@ pub fn layout_tuple(types: &Vec<Type>) -> (MemorySize, MemoryAlignment) {
     }
     let total_offset = calculated_offset.space(MemorySize(0), largest_alignment);
     (total_offset.as_size(), largest_alignment)
+}
+
+#[must_use]
+pub fn layout_tuple_elements(
+    types: &Vec<Type>,
+) -> (MemorySize, MemoryAlignment, Vec<(MemoryOffset, MemorySize)>) {
+    let mut calculated_offset = MemoryOffset(0);
+    let mut largest_alignment = MemoryAlignment::U8;
+
+    let mut elements = Vec::new();
+    for ty in types {
+        let (field_size, field_alignment) = type_size_and_alignment(&ty);
+        if field_alignment.greater_than(largest_alignment) {
+            largest_alignment = field_alignment;
+        }
+        elements.push((calculated_offset, field_size));
+        calculated_offset.space(field_size, field_alignment);
+    }
+    let total_offset = calculated_offset.space(MemorySize(0), largest_alignment);
+    (total_offset.as_size(), largest_alignment, elements)
 }
 
 pub fn layout_union(variants: &SeqMap<String, EnumVariantType>) -> (MemorySize, MemoryAlignment) {

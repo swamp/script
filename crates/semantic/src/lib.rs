@@ -195,6 +195,7 @@ pub struct Variable {
     pub variable_index: usize,
 
     pub unique_id_within_function: usize,
+    pub is_unused: bool,
 }
 
 impl Variable {

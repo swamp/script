@@ -6,7 +6,8 @@ mod vec;
 
 use crate::alloc::{FrameMemoryRegion, ScopeAllocator};
 use crate::alloc_util::{
-    layout_struct, layout_tuple, reserve_space_for_type, type_size_and_alignment,
+    layout_struct, layout_tuple, layout_tuple_elements, reserve_space_for_type,
+    type_size_and_alignment,
 };
 use crate::constants::ConstantsManager;
 use crate::ctx::Context;
@@ -437,7 +438,9 @@ impl<'a> FunctionCodeGen<'a> {
         match &expr.kind {
             ExpressionKind::ConstantAccess(_) => todo!(),
             ExpressionKind::InterpolatedString(_) => todo!(),
-            ExpressionKind::TupleDestructuring(_, _, _) => todo!(),
+            ExpressionKind::TupleDestructuring(variables, tuple_types, tuple_expression) => {
+                self.gen_tuple_destructuring(variables, tuple_types, tuple_expression, ctx)
+            }
             ExpressionKind::Range(start, end, mode) => self.gen_range(start, end, mode, ctx),
 
             ExpressionKind::Assignment(target_mut_location_expr, source_expr) => {
@@ -508,6 +511,13 @@ impl<'a> FunctionCodeGen<'a> {
                     self.state
                         .builder
                         .add_neg_i32(ctx.addr(), left_source.addr, "negate i32");
+                }
+
+                Type::Float => {
+                    let left_source = self.gen_expression_for_access(&unary_operator.left);
+                    self.state
+                        .builder
+                        .add_neg_f32(ctx.addr(), left_source.addr, "negate f32");
                 }
                 _ => todo!(),
             },
@@ -1956,6 +1966,43 @@ impl<'a> FunctionCodeGen<'a> {
         Error {
             kind,
             node: node.clone(),
+        }
+    }
+
+    fn gen_tuple_destructuring(
+        &mut self,
+        target_variables: &Vec<VariableRef>,
+        tuple_type: &Vec<Type>,
+        source_tuple_expression: &Expression,
+        ctx: &Context,
+    ) {
+        let source_region = self.gen_expression_for_access(source_tuple_expression);
+
+        let (total_size, max_alignment, element_offsets) = layout_tuple_elements(tuple_type);
+        assert_eq!(total_size.0, source_region.size.0);
+
+        for (target_variable, (element_offset, element_size)) in
+            target_variables.iter().zip(element_offsets)
+        {
+            if target_variable.is_unused {
+            } else {
+                let (target_region, variable_alignment) = self.get_variable_region(target_variable);
+                assert_eq!(target_region.size.0, element_size.0);
+
+                let source_element_region = FrameMemoryRegion::new(
+                    source_region.addr.advance(element_offset),
+                    element_size,
+                );
+                self.state.builder.add_mov(
+                    target_region.addr,
+                    source_element_region.addr,
+                    source_element_region.size,
+                    &format!(
+                        "destructuring to variable {}",
+                        target_variable.assigned_name
+                    ),
+                );
+            }
         }
     }
 }

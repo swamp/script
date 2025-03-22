@@ -91,6 +91,7 @@ impl Analyzer<'_> {
             .expect("block scope should have at least one scope")
             .variables;
         let variable_index = variables.len();
+        let should_insert_in_scope = !variable_name_str.starts_with('_');
 
         let resolved_variable = Variable {
             name,
@@ -100,6 +101,7 @@ impl Analyzer<'_> {
             scope_index,
             variable_index,
             unique_id_within_function: index_within_function,
+            is_unused: !should_insert_in_scope,
         };
 
         let variable_ref = Rc::new(resolved_variable);
@@ -162,6 +164,7 @@ impl Analyzer<'_> {
 
         let index = { self.scope.gen_variable_index() };
 
+        let should_insert_in_scope = !variable_str.starts_with('_');
         let variables = &mut self
             .scope
             .block_scope_stack
@@ -178,11 +181,11 @@ impl Analyzer<'_> {
             scope_index,
             variable_index: variables.len(),
             unique_id_within_function: index,
+            is_unused: !should_insert_in_scope,
         };
 
         let variable_ref = Rc::new(resolved_variable);
 
-        let should_insert_in_scope = !variable_str.starts_with('_');
         if !should_insert_in_scope && is_mutable.is_some() {
             return Err(self.create_err_resolved(ErrorKind::UnusedVariablesCanNotBeMut, variable));
         }
@@ -214,6 +217,8 @@ impl Analyzer<'_> {
             .expect("block scope should have at least one scope")
             .variables;
 
+        let should_insert_in_scope = !variable_str.starts_with('_');
+
         let resolved_variable = Variable {
             name: Node::default(),
             assigned_name: variable_str.to_string(),
@@ -226,13 +231,16 @@ impl Analyzer<'_> {
             scope_index,
             variable_index: variables.len(),
             unique_id_within_function: index_within_function,
+            is_unused: !should_insert_in_scope,
         };
 
         let variable_ref = Rc::new(resolved_variable);
 
-        variables
-            .insert(variable_str.to_string(), variable_ref.clone())
-            .expect("should have checked earlier for variable");
+        if should_insert_in_scope {
+            variables
+                .insert(variable_str.to_string(), variable_ref.clone())
+                .expect("should have checked earlier for variable");
+        }
 
         Ok(variable_ref)
     }
