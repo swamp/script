@@ -4,7 +4,7 @@ pub mod constants;
 pub mod ctx;
 mod vec;
 
-use crate::alloc::{FrameMemoryRegion, ScopeAllocator};
+use crate::alloc::{ConstantMemoryRegion, FrameMemoryRegion, ScopeAllocator};
 use crate::alloc_util::{
     layout_struct, layout_tuple, layout_tuple_elements, reserve_space_for_type,
     type_size_and_alignment,
@@ -16,8 +16,8 @@ use swamp_script_node::Node;
 use swamp_script_semantic::intr::IntrinsicFunction;
 use swamp_script_semantic::{
     AnonymousStructLiteral, ArgumentExpressionOrLocation, BinaryOperator, BinaryOperatorKind,
-    BooleanExpression, CompoundOperatorKind, EnumLiteralData, Expression, ExpressionKind,
-    ForPattern, Function, Guard, InternalFunctionDefinitionRef, InternalFunctionId,
+    BooleanExpression, CompoundOperatorKind, ConstantId, ConstantRef, EnumLiteralData, Expression,
+    ExpressionKind, ForPattern, Function, Guard, InternalFunctionDefinitionRef, InternalFunctionId,
     InternalMainExpression, Iterable, Literal, LocationAccessKind, Match, MutOrImmutableExpression,
     NormalPattern, Pattern, Postfix, PostfixKind, RangeMode, SingleLocationExpression,
     SingleMutLocationExpression, StructInstantiation, UnaryOperator, UnaryOperatorKind,
@@ -26,8 +26,9 @@ use swamp_script_semantic::{
 use swamp_script_types::{AnonymousStructType, EnumVariantType, Signature, StructTypeField, Type};
 use swamp_vm_instr_build::{InstructionBuilder, PatchPosition};
 use swamp_vm_types::{
-    BOOL_SIZE, BinaryInstruction, CountU16, FrameMemoryAddress, FrameMemorySize, INT_SIZE,
-    InstructionPosition, MemoryAlignment, MemoryOffset, MemorySize, TempFrameMemoryAddress,
+    BOOL_SIZE, BinaryInstruction, ConstantMemoryAddress, CountU16, FrameMemoryAddress,
+    FrameMemorySize, INT_SIZE, InstructionPosition, MemoryAlignment, MemoryOffset, MemorySize,
+    TempFrameMemoryAddress,
 };
 use tracing::{error, info, trace};
 
@@ -64,6 +65,7 @@ pub struct FunctionFixup {
 pub struct CodeGenState {
     builder: InstructionBuilder,
     constants: ConstantsManager,
+    constant_offsets: SeqMap<ConstantId, ConstantMemoryRegion>,
     function_infos: SeqMap<InternalFunctionId, FunctionInfo>,
     function_fixups: Vec<FunctionFixup>,
 }
@@ -126,18 +128,14 @@ impl CodeGenState {
 pub struct GenOptions {
     pub is_halt_function: bool,
 }
-impl Default for CodeGenState {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 
 impl CodeGenState {
     #[must_use]
-    pub fn new() -> Self {
+    pub fn new(constants: SeqMap<ConstantId, ConstantMemoryRegion>) -> Self {
         Self {
             builder: InstructionBuilder::default(),
             constants: ConstantsManager::new(),
+            constant_offsets: constants,
             function_infos: SeqMap::default(),
             function_fixups: vec![],
         }
@@ -436,10 +434,12 @@ impl<'a> FunctionCodeGen<'a> {
 
     pub fn gen_expression(&mut self, expr: &Expression, ctx: &Context) {
         match &expr.kind {
-            ExpressionKind::ConstantAccess(_) => todo!(),
+            ExpressionKind::ConstantAccess(constant_ref) => {
+                self.gen_constant_access(constant_ref, ctx)
+            }
             ExpressionKind::InterpolatedString(_) => todo!(),
             ExpressionKind::TupleDestructuring(variables, tuple_types, tuple_expression) => {
-                self.gen_tuple_destructuring(variables, tuple_types, tuple_expression, ctx)
+                self.gen_tuple_destructuring(variables, tuple_types, tuple_expression);
             }
             ExpressionKind::Range(start, end, mode) => self.gen_range(start, end, mode, ctx),
 
@@ -1974,7 +1974,6 @@ impl<'a> FunctionCodeGen<'a> {
         target_variables: &Vec<VariableRef>,
         tuple_type: &Vec<Type>,
         source_tuple_expression: &Expression,
-        ctx: &Context,
     ) {
         let source_region = self.gen_expression_for_access(source_tuple_expression);
 
@@ -2004,6 +2003,22 @@ impl<'a> FunctionCodeGen<'a> {
                 );
             }
         }
+    }
+
+    fn gen_constant_access(&mut self, constant_reference: &ConstantRef, ctx: &Context) {
+        let constant_region = self
+            .state
+            .constant_offsets
+            .get(&constant_reference.id)
+            .unwrap();
+        assert_eq!(constant_region.size.0, ctx.target_size().0);
+
+        self.state.builder.add_ld_constant(
+            ctx.addr(),
+            constant_region.addr,
+            constant_region.size,
+            &format!("load constant '{}'", constant_reference.assigned_name),
+        );
     }
 }
 

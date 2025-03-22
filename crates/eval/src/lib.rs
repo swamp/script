@@ -945,10 +945,10 @@ impl<'a, C> Interpreter<'a, C> {
                         }
                         StringPart::Interpolation(expr, format_spec) => {
                             let value = self.evaluate_expression(expr)?;
-                            let formatted = match format_spec {
-                                Some(spec) => format_value(&value, &spec.kind).unwrap(), // TODO: Error handling
-                                None => value.convert_to_string_if_needed(),
-                            };
+                            let formatted = format_spec.as_ref().map_or_else(
+                                || value.convert_to_string_if_needed(),
+                                |spec| format_value(&value, &spec.kind).unwrap(),
+                            );
                             result.push_str(&formatted);
                         }
                     }

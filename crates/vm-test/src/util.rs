@@ -1,16 +1,45 @@
-use swamp_script_code_gen::{CodeGenState, GenOptions};
+use seq_map::SeqMap;
+use swamp_script_code_gen::alloc::ConstantMemoryRegion;
+use swamp_script_code_gen::alloc_util::type_size_and_alignment;
+use swamp_script_code_gen::{CodeGenState, Error, GenOptions};
 use swamp_script_compile::Program;
 use swamp_script_compile::compile_string;
-use swamp_script_semantic::Function;
+use swamp_script_semantic::{ConstantId, Function, ProgramState};
 use swamp_script_types::Type;
 use swamp_vm::Vm;
 use swamp_vm::host::HostArgs;
 use swamp_vm_disasm::{disasm_instructions_color, disasm_instructions_no_color};
+use swamp_vm_types::ConstantMemoryAddress;
+use swamp_vm_types::aligner::align;
+
+pub fn execute_constants(
+    program_state: &ProgramState,
+) -> Result<SeqMap<ConstantId, ConstantMemoryRegion>, Error> {
+    let mut constant_addr = 0;
+    let mut constant_offsets = SeqMap::default();
+    for constant in &program_state.constants_in_dependency_order {
+        let (size, alignment) = type_size_and_alignment(&constant.resolved_type);
+        constant_addr = align(constant_addr, alignment.into());
+        let constant_region = ConstantMemoryRegion {
+            addr: ConstantMemoryAddress(constant_addr as u32),
+            size,
+        };
+        constant_offsets
+            .insert(constant.id, constant_region)
+            .unwrap();
+
+        constant_addr += size.0 as usize;
+    }
+
+    Ok(constant_offsets)
+}
 
 pub fn gen_internal(code: &str) -> (CodeGenState, Program) {
     let (program, main_module, source_map) = compile_string(code).unwrap();
 
-    let mut code_gen = CodeGenState::new();
+    let constants = execute_constants(&program.state).unwrap();
+
+    let mut code_gen = CodeGenState::new(constants);
 
     let main_expression = main_module.main_expression.as_ref().unwrap();
     let halt_function = GenOptions {

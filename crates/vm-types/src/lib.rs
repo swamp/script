@@ -28,6 +28,9 @@ impl StackMemoryAddress {
 // relative to the stack pointer
 
 #[derive(Debug, Copy, Clone)]
+pub struct ConstantMemoryAddress(pub u32);
+
+#[derive(Debug, Copy, Clone)]
 pub struct FrameMemoryAddress(pub u16);
 
 #[derive(Debug, Copy, Clone)]

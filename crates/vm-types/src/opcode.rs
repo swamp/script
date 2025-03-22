@@ -38,6 +38,8 @@ pub enum OpCode {
     Ld16,
     Ld32,
 
+    LdConst, // Load from constant memory
+
     // Indirect operations (using pointer)
     //St32x,
     //Stx,
@@ -70,6 +72,8 @@ impl Display for OpCode {
             Self::Ld8 => write!(f, "ld8"),
             Self::Ld16 => write!(f, "ld16"),
             Self::Ld32 => write!(f, "ld32"),
+
+            Self::LdConst => write!(f, "ldconst"),
 
             // Move data
             Self::Mov => write!(f, "mov"),     // Move data

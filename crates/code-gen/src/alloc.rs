@@ -1,9 +1,17 @@
-use swamp_vm_types::{FrameMemoryAddress, MemoryAlignment, MemorySize, align_frame_addr};
+use swamp_vm_types::{
+    ConstantMemoryAddress, FrameMemoryAddress, MemoryAlignment, MemorySize, align_frame_addr,
+};
 use tracing::error;
 
 const ALIGNMENT: u16 = 8;
 const ALIGNMENT_REST: u16 = ALIGNMENT - 1;
 const ALIGNMENT_MASK: u16 = !ALIGNMENT_REST;
+
+#[derive(Debug, Copy, Clone)]
+pub struct ConstantMemoryRegion {
+    pub addr: ConstantMemoryAddress,
+    pub size: MemorySize,
+}
 
 #[derive(Debug, Copy, Clone)]
 pub struct FrameMemoryRegion {

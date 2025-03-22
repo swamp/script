@@ -8,6 +8,7 @@ repository = "https://github.com/swamp/script"
 
 [dependencies]
 swamp-vm = { path = "../vm", version = "0.1.5", features = [] }
+swamp-vm-types = { path = "../vm-types", version = "0.1.5", features = [] }
 swamp-script-code-gen = { path = "../code-gen", version = "0.1.5" }
 swamp-script-compile = { path = "../compile", version = "0.1.5" }
 hexify = "0.0.3"
@@ -15,6 +16,7 @@ swamp-script-types = { path = "../types", version = "0.1.5" }
 swamp-script-semantic = { path = "../semantic", version = "0.1.5" }
 swamp-vm-disasm = { path = "../vm-disasm", version = "0.1.5" }
 tracing = "0.1.40"
+seq-map = "0.0.13"
 
 [dev-dependencies]
 test-log = { version = "0.2.16", features = ["trace", "log", "color"] }

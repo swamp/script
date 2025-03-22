@@ -1,7 +1,7 @@
 use swamp_vm_types::opcode::OpCode;
 use swamp_vm_types::{
-    BinaryInstruction, CountU16, FrameMemoryAddress, FrameMemorySize, InstructionPosition,
-    MemoryAddress, MemorySize,
+    BinaryInstruction, ConstantMemoryAddress, CountU16, FrameMemoryAddress, FrameMemorySize,
+    InstructionPosition, MemoryAddress, MemorySize,
 };
 
 #[derive(Debug)]
@@ -11,6 +11,8 @@ pub struct InstructionBuilder {
     pub instructions: Vec<BinaryInstruction>,
     pub comments: Vec<String>,
 }
+
+impl InstructionBuilder {}
 
 impl InstructionBuilder {}
 
@@ -184,6 +186,25 @@ impl InstructionBuilder {
         self.add_instruction(
             OpCode::Ld32,
             &[dst_offset.0, lower_bits, upper_bits],
+            comment,
+        );
+    }
+
+    pub fn add_ld_constant(
+        &mut self,
+        target_addr: FrameMemoryAddress,
+        constant_addr: ConstantMemoryAddress,
+        size: MemorySize,
+        comment: &str,
+    ) {
+        let value_u32 = constant_addr.0;
+
+        let lower_bits = (value_u32 & 0xFFFF) as u16;
+        let upper_bits = (value_u32 >> 16) as u16;
+
+        self.add_instruction(
+            OpCode::LdConst,
+            &[target_addr.0, lower_bits, upper_bits, size.0],
             comment,
         );
     }

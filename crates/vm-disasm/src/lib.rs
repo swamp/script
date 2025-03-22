@@ -1,8 +1,8 @@
 use seq_map::SeqMap;
 use swamp_vm_types::opcode::OpCode;
 use swamp_vm_types::{
-    BinaryInstruction, FrameMemoryAddress, FrameMemorySize, InstructionPosition, MemoryAddress,
-    MemoryOffset, MemorySize,
+    BinaryInstruction, ConstantMemoryAddress, FrameMemoryAddress, FrameMemorySize,
+    InstructionPosition, MemoryAddress, MemoryOffset, MemorySize,
 };
 use yansi::{Color, Paint};
 
@@ -23,6 +23,7 @@ pub enum DecoratedOperandKind {
         DecoratedMemoryKind,
         FrameMemoryAttribute,
     ),
+    ConstantAddress(ConstantMemoryAddress),
     Ip(InstructionPosition),
     ImmediateU32(u32),
     ImmediateU16(u16),
@@ -31,7 +32,6 @@ pub enum DecoratedOperandKind {
     WriteIndirectMemory(MemoryAddress, MemoryOffset, DecoratedMemoryKind),
     ReadIndirectMemory(MemoryAddress, MemoryOffset, DecoratedMemoryKind),
     CountU16(u16),
-    //PointerOffset(MemoryOffset),
 }
 
 #[derive(Clone, Debug)]
@@ -175,6 +175,14 @@ pub fn disasm_color(
                     memory_kind_color(&memory_kind),
                 )
             }
+            DecoratedOperandKind::ConstantAddress(addr) => {
+                let color = Color::Yellow;
+
+                (
+                    format!("{}{}", "@".fg(color), format!("{:08X}", addr.0).fg(color)),
+                    "constant".to_string(),
+                )
+            }
             DecoratedOperandKind::WriteIndirectMemory(addr, memory_offset, memory_kind) => (
                 format!(
                     "({}{})",
@@ -260,6 +268,9 @@ pub fn disasm_no_color(
             DecoratedOperandKind::WriteFrameAddress(addr, memory_kind, attr) => {
                 format!("{}{}", "$", format!("{:04X}", addr.0))
             }
+            DecoratedOperandKind::ConstantAddress(addr) => {
+                format!("{}{}", "@", format!("{:04X}", addr.0))
+            }
 
             DecoratedOperandKind::ReadIndirectMemory(addr, memory_offset, memory_kind) => {
                 format!("({}{})", "$", format!("{:04X}+{}", addr.0, memory_offset.0))
@@ -306,6 +317,17 @@ pub fn disasm(
     let operands_slice: &[DecoratedOperandKind] = match opcode {
         OpCode::Hlt => &[],
         OpCode::Ret => &[],
+
+        OpCode::LdConst => {
+            let data = ((operands[2] as u32) << 16) | operands[1] as u32;
+
+            &[
+                to_write_frame(operands[0], DecoratedMemoryKind::S32, frame_memory_size),
+                DecoratedOperandKind::ConstantAddress(ConstantMemoryAddress(data)),
+                DecoratedOperandKind::MemorySize(MemorySize(operands[3])),
+            ]
+        }
+
         OpCode::Ld32 => {
             let data = ((operands[2] as u32) << 16) | operands[1] as u32;
 
