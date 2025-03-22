@@ -6,32 +6,40 @@ mod vec;
 
 use crate::alloc::{FrameMemoryRegion, ScopeAllocator};
 use crate::alloc_util::{
-    layout_struct, layout_tuple, layout_union, reserve_space_for_type, type_size_and_alignment,
+    layout_struct, layout_tuple, reserve_space_for_type, type_size_and_alignment,
 };
+use crate::constants::ConstantsManager;
 use crate::ctx::Context;
-use crate::vec::{VECTOR_DATA_PTR_OFFSET, VECTOR_LENGTH_OFFSET};
 use seq_map::SeqMap;
-use std::ops::Deref;
+use swamp_script_node::Node;
+use swamp_script_semantic::intr::IntrinsicFunction;
 use swamp_script_semantic::{
     AnonymousStructLiteral, ArgumentExpressionOrLocation, BinaryOperator, BinaryOperatorKind,
     BooleanExpression, CompoundOperatorKind, EnumLiteralData, Expression, ExpressionKind,
-    ForPattern, Function, FunctionScopeState, Guard, InternalFunctionDefinition,
-    InternalFunctionDefinitionRef, InternalFunctionId, InternalMainExpression, Iterable, Literal,
-    LocationAccessKind, Match, MutOrImmutableExpression, NormalPattern, Pattern, Postfix,
-    PostfixKind, SingleLocationExpression, SingleMutLocationExpression, StructInstantiation,
-    UnaryOperator, UnaryOperatorKind, VariableRef, WhenBinding,
+    ForPattern, Function, Guard, InternalFunctionDefinitionRef, InternalFunctionId,
+    InternalMainExpression, Iterable, Literal, LocationAccessKind, Match, MutOrImmutableExpression,
+    NormalPattern, Pattern, Postfix, PostfixKind, RangeMode, SingleLocationExpression,
+    SingleMutLocationExpression, StructInstantiation, UnaryOperator, UnaryOperatorKind,
+    VariableRef, WhenBinding,
 };
 use swamp_script_types::{AnonymousStructType, EnumVariantType, Signature, StructTypeField, Type};
-
-use crate::constants::ConstantsManager;
-use swamp_script_semantic::intr::IntrinsicFunction;
 use swamp_vm_instr_build::{InstructionBuilder, PatchPosition};
-use swamp_vm_types::opcode::OpCode;
 use swamp_vm_types::{
-    BinaryInstruction, CountU16, FrameMemoryAddress, FrameMemorySize, InstructionPosition,
-    MemoryAddress, MemoryAlignment, MemoryOffset, MemorySize, TempFrameMemoryAddress,
+    BOOL_SIZE, BinaryInstruction, CountU16, FrameMemoryAddress, FrameMemorySize, INT_SIZE,
+    InstructionPosition, MemoryAlignment, MemoryOffset, MemorySize, TempFrameMemoryAddress,
 };
-use tracing::{info, trace};
+use tracing::{error, info, trace};
+
+#[derive(Debug)]
+pub enum ErrorKind {
+    IllegalCompoundAssignment,
+}
+
+#[derive(Debug)]
+pub struct Error {
+    pub kind: ErrorKind,
+    pub node: Node,
+}
 
 pub struct SlicePairInfo {
     pub addr: TempFrameMemoryAddress,
@@ -430,11 +438,11 @@ impl<'a> FunctionCodeGen<'a> {
             ExpressionKind::ConstantAccess(_) => todo!(),
             ExpressionKind::InterpolatedString(_) => todo!(),
             ExpressionKind::TupleDestructuring(_, _, _) => todo!(),
+            ExpressionKind::Range(start, end, mode) => self.gen_range(start, end, mode, ctx),
+
             ExpressionKind::Assignment(target_mut_location_expr, source_expr) => {
                 self.gen_assignment(target_mut_location_expr, source_expr, ctx);
             }
-            ExpressionKind::Range(_, _, _) => todo!(),
-
             ExpressionKind::VariableAccess(variable_ref) => {
                 self.gen_variable_access(variable_ref, ctx);
             }
@@ -791,53 +799,6 @@ impl<'a> FunctionCodeGen<'a> {
         self.gen_variable_assignment(variable, mut_or_immutable_expression, ctx);
     }
 
-    fn gen_lvalue_address(
-        &mut self,
-        location_expression: &SingleLocationExpression,
-    ) -> FrameMemoryRegion {
-        let mut frame_relative_base_address = *self
-            .variable_offsets
-            .get(
-                &location_expression
-                    .starting_variable
-                    .unique_id_within_function,
-            )
-            .unwrap();
-
-        // Loop over the consecutive accesses until we find the actual location
-        for access in &location_expression.access_chain {
-            match &access.kind {
-                LocationAccessKind::FieldIndex(anonymous_struct_type, field_index) => {
-                    let (memory_offset, memory_size, _max_alignment) =
-                        Self::get_struct_field_offset(
-                            &anonymous_struct_type.field_name_sorted_fields,
-                            *field_index,
-                        );
-                    info!(
-                        ?field_index,
-                        ?memory_offset,
-                        ?memory_size,
-                        "lookup struct field",
-                    );
-                    frame_relative_base_address = FrameMemoryRegion::new(
-                        frame_relative_base_address.addr.advance(memory_offset),
-                        memory_size,
-                    );
-                }
-                LocationAccessKind::IntrinsicCallMut(
-                    intrinsic_function,
-                    arguments_to_the_intrinsic,
-                ) => {
-                    // Fetching from vector, map, etc. are done using intrinsic calls
-                    // arguments can be things like the key_value or the int index in a vector
-                    todo!()
-                }
-            }
-        }
-
-        frame_relative_base_address
-    }
-
     fn copy_back_mutable_arguments(
         &mut self,
         signature: &Signature,
@@ -936,135 +897,51 @@ impl<'a> FunctionCodeGen<'a> {
         }
     }
 
-    #[allow(clippy::too_many_lines)]
-    fn gen_postfix_chain_lvalue(
+    fn gen_lvalue_address(
         &mut self,
-        start_expression: &Expression,
-        chain: &[Postfix],
-        ctx: &Context,
+        location_expression: &SingleLocationExpression,
     ) -> FrameMemoryRegion {
-        if let ExpressionKind::InternalFunctionAccess(internal_fn) = &start_expression.kind {
-            if chain.len() == 1 {
-                if let PostfixKind::FunctionCall(args) = &chain[0].kind {
-                    if let Some(intrinsic_fn) = single_intrinsic_fn(&internal_fn.body) {
-                        self.gen_single_intrinsic_call(intrinsic_fn, None, args, ctx);
-                    } else {
-                        self.gen_arguments(&internal_fn.signature, None, args);
-                        self.state
-                            .add_call(internal_fn, &format!("frame size: {}", self.frame_size)); // will be fixed up later
-                        let (return_size, _alignment) =
-                            type_size_and_alignment(&internal_fn.signature.return_type);
-                        if return_size.0 != 0 {
-                            self.state.builder.add_mov(
-                                ctx.addr(),
-                                self.infinite_above_frame_size().addr,
-                                return_size,
-                                "copy the ret value to destination",
-                            );
-                        }
-                        self.copy_back_mutable_arguments(&internal_fn.signature, None, args);
-                    }
+        let mut frame_relative_base_address = *self
+            .variable_offsets
+            .get(
+                &location_expression
+                    .starting_variable
+                    .unique_id_within_function,
+            )
+            .unwrap();
 
-                    return ctx.target();
-                }
-            }
-        }
-
-        if let ExpressionKind::ExternalFunctionAccess(external_fn) = &start_expression.kind {
-            if chain.len() == 1 {
-                if let PostfixKind::FunctionCall(args) = &chain[0].kind {
-                    let total_region = self.gen_arguments(&external_fn.signature, None, args);
-                    self.state.builder.add_host_call(
-                        external_fn.id as u16,
-                        total_region.size,
-                        &format!("call external '{}'", external_fn.assigned_name),
-                    );
-                    let (return_size, _alignment) =
-                        type_size_and_alignment(&external_fn.signature.return_type);
-                    if return_size.0 != 0 {
-                        self.state.builder.add_mov(
-                            ctx.addr(),
-                            self.infinite_above_frame_size().addr,
-                            return_size,
-                            "copy the ret value to destination",
-                        );
-                    }
-
-                    return ctx.target();
-                }
-            }
-        }
-
-        let mut start_source = self.gen_expression_for_access(start_expression);
-
-        for element in chain {
-            match &element.kind {
-                PostfixKind::StructField(anonymous_struct, field_index) => {
+        // Loop over the consecutive accesses until we find the actual location
+        for access in &location_expression.access_chain {
+            match &access.kind {
+                LocationAccessKind::FieldIndex(anonymous_struct_type, field_index) => {
                     let (memory_offset, memory_size, _max_alignment) =
                         Self::get_struct_field_offset(
-                            &anonymous_struct.field_name_sorted_fields,
+                            &anonymous_struct_type.field_name_sorted_fields,
                             *field_index,
                         );
-                    start_source = FrameMemoryRegion::new(
-                        start_source.addr.advance(memory_offset),
+                    info!(
+                        ?field_index,
+                        ?memory_offset,
+                        ?memory_size,
+                        "lookup struct field",
+                    );
+                    frame_relative_base_address = FrameMemoryRegion::new(
+                        frame_relative_base_address.addr.advance(memory_offset),
                         memory_size,
                     );
                 }
-                PostfixKind::MemberCall(function_to_call, arguments) => {
-                    match &**function_to_call {
-                        Function::Internal(internal_fn) => {
-                            if let Some(intrinsic_fn) = single_intrinsic_fn(&internal_fn.body) {
-                                self.gen_single_intrinsic_call(
-                                    intrinsic_fn,
-                                    Some(start_source),
-                                    arguments,
-                                    ctx,
-                                );
-                            } else {
-                                self.gen_arguments(
-                                    &internal_fn.signature,
-                                    Some(start_source),
-                                    arguments,
-                                );
-                                self.state.add_call(
-                                    internal_fn,
-                                    &format!("frame size: {}", self.frame_size),
-                                ); // will be fixed up later
-
-                                let (return_size, _alignment) =
-                                    type_size_and_alignment(&internal_fn.signature.return_type);
-                                if return_size.0 != 0 {
-                                    self.state.builder.add_mov(
-                                        ctx.addr(),
-                                        self.infinite_above_frame_size().addr,
-                                        return_size,
-                                        "copy the return value to destination",
-                                    );
-                                }
-
-                                self.copy_back_mutable_arguments(
-                                    &internal_fn.signature,
-                                    Some(start_source),
-                                    arguments,
-                                );
-                            }
-                        }
-                        Function::External(external_fn) => {
-                            //self.state.builder.add_host_call(external_fn.id);
-                        }
-                    }
+                LocationAccessKind::IntrinsicCallMut(
+                    intrinsic_function,
+                    arguments_to_the_intrinsic,
+                ) => {
+                    // Fetching from vector, map, etc. are done using intrinsic calls
+                    // arguments can be things like the key_value or the int index in a vector
+                    todo!()
                 }
-                PostfixKind::FunctionCall(arguments) => {
-                    //self.gen_arguments(arguments);
-                    //self.state.add_call(start_expression)
-                }
-                PostfixKind::OptionUnwrap => todo!(),
-                PostfixKind::NoneCoalesce(_) => todo!(),
-                PostfixKind::IntrinsicCall(_, _) => todo!(),
             }
         }
 
-        start_source
+        frame_relative_base_address
     }
 
     #[allow(clippy::too_many_lines)]
@@ -1538,7 +1415,7 @@ impl<'a> FunctionCodeGen<'a> {
         op: &CompoundOperatorKind,
         source: &Expression,
         ctx: &Context,
-    ) {
+    ) -> Result<(), Error> {
         let target_location = self.gen_lvalue_address(&target_location.0);
 
         let source_info = self.gen_expression_for_access(source);
@@ -1549,26 +1426,14 @@ impl<'a> FunctionCodeGen<'a> {
             Type::Int => {
                 self.gen_compound_assignment_i32(&target_location, op, &source_info);
             }
-            Type::Float => todo!(),
+            Type::Float => {
+                self.gen_compound_assignment_f32(&target_location, op, &source_info);
+            }
             Type::String => todo!(),
-            Type::Bool => todo!(),
-            Type::Unit => todo!(),
-            Type::Never => todo!(),
-            Type::Tuple(_) => todo!(),
-            Type::NamedStruct(_) => todo!(),
-            Type::AnonymousStruct(_) => todo!(),
-            Type::Enum(_) => todo!(),
-            Type::Function(_) => todo!(),
-            Type::Iterable(_) => todo!(),
-            Type::Optional(_) => todo!(),
-            Type::Generic(_, _) => todo!(),
-            Type::Blueprint(_) => todo!(),
-            Type::Variable(_) => todo!(),
-            Type::External(_) => todo!(),
-            Type::MutableReference(x) => panic!("should have been checked"),
-            Type::Slice(_) => todo!(),
-            Type::SlicePair(_, _) => todo!(),
+            _ => return Err(self.create_err(ErrorKind::IllegalCompoundAssignment, &source.node)),
         }
+
+        Ok(())
     }
 
     fn gen_compound_assignment_i32(
@@ -1584,6 +1449,28 @@ impl<'a> FunctionCodeGen<'a> {
                     target.addr(),
                     source_ctx.addr(),
                     "+=  (i32)",
+                );
+            }
+            CompoundOperatorKind::Sub => todo!(),
+            CompoundOperatorKind::Mul => todo!(),
+            CompoundOperatorKind::Div => todo!(),
+            CompoundOperatorKind::Modulo => todo!(),
+        }
+    }
+
+    fn gen_compound_assignment_f32(
+        &mut self,
+        target: &FrameMemoryRegion,
+        op: &CompoundOperatorKind,
+        source_ctx: &FrameMemoryRegion,
+    ) {
+        match op {
+            CompoundOperatorKind::Add => {
+                self.state.builder.add_add_f32(
+                    target.addr(),
+                    target.addr(),
+                    source_ctx.addr(),
+                    "+=  (f32)",
                 );
             }
             CompoundOperatorKind::Sub => todo!(),
@@ -1767,6 +1654,7 @@ impl<'a> FunctionCodeGen<'a> {
         //        info!(?intrinsic_fn, "generating intrinsic call");
 
         match intrinsic_fn {
+            // Fixed
             IntrinsicFunction::FloatRound => todo!(),
             IntrinsicFunction::FloatFloor => todo!(),
             IntrinsicFunction::FloatSqrt => todo!(),
@@ -1781,13 +1669,19 @@ impl<'a> FunctionCodeGen<'a> {
             IntrinsicFunction::FloatMin => todo!(),
             IntrinsicFunction::FloatMax => todo!(),
             IntrinsicFunction::FloatClamp => todo!(),
+
+            // i32
             IntrinsicFunction::IntAbs => todo!(),
             IntrinsicFunction::IntRnd => todo!(),
             IntrinsicFunction::IntMax => todo!(),
             IntrinsicFunction::IntMin => todo!(),
             IntrinsicFunction::IntClamp => todo!(),
             IntrinsicFunction::IntToFloat => todo!(),
+
+            // String
             IntrinsicFunction::StringLen => todo!(),
+
+            // Vector
             IntrinsicFunction::VecFromSlice => self.gen_intrinsic_vec_from_slice(arguments, ctx),
             IntrinsicFunction::VecPush => {}
             IntrinsicFunction::VecPop => {}
@@ -1800,9 +1694,10 @@ impl<'a> FunctionCodeGen<'a> {
             IntrinsicFunction::VecIterMut => {} // intentionally disregard, since it is never called
             IntrinsicFunction::VecLen => {}
             IntrinsicFunction::VecIsEmpty => {}
-
             IntrinsicFunction::VecSelfPush => todo!(),
             IntrinsicFunction::VecSelfExtend => todo!(),
+
+            // Map
             IntrinsicFunction::MapCreate => todo!(),
             IntrinsicFunction::MapFromSlicePair => todo!(),
             IntrinsicFunction::MapHas => todo!(),
@@ -1815,6 +1710,10 @@ impl<'a> FunctionCodeGen<'a> {
             IntrinsicFunction::MapSubscriptSet => todo!(),
             IntrinsicFunction::MapSubscriptMut => todo!(),
             IntrinsicFunction::MapSubscriptMutCreateIfNeeded => todo!(),
+
+            // Sparse
+            IntrinsicFunction::SparseAdd => todo!(),
+            IntrinsicFunction::SparseNew => todo!(),
             IntrinsicFunction::SparseCreate => todo!(),
             IntrinsicFunction::SparseFromSlice => todo!(),
             IntrinsicFunction::SparseIter => todo!(),
@@ -1823,13 +1722,15 @@ impl<'a> FunctionCodeGen<'a> {
             IntrinsicFunction::SparseSubscriptMut => todo!(),
             IntrinsicFunction::SparseHas => todo!(),
             IntrinsicFunction::SparseRemove => todo!(),
+
+            // Grid
             IntrinsicFunction::GridCreate => todo!(),
             IntrinsicFunction::GridFromSlice => todo!(),
             IntrinsicFunction::GridSubscript => todo!(),
             IntrinsicFunction::GridSubscriptMut => todo!(),
+
+            // Other
             IntrinsicFunction::Float2Magnitude => todo!(),
-            IntrinsicFunction::SparseAdd => todo!(),
-            IntrinsicFunction::SparseNew => todo!(),
         };
     }
 
@@ -2030,6 +1931,31 @@ impl<'a> FunctionCodeGen<'a> {
             self.state
                 .builder
                 .patch_jump_here(maybe_jump_over_false.unwrap());
+        }
+    }
+
+    fn gen_range(&mut self, start: &Expression, end: &Expression, mode: &RangeMode, ctx: &Context) {
+        let start_ctx = ctx.with_offset(MemoryOffset(0), MemorySize(INT_SIZE));
+        self.gen_expression(start, &start_ctx);
+
+        let end_ctx = ctx.with_offset(MemoryOffset(INT_SIZE), MemorySize(INT_SIZE));
+        self.gen_expression(end, &end_ctx);
+
+        let mode_ctx = ctx.with_offset(MemoryOffset(INT_SIZE + INT_SIZE), MemorySize(BOOL_SIZE));
+        let val = match &mode {
+            RangeMode::Inclusive => 1u8,
+            RangeMode::Exclusive => 0u8,
+        };
+        self.state
+            .builder
+            .add_ld8(mode_ctx.addr(), val, "range mode");
+    }
+
+    fn create_err(&mut self, kind: ErrorKind, node: &Node) -> Error {
+        error!(?kind, "encountered error");
+        Error {
+            kind,
+            node: node.clone(),
         }
     }
 }

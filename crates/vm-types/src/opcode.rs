@@ -5,8 +5,15 @@ pub enum OpCode {
     Hlt, // Return to the host
 
     // Operators
+    // i32
     AddI32,
     MulI32,
+    NegI32,
+
+    // Fixed
+    AddF32,
+    MulF32,
+    NegF32,
 
     // Comparisons
     LtI32,
@@ -52,7 +59,6 @@ pub enum OpCode {
     Tst8,
     GtI32,
     HostCall,
-    NegI32,
 }
 
 impl Display for OpCode {
@@ -72,6 +78,10 @@ impl Display for OpCode {
             Self::AddI32 => write!(f, "sadd32"), // Signed Add
             Self::MulI32 => write!(f, "smul32"), // Signed Add
             Self::NegI32 => write!(f, "sneg32"), // Signed negate
+
+            Self::AddF32 => write!(f, "fadd"), // Signed Add
+            Self::MulF32 => write!(f, "fmul"), // Signed Add
+            Self::NegF32 => write!(f, "fneg"), // Signed negate
 
             // Functions
             Self::Call => write!(f, "call"),     // Call function

@@ -332,6 +332,7 @@ pub fn disasm(
             ]
         }
 
+        // Integer
         OpCode::AddI32 => &[
             to_write_frame(operands[0], DecoratedMemoryKind::S32, frame_memory_size),
             to_read_frame(operands[1], DecoratedMemoryKind::S32, frame_memory_size),
@@ -343,6 +344,22 @@ pub fn disasm(
             to_read_frame(operands[2], DecoratedMemoryKind::S32, frame_memory_size),
         ],
         OpCode::NegI32 => &[
+            to_write_frame(operands[0], DecoratedMemoryKind::S32, frame_memory_size),
+            to_read_frame(operands[1], DecoratedMemoryKind::S32, frame_memory_size),
+        ],
+
+        // Fixed
+        OpCode::AddF32 => &[
+            to_write_frame(operands[0], DecoratedMemoryKind::S32, frame_memory_size),
+            to_read_frame(operands[1], DecoratedMemoryKind::S32, frame_memory_size),
+            to_read_frame(operands[2], DecoratedMemoryKind::S32, frame_memory_size),
+        ],
+        OpCode::MulF32 => &[
+            to_write_frame(operands[0], DecoratedMemoryKind::S32, frame_memory_size),
+            to_read_frame(operands[1], DecoratedMemoryKind::S32, frame_memory_size),
+            to_read_frame(operands[2], DecoratedMemoryKind::S32, frame_memory_size),
+        ],
+        OpCode::NegF32 => &[
             to_write_frame(operands[0], DecoratedMemoryKind::S32, frame_memory_size),
             to_read_frame(operands[1], DecoratedMemoryKind::S32, frame_memory_size),
         ],
