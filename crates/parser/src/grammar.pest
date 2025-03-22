@@ -418,6 +418,11 @@ term = {
   | struct_literal
   | anonymous_struct_literal
   | interpolated_string
+  | closure
+}
+
+closure = {
+    "|" ~ variable_list ~ "|" ~ expression
 }
 
 // variable or function
@@ -471,6 +476,10 @@ guard_expr   = { guard_item+ }
     Variable Lists
     =============================================================
 */
+
+variable_list = {
+    ( (maybe_mut_identifier ~ (COMMA ~ maybe_mut_identifier)*) ~ COMMA? )?
+}
 multi_variable_list        = { variable_item ~ (COMMA ~ variable_item)+ }
 maybe_mut_identifier       = { mut_keyword? ~ identifier }
 variable_item              = { maybe_mut_identifier }
