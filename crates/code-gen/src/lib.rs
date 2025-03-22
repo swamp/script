@@ -428,20 +428,22 @@ impl<'a> FunctionCodeGen<'a> {
     pub fn gen_expression(&mut self, expr: &Expression, ctx: &Context) {
         match &expr.kind {
             ExpressionKind::ConstantAccess(_) => todo!(),
+            ExpressionKind::InterpolatedString(_) => todo!(),
+            ExpressionKind::TupleDestructuring(_, _, _) => todo!(),
+            ExpressionKind::Assignment(target_mut_location_expr, source_expr) => {
+                self.gen_assignment(target_mut_location_expr, source_expr, ctx);
+            }
+            ExpressionKind::Range(_, _, _) => todo!(),
+
             ExpressionKind::VariableAccess(variable_ref) => {
                 self.gen_variable_access(variable_ref, ctx);
             }
-            ExpressionKind::IntrinsicFunctionAccess(_) => todo!(),
             ExpressionKind::InternalFunctionAccess(function) => {
                 self.internal_function_access(function, ctx);
             }
-            ExpressionKind::ExternalFunctionAccess(_) => todo!(),
             ExpressionKind::BinaryOp(operator) => self.gen_binary_operator(operator, ctx),
             ExpressionKind::UnaryOp(operator) => self.gen_unary_operator(operator, ctx),
             ExpressionKind::PostfixChain(start, chain) => self.gen_postfix_chain(start, chain, ctx),
-            ExpressionKind::CoerceOptionToBool(_) => todo!(),
-            ExpressionKind::FunctionCall(_, _, _) => todo!(),
-            ExpressionKind::InterpolatedString(_) => todo!(),
             ExpressionKind::VariableDefinition(variable, expression) => {
                 self.gen_variable_definition(variable, expression, ctx);
             }
@@ -452,17 +454,17 @@ impl<'a> FunctionCodeGen<'a> {
                 self.gen_struct_literal(struct_literal, ctx);
             }
             ExpressionKind::AnonymousStructLiteral(anon_struct) => {
-                self.gen_anonymous_struct_literal(&anon_struct, ctx);
+                self.gen_anonymous_struct_literal(anon_struct, ctx);
             }
             ExpressionKind::Literal(basic_literal) => self.gen_literal(basic_literal, ctx),
             ExpressionKind::Option(maybe_option) => {
                 self.gen_option_expression(maybe_option.as_deref(), ctx);
             }
-            ExpressionKind::Range(_, _, _) => todo!(),
             ExpressionKind::ForLoop(a, b, c) => self.gen_for_loop(a, b, c, ctx),
             ExpressionKind::WhileLoop(condition, expression) => {
                 self.gen_while_loop(condition, expression, ctx);
             }
+
             ExpressionKind::Block(expressions) => self.gen_block(expressions, ctx),
             ExpressionKind::Match(match_expr) => self.gen_match(match_expr, ctx),
             ExpressionKind::Guard(guards) => self.gen_guard(guards, ctx),
@@ -470,10 +472,8 @@ impl<'a> FunctionCodeGen<'a> {
                 self.gen_if(conditional, true_expr, false_expr.as_deref(), ctx);
             }
             ExpressionKind::When(bindings, true_expr, false_expr) => {
-                self.gen_when(bindings, true_expr, false_expr.as_deref(), ctx)
+                self.gen_when(bindings, true_expr, false_expr.as_deref(), ctx);
             }
-            ExpressionKind::TupleDestructuring(_, _, _) => todo!(),
-            ExpressionKind::Assignment(_, _) => todo!(),
             ExpressionKind::CompoundAssignment(target_location, operator_kind, source_expr) => {
                 self.compound_assignment(target_location, operator_kind, source_expr, ctx);
             }
@@ -481,6 +481,13 @@ impl<'a> FunctionCodeGen<'a> {
             ExpressionKind::IntrinsicCallEx(intrinsic_fn, arguments) => {
                 self.gen_intrinsic_call_ex(intrinsic_fn, arguments, ctx);
             }
+            // --------- Not high prio
+            ExpressionKind::CoerceOptionToBool(_) => todo!(),
+            ExpressionKind::FunctionValueCall(_, _, _) => todo!(),
+
+            // --------- TO BE REMOVED
+            ExpressionKind::IntrinsicFunctionAccess(_) => todo!(), // TODO: IntrinsicFunctionAccess should be reduced away in analyzer
+            ExpressionKind::ExternalFunctionAccess(_) => todo!(), // TODO: ExternalFunctionAccess should be reduced away in analyzer
         }
     }
 
@@ -522,7 +529,14 @@ impl<'a> FunctionCodeGen<'a> {
             }
 
             BinaryOperatorKind::Subtract => todo!(),
-            BinaryOperatorKind::Multiply => todo!(),
+            BinaryOperatorKind::Multiply => {
+                self.state.builder.add_mul_i32(
+                    ctx.addr(),
+                    left_source.addr(),
+                    right_source.addr(),
+                    "i32 add",
+                );
+            }
             BinaryOperatorKind::Divide => todo!(),
             BinaryOperatorKind::Modulo => todo!(),
             BinaryOperatorKind::LogicalOr => todo!(),
@@ -739,10 +753,24 @@ impl<'a> FunctionCodeGen<'a> {
             .get(&variable.unique_id_within_function)
             .unwrap_or_else(|| panic!("{}", variable.assigned_name));
 
-        let mut init_ctx =
+        let init_ctx =
             ctx.with_target(*target_relative_frame_pointer, "variable assignment target");
 
-        self.gen_mut_or_immute(mut_or_immutable_expression, &mut init_ctx);
+        self.gen_mut_or_immute(mut_or_immutable_expression, &init_ctx);
+    }
+
+    fn gen_assignment(
+        &mut self,
+        lhs: &SingleMutLocationExpression,
+        rhs: &Expression,
+        ctx: &Context,
+    ) {
+        let lhs_addr = self.gen_lvalue_address(&lhs.0);
+        let access = self.gen_expression_for_access(rhs);
+
+        self.state
+            .builder
+            .add_mov(lhs_addr.addr, access.addr, access.size, "assignment");
     }
 
     fn gen_variable_definition(
@@ -767,7 +795,7 @@ impl<'a> FunctionCodeGen<'a> {
         &mut self,
         location_expression: &SingleLocationExpression,
     ) -> FrameMemoryRegion {
-        let frame_relative_base_address = self
+        let mut frame_relative_base_address = *self
             .variable_offsets
             .get(
                 &location_expression
@@ -776,15 +804,25 @@ impl<'a> FunctionCodeGen<'a> {
             )
             .unwrap();
 
-        *frame_relative_base_address
-
-        /*
-
         // Loop over the consecutive accesses until we find the actual location
         for access in &location_expression.access_chain {
             match &access.kind {
-                LocationAccessKind::FieldIndex(_anonymous_struct_type, field_index) => {
-                    // Calculate the offset somehow?
+                LocationAccessKind::FieldIndex(anonymous_struct_type, field_index) => {
+                    let (memory_offset, memory_size, _max_alignment) =
+                        Self::get_struct_field_offset(
+                            &anonymous_struct_type.field_name_sorted_fields,
+                            *field_index,
+                        );
+                    info!(
+                        ?field_index,
+                        ?memory_offset,
+                        ?memory_size,
+                        "lookup struct field",
+                    );
+                    frame_relative_base_address = FrameMemoryRegion::new(
+                        frame_relative_base_address.addr.advance(memory_offset),
+                        memory_size,
+                    );
                 }
                 LocationAccessKind::IntrinsicCallMut(
                     intrinsic_function,
@@ -792,11 +830,12 @@ impl<'a> FunctionCodeGen<'a> {
                 ) => {
                     // Fetching from vector, map, etc. are done using intrinsic calls
                     // arguments can be things like the key_value or the int index in a vector
+                    todo!()
                 }
             }
         }
 
-         */
+        frame_relative_base_address
     }
 
     fn copy_back_mutable_arguments(
@@ -897,6 +936,138 @@ impl<'a> FunctionCodeGen<'a> {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
+    fn gen_postfix_chain_lvalue(
+        &mut self,
+        start_expression: &Expression,
+        chain: &[Postfix],
+        ctx: &Context,
+    ) -> FrameMemoryRegion {
+        if let ExpressionKind::InternalFunctionAccess(internal_fn) = &start_expression.kind {
+            if chain.len() == 1 {
+                if let PostfixKind::FunctionCall(args) = &chain[0].kind {
+                    if let Some(intrinsic_fn) = single_intrinsic_fn(&internal_fn.body) {
+                        self.gen_single_intrinsic_call(intrinsic_fn, None, args, ctx);
+                    } else {
+                        self.gen_arguments(&internal_fn.signature, None, args);
+                        self.state
+                            .add_call(internal_fn, &format!("frame size: {}", self.frame_size)); // will be fixed up later
+                        let (return_size, _alignment) =
+                            type_size_and_alignment(&internal_fn.signature.return_type);
+                        if return_size.0 != 0 {
+                            self.state.builder.add_mov(
+                                ctx.addr(),
+                                self.infinite_above_frame_size().addr,
+                                return_size,
+                                "copy the ret value to destination",
+                            );
+                        }
+                        self.copy_back_mutable_arguments(&internal_fn.signature, None, args);
+                    }
+
+                    return ctx.target();
+                }
+            }
+        }
+
+        if let ExpressionKind::ExternalFunctionAccess(external_fn) = &start_expression.kind {
+            if chain.len() == 1 {
+                if let PostfixKind::FunctionCall(args) = &chain[0].kind {
+                    let total_region = self.gen_arguments(&external_fn.signature, None, args);
+                    self.state.builder.add_host_call(
+                        external_fn.id as u16,
+                        total_region.size,
+                        &format!("call external '{}'", external_fn.assigned_name),
+                    );
+                    let (return_size, _alignment) =
+                        type_size_and_alignment(&external_fn.signature.return_type);
+                    if return_size.0 != 0 {
+                        self.state.builder.add_mov(
+                            ctx.addr(),
+                            self.infinite_above_frame_size().addr,
+                            return_size,
+                            "copy the ret value to destination",
+                        );
+                    }
+
+                    return ctx.target();
+                }
+            }
+        }
+
+        let mut start_source = self.gen_expression_for_access(start_expression);
+
+        for element in chain {
+            match &element.kind {
+                PostfixKind::StructField(anonymous_struct, field_index) => {
+                    let (memory_offset, memory_size, _max_alignment) =
+                        Self::get_struct_field_offset(
+                            &anonymous_struct.field_name_sorted_fields,
+                            *field_index,
+                        );
+                    start_source = FrameMemoryRegion::new(
+                        start_source.addr.advance(memory_offset),
+                        memory_size,
+                    );
+                }
+                PostfixKind::MemberCall(function_to_call, arguments) => {
+                    match &**function_to_call {
+                        Function::Internal(internal_fn) => {
+                            if let Some(intrinsic_fn) = single_intrinsic_fn(&internal_fn.body) {
+                                self.gen_single_intrinsic_call(
+                                    intrinsic_fn,
+                                    Some(start_source),
+                                    arguments,
+                                    ctx,
+                                );
+                            } else {
+                                self.gen_arguments(
+                                    &internal_fn.signature,
+                                    Some(start_source),
+                                    arguments,
+                                );
+                                self.state.add_call(
+                                    internal_fn,
+                                    &format!("frame size: {}", self.frame_size),
+                                ); // will be fixed up later
+
+                                let (return_size, _alignment) =
+                                    type_size_and_alignment(&internal_fn.signature.return_type);
+                                if return_size.0 != 0 {
+                                    self.state.builder.add_mov(
+                                        ctx.addr(),
+                                        self.infinite_above_frame_size().addr,
+                                        return_size,
+                                        "copy the return value to destination",
+                                    );
+                                }
+
+                                self.copy_back_mutable_arguments(
+                                    &internal_fn.signature,
+                                    Some(start_source),
+                                    arguments,
+                                );
+                            }
+                        }
+                        Function::External(external_fn) => {
+                            //self.state.builder.add_host_call(external_fn.id);
+                        }
+                    }
+                }
+                PostfixKind::FunctionCall(arguments) => {
+                    //self.gen_arguments(arguments);
+                    //self.state.add_call(start_expression)
+                }
+                PostfixKind::OptionUnwrap => todo!(),
+                PostfixKind::NoneCoalesce(_) => todo!(),
+                PostfixKind::IntrinsicCall(_, _) => todo!(),
+            }
+        }
+
+        start_source
+    }
+
+    #[allow(clippy::too_many_lines)]
     fn gen_postfix_chain(
         &mut self,
         start_expression: &Expression,
@@ -955,11 +1126,27 @@ impl<'a> FunctionCodeGen<'a> {
             }
         }
 
-        let start_source = self.gen_expression_for_access(start_expression);
+        let mut start_source = self.gen_expression_for_access(start_expression);
 
         for element in chain {
             match &element.kind {
-                PostfixKind::StructField(_, _) => todo!(),
+                PostfixKind::StructField(anonymous_struct, field_index) => {
+                    let (memory_offset, memory_size, _max_alignment) =
+                        Self::get_struct_field_offset(
+                            &anonymous_struct.field_name_sorted_fields,
+                            *field_index,
+                        );
+                    info!(
+                        ?field_index,
+                        ?memory_offset,
+                        ?memory_size,
+                        "lookup struct field",
+                    );
+                    start_source = FrameMemoryRegion::new(
+                        start_source.addr.advance(memory_offset),
+                        memory_size,
+                    );
+                }
                 PostfixKind::MemberCall(function_to_call, arguments) => {
                     match &**function_to_call {
                         Function::Internal(internal_fn) => {
@@ -1306,8 +1493,8 @@ impl<'a> FunctionCodeGen<'a> {
     fn gen_block(&mut self, expressions: &[Expression], ctx: &Context) {
         if let Some((last, others)) = expressions.split_last() {
             for expr in others {
-                let mut temp_context = self.temp_space_for_type(&Type::Unit, "block target");
-                self.gen_expression(expr, &mut temp_context);
+                let temp_context = self.temp_space_for_type(&Type::Unit, "block target");
+                self.gen_expression(expr, &temp_context);
             }
             self.gen_expression(last, ctx);
         }

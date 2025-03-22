@@ -923,7 +923,7 @@ impl<'a, C> Interpreter<'a, C> {
             }
 
             // Calling
-            ExpressionKind::FunctionCall(_signature, expr, arguments) => {
+            ExpressionKind::FunctionValueCall(_signature, expr, arguments) => {
                 self.evaluate_function_call(expr, arguments)?
             }
 

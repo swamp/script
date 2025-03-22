@@ -108,7 +108,7 @@ fn summary(total_execution_time: Duration, iteration_count: i32, test_time: Opti
         print!(
             " (test_time {})",
             format_duration(found_test_time.as_nanos() as f64)
-        )
+        );
     }
     println!();
 }

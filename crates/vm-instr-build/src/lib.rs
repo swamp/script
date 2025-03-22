@@ -206,6 +206,20 @@ impl InstructionBuilder {
         );
     }
 
+    pub fn add_mul_i32(
+        &mut self,
+        dst_offset: FrameMemoryAddress,
+        lhs_offset: FrameMemoryAddress,
+        rhs_offset: FrameMemoryAddress,
+        comment: &str,
+    ) {
+        self.add_instruction(
+            OpCode::MulI32,
+            &[dst_offset.0, lhs_offset.0, rhs_offset.0],
+            comment,
+        );
+    }
+
     pub fn add_neg_i32(
         &mut self,
         target: FrameMemoryAddress,

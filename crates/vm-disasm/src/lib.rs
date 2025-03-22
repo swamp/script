@@ -337,7 +337,11 @@ pub fn disasm(
             to_read_frame(operands[1], DecoratedMemoryKind::S32, frame_memory_size),
             to_read_frame(operands[2], DecoratedMemoryKind::S32, frame_memory_size),
         ],
-
+        OpCode::MulI32 => &[
+            to_write_frame(operands[0], DecoratedMemoryKind::S32, frame_memory_size),
+            to_read_frame(operands[1], DecoratedMemoryKind::S32, frame_memory_size),
+            to_read_frame(operands[2], DecoratedMemoryKind::S32, frame_memory_size),
+        ],
         OpCode::NegI32 => &[
             to_write_frame(operands[0], DecoratedMemoryKind::S32, frame_memory_size),
             to_read_frame(operands[1], DecoratedMemoryKind::S32, frame_memory_size),

@@ -1697,6 +1697,7 @@ impl<'a> Analyzer<'a> {
                 &any_context,
                 LocationSide::Rhs,
             )?;
+
             variable_expressions.push(var);
         }
 

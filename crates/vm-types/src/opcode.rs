@@ -6,6 +6,7 @@ pub enum OpCode {
 
     // Operators
     AddI32,
+    MulI32,
 
     // Comparisons
     LtI32,
@@ -69,6 +70,7 @@ impl Display for OpCode {
             Self::MovLp => write!(f, "movlp"), // Move data
 
             Self::AddI32 => write!(f, "sadd32"), // Signed Add
+            Self::MulI32 => write!(f, "smul32"), // Signed Add
             Self::NegI32 => write!(f, "sneg32"), // Signed negate
 
             // Functions

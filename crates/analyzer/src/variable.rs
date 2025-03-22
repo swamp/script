@@ -243,8 +243,11 @@ impl Analyzer<'_> {
         converted_expression: MutOrImmutableExpression,
     ) -> Result<Expression, Error> {
         let expression_type = converted_expression.ty().clone();
-        let (variable_ref, _is_reassignment) =
-            self.set_or_overwrite_variable_with_type(ast_variable, &expression_type)?;
+        let variable_ref = self.create_local_variable(
+            &ast_variable.name,
+            ast_variable.is_mutable.as_ref(),
+            &expression_type,
+        )?;
         let expr_kind =
             ExpressionKind::VariableDefinition(variable_ref, Box::from(converted_expression));
 

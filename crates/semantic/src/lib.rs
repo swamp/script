@@ -653,7 +653,7 @@ pub enum ExpressionKind {
     // Calls
 
     // For calls from returned function values
-    FunctionCall(
+    FunctionValueCall(
         Signature,
         Box<Expression>,
         Vec<ArgumentExpressionOrLocation>,

@@ -336,7 +336,7 @@ pub fn bootstrap_and_compile(
 
 pub fn debug_all_modules(modules: &Modules, source_map: &SourceMap) {
     for (_name, module) in modules.modules() {
-        debug_module(&module.symbol_table, source_map)
+        debug_module(&module.symbol_table, source_map);
     }
 }
 pub fn debug_module(symbol_table: &SymbolTable, source_map: &SourceMap) {

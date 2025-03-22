@@ -138,6 +138,8 @@ pub fn exec_with_assembly(code: &str, expected_assembly: &str, expected_hex: &st
     compare_hex_outputs(&vm.stack_base_memory()[..16], expected_hex);
 }
 
+/// # Panics
+///
 pub fn exec_with_host_function<F>(
     code: &str,
     expected_assembly: &str,
