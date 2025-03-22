@@ -35,26 +35,26 @@ pub fn execute_constants(
     Ok(constant_offsets)
 }
 
-pub fn gen_internal(code: &str) -> (CodeGenState, Program) {
+pub fn gen_internal(code: &str) -> Result<(CodeGenState, Program), Error> {
     let (program, main_module, source_map) = compile_string(code).unwrap();
 
     let mut code_gen = CodeGenState::new();
-    code_gen.gen_constants_in_order(&program.state.constants_in_dependency_order);
-    let constants = execute_constants(&program.state).unwrap();
+    code_gen.gen_constants_in_order(&program.state.constants_in_dependency_order)?;
+    let constants = execute_constants(&program.state)?;
 
     let main_expression = main_module.main_expression.as_ref().unwrap();
     let halt_function = GenOptions {
         is_halt_function: true,
     };
 
-    code_gen.gen_main_function(main_expression, &halt_function);
+    code_gen.gen_main_function(main_expression, &halt_function)?;
 
     let normal_function = GenOptions {
         is_halt_function: false,
     };
 
     for internal_function_def in &main_module.symbol_table.internal_functions() {
-        code_gen.gen_function_def(internal_function_def, &normal_function);
+        code_gen.gen_function_def(internal_function_def, &normal_function)?;
     }
 
     for (associated_on_type, impl_functions) in &program.state.associated_impls.functions {
@@ -72,7 +72,7 @@ pub fn gen_internal(code: &str) -> (CodeGenState, Program) {
         for (_name, func) in &impl_functions.functions {
             match &**func {
                 Function::Internal(int_fn) => {
-                    code_gen.gen_function_def(int_fn, &normal_function);
+                    code_gen.gen_function_def(int_fn, &normal_function)?;
                 }
 
                 Function::External(_ext_fn) => {}
@@ -82,11 +82,11 @@ pub fn gen_internal(code: &str) -> (CodeGenState, Program) {
 
     code_gen.finalize();
 
-    (code_gen, program)
+    Ok((code_gen, program))
 }
 
-pub fn gen_internal_debug(code: &str) -> (CodeGenState, Program) {
-    let (code_gen, program) = gen_internal(code);
+pub fn gen_internal_debug(code: &str) -> Result<(CodeGenState, Program), Error> {
+    let (code_gen, program) = gen_internal(code)?;
     let disassembler_output = disasm_instructions_color(
         code_gen.instructions(),
         code_gen.comments(),
@@ -95,7 +95,7 @@ pub fn gen_internal_debug(code: &str) -> (CodeGenState, Program) {
 
     eprintln!("{disassembler_output}");
 
-    (code_gen, program)
+    Ok((code_gen, program))
 }
 
 pub fn exec_code_gen_state(code_gen_state: CodeGenState) -> Vm {
@@ -108,16 +108,14 @@ pub fn exec_code_gen_state(code_gen_state: CodeGenState) -> Vm {
     vm
 }
 
-pub fn exec_internal(code: &str) -> Vm {
-    let (code_gen, program) = gen_internal_debug(code);
+pub fn exec_internal(code: &str) -> Result<Vm, Error> {
+    let (code_gen, program) = gen_internal_debug(code)?;
 
-    exec_code_gen_state(code_gen)
+    Ok(exec_code_gen_state(code_gen))
 }
 
-pub fn exec_internal_debug(code: &str) -> Vm {
-    let vm = exec_internal(code);
-
-    vm
+pub fn exec_internal_debug(code: &str) -> Result<Vm, Error> {
+    exec_internal(code)
 }
 
 fn trim_lines(text: &str) -> String {
@@ -146,14 +144,20 @@ fn compare_hex_outputs(memory: &[u8], expected_hex: &str) {
     compare_line_outputs(&encountered_hexed, expected_hex_trimmed);
 }
 
-pub fn exec(code: &str, expected_hex: &str) {
-    let vm = exec_internal_debug(code);
+pub fn exec(code: &str, expected_hex: &str) -> Result<(), Error> {
+    let vm = exec_internal_debug(code)?;
 
-    compare_hex_outputs(&vm.stack_base_memory()[..16], expected_hex);
+    compare_hex_outputs(&vm.stack_memory()[..16], expected_hex);
+
+    Ok(())
 }
 
-pub fn exec_with_assembly(code: &str, expected_assembly: &str, expected_hex: &str) {
-    let (generator, _program) = gen_internal_debug(code);
+pub fn exec_with_assembly(
+    code: &str,
+    expected_assembly: &str,
+    expected_hex: &str,
+) -> Result<(), Error> {
+    let (generator, _program) = gen_internal_debug(code)?;
 
     let disassembler_output = disasm_instructions_no_color(
         generator.instructions(),
@@ -165,7 +169,9 @@ pub fn exec_with_assembly(code: &str, expected_assembly: &str, expected_hex: &st
 
     let vm = exec_code_gen_state(generator);
 
-    compare_hex_outputs(&vm.stack_base_memory()[..16], expected_hex);
+    compare_hex_outputs(&vm.stack_memory()[..16], expected_hex);
+
+    Ok(())
 }
 
 /// # Panics
@@ -176,10 +182,11 @@ pub fn exec_with_host_function<F>(
     expected_hex: &str,
     id: &str,
     callback: F,
-) where
+) -> Result<(), Error>
+where
     F: 'static + FnMut(HostArgs),
 {
-    let (generator, program) = gen_internal_debug(code);
+    let (generator, program) = gen_internal_debug(code)?;
 
     let disassembler_output = disasm_instructions_no_color(
         generator.instructions(),
@@ -206,13 +213,15 @@ pub fn exec_with_host_function<F>(
 
     vm.execute();
 
-    compare_hex_outputs(&vm.stack_base_memory()[..16], expected_hex);
+    compare_hex_outputs(&vm.stack_memory()[..16], expected_hex);
+
+    Ok(())
 }
 
 pub fn exec_show_constants(code: &str, expected_hex: &str, expected_constants: &str) {
-    let vm = exec_internal_debug(code);
+    let vm = exec_internal_debug(code).unwrap();
 
-    compare_hex_outputs(&vm.stack_base_memory()[..16], expected_hex);
+    compare_hex_outputs(&vm.stack_memory()[..16], expected_hex);
     compare_hex_outputs(&vm.memory()[0xFFF0..], expected_constants);
 }
 
@@ -222,8 +231,8 @@ pub fn exec_vars(code: &str, expected_hex: &str) {
     compare_hex_outputs(&vm.frame_memory()[..16], expected_hex);
 }
 
-pub fn gen_code(code: &str, expected_output: &str) {
-    let (generator, program) = gen_internal_debug(code);
+pub fn gen_code(code: &str, expected_output: &str) -> Result<(), Error> {
+    let (generator, program) = gen_internal_debug(code)?;
 
     let disassembler_output = disasm_instructions_no_color(
         generator.instructions(),
@@ -233,4 +242,6 @@ pub fn gen_code(code: &str, expected_output: &str) {
     );
 
     compare_line_outputs(&disassembler_output, expected_output);
+
+    Ok(())
 }
