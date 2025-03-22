@@ -49,6 +49,9 @@ pub enum OpCode {
     //Alloc,
     //     LtU16,
     VecPush,
+    VecIterInit,
+    VecIterNext,
+    VecIterNextPair,
     Nop,
 
     // Intrinsic more advanced opcodes
@@ -56,11 +59,14 @@ pub enum OpCode {
     // Collection intrinsics
     MapNewFromPairs,
     MapRemove,
+    MapIterInit,
+    MapIterNext,
+    MapIterNextPair,
 
     Eq8Imm,
     Tst8,
     GtI32,
-    HostCall,
+    HostCall, // calls back into host
 }
 
 impl Display for OpCode {
@@ -106,19 +112,18 @@ impl Display for OpCode {
 
             // Vec
             Self::VecPush => write!(f, "vec_push"),
+            Self::VecIterInit => write!(f, "vec_iter_init"),
+            Self::VecIterNext => write!(f, "vec_iter_next"),
+            Self::VecIterNextPair => write!(f, "vec_iter_next_pair"),
 
             // Map
             Self::MapNewFromPairs => write!(f, "map_new_from_pairs"),
             Self::MapRemove => write!(f, "map_remove"),
+            Self::MapIterInit => write!(f, "map_iter_init"),
+            Self::MapIterNext => write!(f, "map_iter_next"),
+            Self::MapIterNextPair => write!(f, "map_iter_next_pair"),
 
             Self::Nop => write!(f, "nop"),
-            /*
-            Self::LtU16 => write!(f, "lt16"), // Set Less Than Unsigned
-            Self::Ldx => write!(f, "ldx"),     // Load Indexed/Indirect
-            Self::Stx => write!(f, "stx"),     // Store Indexed/Indirect
-            Self::St32x => write!(f, "st32x"), // Store Indexed/Indirect
-            Self::Alloc => write!(f, "alloc"),
-             */
         }
     }
 }

@@ -2,7 +2,7 @@ use seq_map::SeqMap;
 use swamp_vm_types::opcode::OpCode;
 use swamp_vm_types::{
     BinaryInstruction, ConstantMemoryAddress, FrameMemoryAddress, FrameMemorySize,
-    InstructionPosition, MemoryAddress, MemoryOffset, MemorySize,
+    HeapMemoryAddress, InstructionPosition, MemoryAddress, MemoryOffset, MemorySize,
 };
 use yansi::{Color, Paint};
 
@@ -32,6 +32,7 @@ pub enum DecoratedOperandKind {
     WriteIndirectMemory(MemoryAddress, MemoryOffset, DecoratedMemoryKind),
     ReadIndirectMemory(MemoryAddress, MemoryOffset, DecoratedMemoryKind),
     CountU16(u16),
+    HeapAddress(HeapMemoryAddress),
 }
 
 #[derive(Clone, Debug)]
@@ -179,6 +180,15 @@ pub fn disasm_color(
                 let color = Color::Yellow;
 
                 (
+                    format!("{}{}", "@#".fg(color), format!("{:08X}", addr.0).fg(color)),
+                    "constant".to_string(),
+                )
+            }
+
+            DecoratedOperandKind::HeapAddress(addr) => {
+                let color = Color::Yellow;
+
+                (
                     format!("{}{}", "@".fg(color), format!("{:08X}", addr.0).fg(color)),
                     "constant".to_string(),
                 )
@@ -269,9 +279,11 @@ pub fn disasm_no_color(
                 format!("{}{}", "$", format!("{:04X}", addr.0))
             }
             DecoratedOperandKind::ConstantAddress(addr) => {
+                format!("{}{}", "@#", format!("{:04X}", addr.0))
+            }
+            DecoratedOperandKind::HeapAddress(addr) => {
                 format!("{}{}", "@", format!("{:04X}", addr.0))
             }
-
             DecoratedOperandKind::ReadIndirectMemory(addr, memory_offset, memory_kind) => {
                 format!("({}{})", "$", format!("{:04X}+{}", addr.0, memory_offset.0))
             }
@@ -429,6 +441,28 @@ pub fn disasm(
         ],
         OpCode::Nop => &[],
 
+        OpCode::VecIterInit => {
+            let data = ((operands[2] as u32) << 16) | operands[1] as u32;
+
+            &[
+                to_write_frame(operands[0], DecoratedMemoryKind::Octets, frame_memory_size),
+                DecoratedOperandKind::HeapAddress(HeapMemoryAddress(data)),
+            ]
+        }
+
+        OpCode::VecIterNext => &[
+            to_write_frame(operands[0], DecoratedMemoryKind::Octets, frame_memory_size),
+            to_write_frame(operands[1], DecoratedMemoryKind::Octets, frame_memory_size),
+            to_ip(operands[2]),
+        ],
+
+        OpCode::VecIterNextPair => &[
+            to_write_frame(operands[0], DecoratedMemoryKind::Octets, frame_memory_size),
+            to_write_frame(operands[1], DecoratedMemoryKind::Octets, frame_memory_size),
+            to_write_frame(operands[2], DecoratedMemoryKind::Octets, frame_memory_size),
+            to_ip(operands[3]),
+        ],
+
         OpCode::VecPush => &[
             to_write_frame(operands[0], DecoratedMemoryKind::Octets, frame_memory_size),
             to_read_frame(operands[1], DecoratedMemoryKind::Octets, frame_memory_size),
@@ -439,6 +473,28 @@ pub fn disasm(
             DecoratedOperandKind::MemorySize(MemorySize(operands[2])),
             DecoratedOperandKind::MemorySize(MemorySize(operands[3])),
             DecoratedOperandKind::CountU16(operands[4]),
+        ],
+
+        OpCode::MapIterInit => {
+            let data = ((operands[2] as u32) << 16) | operands[1] as u32;
+
+            &[
+                to_write_frame(operands[0], DecoratedMemoryKind::Octets, frame_memory_size),
+                DecoratedOperandKind::HeapAddress(HeapMemoryAddress(data)),
+            ]
+        }
+
+        OpCode::MapIterNext => &[
+            to_write_frame(operands[0], DecoratedMemoryKind::Octets, frame_memory_size),
+            to_write_frame(operands[1], DecoratedMemoryKind::Octets, frame_memory_size),
+            to_ip(operands[2]),
+        ],
+
+        OpCode::MapIterNextPair => &[
+            to_write_frame(operands[0], DecoratedMemoryKind::Octets, frame_memory_size),
+            to_write_frame(operands[1], DecoratedMemoryKind::Octets, frame_memory_size),
+            to_write_frame(operands[2], DecoratedMemoryKind::Octets, frame_memory_size),
+            to_ip(operands[3]),
         ],
 
         OpCode::MapRemove => &[

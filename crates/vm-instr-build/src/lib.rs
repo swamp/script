@@ -1,7 +1,7 @@
 use swamp_vm_types::opcode::OpCode;
 use swamp_vm_types::{
     BinaryInstruction, ConstantMemoryAddress, CountU16, FrameMemoryAddress, FrameMemorySize,
-    InstructionPosition, MemoryAddress, MemorySize,
+    HeapMemoryAddress, InstructionPosition, MemoryAddress, MemorySize,
 };
 
 #[derive(Debug)]
@@ -11,6 +11,8 @@ pub struct InstructionBuilder {
     pub instructions: Vec<BinaryInstruction>,
     pub comments: Vec<String>,
 }
+
+impl InstructionBuilder {}
 
 impl InstructionBuilder {}
 
@@ -175,6 +177,56 @@ impl InstructionBuilder {
 
     pub fn add_jmp(&mut self, ip: InstructionPosition, comment: &str) {
         self.add_instruction(OpCode::Jmp, &[ip.0 - 1], comment);
+    }
+
+    pub fn add_map_iter_init(
+        &mut self,
+        iterator_target: FrameMemoryAddress,
+        pointer_to_map: HeapMemoryAddress,
+        comment: &str,
+    ) {
+        let value_u32 = pointer_to_map.0;
+        let lower_bits = (value_u32 & 0xFFFF) as u16;
+        let upper_bits = (value_u32 >> 16) as u16;
+        self.add_instruction(
+            OpCode::MapIterInit,
+            &[iterator_target.0, lower_bits, upper_bits],
+            comment,
+        );
+    }
+
+    pub fn add_map_iter_next(
+        &mut self,
+        iterator_target: FrameMemoryAddress,
+        closure_variable: FrameMemoryAddress,
+        instruction_position: InstructionPosition,
+        comment: &str,
+    ) {
+        self.add_instruction(
+            OpCode::MapIterNext,
+            &[
+                iterator_target.0,
+                closure_variable.0,
+                instruction_position.0,
+            ],
+            comment,
+        );
+    }
+
+    pub fn add_vec_iter_init(
+        &mut self,
+        iterator_target: FrameMemoryAddress,
+        pointer_to_map: HeapMemoryAddress,
+        comment: &str,
+    ) {
+        let value_u32 = pointer_to_map.0;
+        let lower_bits = (value_u32 & 0xFFFF) as u16;
+        let upper_bits = (value_u32 >> 16) as u16;
+        self.add_instruction(
+            OpCode::VecIterInit,
+            &[iterator_target.0, lower_bits, upper_bits],
+            comment,
+        );
     }
 
     pub fn add_ld32(&mut self, dst_offset: FrameMemoryAddress, value: i32, comment: &str) {

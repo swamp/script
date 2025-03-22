@@ -26,8 +26,9 @@ use swamp_script_semantic::{
 use swamp_script_types::{AnonymousStructType, EnumVariantType, Signature, StructTypeField, Type};
 use swamp_vm_instr_build::{InstructionBuilder, PatchPosition};
 use swamp_vm_types::{
-    BOOL_SIZE, BinaryInstruction, CountU16, FrameMemoryAddress, FrameMemorySize, INT_SIZE,
-    InstructionPosition, MemoryAlignment, MemoryOffset, MemorySize, TempFrameMemoryAddress,
+    BOOL_SIZE, BinaryInstruction, CountU16, FrameMemoryAddress, FrameMemorySize, HeapMemoryAddress,
+    INT_SIZE, InstructionPosition, MemoryAlignment, MemoryOffset, MemorySize,
+    TempFrameMemoryAddress,
 };
 use tracing::{error, info, trace};
 
@@ -1374,7 +1375,7 @@ impl FunctionCodeGen<'_> {
         &mut self,
         for_pattern: &ForPattern,
         iterable: &Iterable,
-        body: &Box<Expression>,
+        closure: &Box<Expression>,
         ctx: &Context,
     ) -> Result<(), Error> {
         // Add check if the collection is empty, to skip everything
@@ -1383,16 +1384,31 @@ impl FunctionCodeGen<'_> {
 
         // check if it has reached its end
 
+        self.state.builder.add_map_iter_init(
+            FrameMemoryAddress(0x80),
+            HeapMemoryAddress(0xffff_ffff),
+            "initialize map iterator",
+        );
+
+        self.state.builder.add_map_iter_next(
+            FrameMemoryAddress(0x80),
+            FrameMemoryAddress(0x16),
+            InstructionPosition(256),
+            "move to next or jump over",
+        );
+
         match for_pattern {
             ForPattern::Single(value_variable) => {}
             ForPattern::Pair(key_variable, value_variable) => {}
         }
 
         let mut unit_expr = self.temp_space_for_type(&Type::Unit, "for loop body");
-        self.gen_expression(body, &mut unit_expr)
+        //self.gen_expression(body, &mut unit_expr)
 
         // advance iterator pointer
         // jump to check if iterator pointer has reached its end
+
+        Ok(())
     }
 
     fn gen_for_loop_for_vec(

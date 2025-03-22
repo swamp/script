@@ -31,6 +31,9 @@ impl StackMemoryAddress {
 pub struct ConstantMemoryAddress(pub u32);
 
 #[derive(Debug, Copy, Clone)]
+pub struct HeapMemoryAddress(pub u32);
+
+#[derive(Debug, Copy, Clone)]
 pub struct FrameMemoryAddress(pub u16);
 
 #[derive(Debug, Copy, Clone)]
