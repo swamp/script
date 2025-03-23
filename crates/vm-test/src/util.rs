@@ -6,8 +6,8 @@ use swamp_script_compile::Program;
 use swamp_script_compile::compile_string;
 use swamp_script_semantic::{ConstantId, Function};
 use swamp_script_types::Type;
-use swamp_vm::Vm;
 use swamp_vm::host::HostArgs;
+use swamp_vm::{Vm, VmSetup};
 use swamp_vm_disasm::{disasm_instructions_color, disasm_instructions_no_color};
 use swamp_vm_types::ConstantMemoryAddress;
 
@@ -35,12 +35,12 @@ pub fn execute_constants(
     Ok(constant_offsets)
 }
 
-pub fn gen_internal(code: &str) -> Result<(CodeGenState, Program), Error> {
+fn gen_internal(code: &str) -> Result<(CodeGenState, Program), Error> {
     let (program, main_module, source_map) = compile_string(code).unwrap();
 
     let mut code_gen = CodeGenState::new();
     code_gen.gen_constants_in_order(&program.state.constants_in_dependency_order)?;
-    let constants = execute_constants(&program.state)?;
+    //let constants = execute_constants(&program.state)?;
 
     let main_expression = main_module.main_expression.as_ref().unwrap();
     let halt_function = GenOptions {
@@ -85,7 +85,7 @@ pub fn gen_internal(code: &str) -> Result<(CodeGenState, Program), Error> {
     Ok((code_gen, program))
 }
 
-pub fn gen_internal_debug(code: &str) -> Result<(CodeGenState, Program), Error> {
+fn gen_internal_debug(code: &str) -> Result<(CodeGenState, Program), Error> {
     let (code_gen, program) = gen_internal(code)?;
     let disassembler_output = disasm_instructions_color(
         code_gen.instructions(),
@@ -98,23 +98,28 @@ pub fn gen_internal_debug(code: &str) -> Result<(CodeGenState, Program), Error> 
     Ok((code_gen, program))
 }
 
-pub fn exec_code_gen_state(code_gen_state: CodeGenState) -> Vm {
-    let (instructions, constants) = code_gen_state.take_instructions_and_constants();
+fn exec_code_gen_state(code_gen_state: CodeGenState) -> Vm {
+    let (instructions, _constants) = code_gen_state.take_instructions_and_constants();
 
-    let mut vm = Vm::new(instructions, &constants, 0x1_00_00);
+    let setup = VmSetup {
+        frame_memory_size: 1024,
+        heap_memory_size: 1024,
+        constant_memory_size: 1024,
+    };
+    let mut vm = Vm::new(instructions, setup);
 
     vm.execute();
 
     vm
 }
 
-pub fn exec_internal(code: &str) -> Result<Vm, Error> {
+fn exec_internal(code: &str) -> Result<Vm, Error> {
     let (code_gen, program) = gen_internal_debug(code)?;
 
     Ok(exec_code_gen_state(code_gen))
 }
 
-pub fn exec_internal_debug(code: &str) -> Result<Vm, Error> {
+fn exec_internal_debug(code: &str) -> Result<Vm, Error> {
     exec_internal(code)
 }
 
@@ -144,20 +149,14 @@ fn compare_hex_outputs(memory: &[u8], expected_hex: &str) {
     compare_line_outputs(&encountered_hexed, expected_hex_trimmed);
 }
 
-pub fn exec(code: &str, expected_hex: &str) -> Result<(), Error> {
-    let vm = exec_internal_debug(code)?;
+fn exec(code: &str, expected_hex: &str) {
+    let vm = exec_internal_debug(code).expect("should work");
 
     compare_hex_outputs(&vm.stack_memory()[..16], expected_hex);
-
-    Ok(())
 }
 
-pub fn exec_with_assembly(
-    code: &str,
-    expected_assembly: &str,
-    expected_hex: &str,
-) -> Result<(), Error> {
-    let (generator, _program) = gen_internal_debug(code)?;
+pub fn exec_with_assembly(code: &str, expected_assembly: &str, expected_hex: &str) {
+    let (generator, _program) = gen_internal_debug(code).expect("should work");
 
     let disassembler_output = disasm_instructions_no_color(
         generator.instructions(),
@@ -170,8 +169,6 @@ pub fn exec_with_assembly(
     let vm = exec_code_gen_state(generator);
 
     compare_hex_outputs(&vm.stack_memory()[..16], expected_hex);
-
-    Ok(())
 }
 
 /// # Panics
@@ -182,11 +179,10 @@ pub fn exec_with_host_function<F>(
     expected_hex: &str,
     id: &str,
     callback: F,
-) -> Result<(), Error>
-where
+) where
     F: 'static + FnMut(HostArgs),
 {
-    let (generator, program) = gen_internal_debug(code)?;
+    let (generator, program) = gen_internal_debug(code).expect("should work");
 
     let disassembler_output = disasm_instructions_no_color(
         generator.instructions(),
@@ -207,32 +203,28 @@ where
         .unwrap();
 
     let (instructions, constants) = generator.take_instructions_and_constants();
-    let mut vm = Vm::new(instructions, &constants, 0x1_00_00);
+    let setup = VmSetup {
+        frame_memory_size: 1024,
+        heap_memory_size: 1024,
+        constant_memory_size: 1024,
+    };
+    let mut vm = Vm::new(instructions, setup);
 
     vm.add_host_function(external_id.id as u16, callback);
 
     vm.execute();
 
     compare_hex_outputs(&vm.stack_memory()[..16], expected_hex);
-
-    Ok(())
 }
 
-pub fn exec_show_constants(code: &str, expected_hex: &str, expected_constants: &str) {
-    let vm = exec_internal_debug(code).unwrap();
-
-    compare_hex_outputs(&vm.stack_memory()[..16], expected_hex);
-    compare_hex_outputs(&vm.memory()[0xFFF0..], expected_constants);
-}
-
-pub fn exec_vars(code: &str, expected_hex: &str) {
+fn exec_vars(code: &str, expected_hex: &str) {
     let vm = exec_internal_debug(code);
 
-    compare_hex_outputs(&vm.frame_memory()[..16], expected_hex);
+    compare_hex_outputs(&vm.unwrap().stack_memory()[..16], expected_hex);
 }
 
-pub fn gen_code(code: &str, expected_output: &str) -> Result<(), Error> {
-    let (generator, program) = gen_internal_debug(code)?;
+fn gen_code(code: &str, expected_output: &str) {
+    let (generator, program) = gen_internal_debug(code).expect("should work");
 
     let disassembler_output = disasm_instructions_no_color(
         generator.instructions(),
@@ -242,6 +234,11 @@ pub fn gen_code(code: &str, expected_output: &str) -> Result<(), Error> {
     );
 
     compare_line_outputs(&disassembler_output, expected_output);
+}
 
-    Ok(())
+pub fn exec_show_constants(code: &str, expected_hex: &str, expected_constants: &str) {
+    let vm = exec_internal_debug(code).unwrap();
+
+    compare_hex_outputs(&vm.stack_memory()[..16], expected_hex);
+    compare_hex_outputs(&vm.memory()[0xFFF0..], expected_constants);
 }

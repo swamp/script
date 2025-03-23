@@ -1,10 +1,11 @@
+use swamp_script_vm_test::util::exec_show_constants;
 use swamp_script_vm_test::util::exec_with_assembly;
-use swamp_script_vm_test::util::{exec, exec_show_constants, exec_vars, gen_code};
 
 #[test]
 fn variable_definition() {
-    exec(
+    exec_with_assembly(
         "a = 3",
+        "",
         "
 00000000  03 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  ................
     ",
@@ -13,8 +14,9 @@ fn variable_definition() {
 
 #[test]
 fn var_def_add() {
-    exec(
+    exec_with_assembly(
         "a = 3 + 7",
+        "",
         "
 00000000  0A 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  ................
     ",
@@ -23,8 +25,9 @@ fn var_def_add() {
 
 #[test]
 fn var_def_if() {
-    exec(
+    exec_with_assembly(
         "a = if 3 < 7 { 128 } else { 23 }",
+        "",
         "
 00000000  80 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  ................
     ",
@@ -33,7 +36,7 @@ fn var_def_if() {
 
 #[test_log::test]
 fn call() {
-    gen_code(
+    exec_with_assembly(
         "
         fn another_fn(a: Int, b: Int) -> Int {
             a+b
@@ -61,12 +64,13 @@ fn call() {
 > 0008: sadd32 $0000 $0004 $0008 ; i32 add
 > 0009: ret
     ",
+        "",
     );
 }
 
 #[test_log::test]
-fn call_exec() {
-    exec(
+fn call_exec_with_assembly() {
+    exec_with_assembly(
         "
         fn another_fn(a: Int, b: Int) -> Int {
             a+b
@@ -74,6 +78,7 @@ fn call_exec() {
         a = 20
         result = another_fn(a, 10)
         ",
+        "",
         "
 00000000  14 00 00 00 1E 00 00 00  14 00 00 00 00 00 00 00  ................
     ",
@@ -82,7 +87,7 @@ fn call_exec() {
 
 #[test_log::test]
 fn call_mut_argument() {
-    exec(
+    exec_with_assembly(
         "
         fn add_and_overwrite(a: Int, mut b: Int) {
             b = a+b
@@ -92,6 +97,7 @@ fn call_mut_argument() {
         mut b = 30
         add_and_overwrite(a, mut b)
         ",
+        "",
         "
 00000000  14 00 00 00 32 00 00 00  00 00 00 00 00 00 00 00  ....2...........
     ",
@@ -100,7 +106,7 @@ fn call_mut_argument() {
 
 #[test_log::test]
 fn call_struct_function() {
-    exec(
+    exec_with_assembly(
         "
         struct Something {
             a: Int,
@@ -114,6 +120,7 @@ fn call_struct_function() {
         mut s = Something { a: 10, b: 20 }
         add(mut s, 40)
         ",
+        "",
         "
 00000000  32 00 00 00 14 00 00 00  28 00 00 00 00 00 00 00  2.......(.......
     ",
@@ -122,7 +129,7 @@ fn call_struct_function() {
 
 #[test_log::test]
 fn call_associated_function() {
-    exec(
+    exec_with_assembly(
         "
 struct Something {
     a: Int,
@@ -138,6 +145,7 @@ impl Something {
 mut s = Something { a: 10, b: false }
 s.own_add(40)
         ",
+        "",
         "
 00000000  32 00 00 00 00 00 00 00  28 00 00 00 00 00 00 00  2.......(.......
     ",
@@ -146,7 +154,7 @@ s.own_add(40)
 
 #[test_log::test]
 fn enum_literal() {
-    exec(
+    exec_with_assembly(
         "
 enum Something {
     First,
@@ -155,6 +163,7 @@ enum Something {
 
 a = Something::Second
         ",
+        "",
         "
 00000000  01 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  ................
     ",
@@ -163,7 +172,7 @@ a = Something::Second
 
 #[test_log::test]
 fn enum_literal_tuple_one() {
-    exec(
+    exec_with_assembly(
         "
 enum Something {
     First,
@@ -172,6 +181,7 @@ enum Something {
 
 a = Something::First
         ",
+        "",
         "
 00000000  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  ................
     ",
@@ -180,7 +190,7 @@ a = Something::First
 
 #[test_log::test]
 fn enum_literal_tuple_second() {
-    exec(
+    exec_with_assembly(
         "
 enum Something {
     First,
@@ -189,6 +199,7 @@ enum Something {
 
 a = Something::Second(42)
         ",
+        "",
         "
 00000000  01 00 00 00 2A 00 00 00  00 00 00 00 00 00 00 00  ....*...........
     ",
@@ -197,7 +208,7 @@ a = Something::Second(42)
 
 #[test_log::test]
 fn enum_literal_struct() {
-    exec(
+    exec_with_assembly(
         "
 enum Something {
     First,
@@ -208,6 +219,7 @@ a = Something::Second {
     x: 10, y: 2.4,
      }
         ",
+        "",
         "
 00000000  01 00 00 00 0A 00 00 00  66 66 02 00 00 00 00 00  ........ff......
     ",
@@ -216,7 +228,7 @@ a = Something::Second {
 
 #[test_log::test]
 fn enum_literal_both() {
-    exec(
+    exec_with_assembly(
         "
 enum Something {
     First,
@@ -228,6 +240,7 @@ a = Something::Second {
     x: 10, y: 2.4,
      }
         ",
+        "",
         "
 00000000  01 00 00 00 0A 00 00 00  66 66 02 00 00 00 00 00  ........ff......
     ",
@@ -236,7 +249,7 @@ a = Something::Second {
 
 #[test_log::test]
 fn enum_literal_both_third() {
-    exec(
+    exec_with_assembly(
         "
 enum Something {
     First,
@@ -246,6 +259,7 @@ enum Something {
 
 a = Something::Third(1,2,3,4,7.6)
         ",
+        "",
         "
 00000000  02 00 00 00 01 00 00 00  02 00 00 00 03 00 00 00  ................
     ",
@@ -254,7 +268,7 @@ a = Something::Third(1,2,3,4,7.6)
 
 #[test_log::test]
 fn enum_literal_both_third_sub_struct() {
-    exec(
+    exec_with_assembly(
         "
 struct SubStruct {
   x: Int,
@@ -269,6 +283,7 @@ enum Something {
 
 a = Something::Second(SubStruct{x:99, y:128})
         ",
+        "",
         "
 00000000  01 00 00 00 63 00 00 00  80 00 00 00 00 00 00 00  ....c...........
     ",
@@ -313,11 +328,12 @@ a = get_string()
 
 #[test_log::test]
 fn vec() {
-    exec(
+    exec_with_assembly(
         "
 result = [10, 20, 3]
 b = 0x0BAD_CAFE
         ",
+        "",
         "
 00000000  03 00 03 00 04 00 CD 00  FE CA AD 0B 00 00 00 00  ................
 
@@ -327,7 +343,7 @@ b = 0x0BAD_CAFE
 
 #[test_log::test]
 fn map() {
-    exec(
+    exec_with_assembly(
         "
 struct Something {
     is_cool: Bool,
@@ -342,6 +358,7 @@ result = [
 
 b = 0x0BAD_CAFE
         ",
+        "",
         "
 00000000  03 00 08 00 D0 00 04 00  08 00 00 00 FE CA AD 0B  ................
 
@@ -361,7 +378,7 @@ b = 0x0BAD_CAFE
 
 #[test_log::test]
 fn map_remove() {
-    exec(
+    exec_with_assembly(
         "
 struct Something {
     is_cool: Bool,
@@ -378,6 +395,7 @@ result.remove(10)
 
 b = 0x0BAD_CAFE
         ",
+        "",
         "
 00000000  02 00 08 00 D0 00 04 00  08 00 00 00 FE CA AD 0B  ................
 

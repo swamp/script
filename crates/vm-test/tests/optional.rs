@@ -1,6 +1,4 @@
-use swamp_script_vm_test::util::{
-    exec, exec_show_constants, exec_vars, exec_with_assembly, gen_code,
-};
+use swamp_script_vm_test::util::exec_with_assembly;
 
 #[test_log::test]
 fn optional_none() {
