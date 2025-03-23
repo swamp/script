@@ -70,6 +70,9 @@ fn gen_internal(code: &str) -> Result<(CodeGenState, Program), Error> {
         }
 
         for (_name, func) in &impl_functions.functions {
+            if func.name().clone().starts_with("instantiated ") {
+                continue;
+            }
             match &**func {
                 Function::Internal(int_fn) => {
                     code_gen.gen_function_def(int_fn, &normal_function)?;
@@ -168,7 +171,7 @@ pub fn exec_with_assembly(code: &str, expected_assembly: &str, expected_hex: &st
 
     let vm = exec_code_gen_state(generator);
 
-    compare_hex_outputs(&vm.stack_memory()[..16], expected_hex);
+    compare_hex_outputs(&vm.frame_memory()[..16], expected_hex);
 }
 
 /// # Panics

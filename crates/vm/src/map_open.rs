@@ -1,6 +1,7 @@
 use crate::Vm;
 
 impl Vm {
+    /*
     const MAX_PROBES: usize = 8;
     const EMPTY: u8 = 0;
     const DELETED: u8 = 1;
@@ -19,7 +20,7 @@ impl Vm {
 
         let dst_ptr = self.ptr_at_u16(self.frame_offset + dst_offset as usize);
 
-        let buckets_ptr_addr = self.allocate((capacity * (1 + key_size + value_size)) as usize);
+        let buckets_ptr_addr = self.heap_allocate((capacity * (1 + key_size + value_size)) as usize);
 
         unsafe {
             *dst_ptr = 0;
@@ -228,4 +229,6 @@ impl Vm {
 
         panic!("could not find key to delete");
     }
+
+     */
 }

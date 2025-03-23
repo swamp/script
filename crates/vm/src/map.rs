@@ -30,6 +30,7 @@ use swamp_vm_types::PTR_SIZE;
 /// Each bucket starts with a null pointer (0x0000). New entries are prepended to
 /// the chain for cache locality. Existing keys overwrite their values.
 impl Vm {
+    /*
     #[inline]
     pub fn execute_map_new_from_pairs(
         &mut self,
@@ -45,7 +46,7 @@ impl Vm {
 
         // Map header structure (10 bytes)
         let dst_ptr = self.ptr_at_u16(self.frame_offset + dst_offset as usize);
-        let buckets_ptr_addr = self.allocate((capacity * PTR_SIZE) as usize); // Allocate buckets
+        let buckets_ptr_addr = self.heap_allocate((capacity * PTR_SIZE) as usize); // Allocate buckets
         unsafe {
             *dst_ptr = 0; // Initialize length of map to 0
             *dst_ptr.add(1) = capacity;
@@ -95,7 +96,7 @@ impl Vm {
             if !found {
                 // Create new entry: [next_ptr: u16][key][value]
                 let new_entry_size = PTR_SIZE + key_size + value_size;
-                let new_entry_ptr = self.allocate(new_entry_size as usize);
+                let new_entry_ptr = self.heap_allocate(new_entry_size as usize);
                 let new_entry_u8 = self.ptr_at_u8(new_entry_ptr as usize);
 
                 // Link to existing entries - unsafe write
@@ -242,7 +243,7 @@ impl Vm {
         if !found {
             // Create a new entry: [next_ptr: u16][key][value]
             let new_entry_size = PTR_SIZE + key_size + value_size;
-            let new_entry_ptr = self.allocate(new_entry_size as usize);
+            let new_entry_ptr = self.heap_allocate(new_entry_size as usize);
             let new_entry_u8 = self.ptr_at_u8(new_entry_ptr as usize);
 
             // Link to existing entries
@@ -270,4 +271,6 @@ impl Vm {
             }
         }
     }
+
+     */
 }

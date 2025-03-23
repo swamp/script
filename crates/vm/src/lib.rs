@@ -42,7 +42,7 @@ pub struct Vm {
     heap_memory_size: usize,
 
     // Memory regions (offsets)
-    alloc_offset: usize,          // Current allocation point
+    heap_alloc_offset: usize,     // Current allocation point
     stack_offset: usize,          // Current stack position
     frame_offset: usize,          // Current frame position
     constant_alloc_offset: usize, // Constants
@@ -150,7 +150,7 @@ impl Vm {
             constant_memory_size: setup.constant_memory_size,
             heap_memory,
             heap_memory_size: setup.heap_memory_size,
-            alloc_offset: 0x00cd, // TODO: Should be 0, value different from zero for debugging purposes
+            heap_alloc_offset: 0x00cd, // TODO: Should be 0, value different from zero for debugging purposes
             stack_offset: 0,
             constant_alloc_offset: 0,
             frame_offset: 0,
@@ -212,15 +212,16 @@ impl Vm {
         //vm.handlers[OpCode::MapNewFromPairs as usize] =
         //  HandlerType::Args5(Self::execute_map_new_from_pairs);
 
+        vm.handlers[OpCode::VecFromSlice as usize] =
+            HandlerType::Args4(Self::execute_vec_from_slice);
         vm.handlers[OpCode::VecIterInit as usize] = HandlerType::Args3(Self::execute_vec_iter_init);
         vm.handlers[OpCode::VecIterNext as usize] = HandlerType::Args3(Self::execute_vec_iter_next);
 
+        /*
         vm.handlers[OpCode::MapNewFromPairs as usize] =
             HandlerType::Args5(Self::execute_map_open_addressing_from_slice);
 
         vm.handlers[OpCode::MapRemove as usize] = HandlerType::Args2(Self::execute_map_remove);
-
-        /*
 
         // Load indirect
         vm.handlers[OpCode::Ldx as usize] = HandlerType::Args4(Self::execute_ldx);
@@ -345,14 +346,16 @@ impl Vm {
         }
     }
 
+    /*
     #[inline]
     fn execute_alloc(&mut self, dst_offset: u16, memory_size: u16) {
-        let data_ptr = self.allocate(memory_size as usize);
+        let data_ptr = self.heap_allocate(memory_size as usize);
         let dst_ptr = self.ptr_at_u16(self.frame_offset + dst_offset as usize) as *mut u16;
         unsafe {
             *dst_ptr = data_ptr;
         }
     }
+    */
 
     #[inline]
     fn execute_ld8(&mut self, dst_offset: u16, octet: u16) {
@@ -525,6 +528,11 @@ impl Vm {
         unsafe { self.stack_memory.add(offset) }
     }
 
+    #[inline(always)]
+    fn heap_ptr_at(&self, offset: usize) -> *mut u8 {
+        unsafe { self.heap_memory.add(offset) }
+    }
+
     // Helper to get current frame pointer
     fn frame_ptr(&self) -> *mut u8 {
         self.ptr_at_u8(self.frame_offset)
@@ -555,23 +563,30 @@ impl Vm {
         self.ptr_at_u8(self.frame_offset + offset as usize)
     }
 
+    fn frame_ptr_at(&self, offset: u16) -> *mut u8 {
+        self.ptr_at_u8(self.frame_offset + offset as usize)
+    }
     #[inline(always)]
     fn frame_ptr_bool_const_at(&self, offset: u16) -> bool {
         unsafe { *self.ptr_at_u8(self.frame_offset + offset as usize) != 0 }
     }
 
-    fn allocate(&mut self, size: usize) -> u16 {
+    fn heap_allocate(&mut self, size: usize) -> u32 {
         let aligned_size = (size + ALIGNMENT_REST) & ALIGNMENT_MASK;
-        let aligned_offset = (self.alloc_offset + ALIGNMENT_REST) & ALIGNMENT_MASK;
+        let aligned_offset = (self.heap_alloc_offset + ALIGNMENT_REST) & ALIGNMENT_MASK;
 
-        assert!(
+        eprintln!(
+            "heap_allocate original_size:{size}, aligned_size: {aligned_size} offset: {aligned_offset:08X}"
+        );
+
+        debug_assert!(
             aligned_offset + aligned_size <= self.heap_memory_size,
             "Out of memory"
         );
 
-        self.alloc_offset = aligned_offset + aligned_size;
+        self.heap_alloc_offset = aligned_offset + aligned_size;
 
-        aligned_offset as u16
+        aligned_offset as u32
     }
 
     pub fn allocate_constant(&mut self, size: usize) -> u32 {

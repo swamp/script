@@ -10,7 +10,6 @@ repository = "https://github.com/swamp/script"
 [dependencies]
 swamp-vm-types = { path = "../vm-types", version = "0.1.5" }
 seq-map = "0.0.13"
-url = "2.5.4"
 
 [features]
 debug_vm = []  # Enable VM debug output
