@@ -39,6 +39,7 @@ pub enum ErrorKind {
     IllegalCompoundAssignment,
     VariableNotUnique,
     IllegalCollection,
+    NotAnIterableCollection,
 }
 
 #[derive(Debug)]
@@ -1296,9 +1297,9 @@ impl FunctionCodeGen<'_> {
         if let Some(found_value) = maybe_option {
             self.state.builder.add_ld8(ctx.addr(), 1, "option Some tag"); // 1 signals `Some`
             let (inner_size, inner_alignment) = type_size_and_alignment(&found_value.ty);
-            let mut one_offset_ctx = ctx.with_offset(inner_alignment.into(), inner_size);
+            let one_offset_ctx = ctx.with_offset(inner_alignment.into(), inner_size);
 
-            self.gen_expression(found_value, &mut one_offset_ctx)?; // Fills in more of the union
+            self.gen_expression(found_value, &one_offset_ctx)?; // Fills in more of the union
         } else {
             self.state.builder.add_ld8(ctx.addr(), 0, "option None tag"); // 0 signals `None`
             // No real need to clear the rest of the memory
@@ -1311,7 +1312,7 @@ impl FunctionCodeGen<'_> {
         &mut self,
         for_pattern: &ForPattern,
         collection_expr: &MutOrImmutableExpression,
-    ) -> Result<(), Error> {
+    ) -> Result<(InstructionPosition, PatchPosition), Error> {
         let collection_region = self.gen_for_access_or_location(collection_expr)?;
 
         let temp_iterator_region = self
@@ -1323,18 +1324,19 @@ impl FunctionCodeGen<'_> {
             "initialize vec iterator",
         );
 
-        match for_pattern {
+        let loop_ip = self.state.builder.position();
+
+        let placeholder_position = match for_pattern {
             ForPattern::Single(variable) => {
                 let target_variable = self
                     .variable_offsets
                     .get(&variable.unique_id_within_function)
                     .unwrap();
-                self.state.builder.add_vec_iter_next(
+                self.state.builder.add_vec_iter_next_placeholder(
                     temp_iterator_region,
                     target_variable.addr,
-                    InstructionPosition(256), // TODO: PLACEHOLDER
                     "move to next or jump over",
-                );
+                )
             }
             ForPattern::Pair(variable_a, variable_b) => {
                 let target_variable_a = self
@@ -1345,25 +1347,29 @@ impl FunctionCodeGen<'_> {
                     .variable_offsets
                     .get(&variable_b.unique_id_within_function)
                     .unwrap();
-                self.state.builder.add_vec_iter_next_pair(
+                self.state.builder.add_vec_iter_next_pair_placeholder(
                     temp_iterator_region,
                     target_variable_a.addr,
                     target_variable_b.addr,
-                    InstructionPosition(256), // TODO: PLACEHOLDER
                     "move to next or jump over",
-                );
+                )
             }
-        }
+        };
 
-        Ok(())
+        Ok((loop_ip, placeholder_position))
     }
 
-    fn gen_for_loop_map(&mut self, for_pattern: &ForPattern) -> Result<(), Error> {
+    fn gen_for_loop_map(
+        &mut self,
+        for_pattern: &ForPattern,
+    ) -> Result<(InstructionPosition, PatchPosition), Error> {
         self.state.builder.add_map_iter_init(
             FrameMemoryAddress(0x80),
             FrameMemoryAddressIndirectPointer(FrameMemoryAddress(0xffff)),
             "initialize map iterator",
         );
+
+        let jump_ip = self.state.builder.position();
 
         match for_pattern {
             ForPattern::Single(_) => {
@@ -1385,7 +1391,7 @@ impl FunctionCodeGen<'_> {
             }
         }
 
-        Ok(())
+        Ok((jump_ip, PatchPosition(InstructionPosition(0))))
     }
 
     fn gen_for_loop(
@@ -1401,13 +1407,20 @@ impl FunctionCodeGen<'_> {
         // check if it has reached its end
 
         let collection_type = &iterable.resolved_expression.expression_or_location.ty();
-        match collection_type {
-            Type::String => {}
+        let (jump_ip, placeholder_position) = match collection_type {
+            Type::String => {
+                todo!();
+            }
             Type::NamedStruct(_vec) => {
                 if let Some(found_info) = is_vec(collection_type) {
-                    self.gen_for_loop_vec(for_pattern, &iterable.resolved_expression)?;
+                    self.gen_for_loop_vec(for_pattern, &iterable.resolved_expression)?
                 } else if let Some(found_info) = is_map(collection_type) {
-                    self.gen_for_loop_map(for_pattern)?;
+                    self.gen_for_loop_map(for_pattern)?
+                } else {
+                    return Err(self.create_err(
+                        ErrorKind::NotAnIterableCollection,
+                        iterable.resolved_expression.node(),
+                    ));
                 }
             }
             _ => {
@@ -1416,18 +1429,22 @@ impl FunctionCodeGen<'_> {
                     iterable.resolved_expression.node(),
                 ));
             }
-        }
+        };
 
         match for_pattern {
             ForPattern::Single(value_variable) => {}
             ForPattern::Pair(key_variable, value_variable) => {}
         }
 
-        let mut unit_expr = self.temp_space_for_type(&Type::Unit, "for loop body");
-        //self.gen_expression(body, &mut unit_expr)
+        let unit_expr = self.temp_space_for_type(&Type::Unit, "for loop body");
+        self.gen_expression(closure, &unit_expr)?;
 
+        self.state
+            .builder
+            .add_jmp(jump_ip, "jump to next iteration");
         // advance iterator pointer
         // jump to check if iterator pointer has reached its end
+        self.state.builder.patch_jump_here(placeholder_position);
 
         Ok(())
     }

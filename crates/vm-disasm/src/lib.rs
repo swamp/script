@@ -471,14 +471,14 @@ pub fn disasm(
         OpCode::VecIterNext => &[
             to_write_frame(operands[0], DecoratedMemoryKind::Octets, frame_memory_size),
             to_write_frame(operands[1], DecoratedMemoryKind::Octets, frame_memory_size),
-            to_ip(operands[2]),
+            to_jmp_ip(operands[2]),
         ],
 
         OpCode::VecIterNextPair => &[
             to_write_frame(operands[0], DecoratedMemoryKind::Octets, frame_memory_size),
             to_write_frame(operands[1], DecoratedMemoryKind::Octets, frame_memory_size),
             to_write_frame(operands[2], DecoratedMemoryKind::Octets, frame_memory_size),
-            to_ip(operands[3]),
+            to_jmp_ip(operands[3]),
         ],
 
         OpCode::VecPush => &[
@@ -505,14 +505,14 @@ pub fn disasm(
         OpCode::MapIterNext => &[
             to_write_frame(operands[0], DecoratedMemoryKind::Octets, frame_memory_size),
             to_write_frame(operands[1], DecoratedMemoryKind::Octets, frame_memory_size),
-            to_ip(operands[2]),
+            to_jmp_ip(operands[2]),
         ],
 
         OpCode::MapIterNextPair => &[
             to_write_frame(operands[0], DecoratedMemoryKind::Octets, frame_memory_size),
             to_write_frame(operands[1], DecoratedMemoryKind::Octets, frame_memory_size),
             to_write_frame(operands[2], DecoratedMemoryKind::Octets, frame_memory_size),
-            to_ip(operands[3]),
+            to_jmp_ip(operands[3]),
         ],
 
         OpCode::MapRemove => &[

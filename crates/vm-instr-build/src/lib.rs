@@ -57,6 +57,42 @@ impl InstructionBuilder {
         PatchPosition(position)
     }
 
+    pub fn add_vec_iter_next_placeholder(
+        &mut self,
+        iterator_target: FrameMemoryAddress,
+        closure_variable: FrameMemoryAddress,
+        comment: &str,
+    ) -> PatchPosition {
+        let position = self.position();
+        self.add_instruction(
+            OpCode::VecIterNext,
+            &[iterator_target.0, closure_variable.0, 0],
+            comment,
+        );
+        PatchPosition(position)
+    }
+
+    pub fn add_vec_iter_next_pair_placeholder(
+        &mut self,
+        iterator_target: FrameMemoryAddress,
+        closure_variable: FrameMemoryAddress,
+        closure_variable_b: FrameMemoryAddress,
+        comment: &str,
+    ) -> PatchPosition {
+        let position = self.position();
+        self.add_instruction(
+            OpCode::VecIterNextPair,
+            &[
+                iterator_target.0,
+                closure_variable.0,
+                closure_variable_b.0,
+                0,
+            ],
+            comment,
+        );
+        PatchPosition(position)
+    }
+
     pub fn add_eq_u8_immediate(
         &mut self,
         source_addr: FrameMemoryAddress,
@@ -142,6 +178,11 @@ impl InstructionBuilder {
         const JMP_IF: u8 = OpCode::Bnz as u8;
         const JMP: u8 = OpCode::Jmp as u8;
 
+        const VEC_ITER_NEXT: u8 = OpCode::VecIterNext as u8;
+        const VEC_ITER_NEXT_PAIR: u8 = OpCode::VecIterNextPair as u8;
+        const MAP_ITER_NEXT: u8 = OpCode::MapIterNext as u8;
+        const MAP_ITER_NEXT_PAIR: u8 = OpCode::MapIterNextPair as u8;
+
         let instruction = &mut self.instructions[patch_position.0.0 as usize];
 
         match instruction.opcode {
@@ -153,6 +194,22 @@ impl InstructionBuilder {
             }
             JMP => {
                 instruction.operands[0] = target_position.0 as u16 - 1;
+            }
+
+            VEC_ITER_NEXT => {
+                instruction.operands[2] = target_position.0 as u16 - 1;
+            }
+
+            MAP_ITER_NEXT => {
+                instruction.operands[2] = target_position.0 as u16 - 1;
+            }
+
+            VEC_ITER_NEXT_PAIR => {
+                instruction.operands[3] = target_position.0 as u16 - 1;
+            }
+
+            MAP_ITER_NEXT_PAIR => {
+                instruction.operands[3] = target_position.0 as u16 - 1;
             }
             _ => panic!("Attempted to patch a non-jump instruction at position {patch_position:?}"),
         }
