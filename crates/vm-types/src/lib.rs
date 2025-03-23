@@ -37,6 +37,9 @@ pub struct HeapMemoryAddress(pub u32);
 pub struct FrameMemoryAddress(pub u16);
 
 #[derive(Debug, Copy, Clone)]
+pub struct FrameMemoryAddressIndirectPointer(pub FrameMemoryAddress);
+
+#[derive(Debug, Copy, Clone)]
 pub struct TempFrameMemoryAddress(pub FrameMemoryAddress);
 
 impl TempFrameMemoryAddress {
@@ -184,7 +187,14 @@ pub struct InstructionPosition(pub u16);
 pub const INT_SIZE: u16 = 4;
 pub const FLOAT_SIZE: u16 = 4;
 pub const BOOL_SIZE: u16 = 1;
+
 pub const PTR_SIZE: u16 = 2;
+pub const HEAP_PTR_SIZE: u16 = 4;
+pub const HEAP_PTR_ALIGNMENT: MemoryAlignment = MemoryAlignment::U32;
+
+pub const VEC_ITERATOR_SIZE: u16 = 8;
+pub const VEC_ITERATOR_ALIGNMENT: MemoryAlignment = MemoryAlignment::U32;
+
 pub const STR_SIZE: u16 = VEC_SIZE; // TODO: FIX THIS
 pub const VEC_SIZE: u16 = 2 + 2 + 2 + 2;
 pub const MAP_SIZE: u16 = 2 + 2 + 2 + 2 + 2;

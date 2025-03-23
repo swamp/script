@@ -80,6 +80,36 @@ pub fn layout_union(variants: &SeqMap<String, EnumVariantType>) -> (MemorySize, 
     (max_variant_size, max_variant_alignment)
 }
 
+pub fn is_vec(ty: &Type) -> Option<(MemorySize, MemoryAlignment)> {
+    match ty {
+        Type::NamedStruct(named_struct) => {
+            if named_struct.module_path == vec!["core-0.0.0".to_string()]
+                && named_struct.assigned_name.starts_with("Vec<")
+            {
+                Some((MemorySize(VEC_SIZE), MemoryAlignment::U16))
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
+pub fn is_map(ty: &Type) -> Option<(MemorySize, MemoryAlignment)> {
+    match ty {
+        Type::NamedStruct(named_struct) => {
+            if named_struct.module_path == vec!["core-0.0.0".to_string()]
+                && named_struct.assigned_name.starts_with("Map<")
+            {
+                Some((MemorySize(MAP_SIZE), MemoryAlignment::U16))
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
 pub fn type_size_and_alignment(ty: &Type) -> (MemorySize, MemoryAlignment) {
     match ty {
         Type::Int => (MemorySize(INT_SIZE), MemoryAlignment::U32),

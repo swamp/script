@@ -7,6 +7,7 @@ use swamp_vm_types::{BinaryInstruction, InstructionPosition};
 pub mod host;
 mod map;
 mod map_open;
+mod vec;
 
 type Handler0 = fn(&mut Vm);
 type Handler1 = fn(&mut Vm, u16);
@@ -145,11 +146,11 @@ impl Vm {
         let mut vm = Self {
             stack_memory: frame_memory,                 // Raw memory pointer
             stack_memory_size: setup.frame_memory_size, // Total memory size
-            constant_memory: constant_memory,
+            constant_memory,
             constant_memory_size: setup.constant_memory_size,
-            heap_memory: heap_memory,
+            heap_memory,
             heap_memory_size: setup.heap_memory_size,
-            alloc_offset: 0x00cd, // TODO: Should be 0, other values are for debugging
+            alloc_offset: 0x00cd, // TODO: Should be 0, value different from zero for debugging purposes
             stack_offset: 0,
             constant_alloc_offset: 0,
             frame_offset: 0,
@@ -210,6 +211,10 @@ impl Vm {
         // Intrinsic more advanced instructions
         //vm.handlers[OpCode::MapNewFromPairs as usize] =
         //  HandlerType::Args5(Self::execute_map_new_from_pairs);
+
+        vm.handlers[OpCode::VecIterInit as usize] = HandlerType::Args3(Self::execute_vec_iter_init);
+        vm.handlers[OpCode::VecIterNext as usize] = HandlerType::Args3(Self::execute_vec_iter_next);
+
         vm.handlers[OpCode::MapNewFromPairs as usize] =
             HandlerType::Args5(Self::execute_map_open_addressing_from_slice);
 

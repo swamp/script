@@ -579,6 +579,14 @@ impl MutOrImmutableExpression {
             ArgumentExpressionOrLocation::Location(loc) => &loc.ty,
         }
     }
+
+    #[must_use]
+    pub const fn node(&self) -> &Node {
+        match &self.expression_or_location {
+            ArgumentExpressionOrLocation::Expression(expr) => &expr.node,
+            ArgumentExpressionOrLocation::Location(loc) => &loc.node,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

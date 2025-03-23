@@ -2,7 +2,7 @@ use seq_map::SeqMap;
 use swamp_vm_types::opcode::OpCode;
 use swamp_vm_types::{
     BinaryInstruction, ConstantMemoryAddress, FrameMemoryAddress, FrameMemorySize,
-    HeapMemoryAddress, InstructionPosition, MemoryAddress, MemoryOffset, MemorySize,
+    InstructionPosition, MemorySize,
 };
 use yansi::{Color, Paint};
 
@@ -23,16 +23,17 @@ pub enum DecoratedOperandKind {
         DecoratedMemoryKind,
         FrameMemoryAttribute,
     ),
+    ReadIndirectPointer(FrameMemoryAddress),
     ConstantAddress(ConstantMemoryAddress),
     Ip(InstructionPosition),
     ImmediateU32(u32),
     ImmediateU16(u16),
     MemorySize(MemorySize),
     ImmediateU8(u16),
-    WriteIndirectMemory(MemoryAddress, MemoryOffset, DecoratedMemoryKind),
-    ReadIndirectMemory(MemoryAddress, MemoryOffset, DecoratedMemoryKind),
+    //WriteIndirectMemory(MemoryAddress, MemoryOffset, DecoratedMemoryKind),
+    //ReadIndirectMemory(MemoryAddress, MemoryOffset, DecoratedMemoryKind),
     CountU16(u16),
-    HeapAddress(HeapMemoryAddress),
+    //HeapAddress(HeapMemoryAddress),
 }
 
 #[derive(Clone, Debug)]
@@ -176,6 +177,14 @@ pub fn disasm_color(
                     memory_kind_color(&memory_kind),
                 )
             }
+            DecoratedOperandKind::ReadIndirectPointer(addr) => {
+                let color = Color::Green;
+
+                (
+                    format!("({}{})", "$".fg(color), format!("{:04X}", addr.0).fg(color)),
+                    String::new(),
+                )
+            }
             DecoratedOperandKind::ConstantAddress(addr) => {
                 let color = Color::Yellow;
 
@@ -184,32 +193,32 @@ pub fn disasm_color(
                     "constant".to_string(),
                 )
             }
+            /*
+                        DecoratedOperandKind::HeapAddress(addr) => {
+                            let color = Color::Yellow;
 
-            DecoratedOperandKind::HeapAddress(addr) => {
-                let color = Color::Yellow;
-
-                (
-                    format!("{}{}", "@".fg(color), format!("{:08X}", addr.0).fg(color)),
-                    "constant".to_string(),
-                )
-            }
-            DecoratedOperandKind::WriteIndirectMemory(addr, memory_offset, memory_kind) => (
-                format!(
-                    "({}{})",
-                    "$".red(),
-                    format!("{:04X}+{}", addr.0, memory_offset.0).red(),
-                ),
-                memory_kind_color(&memory_kind),
-            ),
-            DecoratedOperandKind::ReadIndirectMemory(addr, memory_offset, memory_kind) => (
-                format!(
-                    "({}{})",
-                    "$".green(),
-                    format!("{:04X}+{}", addr.0, memory_offset.0).green()
-                ),
-                memory_kind_color(&memory_kind),
-            ),
-
+                            (
+                                format!("{}{}", "@".fg(color), format!("{:08X}", addr.0).fg(color)),
+                                "constant".to_string(),
+                            )
+                        }
+                        DecoratedOperandKind::WriteIndirectMemory(addr, memory_offset, memory_kind) => (
+                            format!(
+                                "({}{})",
+                                "$".red(),
+                                format!("{:04X}+{}", addr.0, memory_offset.0).red(),
+                            ),
+                            memory_kind_color(&memory_kind),
+                        ),
+                        DecoratedOperandKind::ReadIndirectMemory(addr, memory_offset, memory_kind) => (
+                            format!(
+                                "({}{})",
+                                "$".green(),
+                                format!("{:04X}+{}", addr.0, memory_offset.0).green()
+                            ),
+                            memory_kind_color(&memory_kind),
+                        ),
+            */
             DecoratedOperandKind::Ip(ip) => (
                 format!("{}{}", "@".cyan(), format!("{:X}", ip.0).bright_cyan()),
                 String::new(),
@@ -278,9 +287,13 @@ pub fn disasm_no_color(
             DecoratedOperandKind::WriteFrameAddress(addr, memory_kind, attr) => {
                 format!("{}{}", "$", format!("{:04X}", addr.0))
             }
+            DecoratedOperandKind::ReadIndirectPointer(addr) => {
+                format!("({}{})", "$", format!("{:04X}", addr.0))
+            }
             DecoratedOperandKind::ConstantAddress(addr) => {
                 format!("{}{}", "@#", format!("{:04X}", addr.0))
             }
+            /*
             DecoratedOperandKind::HeapAddress(addr) => {
                 format!("{}{}", "@", format!("{:04X}", addr.0))
             }
@@ -290,6 +303,8 @@ pub fn disasm_no_color(
             DecoratedOperandKind::WriteIndirectMemory(addr, memory_offset, memory_kind) => {
                 format!("({}{})", "$", format!("{:04X}+{}", addr.0, memory_offset.0))
             }
+
+             */
             DecoratedOperandKind::MemorySize(data) => format!("{}", format!("{:X}", data.0)),
 
             DecoratedOperandKind::Ip(ip) => {
@@ -441,14 +456,17 @@ pub fn disasm(
         ],
         OpCode::Nop => &[],
 
-        OpCode::VecIterInit => {
-            let data = ((operands[2] as u32) << 16) | operands[1] as u32;
+        OpCode::VecFromSlice => &[
+            to_write_frame(operands[0], DecoratedMemoryKind::Octets, frame_memory_size),
+            to_read_frame(operands[1], DecoratedMemoryKind::Octets, frame_memory_size),
+            DecoratedOperandKind::MemorySize(MemorySize(operands[2])),
+            DecoratedOperandKind::CountU16(operands[3]),
+        ],
 
-            &[
-                to_write_frame(operands[0], DecoratedMemoryKind::Octets, frame_memory_size),
-                DecoratedOperandKind::HeapAddress(HeapMemoryAddress(data)),
-            ]
-        }
+        OpCode::VecIterInit => &[
+            to_write_frame(operands[0], DecoratedMemoryKind::Octets, frame_memory_size),
+            DecoratedOperandKind::ReadIndirectPointer(FrameMemoryAddress(operands[1])),
+        ],
 
         OpCode::VecIterNext => &[
             to_write_frame(operands[0], DecoratedMemoryKind::Octets, frame_memory_size),
@@ -480,7 +498,7 @@ pub fn disasm(
 
             &[
                 to_write_frame(operands[0], DecoratedMemoryKind::Octets, frame_memory_size),
-                DecoratedOperandKind::HeapAddress(HeapMemoryAddress(data)),
+                DecoratedOperandKind::ReadIndirectPointer(FrameMemoryAddress(operands[1])),
             ]
         }
 

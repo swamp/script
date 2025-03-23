@@ -1,7 +1,8 @@
 use swamp_vm_types::opcode::OpCode;
 use swamp_vm_types::{
-    BinaryInstruction, ConstantMemoryAddress, CountU16, FrameMemoryAddress, FrameMemorySize,
-    HeapMemoryAddress, InstructionPosition, MemoryAddress, MemorySize,
+    BinaryInstruction, ConstantMemoryAddress, CountU16, FrameMemoryAddress,
+    FrameMemoryAddressIndirectPointer, FrameMemorySize, InstructionPosition, MemoryAddress,
+    MemorySize,
 };
 
 #[derive(Debug)]
@@ -11,6 +12,8 @@ pub struct InstructionBuilder {
     pub instructions: Vec<BinaryInstruction>,
     pub comments: Vec<String>,
 }
+
+impl InstructionBuilder {}
 
 impl InstructionBuilder {}
 
@@ -182,15 +185,12 @@ impl InstructionBuilder {
     pub fn add_map_iter_init(
         &mut self,
         iterator_target: FrameMemoryAddress,
-        pointer_to_map: HeapMemoryAddress,
+        pointer_to_map: FrameMemoryAddressIndirectPointer,
         comment: &str,
     ) {
-        let value_u32 = pointer_to_map.0;
-        let lower_bits = (value_u32 & 0xFFFF) as u16;
-        let upper_bits = (value_u32 >> 16) as u16;
         self.add_instruction(
             OpCode::MapIterInit,
-            &[iterator_target.0, lower_bits, upper_bits],
+            &[iterator_target.0, pointer_to_map.0.0],
             comment,
         );
     }
@@ -213,18 +213,88 @@ impl InstructionBuilder {
         );
     }
 
+    pub fn add_map_iter_next_pair(
+        &mut self,
+        iterator_target: FrameMemoryAddress,
+        closure_variable_key: FrameMemoryAddress,
+        closure_variable_value: FrameMemoryAddress,
+        instruction_position: InstructionPosition,
+        comment: &str,
+    ) {
+        self.add_instruction(
+            OpCode::MapIterNextPair,
+            &[
+                iterator_target.0,
+                closure_variable_key.0,
+                closure_variable_value.0,
+                instruction_position.0,
+            ],
+            comment,
+        );
+    }
+
+    pub fn add_vec_from_slice(
+        &mut self,
+        target: FrameMemoryAddress,
+        source_slice: FrameMemoryAddress,
+        element_size: MemorySize,
+        element_count: CountU16,
+        comment: &str,
+    ) {
+        self.add_instruction(
+            OpCode::VecFromSlice,
+            &[target.0, source_slice.0, element_size.0, element_count.0],
+            comment,
+        );
+    }
+
     pub fn add_vec_iter_init(
         &mut self,
         iterator_target: FrameMemoryAddress,
-        pointer_to_map: HeapMemoryAddress,
+        pointer_to_map: FrameMemoryAddressIndirectPointer,
         comment: &str,
     ) {
-        let value_u32 = pointer_to_map.0;
-        let lower_bits = (value_u32 & 0xFFFF) as u16;
-        let upper_bits = (value_u32 >> 16) as u16;
         self.add_instruction(
             OpCode::VecIterInit,
-            &[iterator_target.0, lower_bits, upper_bits],
+            &[iterator_target.0, pointer_to_map.0.0],
+            comment,
+        );
+    }
+
+    pub fn add_vec_iter_next(
+        &mut self,
+        iterator_target: FrameMemoryAddress,
+        closure_variable: FrameMemoryAddress,
+        instruction_position: InstructionPosition,
+        comment: &str,
+    ) {
+        self.add_instruction(
+            OpCode::VecIterNext,
+            &[
+                iterator_target.0,
+                closure_variable.0,
+                instruction_position.0,
+            ],
+            comment,
+        );
+    }
+
+    pub fn add_vec_iter_next_pair(
+        &mut self,
+        iterator_target: FrameMemoryAddress,
+        closure_variable_key: FrameMemoryAddress,
+        closure_variable_value: FrameMemoryAddress,
+        instruction_position: InstructionPosition,
+        comment: &str,
+    ) {
+        self.add_instruction(
+            OpCode::VecIterNextPair,
+            &[
+                iterator_target.0,
+                closure_variable_key.0,
+                closure_variable_value.0,
+                instruction_position.0,
+            ],
             comment,
         );
     }

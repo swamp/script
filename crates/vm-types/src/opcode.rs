@@ -48,6 +48,7 @@ pub enum OpCode {
     // Allocate heap
     //Alloc,
     //     LtU16,
+    VecFromSlice,
     VecPush,
     VecIterInit,
     VecIterNext,
@@ -112,6 +113,7 @@ impl Display for OpCode {
 
             // Vec
             Self::VecPush => write!(f, "vec_push"),
+            Self::VecFromSlice => write!(f, "vec_from_slice"),
             Self::VecIterInit => write!(f, "vec_iter_init"),
             Self::VecIterNext => write!(f, "vec_iter_next"),
             Self::VecIterNextPair => write!(f, "vec_iter_next_pair"),

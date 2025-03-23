@@ -2,11 +2,12 @@ pub mod alloc;
 pub mod alloc_util;
 pub mod constants;
 pub mod ctx;
+mod location;
 mod vec;
 
 use crate::alloc::{ConstantMemoryRegion, FrameMemoryRegion, ScopeAllocator};
 use crate::alloc_util::{
-    layout_struct, layout_tuple, layout_tuple_elements, reserve_space_for_type,
+    is_map, is_vec, layout_struct, layout_tuple, layout_tuple_elements, reserve_space_for_type,
     type_size_and_alignment,
 };
 use crate::constants::ConstantsManager;
@@ -26,9 +27,10 @@ use swamp_script_semantic::{
 use swamp_script_types::{AnonymousStructType, EnumVariantType, Signature, StructTypeField, Type};
 use swamp_vm_instr_build::{InstructionBuilder, PatchPosition};
 use swamp_vm_types::{
-    BOOL_SIZE, BinaryInstruction, CountU16, FrameMemoryAddress, FrameMemorySize, HeapMemoryAddress,
-    INT_SIZE, InstructionPosition, MemoryAlignment, MemoryOffset, MemorySize,
-    TempFrameMemoryAddress,
+    BOOL_SIZE, BinaryInstruction, CountU16, FrameMemoryAddress, FrameMemoryAddressIndirectPointer,
+    FrameMemorySize, HEAP_PTR_ALIGNMENT, HEAP_PTR_SIZE, HeapMemoryAddress, INT_SIZE,
+    InstructionPosition, MemoryAlignment, MemoryOffset, MemorySize, PTR_SIZE,
+    TempFrameMemoryAddress, VEC_ITERATOR_ALIGNMENT, VEC_ITERATOR_SIZE,
 };
 use tracing::{error, info, trace};
 
@@ -36,6 +38,7 @@ use tracing::{error, info, trace};
 pub enum ErrorKind {
     IllegalCompoundAssignment,
     VariableNotUnique,
+    IllegalCollection,
 }
 
 #[derive(Debug)]
@@ -272,15 +275,16 @@ impl<'a> FunctionCodeGen<'a> {
 }
 
 impl FunctionCodeGen<'_> {
+    #[allow(clippy::too_many_lines)]
     pub(crate) fn gen_single_intrinsic_call(
         &mut self,
         intrinsic_fn: &IntrinsicFunction,
         self_addr: Option<FrameMemoryRegion>,
         arguments: &[ArgumentExpressionOrLocation],
         ctx: &Context,
-    ) {
+    ) -> Result<(), Error> {
         if arguments.is_empty() {
-            return;
+            return Ok(());
         }
         info!(?intrinsic_fn, "generate specific call for intrinsic");
         match intrinsic_fn {
@@ -313,7 +317,17 @@ impl FunctionCodeGen<'_> {
             // Vec
             IntrinsicFunction::VecFromSlice => {
                 let slice_variable = &arguments[0];
-                self.gen_argument(slice_variable, ctx, "move slice to target");
+                let slice_region = self.gen_for_access_or_location_ex(slice_variable)?;
+                let (element_size, element_alignment) =
+                    type_size_and_alignment(&slice_variable.ty());
+                self.state.builder.add_vec_from_slice(
+                    ctx.addr(),
+                    slice_region.addr,
+                    element_size,
+                    CountU16(slice_region.size.0 / element_size.0),
+                    "create vec from slice",
+                );
+                Ok(())
             }
             IntrinsicFunction::VecPush => todo!(),
             IntrinsicFunction::VecPop => todo!(),
@@ -352,13 +366,15 @@ impl FunctionCodeGen<'_> {
                     slice_pair_info.element_count,
                     "create map from temporary slice pair",
                 );
+
+                Ok(())
             }
             IntrinsicFunction::MapHas => todo!(),
             IntrinsicFunction::MapRemove => {
                 let ArgumentExpressionOrLocation::Expression(key_argument) = &arguments[0] else {
                     panic!("must be expression for key");
                 };
-                self.gen_intrinsic_map_remove(self_addr.unwrap(), key_argument, ctx);
+                self.gen_intrinsic_map_remove(self_addr.unwrap(), key_argument, ctx)
             }
             IntrinsicFunction::MapIter => todo!(),
             IntrinsicFunction::MapIterMut => todo!(),
@@ -475,7 +491,7 @@ impl FunctionCodeGen<'_> {
         &mut self,
         expr: &Expression,
     ) -> Result<FrameMemoryRegion, Error> {
-        let result = match &expr.kind {
+        match &expr.kind {
             ExpressionKind::VariableAccess(var_ref) => {
                 info!(?var_ref, "variable access");
                 let frame_address = self
@@ -483,19 +499,30 @@ impl FunctionCodeGen<'_> {
                     .get(&var_ref.unique_id_within_function)
                     .unwrap();
 
-                *frame_address
+                return Ok(*frame_address);
             }
 
-            _ => {
-                let temp_ctx = self.temp_space_for_type(&expr.ty, "expression");
-
-                self.gen_expression(expr, &temp_ctx)?;
-
-                temp_ctx.target()
-            }
+            ExpressionKind::Literal(lit) => match lit {
+                Literal::Slice(slice_type, expressions) => {
+                    return self.gen_slice_literal(slice_type, expressions);
+                }
+                Literal::SlicePair(slice_pair_type, pairs) => {
+                    let info = self.gen_slice_pair_literal(slice_pair_type, pairs);
+                    return Ok(FrameMemoryRegion::new(
+                        info.addr.0,
+                        MemorySize(info.element_count.0 * info.element_size.0),
+                    ));
+                }
+                _ => {}
+            },
+            _ => {}
         };
 
-        Ok(result)
+        let temp_ctx = self.temp_space_for_type(&expr.ty, "expression");
+
+        self.gen_expression(expr, &temp_ctx)?;
+
+        Ok(temp_ctx.target())
     }
 
     pub(crate) fn extra_frame_space_for_type(&mut self, ty: &Type) -> Context {
@@ -543,7 +570,7 @@ impl FunctionCodeGen<'_> {
             ExpressionKind::Option(maybe_option) => {
                 self.gen_option_expression(maybe_option.as_deref(), ctx)
             }
-            ExpressionKind::ForLoop(a, b, c) => self.gen_for_loop(a, b, c, ctx),
+            ExpressionKind::ForLoop(a, b, c) => self.gen_for_loop(a, b, c),
             ExpressionKind::WhileLoop(condition, expression) => {
                 self.gen_while_loop(condition, expression, ctx)
             }
@@ -811,53 +838,6 @@ impl FunctionCodeGen<'_> {
         Ok(())
     }
 
-    fn gen_argument(
-        &mut self,
-        argument: &ArgumentExpressionOrLocation,
-        ctx: &Context,
-        comment: &str,
-    ) -> Result<(), Error> {
-        match &argument {
-            ArgumentExpressionOrLocation::Expression(found_expression) => {
-                self.gen_expression(found_expression, ctx)?;
-            }
-            ArgumentExpressionOrLocation::Location(location_expression) => {
-                self.gen_location_argument(location_expression, ctx, comment);
-            }
-        }
-        Ok(())
-    }
-
-    fn gen_mut_or_immute(
-        &mut self,
-        mut_or_immutable_expression: &MutOrImmutableExpression,
-        ctx: &Context,
-    ) -> Result<(), Error> {
-        match &mut_or_immutable_expression.expression_or_location {
-            ArgumentExpressionOrLocation::Expression(found_expression) => {
-                self.gen_expression(found_expression, ctx)?;
-            }
-            ArgumentExpressionOrLocation::Location(location_expression) => {
-                self.gen_lvalue_address(location_expression);
-            }
-        }
-
-        Ok(())
-    }
-
-    fn gen_for_access_or_location(
-        &mut self,
-        mut_or_immutable_expression: &MutOrImmutableExpression,
-    ) -> Result<FrameMemoryRegion, Error> {
-        match &mut_or_immutable_expression.expression_or_location {
-            ArgumentExpressionOrLocation::Expression(found_expression) => {
-                self.gen_expression_for_access(found_expression)
-            }
-            ArgumentExpressionOrLocation::Location(location_expression) => {
-                self.gen_lvalue_address(location_expression)
-            }
-        }
-    }
     fn gen_variable_assignment(
         &mut self,
         variable: &VariableRef,
@@ -1005,53 +985,6 @@ impl FunctionCodeGen<'_> {
             addr: argument_targets[0].addr(),
             size: MemorySize(last_addr.0 - argument_targets[0].addr().0),
         }
-    }
-
-    fn gen_lvalue_address(
-        &mut self,
-        location_expression: &SingleLocationExpression,
-    ) -> Result<FrameMemoryRegion, Error> {
-        let mut frame_relative_base_address = *self
-            .variable_offsets
-            .get(
-                &location_expression
-                    .starting_variable
-                    .unique_id_within_function,
-            )
-            .unwrap();
-
-        // Loop over the consecutive accesses until we find the actual location
-        for access in &location_expression.access_chain {
-            match &access.kind {
-                LocationAccessKind::FieldIndex(anonymous_struct_type, field_index) => {
-                    let (memory_offset, memory_size, _max_alignment) =
-                        Self::get_struct_field_offset(
-                            &anonymous_struct_type.field_name_sorted_fields,
-                            *field_index,
-                        );
-                    info!(
-                        ?field_index,
-                        ?memory_offset,
-                        ?memory_size,
-                        "lookup struct field",
-                    );
-                    frame_relative_base_address = FrameMemoryRegion::new(
-                        frame_relative_base_address.addr.advance(memory_offset),
-                        memory_size,
-                    );
-                }
-                LocationAccessKind::IntrinsicCallMut(
-                    intrinsic_function,
-                    arguments_to_the_intrinsic,
-                ) => {
-                    // Fetching from vector, map, etc. are done using intrinsic calls
-                    // arguments can be things like the key_value or the int index in a vector
-                    todo!()
-                }
-            }
-        }
-
-        Ok(frame_relative_base_address)
     }
 
     #[allow(clippy::too_many_lines)]
@@ -1305,7 +1238,10 @@ impl FunctionCodeGen<'_> {
             Literal::StringLiteral(str) => {
                 self.gen_string_literal(str, ctx);
             }
-            Literal::Slice(ty, expressions) => self.gen_slice_literal(ty, expressions, ctx),
+            Literal::Slice(ty, expressions) => {
+                //self.gen_slice_literal(ty, expressions, ctx)
+                todo!()
+            }
             Literal::SlicePair(ty, expression_pairs) => {
                 todo!()
             }
@@ -1371,12 +1307,92 @@ impl FunctionCodeGen<'_> {
         Ok(())
     }
 
+    fn gen_for_loop_vec(
+        &mut self,
+        for_pattern: &ForPattern,
+        collection_expr: &MutOrImmutableExpression,
+    ) -> Result<(), Error> {
+        let collection_region = self.gen_for_access_or_location(collection_expr)?;
+
+        let temp_iterator_region = self
+            .temp_allocator
+            .allocate(MemorySize(VEC_ITERATOR_SIZE), VEC_ITERATOR_ALIGNMENT);
+        self.state.builder.add_vec_iter_init(
+            temp_iterator_region,
+            FrameMemoryAddressIndirectPointer(collection_region.addr),
+            "initialize vec iterator",
+        );
+
+        match for_pattern {
+            ForPattern::Single(variable) => {
+                let target_variable = self
+                    .variable_offsets
+                    .get(&variable.unique_id_within_function)
+                    .unwrap();
+                self.state.builder.add_vec_iter_next(
+                    temp_iterator_region,
+                    target_variable.addr,
+                    InstructionPosition(256), // TODO: PLACEHOLDER
+                    "move to next or jump over",
+                );
+            }
+            ForPattern::Pair(variable_a, variable_b) => {
+                let target_variable_a = self
+                    .variable_offsets
+                    .get(&variable_a.unique_id_within_function)
+                    .unwrap();
+                let target_variable_b = self
+                    .variable_offsets
+                    .get(&variable_b.unique_id_within_function)
+                    .unwrap();
+                self.state.builder.add_vec_iter_next_pair(
+                    temp_iterator_region,
+                    target_variable_a.addr,
+                    target_variable_b.addr,
+                    InstructionPosition(256), // TODO: PLACEHOLDER
+                    "move to next or jump over",
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    fn gen_for_loop_map(&mut self, for_pattern: &ForPattern) -> Result<(), Error> {
+        self.state.builder.add_map_iter_init(
+            FrameMemoryAddress(0x80),
+            FrameMemoryAddressIndirectPointer(FrameMemoryAddress(0xffff)),
+            "initialize map iterator",
+        );
+
+        match for_pattern {
+            ForPattern::Single(_) => {
+                self.state.builder.add_map_iter_next(
+                    FrameMemoryAddress(0x80),
+                    FrameMemoryAddress(0x16),
+                    InstructionPosition(256),
+                    "move to next or jump over",
+                );
+            }
+            ForPattern::Pair(_, _) => {
+                self.state.builder.add_map_iter_next_pair(
+                    FrameMemoryAddress(0x80),
+                    FrameMemoryAddress(0x16),
+                    FrameMemoryAddress(0x16),
+                    InstructionPosition(256),
+                    "move to next or jump over",
+                );
+            }
+        }
+
+        Ok(())
+    }
+
     fn gen_for_loop(
         &mut self,
         for_pattern: &ForPattern,
         iterable: &Iterable,
         closure: &Box<Expression>,
-        ctx: &Context,
     ) -> Result<(), Error> {
         // Add check if the collection is empty, to skip everything
 
@@ -1384,18 +1400,23 @@ impl FunctionCodeGen<'_> {
 
         // check if it has reached its end
 
-        self.state.builder.add_map_iter_init(
-            FrameMemoryAddress(0x80),
-            HeapMemoryAddress(0xffff_ffff),
-            "initialize map iterator",
-        );
-
-        self.state.builder.add_map_iter_next(
-            FrameMemoryAddress(0x80),
-            FrameMemoryAddress(0x16),
-            InstructionPosition(256),
-            "move to next or jump over",
-        );
+        let collection_type = &iterable.resolved_expression.expression_or_location.ty();
+        match collection_type {
+            Type::String => {}
+            Type::NamedStruct(_vec) => {
+                if let Some(found_info) = is_vec(collection_type) {
+                    self.gen_for_loop_vec(for_pattern, &iterable.resolved_expression)?;
+                } else if let Some(found_info) = is_map(collection_type) {
+                    self.gen_for_loop_map(for_pattern)?;
+                }
+            }
+            _ => {
+                return Err(self.create_err(
+                    ErrorKind::IllegalCollection,
+                    iterable.resolved_expression.node(),
+                ));
+            }
+        }
 
         match for_pattern {
             ForPattern::Single(value_variable) => {}
@@ -1418,8 +1439,8 @@ impl FunctionCodeGen<'_> {
         ctx: &mut Context,
     ) -> Result<(), Error> {
         // get the vector that is referenced
-        let mut vector_ctx = self.temp_space_for_type(&vector_expr.ty, "vector space");
-        self.gen_expression(&vector_expr, &mut vector_ctx)
+        let vector_ctx = self.temp_space_for_type(&vector_expr.ty, "vector space");
+        self.gen_expression(&vector_expr, &vector_ctx)
 
         /*
         let value_var_addr = match for_pattern {
@@ -1689,7 +1710,11 @@ impl FunctionCodeGen<'_> {
         Ok(())
     }
 
-    fn gen_slice_literal(&mut self, ty: &Type, expressions: &Vec<Expression>, ctx: &Context) {
+    fn gen_slice_literal(
+        &mut self,
+        ty: &Type,
+        expressions: &Vec<Expression>,
+    ) -> Result<FrameMemoryRegion, Error> {
         let (element_size, element_alignment) = type_size_and_alignment(ty);
         let element_count = expressions.len() as u16;
         let total_slice_size = MemorySize(element_size.0 * element_count);
@@ -1704,8 +1729,13 @@ impl FunctionCodeGen<'_> {
                 element_size,
             );
             let element_ctx = Context::new(region);
-            self.gen_expression(expr, &element_ctx);
+            self.gen_expression(expr, &element_ctx)?;
         }
+
+        Ok(FrameMemoryRegion::new(
+            start_frame_address_to_transfer,
+            total_slice_size,
+        ))
     }
 
     fn gen_slice_pair_literal(
@@ -1833,17 +1863,20 @@ impl FunctionCodeGen<'_> {
 
             // Vector
             IntrinsicFunction::VecFromSlice => self.gen_intrinsic_vec_from_slice(arguments, ctx),
-            IntrinsicFunction::VecPush => {}
-            IntrinsicFunction::VecPop => {}
-            IntrinsicFunction::VecRemoveIndex => {}
-            IntrinsicFunction::VecClear => {}
-            IntrinsicFunction::VecCreate => self.gen_intrinsic_vec_create(arguments),
-            IntrinsicFunction::VecSubscript => {}
-            IntrinsicFunction::VecSubscriptMut => {}
-            IntrinsicFunction::VecIter => {} // intentionally disregard, since it is never called
-            IntrinsicFunction::VecIterMut => {} // intentionally disregard, since it is never called
-            IntrinsicFunction::VecLen => {}
-            IntrinsicFunction::VecIsEmpty => {}
+            IntrinsicFunction::VecPush => todo!(),
+            IntrinsicFunction::VecPop => todo!(),
+            IntrinsicFunction::VecRemoveIndex => todo!(),
+            IntrinsicFunction::VecClear => todo!(),
+            IntrinsicFunction::VecCreate => {
+                self.gen_intrinsic_vec_create(arguments);
+                Ok(())
+            }
+            IntrinsicFunction::VecSubscript => todo!(),
+            IntrinsicFunction::VecSubscriptMut => todo!(),
+            IntrinsicFunction::VecIter => todo!(), // intentionally disregard, since it is never called
+            IntrinsicFunction::VecIterMut => todo!(), // intentionally disregard, since it is never called
+            IntrinsicFunction::VecLen => todo!(),
+            IntrinsicFunction::VecIsEmpty => todo!(),
             IntrinsicFunction::VecSelfPush => todo!(),
             IntrinsicFunction::VecSelfExtend => todo!(),
 
@@ -1894,14 +1927,23 @@ impl FunctionCodeGen<'_> {
 
     fn gen_intrinsic_vec_from_slice(
         &mut self,
-        arguments: &Vec<ArgumentExpressionOrLocation>,
+        arguments: &[ArgumentExpressionOrLocation],
         ctx: &Context,
-    ) {
+    ) -> Result<(), Error> {
         if let ArgumentExpressionOrLocation::Expression(found_expr) = &arguments[0] {
-            self.gen_expression_for_access(found_expr);
+            let memory = self.gen_expression_for_access(found_expr)?;
+            self.state.builder.add_vec_from_slice(
+                ctx.addr(),
+                memory.addr,
+                MemorySize(0),
+                CountU16(0),
+                "create vec",
+            );
         } else {
             panic!("vec_from_slice");
         }
+
+        Ok(())
     }
 
     fn gen_match(&mut self, match_expr: &Match, ctx: &Context) -> Result<(), Error> {
