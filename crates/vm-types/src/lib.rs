@@ -25,7 +25,6 @@ impl StackMemoryAddress {
         Self(self.0 + memory_size.0)
     }
 }
-// relative to the stack pointer
 
 #[derive(Debug, Copy, Clone)]
 pub struct ConstantMemoryAddress(pub u32);
@@ -74,7 +73,7 @@ impl FrameMemoryAddress {
 
 impl MemoryAddress {
     #[must_use]
-    pub const fn space(&self, memory_size: MemorySize, alignment: Alignment) -> Self {
+    pub const fn space(&self, memory_size: MemorySize, _alignment: Alignment) -> Self {
         Self(self.0 + memory_size.0)
     }
 }
@@ -201,11 +200,19 @@ pub const STR_SIZE: u16 = VEC_HEADER_SIZE; // TODO: FIX THIS
 pub struct VecHeader {
     pub count: u16, // useful for iterator
     pub capacity: u16,
-    pub size: u16,        // size (in bytes) of each element; useful for iterator
     pub heap_offset: u32, // "pointer" to the allocated slice (an offset into memory)
+    pub size: u16,        // size (in bytes) of each element; useful for iterator
 }
 pub const VEC_HEADER_SIZE: u16 = size_of::<VecHeader>() as u16;
 pub const VEC_REFERENCE_SIZE: u16 = HEAP_PTR_SIZE;
 
 pub const MAP_SIZE: u16 = 2 + 2 + 2 + 2 + 2;
 pub const MAP_REFERENCE_SIZE: u16 = HEAP_PTR_SIZE;
+
+pub struct StringHeader {
+    pub byte_count: u16,
+    pub capacity: u16,
+    pub heap_offset: u32, // "pointer" to the allocated slice (an offset into memory)
+}
+pub const STRING_HEADER_SIZE: u16 = size_of::<StringHeader>() as u16;
+pub const STRING_REFERENCE_SIZE: u16 = HEAP_PTR_SIZE;

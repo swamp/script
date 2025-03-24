@@ -5,7 +5,7 @@
 
 mod util;
 
-use crate::util::{check, check_fail, check_value, eval, eval_string};
+use crate::util::check_value;
 use fixed32::Fp;
 use swamp_script_core_extra::prelude::Value;
 

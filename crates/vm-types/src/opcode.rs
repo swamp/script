@@ -64,6 +64,10 @@ pub enum OpCode {
     MapIterNext,
     MapIterNextPair,
 
+    // String
+    StringFromConstantSlice,
+
+    // others
     Eq8Imm,
     Tst8,
     GtI32,
@@ -124,6 +128,9 @@ impl Display for OpCode {
             Self::MapIterInit => write!(f, "map_iter_init"),
             Self::MapIterNext => write!(f, "map_iter_next"),
             Self::MapIterNextPair => write!(f, "map_iter_next_pair"),
+
+            // Map
+            Self::StringFromConstantSlice => write!(f, "str_from_const"),
 
             Self::Nop => write!(f, "nop"),
         }

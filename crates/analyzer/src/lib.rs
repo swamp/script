@@ -23,7 +23,7 @@ use seq_map::SeqMap;
 use std::mem::take;
 use std::num::{ParseFloatError, ParseIntError};
 use std::rc::Rc;
-use std::task::Context;
+
 use swamp_script_modules::prelude::*;
 use swamp_script_modules::symtbl::{SymbolTableRef, TypeGeneratorKind};
 use swamp_script_node::{FileId, Node, Span};
@@ -36,9 +36,7 @@ use swamp_script_semantic::{
 };
 use swamp_script_source_map::SourceMap;
 use swamp_script_types::prelude::*;
-use swamp_script_types::{
-    ParameterizedTypeBlueprint, all_types_are_concrete, all_types_are_concrete_or_unit,
-};
+use swamp_script_types::{ParameterizedTypeBlueprint, all_types_are_concrete_or_unit};
 use tracing::{debug, error, info, trace};
 
 #[must_use]

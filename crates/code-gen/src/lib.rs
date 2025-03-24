@@ -19,8 +19,8 @@ use swamp_script_semantic::{
     AnonymousStructLiteral, ArgumentExpressionOrLocation, BinaryOperator, BinaryOperatorKind,
     BooleanExpression, CompoundOperatorKind, ConstantId, ConstantRef, EnumLiteralData, Expression,
     ExpressionKind, ForPattern, Function, Guard, InternalFunctionDefinitionRef, InternalFunctionId,
-    InternalMainExpression, Iterable, Literal, LocationAccessKind, Match, MutOrImmutableExpression,
-    NormalPattern, Pattern, Postfix, PostfixKind, RangeMode, SingleLocationExpression,
+    InternalMainExpression, Iterable, Literal, Match, MutOrImmutableExpression, NormalPattern,
+    Pattern, Postfix, PostfixKind, RangeMode, SingleLocationExpression,
     SingleMutLocationExpression, StructInstantiation, UnaryOperator, UnaryOperatorKind,
     VariableRef, WhenBinding,
 };
@@ -761,7 +761,7 @@ impl FunctionCodeGen<'_> {
     }
 
     fn gen_boolean_expression(&mut self, condition: &BooleanExpression) {
-        self.gen_boolean_access(&condition.expression)
+        self.gen_boolean_access(&condition.expression);
     }
 
     fn gen_if(
@@ -1252,12 +1252,22 @@ impl FunctionCodeGen<'_> {
     }
 
     fn gen_string_literal(&mut self, string: &str, ctx: &Context) {
+        let string_bytes = string.as_bytes();
+        let string_byte_count = string_bytes.len();
+
         let data_ptr = self
             .state
             .constants
-            .allocate(string.as_bytes(), MemoryAlignment::U8);
-        let mem_size = MemorySize(string.len() as u16);
+            .allocate(string_bytes, MemoryAlignment::U8);
 
+        let mem_size = MemorySize(string_byte_count as u16);
+
+        self.state.builder.add_string_from_constant_slice(
+            ctx.addr(),
+            data_ptr,
+            mem_size,
+            "create string",
+        );
         // self.gen_vec_immediate(data_ptr, mem_size, mem_size, "string", ctx);
     }
 
@@ -2192,7 +2202,7 @@ impl FunctionCodeGen<'_> {
     ) -> Result<(), Error> {
         let source_region = self.gen_expression_for_access(source_tuple_expression)?;
 
-        let (total_size, max_alignment, element_offsets) = layout_tuple_elements(tuple_type);
+        let (total_size, _max_alignment, element_offsets) = layout_tuple_elements(tuple_type);
         assert_eq!(total_size.0, source_region.size.0);
 
         for (target_variable, (element_offset, element_size)) in
@@ -2200,7 +2210,8 @@ impl FunctionCodeGen<'_> {
         {
             if target_variable.is_unused {
             } else {
-                let (target_region, variable_alignment) = self.get_variable_region(target_variable);
+                let (target_region, _variable_alignment) =
+                    self.get_variable_region(target_variable);
                 assert_eq!(target_region.size.0, element_size.0);
 
                 let source_element_region = FrameMemoryRegion::new(

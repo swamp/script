@@ -281,10 +281,10 @@ pub fn disasm_no_color(
 
     for operand in decorated.operands {
         let new_str = match operand.kind {
-            DecoratedOperandKind::ReadFrameAddress(addr, memory_kind, attr) => {
+            DecoratedOperandKind::ReadFrameAddress(addr, _memory_kind, _attr) => {
                 format!("{}{}", "$", format!("{:04X}", addr.0))
             }
-            DecoratedOperandKind::WriteFrameAddress(addr, memory_kind, attr) => {
+            DecoratedOperandKind::WriteFrameAddress(addr, _memory_kind, _attr) => {
                 format!("{}{}", "$", format!("{:04X}", addr.0))
             }
             DecoratedOperandKind::ReadIndirectPointer(addr) => {
@@ -493,14 +493,10 @@ pub fn disasm(
             DecoratedOperandKind::CountU16(operands[4]),
         ],
 
-        OpCode::MapIterInit => {
-            let data = ((operands[2] as u32) << 16) | operands[1] as u32;
-
-            &[
-                to_write_frame(operands[0], DecoratedMemoryKind::Octets, frame_memory_size),
-                DecoratedOperandKind::ReadIndirectPointer(FrameMemoryAddress(operands[1])),
-            ]
-        }
+        OpCode::MapIterInit => &[
+            to_write_frame(operands[0], DecoratedMemoryKind::Octets, frame_memory_size),
+            DecoratedOperandKind::ReadIndirectPointer(FrameMemoryAddress(operands[1])),
+        ],
 
         OpCode::MapIterNext => &[
             to_write_frame(operands[0], DecoratedMemoryKind::Octets, frame_memory_size),
@@ -519,55 +515,64 @@ pub fn disasm(
             to_write_frame(operands[0], DecoratedMemoryKind::Octets, frame_memory_size),
             to_read_frame(operands[1], DecoratedMemoryKind::Octets, frame_memory_size),
         ],
-        /*
-                OpCode::Alloc => &[
-            to_write_frame(operands[0], DecoratedMemoryKind::Octets, frame_memory_size),
-            DecoratedOperandKind::MemorySize(MemorySize(operands[1])),
-        ],
-        OpCode::LtU16 => todo!(),
-        OpCode::St32x => {
-            let data = ((operands[3] as u32) << 16) | operands[2] as u32;
-            &[
-                DecoratedOperandKind::WriteIndirectMemory(
-                    MemoryAddress(operands[0]),
-                    MemoryOffset(operands[1]),
-                    DecoratedMemoryKind::U32,
-                ),
-                DecoratedOperandKind::ImmediateU32(data),
-            ]
-        }
-        OpCode::Stx => &[
-            DecoratedOperandKind::WriteIndirectMemory(
-                MemoryAddress(operands[0]),
-                MemoryOffset(operands[1]),
-                DecoratedMemoryKind::Octets,
-            ),
-            DecoratedOperandKind::ReadFrameAddress(
-                FrameMemoryAddress(operands[2]),
-                DecoratedMemoryKind::Octets,
-                FrameMemoryAttribute {
-                    is_temporary: operands[2] >= frame_memory_size.0,
-                },
-            ),
-            DecoratedOperandKind::MemorySize(MemorySize(operands[3])),
-        ],
-        OpCode::Ldx => &[
-            DecoratedOperandKind::ReadIndirectMemory(
-                MemoryAddress(operands[0]),
-                MemoryOffset(operands[1]),
-                DecoratedMemoryKind::Octets,
-            ),
-            DecoratedOperandKind::ReadFrameAddress(
-                FrameMemoryAddress(operands[2]),
-                DecoratedMemoryKind::Octets,
-                FrameMemoryAttribute {
-                    is_temporary: operands[2] >= frame_memory_size.0,
-                },
-            ),
-            DecoratedOperandKind::MemorySize(MemorySize(operands[3])),
-        ],
 
-         */
+        OpCode::StringFromConstantSlice => {
+            let data = ((operands[2] as u32) << 16) | operands[1] as u32;
+
+            &[
+                to_write_frame(operands[0], DecoratedMemoryKind::S32, frame_memory_size),
+                DecoratedOperandKind::ConstantAddress(ConstantMemoryAddress(data)),
+                DecoratedOperandKind::MemorySize(MemorySize(operands[3])),
+            ]
+        } /*
+                  OpCode::Alloc => &[
+              to_write_frame(operands[0], DecoratedMemoryKind::Octets, frame_memory_size),
+              DecoratedOperandKind::MemorySize(MemorySize(operands[1])),
+          ],
+          OpCode::LtU16 => todo!(),
+          OpCode::St32x => {
+              let data = ((operands[3] as u32) << 16) | operands[2] as u32;
+              &[
+                  DecoratedOperandKind::WriteIndirectMemory(
+                      MemoryAddress(operands[0]),
+                      MemoryOffset(operands[1]),
+                      DecoratedMemoryKind::U32,
+                  ),
+                  DecoratedOperandKind::ImmediateU32(data),
+              ]
+          }
+          OpCode::Stx => &[
+              DecoratedOperandKind::WriteIndirectMemory(
+                  MemoryAddress(operands[0]),
+                  MemoryOffset(operands[1]),
+                  DecoratedMemoryKind::Octets,
+              ),
+              DecoratedOperandKind::ReadFrameAddress(
+                  FrameMemoryAddress(operands[2]),
+                  DecoratedMemoryKind::Octets,
+                  FrameMemoryAttribute {
+                      is_temporary: operands[2] >= frame_memory_size.0,
+                  },
+              ),
+              DecoratedOperandKind::MemorySize(MemorySize(operands[3])),
+          ],
+          OpCode::Ldx => &[
+              DecoratedOperandKind::ReadIndirectMemory(
+                  MemoryAddress(operands[0]),
+                  MemoryOffset(operands[1]),
+                  DecoratedMemoryKind::Octets,
+              ),
+              DecoratedOperandKind::ReadFrameAddress(
+                  FrameMemoryAddress(operands[2]),
+                  DecoratedMemoryKind::Octets,
+                  FrameMemoryAttribute {
+                      is_temporary: operands[2] >= frame_memory_size.0,
+                  },
+              ),
+              DecoratedOperandKind::MemorySize(MemorySize(operands[3])),
+          ],
+
+           */
     };
 
     let converted_operands = operands_slice

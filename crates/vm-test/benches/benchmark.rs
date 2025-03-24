@@ -12,6 +12,7 @@ fn setup_vm() -> Vm {
         }
     ",
     )
+    .unwrap()
 }
 
 fn format_duration(nanos: f64) -> String {

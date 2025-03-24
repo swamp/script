@@ -1,10 +1,10 @@
-use swamp_vm_types::{MemoryAddress, MemoryAlignment, MemorySize};
+use swamp_vm_types::aligner::align;
+use swamp_vm_types::{ConstantMemoryAddress, MemoryAlignment, MemorySize};
 
-const CONSTANTS_START: u16 = 0xFFFF;
 const ALIGNMENT_MASK: usize = 0x7;
 
 pub struct ConstantsAllocator {
-    current_addr: MemoryAddress,
+    current_addr: u32,
 }
 
 impl Default for ConstantsAllocator {
@@ -16,24 +16,24 @@ impl Default for ConstantsAllocator {
 impl ConstantsAllocator {
     #[must_use]
     pub const fn new() -> Self {
-        Self {
-            current_addr: MemoryAddress(CONSTANTS_START),
-        }
+        Self { current_addr: 0 }
     }
 
-    pub fn allocate(&mut self, size: MemorySize, alignment_enum: MemoryAlignment) -> MemoryAddress {
+    pub fn allocate(
+        &mut self,
+        size: MemorySize,
+        alignment_enum: MemoryAlignment,
+    ) -> ConstantMemoryAddress {
         let alignment: usize = alignment_enum.into();
+        let start_addr = align(self.current_addr as usize, alignment) as u32;
 
-        let aligned_size = (size.0 as usize + alignment - 1) & !(alignment - 1);
+        self.current_addr = start_addr + size.0 as u32;
 
-        self.current_addr =
-            MemoryAddress((self.current_addr.0 - aligned_size as u16) & !(alignment - 1) as u16);
-
-        self.current_addr
+        ConstantMemoryAddress(start_addr)
     }
 
     pub fn reset(&mut self) {
-        self.current_addr = MemoryAddress(CONSTANTS_START);
+        self.current_addr = 0;
     }
 }
 
@@ -50,27 +50,26 @@ impl Default for ConstantsManager {
 
 impl ConstantsManager {
     #[must_use]
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             allocator: ConstantsAllocator::new(),
-            data: Vec::new(),
+            data: vec![0u8; 1024 * 1024],
         }
     }
 
-    pub fn allocate(&mut self, data: &[u8], alignment_enum: MemoryAlignment) -> MemoryAddress {
+    pub fn allocate(
+        &mut self,
+        data: &[u8],
+        alignment_enum: MemoryAlignment,
+    ) -> ConstantMemoryAddress {
         let addr = self
             .allocator
             .allocate(MemorySize(data.len() as u16), alignment_enum);
 
-        let required_len = (CONSTANTS_START - addr.0 + 1) as usize;
-        if required_len > self.data.len() {
-            self.data.resize(required_len, 0);
-        }
-
-        let start_idx = (CONSTANTS_START - addr.0 - data.len() as u16) as usize;
+        let start_idx = addr.0 as usize;
         self.data[start_idx..start_idx + data.len()].copy_from_slice(data);
 
-        addr
+        ConstantMemoryAddress(addr.0)
     }
 
     pub fn take_data(self) -> Vec<u8> {

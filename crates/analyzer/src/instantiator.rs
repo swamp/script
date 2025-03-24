@@ -6,7 +6,6 @@ use swamp_script_types::{
     Signature, StructTypeField, Type, TypeForParameter, all_types_are_concrete,
     all_types_are_concrete_or_unit,
 };
-use tracing::info;
 
 #[derive(Debug)]
 pub struct TypeVariableScope {

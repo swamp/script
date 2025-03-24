@@ -25,7 +25,7 @@ use swamp_script_semantic::ProgramState;
 use swamp_script_source_map::SourceMap;
 use swamp_script_source_map_lookup::SourceMapWrapper;
 use tiny_ver::TinyVersion;
-use tracing::{debug, info, trace};
+use tracing::{info, trace};
 
 pub const COMPILER_VERSION: &str = "0.0.0";
 pub const CORE_VERSION: &str = "core-0.0.0";

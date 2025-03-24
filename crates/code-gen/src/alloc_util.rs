@@ -3,7 +3,7 @@ use seq_map::SeqMap;
 use swamp_script_types::{AnonymousStructType, EnumVariantType, Type};
 use swamp_vm_types::{
     FLOAT_SIZE, INT_SIZE, MAP_REFERENCE_SIZE, MAP_SIZE, MemoryAlignment, MemoryOffset, MemorySize,
-    STR_SIZE, VEC_HEADER_SIZE, VEC_REFERENCE_SIZE,
+    STR_SIZE, VEC_REFERENCE_SIZE,
 };
 use tracing::{error, info};
 

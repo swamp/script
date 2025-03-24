@@ -5,8 +5,7 @@
 
 mod util;
 
-use crate::util::{check, eval, eval_string};
-use swamp_script_core_extra::prelude::Value;
+use crate::util::{check, eval_string};
 
 #[test_log::test]
 fn sparse_map_create() {

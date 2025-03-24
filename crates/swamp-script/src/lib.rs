@@ -6,11 +6,10 @@ use swamp_script_analyzer::prelude::Error;
 use swamp_script_dep_loader::DepLoaderError;
 use swamp_script_source_map::SourceMap;
 pub mod prelude;
-use crate::prelude::SeqMap;
+
 use swamp_script_analyzer::Program;
 use swamp_script_error_report::ScriptResolveError;
 use swamp_script_semantic::SemanticError;
-use tiny_ver::TinyVersion;
 
 #[derive(Debug)]
 pub enum ScriptError {

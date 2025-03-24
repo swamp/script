@@ -7,7 +7,7 @@ use std::cell::{Ref, RefCell};
 use std::fmt::{Display, Formatter};
 use std::hash::Hash;
 use std::rc::Rc;
-use swamp_script_core_extra::extra::{SparseValueId, SparseValueMap};
+use swamp_script_core_extra::extra::SparseValueId;
 use swamp_script_core_extra::prelude::{Value, ValueError};
 use swamp_script_core_extra::value::RustType;
 use swamp_script_core_extra::value::ValueRef;

@@ -1,4 +1,4 @@
-use swamp_script_vm_test::util::{exec_with_assembly, exec_with_host_function};
+use swamp_script_vm_test::util::exec_with_host_function;
 #[test_log::test]
 fn with() {
     exec_with_host_function(
@@ -17,7 +17,7 @@ with x = 3 {
 > 0002: ld32 $0004 00000003
 > 0003: mov $0058 $0004 4
 > 0004: host 0001 4
-> 0005: hlt 
+> 0005: hlt
 ",
         "
 00000000  03 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  ................

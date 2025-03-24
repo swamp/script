@@ -1,37 +1,67 @@
+use swamp_vm_types::StringHeader;
+
 pub struct HostArgs {
     current_index: usize, // Current argument being processed
-    args: Vec<u8>,
+    // references into the Vm
+    frame_memory: *const u8,
+    frame_memory_len: usize,
+    heap_memory: *const u8,
+    heap_memory_len: usize,
 }
 
 impl HostArgs {
-    pub fn new(args: &[u8]) -> Self {
+    #[must_use]
+    pub const fn new(
+        frame_memory: *const u8,
+        frame_memory_len: usize,
+        heap_memory: *const u8,
+        heap_memory_len: usize,
+    ) -> Self {
         Self {
-            args: args.to_vec(),
+            frame_memory,
+            frame_memory_len,
+            heap_memory,
+            heap_memory_len,
             current_index: 0,
         }
     }
 
-    /// Reads the next 4 bytes from `args`, interpreting them as a little-endian i32.
-    /// Advances the current index by 4.
-    ///
-    /// # Panics
-    ///
-    /// Panics if there are not enough bytes remaining.
     pub fn get_i32(&mut self) -> i32 {
-        // Ensure there are enough bytes remaining
-        assert!(
-            self.current_index + 4 <= self.args.len(),
-            "Not enough bytes to read an i32"
+        let size = size_of::<i32>();
+        debug_assert!(
+            self.current_index + size <= self.frame_memory_len,
+            "Attempted to read beyond the end of frame memory"
         );
 
-        // Get the next four bytes
-        let bytes = &self.args[self.current_index..self.current_index + 4];
+        unsafe {
+            let int_ptr = self.frame_memory.add(self.current_index) as *const i32;
+            self.current_index += size;
+            *int_ptr
+        }
+    }
 
-        // Advance the current index
-        self.current_index += 4;
+    pub fn get_str(&mut self) -> &str {
+        unsafe {
+            let offset_ptr = self.frame_memory.add(self.current_index) as *const u32;
+            self.current_index += size_of::<u32>();
+            let header_offset = *offset_ptr as usize;
 
-        // Convert the bytes to an i32 (assuming little-endian encoding)
-        i32::from_le_bytes(bytes.try_into().expect("Slice with incorrect length"))
+            let string_header = self.heap_memory.add(header_offset) as *const StringHeader;
+
+            let rune_offset = (*string_header).heap_offset as usize;
+            let string_byte_length = (*string_header).byte_count as usize;
+
+            debug_assert!(
+                rune_offset + string_byte_length <= self.heap_memory_len,
+                "String read out-of-bounds in heap memory"
+            );
+
+            let ptr_to_utf8 = self.heap_memory.add(rune_offset);
+
+            let bytes = std::slice::from_raw_parts(ptr_to_utf8, string_byte_length);
+
+            std::str::from_utf8_unchecked(bytes)
+        }
     }
 }
 

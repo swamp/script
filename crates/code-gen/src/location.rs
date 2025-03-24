@@ -97,8 +97,8 @@ impl FunctionCodeGen<'_> {
                     );
                 }
                 LocationAccessKind::IntrinsicCallMut(
-                    intrinsic_function,
-                    arguments_to_the_intrinsic,
+                    _intrinsic_function,
+                    _arguments_to_the_intrinsic,
                 ) => {
                     // Fetching from vector, map, etc. are done using intrinsic calls
                     // arguments can be things like the key_value or the int index in a vector

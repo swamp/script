@@ -939,7 +939,7 @@ impl SourceMapDisplay<'_> {
         pub access_chain: Vec<LocationAccess>,
              */
 
-        self.show_variable(f, &location.starting_variable);
+        self.show_variable(f, &location.starting_variable)?;
         //  self.show_type(f, &location.ty, tabs);
         match location.kind {
             SingleLocationExpressionKind::MutStructFieldRef(..) => write!(f, "mut_struct_field"),

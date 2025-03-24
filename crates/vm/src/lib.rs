@@ -1,12 +1,13 @@
 use crate::host::{HostArgs, HostFunctionCallback};
 use seq_map::SeqMap;
-use std::alloc;
+use std::{alloc, ptr};
 use swamp_vm_types::opcode::OpCode;
 use swamp_vm_types::{BinaryInstruction, InstructionPosition};
 
 pub mod host;
 mod map;
 mod map_open;
+mod string;
 mod vec;
 
 type Handler0 = fn(&mut Vm);
@@ -67,10 +68,6 @@ pub struct Vm {
     last_frame_size: u16,
 }
 
-impl Vm {}
-
-impl Vm {}
-
 impl Vm {
     #[must_use]
     pub fn instructions(&self) -> &[BinaryInstruction] {
@@ -124,7 +121,7 @@ const ALIGNMENT_MASK: usize = !ALIGNMENT_REST;
 pub struct VmSetup {
     pub frame_memory_size: usize,
     pub heap_memory_size: usize,
-    pub constant_memory_size: usize,
+    pub constant_memory: Vec<u8>,
 }
 
 impl Vm {
@@ -139,7 +136,7 @@ impl Vm {
         };
         let constant_memory = unsafe {
             alloc::alloc(
-                alloc::Layout::from_size_align(setup.constant_memory_size, ALIGNMENT).unwrap(),
+                alloc::Layout::from_size_align(setup.constant_memory.len(), ALIGNMENT).unwrap(),
             )
         };
 
@@ -147,7 +144,7 @@ impl Vm {
             stack_memory: frame_memory,                 // Raw memory pointer
             stack_memory_size: setup.frame_memory_size, // Total memory size
             constant_memory,
-            constant_memory_size: setup.constant_memory_size,
+            constant_memory_size: setup.constant_memory.len(),
             heap_memory,
             heap_memory_size: setup.heap_memory_size,
             heap_alloc_offset: 0x00cd, // TODO: Should be 0, value different from zero for debugging purposes
@@ -217,6 +214,10 @@ impl Vm {
         vm.handlers[OpCode::VecIterInit as usize] = HandlerType::Args3(Self::execute_vec_iter_init);
         vm.handlers[OpCode::VecIterNext as usize] = HandlerType::Args3(Self::execute_vec_iter_next);
 
+        // String
+        vm.handlers[OpCode::StringFromConstantSlice as usize] =
+            HandlerType::Args4(Self::execute_string_from_constant_slice);
+
         /*
         vm.handlers[OpCode::MapNewFromPairs as usize] =
             HandlerType::Args5(Self::execute_map_open_addressing_from_slice);
@@ -235,9 +236,13 @@ impl Vm {
 
         // Optional: Zero out the memory for safety?
         unsafe {
-            std::ptr::write_bytes(frame_memory, 0, setup.frame_memory_size);
-            std::ptr::write_bytes(heap_memory, 0, setup.frame_memory_size);
-            std::ptr::write_bytes(constant_memory, 0, setup.frame_memory_size);
+            ptr::write_bytes(frame_memory, 0, setup.frame_memory_size);
+            ptr::write_bytes(heap_memory, 0, setup.heap_memory_size);
+            ptr::copy_nonoverlapping(
+                setup.constant_memory.as_ptr(),
+                constant_memory,
+                setup.constant_memory.len(),
+            );
         }
 
         vm
@@ -498,6 +503,17 @@ impl Vm {
     }
 
     // Helper to convert offset to pointer
+
+    #[inline(always)]
+    fn const_ptr_at(&self, constant_offset: u32) -> *mut u8 {
+        unsafe { self.constant_memory.add(constant_offset as usize) }
+    }
+
+    #[inline(always)]
+    fn const_ptr_immute_at(&self, constant_offset: u32) -> *const u8 {
+        unsafe { self.constant_memory.add(constant_offset as usize) }
+    }
+
     #[inline(always)]
     fn ptr_at_i32(&self, offset: usize) -> *mut i32 {
         // Ensure alignment
@@ -571,12 +587,13 @@ impl Vm {
         unsafe { *self.ptr_at_u8(self.frame_offset + offset as usize) != 0 }
     }
 
+    #[inline(always)]
     fn heap_allocate(&mut self, size: usize) -> u32 {
         let aligned_size = (size + ALIGNMENT_REST) & ALIGNMENT_MASK;
         let aligned_offset = (self.heap_alloc_offset + ALIGNMENT_REST) & ALIGNMENT_MASK;
 
         eprintln!(
-            "heap_allocate original_size:{size}, aligned_size: {aligned_size} offset: {aligned_offset:08X}"
+            "heap_allocate original_size:{size}, aligned_size: {aligned_size} offset: {aligned_offset:08X} ({aligned_offset})"
         );
 
         debug_assert!(
@@ -587,6 +604,20 @@ impl Vm {
         self.heap_alloc_offset = aligned_offset + aligned_size;
 
         aligned_offset as u32
+    }
+
+    #[inline(always)]
+    fn heap_allocate_with_data(&mut self, octets: &[u8]) {
+        let offset = self.heap_allocate(octets.len());
+        {
+            unsafe {
+                ptr::copy_nonoverlapping(
+                    octets.as_ptr(),
+                    self.heap_ptr_at(offset as usize),
+                    octets.len(),
+                );
+            }
+        }
     }
 
     pub fn allocate_constant(&mut self, size: usize) -> u32 {
@@ -725,18 +756,19 @@ impl Vm {
     fn execute_host_call(&mut self, function_id: u16, bytes_to_copy_from_frame_ptr: u16) {
         let callback: &mut Box<dyn FnMut(HostArgs)> =
             self.host_functions.get_mut(&function_id).unwrap();
-        let offset = self.frame_offset + self.last_frame_size as usize;
-        let num_bytes = bytes_to_copy_from_frame_ptr as usize;
+        //        let offset = self.frame_offset + self.last_frame_size as usize;
+        //      let num_bytes = bytes_to_copy_from_frame_ptr as usize;
 
-        // SAFETY: We assume that self.memory is a valid pointer to a memory region
-        // of sufficient size. Make sure that offset + num_bytes does not exceed
-        // the allocated memory.
-        let args: Vec<u8> = unsafe {
-            std::slice::from_raw_parts(self.stack_memory.add(offset), num_bytes).to_vec()
-        };
-
-        let host_args = HostArgs::new(&args);
-        callback(host_args);
+        unsafe {
+            let host_args = HostArgs::new(
+                self.stack_memory
+                    .add(self.frame_offset + self.last_frame_size as usize),
+                self.stack_memory_size - self.frame_offset,
+                self.heap_memory,
+                self.heap_memory_size,
+            );
+            callback(host_args);
+        }
     }
 
     #[inline]

@@ -36,7 +36,7 @@ pub fn execute_constants(
 }
 
 fn gen_internal(code: &str) -> Result<(CodeGenState, Program), Error> {
-    let (program, main_module, source_map) = compile_string(code).unwrap();
+    let (program, main_module, _source_map) = compile_string(code).unwrap();
 
     let mut code_gen = CodeGenState::new();
     code_gen.gen_constants_in_order(&program.state.constants_in_dependency_order)?;
@@ -102,12 +102,12 @@ fn gen_internal_debug(code: &str) -> Result<(CodeGenState, Program), Error> {
 }
 
 fn exec_code_gen_state(code_gen_state: CodeGenState) -> Vm {
-    let (instructions, _constants) = code_gen_state.take_instructions_and_constants();
+    let (instructions, constants) = code_gen_state.take_instructions_and_constants();
 
     let setup = VmSetup {
         frame_memory_size: 1024,
         heap_memory_size: 1024,
-        constant_memory_size: 1024,
+        constant_memory: constants,
     };
     let mut vm = Vm::new(instructions, setup);
 
@@ -116,8 +116,8 @@ fn exec_code_gen_state(code_gen_state: CodeGenState) -> Vm {
     vm
 }
 
-fn exec_internal(code: &str) -> Result<Vm, Error> {
-    let (code_gen, program) = gen_internal_debug(code)?;
+pub fn exec_internal(code: &str) -> Result<Vm, Error> {
+    let (code_gen, _program) = gen_internal_debug(code)?;
 
     Ok(exec_code_gen_state(code_gen))
 }
@@ -209,7 +209,7 @@ pub fn exec_with_host_function<F>(
     let setup = VmSetup {
         frame_memory_size: 1024,
         heap_memory_size: 1024,
-        constant_memory_size: 1024,
+        constant_memory: constants,
     };
     let mut vm = Vm::new(instructions, setup);
 
@@ -227,7 +227,7 @@ fn exec_vars(code: &str, expected_hex: &str) {
 }
 
 fn gen_code(code: &str, expected_output: &str) {
-    let (generator, program) = gen_internal_debug(code).expect("should work");
+    let (generator, _program) = gen_internal_debug(code).expect("should work");
 
     let disassembler_output = disasm_instructions_no_color(
         generator.instructions(),

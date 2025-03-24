@@ -10,7 +10,7 @@ use swamp_script_semantic::{
     BlockScopeMode, Expression, ExpressionKind, MutOrImmutableExpression, Variable, VariableRef,
 };
 use swamp_script_types::prelude::*;
-use tracing::{error, info};
+use tracing::error;
 impl Analyzer<'_> {
     fn try_find_local_variable(&self, node: &Node) -> Option<&VariableRef> {
         let current_scope = self

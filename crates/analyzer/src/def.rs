@@ -13,7 +13,7 @@ use swamp_script_semantic::{
 };
 use swamp_script_types::prelude::*;
 use swamp_script_types::{ParameterizedTypeBlueprint, ParameterizedTypeKind};
-use tracing::info;
+
 use tracing::trace;
 
 impl Analyzer<'_> {

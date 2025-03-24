@@ -15,12 +15,6 @@ pub struct InstructionBuilder {
 
 impl InstructionBuilder {}
 
-impl InstructionBuilder {}
-
-impl InstructionBuilder {}
-
-impl InstructionBuilder {}
-
 impl Default for InstructionBuilder {
     fn default() -> Self {
         Self::new()
@@ -290,6 +284,22 @@ impl InstructionBuilder {
         );
     }
 
+    pub fn add_string_from_constant_slice(
+        &mut self,
+        target_string: FrameMemoryAddress,
+        constant_addr: ConstantMemoryAddress,
+        byte_count: MemorySize,
+        comment: &str,
+    ) {
+        let (lower_bits, upper_bits) = Self::convert_to_lower_and_upper(constant_addr.0);
+
+        self.add_instruction(
+            OpCode::StringFromConstantSlice,
+            &[target_string.0, lower_bits, upper_bits, byte_count.0],
+            comment,
+        );
+    }
+
     pub fn add_vec_from_slice(
         &mut self,
         target: FrameMemoryAddress,
@@ -356,11 +366,15 @@ impl InstructionBuilder {
         );
     }
 
-    pub fn add_ld32(&mut self, dst_offset: FrameMemoryAddress, value: i32, comment: &str) {
-        let value_u32 = value as u32;
+    fn convert_to_lower_and_upper(data: u32) -> (u16, u16) {
+        let lower_bits = (data & 0xFFFF) as u16;
+        let upper_bits = (data >> 16) as u16;
 
-        let lower_bits = (value_u32 & 0xFFFF) as u16;
-        let upper_bits = (value_u32 >> 16) as u16;
+        (lower_bits, upper_bits)
+    }
+
+    pub fn add_ld32(&mut self, dst_offset: FrameMemoryAddress, value: i32, comment: &str) {
+        let (lower_bits, upper_bits) = Self::convert_to_lower_and_upper(value as u32);
 
         self.add_instruction(
             OpCode::Ld32,

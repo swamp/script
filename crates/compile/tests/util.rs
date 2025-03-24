@@ -2,8 +2,7 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use seq_map::SeqMap;
-use std::path::Path;
+
 use swamp_script_analyzer::Program;
 use swamp_script_compile::{bootstrap_and_compile, compile_string};
 use swamp_script_error_report::ScriptResolveError;
