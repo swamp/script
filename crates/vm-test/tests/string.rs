@@ -109,3 +109,24 @@ print(23, "🐱if this works it is 🔥😎!" + "extra")
         },
     );
 }
+
+#[test_log::test]
+fn string_len() {
+    exec_with_assembly(
+        r#"
+
+a = "🐱if this works it is 🔥😎!"
+r = a.len()
+
+        "#,
+        "
+> 0000: enter 60
+> 0001: str_from_const $0000 @#0000 21
+> 0002: hlt 
+",
+        "
+00000000  F8 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  ................
+
+    ",
+    );
+}

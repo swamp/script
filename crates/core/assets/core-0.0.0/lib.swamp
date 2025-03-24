@@ -255,8 +255,8 @@ impl String {
     ///
     /// # Returns
     /// An `Int` representing the length of the string.
-    fn len(s: String) -> Int {
-        string_len(s)
+    fn len(self) -> Int {
+        string_len(self)
     }
 }
 
