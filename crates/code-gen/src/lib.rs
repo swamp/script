@@ -192,6 +192,7 @@ impl CodeGenState {
             &block_expressions[0].kind
         {
             // Intentionally do nothing
+            todo!()
         } else {
             function_generator.gen_expression(&internal_fn_def.body, &ctx)?;
         }
@@ -286,9 +287,6 @@ impl FunctionCodeGen<'_> {
         arguments: &[ArgumentExpressionOrLocation],
         ctx: &Context,
     ) -> Result<(), Error> {
-        if arguments.is_empty() {
-            return Ok(());
-        }
         info!(?intrinsic_fn, "generate specific call for intrinsic");
         match intrinsic_fn {
             // Fixed
@@ -315,7 +313,14 @@ impl FunctionCodeGen<'_> {
             IntrinsicFunction::IntToFloat => todo!(),
 
             // String
-            IntrinsicFunction::StringLen => todo!(),
+            IntrinsicFunction::StringLen => {
+                self.state.builder.add_string_len(
+                    ctx.addr(),
+                    FrameMemoryAddressIndirectPointer(self_addr.unwrap().addr),
+                    "get the length",
+                );
+                Ok(())
+            }
 
             // Vec
             IntrinsicFunction::VecFromSlice => {
@@ -343,6 +348,8 @@ impl FunctionCodeGen<'_> {
             IntrinsicFunction::VecIterMut => todo!(),
             IntrinsicFunction::VecSelfPush => todo!(),
             IntrinsicFunction::VecSelfExtend => todo!(),
+            IntrinsicFunction::VecLen => todo!(),
+            IntrinsicFunction::VecIsEmpty => todo!(),
 
             // Map
             IntrinsicFunction::MapCreate => todo!(),
@@ -407,8 +414,6 @@ impl FunctionCodeGen<'_> {
             IntrinsicFunction::Float2Magnitude => todo!(),
 
             IntrinsicFunction::SparseAdd => todo!(),
-            IntrinsicFunction::VecLen => todo!(),
-            IntrinsicFunction::VecIsEmpty => todo!(),
             IntrinsicFunction::SparseNew => todo!(),
         }
     }

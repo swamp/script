@@ -73,6 +73,7 @@ pub enum OpCode {
     Tst8,
     GtI32,
     HostCall, // calls back into host
+    StringLen,
 }
 
 impl Display for OpCode {
@@ -133,6 +134,7 @@ impl Display for OpCode {
             // Map
             Self::StringFromConstantSlice => write!(f, "str_from_const"),
             Self::StringAppend => write!(f, "str_append"),
+            Self::StringLen => write!(f, "str_len"),
 
             Self::Nop => write!(f, "nop"),
         }

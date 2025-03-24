@@ -10,6 +10,7 @@ use swamp_vm::host::HostArgs;
 use swamp_vm::{Vm, VmSetup};
 use swamp_vm_disasm::{disasm_instructions_color, disasm_instructions_no_color};
 use swamp_vm_types::ConstantMemoryAddress;
+use tracing::info;
 
 pub fn execute_constants(
     code_gen_state: &mut CodeGenState,
@@ -42,6 +43,8 @@ fn gen_internal(code: &str) -> Result<(CodeGenState, Program), Error> {
     code_gen.gen_constants_in_order(&program.state.constants_in_dependency_order)?;
     //let constants = execute_constants(&program.state)?;
 
+    let debug_expr = main_module.main_expression.as_ref().unwrap();
+    info!(?debug_expr, "MAIN EXPRESSION");
     let main_expression = main_module.main_expression.as_ref().unwrap();
     let halt_function = GenOptions {
         is_halt_function: true,

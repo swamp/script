@@ -528,6 +528,14 @@ pub fn disasm(
             ]
         }
 
+        OpCode::StringLen => &[
+            to_write_frame(operands[0], DecoratedMemoryKind::U32, frame_memory_size),
+            to_read_frame(
+                operands[1],
+                DecoratedMemoryKind::IndirectHeapPointer,
+                frame_memory_size,
+            ),
+        ],
         OpCode::StringAppend => &[
             to_write_frame(
                 operands[0],

@@ -15,6 +15,8 @@ pub struct InstructionBuilder {
 
 impl InstructionBuilder {}
 
+impl InstructionBuilder {}
+
 impl Default for InstructionBuilder {
     fn default() -> Self {
         Self::new()
@@ -312,6 +314,15 @@ impl InstructionBuilder {
             &[dst_offset.0, lhs_offset.0, rhs_offset.0],
             comment,
         );
+    }
+
+    pub fn add_string_len(
+        &mut self,
+        len_target: FrameMemoryAddress,
+        indirect: FrameMemoryAddressIndirectPointer,
+        comment: &str,
+    ) {
+        self.add_instruction(OpCode::StringLen, &[len_target.0, indirect.0.0], comment);
     }
 
     pub fn add_vec_from_slice(

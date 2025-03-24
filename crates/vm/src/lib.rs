@@ -217,9 +217,9 @@ impl Vm {
         // String
         vm.handlers[OpCode::StringFromConstantSlice as usize] =
             HandlerType::Args4(Self::execute_string_from_constant_slice);
-
         vm.handlers[OpCode::StringAppend as usize] =
             HandlerType::Args3(Self::execute_string_append);
+        vm.handlers[OpCode::StringLen as usize] = HandlerType::Args2(Self::execute_string_len);
 
         /*
         vm.handlers[OpCode::MapNewFromPairs as usize] =

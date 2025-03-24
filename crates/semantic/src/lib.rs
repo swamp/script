@@ -54,6 +54,7 @@ pub enum SemanticError {
 #[derive(Debug, Eq, PartialEq)]
 pub struct LocalIdentifier(pub Node);
 
+#[derive(Debug)]
 pub struct InternalMainExpression {
     pub expression: Expression,
     pub function_scope_state: Vec<VariableRef>,
