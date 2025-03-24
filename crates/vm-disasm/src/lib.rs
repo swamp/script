@@ -293,7 +293,7 @@ pub fn disasm_no_color(
                 format!("({}{})", "$", format!("{:04X}", addr.0))
             }
             DecoratedOperandKind::ConstantAddress(addr) => {
-                format!("{}{}", "@#", format!("{:04X}", addr.0))
+                format!("{}{}", "@#", format!("{:08X}", addr.0))
             }
             /*
             DecoratedOperandKind::HeapAddress(addr) => {

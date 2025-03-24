@@ -72,7 +72,6 @@ impl Vm {
         target_variable: u16,
         jump: u16,
     ) {
-        // Get a pointer to the VecIterator in frame memory.
         let vec_iterator = self.frame_ptr_at(target_iterator_addr) as *mut VecIterator;
 
         // Read fields from the iterator in one small unsafe block.
@@ -93,12 +92,10 @@ impl Vm {
             let source = self.heap_ptr_immut_at(heap_data_offset as usize);
             let target_ptr = self.frame_ptr_at(target_variable);
 
-            // Copy the data in a minimal unsafe block.
             unsafe {
                 ptr::copy_nonoverlapping(source, target_ptr, element_size as usize);
             }
 
-            // Update the iterator's index in a separate, small unsafe block.
             unsafe {
                 (*vec_iterator).index = new_index;
             }

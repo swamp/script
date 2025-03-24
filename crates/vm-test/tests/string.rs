@@ -89,9 +89,9 @@ print(23, "🐱if this works it is 🔥😎!" + "extra")
         "
 > 0000: enter 50
 > 0001: ld32 $0050 00000017
-> 0002: str_from_const $0060 @#0000 21
-> 0003: str_from_const $006C @#0021 5
-> 0004: str_append $0054 $0060 $006C
+> 0002: str_from_const $0150 @#00000000 21
+> 0003: str_from_const $015C @#00000021 5
+> 0004: str_append $0054 $0150 $015C
 > 0005: host 0001 10
 > 0006: hlt 
 ",
