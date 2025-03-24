@@ -41,6 +41,7 @@ fn add_intrinsic_functions(core_ns: &mut SymbolTable) {
     add_intrinsic_float_functions(core_ns);
     add_intrinsic_int_functions(core_ns);
     add_intrinsic_string_functions(core_ns);
+    add_intrinsic_grid_functions(core_ns);
     add_intrinsic_vec_functions(core_ns);
     add_intrinsic_map_functions(core_ns);
     add_intrinsic_sparse_functions(core_ns);
@@ -494,6 +495,102 @@ fn add_intrinsic_map_functions(core_ns: &mut SymbolTable) {
                 name,
                 intrinsic: intrinsic_fn,
                 signature: self_to_bool.clone(),
+            })
+            .unwrap();
+    }
+}
+
+fn add_intrinsic_grid_functions(core_ns: &mut SymbolTable) {
+    let unit_to_value = Signature {
+        parameters: [].into(),
+        return_type: Box::new(Type::Never),
+    };
+    let unit_to_value_functions = [IntrinsicFunction::GridCreate];
+    for intrinsic_fn in unit_to_value_functions {
+        let name = intrinsic_fn.to_string();
+        core_ns
+            .add_intrinsic_function(IntrinsicFunctionDefinition {
+                name,
+                intrinsic: intrinsic_fn,
+                signature: unit_to_value.clone(),
+            })
+            .unwrap();
+    }
+
+    let self_value_int_int_value_to_unit = Signature {
+        parameters: [
+            TypeForParameter {
+                name: "self".to_string(),
+                resolved_type: Type::Never,
+                is_mutable: true,
+                node: None,
+            },
+            TypeForParameter {
+                name: "x".to_string(),
+                resolved_type: Type::Int,
+                is_mutable: false,
+                node: None,
+            },
+            TypeForParameter {
+                name: "y".to_string(),
+                resolved_type: Type::Int,
+                is_mutable: false,
+                node: None,
+            },
+            TypeForParameter {
+                name: "v".to_string(),
+                resolved_type: Type::Never,
+                is_mutable: false,
+                node: None,
+            },
+        ]
+        .into(),
+        return_type: Box::new(Type::Unit),
+    };
+    let self_value_int_int_value_to_unit_functions = [IntrinsicFunction::GridSet];
+    for intrinsic_fn in self_value_int_int_value_to_unit_functions {
+        let name = intrinsic_fn.to_string();
+        core_ns
+            .add_intrinsic_function(IntrinsicFunctionDefinition {
+                name,
+                intrinsic: intrinsic_fn,
+                signature: self_value_int_int_value_to_unit.clone(),
+            })
+            .unwrap();
+    }
+
+    let self_int_int_to_value = Signature {
+        parameters: [
+            TypeForParameter {
+                name: "self".to_string(),
+                resolved_type: Type::Never,
+                is_mutable: false,
+                node: None,
+            },
+            TypeForParameter {
+                name: "x".to_string(),
+                resolved_type: Type::Int,
+                is_mutable: false,
+                node: None,
+            },
+            TypeForParameter {
+                name: "y".to_string(),
+                resolved_type: Type::Int,
+                is_mutable: false,
+                node: None,
+            },
+        ]
+        .into(),
+        return_type: Box::new(Type::Never),
+    };
+    let self_int_int_to_value_functions = [IntrinsicFunction::GridGet];
+    for intrinsic_fn in self_int_int_to_value_functions {
+        let name = intrinsic_fn.to_string();
+        core_ns
+            .add_intrinsic_function(IntrinsicFunctionDefinition {
+                name,
+                intrinsic: intrinsic_fn,
+                signature: self_int_int_to_value.clone(),
             })
             .unwrap();
     }

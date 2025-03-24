@@ -408,8 +408,8 @@ impl FunctionCodeGen<'_> {
             // Grid
             IntrinsicFunction::GridCreate => todo!(),
             IntrinsicFunction::GridFromSlice => todo!(),
-            IntrinsicFunction::GridSubscript => todo!(),
-            IntrinsicFunction::GridSubscriptMut => todo!(),
+            IntrinsicFunction::GridSet => todo!(),
+            IntrinsicFunction::GridGet => todo!(),
 
             IntrinsicFunction::Float2Magnitude => todo!(),
 
@@ -1985,8 +1985,8 @@ impl FunctionCodeGen<'_> {
             // Grid
             IntrinsicFunction::GridCreate => todo!(),
             IntrinsicFunction::GridFromSlice => todo!(),
-            IntrinsicFunction::GridSubscript => todo!(),
-            IntrinsicFunction::GridSubscriptMut => todo!(),
+            IntrinsicFunction::GridSet => todo!(),
+            IntrinsicFunction::GridGet => todo!(),
 
             // Other
             IntrinsicFunction::Float2Magnitude => todo!(),

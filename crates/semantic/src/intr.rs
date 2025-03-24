@@ -80,9 +80,9 @@ pub enum IntrinsicFunction {
     GridFromSlice,
     //GridIter,
     //GridIterMut,
-    GridSubscript,
-    GridSubscriptMut,
-
+    GridSet,
+    GridGet,
+    //GridSubscriptMut,
     Float2Magnitude,
     SparseAdd,
     VecLen,
@@ -173,8 +173,8 @@ impl fmt::Display for IntrinsicFunction {
 
             // Grid
             Self::GridCreate => "grid_new",
-            Self::GridSubscript => "grid_subscript",
-            Self::GridSubscriptMut => "grid_subscript_mut",
+            Self::GridSet => "grid_set",
+            Self::GridGet => "grid_get",
             Self::GridFromSlice => "grid_from_slice",
 
             // Other

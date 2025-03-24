@@ -571,6 +571,37 @@ impl Stack<T> {
     }
 }
 
+struct Grid<T>
+
+impl Grid<T> {
+    /// Creates a new grid
+    ///
+    /// Uses intrinsic function `grid_create` to add the value.
+    fn new() -> Vec<T> {
+        grid_new()
+    }
+
+/*
+    fn new_from_slice(slice: <Slice>) {
+    }
+    */
+
+    /// Sets the value in the grid
+    fn set(mut self, x: Int, y: Int, data: T) {
+        grid_set(mut self, x, y, data)
+    }
+
+    /// Gets the value
+    fn get(self, x: Int, y: Int) -> T {
+        grid_get(self, x, y)
+    }
+
+    /// Get column
+    //fn get_col(self, x: Int) -> [T] {
+      //  grid_get_col(self, x)
+    //}
+}
+
 
 struct SparseId
 
