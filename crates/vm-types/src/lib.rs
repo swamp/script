@@ -197,7 +197,6 @@ pub const PTR_SIZE: u16 = 2;
 pub const HEAP_PTR_SIZE: u16 = 4;
 pub const HEAP_PTR_ALIGNMENT: MemoryAlignment = MemoryAlignment::U32;
 
-pub const VEC_ITERATOR_SIZE: u16 = 8;
 pub const VEC_ITERATOR_ALIGNMENT: MemoryAlignment = MemoryAlignment::U32;
 
 pub const STR_SIZE: u16 = VEC_HEADER_SIZE; // TODO: FIX THIS
@@ -211,6 +210,15 @@ pub struct VecHeader {
 }
 pub const VEC_HEADER_SIZE: u16 = size_of::<VecHeader>() as u16;
 pub const VEC_REFERENCE_SIZE: u16 = HEAP_PTR_SIZE;
+
+pub struct VecIterator {
+    pub data_heap_offset: u32,
+    pub count: u16,
+    pub element_size: u16,
+    pub index: u16,
+}
+
+pub const VEC_ITERATOR_SIZE: u16 = size_of::<VecIterator>() as u16;
 
 pub const MAP_SIZE: u16 = 2 + 2 + 2 + 2 + 2;
 pub const MAP_REFERENCE_SIZE: u16 = HEAP_PTR_SIZE;

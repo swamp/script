@@ -211,7 +211,7 @@ impl Vm {
 
         vm.handlers[OpCode::VecFromSlice as usize] =
             HandlerType::Args4(Self::execute_vec_from_slice);
-        vm.handlers[OpCode::VecIterInit as usize] = HandlerType::Args3(Self::execute_vec_iter_init);
+        vm.handlers[OpCode::VecIterInit as usize] = HandlerType::Args2(Self::execute_vec_iter_init);
         vm.handlers[OpCode::VecIterNext as usize] = HandlerType::Args3(Self::execute_vec_iter_next);
 
         // String
@@ -601,6 +601,11 @@ impl Vm {
         let heap_offset = self.frame_u32_at(frame_offset);
         self.heap_ptr_immut_at(heap_offset as usize)
     }
+
+    fn frame_ptr_indirect_heap_offset_at(&self, frame_offset: u16) -> u32 {
+        self.frame_u32_at(frame_offset)
+    }
+
     #[inline(always)]
     fn frame_ptr_bool_const_at(&self, offset: u16) -> bool {
         unsafe { *self.ptr_at_u8(self.frame_offset + offset as usize) != 0 }

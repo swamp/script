@@ -258,8 +258,9 @@ pub struct FunctionCodeGen<'a> {
     state: &'a mut CodeGenState,
     variable_offsets: SeqMap<usize, FrameMemoryRegion>,
     frame_size: FrameMemorySize,
-    extra_frame_allocator: ScopeAllocator,
+    //extra_frame_allocator: ScopeAllocator,
     temp_allocator: ScopeAllocator,
+    argument_allocator: ScopeAllocator,
 }
 
 impl<'a> FunctionCodeGen<'a> {
@@ -269,8 +270,9 @@ impl<'a> FunctionCodeGen<'a> {
             state,
             variable_offsets: SeqMap::default(),
             frame_size: FrameMemorySize(0),
-            extra_frame_allocator: ScopeAllocator::new(FrameMemoryRegion::default()),
+            //  extra_frame_allocator: ScopeAllocator::new(FrameMemoryRegion::default()),
             temp_allocator: ScopeAllocator::new(FrameMemoryRegion::default()),
+            argument_allocator: ScopeAllocator::new(FrameMemoryRegion::default()),
         }
     }
 }
@@ -460,15 +462,20 @@ impl FunctionCodeGen<'_> {
 
         let extra_frame_size = MemorySize(80);
         let extra_target = FrameMemoryRegion::new(allocator.addr(), extra_frame_size);
-        self.extra_frame_allocator = ScopeAllocator::new(extra_target);
         self.frame_size = allocator.addr().as_size().add(extra_frame_size);
 
         self.state
             .builder
             .add_enter(self.frame_size, &enter_comment);
 
-        self.temp_allocator = ScopeAllocator::new(FrameMemoryRegion::new(
+        const ARGUMENT_MAX_SIZE: u16 = 256;
+        self.argument_allocator = ScopeAllocator::new(FrameMemoryRegion::new(
             FrameMemoryAddress(self.frame_size.0),
+            MemorySize(ARGUMENT_MAX_SIZE),
+        ));
+
+        self.temp_allocator = ScopeAllocator::new(FrameMemoryRegion::new(
+            FrameMemoryAddress(self.frame_size.0 + ARGUMENT_MAX_SIZE),
             MemorySize(1024),
         ));
 
@@ -527,7 +534,7 @@ impl FunctionCodeGen<'_> {
     }
 
     pub(crate) fn extra_frame_space_for_type(&mut self, ty: &Type) -> Context {
-        let target = Self::reserve(ty, &mut self.extra_frame_allocator);
+        let target = Self::reserve(ty, &mut self.temp_allocator);
         Context::new(target)
     }
 
@@ -972,16 +979,20 @@ impl FunctionCodeGen<'_> {
         self_region: Option<FrameMemoryRegion>,
         arguments: &Vec<ArgumentExpressionOrLocation>,
     ) -> Result<FrameMemoryRegion, Error> {
+        self.argument_allocator.reset();
         // Layout return and arguments, must be continuous space
-        let _argument_addr = Self::reserve(&signature.return_type, &mut self.temp_allocator);
+        let argument_addr = Self::reserve(&signature.return_type, &mut self.argument_allocator);
+        assert_eq!(argument_addr.addr.0, self.frame_size.0);
 
         let mut argument_targets = Vec::new();
         let mut argument_comments = Vec::new();
 
         // Layout arguments, must be continuous space
         for (index, type_for_parameter) in signature.parameters.iter().enumerate() {
-            let argument_target =
-                Self::reserve(&type_for_parameter.resolved_type, &mut self.temp_allocator);
+            let argument_target = Self::reserve(
+                &type_for_parameter.resolved_type,
+                &mut self.argument_allocator,
+            );
             let arg_ctx = Context::new(argument_target);
             info!(?index, %argument_target.addr, "layout argument");
             argument_targets.push(arg_ctx);

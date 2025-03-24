@@ -332,12 +332,12 @@ impl InstructionBuilder {
     pub fn add_vec_iter_init(
         &mut self,
         iterator_target: FrameMemoryAddress,
-        pointer_to_map: FrameMemoryAddressIndirectPointer,
+        pointer_to_vec: FrameMemoryAddressIndirectPointer,
         comment: &str,
     ) {
         self.add_instruction(
             OpCode::VecIterInit,
-            &[iterator_target.0, pointer_to_map.0.0],
+            &[iterator_target.0, pointer_to_vec.0.0],
             comment,
         );
     }
