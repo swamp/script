@@ -35,6 +35,12 @@ pub struct HeapMemoryAddress(pub u32);
 #[derive(Debug, Copy, Clone)]
 pub struct FrameMemoryAddress(pub u16);
 
+impl Display for FrameMemoryAddress {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[frame {:04X} ({})]", self.0, self.0)
+    }
+}
+
 #[derive(Debug, Copy, Clone)]
 pub struct FrameMemoryAddressIndirectPointer(pub FrameMemoryAddress);
 

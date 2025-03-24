@@ -477,7 +477,7 @@ impl FunctionCodeGen<'_> {
 
     pub fn temp_memory_region_for_type(&mut self, ty: &Type, comment: &str) -> FrameMemoryRegion {
         let new_target_info = reserve_space_for_type(ty, &mut self.temp_allocator);
-        trace!(?new_target_info, "creating temporary space");
+        info!(?new_target_info, "creating temporary space");
         new_target_info
     }
 
@@ -636,6 +636,9 @@ impl FunctionCodeGen<'_> {
         match (&binary_operator.left.ty, &binary_operator.right.ty) {
             (Type::Int, Type::Int) => self.gen_binary_operator_i32(binary_operator, ctx)?,
             (Type::Bool, Type::Bool) => self.gen_binary_operator_bool(binary_operator)?,
+            (Type::String, Type::String) => {
+                self.gen_binary_operator_string(binary_operator, ctx)?
+            }
             _ => todo!(),
         }
 
@@ -688,6 +691,34 @@ impl FunctionCodeGen<'_> {
             }
             BinaryOperatorKind::GreaterEqual => todo!(),
             BinaryOperatorKind::RangeExclusive => todo!(),
+        }
+
+        Ok(())
+    }
+
+    fn gen_binary_operator_string(
+        &mut self,
+        binary_operator: &BinaryOperator,
+        ctx: &Context,
+    ) -> Result<(), Error> {
+        let left_source = self.gen_expression_for_access(&binary_operator.left)?;
+        let right_source = self.gen_expression_for_access(&binary_operator.right)?;
+
+        info!(?left_source, ?right_source, "binary string");
+
+        match binary_operator.kind {
+            BinaryOperatorKind::Add => {
+                self.state.builder.add_string_append(
+                    ctx.addr(),
+                    left_source.addr(),
+                    right_source.addr(),
+                    "string add",
+                );
+            }
+
+            BinaryOperatorKind::Equal => todo!(),
+            BinaryOperatorKind::NotEqual => todo!(),
+            _ => panic!("illegal string operator"),
         }
 
         Ok(())
@@ -940,19 +971,19 @@ impl FunctionCodeGen<'_> {
         signature: &Signature,
         self_region: Option<FrameMemoryRegion>,
         arguments: &Vec<ArgumentExpressionOrLocation>,
-    ) -> FrameMemoryRegion {
-        let arguments_memory_region = self.infinite_above_frame_size();
-        let mut arguments_allocator = ScopeAllocator::new(arguments_memory_region);
-
-        let _argument_addr = Self::reserve(&signature.return_type, &mut arguments_allocator);
+    ) -> Result<FrameMemoryRegion, Error> {
+        // Layout return and arguments, must be continuous space
+        let _argument_addr = Self::reserve(&signature.return_type, &mut self.temp_allocator);
 
         let mut argument_targets = Vec::new();
         let mut argument_comments = Vec::new();
 
-        for type_for_parameter in &signature.parameters {
+        // Layout arguments, must be continuous space
+        for (index, type_for_parameter) in signature.parameters.iter().enumerate() {
             let argument_target =
-                Self::reserve(&type_for_parameter.resolved_type, &mut arguments_allocator);
+                Self::reserve(&type_for_parameter.resolved_type, &mut self.temp_allocator);
             let arg_ctx = Context::new(argument_target);
+            info!(?index, %argument_target.addr, "layout argument");
             argument_targets.push(arg_ctx);
             argument_comments.push(format!("argument {}", type_for_parameter.name));
         }
@@ -972,20 +1003,22 @@ impl FunctionCodeGen<'_> {
             .zip(arguments)
             .zip(argument_comments)
         {
+            let debug_addr = argument_target_ctx.target().addr();
+            info!(%debug_addr, "set argument");
             self.gen_argument(
                 argument_expr_or_loc,
                 &argument_target_ctx,
                 &argument_comment,
-            );
+            )?;
         }
 
         let last_addr = argument_targets[argument_targets.len() - 1]
             .addr()
             .add(argument_targets[argument_targets.len() - 1].target_size());
-        FrameMemoryRegion {
+        Ok(FrameMemoryRegion {
             addr: argument_targets[0].addr(),
             size: MemorySize(last_addr.0 - argument_targets[0].addr().0),
-        }
+        })
     }
 
     #[allow(clippy::too_many_lines)]
@@ -999,9 +1032,9 @@ impl FunctionCodeGen<'_> {
             if chain.len() == 1 {
                 if let PostfixKind::FunctionCall(args) = &chain[0].kind {
                     if let Some(intrinsic_fn) = single_intrinsic_fn(&internal_fn.body) {
-                        self.gen_single_intrinsic_call(intrinsic_fn, None, args, ctx);
+                        self.gen_single_intrinsic_call(intrinsic_fn, None, args, ctx)?;
                     } else {
-                        self.gen_arguments(&internal_fn.signature, None, args);
+                        self.gen_arguments(&internal_fn.signature, None, args)?;
                         self.state
                             .add_call(internal_fn, &format!("frame size: {}", self.frame_size)); // will be fixed up later
                         let (return_size, _alignment) =
@@ -1014,7 +1047,7 @@ impl FunctionCodeGen<'_> {
                                 "copy the ret value to destination",
                             );
                         }
-                        self.copy_back_mutable_arguments(&internal_fn.signature, None, args);
+                        self.copy_back_mutable_arguments(&internal_fn.signature, None, args)?;
                     }
 
                     return Ok(());
@@ -1025,7 +1058,7 @@ impl FunctionCodeGen<'_> {
         if let ExpressionKind::ExternalFunctionAccess(external_fn) = &start_expression.kind {
             if chain.len() == 1 {
                 if let PostfixKind::FunctionCall(args) = &chain[0].kind {
-                    let total_region = self.gen_arguments(&external_fn.signature, None, args);
+                    let total_region = self.gen_arguments(&external_fn.signature, None, args)?;
                     self.state.builder.add_host_call(
                         external_fn.id as u16,
                         total_region.size,

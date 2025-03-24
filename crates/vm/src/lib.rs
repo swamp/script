@@ -218,6 +218,9 @@ impl Vm {
         vm.handlers[OpCode::StringFromConstantSlice as usize] =
             HandlerType::Args4(Self::execute_string_from_constant_slice);
 
+        vm.handlers[OpCode::StringAppend as usize] =
+            HandlerType::Args3(Self::execute_string_append);
+
         /*
         vm.handlers[OpCode::MapNewFromPairs as usize] =
             HandlerType::Args5(Self::execute_map_open_addressing_from_slice);
@@ -549,6 +552,10 @@ impl Vm {
         unsafe { self.heap_memory.add(offset) }
     }
 
+    fn heap_ptr_immut_at(&self, offset: usize) -> *const u8 {
+        unsafe { self.heap_memory.add(offset) }
+    }
+
     // Helper to get current frame pointer
     fn frame_ptr(&self) -> *mut u8 {
         self.ptr_at_u8(self.frame_offset)
@@ -575,12 +582,24 @@ impl Vm {
     }
 
     #[inline(always)]
+    fn frame_u32_at(&self, offset: u16) -> u32 {
+        unsafe { *self.ptr_at_u32(self.frame_offset + offset as usize) }
+    }
+
+    #[inline(always)]
     fn frame_ptr_bool_at(&self, offset: u16) -> *mut u8 {
         self.ptr_at_u8(self.frame_offset + offset as usize)
     }
 
+    #[inline(always)]
     fn frame_ptr_at(&self, offset: u16) -> *mut u8 {
         self.ptr_at_u8(self.frame_offset + offset as usize)
+    }
+
+    #[inline(always)]
+    fn frame_ptr_indirect_heap_immut_at(&self, frame_offset: u16) -> *const u8 {
+        let heap_offset = self.frame_u32_at(frame_offset);
+        self.heap_ptr_immut_at(heap_offset as usize)
     }
     #[inline(always)]
     fn frame_ptr_bool_const_at(&self, offset: u16) -> bool {

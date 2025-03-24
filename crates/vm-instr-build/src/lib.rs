@@ -300,6 +300,20 @@ impl InstructionBuilder {
         );
     }
 
+    pub fn add_string_append(
+        &mut self,
+        dst_offset: FrameMemoryAddress,
+        lhs_offset: FrameMemoryAddress,
+        rhs_offset: FrameMemoryAddress,
+        comment: &str,
+    ) {
+        self.add_instruction(
+            OpCode::StringAppend,
+            &[dst_offset.0, lhs_offset.0, rhs_offset.0],
+            comment,
+        );
+    }
+
     pub fn add_vec_from_slice(
         &mut self,
         target: FrameMemoryAddress,

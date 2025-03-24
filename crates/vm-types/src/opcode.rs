@@ -66,6 +66,7 @@ pub enum OpCode {
 
     // String
     StringFromConstantSlice,
+    StringAppend,
 
     // others
     Eq8Imm,
@@ -131,6 +132,7 @@ impl Display for OpCode {
 
             // Map
             Self::StringFromConstantSlice => write!(f, "str_from_const"),
+            Self::StringAppend => write!(f, "str_append"),
 
             Self::Nop => write!(f, "nop"),
         }

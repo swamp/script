@@ -12,10 +12,6 @@ impl Context {
     }
 }
 
-impl Context {}
-
-impl Context {}
-
 impl Context {
     pub(crate) const fn target(&self) -> FrameMemoryRegion {
         self.target_info
