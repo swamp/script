@@ -577,8 +577,8 @@ impl Grid<T> {
     /// Creates a new grid
     ///
     /// Uses intrinsic function `grid_create` to add the value.
-    fn new() -> Vec<T> {
-        grid_new()
+    fn new(x: Int, y: Int, initial_value: T) -> Grid<T> {
+        grid_new(x, y, initial_value)
     }
 
 /*
@@ -597,9 +597,9 @@ impl Grid<T> {
     }
 
     /// Get column
-    //fn get_col(self, x: Int) -> [T] {
-      //  grid_get_col(self, x)
-    //}
+    fn get_col(self, x: Int) -> Vec<T> {
+      grid_get_column(self, x)
+    }
 }
 
 

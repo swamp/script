@@ -11,6 +11,7 @@ use std::fmt::Debug;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use swamp_script_core_extra::extra::{SparseValueId, SparseValueMap};
 use swamp_script_core_extra::prelude::ValueError;
+use swamp_script_core_extra::value::Grid;
 use swamp_script_core_extra::value::ValueRef;
 use swamp_script_core_extra::value::{
     SourceMapLookup, Value, convert_vec_to_rc_refcell, format_value, to_rust_value,
@@ -24,7 +25,7 @@ use swamp_script_semantic::{
     SingleLocationExpressionKind, UnaryOperatorKind,
 };
 use swamp_script_semantic::{ExternalFunctionId, Postfix, SingleMutLocationExpression};
-use swamp_script_types::{EnumVariantType, TypeForParameter, same_anon_struct_ref};
+use swamp_script_types::{EnumVariantType, Type, TypeForParameter, same_anon_struct_ref};
 use tracing::{error, info};
 pub mod err;
 
@@ -1246,22 +1247,7 @@ impl<'a, C> Interpreter<'a, C> {
         intrinsic_function: &IntrinsicFunction,
         arguments: &[ArgumentExpressionOrLocation],
     ) -> Result<Value, RuntimeError> {
-        let self_value = self.evaluate_argument(&arguments[0])?;
-
-        let mut expressions = Vec::new();
-        for arg in &arguments[1..] {
-            match arg {
-                ArgumentExpressionOrLocation::Location(_loc) => panic!("not supported"),
-                ArgumentExpressionOrLocation::Expression(expr) => expressions.push(expr),
-            }
-        }
-
-        self.eval_intrinsic_internal(
-            node,
-            intrinsic_function,
-            self_value.to_value_ref(),
-            &expressions,
-        )
+        self.eval_intrinsic_internal(node, intrinsic_function, arguments)
     }
 
     #[allow(clippy::too_many_lines)]
@@ -1269,9 +1255,18 @@ impl<'a, C> Interpreter<'a, C> {
         &mut self,
         node: &Node,
         intrinsic_function: &IntrinsicFunction,
-        value_ref: ValueRef,
-        arguments: &[&Expression],
+        expressions: &[ArgumentExpressionOrLocation],
     ) -> Result<Value, RuntimeError> {
+        // Common case for most of the intrinsics
+        let value_ref = self.evaluate_argument(&expressions[0])?.to_value_ref();
+        let mut arguments = Vec::new();
+        for arg in &expressions[1..] {
+            match arg {
+                ArgumentExpressionOrLocation::Location(_loc) => panic!("not supported"),
+                ArgumentExpressionOrLocation::Expression(expr) => arguments.push(expr),
+            }
+        }
+
         let val = match &intrinsic_function {
             IntrinsicFunction::VecRemoveIndex => {
                 let index_val = self.evaluate_expression(&arguments[0])?;
@@ -1480,7 +1475,7 @@ impl<'a, C> Interpreter<'a, C> {
 
                 match &*borrowed {
                     Value::Sparse(_type, found) => {
-                        let id_value = self.evaluate_expression(&arguments[0])?; // id
+                        let id_value = self.evaluate_expression(arguments[0])?; // id
                         match id_value.downcast_rust::<SparseValueId>() {
                             Some(found_id) => match found.get(&found_id.borrow()) {
                                 Some(found_value) => Value::Option(Some(found_value.clone())),
@@ -1495,6 +1490,65 @@ impl<'a, C> Interpreter<'a, C> {
                         return Err(self.create_err(RuntimeErrorKind::NotSparseId, node));
                     }
                 }
+            }
+
+            // Grid
+            IntrinsicFunction::GridCreate => {
+                let width_value = value_ref.borrow().expect_int()?;
+                let height_value = self
+                    .evaluate_expression(arguments[0])
+                    .unwrap()
+                    .expect_int()?;
+
+                let initial_value = self.evaluate_expression(arguments[1])?;
+
+                Value::Grid(Grid::new(
+                    width_value as usize,
+                    height_value as usize,
+                    Rc::new(RefCell::new(initial_value)),
+                ))
+            }
+
+            IntrinsicFunction::GridSet => {
+                let Value::Grid(ref mut mut_grid) = *value_ref.borrow_mut() else {
+                    panic!("should be grid")
+                };
+                let x_value = self.evaluate_expression(arguments[0])?.expect_int()?;
+                let y_value = self.evaluate_expression(arguments[1])?.expect_int()?;
+                let grid_value = self.evaluate_expression(arguments[2])?;
+
+                mut_grid.set(
+                    x_value as usize,
+                    y_value as usize,
+                    Rc::new(RefCell::new(grid_value)),
+                );
+
+                Value::Unit
+            }
+
+            IntrinsicFunction::GridGet => {
+                let Value::Grid(ref mut_grid) = *value_ref.borrow() else {
+                    panic!("should be grid")
+                };
+                let x_value = self.evaluate_expression(arguments[0])?.expect_int()?;
+                let y_value = self.evaluate_expression(arguments[1])?.expect_int()?;
+
+                mut_grid
+                    .get(x_value as usize, y_value as usize)
+                    .unwrap()
+                    .borrow()
+                    .clone()
+            }
+
+            IntrinsicFunction::GridGetColumn => {
+                let Value::Grid(ref grid) = *value_ref.borrow() else {
+                    panic!("should be grid")
+                };
+                let x_value = self.evaluate_expression(arguments[0])?.expect_int()?;
+
+                let column_items = grid.column(x_value as usize).unwrap();
+
+                Value::Vec(Type::Unit, column_items)
             }
 
             IntrinsicFunction::FloatRound => match value_ref.borrow().clone() {

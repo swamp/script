@@ -76,6 +76,96 @@ impl QuickSerialize for Rc<RefCell<dyn RustType>> {
     }
 }
 
+pub struct ColumnIter<'a, T> {
+    grid: &'a Grid<T>,
+    x: usize,
+    y: usize,
+}
+
+impl<'a, T> Iterator for ColumnIter<'a, T> {
+    type Item = &'a T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.y < self.grid.height {
+            let item = &self.grid.data[self.y * self.grid.width + self.x];
+            self.y += 1;
+            Some(item)
+        } else {
+            None
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Grid<T> {
+    width: usize,
+    height: usize,
+    pub data: Vec<T>,
+}
+
+impl<T: Clone> Grid<T> {
+    pub fn new(width: usize, height: usize, initial: T) -> Self {
+        Self {
+            width,
+            height,
+            data: vec![initial; width * height],
+        }
+    }
+
+    pub fn column(&self, x: usize) -> Option<Vec<T>> {
+        if x < self.width {
+            Some(
+                (0..self.height)
+                    .map(|y| self.data[y * self.width + x].clone())
+                    .collect(),
+            )
+        } else {
+            None
+        }
+    }
+}
+
+impl<T> Grid<T> {
+    #[must_use]
+    pub fn get(&self, x: usize, y: usize) -> Option<&T> {
+        if y < self.height && x < self.width {
+            Some(&self.data[y * self.width + x])
+        } else {
+            None
+        }
+    }
+
+    #[must_use]
+    pub fn get_mut(&mut self, x: usize, y: usize) -> Option<&mut T> {
+        if y < self.height && x < self.width {
+            Some(&mut self.data[y * self.width + x])
+        } else {
+            None
+        }
+    }
+
+    pub fn set(&mut self, x: usize, y: usize, data: T) -> Option<()> {
+        if x < self.width && y < self.height {
+            self.data[y * self.width + x] = data;
+            Some(())
+        } else {
+            None
+        }
+    }
+
+    pub fn rows(&self) -> impl Iterator<Item = &[T]> {
+        self.data.chunks(self.width)
+    }
+
+    pub fn columns(&self) -> impl Iterator<Item = ColumnIter<'_, T>> {
+        (0..self.width).map(move |x| ColumnIter {
+            grid: self,
+            x,
+            y: 0,
+        })
+    }
+}
+
 #[derive(Debug, Default)]
 pub enum Value {
     Int(i32),
@@ -111,6 +201,7 @@ pub enum Value {
 
     // Other
     RustValue(ExternalType, Rc<RefCell<Box<dyn RustType>>>),
+    Grid(Grid<ValueRef>),
 }
 
 #[allow(unused)]
@@ -235,6 +326,9 @@ impl Value {
                 todo!("anonymous structs not supported")
             }
 
+            Self::Grid(grid) => {
+                todo!("anonymous structs not supported")
+            }
             Self::EnumVariantSimple(_, enum_variant) => {
                 octets[0] = enum_variant.common.container_index;
                 1
@@ -316,6 +410,8 @@ impl Clone for Value {
 
                 Self::Map(key.clone(), cloned_seq_map)
             }
+
+            Self::Grid(grid) => Self::Grid(grid.clone()),
 
             Self::Slice(resolved_ref, vec_refs) => {
                 Self::Slice(resolved_ref.clone(), deep_clone_valrefs(vec_refs))
@@ -705,6 +801,20 @@ impl Display for Value {
                 }
                 write!(f, "]")
             }
+            Self::Grid(grid) => {
+                writeln!(f, "[grid:")?;
+                for row in grid.rows() {
+                    write!(f, "[")?;
+                    for (i, val) in row.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "{}", val.borrow())?;
+                    }
+                    writeln!(f, "]")?;
+                }
+                writeln!(f, "]")
+            }
             Self::Map(_key, items) => {
                 write!(f, "[")?;
                 for (i, (key, val)) in items.iter().enumerate() {
@@ -915,6 +1025,7 @@ impl Hash for Value {
             Self::Unit => (),
             Self::Option(_wrapped) => {}
             Self::Vec(_, _arr) => {}
+            Self::Grid(_) => {}
             Self::Slice(_, _arr) => {}
             Self::NamedStruct(type_ref, values) => {
                 type_ref.name().span.hash(state);

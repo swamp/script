@@ -78,6 +78,7 @@ pub enum IntrinsicFunction {
     // Grid
     GridCreate,
     GridFromSlice,
+    GridGetColumn,
     //GridIter,
     //GridIterMut,
     GridSet,
@@ -176,6 +177,7 @@ impl fmt::Display for IntrinsicFunction {
             Self::GridSet => "grid_set",
             Self::GridGet => "grid_get",
             Self::GridFromSlice => "grid_from_slice",
+            Self::GridGetColumn => "grid_get_column",
 
             // Other
             Self::Float2Magnitude => "float2_magnitude",
