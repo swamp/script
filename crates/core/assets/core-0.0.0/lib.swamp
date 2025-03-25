@@ -462,51 +462,154 @@ impl Map<K, V> {
     }
 }
 
+/// A two-dimensional map that stores values indexed by a column and a row key.
+///
+/// # Type Parameters
+/// - `C`: The column key type.
+/// - `R`: The row key type.
+/// - `V`: The value type stored in each cell.
+///
+/// This structure uses intrinsic functions to perform core operations efficiently and securely.
 struct Map2<C, R, V>
 
 impl Map2<C, R, V> {
-    /// Creates a new Map
+    /// Creates a new two-dimensional map.
     ///
-    /// Uses intrinsic function `map_create` to create the Map value.
+    /// This function leverages the intrinsic function `map2_create` to allocate and initialize a new map.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let map = Map2::<City, Month, Int>::new();
+    /// ```
     fn new() -> Map2<C, R, V> {
         map2_create()
     }
 
-
-    /// Checks if the map contains a specified cell.
+    /// Checks if the map contains a cell at the specified column and row.
+    ///
+    /// Internally, this method invokes the intrinsic function `map2_has` to determine whether the
+    /// given key pair exists within the map.
     ///
     /// # Parameters
     ///
-    /// Uses intrinsic function `map2_has` to determine whether the specified key exists in the map.
+    /// - `column`: The key identifying the column.
+    /// - `row`: The key identifying the row.
     ///
     /// # Returns
-    /// A `Bool` indicating the presence of the key.
+    ///
+    /// A `Bool` indicating whether the cell exists.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// if map.has(col_key, row_key) {
+    ///     // The cell exists!
+    /// }
+    /// ```
     fn has(self, column: C, row: R) -> Bool {
         map2_has(self, column, row)
     }
 
-    /// Removes a cell.
+    /// Removes a cell from the map.
+    ///
+    /// This function uses the intrinsic `map2_remove` to delete the cell at the specified column and row.
     ///
     /// # Parameters
     ///
-    /// Uses intrinsic function `map2_remove` to remove the key and return the corresponding value if it exists.
+    /// - `column`: The key for the column of the cell to remove.
+    /// - `row`: The key for the row of the cell to remove.
     ///
+    /// # Examples
+    ///
+    /// ```
+    /// map.remove(col_key, row_key);
+    /// ```
     fn remove(mut self, column: C, row: R) {
         map2_remove(mut self, column, row)
     }
 
+    /// Sets the value of a cell at the specified column and row.
+    ///
+    /// If a cell already exists at that location, it panics.
+    /// This method employs the intrinsic `map2_insert` to insert the cell.
+    ///
+    /// # Parameters
+    ///
+    /// - `column`: The key for the column.
+    /// - `row`: The key for the row.
+    /// - `value`: The value to store in the cell.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// map.set(col_key, row_key, new_value);
+    /// ```
     fn set(mut self, column: C, row: R, value: V) {
         map2_insert(mut self, column, row, value)
     }
 
+    /// Retrieves the value stored in the cell at the specified column and row.
+    /// If the cell does not exist, it panics.
+    ///
+    /// This method calls the intrinsic `map2_get` to fetch the value.
+    ///
+    /// # Parameters
+    ///
+    /// - `column`: The key for the column.
+    /// - `row`: The key for the row.
+    ///
+    /// # Returns
+    ///
+    /// The value stored in the cell.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let value = map.get(col_key, row_key);
+    /// ```
     fn get(self, column: C, row: R) -> V {
         map2_get(self, column, row)
     }
 
+    /// Retrieves all cells in a specific column as a map from row keys to values.
+    ///
+    /// This function uses the intrinsic `map2_get_column` to extract the entire column.
+    ///
+    /// # Parameters
+    ///
+    /// - `column`: The key identifying the column to retrieve.
+    ///
+    /// # Returns
+    ///
+    /// A `Map<R, V>` representing the cells of the specified column.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let column_map = map.get_column(col_key);
+    /// ```
     fn get_column(self, column: C) -> Map<R, V> {
         map2_get_column(self, column)
     }
 
+    /// Retrieves all cells in a specific row as a map from column keys to values.
+    ///
+    /// This method calls the intrinsic `map2_get_row` to collect all cells in the specified row.
+    ///
+    /// # Parameters
+    ///
+    /// - `row`: The key identifying the row to retrieve.
+    ///
+    /// # Returns
+    ///
+    /// A `Map<C, V>` representing the cells of the specified row.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let row_map = map.get_row(row_key);
+    /// ```
     fn get_row(self, row: R) -> Map<C, V> {
         map2_get_row(self, row)
     }
