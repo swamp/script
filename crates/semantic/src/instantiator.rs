@@ -7,9 +7,9 @@ use seq_map::SeqMap;
 use std::rc::Rc;
 use swamp_script_node::Node;
 use swamp_script_types::{
-    AnonymousStructType, NamedStructType, ParameterizedTypeBlueprint, ParameterizedTypeKind,
-    Signature, StructTypeField, Type, TypeForParameter, all_types_are_concrete,
-    all_types_are_concrete_or_unit,
+    AnonymousStructType, NamedStructType, ParameterizedTypeBlueprint,
+    ParameterizedTypeBlueprintInfo, ParameterizedTypeKind, Signature, StructTypeField, Type,
+    TypeForParameter, all_types_are_concrete, all_types_are_concrete_or_unit,
 };
 
 #[derive(Debug)]
@@ -36,7 +36,7 @@ pub struct Instantiator {
 }
 
 impl Instantiator {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             associated_impls: AssociatedImpls::new(),
             instantiation_cache: InstantiationCache::new(),
@@ -62,7 +62,7 @@ impl Instantiator {
             analyzed_type_parameters,
         )?;
         let (_ignore_if_changed, instantiated_type) =
-            self.instantiate_blueprint(blueprint, &scope)?;
+            self.instantiate_base_type_from_blueprint(blueprint, &scope)?;
 
         let new_impls = {
             let mut new_impls = SeqMap::new();
@@ -74,8 +74,8 @@ impl Instantiator {
             if let Some(found_member_functions) = maybe_member_functions {
                 for (func_name, func_ref) in &found_member_functions.functions {
                     let (_replaced, new_signature) = self.instantiate_signature(
-                        func_ref.signature(),
                         &instantiated_type,
+                        func_ref.signature(),
                         &scope,
                     )?;
                     let new_func = match &**func_ref {
@@ -111,7 +111,6 @@ impl Instantiator {
 
         self.associated_impls.prepare(&instantiated_type);
         for (name, func) in &new_impls {
-            //info!(?name, ?func, id=?instantiated_type, "ADDING");
             self.associated_impls.add_member_function(
                 &instantiated_type,
                 name,
@@ -131,7 +130,7 @@ impl Instantiator {
         Ok(instantiated_type)
     }
 
-    pub fn create_type_parameter_scope(
+    fn create_type_parameter_scope(
         parameters: &[Type],
         concrete: &[Type],
     ) -> Result<TypeVariableScope, SemanticError> {
@@ -149,7 +148,7 @@ impl Instantiator {
         Ok(TypeVariableScope::new(scope))
     }
 
-    pub fn create_type_parameter_scope_from_variables(
+    fn create_type_parameter_scope_from_variables(
         variables: &[String],
         concrete_types: &[Type],
     ) -> Result<TypeVariableScope, SemanticError> {
@@ -169,27 +168,46 @@ impl Instantiator {
         Ok(TypeVariableScope::new(scope))
     }
 
-    pub(crate) fn instantiate_blueprint(
+    fn instantiate_base_type_from_blueprint(
         &mut self,
         blueprint: &ParameterizedTypeBlueprint,
         scope: &TypeVariableScope,
     ) -> Result<(bool, Type), SemanticError> {
         match &blueprint.kind {
-            ParameterizedTypeKind::Struct(struct_ref) => self.instantiate_struct(struct_ref, scope),
+            ParameterizedTypeKind::Struct(struct_ref) => self.instantiate_struct(
+                Some(&Type::Blueprint(blueprint.clone())),
+                struct_ref,
+                scope,
+            ),
             ParameterizedTypeKind::Enum(_) => todo!(),
+        }
+    }
+
+    fn instantiate_type_in_signature(
+        &mut self,
+        current_self: &Type,
+        ty: &Type,
+        type_variables: &TypeVariableScope,
+    ) -> Result<(bool, Type), SemanticError> {
+        match ty {
+            Type::Blueprint(_) => {
+                // TODO: Check if this hack is still needed
+                Ok((false, current_self.clone()))
+            }
+            _ => self.instantiate_type_if_needed(Some(current_self), ty, type_variables),
         }
     }
 
     pub fn instantiate_signature(
         &mut self,
-        signature: &Signature,
         self_type: &Type,
+        signature: &Signature,
         scope: &TypeVariableScope,
     ) -> Result<(bool, Signature), SemanticError> {
         let mut was_replaced = false;
         let mut instantiated_type_for_parameters = Vec::new();
         for type_for_parameter in &signature.parameters {
-            let (type_was_replaced, resolved) = self.instantiate_type_if_needed_with_self(
+            let (type_was_replaced, resolved) = self.instantiate_type_in_signature(
                 self_type,
                 &type_for_parameter.resolved_type,
                 scope,
@@ -207,7 +225,7 @@ impl Instantiator {
         }
 
         let (return_type_was_replaced, instantiated_return_type) =
-            self.instantiate_type_if_needed_with_self(self_type, &signature.return_type, scope)?;
+            self.instantiate_type_in_signature(self_type, &signature.return_type, scope)?;
         if return_type_was_replaced {
             was_replaced = true;
         }
@@ -222,6 +240,8 @@ impl Instantiator {
 
     fn instantiate_types_if_needed(
         &mut self,
+        current_self: Option<&Type>,
+
         types: &[Type],
         type_variables: &TypeVariableScope,
     ) -> Result<(bool, Vec<Type>), SemanticError> {
@@ -229,7 +249,7 @@ impl Instantiator {
 
         for ty in types {
             let (_was_converted, instantiated_type) =
-                self.instantiate_type_if_needed(ty, type_variables)?;
+                self.instantiate_type_if_needed(current_self, ty, type_variables)?;
 
             converted.push(instantiated_type);
         }
@@ -237,36 +257,43 @@ impl Instantiator {
         Ok((true, converted))
     }
 
-    fn instantiate_type_if_needed_with_self(
-        &mut self,
-        self_type: &Type,
-        ty: &Type,
-        type_variables: &TypeVariableScope,
-    ) -> Result<(bool, Type), SemanticError> {
+    // TODO: This function seems a bit broad, are all three cases needed?
+    fn extract_blueprint_info(ty: &Type) -> Option<ParameterizedTypeBlueprintInfo> {
         match ty {
-            Type::Blueprint(_blueprint) => Ok((false, self_type.clone())), // HACK: assume self if there is a blueprint here
-            _ => self.instantiate_type_if_needed(ty, type_variables),
+            Type::Blueprint(bp) => Some(bp.info()),
+            Type::NamedStruct(named) => Some(named.blueprint_info.clone().unwrap()),
+            Type::Generic(bp, _) => Some(bp.info()),
+            _ => None,
         }
     }
 
     fn instantiate_type_if_needed(
         &mut self,
+        current_self: Option<&Type>,
         ty: &Type,
         type_variables: &TypeVariableScope,
     ) -> Result<(bool, Type), SemanticError> {
+        if let Some(cs) = current_self {
+            if let Some(cs_bp) = Self::extract_blueprint_info(cs) {
+                let other = Self::extract_blueprint_info(&ty);
+                if let Some(found_other) = other {
+                    if found_other == cs_bp {
+                        return Ok((false, cs.clone()));
+                    }
+                }
+            }
+        }
+
         let (replaced, result_type) = match ty {
             Type::Generic(parameterized_type, arguments) => {
                 let (_was_replaced, new_arguments) =
-                    self.instantiate_types_if_needed(arguments, type_variables)?;
-
+                    self.instantiate_types_if_needed(current_self, arguments, type_variables)?;
                 if all_types_are_concrete(&new_arguments) {
-                    let new_scope = Self::create_type_parameter_scope_from_variables(
-                        &parameterized_type.type_variables,
-                        &new_arguments,
-                    )?;
-                    self.instantiate_blueprint(parameterized_type, &new_scope)?
+                    let new_type =
+                        self.instantiate_blueprint_and_members(parameterized_type, &new_arguments)?;
+                    (true, new_type)
                 } else {
-                    panic!("can we leave generics")
+                    panic!("Cannot instantiate generics with unresolved parameters")
                 }
             }
 
@@ -286,27 +313,27 @@ impl Instantiator {
 
             Type::Tuple(types) => {
                 let (was_replaced, new_types) =
-                    self.instantiate_types_if_needed(types, type_variables)?;
+                    self.instantiate_types_if_needed(current_self, types, type_variables)?;
                 (was_replaced, Type::Tuple(new_types))
             }
 
             Type::Optional(inner_type) => {
                 let (was_replaced, new_type) =
-                    self.instantiate_type_if_needed(inner_type, type_variables)?;
+                    self.instantiate_type_if_needed(current_self, inner_type, type_variables)?;
                 (was_replaced, Type::Optional(Box::new(new_type)))
             }
 
             Type::Slice(inner_type) => {
                 let (was_replaced, new_type) =
-                    self.instantiate_type_if_needed(inner_type, type_variables)?;
+                    self.instantiate_type_if_needed(current_self, inner_type, type_variables)?;
                 (was_replaced, Type::Slice(Box::new(new_type)))
             }
 
             Type::SlicePair(key_type, value_type) => {
                 let (key_type_was_replaced, new_key_type) =
-                    self.instantiate_type_if_needed(key_type, type_variables)?;
+                    self.instantiate_type_if_needed(current_self, key_type, type_variables)?;
                 let (value_type_was_replaced, new_value_type) =
-                    self.instantiate_type_if_needed(value_type, type_variables)?;
+                    self.instantiate_type_if_needed(current_self, value_type, type_variables)?;
                 (
                     key_type_was_replaced || value_type_was_replaced,
                     Type::SlicePair(Box::new(new_key_type), Box::new(new_value_type)),
@@ -330,6 +357,7 @@ impl Instantiator {
 
     fn instantiate_struct(
         &mut self,
+        current_self: Option<&Type>,
         struct_type: &NamedStructType,
         type_variables: &TypeVariableScope,
     ) -> Result<(bool, Type), SemanticError> {
@@ -337,7 +365,7 @@ impl Instantiator {
         let mut new_fields = SeqMap::new();
         for (name, field) in &struct_type.anon_struct_type.field_name_sorted_fields {
             let (was_replaced, new_type) =
-                self.instantiate_type_if_needed(&field.field_type, type_variables)?;
+                self.instantiate_type_if_needed(current_self, &field.field_type, type_variables)?;
             was_any_replaced |= was_replaced;
             let new_field = StructTypeField {
                 identifier: field.identifier.clone(),
@@ -348,6 +376,10 @@ impl Instantiator {
 
         let new_assigned_name =
             Self::parameterized_name(&struct_type.assigned_name, &type_variables.variables());
+
+        let Type::Blueprint(blueprint) = current_self.unwrap() else {
+            panic!("must be blueprint");
+        };
 
         let new_struct = NamedStructType {
             name: struct_type.name.clone(),
@@ -361,6 +393,7 @@ impl Instantiator {
                 .values()
                 .cloned()
                 .collect::<Vec<_>>(),
+            blueprint_info: Some(blueprint.info()),
         };
 
         Ok((was_any_replaced, Type::NamedStruct(new_struct)))

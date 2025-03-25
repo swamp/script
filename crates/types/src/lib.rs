@@ -64,6 +64,12 @@ impl ParameterizedTypeKind {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ParameterizedTypeBlueprintInfo {
+    pub name: String,
+    pub defined_in_module_path: Vec<String>,
+}
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct ParameterizedTypeBlueprint {
     pub kind: ParameterizedTypeKind,
@@ -73,6 +79,12 @@ pub struct ParameterizedTypeBlueprint {
 }
 
 impl ParameterizedTypeBlueprint {
+    pub fn info(&self) -> ParameterizedTypeBlueprintInfo {
+        ParameterizedTypeBlueprintInfo {
+            name: self.name(),
+            defined_in_module_path: self.defined_in_module_path.clone(),
+        }
+    }
     pub fn name(&self) -> String {
         self.kind.name()
     }
@@ -608,6 +620,7 @@ pub struct NamedStructType {
     pub assigned_name: String,
     pub anon_struct_type: AnonymousStructType,
     pub instantiated_type_parameters: Vec<Type>,
+    pub blueprint_info: Option<ParameterizedTypeBlueprintInfo>,
 }
 
 impl Debug for NamedStructType {
@@ -627,6 +640,7 @@ impl NamedStructType {
         assigned_name: &str,
         anon_struct_type: AnonymousStructType,
         module_path: &[String],
+        blueprint_info: Option<ParameterizedTypeBlueprintInfo>,
     ) -> Self {
         Self {
             //defined_in_module,
@@ -635,6 +649,7 @@ impl NamedStructType {
             module_path: module_path.to_vec(),
             assigned_name: assigned_name.to_string(),
             instantiated_type_parameters: Vec::default(),
+            blueprint_info,
         }
     }
 

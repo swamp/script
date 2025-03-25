@@ -382,6 +382,7 @@ impl Analyzer<'_> {
             assigned_name: struct_name_str,
             module_path: self.shared.definition_table.module_path(),
             instantiated_type_parameters: Vec::default(),
+            blueprint_info: None,
         };
 
         if has_type_variables {
