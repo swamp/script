@@ -402,6 +402,7 @@ impl FunctionCodeGen<'_> {
             IntrinsicFunction::Map2GetRow => todo!(),
             IntrinsicFunction::Map2Get => todo!(),
             IntrinsicFunction::Map2Has => todo!(),
+            IntrinsicFunction::Map2Create => todo!(),
 
             // Sparse
             IntrinsicFunction::SparseCreate => todo!(),
@@ -1985,6 +1986,7 @@ impl FunctionCodeGen<'_> {
             IntrinsicFunction::Map2Has => todo!(),
             IntrinsicFunction::Map2Get => todo!(),
             IntrinsicFunction::Map2Insert => todo!(),
+            IntrinsicFunction::Map2Create => todo!(),
 
             // Sparse
             IntrinsicFunction::SparseAdd => todo!(),
