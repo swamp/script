@@ -1,6 +1,6 @@
 [package]
 name = "swamp-script-code-gen"
-version = "0.1.5"
+version = "0.1.6"
 edition = "2024"
 license = "MIT"
 description = "generates swamp-vm opcodes"
@@ -8,13 +8,13 @@ repository = "https://github.com/swamp/script"
 
 [dependencies]
 # Swamp VM
-swamp-vm-types = { path = "../vm-types", version = "0.1.5" }
-swamp-vm-instr-build = { path = "../vm-instr-build", version = "0.1.5" }
+swamp-vm-types = { path = "../vm-types", version = "0.1.6" }
+swamp-vm-instr-build = { path = "../vm-instr-build", version = "0.1.6" }
 
 # Swamp script
-swamp-script-semantic = { path = "../semantic", version = "0.1.5" }
-swamp-script-node = { path = "../node", version = "0.1.5"}
-swamp-script-types = { path = "../types", version = "0.1.5" }
+swamp-script-semantic = { path = "../semantic", version = "0.1.6" }
+swamp-script-node = { path = "../node", version = "0.1.6" }
+swamp-script-types = { path = "../types", version = "0.1.6" }
 
 seq-map = "0.0.13"
 tracing = "0.1.40"
