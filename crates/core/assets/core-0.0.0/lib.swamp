@@ -457,13 +457,50 @@ impl Map<K, V> {
     /// - `key`: The key of the pair to remove.
     ///
     /// Uses intrinsic function `map_remove` to remove the key and return the corresponding value if it exists.
-    ///
-    /// # Returns
-    /// An optional value of type `V` associated with the removed key.
     fn remove(mut self, key: K) {
         map_remove(mut self, key)
     }
 }
+
+struct Map2<C, R, V>
+
+impl Map2<C, R, V> {
+    /// Checks if the map contains a specified cell.
+    ///
+    /// # Parameters
+    ///
+    /// Uses intrinsic function `map2_has` to determine whether the specified key exists in the map.
+    ///
+    /// # Returns
+    /// A `Bool` indicating the presence of the key.
+    fn has(self, column: C, row: R) -> Bool {
+        map2_has(self, column, row)
+    }
+
+    /// Removes a cell.
+    ///
+    /// # Parameters
+    ///
+    /// Uses intrinsic function `map2_remove` to remove the key and return the corresponding value if it exists.
+    ///
+    fn remove(mut self, column: C, row: R) {
+        map2_remove(mut self, column, row)
+    }
+
+    fn insert(mut self, column: C, row: R, value: V) {
+        map2_insert(mut self, column, row, value)
+    }
+
+    fn get_column(self, column: C) -> Map<R, V> {
+        map2_get_column(self, column)
+    }
+
+    fn get_row(self, row: R) -> Map<C, V> {
+        map2_get_row(self, row)
+    }
+}
+
+
 
 struct Stack<T>
 
@@ -573,30 +610,72 @@ impl Stack<T> {
 
 struct Grid<T>
 
+/// A two-dimensional grid that stores values of type `T`.
+///
+/// This grid leverages intrinsic functions (`grid_new`, `grid_set`, `grid_get`, and `grid_get_column`)
+/// for its internal operations.
 impl Grid<T> {
-    /// Creates a new grid
+    /// Creates a new grid with the specified dimensions.
     ///
-    /// Uses intrinsic function `grid_create` to add the value.
+    /// This function uses the intrinsic function `grid_new` to create a grid of size `(x, y)`,
+    /// initializing every cell with `initial_value`.
+    ///
+    /// # Parameters
+    ///
+    /// - `x`: The width of the grid (number of columns).
+    /// - `y`: The height of the grid (number of rows).
+    /// - `initial_value`: The value to initialize each cell of the grid.
+    ///
+    /// # Returns
+    ///
+    /// A new instance of `Grid<T>` with all cells set to `initial_value`.
     fn new(x: Int, y: Int, initial_value: T) -> Grid<T> {
         grid_new(x, y, initial_value)
     }
 
-/*
-    fn new_from_slice(slice: <Slice>) {
-    }
-    */
-
-    /// Sets the value in the grid
+    /// Sets the value at the specified coordinates in the grid.
+    ///
+    /// This method updates the cell at position `(x, y)` by calling the intrinsic function `grid_set`.
+    ///
+    /// # Parameters
+    ///
+    /// - `x`: The x-coordinate (column index) where the value will be set.
+    /// - `y`: The y-coordinate (row index) where the value will be set.
+    /// - `data`: The new value to store in the cell.
+    ///
     fn set(mut self, x: Int, y: Int, data: T) {
         grid_set(mut self, x, y, data)
     }
 
-    /// Gets the value
+    /// Retrieves the value from the grid at the specified coordinates.
+    ///
+    /// This function fetches the value from the cell at `(x, y)` by calling the intrinsic function
+    /// `grid_get`.
+    ///
+    /// # Parameters
+    ///
+    /// - `x`: The x-coordinate (column index) of the cell.
+    /// - `y`: The y-coordinate (row index) of the cell.
+    ///
+    /// # Returns
+    ///
+    /// The value stored in the cell at `(x, y)`.
     fn get(self, x: Int, y: Int) -> T {
         grid_get(self, x, y)
     }
 
-    /// Get column
+    /// Extracts an entire column from the grid.
+    ///
+    /// This function returns a vector containing all the values from the column at index `x`.
+    /// The values are collected from row 0 to the highest row (number of rows - 1).
+    ///
+    /// # Parameters
+    ///
+    /// - `x`: The index of the column to retrieve.
+    ///
+    /// # Returns
+    ///
+    /// A `Vec<T>` containing the values from the specified column.
     fn get_col(self, x: Int) -> Vec<T> {
       grid_get_column(self, x)
     }

@@ -44,6 +44,7 @@ fn add_intrinsic_functions(core_ns: &mut SymbolTable) {
     add_intrinsic_grid_functions(core_ns);
     add_intrinsic_vec_functions(core_ns);
     add_intrinsic_map_functions(core_ns);
+    add_intrinsic_map2_functions(core_ns);
     add_intrinsic_sparse_functions(core_ns);
 }
 
@@ -249,6 +250,183 @@ fn add_intrinsic_sparse_functions(core_ns: &mut SymbolTable) {
                 name,
                 intrinsic: intrinsic_fn,
                 signature: self_value_to_option_value.clone(),
+            })
+            .unwrap();
+    }
+}
+
+#[allow(clippy::too_many_lines)]
+fn add_intrinsic_map2_functions(core_ns: &mut SymbolTable) {
+    let self_value_value_to_bool = Signature {
+        parameters: [
+            TypeForParameter {
+                name: "self".to_string(),
+                resolved_type: Type::Never,
+                is_mutable: false,
+                node: None,
+            },
+            TypeForParameter {
+                name: "x".to_string(),
+                resolved_type: Type::Never,
+                is_mutable: false,
+                node: None,
+            },
+            TypeForParameter {
+                name: "y".to_string(),
+                resolved_type: Type::Never,
+                is_mutable: false,
+                node: None,
+            },
+        ]
+        .into(),
+        return_type: Box::new(Type::Bool),
+    };
+    let self_value_to_bool_functions = [IntrinsicFunction::Map2Has];
+    for intrinsic_fn in self_value_to_bool_functions {
+        let name = intrinsic_fn.to_string();
+        core_ns
+            .add_intrinsic_function(IntrinsicFunctionDefinition {
+                name,
+                intrinsic: intrinsic_fn,
+                signature: self_value_value_to_bool.clone(),
+            })
+            .unwrap();
+    }
+
+    let self_value_to_vec = Signature {
+        parameters: [
+            TypeForParameter {
+                name: "self".to_string(),
+                resolved_type: Type::Never,
+                is_mutable: false,
+                node: None,
+            },
+            TypeForParameter {
+                name: "x".to_string(),
+                resolved_type: Type::Never,
+                is_mutable: false,
+                node: None,
+            },
+        ]
+        .into(),
+        return_type: Box::new(Type::Never),
+    };
+    let self_value_to_vec_functions = [IntrinsicFunction::Map2GetColumn];
+    for intrinsic_fn in self_value_to_vec_functions {
+        let name = intrinsic_fn.to_string();
+        core_ns
+            .add_intrinsic_function(IntrinsicFunctionDefinition {
+                name,
+                intrinsic: intrinsic_fn,
+                signature: self_value_to_vec.clone(),
+            })
+            .unwrap();
+    }
+
+    let self_value_y_to_vec = Signature {
+        parameters: [
+            TypeForParameter {
+                name: "self".to_string(),
+                resolved_type: Type::Never,
+                is_mutable: false,
+                node: None,
+            },
+            TypeForParameter {
+                name: "y".to_string(),
+                resolved_type: Type::Never,
+                is_mutable: false,
+                node: None,
+            },
+        ]
+        .into(),
+        return_type: Box::new(Type::Never),
+    };
+    let self_value_y_to_vec_functions = [IntrinsicFunction::Map2GetRow];
+    for intrinsic_fn in self_value_y_to_vec_functions {
+        let name = intrinsic_fn.to_string();
+        core_ns
+            .add_intrinsic_function(IntrinsicFunctionDefinition {
+                name,
+                intrinsic: intrinsic_fn,
+                signature: self_value_y_to_vec.clone(),
+            })
+            .unwrap();
+    }
+
+    let self_value_value_to_unit = Signature {
+        parameters: [
+            TypeForParameter {
+                name: "self".to_string(),
+                resolved_type: Type::Never,
+                is_mutable: true,
+                node: None,
+            },
+            TypeForParameter {
+                name: "x".to_string(),
+                resolved_type: Type::Never,
+                is_mutable: false,
+                node: None,
+            },
+            TypeForParameter {
+                name: "y".to_string(),
+                resolved_type: Type::Never,
+                is_mutable: false,
+                node: None,
+            },
+        ]
+        .into(),
+        return_type: Box::new(Type::Unit),
+    };
+    let self_value_value_to_unit_functions = [IntrinsicFunction::Map2Remove];
+    for intrinsic_fn in self_value_value_to_unit_functions {
+        let name = intrinsic_fn.to_string();
+        core_ns
+            .add_intrinsic_function(IntrinsicFunctionDefinition {
+                name,
+                intrinsic: intrinsic_fn,
+                signature: self_value_value_to_unit.clone(),
+            })
+            .unwrap();
+    }
+
+    let self_value_value_value_to_unit = Signature {
+        parameters: [
+            TypeForParameter {
+                name: "self".to_string(),
+                resolved_type: Type::Never,
+                is_mutable: true,
+                node: None,
+            },
+            TypeForParameter {
+                name: "x".to_string(),
+                resolved_type: Type::Never,
+                is_mutable: false,
+                node: None,
+            },
+            TypeForParameter {
+                name: "y".to_string(),
+                resolved_type: Type::Never,
+                is_mutable: false,
+                node: None,
+            },
+            TypeForParameter {
+                name: "v".to_string(),
+                resolved_type: Type::Never,
+                is_mutable: false,
+                node: None,
+            },
+        ]
+        .into(),
+        return_type: Box::new(Type::Unit),
+    };
+    let self_value_value_value_to_unit_functions = [IntrinsicFunction::Map2Insert];
+    for intrinsic_fn in self_value_value_value_to_unit_functions {
+        let name = intrinsic_fn.to_string();
+        core_ns
+            .add_intrinsic_function(IntrinsicFunctionDefinition {
+                name,
+                intrinsic: intrinsic_fn,
+                signature: self_value_value_value_to_unit.clone(),
             })
             .unwrap();
     }

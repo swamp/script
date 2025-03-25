@@ -3,6 +3,9 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use crate::extra::{SparseValueId, SparseValueMap};
+use crate::grid::Grid;
+use crate::map2::Map2;
+use crate::map2::print_grid;
 use core::any::Any;
 use fixed32::Fp;
 use seq_map::SeqMap;
@@ -76,96 +79,6 @@ impl QuickSerialize for Rc<RefCell<dyn RustType>> {
     }
 }
 
-pub struct ColumnIter<'a, T> {
-    grid: &'a Grid<T>,
-    x: usize,
-    y: usize,
-}
-
-impl<'a, T> Iterator for ColumnIter<'a, T> {
-    type Item = &'a T;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.y < self.grid.height {
-            let item = &self.grid.data[self.y * self.grid.width + self.x];
-            self.y += 1;
-            Some(item)
-        } else {
-            None
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Grid<T> {
-    width: usize,
-    height: usize,
-    pub data: Vec<T>,
-}
-
-impl<T: Clone> Grid<T> {
-    pub fn new(width: usize, height: usize, initial: T) -> Self {
-        Self {
-            width,
-            height,
-            data: vec![initial; width * height],
-        }
-    }
-
-    pub fn column(&self, x: usize) -> Option<Vec<T>> {
-        if x < self.width {
-            Some(
-                (0..self.height)
-                    .map(|y| self.data[y * self.width + x].clone())
-                    .collect(),
-            )
-        } else {
-            None
-        }
-    }
-}
-
-impl<T> Grid<T> {
-    #[must_use]
-    pub fn get(&self, x: usize, y: usize) -> Option<&T> {
-        if y < self.height && x < self.width {
-            Some(&self.data[y * self.width + x])
-        } else {
-            None
-        }
-    }
-
-    #[must_use]
-    pub fn get_mut(&mut self, x: usize, y: usize) -> Option<&mut T> {
-        if y < self.height && x < self.width {
-            Some(&mut self.data[y * self.width + x])
-        } else {
-            None
-        }
-    }
-
-    pub fn set(&mut self, x: usize, y: usize, data: T) -> Option<()> {
-        if x < self.width && y < self.height {
-            self.data[y * self.width + x] = data;
-            Some(())
-        } else {
-            None
-        }
-    }
-
-    pub fn rows(&self) -> impl Iterator<Item = &[T]> {
-        self.data.chunks(self.width)
-    }
-
-    pub fn columns(&self) -> impl Iterator<Item = ColumnIter<'_, T>> {
-        (0..self.width).map(move |x| ColumnIter {
-            grid: self,
-            x,
-            y: 0,
-        })
-    }
-}
-
 #[derive(Debug, Default)]
 pub enum Value {
     Int(i32),
@@ -184,6 +97,9 @@ pub enum Value {
     Vec(Type, Vec<ValueRef>),
     Map(Type, SeqMap<Value, ValueRef>), // Do not change to HashMap, the order is important for it to be deterministic
     Tuple(Vec<Type>, Vec<ValueRef>),
+    Grid(Grid<ValueRef>),
+    Map2(Map2<Value, Value, ValueRef>),
+
     Sparse(Type, SparseValueMap),
     NamedStruct(NamedStructType, Vec<ValueRef>), // type of the struct, and the fields themselves in strict order
     AnonymousStruct(AnonymousStructType, Vec<ValueRef>), // type of the struct, and the fields themselves in strict order
@@ -201,7 +117,6 @@ pub enum Value {
 
     // Other
     RustValue(ExternalType, Rc<RefCell<Box<dyn RustType>>>),
-    Grid(Grid<ValueRef>),
 }
 
 #[allow(unused)]
@@ -327,7 +242,10 @@ impl Value {
             }
 
             Self::Grid(grid) => {
-                todo!("anonymous structs not supported")
+                todo!("grid not supported")
+            }
+            Self::Map2(_map2) => {
+                todo!("map2 not supported")
             }
             Self::EnumVariantSimple(_, enum_variant) => {
                 octets[0] = enum_variant.common.container_index;
@@ -410,6 +328,7 @@ impl Clone for Value {
 
                 Self::Map(key.clone(), cloned_seq_map)
             }
+            Self::Map2(map2) => Self::Map2(map2.clone()),
 
             Self::Grid(grid) => Self::Grid(grid.clone()),
 
@@ -815,6 +734,10 @@ impl Display for Value {
                 }
                 writeln!(f, "]")
             }
+            Self::Map2(map2) => {
+                print_grid(map2);
+                Ok(())
+            }
             Self::Map(_key, items) => {
                 write!(f, "[")?;
                 for (i, (key, val)) in items.iter().enumerate() {
@@ -1040,6 +963,7 @@ impl Hash for Value {
                 }
             }
             Self::Map(_, _items) => {}
+            Self::Map2(_items) => {}
             Self::SlicePair(_, _items) => {}
             Self::Tuple(_, _arr) => {}
             Self::EnumVariantSimple(_, _) => (),

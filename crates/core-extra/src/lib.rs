@@ -6,7 +6,9 @@
 pub mod cnv;
 pub mod export;
 pub mod extra;
+pub mod grid;
 pub mod idx_gen;
+pub mod map2;
 pub mod prelude;
 pub mod qck_des;
 pub mod typereg;

@@ -65,6 +65,14 @@ pub enum IntrinsicFunction {
     MapSubscriptMut,
     MapSubscriptMutCreateIfNeeded,
 
+    // Map2
+    Map2Insert,
+    Map2Remove,
+    Map2Get,
+    Map2GetColumn,
+    Map2GetRow,
+    Map2Has,
+
     // Sparse
     SparseCreate,
     SparseFromSlice,
@@ -159,6 +167,14 @@ impl fmt::Display for IntrinsicFunction {
             Self::MapIterMut => "map_iter_mut",
             Self::MapLen => "map_len",
             Self::MapIsEmpty => "map_is_empty",
+
+            // Map2
+            Self::Map2Insert => "map2_insert",
+            Self::Map2Remove => "map2_remove",
+            Self::Map2Has => "map2_has",
+            Self::Map2GetColumn => "map2_get_column",
+            Self::Map2GetRow => "map2_get_row",
+            Self::Map2Get => "map2_get",
 
             // Sparse
             Self::SparseNew => "sparse_new",

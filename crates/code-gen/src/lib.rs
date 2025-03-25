@@ -395,6 +395,14 @@ impl FunctionCodeGen<'_> {
             IntrinsicFunction::MapSubscriptMut => todo!(),
             IntrinsicFunction::MapSubscriptMutCreateIfNeeded => todo!(),
 
+            // Map2
+            IntrinsicFunction::Map2Remove => todo!(),
+            IntrinsicFunction::Map2Insert => todo!(),
+            IntrinsicFunction::Map2GetColumn => todo!(),
+            IntrinsicFunction::Map2GetRow => todo!(),
+            IntrinsicFunction::Map2Get => todo!(),
+            IntrinsicFunction::Map2Has => todo!(),
+
             // Sparse
             IntrinsicFunction::SparseCreate => todo!(),
             IntrinsicFunction::SparseFromSlice => todo!(),
@@ -410,6 +418,7 @@ impl FunctionCodeGen<'_> {
             IntrinsicFunction::GridFromSlice => todo!(),
             IntrinsicFunction::GridSet => todo!(),
             IntrinsicFunction::GridGet => todo!(),
+            IntrinsicFunction::GridGetColumn => todo!(),
 
             IntrinsicFunction::Float2Magnitude => todo!(),
 
@@ -1970,6 +1979,13 @@ impl FunctionCodeGen<'_> {
             IntrinsicFunction::MapSubscriptMut => todo!(),
             IntrinsicFunction::MapSubscriptMutCreateIfNeeded => todo!(),
 
+            IntrinsicFunction::Map2GetColumn => todo!(),
+            IntrinsicFunction::Map2GetRow => todo!(),
+            IntrinsicFunction::Map2Remove => todo!(),
+            IntrinsicFunction::Map2Has => todo!(),
+            IntrinsicFunction::Map2Get => todo!(),
+            IntrinsicFunction::Map2Insert => todo!(),
+
             // Sparse
             IntrinsicFunction::SparseAdd => todo!(),
             IntrinsicFunction::SparseNew => todo!(),
@@ -1987,6 +2003,7 @@ impl FunctionCodeGen<'_> {
             IntrinsicFunction::GridFromSlice => todo!(),
             IntrinsicFunction::GridSet => todo!(),
             IntrinsicFunction::GridGet => todo!(),
+            IntrinsicFunction::GridGetColumn => todo!(),
 
             // Other
             IntrinsicFunction::Float2Magnitude => todo!(),
