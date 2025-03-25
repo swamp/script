@@ -1464,8 +1464,6 @@ impl<'a, C> Interpreter<'a, C> {
                 let row_val = self.evaluate_expression(&arguments[1])?;
                 let value_to_insert = self.evaluate_expression(&arguments[2])?;
 
-                info!(?value_ref, ?column_val, "Map2Insert");
-
                 let result = {
                     let mut borrowed = value_ref.borrow_mut();
                     match &mut *borrowed {
