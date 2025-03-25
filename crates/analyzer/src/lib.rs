@@ -7,7 +7,6 @@ pub mod call;
 pub mod constant;
 pub mod def;
 pub mod err;
-mod instantiator;
 pub mod internal;
 pub mod literal;
 pub mod operator;
@@ -18,15 +17,13 @@ pub mod types;
 pub mod variable;
 
 use crate::err::{Error, ErrorKind};
-use crate::instantiator::{Instantiator, TypeVariableScope};
 use seq_map::SeqMap;
 use std::mem::take;
 use std::num::{ParseFloatError, ParseIntError};
-use std::rc::Rc;
-
 use swamp_script_modules::prelude::*;
 use swamp_script_modules::symtbl::{SymbolTableRef, TypeGeneratorKind};
 use swamp_script_node::{FileId, Node, Span};
+use swamp_script_semantic::instantiator::TypeVariableScope;
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
     ArgumentExpressionOrLocation, BlockScope, BlockScopeMode, FunctionScopeState,
@@ -35,9 +32,9 @@ use swamp_script_semantic::{
     SingleLocationExpressionKind, SingleMutLocationExpression, TypeWithMut, WhenBinding,
 };
 use swamp_script_source_map::SourceMap;
+use swamp_script_types::all_types_are_concrete_or_unit;
 use swamp_script_types::prelude::*;
-use swamp_script_types::{ParameterizedTypeBlueprint, all_types_are_concrete_or_unit};
-use tracing::{debug, error, info, trace};
+use tracing::{error, trace};
 
 #[must_use]
 pub fn convert_range_mode(range_mode: &swamp_script_ast::RangeMode) -> RangeMode {
@@ -1020,6 +1017,7 @@ impl<'a> Analyzer<'a> {
                         if let Some(_found_member) = self
                             .shared
                             .state
+                            .instantiator
                             .associated_impls
                             .get_member_function(&tv.resolved_type, &member_name_str)
                         {
@@ -1071,6 +1069,7 @@ impl<'a> Analyzer<'a> {
                     if let Some(found) = self
                         .shared
                         .state
+                        .instantiator
                         .associated_impls
                         .get_member_function(&tv.resolved_type, "subscript")
                         .cloned()
@@ -1210,6 +1209,7 @@ impl<'a> Analyzer<'a> {
                 if let Some(found_iter_fn) = self
                     .shared
                     .state
+                    .instantiator
                     .associated_impls
                     .get_internal_member_function(resolved_type, "iter")
                 {
@@ -2002,6 +2002,7 @@ impl<'a> Analyzer<'a> {
                     if let Some(found) = self
                         .shared
                         .state
+                        .instantiator
                         .associated_impls
                         .get_internal_member_function(&ty, subscript_member_function_name)
                         .cloned()
@@ -2393,6 +2394,7 @@ impl<'a> Analyzer<'a> {
         let maybe_function = self
             .shared
             .state
+            .instantiator
             .associated_impls
             .get_member_function(type_that_member_is_on, &field_name_str)
             .cloned();
@@ -2456,103 +2458,6 @@ impl<'a> Analyzer<'a> {
         ))
     }
 
-    fn instantiate_blueprint_and_members(
-        &mut self,
-        blueprint: &ParameterizedTypeBlueprint,
-        analyzed_type_parameters: &[Type],
-    ) -> Result<Type, Error> {
-        assert!(all_types_are_concrete_or_unit(analyzed_type_parameters));
-
-        if let Some(existing) = self.shared.state.instantiation_cache.get(
-            &blueprint.defined_in_module_path,
-            &blueprint.name(),
-            analyzed_type_parameters,
-        ) {
-            return Ok(existing.clone());
-        }
-
-        let scope = Instantiator::create_type_parameter_scope_from_variables(
-            &blueprint.type_variables,
-            analyzed_type_parameters,
-        )?;
-        let (_ignore_if_changed, instantiated_type) =
-            Instantiator::instantiate_blueprint(blueprint, &scope)?;
-
-        let new_impls = {
-            let mut new_impls = SeqMap::new();
-            let maybe_member_functions = self
-                .shared
-                .state
-                .associated_impls
-                .functions
-                .get(&Type::Blueprint(blueprint.clone()))
-                .cloned();
-            if let Some(found_member_functions) = maybe_member_functions {
-                for (func_name, func_ref) in &found_member_functions.functions {
-                    let (_replaced, new_signature) = Instantiator::instantiate_signature(
-                        func_ref.signature().clone(),
-                        &instantiated_type,
-                        &scope,
-                    )?;
-                    let new_func = match &**func_ref {
-                        Function::Internal(internal) => {
-                            let func_ref = Rc::new(InternalFunctionDefinition {
-                                body: internal.body.clone(),
-                                name: LocalIdentifier(Node::default()),
-                                assigned_name: format!("instantiated {func_name}"),
-                                signature: new_signature,
-                                variable_scopes: self.scope.clone(),
-                                function_scope_state: self.function_variables.clone(),
-                                program_unique_id: self
-                                    .shared
-                                    .state
-                                    .allocate_internal_function_id(),
-                            });
-                            Function::Internal(func_ref)
-                        }
-                        Function::External(blueprint_external) => {
-                            let func_ref = Rc::new(ExternalFunctionDefinition {
-                                name: None,
-                                assigned_name: String::new(),
-                                signature: new_signature,
-                                id: blueprint_external.id,
-                            });
-                            Function::External(func_ref)
-                        }
-                    };
-                    new_impls.insert(func_name.clone(), new_func).unwrap();
-                }
-            }
-            new_impls
-        };
-
-        self.shared
-            .state
-            .associated_impls
-            .prepare(&instantiated_type);
-        for (name, func) in &new_impls {
-            //info!(?name, ?func, id=?instantiated_type, "ADDING");
-            self.shared.state.associated_impls.add_member_function(
-                &instantiated_type,
-                &*name,
-                func.clone().into(),
-            )?;
-        }
-
-        self.shared
-            .state
-            .instantiation_cache
-            .add(
-                &blueprint.defined_in_module_path,
-                &blueprint.name(),
-                instantiated_type.clone(),
-                analyzed_type_parameters,
-            )
-            .unwrap();
-
-        Ok(instantiated_type)
-    }
-
     #[allow(clippy::too_many_lines)]
     fn analyze_generic_type(
         &mut self,
@@ -2565,7 +2470,10 @@ impl<'a> Analyzer<'a> {
             //          Symbol::Alias(alias_type) => alias_type.referenced_type.clone(),
             Symbol::Blueprint(blueprint) => {
                 if all_types_are_concrete_or_unit(analyzed_type_parameters) {
-                    self.instantiate_blueprint_and_members(blueprint, analyzed_type_parameters)?
+                    self.shared
+                        .state
+                        .instantiator
+                        .instantiate_blueprint_and_members(blueprint, analyzed_type_parameters)?
                 } else {
                     Type::Generic(blueprint.clone(), analyzed_type_parameters.to_vec())
                 }

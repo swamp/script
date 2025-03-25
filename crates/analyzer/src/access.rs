@@ -29,6 +29,7 @@ impl Analyzer<'_> {
     ) -> Option<FunctionRef> {
         self.shared
             .state
+            .instantiator
             .associated_impls
             .get_member_function(ty, function_name)
             .cloned()

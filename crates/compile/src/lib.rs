@@ -18,7 +18,7 @@ use swamp_script_dep_loader::{
 };
 use swamp_script_error_report::{ScriptResolveError, prelude::show_script_resolve_error};
 use swamp_script_eval_loader::analyze_modules_in_order;
-use swamp_script_modules::modules::{Module, ModuleRef, Modules};
+use swamp_script_modules::modules::{ModuleRef, Modules};
 use swamp_script_modules::symtbl::{SymbolTable, SymbolTableRef};
 use swamp_script_pretty_print::{SourceMapDisplay, SymbolTableDisplay};
 use swamp_script_semantic::ProgramState;
@@ -108,7 +108,7 @@ pub struct BootstrapResult {
 /// # Panics
 /// In theory it can panic, but should be safe.
 pub fn bootstrap_modules(
-    mut source_map: &mut SourceMap,
+    source_map: &mut SourceMap,
 ) -> Result<BootstrapResult, ScriptResolveError> {
     let compiler_version = TinyVersion::from_str(COMPILER_VERSION).unwrap();
     trace!(%compiler_version, "booting up compiler");

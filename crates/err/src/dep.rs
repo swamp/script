@@ -13,7 +13,7 @@ use crate::parse::build_parser_error;
 pub fn build_dependency_error(err: &DependencyError) -> Builder<usize> {
     let span = &Span::default();
     match err {
-        DependencyError::CircularDependency(err) => {
+        DependencyError::CircularDependency(_err) => {
             Report::build(Kind::Error, 10, "circular dependency", span)
         }
         DependencyError::ParseRootError(parse_root) => match parse_root {

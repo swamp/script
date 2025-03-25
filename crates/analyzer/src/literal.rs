@@ -10,7 +10,7 @@ use swamp_script_semantic::{
     ArgumentExpressionOrLocation, EnumLiteralData, Expression, Fp, Literal,
 };
 use swamp_script_types::prelude::*;
-use tracing::{error, info};
+use tracing::error;
 
 impl Analyzer<'_> {
     /// # Errors
@@ -38,15 +38,19 @@ impl Analyzer<'_> {
                         .get_blueprint("Vec")
                         .unwrap()
                         .clone();
-                    self.instantiate_blueprint_and_members(
-                        &vec_blueprint,
-                        &[encountered_element_type.clone()],
-                    )?
+                    self.shared
+                        .state
+                        .instantiator
+                        .instantiate_blueprint_and_members(
+                            &vec_blueprint,
+                            &[encountered_element_type.clone()],
+                        )?
                 };
 
                 if let Some(found) = self
                     .shared
                     .state
+                    .instantiator
                     .associated_impls
                     .get_internal_member_function(&found_expected_type, "new_from_slice")
                 {
@@ -107,15 +111,19 @@ impl Analyzer<'_> {
                         .get_blueprint("Map")
                         .unwrap()
                         .clone();
-                    self.instantiate_blueprint_and_members(
-                        &map_blueprint,
-                        &[encountered_key_type.clone(), encountered_value_type.clone()],
-                    )?
+                    self.shared
+                        .state
+                        .instantiator
+                        .instantiate_blueprint_and_members(
+                            &map_blueprint,
+                            &[encountered_key_type.clone(), encountered_value_type.clone()],
+                        )?
                 };
 
                 if let Some(found) = self
                     .shared
                     .state
+                    .instantiator
                     .associated_impls
                     .get_internal_member_function(&found_expected_type, "new_from_slice_pair")
                 {

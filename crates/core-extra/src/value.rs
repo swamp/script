@@ -241,7 +241,7 @@ impl Value {
                 todo!("anonymous structs not supported")
             }
 
-            Self::Grid(grid) => {
+            Self::Grid(_grid) => {
                 todo!("grid not supported")
             }
             Self::Map2(_map2) => {
@@ -449,7 +449,7 @@ impl Value {
                     .collect();
                 Ok(Box::new(values.into_iter()))
             }
-            Self::RustValue(ref rust_type_ref, _) => {
+            Self::RustValue(ref _rust_type_ref, _) => {
                 todo!()
             }
             Self::Range(start_val, max_val, range_mode) => {

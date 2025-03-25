@@ -6,10 +6,12 @@ pub mod inst_cache;
 pub mod intr;
 pub mod prelude;
 
-use crate::inst_cache::InstantiationCache;
+pub mod instantiator;
+
 use crate::intr::IntrinsicFunction;
 use crate::prelude::IntrinsicFunctionDefinitionRef;
 
+use crate::instantiator::Instantiator;
 pub use fixed32::Fp;
 use seq_map::SeqMap;
 use std::cmp::PartialEq;
@@ -984,13 +986,12 @@ impl AssociatedImpls {
 #[derive(Debug, Clone)]
 pub struct ProgramState {
     pub external_function_number: ExternalFunctionId,
-    pub internal_function_number: InternalFunctionId,
+    pub internal_function_id_allocator: InternalFunctionIdAllocator,
     // It is just so we don't have to do another dependency check of the
     // modules, we know that these constants have been
     // evaluated in order already
     pub constants_in_dependency_order: Vec<ConstantRef>,
-    pub associated_impls: AssociatedImpls,
-    pub instantiation_cache: InstantiationCache,
+    pub instantiator: Instantiator,
 }
 
 impl Default for ProgramState {
@@ -999,15 +1000,38 @@ impl Default for ProgramState {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct InternalFunctionIdAllocator {
+    pub internal_function_number: InternalFunctionId,
+}
+
+impl Default for InternalFunctionIdAllocator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl InternalFunctionIdAllocator {
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            internal_function_number: 0,
+        }
+    }
+    pub fn alloc(&mut self) -> InternalFunctionId {
+        self.internal_function_number += 1;
+        self.internal_function_number
+    }
+}
+
 impl ProgramState {
     #[must_use]
     pub fn new() -> Self {
         Self {
             external_function_number: 0,
-            internal_function_number: 0,
+            internal_function_id_allocator: InternalFunctionIdAllocator::new(),
             constants_in_dependency_order: Vec::new(),
-            associated_impls: AssociatedImpls::new(),
-            instantiation_cache: InstantiationCache::new(),
+            instantiator: Instantiator::new(),
         }
     }
 
@@ -1017,8 +1041,7 @@ impl ProgramState {
     }
 
     pub fn allocate_internal_function_id(&mut self) -> InternalFunctionId {
-        self.internal_function_number += 1;
-        self.internal_function_number
+        self.internal_function_id_allocator.alloc()
     }
 }
 

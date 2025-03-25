@@ -60,7 +60,9 @@ fn gen_internal(code: &str) -> Result<(CodeGenState, Program), Error> {
         code_gen.gen_function_def(internal_function_def, &normal_function)?;
     }
 
-    for (associated_on_type, impl_functions) in &program.state.associated_impls.functions {
+    for (associated_on_type, impl_functions) in
+        &program.state.instantiator.associated_impls.functions
+    {
         if !associated_on_type.is_concrete() {
             continue;
         }

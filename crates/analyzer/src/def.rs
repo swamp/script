@@ -5,7 +5,6 @@
 
 use crate::Analyzer;
 use crate::err::{Error, ErrorKind};
-use crate::instantiator::TypeVariableScope;
 use seq_map::SeqMap;
 use std::rc::Rc;
 use swamp_script_semantic::{
@@ -14,6 +13,7 @@ use swamp_script_semantic::{
 use swamp_script_types::prelude::*;
 use swamp_script_types::{ParameterizedTypeBlueprint, ParameterizedTypeKind};
 
+use swamp_script_semantic::instantiator::TypeVariableScope;
 use tracing::trace;
 
 impl Analyzer<'_> {
@@ -670,7 +670,11 @@ impl Analyzer<'_> {
         attach_to_type: Type, // Needed for self
         functions: &[&swamp_script_ast::Function],
     ) -> Result<(), Error> {
-        self.shared.state.associated_impls.prepare(&attach_to_type);
+        self.shared
+            .state
+            .instantiator
+            .associated_impls
+            .prepare(&attach_to_type);
 
         for function in functions {
             let new_return_type = self.analyze_return_type(function)?;
@@ -693,6 +697,7 @@ impl Analyzer<'_> {
 
             self.shared
                 .state
+                .instantiator
                 .associated_impls
                 .add_member_function(&attach_to_type, &function_name_str, resolved_function_ref)
                 .map_err(|err| {

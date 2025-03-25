@@ -203,7 +203,7 @@ impl<C: Display + Clone> Builder<C> {
     }
 }
 
-pub fn build_and_print(mut builder: Builder<usize>, source_map: &SourceMap, current_dir: &Path) {
+pub fn build_and_print(builder: Builder<usize>, source_map: &SourceMap, current_dir: &Path) {
     let report = builder.build();
     report.print(source_map, current_dir, stderr()).unwrap();
 }

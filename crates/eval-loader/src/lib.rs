@@ -2,14 +2,14 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/script
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
+use swamp_script_analyzer::Analyzer;
 use swamp_script_analyzer::prelude::{Error, Program};
-use swamp_script_analyzer::{Analyzer, TypeContext};
 use swamp_script_dep_loader::{
     DependencyParser, ParsedAstModule, parse_local_modules_and_get_order,
 };
 use swamp_script_modules::prelude::*;
 use swamp_script_modules::symtbl::SymbolTableRef;
-use swamp_script_semantic::{Expression, InternalMainExpression, ProgramState, SemanticError};
+use swamp_script_semantic::{InternalMainExpression, ProgramState, SemanticError};
 use swamp_script_source_map::SourceMap;
 use tracing::{Level, debug, span};
 
@@ -81,7 +81,7 @@ pub fn analyze_modules_in_order(
         }
         if let Some(parse_module) = parsed_modules.get_parsed_module(module_path) {
             let process_span = span!(Level::TRACE, "analyze mod", path = ?module_path);
-            let enter_ = process_span.enter();
+            let _enter = process_span.enter();
 
             let (analyzed_symbol_table, maybe_expression) = analyze_module(
                 state,

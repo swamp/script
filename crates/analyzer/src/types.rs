@@ -45,6 +45,9 @@ impl Analyzer<'_> {
                     .unwrap()
                     .clone();
                 let instantiated_vec = self
+                    .shared
+                    .state
+                    .instantiator
                     .instantiate_blueprint_and_members(&vec_blueprint, &[analyzed_element_type])?;
                 instantiated_vec
             }
@@ -58,10 +61,14 @@ impl Analyzer<'_> {
                     .unwrap()
                     .clone();
 
-                let instantiated_vec = self.instantiate_blueprint_and_members(
-                    &map_blueprint,
-                    &[analyzed_key_type, analyzed_value_type],
-                )?;
+                let instantiated_vec = self
+                    .shared
+                    .state
+                    .instantiator
+                    .instantiate_blueprint_and_members(
+                        &map_blueprint,
+                        &[analyzed_key_type, analyzed_value_type],
+                    )?;
                 instantiated_vec
             }
             swamp_script_ast::Type::Tuple(types) => Type::Tuple(self.analyze_types(types)?),

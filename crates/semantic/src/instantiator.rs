@@ -1,6 +1,11 @@
-use crate::prelude::Error;
+use crate::prelude::InstantiationCache;
+use crate::{
+    AssociatedImpls, ExternalFunctionDefinition, Function, FunctionScopeState,
+    InternalFunctionDefinition, LocalIdentifier, SemanticError,
+};
 use seq_map::SeqMap;
-use swamp_script_semantic::SemanticError;
+use std::rc::Rc;
+use swamp_script_node::Node;
 use swamp_script_types::{
     AnonymousStructType, NamedStructType, ParameterizedTypeBlueprint, ParameterizedTypeKind,
     Signature, StructTypeField, Type, TypeForParameter, all_types_are_concrete,
@@ -11,8 +16,6 @@ use swamp_script_types::{
 pub struct TypeVariableScope {
     pub type_variables: SeqMap<String, Type>,
 }
-
-impl TypeVariableScope {}
 
 impl TypeVariableScope {
     pub fn new(scope: SeqMap<String, Type>) -> Self {
@@ -25,13 +28,112 @@ impl TypeVariableScope {
         self.type_variables.values().map(|ty| ty.clone()).collect()
     }
 }
-pub struct Instantiator;
+#[derive(Clone, Debug)]
+pub struct Instantiator {
+    pub associated_impls: AssociatedImpls,
+    pub instantiation_cache: InstantiationCache,
+}
 
 impl Instantiator {
+    pub(crate) fn new() -> Self {
+        Self {
+            associated_impls: AssociatedImpls::new(),
+            instantiation_cache: InstantiationCache::new(),
+        }
+    }
+    pub fn instantiate_blueprint_and_members(
+        &mut self,
+        blueprint: &ParameterizedTypeBlueprint,
+        analyzed_type_parameters: &[Type],
+    ) -> Result<Type, SemanticError> {
+        assert!(all_types_are_concrete_or_unit(analyzed_type_parameters));
+
+        if let Some(existing) = self.instantiation_cache.get(
+            &blueprint.defined_in_module_path,
+            &blueprint.name(),
+            analyzed_type_parameters,
+        ) {
+            return Ok(existing.clone());
+        }
+
+        let scope = Instantiator::create_type_parameter_scope_from_variables(
+            &blueprint.type_variables,
+            analyzed_type_parameters,
+        )?;
+        let (_ignore_if_changed, instantiated_type) =
+            Instantiator::instantiate_blueprint(blueprint, &scope)?;
+
+        let new_impls = {
+            let mut new_impls = SeqMap::new();
+            let maybe_member_functions = self
+                .associated_impls
+                .functions
+                .get(&Type::Blueprint(blueprint.clone()))
+                .cloned();
+            if let Some(found_member_functions) = maybe_member_functions {
+                for (func_name, func_ref) in &found_member_functions.functions {
+                    let (_replaced, new_signature) = Instantiator::instantiate_signature(
+                        func_ref.signature().clone(),
+                        &instantiated_type,
+                        &scope,
+                    )?;
+                    let new_func = match &**func_ref {
+                        Function::Internal(internal) => {
+                            let func_ref = Rc::new(InternalFunctionDefinition {
+                                body: internal.body.clone(),
+                                name: LocalIdentifier(Node::default()),
+                                assigned_name: format!("instantiated {func_name}"),
+                                signature: new_signature.clone(),
+                                variable_scopes: FunctionScopeState::new(
+                                    *new_signature.return_type.clone(),
+                                ), // self.scope.clone(),
+                                function_scope_state: Vec::new(), // self.function_variables.clone(),
+                                program_unique_id: internal.program_unique_id,
+                            });
+                            Function::Internal(func_ref)
+                        }
+                        Function::External(blueprint_external) => {
+                            let func_ref = Rc::new(ExternalFunctionDefinition {
+                                name: None,
+                                assigned_name: String::new(),
+                                signature: new_signature,
+                                id: blueprint_external.id,
+                            });
+                            Function::External(func_ref)
+                        }
+                    };
+                    new_impls.insert(func_name.clone(), new_func).unwrap();
+                }
+            }
+            new_impls
+        };
+
+        self.associated_impls.prepare(&instantiated_type);
+        for (name, func) in &new_impls {
+            //info!(?name, ?func, id=?instantiated_type, "ADDING");
+            self.associated_impls.add_member_function(
+                &instantiated_type,
+                &*name,
+                func.clone().into(),
+            )?;
+        }
+
+        self.instantiation_cache
+            .add(
+                &blueprint.defined_in_module_path,
+                &blueprint.name(),
+                instantiated_type.clone(),
+                analyzed_type_parameters,
+            )
+            .unwrap();
+
+        Ok(instantiated_type)
+    }
+
     pub fn create_type_parameter_scope(
         parameters: &[Type],
         concrete: &[Type],
-    ) -> Result<TypeVariableScope, Error> {
+    ) -> Result<TypeVariableScope, SemanticError> {
         if parameters.len() != concrete.len() {
             panic!("wrong parameter count")
         }
@@ -51,7 +153,7 @@ impl Instantiator {
     pub fn create_type_parameter_scope_from_variables(
         variables: &[String],
         concrete_types: &[Type],
-    ) -> Result<TypeVariableScope, Error> {
+    ) -> Result<TypeVariableScope, SemanticError> {
         if variables.len() != concrete_types.len() {
             panic!("wrong parameter count")
         }
@@ -69,7 +171,7 @@ impl Instantiator {
     pub(crate) fn instantiate_blueprint(
         blueprint: &ParameterizedTypeBlueprint,
         scope: &TypeVariableScope,
-    ) -> Result<(bool, Type), Error> {
+    ) -> Result<(bool, Type), SemanticError> {
         match &blueprint.kind {
             ParameterizedTypeKind::Struct(struct_ref) => {
                 Self::instantiate_struct(struct_ref, scope)
@@ -82,7 +184,7 @@ impl Instantiator {
         signature: Signature,
         self_type: &Type,
         scope: &TypeVariableScope,
-    ) -> Result<(bool, Signature), Error> {
+    ) -> Result<(bool, Signature), SemanticError> {
         let mut was_replaced = false;
         let mut instantiated_type_for_parameters = Vec::new();
         for type_for_parameter in &signature.parameters {
@@ -120,7 +222,7 @@ impl Instantiator {
     fn instantiate_types_if_needed(
         types: &[Type],
         type_variables: &TypeVariableScope,
-    ) -> Result<(bool, Vec<Type>), Error> {
+    ) -> Result<(bool, Vec<Type>), SemanticError> {
         let mut converted = Vec::new();
 
         for ty in types {
@@ -137,7 +239,7 @@ impl Instantiator {
         self_type: &Type,
         ty: &Type,
         type_variables: &TypeVariableScope,
-    ) -> Result<(bool, Type), Error> {
+    ) -> Result<(bool, Type), SemanticError> {
         match ty {
             Type::Blueprint(_blueprint) => Ok((false, self_type.clone())), // HACK: assume self if there is a blueprint here
             _ => Self::instantiate_type_if_needed(ty, type_variables),
@@ -147,7 +249,7 @@ impl Instantiator {
     fn instantiate_type_if_needed(
         ty: &Type,
         type_variables: &TypeVariableScope,
-    ) -> Result<(bool, Type), Error> {
+    ) -> Result<(bool, Type), SemanticError> {
         let (replaced, result_type) = match ty {
             Type::Generic(parameterized_type, arguments) => {
                 let (_was_replaced, new_arguments) =
@@ -173,7 +275,7 @@ impl Instantiator {
                 (true, found_type.clone())
             }
 
-            Type::Blueprint(blueprint) => {
+            Type::Blueprint(_blueprint) => {
                 //error!(?blueprint, "not allowed with blueprints here for types");
                 panic!("not allowed with blueprints here for types")
             }
@@ -225,7 +327,7 @@ impl Instantiator {
     fn instantiate_struct(
         struct_type: &NamedStructType,
         type_variables: &TypeVariableScope,
-    ) -> Result<(bool, Type), Error> {
+    ) -> Result<(bool, Type), SemanticError> {
         let mut was_any_replaced = false;
         let mut new_fields = SeqMap::new();
         for (name, field) in &struct_type.anon_struct_type.field_name_sorted_fields {

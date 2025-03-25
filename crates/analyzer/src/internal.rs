@@ -13,7 +13,7 @@ impl Analyzer<'_> {
     pub(crate) fn check_for_internal_member_call(
         &mut self,
         ty: &Type,
-        is_mutable: bool,
+        _is_mutable: bool,
         ast_member_function_name: &swamp_script_ast::Node,
         ast_arguments: &[&swamp_script_ast::Expression],
     ) -> Result<Option<Postfix>, Error> {
