@@ -22,7 +22,7 @@ where
     for row in rows {
         print!("{:>10} ", row);
         for col in &cols {
-            if let Some(value) = map.get(row, col) {
+            if let Some(value) = map.get(col, row) {
                 print!("{:?} ", value);
             } else {
                 print!("{:>10} ", "");
@@ -61,7 +61,7 @@ where
     }
 
     /// Returns a reference to the value at the given row and column.
-    pub fn get(&self, row: &R, col: &C) -> Option<&V> {
+    pub fn get(&self, col: &C, row: &R) -> Option<&V> {
         self.rows.get(row).and_then(|row_map| row_map.get(col))
     }
 
@@ -75,9 +75,15 @@ where
         self.columns.get(col)
     }
 
+    pub fn has(&self, col: &C, row: &R) -> bool {
+        self.rows
+            .get(row)
+            .map_or(false, |row_map| row_map.contains_key(col))
+    }
+
     /// Inserts a value into the map at the given row and column.
     /// If there was an existing value at that position, it is returned.
-    pub fn insert(&mut self, row: R, col: C, value: V) {
+    pub fn insert(&mut self, col: C, row: R, value: V) {
         // Insert into the rows map.
         if self.rows.contains_key(&row) {
             self.rows
@@ -107,7 +113,7 @@ where
 
     /// Removes the value at the given row and column.
     /// Returns the removed value, if it existed.
-    pub fn remove(&mut self, row: &R, col: &C) -> Option<V> {
+    pub fn remove(&mut self, col: &C, row: &R) -> Option<V> {
         // Remove from the rows map.
         let removed = if let Some(row_map) = self.rows.get_mut(row) {
             let removed = row_map.remove(col);

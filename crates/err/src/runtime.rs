@@ -35,6 +35,7 @@ pub fn build_runtime_error(err: &RuntimeError) -> Builder<usize> {
         RuntimeErrorKind::ContinueNotAllowedHere => todo!(),
         RuntimeErrorKind::BreakNotAllowedHere => todo!(),
         RuntimeErrorKind::NotAMap => todo!(),
+        RuntimeErrorKind::NotAMap2 => todo!(),
         RuntimeErrorKind::MissingExternalFunction(_) => todo!(),
         RuntimeErrorKind::WrongNumberOfArguments(_, _) => todo!(),
         RuntimeErrorKind::RangeItemMustBeInt => todo!(),

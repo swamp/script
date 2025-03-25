@@ -465,6 +465,14 @@ impl Map<K, V> {
 struct Map2<C, R, V>
 
 impl Map2<C, R, V> {
+    /// Creates a new Map
+    ///
+    /// Uses intrinsic function `map_create` to create the Map value.
+    fn new() -> Map2<C, R, V> {
+        map2_create()
+    }
+
+
     /// Checks if the map contains a specified cell.
     ///
     /// # Parameters
@@ -487,8 +495,12 @@ impl Map2<C, R, V> {
         map2_remove(mut self, column, row)
     }
 
-    fn insert(mut self, column: C, row: R, value: V) {
+    fn set(mut self, column: C, row: R, value: V) {
         map2_insert(mut self, column, row, value)
+    }
+
+    fn get(self, column: C, row: R) -> V {
+        map2_get(self, column, row)
     }
 
     fn get_column(self, column: C) -> Map<R, V> {

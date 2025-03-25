@@ -37,6 +37,7 @@ pub enum RuntimeErrorKind {
     ContinueNotAllowedHere,
     BreakNotAllowedHere,
     NotAMap,
+    NotAMap2,
     MissingExternalFunction(ExternalFunctionId),
     ExpectedInt,
     ExpectedString,

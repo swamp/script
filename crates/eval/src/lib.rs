@@ -11,6 +11,7 @@ use std::fmt::Debug;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use swamp_script_core_extra::extra::{SparseValueId, SparseValueMap};
 use swamp_script_core_extra::grid::Grid;
+use swamp_script_core_extra::map2::Map2;
 use swamp_script_core_extra::prelude::ValueError;
 use swamp_script_core_extra::value::ValueRef;
 use swamp_script_core_extra::value::{
@@ -1259,12 +1260,19 @@ impl<'a, C> Interpreter<'a, C> {
         expressions: &[ArgumentExpressionOrLocation],
     ) -> Result<Value, RuntimeError> {
         // Common case for most of the intrinsics
-        let value_ref = self.evaluate_argument(&expressions[0])?.to_value_ref();
+        let value_ref = if expressions.is_empty() {
+            ValueRef::new(RefCell::new(Value::Unit))
+        } else {
+            self.evaluate_argument(&expressions[0])?.to_value_ref()
+        };
+
         let mut arguments = Vec::new();
-        for arg in &expressions[1..] {
-            match arg {
-                ArgumentExpressionOrLocation::Location(_loc) => panic!("not supported"),
-                ArgumentExpressionOrLocation::Expression(expr) => arguments.push(expr),
+        if expressions.len() > 1 {
+            for arg in &expressions[1..] {
+                match arg {
+                    ArgumentExpressionOrLocation::Location(_loc) => panic!("not supported"),
+                    ArgumentExpressionOrLocation::Expression(expr) => arguments.push(expr),
+                }
             }
         }
 
@@ -1334,7 +1342,6 @@ impl<'a, C> Interpreter<'a, C> {
                     return Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, node))?;
                 }
             },
-
             IntrinsicFunction::VecLen => match &mut *value_ref.borrow_mut() {
                 Value::Vec(_type_id, vector) => {
                     let length = vector.len();
@@ -1342,12 +1349,10 @@ impl<'a, C> Interpreter<'a, C> {
                 }
                 _ => Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, node))?,
             },
-
             IntrinsicFunction::VecIsEmpty => match &mut *value_ref.borrow_mut() {
                 Value::Vec(_type_id, vector) => Value::Bool(vector.len() == 0),
                 _ => Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, node))?,
             },
-
             IntrinsicFunction::VecPop => match &mut *value_ref.borrow_mut() {
                 Value::Vec(_type_id, vector) => {
                     let maybe_val = vector.pop();
@@ -1359,6 +1364,8 @@ impl<'a, C> Interpreter<'a, C> {
                 }
                 _ => Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, node))?,
             },
+
+            IntrinsicFunction::MapCreate => Value::Map(Type::Unit, SeqMap::new()),
 
             IntrinsicFunction::MapFromSlicePair => {
                 let borrow = value_ref.borrow();
@@ -1386,12 +1393,10 @@ impl<'a, C> Interpreter<'a, C> {
                     return Err(self.create_err(RuntimeErrorKind::NotAMap, node));
                 }
             },
-
             IntrinsicFunction::MapIsEmpty => match &mut *value_ref.borrow_mut() {
                 Value::Vec(_type_id, seq_map) => Value::Bool(seq_map.len() == 0),
                 _ => Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, node))?,
             },
-
             IntrinsicFunction::MapSubscript => match value_ref.borrow().clone() {
                 Value::Map(_type_id, seq_map) => {
                     let key_value = self.evaluate_expression(&arguments[0])?;
@@ -1406,7 +1411,6 @@ impl<'a, C> Interpreter<'a, C> {
                     return Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, node))?;
                 }
             },
-
             IntrinsicFunction::MapRemove => {
                 let index_val = self.evaluate_expression(&arguments[0])?;
 
@@ -1427,6 +1431,128 @@ impl<'a, C> Interpreter<'a, C> {
                         }
                         _ => {
                             return Err(self.create_err(RuntimeErrorKind::NotAMap, node));
+                        }
+                    }
+                };
+                result
+            }
+
+            // Map2 ---
+            IntrinsicFunction::Map2Create => Value::Map2(Map2::new()),
+
+            IntrinsicFunction::Map2Remove => {
+                let column_val = self.evaluate_expression(&arguments[0])?;
+                let row_val = self.evaluate_expression(&arguments[1])?;
+
+                let result = {
+                    let mut borrowed = value_ref.borrow_mut();
+                    match &mut *borrowed {
+                        Value::Map2(map2) => {
+                            map2.remove(&column_val, &row_val);
+                            Value::Unit
+                        }
+                        _ => {
+                            return Err(self.create_err(RuntimeErrorKind::NotAMap2, node));
+                        }
+                    }
+                };
+                result
+            }
+
+            IntrinsicFunction::Map2Insert => {
+                let column_val = self.evaluate_expression(&arguments[0])?;
+                let row_val = self.evaluate_expression(&arguments[1])?;
+                let value_to_insert = self.evaluate_expression(&arguments[2])?;
+
+                info!(?value_ref, ?column_val, "Map2Insert");
+
+                let result = {
+                    let mut borrowed = value_ref.borrow_mut();
+                    match &mut *borrowed {
+                        Value::Map2(map2) => {
+                            map2.insert(
+                                column_val,
+                                row_val,
+                                Rc::new(RefCell::new(value_to_insert)),
+                            );
+                            Value::Unit
+                        }
+                        _ => {
+                            return Err(self.create_err(RuntimeErrorKind::NotAMap2, node));
+                        }
+                    }
+                };
+                result
+            }
+
+            IntrinsicFunction::Map2Has => {
+                let column_val = self.evaluate_expression(&arguments[0])?;
+                let row_val = self.evaluate_expression(&arguments[1])?;
+
+                let result = {
+                    let mut borrowed = value_ref.borrow();
+                    match &*borrowed {
+                        Value::Map2(map2) => {
+                            let has_cell = map2.has(&column_val, &row_val);
+                            Value::Bool(has_cell)
+                        }
+                        _ => {
+                            return Err(self.create_err(RuntimeErrorKind::NotAMap2, node));
+                        }
+                    }
+                };
+                result
+            }
+
+            IntrinsicFunction::Map2Get => {
+                let column_val = self.evaluate_expression(&arguments[0])?;
+                let row_val = self.evaluate_expression(&arguments[1])?;
+
+                let result = {
+                    let mut borrowed = value_ref.borrow();
+                    match &*borrowed {
+                        Value::Map2(map2) => {
+                            let cell_value = map2.get(&column_val, &row_val).unwrap();
+                            cell_value.borrow().clone()
+                        }
+                        _ => {
+                            return Err(self.create_err(RuntimeErrorKind::NotAMap2, node));
+                        }
+                    }
+                };
+                result
+            }
+
+            IntrinsicFunction::Map2GetColumn => {
+                let column_val = self.evaluate_expression(&arguments[0])?;
+
+                let result = {
+                    let mut borrowed = value_ref.borrow();
+                    match &*borrowed {
+                        Value::Map2(map2) => {
+                            let column_map = map2.get_column(&column_val).unwrap();
+                            Value::Map(Type::Unit, column_map.clone())
+                        }
+                        _ => {
+                            return Err(self.create_err(RuntimeErrorKind::NotAMap2, node));
+                        }
+                    }
+                };
+                result
+            }
+
+            IntrinsicFunction::Map2GetRow => {
+                let row_val = self.evaluate_expression(&arguments[0])?;
+
+                let result = {
+                    let mut borrowed = value_ref.borrow();
+                    match &*borrowed {
+                        Value::Map2(map2) => {
+                            let row_map = map2.get_row(&row_val).unwrap();
+                            Value::Map(Type::Unit, row_map.clone())
+                        }
+                        _ => {
+                            return Err(self.create_err(RuntimeErrorKind::NotAMap2, node));
                         }
                     }
                 };
@@ -1564,7 +1690,6 @@ impl<'a, C> Interpreter<'a, C> {
                     return Err(self.create_err(RuntimeErrorKind::ExpectedFloat, node));
                 }
             },
-
             IntrinsicFunction::FloatSign => match value_ref.borrow().clone() {
                 Value::Float(f) => {
                     let signum = if f.inner() < 0 {
@@ -1586,42 +1711,36 @@ impl<'a, C> Interpreter<'a, C> {
                     return Err(self.create_err(RuntimeErrorKind::ExpectedFloat, node));
                 }
             },
-
             IntrinsicFunction::FloatCos => match value_ref.borrow().clone() {
                 Value::Float(f) => Value::Float(f.cos()),
                 _ => {
                     return Err(self.create_err(RuntimeErrorKind::ExpectedFloat, node));
                 }
             },
-
             IntrinsicFunction::FloatAcos => match value_ref.borrow().clone() {
                 Value::Float(f) => Value::Float(f.acos()),
                 _ => {
                     return Err(self.create_err(RuntimeErrorKind::ExpectedFloat, node));
                 }
             },
-
             IntrinsicFunction::FloatSin => match value_ref.borrow().clone() {
                 Value::Float(f) => Value::Float(f.sin()),
                 _ => {
                     return Err(self.create_err(RuntimeErrorKind::ExpectedFloat, node));
                 }
             },
-
             IntrinsicFunction::FloatAsin => match value_ref.borrow().clone() {
                 Value::Float(f) => Value::Float(f.asin()),
                 _ => {
                     return Err(self.create_err(RuntimeErrorKind::ExpectedFloat, node));
                 }
             },
-
             IntrinsicFunction::FloatSqrt => match value_ref.borrow().clone() {
                 Value::Float(f) => Value::Float(f.sqrt()),
                 _ => {
                     return Err(self.create_err(RuntimeErrorKind::ExpectedFloat, node));
                 }
             },
-
             IntrinsicFunction::FloatMin => {
                 let min_value = self.evaluate_expression(&arguments[0])?;
                 match (value_ref.borrow().clone(), min_value) {
@@ -1676,14 +1795,12 @@ impl<'a, C> Interpreter<'a, C> {
                     return Err(self.create_err(RuntimeErrorKind::ExpectedFloat, node));
                 }
             },
-
             IntrinsicFunction::IntAbs => match value_ref.borrow().clone() {
                 Value::Int(i) => Value::Int(i.abs()),
                 _ => {
                     return Err(self.create_err(RuntimeErrorKind::ExpectedFloat, node));
                 }
             },
-
             IntrinsicFunction::IntClamp => {
                 let min_value = self.evaluate_expression(arguments[0])?;
                 let max_value = self.evaluate_expression(arguments[1])?;
@@ -1723,21 +1840,18 @@ impl<'a, C> Interpreter<'a, C> {
                     return Err(self.create_err(RuntimeErrorKind::ExpectedInt, node));
                 }
             },
-
             IntrinsicFunction::IntToFloat => match value_ref.borrow().clone() {
                 Value::Int(i) => Value::Float(Fp::from(i as i16)),
                 _ => {
                     return Err(self.create_err(RuntimeErrorKind::ExpectedInt, node));
                 }
             },
-
             IntrinsicFunction::StringLen => match value_ref.borrow().clone() {
                 Value::String(s) => Value::Int(s.len().try_into().expect("string len overflow")),
                 _ => {
                     return Err(self.create_err(RuntimeErrorKind::ExpectedString, node));
                 }
             },
-
             IntrinsicFunction::Float2Magnitude => match value_ref.borrow().clone() {
                 Value::Tuple(_tuple_ref, values) => {
                     if values.len() != 2 {
@@ -1772,7 +1886,6 @@ impl<'a, C> Interpreter<'a, C> {
                     return Err(self.create_err(RuntimeErrorKind::ExpectedTwoFloatTuple, node));
                 }
             },
-
             _ => todo!("{intrinsic_function:?} not implemented"),
         };
 

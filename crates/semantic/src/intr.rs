@@ -66,6 +66,7 @@ pub enum IntrinsicFunction {
     MapSubscriptMutCreateIfNeeded,
 
     // Map2
+    Map2Create,
     Map2Insert,
     Map2Remove,
     Map2Get,
@@ -169,6 +170,7 @@ impl fmt::Display for IntrinsicFunction {
             Self::MapIsEmpty => "map_is_empty",
 
             // Map2
+            Self::Map2Create => "map2_create",
             Self::Map2Insert => "map2_insert",
             Self::Map2Remove => "map2_remove",
             Self::Map2Has => "map2_has",

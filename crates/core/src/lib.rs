@@ -323,6 +323,42 @@ fn add_intrinsic_map2_functions(core_ns: &mut SymbolTable) {
             .unwrap();
     }
 
+    let self_value_value_to_value = Signature {
+        parameters: [
+            TypeForParameter {
+                name: "self".to_string(),
+                resolved_type: Type::Never,
+                is_mutable: false,
+                node: None,
+            },
+            TypeForParameter {
+                name: "x".to_string(),
+                resolved_type: Type::Never,
+                is_mutable: false,
+                node: None,
+            },
+            TypeForParameter {
+                name: "y".to_string(),
+                resolved_type: Type::Never,
+                is_mutable: false,
+                node: None,
+            },
+        ]
+        .into(),
+        return_type: Box::new(Type::Never),
+    };
+    let self_value_value_to_value_functions = [IntrinsicFunction::Map2Get];
+    for intrinsic_fn in self_value_value_to_value_functions {
+        let name = intrinsic_fn.to_string();
+        core_ns
+            .add_intrinsic_function(IntrinsicFunctionDefinition {
+                name,
+                intrinsic: intrinsic_fn,
+                signature: self_value_value_to_value.clone(),
+            })
+            .unwrap();
+    }
+
     let self_value_y_to_vec = Signature {
         parameters: [
             TypeForParameter {
@@ -427,6 +463,22 @@ fn add_intrinsic_map2_functions(core_ns: &mut SymbolTable) {
                 name,
                 intrinsic: intrinsic_fn,
                 signature: self_value_value_value_to_unit.clone(),
+            })
+            .unwrap();
+    }
+
+    let to_self = Signature {
+        parameters: [].into(),
+        return_type: Box::new(Type::Never),
+    };
+    let to_self_functions = [IntrinsicFunction::Map2Create];
+    for intrinsic_fn in to_self_functions {
+        let name = intrinsic_fn.to_string();
+        core_ns
+            .add_intrinsic_function(IntrinsicFunctionDefinition {
+                name,
+                intrinsic: intrinsic_fn,
+                signature: to_self.clone(),
             })
             .unwrap();
     }
