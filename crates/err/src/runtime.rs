@@ -26,7 +26,9 @@ pub fn build_runtime_error(err: &RuntimeError) -> Builder<usize> {
         RuntimeErrorKind::ArgumentIsNotMutable => {
             Report::build(Kind::Error, 104, "argument is not mutable", span)
         }
-        RuntimeErrorKind::ExpectedOptional => todo!(),
+        RuntimeErrorKind::ExpectedOptional => {
+            Report::build(Kind::Error, 104, "expected optional", span)
+        }
         RuntimeErrorKind::NonUniqueKeysInMapLiteralDetected => todo!(),
         RuntimeErrorKind::NotAnArray => todo!(),
         RuntimeErrorKind::NotSparseValue => todo!(),
