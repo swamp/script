@@ -341,7 +341,6 @@ impl FunctionCodeGen<'_> {
         arguments: &[ArgumentExpressionOrLocation],
         ctx: &Context,
     ) -> Result<(), Error> {
-        info!(?intrinsic_fn, "generate specific call for intrinsic");
         match intrinsic_fn {
             // Fixed
             IntrinsicFunction::FloatRound => todo!(),
@@ -581,7 +580,6 @@ impl FunctionCodeGen<'_> {
     ) -> Result<(FrameMemoryRegion, GeneratedExpressionResult), Error> {
         match &expr.kind {
             ExpressionKind::VariableAccess(var_ref) => {
-                info!(?var_ref, "variable access");
                 let frame_address = self
                     .variable_offsets
                     .get(&var_ref.unique_id_within_function)
@@ -814,8 +812,6 @@ impl FunctionCodeGen<'_> {
     ) -> Result<GeneratedExpressionResult, Error> {
         let left_source = self.gen_expression_for_access(&binary_operator.left)?;
         let right_source = self.gen_expression_for_access(&binary_operator.right)?;
-
-        info!(?left_source, ?right_source, "binary string");
 
         match binary_operator.kind {
             BinaryOperatorKind::Add => {
@@ -1125,7 +1121,6 @@ impl FunctionCodeGen<'_> {
             .zip(argument_comments)
         {
             let debug_addr = argument_target_ctx.target().addr();
-            info!(%debug_addr, "set argument");
             self.gen_argument(
                 argument_expr_or_loc,
                 &argument_target_ctx,

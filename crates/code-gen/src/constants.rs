@@ -27,7 +27,6 @@ impl ConstantsAllocator {
     ) -> ConstantMemoryAddress {
         let alignment: usize = alignment_enum.into();
         let start_addr = align(self.current_addr as usize, alignment) as u32;
-        info!(?start_addr, "getting constant memory");
 
         self.current_addr = start_addr + size.0 as u32;
 
@@ -78,7 +77,6 @@ impl ConstantsManager {
 
         let start_idx = addr.0 as usize;
         self.data[start_idx..start_idx + data.len()].copy_from_slice(data);
-        info!(?start_idx, "copying into data");
 
         ConstantMemoryAddress(addr.0)
     }
