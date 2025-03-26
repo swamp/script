@@ -190,6 +190,21 @@ pub fn exec_with_host_function<F>(
 ) where
     F: 'static + FnMut(HostArgs),
 {
+    let vm = exec_with_host_function_internal(code, expected_assembly, id, callback);
+    compare_hex_outputs(&vm.frame_memory()[..16], expected_hex);
+}
+
+/// # Panics
+///
+pub fn exec_with_host_function_internal<F>(
+    code: &str,
+    expected_assembly: &str,
+    id: &str,
+    callback: F,
+) -> Vm
+where
+    F: 'static + FnMut(HostArgs),
+{
     let (generator, program) = gen_internal_debug(code).expect("should work");
 
     let disassembler_output = disasm_instructions_no_color(
@@ -222,13 +237,30 @@ pub fn exec_with_host_function<F>(
 
     vm.execute();
 
-    compare_hex_outputs(&vm.stack_memory()[..16], expected_hex);
+    vm
+}
+
+/// # Panics
+///
+pub fn exec_with_host_function_show_heap<F>(
+    code: &str,
+    expected_assembly: &str,
+    start: usize,
+    count: usize,
+    expected_hex: &str,
+    id: &str,
+    callback: F,
+) where
+    F: 'static + FnMut(HostArgs),
+{
+    let vm = exec_with_host_function_internal(code, expected_assembly, id, callback);
+    compare_hex_outputs(&vm.heap_memory()[start..start + count], expected_hex);
 }
 
 fn exec_vars(code: &str, expected_hex: &str) {
     let vm = exec_internal_debug(code);
 
-    compare_hex_outputs(&vm.unwrap().stack_memory()[..16], expected_hex);
+    compare_hex_outputs(&vm.unwrap().frame_memory()[..16], expected_hex);
 }
 
 fn gen_code(code: &str, expected_output: &str) {
@@ -248,5 +280,5 @@ pub fn exec_show_constants(code: &str, expected_hex: &str, expected_constants: &
     let vm = exec_internal_debug(code).unwrap();
 
     compare_hex_outputs(&vm.stack_memory()[..16], expected_hex);
-    compare_hex_outputs(&vm.memory()[0xFFF0..], expected_constants);
+    compare_hex_outputs(&vm.constants()[..16], expected_constants);
 }

@@ -25,13 +25,13 @@ result = when a {
 > 0005: movlp $0008 $0004 4         ; copy overlapping the Some part into the new variable `a`
 
 ; true block `a + 7`
-    > 0006: ld32 $0060 00000007         ;    7                  
-    > 0007: sadd32 $000C $0008 $0060    ; result = a + 7
+    > 0006: ld32 $0160 00000007         ;    7                  
+    > 0007: sadd32 $000C $0008 $0160    ; result = a + 7
 > 0008: jmp @B                      ; jump over to end
 
 ; false block `-1`
-    > 0009: ld32 $0064 00000001         ; temp = 1
-    > 000A: sneg32 $000C $0064          ; result = -temp
+    > 0009: ld32 $0164 00000001         ; temp = 1
+    > 000A: sneg32 $000C $0164          ; result = -temp
 
 > 000B: hlt 
 ",
@@ -62,11 +62,11 @@ result = when a {
 > 0002: tst8 $0000
 > 0003: bnz @8
 > 0004: movlp $0008 $0004 4
-> 0005: ld32 $0060 00000007
-> 0006: sadd32 $000C $0008 $0060
+> 0005: ld32 $0160 00000007
+> 0006: sadd32 $000C $0008 $0160
 > 0007: jmp @A
-> 0008: ld32 $0064 00000001
-> 0009: sneg32 $000C $0064
+> 0008: ld32 $0164 00000001
+> 0009: sneg32 $000C $0164
 > 000A: hlt 
 ",
         "

@@ -1,4 +1,4 @@
-use swamp_script_vm_test::util::{exec_with_assembly, exec_with_host_function};
+use swamp_script_vm_test::util::{exec_with_assembly, exec_with_host_function_show_heap};
 #[test_log::test]
 fn gen_string() {
     exec_with_assembly(
@@ -12,7 +12,7 @@ result = "hello, world"
 > 0002: hlt
 ",
         "
-00000000  E0 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  ................
+00000000  10 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  ................
 
     ",
     );
@@ -20,7 +20,7 @@ result = "hello, world"
 
 #[test_log::test]
 fn string_with_print() {
-    exec_with_host_function(
+    exec_with_host_function_show_heap(
         r#"
 
 external fn print(output: String)
@@ -34,8 +34,11 @@ print("hello, world!")
 > 0002: host 0001 C
 > 0003: hlt
 ",
+        0x0,
+        32,
         "
-00000000  E0 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  ................
+00000000  68 65 6C 6C 6F 2C 20 77  6F 72 6C 64 21 00 00 00  hello, world!...
+00000010  00 00 00 00 0D 00 0D 00  00 00 00 00 00 00 00 00  ................
 
     ",
         "print",
@@ -48,7 +51,7 @@ print("hello, world!")
 
 #[test_log::test]
 fn string_with_emoji_print() {
-    exec_with_host_function(
+    exec_with_host_function_show_heap(
         r#"
 external fn print(extra_arg: Int, output: String)
 
@@ -62,8 +65,11 @@ print(23, "🐱if this works it is 🔥😎!")
 > 0003: host 0001 10
 > 0004: hlt
 ",
+        0,
+        32,
         "
-00000000  17 00 00 00 F8 00 00 00  00 00 00 00 00 00 00 00  ................
+00000000  F0 9F 90 B1 69 66 20 74  68 69 73 20 77 6F 72 6B  ....if this work
+00000010  73 20 69 74 20 69 73 20  F0 9F 94 A5 F0 9F 98 8E  s it is ........
 
     ",
         "print",
@@ -79,7 +85,7 @@ print(23, "🐱if this works it is 🔥😎!")
 
 #[test_log::test]
 fn string_append() {
-    exec_with_host_function(
+    exec_with_host_function_show_heap(
         r#"
 external fn print(extra_arg: Int, output: String)
 
@@ -95,8 +101,11 @@ print(23, "🐱if this works it is 🔥😎!" + "extra")
 > 0005: host 0001 10
 > 0006: hlt
 ",
+        0x40,
+        32,
         "
-00000000  17 00 00 00 38 01 00 00  00 00 00 00 00 00 00 00  ....8...........
+00000000  F0 9F 90 B1 69 66 20 74  68 69 73 20 77 6F 72 6B  ....if this work
+00000010  73 20 69 74 20 69 73 20  F0 9F 94 A5 F0 9F 98 8E  s it is ........
 
     ",
         "print",
@@ -126,7 +135,7 @@ r = a.len()
 > 0003: hlt 
 ",
         "
-00000000  F8 00 00 00 00 00 00 00  00 00 00 00 21 00 00 00  ............!...
+00000000  28 00 00 00 00 00 00 00  00 00 00 00 21 00 00 00  (...........!...
 
     ",
     );

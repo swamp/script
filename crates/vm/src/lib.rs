@@ -101,16 +101,19 @@ impl Drop for Vm {
 }
 
 impl Vm {
-    pub fn memory(&self) -> &[u8] {
-        unsafe { std::slice::from_raw_parts(self.stack_memory, self.stack_memory_size) }
-    }
-
     pub fn stack_memory(&self) -> &[u8] {
         unsafe { std::slice::from_raw_parts(self.stack_ptr(), self.stack_memory_size) }
     }
 
     pub fn frame_memory(&self) -> &[u8] {
         unsafe { std::slice::from_raw_parts(self.frame_ptr(), self.stack_memory_size) }
+    }
+    pub fn heap_memory(&self) -> &[u8] {
+        unsafe { std::slice::from_raw_parts(self.heap_memory, self.heap_memory_size) }
+    }
+
+    pub fn constants(&self) -> &[u8] {
+        unsafe { std::slice::from_raw_parts(self.constant_memory, self.heap_memory_size) }
     }
 }
 
@@ -147,7 +150,7 @@ impl Vm {
             constant_memory_size: setup.constant_memory.len(),
             heap_memory,
             heap_memory_size: setup.heap_memory_size,
-            heap_alloc_offset: 0x00cd, // TODO: Should be 0, value different from zero for debugging purposes
+            heap_alloc_offset: 0,
             stack_offset: 0,
             constant_alloc_offset: 0,
             frame_offset: 0,

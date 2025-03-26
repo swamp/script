@@ -34,6 +34,18 @@ use swamp_vm_types::{
 };
 use tracing::{error, info, trace};
 
+pub struct GeneratedExpressionResult {
+    pub has_set_bool_z_flag: bool,
+}
+
+impl Default for GeneratedExpressionResult {
+    fn default() -> Self {
+        Self {
+            has_set_bool_z_flag: false,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum ErrorKind {
     IllegalCompoundAssignment,
@@ -514,6 +526,18 @@ impl FunctionCodeGen<'_> {
         &mut self,
         expr: &Expression,
     ) -> Result<FrameMemoryRegion, Error> {
+        let (region, _gen_result) = self.gen_expression_for_access_internal(expr)?;
+
+        Ok(region)
+    }
+
+    /// # Panics
+    ///
+    #[allow(clippy::single_match_else)]
+    pub fn gen_expression_for_access_internal(
+        &mut self,
+        expr: &Expression,
+    ) -> Result<(FrameMemoryRegion, GeneratedExpressionResult), Error> {
         match &expr.kind {
             ExpressionKind::VariableAccess(var_ref) => {
                 info!(?var_ref, "variable access");
@@ -522,18 +546,24 @@ impl FunctionCodeGen<'_> {
                     .get(&var_ref.unique_id_within_function)
                     .unwrap();
 
-                return Ok(*frame_address);
+                return Ok((*frame_address, GeneratedExpressionResult::default()));
             }
 
             ExpressionKind::Literal(lit) => match lit {
                 Literal::Slice(slice_type, expressions) => {
-                    return self.gen_slice_literal(slice_type, expressions);
+                    return Ok((
+                        self.gen_slice_literal(slice_type, expressions)?,
+                        GeneratedExpressionResult::default(),
+                    ));
                 }
                 Literal::SlicePair(slice_pair_type, pairs) => {
                     let info = self.gen_slice_pair_literal(slice_pair_type, pairs);
-                    return Ok(FrameMemoryRegion::new(
-                        info.addr.0,
-                        MemorySize(info.element_count.0 * info.element_size.0),
+                    return Ok((
+                        FrameMemoryRegion::new(
+                            info.addr.0,
+                            MemorySize(info.element_count.0 * info.element_size.0),
+                        ),
+                        GeneratedExpressionResult::default(),
                     ));
                 }
                 _ => {}
@@ -543,9 +573,9 @@ impl FunctionCodeGen<'_> {
 
         let temp_ctx = self.temp_space_for_type(&expr.ty, "expression");
 
-        self.gen_expression(expr, &temp_ctx)?;
+        let expression_result = self.gen_expression(expr, &temp_ctx)?;
 
-        Ok(temp_ctx.target())
+        Ok((temp_ctx.target(), expression_result))
     }
 
     pub(crate) fn extra_frame_space_for_type(&mut self, ty: &Type) -> Context {
@@ -553,65 +583,85 @@ impl FunctionCodeGen<'_> {
         Context::new(target)
     }
 
-    pub fn gen_expression(&mut self, expr: &Expression, ctx: &Context) -> Result<(), Error> {
+    pub fn gen_expression(
+        &mut self,
+        expr: &Expression,
+        ctx: &Context,
+    ) -> Result<GeneratedExpressionResult, Error> {
         match &expr.kind {
             ExpressionKind::InterpolatedString(_) => todo!(),
 
-            ExpressionKind::ConstantAccess(constant_ref) => {
-                self.gen_constant_access(constant_ref, ctx)
-            }
-            ExpressionKind::TupleDestructuring(variables, tuple_types, tuple_expression) => {
-                self.gen_tuple_destructuring(variables, tuple_types, tuple_expression)
-            }
-            ExpressionKind::Range(start, end, mode) => self.gen_range(start, end, mode, ctx),
+            ExpressionKind::ConstantAccess(constant_ref) => self
+                .gen_constant_access(constant_ref, ctx)
+                .map(|_| GeneratedExpressionResult::default()),
+            ExpressionKind::TupleDestructuring(variables, tuple_types, tuple_expression) => self
+                .gen_tuple_destructuring(variables, tuple_types, tuple_expression)
+                .map(|_| GeneratedExpressionResult::default()),
+            ExpressionKind::Range(start, end, mode) => self
+                .gen_range(start, end, mode, ctx)
+                .map(|_| GeneratedExpressionResult::default()),
 
-            ExpressionKind::Assignment(target_mut_location_expr, source_expr) => {
-                self.gen_assignment(target_mut_location_expr, source_expr)
-            }
-            ExpressionKind::VariableAccess(variable_ref) => {
-                self.gen_variable_access(variable_ref, ctx)
-            }
-            ExpressionKind::InternalFunctionAccess(function) => {
-                self.internal_function_access(function, ctx)
-            }
+            ExpressionKind::Assignment(target_mut_location_expr, source_expr) => self
+                .gen_assignment(target_mut_location_expr, source_expr)
+                .map(|_| GeneratedExpressionResult::default()),
+            ExpressionKind::VariableAccess(variable_ref) => self
+                .gen_variable_access(variable_ref, ctx)
+                .map(|_| GeneratedExpressionResult::default()),
+            ExpressionKind::InternalFunctionAccess(function) => self
+                .internal_function_access(function, ctx)
+                .map(|_| GeneratedExpressionResult::default()),
             ExpressionKind::BinaryOp(operator) => self.gen_binary_operator(operator, ctx),
-            ExpressionKind::UnaryOp(operator) => self.gen_unary_operator(operator, ctx),
-            ExpressionKind::PostfixChain(start, chain) => self.gen_postfix_chain(start, chain, ctx),
-            ExpressionKind::VariableDefinition(variable, expression) => {
-                self.gen_variable_definition(variable, expression, ctx)
-            }
-            ExpressionKind::VariableReassignment(variable, expression) => {
-                self.gen_variable_reassignment(variable, expression, ctx)
-            }
-            ExpressionKind::StructInstantiation(struct_literal) => {
-                self.gen_struct_literal(struct_literal, ctx)
-            }
-            ExpressionKind::AnonymousStructLiteral(anon_struct) => {
-                self.gen_anonymous_struct_literal(anon_struct, ctx)
-            }
-            ExpressionKind::Literal(basic_literal) => self.gen_literal(basic_literal, ctx),
-            ExpressionKind::Option(maybe_option) => {
-                self.gen_option_expression(maybe_option.as_deref(), ctx)
-            }
-            ExpressionKind::ForLoop(a, b, c) => self.gen_for_loop(a, b, c),
-            ExpressionKind::WhileLoop(condition, expression) => {
-                self.gen_while_loop(condition, expression, ctx)
-            }
-            ExpressionKind::Block(expressions) => self.gen_block(expressions, ctx),
-            ExpressionKind::Match(match_expr) => self.gen_match(match_expr, ctx),
-            ExpressionKind::Guard(guards) => self.gen_guard(guards, ctx),
-            ExpressionKind::If(conditional, true_expr, false_expr) => {
-                self.gen_if(conditional, true_expr, false_expr.as_deref(), ctx)
-            }
-            ExpressionKind::When(bindings, true_expr, false_expr) => {
-                self.gen_when(bindings, true_expr, false_expr.as_deref(), ctx)
-            }
-            ExpressionKind::CompoundAssignment(target_location, operator_kind, source_expr) => {
-                self.compound_assignment(target_location, operator_kind, source_expr, ctx)
-            }
-            ExpressionKind::IntrinsicCallEx(intrinsic_fn, arguments) => {
-                self.gen_intrinsic_call_ex(intrinsic_fn, arguments, ctx)
-            }
+            ExpressionKind::UnaryOp(operator) => self
+                .gen_unary_operator(operator, ctx)
+                .map(|_| GeneratedExpressionResult::default()),
+            ExpressionKind::PostfixChain(start, chain) => self
+                .gen_postfix_chain(start, chain, ctx)
+                .map(|_| GeneratedExpressionResult::default()),
+            ExpressionKind::VariableDefinition(variable, expression) => self
+                .gen_variable_definition(variable, expression, ctx)
+                .map(|_| GeneratedExpressionResult::default()),
+            ExpressionKind::VariableReassignment(variable, expression) => self
+                .gen_variable_reassignment(variable, expression, ctx)
+                .map(|_| GeneratedExpressionResult::default()),
+            ExpressionKind::StructInstantiation(struct_literal) => self
+                .gen_struct_literal(struct_literal, ctx)
+                .map(|_| GeneratedExpressionResult::default()),
+            ExpressionKind::AnonymousStructLiteral(anon_struct) => self
+                .gen_anonymous_struct_literal(anon_struct, ctx)
+                .map(|_| GeneratedExpressionResult::default()),
+            ExpressionKind::Literal(basic_literal) => self
+                .gen_literal(basic_literal, ctx)
+                .map(|_| GeneratedExpressionResult::default()),
+            ExpressionKind::Option(maybe_option) => self
+                .gen_option_expression(maybe_option.as_deref(), ctx)
+                .map(|_| GeneratedExpressionResult::default()),
+            ExpressionKind::ForLoop(a, b, c) => self
+                .gen_for_loop(a, b, c)
+                .map(|_| GeneratedExpressionResult::default()),
+            ExpressionKind::WhileLoop(condition, expression) => self
+                .gen_while_loop(condition, expression, ctx)
+                .map(|_| GeneratedExpressionResult::default()),
+            ExpressionKind::Block(expressions) => self
+                .gen_block(expressions, ctx)
+                .map(|_| GeneratedExpressionResult::default()),
+            ExpressionKind::Match(match_expr) => self
+                .gen_match(match_expr, ctx)
+                .map(|_| GeneratedExpressionResult::default()),
+            ExpressionKind::Guard(guards) => self
+                .gen_guard(guards, ctx)
+                .map(|_| GeneratedExpressionResult::default()),
+            ExpressionKind::If(conditional, true_expr, false_expr) => self
+                .gen_if(conditional, true_expr, false_expr.as_deref(), ctx)
+                .map(|_| GeneratedExpressionResult::default()),
+            ExpressionKind::When(bindings, true_expr, false_expr) => self
+                .gen_when(bindings, true_expr, false_expr.as_deref(), ctx)
+                .map(|_| GeneratedExpressionResult::default()),
+            ExpressionKind::CompoundAssignment(target_location, operator_kind, source_expr) => self
+                .compound_assignment(target_location, operator_kind, source_expr, ctx)
+                .map(|_| GeneratedExpressionResult::default()),
+            ExpressionKind::IntrinsicCallEx(intrinsic_fn, arguments) => self
+                .gen_intrinsic_call_ex(intrinsic_fn, arguments, ctx)
+                .map(|_| GeneratedExpressionResult::default()),
             // --------- Not high prio
             ExpressionKind::CoerceOptionToBool(_) => todo!(),
             ExpressionKind::FunctionValueCall(_, _, _) => todo!(),
@@ -654,24 +704,20 @@ impl FunctionCodeGen<'_> {
         &mut self,
         binary_operator: &BinaryOperator,
         ctx: &Context,
-    ) -> Result<(), Error> {
+    ) -> Result<GeneratedExpressionResult, Error> {
         match (&binary_operator.left.ty, &binary_operator.right.ty) {
-            (Type::Int, Type::Int) => self.gen_binary_operator_i32(binary_operator, ctx)?,
-            (Type::Bool, Type::Bool) => self.gen_binary_operator_bool(binary_operator)?,
-            (Type::String, Type::String) => {
-                self.gen_binary_operator_string(binary_operator, ctx)?
-            }
+            (Type::Int, Type::Int) => self.gen_binary_operator_i32(binary_operator, ctx),
+            (Type::Bool, Type::Bool) => self.gen_binary_operator_bool(binary_operator),
+            (Type::String, Type::String) => self.gen_binary_operator_string(binary_operator, ctx),
             _ => todo!(),
         }
-
-        Ok(())
     }
 
     fn gen_binary_operator_i32(
         &mut self,
         binary_operator: &BinaryOperator,
         ctx: &Context,
-    ) -> Result<(), Error> {
+    ) -> Result<GeneratedExpressionResult, Error> {
         let left_source = self.gen_expression_for_access(&binary_operator.left)?;
         let right_source = self.gen_expression_for_access(&binary_operator.right)?;
 
@@ -715,14 +761,16 @@ impl FunctionCodeGen<'_> {
             BinaryOperatorKind::RangeExclusive => todo!(),
         }
 
-        Ok(())
+        Ok(GeneratedExpressionResult {
+            has_set_bool_z_flag: true,
+        })
     }
 
     fn gen_binary_operator_string(
         &mut self,
         binary_operator: &BinaryOperator,
         ctx: &Context,
-    ) -> Result<(), Error> {
+    ) -> Result<GeneratedExpressionResult, Error> {
         let left_source = self.gen_expression_for_access(&binary_operator.left)?;
         let right_source = self.gen_expression_for_access(&binary_operator.right)?;
 
@@ -743,14 +791,19 @@ impl FunctionCodeGen<'_> {
             _ => panic!("illegal string operator"),
         }
 
-        Ok(())
+        Ok(GeneratedExpressionResult {
+            has_set_bool_z_flag: false,
+        })
     }
 
-    fn gen_binary_operator_bool(&mut self, binary_operator: &BinaryOperator) -> Result<(), Error> {
+    fn gen_binary_operator_bool(
+        &mut self,
+        binary_operator: &BinaryOperator,
+    ) -> Result<GeneratedExpressionResult, Error> {
         match binary_operator.kind {
             BinaryOperatorKind::LogicalOr => {
                 // this updates the z flag
-                self.gen_boolean_access(&binary_operator.left);
+                self.gen_boolean_access_set_z_flag(&binary_operator.left);
 
                 let jump_after_patch = self
                     .state
@@ -758,13 +811,13 @@ impl FunctionCodeGen<'_> {
                     .add_jmp_if_equal_placeholder("skip rhs `or` expression");
 
                 // this updates the z flag
-                self.gen_boolean_access(&binary_operator.right);
+                self.gen_boolean_access_set_z_flag(&binary_operator.right);
 
                 self.state.builder.patch_jump_here(jump_after_patch);
             }
             BinaryOperatorKind::LogicalAnd => {
                 // this updates the z flag
-                self.gen_boolean_access(&binary_operator.left);
+                self.gen_boolean_access_set_z_flag(&binary_operator.left);
 
                 let jump_after_patch = self
                     .state
@@ -772,7 +825,7 @@ impl FunctionCodeGen<'_> {
                     .add_jmp_if_not_equal_placeholder("skip rhs `and` expression");
 
                 // this updates the z flag
-                self.gen_boolean_access(&binary_operator.right);
+                self.gen_boolean_access_set_z_flag(&binary_operator.right);
 
                 self.state.builder.patch_jump_here(jump_after_patch);
             }
@@ -781,7 +834,9 @@ impl FunctionCodeGen<'_> {
             }
         }
 
-        Ok(())
+        Ok(GeneratedExpressionResult {
+            has_set_bool_z_flag: true,
+        })
     }
 
     fn gen_condition_context(
@@ -799,22 +854,22 @@ impl FunctionCodeGen<'_> {
         Ok((condition_ctx, jump_on_false_condition))
     }
 
-    fn gen_boolean_access(&mut self, condition: &Expression) {
-        let _frame_memory_region = self.gen_expression_for_access(&condition);
-        /*
-        // HACK:
-        if frame_memory_region.size.0 == 1 {
+    fn gen_boolean_access_set_z_flag(&mut self, condition: &Expression) -> Result<(), Error> {
+        let (frame_memory_region, gen_result) =
+            self.gen_expression_for_access_internal(condition)?;
+
+        if !gen_result.has_set_bool_z_flag {
             self.state.builder.add_tst8(
                 frame_memory_region.addr,
                 "convert to boolean expression (update z flag)",
             );
         }
 
-         */
+        Ok(())
     }
 
-    fn gen_boolean_expression(&mut self, condition: &BooleanExpression) {
-        self.gen_boolean_access(&condition.expression);
+    fn gen_boolean_expression(&mut self, condition: &BooleanExpression) -> Result<(), Error> {
+        self.gen_boolean_access_set_z_flag(&condition.expression)
     }
 
     fn gen_if(
@@ -1038,12 +1093,22 @@ impl FunctionCodeGen<'_> {
             )?;
         }
 
-        let last_addr = argument_targets[argument_targets.len() - 1]
-            .addr()
-            .add(argument_targets[argument_targets.len() - 1].target_size());
+        let memory_size = argument_targets
+            .last()
+            .map_or(MemorySize(0), |last_target| {
+                MemorySize(
+                    last_target.addr().add(last_target.target_size()).0
+                        - argument_targets[0].addr().0,
+                )
+            });
+
+        let start_addr = argument_targets
+            .first()
+            .map_or(FrameMemoryAddress(0), |first| first.addr());
+
         Ok(FrameMemoryRegion {
-            addr: argument_targets[0].addr(),
-            size: MemorySize(last_addr.0 - argument_targets[0].addr().0),
+            addr: start_addr,
+            size: memory_size,
         })
     }
 
@@ -1523,7 +1588,7 @@ impl FunctionCodeGen<'_> {
         element_type: &Type,
         vector_expr: Expression,
         ctx: &mut Context,
-    ) -> Result<(), Error> {
+    ) -> Result<GeneratedExpressionResult, Error> {
         // get the vector that is referenced
         let vector_ctx = self.temp_space_for_type(&vector_expr.ty, "vector space");
         self.gen_expression(&vector_expr, &vector_ctx)
@@ -2089,7 +2154,7 @@ impl FunctionCodeGen<'_> {
             };
 
             let maybe_guard_skip = if let Some(guard) = maybe_guard {
-                self.gen_boolean_expression(guard);
+                self.gen_boolean_expression(guard)?;
                 // z flag should have been updated now
 
                 Some(
