@@ -1868,18 +1868,23 @@ impl<'a> Analyzer<'a> {
         variable: &swamp_script_ast::Variable,
         source_expression: &swamp_script_ast::MutableOrImmutableExpression,
     ) -> Result<Expression, Error> {
-        let any_argument_context = TypeContext::new_anything_argument();
+        let maybe_found_variable = self.try_find_variable(&variable.name);
+
+        let required_type = maybe_found_variable
+            .as_ref()
+            .map(|found_variable| found_variable.resolved_type.clone());
+
+        let context = TypeContext::new_unsure_argument(required_type.as_ref());
+
         let source_expr = self.analyze_mut_or_immutable_expression(
             source_expression,
-            &any_argument_context,
+            &context,
             LocationSide::Rhs,
         )?;
         let ty = source_expr.ty().clone();
         if !ty.is_concrete() {
             return Err(self.create_err(ErrorKind::VariableTypeMustBeConcrete, &variable.name));
         }
-
-        let maybe_found_variable = self.try_find_variable(&variable.name);
 
         let kind: ExpressionKind = if let Some(found_var) = maybe_found_variable {
             if !found_var.is_mutable() {
