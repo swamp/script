@@ -85,12 +85,6 @@ impl FunctionCodeGen<'_> {
                             &anonymous_struct_type.field_name_sorted_fields,
                             *field_index,
                         );
-                    info!(
-                        ?field_index,
-                        ?memory_offset,
-                        ?memory_size,
-                        "lookup struct field",
-                    );
                     frame_relative_base_address = FrameMemoryRegion::new(
                         frame_relative_base_address.addr.advance(memory_offset),
                         memory_size,

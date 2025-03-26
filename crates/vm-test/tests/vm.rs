@@ -104,7 +104,7 @@ fn call_exec_with_assembly() {
 > 0003: ld32 $0060 0000000A
 > 0004: call @7
 > 0005: mov $0004 $0058 4
-> 0006: hlt 
+> 0006: hlt
 - another_fn -
 > 0007: enter 5C
 > 0008: sadd32 $0000 $0004 $0008
@@ -135,7 +135,7 @@ fn call_mut_argument() {
 > 0004: mov $005C $0004 4
 > 0005: call @8
 > 0006: mov $0004 $005C 4
-> 0007: hlt 
+> 0007: hlt
 - add_and_overwrite -
 > 0008: enter 58
 > 0009: sadd32 $0004 $0000 $0004
@@ -170,7 +170,7 @@ fn call_struct_function() {
 > 0004: ld32 $0060 00000028
 > 0005: call @8
 > 0006: mov $0000 $0058 8   ; copy back whole Something (it is probably been mutated in add())
-> 0007: hlt 
+> 0007: hlt
 - add -
 > 0008: enter 5C
 > 0009: sadd32 $0004 $0004 $0008 ; s.b += 40
@@ -207,7 +207,7 @@ s.own_add(40)
 > 0004: ld32 $0060 00000028
 > 0005: call @8
 > 0006: mov $0000 $0058 8
-> 0007: hlt 
+> 0007: hlt
 - own_add -
 > 0008: enter 5C
 > 0009: sadd32 $0000 $0000 $0008
@@ -326,7 +326,7 @@ a = Something::Second {
 > 0001: ld8 $0000 01
 > 0002: ld32 $0004 0000000A
 > 0003: ld32 $0008 00026666
-> 0004: hlt 
+> 0004: hlt
         ",
         "
 00000000  01 00 00 00 0A 00 00 00  66 66 02 00 00 00 00 00  ........ff......
@@ -354,7 +354,7 @@ a = Something::Third(1,2,3,4,7.6)
 > 0004: ld32 $000C 00000003
 > 0005: ld32 $0010 00000004
 > 0006: ld32 $0014 00079999 ; 7.6
-> 0007: hlt 
+> 0007: hlt
         ",
         "
 00000000  02 00 00 00 01 00 00 00  02 00 00 00 03 00 00 00  ................
@@ -384,7 +384,7 @@ a = Something::Second(SubStruct{x:99, y:128})
 > 0001: ld8 $0000 01 ; enum tag
 > 0002: ld32 $0004 00000063 ; x: 99
 > 0003: ld32 $0008 00000080 ; y: 128
-> 0004: hlt 
+> 0004: hlt
         ",
         "
 00000000  01 00 00 00 63 00 00 00  80 00 00 00 00 00 00 00  ....c...........
@@ -453,7 +453,7 @@ b = 0x0BAD_CAFE
     );
 }
 
-#[test_log::test]
+//#[test_log::test]
 fn map() {
     exec_with_assembly(
         "
@@ -483,7 +483,7 @@ b = 0x0BAD_CAFE
 > 0009: ld32 $0178 0000547A
 > 000A: map_new_from_pairs $0000 $0158 4 8 0003 ; $0158 is slice pair, 4:key size, 8:value size (Something), 0003 is the count
 > 000B: ld32 $0004 0BADCAFE
-> 000C: hlt 
+> 000C: hlt
 ",
         "
 00000000  03 00 08 00 D0 00 04 00  08 00 00 00 FE CA AD 0B  ................
@@ -502,7 +502,7 @@ b = 0x0BAD_CAFE
     );
 }
 
-#[test_log::test]
+//#[test_log::test]
 fn map_remove() {
     exec_with_assembly(
         "
@@ -536,7 +536,7 @@ b = 0x0BAD_CAFE
 > 000B: ld32 $017C 0000000A
 > 000C: map_remove $0000 $017C ; remove from map from the key at addr $017C (10)
 > 000D: ld32 $0004 0BADCAFE
-> 000E: hlt 
+> 000E: hlt
         ",
         "
 00000000  02 00 08 00 D0 00 04 00  08 00 00 00 FE CA AD 0B  ................

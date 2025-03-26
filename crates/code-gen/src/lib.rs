@@ -553,7 +553,6 @@ impl FunctionCodeGen<'_> {
 
     pub fn temp_memory_region_for_type(&mut self, ty: &Type, comment: &str) -> FrameMemoryRegion {
         let new_target_info = reserve_space_for_type(ty, &mut self.temp_allocator);
-        info!(?new_target_info, "creating temporary space");
         new_target_info
     }
 
@@ -1106,7 +1105,6 @@ impl FunctionCodeGen<'_> {
                 &mut self.argument_allocator,
             );
             let arg_ctx = Context::new(argument_target);
-            info!(?index, %argument_target.addr, "layout argument");
             argument_targets.push(arg_ctx);
             argument_comments.push(format!("argument {}", type_for_parameter.name));
         }
@@ -1223,12 +1221,6 @@ impl FunctionCodeGen<'_> {
                             &anonymous_struct.field_name_sorted_fields,
                             *field_index,
                         );
-                    info!(
-                        ?field_index,
-                        ?memory_offset,
-                        ?memory_size,
-                        "lookup struct field",
-                    );
                     start_source = FrameMemoryRegion::new(
                         start_source.addr.advance(memory_offset),
                         memory_size,
@@ -1243,13 +1235,13 @@ impl FunctionCodeGen<'_> {
                                     Some(start_source),
                                     arguments,
                                     ctx,
-                                );
+                                )?;
                             } else {
                                 self.gen_arguments(
                                     &internal_fn.signature,
                                     Some(start_source),
                                     arguments,
-                                );
+                                )?;
                                 self.state.add_call(
                                     internal_fn,
                                     &format!("frame size: {}", self.frame_size),
@@ -1270,7 +1262,7 @@ impl FunctionCodeGen<'_> {
                                     &internal_fn.signature,
                                     Some(start_source),
                                     arguments,
-                                );
+                                )?;
                             }
                         }
                         Function::External(external_fn) => {

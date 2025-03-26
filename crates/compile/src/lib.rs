@@ -368,7 +368,6 @@ pub fn compile_string(script: &str) -> Result<(Program, ModuleRef, SourceMap), S
 
     let program = bootstrap_and_compile(&mut source_map, &resolved_path_str)?;
     let main_module = program.modules.get(&resolved_path_str).unwrap().clone();
-    info!(?main_module, "main module");
 
     Ok((program, main_module, source_map))
 }
