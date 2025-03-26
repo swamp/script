@@ -1,33 +1,33 @@
 [package]
 name = "swamp-script-compile"
-version = "0.1.6"
+version = "0.1.7"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/swamp/script"
 description = "Compile utility functions"
 
 [dependencies]
-swamp-script-source-map = { path = "../source-map", version = "0.1.6" }
+swamp-script-source-map = { path = "../source-map", version = "0.1.7" }
 # Ast and Parser
-swamp-script-parser = { path = "../parser", version = "0.1.6" }
-swamp-script-ast = { path = "../ast", version = "0.1.6" }
+swamp-script-parser = { path = "../parser", version = "0.1.7" }
+swamp-script-ast = { path = "../ast", version = "0.1.7" }
 
 # Semantic and Analyzer
-swamp-script-semantic = { path = "../semantic", version = "0.1.6" }
-swamp-script-analyzer = { path = "../analyzer", version = "0.1.6" }
-swamp-script-error-report = { path = "../err", version = "0.1.6" }
+swamp-script-semantic = { path = "../semantic", version = "0.1.7" }
+swamp-script-analyzer = { path = "../analyzer", version = "0.1.7" }
+swamp-script-error-report = { path = "../err", version = "0.1.7" }
 
-swamp-script-modules = { path = "../modules", version = "0.1.6" }
+swamp-script-modules = { path = "../modules", version = "0.1.7" }
 
 # Core and Std
-swamp-script-core = { path = "../core", version = "0.1.6" }
-swamp-script-std = { path = "../std", version = "0.1.6" }
+swamp-script-core = { path = "../core", version = "0.1.7" }
+swamp-script-std = { path = "../std", version = "0.1.7" }
 
-swamp-script-pretty-print = { path = "../pretty-print", version = "0.1.6" }
+swamp-script-pretty-print = { path = "../pretty-print", version = "0.1.7" }
 
-swamp-script-dep-loader = { path = "../dep-loader", version = "0.1.6" }
-swamp-script-eval-loader = { path = "../eval-loader", version = "0.1.6" }
-swamp-script-source-map-lookup = { path = "../source-map-lookup", version = "0.1.6" }
+swamp-script-dep-loader = { path = "../dep-loader", version = "0.1.7" }
+swamp-script-eval-loader = { path = "../eval-loader", version = "0.1.7" }
+swamp-script-source-map-lookup = { path = "../source-map-lookup", version = "0.1.7" }
 
 tracing = "0.1.40"
 regex = "1.11.1"
