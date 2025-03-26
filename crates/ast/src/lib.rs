@@ -511,6 +511,17 @@ pub enum EnumVariantLiteral {
     ),
 }
 
+impl EnumVariantLiteral {
+    #[must_use]
+    pub const fn node(&self) -> &Node {
+        match self {
+            EnumVariantLiteral::Simple(ident, _) => &ident.name.0,
+            EnumVariantLiteral::Tuple(ident, _, _) => &ident.name.0,
+            EnumVariantLiteral::Struct(ident, _, _, _) => &ident.name.0,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum EnumVariantType {
     Simple(Node),

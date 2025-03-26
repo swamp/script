@@ -49,7 +49,7 @@ pub enum ErrorKind {
     ExpectedOptional,
     MapKeyTypeMismatch { expected: Type, found: Type },
     MapValueTypeMismatch { expected: Type, found: Type },
-    IncompatibleTypes(Type, Type),
+    IncompatibleTypes { expected: Type, found: Type },
     UnknownMemberFunction,
     ExpressionsNotAllowedInLetPattern,
     UnknownField,

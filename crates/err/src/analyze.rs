@@ -76,10 +76,12 @@ pub fn build_analyzer_error(err: &Error) -> Builder<usize> {
         ErrorKind::MapValueTypeMismatch { .. } => {
             Report::build(Kind::Error, 22, "map value type mismatch", span)
         }
-        ErrorKind::IncompatibleTypes(_a, _b) => {
+        ErrorKind::IncompatibleTypes { expected, found } => {
             Report::build(Kind::Error, 23, "incompatible types", span)
-            //.with_label("first_type", a.clone())
-            //.with_note(&format!("second_type {b:?}"))
+                //.with_label("first_type", a.clone())
+                .with_note(&format!(
+                    "required_type: {expected}, encountered type: {found}"
+                ))
         }
         ErrorKind::UnknownMemberFunction => {
             Report::build(Kind::Error, 24, "unknown member function", span)

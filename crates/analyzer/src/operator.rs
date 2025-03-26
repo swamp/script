@@ -52,7 +52,10 @@ impl Analyzer<'_> {
                 if !left_type.compatible_with(&right_type) {
                     debug!(?left_type, ?right_type, "type mismatch in comparison");
                     return Err(self.create_err(
-                        ErrorKind::IncompatibleTypes(left_type, right_type),
+                        ErrorKind::IncompatibleTypes {
+                            expected: left_type,
+                            found: right_type,
+                        },
                         &ast_op.node,
                     ));
                 }
@@ -72,7 +75,10 @@ impl Analyzer<'_> {
                 if !left_type.compatible_with(&right_type) {
                     debug!(?left_type, ?right_type, "type mismatch in operation");
                     return Err(self.create_err_resolved(
-                        ErrorKind::IncompatibleTypes(left_type, right_type),
+                        ErrorKind::IncompatibleTypes {
+                            expected: left_type,
+                            found: right_type,
+                        },
                         &node,
                     ));
                 }

@@ -81,7 +81,10 @@ impl Analyzer<'_> {
                             "incompatible types new_from_slice"
                         );
                         return Err(self.create_err(
-                            ErrorKind::IncompatibleTypes(slice_type, required_type.clone()),
+                            ErrorKind::IncompatibleTypes {
+                                expected: required_type.clone(),
+                                found: slice_type,
+                            },
                             ast_node,
                         ));
                     }
@@ -149,7 +152,10 @@ impl Analyzer<'_> {
                         self.create_expr(call_kind, return_type, ast_node)
                     } else {
                         return Err(self.create_err(
-                            ErrorKind::IncompatibleTypes(slice_pair_type, required_type.clone()),
+                            ErrorKind::IncompatibleTypes {
+                                expected: required_type.clone(),
+                                found: slice_pair_type,
+                            },
                             ast_node,
                         ));
                     }
@@ -237,9 +243,20 @@ impl Analyzer<'_> {
                         swamp_script_ast::EnumVariantLiteral::Tuple(
                             _node,
                             _variant,
-                            expressions,
+                            ast_expressions,
                         ) => {
-                            let resolved = self.analyze_argument_expressions(None, expressions)?;
+                            let EnumVariantType::Tuple(tuple_data) = &variant_ref else {
+                                return Err(self.create_err(
+                                    ErrorKind::WrongEnumVariantContainer(variant_ref),
+                                    &ast_node,
+                                ));
+                            };
+
+                            let resolved = self.analyze_tuple_type(
+                                &enum_literal.node(),
+                                &tuple_data.fields_in_order,
+                                ast_expressions,
+                            )?;
                             EnumLiteralData::Tuple(resolved)
                         }
                         swamp_script_ast::EnumVariantLiteral::Struct(
@@ -328,6 +345,26 @@ impl Analyzer<'_> {
         }
 
         Ok((tuple_types, expressions))
+    }
+
+    fn analyze_tuple_type(
+        &mut self,
+        node: &swamp_script_ast::Node,
+        expected_types: &Vec<Type>,
+        ast_expressions: &Vec<swamp_script_ast::Expression>,
+    ) -> Result<Vec<Expression>, Error> {
+        if ast_expressions.len() != expected_types.len() {
+            return Err(self.create_err(ErrorKind::WrongNumberOfArguments(0, 0), node));
+        }
+
+        let mut expressions = Vec::new();
+        for (expected_type, expr) in expected_types.iter().zip(ast_expressions) {
+            let context = TypeContext::new_argument(expected_type);
+            let resolved_expr = self.analyze_expression(expr, &context)?;
+            expressions.push(resolved_expr);
+        }
+
+        Ok(expressions)
     }
 
     fn analyze_slice_pair_literal(

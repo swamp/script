@@ -1474,7 +1474,10 @@ impl<'a> Analyzer<'a> {
             |encountered_type| {
                 if matches!(encountered_type, Type::Never) {
                     Err(self.create_err(
-                        ErrorKind::IncompatibleTypes(encountered_type.clone(), encountered_type),
+                        ErrorKind::IncompatibleTypes {
+                            expected: Type::Never,
+                            found: encountered_type,
+                        },
                         &scrutinee.expression.node,
                     ))
                 } else {
@@ -1546,7 +1549,10 @@ impl<'a> Analyzer<'a> {
 
         if !ty.compatible_with(expected_condition_type) {
             return Err(self.create_err(
-                ErrorKind::IncompatibleTypes(ty, expected_condition_type.clone()),
+                ErrorKind::IncompatibleTypes {
+                    expected: expected_condition_type.clone(),
+                    found: ty,
+                },
                 node,
             ));
         }
@@ -1892,7 +1898,10 @@ impl<'a> Analyzer<'a> {
             }
             if !found_var.resolved_type.assignable_type(&ty) {
                 return Err(self.create_err(
-                    ErrorKind::IncompatibleTypes(found_var.resolved_type.clone(), ty.clone()),
+                    ErrorKind::IncompatibleTypes {
+                        expected: ty,
+                        found: found_var.resolved_type.clone(),
+                    },
                     &variable.name,
                 ));
             }
@@ -2076,7 +2085,10 @@ impl<'a> Analyzer<'a> {
         if let Some(found_expected_type) = context.expected_type {
             if !ty.compatible_with(found_expected_type) {
                 return Err(self.create_err(
-                    ErrorKind::IncompatibleTypes(ty, found_expected_type.clone()),
+                    ErrorKind::IncompatibleTypes {
+                        expected: found_expected_type.clone(),
+                        found: ty,
+                    },
                     &chain.base.node,
                 ));
             }
@@ -2458,7 +2470,10 @@ impl<'a> Analyzer<'a> {
 
         error!(?expected_type, ?encountered_type, "incompatible types");
         Err(self.create_err(
-            ErrorKind::IncompatibleTypes(expected_type.clone(), encountered_type.clone()),
+            ErrorKind::IncompatibleTypes {
+                expected: expected_type.clone(),
+                found: encountered_type.clone(),
+            },
             &node,
         ))
     }
