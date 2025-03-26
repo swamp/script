@@ -1,4 +1,5 @@
 use seq_map::SeqMap;
+use std::ptr;
 use swamp_script_code_gen::alloc::ConstantMemoryRegion;
 use swamp_script_code_gen::alloc_util::type_size_and_alignment;
 use swamp_script_code_gen::{CodeGenState, Error, GenOptions};
@@ -12,36 +13,12 @@ use swamp_vm_disasm::{disasm_instructions_color, disasm_instructions_no_color};
 use swamp_vm_types::ConstantMemoryAddress;
 use tracing::info;
 
-pub fn execute_constants(
-    code_gen_state: &mut CodeGenState,
-    vm: &mut Vm,
-) -> Result<SeqMap<ConstantId, ConstantMemoryRegion>, Error> {
-    let mut constant_offsets = SeqMap::default();
-
-    for (constant_id, constant_info) in code_gen_state.constant_functions() {
-        let (size, _alignment) = type_size_and_alignment(&constant_info.constant_ref.resolved_type);
-
-        vm.execute_from_ip(&constant_info.ip);
-
-        let constant_offset = vm.allocate_constant(size.0 as usize);
-        let constant_region = ConstantMemoryRegion {
-            addr: ConstantMemoryAddress(constant_offset),
-            size,
-        };
-        constant_offsets
-            .insert(*constant_id, constant_region)
-            .unwrap();
-    }
-
-    Ok(constant_offsets)
-}
-
 fn gen_internal(code: &str) -> Result<(CodeGenState, Program), Error> {
     let (program, main_module, _source_map) = compile_string(code).unwrap();
 
     let mut code_gen = CodeGenState::new();
-    code_gen.gen_constants_in_order(&program.state.constants_in_dependency_order)?;
-    //let constants = execute_constants(&program.state)?;
+
+    code_gen.reserve_space_for_constants(&program.state.constants_in_dependency_order)?;
 
     let debug_expr = main_module.main_expression.as_ref().unwrap();
     info!(?debug_expr, "MAIN EXPRESSION");
@@ -88,6 +65,10 @@ fn gen_internal(code: &str) -> Result<(CodeGenState, Program), Error> {
         }
     }
 
+    code_gen.gen_constants_expression_functions_in_order(
+        &program.state.constants_in_dependency_order,
+    )?;
+
     code_gen.finalize();
 
     Ok((code_gen, program))
@@ -107,12 +88,35 @@ fn gen_internal_debug(code: &str) -> Result<(CodeGenState, Program), Error> {
 }
 
 fn exec_code_gen_state(code_gen_state: CodeGenState) -> Vm {
-    let (instructions, constants) = code_gen_state.take_instructions_and_constants();
+    let (instructions, mut constants_memory, constant_functions) =
+        code_gen_state.take_instructions_and_constants();
+
+    for (_constant_id, constant_func) in constant_functions {
+        let setup = VmSetup {
+            frame_memory_size: 1024,
+            heap_memory_size: 1024,
+            constant_memory: constants_memory.clone(),
+        };
+
+        let mut vm = Vm::new(instructions.clone(), setup);
+
+        vm.execute_from_ip(&constant_func.ip);
+
+        unsafe {
+            ptr::copy_nonoverlapping(
+                vm.frame_memory().as_ptr(),
+                constants_memory
+                    .as_mut_ptr()
+                    .add(constant_func.target_constant_memory.addr.0 as usize),
+                constant_func.target_constant_memory.size.0 as usize,
+            );
+        }
+    }
 
     let setup = VmSetup {
         frame_memory_size: 1024,
         heap_memory_size: 1024,
-        constant_memory: constants,
+        constant_memory: constants_memory,
     };
     let mut vm = Vm::new(instructions, setup);
 
@@ -225,7 +229,7 @@ where
         .get_external_function_declaration(id)
         .unwrap();
 
-    let (instructions, constants) = generator.take_instructions_and_constants();
+    let (instructions, constants, constant_infos) = generator.take_instructions_and_constants();
     let setup = VmSetup {
         frame_memory_size: 1024,
         heap_memory_size: 1024,

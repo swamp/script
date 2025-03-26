@@ -82,6 +82,7 @@ pub struct FunctionFixup {
 pub struct ConstantInfo {
     pub ip: InstructionPosition,
     pub constant_ref: ConstantRef,
+    pub target_constant_memory: ConstantMemoryRegion,
 }
 
 pub struct CodeGenState {
@@ -117,13 +118,20 @@ impl CodeGenState {
     pub fn create_function_sections(&self) -> SeqMap<InstructionPosition, String> {
         let mut lookups = SeqMap::new();
         for (_func_id, function_info) in &self.function_infos {
-            let description = format!(
-                "{}",
-                function_info.internal_function_definition.assigned_name
-            );
+            let description = function_info
+                .internal_function_definition
+                .assigned_name
+                .clone();
             lookups
                 .insert(function_info.starts_at_ip.clone(), description)
-                .unwrap()
+                .unwrap();
+        }
+
+        for (_func_id, function_info) in &self.constant_functions {
+            let description = format!("constant {}", function_info.constant_ref.assigned_name);
+            lookups
+                .insert(function_info.ip.clone(), description)
+                .unwrap();
         }
 
         lookups
@@ -164,8 +172,18 @@ impl CodeGenState {
     }
 
     #[must_use]
-    pub fn take_instructions_and_constants(self) -> (Vec<BinaryInstruction>, Vec<u8>) {
-        (self.builder.instructions, self.constants.take_data())
+    pub fn take_instructions_and_constants(
+        self,
+    ) -> (
+        Vec<BinaryInstruction>,
+        Vec<u8>,
+        SeqMap<ConstantId, ConstantInfo>,
+    ) {
+        (
+            self.builder.instructions,
+            self.constants.take_data(),
+            self.constant_functions,
+        )
     }
 
     pub fn gen_function_def(
@@ -222,15 +240,39 @@ impl CodeGenState {
         }
     }
 
-    pub fn gen_constants_in_order(&mut self, constants: &[ConstantRef]) -> Result<(), Error> {
+    pub fn reserve_space_for_constants(&mut self, constants: &[ConstantRef]) -> Result<(), Error> {
         for constant in constants {
-            let (size, _alignment) = type_size_and_alignment(&constant.resolved_type);
+            let (size, alignment) = type_size_and_alignment(&constant.resolved_type);
+
+            let constant_memory_address = self.constants.reserve(size, alignment);
+
+            let constant_memory_region = ConstantMemoryRegion {
+                addr: constant_memory_address,
+                size,
+            };
+
+            self.constant_offsets
+                .insert(constant.id, constant_memory_region)
+                .unwrap();
+        }
+
+        Ok(())
+    }
+    pub fn gen_constants_expression_functions_in_order(
+        &mut self,
+        constants: &[ConstantRef],
+    ) -> Result<(), Error> {
+        for constant in constants {
+            let target_region = *self.constant_offsets.get(&constant.id).unwrap();
             let ip = self.builder.position();
             {
                 let mut function_generator = FunctionCodeGen::new(self);
 
-                let empty_ctx = Context::new(FrameMemoryRegion::new(FrameMemoryAddress(0), size));
-                function_generator.gen_expression(&constant.expr, &empty_ctx)?;
+                let constant_target_ctx = Context::new(FrameMemoryRegion::new(
+                    FrameMemoryAddress(0),
+                    target_region.size,
+                ));
+                function_generator.gen_expression(&constant.expr, &constant_target_ctx)?;
                 self.finalize_function(&GenOptions {
                     is_halt_function: true,
                 });
@@ -238,7 +280,7 @@ impl CodeGenState {
 
             let constant_info = ConstantInfo {
                 ip,
-                //memory_offset:
+                target_constant_memory: target_region,
                 constant_ref: constant.clone(),
             };
 

@@ -5,6 +5,7 @@ pub mod aligner;
 pub mod opcode;
 
 #[repr(C, packed)]
+#[derive(Clone)]
 pub struct BinaryInstruction {
     pub opcode: u8,
     pub operands: [u16; 5],

@@ -59,6 +59,14 @@ impl ConstantsManager {
         }
     }
 
+    pub fn reserve(
+        &mut self,
+        memory_size: MemorySize,
+        memory_alignment: MemoryAlignment,
+    ) -> ConstantMemoryAddress {
+        self.allocator.allocate(memory_size, memory_alignment)
+    }
+
     pub fn allocate(
         &mut self,
         data: &[u8],

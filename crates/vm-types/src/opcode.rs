@@ -1,6 +1,7 @@
 use std::fmt::{Display, Formatter};
 
 #[repr(u8)]
+#[derive(Debug)]
 pub enum OpCode {
     Hlt, // Return to the host
 

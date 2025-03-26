@@ -173,6 +173,7 @@ impl Vm {
         // Copy data in frame memory
         vm.handlers[OpCode::Mov as usize] = HandlerType::Args3(Self::execute_mov);
         vm.handlers[OpCode::MovLp as usize] = HandlerType::Args3(Self::execute_mov_lp);
+        vm.handlers[OpCode::LdConst as usize] = HandlerType::Args4(Self::execute_ld_const);
 
         // Comparisons
         vm.handlers[OpCode::LtI32 as usize] = HandlerType::Args2(Self::execute_lt_i32);
@@ -485,7 +486,8 @@ impl Vm {
     }
 
     fn execute_unimplemented(&mut self) {
-        panic!("unknown OPCODE!");
+        let unknown_opcode = OpCode::from(self.instructions[self.ip].opcode);
+        panic!("unknown OPCODE! {unknown_opcode} {unknown_opcode:?}");
     }
 
     #[inline]
@@ -495,6 +497,23 @@ impl Vm {
 
         unsafe {
             std::ptr::copy_nonoverlapping(src_ptr, dst_ptr, size as usize);
+        }
+    }
+
+    #[inline]
+    fn execute_ld_const(
+        &mut self,
+        dst_offset: u16,
+        const_lower: u16,
+        const_upper: u16,
+        memory_size: u16,
+    ) {
+        let const_offset = ((const_upper as u32) << 16) | (const_lower as u32);
+        let src_ptr = self.const_ptr_at(const_offset);
+        let dst_ptr = self.frame_ptr_at(dst_offset);
+
+        unsafe {
+            ptr::copy_nonoverlapping(src_ptr, dst_ptr, memory_size as usize);
         }
     }
 
