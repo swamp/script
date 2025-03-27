@@ -74,15 +74,17 @@ fn memory_kind_color(kind: &DecoratedMemoryKind) -> String {
 #[must_use]
 pub fn disasm_instructions_color(
     binary_instructions: &[BinaryInstruction],
+    instruction_position_base: &InstructionPosition,
     descriptions: &[String],
     ip_infos: &SeqMap<InstructionPosition, String>,
 ) -> String {
     let mut string = String::new();
     let mut last_frame_size: u16 = 0;
 
-    for (ip_index, (instruction, comment)) in
+    for (ip_offset, (instruction, comment)) in
         binary_instructions.iter().zip(descriptions).enumerate()
     {
+        let ip_index = instruction_position_base.0 + ip_offset as u16;
         if OpCode::Enter as u8 == instruction.opcode {
             last_frame_size = instruction.operands[0];
         }
@@ -431,6 +433,10 @@ pub fn disasm(
                 DecoratedOperandKind::ImmediateU8(data),
             ]
         }
+        OpCode::Eq32 => &[
+            to_read_frame(operands[0], DecoratedMemoryKind::U32, frame_memory_size),
+            to_read_frame(operands[1], DecoratedMemoryKind::U32, frame_memory_size),
+        ],
         OpCode::Tst8 => &[to_read_frame(
             operands[0],
             DecoratedMemoryKind::S32,

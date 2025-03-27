@@ -204,9 +204,6 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
         Type::Function(_) => {
             panic!("can not serialize function")
         }
-        Type::Iterable(_) => {
-            panic!("can not serialize iterables")
-        }
         Type::Optional(optional_type_ref) => {
             let mut offset = 0;
             let has_some = buf[0] != 0;

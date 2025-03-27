@@ -160,14 +160,6 @@ pub fn type_size_and_alignment(ty: &Type) -> (MemorySize, MemoryAlignment) {
             panic!("generic is not supported")
         }
         Type::MutableReference(referenced_type) => type_size_and_alignment(referenced_type),
-        Type::Iterable(x) => {
-            if **x == Type::Int {
-                // HACK: assume range for now
-                (MemorySize(2 + 2 + 1 + 2), MemoryAlignment::U16)
-            } else {
-                todo!()
-            }
-        }
         Type::Blueprint(_) => panic!("not supported"),
         Type::Variable(_) => panic!("not supported"),
         Type::External(_) => todo!(),

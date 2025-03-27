@@ -466,7 +466,7 @@ impl<'a> Analyzer<'a> {
         ast_expression: &swamp_script_ast::Expression,
         context: &TypeContext,
     ) -> Result<Expression, Error> {
-        //self.debug_expression(&ast_expression);
+        // self.debug_expression(&ast_expression);
 
         let expr = self.analyze_expression_internal(ast_expression, context)?;
 
@@ -609,12 +609,7 @@ impl<'a> Analyzer<'a> {
             )?,
 
             swamp_script_ast::ExpressionKind::Range(min_value, max_value, range_mode) => {
-                let range = self.analyze_range(min_value, max_value, range_mode)?;
-                self.create_expr(
-                    ExpressionKind::Range(Box::from(range.min), Box::from(range.max), range.mode),
-                    Type::Iterable(Box::from(Type::Int)),
-                    &ast_expression.node,
-                )
+                self.analyze_range(min_value, max_value, range_mode, &ast_expression.node)?
             }
 
             swamp_script_ast::ExpressionKind::Literal(literal) => {
@@ -1032,12 +1027,27 @@ impl<'a> Analyzer<'a> {
 
                 swamp_script_ast::Postfix::Subscript(index_expr) => {
                     let collection_type = tv.resolved_type.clone();
+
+                    let temp_lookup_context = TypeContext::new_anything_argument();
+                    let temp_analyzed_expr =
+                        self.analyze_expression(index_expr, &temp_lookup_context)?;
+
+                    let mut subscript_function_name = "subscript";
+
+                    if let Type::NamedStruct(named_struct) = temp_analyzed_expr.ty {
+                        if named_struct.assigned_name == "Range"
+                            && named_struct.module_path == vec!["core-0.0.0".to_string()]
+                        {
+                            subscript_function_name = "subscript_range";
+                        }
+                    };
+
                     if let Some(found) = self
                         .shared
                         .state
                         .instantiator
                         .associated_impls
-                        .get_member_function(&tv.resolved_type, "subscript")
+                        .get_member_function(&tv.resolved_type, subscript_function_name)
                         .cloned()
                     {
                         let cloned = found.clone();
@@ -1057,7 +1067,10 @@ impl<'a> Analyzer<'a> {
                         );
                         tv.resolved_type = return_type.clone();
                     } else {
-                        error!(?collection_type, "missing subscript");
+                        error!(
+                            ?collection_type,
+                            subscript_function_name, "missing subscript"
+                        );
                         return Err(
                             self.create_err(ErrorKind::MissingSubscriptMember, &index_expr.node)
                         );
@@ -1169,7 +1182,6 @@ impl<'a> Analyzer<'a> {
         let resolved_type = &resolved_expression.ty().clone();
         let (key_type, value_type): (Option<Type>, Type) = match resolved_type {
             Type::String => (Some(Type::Int), Type::String),
-            Type::Iterable(item_type) => (None, *item_type.clone()),
 
             _ => {
                 if let Some(found_iter_fn) = self

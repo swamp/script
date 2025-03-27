@@ -11,6 +11,7 @@ use swamp_script_semantic::{
 };
 use swamp_script_types::prelude::*;
 use tracing::error;
+use tracing::info;
 
 impl Analyzer<'_> {
     /// # Errors

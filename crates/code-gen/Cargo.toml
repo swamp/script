@@ -10,6 +10,7 @@ repository = "https://github.com/swamp/script"
 # Swamp VM
 swamp-vm-types = { path = "../vm-types", version = "0.1.7" }
 swamp-vm-instr-build = { path = "../vm-instr-build", version = "0.1.7" }
+swamp-vm-disasm = { path = "../vm-disasm", version = "0.1.7"}
 
 # Swamp script
 swamp-script-semantic = { path = "../semantic", version = "0.1.7" }
@@ -17,6 +18,7 @@ swamp-script-node = { path = "../node", version = "0.1.7" }
 swamp-script-types = { path = "../types", version = "0.1.7" }
 
 swamp-script-source-map-lookup = { path = "../source-map-lookup", version = "0.1.7"}
+
 
 seq-map = "0.0.13"
 tracing = "0.1.40"

@@ -27,6 +27,7 @@ use swamp_script_semantic::{
 };
 use swamp_script_source_map_lookup::{SourceMapLookup, SourceMapWrapper};
 use swamp_script_types::{AnonymousStructType, EnumVariantType, Signature, StructTypeField, Type};
+use swamp_vm_disasm::{disasm_color, disasm_instructions_color};
 use swamp_vm_instr_build::{InstructionBuilder, PatchPosition};
 use swamp_vm_types::{
     BOOL_SIZE, BinaryInstruction, CountU16, FrameMemoryAddress, FrameMemoryAddressIndirectPointer,
@@ -95,6 +96,7 @@ pub struct CodeGenState<'b> {
     function_infos: SeqMap<InternalFunctionId, FunctionInfo>,
     function_fixups: Vec<FunctionFixup>,
     source_map_lookup: &'b SourceMapWrapper<'b>,
+    debug_last_ip: usize,
 }
 
 pub struct GenOptions {
@@ -112,6 +114,7 @@ impl<'a> CodeGenState<'a> {
             constant_functions: SeqMap::default(),
             function_fixups: vec![],
             source_map_lookup,
+            debug_last_ip: 0,
         }
     }
 
@@ -208,15 +211,10 @@ impl<'a> CodeGenState<'a> {
 
         let mut function_generator = FunctionCodeGen::new(self);
 
-        let ctx = Context::new(FrameMemoryRegion::new(
-            FrameMemoryAddress(0),
-            MemorySize(512),
-        ));
-
         function_generator.layout_variables(
             &internal_fn_def.function_scope_state,
             &internal_fn_def.signature.return_type,
-        );
+        )?;
 
         let ExpressionKind::Block(block_expressions) = &internal_fn_def.body.kind else {
             panic!("function body should be a block")
@@ -228,6 +226,12 @@ impl<'a> CodeGenState<'a> {
             // Intentionally do nothing
             todo!()
         } else {
+            let (return_type_size, _return_alignment) =
+                type_size_and_alignment(&internal_fn_def.signature.return_type);
+            let ctx = Context::new(FrameMemoryRegion::new(
+                FrameMemoryAddress(0),
+                return_type_size,
+            ));
             function_generator.gen_expression(&internal_fn_def.body, &ctx)?;
         }
 
@@ -402,6 +406,7 @@ impl FunctionCodeGen<'_, '_> {
             IntrinsicFunction::VecCreate => todo!(),
             IntrinsicFunction::VecSubscript => todo!(),
             IntrinsicFunction::VecSubscriptMut => todo!(),
+            IntrinsicFunction::VecSubscriptRange => todo!(),
             IntrinsicFunction::VecIter => todo!(),
             IntrinsicFunction::VecIterMut => todo!(),
             IntrinsicFunction::VecSelfPush => todo!(),
@@ -629,11 +634,30 @@ impl FunctionCodeGen<'_, '_> {
 
     fn debug_node(&self, node: &Node) {
         let line_info = self.state.source_map_lookup.get_line(&node.span);
+        let span_text = self.state.source_map_lookup.get_text_span(&node.span);
         eprintln!(
             "{}:{}:{}> {}",
-            line_info.relative_file_name, line_info.row, line_info.col, line_info.line
+            line_info.relative_file_name, line_info.row, line_info.col, span_text,
         );
         //info!(?source_code_line, "generating");
+    }
+
+    fn debug_instructions(&mut self) {
+        let end_ip = self.state.builder.instructions.len() - 1;
+        let instructions_to_disasm =
+            &self.state.builder.instructions[self.state.debug_last_ip..=end_ip];
+        let mut descriptions = Vec::new();
+        for x in instructions_to_disasm {
+            descriptions.push(String::new());
+        }
+        let output = disasm_instructions_color(
+            instructions_to_disasm,
+            &InstructionPosition(self.state.debug_last_ip as u16),
+            &descriptions,
+            &SeqMap::default(),
+        );
+        eprintln!("{output}");
+        self.state.debug_last_ip = end_ip + 1;
     }
 
     pub fn gen_expression(
@@ -642,7 +666,7 @@ impl FunctionCodeGen<'_, '_> {
         ctx: &Context,
     ) -> Result<GeneratedExpressionResult, Error> {
         self.debug_node(&expr.node);
-        match &expr.kind {
+        let result = match &expr.kind {
             ExpressionKind::InterpolatedString(_) => todo!(),
 
             ExpressionKind::ConstantAccess(constant_ref) => self
@@ -650,9 +674,6 @@ impl FunctionCodeGen<'_, '_> {
                 .map(|_| GeneratedExpressionResult::default()),
             ExpressionKind::TupleDestructuring(variables, tuple_types, tuple_expression) => self
                 .gen_tuple_destructuring(variables, tuple_types, tuple_expression)
-                .map(|_| GeneratedExpressionResult::default()),
-            ExpressionKind::Range(start, end, mode) => self
-                .gen_range(start, end, mode, ctx)
                 .map(|_| GeneratedExpressionResult::default()),
 
             ExpressionKind::Assignment(target_mut_location_expr, source_expr) => self
@@ -679,7 +700,7 @@ impl FunctionCodeGen<'_, '_> {
                 .map(|_| GeneratedExpressionResult::default()),
             ExpressionKind::StructInstantiation(struct_literal) => self
                 .gen_struct_literal(struct_literal, ctx)
-                .map(|_| GeneratedExpressionResult::default()),
+                .map(|()| GeneratedExpressionResult::default()),
             ExpressionKind::AnonymousStructLiteral(anon_struct) => self
                 .gen_anonymous_struct_literal(anon_struct, ctx)
                 .map(|_| GeneratedExpressionResult::default()),
@@ -723,7 +744,11 @@ impl FunctionCodeGen<'_, '_> {
             // --------- TO BE REMOVED
             ExpressionKind::IntrinsicFunctionAccess(_) => todo!(), // TODO: IntrinsicFunctionAccess should be reduced away in analyzer
             ExpressionKind::ExternalFunctionAccess(_) => todo!(), // TODO: ExternalFunctionAccess should be reduced away in analyzer
-        }
+        };
+
+        self.debug_instructions();
+
+        result
     }
 
     fn gen_unary_operator(
@@ -798,7 +823,11 @@ impl FunctionCodeGen<'_, '_> {
             BinaryOperatorKind::Modulo => todo!(),
             BinaryOperatorKind::LogicalOr => todo!(),
             BinaryOperatorKind::LogicalAnd => todo!(),
-            BinaryOperatorKind::Equal => todo!(),
+            BinaryOperatorKind::Equal => {
+                self.state
+                    .builder
+                    .add_eq_32(left_source.addr(), right_source.addr(), "i32 eq");
+            }
             BinaryOperatorKind::NotEqual => todo!(),
             BinaryOperatorKind::LessThan => {
                 self.state
@@ -2068,6 +2097,7 @@ impl FunctionCodeGen<'_, '_> {
             }
             IntrinsicFunction::VecSubscript => todo!(),
             IntrinsicFunction::VecSubscriptMut => todo!(),
+            IntrinsicFunction::VecSubscriptRange => todo!(),
             IntrinsicFunction::VecIter => todo!(), // intentionally disregard, since it is never called
             IntrinsicFunction::VecIterMut => todo!(), // intentionally disregard, since it is never called
             IntrinsicFunction::VecLen => todo!(),

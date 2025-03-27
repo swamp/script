@@ -14,10 +14,9 @@ use std::cell::RefCell;
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
 use std::rc::Rc;
-use swamp_script_node::{Node, Span};
 use swamp_script_semantic::{
     ExternalFunctionDefinitionRef, FormatSpecifierKind, InternalFunctionDefinitionRef,
-    PrecisionType, RangeMode,
+    PrecisionType,
 };
 use swamp_script_types::prelude::*;
 
@@ -107,9 +106,6 @@ pub enum Value {
     EnumVariantSimple(EnumType, EnumVariantSimpleType),
     EnumVariantTuple(EnumType, EnumVariantTupleType, Vec<ValueRef>),
     EnumVariantStruct(EnumType, EnumVariantStructType, Vec<ValueRef>),
-
-    // Number generators
-    Range(Box<i32>, Box<i32>, RangeMode),
 
     // Higher order
     InternalFunction(InternalFunctionDefinitionRef),
@@ -276,10 +272,6 @@ impl Value {
                 offset
             }
 
-            Self::Range(_, _, _) => {
-                todo!("range is not supported yet")
-            }
-
             Self::SlicePair(_key, _values) => {
                 panic!("slice pair is not supported ")
             }
@@ -368,10 +360,6 @@ impl Clone for Value {
                 Self::EnumVariantStruct(enum_type.clone(), resolved_ref.clone(), vec_values.clone())
             }
 
-            Self::Range(start, end, range_mode) => {
-                Self::Range(Box::new(**start), Box::new(**end), range_mode.clone())
-            }
-
             Self::InternalFunction(resolved_def_ref) => {
                 Self::InternalFunction(resolved_def_ref.clone())
             }
@@ -431,6 +419,7 @@ impl Value {
             Self::Vec(_, values) => Ok(Box::new(
                 values.into_iter().map(|item| item.borrow().clone()),
             )),
+
             Self::String(values) => Ok(Box::new(
                 values
                     .chars()
@@ -452,13 +441,13 @@ impl Value {
             Self::RustValue(ref _rust_type_ref, _) => {
                 todo!()
             }
-            Self::Range(start_val, max_val, range_mode) => {
-                let start = *start_val;
-                let end = *max_val;
-                match range_mode {
-                    RangeMode::Exclusive => Ok(Box::new((start..end).map(Value::Int))),
-                    RangeMode::Inclusive => Ok(Box::new((start..=end).map(Value::Int))),
-                }
+            Self::NamedStruct(struct_type, fields) => {
+                // assume it is Range
+                debug_assert_eq!(struct_type.assigned_name, "Range");
+                let start = fields[0].borrow().expect_int()?;
+                let end = fields[1].borrow().expect_int()?;
+                let is_inclusive = fields[2].borrow().expect_bool()?;
+                generate_range_value_iterator(start, end, is_inclusive)
             }
             _ => Err(ValueError::CanNotCoerceToIterator),
         }
@@ -697,6 +686,34 @@ impl Value {
     }
 }
 
+fn generate_range_int_iterator(
+    start: i32,
+    end: i32,
+    is_inclusive: bool,
+) -> Box<dyn Iterator<Item = i32>> {
+    if start > end {
+        if is_inclusive {
+            Box::new((end..=start).rev())
+        } else {
+            Box::new((end.saturating_add(1)..=start).rev())
+        }
+    } else if is_inclusive {
+        Box::new(start..=end)
+    } else {
+        Box::new(start..end)
+    }
+}
+
+fn generate_range_value_iterator(
+    start: i32,
+    exclusive_end: i32,
+    is_inclusive: bool,
+) -> Result<Box<dyn Iterator<Item = Value>>, ValueError> {
+    Ok(Box::new(
+        generate_range_int_iterator(start, exclusive_end, is_inclusive).map(Value::Int),
+    ))
+}
+
 impl Display for Value {
     #[allow(clippy::too_many_lines)]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
@@ -812,10 +829,6 @@ impl Display for Value {
             }
             Self::InternalFunction(internal_fn) => write!(f, "[fn {}]", internal_fn.assigned_name),
             Self::Unit => write!(f, "()"),
-            Self::Range(start, end, range_mode) => match range_mode {
-                RangeMode::Exclusive => write!(f, "{start}..{end}"),
-                RangeMode::Inclusive => write!(f, "{start}..={end}"),
-            },
 
             Self::ExternalFunction(external_function) => {
                 write!(f, "[external_fn {}]", external_function.assigned_name)
@@ -941,7 +954,14 @@ impl Hash for Value {
             Self::String(s) => s.hash(state),
             Self::Bool(b) => b.hash(state),
             Self::Unit => (),
-            Self::Option(_wrapped) => {}
+            Self::Option(wrapped) => {
+                if let Some(found) = wrapped {
+                    1.hash(state);
+                    found.borrow().hash(state);
+                } else {
+                    0.hash(state);
+                }
+            }
             Self::Vec(_, _arr) => {}
             Self::Grid(_) => {}
             Self::Slice(_, _arr) => {}
@@ -957,17 +977,22 @@ impl Hash for Value {
                     v.borrow().hash(state);
                 }
             }
-            Self::Map(_, _items) => {}
-            Self::Map2(_items) => {}
+            Self::Map(_, values) => {
+                for (key, val) in values {
+                    key.hash(state);
+                    val.borrow().hash(state);
+                }
+            }
+            Self::Map2(items) => {}
             Self::SlicePair(_, _items) => {}
-            Self::Tuple(_, _arr) => {}
+            Self::Tuple(_, values) => {
+                for v in values {
+                    v.borrow().hash(state);
+                }
+            }
             Self::EnumVariantSimple(_, _) => (),
             Self::EnumVariantTuple(_, _, _fields) => todo!(),
             Self::EnumVariantStruct(_, _, _fields) => todo!(),
-            Self::Range(start, end, _range_mode) => {
-                start.hash(state);
-                end.hash(state);
-            }
             Self::RustValue(_rust_type, _rust_val) => (),
             Self::InternalFunction(_) => (),
             Self::ExternalFunction(_) => (),

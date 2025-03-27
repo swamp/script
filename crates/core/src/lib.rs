@@ -969,9 +969,7 @@ fn add_intrinsic_vec_functions(core_ns: &mut SymbolTable) {
         .into(),
         return_type: Box::new(Type::Never),
     };
-
     let self_int_to_value_functions = [IntrinsicFunction::VecSubscript];
-
     for intrinsic_fn in self_int_to_value_functions {
         let name = intrinsic_fn.to_string();
         core_ns
@@ -979,6 +977,36 @@ fn add_intrinsic_vec_functions(core_ns: &mut SymbolTable) {
                 name,
                 intrinsic: intrinsic_fn,
                 signature: self_int_to_value.clone(),
+            })
+            .unwrap();
+    }
+
+    let self_range_to_self = Signature {
+        parameters: [
+            TypeForParameter {
+                name: "self".to_string(),
+                resolved_type: Type::Never,
+                is_mutable: false,
+                node: None,
+            },
+            TypeForParameter {
+                name: "range".to_string(),
+                resolved_type: Type::Never,
+                is_mutable: false,
+                node: None,
+            },
+        ]
+        .into(),
+        return_type: Box::new(Type::Never),
+    };
+    let self_range_to_self_functions = [IntrinsicFunction::VecSubscriptRange];
+    for intrinsic_fn in self_range_to_self_functions {
+        let name = intrinsic_fn.to_string();
+        core_ns
+            .add_intrinsic_function(IntrinsicFunctionDefinition {
+                name,
+                intrinsic: intrinsic_fn,
+                signature: self_range_to_self.clone(),
             })
             .unwrap();
     }

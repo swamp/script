@@ -430,9 +430,6 @@ impl SourceMapDisplay<'_> {
             ExpressionKind::Option(_) => {
                 write!(f, "Option()")
             }
-            ExpressionKind::Range(_, _, _) => {
-                write!(f, "Range()")
-            }
             ExpressionKind::ForLoop(_, _, _) => {
                 write!(f, "ForLoop()")
             }
@@ -656,8 +653,6 @@ impl SourceMapDisplay<'_> {
             Type::Bool => write!(f, "{}", "Bool".bright_blue()),
             Type::Unit => write!(f, "{}", "()".bright_blue()),
 
-            Type::Iterable(_) => write!(f, "{}", "iterable"),
-
             Type::Tuple(tuple_type) => {
                 write!(f, "(")?;
                 for (index, item_type) in tuple_type.iter().enumerate() {
@@ -701,8 +696,6 @@ impl SourceMapDisplay<'_> {
             Type::String => write!(f, "{}", "String".bright_blue()),
             Type::Bool => write!(f, "{}", "Bool".bright_blue()),
             Type::Unit => write!(f, "{}", "()".bright_blue()),
-
-            Type::Iterable(_) => write!(f, "{}", "iterable"),
 
             Type::Tuple(tuple_type) => {
                 write!(f, "(")?;

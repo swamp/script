@@ -498,13 +498,6 @@ pub struct Postfix {
 }
 
 #[derive(Debug, Clone)]
-pub struct Range {
-    pub min: Expression,
-    pub max: Expression,
-    pub mode: RangeMode,
-}
-
-#[derive(Debug, Clone)]
 pub enum PostfixKind {
     StructField(AnonymousStructType, usize),
     MemberCall(FunctionRef, Vec<ArgumentExpressionOrLocation>),
@@ -684,7 +677,7 @@ pub enum ExpressionKind {
     AnonymousStructLiteral(AnonymousStructLiteral),
     Literal(Literal),
     Option(Option<Box<Expression>>), // Wrapping an expression in `Some()`
-    Range(Box<Expression>, Box<Expression>, RangeMode),
+    //Range(Box<Expression>, Box<Expression>, RangeMode),
 
     // Loops
     ForLoop(ForPattern, Iterable, Box<Expression>),

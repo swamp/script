@@ -837,17 +837,6 @@ impl<'a, C> Interpreter<'a, C> {
                 )
             }
 
-            ExpressionKind::Range(start, end, range_mode) => {
-                let start_val = self.evaluate_expression(start)?;
-                let end_val = self.evaluate_expression(end)?;
-                match (start_val, end_val) {
-                    (Value::Int(s), Value::Int(e)) => {
-                        Value::Range(Box::new(s), Box::new(e), range_mode.clone())
-                    }
-                    _ => Err(self.create_err(RuntimeErrorKind::RangeItemMustBeInt, &expr.node))?,
-                }
-            }
-
             // ==================== ASSIGNMENT ====================
             ExpressionKind::VariableDefinition(target_var, source_expr) => {
                 let source_value_or_reference =
@@ -1343,6 +1332,31 @@ impl<'a, C> Interpreter<'a, C> {
                     return Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, node))?;
                 }
             },
+
+            IntrinsicFunction::VecSubscriptRange => match &mut *value_ref.borrow_mut() {
+                Value::Vec(type_id, vector) => {
+                    let range_struct = self.evaluate_expression(arguments[0])?;
+                    let Value::NamedStruct(_, fields) = range_struct else {
+                        panic!("range is wrong");
+                    };
+
+                    let start = fields[0].borrow().expect_int()?;
+                    let end = fields[1].borrow().expect_int()?;
+                    let is_inclusive = fields[2].borrow().expect_bool()?;
+
+                    let values = if is_inclusive {
+                        vector[start as usize..=end as usize].to_vec()
+                    } else {
+                        vector[start as usize..end as usize].to_vec()
+                    };
+
+                    Value::Vec(type_id.clone(), values)
+                }
+                _ => {
+                    return Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, node))?;
+                }
+            },
+
             IntrinsicFunction::VecLen => match &mut *value_ref.borrow_mut() {
                 Value::Vec(_type_id, vector) => {
                     let length = vector.len();

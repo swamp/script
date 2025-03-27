@@ -246,7 +246,7 @@ impl Instantiator {
 
     fn extract_blueprint_info(ty: &Type) -> Option<ParameterizedTypeBlueprintInfo> {
         match ty {
-            Type::NamedStruct(named) => Some(named.blueprint_info.clone().unwrap()),
+            Type::NamedStruct(named) => named.blueprint_info.clone(),
             Type::Generic(bp, _) => Some(bp.info()),
             // TODO: This function seems a bit broad, are all three cases needed?
             // | Type::Blueprint(bp) // TODO: Verify that this is never needed

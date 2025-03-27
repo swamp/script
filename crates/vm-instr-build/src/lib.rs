@@ -17,6 +17,8 @@ impl InstructionBuilder {}
 
 impl InstructionBuilder {}
 
+impl InstructionBuilder {}
+
 impl Default for InstructionBuilder {
     fn default() -> Self {
         Self::new()
@@ -96,6 +98,15 @@ impl InstructionBuilder {
         comment: &str,
     ) {
         self.add_instruction(OpCode::Eq8Imm, &[source_addr.0, immediate as u16], comment);
+    }
+
+    pub fn add_eq_32(
+        &mut self,
+        addr_a: FrameMemoryAddress,
+        addr_b: FrameMemoryAddress,
+        comment: &str,
+    ) {
+        self.add_instruction(OpCode::Eq32, &[addr_a.0, addr_b.0], comment);
     }
 
     pub fn add_call_placeholder(&mut self, comment: &str) -> PatchPosition {

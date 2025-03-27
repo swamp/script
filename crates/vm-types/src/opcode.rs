@@ -71,6 +71,8 @@ pub enum OpCode {
 
     // others
     Eq8Imm,
+    Eq32,
+
     Tst8,
     GtI32,
     HostCall, // calls back into host
@@ -116,6 +118,7 @@ impl Display for OpCode {
             Self::LtI32 => write!(f, "slt32"), // signed Less Than
             Self::GtI32 => write!(f, "sgt32"), // Set Less Than
             Self::Eq8Imm => write!(f, "eq8"),
+            Self::Eq32 => write!(f, "eq32"),
             Self::Tst8 => write!(f, "tst8"),
 
             // Vec

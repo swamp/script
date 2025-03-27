@@ -45,6 +45,7 @@ pub enum IntrinsicFunction {
     VecCreate,
     VecSubscript,
     VecSubscriptMut,
+    VecSubscriptRange,
     VecIter,
     VecIterMut,
 
@@ -147,6 +148,7 @@ impl fmt::Display for IntrinsicFunction {
             Self::VecCreate => "vec_create",
             Self::VecSubscriptMut => "vec_subscript_mut",
             Self::VecSubscript => "vec_subscript",
+            Self::VecSubscriptRange => "vec_subscript_range",
             Self::VecIter => "vec_iter",
             Self::VecIterMut => "vec_iter_mut",
             Self::VecLen => "vec_len",

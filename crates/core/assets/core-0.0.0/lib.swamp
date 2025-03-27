@@ -260,6 +260,28 @@ impl String {
     }
 }
 
+
+struct Range {
+    start: Int,
+    end: Int,
+    is_inclusive: Bool,
+}
+
+impl Range {
+    fn new(start: Int, end: Int, is_inclusive: Bool) -> Range {
+        Range {
+            start: start,
+            end: end,
+            is_inclusive: is_inclusive,
+        }
+    }
+
+    fn iter(self) -> (Int, Int) {
+        //range_iter(self)
+        (0, 0)
+    }
+}
+
 struct Vec<T>
 
 impl Vec<T> {
@@ -325,6 +347,19 @@ impl Vec<T> {
         vec_subscript_mut(mut self, index)
     }
 
+
+    /// Gets an element at the specified index
+    ///
+    /// # Parameters
+    /// - `index`: The index of the element to get
+    ///
+    /// # Panics
+    /// If the index is outside of the vector, it panics.
+    ///
+    /// Uses intrinsic function `vec_subscript_range` to fetch the values.
+    fn subscript_range(self, range: Range) -> Vec<T> {
+        vec_subscript_range(self, range)
+    }
 
     /// Gets a mutable element with the specified key. Create a key if it doesn't exist
     ///

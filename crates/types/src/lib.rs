@@ -36,7 +36,6 @@ pub enum Type {
     Enum(EnumType),
 
     Function(Signature),
-    Iterable(Box<Type>),
 
     Optional(Box<Type>),
 
@@ -191,7 +190,7 @@ impl Debug for Type {
             Self::Float => write!(f, "Float"),
             Self::String => write!(f, "String"),
             Self::Bool => write!(f, "Bool"),
-            Self::Unit => write!(f, "Unit"),
+            Self::Unit => write!(f, "()"),
             Self::Never => write!(f, "!"),
             Self::Tuple(tuple_type_ref) => write!(f, "( {tuple_type_ref:?} )"),
             Self::NamedStruct(struct_type_ref) => {
@@ -204,7 +203,6 @@ impl Debug for Type {
             Self::Function(function_type_signature) => {
                 write!(f, "{function_type_signature:?}")
             }
-            Self::Iterable(type_generated) => write!(f, "Iterable<{type_generated:?}>"),
             Self::Optional(base_type) => write!(f, "{base_type:?}?"),
             Self::MutableReference(base_type) => write!(f, "mut ref {base_type:?}?"),
             Self::External(rust_type) => write!(f, "{:?}?", rust_type.type_name),
@@ -232,14 +230,13 @@ impl Display for Type {
             Self::Float => write!(f, "Float"),
             Self::String => write!(f, "String"),
             Self::Bool => write!(f, "Bool"),
-            Self::Unit => write!(f, "Unit"),
+            Self::Unit => write!(f, "()"),
             Self::Never => write!(f, "!"),
             Self::Tuple(tuple) => write!(f, "({})", comma(tuple)),
             Self::NamedStruct(struct_ref) => write!(f, "{}", struct_ref.assigned_name),
             Self::AnonymousStruct(struct_ref) => write!(f, "{struct_ref:?}"),
             Self::Enum(enum_type) => write!(f, "{}", enum_type.assigned_name),
             Self::Function(signature) => write!(f, "function {signature}"),
-            Self::Iterable(generating_type) => write!(f, "Iterable<{generating_type}>"),
             Self::Optional(base_type) => write!(f, "{base_type}?"),
             Self::MutableReference(base_type) => write!(f, "mut ref {base_type:?}?"),
             Self::External(rust_type) => write!(f, "RustType {}", rust_type.type_name),

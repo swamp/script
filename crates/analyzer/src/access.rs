@@ -5,7 +5,10 @@
 use crate::Analyzer;
 use crate::TypeContext;
 use crate::err::{Error, ErrorKind};
-use swamp_script_semantic::{Expression, ExpressionKind, Function, FunctionRef, Range, RangeMode};
+use swamp_script_semantic::Literal::BoolLiteral;
+use swamp_script_semantic::{
+    ArgumentExpressionOrLocation, Expression, ExpressionKind, Function, FunctionRef,
+};
 use swamp_script_types::prelude::*;
 
 impl Analyzer<'_> {
@@ -87,17 +90,33 @@ impl Analyzer<'_> {
         min_expr: &swamp_script_ast::Expression,
         max_expr: &swamp_script_ast::Expression,
         mode: &swamp_script_ast::RangeMode,
-    ) -> Result<Range, Error> {
+        ast_node: &swamp_script_ast::Node,
+    ) -> Result<Expression, Error> {
         let (min, max) = self.analyze_min_max_expr(min_expr, max_expr)?;
 
-        let resolved_range_mode = match mode {
-            swamp_script_ast::RangeMode::Inclusive => RangeMode::Inclusive,
-            swamp_script_ast::RangeMode::Exclusive => RangeMode::Exclusive,
-        };
-        Ok(Range {
-            min,
-            max,
-            mode: resolved_range_mode,
-        })
+        let range_type = self
+            .shared
+            .core_symbol_table
+            .get_type("Range")
+            .unwrap()
+            .clone();
+
+        let is_inclusive = matches!(mode, swamp_script_ast::RangeMode::Inclusive);
+
+        let bool_expr_kind = ExpressionKind::Literal(BoolLiteral(is_inclusive));
+        let bool_expr = self.create_expr(bool_expr_kind, Type::Bool, ast_node);
+
+        let call_kind = self.create_static_call(
+            "new",
+            &[
+                ArgumentExpressionOrLocation::Expression(min),
+                ArgumentExpressionOrLocation::Expression(max),
+                ArgumentExpressionOrLocation::Expression(bool_expr),
+            ],
+            ast_node,
+            &range_type.clone(),
+        )?;
+
+        Ok(self.create_expr(call_kind, range_type, ast_node))
     }
 }
