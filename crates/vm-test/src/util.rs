@@ -9,7 +9,7 @@ use swamp_vm::{Vm, VmSetup};
 use swamp_vm_disasm::{disasm_instructions_color, disasm_instructions_no_color};
 use swamp_vm_types::InstructionPosition;
 
-fn gen_internal(code: &str) -> Result<(CodeGenState, Program, SourceMapWrapper), Error> {
+fn gen_internal(code: &str) -> Result<(CodeGenState, Program), Error> {
     let (program, main_module, source_map) = compile_string(code).unwrap();
 
     let source_map_wrapper = SourceMapWrapper {
@@ -18,7 +18,7 @@ fn gen_internal(code: &str) -> Result<(CodeGenState, Program, SourceMapWrapper),
     };
     let code_gen = code_gen_program(&program, &main_module, &source_map_wrapper)?;
 
-    Ok((code_gen, program, source_map_wrapper))
+    Ok((code_gen, program))
 }
 
 fn gen_internal_debug(code: &str) -> Result<(CodeGenState, Program), Error> {
