@@ -24,6 +24,7 @@ use swamp_script_pretty_print::{SourceMapDisplay, SymbolTableDisplay};
 use swamp_script_semantic::ProgramState;
 use swamp_script_source_map::SourceMap;
 use swamp_script_source_map_lookup::SourceMapWrapper;
+use time_dilation::ScopedTimer;
 use tiny_ver::TinyVersion;
 use tracing::{info, trace};
 
@@ -142,7 +143,10 @@ pub fn bootstrap_modules(
     core_analyzed_definition_table
         .extend_basic_from(&default_symbol_table_for_core_with_intrinsics);
 
-    let source_map_lookup = SourceMapWrapper { source_map };
+    let source_map_lookup = SourceMapWrapper {
+        source_map,
+        current_dir: current_dir().unwrap(),
+    };
     let pretty_printer = SourceMapDisplay {
         source_map: &source_map_lookup,
     };
@@ -174,7 +178,10 @@ pub fn bootstrap_modules(
         .add_package_version(swamp_script_core::PACKAGE_NAME, compiler_version)
         .expect("should work");
 
-    let source_map_lookup = SourceMapWrapper { source_map };
+    let source_map_lookup = SourceMapWrapper {
+        source_map,
+        current_dir: current_dir().unwrap(),
+    };
     let pretty_printer = SourceMapDisplay {
         source_map: &source_map_lookup,
     };
@@ -250,7 +257,7 @@ pub fn compile_analyze_and_link_without_version(
     match mangrove_render_result {
         Ok(..) => {}
         Err(err) => {
-            show_script_resolve_error(&err, source_map, &Path::new(""));
+            show_script_resolve_error(&err, source_map, Path::new(""));
             Err(err)?;
         }
     }
@@ -296,9 +303,11 @@ pub fn bootstrap_and_compile(
     //root_dependencies: SeqMap<String, TinyVersion>,
     root_path: &[String],
 ) -> Result<Program, ScriptResolveError> {
+    let bootstrap_timer = ScopedTimer::new("bootstrap");
     let bootstrap_result = bootstrap_modules(source_map).inspect_err(|err| {
         show_script_resolve_error(err, source_map, &current_path());
     })?;
+    drop(bootstrap_timer);
 
     let mut program = bootstrap_result.program;
 
@@ -319,6 +328,7 @@ pub fn bootstrap_and_compile(
 
      */
 
+    let compile_all_modules_timer = ScopedTimer::new("compile all modules");
     compile_and_analyze_all_modules(
         root_path,
         &mut program,
@@ -328,6 +338,8 @@ pub fn bootstrap_and_compile(
     .inspect_err(|err| {
         show_script_resolve_error(err, source_map, &current_path());
     })?;
+
+    drop(compile_all_modules_timer);
 
     // debug_all_modules(&program.modules, source_map);
 
@@ -340,7 +352,10 @@ pub fn debug_all_modules(modules: &Modules, source_map: &SourceMap) {
     }
 }
 pub fn debug_module(symbol_table: &SymbolTable, source_map: &SourceMap) {
-    let source_map_lookup = SourceMapWrapper { source_map };
+    let source_map_lookup = SourceMapWrapper {
+        source_map,
+        current_dir: current_dir().unwrap(),
+    };
     let pretty_printer = SourceMapDisplay {
         source_map: &source_map_lookup,
     };

@@ -7,7 +7,7 @@ use swamp_script_semantic::{
 };
 use tracing::info;
 
-impl FunctionCodeGen<'_> {
+impl FunctionCodeGen<'_, '_> {
     pub(crate) fn gen_for_access_or_location(
         &mut self,
         mut_or_immutable_expression: &MutOrImmutableExpression,

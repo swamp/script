@@ -13,6 +13,7 @@ use crate::alloc_util::{
 use crate::constants::ConstantsManager;
 use crate::ctx::Context;
 use seq_map::SeqMap;
+use std::path::PathBuf;
 use swamp_script_node::Node;
 use swamp_script_semantic::intr::IntrinsicFunction;
 use swamp_script_semantic::{
@@ -24,6 +25,7 @@ use swamp_script_semantic::{
     SingleMutLocationExpression, StructInstantiation, UnaryOperator, UnaryOperatorKind,
     VariableRef, WhenBinding,
 };
+use swamp_script_source_map_lookup::{SourceMapLookup, SourceMapWrapper};
 use swamp_script_types::{AnonymousStructType, EnumVariantType, Signature, StructTypeField, Type};
 use swamp_vm_instr_build::{InstructionBuilder, PatchPosition};
 use swamp_vm_types::{
@@ -85,22 +87,23 @@ pub struct ConstantInfo {
     pub target_constant_memory: ConstantMemoryRegion,
 }
 
-pub struct CodeGenState {
+pub struct CodeGenState<'b> {
     builder: InstructionBuilder,
     constants: ConstantsManager,
     constant_offsets: SeqMap<ConstantId, ConstantMemoryRegion>,
     constant_functions: SeqMap<ConstantId, ConstantInfo>,
     function_infos: SeqMap<InternalFunctionId, FunctionInfo>,
     function_fixups: Vec<FunctionFixup>,
+    source_map_lookup: &'b SourceMapWrapper<'b>,
 }
 
 pub struct GenOptions {
     pub is_halt_function: bool,
 }
 
-impl CodeGenState {
+impl<'a> CodeGenState<'a> {
     #[must_use]
-    pub fn new() -> Self {
+    pub fn new(source_map_lookup: &'a SourceMapWrapper) -> Self {
         Self {
             builder: InstructionBuilder::default(),
             constants: ConstantsManager::new(),
@@ -108,6 +111,7 @@ impl CodeGenState {
             function_infos: SeqMap::default(),
             constant_functions: SeqMap::default(),
             function_fixups: vec![],
+            source_map_lookup,
         }
     }
 
@@ -298,10 +302,11 @@ impl CodeGenState {
         &mut self,
         main: &InternalMainExpression,
         options: &GenOptions,
+        source_map_lookup: &dyn SourceMapLookup,
     ) -> Result<(), Error> {
         let mut function_generator = FunctionCodeGen::new(self);
 
-        function_generator.layout_variables(&main.function_scope_state, &main.expression.ty);
+        function_generator.layout_variables(&main.function_scope_state, &main.expression.ty)?;
         let empty_ctx = Context::new(FrameMemoryRegion::default());
         function_generator.gen_expression(&main.expression, &empty_ctx)?;
         self.finalize_function(options);
@@ -309,8 +314,8 @@ impl CodeGenState {
     }
 }
 
-pub struct FunctionCodeGen<'a> {
-    state: &'a mut CodeGenState,
+pub struct FunctionCodeGen<'a, 'b> {
+    state: &'a mut CodeGenState<'b>,
     variable_offsets: SeqMap<usize, FrameMemoryRegion>,
     frame_size: FrameMemorySize,
     //extra_frame_allocator: ScopeAllocator,
@@ -318,9 +323,9 @@ pub struct FunctionCodeGen<'a> {
     argument_allocator: ScopeAllocator,
 }
 
-impl<'a> FunctionCodeGen<'a> {
+impl<'a, 'b> FunctionCodeGen<'a, 'b> {
     #[must_use]
-    pub fn new(state: &'a mut CodeGenState) -> Self {
+    pub fn new(state: &'a mut CodeGenState<'b>) -> Self {
         Self {
             state,
             variable_offsets: SeqMap::default(),
@@ -332,7 +337,7 @@ impl<'a> FunctionCodeGen<'a> {
     }
 }
 
-impl FunctionCodeGen<'_> {
+impl FunctionCodeGen<'_, '_> {
     #[allow(clippy::too_many_lines)]
     pub(crate) fn gen_single_intrinsic_call(
         &mut self,
@@ -622,11 +627,21 @@ impl FunctionCodeGen<'_> {
         Context::new(target)
     }
 
+    fn debug_node(&self, node: &Node) {
+        let line_info = self.state.source_map_lookup.get_line(&node.span);
+        eprintln!(
+            "{}:{}:{}> {}",
+            line_info.relative_file_name, line_info.row, line_info.col, line_info.line
+        );
+        //info!(?source_code_line, "generating");
+    }
+
     pub fn gen_expression(
         &mut self,
         expr: &Expression,
         ctx: &Context,
     ) -> Result<GeneratedExpressionResult, Error> {
+        self.debug_node(&expr.node);
         match &expr.kind {
             ExpressionKind::InterpolatedString(_) => todo!(),
 

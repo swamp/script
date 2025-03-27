@@ -134,29 +134,6 @@ impl<'a> TypeContext<'a> {
     pub(crate) const fn we_know_expected_type(&self, found_type: &'a Type) -> Self {
         self.with_expected_type(Some(found_type))
     }
-
-    #[must_use]
-    pub fn enter_function(&self, required_type: &'a Type) -> Self {
-        Self {
-            expected_type: Some(required_type),
-        }
-    }
-
-    /// Creates a new scope when entering a loop
-    #[must_use]
-    pub fn enter_loop(&self) -> Self {
-        Self {
-            expected_type: self.expected_type,
-        }
-    }
-
-    /// Creates a new scope when entering a loop
-    #[must_use]
-    pub fn enter_compare(&self) -> Self {
-        Self {
-            expected_type: self.expected_type,
-        }
-    }
 }
 
 pub struct SharedState<'a> {
@@ -271,7 +248,7 @@ impl<'a> Analyzer<'a> {
     ) -> Result<Expression, Error> {
         let resolved_condition = self.analyze_bool_argument_expression(condition)?;
 
-        let branch_context = context.enter_compare();
+        let branch_context = context;
 
         let true_expr = self.analyze_expression(true_expression, &branch_context)?;
         let resolved_true = Box::new(true_expr);
@@ -434,17 +411,6 @@ impl<'a> Analyzer<'a> {
 
     /// # Errors
     ///
-    pub fn analyze_immutable_argument(
-        &mut self,
-        ast_expression: &swamp_script_ast::Expression,
-        expected_type: &Type,
-    ) -> Result<Expression, Error> {
-        let context = TypeContext::new_argument(expected_type);
-        self.analyze_expression(ast_expression, &context)
-    }
-
-    /// # Errors
-    ///
     pub fn analyze_start_chain_expression_get_mutability(
         &mut self,
         ast_expression: &swamp_script_ast::Expression,
@@ -559,6 +525,7 @@ impl<'a> Analyzer<'a> {
                 self.analyze_identifier(qualified_identifier)?
             }
             swamp_script_ast::ExpressionKind::VariableReference(variable) => {
+                // TODO: investigate why this is not called?
                 self.analyze_variable_reference(&variable.name)?
             }
 
@@ -661,6 +628,7 @@ impl<'a> Analyzer<'a> {
                 statements,
             ) => {
                 let _analyzed_guard = if let Some(found_guard) = guard_expr {
+                    // TODO: Remove guard in for loops
                     Some(self.analyze_bool_argument_expression(found_guard)?)
                 } else {
                     None
@@ -675,8 +643,7 @@ impl<'a> Analyzer<'a> {
                     resolved_iterator.key_type.as_ref(),
                     &resolved_iterator.value_type,
                 )?;
-                let resolved_statements =
-                    self.analyze_expression(statements, &context.enter_loop())?;
+                let resolved_statements = self.analyze_expression(statements, &context)?;
                 self.pop_block_scope("for_loop");
                 let resolved_type = resolved_statements.ty.clone();
                 self.create_expr(
@@ -692,8 +659,7 @@ impl<'a> Analyzer<'a> {
             swamp_script_ast::ExpressionKind::WhileLoop(expression, statements) => {
                 let condition = self.analyze_bool_argument_expression(expression)?;
                 //self.push_block_scope("while_loop");
-                let resolved_statements =
-                    self.analyze_expression(statements, &context.enter_loop())?;
+                let resolved_statements = self.analyze_expression(statements, context)?;
                 let resolved_type = resolved_statements.ty.clone();
                 //self.pop_block_scope("while_loop");
 

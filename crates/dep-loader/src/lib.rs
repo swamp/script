@@ -8,6 +8,7 @@ use seq_map::SeqMap;
 use std::collections::HashSet;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 use std::{env, io};
 use swamp_script_ast::Function;
 use swamp_script_ast::prelude::*;
@@ -72,9 +73,8 @@ impl ParseRoot {
         contents: String,
         file_id: FileId,
     ) -> Result<ParsedAstModule, ParseRootError> {
-        let parser = AstParser {};
-
-        let ast_program = parser.parse_module(&contents).map_err(|err| {
+        let before = Instant::now();
+        let ast_program = AstParser.parse_module(&contents).map_err(|err| {
             let new_err = ParserError {
                 node: Node { span: err.span },
                 specific: err.specific,
@@ -82,6 +82,7 @@ impl ParseRoot {
             };
             ParseRootError::ParserError(new_err)
         })?;
+        let after = Instant::now();
 
         Ok(ParsedAstModule {
             ast_module: ast_program,
@@ -247,7 +248,7 @@ pub fn parse_single_module(
             mount_name,
             &module_path_to_relative_swamp_file_string(module_path),
         )
-        .map_err(|err| DependencyError::ReadFileError(err))?;
+        .map_err(DependencyError::ReadFileError)?;
 
     let parse_module = ParseRoot.parse(script, file_id)?;
 

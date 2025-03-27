@@ -16,5 +16,7 @@ swamp-script-semantic = { path = "../semantic", version = "0.1.7" }
 swamp-script-node = { path = "../node", version = "0.1.7" }
 swamp-script-types = { path = "../types", version = "0.1.7" }
 
+swamp-script-source-map-lookup = { path = "../source-map-lookup", version = "0.1.7"}
+
 seq-map = "0.0.13"
 tracing = "0.1.40"

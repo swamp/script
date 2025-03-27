@@ -1,74 +1,16 @@
-use seq_map::SeqMap;
 use std::ptr;
-use swamp_script_code_gen::alloc::ConstantMemoryRegion;
-use swamp_script_code_gen::alloc_util::type_size_and_alignment;
-use swamp_script_code_gen::{CodeGenState, Error, GenOptions};
+use swamp_script_code_gen::{CodeGenState, Error};
+use swamp_script_code_gen_program::code_gen_program;
 use swamp_script_compile::Program;
 use swamp_script_compile::compile_string;
-use swamp_script_semantic::{ConstantId, Function};
-use swamp_script_types::Type;
 use swamp_vm::host::HostArgs;
 use swamp_vm::{Vm, VmSetup};
 use swamp_vm_disasm::{disasm_instructions_color, disasm_instructions_no_color};
-use swamp_vm_types::ConstantMemoryAddress;
-use tracing::info;
 
 fn gen_internal(code: &str) -> Result<(CodeGenState, Program), Error> {
     let (program, main_module, _source_map) = compile_string(code).unwrap();
 
-    let mut code_gen = CodeGenState::new();
-
-    code_gen.reserve_space_for_constants(&program.state.constants_in_dependency_order)?;
-
-    let debug_expr = main_module.main_expression.as_ref().unwrap();
-    let main_expression = main_module.main_expression.as_ref().unwrap();
-    let halt_function = GenOptions {
-        is_halt_function: true,
-    };
-
-    code_gen.gen_main_function(main_expression, &halt_function)?;
-
-    let normal_function = GenOptions {
-        is_halt_function: false,
-    };
-
-    for internal_function_def in &main_module.symbol_table.internal_functions() {
-        code_gen.gen_function_def(internal_function_def, &normal_function)?;
-    }
-
-    for (associated_on_type, impl_functions) in
-        &program.state.instantiator.associated_impls.functions
-    {
-        if !associated_on_type.is_concrete() {
-            continue;
-        }
-        if associated_on_type == &Type::Int
-            || associated_on_type == &Type::Float
-            || associated_on_type == &Type::Bool
-            || associated_on_type == &Type::String
-        {
-            continue;
-        }
-
-        for (_name, func) in &impl_functions.functions {
-            if func.name().clone().starts_with("instantiated ") {
-                continue;
-            }
-            match &**func {
-                Function::Internal(int_fn) => {
-                    code_gen.gen_function_def(int_fn, &normal_function)?;
-                }
-
-                Function::External(_ext_fn) => {}
-            }
-        }
-    }
-
-    code_gen.gen_constants_expression_functions_in_order(
-        &program.state.constants_in_dependency_order,
-    )?;
-
-    code_gen.finalize();
+    let code_gen = code_gen_program(&program, &main_module)?;
 
     Ok((code_gen, program))
 }

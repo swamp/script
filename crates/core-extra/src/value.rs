@@ -697,11 +697,6 @@ impl Value {
     }
 }
 
-pub trait SourceMapLookup: Debug {
-    fn get_text(&self, resolved_node: &Node) -> &str;
-    fn get_text_span(&self, span: &Span) -> &str;
-}
-
 impl Display for Value {
     #[allow(clippy::too_many_lines)]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {

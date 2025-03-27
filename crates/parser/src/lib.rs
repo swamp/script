@@ -1137,12 +1137,14 @@ impl AstParser {
     fn parse_expression(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
         let sub = &Self::right_alternative(pair)?;
         match sub.as_rule() {
+            /*
+            // TODO: verify that this block is not needed
             Rule::expression => {
                 let inner = self.next_inner_pair(sub)?;
 
                 self.parse_expression(&inner)
             }
-
+             */
             Rule::qualified_identifier => Ok(self.create_expr(
                 ExpressionKind::VariableReference(Variable::new(self.to_node(sub), None)),
                 sub,
@@ -1173,13 +1175,14 @@ impl AstParser {
 
             //            Rule::expression | Rule::literal => self.parse_expr(pair),
             Rule::prefix_op | Rule::op_neg | Rule::op_not => {
+                // TODO: maybe not called?
                 let op = self.parse_unary_operator(sub)?;
                 let expr = self.parse_postfix_expression(&self.next_inner_pair(sub)?)?;
                 Ok(self.create_expr(ExpressionKind::UnaryOp(op, Box::new(expr)), sub))
             }
 
             //Rule::mut_expression => self.parse_mutable_or_immutable_expression(pair),
-            Rule::postfix => self.parse_postfix_expression(sub),
+            Rule::postfix => self.parse_postfix_expression(sub), // TODO: maybe not called
             _ => Err(self.create_error_pair(
                 SpecificError::UnexpectedExpressionType(Self::pair_to_rule(sub)),
                 sub,
@@ -1512,7 +1515,7 @@ impl AstParser {
                 // TODO: Maybe loop and check for generic params
                 if let Some(generic_params) = inner_pairs.next() {
                     if generic_params.as_rule() == Rule::generic_params {
-                        generic_types = self.parse_generic_params(&generic_params)?;
+                        generic_types = self.parse_generic_params(&generic_params)?; // TODO: maybe not used?
                     }
                 }
 
@@ -1568,6 +1571,7 @@ impl AstParser {
                 // TODO: Maybe loop and check for generic params
                 if let Some(generic_params) = inner_pairs.next() {
                     if generic_params.as_rule() == Rule::generic_params {
+                        // TODO: maybe not used?
                         generic_types = self.parse_generic_params(&generic_params)?;
                     }
                 }
@@ -1584,6 +1588,7 @@ impl AstParser {
                 // TODO: Maybe loop and check for generic params
                 if let Some(generic_params) = inner_pairs.next() {
                     if generic_params.as_rule() == Rule::generic_params {
+                        // TODO: maybe not used
                         generic_types = self.parse_generic_params(&generic_params)?;
                     }
                 }
@@ -2312,20 +2317,6 @@ impl AstParser {
             ));
         }
         Ok(LocalTypeIdentifier::new(self.to_node(pair)))
-    }
-
-    fn parse_local_type_identifier_next<'a>(
-        &self,
-        pairs: &mut impl Iterator<Item = Pair<'a, Rule>>,
-    ) -> Result<LocalTypeIdentifier, ParseError> {
-        let pair = Self::next_pair(pairs)?;
-        if pair.as_rule() != Rule::type_identifier {
-            return Err(self.create_error_pair(
-                SpecificError::ExpectedLocalTypeIdentifier(Self::pair_to_rule(&pair)),
-                &pair,
-            ));
-        }
-        Ok(LocalTypeIdentifier::new(self.to_node(&pair)))
     }
 
     fn parse_enum_def(&self, pair: &Pair<Rule>) -> Result<Definition, ParseError> {

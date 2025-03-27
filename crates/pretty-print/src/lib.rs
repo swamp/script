@@ -1,6 +1,5 @@
 use seq_map::SeqMap;
 use std::fmt::{Display, Formatter};
-use swamp_script_core_extra::prelude::SourceMapLookup;
 use swamp_script_modules::modules::{ModuleRef, Modules};
 use swamp_script_modules::symtbl::{FuncDef, Symbol, SymbolTable, TypeGenerator};
 use swamp_script_semantic::prelude::*;
@@ -11,6 +10,7 @@ use swamp_script_semantic::{
 
 use swamp_script_types::*;
 
+use swamp_script_source_map_lookup::SourceMapLookup;
 use yansi::{Color, Paint};
 
 pub struct SourceMapDisplay<'a> {

@@ -4,10 +4,9 @@
  */
 
 use swamp_script_analyzer::Program;
-use swamp_script_compile::{bootstrap_and_compile, compile_string};
+use swamp_script_compile::compile_string;
 use swamp_script_error_report::ScriptResolveError;
 use swamp_script_pretty_print::{SourceMapDisplay, SymbolTableDisplay};
-use swamp_script_source_map::SourceMap;
 use swamp_script_source_map_lookup::SourceMapWrapper;
 use tracing::{info, warn};
 

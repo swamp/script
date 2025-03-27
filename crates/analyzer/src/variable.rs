@@ -51,69 +51,6 @@ impl Analyzer<'_> {
         None
     }
 
-    pub(crate) fn set_or_overwrite_variable_with_type(
-        &mut self,
-        variable: &swamp_script_ast::Variable,
-        variable_type_ref: &Type,
-    ) -> Result<(VariableRef, bool), Error> {
-        if let Some(existing_variable) = self.try_find_variable(&variable.name) {
-            // Check type compatibility
-            if !&existing_variable
-                .resolved_type
-                .assignable_type(variable_type_ref)
-            {
-                return Err(
-                    self.create_err(ErrorKind::OverwriteVariableWithAnotherType, &variable.name)
-                );
-            }
-
-            // For reassignment, check if the EXISTING variable is mutable
-            if !existing_variable.is_mutable() {
-                return Err(
-                    self.create_err(ErrorKind::CanOnlyOverwriteVariableWithMut, &variable.name)
-                );
-            }
-
-            return Ok((existing_variable, true));
-        }
-
-        // For first assignment, create new variable with the mutability from the assignment
-        let scope_index = self.scope.block_scope_stack.len() - 1;
-        let name = self.to_node(&variable.name);
-        let mutable_node = self.to_node_option(Option::from(&variable.is_mutable));
-        let variable_name_str = self.get_text_resolved(&name).to_string();
-
-        let index_within_function = { self.scope.gen_variable_index() };
-        let variables = &mut self
-            .scope
-            .block_scope_stack
-            .last_mut()
-            .expect("block scope should have at least one scope")
-            .variables;
-        let variable_index = variables.len();
-        let should_insert_in_scope = !variable_name_str.starts_with('_');
-
-        let resolved_variable = Variable {
-            name,
-            assigned_name: variable_name_str.clone(),
-            resolved_type: variable_type_ref.clone(),
-            mutable_node,
-            scope_index,
-            variable_index,
-            unique_id_within_function: index_within_function,
-            is_unused: !should_insert_in_scope,
-        };
-
-        let variable_ref = Rc::new(resolved_variable);
-
-        {
-            variables
-                .insert(variable_name_str, variable_ref.clone())
-                .expect("should have checked earlier for variable");
-        }
-
-        Ok((variable_ref, false))
-    }
     pub(crate) fn create_local_variable(
         &mut self,
         variable: &swamp_script_ast::Node,

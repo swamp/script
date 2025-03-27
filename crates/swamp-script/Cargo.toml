@@ -28,8 +28,16 @@ swamp-script-error-report = { path = "../err", version = "0.1.7" }
 swamp-script-core-extra = { path = "../core-extra", version = "0.1.7" }
 swamp-script-std = { path = "../std", version = "0.1.7" }
 
-# Runner
-swamp-script-eval = { path = "../eval", version = "0.1.7" }
+
 swamp-script-dep-loader = { path = "../dep-loader", version = "0.1.7" }
 swamp-script-eval-loader = { path = "../eval-loader", version = "0.1.7" }
 swamp-script-source-map-lookup = { path = "../source-map-lookup", version = "0.1.7" }
+
+# Runner
+swamp-script-eval = { path = "../eval", version = "0.1.7" }
+
+swamp-script-code-gen-program = { path = "../code-gen-program", version = "0.1.7" }
+
+[dev-dependencies]
+test-log = { version = "0.2.16", features = ["trace", "log", "color"] }
+tracing = "0.1.40"

@@ -8,6 +8,6 @@ pub use {
     //crate::export::SwampExport,
     crate::qck_des::quick_deserialize,
     //crate::typereg::TypeRegistry,
-    crate::value::{QuickSerialize, SourceMapLookup, Value, ValueError, ValueRef},
+    crate::value::{QuickSerialize, Value, ValueError, ValueRef},
     seq_map::SeqMap,
 };

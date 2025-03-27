@@ -15,7 +15,7 @@ use swamp_script_core_extra::map2::Map2;
 use swamp_script_core_extra::prelude::ValueError;
 use swamp_script_core_extra::value::ValueRef;
 use swamp_script_core_extra::value::{
-    SourceMapLookup, Value, convert_vec_to_rc_refcell, format_value, to_rust_value,
+    Value, convert_vec_to_rc_refcell, format_value, to_rust_value,
 };
 use swamp_script_node::Node;
 use swamp_script_semantic::prelude::*;
@@ -26,6 +26,7 @@ use swamp_script_semantic::{
     SingleLocationExpressionKind, UnaryOperatorKind,
 };
 use swamp_script_semantic::{ExternalFunctionId, Postfix, SingleMutLocationExpression};
+use swamp_script_source_map_lookup::SourceMapLookup;
 use swamp_script_types::{EnumVariantType, Type, TypeForParameter, same_anon_struct_ref};
 use tracing::{error, info};
 
