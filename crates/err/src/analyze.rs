@@ -10,6 +10,7 @@ use swamp_script_source_map::SourceMap;
 pub fn build_analyzer_error(err: &Error) -> Builder<usize> {
     let span = &err.node.span;
     let mut b = match &err.kind {
+        ErrorKind::ExpectedLambda => Report::build(Kind::Error, 2, "expected lambda", span),
         ErrorKind::UnknownEnumType => Report::build(Kind::Error, 1, "unknown enum type", span),
         ErrorKind::TooManyDestructureVariables => {
             Report::build(Kind::Error, 2, "too many destructure variables", span)
@@ -115,7 +116,6 @@ pub fn build_analyzer_error(err: &Error) -> Builder<usize> {
         ErrorKind::DuplicateFieldInStructInstantiation(_) => {
             Report::build(Kind::Error, 34, "duplicate field in struct literal", span)
         }
-        ErrorKind::UnknownFunction => Report::build(Kind::Error, 34, "unknown function", span),
         ErrorKind::NoDefaultImplemented(_resolved_type) => {
             Report::build(Kind::Error, 35, "no default() function", span)
         }
@@ -152,7 +152,10 @@ pub fn build_analyzer_error(err: &Error) -> Builder<usize> {
         ErrorKind::UnusedVariablesCanNotBeMut => {
             Report::build(Kind::Error, 44, "unused variables must not be mut", span)
         }
-        ErrorKind::UnknownIdentifier => Report::build(Kind::Error, 45, "unknown identifier", span),
+        ErrorKind::UnknownIdentifier(x) => {
+            Report::build(Kind::Error, 45, "unknown identifier", span)
+                .with_note(&format!("identifier: {x}"))
+        }
         ErrorKind::VariableTypeMustBeConcrete => {
             Report::build(Kind::Error, 46, "variable type must be concrete", span)
         }

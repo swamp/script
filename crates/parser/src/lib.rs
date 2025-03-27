@@ -40,7 +40,7 @@ pub enum SpecificError {
     General(String),
     ExpectingTypeIdentifier,
     ExpectingInnerPair,
-    UnexpectedTypeRule,
+    UnexpectedTypeRule(String),
     ExpectedTypeIdentifier(String),
     ExpectedLocalTypeIdentifier(String),
     UnexpectedRuleInParseScript(String),
@@ -215,7 +215,7 @@ impl AstParser {
     }
 
     fn parse_dot_identifier<'a>(&self, pair: &Pair<Rule>) -> Result<FieldName, ParseError> {
-        assert_eq!(pair.as_rule(), Rule::dot_identifier);
+        debug_assert_eq!(pair.as_rule(), Rule::dot_identifier);
         let mut inner = pair.clone().into_inner();
         let ident_pair = inner
             .next()
@@ -654,7 +654,7 @@ impl AstParser {
                             let mut inner = child.into_inner();
 
                             let member_access = Self::next_pair(&mut inner)?;
-                            assert_eq!(member_access.as_rule(), Rule::member_access_postfix);
+                            debug_assert_eq!(member_access.as_rule(), Rule::member_access_postfix);
                             let mut ma_inner = member_access.into_inner();
                             let dot_id = Self::next_pair(&mut ma_inner)?;
                             let member_identifier = self.parse_dot_identifier(&dot_id)?;
@@ -723,7 +723,7 @@ impl AstParser {
     }
 
     fn parse_struct_type_field(&self, pair: &Pair<Rule>) -> Result<StructTypeField, ParseError> {
-        assert_eq!(pair.as_rule(), Rule::struct_type_field);
+        debug_assert_eq!(pair.as_rule(), Rule::struct_type_field);
 
         let mut field_inner = Self::convert_into_iterator(&pair);
         let field_name = self.expect_field_label_next(&mut field_inner)?;
@@ -740,7 +740,7 @@ impl AstParser {
         &self,
         pair: &Pair<Rule>,
     ) -> Result<Vec<StructTypeField>, ParseError> {
-        assert_eq!(pair.as_rule(), Rule::struct_type_fields);
+        debug_assert_eq!(pair.as_rule(), Rule::struct_type_fields);
         let mut fields = Vec::new();
         for field_def in Self::convert_into_iterator(pair) {
             let anonymous_struct_field = self.parse_struct_type_field(&field_def)?;
@@ -751,7 +751,7 @@ impl AstParser {
     }
 
     fn parse_struct_type(&self, pair: &Pair<Rule>) -> Result<AnonymousStructType, ParseError> {
-        assert_eq!(pair.as_rule(), Rule::struct_type);
+        debug_assert_eq!(pair.as_rule(), Rule::struct_type);
         let fields = Self::right_alternative(pair)?;
         let fields = self.parse_struct_type_fields(&fields)?;
         let struct_type = AnonymousStructType::new(fields);
@@ -759,7 +759,7 @@ impl AstParser {
     }
 
     fn parse_tuple_type_elements(&self, pair: &Pair<Rule>) -> Result<Vec<Type>, ParseError> {
-        assert_eq!(pair.as_rule(), Rule::tuple_type);
+        debug_assert_eq!(pair.as_rule(), Rule::tuple_type);
         let mut types = Vec::new();
         for type_pair in pair.clone().into_inner() {
             let type_value = self.parse_type(type_pair)?;
@@ -947,7 +947,7 @@ impl AstParser {
     }
 
     fn parse_member_signature(&self, pair: &Pair<Rule>) -> Result<FunctionDeclaration, ParseError> {
-        assert_eq!(pair.as_rule(), Rule::member_signature);
+        debug_assert_eq!(pair.as_rule(), Rule::member_signature);
 
         let mut inner = pair.clone().into_inner();
 
@@ -1190,18 +1190,29 @@ impl AstParser {
         }
     }
 
-    fn parse_variable_list(&self, pair: &Pair<Rule>) -> Result<Vec<Variable>, ParseError> {
+    fn parse_at_least_two_variable_list(
+        &self,
+        pair: &Pair<Rule>,
+    ) -> Result<Vec<Variable>, ParseError> {
+        debug_assert_eq!(pair.as_rule(), Rule::at_least_two_variables_list);
         let mut variables = Vec::new();
         for item_pair in pair.clone().into_inner() {
-            if item_pair.as_rule() == Rule::variable_item {
-                variables.push(self.parse_variable_item(&item_pair)?);
-            }
+            variables.push(self.parse_variable_item(&item_pair)?);
+        }
+        Ok(variables)
+    }
+
+    fn parse_optional_variable_list(&self, pair: &Pair<Rule>) -> Result<Vec<Variable>, ParseError> {
+        debug_assert_eq!(pair.as_rule(), Rule::optional_variable_list);
+        let mut variables = Vec::new();
+        for item_pair in pair.clone().into_inner() {
+            variables.push(self.parse_variable_item(&item_pair)?);
         }
         Ok(variables)
     }
 
     fn parse_maybe_mut_identifier(&self, pair: &Pair<Rule>) -> Result<Variable, ParseError> {
-        assert_eq!(pair.as_rule(), Rule::maybe_mut_identifier);
+        debug_assert_eq!(pair.as_rule(), Rule::maybe_mut_identifier);
         let mut inner = pair.clone().into_inner();
         let mut_node = if let Some(peeked) = inner.peek() {
             if peeked.as_rule() == Rule::mut_keyword {
@@ -1244,7 +1255,7 @@ impl AstParser {
     }
 
     fn parse_variable_item(&self, pair: &Pair<Rule>) -> Result<Variable, ParseError> {
-        assert_eq!(pair.as_rule(), Rule::variable_item);
+        debug_assert_eq!(pair.as_rule(), Rule::variable_item);
         let mut inner = pair.clone().into_inner();
         self.parse_maybe_mut_identifier(&inner.next().unwrap())
     }
@@ -1281,7 +1292,7 @@ impl AstParser {
     }
 
     fn parse_assignment_op(&self, pair: &Pair<Rule>) -> Result<AssignmentOperatorKind, ParseError> {
-        assert_eq!(pair.as_rule(), Rule::assign_op);
+        debug_assert_eq!(pair.as_rule(), Rule::assign_op);
         let sub = Self::right_alternative(pair)?;
         let op = match sub.as_rule() {
             Rule::compound_assign_op => {
@@ -1301,7 +1312,7 @@ impl AstParser {
 
     #[allow(clippy::too_many_lines)]
     fn parse_destructuring_assignment(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
-        assert_eq!(pair.as_rule(), Rule::destructuring_assignment);
+        debug_assert_eq!(pair.as_rule(), Rule::destructuring_assignment);
         let mut inner = pair.clone().into_inner();
 
         let var_list_pair = inner.next().ok_or_else(|| {
@@ -1311,7 +1322,7 @@ impl AstParser {
             )
         })?;
 
-        let variables = self.parse_variable_list(&var_list_pair)?;
+        let variables = self.parse_at_least_two_variable_list(&var_list_pair)?;
 
         let rhs_pair = inner.next().ok_or_else(|| {
             self.create_error_pair(
@@ -1337,7 +1348,7 @@ impl AstParser {
     pub fn parse_compound_assign_op(
         op_pair: &Pair<Rule>,
     ) -> Result<CompoundOperatorKind, ParseError> {
-        assert_eq!(op_pair.as_rule(), Rule::compound_assign_op);
+        debug_assert_eq!(op_pair.as_rule(), Rule::compound_assign_op);
 
         let kind = match Self::right_alternative(&op_pair)?.as_rule() {
             Rule::add_assign_op => CompoundOperatorKind::Add,
@@ -1399,7 +1410,7 @@ impl AstParser {
         }
     }
     fn parse_prefix(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
-        assert_eq!(pair.as_rule(), Rule::prefix);
+        debug_assert_eq!(pair.as_rule(), Rule::prefix);
         let _span = pair.as_span();
         let inner = Self::convert_into_iterator(pair);
         let mut expr = None;
@@ -1641,7 +1652,7 @@ impl AstParser {
         &self,
         pair: &Pair<Rule>,
     ) -> Result<Vec<TypeVariable>, ParseError> {
-        assert_eq!(pair.as_rule(), Rule::generic_type_params);
+        debug_assert_eq!(pair.as_rule(), Rule::generic_type_params);
         let mut type_params = Vec::new();
         for type_identifier_pair in Self::convert_into_iterator(pair) {
             if type_identifier_pair.as_rule() == Rule::type_identifier {
@@ -1659,7 +1670,7 @@ impl AstParser {
         &self,
         pair: &Pair<Rule>,
     ) -> Result<LocalTypeIdentifierWithOptionalTypeVariables, ParseError> {
-        assert_eq!(pair.as_rule(), Rule::type_identifier_optional_type_params);
+        debug_assert_eq!(pair.as_rule(), Rule::type_identifier_optional_type_params);
 
         let mut inner = pair.clone().into_inner();
         let name = self.expect_local_type_identifier_next(&mut inner)?;
@@ -1728,7 +1739,7 @@ impl AstParser {
         &self,
         pair: &Pair<Rule>,
     ) -> Result<(Vec<FieldExpression>, bool), ParseError> {
-        assert_eq!(pair.as_rule(), Rule::anonymous_struct_literal);
+        debug_assert_eq!(pair.as_rule(), Rule::anonymous_struct_literal);
         let mut inner = Self::convert_into_iterator(pair);
         let (field_expressions, detected_rest) =
             self.parse_struct_fields_expressions(&inner.next().unwrap())?;
@@ -1740,7 +1751,7 @@ impl AstParser {
         &self,
         pair: &Pair<Rule>,
     ) -> Result<(Vec<FieldExpression>, bool), ParseError> {
-        assert_eq!(pair.as_rule(), Rule::struct_literal_optional_field_list);
+        debug_assert_eq!(pair.as_rule(), Rule::struct_literal_optional_field_list);
         let mut inner = Self::convert_into_iterator(pair);
         let (field_expressions, detected_rest) = if let Some(field_list) = inner.next() {
             self.parse_struct_fields_expressions(&field_list)?
@@ -1781,7 +1792,7 @@ impl AstParser {
     }
 
     fn parse_constant_reference(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
-        assert_eq!(pair.as_rule(), Rule::constant_reference);
+        debug_assert_eq!(pair.as_rule(), Rule::constant_reference);
         let mut inner_pairs = pair.clone().into_inner();
 
         let mut first = inner_pairs.next().unwrap();
@@ -1800,7 +1811,7 @@ impl AstParser {
     }
 
     fn parse_term(&self, pair2: &Pair<Rule>) -> Result<Expression, ParseError> {
-        assert_eq!(pair2.as_rule(), Rule::term);
+        debug_assert_eq!(pair2.as_rule(), Rule::term);
         let sub = &Self::right_alternative(pair2)?;
         match sub.as_rule() {
             Rule::qualified_identifier => self.parse_qualified_identifier_expression(sub),
@@ -1822,6 +1833,8 @@ impl AstParser {
             Rule::anonymous_struct_literal => self.parse_anonymous_struct_literal(sub),
 
             Rule::interpolated_string => self.parse_interpolated_string(sub),
+
+            Rule::lambda => self.parse_lambda(sub),
 
             _ => {
                 Err(self
@@ -2103,7 +2116,7 @@ impl AstParser {
     }
 
     fn parse_basic_literal(&self, pair: &Pair<Rule>) -> Result<(LiteralKind, Node), ParseError> {
-        assert_eq!(pair.as_rule(), Rule::basic_literal);
+        debug_assert_eq!(pair.as_rule(), Rule::basic_literal);
         let inner = self.next_inner_pair(pair)?;
         let literal_kind = match inner.as_rule() {
             Rule::int_lit => LiteralKind::Int,
@@ -2190,7 +2203,7 @@ impl AstParser {
         &self,
         pair: &Pair<Rule>,
     ) -> Result<Vec<MutableOrImmutableExpression>, ParseError> {
-        assert_eq!(pair.as_rule(), Rule::function_call_postfix);
+        debug_assert_eq!(pair.as_rule(), Rule::function_call_postfix);
         let mut inner = pair.clone().into_inner();
         self.parse_function_call_arguments(&Self::next_pair(&mut inner)?)
     }
@@ -2199,7 +2212,7 @@ impl AstParser {
         &self,
         pair: &Pair<Rule>,
     ) -> Result<Vec<MutableOrImmutableExpression>, ParseError> {
-        assert_eq!(pair.as_rule(), Rule::function_call_args);
+        debug_assert_eq!(pair.as_rule(), Rule::function_call_args);
         let inner = pair.clone().into_inner();
         let mut args = Vec::new();
 
@@ -2301,7 +2314,12 @@ impl AstParser {
                 Ok(Type::AnonymousStruct(element_type))
             }
 
-            _ => Err(self.create_error_pair(SpecificError::UnexpectedTypeRule, &pair)),
+            Rule::unit_type => Ok(Type::Unit),
+
+            _ => Err(self.create_error_pair(
+                SpecificError::UnexpectedTypeRule(format!("{:?}", pair.as_rule())),
+                &pair,
+            )),
         }
     }
 
@@ -2685,5 +2703,19 @@ impl AstParser {
             );
         }
         Ok(expr)
+    }
+
+    fn parse_lambda(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
+        debug_assert_eq!(pair.as_rule(), Rule::lambda);
+        let mut inner = pair.clone().into_inner();
+        let variable_list_pair = inner.next().unwrap();
+        let variable_list = self.parse_optional_variable_list(&variable_list_pair)?;
+        let expression_pair = inner.next().unwrap();
+        let expression = self.parse_expression(&expression_pair)?;
+
+        Ok(self.create_expr(
+            ExpressionKind::Lambda(variable_list, Box::new(expression)),
+            pair,
+        ))
     }
 }

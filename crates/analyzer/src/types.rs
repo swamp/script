@@ -79,6 +79,7 @@ impl Analyzer<'_> {
             swamp_script_ast::Type::Named(ast_type_reference) => {
                 self.analyze_named_type(ast_type_reference)?
             }
+            swamp_script_ast::Type::Unit => Type::Unit,
             swamp_script_ast::Type::Optional(inner_type_ast, _node) => {
                 let inner_resolved_type = self.analyze_type(inner_type_ast)?;
                 Type::Optional(Box::from(inner_resolved_type))

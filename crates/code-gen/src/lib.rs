@@ -411,6 +411,7 @@ impl FunctionCodeGen<'_> {
             IntrinsicFunction::VecSubscriptRange => todo!(),
             IntrinsicFunction::VecIter => todo!(),
             IntrinsicFunction::VecIterMut => todo!(),
+            IntrinsicFunction::VecFor => todo!(),
             IntrinsicFunction::VecSelfPush => todo!(),
             IntrinsicFunction::VecSelfExtend => todo!(),
             IntrinsicFunction::VecLen => todo!(),
@@ -739,6 +740,10 @@ impl FunctionCodeGen<'_> {
             ExpressionKind::IntrinsicCallEx(intrinsic_fn, arguments) => self
                 .gen_intrinsic_call_ex(intrinsic_fn, arguments, ctx)
                 .map(|_| GeneratedExpressionResult::default()),
+
+            ExpressionKind::Lambda(vec, x) => {
+                todo!()
+            }
             // --------- Not high prio
             ExpressionKind::CoerceOptionToBool(_) => todo!(),
             ExpressionKind::FunctionValueCall(_, _, _) => todo!(),
@@ -2091,6 +2096,7 @@ impl FunctionCodeGen<'_> {
             IntrinsicFunction::VecFromSlice => self.gen_intrinsic_vec_from_slice(arguments, ctx),
             IntrinsicFunction::VecPush => todo!(),
             IntrinsicFunction::VecPop => todo!(),
+            IntrinsicFunction::VecFor => todo!(),
             IntrinsicFunction::VecRemoveIndex => todo!(),
             IntrinsicFunction::VecClear => todo!(),
             IntrinsicFunction::VecCreate => {

@@ -1078,6 +1078,8 @@ impl<'a, C> Interpreter<'a, C> {
             ExpressionKind::IntrinsicFunctionAccess(_) => panic!(
                 "Intrinsic Function Access should have been converted to IntrinsicFunctionCalls before eval"
             ),
+
+            ExpressionKind::Lambda(a, b) => Value::Lambda(a.to_vec(), b.clone()),
         };
 
         self.depth -= 1;
@@ -1364,6 +1366,49 @@ impl<'a, C> Interpreter<'a, C> {
                 }
                 _ => Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, node))?,
             },
+
+            IntrinsicFunction::VecFor => {
+                let lambda_value = self.evaluate_expression(arguments[0])?;
+                let Value::Lambda(variables, lambda_expression) = lambda_value else {
+                    panic!("need lambda value");
+                };
+
+                let Value::Vec(found_val, items) = &mut *value_ref.borrow_mut() else {
+                    panic!("borrow self");
+                };
+
+                let target_var_info = &variables[0];
+
+                self.push_block_scope();
+
+                self.current_block_scopes.initialize_var(
+                    target_var_info.scope_index,
+                    target_var_info.variable_index,
+                    Value::Int(0),
+                    true,
+                );
+
+                for item in items {
+                    eprintln!("target: {target_var_info:?}");
+                    /*
+
+
+                    */
+
+                    self.current_block_scopes.overwrite_existing_var(
+                        target_var_info.scope_index,
+                        target_var_info.variable_index,
+                        item.borrow().clone(),
+                    );
+
+                    self.evaluate_expression(&lambda_expression)?;
+                }
+
+                self.pop_block_scope();
+
+                Value::Unit
+            }
+
             IntrinsicFunction::VecIsEmpty => match &mut *value_ref.borrow_mut() {
                 Value::Vec(_type_id, vector) => Value::Bool(vector.len() == 0),
                 _ => Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, node))?,

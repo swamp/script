@@ -2822,7 +2822,7 @@ struct SomeStruct {
          ",
         "
 
-StructDef(StructDef { identifier: LocalTypeIdentifier(<8:10>), struct_type: StructType { fields: [StructTypeField { field_name: FieldName(<24:4>), field_type: Struct(StructType { fields: [StructTypeField { field_name: FieldName(<32:1>), field_type: Named(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<35:3>), module_path: None, generic_params: [] }) }, StructTypeField { field_name: FieldName(<40:1>), field_type: Named(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<43:3>), module_path: None, generic_params: [] }) }] }) }, StructTypeField { field_name: FieldName(<53:1>), field_type: Named(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<56:3>), module_path: None, generic_params: [] }) }] } })
+NamedStructDef(NamedStructDef { identifier: LocalTypeIdentifierWithOptionalTypeVariables { name: <8:10>, type_variables: [] }, struct_type: AnonymousStructType { fields: [StructTypeField { field_name: FieldName(<24:4>), field_type: AnonymousStruct(AnonymousStructType { fields: [StructTypeField { field_name: FieldName(<32:1>), field_type: Named(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<35:3>), module_path: None, generic_params: [] }) }, StructTypeField { field_name: FieldName(<40:1>), field_type: Named(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<43:3>), module_path: None, generic_params: [] }) }] }) }, StructTypeField { field_name: FieldName(<53:1>), field_type: Named(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<56:3>), module_path: None, generic_params: [] }) }] } })
 
 
 ",
@@ -2840,9 +2840,86 @@ enum Something {
          ",
         "
 
-EnumDef(<6:9>, [Simple(<21:5>), Struct(<31:7>, StructType { fields: [StructTypeField { field_name: FieldName(<41:1>), field_type: Named(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<44:3>), module_path: None, generic_params: [] }) }, StructTypeField { field_name: FieldName(<49:1>), field_type: Named(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<52:5>), module_path: None, generic_params: [] }) }] })])
+EnumDef(LocalTypeIdentifierWithOptionalTypeVariables { name: <6:9>, type_variables: [] }, [Simple(<21:5>), Struct(<31:7>, AnonymousStructType { fields: [StructTypeField { field_name: FieldName(<41:1>), field_type: Named(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<44:3>), module_path: None, generic_params: [] }) }, StructTypeField { field_name: FieldName(<49:1>), field_type: Named(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<52:5>), module_path: None, generic_params: [] }) }] })])
 
 
+",
+    );
+}
+
+#[test_log::test]
+fn lambda_no_parameters() {
+    check(
+        "
+| | {
+    // This is a block
+}
+         ",
+        "
+
+<1:30>Lambda([], <5:26>Block([]))
+
+",
+    );
+}
+
+#[test_log::test]
+fn lambda_one_param() {
+    check(
+        "
+|
+a
+| {
+    // This is a block
+}
+         ",
+        "
+<1:32>Lambda([<3:1>], <7:26>Block([]))
+",
+    );
+}
+
+#[test_log::test]
+fn lambda_two_params() {
+    check(
+        "
+|
+    a,
+    b,
+| {
+    // This is a block
+}
+         ",
+        "
+<1:44>Lambda([<7:1>, <14:1>], <19:26>Block([]))
+",
+    );
+}
+
+#[test_log::test]
+fn lambda_two_params_expr() {
+    check(
+        "
+|
+    a,
+    b,
+| a + b
+         ",
+        "
+<1:33>Lambda([<7:1>, <14:1>], <19:15>BinaryOp(<19:2>IdentifierReference(QualifiedIdentifier { name: <19:1>, module_path: None, generic_params: [] }), BinaryOperator { kind: Add, node: <21:1> }, <23:11>IdentifierReference(QualifiedIdentifier { name: <23:1>, module_path: None, generic_params: [] })))
+
+",
+    );
+}
+
+#[test_log::test]
+fn lambda_no_params_expr() {
+    check(
+        "
+|| 23
+         ",
+        "
+<1:15>Lambda([], <4:2>Literal(Int))
 ",
     );
 }

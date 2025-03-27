@@ -37,8 +37,9 @@ pub fn build_parse_error(err: &SpecificError, span: &Span) -> Builder<usize> {
         }
         SpecificError::ExpectingTypeIdentifier => todo!(),
         SpecificError::ExpectingInnerPair => todo!(),
-        SpecificError::UnexpectedTypeRule => {
+        SpecificError::UnexpectedTypeRule(wrong_rule) => {
             Report::build(Kind::Error, 1, "unexpected type rule", span)
+                .with_note(&format!("rule: {wrong_rule}"))
         }
         SpecificError::ExpectedTypeIdentifier(_) => todo!(),
         SpecificError::ExpectedLocalTypeIdentifier(_) => todo!(),

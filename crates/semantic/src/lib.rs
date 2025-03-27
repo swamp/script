@@ -693,6 +693,7 @@ pub enum ExpressionKind {
 
      */
     //IntrinsicCall(IntrinsicFunction, Vec<Expression>),
+    Lambda(Vec<VariableRef>, Box<Expression>),
 }
 
 #[derive(Debug, Clone)]

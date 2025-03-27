@@ -241,6 +241,7 @@ impl Display for Type {
             Self::MutableReference(base_type) => write!(f, "mut ref {base_type:?}?"),
             Self::External(rust_type) => write!(f, "RustType {}", rust_type.type_name),
             Self::Variable(variable_name) => write!(f, "<|{variable_name}|>"),
+
             Self::Generic(blueprint, non_concrete_arguments) => {
                 write!(f, "{blueprint:?}<{non_concrete_arguments:?}>")
             }

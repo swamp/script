@@ -461,6 +461,7 @@ pub enum ExpressionKind {
     NamedStructLiteral(QualifiedTypeIdentifier, Vec<FieldExpression>, bool),
     Range(Box<Expression>, Box<Expression>, RangeMode),
     Literal(LiteralKind),
+    Lambda(Vec<Variable>, Box<Expression>),
 }
 
 #[derive(Debug, Clone)]
@@ -541,6 +542,7 @@ pub enum Type {
     Slice(Box<Type>),                // Value array
     SlicePair(Box<Type>, Box<Type>), // Key : Value
     AnonymousStruct(AnonymousStructType),
+    Unit,
     Tuple(Vec<Type>),
     Function(Vec<TypeForParameter>, Box<Type>),
 

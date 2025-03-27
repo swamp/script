@@ -404,7 +404,7 @@ expression = {
 }
 
 assignment               = { logical ~ (assign_op ~ expression)? }
-destructuring_assignment = { multi_variable_list ~ "=" ~ expression }
+destructuring_assignment = { at_least_two_variables_list ~ "=" ~ expression }
 
 parenthesized = { "(" ~ expression ~ ")" }
 
@@ -418,11 +418,12 @@ term = {
   | struct_literal
   | anonymous_struct_literal
   | interpolated_string
-  | closure
+  | lambda
+
 }
 
-closure = {
-    "|" ~ variable_list ~ "|" ~ expression
+lambda = {
+    "|" ~ optional_variable_list ~ "|" ~ expression
 }
 
 // variable or function
@@ -477,10 +478,8 @@ guard_expr   = { guard_item+ }
     =============================================================
 */
 
-variable_list = {
-    ( (maybe_mut_identifier ~ (COMMA ~ maybe_mut_identifier)*) ~ COMMA? )?
-}
-multi_variable_list        = { variable_item ~ (COMMA ~ variable_item)+ }
+optional_variable_list              = { (variable_item ~ (COMMA ~ variable_item)*)? ~ TRAILING_COMMA }
+at_least_two_variables_list        = { variable_item ~ (COMMA ~ variable_item)+ }
 maybe_mut_identifier       = { mut_keyword? ~ identifier }
 variable_item              = { maybe_mut_identifier }
 variable_binding_list      = { variable_binding ~ (COMMA ~ variable_binding)* ~ TRAILING_COMMA }

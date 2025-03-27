@@ -15,8 +15,8 @@ use std::fmt::{Debug, Display};
 use std::hash::Hash;
 use std::rc::Rc;
 use swamp_script_semantic::{
-    ExternalFunctionDefinitionRef, FormatSpecifierKind, InternalFunctionDefinitionRef,
-    PrecisionType,
+    Expression, ExternalFunctionDefinitionRef, FormatSpecifierKind, InternalFunctionDefinitionRef,
+    PrecisionType, VariableRef,
 };
 use swamp_script_types::prelude::*;
 
@@ -113,6 +113,7 @@ pub enum Value {
 
     // Other
     RustValue(ExternalType, Rc<RefCell<Box<dyn RustType>>>),
+    Lambda(Vec<VariableRef>, Box<Expression>),
 }
 
 #[allow(unused)]
@@ -161,7 +162,7 @@ impl Value {
                 octets[0] = u8::from(*b);
                 1
             }
-
+            Self::Lambda(_, _) => todo!(),
             Self::Unit => 0,
             Self::Option(maybe_value) => match maybe_value {
                 None => {
@@ -301,6 +302,7 @@ impl Clone for Value {
             Self::String(s) => Self::String(s.clone()),
             Self::Bool(b) => Self::Bool(*b),
             Self::Unit => Self::Unit,
+            Self::Lambda(a, b) => Self::Lambda(a.clone(), b.clone()),
 
             Self::Option(opt) => {
                 let cloned_opt = opt.as_ref().map(std::clone::Clone::clone);
@@ -732,6 +734,9 @@ impl Display for Value {
                 }
                 write!(f, "]")
             }
+            Self::Lambda(a, b) => {
+                writeln!(f, "lambda")
+            }
             Self::Grid(grid) => {
                 writeln!(f, "[grid:")?;
                 for row in grid.rows() {
@@ -961,6 +966,9 @@ impl Hash for Value {
                 } else {
                     0.hash(state);
                 }
+            }
+            Self::Lambda(a, b) => {
+                todo!()
             }
             Self::Vec(_, _arr) => {}
             Self::Grid(_) => {}

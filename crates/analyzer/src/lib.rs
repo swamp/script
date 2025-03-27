@@ -34,6 +34,7 @@ use swamp_script_semantic::{
 use swamp_script_source_map::SourceMap;
 use swamp_script_types::all_types_are_concrete_or_unit;
 use swamp_script_types::prelude::*;
+use tracing::info;
 use tracing::{error, trace};
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -678,6 +679,10 @@ impl<'a> Analyzer<'a> {
             }
             swamp_script_ast::ExpressionKind::Guard(guard_expressions) => {
                 self.analyze_guard(&ast_expression.node, context, guard_expressions)?
+            }
+
+            swamp_script_ast::ExpressionKind::Lambda(variables, expression) => {
+                self.analyze_lambda(&ast_expression.node, variables, &**expression, context)?
             }
         };
 
@@ -1332,7 +1337,10 @@ impl<'a> Analyzer<'a> {
                 ));
             }
         }
-        Err(self.create_err(ErrorKind::UnknownFunction, &qualified_func_name.name))
+        Err(self.create_err(
+            ErrorKind::UnknownIdentifier(function_name.to_string()),
+            &qualified_func_name.name,
+        ))
     }
 
     // The ast assumes it is something similar to a variable, but it can be a function reference as well.
@@ -1347,7 +1355,8 @@ impl<'a> Analyzer<'a> {
                 var_node,
             ));
         }
-        Err(self.create_err(ErrorKind::UnknownIdentifier, var_node))
+        let text = self.get_text(var_node);
+        Err(self.create_err(ErrorKind::UnknownIdentifier(text.to_string()), var_node))
     }
 
     fn analyze_slice_type_helper(
@@ -1835,6 +1844,53 @@ impl<'a> Analyzer<'a> {
                 Ok(expr)
             },
         )
+    }
+
+    fn analyze_lambda(
+        &mut self,
+        node: &swamp_script_ast::Node,
+        variables: &Vec<swamp_script_ast::Variable>,
+        ast_expr: &swamp_script_ast::Expression,
+        context: &TypeContext,
+    ) -> Result<Expression, Error> {
+        let Type::Function(signature) = &context.expected_type.unwrap() else {
+            return Err(self.create_err(ErrorKind::ExpectedLambda, node));
+        };
+        info!(?signature, "LAMBDA SIGN");
+
+        let return_block_type = TypeContext::new_argument(&signature.return_type);
+
+        self.push_block_scope("lambda");
+
+        let arity_required = signature.parameters.len();
+        let variable_types_to_create = if variables.len() == arity_required {
+            &signature.parameters
+        } else if variables.len() + 1 == arity_required {
+            &signature.parameters[1..].to_vec()
+        } else {
+            return Err(self.create_err(ErrorKind::WrongNumberOfArguments(0, 0), node));
+        };
+
+        let mut resolved_variables = Vec::new();
+        for (variable, variable_type) in variables.iter().zip(variable_types_to_create) {
+            let variable_ref = self.create_local_variable(
+                &variable.name,
+                Some(node),
+                &variable_type.resolved_type,
+            )?;
+            info!(?variable_ref, ?variable_type.resolved_type, "variable type");
+            resolved_variables.push(variable_ref);
+        }
+
+        let analyzed_expression = self.analyze_expression(ast_expr, &return_block_type)?;
+
+        self.pop_block_scope("lambda");
+
+        Ok(self.create_expr(
+            ExpressionKind::Lambda(resolved_variables, Box::new(analyzed_expression)),
+            Type::Function(signature.clone()),
+            node,
+        ))
     }
 
     /// # Errors

@@ -310,6 +310,10 @@ impl Vec<T> {
         vec_iter_mut(self)
     }
 
+    fn for(self, block: (T) -> ()) {
+        vec_for(self, block)
+    }
+
     /// Adds an element at the end of the vector.
     ///
     /// # Parameters
@@ -427,6 +431,16 @@ impl Map<K, V> {
     fn iter_mut(self) -> (K, V) {
         map_iter_mut(self)
     }
+
+/*
+    fn for(block: (K, V) -> ()) {
+        map_for(self, block)
+    }
+
+    fn while(block: (K, V) -> Bool) {
+        map_while(self, block)
+    }
+*/
 
     /// Gets an element with the specified key
     ///

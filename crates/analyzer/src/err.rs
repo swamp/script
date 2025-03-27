@@ -18,7 +18,6 @@ pub enum ErrorKind {
     NoAssociatedFunction(Type, String),
     MissingSubscriptMember,
     UnusedVariablesCanNotBeMut,
-    UnknownIdentifier,
     VariableTypeMustBeConcrete,
     GuardCanNotHaveMultipleWildcards,
     WildcardMustBeLastInGuard,
@@ -61,7 +60,7 @@ pub enum ErrorKind {
     FloatConversionError(ParseFloatError),
     BoolConversionError,
     DuplicateFieldInStructInstantiation(String),
-    UnknownFunction,
+    UnknownIdentifier(String),
     NoDefaultImplemented(Type),
     UnknownConstant,
     NotValidLocationStartingPoint,
@@ -83,6 +82,7 @@ pub enum ErrorKind {
     UnexpectedType,
     CanNotAttachFunctionsToType,
     MissingMemberFunction(String),
+    ExpectedLambda,
 }
 
 impl From<SemanticError> for Error {
