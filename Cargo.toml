@@ -35,5 +35,5 @@ members = [
     "crates/vm-test",
     "crates/vm-disasm",
     "crates/vm-types",
-    "crates/vm-instr-build", "crates/vm-host",
+    "crates/vm-instr-build", "crates/vm-host", "crates/time-dilation", "crates/code-gen-program",
 ]
