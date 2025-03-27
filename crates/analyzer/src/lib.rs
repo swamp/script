@@ -28,21 +28,13 @@ use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{
     ArgumentExpressionOrLocation, BlockScope, BlockScopeMode, FunctionScopeState,
     InternalMainExpression, LocationAccess, LocationAccessKind, MutOrImmutableExpression,
-    NormalPattern, Postfix, PostfixKind, RangeMode, SingleLocationExpression,
-    SingleLocationExpressionKind, SingleMutLocationExpression, TypeWithMut, WhenBinding,
+    NormalPattern, Postfix, PostfixKind, SingleLocationExpression, SingleLocationExpressionKind,
+    SingleMutLocationExpression, TypeWithMut, WhenBinding,
 };
 use swamp_script_source_map::SourceMap;
 use swamp_script_types::all_types_are_concrete_or_unit;
 use swamp_script_types::prelude::*;
 use tracing::{error, trace};
-
-#[must_use]
-pub fn convert_range_mode(range_mode: &swamp_script_ast::RangeMode) -> RangeMode {
-    match range_mode {
-        swamp_script_ast::RangeMode::Inclusive => RangeMode::Inclusive,
-        swamp_script_ast::RangeMode::Exclusive => RangeMode::Exclusive,
-    }
-}
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum LocationSide {

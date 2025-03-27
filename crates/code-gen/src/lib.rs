@@ -21,9 +21,8 @@ use swamp_script_semantic::{
     BooleanExpression, CompoundOperatorKind, ConstantId, ConstantRef, EnumLiteralData, Expression,
     ExpressionKind, ForPattern, Function, Guard, InternalFunctionDefinitionRef, InternalFunctionId,
     InternalMainExpression, Iterable, Literal, Match, MutOrImmutableExpression, NormalPattern,
-    Pattern, Postfix, PostfixKind, RangeMode, SingleLocationExpression,
-    SingleMutLocationExpression, StructInstantiation, UnaryOperator, UnaryOperatorKind,
-    VariableRef, WhenBinding,
+    Pattern, Postfix, PostfixKind, SingleLocationExpression, SingleMutLocationExpression,
+    StructInstantiation, UnaryOperator, UnaryOperatorKind, VariableRef, WhenBinding,
 };
 use swamp_script_source_map_lookup::{SourceMapLookup, SourceMapWrapper};
 use swamp_script_types::{AnonymousStructType, EnumVariantType, Signature, StructTypeField, Type};
@@ -2364,31 +2363,6 @@ impl FunctionCodeGen<'_, '_> {
                 .builder
                 .patch_jump_here(maybe_jump_over_false.unwrap());
         }
-
-        Ok(())
-    }
-
-    fn gen_range(
-        &mut self,
-        start: &Expression,
-        end: &Expression,
-        mode: &RangeMode,
-        ctx: &Context,
-    ) -> Result<(), Error> {
-        let start_ctx = ctx.with_offset(MemoryOffset(0), MemorySize(INT_SIZE));
-        self.gen_expression(start, &start_ctx)?;
-
-        let end_ctx = ctx.with_offset(MemoryOffset(INT_SIZE), MemorySize(INT_SIZE));
-        self.gen_expression(end, &end_ctx)?;
-
-        let mode_ctx = ctx.with_offset(MemoryOffset(INT_SIZE + INT_SIZE), MemorySize(BOOL_SIZE));
-        let val = match &mode {
-            RangeMode::Inclusive => 1u8,
-            RangeMode::Exclusive => 0u8,
-        };
-        self.state
-            .builder
-            .add_ld8(mode_ctx.addr(), val, "range mode");
 
         Ok(())
     }

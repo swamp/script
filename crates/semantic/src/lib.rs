@@ -484,12 +484,6 @@ pub struct Guard {
     pub result: Expression,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub enum RangeMode {
-    Inclusive,
-    Exclusive,
-}
-
 #[derive(Debug, Clone)]
 pub struct Postfix {
     pub node: Node,
@@ -537,15 +531,6 @@ pub struct SingleMutLocationExpression(pub SingleLocationExpression);
 pub enum SingleLocationExpressionKind {
     MutVariableRef,
     MutStructFieldRef(NamedStructType, usize),
-}
-
-#[derive(Debug, Clone)]
-pub struct SliceLocationExpression {
-    pub start: Box<Expression>,
-    pub range_start: Box<Expression>,
-    pub range_end: Box<Expression>,
-    pub mode: RangeMode,
-    pub ty: Type,
 }
 
 #[derive(Debug, Clone)]

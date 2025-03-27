@@ -156,7 +156,7 @@ pub fn bootstrap_modules(
         source_map_display: &pretty_printer,
     };
 
-    trace!(%display_core_analyzed_definition_table, "core analyzed symbol table");
+    //trace!(%display_core_analyzed_definition_table, "core analyzed symbol table");
 
     core_module_with_intrinsics.symbol_table = core_analyzed_definition_table;
 
@@ -190,8 +190,6 @@ pub fn bootstrap_modules(
         symbol_table: &default_symbol_table_for_others,
         source_map_display: &pretty_printer,
     };
-
-    trace!(%symbol_table_display, "default_symbol_table");
 
     let program = Program::new(state, modules, default_symbol_table_for_others);
 

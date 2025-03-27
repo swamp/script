@@ -9,14 +9,12 @@ use crate::prelude::{ValueReference, VariableValue};
 use seq_map::SeqMap;
 use std::fmt::Debug;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
-use swamp_script_core_extra::extra::{SparseValueId, SparseValueMap};
+use swamp_script_core_extra::extra::SparseValueId;
 use swamp_script_core_extra::grid::Grid;
 use swamp_script_core_extra::map2::Map2;
 use swamp_script_core_extra::prelude::ValueError;
 use swamp_script_core_extra::value::ValueRef;
-use swamp_script_core_extra::value::{
-    Value, convert_vec_to_rc_refcell, format_value, to_rust_value,
-};
+use swamp_script_core_extra::value::{Value, convert_vec_to_rc_refcell, format_value};
 use swamp_script_node::Node;
 use swamp_script_semantic::prelude::*;
 use swamp_script_semantic::{ArgumentExpressionOrLocation, LocationAccess, LocationAccessKind};
@@ -25,10 +23,9 @@ use swamp_script_semantic::{
     MutOrImmutableExpression, NormalPattern, PatternElement, PostfixKind, SingleLocationExpression,
     SingleLocationExpressionKind, UnaryOperatorKind,
 };
-use swamp_script_semantic::{ExternalFunctionId, Postfix, SingleMutLocationExpression};
+use swamp_script_semantic::{ExternalFunctionId, Postfix};
 use swamp_script_source_map_lookup::SourceMapLookup;
 use swamp_script_types::{EnumVariantType, Type, TypeForParameter, same_anon_struct_ref};
-use tracing::{error, info};
 
 pub mod err;
 
@@ -1031,7 +1028,6 @@ impl<'a, C> Interpreter<'a, C> {
                     self.push_block_scope();
 
                     for (binding, value) in bindings.iter().zip(all_expressions) {
-                        info!(var=?binding.variable, "binding as mutable");
                         self.current_block_scopes.initialize_var(
                             binding.variable.scope_index,
                             binding.variable.variable_index,
@@ -1071,7 +1067,7 @@ impl<'a, C> Interpreter<'a, C> {
             }
             ExpressionKind::VariableAccess(variable_ref) => {
                 let temp = self.current_block_scopes.lookup_var_value(variable_ref);
-                assert_ne!(temp, Value::Unit);
+                debug_assert_ne!(temp, Value::Unit);
                 temp
             }
             ExpressionKind::PostfixChain(start, parts) => {
@@ -1323,9 +1319,13 @@ impl<'a, C> Interpreter<'a, C> {
                     if let Some(found_value) = maybe_value {
                         found_value.borrow().clone()
                     } else {
-                        return Err(
-                            self.create_err(RuntimeErrorKind::VecSubscriptNonExisting, node)
-                        );
+                        return Err(self.create_err(
+                            RuntimeErrorKind::VecIndexOutOfBoundsError {
+                                tried: index_int,
+                                size: vector.len(),
+                            },
+                            node,
+                        ));
                     }
                 }
                 _ => {
@@ -1918,11 +1918,11 @@ impl<'a, C> Interpreter<'a, C> {
 
                 match start_variable_value {
                     VariableValue::Value(value) => {
-                        assert_ne!(*value, Value::Unit);
+                        debug_assert_ne!(*value, Value::Unit);
                         (Rc::new(RefCell::new(value.clone())), false)
                     }
                     VariableValue::Reference(value_ref) => {
-                        assert_ne!(value_ref.borrow().clone(), Value::Unit);
+                        debug_assert_ne!(value_ref.borrow().clone(), Value::Unit);
                         (value_ref.clone(), true)
                     }
                 }
@@ -1976,14 +1976,6 @@ impl<'a, C> Interpreter<'a, C> {
                         })?;
                         (struct_ref.clone(), fields_ref.clone())
                     };
-
-                    if !same_anon_struct_ref(&encountered_struct_type, expected_struct_type) {
-                        error!(
-                            ?expected_struct_type,
-                            ?encountered_struct_type,
-                            "difference"
-                        );
-                    }
 
                     debug_assert!(same_anon_struct_ref(
                         &encountered_struct_type,
@@ -2332,15 +2324,9 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             }
             Value::EnumVariantStruct(enum_type, value_enum_struct_type, values) => {
-                info!(
-                    ?value_enum_struct_type,
-                    ?variant_ref,
-                    "comparing enum variant struct match arm"
-                );
                 if value_enum_struct_type.common.container_index
                     == variant_ref.common().container_index
                 {
-                    info!(?value_enum_struct_type, ?variant_ref, "FOUND!");
                     if let Some(elements) = maybe_elements {
                         self.push_block_scope();
 
@@ -2349,7 +2335,6 @@ impl<'a, C> Interpreter<'a, C> {
                                 element
                             {
                                 let value = &values[*field_index];
-                                info!(?value, "setting match arm variable");
                                 self.current_block_scopes.init_var_ref(var_ref, value);
                             }
                         }
@@ -2508,7 +2493,6 @@ impl<'a, C> Interpreter<'a, C> {
             (Value::Option(a), BinaryOperatorKind::Equal, Value::Option(b)) => Value::Bool(a == b),
 
             _ => {
-                error!(?op, "invalid binary operation!!");
                 panic!("invalid binary operation"); // TODO: improve error handling
             }
         };

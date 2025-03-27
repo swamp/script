@@ -12,8 +12,9 @@ pub fn build_runtime_error(err: &RuntimeError) -> Builder<usize> {
         RuntimeErrorKind::StackCouldNotBePopped => {
             Report::build(Kind::Error, 104, "stack could not pop", span)
         }
-        RuntimeErrorKind::VecSubscriptNonExisting => {
-            Report::build(Kind::Error, 104, "vector subscript failed", span)
+        RuntimeErrorKind::VecIndexOutOfBoundsError { tried, size } => {
+            Report::build(Kind::Error, 104, "index out of bounds", span)
+                .with_note(&format!("tried_index:{tried} size:{size}"))
         }
         RuntimeErrorKind::MapKeyNonExisting => {
             Report::build(Kind::Error, 104, "map key does not exist", span)

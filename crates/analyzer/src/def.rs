@@ -23,7 +23,6 @@ impl Analyzer<'_> {
         import_items: &swamp_script_ast::ImportItems,
         node: &swamp_script_ast::Node,
     ) -> Result<(), Error> {
-        trace!(?path, "looking for module");
         let found_module = self
             .shared
             .get_module(path)
@@ -564,7 +563,6 @@ impl Analyzer<'_> {
             .get_source_line(self.shared.file_id, line);
 
          */
-        trace!(?definition, "analyzing definition");
     }
 
     /// # Errors
@@ -610,7 +608,6 @@ impl Analyzer<'_> {
         functions: &[swamp_script_ast::Function],
     ) -> Result<(), Error> {
         let type_name_text = self.get_text(&attached_to_type.name).to_string();
-        trace!(?type_name_text, "impl start");
 
         let converted_type_variables_to_ast_types = attached_to_type
             .type_variables
@@ -645,8 +642,6 @@ impl Analyzer<'_> {
         };
 
         if let Some(type_to_attach_to) = maybe_type_to_attach_to {
-            trace!(?type_to_attach_to, "impl type to attach to");
-
             let function_refs: Vec<&swamp_script_ast::Function> = functions.iter().collect();
 
             self.analyze_impl_functions(type_to_attach_to, &function_refs)?;

@@ -11,7 +11,6 @@ use swamp_script_core_extra::extra::SparseValueId;
 use swamp_script_core_extra::prelude::{Value, ValueError};
 use swamp_script_core_extra::value::RustType;
 use swamp_script_core_extra::value::ValueRef;
-use tracing::info;
 
 #[derive(Debug, Clone)]
 pub struct ValueReference(pub ValueRef);
@@ -47,7 +46,6 @@ impl ValueReference {
                 Box::new(cloned_rc.into_iter()) as Box<dyn Iterator<Item = ValueRef> + 'static>
             }
             _ => {
-                info!(?inner, "not sure what this is:");
                 todo!()
             }
         };

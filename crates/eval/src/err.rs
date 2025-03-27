@@ -22,7 +22,7 @@ pub struct RuntimeError {
 #[derive(Debug, PartialEq, Eq)]
 pub enum RuntimeErrorKind {
     StackCouldNotBePopped,
-    VecSubscriptNonExisting,
+    VecIndexOutOfBoundsError { tried: i32, size: usize },
     MapKeyNonExisting,
     MustHaveGuardArmThatMatches,
     ValueError(ValueError),

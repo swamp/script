@@ -91,11 +91,6 @@ impl SourceMap {
     }
 
     pub fn read_file(&mut self, path: &Path, mount_name: &str) -> io::Result<(FileId, String)> {
-        trace!(
-            ?path,
-            ?mount_name,
-            "actually reading file from secondary storage"
-        );
         let found_base_path = self.base_path(mount_name);
         let relative_path = diff_paths(path, found_base_path)
             .unwrap_or_else(|| panic!("could not find relative path {path:?} {found_base_path:?}"));
