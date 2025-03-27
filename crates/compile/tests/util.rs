@@ -15,6 +15,7 @@ fn internal_compile(script: &str) -> Result<Program, ScriptResolveError> {
 
     let source_map_lookup = SourceMapWrapper {
         source_map: &source_map,
+        current_dir: Default::default(),
     };
     let pretty_printer = SourceMapDisplay {
         source_map: &source_map_lookup,

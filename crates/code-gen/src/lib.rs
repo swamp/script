@@ -87,14 +87,14 @@ pub struct ConstantInfo {
     pub target_constant_memory: ConstantMemoryRegion,
 }
 
-pub struct CodeGenState<'b> {
+pub struct CodeGenState {
     builder: InstructionBuilder,
     constants: ConstantsManager,
     constant_offsets: SeqMap<ConstantId, ConstantMemoryRegion>,
     constant_functions: SeqMap<ConstantId, ConstantInfo>,
     function_infos: SeqMap<InternalFunctionId, FunctionInfo>,
     function_fixups: Vec<FunctionFixup>,
-    source_map_lookup: &'b SourceMapWrapper<'b>,
+    //source_map_lookup: &'b SourceMapWrapper<'b>,
     debug_last_ip: usize,
 }
 
@@ -102,9 +102,9 @@ pub struct GenOptions {
     pub is_halt_function: bool,
 }
 
-impl<'a> CodeGenState<'a> {
+impl CodeGenState {
     #[must_use]
-    pub fn new(source_map_lookup: &'a SourceMapWrapper) -> Self {
+    pub fn new() -> Self {
         Self {
             builder: InstructionBuilder::default(),
             constants: ConstantsManager::new(),
@@ -112,7 +112,6 @@ impl<'a> CodeGenState<'a> {
             function_infos: SeqMap::default(),
             constant_functions: SeqMap::default(),
             function_fixups: vec![],
-            source_map_lookup,
             debug_last_ip: 0,
         }
     }
@@ -196,6 +195,7 @@ impl<'a> CodeGenState<'a> {
         &mut self,
         internal_fn_def: &InternalFunctionDefinitionRef,
         options: &GenOptions,
+        source_map_wrapper: &SourceMapWrapper,
     ) -> Result<(), Error> {
         assert_ne!(internal_fn_def.program_unique_id, 0);
         self.function_infos
@@ -208,7 +208,7 @@ impl<'a> CodeGenState<'a> {
             )
             .unwrap();
 
-        let mut function_generator = FunctionCodeGen::new(self);
+        let mut function_generator = FunctionCodeGen::new(self, source_map_wrapper);
 
         function_generator.layout_variables(
             &internal_fn_def.function_scope_state,
@@ -268,12 +268,13 @@ impl<'a> CodeGenState<'a> {
     pub fn gen_constants_expression_functions_in_order(
         &mut self,
         constants: &[ConstantRef],
+        source_map_wrapper: &SourceMapWrapper,
     ) -> Result<(), Error> {
         for constant in constants {
             let target_region = *self.constant_offsets.get(&constant.id).unwrap();
             let ip = self.builder.position();
             {
-                let mut function_generator = FunctionCodeGen::new(self);
+                let mut function_generator = FunctionCodeGen::new(self, source_map_wrapper);
 
                 let constant_target_ctx = Context::new(FrameMemoryRegion::new(
                     FrameMemoryAddress(0),
@@ -305,9 +306,9 @@ impl<'a> CodeGenState<'a> {
         &mut self,
         main: &InternalMainExpression,
         options: &GenOptions,
-        source_map_lookup: &dyn SourceMapLookup,
+        source_map_lookup: &SourceMapWrapper,
     ) -> Result<(), Error> {
-        let mut function_generator = FunctionCodeGen::new(self);
+        let mut function_generator = FunctionCodeGen::new(self, source_map_lookup);
 
         function_generator.layout_variables(&main.function_scope_state, &main.expression.ty)?;
         let empty_ctx = Context::new(FrameMemoryRegion::default());
@@ -317,18 +318,19 @@ impl<'a> CodeGenState<'a> {
     }
 }
 
-pub struct FunctionCodeGen<'a, 'b> {
-    state: &'a mut CodeGenState<'b>,
+pub struct FunctionCodeGen<'a> {
+    state: &'a mut CodeGenState,
     variable_offsets: SeqMap<usize, FrameMemoryRegion>,
     frame_size: FrameMemorySize,
     //extra_frame_allocator: ScopeAllocator,
     temp_allocator: ScopeAllocator,
     argument_allocator: ScopeAllocator,
+    source_map_lookup: &'a SourceMapWrapper<'a>,
 }
 
-impl<'a, 'b> FunctionCodeGen<'a, 'b> {
+impl<'a> FunctionCodeGen<'a> {
     #[must_use]
-    pub fn new(state: &'a mut CodeGenState<'b>) -> Self {
+    pub fn new(state: &'a mut CodeGenState, source_map_lookup: &'a SourceMapWrapper) -> Self {
         Self {
             state,
             variable_offsets: SeqMap::default(),
@@ -336,11 +338,12 @@ impl<'a, 'b> FunctionCodeGen<'a, 'b> {
             //  extra_frame_allocator: ScopeAllocator::new(FrameMemoryRegion::default()),
             temp_allocator: ScopeAllocator::new(FrameMemoryRegion::default()),
             argument_allocator: ScopeAllocator::new(FrameMemoryRegion::default()),
+            source_map_lookup,
         }
     }
 }
 
-impl FunctionCodeGen<'_, '_> {
+impl FunctionCodeGen<'_> {
     #[allow(clippy::too_many_lines)]
     pub(crate) fn gen_single_intrinsic_call(
         &mut self,
@@ -632,8 +635,8 @@ impl FunctionCodeGen<'_, '_> {
     }
 
     fn debug_node(&self, node: &Node) {
-        let line_info = self.state.source_map_lookup.get_line(&node.span);
-        let span_text = self.state.source_map_lookup.get_text_span(&node.span);
+        let line_info = self.source_map_lookup.get_line(&node.span);
+        let span_text = self.source_map_lookup.get_text_span(&node.span);
         eprintln!(
             "{}:{}:{}> {}",
             line_info.relative_file_name, line_info.row, line_info.col, span_text,

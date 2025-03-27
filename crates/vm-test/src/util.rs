@@ -3,22 +3,29 @@ use swamp_script_code_gen::{CodeGenState, Error};
 use swamp_script_code_gen_program::code_gen_program;
 use swamp_script_compile::Program;
 use swamp_script_compile::compile_string;
+use swamp_script_source_map_lookup::SourceMapWrapper;
 use swamp_vm::host::HostArgs;
 use swamp_vm::{Vm, VmSetup};
 use swamp_vm_disasm::{disasm_instructions_color, disasm_instructions_no_color};
+use swamp_vm_types::InstructionPosition;
 
-fn gen_internal(code: &str) -> Result<(CodeGenState, Program), Error> {
-    let (program, main_module, _source_map) = compile_string(code).unwrap();
+fn gen_internal(code: &str) -> Result<(CodeGenState, Program, SourceMapWrapper), Error> {
+    let (program, main_module, source_map) = compile_string(code).unwrap();
 
-    let code_gen = code_gen_program(&program, &main_module)?;
+    let source_map_wrapper = SourceMapWrapper {
+        source_map: &source_map,
+        current_dir: Default::default(),
+    };
+    let code_gen = code_gen_program(&program, &main_module, &source_map_wrapper)?;
 
-    Ok((code_gen, program))
+    Ok((code_gen, program, source_map_wrapper))
 }
 
 fn gen_internal_debug(code: &str) -> Result<(CodeGenState, Program), Error> {
     let (code_gen, program) = gen_internal(code)?;
     let disassembler_output = disasm_instructions_color(
         code_gen.instructions(),
+        &InstructionPosition(0),
         code_gen.comments(),
         &code_gen.create_function_sections(),
     );

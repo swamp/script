@@ -113,7 +113,7 @@ impl Constants {
     #[must_use]
     pub fn lookup_constant_value(&self, id: ConstantId) -> &Value {
         let x = &self.values[id as usize];
-        assert_ne!(*x, Value::Unit, "illegal constant");
+        debug_assert_ne!(*x, Value::Unit, "illegal constant");
         x
     }
 
@@ -2647,7 +2647,7 @@ impl<'a, C> Interpreter<'a, C> {
 #[inline]
 #[must_use]
 pub fn i64_sqrt(v: i64) -> i64 {
-    assert!(v >= 0, "negative numbers are undefined for sqrt() {v}");
+    debug_assert!(v >= 0, "negative numbers are undefined for sqrt() {v}");
 
     if v == 0 {
         return v;
