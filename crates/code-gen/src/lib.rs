@@ -1322,7 +1322,6 @@ impl FunctionCodeGen<'_> {
                 }
                 PostfixKind::OptionUnwrap => todo!(),
                 PostfixKind::NoneCoalesce(_) => todo!(),
-                PostfixKind::IntrinsicCall(_, _) => todo!(),
             }
         }
 

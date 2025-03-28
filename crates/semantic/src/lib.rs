@@ -145,6 +145,17 @@ pub struct BlockScope {
     pub variables: SeqMap<String, VariableRef>,
 }
 
+impl Display for BlockScope {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        writeln!(f, "-- scope {:?}", self.mode)?;
+
+        for (index, (name, var)) in self.variables.iter().enumerate() {
+            writeln!(f, "  var({index}): {name}:{var:?}")?;
+        }
+        Ok(())
+    }
+}
+
 impl Default for BlockScope {
     fn default() -> Self {
         Self::new()
@@ -166,6 +177,15 @@ pub struct FunctionScopeState {
     pub block_scope_stack: Vec<BlockScope>,
     pub return_type: Type,
     pub variable_index: usize,
+}
+
+impl Display for FunctionScopeState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        for (index, scope) in self.block_scope_stack.iter().enumerate() {
+            writeln!(f, "block({index}):\n{scope}")?;
+        }
+        Ok(())
+    }
 }
 
 impl FunctionScopeState {
@@ -498,7 +518,6 @@ pub enum PostfixKind {
     FunctionCall(Vec<ArgumentExpressionOrLocation>),
     OptionUnwrap, // ? operator
     NoneCoalesce(Expression),
-    IntrinsicCall(IntrinsicFunction, Vec<Expression>),
 }
 
 #[derive(Debug, Clone)]

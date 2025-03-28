@@ -7,6 +7,7 @@ use crate::err::RuntimeErrorKind;
 use crate::prelude::RuntimeError;
 use crate::prelude::VariableValue;
 use std::cell::RefCell;
+use std::fmt::Display;
 use std::rc::Rc;
 use swamp_script_core_extra::prelude::Value;
 use swamp_script_core_extra::value::ValueRef;
@@ -31,6 +32,15 @@ impl Default for BlockScope {
     }
 }
 
+impl Display for BlockScope {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        for (index, variable_value) in self.variables.iter().enumerate().take(4) {
+            writeln!(f, "  var({}): {}", index, variable_value.to_value())?;
+        }
+        Ok(())
+    }
+}
+
 impl BlockScope {
     #[inline(always)]
     fn set(&mut self, variable_index: usize, value: VariableValue) {
@@ -49,13 +59,18 @@ pub struct BlockScopes {
     current_block_scopes: Vec<BlockScope>,
 }
 
-impl BlockScopes {}
-
-impl BlockScopes {}
-
 impl Default for BlockScopes {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl Display for BlockScopes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        for (index, scope) in self.current_block_scopes.iter().enumerate() {
+            writeln!(f, "block({index}):\n{scope}")?;
+        }
+        Ok(())
     }
 }
 
@@ -134,17 +149,14 @@ impl BlockScopes {
 
     #[inline]
     pub fn lookup_var(&self, relative_scope_index: usize, variable_index: usize) -> &VariableValue {
-        if relative_scope_index >= self.current_block_scopes.len() {
-            panic!(
-                "illegal scope index {relative_scope_index} of {}",
-                self.current_block_scopes.len()
-            );
-        }
+        debug_assert!(
+            relative_scope_index < self.current_block_scopes.len(),
+            "illegal scope index {relative_scope_index} of {}",
+            self.current_block_scopes.len()
+        );
 
         let variables = &self.current_block_scopes[relative_scope_index].variables;
-        if variable_index >= variables.len() {
-            panic!("illegal index");
-        }
+        debug_assert!(variable_index < variables.len(), "illegal index");
         &variables[variable_index]
     }
 

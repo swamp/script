@@ -1379,6 +1379,8 @@ impl<'a, C> Interpreter<'a, C> {
 
                 let target_var_info = &variables[0];
 
+                self.pop_function_scope();
+
                 self.push_block_scope();
 
                 self.current_block_scopes.initialize_var(
@@ -1389,12 +1391,6 @@ impl<'a, C> Interpreter<'a, C> {
                 );
 
                 for item in items {
-                    eprintln!("target: {target_var_info:?}");
-                    /*
-
-
-                    */
-
                     self.current_block_scopes.overwrite_existing_var(
                         target_var_info.scope_index,
                         target_var_info.variable_index,
@@ -1405,6 +1401,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
 
                 self.pop_block_scope();
+                self.push_function_scope(); // Hack since function scope will be popped when returning
 
                 Value::Unit
             }
@@ -2036,6 +2033,14 @@ impl<'a, C> Interpreter<'a, C> {
                     val_ref = Rc::new(RefCell::new(val));
                     is_mutable = false;
                 }
+                /*
+                PostfixKind::IntrinsicCall(intrinsic, arguments) => {
+                    let val = self.eval_intrinsic_internal(node, intrinsic, arguments)?;
+                    val_ref = Rc::new(RefCell::new(val));
+                    is_mutable = false;
+                }
+
+                 */
                 PostfixKind::FunctionCall(arguments) => {
                     let val = self.eval_function_call(node, &val_ref, arguments)?;
 
@@ -2067,7 +2072,6 @@ impl<'a, C> Interpreter<'a, C> {
                     is_mutable = false;
                     is_uncertain = true;
                 }
-                _ => {}
             }
         }
 

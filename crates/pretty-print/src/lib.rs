@@ -578,11 +578,6 @@ impl SourceMapDisplay<'_> {
 
 
              */
-            PostfixKind::IntrinsicCall(intrinsic_fn, arguments) => {
-                write!(f, "[intrinsic_call: {intrinsic_fn:?}")?;
-                self.show_expressions(f, arguments, tabs + 1)?;
-                write!(f, "]")
-            }
         }
     }
 

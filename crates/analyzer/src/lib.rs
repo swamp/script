@@ -7,7 +7,6 @@ pub mod call;
 pub mod constant;
 pub mod def;
 pub mod err;
-pub mod internal;
 pub mod literal;
 pub mod operator;
 pub mod pattern;
@@ -960,41 +959,29 @@ impl<'a> Analyzer<'a> {
                         .iter()
                         .map(|x| &x.expression)
                         .collect::<Vec<_>>();
-                    if let Some(found_internal) = self.check_for_internal_member_call(
-                        &tv.resolved_type,
-                        tv.is_mutable,
-                        member_name,
-                        &dereference,
-                    )? {
-                        tv.resolved_type = found_internal.ty.clone();
+
+                    let member_name_str = self.get_text(member_name).to_string();
+
+                    if let Some(_found_member) = self
+                        .shared
+                        .state
+                        .instantiator
+                        .associated_impls
+                        .get_member_function(&tv.resolved_type, &member_name_str)
+                    {
+                        let return_type = self.analyze_postfix_member_call(
+                            &tv.resolved_type,
+                            tv.is_mutable,
+                            member_name,
+                            ast_arguments,
+                            &mut suffixes,
+                        )?;
+
+                        //self.add_postfix(&mut suffixes, kind, return_type.clone(), member_name);
+                        tv.resolved_type = return_type.clone();
                         tv.is_mutable = false;
-                        suffixes.push(found_internal);
                     } else {
-                        let member_name_str = self.get_text(member_name).to_string();
-
-                        if let Some(_found_member) = self
-                            .shared
-                            .state
-                            .instantiator
-                            .associated_impls
-                            .get_member_function(&tv.resolved_type, &member_name_str)
-                        {
-                            let return_type = self.analyze_postfix_member_call(
-                                &tv.resolved_type,
-                                tv.is_mutable,
-                                member_name,
-                                ast_arguments,
-                                &mut suffixes,
-                            )?;
-
-                            //self.add_postfix(&mut suffixes, kind, return_type.clone(), member_name);
-                            tv.resolved_type = return_type.clone();
-                            tv.is_mutable = false;
-                        } else {
-                            return Err(
-                                self.create_err(ErrorKind::UnknownMemberFunction, member_name)
-                            );
-                        }
+                        return Err(self.create_err(ErrorKind::UnknownMemberFunction, member_name));
                     }
                 }
                 swamp_script_ast::Postfix::FunctionCall(node, arguments) => {
@@ -1372,6 +1359,10 @@ impl<'a> Analyzer<'a> {
         };
 
         Ok((element_type, expressions))
+    }
+
+    fn function_scope(&self) -> &FunctionScopeState {
+        &self.scope
     }
 
     fn push_block_scope(&mut self, _debug_str: &str) {
@@ -1849,7 +1840,7 @@ impl<'a> Analyzer<'a> {
     fn analyze_lambda(
         &mut self,
         node: &swamp_script_ast::Node,
-        variables: &Vec<swamp_script_ast::Variable>,
+        variables: &[swamp_script_ast::Variable],
         ast_expr: &swamp_script_ast::Expression,
         context: &TypeContext,
     ) -> Result<Expression, Error> {
@@ -1881,6 +1872,8 @@ impl<'a> Analyzer<'a> {
             info!(?variable_ref, ?variable_type.resolved_type, "variable type");
             resolved_variables.push(variable_ref);
         }
+
+        info!(scope =%self.scope, "scopes");
 
         let analyzed_expression = self.analyze_expression(ast_expr, &return_block_type)?;
 
@@ -1992,6 +1985,19 @@ impl<'a> Analyzer<'a> {
         vec.push(postfix);
     }
 
+    fn extract_single_intrinsic_call(body: &Expression) -> Option<IntrinsicFunction> {
+        match &body.kind {
+            ExpressionKind::Block(expressions) => {
+                let first_kind = &expressions[0].kind;
+                if let ExpressionKind::IntrinsicCallEx(intrinsic_fn, _args) = first_kind {
+                    return Some(intrinsic_fn.clone());
+                }
+            }
+            _ => {}
+        }
+        None
+    }
+
     #[allow(clippy::too_many_lines)]
     fn analyze_chain_to_location(
         &mut self,
@@ -2047,20 +2053,8 @@ impl<'a> Analyzer<'a> {
                         .get_internal_member_function(&ty, subscript_member_function_name)
                         .cloned()
                     {
-                        let intrinsic_to_call = match &found.body.kind {
-                            ExpressionKind::Block(expressions) => {
-                                assert_eq!(expressions.len(), 1);
-                                let first_kind = &expressions[0].kind;
-                                if let ExpressionKind::IntrinsicCallEx(intrinsic_fn, _args) =
-                                    first_kind
-                                {
-                                    intrinsic_fn.clone()
-                                } else {
-                                    panic!("must be postfix");
-                                }
-                            }
-                            _ => panic!("illegal subscript_mut"),
-                        };
+                        let intrinsic_to_call =
+                            Self::extract_single_intrinsic_call(&found.body).expect("must exist");
 
                         let create_if_not_exists_bool_expr = self.create_expr(
                             ExpressionKind::Literal(Literal::BoolLiteral(create_if_not_exists)),
@@ -2069,7 +2063,7 @@ impl<'a> Analyzer<'a> {
                         );
 
                         let required_type = &found.signature.parameters[1].resolved_type;
-                        let subscript_lookup_context = TypeContext::new_argument(&required_type);
+                        let subscript_lookup_context = TypeContext::new_argument(required_type);
                         let analyzed_key_expression =
                             self.analyze_expression(key_expression, &subscript_lookup_context)?;
                         let return_type = *found.signature.return_type.clone();
@@ -2413,6 +2407,7 @@ impl<'a> Analyzer<'a> {
         )?;
 
         let kind = PostfixKind::MemberCall(found_function.clone(), resolved_arguments);
+
         let postfix = Postfix {
             node: resolved_node.clone(),
             ty: *signature.return_type.clone(),
