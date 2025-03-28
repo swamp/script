@@ -333,7 +333,6 @@ impl Instantiator {
                     type_variables,
                 )?;
 
-                info!(?new_inner_signature, "new_signature");
                 Type::Function(new_inner_signature)
             }
 

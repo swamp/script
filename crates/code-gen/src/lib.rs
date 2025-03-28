@@ -412,6 +412,8 @@ impl FunctionCodeGen<'_> {
             IntrinsicFunction::VecIter => todo!(),
             IntrinsicFunction::VecIterMut => todo!(),
             IntrinsicFunction::VecFor => todo!(),
+            IntrinsicFunction::VecWhile => todo!(),
+            IntrinsicFunction::VecFind => todo!(),
             IntrinsicFunction::VecSelfPush => todo!(),
             IntrinsicFunction::VecSelfExtend => todo!(),
             IntrinsicFunction::VecLen => todo!(),
@@ -2096,6 +2098,8 @@ impl FunctionCodeGen<'_> {
             IntrinsicFunction::VecPush => todo!(),
             IntrinsicFunction::VecPop => todo!(),
             IntrinsicFunction::VecFor => todo!(),
+            IntrinsicFunction::VecWhile => todo!(),
+            IntrinsicFunction::VecFind => todo!(),
             IntrinsicFunction::VecRemoveIndex => todo!(),
             IntrinsicFunction::VecClear => todo!(),
             IntrinsicFunction::VecCreate => {

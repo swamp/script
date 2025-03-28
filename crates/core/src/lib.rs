@@ -1139,7 +1139,7 @@ fn add_intrinsic_vec_functions(core_ns: &mut SymbolTable) {
         .into(),
         return_type: Box::new(Type::Unit),
     };
-    let self_block_to_unit_functions = [IntrinsicFunction::VecFor];
+    let self_block_to_unit_functions = [IntrinsicFunction::VecFor, IntrinsicFunction::VecWhile];
     for intrinsic_fn in self_block_to_unit_functions {
         let name = intrinsic_fn.to_string();
         core_ns
@@ -1147,6 +1147,36 @@ fn add_intrinsic_vec_functions(core_ns: &mut SymbolTable) {
                 name,
                 intrinsic: intrinsic_fn,
                 signature: self_block_to_unit.clone(),
+            })
+            .unwrap();
+    }
+
+    let self_block_to_generic = Signature {
+        parameters: [
+            TypeForParameter {
+                name: "self".to_string(),
+                resolved_type: Type::Never,
+                is_mutable: false,
+                node: None,
+            },
+            TypeForParameter {
+                name: "block".to_string(),
+                resolved_type: Type::Never,
+                is_mutable: false,
+                node: None,
+            },
+        ]
+        .into(),
+        return_type: Box::new(Type::Never),
+    };
+    let self_block_to_generic_functions = [IntrinsicFunction::VecFind];
+    for intrinsic_fn in self_block_to_generic_functions {
+        let name = intrinsic_fn.to_string();
+        core_ns
+            .add_intrinsic_function(IntrinsicFunctionDefinition {
+                name,
+                intrinsic: intrinsic_fn,
+                signature: self_block_to_generic.clone(),
             })
             .unwrap();
     }

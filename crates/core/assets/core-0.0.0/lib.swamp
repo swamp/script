@@ -310,8 +310,24 @@ impl Vec<T> {
         vec_iter_mut(self)
     }
 
+    // maybe call it `for_each`?
     fn for(self, block: (T) -> ()) {
         vec_for(self, block)
+    }
+
+    // maybe call it `take_while`?
+    fn while(self, block: (T) -> Bool) {
+        vec_while(self, block)
+    }
+
+/*
+    fn find_map<R>(self, block: (T) -> R?) {
+        vec_find(self, block)
+    }
+*/
+
+    fn find(self, block: (T) -> T?) -> T? {
+        vec_find(self, block)
     }
 
     /// Adds an element at the end of the vector.
@@ -323,6 +339,14 @@ impl Vec<T> {
     fn push(mut self, value: T) {
         vec_push(mut self, value)
     }
+
+    /// Removed the top most element at the end of the stack.
+    ///
+    /// Uses intrinsic function `vec_pop` to add the value.
+    fn pop(mut self) -> T {
+        vec_pop(mut self)
+    }
+
 
     /// Gets an element at the specified index
     ///

@@ -2466,10 +2466,20 @@ impl<'a> Analyzer<'a> {
         encountered_type: &Type,
         node: &swamp_script_ast::Node,
     ) -> Result<Expression, Error> {
-        if !matches!(encountered_type, Type::Optional(_)) {
-            // If an optional is expected, we can wrap it
-            if let Type::Optional(expected_inner_type) = expected_type {
-                if encountered_type.compatible_with(expected_inner_type) {
+        if let Type::Optional(expected_inner_type) = expected_type {
+            // If an optional is expected, we can wrap it if this type has the exact same
+            // inner type
+            assert!(
+                expected_inner_type
+                    .inner_optional_mut_or_immutable()
+                    .is_none()
+            );
+
+            // First make sure it is not already an optional type. we can not wrap an option with an option
+            if encountered_type.inner_optional_mut_or_immutable().is_none() {
+                // good it isn't, lets see if they share inner types
+                if expected_inner_type.compatible_ignore_mutability_of(encountered_type) {
+                    // they share inner types as well, lets wrap it up
                     let wrapped = self.create_expr(
                         ExpressionKind::Option(Option::from(Box::new(expr))),
                         expected_type.clone(),
@@ -2479,7 +2489,8 @@ impl<'a> Analyzer<'a> {
                 }
             }
         } else if matches!(expected_type, &Type::Bool) {
-            if let Type::Optional(_inner_type) = encountered_type {
+            // if it has a mut or immutable optional, then it works well to wrap it
+            if encountered_type.inner_optional_mut_or_immutable().is_some() {
                 let wrapped = self.create_expr(
                     ExpressionKind::CoerceOptionToBool(Box::from(expr)),
                     Type::Bool,

@@ -38,7 +38,7 @@ impl From<ValueError> for RuntimeError {
     fn from(value: ValueError) -> Self {
         Self {
             kind: RuntimeErrorKind::ValueError(value),
-            node: Default::default(),
+            node: Node::default(),
         }
     }
 }
@@ -123,7 +123,7 @@ impl Constants {
 
     #[must_use]
     pub fn new() -> Self {
-        let arr: [Value; 1024] = core::array::from_fn(|_| Value::Unit);
+        let arr: [Value; 256] = core::array::from_fn(|_| Value::Unit);
         Self {
             values: arr.to_vec(),
         }
@@ -151,7 +151,7 @@ impl<C> ExternalFunctions<C> {
         let external_func_ref = Rc::new(RefCell::new(external_func));
 
         self.external_functions_by_id
-            .insert(function_id, external_func_ref.clone());
+            .insert(function_id, external_func_ref);
 
         Ok(())
     }
@@ -198,7 +198,7 @@ pub fn util_execute_function<C>(
 ) -> Result<Value, RuntimeError> {
     let mut interpreter = Interpreter::<C>::new(externals, constants, context);
     interpreter.debug_source_map = debug_source_map;
-    interpreter.bind_parameters(&func.body.node, &func.signature.parameters, &arguments)?;
+    interpreter.bind_parameters(&func.body.node, &func.signature.parameters, arguments)?;
     let value = interpreter.evaluate_expression(&func.body)?;
     interpreter.current_block_scopes.clear();
     interpreter.function_scope_stack.clear();
@@ -538,7 +538,7 @@ impl<'a, C> Interpreter<'a, C> {
         &mut self,
         pattern: &ForPattern,
         iterator_expr: &Iterable,
-        body: &Box<Expression>,
+        body: &Expression,
     ) -> Result<ValueWithSignal, RuntimeError> {
         let mut result = Value::Unit;
 
@@ -555,7 +555,7 @@ impl<'a, C> Interpreter<'a, C> {
             ForPattern::Single(var_ref) => {
                 self.push_block_scope();
 
-                for value in ValueReference(iterator_value).into_iter_mut().unwrap() {
+                for value in ValueReference(iterator_value).into_iter_mut()? {
                     // TODO: Improve error handling
                     self.current_block_scopes.initialize_var_mut(var_ref, value);
 
@@ -573,9 +573,8 @@ impl<'a, C> Interpreter<'a, C> {
             ForPattern::Pair(first_ref, second_ref) => {
                 self.push_block_scope();
 
-                for (key, value_reference) in ValueReference(iterator_value)
-                    .into_iter_mut_pairs()
-                    .unwrap()
+                for (key, value_reference) in
+                    ValueReference(iterator_value).into_iter_mut_pairs()?
                 {
                     // TODO: error handling
                     // Set both variables
@@ -607,7 +606,7 @@ impl<'a, C> Interpreter<'a, C> {
         &mut self,
         pattern: &ForPattern,
         iterator_expr: &Iterable,
-        body: &Box<Expression>,
+        body: &Expression,
     ) -> Result<ValueWithSignal, RuntimeError> {
         let mut result = Value::Unit;
 
@@ -618,7 +617,7 @@ impl<'a, C> Interpreter<'a, C> {
             ForPattern::Single(var_ref) => {
                 self.push_block_scope();
 
-                for value in iterator_value.into_iter().unwrap() {
+                for value in iterator_value.into_iter()? {
                     // TODO: Error handling
                     self.current_block_scopes.initialize_var(
                         var_ref.scope_index,
@@ -646,7 +645,7 @@ impl<'a, C> Interpreter<'a, C> {
 
                 // iterator_expr.is_mutable() should select reference
 
-                for (key, value) in iterator_value.into_iter_pairs().unwrap() {
+                for (key, value) in iterator_value.into_iter_pairs()? {
                     // TODO: Error handling
                     // Set both variables
                     self.current_block_scopes.initialize_var(
@@ -848,32 +847,11 @@ impl<'a, C> Interpreter<'a, C> {
             ExpressionKind::VariableReassignment(variable_ref, source_expr) => {
                 let new_value = self.evaluate_mut_or_immutable_expression(source_expr)?;
 
-                let value_ref = self
-                    .current_block_scopes
-                    .lookup_variable_mut_ref(variable_ref)?;
-
-                let mut was_assigned = false;
-                if let Value::Option(inner_value) = &*value_ref.borrow() {
-                    if let Some(inner) = inner_value {
-                        *inner.borrow_mut() = new_value.to_value();
-                        was_assigned = true;
-                    }
-                }
-
-                if !was_assigned {
-                    self.current_block_scopes
-                        .overwrite_existing_var_mem(variable_ref, new_value.clone())?;
-                }
+                self.current_block_scopes
+                    .overwrite_existing_var_mem(variable_ref, new_value)?;
 
                 Value::Unit
             }
-
-            /*
-            ExpressionKind::IntrinsicCallMut(intrinsic, location, arguments) => {
-               self.evaluate_intrinsic_mut(&expr.node, intrinsic, location, arguments)?
-            }
-
-             */
             // ------------- LOOKUP ---------------------
             ExpressionKind::ConstantAccess(constant) => {
                 self.constants.lookup_constant_value(constant.id).clone()
@@ -1240,6 +1218,45 @@ impl<'a, C> Interpreter<'a, C> {
         self.eval_intrinsic_internal(node, intrinsic_function, arguments)
     }
 
+    fn prepare_lambda(
+        &mut self,
+        arguments: &[&Expression],
+    ) -> Result<(Vec<VariableRef>, Expression), RuntimeError> {
+        let lambda_value = self.evaluate_expression(arguments[0])?;
+        let Value::Lambda(variables, lambda_expression) = lambda_value else {
+            panic!("need lambda value");
+        };
+
+        self.pop_function_scope();
+
+        self.push_block_scope();
+
+        Ok((variables, *lambda_expression))
+    }
+
+    fn prepare_lambda_and_initialize_variables(
+        &mut self,
+        arguments: &[&Expression],
+    ) -> Result<(Vec<VariableRef>, Expression), RuntimeError> {
+        let (variable_infos, expression) = self.prepare_lambda(arguments)?;
+
+        for target_var_info in &variable_infos {
+            self.current_block_scopes.initialize_var(
+                target_var_info.scope_index,
+                target_var_info.variable_index,
+                Value::Int(0),
+                true,
+            );
+        }
+
+        Ok((variable_infos, expression))
+    }
+
+    fn clean_up_lambda(&mut self) {
+        self.pop_block_scope();
+        self.push_function_scope(); // Hack since function scope will be popped when returning
+    }
+
     #[allow(clippy::too_many_lines)]
     fn eval_intrinsic_internal(
         &mut self,
@@ -1368,20 +1385,10 @@ impl<'a, C> Interpreter<'a, C> {
             },
 
             IntrinsicFunction::VecFor => {
-                let lambda_value = self.evaluate_expression(arguments[0])?;
-                let Value::Lambda(variables, lambda_expression) = lambda_value else {
-                    panic!("need lambda value");
-                };
-
-                let Value::Vec(found_val, items) = &mut *value_ref.borrow_mut() else {
-                    panic!("borrow self");
-                };
+                let (variables, lambda_expression) =
+                    self.prepare_lambda_and_initialize_variables(&*arguments)?;
 
                 let target_var_info = &variables[0];
-
-                self.pop_function_scope();
-
-                self.push_block_scope();
 
                 self.current_block_scopes.initialize_var(
                     target_var_info.scope_index,
@@ -1390,20 +1397,84 @@ impl<'a, C> Interpreter<'a, C> {
                     true,
                 );
 
+                let Value::Vec(_vec_type, items) = &mut *value_ref.borrow_mut() else {
+                    panic!("borrow self");
+                };
+
                 for item in items {
                     self.current_block_scopes.overwrite_existing_var(
                         target_var_info.scope_index,
                         target_var_info.variable_index,
                         item.borrow().clone(),
-                    );
+                    )?;
 
                     self.evaluate_expression(&lambda_expression)?;
                 }
 
-                self.pop_block_scope();
-                self.push_function_scope(); // Hack since function scope will be popped when returning
+                self.clean_up_lambda();
 
                 Value::Unit
+            }
+
+            IntrinsicFunction::VecWhile => {
+                let (variables, lambda_expression) =
+                    self.prepare_lambda_and_initialize_variables(&arguments)?;
+
+                let target_var_info = &variables[0];
+
+                let Value::Vec(_vec_type, items) = &mut *value_ref.borrow_mut() else {
+                    panic!("borrow self");
+                };
+                for item in items {
+                    self.current_block_scopes.overwrite_existing_var(
+                        target_var_info.scope_index,
+                        target_var_info.variable_index,
+                        item.borrow().clone(),
+                    )?;
+
+                    let result = self.evaluate_expression(&lambda_expression)?;
+                    let should_continue = result.expect_bool()?;
+                    if !should_continue {
+                        break;
+                    }
+                }
+
+                self.clean_up_lambda();
+
+                Value::Unit
+            }
+
+            IntrinsicFunction::VecFind => {
+                let (variables, lambda_expression) =
+                    self.prepare_lambda_and_initialize_variables(&arguments)?;
+
+                let target_var_info = &variables[0];
+
+                let Value::Vec(_vec_type, items) = &mut *value_ref.borrow_mut() else {
+                    panic!("borrow self");
+                };
+
+                let mut final_result = Value::Option(None);
+                for item in items {
+                    self.current_block_scopes.overwrite_existing_var(
+                        target_var_info.scope_index,
+                        target_var_info.variable_index,
+                        item.borrow().clone(),
+                    )?;
+
+                    let result = self.evaluate_expression(&lambda_expression)?;
+                    let Value::Option(ref inner) = result else {
+                        panic!("must have option value");
+                    };
+                    if inner.is_some() {
+                        final_result = result;
+                        break;
+                    }
+                }
+
+                self.clean_up_lambda();
+
+                final_result
             }
 
             IntrinsicFunction::VecIsEmpty => match &mut *value_ref.borrow_mut() {
@@ -1456,7 +1527,7 @@ impl<'a, C> Interpreter<'a, C> {
             },
             IntrinsicFunction::MapSubscript => match value_ref.borrow().clone() {
                 Value::Map(_type_id, seq_map) => {
-                    let key_value = self.evaluate_expression(&arguments[0])?;
+                    let key_value = self.evaluate_expression(arguments[0])?;
                     let maybe_value = seq_map.get(&key_value);
                     if let Some(found_value) = maybe_value {
                         found_value.borrow().clone()
@@ -1469,7 +1540,7 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             },
             IntrinsicFunction::MapRemove => {
-                let index_val = self.evaluate_expression(&arguments[0])?;
+                let index_val = self.evaluate_expression(arguments[0])?;
 
                 let result = {
                     let mut borrowed = value_ref.borrow_mut();
@@ -1541,8 +1612,8 @@ impl<'a, C> Interpreter<'a, C> {
             }
 
             IntrinsicFunction::Map2Has => {
-                let column_val = self.evaluate_expression(&arguments[0])?;
-                let row_val = self.evaluate_expression(&arguments[1])?;
+                let column_val = self.evaluate_expression(arguments[0])?;
+                let row_val = self.evaluate_expression(arguments[1])?;
 
                 let result = {
                     let mut borrowed = value_ref.borrow();
@@ -1560,8 +1631,8 @@ impl<'a, C> Interpreter<'a, C> {
             }
 
             IntrinsicFunction::Map2Get => {
-                let column_val = self.evaluate_expression(&arguments[0])?;
-                let row_val = self.evaluate_expression(&arguments[1])?;
+                let column_val = self.evaluate_expression(arguments[0])?;
+                let row_val = self.evaluate_expression(arguments[1])?;
 
                 let result = {
                     let mut borrowed = value_ref.borrow();
@@ -1807,7 +1878,7 @@ impl<'a, C> Interpreter<'a, C> {
             }
 
             IntrinsicFunction::FloatMax => {
-                let max_value = self.evaluate_expression(&arguments[0])?;
+                let max_value = self.evaluate_expression(arguments[0])?;
                 match (value_ref.borrow().clone(), max_value) {
                     (Value::Float(f), Value::Float(max_f)) => Value::Float(f.max(max_f)),
                     _ => {
@@ -1817,7 +1888,7 @@ impl<'a, C> Interpreter<'a, C> {
             }
 
             IntrinsicFunction::FloatAtan2 => {
-                let x_value = self.evaluate_expression(&arguments[0])?;
+                let x_value = self.evaluate_expression(arguments[0])?;
                 match (value_ref.borrow().clone(), x_value) {
                     (Value::Float(_y_f), Value::Float(_x_f)) => {
                         Value::Float(Fp::from(-9999)) //y_f.atan2(x_f)) // TODO: Implement atan2
@@ -1829,8 +1900,8 @@ impl<'a, C> Interpreter<'a, C> {
             }
 
             IntrinsicFunction::FloatClamp => {
-                let min_value = self.evaluate_expression(&arguments[0])?;
-                let max_value = self.evaluate_expression(&arguments[1])?;
+                let min_value = self.evaluate_expression(arguments[0])?;
+                let max_value = self.evaluate_expression(arguments[1])?;
                 match (value_ref.borrow().clone(), min_value, max_value) {
                     (Value::Float(f), Value::Float(min_f), Value::Float(max_f)) => {
                         Value::Float(f.clamp(min_f, max_f))
@@ -1912,7 +1983,7 @@ impl<'a, C> Interpreter<'a, C> {
                     if values.len() != 2 {
                         return Err(self.create_err(
                             RuntimeErrorKind::WrongNumberOfArguments(2, values.len()),
-                            &node,
+                            node,
                         ));
                     }
                     match (
@@ -1956,7 +2027,7 @@ impl<'a, C> Interpreter<'a, C> {
     ) -> Result<ValueRef, RuntimeError> {
         let (mut val_ref, mut is_mutable) = match &start.kind {
             ExpressionKind::VariableAccess(start_var) => {
-                let start_variable_value = self.current_block_scopes.get_var(&start_var);
+                let start_variable_value = self.current_block_scopes.get_var(start_var);
 
                 match start_variable_value {
                     VariableValue::Value(value) => {
@@ -2095,8 +2166,8 @@ impl<'a, C> Interpreter<'a, C> {
         arguments: &[ArgumentExpressionOrLocation],
     ) -> Result<Value, RuntimeError> {
         let resolved_fn = match function_val.borrow().clone() {
-            Value::InternalFunction(x) => Function::Internal(x.clone()),
-            Value::ExternalFunction(external_fn) => Function::External(external_fn.clone()),
+            Value::InternalFunction(x) => Function::Internal(x),
+            Value::ExternalFunction(external_fn) => Function::External(external_fn),
             _ => panic!("no function to call"),
         };
 
@@ -2108,13 +2179,13 @@ impl<'a, C> Interpreter<'a, C> {
             "wrong number of arguments"
         );
 
-        let resolved_arguments = self.evaluate_args(&arguments)?;
+        let resolved_arguments = self.evaluate_args(arguments)?;
 
         let result_val = match &resolved_fn {
             Function::Internal(internal_function) => {
                 self.push_function_scope();
 
-                self.bind_parameters(node, &parameters, &resolved_arguments)?;
+                self.bind_parameters(node, parameters, &resolved_arguments)?;
                 let result = self.evaluate_expression(&internal_function.body)?;
                 self.pop_function_scope();
 
@@ -2147,7 +2218,7 @@ impl<'a, C> Interpreter<'a, C> {
 
         let self_var_value = if parameters[0].is_mutable {
             if !is_mutable {
-                return Err(self.create_err(RuntimeErrorKind::ArgumentIsNotMutable, &node));
+                return Err(self.create_err(RuntimeErrorKind::ArgumentIsNotMutable, node));
             }
             VariableValue::Reference(self_value_ref.clone())
         } else {
@@ -2156,17 +2227,19 @@ impl<'a, C> Interpreter<'a, C> {
 
         let mut member_call_arguments = Vec::new();
         member_call_arguments.push(self_var_value); // Add self as first argument
-        member_call_arguments.extend(self.evaluate_args(&arguments)?);
+        member_call_arguments.extend(self.evaluate_args(arguments)?);
 
         // Check total number of parameters (including self)
-        if member_call_arguments.len() != parameters.len() {
-            panic!("wrong number of arguments")
-        }
+        assert_eq!(
+            member_call_arguments.len(),
+            parameters.len(),
+            "wrong number of arguments"
+        );
 
         let result_val = match &**function_ref {
             Function::Internal(internal_function) => {
                 self.push_function_scope();
-                self.bind_parameters(node, &parameters, &member_call_arguments)?;
+                self.bind_parameters(node, parameters, &member_call_arguments)?;
                 let result = self.evaluate_expression(&internal_function.body)?;
                 self.pop_function_scope();
 
@@ -2200,10 +2273,10 @@ impl<'a, C> Interpreter<'a, C> {
             }
         }
 
-        Err(self.create_err(RuntimeErrorKind::MustHaveGuardArmThatMatches, &node))
+        Err(self.create_err(RuntimeErrorKind::MustHaveGuardArmThatMatches, node))
     }
 
-    #[inline(always)]
+    #[inline]
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     fn eval_match(&mut self, resolved_match: &Match) -> Result<Value, RuntimeError> {
         let actual_value = self.evaluate_mut_or_immutable_expression(&resolved_match.expression)?;
@@ -2262,7 +2335,7 @@ impl<'a, C> Interpreter<'a, C> {
                             (
                                 Literal::TupleLiteral(_a_type_ref, a_values),
                                 Value::Tuple(_b_type_ref, b_values),
-                            ) if self.expressions_equal_to_values(&a_values, &b_values)? => {
+                            ) if self.expressions_equal_to_values(a_values, b_values)? => {
                                 return self.evaluate_expression(&arm.expression);
                             }
                             _ => {}
@@ -2341,7 +2414,7 @@ impl<'a, C> Interpreter<'a, C> {
         value_ref: ValueRef,
     ) -> Result<Option<Value>, RuntimeError> {
         match value_ref.borrow_mut().clone() {
-            Value::EnumVariantTuple(enum_type, value_tuple_type, values) => {
+            Value::EnumVariantTuple(_enum_type, value_tuple_type, values) => {
                 // First check if the variant types match
                 if variant_ref.common().container_index != value_tuple_type.common.container_index {
                     return Ok(None); // Try next pattern
@@ -2365,14 +2438,12 @@ impl<'a, C> Interpreter<'a, C> {
                         }
                     }
 
-                    let result = self.evaluate_expression(&expression_to_evaluate);
+                    let result = self.evaluate_expression(expression_to_evaluate);
                     self.pop_block_scope();
                     return Ok(Option::from(result?));
-                } else {
-                    panic!("not work");
                 }
             }
-            Value::EnumVariantStruct(enum_type, value_enum_struct_type, values) => {
+            Value::EnumVariantStruct(_enum_type, value_enum_struct_type, values) => {
                 if value_enum_struct_type.common.container_index
                     == variant_ref.common().container_index
                 {
@@ -2388,7 +2459,7 @@ impl<'a, C> Interpreter<'a, C> {
                             }
                         }
 
-                        let result = self.evaluate_expression(&expression_to_evaluate);
+                        let result = self.evaluate_expression(expression_to_evaluate);
                         self.pop_block_scope();
                         return Ok(Some(result?));
                     }
@@ -2579,7 +2650,7 @@ impl<'a, C> Interpreter<'a, C> {
         Ok(true)
     }
 
-    #[inline(always)]
+    #[inline]
     fn apply_compound_operator(
         &self,
         node: &Node,
@@ -2696,14 +2767,14 @@ impl<'a, C> Interpreter<'a, C> {
 #[inline]
 #[must_use]
 pub fn i64_sqrt(v: i64) -> i64 {
+    const MAX_ITERATIONS: usize = 40;
+    const TOLERANCE: i64 = 2;
+
     debug_assert!(v >= 0, "negative numbers are undefined for sqrt() {v}");
 
     if v == 0 {
         return v;
     }
-
-    const MAX_ITERATIONS: usize = 40;
-    const TOLERANCE: i64 = 2;
 
     let mut guess = v / 2;
 
@@ -2722,6 +2793,7 @@ pub fn i64_sqrt(v: i64) -> i64 {
 }
 
 #[allow(unused)]
+#[must_use]
 pub fn values_to_value_refs(values: &[Value]) -> Vec<ValueRef> {
     let mut items = Vec::new();
 
@@ -2732,6 +2804,7 @@ pub fn values_to_value_refs(values: &[Value]) -> Vec<ValueRef> {
     items
 }
 
+#[must_use]
 pub fn values_to_value_refs_owned(values: Vec<Value>) -> Vec<ValueRef> {
     values
         .into_iter()
@@ -2739,9 +2812,10 @@ pub fn values_to_value_refs_owned(values: Vec<Value>) -> Vec<ValueRef> {
         .collect()
 }
 
+#[must_use]
 pub fn wrap_in_option(maybe: Option<&ValueRef>) -> ValueRef {
-    match maybe {
-        None => Rc::new(RefCell::new(Value::Option(None))),
-        Some(x) => Rc::new(RefCell::new(Value::Option(Some(x.clone())))),
-    }
+    maybe.map_or_else(
+        || Rc::new(RefCell::new(Value::Option(None))),
+        |x| Rc::new(RefCell::new(Value::Option(Some(x.clone())))),
+    )
 }

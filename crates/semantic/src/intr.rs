@@ -49,6 +49,8 @@ pub enum IntrinsicFunction {
     VecIter,
     VecIterMut,
     VecFor,
+    VecWhile,
+    VecFind,
 
     VecSelfPush,
     VecSelfExtend,
@@ -153,6 +155,8 @@ impl fmt::Display for IntrinsicFunction {
             Self::VecIter => "vec_iter",
             Self::VecIterMut => "vec_iter_mut",
             Self::VecFor => "vec_for",
+            Self::VecWhile => "vec_while",
+            Self::VecFind => "vec_find",
             Self::VecLen => "vec_len",
             Self::VecIsEmpty => "vec_is_empty",
 

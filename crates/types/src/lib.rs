@@ -48,6 +48,18 @@ pub enum Type {
     External(ExternalType),
 }
 
+impl Type {
+    pub fn inner_optional_mut_or_immutable(&self) -> Option<&Type> {
+        if let Self::Optional(normal) = self {
+            Some(normal)
+        } else if let Self::MutableReference(mutable_reference) = self {
+            mutable_reference.inner_optional_mut_or_immutable()
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ParameterizedTypeKind {
     Struct(NamedStructType),
@@ -267,6 +279,14 @@ impl Type {
             inner_type.compatible_with(other)
         } else {
             false
+        }
+    }
+
+    pub fn compatible_ignore_mutability_of(&self, other: &Self) -> bool {
+        if let Self::MutableReference(other_reference) = other {
+            self.compatible_with(other_reference)
+        } else {
+            self.compatible_with(other)
         }
     }
 
