@@ -3,11 +3,11 @@ name = "time-dilation"
 version = "0.1.8"
 edition = "2024"
 license = "MIT"
-description = "checks the time passed"
-repository = "github.com/swamp/script"
+description = "checks the time passed and prints out a summary"
+repository = "https://github.com/swamp/script"
 
 [dependencies]
+
 [features]
 default = []
-# This feature controls whether the summary is printed on drop
 enable_summary = []
