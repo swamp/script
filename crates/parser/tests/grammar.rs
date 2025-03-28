@@ -8,14 +8,6 @@ mod util;
 
 /*
 
-//#[test_log::test]
-fn pipe() {
-    let script = r#"
-        double <| abs(-10)
-     "#;
-    check(script, r#""#);
-}
-
 #[test_log::test]
 fn match_value_expressions() {
     let script = r#"
@@ -30,7 +22,6 @@ fn match_value_expressions() {
 }
 */
 
-/*
 #[test_log::test]
 fn assignment() {
     check(
@@ -468,7 +459,7 @@ fn array() {
     check(
         script,
         r"
-<9:13>VariableAssignment(<9:1>, MutableOrImmutableExpression { is_mutable: None, expression: <13:9>Literal(Array([<14:1>Literal(Int), <17:1>Literal(Int), <20:1>Literal(Int)])) })
+<9:13>VariableAssignment(<9:1>, MutableOrImmutableExpression { is_mutable: None, expression: <13:9>Literal(Slice([<14:1>Literal(Int), <17:1>Literal(Int), <20:1>Literal(Int)])) })
 
     ",
     );
@@ -644,8 +635,21 @@ fn enum_type() {
     check(
         script,
         "
-EnumDef(<10:6>, [Simple(<27:4>), Tuple(<41:7>, [Int(<49:3>), Float(<54:5>)]), Struct(<70:8>, AnonymousStructType { fields: [FieldType { field_name: FieldName(<81:5>), field_type: Int(<88:3>) }] })])
+EnumDef(LocalTypeIdentifierWithOptionalTypeVariables { name: <10:6>, type_variables: [] }, [Simple(<27:4>), Tuple(<41:7>, [Named(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<49:3>), module_path: None, generic_params: [] }), Named(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<54:5>), module_path: None, generic_params: [] })]), Struct(<70:8>, AnonymousStructType { fields: [StructTypeField { field_name: FieldName(<81:5>), field_type: Named(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<88:3>), module_path: None, generic_params: [] }) }] })])
 
+
+        ",
+    );
+}
+
+#[test_log::test]
+fn return_bool() {
+    check(
+        "  fn default() -> Bool {
+    false
+  }",
+        "
+FunctionDef(Internal(FunctionWithBody { declaration: FunctionDeclaration { name: <5:7>, params: [], self_parameter: None, return_type: Some(Named(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<18:4>), module_path: None, generic_params: [] })), generic_variables: [] }, body: <23:15>Block([<29:5>Literal(Bool)]) }))
         ",
     );
 }
@@ -1588,7 +1592,7 @@ fn check_some_bug() {
     ",
         r"
 <9:29>VariableAssignment(<9:12>, MutableOrImmutableExpression { is_mutable: None, expression: <24:5>Literal(Bool) })
-<38:42>VariableAssignment(<38:1>, MutableOrImmutableExpression { is_mutable: None, expression: <42:38>If(<45:12>IdentifierReference(<45:12>), <58:7>Block([<60:3>Literal(Float)]), Some(<71:9>Block([<73:6>UnaryOp(Negate(<73:1>), <74:4>Literal(Float))]))) })
+<38:42>VariableAssignment(<38:1>, MutableOrImmutableExpression { is_mutable: None, expression: <42:38>If(<45:13>IdentifierReference(QualifiedIdentifier { name: <45:12>, module_path: None, generic_params: [] }), <58:7>Block([<60:3>Literal(Float)]), Some(<71:9>Block([<73:6>UnaryOp(Negate(<73:1>), <74:4>Literal(Float))]))) })
 
 
         ",
@@ -2695,7 +2699,7 @@ a:Int? = if true 0 else none
          ",
         r"
 
-<1:38>VariableDefinition(<1:1>, Some(Optional(Int(<3:3>), <6:1>)), MutableOrImmutableExpression { is_mutable: None, expression: <10:29>If(<13:4>Literal(Bool), <18:1>Literal(Int), Some(<25:4>Literal(None))) })
+<1:38>VariableDefinition(<1:1>, Some(Optional(Named(QualifiedTypeIdentifier { name: LocalTypeIdentifier(<3:3>), module_path: None, generic_params: [] }), <6:1>)), MutableOrImmutableExpression { is_mutable: None, expression: <10:29>If(<13:4>Literal(Bool), <18:1>Literal(Int), Some(<25:4>Literal(None))) })
 
 ",
     );
@@ -2802,15 +2806,11 @@ while while {
 
          ",
         "
-
-<1:26>WhileLoop(<7:5>IdentifierReference(<7:5>), <13:14>Block([<19:7>VariableAssignment(<19:2>, MutableOrImmutableExpression { is_mutable: None, expression: <24:1>Literal(Int) })]))
-
-
+<1:26>WhileLoop(<7:6>IdentifierReference(QualifiedIdentifier { name: <7:5>, module_path: None, generic_params: [] }), <13:14>Block([<19:7>VariableAssignment(<19:2>, MutableOrImmutableExpression { is_mutable: None, expression: <24:1>Literal(Int) })]))
 ",
     );
 }
 
-*/
 #[test_log::test]
 fn anonymous_struct() {
     check(

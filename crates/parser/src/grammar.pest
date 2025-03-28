@@ -196,7 +196,7 @@ unit_type     = { "()" }
 
 field_label       = { identifier ~ ":" }
 
-generic_params  = { "<" ~ type_name ~ (COMMA ~ type_name)* ~ ">" }
+generic_arguments  = { "<" ~ type_name ~ (COMMA ~ type_name)* ~ ">" }
 function_type   = {
     "(" ~ function_params? ~ ")" ~ "->" ~ type_name
 }
@@ -210,11 +210,11 @@ function_params = {
     =============================================================
 */
 qualified_identifier      = {
-    module_segments? ~ identifier ~ generic_params?
+    module_segments? ~ identifier ~ generic_arguments?
 }
 
 qualified_type_identifier = {
-    module_segments? ~ type_identifier ~ generic_params?
+    module_segments? ~ type_identifier ~ generic_arguments?
 }
 
 
@@ -241,20 +241,21 @@ trait_def = {
     "trait"  ~ type_identifier ~ "{" ~ impl_item* ~ "}"
 }
 
-type_identifier_optional_type_params = { type_identifier ~ generic_type_params? }
-generic_type_params  = { "<" ~ type_identifier ~ (COMMA ~ type_identifier)* ~ ">" }
+type_identifier_optional_type_variables = { type_identifier ~ generic_type_variables? }
+generic_type_variable = { type_identifier }
+generic_type_variables  = { "<" ~ generic_type_variable ~ (COMMA ~ generic_type_variable)* ~ ">" }
 
 impl_def = {
-    "impl"  ~ type_identifier_optional_type_params ~ "{" ~ (impl_item)* ~ "}"
+    "impl"  ~ type_identifier_optional_type_variables ~ "{" ~ (impl_item)* ~ "}"
 }
 
 impl_item = { normal_member_function | external_member_function }
 
-struct_def = { "struct"  ~ type_identifier_optional_type_params ~ struct_type? }
+struct_def = { "struct"  ~ type_identifier_optional_type_variables ~ struct_type? }
 
 type_def = { "type"  ~ type_identifier ~ "=" ~ type_name }
 
-enum_def = { "enum"  ~ type_identifier_optional_type_params ~ "{" ~ enum_variants? ~ "}" }
+enum_def = { "enum"  ~ type_identifier_optional_type_variables ~ "{" ~ enum_variants? ~ "}" }
 
 enum_variants = { enum_variant ~ (COMMA ~ enum_variant)* ~ TRAILING_COMMA }
 
@@ -320,14 +321,14 @@ import_item = { type_identifier | identifier }
 */
 
 
-function_identifier = { identifier ~ generic_type_params? }
+function_identifier = { identifier  }
 
 function_signature = {
-   "fn"   ~ function_identifier ~ "(" ~ (parameter_list ~ TRAILING_COMMA)? ~ ")" ~ return_type?
+   "fn"   ~ function_identifier ~ generic_type_variables? ~ "(" ~ (parameter_list ~ TRAILING_COMMA)? ~ ")" ~ return_type?
 }
 
 member_signature = {
-   "fn"   ~ function_identifier ~ "(" ~ (self_parameter ~ (COMMA ~ parameter_list)? | parameter_list)? ~ ")" ~ return_type?
+   "fn"   ~ function_identifier ~ generic_type_variables?  ~ "(" ~ (self_parameter ~ (COMMA ~ parameter_list)? | parameter_list)? ~ ")" ~ return_type?
 }
 
 self_identifier = { "self" }

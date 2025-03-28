@@ -43,6 +43,7 @@ impl ParsedAstModule {
             params: parameters,
             self_parameter: None,
             return_type,
+            generic_variables: vec![],
         };
         let external_signature = Function::External(signature);
 

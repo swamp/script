@@ -331,6 +331,7 @@ pub struct FunctionDeclaration {
     pub params: Vec<Parameter>,
     pub self_parameter: Option<SelfParameter>,
     pub return_type: Option<Type>,
+    pub generic_variables: Vec<TypeVariable>,
 }
 
 #[derive(Debug, Clone)]
