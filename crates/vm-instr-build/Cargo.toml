@@ -1,6 +1,6 @@
 [package]
 name = "swamp-vm-instr-build"
-version = "0.1.7"
+version = "0.1.8"
 edition = "2024"
 license = "MIT"
 description = "builds opcodes for the swamp vm"
@@ -8,4 +8,4 @@ repository = "https://github.com/swamp/script"
 
 
 [dependencies]
-swamp-vm-types = { path = "../vm-types", version = "0.1.7" }
+swamp-vm-types = { path = "../vm-types", version = "0.1.8" }

@@ -1,35 +1,35 @@
 [package]
 name = "swamp-script-compile"
-version = "0.1.7"
+version = "0.1.8"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/swamp/script"
 description = "Compile utility functions"
 
 [dependencies]
-swamp-script-source-map = { path = "../source-map", version = "0.1.7" }
+swamp-script-source-map = { path = "../source-map", version = "0.1.8" }
 # Ast and Parser
-swamp-script-parser = { path = "../parser", version = "0.1.7" }
-swamp-script-ast = { path = "../ast", version = "0.1.7" }
+swamp-script-parser = { path = "../parser", version = "0.1.8" }
+swamp-script-ast = { path = "../ast", version = "0.1.8" }
 
 # Semantic and Analyzer
-swamp-script-semantic = { path = "../semantic", version = "0.1.7" }
-swamp-script-analyzer = { path = "../analyzer", version = "0.1.7" }
-swamp-script-error-report = { path = "../err", version = "0.1.7" }
+swamp-script-semantic = { path = "../semantic", version = "0.1.8" }
+swamp-script-analyzer = { path = "../analyzer", version = "0.1.8" }
+swamp-script-error-report = { path = "../err", version = "0.1.8" }
 
-swamp-script-modules = { path = "../modules", version = "0.1.7" }
+swamp-script-modules = { path = "../modules", version = "0.1.8" }
 
 # Core and Std
-swamp-script-core = { path = "../core", version = "0.1.7" }
-swamp-script-std = { path = "../std", version = "0.1.7" }
+swamp-script-core = { path = "../core", version = "0.1.8" }
+swamp-script-std = { path = "../std", version = "0.1.8" }
 
-swamp-script-pretty-print = { path = "../pretty-print", version = "0.1.7" }
+swamp-script-pretty-print = { path = "../pretty-print", version = "0.1.8" }
 
-swamp-script-dep-loader = { path = "../dep-loader", version = "0.1.7" }
-swamp-script-eval-loader = { path = "../eval-loader", version = "0.1.7" }
-swamp-script-source-map-lookup = { path = "../source-map-lookup", version = "0.1.7" }
+swamp-script-dep-loader = { path = "../dep-loader", version = "0.1.8" }
+swamp-script-eval-loader = { path = "../eval-loader", version = "0.1.8" }
+swamp-script-source-map-lookup = { path = "../source-map-lookup", version = "0.1.8" }
 
-time-dilation = { path = "../time-dilation", version = "0.1.7", features = ["enable_summary"] }
+time-dilation = { path = "../time-dilation", version = "0.1.8", features = ["enable_summary"] }
 
 
 tracing = "0.1.40"
