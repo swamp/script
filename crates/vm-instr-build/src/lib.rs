@@ -13,12 +13,6 @@ pub struct InstructionBuilder {
     pub comments: Vec<String>,
 }
 
-impl InstructionBuilder {}
-
-impl InstructionBuilder {}
-
-impl InstructionBuilder {}
-
 impl Default for InstructionBuilder {
     fn default() -> Self {
         Self::new()

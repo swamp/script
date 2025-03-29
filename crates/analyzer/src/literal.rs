@@ -55,7 +55,7 @@ impl Analyzer<'_> {
                     .associated_impls
                     .get_internal_member_function(&found_expected_type, "new_from_slice")
                 {
-                    let required_type = &found.signature.parameters[0].resolved_type;
+                    let required_type = &found.signature.signature.parameters[0].resolved_type;
                     if resolved_items.is_empty() || slice_type.compatible_with(required_type) {
                         let slice_literal =
                             Literal::Slice(slice_type.clone(), resolved_items.clone());
@@ -65,7 +65,7 @@ impl Analyzer<'_> {
                             slice_type.clone(),
                             ast_node,
                         );
-                        let return_type = *found.signature.return_type.clone();
+                        let return_type = *found.signature.signature.return_type.clone();
                         let arg = ArgumentExpressionOrLocation::Expression(expr);
                         let call_kind = self.create_static_call(
                             "new_from_slice",
@@ -131,7 +131,7 @@ impl Analyzer<'_> {
                     .associated_impls
                     .get_internal_member_function(&found_expected_type, "new_from_slice_pair")
                 {
-                    let required_type = &found.signature.parameters[0].resolved_type;
+                    let required_type = &found.signature.signature.parameters[0].resolved_type;
                     if resolved_items.is_empty() || slice_pair_type.compatible_with(required_type) {
                         let slice_literal =
                             Literal::SlicePair(slice_pair_type.clone(), resolved_items.clone());
@@ -141,7 +141,7 @@ impl Analyzer<'_> {
                             slice_pair_type.clone(),
                             ast_node,
                         );
-                        let return_type = *found.signature.return_type.clone();
+                        let return_type = *found.signature.signature.return_type.clone();
                         let arg = ArgumentExpressionOrLocation::Expression(expr);
                         let call_kind = self.create_static_call(
                             "new_from_slice_pair",

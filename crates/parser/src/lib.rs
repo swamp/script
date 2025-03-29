@@ -964,11 +964,11 @@ impl AstParser {
         let name = self.expect_function_identifier_next(&mut inner)?;
 
         let mut generic_type_variables = Vec::new();
-        let mut maybe_next_token = inner.peek();
+        let maybe_next_token = inner.peek();
         if let Some(next_rule) = &maybe_next_token {
             if next_rule.as_rule() == Rule::generic_type_variables {
                 generic_type_variables = self.parse_generic_type_variables(next_rule)?;
-                maybe_next_token = inner.next();
+                let _ = inner.next();
             }
         }
 
@@ -1677,7 +1677,7 @@ impl AstParser {
         debug_assert_eq!(pair.as_rule(), Rule::generic_type_variables);
         let mut type_params = Vec::new();
 
-        let mut inner = Self::convert_into_iterator(pair);
+        let inner = Self::convert_into_iterator(pair);
         for type_variable in inner {
             let mut inner_type_var = type_variable.into_inner();
             let type_identifier_pair = inner_type_var.next().unwrap();

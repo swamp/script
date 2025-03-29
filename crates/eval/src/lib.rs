@@ -198,7 +198,11 @@ pub fn util_execute_function<C>(
 ) -> Result<Value, RuntimeError> {
     let mut interpreter = Interpreter::<C>::new(externals, constants, context);
     interpreter.debug_source_map = debug_source_map;
-    interpreter.bind_parameters(&func.body.node, &func.signature.parameters, arguments)?;
+    interpreter.bind_parameters(
+        &func.body.node,
+        &func.signature.signature.parameters,
+        arguments,
+    )?;
     let value = interpreter.evaluate_expression(&func.body)?;
     interpreter.current_block_scopes.clear();
     interpreter.function_scope_stack.clear();
@@ -343,7 +347,7 @@ impl<'a, C> Interpreter<'a, C> {
 
                 self.bind_parameters(
                     &internal_func_ref.body.node,
-                    &internal_func_ref.signature.parameters,
+                    &internal_func_ref.signature.signature.parameters,
                     &evaluated_args,
                 )?;
 

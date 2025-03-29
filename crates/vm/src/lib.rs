@@ -293,6 +293,7 @@ impl Vm {
         }
     }
 
+    /*
     #[inline]
     fn execute_ld32ptr(&mut self, base_offset: u16, offset: u16, lower_bits: u16, upper_bits: u16) {
         let value = ((upper_bits as u32) << 16) | (lower_bits as u32);
@@ -349,6 +350,7 @@ impl Vm {
             *dst_ptr = value;
         }
     }
+    */
 
     #[inline]
     fn execute_ld16(&mut self, dst_offset: u16, data: u16) {

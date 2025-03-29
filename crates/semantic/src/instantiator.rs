@@ -7,7 +7,7 @@ use seq_map::SeqMap;
 use std::rc::Rc;
 use swamp_script_node::Node;
 use swamp_script_types::{
-    AnonymousStructType, NamedStructType, ParameterizedTypeBlueprint,
+    AnonymousStructType, GenericAwareSignature, NamedStructType, ParameterizedTypeBlueprint,
     ParameterizedTypeBlueprintInfo, ParameterizedTypeKind, Signature, StructTypeField, Type,
     TypeForParameter, all_types_are_concrete, all_types_are_concrete_or_unit,
 };
@@ -15,21 +15,37 @@ use tracing::info;
 
 #[derive(Debug)]
 pub struct TypeVariableScope {
-    pub type_variables: SeqMap<String, Type>,
+    type_variables_private: SeqMap<String, Type>,
 }
 
 impl TypeVariableScope {
     #[must_use]
     pub const fn new(scope: SeqMap<String, Type>) -> Self {
         Self {
-            type_variables: scope,
+            type_variables_private: scope,
         }
     }
 
-    pub(crate) fn variables(&self) -> Vec<Type> {
-        self.type_variables.values().cloned().collect()
+    /// # Errors
+    ///
+    pub fn add_type_variable(&mut self, type_variable: &str) -> Result<(), SemanticError> {
+        self.type_variables_private
+            .insert(
+                type_variable.to_string(),
+                Type::Variable(type_variable.to_string()),
+            )
+            .map_err(|_| SemanticError::DuplicateSymbolName(type_variable.to_string()))
+    }
+
+    pub(crate) fn types(&self) -> Vec<Type> {
+        self.type_variables_private.values().cloned().collect()
+    }
+
+    pub fn internal_get_type(&self, name: &str) -> Option<Type> {
+        self.type_variables_private.get(&name.to_string()).cloned()
     }
 }
+
 #[derive(Clone, Debug)]
 pub struct Instantiator {
     pub associated_impls: AssociatedImpls,
@@ -61,6 +77,8 @@ impl Instantiator {
         analyzed_type_parameters: &[Type],
     ) -> Result<Type, SemanticError> {
         assert!(all_types_are_concrete_or_unit(analyzed_type_parameters));
+
+        info!(?blueprint, ?analyzed_type_parameters, "INSTANTIATE!");
 
         if let Some(existing) = self.instantiation_cache.get(
             &blueprint.defined_in_module_path,
@@ -97,7 +115,10 @@ impl Instantiator {
                                 body: internal.body.clone(),
                                 name: LocalIdentifier(Node::default()),
                                 assigned_name: format!("instantiated {func_name}"),
-                                signature: new_signature.clone(),
+                                signature: GenericAwareSignature {
+                                    signature: new_signature.clone(),
+                                    generic_type_variables: vec![],
+                                },
                                 variable_scopes: FunctionScopeState::new(
                                     *new_signature.return_type.clone(),
                                 ), // self.scope.clone(),
@@ -284,10 +305,13 @@ impl Instantiator {
             }
 
             Type::Variable(type_variable) => {
-                let found_type = type_variables
-                    .type_variables
-                    .get(type_variable)
-                    .ok_or(SemanticError::UnknownTypeVariable)?;
+                let found_type =
+                    type_variables
+                        .internal_get_type(type_variable)
+                        .ok_or_else(|| {
+                            info!(?type_variable, "could not get");
+                            SemanticError::UnknownTypeVariable
+                        })?;
                 assert!(found_type.is_concrete());
                 found_type.clone()
             }
@@ -380,7 +404,7 @@ impl Instantiator {
         }
 
         let new_assigned_name =
-            Self::parameterized_name(&struct_type.assigned_name, &type_variables.variables());
+            Self::parameterized_name(&struct_type.assigned_name, &type_variables.types());
 
         let Type::Blueprint(blueprint) = current_self else {
             panic!("must be blueprint");
@@ -393,11 +417,7 @@ impl Instantiator {
                 field_name_sorted_fields: new_fields,
             },
             module_path: struct_type.module_path.clone(),
-            instantiated_type_parameters: type_variables
-                .type_variables
-                .values()
-                .cloned()
-                .collect::<Vec<_>>(),
+            instantiated_type_parameters: type_variables.types(),
             blueprint_info: Some(blueprint.info()),
         };
 

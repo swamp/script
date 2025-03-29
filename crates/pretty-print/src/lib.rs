@@ -811,7 +811,7 @@ impl SourceMapDisplay<'_> {
         internal_func: &InternalFunctionDefinition,
         tabs: usize,
     ) -> std::fmt::Result {
-        self.show_signature(f, &internal_func.signature, tabs)?;
+        self.show_signature(f, &internal_func.signature.signature, tabs)?;
         Self::new_line_and_tab(f, tabs)?;
         self.show_expression(f, &internal_func.body, tabs)
     }

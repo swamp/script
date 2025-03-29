@@ -8,13 +8,13 @@ use crate::err::{Error, ErrorKind};
 use seq_map::SeqMap;
 use std::rc::Rc;
 use swamp_script_semantic::{
-    ExternalFunctionDefinition, Function, InternalFunctionDefinition, LocalIdentifier, UseItem,
+    ExternalFunctionDefinition, Function, InternalFunctionDefinition, LocalIdentifier,
+    SemanticError, UseItem,
 };
 use swamp_script_types::prelude::*;
-use swamp_script_types::{ParameterizedTypeBlueprint, ParameterizedTypeKind};
-
-use swamp_script_semantic::instantiator::TypeVariableScope;
-use tracing::trace;
+use swamp_script_types::{
+    GenericAwareSignature, ParameterizedTypeBlueprint, ParameterizedTypeKind,
+};
 
 impl Analyzer<'_> {
     fn general_import(
@@ -339,19 +339,9 @@ impl Analyzer<'_> {
     /// # Panics
     ///
     pub fn set_type_variables_to_extra_symbol_table(&mut self, type_variables: &[String]) {
-        let mut types = SeqMap::new();
-        for type_variable in type_variables {
-            types
-                .insert(
-                    type_variable.to_string(),
-                    Type::Variable(type_variable.clone()),
-                )
-                .unwrap();
-        }
-
-        let type_variables = TypeVariableScope::new(types);
-
-        self.shared.type_variables = Some(type_variables);
+        self.shared
+            .type_variables
+            .push_type_scope_with_variables(type_variables);
     }
 
     /// # Errors
@@ -364,6 +354,7 @@ impl Analyzer<'_> {
 
         let type_variables =
             self.convert_to_type_variables(&ast_struct_def.identifier.type_variables);
+
         if has_type_variables {
             self.set_type_variables_to_extra_symbol_table(&type_variables);
         }
@@ -387,7 +378,7 @@ impl Analyzer<'_> {
         if has_type_variables {
             // It is a blueprint! Store it in the definition
 
-            self.shared.type_variables = None;
+            self.shared.type_variables.pop_type_scope();
 
             let blueprint_ref = self
                 .shared
@@ -473,9 +464,12 @@ impl Analyzer<'_> {
                 self.scope.return_type = Type::Unit;
 
                 let internal = InternalFunctionDefinition {
-                    signature: Signature {
-                        parameters,
-                        return_type: Box::new(return_type),
+                    signature: GenericAwareSignature {
+                        signature: Signature {
+                            parameters,
+                            return_type: Box::new(return_type),
+                        },
+                        generic_type_variables: vec![],
                     },
                     body: statements,
                     name: LocalIdentifier(self.to_node(&function_data.declaration.name)),
@@ -647,7 +641,7 @@ impl Analyzer<'_> {
             self.analyze_impl_functions(type_to_attach_to, &function_refs)?;
 
             if is_parameterized {
-                self.shared.type_variables = None;
+                self.shared.type_variables.pop_type_scope();
             }
 
             Ok(())
@@ -704,6 +698,23 @@ impl Analyzer<'_> {
         Ok(())
     }
 
+    pub(crate) fn push_type_scope_with_variables(
+        &mut self,
+        type_variables: &[swamp_script_ast::TypeVariable],
+    ) -> Result<(), SemanticError> {
+        self.shared.type_variables.push_type_scope();
+
+        for type_var in type_variables {
+            let variable_name_string = self.get_text(&type_var.0).to_string();
+            self.shared
+                .type_variables
+                .declare_type_variable(&variable_name_string)?;
+        }
+
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_lines)]
     fn analyze_impl_func(
         &mut self,
         function: &swamp_script_ast::Function,
@@ -711,6 +722,14 @@ impl Analyzer<'_> {
     ) -> Result<Function, Error> {
         let resolved_fn = match function {
             swamp_script_ast::Function::Internal(function_data) => {
+                let has_function_local_generic_type_variables =
+                    !function_data.declaration.generic_variables.is_empty();
+                if has_function_local_generic_type_variables {
+                    self.push_type_scope_with_variables(
+                        &function_data.declaration.generic_variables,
+                    )?;
+                }
+
                 let mut parameters = Vec::new();
 
                 if let Some(found_self) = &function_data.declaration.self_parameter {
@@ -754,10 +773,17 @@ impl Analyzer<'_> {
                 let statements =
                     self.analyze_function_body_expression(&function_data.body, &return_type)?;
 
+                if has_function_local_generic_type_variables {
+                    self.shared.type_variables.pop_type_scope();
+                }
+
                 let internal = InternalFunctionDefinition {
-                    signature: Signature {
-                        parameters,
-                        return_type: Box::new(return_type),
+                    signature: GenericAwareSignature {
+                        signature: Signature {
+                            parameters,
+                            return_type: Box::new(return_type),
+                        },
+                        generic_type_variables: vec![],
                     },
                     body: statements,
                     name: LocalIdentifier(self.to_node(&function_data.declaration.name)),

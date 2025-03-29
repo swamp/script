@@ -58,9 +58,15 @@ pub fn build_semantic_error(err: &SemanticError, span: &Span) -> Builder<usize> 
         SemanticError::DuplicateNamespaceLink(_) => {
             Report::build(Kind::Error, 140, "DuplicateNamespaceLink", span)
         }
-        &swamp_script_semantic::SemanticError::DuplicateSymbolName(_)
-        | &swamp_script_semantic::SemanticError::MismatchedTypes { .. } => todo!(),
-        &swamp_script_semantic::SemanticError::UnknownTypeVariable => todo!(),
+        SemanticError::DuplicateSymbolName(_) => {
+            Report::build(Kind::Error, 140, "duplicate symbol", span)
+        }
+        SemanticError::MismatchedTypes { .. } => {
+            Report::build(Kind::Error, 140, "mismatch types", span)
+        }
+        SemanticError::UnknownTypeVariable => {
+            Report::build(Kind::Error, 140, "unknown type variable", span)
+        }
     };
 
     b.error_module = "S".to_string();

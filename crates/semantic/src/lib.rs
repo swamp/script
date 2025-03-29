@@ -3,15 +3,13 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 pub mod inst_cache;
+pub mod instantiator;
 pub mod intr;
 pub mod prelude;
-
-pub mod instantiator;
-
+pub mod type_var_stack;
+use crate::instantiator::Instantiator;
 use crate::intr::IntrinsicFunction;
 use crate::prelude::IntrinsicFunctionDefinitionRef;
-
-use crate::instantiator::Instantiator;
 pub use fixed32::Fp;
 use seq_map::SeqMap;
 use std::cmp::PartialEq;
@@ -19,6 +17,7 @@ use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::rc::Rc;
 use swamp_script_node::Node;
+use swamp_script_types::GenericAwareSignature;
 use swamp_script_types::prelude::*;
 use tracing::error;
 
@@ -68,7 +67,7 @@ pub struct InternalFunctionDefinition {
     pub body: Expression,
     pub name: LocalIdentifier,
     pub assigned_name: String,
-    pub signature: Signature,
+    pub signature: GenericAwareSignature,
     pub variable_scopes: FunctionScopeState,
     pub function_scope_state: Vec<VariableRef>,
     pub program_unique_id: InternalFunctionId,
@@ -84,9 +83,12 @@ impl Default for InternalFunctionDefinition {
             },
             name: LocalIdentifier(Node::default()),
             assigned_name: String::new(),
-            signature: Signature {
-                parameters: vec![],
-                return_type: Box::new(Type::Never),
+            signature: GenericAwareSignature {
+                signature: Signature {
+                    parameters: vec![],
+                    return_type: Box::new(Type::Never),
+                },
+                generic_type_variables: vec![],
             },
             variable_scopes: FunctionScopeState::new(Type::Unit),
             function_scope_state: Vec::new(),
@@ -390,7 +392,7 @@ impl Function {
     #[must_use]
     pub fn signature(&self) -> &Signature {
         match self {
-            Self::Internal(internal) => &internal.signature,
+            Self::Internal(internal) => &internal.signature.signature,
             Self::External(external) => &external.signature,
         }
     }
@@ -681,7 +683,6 @@ pub enum ExpressionKind {
     AnonymousStructLiteral(AnonymousStructLiteral),
     Literal(Literal),
     Option(Option<Box<Expression>>), // Wrapping an expression in `Some()`
-    //Range(Box<Expression>, Box<Expression>, RangeMode),
 
     // Loops
     ForLoop(ForPattern, Iterable, Box<Expression>),
@@ -709,9 +710,7 @@ pub enum ExpressionKind {
         SingleMutLocationExpression,
         Vec<Expression>,
     ),
-
-     */
-    //IntrinsicCall(IntrinsicFunction, Vec<Expression>),
+    */
     Lambda(Vec<VariableRef>, Box<Expression>),
 }
 

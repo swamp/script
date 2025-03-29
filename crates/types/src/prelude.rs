@@ -5,7 +5,8 @@
 pub use crate::{
     AliasType, AnonymousStructType, EnumType, EnumVariantCommon, EnumVariantSimpleType,
     EnumVariantStructFieldType, EnumVariantStructType, EnumVariantTupleFieldType,
-    EnumVariantTupleType, EnumVariantType, ExternalType, NamedStructType, ParameterNode, Signature,
-    StructTypeField, Type, TypeForParameter, check_assignable_anonymous_struct_types, comma_seq,
-    compare_anonymous_struct_types, same_anon_struct_ref,
+    EnumVariantTupleType, EnumVariantType, ExternalType, GenericAwareSignature, NamedStructType,
+    ParameterNode, Signature, StructTypeField, Type, TypeForParameter,
+    check_assignable_anonymous_struct_types, comma_seq, compare_anonymous_struct_types,
+    same_anon_struct_ref,
 };

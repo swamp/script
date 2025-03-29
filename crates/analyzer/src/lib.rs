@@ -19,11 +19,12 @@ use crate::err::{Error, ErrorKind};
 use seq_map::SeqMap;
 use std::mem::take;
 use std::num::{ParseFloatError, ParseIntError};
+use swamp_script_ast::TypeVariable;
 use swamp_script_modules::prelude::*;
 use swamp_script_modules::symtbl::{SymbolTableRef, TypeGeneratorKind};
 use swamp_script_node::{FileId, Node, Span};
-use swamp_script_semantic::instantiator::TypeVariableScope;
 use swamp_script_semantic::prelude::*;
+use swamp_script_semantic::type_var_stack::SemanticContext;
 use swamp_script_semantic::{
     ArgumentExpressionOrLocation, BlockScope, BlockScopeMode, FunctionScopeState,
     InternalMainExpression, LocationAccess, LocationAccessKind, MutOrImmutableExpression,
@@ -136,7 +137,7 @@ pub struct SharedState<'a> {
     pub source_map: &'a SourceMap,
     pub file_id: FileId,
     pub core_symbol_table: SymbolTableRef,
-    type_variables: Option<TypeVariableScope>,
+    pub type_variables: SemanticContext,
 }
 
 impl<'a> SharedState<'a> {
@@ -145,8 +146,7 @@ impl<'a> SharedState<'a> {
         if path.is_empty() {
             return Some(&self.lookup_table);
         }
-        self.get_module(path)
-            .map_or(None, |module| Some(&module.symbol_table))
+        self.get_module(path).map(|module| &module.symbol_table)
     }
 
     #[must_use]
@@ -187,7 +187,8 @@ pub struct Analyzer<'a> {
 }
 
 impl<'a> Analyzer<'a> {
-    pub fn scopes(&self) -> &FunctionScopeState {
+    #[must_use]
+    pub const fn scopes(&self) -> &FunctionScopeState {
         &self.scope
     }
 }
@@ -209,7 +210,7 @@ impl<'a> Analyzer<'a> {
             core_symbol_table,
             source_map,
             file_id,
-            type_variables: None,
+            type_variables: SemanticContext::default(),
         };
         Self {
             scope: FunctionScopeState::new(Type::Unit),
@@ -713,10 +714,8 @@ impl<'a> Analyzer<'a> {
 
         if path.is_empty() {
             // Check if it is a type variable first!
-            if let Some(found_scope) = &self.shared.type_variables {
-                if let Some(found_type) = found_scope.type_variables.get(&name) {
-                    return Ok(found_type.clone());
-                }
+            if let Some(found_type) = self.shared.type_variables.resolve_type_variable(&name) {
+                return Ok(found_type.clone());
             }
         }
 
@@ -955,11 +954,6 @@ impl<'a> Analyzer<'a> {
                     // keep previous `is_mutable`
                 }
                 swamp_script_ast::Postfix::MemberCall(member_name, ast_arguments) => {
-                    let dereference = ast_arguments
-                        .iter()
-                        .map(|x| &x.expression)
-                        .collect::<Vec<_>>();
-
                     let member_name_str = self.get_text(member_name).to_string();
 
                     if let Some(_found_member) = self
@@ -1175,7 +1169,7 @@ impl<'a> Analyzer<'a> {
                     .associated_impls
                     .get_internal_member_function(resolved_type, "iter")
                 {
-                    let ret_type = found_iter_fn.signature.return_type.clone();
+                    let ret_type = found_iter_fn.signature.signature.return_type.clone();
                     match *ret_type {
                         Type::Tuple(tuple_items) => {
                             (Some(tuple_items[0].clone()), tuple_items[1].clone())
@@ -1304,7 +1298,7 @@ impl<'a> Analyzer<'a> {
                 let (kind, signature) = match found_func {
                     FuncDef::Internal(internal_fn) => (
                         ExpressionKind::InternalFunctionAccess(internal_fn.clone()),
-                        &internal_fn.signature,
+                        &internal_fn.signature.signature,
                     ),
                     FuncDef::External(external_fn) => (
                         ExpressionKind::ExternalFunctionAccess(external_fn.clone()),
@@ -2062,11 +2056,11 @@ impl<'a> Analyzer<'a> {
                             &chain.base.node,
                         );
 
-                        let required_type = &found.signature.parameters[1].resolved_type;
+                        let required_type = &found.signature.signature.parameters[1].resolved_type;
                         let subscript_lookup_context = TypeContext::new_argument(required_type);
                         let analyzed_key_expression =
                             self.analyze_expression(key_expression, &subscript_lookup_context)?;
-                        let return_type = *found.signature.return_type.clone();
+                        let return_type = *found.signature.signature.return_type.clone();
                         ty = return_type.clone();
                         //let argument = ArgumentExpressionOrLocation::Expression(analyzed_expr);
                         self.add_location_item(
@@ -2226,99 +2220,6 @@ impl<'a> Analyzer<'a> {
 
         Ok(expr)
     }
-
-    /*
-
-    #[must_use]
-    pub fn create_mut_single_location_expr(
-        &self,
-        kind: SingleLocationExpressionKind,
-        ty: Type,
-        ast_node: &swamp_script_ast::Node,
-    ) -> SingleMutLocationExpression {
-        SingleMutLocationExpression(SingleLocationExpression {
-            kind,
-            ty,
-            starting_variable: Rc::new(Variable {
-                name: Node::default(),
-                resolved_type: Type::Int,
-                mutable_node: None,
-                scope_index: 0,
-                variable_index: 0,
-            }),
-            node: self.to_node(ast_node),
-            access_chain: vec![],
-        })
-    }
-
-    #[must_use]
-    pub fn create_single_location_expr(
-        &self,
-        kind: SingleLocationExpressionKind,
-        ty: Type,
-        ast_node: &swamp_script_ast::Node,
-    ) -> SingleLocationExpression {
-        SingleLocationExpression {
-            kind,
-            ty,
-            starting_variable: Rc::new(Variable {
-                name: Node::default(),
-                resolved_type: Type::Int,
-                mutable_node: None,
-                scope_index: 0,
-                variable_index: 0,
-            }),
-            node: self.to_node(ast_node),
-            access_chain: vec![],
-        }
-    }
-
-
-    #[must_use]
-    pub fn create_single_location_expr_resolved(
-        &self,
-        kind: SingleLocationExpressionKind,
-        ty: Type,
-        node: &Node,
-    ) -> SingleLocationExpression {
-        SingleLocationExpression {
-            kind,
-            ty,
-            starting_variable: Rc::new(Variable {
-                name: Node::default(),
-                resolved_type: Type::Int,
-                mutable_node: None,
-                scope_index: 0,
-                variable_index: 0,
-            }),
-            node: node.clone(),
-            access_chain: vec![],
-        }
-    }
-
-
-    #[must_use]
-    pub fn create_mut_single_location_expr_resolved(
-        &self,
-        kind: SingleLocationExpressionKind,
-        ty: Type,
-        node: &Node,
-    ) -> SingleMutLocationExpression {
-        SingleMutLocationExpression(SingleLocationExpression {
-            kind,
-            ty,
-            starting_variable: Rc::new(Variable {
-                name: Node::default(),
-                resolved_type: Type::Int,
-                mutable_node: None,
-                scope_index: 0,
-                variable_index: 0,
-            }),
-            node: node.clone(),
-            access_chain: vec![],
-        })
-    }
-         */
 
     #[must_use]
     pub const fn create_expr(

@@ -3,9 +3,9 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use std::fmt::Debug;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use swamp_script_node::{Node, Span};
-use swamp_script_source_map::{RelativePath, SourceMap};
+use swamp_script_source_map::SourceMap;
 
 pub struct FileLineInfo {
     pub row: usize,

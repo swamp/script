@@ -212,7 +212,7 @@ impl CodeGenState {
 
         function_generator.layout_variables(
             &internal_fn_def.function_scope_state,
-            &internal_fn_def.signature.return_type,
+            &internal_fn_def.signature.signature.return_type,
         )?;
 
         let ExpressionKind::Block(block_expressions) = &internal_fn_def.body.kind else {
@@ -226,7 +226,7 @@ impl CodeGenState {
             todo!()
         } else {
             let (return_type_size, _return_alignment) =
-                type_size_and_alignment(&internal_fn_def.signature.return_type);
+                type_size_and_alignment(&internal_fn_def.signature.signature.return_type);
             let ctx = Context::new(FrameMemoryRegion::new(
                 FrameMemoryAddress(0),
                 return_type_size,
@@ -1213,11 +1213,11 @@ impl FunctionCodeGen<'_> {
                     if let Some(intrinsic_fn) = single_intrinsic_fn(&internal_fn.body) {
                         self.gen_single_intrinsic_call(intrinsic_fn, None, args, ctx)?;
                     } else {
-                        self.gen_arguments(&internal_fn.signature, None, args)?;
+                        self.gen_arguments(&internal_fn.signature.signature, None, args)?;
                         self.state
                             .add_call(internal_fn, &format!("frame size: {}", self.frame_size)); // will be fixed up later
                         let (return_size, _alignment) =
-                            type_size_and_alignment(&internal_fn.signature.return_type);
+                            type_size_and_alignment(&internal_fn.signature.signature.return_type);
                         if return_size.0 != 0 {
                             self.state.builder.add_mov(
                                 ctx.addr(),
@@ -1226,7 +1226,11 @@ impl FunctionCodeGen<'_> {
                                 "copy the ret value to destination",
                             );
                         }
-                        self.copy_back_mutable_arguments(&internal_fn.signature, None, args)?;
+                        self.copy_back_mutable_arguments(
+                            &internal_fn.signature.signature,
+                            None,
+                            args,
+                        )?;
                     }
 
                     return Ok(());
@@ -1286,7 +1290,7 @@ impl FunctionCodeGen<'_> {
                                 )?;
                             } else {
                                 self.gen_arguments(
-                                    &internal_fn.signature,
+                                    &internal_fn.signature.signature,
                                     Some(start_source),
                                     arguments,
                                 )?;
@@ -1295,8 +1299,9 @@ impl FunctionCodeGen<'_> {
                                     &format!("frame size: {}", self.frame_size),
                                 ); // will be fixed up later
 
-                                let (return_size, _alignment) =
-                                    type_size_and_alignment(&internal_fn.signature.return_type);
+                                let (return_size, _alignment) = type_size_and_alignment(
+                                    &internal_fn.signature.signature.return_type,
+                                );
                                 if return_size.0 != 0 {
                                     self.state.builder.add_mov(
                                         ctx.addr(),
@@ -1307,7 +1312,7 @@ impl FunctionCodeGen<'_> {
                                 }
 
                                 self.copy_back_mutable_arguments(
-                                    &internal_fn.signature,
+                                    &internal_fn.signature.signature,
                                     Some(start_source),
                                     arguments,
                                 )?;
