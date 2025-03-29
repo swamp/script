@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/swamp
+ * Licensed under the MIT License. See LICENSE in the project root for license information.
+ */
+
 use swamp_script_code_gen::{CodeGenState, Error, GenOptions};
 use swamp_script_compile::Program;
 use swamp_script_modules::prelude::ModuleRef;

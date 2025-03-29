@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/swamp
+ * Licensed under the MIT License. See LICENSE in the project root for license information.
+ */
+
 use swamp_script_modules::modules::Module;
 use swamp_script_modules::symtbl::{SymbolTable, TypeGenerator, TypeGeneratorKind};
 use swamp_script_node::Node;
