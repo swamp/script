@@ -272,8 +272,6 @@ impl SourceMap {
             .unwrap()
     }
     pub fn minimal_relative_path(target: &Path, current_dir: &Path) -> io::Result<PathBuf> {
-        //let target = target.canonicalize()?;
-
         let current_dir_components = current_dir.components().collect::<Vec<_>>();
         let target_components = target.components().collect::<Vec<_>>();
 
