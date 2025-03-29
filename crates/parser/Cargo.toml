@@ -3,8 +3,8 @@ name = "swamp-parser"
 version = "0.1.10"
 edition = "2024"
 license = "MIT"
-repository = "https://github.com/swamp/script"
-description = "parser for swamp script"
+repository = "https://github.com/swamp/swamp"
+description = "parser for swamp"
 
 
 [dependencies]

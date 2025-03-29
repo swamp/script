@@ -4,7 +4,7 @@ version = "0.1.10"
 edition = "2024"
 license = "MIT"
 description = "checks the time passed and prints out a summary"
-repository = "https://github.com/swamp/script"
+repository = "https://github.com/swamp/swamp"
 
 [dependencies]
 

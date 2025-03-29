@@ -3,8 +3,8 @@ name = "swamp-analyzer"
 version = "0.1.10"
 edition = "2024"
 license = "MIT"
-repository = "https://github.com/swamp/script"
-description = "analyzer for swamp script"
+repository = "https://github.com/swamp/swamp"
+description = "analyzer for swamp"
 
 [dependencies]
 tracing = "0.1.40"

@@ -3,7 +3,7 @@ name = "swamp-compile"
 version = "0.1.10"
 edition = "2024"
 license = "MIT"
-repository = "https://github.com/swamp/script"
+repository = "https://github.com/swamp/swamp"
 description = "Compile utility functions"
 
 [dependencies]

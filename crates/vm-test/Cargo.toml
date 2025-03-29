@@ -3,8 +3,8 @@ name = "swamp-vm-test"
 version = "0.1.10"
 edition = "2024"
 license = "MIT"
-description = "examples and tests on how to use the swamp vm with swamp script"
-repository = "https://github.com/swamp/script"
+description = "examples and tests on how to use the swamp vm with swamp"
+repository = "https://github.com/swamp/swamp"
 
 [dependencies]
 swamp-vm = { path = "../vm", version = "0.1.10", features = [] }

@@ -3,7 +3,7 @@ name = "swamp-source-map-lookup"
 version = "0.1.10"
 edition = "2024"
 license = "MIT"
-repository = "https://github.com/swamp/script"
+repository = "https://github.com/swamp/swamp"
 description = "Source map lookup for Swamp"
 
 [dependencies]

@@ -4,7 +4,7 @@ version = "0.1.10"
 edition = "2024"
 license = "MIT"
 description = "generates swamp-vm opcodes"
-repository = "https://github.com/swamp/script"
+repository = "https://github.com/swamp/swamp"
 
 [dependencies]
 # Swamp VM
@@ -12,7 +12,7 @@ swamp-vm-types = { path = "../vm-types", version = "0.1.10" }
 swamp-vm-instr-build = { path = "../vm-instr-build", version = "0.1.10" }
 swamp-vm-disasm = { path = "../vm-disasm", version = "0.1.10" }
 
-# Swamp script
+# Swamp
 swamp-semantic = { path = "../semantic", version = "0.1.10" }
 swamp-node = { path = "../node", version = "0.1.10" }
 swamp-types = { path = "../types", version = "0.1.10" }

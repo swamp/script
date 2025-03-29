@@ -3,8 +3,8 @@ name = "swamp-source-map"
 version = "0.1.10"
 edition = "2024"
 license = "MIT"
-repository = "https://github.com/swamp/script"
-description = "Source map cache for Swamp script"
+repository = "https://github.com/swamp/swamp"
+description = "Source map cache for Swamp"
 
 [dependencies]
 seq-map = "0.0.13"

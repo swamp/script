@@ -4,6 +4,6 @@ version = "0.1.10"
 edition = "2024"
 license = "MIT"
 description = "shared types for the swamp VM"
-repository = "https://github.com/swamp/script"
+repository = "https://github.com/swamp/swamp"
 
 [dependencies]
