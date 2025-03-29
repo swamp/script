@@ -10,12 +10,12 @@ These types are crucial for the correct functioning of the VM, ensuring proper m
 
 ## Key Components
 
-*   **Memory Addresses:** Structs like `FrameMemoryAddress`, `ConstantMemoryAddress`, `HeapMemoryAddress`, `StackMemoryAddress` represent pointers or locations within different VM memory regions.
-*   **Memory Sizes & Offsets:** `MemorySize`, `FrameMemorySize`, `MemoryOffset` define the size of data types and relative positions in memory.
-*   **Memory Alignment:** The `MemoryAlignment` enum and associated functions (`align`, `align_frame_addr`, etc.) handle memory alignment requirements for different data types.
-*   **Instruction Format:** `BinaryInstruction` defines the packed binary layout of a single VM instruction, using opcodes defined in the `opcode` module.
-*   **Layout Constants:** Defines constants like `INT_SIZE`, `FLOAT_SIZE`, `PTR_SIZE`, `HEAP_PTR_SIZE`, `VEC_HEADER_SIZE`, `STRING_HEADER_SIZE`, etc., specifying the byte size of primitive types and internal data structure headers.
-*   **Internal Struct Layouts:** Defines `#[repr(C)]` structs like `VecHeader` and `StringHeader` to match the expected memory layout within the VM.
+* **Memory Addresses:** Structs like `FrameMemoryAddress`, `ConstantMemoryAddress`, `HeapMemoryAddress`, `StackMemoryAddress` represent pointers or locations within different VM memory regions.
+* **Memory Sizes & Offsets:** `MemorySize`, `FrameMemorySize`, `MemoryOffset` define the size of data types and relative positions in memory.
+* **Memory Alignment:** The `MemoryAlignment` enum and associated functions (`align`, `align_frame_addr`, etc.) handle memory alignment requirements for different data types.
+* **Instruction Format:** `BinaryInstruction` defines the packed binary layout of a single VM instruction, using opcodes defined in the `opcode` module.
+* **Layout Constants:** Defines constants like `INT_SIZE`, `FLOAT_SIZE`, `PTR_SIZE`, `HEAP_PTR_SIZE`, `VEC_HEADER_SIZE`, `STRING_HEADER_SIZE`, etc., specifying the byte size of primitive types and internal data structure headers.
+* **Internal Struct Layouts:** Defines `#[repr(C)]` structs like `VecHeader` and `StringHeader` to match the expected memory layout within the VM.
 
 ## Installation
 
