@@ -11,6 +11,7 @@ use swamp_script_modules::prelude::*;
 use swamp_script_modules::symtbl::SymbolTableRef;
 use swamp_script_semantic::{InternalMainExpression, ProgramState, SemanticError};
 use swamp_script_source_map::SourceMap;
+use time_dilation::ScopedTimer;
 use tracing::{Level, debug, span};
 
 #[derive(Debug)]
@@ -35,6 +36,9 @@ pub fn analyze_module(
     module_path: &[String],
     ast_module: &ParsedAstModule,
 ) -> Result<(SymbolTable, Option<InternalMainExpression>), LoaderErr> {
+    let debug_string = format!("analyze module {module_path:?}");
+    let _analyze_timer = ScopedTimer::new(&debug_string);
+
     let mut resolver = Analyzer::new(
         state,
         modules,

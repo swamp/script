@@ -13,15 +13,54 @@ fn format_duration(nanos: f64) -> String {
     }
 }
 
+pub enum Grade {
+    Great,
+    Good,
+    Warning,
+    Bad,
+}
+
+fn grade_from_nano(nanos: f64) -> Grade {
+    let ms = (nanos / 1_000_000.0) as u64;
+    if ms < 10 {
+        Grade::Great
+    } else if ms < 40 {
+        Grade::Good
+    } else if ms < 70 {
+        Grade::Warning
+    } else {
+        Grade::Bad
+    }
+}
+
+const RESET: &str = "\x1B[0m";
+const RED: &str = "\x1B[31m";
+const GREEN: &str = "\x1B[32m";
+const YELLOW_BOLD: &str = "\x1B[1;33m";
+const CYAN: &str = "\x1B[36m";
+const BLUE: &str = "\x1B[34m";
+
 #[cfg(feature = "enable_summary")]
 pub fn summary(name: &str, total_execution_time: Duration) {
     let duration = total_execution_time;
     let total_nanos = duration.as_nanos() as f64;
 
+    let grade = grade_from_nano(total_nanos);
+    let grade_color_string = match grade {
+        Grade::Great => GREEN,
+        Grade::Good => CYAN,
+        Grade::Warning => YELLOW_BOLD,
+        Grade::Bad => RED,
+    };
+
     println!(
-        "timer '{}' completed in {}",
+        "timer '{}{}{}' completed in {}{}{}",
+        BLUE,
         name,
+        RESET,
+        grade_color_string,
         format_duration(total_nanos),
+        RESET,
     );
 }
 
@@ -30,20 +69,20 @@ pub fn summary(name: &str, total_execution_time: Duration) {
 /// If the `enable_summary` feature is active, it prints the elapsed time
 /// when dropped.
 #[derive(Debug)]
-pub struct ScopedTimer {
+pub struct ScopedTimer<'a> {
     start: Instant,
     #[allow(dead_code)]
-    name: &'static str,
+    name: &'a str,
 }
 
-impl ScopedTimer {
+impl<'a> ScopedTimer<'a> {
     /// Creates a new timer and records the start time.
     ///
     /// # Arguments
     ///
     /// * `name` - A static string slice used to identify the timer in the summary output.
     #[must_use]
-    pub fn new(name: &'static str) -> Self {
+    pub fn new(name: &'a str) -> Self {
         Self {
             start: Instant::now(),
             name,
@@ -57,7 +96,7 @@ impl ScopedTimer {
     }
 }
 
-impl Drop for ScopedTimer {
+impl Drop for ScopedTimer<'_> {
     fn drop(&mut self) {
         #[cfg(feature = "enable_summary")]
         {

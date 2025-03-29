@@ -11,7 +11,6 @@ pub struct SemanticContext {
 
 impl SemanticContext {
     pub fn push_type_scope(&mut self) {
-        info!("SCOPE pushing type scope");
         self.type_variable_scopes
             .push(TypeVariableScope::new(SeqMap::new()));
     }
@@ -26,18 +25,8 @@ impl SemanticContext {
         }
         Ok(())
     }
-    /*
-    pub fn declare_type_variable_var(&mut self, type_variable: &TypeVariable) -> Result<(), SemanticError> {
-        if let Some(current_scope) = self.type_variable_scopes.last_mut() {
-            current_scope
-                .add_type_variable_var(type_variable)
-        } else {
-            panic!("Error: No active type variable scope!");
-        }
-    }*/
 
     pub fn pop_type_scope(&mut self) {
-        info!("SCOPE POP");
         assert!(!self.type_variable_scopes.is_empty());
         self.type_variable_scopes.pop();
     }
@@ -47,8 +36,6 @@ impl SemanticContext {
     /// # Panics
     /// if no stack is present
     pub fn declare_type_variable(&mut self, name: &str) -> Result<(), SemanticError> {
-        info!(?name, "SCOPE declare type");
-
         self.type_variable_scopes.last_mut().map_or_else(
             || {
                 panic!("Error: No active type variable scope!");

@@ -14,6 +14,7 @@ use swamp_script_ast::Function;
 use swamp_script_ast::prelude::*;
 use swamp_script_parser::{AstParser, SpecificError};
 use swamp_script_source_map::{FileId, SourceMap};
+use time_dilation::ScopedTimer;
 use tracing::debug;
 
 pub struct ParseRoot;
@@ -242,6 +243,9 @@ pub fn parse_single_module(
     source_map: &mut SourceMap,
     module_path: &[String],
 ) -> Result<ParsedAstModule, DependencyError> {
+    let debug = format!("parse module {module_path:?}");
+    let _parse_module_timer = ScopedTimer::new(&debug);
+
     let mount_name = mount_name_from_path(module_path);
 
     let (file_id, script) = source_map

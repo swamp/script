@@ -12,6 +12,8 @@ swamp-script-analyzer = { path = "../analyzer", version = "0.1.9" }
 swamp-script-semantic = { path = "../semantic", version = "0.1.9" }
 swamp-script-source-map = { path = "../source-map", version = "0.1.9" }
 swamp-script-modules = { path = "../modules", version = "0.1.9" }
+time-dilation = { path = "../time-dilation", version = "0.1.9"}
+
 tracing = "0.1.41"
 
 [dev-dependencies]

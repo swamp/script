@@ -78,8 +78,6 @@ impl Instantiator {
     ) -> Result<Type, SemanticError> {
         assert!(all_types_are_concrete_or_unit(analyzed_type_parameters));
 
-        info!(?blueprint, ?analyzed_type_parameters, "INSTANTIATE!");
-
         if let Some(existing) = self.instantiation_cache.get(
             &blueprint.defined_in_module_path,
             &blueprint.name(),
