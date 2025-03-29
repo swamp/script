@@ -4,7 +4,7 @@ version = "0.1.10"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/swamp/swamp"
-description = "Compile utility functions"
+description = "Main driver for the Swamp compiler, orchestrating bootstrapping, dependency loading, parsing, and semantic analysis phases."
 
 [dependencies]
 # Ast and Parser
