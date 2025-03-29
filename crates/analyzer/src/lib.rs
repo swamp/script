@@ -2175,7 +2175,7 @@ impl<'a> Analyzer<'a> {
             self.analyze_to_location(target_location, &any_argument_context, LocationSide::Lhs)?;
 
         let ty = resolved_location.ty.clone();
-        assert_eq!(ty, Type::Unit);
+        assert!(ty.is_concrete());
 
         let lhs_argument_context = TypeContext::new_argument(&ty);
         let source_expr = self.analyze_expression(ast_source_expression, &lhs_argument_context)?;
