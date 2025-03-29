@@ -18,7 +18,6 @@ use crate::alloc_util::{
 use crate::constants::ConstantsManager;
 use crate::ctx::Context;
 use seq_map::SeqMap;
-use std::path::PathBuf;
 use swamp_node::Node;
 use swamp_semantic::intr::IntrinsicFunction;
 use swamp_semantic::{

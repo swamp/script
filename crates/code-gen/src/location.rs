@@ -10,7 +10,6 @@ use swamp_semantic::{
     ArgumentExpressionOrLocation, LocationAccessKind, MutOrImmutableExpression,
     SingleLocationExpression,
 };
-use tracing::info;
 
 impl FunctionCodeGen<'_> {
     pub(crate) fn gen_for_access_or_location(

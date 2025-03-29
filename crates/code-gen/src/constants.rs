@@ -5,7 +5,6 @@
 
 use swamp_vm_types::aligner::align;
 use swamp_vm_types::{ConstantMemoryAddress, MemoryAlignment, MemorySize};
-use tracing::info;
 
 const ALIGNMENT_MASK: usize = 0x7;
 
