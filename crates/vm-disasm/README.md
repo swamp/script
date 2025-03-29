@@ -21,7 +21,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-swamp-vm-disassembler = "0.1.0"
+swamp-vm-disasm = "0.1.11"
 ```
 
 ## License

@@ -17,8 +17,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-# Check crates.io for the latest version
-swamp-modules = "0.1.0"
+swamp-modules = "0.1.11"
 ```
 
 ## License
