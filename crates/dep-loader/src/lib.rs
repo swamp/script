@@ -8,14 +8,12 @@ use seq_map::SeqMap;
 use std::collections::HashSet;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
-use std::time::Instant;
 use std::{env, io};
 use swamp_ast::Function;
 use swamp_ast::prelude::*;
 use swamp_parser::{AstParser, SpecificError};
 use swamp_source_map::{FileId, SourceMap};
 use time_dilation::ScopedTimer;
-use tracing::debug;
 
 pub struct ParseRoot;
 
@@ -75,7 +73,6 @@ impl ParseRoot {
         contents: String,
         file_id: FileId,
     ) -> Result<ParsedAstModule, ParseRootError> {
-        let before = Instant::now();
         let ast_program = AstParser.parse_module(&contents).map_err(|err| {
             let new_err = ParserError {
                 node: Node { span: err.span },
@@ -84,7 +81,6 @@ impl ParseRoot {
             };
             ParseRootError::ParserError(new_err)
         })?;
-        let after = Instant::now();
 
         Ok(ParsedAstModule {
             ast_module: ast_program,
@@ -129,10 +125,6 @@ impl DependencyParser {
     }
 
     pub fn add_ast_module(&mut self, module_path: Vec<String>, parsed_module: ParsedAstModule) {
-        debug!(
-            "Adding ast module parsed outside of graph resolver {:?}",
-            module_path
-        );
         self.already_parsed_modules
             .insert(module_path, parsed_module)
             .expect("can not add parsed module")
@@ -446,7 +438,6 @@ pub fn parse_local_modules_and_get_order(
     dependency_parser: &mut DependencyParser,
     source_map: &mut SourceMap,
 ) -> Result<Vec<Vec<String>>, DepLoaderError> {
-    debug!(current_directory=?get_current_dir().expect("failed to get current directory"), "current directory");
     dependency_parser.parse_local_modules(&module_path, source_map)?;
 
     let module_paths_in_order = dependency_parser.get_analysis_order()?;

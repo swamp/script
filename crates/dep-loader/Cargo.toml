@@ -4,14 +4,13 @@ version = "0.1.10"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/swamp/swamp"
-description = "dependency parser and loader for swamp"
+description = "Parses Swamp modules, scans for dependencies (`mod` and `use`), and determines the correct analysis order."
 
 [dependencies]
-tracing = "0.1.40"
-seq-map = "0.0.13"
 swamp-ast = { path = "../ast", version = "0.1.10" }
 swamp-parser = { path = "../parser", version = "0.1.10" }
 swamp-source-map = { path = "../source-map", version = "0.1.10" }
-time-dilation = { path = "../time-dilation", version = "0.1.10" }
 
+seq-map = "0.0.13"
+time-dilation = { path = "../time-dilation", version = "0.1.10" }
 dirs = "6.0.0"
