@@ -373,14 +373,6 @@ impl DependencyParser {
     }
 }
 
-fn get_current_dir() -> Result<PathBuf, std::io::Error> {
-    let path = env::current_dir()?;
-
-    //let cargo_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-
-    Ok(path)
-}
-
 #[derive(Debug)]
 pub enum DepLoaderError {
     DependencyError(DependencyError),

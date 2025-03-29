@@ -140,10 +140,12 @@ pub fn bootstrap_modules(
 
     // Overwrite the default lookup table to the definition table
     core_analyzed_definition_table
-        .extend_intrinsic_functions_from(&default_symbol_table_for_core_with_intrinsics);
+        .extend_intrinsic_functions_from(&default_symbol_table_for_core_with_intrinsics)
+        .expect("core extend");
 
     core_analyzed_definition_table
-        .extend_basic_from(&default_symbol_table_for_core_with_intrinsics);
+        .extend_basic_from(&default_symbol_table_for_core_with_intrinsics)
+        .expect("extend basics from core");
 
     /*
     let source_map_lookup = SourceMapWrapper {
@@ -191,10 +193,12 @@ pub fn bootstrap_modules(
         source_map: &source_map_lookup,
     };
 
+    /*
     let symbol_table_display = SymbolTableDisplay {
         symbol_table: &default_symbol_table_for_others,
         source_map_display: &pretty_printer,
     };
+     */
 
     let program = Program::new(state, modules, default_symbol_table_for_others);
 

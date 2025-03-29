@@ -1332,10 +1332,6 @@ impl<'a> Analyzer<'a> {
         Ok((element_type, expressions))
     }
 
-    fn function_scope(&self) -> &FunctionScopeState {
-        &self.scope
-    }
-
     fn push_block_scope(&mut self, _debug_str: &str) {
         self.scope.block_scope_stack.push(BlockScope {
             mode: BlockScopeMode::Open,
