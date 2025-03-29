@@ -11,7 +11,6 @@ use std::cmp::PartialEq;
 use std::fmt;
 use std::hash::Hash;
 use swamp_node::Node;
-use tracing::info;
 
 #[derive(Eq, PartialEq, Hash, Clone)]
 pub enum Type {
@@ -383,7 +382,6 @@ pub fn same_named_struct_ref(a: &NamedStructType, b: &NamedStructType) -> bool {
 #[must_use]
 pub fn compare_anonymous_struct_types(a: &AnonymousStructType, b: &AnonymousStructType) -> bool {
     if a.field_name_sorted_fields.len() != b.field_name_sorted_fields.len() {
-        info!("different lengths");
         return false;
     }
 
@@ -393,13 +391,10 @@ pub fn compare_anonymous_struct_types(a: &AnonymousStructType, b: &AnonymousStru
         .zip(b.field_name_sorted_fields.clone())
     {
         if *a_name != b_name {
-            info!(?a_name, ?b_name, "different field names");
-
             return false;
         }
 
         if !a_type.field_type.compatible_with(&b_type.field_type) {
-            info!(?a_type.field_type, ?b_type.field_type, "different field types");
             return false;
         }
     }

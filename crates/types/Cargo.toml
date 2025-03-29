@@ -8,7 +8,7 @@ description = "types used in Swamp"
 
 
 [dependencies]
+swamp-node = { path = "../node", version = "0.1.10" }
+
 seq-fmt = "0.0.1"
 seq-map = "0.0.13"
-swamp-node = { path = "../node", version = "0.1.10" }
-tracing = "0.1.40"
