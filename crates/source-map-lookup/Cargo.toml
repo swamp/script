@@ -4,9 +4,8 @@ version = "0.1.10"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/swamp/swamp"
-description = "Source map lookup for Swamp"
+description = "Trait and implementation for querying source text and locations (line/col/file)"
 
 [dependencies]
 swamp-node = { path = "../node", version = "0.1.10" }
 swamp-source-map = { path = "../source-map", version = "0.1.10" }
-swamp-core-extra = { path = "../core-extra", version = "0.1.10" }

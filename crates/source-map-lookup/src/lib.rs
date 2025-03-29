@@ -17,7 +17,6 @@ pub struct FileLineInfo {
 pub trait SourceMapLookup: Debug {
     fn get_text(&self, resolved_node: &Node) -> &str;
     fn get_text_span(&self, span: &Span) -> &str;
-
     fn get_line(&self, span: &Span) -> FileLineInfo;
 }
 
