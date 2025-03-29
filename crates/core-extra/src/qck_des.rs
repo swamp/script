@@ -2,13 +2,11 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/swamp
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use crate::extra::SparseValueId;
 use crate::prelude::Value;
-use crate::value::{QuickDeserialize, RustType};
 use fixed32::Fp;
 use std::cell::RefCell;
 use std::rc::Rc;
-use swamp_types::{EnumVariantType, ExternalType, Type};
+use swamp_types::{EnumVariantType, Type};
 
 /// # Panics
 ///
@@ -36,10 +34,10 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
         Type::Bool => (Value::Bool(buf[0] != 0), 1),
         Type::Unit => (Value::Unit, 0),
         Type::Never => panic!("can not deserialize never type"),
-        Type::Slice(value_type) => {
+        Type::Slice(_value_type) => {
             todo!()
         }
-        Type::SlicePair(key_type, value_type) => {
+        Type::SlicePair(_key_type, _value_type) => {
             todo!()
         }
         Type::MutableReference(_) => todo!(),
@@ -215,7 +213,8 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
                 (Value::Option(None), offset)
             }
         }
-        Type::External(rust_type_ref) => {
+        Type::External(_rust_type_ref) => {
+            /*
             match rust_type_ref.number {
                 SPARSE_ID_TYPE_ID => {
                     let sparse_id_rust_type = ExternalType {
@@ -235,6 +234,8 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
                 }
                 _ => panic!("can not deserialize rust types {}", rust_type_ref.type_name),
             }
+            */
+            (Value::Unit, 0)
         }
         &swamp_types::Type::Variable(_) => todo!(),
         &swamp_types::Type::Generic(_, _) => todo!(),

@@ -734,7 +734,7 @@ impl Display for Value {
                 }
                 write!(f, "]")
             }
-            Self::Lambda(a, b) => {
+            Self::Lambda(_a, _b) => {
                 writeln!(f, "lambda")
             }
             Self::Grid(grid) => {
@@ -967,7 +967,7 @@ impl Hash for Value {
                     0.hash(state);
                 }
             }
-            Self::Lambda(a, b) => {
+            Self::Lambda(_a, _b) => {
                 todo!()
             }
             Self::Vec(_, _arr) => {}
@@ -991,7 +991,7 @@ impl Hash for Value {
                     val.borrow().hash(state);
                 }
             }
-            Self::Map2(items) => {}
+            Self::Map2(_items) => {}
             Self::SlicePair(_, _items) => {}
             Self::Tuple(_, values) => {
                 for v in values {
