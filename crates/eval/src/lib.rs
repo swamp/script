@@ -2050,38 +2050,42 @@ impl<'a, C> Interpreter<'a, C> {
             ),
         };
 
-        let mut is_uncertain = false;
-        let mut is_undefined = false;
+        let mut has_value_but_should_be_considered_as_option = false;
+        let mut optional_chaining_has_failed = false;
 
         for part in parts {
-            if let PostfixKind::NoneCoalesce(default_expression) = &part.kind {
+            if let PostfixKind::NoneCoalescingOperator(default_expression) = &part.kind {
                 val_ref = {
                     let borrowed = val_ref.borrow();
 
-                    match borrowed.clone() {
-                        Value::Option(found_option) => match found_option {
-                            Some(some_value) => some_value,
+                    match &*borrowed {
+                        Value::Option(found_option) => match &found_option {
+                            Some(some_value) => some_value.clone(),
                             _ => {
                                 let default_value = self.evaluate_expression(default_expression)?;
                                 Rc::new(RefCell::new(default_value))
                             }
                         },
                         _ => {
-                            return Err(
-                                self.create_err(RuntimeErrorKind::ExpectedOptional, &part.node)
-                            );
+                            if has_value_but_should_be_considered_as_option {
+                                val_ref.clone()
+                            } else {
+                                return Err(
+                                    self.create_err(RuntimeErrorKind::ExpectedOptional, &part.node)
+                                );
+                            }
                         }
                     }
                 };
 
                 is_mutable = false;
-                is_uncertain = false;
-                is_undefined = false;
-            } else if is_undefined {
+                has_value_but_should_be_considered_as_option = false;
+                optional_chaining_has_failed = false;
+            } else if optional_chaining_has_failed {
                 continue;
             }
             match &part.kind {
-                PostfixKind::NoneCoalesce(_default_expression) => {
+                PostfixKind::NoneCoalescingOperator(_default_expression) => {
                     // Handled earlier
                 }
 
@@ -2108,14 +2112,6 @@ impl<'a, C> Interpreter<'a, C> {
                     val_ref = Rc::new(RefCell::new(val));
                     is_mutable = false;
                 }
-                /*
-                PostfixKind::IntrinsicCall(intrinsic, arguments) => {
-                    let val = self.eval_intrinsic_internal(node, intrinsic, arguments)?;
-                    val_ref = Rc::new(RefCell::new(val));
-                    is_mutable = false;
-                }
-
-                 */
                 PostfixKind::FunctionCall(arguments) => {
                     let val = self.eval_function_call(node, &val_ref, arguments)?;
 
@@ -2123,19 +2119,20 @@ impl<'a, C> Interpreter<'a, C> {
                     is_mutable = false;
                 }
 
-                PostfixKind::OptionUnwrap => {
+                // Optional: ?.
+                PostfixKind::OptionalChainingOperator => {
                     val_ref = {
                         let borrowed = val_ref.borrow();
 
                         match borrowed.clone() {
-                            Value::Option(found_option) => match found_option {
-                                Some(some_value) => some_value,
-                                _ => {
-                                    is_undefined = true;
-
+                            Value::Option(found_option) => {
+                                if let Some(found) = found_option {
+                                    found
+                                } else {
+                                    optional_chaining_has_failed = true;
                                     Rc::new(RefCell::new(Value::Option(None)))
                                 }
-                            },
+                            }
                             _ => {
                                 return Err(
                                     self.create_err(RuntimeErrorKind::ExpectedOptional, &part.node)
@@ -2145,19 +2142,18 @@ impl<'a, C> Interpreter<'a, C> {
                     };
 
                     is_mutable = false;
-                    is_uncertain = true;
+                    has_value_but_should_be_considered_as_option = true;
                 }
             }
         }
 
-        if is_uncertain {
-            let binding = val_ref.borrow().clone();
-            match binding {
+        if has_value_but_should_be_considered_as_option {
+            match &*val_ref.borrow() {
                 Value::Option(_) => {}
                 _ => {
-                    val_ref = Rc::new(RefCell::new(Value::Option(Some(val_ref))));
+                    return Ok(Rc::new(RefCell::new(Value::Option(Some(val_ref.clone())))));
                 }
-            }
+            };
         }
 
         Ok(val_ref)

@@ -1327,8 +1327,8 @@ impl FunctionCodeGen<'_> {
                     //self.gen_arguments(arguments);
                     //self.state.add_call(start_expression)
                 }
-                PostfixKind::OptionUnwrap => todo!(),
-                PostfixKind::NoneCoalesce(_) => todo!(),
+                PostfixKind::OptionalChainingOperator => todo!(),
+                PostfixKind::NoneCoalescingOperator(_) => todo!(),
             }
         }
 

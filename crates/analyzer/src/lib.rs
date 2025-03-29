@@ -1055,7 +1055,7 @@ impl<'a> Analyzer<'a> {
                     }
                 }
 
-                swamp_script_ast::Postfix::NoneCoalesce(default_expr) => {
+                swamp_script_ast::Postfix::NoneCoalescingOperator(default_expr) => {
                     let unwrapped_type = if let Type::Optional(unwrapped_type) = &tv.resolved_type {
                         unwrapped_type
                     } else if uncertain {
@@ -1071,7 +1071,7 @@ impl<'a> Analyzer<'a> {
                         self.analyze_expression(default_expr, &unwrapped_type_context)?;
                     self.add_postfix(
                         &mut suffixes,
-                        PostfixKind::NoneCoalesce(resolved_default_expr),
+                        PostfixKind::NoneCoalescingOperator(resolved_default_expr),
                         unwrapped_type.clone(),
                         &default_expr.node,
                     );
@@ -1079,12 +1079,12 @@ impl<'a> Analyzer<'a> {
                     uncertain = false; // the chain is safe, because this will always solve None
                 }
 
-                swamp_script_ast::Postfix::OptionUnwrap(option_node) => {
+                swamp_script_ast::Postfix::OptionalChainingOperator(option_node) => {
                     if let Type::Optional(unwrapped_type) = &tv.resolved_type {
                         uncertain = true;
                         self.add_postfix(
                             &mut suffixes,
-                            PostfixKind::OptionUnwrap,
+                            PostfixKind::OptionalChainingOperator,
                             *unwrapped_type.clone(),
                             option_node,
                         );
@@ -2085,10 +2085,10 @@ impl<'a> Analyzer<'a> {
                 swamp_script_ast::Postfix::FunctionCall(node, _) => {
                     return Err(self.create_err(ErrorKind::CallsCanNotBePartOfChain, node));
                 }
-                swamp_script_ast::Postfix::OptionUnwrap(node) => {
+                swamp_script_ast::Postfix::OptionalChainingOperator(node) => {
                     return Err(self.create_err(ErrorKind::UnwrapCanNotBePartOfChain, node));
                 }
-                swamp_script_ast::Postfix::NoneCoalesce(expr) => {
+                swamp_script_ast::Postfix::NoneCoalescingOperator(expr) => {
                     return Err(
                         self.create_err(ErrorKind::NoneCoalesceCanNotBePartOfChain, &expr.node)
                     );

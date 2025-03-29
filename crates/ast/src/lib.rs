@@ -403,8 +403,8 @@ pub enum Postfix {
     Subscript(Expression),
     MemberCall(Node, Vec<MutableOrImmutableExpression>),
     FunctionCall(Node, Vec<MutableOrImmutableExpression>),
-    OptionUnwrap(Node),       // ?-postfix
-    NoneCoalesce(Expression), // ??-postfix
+    OptionalChainingOperator(Node),     // ?-postfix
+    NoneCoalescingOperator(Expression), // ??-postfix
 }
 
 #[derive(Debug, Clone)]

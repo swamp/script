@@ -518,8 +518,8 @@ pub enum PostfixKind {
     StructField(AnonymousStructType, usize),
     MemberCall(FunctionRef, Vec<ArgumentExpressionOrLocation>),
     FunctionCall(Vec<ArgumentExpressionOrLocation>),
-    OptionUnwrap, // ? operator
-    NoneCoalesce(Expression),
+    OptionalChainingOperator,           // ? operator
+    NoneCoalescingOperator(Expression), // ?? operator
 }
 
 #[derive(Debug, Clone)]

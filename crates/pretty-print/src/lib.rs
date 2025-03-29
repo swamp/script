@@ -132,7 +132,7 @@ impl SourceMapDisplay<'_> {
         generator: &TypeGenerator,
         tabs: usize,
     ) -> std::fmt::Result {
-        write!(f, "{:?}", generator)
+        write!(f, "{generator:?}")
     }
 }
 
@@ -567,8 +567,8 @@ impl SourceMapDisplay<'_> {
                 self.show_arguments(f, arguments, tabs + 1)?;
                 write!(f, "]")
             }
-            PostfixKind::OptionUnwrap => todo!(),
-            PostfixKind::NoneCoalesce(_) => todo!(),
+            PostfixKind::OptionalChainingOperator => todo!(),
+            PostfixKind::NoneCoalescingOperator(_) => todo!(),
             /*
             PostfixKind::IntrinsicCallEx(intrinsic_fn, arguments) => {
                 write!(f, "[intrinsic_call_ex: {intrinsic_fn:?}")?;

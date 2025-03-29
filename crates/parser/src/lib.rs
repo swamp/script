@@ -634,14 +634,15 @@ impl AstParser {
 
                     match child.as_rule() {
                         Rule::unwrap_postfix => {
-                            postfixes.push(Postfix::OptionUnwrap(self.to_node(&op_pair)));
+                            postfixes
+                                .push(Postfix::OptionalChainingOperator(self.to_node(&op_pair)));
                         }
 
                         Rule::none_coalesce_postfix => {
                             let mut postfix_inner = Self::convert_into_iterator(&child);
                             let expr_pair = postfix_inner.next().expect("must have following");
                             let default_expression = self.parse_expression(&expr_pair)?;
-                            postfixes.push(Postfix::NoneCoalesce(default_expression));
+                            postfixes.push(Postfix::NoneCoalescingOperator(default_expression));
                         }
 
                         Rule::function_call_postfix => {
