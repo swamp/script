@@ -57,8 +57,7 @@ impl Analyzer<'_> {
         is_mutable: Option<&swamp_ast::Node>,
         variable_type_ref: &Type,
     ) -> Result<VariableRef, Error> {
-        if variable_type_ref == &Type::Unit {}
-        assert_ne!(*variable_type_ref, Type::Unit);
+        debug_assert!(variable_type_ref.is_concrete());
         self.create_local_variable_resolved(
             &self.to_node(variable),
             Option::from(&self.to_node_option(is_mutable)),

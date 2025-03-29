@@ -141,7 +141,7 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
                 .get_variant_from_index(enum_lookup_index as usize)
                 .expect("should be able to find variant");
 
-            let val = match &*variant_type {
+            let val = match variant_type {
                 EnumVariantType::Struct(_) => {
                     todo!("struct containers not done yet")
                 }

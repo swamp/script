@@ -40,10 +40,7 @@ impl<T: Any + Debug + Display + QuickSerialize + PartialEq> RustType for T {
 
     fn eq_dyn(&self, other: &dyn RustType) -> bool {
         // Check if `other` is the same concrete type as `self`
-        other
-            .as_any()
-            .downcast_ref::<T>()
-            .map_or(false, |other_t| self == other_t)
+        other.as_any().downcast_ref::<T>() == Some(self)
     }
 }
 
@@ -591,7 +588,7 @@ impl Value {
     ///
     pub fn expect_slice(&self) -> Result<(Type, Vec<ValueRef>), ValueError> {
         match self {
-            Self::Slice(ty, items) => Ok((ty.clone(), items.to_vec())),
+            Self::Slice(ty, items) => Ok((ty.clone(), items.clone())),
             _ => Err(ValueError::ConversionError("Expected slice value".into())),
         }
     }

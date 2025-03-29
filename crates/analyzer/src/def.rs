@@ -231,7 +231,7 @@ impl Analyzer<'_> {
 
         self.shared
             .lookup_table
-            .add_enum_type_link(new_enum_type.clone())
+            .add_enum_type_link(new_enum_type)
             .map_err(|err| self.create_err(ErrorKind::SemanticError(err), &enum_type_name.name))?;
 
         Ok(())
@@ -551,7 +551,7 @@ impl Analyzer<'_> {
     /// # Errors
     ///
     pub fn analyze_definition(&mut self, ast_def: &swamp_ast::Definition) -> Result<(), Error> {
-        self.debug_definition(ast_def);
+        //self.debug_definition(ast_def);
         match ast_def {
             swamp_ast::Definition::NamedStructDef(ast_struct) => {
                 self.analyze_named_struct_type_definition(ast_struct)?;
@@ -612,11 +612,15 @@ impl Analyzer<'_> {
         let maybe_type_to_attach_to = if is_parameterized {
             let type_variables = self.convert_to_type_variables(&attached_to_type.type_variables);
             self.set_type_variables_to_extra_symbol_table(&type_variables);
-            if let Some(found_blueprint) = self.shared.lookup_table.get_blueprint(&type_name_text) {
-                Some(Type::Blueprint(found_blueprint.clone()))
-            } else {
-                panic!("must be something");
-            }
+            self.shared
+                .lookup_table
+                .get_blueprint(&type_name_text)
+                .map_or_else(
+                    || {
+                        panic!("blueprint was missing");
+                    },
+                    |found_blueprint| Some(Type::Blueprint(found_blueprint.clone())),
+                )
         } else {
             Some(self.analyze_named_type(&qualified)?)
         };
@@ -624,7 +628,7 @@ impl Analyzer<'_> {
         if let Some(type_to_attach_to) = maybe_type_to_attach_to {
             let function_refs: Vec<&swamp_ast::Function> = functions.iter().collect();
 
-            self.analyze_impl_functions(type_to_attach_to, &function_refs)?;
+            self.analyze_impl_functions(&type_to_attach_to, &function_refs)?;
 
             if is_parameterized {
                 self.shared.type_variables.pop_type_scope();
@@ -643,14 +647,14 @@ impl Analyzer<'_> {
     ///
     pub fn analyze_impl_functions(
         &mut self,
-        attach_to_type: Type, // Needed for self
+        attach_to_type: &Type, // Needed for self
         functions: &[&swamp_ast::Function],
     ) -> Result<(), Error> {
         self.shared
             .state
             .instantiator
             .associated_impls
-            .prepare(&attach_to_type);
+            .prepare(attach_to_type);
 
         for function in functions {
             let new_return_type = self.analyze_return_type(function)?;
@@ -665,7 +669,7 @@ impl Analyzer<'_> {
 
             let function_name_str = self.get_text(&function_name.name).to_string();
 
-            let resolved_function = self.analyze_impl_func(function, &attach_to_type)?;
+            let resolved_function = self.analyze_impl_func(function, attach_to_type)?;
 
             let resolved_function_ref = Rc::new(resolved_function);
 
@@ -675,7 +679,7 @@ impl Analyzer<'_> {
                 .state
                 .instantiator
                 .associated_impls
-                .add_member_function(&attach_to_type, &function_name_str, resolved_function_ref)
+                .add_member_function(attach_to_type, &function_name_str, resolved_function_ref)
                 .map_err(|err| {
                     self.create_err(ErrorKind::SemanticError(err), &function_name.name)
                 })?;

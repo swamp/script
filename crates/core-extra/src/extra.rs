@@ -31,7 +31,7 @@ impl QuickDeserialize for SparseValueId {
         offset += 2;
 
         // Deserialize the generation
-        let generation = u8::from_le_bytes(octets[offset..offset + 1].try_into().unwrap());
+        let generation = u8::from_le_bytes(octets[offset..=offset].try_into().unwrap());
         offset += 1;
 
         let id = Id::new(index.into(), generation);
@@ -112,7 +112,7 @@ impl SparseValueMap {
     #[must_use]
     pub fn quick_deserialize(
         key_type: ExternalType,
-        value_item_type: Type,
+        value_item_type: &Type,
         octets: &[u8],
     ) -> (Self, usize) {
         let mut sparse = Self::new(key_type, value_item_type.clone());
@@ -133,7 +133,7 @@ impl SparseValueMap {
             offset += 2;
 
             let generation = u8::from_le_bytes(
-                octets[offset..offset + 1]
+                octets[offset..=offset]
                     .try_into()
                     .expect("could not convert to u16 generation"),
             );
@@ -150,9 +150,7 @@ impl SparseValueMap {
                 .try_set(id, deserialized_value_ref)
                 .expect("could not insert into SparseValueMap");
 
-            sparse
-                .id_generator
-                .reserve(index as usize, generation.into());
+            sparse.id_generator.reserve(index as usize, generation);
         }
 
         (sparse, offset)

@@ -38,7 +38,7 @@ impl ParsedAstModule {
         let fake_identifier = Node::default();
 
         let signature = FunctionDeclaration {
-            name: fake_identifier.clone(),
+            name: fake_identifier,
             params: parameters,
             self_parameter: None,
             return_type,
@@ -63,8 +63,15 @@ pub struct ParserError {
     pub file_id: FileId,
 }
 
+impl Default for ParseRoot {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ParseRoot {
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {}
     }
 
@@ -193,6 +200,7 @@ pub fn get_all_local_paths(
     (imports, uses)
 }
 
+#[must_use]
 pub fn module_path_to_relative_swamp_file(module_path_vec: &[String]) -> PathBuf {
     let mut path_buf = PathBuf::new();
 
@@ -214,6 +222,7 @@ pub fn module_path_to_relative_swamp_file(module_path_vec: &[String]) -> PathBuf
     path_buf
 }
 
+#[must_use]
 pub fn module_path_to_relative_swamp_file_string(module_path_vec: &[String]) -> String {
     module_path_to_relative_swamp_file(module_path_vec)
         .to_str()
@@ -221,6 +230,7 @@ pub fn module_path_to_relative_swamp_file_string(module_path_vec: &[String]) -> 
         .into()
 }
 
+#[must_use]
 pub fn mount_name_from_path(path: &[String]) -> &str {
     if path[0] == "crate" {
         "crate"
@@ -316,6 +326,7 @@ impl DependencyParser {
         Ok(())
     }
 
+    #[must_use]
     pub fn get_parsed_module(&self, path: &[String]) -> Option<&ParsedAstModule> {
         self.already_parsed_modules.get(&path.to_vec())
     }
@@ -403,18 +414,13 @@ pub fn os_home_relative_path(project_name: &str) -> io::Result<PathBuf> {
 }
 
 pub fn path_from_environment_variable() -> io::Result<PathBuf> {
-    if let Ok(string_value) = &env::var("SWAMP_HOME") {
-        Ok(Path::new(string_value).to_path_buf())
-    } else {
-        Err(io::Error::new(ErrorKind::InvalidData, "missing SWAMP_HOME"))
-    }
+    env::var("SWAMP_HOME").as_ref().map_or_else(
+        |_| Err(io::Error::new(ErrorKind::InvalidData, "missing SWAMP_HOME")),
+        |string_value| Ok(Path::new(string_value).to_path_buf()),
+    )
 }
 pub fn swamp_home() -> io::Result<PathBuf> {
-    if let Ok(found_path) = path_from_environment_variable() {
-        Ok(found_path)
-    } else {
-        os_home_relative_path("swamp")
-    }
+    path_from_environment_variable().map_or_else(|_| os_home_relative_path("swamp"), Ok)
 }
 
 /// # Errors
@@ -426,7 +432,7 @@ pub fn swamp_registry_path() -> io::Result<PathBuf> {
 }
 
 pub fn parse_local_modules_and_get_order(
-    module_path: Vec<String>,
+    module_path: &[String],
     dependency_parser: &mut DependencyParser,
     source_map: &mut SourceMap,
 ) -> Result<Vec<Vec<String>>, DepLoaderError> {

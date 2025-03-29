@@ -217,17 +217,14 @@ pub fn compile_and_analyze_all_modules(
 ) -> Result<(), ScriptResolveError> {
     let mut dependency_parser = DependencyParser::new();
 
-    let module_paths_in_order = parse_local_modules_and_get_order(
-        module_path.to_vec(),
-        &mut dependency_parser,
-        source_map,
-    )?;
+    let module_paths_in_order =
+        parse_local_modules_and_get_order(module_path, &mut dependency_parser, source_map)?;
 
     analyze_modules_in_order(
         &mut resolved_program.state,
         &resolved_program.default_symbol_table,
         &mut resolved_program.modules,
-        core_symbol_table,
+        &core_symbol_table,
         source_map,
         &module_paths_in_order,
         &dependency_parser,

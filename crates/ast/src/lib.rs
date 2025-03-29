@@ -15,7 +15,7 @@ pub struct SpanWithoutFileId {
 }
 
 impl Debug for SpanWithoutFileId {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "<{}:{}>", self.offset, self.length)
     }
 }
@@ -392,7 +392,7 @@ pub struct Expression {
 }
 
 impl Debug for Expression {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
         write!(f, "{:?}{:?}", self.node.span, self.kind)
     }
 }
@@ -517,9 +517,9 @@ impl EnumVariantLiteral {
     #[must_use]
     pub const fn node(&self) -> &Node {
         match self {
-            EnumVariantLiteral::Simple(ident, _) => &ident.name.0,
-            EnumVariantLiteral::Tuple(ident, _, _) => &ident.name.0,
-            EnumVariantLiteral::Struct(ident, _, _, _) => &ident.name.0,
+            Self::Tuple(ident, _, _) | Self::Struct(ident, _, _, _) | Self::Simple(ident, _) => {
+                &ident.name.0
+            }
         }
     }
 }

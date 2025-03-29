@@ -51,8 +51,8 @@ impl SemanticContext {
     #[must_use]
     pub fn resolve_type_variable(&self, name: &str) -> Option<Type> {
         for scope in self.type_variable_scopes.iter().rev() {
-            if let Some(found_type) = scope.internal_get_type(&name) {
-                return Some(found_type.clone());
+            if let Some(found_type) = scope.internal_get_type(name) {
+                return Some(found_type);
             }
         }
         None

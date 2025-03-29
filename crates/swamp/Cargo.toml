@@ -27,8 +27,6 @@ swamp-compile = { path = "../compile", version = "0.1.10" }
 
 swamp-error-report = { path = "../err", version = "0.1.10" }
 
-swamp-std = { path = "../std", version = "0.1.10" }
-
 # Runner
 swamp-eval = { path = "../eval", version = "0.1.10" }
 

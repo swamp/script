@@ -30,11 +30,13 @@ impl Analyzer<'_> {
 
     /// # Errors
     ///
+    /// # Panics
+    /// if `Vec` wasn't added in core.
     pub fn analyze_type(&mut self, ast_type: &swamp_ast::Type) -> Result<Type, Error> {
         let resolved = match ast_type {
             swamp_ast::Type::AnonymousStruct(ast_struct) => {
                 let struct_ref = self.analyze_anonymous_struct_type(ast_struct)?;
-                Type::AnonymousStruct(struct_ref.into())
+                Type::AnonymousStruct(struct_ref)
             }
             swamp_ast::Type::Slice(ast_type) => {
                 let analyzed_element_type = self.analyze_slice_type(ast_type)?;
@@ -44,12 +46,10 @@ impl Analyzer<'_> {
                     .get_blueprint("Vec")
                     .unwrap()
                     .clone();
-                let instantiated_vec = self
-                    .shared
+                self.shared
                     .state
                     .instantiator
-                    .instantiate_blueprint_and_members(&vec_blueprint, &[analyzed_element_type])?;
-                instantiated_vec
+                    .instantiate_blueprint_and_members(&vec_blueprint, &[analyzed_element_type])?
             }
             swamp_ast::Type::SlicePair(key_type, value_type) => {
                 let analyzed_key_type = self.analyze_slice_type(key_type)?;
@@ -61,15 +61,13 @@ impl Analyzer<'_> {
                     .unwrap()
                     .clone();
 
-                let instantiated_vec = self
-                    .shared
+                self.shared
                     .state
                     .instantiator
                     .instantiate_blueprint_and_members(
                         &map_blueprint,
                         &[analyzed_key_type, analyzed_value_type],
-                    )?;
-                instantiated_vec
+                    )?
             }
             swamp_ast::Type::Tuple(types) => Type::Tuple(self.analyze_types(types)?),
             //            swamp_ast::Type::Generic(base_type, generic_types) => {

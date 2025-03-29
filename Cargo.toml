@@ -16,10 +16,10 @@ members = [
     "crates/modules",
     "crates/dep-loader",
     "crates/program-analyzer",
-    # Core and Std
+    # Core
     "crates/core",
     "crates/core-extra",
-    "crates/std",
+    # Error report
     "crates/err",
     # Debug
     "crates/pretty-print",

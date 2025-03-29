@@ -85,6 +85,8 @@ impl Analyzer<'_> {
 
     /// # Errors
     ///
+    /// #  Panics
+    /// If core hasn't added the `Range` type
     pub fn analyze_range(
         &mut self,
         min_expr: &swamp_ast::Expression,
@@ -114,7 +116,7 @@ impl Analyzer<'_> {
                 ArgumentExpressionOrLocation::Expression(bool_expr),
             ],
             ast_node,
-            &range_type.clone(),
+            &range_type,
         )?;
 
         Ok(self.create_expr(call_kind, range_type, ast_node))

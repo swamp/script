@@ -1392,7 +1392,7 @@ fn add_intrinsic_int_functions(core_ns: &mut SymbolTable) {
         .add_intrinsic_function(IntrinsicFunctionDefinition {
             name: IntrinsicFunction::IntToFloat.to_string(),
             intrinsic: IntrinsicFunction::IntToFloat,
-            signature: int_to_float.clone(),
+            signature: int_to_float,
         })
         .unwrap();
 }
@@ -1519,7 +1519,7 @@ fn add_intrinsic_float_functions(core_ns: &mut SymbolTable) {
         .add_intrinsic_function(IntrinsicFunctionDefinition {
             name: IntrinsicFunction::FloatClamp.to_string(),
             intrinsic: IntrinsicFunction::FloatClamp,
-            signature: float_float_float_to_float.clone(),
+            signature: float_float_float_to_float,
         })
         .unwrap();
 }

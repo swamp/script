@@ -12,6 +12,8 @@ use swamp_types::prelude::*;
 impl Analyzer<'_> {
     /// # Errors
     ///
+    /// # Panics
+    /// if core hasn't added `Vec`
     #[allow(clippy::too_many_lines)]
     pub fn analyze_complex_literal_to_expression(
         &mut self,
@@ -40,7 +42,7 @@ impl Analyzer<'_> {
                         .instantiator
                         .instantiate_blueprint_and_members(
                             &vec_blueprint,
-                            &[encountered_element_type.clone()],
+                            &[encountered_element_type],
                         )?
                 };
 
@@ -53,12 +55,11 @@ impl Analyzer<'_> {
                 {
                     let required_type = &found.signature.signature.parameters[0].resolved_type;
                     if resolved_items.is_empty() || slice_type.compatible_with(required_type) {
-                        let slice_literal =
-                            Literal::Slice(slice_type.clone(), resolved_items.clone());
+                        let slice_literal = Literal::Slice(slice_type.clone(), resolved_items);
 
                         let expr = self.create_expr(
                             ExpressionKind::Literal(slice_literal),
-                            slice_type.clone(),
+                            slice_type,
                             ast_node,
                         );
                         let return_type = *found.signature.signature.return_type.clone();
@@ -111,7 +112,7 @@ impl Analyzer<'_> {
                         .instantiator
                         .instantiate_blueprint_and_members(
                             &map_blueprint,
-                            &[encountered_key_type.clone(), encountered_value_type.clone()],
+                            &[encountered_key_type, encountered_value_type],
                         )?
                 };
 
@@ -125,11 +126,11 @@ impl Analyzer<'_> {
                     let required_type = &found.signature.signature.parameters[0].resolved_type;
                     if resolved_items.is_empty() || slice_pair_type.compatible_with(required_type) {
                         let slice_literal =
-                            Literal::SlicePair(slice_pair_type.clone(), resolved_items.clone());
+                            Literal::SlicePair(slice_pair_type.clone(), resolved_items);
 
                         let expr = self.create_expr(
                             ExpressionKind::Literal(slice_literal),
-                            slice_pair_type.clone(),
+                            slice_pair_type,
                             ast_node,
                         );
                         let return_type = *found.signature.signature.return_type.clone();
@@ -234,12 +235,12 @@ impl Analyzer<'_> {
                             let EnumVariantType::Tuple(tuple_data) = &variant_ref else {
                                 return Err(self.create_err(
                                     ErrorKind::WrongEnumVariantContainer(variant_ref),
-                                    &ast_node,
+                                    ast_node,
                                 ));
                             };
 
                             let resolved = self.analyze_tuple_type(
-                                &enum_literal.node(),
+                                enum_literal.node(),
                                 &tuple_data.fields_in_order,
                                 ast_expressions,
                             )?;
@@ -310,7 +311,7 @@ impl Analyzer<'_> {
                         return Ok((Literal::NoneLiteral, found_expected_type.clone()));
                     }
                 }
-                return Err(self.create_err(ErrorKind::NoneNeedsExpectedTypeHint, &ast_node));
+                return Err(self.create_err(ErrorKind::NoneNeedsExpectedTypeHint, ast_node));
             }
             &&swamp_ast::LiteralKind::Slice(_) | &swamp_ast::LiteralKind::SlicePair(_) => todo!(),
         };
@@ -335,7 +336,7 @@ impl Analyzer<'_> {
     fn analyze_tuple_type(
         &mut self,
         node: &swamp_ast::Node,
-        expected_types: &Vec<Type>,
+        expected_types: &[Type],
         ast_expressions: &Vec<swamp_ast::Expression>,
     ) -> Result<Vec<Expression>, Error> {
         if ast_expressions.len() != expected_types.len() {
@@ -407,7 +408,7 @@ impl Analyzer<'_> {
     }
 
     #[must_use]
-    pub fn create_err(&self, kind: ErrorKind, ast_node: &swamp_ast::Node) -> Error {
+    pub const fn create_err(&self, kind: ErrorKind, ast_node: &swamp_ast::Node) -> Error {
         Error {
             node: self.to_node(ast_node),
             kind,

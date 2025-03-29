@@ -7,5 +7,5 @@ pub use {
     swamp_analyzer::prelude::*, swamp_core::*, swamp_core_extra::prelude::*,
     swamp_dep_loader::prelude::*, swamp_error_report::prelude::*, swamp_eval::prelude::*,
     swamp_modules::prelude::*, swamp_parser::prelude::*, swamp_program_analyzer::LoaderErr,
-    swamp_semantic::prelude::*, swamp_std::prelude::*, swamp_types::prelude::*,
+    swamp_semantic::prelude::*, swamp_types::prelude::*,
 };

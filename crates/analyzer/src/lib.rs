@@ -183,7 +183,7 @@ pub struct Analyzer<'a> {
     module_path: Vec<String>,
 }
 
-impl<'a> Analyzer<'a> {
+impl Analyzer<'_> {
     #[must_use]
     pub const fn scopes(&self) -> &FunctionScopeState {
         &self.scope
@@ -240,7 +240,7 @@ impl<'a> Analyzer<'a> {
 
         let branch_context = context;
 
-        let true_expr = self.analyze_expression(true_expression, &branch_context)?;
+        let true_expr = self.analyze_expression(true_expression, branch_context)?;
         let resolved_true = Box::new(true_expr);
 
         let mut detected = context.expected_type.cloned();
@@ -421,6 +421,8 @@ impl<'a> Analyzer<'a> {
             .get_source_line(self.shared.file_id, line);
     }
 
+    /// # Errors
+    ///
     pub fn analyze_main_expression(
         &mut self,
         ast_expression: &swamp_ast::Expression,
@@ -449,8 +451,6 @@ impl<'a> Analyzer<'a> {
         ast_expression: &swamp_ast::Expression,
         context: &TypeContext,
     ) -> Result<Expression, Error> {
-        // self.debug_expression(&ast_expression);
-
         let expr = self.analyze_expression_internal(ast_expression, context)?;
 
         let encountered_type = expr.ty.clone();
@@ -500,6 +500,7 @@ impl<'a> Analyzer<'a> {
             swamp_ast::ExpressionKind::VariableAssignment(variable, source_expression) => {
                 self.analyze_variable_assignment(variable, source_expression)?
             }
+
             swamp_ast::ExpressionKind::DestructuringAssignment(variables, expression) => {
                 self.analyze_destructuring(&ast_expression.node, variables, expression)?
             }
@@ -507,8 +508,8 @@ impl<'a> Analyzer<'a> {
             swamp_ast::ExpressionKind::IdentifierReference(qualified_identifier) => {
                 self.analyze_identifier(qualified_identifier)?
             }
+
             swamp_ast::ExpressionKind::VariableReference(variable) => {
-                // TODO: investigate why this is not called?
                 self.analyze_variable_reference(&variable.name)?
             }
 
@@ -524,6 +525,7 @@ impl<'a> Analyzer<'a> {
             swamp_ast::ExpressionKind::Assignment(location, source) => {
                 self.analyze_assignment(location, source)?
             }
+
             swamp_ast::ExpressionKind::CompoundAssignment(target, op, source) => {
                 self.analyze_assignment_compound(target, op, source)?
             }
@@ -539,6 +541,7 @@ impl<'a> Analyzer<'a> {
                     &ast_expression.node,
                 )
             }
+
             swamp_ast::ExpressionKind::UnaryOp(operator, expression) => {
                 let (resolved_op, result_type) = self.analyze_unary_op(operator, expression)?;
                 self.create_expr(
@@ -617,7 +620,7 @@ impl<'a> Analyzer<'a> {
                     resolved_iterator.key_type.as_ref(),
                     &resolved_iterator.value_type,
                 )?;
-                let resolved_statements = self.analyze_expression(statements, &context)?;
+                let resolved_statements = self.analyze_expression(statements, context)?;
                 self.pop_block_scope("for_loop");
                 let resolved_type = resolved_statements.ty.clone();
                 self.create_expr(
@@ -630,6 +633,7 @@ impl<'a> Analyzer<'a> {
                     &ast_expression.node,
                 )
             }
+
             swamp_ast::ExpressionKind::WhileLoop(expression, statements) => {
                 let condition = self.analyze_bool_argument_expression(expression)?;
                 //self.push_block_scope("while_loop");
@@ -666,7 +670,7 @@ impl<'a> Analyzer<'a> {
             }
 
             swamp_ast::ExpressionKind::Lambda(variables, expression) => {
-                self.analyze_lambda(&ast_expression.node, variables, &**expression, context)?
+                self.analyze_lambda(&ast_expression.node, variables, expression, context)?
             }
         };
 
@@ -699,7 +703,7 @@ impl<'a> Analyzer<'a> {
         if path.is_empty() {
             // Check if it is a type variable first!
             if let Some(found_type) = self.shared.type_variables.resolve_type_variable(&name) {
-                return Ok(found_type.clone());
+                return Ok(found_type);
             }
         }
 
@@ -724,13 +728,7 @@ impl<'a> Analyzer<'a> {
             analyzed_type_parameters.push(ty);
         }
 
-        let result_type = if !analyzed_type_parameters.is_empty() {
-            self.analyze_generic_type(
-                &symbol,
-                &analyzed_type_parameters,
-                &type_name_to_find.name.0,
-            )?
-        } else {
+        let result_type = if analyzed_type_parameters.is_empty() {
             match &symbol {
                 Symbol::Type(base_type) => base_type.clone(),
                 Symbol::Alias(alias_type) => alias_type.referenced_type.clone(),
@@ -740,6 +738,12 @@ impl<'a> Analyzer<'a> {
                     );
                 }
             }
+        } else {
+            self.analyze_generic_type(
+                &symbol,
+                &analyzed_type_parameters,
+                &type_name_to_find.name.0,
+            )?
         };
 
         Ok(result_type)
@@ -853,7 +857,7 @@ impl<'a> Analyzer<'a> {
     pub fn analyze_struct_field(
         &mut self,
         field_name: &swamp_ast::Node,
-        tv: Type,
+        tv: &Type,
     ) -> Result<(AnonymousStructType, usize, Type), Error> {
         let field_name_str = self.get_text(field_name).to_string();
 
@@ -908,9 +912,8 @@ impl<'a> Analyzer<'a> {
                     *some_access.signature.return_type.clone(),
                     &chain.base.node,
                 ));
-            } else {
-                panic!("not sure here");
             }
+            panic!("not sure here");
         }
 
         let mut tv = TypeWithMut {
@@ -926,7 +929,7 @@ impl<'a> Analyzer<'a> {
             match item {
                 swamp_ast::Postfix::FieldAccess(field_name) => {
                     let (struct_type_ref, index, return_type) =
-                        self.analyze_struct_field(&field_name.clone(), tv.resolved_type)?;
+                        self.analyze_struct_field(&field_name.clone(), &tv.resolved_type)?;
                     self.add_postfix(
                         &mut suffixes,
                         PostfixKind::StructField(struct_type_ref.clone(), index),
@@ -1940,7 +1943,7 @@ impl<'a> Analyzer<'a> {
     ) {
         let resolved_node = self.to_node(ast_node);
         let postfix = LocationAccess {
-            node: resolved_node.clone(),
+            node: resolved_node,
             ty,
             kind,
         };
@@ -1987,7 +1990,7 @@ impl<'a> Analyzer<'a> {
                 swamp_ast::Postfix::FieldAccess(field_name_node) => {
                     //let field_name_resolved = self.to_node(field_name_node)
                     let (struct_type_ref, index, return_type) =
-                        self.analyze_struct_field(field_name_node, ty)?;
+                        self.analyze_struct_field(field_name_node, &ty)?;
                     self.add_location_item(
                         &mut items,
                         LocationAccessKind::FieldIndex(struct_type_ref.clone(), index),
@@ -2370,7 +2373,7 @@ impl<'a> Analyzer<'a> {
                 expected: expected_type.clone(),
                 found: encountered_type.clone(),
             },
-            &node,
+            node,
         ))
     }
 

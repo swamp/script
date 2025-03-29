@@ -46,6 +46,7 @@ impl TypeVariableScope {
         self.type_variables_private.values().cloned().collect()
     }
 
+    #[must_use]
     pub fn internal_get_type(&self, name: &str) -> Option<Type> {
         self.type_variables_private.get(&name.to_string()).cloned()
     }

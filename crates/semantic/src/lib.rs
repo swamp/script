@@ -308,7 +308,7 @@ pub fn comma_tuple_ref<K: Display, V: Display>(values: &[(&K, &V)]) -> String {
         if i > 0 {
             result.push_str(", ");
         }
-        result.push_str(format!("{}: {}", key, value).as_str());
+        result.push_str(format!("{key}: {value}").as_str());
     }
     result
 }
@@ -493,6 +493,7 @@ pub struct VariableCompoundAssignment {
     pub compound_operator: CompoundOperator,
 }
 
+#[must_use]
 pub fn create_rust_type(name: &str, external_number: u32) -> ExternalType {
     ExternalType {
         type_name: name.to_string(),
@@ -568,14 +569,15 @@ impl MutOrImmutableExpression {
         }
     }
 
-    pub fn expect_immutable_ref(&self) -> Result<&Expression, SemanticError> {
+    pub const fn expect_immutable_ref(&self) -> Result<&Expression, SemanticError> {
         match &self.expression_or_location {
             ArgumentExpressionOrLocation::Expression(expr) => Ok(expr),
             ArgumentExpressionOrLocation::Location(_) => Err(SemanticError::WasNotImmutable),
         }
     }
 
-    pub fn ty(&self) -> &Type {
+    #[must_use]
+    pub const fn ty(&self) -> &Type {
         match &self.expression_or_location {
             ArgumentExpressionOrLocation::Expression(expr) => &expr.ty,
             ArgumentExpressionOrLocation::Location(loc) => &loc.ty,
@@ -864,7 +866,7 @@ impl AssociatedImpls {
     }
     #[must_use]
     pub fn get_member_function(&self, ty: &Type, function_name: &str) -> Option<&FunctionRef> {
-        let maybe_found_impl = self.functions.get(&ty);
+        let maybe_found_impl = self.functions.get(ty);
         if let Some(found_impl) = maybe_found_impl {
             if let Some(func) = found_impl.functions.get(&function_name.to_string()) {
                 return Some(func);
@@ -873,6 +875,7 @@ impl AssociatedImpls {
         None
     }
 
+    #[must_use]
     pub fn api_get_external_function(
         &self,
         ty: &Type,
@@ -886,6 +889,7 @@ impl AssociatedImpls {
         None
     }
 
+    #[must_use]
     pub fn api_fetch_external_function_id(
         &self,
         ty: &Type,
@@ -896,6 +900,7 @@ impl AssociatedImpls {
             .id
     }
 
+    #[must_use]
     pub fn get_internal_member_function(
         &self,
         ty: &Type,
@@ -915,7 +920,7 @@ impl AssociatedImpls {
         name: &str,
         func: FunctionRef,
     ) -> Result<(), SemanticError> {
-        let maybe_found_impl = self.functions.get_mut(&ty);
+        let maybe_found_impl = self.functions.get_mut(ty);
 
         if let Some(found_impl) = maybe_found_impl {
             found_impl
@@ -948,7 +953,7 @@ impl AssociatedImpls {
     ) -> Result<(), SemanticError> {
         self.add_member_function(
             &Type::NamedStruct(named_struct_type.clone()),
-            &func.name().clone(),
+            &func.name(),
             func.into(),
         )
     }
@@ -959,7 +964,7 @@ impl AssociatedImpls {
         func: ExternalFunctionDefinition,
     ) -> Result<(), SemanticError> {
         self.add_member_function(
-            &Type::NamedStruct(named_struct_type.clone()),
+            &Type::NamedStruct(named_struct_type),
             &func.assigned_name.clone(),
             Function::External(func.into()).into(),
         )
@@ -971,9 +976,9 @@ impl AssociatedImpls {
         func: ExternalFunctionDefinitionRef,
     ) -> Result<(), SemanticError> {
         self.add_member_function(
-            &Type::NamedStruct(named_struct_type.clone()),
+            &Type::NamedStruct(named_struct_type),
             &func.assigned_name.clone(),
-            Function::External(func.into()).into(),
+            Function::External(func).into(),
         )
     }
 }
@@ -1049,7 +1054,7 @@ pub enum EnumLiteralData {
 }
 
 impl Debug for EnumLiteralData {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         match self {
             Self::Nothing => Ok(()),
             Self::Tuple(x) => write!(f, "{x:?}"),

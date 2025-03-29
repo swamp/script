@@ -13,13 +13,21 @@ pub struct InstantiationCache {
     pub cache: SeqMap<String, Type>,
 }
 
+impl Default for InstantiationCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl InstantiationCache {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             cache: SeqMap::default(),
         }
     }
 
+    #[must_use]
     pub fn complete_name(path: &[String], base_name: &str, argument_types: &[Type]) -> String {
         format!(
             "{}::{}<{}>",
@@ -43,10 +51,12 @@ impl InstantiationCache {
         self.cache.insert(converted_name, ty)
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.cache.is_empty()
     }
 
+    #[must_use]
     pub fn get(&self, path: &[String], base_name: &str, argument_type: &[Type]) -> Option<&Type> {
         let name = Self::complete_name(path, base_name, argument_type);
 

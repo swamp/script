@@ -39,6 +39,7 @@ impl<T: Clone> Grid<T> {
         }
     }
 
+    #[must_use]
     pub fn column(&self, x: usize) -> Option<Vec<T>> {
         if x < self.width {
             Some(

@@ -21,10 +21,12 @@ pub enum LoaderErr {
 
 impl From<Error> for LoaderErr {
     fn from(value: Error) -> Self {
-        LoaderErr::AnalyzerError(value)
+        Self::AnalyzerError(value)
     }
 }
 
+/// # Errors
+///
 pub fn analyze_module(
     state: &mut ProgramState,
     default_lookup_symbol_table: &SymbolTable,
@@ -67,11 +69,13 @@ pub fn analyze_module(
 
 /// # Errors
 ///
+/// # Panics
+///
 pub fn analyze_modules_in_order(
     state: &mut ProgramState,
     default_lookup_symbol_table: &SymbolTable,
     modules: &mut Modules,
-    core_symbol_table: SymbolTableRef,
+    core_symbol_table: &SymbolTableRef,
     source_map: &SourceMap,
     module_paths_in_order: &[Vec<String>],
     parsed_modules: &DependencyParser,
@@ -89,7 +93,7 @@ pub fn analyze_modules_in_order(
                 state,
                 default_lookup_symbol_table,
                 modules,
-                &core_symbol_table,
+                core_symbol_table,
                 source_map,
                 module_path,
                 parse_module,
@@ -103,17 +107,20 @@ pub fn analyze_modules_in_order(
     Ok(())
 }
 
+/// # Errors
+///
+/// # Panics
+///
 pub fn compile_and_analyze_all_modules(
     module_path: &[String],
     resolved_program: &mut Program,
     source_map: &mut SourceMap,
-    core_symbol_table: SymbolTableRef,
+    core_symbol_table: &SymbolTableRef,
 ) -> Result<(), LoaderErr> {
     let mut dependency_parser = DependencyParser::new();
 
     let module_paths_in_order =
-        parse_local_modules_and_get_order(module_path.to_vec(), &mut dependency_parser, source_map)
-            .unwrap(); // TODO: FIX THIS
+        parse_local_modules_and_get_order(module_path, &mut dependency_parser, source_map).unwrap(); // TODO: FIX THIS
 
     analyze_modules_in_order(
         &mut resolved_program.state,

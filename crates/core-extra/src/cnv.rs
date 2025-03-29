@@ -12,10 +12,10 @@ pub fn overwrite_value(target: &ValueRef, source: Value) {
     {
         if let Value::NamedStruct(source_struct_type_ref, source_fields) = source {
             overwrite_struct(
-                target_struct_type_ref.clone(),
+                target_struct_type_ref,
                 target_fields,
-                source_struct_type_ref,
-                source_fields,
+                &source_struct_type_ref,
+                &source_fields,
             );
         }
     }
@@ -24,12 +24,12 @@ pub fn overwrite_value(target: &ValueRef, source: Value) {
 /// # Panics
 ///
 pub fn overwrite_struct(
-    target_struct_type_ref: NamedStructType,
+    target_struct_type_ref: &NamedStructType,
     target_values: &mut Vec<ValueRef>,
-    source_struct: NamedStructType,
-    source_values: Vec<ValueRef>,
+    source_struct: &NamedStructType,
+    source_values: &[ValueRef],
 ) {
-    let borrowed_source_struct_type = source_struct.clone();
+    let borrowed_source_struct_type = source_struct;
     let source_anon_type = &borrowed_source_struct_type.anon_struct_type;
 
     for ((field_name, target_field_type), target_field_value) in target_struct_type_ref

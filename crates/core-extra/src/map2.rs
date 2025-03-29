@@ -20,15 +20,15 @@ where
     // Print header: leave space for row labels.
     print!("{:>10} ", ""); // empty top-left cell
     for col in &cols {
-        print!("{:>10} ", col);
+        print!("{col:>10} ");
     }
     println!();
 
     for row in rows {
-        print!("{:>10} ", row);
+        print!("{row:>10} ");
         for col in &cols {
             if let Some(value) = map.get(col, row) {
-                print!("{:?} ", value);
+                print!("{value:?} ");
             } else {
                 print!("{:>10} ", "");
             }
@@ -41,6 +41,17 @@ where
 pub struct Map2<R: Eq + Hash, C: Eq + Hash, V> {
     rows: SeqMap<R, SeqMap<C, V>>,
     columns: SeqMap<C, SeqMap<R, V>>,
+}
+
+impl<R, C, V> Default for Map2<R, C, V>
+where
+    R: Eq + Hash + Clone,
+    C: Eq + Hash + Clone,
+    V: Clone,
+{
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<R, C, V> Map2<R, C, V>
@@ -57,11 +68,13 @@ where
         }
     }
 
-    pub fn rows(&self) -> &SeqMap<R, SeqMap<C, V>> {
+    #[must_use]
+    pub const fn rows(&self) -> &SeqMap<R, SeqMap<C, V>> {
         &self.rows
     }
 
-    pub fn columns(&self) -> &SeqMap<C, SeqMap<R, V>> {
+    #[must_use]
+    pub const fn columns(&self) -> &SeqMap<C, SeqMap<R, V>> {
         &self.columns
     }
 
@@ -83,7 +96,7 @@ where
     pub fn has(&self, col: &C, row: &R) -> bool {
         self.rows
             .get(row)
-            .map_or(false, |row_map| row_map.contains_key(col))
+            .is_some_and(|row_map| row_map.contains_key(col))
     }
 
     /// Inserts a value into the map at the given row and column.
