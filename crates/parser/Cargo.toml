@@ -4,15 +4,15 @@ version = "0.1.10"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/swamp/swamp"
-description = "parser for swamp"
+description = "Parses Swamp programming language source code into an Abstract Syntax Tree (AST) defined in the `swamp-ast` crate, using the pest parsing library."
 
 
 [dependencies]
+swamp-ast = { path = "../ast", version = "0.1.10" }
+
 pest = "2.7.15"
 pest_derive = "2.7.15"
-tracing = "0.1.41"
-
-swamp-ast = { path = "../ast", version = "0.1.10" }
+tracing = "0.1.40"
 
 [dev-dependencies]
 test-log = { version = "0.2.16", features = ["trace", "log", "color"] }
