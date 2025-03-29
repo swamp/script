@@ -12,7 +12,7 @@ members = [
     # "crates/examples",
 
     "crates/dep-loader",
-    "crates/swamp-script",
+    "crates/swamp",
     "crates/eval-loader",
     # Core and Std
     "crates/core-extra",
@@ -28,12 +28,14 @@ members = [
     "crates/core",
     "crates/types",
     "crates/node",
-
     "crates/code-gen",
     # VM, move later
     "crates/vm",
     "crates/vm-test",
     "crates/vm-disasm",
     "crates/vm-types",
-    "crates/vm-instr-build", "crates/vm-host", "crates/time-dilation", "crates/code-gen-program",
+    "crates/vm-instr-build",
+    "crates/vm-host",
+    "crates/time-dilation",
+    "crates/code-gen-program",
 ]
