@@ -2,6 +2,13 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/swamp
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
+pub mod err;
+
+mod block;
+pub mod prelude;
+pub mod value_both;
+pub mod value_ref;
+
 use crate::block::BlockScopes;
 use crate::err::RuntimeErrorKind;
 use crate::prelude::RuntimeError;
@@ -26,13 +33,6 @@ use swamp_semantic::{
 use swamp_semantic::{ExternalFunctionId, Postfix};
 use swamp_source_map_lookup::SourceMapLookup;
 use swamp_types::{EnumVariantType, Type, TypeForParameter, same_anon_struct_ref};
-
-pub mod err;
-
-mod block;
-pub mod prelude;
-pub mod value_both;
-pub mod value_ref;
 
 impl From<ValueError> for RuntimeError {
     fn from(value: ValueError) -> Self {
@@ -1188,7 +1188,7 @@ impl<'a, C> Interpreter<'a, C> {
                     Value::Map(_type_id, seq_map) => {
                         let key_value = self.evaluate_expression(&arguments[0])?;
                         let maybe_value = seq_map.get_mut(&key_value);
-                        if let Some(ref found) = maybe_value {
+                        if let Some(ref _found) = maybe_value {
                             maybe_value.unwrap().clone()
                         } else {
                             let empty_value = Rc::new(RefCell::new(Value::Int(0)));
@@ -1620,7 +1620,7 @@ impl<'a, C> Interpreter<'a, C> {
                 let row_val = self.evaluate_expression(arguments[1])?;
 
                 let result = {
-                    let mut borrowed = value_ref.borrow();
+                    let borrowed = value_ref.borrow();
                     match &*borrowed {
                         Value::Map2(map2) => {
                             let has_cell = map2.has(&column_val, &row_val);
@@ -1639,7 +1639,7 @@ impl<'a, C> Interpreter<'a, C> {
                 let row_val = self.evaluate_expression(arguments[1])?;
 
                 let result = {
-                    let mut borrowed = value_ref.borrow();
+                    let borrowed = value_ref.borrow();
                     match &*borrowed {
                         Value::Map2(map2) => {
                             let cell_value = map2.get(&column_val, &row_val).unwrap();
@@ -1657,7 +1657,7 @@ impl<'a, C> Interpreter<'a, C> {
                 let column_val = self.evaluate_expression(&arguments[0])?;
 
                 let result = {
-                    let mut borrowed = value_ref.borrow();
+                    let borrowed = value_ref.borrow();
                     match &*borrowed {
                         Value::Map2(map2) => {
                             let column_map = map2.get_column(&column_val).unwrap();
@@ -1675,7 +1675,7 @@ impl<'a, C> Interpreter<'a, C> {
                 let row_val = self.evaluate_expression(&arguments[0])?;
 
                 let result = {
-                    let mut borrowed = value_ref.borrow();
+                    let borrowed = value_ref.borrow();
                     match &*borrowed {
                         Value::Map2(map2) => {
                             let row_map = map2.get_row(&row_val).unwrap();

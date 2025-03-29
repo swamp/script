@@ -7,13 +7,19 @@ repository = "https://github.com/swamp/swamp"
 description = "interpreter for swamp"
 
 [dependencies]
+# Semantic
 swamp-semantic = { path = "../semantic", version = "0.1.10" }
 swamp-types = { path = "../types", version = "0.1.10" }
+
+# Runtime Implementation
+swamp-core-extra = { path = "../core-extra", version = "0.1.10" }
+
+# Source Map
 swamp-node = { path = "../node", version = "0.1.10" }
+swamp-source-map-lookup = { path = "../source-map-lookup", version = "0.1.10" }
+
 fixed32 = "0.0.17"
 seq-map = "0.0.13"
-swamp-core-extra = { path = "../core-extra", version = "0.1.10" }
-swamp-source-map-lookup = { path = "../source-map-lookup", version = "0.1.10" }
 squirrel-prng = "0.0.1"
 
 [dev-dependencies]
