@@ -329,7 +329,8 @@ impl Analyzer<'_> {
     pub fn set_type_variables_to_extra_symbol_table(&mut self, type_variables: &[String]) {
         self.shared
             .type_variables
-            .push_type_scope_with_variables(type_variables);
+            .push_type_scope_with_variables(type_variables)
+            .unwrap();
     }
 
     /// # Errors
@@ -533,7 +534,7 @@ impl Analyzer<'_> {
         Ok(func)
     }
 
-    pub fn debug_definition(&self, definition: &swamp_ast::Definition) {
+    pub fn debug_definition(&self, _definition: &swamp_ast::Definition) {
         /*
         let (line, col) = self
             .shared

@@ -8,8 +8,6 @@ use swamp_node::Node;
 use swamp_semantic::ExpressionKind;
 use swamp_semantic::{ArgumentExpressionOrLocation, EnumLiteralData, Expression, Fp, Literal};
 use swamp_types::prelude::*;
-use tracing::error;
-use tracing::info;
 
 impl Analyzer<'_> {
     /// # Errors
@@ -74,11 +72,6 @@ impl Analyzer<'_> {
 
                         self.create_expr(call_kind, return_type, ast_node)
                     } else {
-                        error!(
-                            ?slice_type,
-                            ?required_type,
-                            "incompatible types new_from_slice"
-                        );
                         return Err(self.create_err(
                             ErrorKind::IncompatibleTypes {
                                 expected: required_type.clone(),
@@ -415,7 +408,6 @@ impl Analyzer<'_> {
 
     #[must_use]
     pub fn create_err(&self, kind: ErrorKind, ast_node: &swamp_ast::Node) -> Error {
-        error!(?kind, "error created");
         Error {
             node: self.to_node(ast_node),
             kind,

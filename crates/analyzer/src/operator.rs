@@ -6,7 +6,6 @@ use crate::err::{Error, ErrorKind};
 use crate::{Analyzer, TypeContext};
 use swamp_semantic::{BinaryOperator, BinaryOperatorKind, UnaryOperator, UnaryOperatorKind};
 use swamp_types::prelude::*;
-use tracing::debug;
 
 impl Analyzer<'_> {
     pub(crate) fn analyze_binary_op(
@@ -49,7 +48,6 @@ impl Analyzer<'_> {
                 _,
             ) => {
                 if !left_type.compatible_with(&right_type) {
-                    debug!(?left_type, ?right_type, "type mismatch in comparison");
                     return Err(self.create_err(
                         ErrorKind::IncompatibleTypes {
                             expected: left_type,
@@ -72,7 +70,6 @@ impl Analyzer<'_> {
             // All other operators require exact type matches
             _ => {
                 if !left_type.compatible_with(&right_type) {
-                    debug!(?left_type, ?right_type, "type mismatch in operation");
                     return Err(self.create_err_resolved(
                         ErrorKind::IncompatibleTypes {
                             expected: left_type,

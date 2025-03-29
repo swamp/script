@@ -10,7 +10,7 @@ use swamp_semantic::{
     BlockScopeMode, Expression, ExpressionKind, MutOrImmutableExpression, Variable, VariableRef,
 };
 use swamp_types::prelude::*;
-use tracing::error;
+
 impl Analyzer<'_> {
     fn try_find_local_variable(&self, node: &Node) -> Option<&VariableRef> {
         let current_scope = self
@@ -57,13 +57,7 @@ impl Analyzer<'_> {
         is_mutable: Option<&swamp_ast::Node>,
         variable_type_ref: &Type,
     ) -> Result<VariableRef, Error> {
-        if variable_type_ref == &Type::Unit {
-            let debug_text = self.get_text(variable);
-            error!(
-                ?debug_text,
-                "panic, tries to create a local variable as a unit"
-            );
-        }
+        if variable_type_ref == &Type::Unit {}
         assert_ne!(*variable_type_ref, Type::Unit);
         self.create_local_variable_resolved(
             &self.to_node(variable),

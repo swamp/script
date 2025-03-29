@@ -19,7 +19,6 @@ use crate::err::{Error, ErrorKind};
 use seq_map::SeqMap;
 use std::mem::take;
 use std::num::{ParseFloatError, ParseIntError};
-use swamp_ast::TypeVariable;
 use swamp_modules::prelude::*;
 use swamp_modules::symtbl::{SymbolTableRef, TypeGeneratorKind};
 use swamp_node::{FileId, Node, Span};
@@ -34,8 +33,6 @@ use swamp_semantic::{
 use swamp_source_map::SourceMap;
 use swamp_types::all_types_are_concrete_or_unit;
 use swamp_types::prelude::*;
-use tracing::info;
-use tracing::{error, trace};
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum LocationSide {
@@ -414,15 +411,14 @@ impl<'a> Analyzer<'a> {
     }
 
     pub fn debug_expression(&self, expr: &swamp_ast::Expression) {
-        let (line, col) = self
+        let (line, _col) = self
             .shared
             .source_map
             .get_span_location_utf8(self.shared.file_id, expr.node.span.offset as usize);
-        let source_line = self
+        let _source_line = self
             .shared
             .source_map
             .get_source_line(self.shared.file_id, line);
-        trace!(?line, ?col, ?source_line, "analyzing");
     }
 
     pub fn analyze_main_expression(
@@ -992,7 +988,7 @@ impl<'a> Analyzer<'a> {
                 }
 
                 swamp_ast::Postfix::Subscript(index_expr) => {
-                    let collection_type = tv.resolved_type.clone();
+                    let _collection_type = tv.resolved_type.clone();
 
                     let temp_lookup_context = TypeContext::new_anything_argument();
                     let temp_analyzed_expr =
@@ -1033,10 +1029,6 @@ impl<'a> Analyzer<'a> {
                         );
                         tv.resolved_type = return_type.clone();
                     } else {
-                        error!(
-                            ?collection_type,
-                            subscript_function_name, "missing subscript"
-                        );
                         return Err(
                             self.create_err(ErrorKind::MissingSubscriptMember, &index_expr.node)
                         );
@@ -1826,7 +1818,6 @@ impl<'a> Analyzer<'a> {
         let Type::Function(signature) = &context.expected_type.unwrap() else {
             return Err(self.create_err(ErrorKind::ExpectedLambda, node));
         };
-        info!(?signature, "LAMBDA SIGN");
 
         let return_block_type = TypeContext::new_argument(&signature.return_type);
 
@@ -1848,11 +1839,8 @@ impl<'a> Analyzer<'a> {
                 Some(node),
                 &variable_type.resolved_type,
             )?;
-            info!(?variable_ref, ?variable_type.resolved_type, "variable type");
             resolved_variables.push(variable_ref);
         }
-
-        info!(scope =%self.scope, "scopes");
 
         let analyzed_expression = self.analyze_expression(ast_expr, &return_block_type)?;
 
@@ -2145,10 +2133,7 @@ impl<'a> Analyzer<'a> {
                     Err(self.create_err(ErrorKind::VariableIsNotMutable, &expr.node))
                 }
             }
-            _ => {
-                error!(?expr.kind, "error");
-                Err(self.create_err(ErrorKind::NotValidLocationStartingPoint, &expr.node))
-            }
+            _ => Err(self.create_err(ErrorKind::NotValidLocationStartingPoint, &expr.node)),
         }
     }
 
@@ -2190,9 +2175,7 @@ impl<'a> Analyzer<'a> {
             self.analyze_to_location(target_location, &any_argument_context, LocationSide::Lhs)?;
 
         let ty = resolved_location.ty.clone();
-        if ty == Type::Unit {
-            error!(?ast_source_expression, "unit problem");
-        }
+        assert_eq!(ty, Type::Unit);
 
         let lhs_argument_context = TypeContext::new_argument(&ty);
         let source_expr = self.analyze_expression(ast_source_expression, &lhs_argument_context)?;
@@ -2386,7 +2369,6 @@ impl<'a> Analyzer<'a> {
             }
         }
 
-        error!(?expected_type, ?encountered_type, "incompatible types");
         Err(self.create_err(
             ErrorKind::IncompatibleTypes {
                 expected: expected_type.clone(),
