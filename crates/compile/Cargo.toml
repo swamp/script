@@ -1,6 +1,6 @@
 [package]
 name = "swamp-compile"
-version = "0.1.11"
+version = "0.1.10"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/swamp/swamp"
