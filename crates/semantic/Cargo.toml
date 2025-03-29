@@ -7,13 +7,14 @@ repository = "https://github.com/swamp/swamp"
 description = "semantic types for swamp"
 
 [dependencies]
+swamp-node = { path = "../node", version = "0.1.10" }
+swamp-types = { path = "../types", version = "0.1.10" }
+
 seq-map = "0.0.13"
 fixed32 = "0.0.17"
 tracing = "0.1.40"
 seq-fmt = "0.0.1"
 tiny-ver = "0.1.2"
-swamp-node = { path = "../node", version = "0.1.10" }
-swamp-types = { path = "../types", version = "0.1.10" }
 
 [dev-dependencies]
 test-log = { version = "0.2.16", features = ["trace", "log", "color"] }

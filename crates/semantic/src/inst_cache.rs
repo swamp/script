@@ -28,6 +28,7 @@ impl InstantiationCache {
             comma(argument_types)
         )
     }
+
     pub fn add(
         &mut self,
         path: &[String],

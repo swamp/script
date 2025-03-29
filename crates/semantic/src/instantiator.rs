@@ -342,18 +342,6 @@ impl Instantiator {
             }
 
             Type::Function(inner_signature) => {
-                /*
-                let mut resolved_parameters = Vec::new();
-                for param_type in inner_signature.parameters {
-                    let resolved_param = self.instantiate_type_if_needed(current_self, param_type.resolved_type, type_variables)?;
-                    resolved_parameters.push(resolved_param);
-                }
-                let resolved_return = self.instantiate_type_if_needed(current_self,inner_signature.return_type, type_variables)?;
-
-                let new_signature =
-
-                 */
-
                 let new_inner_signature = self.instantiate_signature(
                     current_self.unwrap(),
                     inner_signature,

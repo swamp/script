@@ -799,8 +799,7 @@ pub fn sort_struct_fields(
 
     ordered_seq_map
 }
-
- */
+*/
 
 #[derive(Debug, Clone)]
 pub struct ImplMember {}
