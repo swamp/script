@@ -17,10 +17,10 @@ use swamp_dep_loader::{
     swamp_registry_path,
 };
 use swamp_error_report::{ScriptResolveError, prelude::show_script_resolve_error};
-use swamp_eval_loader::analyze_modules_in_order;
 use swamp_modules::modules::{ModuleRef, Modules};
 use swamp_modules::symtbl::{SymbolTable, SymbolTableRef};
 use swamp_pretty_print::{SourceMapDisplay, SymbolTableDisplay};
+use swamp_program_analyzer::analyze_modules_in_order;
 use swamp_semantic::ProgramState;
 use swamp_source_map::SourceMap;
 use swamp_source_map_lookup::SourceMapWrapper;
@@ -137,16 +137,20 @@ pub fn bootstrap_modules(
         source_map,
         &core_module_with_intrinsics.symbol_table.module_path(),
     )?;
+
     // Overwrite the default lookup table to the definition table
     core_analyzed_definition_table
         .extend_intrinsic_functions_from(&default_symbol_table_for_core_with_intrinsics);
+
     core_analyzed_definition_table
         .extend_basic_from(&default_symbol_table_for_core_with_intrinsics);
 
+    /*
     let source_map_lookup = SourceMapWrapper {
         source_map,
         current_dir: current_dir().unwrap(),
     };
+
     let pretty_printer = SourceMapDisplay {
         source_map: &source_map_lookup,
     };
@@ -157,6 +161,7 @@ pub fn bootstrap_modules(
     };
 
     //trace!(%display_core_analyzed_definition_table, "core analyzed symbol table");
+    */
 
     core_module_with_intrinsics.symbol_table = core_analyzed_definition_table;
 
