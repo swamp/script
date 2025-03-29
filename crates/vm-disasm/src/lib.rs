@@ -651,10 +651,6 @@ fn to_read_frame(
     )
 }
 
-fn to_ip(ip: u16) -> DecoratedOperandKind {
-    DecoratedOperandKind::Ip(InstructionPosition(ip))
-}
-
 fn to_jmp_ip(ip: u16) -> DecoratedOperandKind {
     DecoratedOperandKind::Ip(InstructionPosition(ip + 1))
 }
