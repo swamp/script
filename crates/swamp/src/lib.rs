@@ -43,7 +43,6 @@ impl From<Error> for LoaderErr {
 }
 pub fn compile_and_analyze(
     module_path: &[String],
-    //version_roots: SeqMap<String, TinyVersion>,
     source_map: &mut SourceMap,
 ) -> Result<Program, ScriptResolveError> {
     swamp_compile::bootstrap_and_compile(source_map, module_path)
