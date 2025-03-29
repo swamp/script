@@ -1,34 +1,37 @@
 [workspace]
 resolver = "2"
 members = [
+    # Root crate
+    "crates/swamp",
+
     # Parser
     "crates/ast",
     "crates/parser",
+
     # Analyzer
     "crates/semantic",
     "crates/analyzer",
-    # Evaluator
-    "crates/eval",
-    # "crates/examples",
+
 
     "crates/dep-loader",
-    "crates/swamp",
     "crates/program-analyzer",
+
     # Core and Std
     "crates/core-extra",
     "crates/std",
+
     # "crates/extra", # Not used yet
     "crates/err",
     "crates/compile",
     "crates/modules",
-    "crates/source-map",        # Move this later
-    "crates/eira",
     "crates/pretty-print",
-    "crates/source-map-lookup",
     "crates/core",
     "crates/types",
-    "crates/node",
+
+    # Code generator
     "crates/code-gen",
+    "crates/code-gen-program",
+
     # VM, move later
     "crates/vm",
     "crates/vm-test",
@@ -36,6 +39,9 @@ members = [
     "crates/vm-types",
     "crates/vm-instr-build",
     "crates/vm-host",
-    "crates/time-dilation",
-    "crates/code-gen-program",
+
+    # Evaluator
+    "crates/eval",
+
+    # "crates/examples",
 ]

@@ -4,8 +4,8 @@
  */
 use crate::Analyzer;
 use crate::err::{Error, ErrorKind};
+use source_map_node::Node;
 use std::rc::Rc;
-use swamp_node::Node;
 use swamp_semantic::{
     BlockScopeMode, Expression, ExpressionKind, MutOrImmutableExpression, Variable, VariableRef,
 };

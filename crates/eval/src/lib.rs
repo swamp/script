@@ -14,6 +14,8 @@ use crate::err::RuntimeErrorKind;
 use crate::prelude::RuntimeError;
 use crate::prelude::{ValueReference, VariableValue};
 use seq_map::SeqMap;
+use source_map_cache::SourceMapLookup;
+use source_map_node::Node;
 use std::fmt::Debug;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use swamp_core_extra::extra::SparseValueId;
@@ -22,7 +24,6 @@ use swamp_core_extra::map2::Map2;
 use swamp_core_extra::prelude::ValueError;
 use swamp_core_extra::value::ValueRef;
 use swamp_core_extra::value::{Value, convert_vec_to_rc_refcell, format_value};
-use swamp_node::Node;
 use swamp_semantic::prelude::*;
 use swamp_semantic::{ArgumentExpressionOrLocation, LocationAccess, LocationAccessKind};
 use swamp_semantic::{
@@ -31,7 +32,6 @@ use swamp_semantic::{
     SingleLocationExpressionKind, UnaryOperatorKind,
 };
 use swamp_semantic::{ExternalFunctionId, Postfix};
-use swamp_source_map_lookup::SourceMapLookup;
 use swamp_types::{EnumVariantType, Type, TypeForParameter, same_anon_struct_ref};
 
 impl From<ValueError> for RuntimeError {

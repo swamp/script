@@ -9,7 +9,7 @@ description = "Rust runtime implementations for Swamp core library collections (
 [dependencies]
 swamp-semantic = { path = "../semantic", version = "0.1.10" }
 swamp-types = { path = "../types", version = "0.1.10" }
-swamp-node = { path = "../node", version = "0.1.10" }
+source-map-node = "0.0.1"
 
 fixed32 = "0.0.17"
 seq-map = "0.0.13"

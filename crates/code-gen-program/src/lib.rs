@@ -3,11 +3,11 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
+use source_map_cache::SourceMapWrapper;
 use swamp_code_gen::{CodeGenState, Error, GenOptions};
 use swamp_compile::Program;
 use swamp_modules::prelude::ModuleRef;
 use swamp_semantic::Function;
-use swamp_source_map_lookup::SourceMapWrapper;
 use swamp_types::Type;
 
 pub fn code_gen_program<'a>(

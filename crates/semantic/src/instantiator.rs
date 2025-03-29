@@ -9,8 +9,8 @@ use crate::{
     InternalFunctionDefinition, LocalIdentifier, SemanticError,
 };
 use seq_map::SeqMap;
+use source_map_node::Node;
 use std::rc::Rc;
-use swamp_node::Node;
 use swamp_types::{
     AnonymousStructType, GenericAwareSignature, NamedStructType, ParameterizedTypeBlueprint,
     ParameterizedTypeBlueprintInfo, ParameterizedTypeKind, Signature, StructTypeField, Type,

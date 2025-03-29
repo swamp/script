@@ -7,7 +7,7 @@ use eira::Kind;
 use std::io::stderr;
 use swamp_error_report::Report;
 use swamp_semantic::Span;
-use swamp_source_map::SourceMap;
+use source_map_cache::SourceMap;
 
 
 #[test]

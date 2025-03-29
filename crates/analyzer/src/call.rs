@@ -5,7 +5,7 @@
 use crate::TypeContext;
 use crate::err::{Error, ErrorKind};
 use crate::{Analyzer, LocationSide};
-use swamp_node::Node;
+use source_map_node::Node;
 use swamp_semantic::{ArgumentExpressionOrLocation, MutOrImmutableExpression};
 use swamp_types::prelude::*;
 

@@ -7,10 +7,10 @@ pub mod prelude;
 use fmt::{Debug, Display};
 use seq_fmt::comma;
 use seq_map::SeqMap;
+use source_map_node::Node;
 use std::cmp::PartialEq;
 use std::fmt;
 use std::hash::Hash;
-use swamp_node::Node;
 
 #[derive(Eq, PartialEq, Hash, Clone)]
 pub enum Type {

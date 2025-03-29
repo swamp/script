@@ -17,8 +17,8 @@ swamp-semantic = { path = "../semantic", version = "0.1.10" }
 swamp-types = { path = "../types", version = "0.1.10" }
 
 # Source Map
-swamp-node = { path = "../node", version = "0.1.10" }
-swamp-source-map-lookup = { path = "../source-map-lookup", version = "0.1.10" }
+source-map-node = "0.0.1"
+source-map-cache = "0.0.1"
 
 
 seq-map = "0.0.13"

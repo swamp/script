@@ -15,7 +15,7 @@ swamp-dep-loader = { path = "../dep-loader", version = "0.1.10" }
 swamp-program-analyzer = { path = "../program-analyzer", version = "0.1.10" }
 swamp-semantic = { path = "../semantic", version = "0.1.10" }
 swamp-types = { path = "../types", version = "0.1.10" }
-swamp-node = { path = "../node", version = "0.1.10" }
+source-map-node = "0.0.1"
 swamp-analyzer = { path = "../analyzer", version = "0.1.10" }
 swamp-modules = { path = "../modules", version = "0.1.10" }
 
@@ -37,8 +37,7 @@ swamp-eval = { path = "../eval", version = "0.1.10" }
 swamp-code-gen-program = { path = "../code-gen-program", version = "0.1.10" }
 
 # Source Map
-swamp-source-map = { path = "../source-map", version = "0.1.10" }
-swamp-source-map-lookup = { path = "../source-map-lookup", version = "0.1.10" }
+source-map-cache = "0.0.1"
 
 tiny-ver = "0.1.2"
 

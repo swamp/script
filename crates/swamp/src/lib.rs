@@ -2,9 +2,9 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/swamp
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
+use source_map_cache::SourceMap;
 use swamp_analyzer::prelude::Error;
 use swamp_dep_loader::DepLoaderError;
-use swamp_source_map::SourceMap;
 pub mod prelude;
 
 use swamp_analyzer::Program;

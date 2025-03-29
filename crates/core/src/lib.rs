@@ -3,9 +3,9 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
+use source_map_node::Node;
 use swamp_modules::modules::Module;
 use swamp_modules::symtbl::{SymbolTable, TypeGenerator, TypeGeneratorKind};
-use swamp_node::Node;
 use swamp_semantic::prelude::{IntrinsicFunction, IntrinsicFunctionDefinition};
 use swamp_types::{AliasType, Signature, Type, TypeForParameter};
 use tiny_ver::TinyVersion;

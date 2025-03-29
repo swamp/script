@@ -3,12 +3,12 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
+use source_map_cache::SourceMap;
+use source_map_cache::SourceMapWrapper;
 use std::path::{Path, PathBuf};
 use swamp::prelude::SeqMap;
 use swamp_code_gen_program::code_gen_program;
 use swamp_dep_loader::swamp_registry_path;
-use swamp_source_map::SourceMap;
-use swamp_source_map_lookup::SourceMapWrapper;
 
 #[test_log::test]
 fn compile_and_run() {

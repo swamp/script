@@ -9,9 +9,9 @@ description = "analyzer for swamp"
 [dependencies]
 swamp-semantic = { path = "../semantic", version = "0.1.10" }
 swamp-ast = { path = "../ast", version = "0.1.10" }
-swamp-source-map = { path = "../source-map", version = "0.1.10" }
 swamp-types = { path = "../types", version = "0.1.10" }
-swamp-node = { path = "../node", version = "0.1.10" }
+source-map-node = "0.0.1"
+source-map-cache = "0.0.1"
 swamp-modules = { path = "../modules", version = "0.1.10" }
 
 seq-map = "0.0.13"

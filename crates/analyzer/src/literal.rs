@@ -4,7 +4,7 @@
  */
 use crate::err::{Error, ErrorKind};
 use crate::{Analyzer, TypeContext};
-use swamp_node::Node;
+use source_map_node::Node;
 use swamp_semantic::ExpressionKind;
 use swamp_semantic::{ArgumentExpressionOrLocation, EnumLiteralData, Expression, Fp, Literal};
 use swamp_types::prelude::*;

@@ -4,9 +4,9 @@
  */
 use crate::modules::ModuleRef;
 use seq_map::SeqMap;
+use source_map_node::Node;
 use std::fmt::Debug;
 use std::rc::Rc;
-use swamp_node::Node;
 use swamp_semantic::prelude::*;
 use swamp_types::ParameterizedTypeBlueprint;
 use swamp_types::prelude::*;

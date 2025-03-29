@@ -4,6 +4,8 @@
  */
 use regex::Regex;
 use seq_map::SeqMap;
+use source_map_cache::SourceMap;
+use source_map_cache::SourceMapWrapper;
 use std::env::current_dir;
 use std::io;
 use std::path::Path;
@@ -22,8 +24,6 @@ use swamp_modules::symtbl::{SymbolTable, SymbolTableRef};
 use swamp_pretty_print::{SourceMapDisplay, SymbolTableDisplay};
 use swamp_program_analyzer::analyze_modules_in_order;
 use swamp_semantic::ProgramState;
-use swamp_source_map::SourceMap;
-use swamp_source_map_lookup::SourceMapWrapper;
 use time_dilation::ScopedTimer;
 use tiny_ver::TinyVersion;
 use tracing::{info, trace};

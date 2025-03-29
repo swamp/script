@@ -5,10 +5,10 @@
 
 use crate::{Builder, Report, build_and_print};
 use eira::Kind;
+use source_map_cache::SourceMap;
 use std::path::Path;
 use swamp_eval::err::RuntimeErrorKind;
 use swamp_eval::prelude::RuntimeError;
-use swamp_source_map::SourceMap;
 
 #[must_use]
 pub fn build_runtime_error(err: &RuntimeError) -> Builder<usize> {

@@ -5,6 +5,7 @@
 pub mod prelude;
 use dirs::home_dir;
 use seq_map::SeqMap;
+use source_map_cache::{FileId, SourceMap};
 use std::collections::HashSet;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
@@ -12,7 +13,6 @@ use std::{env, io};
 use swamp_ast::Function;
 use swamp_ast::prelude::*;
 use swamp_parser::{AstParser, SpecificError};
-use swamp_source_map::{FileId, SourceMap};
 use time_dilation::ScopedTimer;
 
 pub struct ParseRoot;

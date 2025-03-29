@@ -2,13 +2,13 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/swamp
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
+use source_map_cache::SourceMap;
 use swamp_analyzer::Analyzer;
 use swamp_analyzer::prelude::{Error, Program};
 use swamp_dep_loader::{DependencyParser, ParsedAstModule, parse_local_modules_and_get_order};
 use swamp_modules::prelude::*;
 use swamp_modules::symtbl::SymbolTableRef;
 use swamp_semantic::{InternalMainExpression, ProgramState, SemanticError};
-use swamp_source_map::SourceMap;
 use time_dilation::ScopedTimer;
 use tracing::{Level, debug, span};
 

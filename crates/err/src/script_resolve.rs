@@ -8,9 +8,9 @@ use crate::analyze::build_analyzer_error;
 use crate::dep::build_dep_loader_error;
 use crate::dep::build_dependency_error;
 use crate::loader::build_loader_error;
+use source_map_cache::SourceMap;
 use std::io::stderr;
 use std::path::Path;
-use swamp_source_map::SourceMap;
 
 use crate::Builder;
 #[must_use]

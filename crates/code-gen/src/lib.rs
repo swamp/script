@@ -18,7 +18,8 @@ use crate::alloc_util::{
 use crate::constants::ConstantsManager;
 use crate::ctx::Context;
 use seq_map::SeqMap;
-use swamp_node::Node;
+use source_map_cache::{SourceMapLookup, SourceMapWrapper};
+use source_map_node::Node;
 use swamp_semantic::intr::IntrinsicFunction;
 use swamp_semantic::{
     AnonymousStructLiteral, ArgumentExpressionOrLocation, BinaryOperator, BinaryOperatorKind,
@@ -28,7 +29,6 @@ use swamp_semantic::{
     Pattern, Postfix, PostfixKind, SingleLocationExpression, SingleMutLocationExpression,
     StructInstantiation, UnaryOperator, UnaryOperatorKind, VariableRef, WhenBinding,
 };
-use swamp_source_map_lookup::{SourceMapLookup, SourceMapWrapper};
 use swamp_types::{AnonymousStructType, EnumVariantType, Signature, StructTypeField, Type};
 use swamp_vm_disasm::{disasm_color, disasm_instructions_color};
 use swamp_vm_instr_build::{InstructionBuilder, PatchPosition};

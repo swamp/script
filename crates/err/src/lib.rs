@@ -20,8 +20,8 @@ use swamp_analyzer::prelude::Error;
 use swamp_dep_loader::{DepLoaderError, DependencyError};
 use swamp_program_analyzer::LoaderErr;
 
-use swamp_node::Span;
-use swamp_source_map::{FileId, SourceMap};
+use source_map_cache::{FileId, SourceMap};
+use source_map_node::Span;
 
 #[derive(Debug)]
 pub enum ScriptResolveError {

@@ -4,6 +4,7 @@
  */
 
 use seq_map::SeqMap;
+use source_map_cache::SourceMapLookup;
 use std::fmt::{Display, Formatter};
 use swamp_modules::modules::{ModuleRef, Modules};
 use swamp_modules::symtbl::{FuncDef, Symbol, SymbolTable, TypeGenerator};
@@ -12,7 +13,6 @@ use swamp_semantic::{
     ArgumentExpressionOrLocation, AssociatedImpls, MutOrImmutableExpression, Postfix, PostfixKind,
     SingleLocationExpression, SingleLocationExpressionKind, SingleMutLocationExpression,
 };
-use swamp_source_map_lookup::SourceMapLookup;
 use swamp_types::*;
 use yansi::{Color, Paint};
 

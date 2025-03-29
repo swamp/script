@@ -5,12 +5,12 @@
 use crate::err::RuntimeErrorKind;
 use crate::prelude::RuntimeError;
 use crate::prelude::VariableValue;
+use source_map_node::Node;
 use std::cell::RefCell;
 use std::fmt::Display;
 use std::rc::Rc;
 use swamp_core_extra::prelude::Value;
 use swamp_core_extra::value::ValueRef;
-use swamp_node::Node;
 use swamp_semantic::VariableRef;
 
 #[derive(Debug, Clone)]

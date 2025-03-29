@@ -17,11 +17,12 @@ pub mod variable;
 
 use crate::err::{Error, ErrorKind};
 use seq_map::SeqMap;
+use source_map_cache::SourceMap;
+use source_map_node::{FileId, Node, Span};
 use std::mem::take;
 use std::num::{ParseFloatError, ParseIntError};
 use swamp_modules::prelude::*;
 use swamp_modules::symtbl::{SymbolTableRef, TypeGeneratorKind};
-use swamp_node::{FileId, Node, Span};
 use swamp_semantic::prelude::*;
 use swamp_semantic::type_var_stack::SemanticContext;
 use swamp_semantic::{
@@ -30,7 +31,6 @@ use swamp_semantic::{
     NormalPattern, Postfix, PostfixKind, SingleLocationExpression, SingleLocationExpressionKind,
     SingleMutLocationExpression, TypeWithMut, WhenBinding,
 };
-use swamp_source_map::SourceMap;
 use swamp_types::all_types_are_concrete_or_unit;
 use swamp_types::prelude::*;
 

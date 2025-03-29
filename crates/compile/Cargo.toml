@@ -26,10 +26,9 @@ swamp-std = { path = "../std", version = "0.1.10" }
 swamp-pretty-print = { path = "../pretty-print", version = "0.1.10" }
 
 # Source Map
-swamp-source-map-lookup = { path = "../source-map-lookup", version = "0.1.10" }
-swamp-source-map = { path = "../source-map", version = "0.1.10" }
+source-map-cache = "0.0.1"
 
-time-dilation = { path = "../time-dilation", version = "0.1.10", features = [
+time-dilation = { version = "0.1.10", features = [
     "enable_summary",
 ] }
 

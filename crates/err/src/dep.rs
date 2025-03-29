@@ -5,11 +5,11 @@
 
 use crate::Report;
 use eira::Kind;
+use source_map_cache::SourceMap;
+use source_map_node::Span;
 use std::io::stderr;
 use std::path::Path;
 use swamp_dep_loader::{DepLoaderError, DependencyError, ParseRootError};
-use swamp_node::Span;
-use swamp_source_map::SourceMap;
 
 use crate::Builder;
 use crate::parse::build_parser_error;

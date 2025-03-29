@@ -5,10 +5,10 @@
 
 use crate::{Builder, Report, build_and_print};
 use eira::Kind;
+use source_map_cache::SourceMap;
+use source_map_node::Span;
 use std::path::Path;
-use swamp_node::Span;
 use swamp_semantic::SemanticError;
-use swamp_source_map::SourceMap;
 
 #[must_use]
 pub fn build_semantic_error(err: &SemanticError, span: &Span) -> Builder<usize> {

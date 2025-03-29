@@ -21,7 +21,7 @@ swamp-code-gen = { path = "../code-gen", version = "0.1.10" }
 swamp-vm-disasm = { path = "../vm-disasm", version = "0.1.10" }
 
 # Source Map
-swamp-source-map-lookup = { path = "../source-map-lookup", version = "0.1.10" }
+source-map-cache = "0.0.1"
 
 tracing = "0.1.40"
 seq-map = "0.0.13"

@@ -6,9 +6,9 @@
 use crate::semantic::build_semantic_error;
 use crate::{Builder, Report, build_and_print};
 use eira::Kind;
+use source_map_cache::SourceMap;
 use std::path::Path;
 use swamp_analyzer::err::{Error, ErrorKind};
-use swamp_source_map::SourceMap;
 
 #[must_use]
 #[allow(clippy::too_many_lines)]

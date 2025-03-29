@@ -7,7 +7,7 @@ repository = "https://github.com/swamp/swamp"
 description = "semantic types for swamp"
 
 [dependencies]
-swamp-node = { path = "../node", version = "0.1.10" }
+source-map-node = "0.0.1"
 swamp-types = { path = "../types", version = "0.1.10" }
 
 seq-map = "0.0.13"

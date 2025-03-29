@@ -12,9 +12,9 @@ swamp-analyzer = { path = "../analyzer", version = "0.1.10" }
 swamp-semantic = { path = "../semantic", version = "0.1.10" }
 swamp-modules = { path = "../modules", version = "0.1.10" }
 
-swamp-source-map = { path = "../source-map", version = "0.1.10" }
+source-map-cache = "0.0.1"
 
-time-dilation = { path = "../time-dilation", version = "0.1.10" }
+time-dilation = "0.1.10"
 
 tracing = "0.1.40"
 
