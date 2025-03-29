@@ -1,5 +1,5 @@
 [package]
-name = "swamp-script-examples"
+name = "swamp-examples"
 version = "0.0.1"
 edition = "2024"
 license = "MIT"

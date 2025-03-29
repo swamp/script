@@ -1,5 +1,5 @@
 [package]
-name = "swamp-script-code-gen"
+name = "swamp-code-gen"
 version = "0.1.10"
 edition = "2024"
 license = "MIT"
@@ -13,11 +13,11 @@ swamp-vm-instr-build = { path = "../vm-instr-build", version = "0.1.10" }
 swamp-vm-disasm = { path = "../vm-disasm", version = "0.1.10" }
 
 # Swamp script
-swamp-script-semantic = { path = "../semantic", version = "0.1.10" }
-swamp-script-node = { path = "../node", version = "0.1.10" }
-swamp-script-types = { path = "../types", version = "0.1.10" }
+swamp-semantic = { path = "../semantic", version = "0.1.10" }
+swamp-node = { path = "../node", version = "0.1.10" }
+swamp-types = { path = "../types", version = "0.1.10" }
 
-swamp-script-source-map-lookup = { path = "../source-map-lookup", version = "0.1.10" }
+swamp-source-map-lookup = { path = "../source-map-lookup", version = "0.1.10" }
 
 
 seq-map = "0.0.13"

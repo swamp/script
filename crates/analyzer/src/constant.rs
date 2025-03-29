@@ -4,10 +4,10 @@
  */
 use crate::err::{Error, ErrorKind};
 use crate::{Analyzer, TypeContext};
-use swamp_script_semantic::{Constant, ConstantRef, Expression, ExpressionKind};
+use swamp_semantic::{Constant, ConstantRef, Expression, ExpressionKind};
 
 impl Analyzer<'_> {
-    fn analyze_constant(&mut self, constant: &swamp_script_ast::ConstantInfo) -> Result<(), Error> {
+    fn analyze_constant(&mut self, constant: &swamp_ast::ConstantInfo) -> Result<(), Error> {
         let context = TypeContext::new_anything_argument();
         let resolved_expr = self.analyze_expression(&constant.expression, &context)?;
         let resolved_type = resolved_expr.ty.clone();
@@ -43,14 +43,14 @@ impl Analyzer<'_> {
 
     pub(crate) fn analyze_constant_definition(
         &mut self,
-        constant: &swamp_script_ast::ConstantInfo,
+        constant: &swamp_ast::ConstantInfo,
     ) -> Result<(), Error> {
         self.analyze_constant(constant)
     }
 
     pub(crate) fn analyze_constant_access(
         &self,
-        qualified_constant_identifier: &swamp_script_ast::QualifiedConstantIdentifier,
+        qualified_constant_identifier: &swamp_ast::QualifiedConstantIdentifier,
     ) -> Result<Expression, Error> {
         self.try_find_constant(qualified_constant_identifier)
             .map_or_else(
@@ -74,7 +74,7 @@ impl Analyzer<'_> {
     #[must_use]
     pub fn try_find_constant(
         &self,
-        qualified_constant_identifier: &swamp_script_ast::QualifiedConstantIdentifier,
+        qualified_constant_identifier: &swamp_ast::QualifiedConstantIdentifier,
     ) -> Option<&ConstantRef> {
         let path = self.get_module_path(qualified_constant_identifier.module_path.as_ref());
         let constant_name = self.get_text(&qualified_constant_identifier.name);

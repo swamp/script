@@ -7,9 +7,9 @@ use crate::Report;
 use eira::Kind;
 use std::io::stderr;
 use std::path::Path;
-use swamp_script_dep_loader::{DepLoaderError, DependencyError, ParseRootError};
-use swamp_script_node::Span;
-use swamp_script_source_map::SourceMap;
+use swamp_dep_loader::{DepLoaderError, DependencyError, ParseRootError};
+use swamp_node::Span;
+use swamp_source_map::SourceMap;
 
 use crate::Builder;
 use crate::parse::build_parser_error;

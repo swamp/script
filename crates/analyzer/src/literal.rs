@@ -4,12 +4,10 @@
  */
 use crate::err::{Error, ErrorKind};
 use crate::{Analyzer, TypeContext};
-use swamp_script_node::Node;
-use swamp_script_semantic::ExpressionKind;
-use swamp_script_semantic::{
-    ArgumentExpressionOrLocation, EnumLiteralData, Expression, Fp, Literal,
-};
-use swamp_script_types::prelude::*;
+use swamp_node::Node;
+use swamp_semantic::ExpressionKind;
+use swamp_semantic::{ArgumentExpressionOrLocation, EnumLiteralData, Expression, Fp, Literal};
+use swamp_types::prelude::*;
 use tracing::error;
 use tracing::info;
 
@@ -19,12 +17,12 @@ impl Analyzer<'_> {
     #[allow(clippy::too_many_lines)]
     pub fn analyze_complex_literal_to_expression(
         &mut self,
-        ast_node: &swamp_script_ast::Node,
-        ast_literal_kind: &swamp_script_ast::LiteralKind,
+        ast_node: &swamp_ast::Node,
+        ast_literal_kind: &swamp_ast::LiteralKind,
         context: &TypeContext,
     ) -> Result<Expression, Error> {
         let expression = match &ast_literal_kind {
-            swamp_script_ast::LiteralKind::Slice(items) => {
+            swamp_ast::LiteralKind::Slice(items) => {
                 let (encountered_element_type, resolved_items) =
                     self.analyze_slice_type_helper(ast_node, items)?;
 
@@ -97,7 +95,7 @@ impl Analyzer<'_> {
                 }
             }
 
-            swamp_script_ast::LiteralKind::SlicePair(entries) => {
+            swamp_ast::LiteralKind::SlicePair(entries) => {
                 let (resolved_items, encountered_key_type, encountered_value_type) =
                     self.analyze_slice_pair_literal(ast_node, entries)?;
 
@@ -181,19 +179,19 @@ impl Analyzer<'_> {
     #[allow(clippy::too_many_lines)]
     pub(crate) fn analyze_literal(
         &mut self,
-        ast_node: &swamp_script_ast::Node,
-        ast_literal_kind: &swamp_script_ast::LiteralKind,
+        ast_node: &swamp_ast::Node,
+        ast_literal_kind: &swamp_ast::LiteralKind,
         context: &TypeContext,
     ) -> Result<(Literal, Type), Error> {
         let node_text = self.get_text(ast_node);
         let resolved_literal = match &ast_literal_kind {
-            swamp_script_ast::LiteralKind::Int => (
+            swamp_ast::LiteralKind::Int => (
                 Literal::IntLiteral(Self::str_to_int(node_text).map_err(|int_conversion_err| {
                     self.create_err(ErrorKind::IntConversionError(int_conversion_err), ast_node)
                 })?),
                 Type::Int,
             ),
-            swamp_script_ast::LiteralKind::Float => {
+            swamp_ast::LiteralKind::Float => {
                 let float = Self::str_to_float(node_text).map_err(|float_conversion_err| {
                     self.create_err(
                         ErrorKind::FloatConversionError(float_conversion_err),
@@ -202,11 +200,11 @@ impl Analyzer<'_> {
                 })?;
                 (Literal::FloatLiteral(Fp::from(float)), Type::Float)
             }
-            swamp_script_ast::LiteralKind::String(processed_string) => (
+            swamp_ast::LiteralKind::String(processed_string) => (
                 Literal::StringLiteral(processed_string.to_string()),
                 Type::String,
             ),
-            swamp_script_ast::LiteralKind::Bool => {
+            swamp_ast::LiteralKind::Bool => {
                 let bool_val = if node_text == "false" {
                     false
                 } else if node_text == "true" {
@@ -216,15 +214,15 @@ impl Analyzer<'_> {
                 };
                 (Literal::BoolLiteral(bool_val), Type::Bool)
             }
-            swamp_script_ast::LiteralKind::EnumVariant(enum_literal) => {
+            swamp_ast::LiteralKind::EnumVariant(enum_literal) => {
                 let (enum_name, variant_name) = match enum_literal {
-                    swamp_script_ast::EnumVariantLiteral::Simple(enum_name, variant_name) => {
+                    swamp_ast::EnumVariantLiteral::Simple(enum_name, variant_name) => {
                         (enum_name, variant_name)
                     }
-                    swamp_script_ast::EnumVariantLiteral::Tuple(enum_name, variant_name, _) => {
+                    swamp_ast::EnumVariantLiteral::Tuple(enum_name, variant_name, _) => {
                         (enum_name, variant_name)
                     }
-                    swamp_script_ast::EnumVariantLiteral::Struct(enum_name, variant_name, _, _) => {
+                    swamp_ast::EnumVariantLiteral::Struct(enum_name, variant_name, _, _) => {
                         (enum_name, variant_name)
                     }
                 };
@@ -238,14 +236,8 @@ impl Analyzer<'_> {
                     let variant_ref = self.analyze_enum_variant_ref(enum_name, variant_name)?;
 
                     let resolved_data = match enum_literal {
-                        swamp_script_ast::EnumVariantLiteral::Simple(_, _) => {
-                            EnumLiteralData::Nothing
-                        }
-                        swamp_script_ast::EnumVariantLiteral::Tuple(
-                            _node,
-                            _variant,
-                            ast_expressions,
-                        ) => {
+                        swamp_ast::EnumVariantLiteral::Simple(_, _) => EnumLiteralData::Nothing,
+                        swamp_ast::EnumVariantLiteral::Tuple(_node, _variant, ast_expressions) => {
                             let EnumVariantType::Tuple(tuple_data) = &variant_ref else {
                                 return Err(self.create_err(
                                     ErrorKind::WrongEnumVariantContainer(variant_ref),
@@ -260,7 +252,7 @@ impl Analyzer<'_> {
                             )?;
                             EnumLiteralData::Tuple(resolved)
                         }
-                        swamp_script_ast::EnumVariantLiteral::Struct(
+                        swamp_ast::EnumVariantLiteral::Struct(
                             _qualified_type_identifier,
                             variant,
                             anonym_struct_field_and_expressions,
@@ -312,14 +304,14 @@ impl Analyzer<'_> {
                 return Err(self.create_err(ErrorKind::UnknownEnumType, ast_node));
             }
 
-            swamp_script_ast::LiteralKind::Tuple(expressions) => {
+            swamp_ast::LiteralKind::Tuple(expressions) => {
                 let (tuple_type_ref, resolved_items) = self.analyze_tuple_literal(expressions)?;
                 (
                     Literal::TupleLiteral(tuple_type_ref.clone(), resolved_items),
                     Type::Tuple(tuple_type_ref),
                 )
             }
-            swamp_script_ast::LiteralKind::None => {
+            swamp_ast::LiteralKind::None => {
                 if let Some(found_expected_type) = context.expected_type {
                     if let Type::Optional(_some_type) = found_expected_type {
                         return Ok((Literal::NoneLiteral, found_expected_type.clone()));
@@ -327,8 +319,7 @@ impl Analyzer<'_> {
                 }
                 return Err(self.create_err(ErrorKind::NoneNeedsExpectedTypeHint, &ast_node));
             }
-            &&swamp_script_ast::LiteralKind::Slice(_)
-            | &swamp_script_ast::LiteralKind::SlicePair(_) => todo!(),
+            &&swamp_ast::LiteralKind::Slice(_) | &swamp_ast::LiteralKind::SlicePair(_) => todo!(),
         };
 
         Ok(resolved_literal)
@@ -336,7 +327,7 @@ impl Analyzer<'_> {
 
     fn analyze_tuple_literal(
         &mut self,
-        items: &[swamp_script_ast::Expression],
+        items: &[swamp_ast::Expression],
     ) -> Result<(Vec<Type>, Vec<Expression>), Error> {
         let expressions = self.analyze_argument_expressions(None, items)?;
         let mut tuple_types = Vec::new();
@@ -350,9 +341,9 @@ impl Analyzer<'_> {
 
     fn analyze_tuple_type(
         &mut self,
-        node: &swamp_script_ast::Node,
+        node: &swamp_ast::Node,
         expected_types: &Vec<Type>,
-        ast_expressions: &Vec<swamp_script_ast::Expression>,
+        ast_expressions: &Vec<swamp_ast::Expression>,
     ) -> Result<Vec<Expression>, Error> {
         if ast_expressions.len() != expected_types.len() {
             return Err(self.create_err(ErrorKind::WrongNumberOfArguments(0, 0), node));
@@ -370,8 +361,8 @@ impl Analyzer<'_> {
 
     fn analyze_slice_pair_literal(
         &mut self,
-        node: &swamp_script_ast::Node,
-        entries: &[(swamp_script_ast::Expression, swamp_script_ast::Expression)],
+        node: &swamp_ast::Node,
+        entries: &[(swamp_ast::Expression, swamp_ast::Expression)],
     ) -> Result<(Vec<(Expression, Expression)>, Type, Type), Error> {
         if entries.is_empty() {
             return Ok((vec![], Type::Unit, Type::Unit));
@@ -423,7 +414,7 @@ impl Analyzer<'_> {
     }
 
     #[must_use]
-    pub fn create_err(&self, kind: ErrorKind, ast_node: &swamp_script_ast::Node) -> Error {
+    pub fn create_err(&self, kind: ErrorKind, ast_node: &swamp_ast::Node) -> Error {
         error!(?kind, "error created");
         Error {
             node: self.to_node(ast_node),

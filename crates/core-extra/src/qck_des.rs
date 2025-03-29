@@ -8,7 +8,7 @@ use crate::value::{QuickDeserialize, RustType};
 use fixed32::Fp;
 use std::cell::RefCell;
 use std::rc::Rc;
-use swamp_script_types::{EnumVariantType, ExternalType, Type};
+use swamp_types::{EnumVariantType, ExternalType, Type};
 
 /// # Panics
 ///
@@ -189,7 +189,7 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
 
             (
                 Value::Sparse(
-                    swamp_script_types::Type::External(sparse_collection_rust_type),
+                    swamp_types::Type::External(sparse_collection_rust_type),
                     internal_map,
                 ),
                 sparse_value_map_octet_size,
@@ -236,9 +236,9 @@ pub fn quick_deserialize(resolved_type: &Type, buf: &[u8], depth: usize) -> (Val
                 _ => panic!("can not deserialize rust types {}", rust_type_ref.type_name),
             }
         }
-        &swamp_script_types::Type::Variable(_) => todo!(),
-        &swamp_script_types::Type::Generic(_, _) => todo!(),
-        &swamp_script_types::Type::Blueprint(_) => todo!(),
+        &swamp_types::Type::Variable(_) => todo!(),
+        &swamp_types::Type::Generic(_, _) => todo!(),
+        &swamp_types::Type::Blueprint(_) => todo!(),
     };
 
     (val, octet_size)

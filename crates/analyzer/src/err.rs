@@ -3,9 +3,9 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 use std::num::{ParseFloatError, ParseIntError};
-use swamp_script_node::Node;
-use swamp_script_semantic::SemanticError;
-use swamp_script_types::prelude::*;
+use swamp_node::Node;
+use swamp_semantic::SemanticError;
+use swamp_types::prelude::*;
 
 #[derive(Debug)]
 pub struct Error {

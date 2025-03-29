@@ -4,11 +4,11 @@
  */
 
 use std::path::{Path, PathBuf};
+use swamp_code_gen_program::code_gen_program;
+use swamp_dep_loader::swamp_registry_path;
 use swamp_script::prelude::SeqMap;
-use swamp_script_code_gen_program::code_gen_program;
-use swamp_script_dep_loader::swamp_registry_path;
-use swamp_script_source_map::SourceMap;
-use swamp_script_source_map_lookup::SourceMapWrapper;
+use swamp_source_map::SourceMap;
+use swamp_source_map_lookup::SourceMapWrapper;
 
 #[test_log::test]
 fn compile_and_run() {
@@ -25,7 +25,7 @@ fn compile_and_run() {
 
     let crate_main_path = &["crate".to_string(), "main".to_string()];
 
-    let program = swamp_script_compile::bootstrap_and_compile(&mut source_map, crate_main_path)
+    let program = swamp_compile::bootstrap_and_compile(&mut source_map, crate_main_path)
         .expect("TODO: panic message");
 
     let main_module = program.modules.get(crate_main_path).unwrap().clone();

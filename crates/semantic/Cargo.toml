@@ -1,5 +1,5 @@
 [package]
-name = "swamp-script-semantic"
+name = "swamp-semantic"
 version = "0.1.10"
 edition = "2024"
 license = "MIT"
@@ -12,8 +12,8 @@ fixed32 = "0.0.17"
 tracing = "0.1.40"
 seq-fmt = "0.0.1"
 tiny-ver = "0.1.2"
-swamp-script-node = { path = "../node", version = "0.1.10" }
-swamp-script-types = { path = "../types", version = "0.1.10" }
+swamp-node = { path = "../node", version = "0.1.10" }
+swamp-types = { path = "../types", version = "0.1.10" }
 
 [dev-dependencies]
 test-log = { version = "0.2.16", features = ["trace", "log", "color"] }

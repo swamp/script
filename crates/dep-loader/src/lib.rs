@@ -10,10 +10,10 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use std::{env, io};
-use swamp_script_ast::Function;
-use swamp_script_ast::prelude::*;
-use swamp_script_parser::{AstParser, SpecificError};
-use swamp_script_source_map::{FileId, SourceMap};
+use swamp_ast::Function;
+use swamp_ast::prelude::*;
+use swamp_parser::{AstParser, SpecificError};
+use swamp_source_map::{FileId, SourceMap};
 use time_dilation::ScopedTimer;
 use tracing::debug;
 
@@ -26,7 +26,7 @@ pub enum ParseRootError {
 
 #[derive(Debug)]
 pub struct ParsedAstModule {
-    pub ast_module: swamp_script_ast::Module,
+    pub ast_module: swamp_ast::Module,
     pub file_id: FileId,
 }
 

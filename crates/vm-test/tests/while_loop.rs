@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use swamp_script_vm_test::util::exec_with_assembly;
+use swamp_vm_test::util::exec_with_assembly;
 
 #[test_log::test]
 fn while_loop() {
@@ -23,7 +23,7 @@ fn while_loop() {
 > 0005: ld32 $015C 00000001
 > 0006: sadd32 $0000 $0000 $015C
 > 0007: jmp @2
-> 0008: hlt 
+> 0008: hlt
         ",
         "
 00000000  FF 7F 00 00 00 00 00 00  00 00 00 00 00 00 00 00  ................

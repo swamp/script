@@ -19,9 +19,9 @@ use crate::constants::ConstantsManager;
 use crate::ctx::Context;
 use seq_map::SeqMap;
 use std::path::PathBuf;
-use swamp_script_node::Node;
-use swamp_script_semantic::intr::IntrinsicFunction;
-use swamp_script_semantic::{
+use swamp_node::Node;
+use swamp_semantic::intr::IntrinsicFunction;
+use swamp_semantic::{
     AnonymousStructLiteral, ArgumentExpressionOrLocation, BinaryOperator, BinaryOperatorKind,
     BooleanExpression, CompoundOperatorKind, ConstantId, ConstantRef, EnumLiteralData, Expression,
     ExpressionKind, ForPattern, Function, Guard, InternalFunctionDefinitionRef, InternalFunctionId,
@@ -29,8 +29,8 @@ use swamp_script_semantic::{
     Pattern, Postfix, PostfixKind, SingleLocationExpression, SingleMutLocationExpression,
     StructInstantiation, UnaryOperator, UnaryOperatorKind, VariableRef, WhenBinding,
 };
-use swamp_script_source_map_lookup::{SourceMapLookup, SourceMapWrapper};
-use swamp_script_types::{AnonymousStructType, EnumVariantType, Signature, StructTypeField, Type};
+use swamp_source_map_lookup::{SourceMapLookup, SourceMapWrapper};
+use swamp_types::{AnonymousStructType, EnumVariantType, Signature, StructTypeField, Type};
 use swamp_vm_disasm::{disasm_color, disasm_instructions_color};
 use swamp_vm_instr_build::{InstructionBuilder, PatchPosition};
 use swamp_vm_types::{

@@ -5,7 +5,7 @@
 mod util;
 
 use crate::util::check_value;
-use swamp_script_core_extra::prelude::Value;
+use swamp_core_extra::prelude::Value;
 
 #[test_log::test]
 fn basic_eval_5() {

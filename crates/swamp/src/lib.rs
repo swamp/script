@@ -2,14 +2,14 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/swamp
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use swamp_script_analyzer::prelude::Error;
-use swamp_script_dep_loader::DepLoaderError;
-use swamp_script_source_map::SourceMap;
+use swamp_analyzer::prelude::Error;
+use swamp_dep_loader::DepLoaderError;
+use swamp_source_map::SourceMap;
 pub mod prelude;
 
-use swamp_script_analyzer::Program;
-use swamp_script_error_report::ScriptResolveError;
-use swamp_script_semantic::SemanticError;
+use swamp_analyzer::Program;
+use swamp_error_report::ScriptResolveError;
+use swamp_semantic::SemanticError;
 
 #[derive(Debug)]
 pub enum ScriptError {
@@ -46,5 +46,5 @@ pub fn compile_and_analyze(
     //version_roots: SeqMap<String, TinyVersion>,
     source_map: &mut SourceMap,
 ) -> Result<Program, ScriptResolveError> {
-    swamp_script_compile::bootstrap_and_compile(source_map, module_path)
+    swamp_compile::bootstrap_and_compile(source_map, module_path)
 }

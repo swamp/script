@@ -6,7 +6,7 @@ mod util;
 
 use crate::util::{check, check_fail, check_value, eval, eval_string};
 use fixed32::Fp;
-use swamp_script_core_extra::prelude::Value;
+use swamp_core_extra::prelude::Value;
 
 #[test_log::test]
 fn float_2_magnitude() {

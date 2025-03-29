@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use swamp_script_vm_test::util::exec_with_host_function;
+use swamp_vm_test::util::exec_with_host_function;
 #[test_log::test]
 fn with() {
     exec_with_host_function(

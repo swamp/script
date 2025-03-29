@@ -16,9 +16,9 @@ use std::cmp::PartialEq;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::rc::Rc;
-use swamp_script_node::Node;
-use swamp_script_types::GenericAwareSignature;
-use swamp_script_types::prelude::*;
+use swamp_node::Node;
+use swamp_types::GenericAwareSignature;
+use swamp_types::prelude::*;
 use tracing::error;
 
 #[derive(Debug, Clone)]

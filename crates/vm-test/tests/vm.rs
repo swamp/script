@@ -3,8 +3,8 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use swamp_script_vm_test::util::exec_show_constants;
-use swamp_script_vm_test::util::exec_with_assembly;
+use swamp_vm_test::util::exec_show_constants;
+use swamp_vm_test::util::exec_with_assembly;
 
 #[test]
 fn variable_definition() {

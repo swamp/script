@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use swamp_script_vm_test::util::exec_with_assembly;
+use swamp_vm_test::util::exec_with_assembly;
 
 #[test_log::test]
 fn match_simple() {
@@ -36,7 +36,7 @@ result = match a {
 > 0008: ld32 $0004 00000003
 > 0009: jmp @B
 > 000A: ld32 $0004 00000000
-> 000B: hlt 
+> 000B: hlt
 
 ",
         "
@@ -84,7 +84,7 @@ result = match a {
 > 000B: ld32 $0004 00000003 ; int literal (i32, int:3)
 > 000C: jmp @E ; jump to exit
 > 000D: ld32 $0004 000000FF ; int literal (i32, int:0)
-> 000E: hlt   
+> 000E: hlt
 
 ",
         "

@@ -10,7 +10,7 @@ use pest::{Parser, Position};
 use pest_derive::Parser;
 use std::iter::Peekable;
 use std::str::Chars;
-use swamp_script_ast::{
+use swamp_ast::{
     AssignmentOperatorKind, BinaryOperatorKind, CompoundOperator, CompoundOperatorKind,
     EnumVariantLiteral, ExpressionKind, FieldExpression, FieldName, ForPattern, ForVar,
     ImportItems, IterableExpression, LocalConstantIdentifier,
@@ -18,9 +18,9 @@ use swamp_script_ast::{
     QualifiedIdentifier, RangeMode, SpanWithoutFileId, StructTypeField, TypeForParameter,
     TypeVariable, VariableBinding, prelude::*,
 };
-use swamp_script_ast::{Function, WhenBinding};
-use swamp_script_ast::{LiteralKind, MutableOrImmutableExpression};
-use swamp_script_ast::{Postfix, PostfixChain};
+use swamp_ast::{Function, WhenBinding};
+use swamp_ast::{LiteralKind, MutableOrImmutableExpression};
+use swamp_ast::{Postfix, PostfixChain};
 use tracing::error;
 
 pub struct ParseResult<'a> {

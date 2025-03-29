@@ -6,7 +6,7 @@ use crate::symtbl::SymbolTable;
 use seq_map::SeqMap;
 use std::fmt::{Debug, Formatter};
 use std::rc::Rc;
-use swamp_script_semantic::{Expression, ExpressionKind, InternalMainExpression};
+use swamp_semantic::{Expression, ExpressionKind, InternalMainExpression};
 
 #[derive(Debug)]
 pub struct Modules {

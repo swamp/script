@@ -3,12 +3,12 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use swamp_script_code_gen::{CodeGenState, Error, GenOptions};
-use swamp_script_compile::Program;
-use swamp_script_modules::prelude::ModuleRef;
-use swamp_script_semantic::Function;
-use swamp_script_source_map_lookup::SourceMapWrapper;
-use swamp_script_types::Type;
+use swamp_code_gen::{CodeGenState, Error, GenOptions};
+use swamp_compile::Program;
+use swamp_modules::prelude::ModuleRef;
+use swamp_semantic::Function;
+use swamp_source_map_lookup::SourceMapWrapper;
+use swamp_types::Type;
 
 pub fn code_gen_program<'a>(
     program: &Program,

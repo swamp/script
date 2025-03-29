@@ -8,8 +8,8 @@ use crate::Report;
 use crate::analyze::build_analyzer_error;
 use crate::semantic::build_semantic_error;
 use eira::Kind;
-use swamp_script_eval_loader::LoaderErr;
-use swamp_script_node::Span;
+use swamp_eval_loader::LoaderErr;
+use swamp_node::Span;
 
 pub fn build_loader_error(err: &LoaderErr) -> Builder<usize> {
     match err {

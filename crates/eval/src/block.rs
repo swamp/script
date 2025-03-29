@@ -8,10 +8,10 @@ use crate::prelude::VariableValue;
 use std::cell::RefCell;
 use std::fmt::Display;
 use std::rc::Rc;
-use swamp_script_core_extra::prelude::Value;
-use swamp_script_core_extra::value::ValueRef;
-use swamp_script_node::Node;
-use swamp_script_semantic::VariableRef;
+use swamp_core_extra::prelude::Value;
+use swamp_core_extra::value::ValueRef;
+use swamp_node::Node;
+use swamp_semantic::VariableRef;
 
 #[derive(Debug, Clone)]
 pub struct BlockScope {

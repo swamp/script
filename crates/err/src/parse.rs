@@ -6,10 +6,10 @@
 use crate::{Builder, Report, build_and_print};
 use eira::Kind;
 use std::path::Path;
-use swamp_script_dep_loader::ParserError;
-use swamp_script_node::Span;
-use swamp_script_parser::SpecificError;
-use swamp_script_source_map::SourceMap;
+use swamp_dep_loader::ParserError;
+use swamp_node::Span;
+use swamp_parser::SpecificError;
+use swamp_source_map::SourceMap;
 
 #[must_use]
 pub fn build_parse_error(err: &SpecificError, span: &Span) -> Builder<usize> {

@@ -10,8 +10,8 @@ use crate::{
 };
 use seq_map::SeqMap;
 use std::rc::Rc;
-use swamp_script_node::Node;
-use swamp_script_types::{
+use swamp_node::Node;
+use swamp_types::{
     AnonymousStructType, GenericAwareSignature, NamedStructType, ParameterizedTypeBlueprint,
     ParameterizedTypeBlueprintInfo, ParameterizedTypeKind, Signature, StructTypeField, Type,
     TypeForParameter, all_types_are_concrete, all_types_are_concrete_or_unit,

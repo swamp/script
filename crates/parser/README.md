@@ -1,3 +1,3 @@
-# swamp-script-parser
+# swamp-parser
 
 Converts a string into an AST.

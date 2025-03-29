@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use swamp_script_vm_test::util::{exec_with_assembly, exec_with_host_function};
+use swamp_vm_test::util::{exec_with_assembly, exec_with_host_function};
 
 #[test_log::test]
 fn vec_iter() {
@@ -28,7 +28,7 @@ for i in a {
 > 0008: vec_iter_next $0170 $0004 @B
 > 0009: ld32 $0008 00000063
 > 000A: jmp @8
-> 000B: hlt 
+> 000B: hlt
 ",
         "
 00000000  18 00 00 00 20 00 00 00  63 00 00 00 00 00 00 00  .... ...c....... ; E8 00 00 00 is the allocated header pointer
@@ -64,7 +64,7 @@ for i in a {
 > 0009: mov $0058 $0004 4
 > 000A: host 0001 4
 > 000B: jmp @8
-> 000C: hlt 
+> 000C: hlt
 ",
         "
 00000000  18 00 00 00 20 00 00 00  00 00 00 00 00 00 00 00  .... ...........

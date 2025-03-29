@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use swamp_script_vm_test::util::exec_with_assembly;
+use swamp_vm_test::util::exec_with_assembly;
 
 #[test_log::test]
 fn optional_none() {
@@ -16,7 +16,7 @@ result: Int? = none
         "
 > 0000: enter 58
 > 0001: ld8 $0000 00 ; 00 is `none`, no need to fill out the int portion
-> 0002: hlt 
+> 0002: hlt
 ",
         "
 00000000  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  ................
@@ -37,7 +37,7 @@ result: Int? = 128
 > 0000: enter 58
 > 0001: ld8 $0000 01 ; `01` is the `Some` tag, that a value exists
 > 0002: ld32 $0004 00000080 ; hex `80` is 128. it should be at $0004 since it must be aligned to 4 bytes.
-> 0003: hlt 
+> 0003: hlt
 
 ",
         "
@@ -71,7 +71,7 @@ result: Something? = Something {
 > 0002: ld32 $0004 0000000A ; int 10
 > 0003: ld8 $0008 01 ; `true`
 > 0004: ld32 $000C 7FFF0000 ; float 32767.0
-> 0005: hlt 
+> 0005: hlt
 
 ",
         "

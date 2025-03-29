@@ -6,9 +6,9 @@ use crate::util::{check, check_fail, check_value, eval, eval_string};
 use fixed32::Fp;
 use std::cell::RefCell;
 use std::rc::Rc;
-use swamp_script_core_extra::prelude::Value;
-use swamp_script_core_extra::qck_des::quick_deserialize;
-use swamp_script_types::Type;
+use swamp_core_extra::prelude::Value;
+use swamp_core_extra::qck_des::quick_deserialize;
+use swamp_types::Type;
 
 mod util;
 

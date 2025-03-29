@@ -1,42 +1,43 @@
 [package]
-name = "swamp-compile"
+name = "swamp"
 version = "0.1.10"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/swamp/script"
-description = "Compile utility functions"
+description = "script language for embedding"
 
 [dependencies]
+tiny-ver = "0.1.2"
 swamp-source-map = { path = "../source-map", version = "0.1.10" }
-# Ast and Parser
-swamp-parser = { path = "../parser", version = "0.1.10" }
-swamp-ast = { path = "../ast", version = "0.1.10" }
+
+# Parser
+swamp-parser = { path = "../parser", version = "0.1.10" } # TODO: This is only for an error. parser should not be a dependency
 
 # Semantic and Analyzer
 swamp-semantic = { path = "../semantic", version = "0.1.10" }
+swamp-types = { path = "../types", version = "0.1.10" }
+swamp-node = { path = "../node", version = "0.1.10" }
 swamp-analyzer = { path = "../analyzer", version = "0.1.10" }
+swamp-core = { path = "../core", version = "0.1.10" }
+swamp-modules = { path = "../modules", version = "0.1.10" }
+swamp-compile = { path = "../compile", version = "0.1.10" }
+
 swamp-error-report = { path = "../err", version = "0.1.10" }
 
-swamp-modules = { path = "../modules", version = "0.1.10" }
-
 # Core and Std
-swamp-core = { path = "../core", version = "0.1.10" }
+swamp-core-extra = { path = "../core-extra", version = "0.1.10" }
 swamp-std = { path = "../std", version = "0.1.10" }
 
-swamp-pretty-print = { path = "../pretty-print", version = "0.1.10" }
 
 swamp-dep-loader = { path = "../dep-loader", version = "0.1.10" }
 swamp-eval-loader = { path = "../eval-loader", version = "0.1.10" }
 swamp-source-map-lookup = { path = "../source-map-lookup", version = "0.1.10" }
 
-time-dilation = { path = "../time-dilation", version = "0.1.10", features = ["enable_summary"] }
+# Runner
+swamp-eval = { path = "../eval", version = "0.1.10" }
 
-
-tracing = "0.1.40"
-regex = "1.11.1"
-tiny-ver = "0.1.2"
-seq-map = "0.0.13"
-
+swamp-code-gen-program = { path = "../code-gen-program", version = "0.1.10" }
 
 [dev-dependencies]
 test-log = { version = "0.2.16", features = ["trace", "log", "color"] }
+tracing = "0.1.40"

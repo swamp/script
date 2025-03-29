@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use swamp_script_vm_test::util::exec_with_host_function;
+use swamp_vm_test::util::exec_with_host_function;
 
 #[test_log::test]
 fn host_call() {
@@ -21,7 +21,7 @@ some_test(-42, 23)
 > 0002: sneg32 $0050 $0150
 > 0003: ld32 $0054 00000017
 > 0004: host 0001 8
-> 0005: hlt 
+> 0005: hlt
 ",
         "
 00000000  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  ................

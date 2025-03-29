@@ -1,5 +1,5 @@
 [package]
-name = "swamp-script-node"
+name = "swamp-node"
 version = "0.1.10"
 edition = "2024"
 license = "MIT"

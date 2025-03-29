@@ -4,7 +4,7 @@
  */
 use crate::value::Value;
 use crate::value::ValueRef;
-use swamp_script_types::NamedStructType;
+use swamp_types::NamedStructType;
 
 pub fn overwrite_value(target: &ValueRef, source: Value) {
     if let Value::NamedStruct(ref mut target_struct_type_ref, ref mut target_fields) =

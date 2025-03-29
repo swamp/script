@@ -2,11 +2,11 @@
  * Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/swamp/swamp
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
-use swamp_script_analyzer::Program;
-use swamp_script_compile::compile_string;
-use swamp_script_error_report::ScriptResolveError;
-use swamp_script_pretty_print::{SourceMapDisplay, SymbolTableDisplay};
-use swamp_script_source_map_lookup::SourceMapWrapper;
+use swamp_analyzer::Program;
+use swamp_compile::compile_string;
+use swamp_error_report::ScriptResolveError;
+use swamp_pretty_print::{SourceMapDisplay, SymbolTableDisplay};
+use swamp_source_map_lookup::SourceMapWrapper;
 use tracing::{info, warn};
 
 fn internal_compile(script: &str) -> Result<Program, ScriptResolveError> {

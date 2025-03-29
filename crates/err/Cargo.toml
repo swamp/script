@@ -1,5 +1,5 @@
 [package]
-name = "swamp-script-error-report"
+name = "swamp-error-report"
 version = "0.1.10"
 edition = "2024"
 license = "MIT"
@@ -7,14 +7,14 @@ description = "Swamp script error report"
 repository = "https://github.com/swamp/script"
 
 [dependencies]
-swamp-script-semantic = { path = "../semantic", version = "0.1.10" }
-swamp-script-node = { path = "../node", version = "0.1.10" }
-swamp-script-source-map = { path = "../source-map", version = "0.1.10" }
-swamp-script-dep-loader = { path = "../dep-loader", version = "0.1.10" }
-swamp-script-eval-loader = { path = "../eval-loader", version = "0.1.10" }
+swamp-semantic = { path = "../semantic", version = "0.1.10" }
+swamp-node = { path = "../node", version = "0.1.10" }
+swamp-source-map = { path = "../source-map", version = "0.1.10" }
+swamp-dep-loader = { path = "../dep-loader", version = "0.1.10" }
+swamp-eval-loader = { path = "../eval-loader", version = "0.1.10" }
 
-swamp-script-eval = { path = "../eval", version = "0.1.10" }
-swamp-script-analyzer = { path = "../analyzer", version = "0.1.10" }
-swamp-script-parser = { path = "../parser", version = "0.1.10" }
+swamp-eval = { path = "../eval", version = "0.1.10" }
+swamp-analyzer = { path = "../analyzer", version = "0.1.10" }
+swamp-parser = { path = "../parser", version = "0.1.10" }
 eira = { path = "../eira", version = "0.1.10" }
 yansi = "1.0.1"

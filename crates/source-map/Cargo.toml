@@ -1,5 +1,5 @@
 [package]
-name = "swamp-script-source-map"
+name = "swamp-source-map"
 version = "0.1.10"
 edition = "2024"
 license = "MIT"

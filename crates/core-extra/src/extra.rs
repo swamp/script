@@ -10,8 +10,8 @@ use sparse_slot::{Id, SparseSlot};
 use std::cell::RefCell;
 use std::fmt::{Debug, Display, Formatter};
 use std::rc::Rc;
-use swamp_script_types::ExternalType;
-use swamp_script_types::Type;
+use swamp_types::ExternalType;
+use swamp_types::Type;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct SparseValueId(pub Id);

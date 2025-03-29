@@ -4,8 +4,8 @@
  */
 use std::fmt::Debug;
 use std::path::PathBuf;
-use swamp_script_node::{Node, Span};
-use swamp_script_source_map::SourceMap;
+use swamp_node::{Node, Span};
+use swamp_source_map::SourceMap;
 
 pub struct FileLineInfo {
     pub row: usize,

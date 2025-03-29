@@ -14,11 +14,11 @@ use std::cell::RefCell;
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
 use std::rc::Rc;
-use swamp_script_semantic::{
+use swamp_semantic::{
     Expression, ExternalFunctionDefinitionRef, FormatSpecifierKind, InternalFunctionDefinitionRef,
     PrecisionType, VariableRef,
 };
-use swamp_script_types::prelude::*;
+use swamp_types::prelude::*;
 
 pub type ValueRef = Rc<RefCell<Value>>;
 

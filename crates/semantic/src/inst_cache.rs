@@ -5,7 +5,7 @@
 
 use seq_fmt::comma;
 use seq_map::{SeqMap, SeqMapError};
-use swamp_script_types::Type;
+use swamp_types::Type;
 
 /// It is not a proper Monomorphization cache, but similar
 #[derive(Debug, Clone)]

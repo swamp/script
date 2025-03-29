@@ -1,5 +1,5 @@
 [package]
-name = "swamp-script-ast"
+name = "swamp-ast"
 version = "0.1.10"
 edition = "2024"
 license = "MIT"

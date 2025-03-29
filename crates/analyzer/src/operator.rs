@@ -4,16 +4,16 @@
  */
 use crate::err::{Error, ErrorKind};
 use crate::{Analyzer, TypeContext};
-use swamp_script_semantic::{BinaryOperator, BinaryOperatorKind, UnaryOperator, UnaryOperatorKind};
-use swamp_script_types::prelude::*;
+use swamp_semantic::{BinaryOperator, BinaryOperatorKind, UnaryOperator, UnaryOperatorKind};
+use swamp_types::prelude::*;
 use tracing::debug;
 
 impl Analyzer<'_> {
     pub(crate) fn analyze_binary_op(
         &mut self,
-        ast_left: &swamp_script_ast::Expression,
-        ast_op: &swamp_script_ast::BinaryOperator,
-        ast_right: &swamp_script_ast::Expression,
+        ast_left: &swamp_ast::Expression,
+        ast_op: &swamp_ast::BinaryOperator,
+        ast_right: &swamp_ast::Expression,
     ) -> Result<(BinaryOperator, Type), Error> {
         let anything_context = TypeContext::new_anything_argument();
         let left = self.analyze_expression(ast_left, &anything_context)?;
@@ -96,16 +96,14 @@ impl Analyzer<'_> {
 
     pub(crate) fn analyze_unary_op(
         &mut self,
-        ast_op: &swamp_script_ast::UnaryOperator,
-        ast_left: &swamp_script_ast::Expression,
+        ast_op: &swamp_ast::UnaryOperator,
+        ast_left: &swamp_ast::Expression,
     ) -> Result<(UnaryOperator, Type), Error> {
         let (node, kind, require_type) = match ast_op {
-            swamp_script_ast::UnaryOperator::Not(node) => {
+            swamp_ast::UnaryOperator::Not(node) => {
                 (node, UnaryOperatorKind::Not, Some(&Type::Bool))
             }
-            swamp_script_ast::UnaryOperator::Negate(node) => {
-                (node, UnaryOperatorKind::Negate, None)
-            }
+            swamp_ast::UnaryOperator::Negate(node) => (node, UnaryOperatorKind::Negate, None),
         };
         let context = TypeContext::new_unsure_argument(require_type);
         let left = self.analyze_expression(ast_left, &context)?;
@@ -122,25 +120,23 @@ impl Analyzer<'_> {
 
     const fn convert_binary_operator_kind(
         &self,
-        binary_operator: &swamp_script_ast::BinaryOperator,
+        binary_operator: &swamp_ast::BinaryOperator,
     ) -> BinaryOperatorKind {
         match binary_operator.kind {
-            swamp_script_ast::BinaryOperatorKind::Add => BinaryOperatorKind::Add,
-            swamp_script_ast::BinaryOperatorKind::Subtract => BinaryOperatorKind::Subtract,
-            swamp_script_ast::BinaryOperatorKind::Multiply => BinaryOperatorKind::Multiply,
-            swamp_script_ast::BinaryOperatorKind::Divide => BinaryOperatorKind::Divide,
-            swamp_script_ast::BinaryOperatorKind::Modulo => BinaryOperatorKind::Modulo,
-            swamp_script_ast::BinaryOperatorKind::LogicalOr => BinaryOperatorKind::LogicalOr,
-            swamp_script_ast::BinaryOperatorKind::LogicalAnd => BinaryOperatorKind::LogicalAnd,
-            swamp_script_ast::BinaryOperatorKind::Equal => BinaryOperatorKind::Equal,
-            swamp_script_ast::BinaryOperatorKind::NotEqual => BinaryOperatorKind::NotEqual,
-            swamp_script_ast::BinaryOperatorKind::LessThan => BinaryOperatorKind::LessThan,
-            swamp_script_ast::BinaryOperatorKind::LessEqual => BinaryOperatorKind::LessEqual,
-            swamp_script_ast::BinaryOperatorKind::GreaterThan => BinaryOperatorKind::GreaterThan,
-            swamp_script_ast::BinaryOperatorKind::GreaterEqual => BinaryOperatorKind::GreaterEqual,
-            swamp_script_ast::BinaryOperatorKind::RangeExclusive => {
-                BinaryOperatorKind::RangeExclusive
-            }
+            swamp_ast::BinaryOperatorKind::Add => BinaryOperatorKind::Add,
+            swamp_ast::BinaryOperatorKind::Subtract => BinaryOperatorKind::Subtract,
+            swamp_ast::BinaryOperatorKind::Multiply => BinaryOperatorKind::Multiply,
+            swamp_ast::BinaryOperatorKind::Divide => BinaryOperatorKind::Divide,
+            swamp_ast::BinaryOperatorKind::Modulo => BinaryOperatorKind::Modulo,
+            swamp_ast::BinaryOperatorKind::LogicalOr => BinaryOperatorKind::LogicalOr,
+            swamp_ast::BinaryOperatorKind::LogicalAnd => BinaryOperatorKind::LogicalAnd,
+            swamp_ast::BinaryOperatorKind::Equal => BinaryOperatorKind::Equal,
+            swamp_ast::BinaryOperatorKind::NotEqual => BinaryOperatorKind::NotEqual,
+            swamp_ast::BinaryOperatorKind::LessThan => BinaryOperatorKind::LessThan,
+            swamp_ast::BinaryOperatorKind::LessEqual => BinaryOperatorKind::LessEqual,
+            swamp_ast::BinaryOperatorKind::GreaterThan => BinaryOperatorKind::GreaterThan,
+            swamp_ast::BinaryOperatorKind::GreaterEqual => BinaryOperatorKind::GreaterEqual,
+            swamp_ast::BinaryOperatorKind::RangeExclusive => BinaryOperatorKind::RangeExclusive,
         }
     }
 }

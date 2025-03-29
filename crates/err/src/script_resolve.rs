@@ -10,7 +10,7 @@ use crate::dep::build_dependency_error;
 use crate::loader::build_loader_error;
 use std::io::stderr;
 use std::path::Path;
-use swamp_script_source_map::SourceMap;
+use swamp_source_map::SourceMap;
 
 use crate::Builder;
 #[must_use]

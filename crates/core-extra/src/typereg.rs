@@ -5,7 +5,7 @@
 /*
 use seq_map::SeqMap;
 use std::cell::RefCell;
-use swamp_script_types::prelude::*;
+use swamp_types::prelude::*;
 
 #[derive(Debug)]
 pub struct TypeRegistry {

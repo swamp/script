@@ -1,5 +1,5 @@
 [package]
-name = "swamp-script-core-extra"
+name = "swamp-core-extra"
 version = "0.1.10"
 edition = "2024"
 license = "MIT"
@@ -8,9 +8,9 @@ description = "core parts for swamp evaluator"
 
 
 [dependencies]
-swamp-script-semantic = { path = "../semantic", version = "0.1.10" }
-swamp-script-types = { path = "../types", version = "0.1.10" }
-swamp-script-node = { path = "../node", version = "0.1.10" }
+swamp-semantic = { path = "../semantic", version = "0.1.10" }
+swamp-types = { path = "../types", version = "0.1.10" }
+swamp-node = { path = "../node", version = "0.1.10" }
 fixed32 = "0.0.17"
 seq-map = "0.0.13"
 sparse-slot =  { version = "0.0.4"}

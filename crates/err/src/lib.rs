@@ -16,12 +16,12 @@ use std::fmt::Display;
 use std::io;
 use std::io::{Write, stderr};
 use std::path::Path;
-use swamp_script_analyzer::prelude::Error;
-use swamp_script_dep_loader::{DepLoaderError, DependencyError};
+use swamp_analyzer::prelude::Error;
+use swamp_dep_loader::{DepLoaderError, DependencyError};
 
-use swamp_script_eval_loader::LoaderErr;
-use swamp_script_node::Span;
-use swamp_script_source_map::{FileId, SourceMap};
+use swamp_eval_loader::LoaderErr;
+use swamp_node::Span;
+use swamp_source_map::{FileId, SourceMap};
 
 #[derive(Debug)]
 pub enum ScriptResolveError {

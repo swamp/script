@@ -5,9 +5,9 @@
 /*
 use eira::Kind;
 use std::io::stderr;
-use swamp_script_error_report::Report;
-use swamp_script_semantic::Span;
-use swamp_script_source_map::SourceMap;
+use swamp_error_report::Report;
+use swamp_semantic::Span;
+use swamp_source_map::SourceMap;
 
 
 #[test]

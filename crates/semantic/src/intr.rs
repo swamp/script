@@ -5,7 +5,7 @@
 use std::fmt;
 use std::fmt::Debug;
 use std::rc::Rc;
-use swamp_script_types::prelude::*;
+use swamp_types::prelude::*;
 
 #[derive(Debug, Hash, Clone)]
 pub enum IntrinsicFunction {

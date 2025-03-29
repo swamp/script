@@ -5,7 +5,7 @@
 mod util;
 
 use crate::util::eval;
-use swamp_script_core_extra::prelude::Value;
+use swamp_core_extra::prelude::Value;
 
 #[test_log::test]
 fn int_literal() {

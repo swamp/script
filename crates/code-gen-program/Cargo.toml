@@ -1,5 +1,5 @@
 [package]
-name = "swamp-script-code-gen-program"
+name = "swamp-code-gen-program"
 version = "0.1.10"
 edition = "2024"
 license = "MIT"
@@ -7,12 +7,12 @@ description = "converts a Swamp program to swamp-vm opcodes"
 repository = "https://github.com/swamp/script"
 
 [dependencies]
-swamp-script-code-gen = { path = "../code-gen", version = "0.1.10" }
-swamp-script-compile = { path = "../compile", version = "0.1.10" }
-swamp-script-types = { path = "../types", version = "0.1.10" }
-swamp-script-semantic = { path = "../semantic", version = "0.1.10" }
-swamp-script-modules = { path = "../modules", version = "0.1.10" }
-swamp-script-source-map-lookup = { path = "../source-map-lookup", version = "0.1.10" }
+swamp-code-gen = { path = "../code-gen", version = "0.1.10" }
+swamp-compile = { path = "../compile", version = "0.1.10" }
+swamp-types = { path = "../types", version = "0.1.10" }
+swamp-semantic = { path = "../semantic", version = "0.1.10" }
+swamp-modules = { path = "../modules", version = "0.1.10" }
+swamp-source-map-lookup = { path = "../source-map-lookup", version = "0.1.10" }
 swamp-vm-disasm = { path = "../vm-disasm", version = "0.1.10" }
 
 tracing = "0.1.40"

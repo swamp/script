@@ -6,7 +6,7 @@
 use crate::alloc::FrameMemoryRegion;
 use crate::ctx::Context;
 use crate::{Error, FunctionCodeGen};
-use swamp_script_semantic::{
+use swamp_semantic::{
     ArgumentExpressionOrLocation, LocationAccessKind, MutOrImmutableExpression,
     SingleLocationExpression,
 };

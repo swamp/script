@@ -1,5 +1,5 @@
 [package]
-name = "swamp-script-eval-loader"
+name = "swamp-eval-loader"
 version = "0.1.10"
 edition = "2024"
 license = "MIT"
@@ -7,11 +7,11 @@ description = "load swamp-scripts"
 repository = "https://github.com/swamp/script"
 
 [dependencies]
-swamp-script-dep-loader = { path = "../dep-loader", version = "0.1.10" }
-swamp-script-analyzer = { path = "../analyzer", version = "0.1.10" }
-swamp-script-semantic = { path = "../semantic", version = "0.1.10" }
-swamp-script-source-map = { path = "../source-map", version = "0.1.10" }
-swamp-script-modules = { path = "../modules", version = "0.1.10" }
+swamp-dep-loader = { path = "../dep-loader", version = "0.1.10" }
+swamp-analyzer = { path = "../analyzer", version = "0.1.10" }
+swamp-semantic = { path = "../semantic", version = "0.1.10" }
+swamp-source-map = { path = "../source-map", version = "0.1.10" }
+swamp-modules = { path = "../modules", version = "0.1.10" }
 time-dilation = { path = "../time-dilation", version = "0.1.10" }
 
 tracing = "0.1.41"

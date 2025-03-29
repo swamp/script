@@ -4,11 +4,11 @@
  */
 
 use std::ptr;
-use swamp_script_code_gen::{CodeGenState, Error};
-use swamp_script_code_gen_program::code_gen_program;
-use swamp_script_compile::Program;
-use swamp_script_compile::compile_string;
-use swamp_script_source_map_lookup::SourceMapWrapper;
+use swamp_code_gen::{CodeGenState, Error};
+use swamp_code_gen_program::code_gen_program;
+use swamp_compile::Program;
+use swamp_compile::compile_string;
+use swamp_source_map_lookup::SourceMapWrapper;
 use swamp_vm::host::HostArgs;
 use swamp_vm::{Vm, VmSetup};
 use swamp_vm_disasm::{disasm_instructions_color, disasm_instructions_no_color};

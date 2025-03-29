@@ -1,5 +1,5 @@
 [package]
-name = "swamp-script-source-map-lookup"
+name = "swamp-source-map-lookup"
 version = "0.1.10"
 edition = "2024"
 license = "MIT"
@@ -7,6 +7,6 @@ repository = "https://github.com/swamp/script"
 description = "Source map lookup for Swamp"
 
 [dependencies]
-swamp-script-node = { path = "../node", version = "0.1.10" }
-swamp-script-source-map = { path = "../source-map", version = "0.1.10" }
-swamp-script-core-extra = { path = "../core-extra", version = "0.1.10" }
+swamp-node = { path = "../node", version = "0.1.10" }
+swamp-source-map = { path = "../source-map", version = "0.1.10" }
+swamp-core-extra = { path = "../core-extra", version = "0.1.10" }

@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use swamp_script_vm_test::util::exec_with_assembly;
+use swamp_vm_test::util::exec_with_assembly;
 
 #[test_log::test]
 fn when() {
@@ -30,7 +30,7 @@ result = when a {
 > 0005: movlp $0008 $0004 4         ; copy overlapping the Some part into the new variable `a`
 
 ; true block `a + 7`
-    > 0006: ld32 $0160 00000007         ;    7                  
+    > 0006: ld32 $0160 00000007         ;    7
     > 0007: sadd32 $000C $0008 $0160    ; result = a + 7
 > 0008: jmp @B                      ; jump over to end
 
@@ -38,7 +38,7 @@ result = when a {
     > 0009: ld32 $0164 00000001         ; temp = 1
     > 000A: sneg32 $000C $0164          ; result = -temp
 
-> 000B: hlt 
+> 000B: hlt
 ",
         "
 00000000  01 00 00 00 03 00 00 00  03 00 00 00 0A 00 00 00  ................ ; 0A 00 00 00 is the a + 7 ( 3 + 7 )
@@ -72,7 +72,7 @@ result = when a {
 > 0007: jmp @A
 > 0008: ld32 $0164 00000001
 > 0009: sneg32 $000C $0164
-> 000A: hlt 
+> 000A: hlt
 ",
         "
 00000000  00 00 00 00 00 00 00 00  00 00 00 00 FF FF FF FF  ................ ; FF FF FF FF is the -1 since the value was none

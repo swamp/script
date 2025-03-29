@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use swamp_script_core::create_module;
+use swamp_core::create_module;
 use tiny_ver::TinyVersion;
 use tracing::info;
 

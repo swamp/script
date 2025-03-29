@@ -5,11 +5,11 @@
 use crate::Analyzer;
 use crate::err::{Error, ErrorKind};
 use std::rc::Rc;
-use swamp_script_node::Node;
-use swamp_script_semantic::{
+use swamp_node::Node;
+use swamp_semantic::{
     BlockScopeMode, Expression, ExpressionKind, MutOrImmutableExpression, Variable, VariableRef,
 };
-use swamp_script_types::prelude::*;
+use swamp_types::prelude::*;
 use tracing::error;
 impl Analyzer<'_> {
     fn try_find_local_variable(&self, node: &Node) -> Option<&VariableRef> {
@@ -28,7 +28,7 @@ impl Analyzer<'_> {
     #[allow(unused)]
     pub(crate) fn find_variable(
         &self,
-        variable: &swamp_script_ast::Variable,
+        variable: &swamp_ast::Variable,
     ) -> Result<VariableRef, Error> {
         self.try_find_variable(&variable.name).map_or_else(
             || Err(self.create_err(ErrorKind::UnknownVariable, &variable.name)),
@@ -36,7 +36,7 @@ impl Analyzer<'_> {
         )
     }
 
-    pub(crate) fn try_find_variable(&self, node: &swamp_script_ast::Node) -> Option<VariableRef> {
+    pub(crate) fn try_find_variable(&self, node: &swamp_ast::Node) -> Option<VariableRef> {
         let variable_text = self.get_text(node);
 
         for scope in self.scope.block_scope_stack.iter().rev() {
@@ -53,8 +53,8 @@ impl Analyzer<'_> {
 
     pub(crate) fn create_local_variable(
         &mut self,
-        variable: &swamp_script_ast::Node,
-        is_mutable: Option<&swamp_script_ast::Node>,
+        variable: &swamp_ast::Node,
+        is_mutable: Option<&swamp_ast::Node>,
         variable_type_ref: &Type,
     ) -> Result<VariableRef, Error> {
         if variable_type_ref == &Type::Unit {
@@ -74,7 +74,7 @@ impl Analyzer<'_> {
 
     pub(crate) fn create_variable(
         &mut self,
-        variable: &swamp_script_ast::Variable,
+        variable: &swamp_ast::Variable,
         variable_type_ref: &Type,
     ) -> Result<VariableRef, Error> {
         self.create_local_variable(
@@ -184,7 +184,7 @@ impl Analyzer<'_> {
 
     pub(crate) fn create_variable_binding_for_with(
         &mut self,
-        ast_variable: &swamp_script_ast::Variable,
+        ast_variable: &swamp_ast::Variable,
         converted_expression: MutOrImmutableExpression,
     ) -> Result<Expression, Error> {
         let expression_type = converted_expression.ty().clone();

@@ -6,10 +6,10 @@ use crate::modules::ModuleRef;
 use seq_map::SeqMap;
 use std::fmt::Debug;
 use std::rc::Rc;
-use swamp_script_node::Node;
-use swamp_script_semantic::prelude::*;
-use swamp_script_types::ParameterizedTypeBlueprint;
-use swamp_script_types::prelude::*;
+use swamp_node::Node;
+use swamp_semantic::prelude::*;
+use swamp_types::ParameterizedTypeBlueprint;
+use swamp_types::prelude::*;
 use tiny_ver::TinyVersion;
 
 #[derive(Debug, Clone)]

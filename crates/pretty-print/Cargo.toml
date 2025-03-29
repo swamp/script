@@ -1,5 +1,5 @@
 [package]
-name = "swamp-script-pretty-print"
+name = "swamp-pretty-print"
 version = "0.1.10"
 edition = "2024"
 license = "MIT"
@@ -11,8 +11,8 @@ tracing = "0.1.40"
 seq-map = "0.0.13"
 yansi = "1.0.1"
 
-swamp-script-semantic = { path = "../semantic", version = "0.1.10" }
-swamp-script-core-extra = { path = "../core-extra", version = "0.1.10" }
-swamp-script-modules = { path = "../modules", version = "0.1.10" }
-swamp-script-types = { path = "../types", version = "0.1.10" }
-swamp-script-source-map-lookup = { path = "../source-map-lookup", version = "0.1.10" }
+swamp-semantic = { path = "../semantic", version = "0.1.10" }
+swamp-core-extra = { path = "../core-extra", version = "0.1.10" }
+swamp-modules = { path = "../modules", version = "0.1.10" }
+swamp-types = { path = "../types", version = "0.1.10" }
+swamp-source-map-lookup = { path = "../source-map-lookup", version = "0.1.10" }

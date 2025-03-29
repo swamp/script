@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use swamp_script_vm_test::util::exec_with_host_function;
+use swamp_vm_test::util::exec_with_host_function;
 #[test_log::test]
 fn assignment() {
     exec_with_host_function(
@@ -36,7 +36,7 @@ print(s.i)
 > 0005: ld32 $015C 002A0000
 > 0006: mov $0008 $015C 4
 > 0007: host 0001 4
-> 0008: hlt 
+> 0008: hlt
 ",
         "
 00000000  0A 00 00 00 20 00 00 00  00 00 2A 00 00 00 00 00  .... .....*..... ; 0A 00 00 00 = i:10, 20 00 00 00 = a:32,  00 00 2A 00 = f: 42.0 (2752512 in hex, 2752512/65536 = 42)

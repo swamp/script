@@ -10,20 +10,20 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::str::FromStr;
-use swamp_script_analyzer::Analyzer;
-pub use swamp_script_analyzer::prelude::{Error, Program};
-use swamp_script_dep_loader::{
+use swamp_analyzer::Analyzer;
+pub use swamp_analyzer::prelude::{Error, Program};
+use swamp_dep_loader::{
     DependencyParser, ParsedAstModule, parse_local_modules_and_get_order, parse_single_module,
     swamp_registry_path,
 };
-use swamp_script_error_report::{ScriptResolveError, prelude::show_script_resolve_error};
-use swamp_script_eval_loader::analyze_modules_in_order;
-use swamp_script_modules::modules::{ModuleRef, Modules};
-use swamp_script_modules::symtbl::{SymbolTable, SymbolTableRef};
-use swamp_script_pretty_print::{SourceMapDisplay, SymbolTableDisplay};
-use swamp_script_semantic::ProgramState;
-use swamp_script_source_map::SourceMap;
-use swamp_script_source_map_lookup::SourceMapWrapper;
+use swamp_error_report::{ScriptResolveError, prelude::show_script_resolve_error};
+use swamp_eval_loader::analyze_modules_in_order;
+use swamp_modules::modules::{ModuleRef, Modules};
+use swamp_modules::symtbl::{SymbolTable, SymbolTableRef};
+use swamp_pretty_print::{SourceMapDisplay, SymbolTableDisplay};
+use swamp_semantic::ProgramState;
+use swamp_source_map::SourceMap;
+use swamp_source_map_lookup::SourceMapWrapper;
 use time_dilation::ScopedTimer;
 use tiny_ver::TinyVersion;
 use tracing::{info, trace};
@@ -116,7 +116,7 @@ pub fn bootstrap_modules(
 
     let mut modules = Modules::new();
 
-    let mut core_module_with_intrinsics = swamp_script_core::create_module(&compiler_version);
+    let mut core_module_with_intrinsics = swamp_core::create_module(&compiler_version);
 
     let core_ast_module = parse_single_module(
         source_map,
@@ -175,7 +175,7 @@ pub fn bootstrap_modules(
 
     // Add `core` module without the version number, so they can be referenced from code
     default_symbol_table_for_others
-        .add_package_version(swamp_script_core::PACKAGE_NAME, compiler_version)
+        .add_package_version(swamp_core::PACKAGE_NAME, compiler_version)
         .expect("should work");
 
     let source_map_lookup = SourceMapWrapper {

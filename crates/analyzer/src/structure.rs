@@ -6,13 +6,13 @@ use crate::err::{Error, ErrorKind};
 use crate::{Analyzer, TypeContext};
 use seq_map::SeqMap;
 use seq_set::SeqSet;
-use swamp_script_node::Node;
-use swamp_script_semantic::{
+use swamp_node::Node;
+use swamp_semantic::{
     AnonymousStructLiteral, ArgumentExpressionOrLocation, Expression, ExpressionKind, FunctionRef,
     LocationAccess, LocationAccessKind, MutOrImmutableExpression, SingleLocationExpression,
     SingleLocationExpressionKind, SingleMutLocationExpression, StructInstantiation,
 };
-use swamp_script_types::prelude::*;
+use swamp_types::prelude::*;
 
 impl Analyzer<'_> {
     fn analyze_struct_init_calling_default(
@@ -20,7 +20,7 @@ impl Analyzer<'_> {
         function: &FunctionRef,
         struct_to_instantiate: &NamedStructType,
         source_order_expressions: Vec<(usize, Node, Expression)>,
-        node: &swamp_script_ast::Node,
+        node: &swamp_ast::Node,
     ) -> Result<Expression, Error> {
         let mut expressions = Vec::new();
 
@@ -114,7 +114,7 @@ impl Analyzer<'_> {
         struct_to_instantiate: NamedStructType,
         mut source_order_expressions: Vec<(usize, Expression)>,
         missing_fields: SeqSet<String>,
-        node: &swamp_script_ast::Node,
+        node: &swamp_ast::Node,
     ) -> Result<Expression, Error> {
         {
             let borrowed_anon_type = &struct_to_instantiate.anon_struct_type;
@@ -153,8 +153,8 @@ impl Analyzer<'_> {
     ///
     pub fn analyze_anonymous_struct_literal(
         &mut self,
-        node: &swamp_script_ast::Node,
-        ast_fields: &Vec<swamp_script_ast::FieldExpression>,
+        node: &swamp_ast::Node,
+        ast_fields: &Vec<swamp_ast::FieldExpression>,
         rest_was_specified: bool,
         context: &TypeContext,
     ) -> Result<Expression, Error> {
@@ -230,8 +230,8 @@ impl Analyzer<'_> {
 
     pub(crate) fn analyze_struct_instantiation(
         &mut self,
-        qualified_type_identifier: &swamp_script_ast::QualifiedTypeIdentifier,
-        ast_fields: &Vec<swamp_script_ast::FieldExpression>,
+        qualified_type_identifier: &swamp_ast::QualifiedTypeIdentifier,
+        ast_fields: &Vec<swamp_ast::FieldExpression>,
         has_rest: bool,
     ) -> Result<Expression, Error> {
         let struct_to_instantiate = self.get_struct_type(qualified_type_identifier)?;
@@ -304,7 +304,7 @@ impl Analyzer<'_> {
     fn analyze_anon_struct_instantiation_helper(
         &mut self,
         struct_to_instantiate: &AnonymousStructType,
-        ast_fields: &Vec<swamp_script_ast::FieldExpression>,
+        ast_fields: &Vec<swamp_ast::FieldExpression>,
     ) -> Result<(Vec<(usize, Node, Expression)>, SeqSet<String>), Error> {
         let mut missing_fields: SeqSet<String> = struct_to_instantiate
             .field_name_sorted_fields
@@ -359,9 +359,9 @@ impl Analyzer<'_> {
 
     pub(crate) fn analyze_anon_struct_instantiation(
         &mut self,
-        node: &swamp_script_ast::Node,
+        node: &swamp_ast::Node,
         struct_to_instantiate: &AnonymousStructType,
-        ast_fields: &Vec<swamp_script_ast::FieldExpression>,
+        ast_fields: &Vec<swamp_ast::FieldExpression>,
         allow_rest: bool,
     ) -> Result<Vec<(usize, Expression)>, Error> {
         let (source_order_expressions, missing_fields) =

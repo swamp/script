@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See LICENSE in the project root for license information.
  */
 
-use swamp_script_vm_test::util::{exec_with_assembly, exec_with_host_function_show_heap};
+use swamp_vm_test::util::{exec_with_assembly, exec_with_host_function_show_heap};
 #[test_log::test]
 fn gen_string() {
     exec_with_assembly(
@@ -137,7 +137,7 @@ r = a.len()
 > 0000: enter 60
 > 0001: str_from_const $0000 @#00000000 21
 > 0002: str_len $000C $0000
-> 0003: hlt 
+> 0003: hlt
 ",
         "
 00000000  28 00 00 00 00 00 00 00  00 00 00 00 21 00 00 00  (...........!...

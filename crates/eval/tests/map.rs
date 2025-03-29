@@ -5,7 +5,7 @@
 mod util;
 
 use crate::util::{check, check_fail, check_value, eval};
-use swamp_script_core_extra::prelude::Value;
+use swamp_core_extra::prelude::Value;
 
 #[test_log::test]
 fn map_fn_return() {

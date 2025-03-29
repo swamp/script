@@ -1,5 +1,5 @@
 [package]
-name = "swamp-script-types"
+name = "swamp-types"
 version = "0.1.10"
 edition = "2024"
 license = "MIT"
@@ -10,5 +10,5 @@ description = "types used in Swamp"
 [dependencies]
 seq-fmt = "0.0.1"
 seq-map = "0.0.13"
-swamp-script-node = { path = "../node", version = "0.1.10" }
+swamp-node = { path = "../node", version = "0.1.10" }
 tracing = "0.1.40"

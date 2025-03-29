@@ -4,8 +4,8 @@
  */
 
 use std::time::{Duration, Instant};
-use swamp_script_vm_test::util::exec_internal;
 use swamp_vm::Vm;
+use swamp_vm_test::util::exec_internal;
 
 fn setup_vm() -> Vm {
     exec_internal(

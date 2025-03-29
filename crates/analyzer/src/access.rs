@@ -5,11 +5,11 @@
 use crate::Analyzer;
 use crate::TypeContext;
 use crate::err::{Error, ErrorKind};
-use swamp_script_semantic::Literal::BoolLiteral;
-use swamp_script_semantic::{
+use swamp_semantic::Literal::BoolLiteral;
+use swamp_semantic::{
     ArgumentExpressionOrLocation, Expression, ExpressionKind, Function, FunctionRef,
 };
-use swamp_script_types::prelude::*;
+use swamp_types::prelude::*;
 
 impl Analyzer<'_> {
     #[must_use]
@@ -42,7 +42,7 @@ impl Analyzer<'_> {
     pub fn convert_to_function_access_expr(
         &self,
         associated_function_info: &FunctionRef,
-        ast_node: &swamp_script_ast::Node,
+        ast_node: &swamp_ast::Node,
     ) -> Expression {
         let kind = Self::convert_to_function_access_kind(associated_function_info);
         self.create_expr(
@@ -54,8 +54,8 @@ impl Analyzer<'_> {
 
     pub(crate) fn analyze_static_member_access(
         &mut self,
-        named_type: &swamp_script_ast::QualifiedTypeIdentifier,
-        member_name_node: &swamp_script_ast::Node,
+        named_type: &swamp_ast::QualifiedTypeIdentifier,
+        member_name_node: &swamp_ast::Node,
     ) -> Result<Expression, Error> {
         let some_type = self.analyze_named_type(named_type)?;
         let member_name = self.get_text(member_name_node);
@@ -72,8 +72,8 @@ impl Analyzer<'_> {
 
     pub(crate) fn analyze_min_max_expr(
         &mut self,
-        min_expr: &swamp_script_ast::Expression,
-        max_expr: &swamp_script_ast::Expression,
+        min_expr: &swamp_ast::Expression,
+        max_expr: &swamp_ast::Expression,
     ) -> Result<(Expression, Expression), Error> {
         let context = TypeContext::new_argument(&Type::Int);
 
@@ -87,10 +87,10 @@ impl Analyzer<'_> {
     ///
     pub fn analyze_range(
         &mut self,
-        min_expr: &swamp_script_ast::Expression,
-        max_expr: &swamp_script_ast::Expression,
-        mode: &swamp_script_ast::RangeMode,
-        ast_node: &swamp_script_ast::Node,
+        min_expr: &swamp_ast::Expression,
+        max_expr: &swamp_ast::Expression,
+        mode: &swamp_ast::RangeMode,
+        ast_node: &swamp_ast::Node,
     ) -> Result<Expression, Error> {
         let (min, max) = self.analyze_min_max_expr(min_expr, max_expr)?;
 
@@ -101,7 +101,7 @@ impl Analyzer<'_> {
             .unwrap()
             .clone();
 
-        let is_inclusive = matches!(mode, swamp_script_ast::RangeMode::Inclusive);
+        let is_inclusive = matches!(mode, swamp_ast::RangeMode::Inclusive);
 
         let bool_expr_kind = ExpressionKind::Literal(BoolLiteral(is_inclusive));
         let bool_expr = self.create_expr(bool_expr_kind, Type::Bool, ast_node);

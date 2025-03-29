@@ -10,7 +10,7 @@ use seq_map::SeqMap;
 use std::cmp::PartialEq;
 use std::fmt;
 use std::hash::Hash;
-use swamp_script_node::Node;
+use swamp_node::Node;
 use tracing::info;
 
 #[derive(Eq, PartialEq, Hash, Clone)]

@@ -6,7 +6,7 @@
 use crate::SemanticError;
 use crate::instantiator::TypeVariableScope;
 use seq_map::SeqMap;
-use swamp_script_types::Type;
+use swamp_types::Type;
 use tracing::info;
 
 #[derive(Debug, Default)]

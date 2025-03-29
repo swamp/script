@@ -6,7 +6,7 @@ mod util;
 
 use crate::util::check_value;
 use fixed32::Fp;
-use swamp_script_core_extra::prelude::Value;
+use swamp_core_extra::prelude::Value;
 
 #[test_log::test]
 fn float_sin() {

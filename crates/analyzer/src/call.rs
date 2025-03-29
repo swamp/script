@@ -5,9 +5,9 @@
 use crate::TypeContext;
 use crate::err::{Error, ErrorKind};
 use crate::{Analyzer, LocationSide};
-use swamp_script_node::Node;
-use swamp_script_semantic::{ArgumentExpressionOrLocation, MutOrImmutableExpression};
-use swamp_script_types::prelude::*;
+use swamp_node::Node;
+use swamp_semantic::{ArgumentExpressionOrLocation, MutOrImmutableExpression};
+use swamp_types::prelude::*;
 
 impl Analyzer<'_> {
     /// # Errors
@@ -15,7 +15,7 @@ impl Analyzer<'_> {
     pub fn analyze_argument(
         &mut self,
         fn_parameter: &TypeForParameter,
-        argument_expr: &swamp_script_ast::MutableOrImmutableExpression,
+        argument_expr: &swamp_ast::MutableOrImmutableExpression,
     ) -> Result<ArgumentExpressionOrLocation, Error> {
         let context = TypeContext::new_argument(&fn_parameter.resolved_type);
 
@@ -49,7 +49,7 @@ impl Analyzer<'_> {
         &mut self,
         node: &Node,
         fn_parameters: &[TypeForParameter],
-        arguments: &[swamp_script_ast::MutableOrImmutableExpression],
+        arguments: &[swamp_ast::MutableOrImmutableExpression],
     ) -> Result<Vec<ArgumentExpressionOrLocation>, Error> {
         if fn_parameters.len() != arguments.len() {
             return Err(self.create_err_resolved(
@@ -71,7 +71,7 @@ impl Analyzer<'_> {
     ///
     pub fn analyze_mut_or_immutable_expression(
         &mut self,
-        expr: &swamp_script_ast::MutableOrImmutableExpression,
+        expr: &swamp_ast::MutableOrImmutableExpression,
         context: &TypeContext,
         location_side: LocationSide,
     ) -> Result<MutOrImmutableExpression, Error> {
