@@ -13,7 +13,7 @@ members = [
 
     "crates/dep-loader",
     "crates/swamp",
-    "crates/eval-loader",
+    "crates/program-analyzer",
     # Core and Std
     "crates/core-extra",
     "crates/std",
@@ -21,7 +21,7 @@ members = [
     "crates/err",
     "crates/compile",
     "crates/modules",
-    "crates/source-map", # Move this later
+    "crates/source-map",        # Move this later
     "crates/eira",
     "crates/pretty-print",
     "crates/source-map-lookup",
