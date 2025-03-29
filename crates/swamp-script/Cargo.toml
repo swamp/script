@@ -1,6 +1,6 @@
 [package]
 name = "swamp-script"
-version = "0.1.9"
+version = "0.1.10"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/swamp/script"
@@ -8,35 +8,35 @@ description = "script language for embedding"
 
 [dependencies]
 tiny-ver = "0.1.2"
-swamp-script-source-map = { path = "../source-map", version = "0.1.9" }
+swamp-script-source-map = { path = "../source-map", version = "0.1.10" }
 
 # Parser
-swamp-script-parser = { path = "../parser", version = "0.1.9" } # TODO: This is only for an error. parser should not be a dependency
+swamp-script-parser = { path = "../parser", version = "0.1.10" } # TODO: This is only for an error. parser should not be a dependency
 
 # Semantic and Analyzer
-swamp-script-semantic = { path = "../semantic", version = "0.1.9" }
-swamp-script-types = { path = "../types", version = "0.1.9" }
-swamp-script-node = { path = "../node", version = "0.1.9" }
-swamp-script-analyzer = { path = "../analyzer", version = "0.1.9" }
-swamp-script-core = { path = "../core", version = "0.1.9" }
-swamp-script-modules = { path = "../modules", version = "0.1.9" }
-swamp-script-compile = { path = "../compile", version = "0.1.9" }
+swamp-script-semantic = { path = "../semantic", version = "0.1.10" }
+swamp-script-types = { path = "../types", version = "0.1.10" }
+swamp-script-node = { path = "../node", version = "0.1.10" }
+swamp-script-analyzer = { path = "../analyzer", version = "0.1.10" }
+swamp-script-core = { path = "../core", version = "0.1.10" }
+swamp-script-modules = { path = "../modules", version = "0.1.10" }
+swamp-script-compile = { path = "../compile", version = "0.1.10" }
 
-swamp-script-error-report = { path = "../err", version = "0.1.9" }
+swamp-script-error-report = { path = "../err", version = "0.1.10" }
 
 # Core and Std
-swamp-script-core-extra = { path = "../core-extra", version = "0.1.9" }
-swamp-script-std = { path = "../std", version = "0.1.9" }
+swamp-script-core-extra = { path = "../core-extra", version = "0.1.10" }
+swamp-script-std = { path = "../std", version = "0.1.10" }
 
 
-swamp-script-dep-loader = { path = "../dep-loader", version = "0.1.9" }
-swamp-script-eval-loader = { path = "../eval-loader", version = "0.1.9" }
-swamp-script-source-map-lookup = { path = "../source-map-lookup", version = "0.1.9" }
+swamp-script-dep-loader = { path = "../dep-loader", version = "0.1.10" }
+swamp-script-eval-loader = { path = "../eval-loader", version = "0.1.10" }
+swamp-script-source-map-lookup = { path = "../source-map-lookup", version = "0.1.10" }
 
 # Runner
-swamp-script-eval = { path = "../eval", version = "0.1.9" }
+swamp-script-eval = { path = "../eval", version = "0.1.10" }
 
-swamp-script-code-gen-program = { path = "../code-gen-program", version = "0.1.9" }
+swamp-script-code-gen-program = { path = "../code-gen-program", version = "0.1.10" }
 
 [dev-dependencies]
 test-log = { version = "0.2.16", features = ["trace", "log", "color"] }

@@ -1,6 +1,6 @@
 [package]
 name = "swamp-script-analyzer"
-version = "0.1.9"
+version = "0.1.10"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/swamp/script"
@@ -11,11 +11,11 @@ tracing = "0.1.40"
 seq-map = "0.0.13"
 seq-set = "0.0.2"
 
-swamp-script-semantic = { path = "../semantic", version = "0.1.9" }
-swamp-script-ast = { path = "../ast", version = "0.1.9" }
-swamp-script-source-map = { path = "../source-map", version = "0.1.9" }
-swamp-script-types = { path = "../types", version = "0.1.9" }
-swamp-script-node = { path = "../node", version = "0.1.9" }
-swamp-script-modules = { path = "../modules", version = "0.1.9" }
+swamp-script-semantic = { path = "../semantic", version = "0.1.10" }
+swamp-script-ast = { path = "../ast", version = "0.1.10" }
+swamp-script-source-map = { path = "../source-map", version = "0.1.10" }
+swamp-script-types = { path = "../types", version = "0.1.10" }
+swamp-script-node = { path = "../node", version = "0.1.10" }
+swamp-script-modules = { path = "../modules", version = "0.1.10" }
 
 [dev-dependencies]

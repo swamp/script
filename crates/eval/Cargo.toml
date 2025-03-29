@@ -1,19 +1,19 @@
 [package]
 name = "swamp-script-eval"
-version = "0.1.9"
+version = "0.1.10"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/swamp/script"
 description = "interpreter for swamp script"
 
 [dependencies]
-swamp-script-semantic = { path = "../semantic", version = "0.1.9" }
-swamp-script-types = { path = "../types", version = "0.1.9" }
-swamp-script-node = { path = "../node", version = "0.1.9" }
+swamp-script-semantic = { path = "../semantic", version = "0.1.10" }
+swamp-script-types = { path = "../types", version = "0.1.10" }
+swamp-script-node = { path = "../node", version = "0.1.10" }
 fixed32 = "0.0.17"
 seq-map = "0.0.13"
-swamp-script-core-extra = { path = "../core-extra", version = "0.1.9" }
-swamp-script-source-map-lookup = { path = "../source-map-lookup", version = "0.1.9" }
+swamp-script-core-extra = { path = "../core-extra", version = "0.1.10" }
+swamp-script-source-map-lookup = { path = "../source-map-lookup", version = "0.1.10" }
 squirrel-prng = "0.0.1"
 
 [dev-dependencies]

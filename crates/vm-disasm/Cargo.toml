@@ -1,6 +1,6 @@
 [package]
 name = "swamp-vm-disasm"
-version = "0.1.9"
+version = "0.1.10"
 edition = "2024"
 license = "MIT"
 description = "disassembler for the opcodes in the swamp vm"
@@ -8,6 +8,6 @@ repository = "https://github.com/swamp/script"
 
 
 [dependencies]
-swamp-vm-types = { path = "../vm-types", version = "0.1.9" }
+swamp-vm-types = { path = "../vm-types", version = "0.1.10" }
 yansi = "1.0.1"
 seq-map = "0.0.13"
