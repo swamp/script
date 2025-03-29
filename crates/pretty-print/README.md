@@ -6,7 +6,7 @@ Provides functions to format and display internal data structures from the [Swam
 
 This crate is a debugging and inspection tool for developers working on the Swamp compiler. It takes complex internal representations like the Abstract Semantic Graph (`swamp_semantic::Expression`), type structures (`swamp_types::Type`), symbol tables (`swamp_modules::SymbolTable`), etc., and formats them into indented, color-coded strings.
 
-It utilizes `swamp-source-map-lookup` to potentially include source text snippets and `yansi` for terminal colorization.
+It utilizes `swamp-source-map-lookup` to include source text snippets and `yansi` for terminal colorization.
 
 ## Key Features
 
@@ -17,8 +17,8 @@ It utilizes `swamp-source-map-lookup` to potentially include source text snippet
 
 ## Core Structures
 
-* **`SourceMapDisplay<'a>`:** A wrapper around a `SourceMapLookup` implementation that provides the core formatting methods.
-* **`SymbolTableDisplay<'a>`**, **`ExpressionDisplay<'a>`**, etc.: Wrapper structs that implement `std::fmt::Display` by using `SourceMapDisplay` to format the contained compiler structure.
+* **`SourceMapDisplay`:** A wrapper around a `SourceMapLookup` implementation that provides the core formatting methods.
+* **`SymbolTableDisplay`**, **`ExpressionDisplay`**, etc.: Wrapper structs that implement `std::fmt::Display` by using `SourceMapDisplay` to format the contained compiler structure.
 
 ## Installation
 
