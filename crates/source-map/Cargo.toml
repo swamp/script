@@ -8,6 +8,7 @@ description = "Source map cache for Swamp"
 
 [dependencies]
 seq-map = "0.0.13"
-tracing = "0.1.41"
-test-log = { version = "0.2.16", features = ["trace", "log", "color"] }
 pathdiff = "0.2.3"
+
+[dev-dependencies]
+test-log = { version = "0.2.16", features = ["trace", "log", "color"] }

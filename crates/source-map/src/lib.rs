@@ -7,7 +7,6 @@ use seq_map::SeqMap;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
-use tracing::trace;
 
 pub mod prelude;
 
@@ -185,20 +184,6 @@ impl SourceMap {
         let buf = self.to_file_system_path(mount_name, relative_path)?;
         self.read_file(&buf, mount_name)
     }
-
-    /*
-
-    fn to_relative_path(path: &ModulePath) -> RelativePath {
-        RelativePath(
-            path.0
-                .iter()
-                .map(|local_type_identifier| local_type_identifier.as_str())
-                .collect::<Vec<_>>()
-                .join("/"),
-        )
-    }
-
-     */
 
     fn to_file_system_path(&self, mount_name: &str, relative_path: &str) -> io::Result<PathBuf> {
         let base_path = self.base_path(mount_name).to_path_buf();

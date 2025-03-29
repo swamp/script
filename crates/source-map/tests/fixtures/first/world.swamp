@@ -1,9 +1,0 @@
-a = 3
-
-two_octets = "test:é{a}"
-three_octets = "test:日{a}"
-four_octets = "test: 🚀{a}"
-
-fn test(a: Int, b: Int) -> Int {
-    a + b
-}
