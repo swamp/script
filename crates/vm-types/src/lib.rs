@@ -66,8 +66,8 @@ impl FrameMemoryAddress {
         FrameMemoryAddress(self.0 + memory_offset.0)
     }
 }
-// relative to the frame pointer
 
+/// relative to the frame pointer
 impl FrameMemoryAddress {
     #[must_use]
     pub const fn add(&self, memory_size: MemorySize) -> Self {
