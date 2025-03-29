@@ -223,6 +223,7 @@ impl SymbolTable {
 
         Ok(())
     }
+
     /// # Errors
     ///
     pub fn add_blueprint(

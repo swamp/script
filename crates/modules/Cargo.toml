@@ -10,6 +10,6 @@ description = "Module support for Swamp"
 swamp-semantic = { path = "../semantic", version = "0.1.10" }
 swamp-types = { path = "../types", version = "0.1.10" }
 swamp-node = { path = "../node", version = "0.1.10" }
+
 seq-map = "0.0.13"
-tracing = "0.1.40"
 tiny-ver = "0.1.2"
