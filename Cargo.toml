@@ -1,47 +1,38 @@
 [workspace]
 resolver = "2"
 members = [
-    # Root crate
+    # Root orchestrator
     "crates/swamp",
-
-    # Parser
+    # Compile orchestrator
+    "crates/compile",
+    # Parser, AST
     "crates/ast",
     "crates/parser",
-
-    # Analyzer
+    # Analyzer, Semantic, ASG
     "crates/semantic",
+    "crates/types",
     "crates/analyzer",
-
-
+    # Dependency
+    "crates/modules",
     "crates/dep-loader",
     "crates/program-analyzer",
-
     # Core and Std
+    "crates/core",
     "crates/core-extra",
     "crates/std",
-
-    # "crates/extra", # Not used yet
     "crates/err",
-    "crates/compile",
-    "crates/modules",
+    # Debug
     "crates/pretty-print",
-    "crates/core",
-    "crates/types",
-
     # Code generator
     "crates/code-gen",
     "crates/code-gen-program",
-
-    # VM, move later
+    # VM, move to own repo in the far future
     "crates/vm",
     "crates/vm-test",
     "crates/vm-disasm",
     "crates/vm-types",
     "crates/vm-instr-build",
     "crates/vm-host",
-
-    # Evaluator
+    # Evaluator, hopefully soon deprecated
     "crates/eval",
-
-    # "crates/examples",
 ]
