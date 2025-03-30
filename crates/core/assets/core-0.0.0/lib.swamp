@@ -325,38 +325,110 @@ impl Vec<T> {
     }
 
     /// Creates a new collection by applying the lambda `transform` to each element.
+    ///
+    /// # Example
+    ///
+    /// ```
+	///	vec = [1, 2, 3, 4, 5]
+	///	result = vec.map<Point>(
+	///		|x|	Point::new(x+3, x*2)
+	///	)
+    /// ```
     fn map<R>(self, predicate: (T) -> R) -> Vec<R> {
         vec_map(self, predicate)
     }
 
     /// Creates a new collection containing only the elements for which the `predicate` returns `true`.
+    ///
+    /// # Example
+    ///
+    /// ```
+	///	vec = [1, 2, 3, 4, 5]
+	///	result = vec.filter(
+	///		|x|	x % 2 == 0
+	///	)
+    /// ```
     fn filter(self, predicate: (T) -> Bool) -> Vec<T> {
         vec_filter(self, predicate)
     }
 
     /// Returns a new collection for all `Some` values the predicate returned
+    ///
+    /// # Example
+    ///
+    /// ```
+	///	vec = [1, 2, 3, 4, 5]
+	///	result = vec.filter_map<Point>(
+	///		|x|	if x % 2 == 0 { Point::new(x+3, x) } else { none }
+	///	)
+    /// ```
     fn filter_map<R>(self, predicate: (T) -> R?) -> Vec<R> {
         vec_filter_map(self, predicate)
     }
 
     /// Returns the first element where predicate is `true`
+    ///
+    /// # Example
+    ///
+    /// ```
+	///	vec = [1, 2, 3, 4, 5]
+	///	result = vec.find(
+	///		|x| {
+	///			print('searching {x}')
+	///			x == 3
+	///		}
+	///	)
+    /// ```
     fn find(self, predicate: (T) -> Bool) -> T? {
         vec_find(self, predicate)
     }
 
     /// returns the first value where the predicate is `Some` (None otherwise)
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// vec = [1, 2, 3, 4, 5]
+    ///	result = vec.find_map<Point>(
+    ///     |x| {
+    ///		    if x > 3 {
+    ///			    Point::new(x+3, x)
+    ///			} else {
+    ///				none
+    ///			}
+    ///		}
+    ///	)
+    /// ```
     fn find_map<R>(self, predicate: (T) -> R?) -> R? {
         vec_find_map(self, predicate)
     }
 
     /// Returns `true` if at least one element satisfies the `predicate`.
     /// Returns `false` otherwise.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// vec = [1, 2, 3, 4, 5]
+	/// result2 = vec.any(
+	///		|x|	x > 5
+	///	)
+    /// ```
     fn any(self, predicate: (T) -> Bool) -> Bool {
         vec_any(self, predicate)
     }
 
     /// Returns `true` if all elements satisfy the `predicate`.
     /// Returns `false` otherwise.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// vec = [1, 2, 3, 4, 5]
+	/// result2 = vec.all(
+	///	    |x|	x <= 5
+	///	)
+    /// ```
     fn all(self, predicate: (T) -> Bool) -> Bool {
         vec_all(self, predicate)
     }
@@ -364,26 +436,69 @@ impl Vec<T> {
     /// Swaps the elements at the given indices `index_a` and `index_b`.
     /// Modifies the vector in place.
     /// Panics if either index is out of bounds.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// mut vec = [1, 2, 3, 4, 5]
+	/// vec.swamp(1, 4) // vec is modified to: [1, 5, 3, 4, 2]
+    /// ```
     fn swap(mut self, index_a: Int, index_b: Int) {
         vec_swap(mut self, index_a, index_b)
     }
 
     /// Inserts `element` at `index`, shifting subsequent elements to the right.
     /// Panics if `index > self.len()`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// mut vec = [1, 3, 4, 5]
+	/// vec.insert(1, 2) // vec is modified to: [1, 2, 3, 4, 5]
+    /// ```
     fn insert(mut self, index: Int, value: T) {
         vec_insert(mut self, index, value)
     }
-/*
-    /// Inserts at the first element. Maybe call it `unshift` or `insert_first` ?
-    /// Or is it needed at all?
+
+    /// Inserts at the first element
+    /// TODO: Evaluate if this is needed at all in the future?
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// mut vec = [2, 3, 4, 5]
+	/// vec.prepend(1) // vec is modified to: [1, 2, 3, 4, 5]
+    /// ```
     fn prepend(mut self, value: T) {
-        self.insert(0, value)
+        vec_insert(mut self, 0, value)
     }
-*/
+
+    /// Returns first element if it exists
+    ///
+    /// # Example
+    ///
+    /// ```
+	///	vec = [2, 3, 4, 5]
+	///	result = vec.first() // result is Option(2)
+    ///
+    ///	empty_vec: [Int] = []
+    ///	result = empty_vec.first() // result is none
+    /// ```
     fn first(self) -> T? {
         vec_first(self)
     }
 
+    /// Returns last element if it exists
+    ///
+    /// # Example
+    ///
+    /// ```
+	///	vec = [2, 3, 4, 5]
+	///	result = vec.last() // result is Option(5)
+    ///
+	///	empty_vec: [Int] = []
+	///	result = empty_vec.last() // result is none
+    /// ```
     fn last(self) -> T? {
         vec_last(self)
     }

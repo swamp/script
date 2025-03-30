@@ -1397,10 +1397,116 @@ impl<'a, C> Interpreter<'a, C> {
                 }
             },
 
+            IntrinsicFunction::VecIsEmpty => match &mut *value_ref.borrow_mut() {
+                Value::Vec(_type_id, vector) => Value::Bool(vector.len() == 0),
+                _ => Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, node))?,
+            },
+
+            IntrinsicFunction::VecPop => match &mut *value_ref.borrow_mut() {
+                Value::Vec(_type_id, vector) => {
+                    let maybe_val = vector.pop();
+                    if let Some(found_value) = maybe_val {
+                        found_value.borrow().clone()
+                    } else {
+                        return Err(self.create_err(RuntimeErrorKind::StackCouldNotBePopped, node));
+                    }
+                }
+                _ => Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, node))?,
+            },
+
+            IntrinsicFunction::VecSwap => match &mut *value_ref.borrow_mut() {
+                Value::Vec(_type_id, vector) => {
+                    let index_a = self.evaluate_expression(&arguments[0])?.expect_int()?;
+                    let index_b = self.evaluate_expression(&arguments[1])?.expect_int()?;
+
+                    if index_a < 0 || index_b < 0 {
+                        return Err(self.create_err(
+                            RuntimeErrorKind::VecIndexOutOfBoundsError {
+                                tried: index_a,
+                                size: vector.len(),
+                            },
+                            node,
+                        ));
+                    }
+
+                    let index_a_usize = index_a as usize;
+                    let index_b_usize = index_b as usize;
+
+                    if index_a_usize < vector.len() && index_b_usize < vector.len() {
+                        vector.swap(index_a_usize, index_b_usize);
+                    } else {
+                        return Err(self.create_err(
+                            RuntimeErrorKind::VecIndexOutOfBoundsError {
+                                tried: index_a,
+                                size: vector.len(),
+                            },
+                            node,
+                        ));
+                    }
+
+                    Value::Unit
+                }
+                _ => {
+                    return Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, node))?;
+                }
+            },
+
+            IntrinsicFunction::VecInsert => match &mut *value_ref.borrow_mut() {
+                Value::Vec(_type_id, vector) => {
+                    let index = self.evaluate_expression(&arguments[0])?.expect_int()?;
+                    let value_to_insert = self.evaluate_expression(&arguments[1])?;
+
+                    if index < 0 {
+                        return Err(self.create_err(
+                            RuntimeErrorKind::VecIndexOutOfBoundsError {
+                                tried: index,
+                                size: vector.len(),
+                            },
+                            node,
+                        ));
+                    }
+
+                    let index_usize = index as usize;
+
+                    if index_usize < vector.len() {
+                        vector.insert(index_usize, Rc::new(RefCell::new(value_to_insert)));
+                    } else {
+                        return Err(self.create_err(
+                            RuntimeErrorKind::VecIndexOutOfBoundsError {
+                                tried: index,
+                                size: vector.len(),
+                            },
+                            node,
+                        ));
+                    }
+
+                    Value::Unit
+                }
+                _ => {
+                    return Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, node))?;
+                }
+            },
+
             IntrinsicFunction::VecLen => match &mut *value_ref.borrow_mut() {
                 Value::Vec(_type_id, vector) => {
                     let length = vector.len();
                     Value::Int(length as i32)
+                }
+                _ => Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, node))?,
+            },
+
+            IntrinsicFunction::VecFirst => match &mut *value_ref.borrow_mut() {
+                Value::Vec(_type_id, vector) => {
+                    let maybe_first = vector.first();
+                    Value::Option(maybe_first.cloned())
+                }
+                _ => Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, node))?,
+            },
+
+            IntrinsicFunction::VecLast => match &mut *value_ref.borrow_mut() {
+                Value::Vec(_type_id, vector) => {
+                    let maybe_last = vector.last();
+                    Value::Option(maybe_last.cloned())
                 }
                 _ => Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, node))?,
             },
@@ -1648,22 +1754,6 @@ impl<'a, C> Interpreter<'a, C> {
 
                 Value::Bool(found)
             }
-
-            IntrinsicFunction::VecIsEmpty => match &mut *value_ref.borrow_mut() {
-                Value::Vec(_type_id, vector) => Value::Bool(vector.len() == 0),
-                _ => Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, node))?,
-            },
-            IntrinsicFunction::VecPop => match &mut *value_ref.borrow_mut() {
-                Value::Vec(_type_id, vector) => {
-                    let maybe_val = vector.pop();
-                    if let Some(found_value) = maybe_val {
-                        found_value.borrow().clone()
-                    } else {
-                        return Err(self.create_err(RuntimeErrorKind::StackCouldNotBePopped, node));
-                    }
-                }
-                _ => Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, node))?,
-            },
 
             IntrinsicFunction::MapCreate => Value::Map(Type::Unit, SeqMap::new()),
 
