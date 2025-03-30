@@ -568,6 +568,15 @@ impl Value {
 
     /// # Errors
     ///
+    pub fn expect_option_value(&self) -> Result<&Option<ValueRef>, ValueError> {
+        match self {
+            Self::Option(v) => Ok(v),
+            _ => Err(ValueError::ConversionError("Expected option value".into())),
+        }
+    }
+
+    /// # Errors
+    ///
     pub fn expect_int(&self) -> Result<i32, ValueError> {
         match self {
             Self::Int(v) => Ok(*v),

@@ -1507,6 +1507,100 @@ impl<'a, C> Interpreter<'a, C> {
                 Value::Vec(Type::Unit, result_vec)
             }
 
+            IntrinsicFunction::VecFilter => {
+                let (items, target_var_info, lambda_expression) =
+                    self.prepare_lambda_vec(value_ref, &arguments)?;
+
+                let mut result_vec = Vec::new();
+                for item in items {
+                    self.current_block_scopes
+                        .overwrite_existing_var(&target_var_info, item.borrow().clone())?;
+
+                    let bool_value = self
+                        .evaluate_expression(&lambda_expression)?
+                        .expect_bool()?;
+                    if bool_value {
+                        result_vec.push(item); // Rc::new(RefCell::new(item))
+                    }
+                }
+
+                self.clean_up_lambda();
+
+                Value::Vec(Type::Unit, result_vec)
+            }
+
+            IntrinsicFunction::VecFilterMap => {
+                let (items, target_var_info, lambda_expression) =
+                    self.prepare_lambda_vec(value_ref, &arguments)?;
+
+                let mut result_vec = Vec::new();
+                for item in items {
+                    self.current_block_scopes
+                        .overwrite_existing_var(&target_var_info, item.borrow().clone())?;
+
+                    let maybe_value = self
+                        .evaluate_expression(&lambda_expression)?
+                        .expect_option_value()?
+                        .clone();
+                    if let Some(found_value) = maybe_value {
+                        result_vec.push(found_value.clone());
+                    }
+                }
+
+                self.clean_up_lambda();
+
+                Value::Vec(Type::Unit, result_vec)
+            }
+
+            IntrinsicFunction::VecFind => {
+                let (items, target_var_info, lambda_expression) =
+                    self.prepare_lambda_vec(value_ref, &arguments)?;
+
+                let mut found: Option<ValueRef> = None;
+
+                for item in items {
+                    self.current_block_scopes
+                        .overwrite_existing_var(&target_var_info, item.borrow().clone())?;
+
+                    let bool_value = self
+                        .evaluate_expression(&lambda_expression)?
+                        .expect_bool()?;
+                    if bool_value {
+                        found = Some(item);
+                        break;
+                    }
+                }
+
+                self.clean_up_lambda();
+
+                Value::Option(found)
+            }
+
+            IntrinsicFunction::VecFindMap => {
+                let (items, target_var_info, lambda_expression) =
+                    self.prepare_lambda_vec(value_ref, &arguments)?;
+
+                let mut found: Option<ValueRef> = None;
+
+                for item in items {
+                    self.current_block_scopes
+                        .overwrite_existing_var(&target_var_info, item.borrow().clone())?;
+
+                    let maybe_value = self
+                        .evaluate_expression(&lambda_expression)?
+                        .expect_option_value()?
+                        .clone();
+                    if let Some(found_value) = maybe_value {
+                        found = Some(found_value);
+                        break;
+                    }
+                }
+
+                self.clean_up_lambda();
+
+                Value::Option(found)
+            }
+
             IntrinsicFunction::VecIsEmpty => match &mut *value_ref.borrow_mut() {
                 Value::Vec(_type_id, vector) => Value::Bool(vector.len() == 0),
                 _ => Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, node))?,
