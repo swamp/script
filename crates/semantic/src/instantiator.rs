@@ -140,6 +140,12 @@ impl Instantiator {
                         )?
                     };
 
+                    let generics_to_keep = if let Some(generic) = maybe_generic_signature {
+                        generic.generic_type_variables.clone()
+                    } else {
+                        vec![]
+                    };
+
                     let new_func = match &**func_ref {
                         Function::Internal(internal) => {
                             let func_ref = Rc::new(InternalFunctionDefinition {
@@ -148,10 +154,10 @@ impl Instantiator {
                                 assigned_name: format!("instantiated {func_name}"),
                                 signature: GenericAwareSignature {
                                     signature: new_signature.clone(),
-                                    generic_type_variables: vec![],
+                                    generic_type_variables: generics_to_keep,
                                 },
                                 variable_scopes: FunctionScopeState::new(
-                                    *new_signature.return_type.clone(),
+                                  //  *new_signature.return_type.clone(),
                                 ), // self.scope.clone(),
                                 function_scope_state: Vec::new(), // self.function_variables.clone(),
                                 program_unique_id: internal.program_unique_id,
@@ -253,7 +259,20 @@ impl Instantiator {
     ) -> Result<Signature, SemanticError> {
         info!(?signature, "instantiate generic signature");
         let scope_to_use = if !signature.generic_type_variables.is_empty() {
-            &scope.with_variables(&signature.generic_type_variables)?
+            let mut has_all_generics = true;
+
+            for required_types in &signature.generic_type_variables {
+                if !scope.type_variables_private.contains_key(&required_types.0) {
+                    has_all_generics = false;
+                    break;
+                }
+            }
+
+            if !has_all_generics {
+                &scope.with_variables(&signature.generic_type_variables)?
+            } else {
+                scope
+            }
         } else {
             scope
         };

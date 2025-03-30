@@ -90,7 +90,7 @@ impl Default for InternalFunctionDefinition {
                 },
                 generic_type_variables: vec![],
             },
-            variable_scopes: FunctionScopeState::new(Type::Unit),
+            variable_scopes: FunctionScopeState::new(),
             function_scope_state: Vec::new(),
             program_unique_id: 0,
         }
@@ -177,7 +177,7 @@ impl BlockScope {
 #[derive(Clone)]
 pub struct FunctionScopeState {
     pub block_scope_stack: Vec<BlockScope>,
-    pub return_type: Type,
+    //pub return_type: Type,
     pub variable_index: usize,
 }
 
@@ -200,10 +200,10 @@ impl FunctionScopeState {
 
 impl FunctionScopeState {
     #[must_use]
-    pub fn new(return_type: Type) -> Self {
+    pub fn new() -> Self {
         Self {
             block_scope_stack: vec![BlockScope::new()],
-            return_type,
+            //return_type,
             variable_index: 0,
         }
     }
@@ -394,6 +394,14 @@ impl Function {
         match self {
             Self::Internal(internal) => &internal.signature.signature,
             Self::External(external) => &external.signature,
+        }
+    }
+
+    #[must_use]
+    pub fn signatures(&self) -> (Option<&GenericAwareSignature>, &Signature) {
+        match self {
+            Self::Internal(internal) => (Some(&internal.signature), &internal.signature.signature),
+            Self::External(external) => (None, &external.signature),
         }
     }
 }

@@ -435,7 +435,7 @@ impl Analyzer<'_> {
                     Type::Unit
                 };
 
-                self.scope.return_type = return_type.clone();
+                // self.scope.return_type = return_type.clone();
 
                 // Set up scope for function body
                 for param in &parameters {
@@ -451,7 +451,7 @@ impl Analyzer<'_> {
                     .to_string();
                 let statements =
                     self.analyze_function_body_expression(&function_data.body, &return_type)?;
-                self.scope.return_type = Type::Unit;
+                //self.scope.return_type = Type::Unit;
 
                 let converted_generic_variables = function_data
                     .declaration
@@ -575,7 +575,7 @@ impl Analyzer<'_> {
             }
             swamp_ast::Definition::FunctionDef(function) => {
                 let resolved_return_type = self.analyze_return_type(function)?;
-                self.start_function(resolved_return_type);
+                self.start_function();
                 self.analyze_function_definition(function)?;
 
                 self.stop_function();
@@ -668,8 +668,8 @@ impl Analyzer<'_> {
             .prepare(attach_to_type);
 
         for function in functions {
-            let new_return_type = self.analyze_return_type(function)?;
-            self.start_function(new_return_type);
+            //let new_return_type = self.analyze_return_type(function)?;
+            self.start_function();
 
             let function_name = match function {
                 swamp_ast::Function::Internal(function_with_body) => {

@@ -21,8 +21,10 @@ use source_map_cache::SourceMap;
 use source_map_node::{FileId, Node, Span};
 use std::mem::take;
 use std::num::{ParseFloatError, ParseIntError};
+use std::ops::Deref;
 use swamp_modules::prelude::*;
 use swamp_modules::symtbl::{SymbolTableRef, TypeGeneratorKind};
+use swamp_semantic::instantiator::TypeVariableScope;
 use swamp_semantic::prelude::*;
 use swamp_semantic::type_var_stack::SemanticContext;
 use swamp_semantic::{
@@ -33,6 +35,7 @@ use swamp_semantic::{
 };
 use swamp_types::all_types_are_concrete_or_unit;
 use swamp_types::prelude::*;
+use tracing::info;
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum LocationSide {
@@ -210,17 +213,17 @@ impl<'a> Analyzer<'a> {
             type_variables: SemanticContext::default(),
         };
         Self {
-            scope: FunctionScopeState::new(Type::Unit),
-            global: FunctionScopeState::new(Type::Unit),
+            scope: FunctionScopeState::new(),
+            global: FunctionScopeState::new(),
             shared,
             module_path: module_path.to_vec(),
             function_variables: Vec::new(),
         }
     }
 
-    fn start_function(&mut self, return_type: Type) {
+    fn start_function(&mut self) {
         self.global.block_scope_stack = take(&mut self.scope.block_scope_stack);
-        self.scope = FunctionScopeState::new(return_type);
+        self.scope = FunctionScopeState::new();
         self.function_variables.clear();
     }
 
@@ -427,10 +430,9 @@ impl<'a> Analyzer<'a> {
         &mut self,
         ast_expression: &swamp_ast::Expression,
     ) -> Result<InternalMainExpression, Error> {
-        let expected_type = Type::Unit;
-        self.start_function(expected_type.clone());
+        self.start_function();
 
-        let context = TypeContext::new_argument(&expected_type);
+        let context = TypeContext::new_anything_argument();
         let analyzed_expr = self.analyze_expression(ast_expression, &context)?;
         let main_expr = InternalMainExpression {
             expression: analyzed_expr,
@@ -942,7 +944,7 @@ impl<'a> Analyzer<'a> {
                     tv.resolved_type = return_type.clone();
                     // keep previous `is_mutable`
                 }
-                swamp_ast::Postfix::MemberCall(member_name, _generic_arguments, ast_arguments) => {
+                swamp_ast::Postfix::MemberCall(member_name, generic_arguments, ast_arguments) => {
                     let member_name_str = self.get_text(member_name).to_string();
 
                     if let Some(_found_member) = self
@@ -956,6 +958,7 @@ impl<'a> Analyzer<'a> {
                             &tv.resolved_type,
                             tv.is_mutable,
                             member_name,
+                            generic_arguments.clone(),
                             ast_arguments,
                             &mut suffixes,
                         )?;
@@ -2257,9 +2260,40 @@ impl<'a> Analyzer<'a> {
         found_function: &FunctionRef,
         encountered_self_type: &Type,
         is_mutable: bool,
+        generic_arguments: &[Type],
         arguments: &[swamp_ast::MutableOrImmutableExpression],
     ) -> Result<Postfix, Error> {
-        let signature = found_function.signature();
+        let (maybe_generic, alternative_signature) = found_function.signatures();
+
+        let signature = if let Some(found_generic) = maybe_generic {
+            let mut seq_map = SeqMap::new();
+            if generic_arguments.len() != found_generic.generic_type_variables.len() {
+                return Err(self
+                    .create_err_resolved(ErrorKind::WrongNumberOfArguments(0, 0), resolved_node));
+            }
+            for (variable, generic_argument_type) in found_generic
+                .generic_type_variables
+                .iter()
+                .zip(generic_arguments)
+            {
+                info!(?variable, ?generic_argument_type, "SETTING VAR");
+                seq_map
+                    .insert(variable.0.to_string(), generic_argument_type.clone())
+                    .unwrap();
+            }
+            let scope = TypeVariableScope::new(seq_map);
+            let instantiated_signature = self
+                .shared
+                .state
+                .instantiator
+                .instantiate_generic_signature(encountered_self_type, found_generic, &scope)?
+                .clone();
+
+            info!(?instantiated_signature, "INSTANTIATED");
+            &instantiated_signature.clone()
+        } else {
+            alternative_signature
+        };
 
         let self_type = &signature.parameters[0];
         if !self_type
@@ -2292,12 +2326,23 @@ impl<'a> Analyzer<'a> {
         type_that_member_is_on: &Type,
         is_mutable: bool,
         member_name: &swamp_ast::Node,
+        ast_maybe_generic_arguments: Option<Vec<swamp_ast::Type>>,
         arguments: &[swamp_ast::MutableOrImmutableExpression],
         suffixes: &mut Vec<Postfix>,
     ) -> Result<Type, Error> {
         let field_name_str = self.get_text(member_name).to_string();
 
         let resolved_node = self.to_node(member_name);
+
+        let generic_arguments = if let Some(ast_generic_arguments) = ast_maybe_generic_arguments {
+            let mut resolved_types = Vec::new();
+            for ast_type in ast_generic_arguments {
+                resolved_types.push(self.analyze_type(&ast_type)?);
+            }
+            resolved_types
+        } else {
+            vec![]
+        };
 
         let maybe_function = self
             .shared
@@ -2314,6 +2359,7 @@ impl<'a> Analyzer<'a> {
                     &found_function_member,
                     type_that_member_is_on,
                     is_mutable,
+                    &generic_arguments,
                     arguments,
                 )?;
                 vec![postfix]
