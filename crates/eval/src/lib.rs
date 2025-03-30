@@ -1601,6 +1601,54 @@ impl<'a, C> Interpreter<'a, C> {
                 Value::Option(found)
             }
 
+            IntrinsicFunction::VecAny => {
+                let (items, target_var_info, lambda_expression) =
+                    self.prepare_lambda_vec(value_ref, &arguments)?;
+
+                let mut found = false;
+
+                for item in items {
+                    self.current_block_scopes
+                        .overwrite_existing_var(&target_var_info, item.borrow().clone())?;
+
+                    let bool_value = self
+                        .evaluate_expression(&lambda_expression)?
+                        .expect_bool()?;
+                    if bool_value {
+                        found = true;
+                        break;
+                    }
+                }
+
+                self.clean_up_lambda();
+
+                Value::Bool(found)
+            }
+
+            IntrinsicFunction::VecAll => {
+                let (items, target_var_info, lambda_expression) =
+                    self.prepare_lambda_vec(value_ref, &arguments)?;
+
+                let mut found = true;
+
+                for item in items {
+                    self.current_block_scopes
+                        .overwrite_existing_var(&target_var_info, item.borrow().clone())?;
+
+                    let bool_value = self
+                        .evaluate_expression(&lambda_expression)?
+                        .expect_bool()?;
+                    if !bool_value {
+                        found = false;
+                        break;
+                    }
+                }
+
+                self.clean_up_lambda();
+
+                Value::Bool(found)
+            }
+
             IntrinsicFunction::VecIsEmpty => match &mut *value_ref.borrow_mut() {
                 Value::Vec(_type_id, vector) => Value::Bool(vector.len() == 0),
                 _ => Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, node))?,
