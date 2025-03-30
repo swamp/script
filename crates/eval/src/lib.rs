@@ -1256,6 +1256,23 @@ impl<'a, C> Interpreter<'a, C> {
         Ok((variable_infos, expression))
     }
 
+    fn prepare_lambda_vec(
+        &mut self,
+        value_ref: ValueRef,
+        arguments: &[&Expression],
+    ) -> Result<(Vec<ValueRef>, VariableRef, Expression), RuntimeError> {
+        let (variables, lambda_expression) =
+            self.prepare_lambda_and_initialize_variables(&arguments)?;
+
+        let target_var_info = &variables[0];
+
+        let Value::Vec(_vec_type, items) = &mut *value_ref.borrow_mut() else {
+            panic!("borrow self");
+        };
+
+        Ok((items.to_vec(), target_var_info.clone(), lambda_expression))
+    }
+
     fn clean_up_lambda(&mut self) {
         self.pop_block_scope();
         self.push_function_scope(); // Hack since function scope will be popped when returning
@@ -1406,11 +1423,8 @@ impl<'a, C> Interpreter<'a, C> {
                 };
 
                 for item in items {
-                    self.current_block_scopes.overwrite_existing_var(
-                        target_var_info.scope_index,
-                        target_var_info.variable_index,
-                        item.borrow().clone(),
-                    )?;
+                    self.current_block_scopes
+                        .overwrite_existing_var(&target_var_info, item.borrow().clone())?;
 
                     self.evaluate_expression(&lambda_expression)?;
                 }
@@ -1430,11 +1444,8 @@ impl<'a, C> Interpreter<'a, C> {
                     panic!("borrow self");
                 };
                 for item in items {
-                    self.current_block_scopes.overwrite_existing_var(
-                        target_var_info.scope_index,
-                        target_var_info.variable_index,
-                        item.borrow().clone(),
-                    )?;
+                    self.current_block_scopes
+                        .overwrite_existing_var(target_var_info, item.borrow().clone())?;
 
                     let result = self.evaluate_expression(&lambda_expression)?;
                     let should_continue = result.expect_bool()?;
@@ -1460,11 +1471,8 @@ impl<'a, C> Interpreter<'a, C> {
 
                 let mut final_result = Value::Option(None);
                 for item in items {
-                    self.current_block_scopes.overwrite_existing_var(
-                        target_var_info.scope_index,
-                        target_var_info.variable_index,
-                        item.borrow().clone(),
-                    )?;
+                    self.current_block_scopes
+                        .overwrite_existing_var(target_var_info, item.borrow().clone())?;
 
                     let result = self.evaluate_expression(&lambda_expression)?;
                     let Value::Option(ref inner) = result else {
@@ -1479,6 +1487,24 @@ impl<'a, C> Interpreter<'a, C> {
                 self.clean_up_lambda();
 
                 final_result
+            }
+
+            IntrinsicFunction::VecMap => {
+                let (items, target_var_info, lambda_expression) =
+                    self.prepare_lambda_vec(value_ref, &arguments)?;
+
+                let mut result_vec = Vec::new();
+                for item in items {
+                    self.current_block_scopes
+                        .overwrite_existing_var(&target_var_info, item.borrow().clone())?;
+
+                    let result = self.evaluate_expression(&lambda_expression)?;
+                    result_vec.push(Rc::new(RefCell::new(result)));
+                }
+
+                self.clean_up_lambda();
+
+                Value::Vec(Type::Unit, result_vec)
             }
 
             IntrinsicFunction::VecIsEmpty => match &mut *value_ref.borrow_mut() {

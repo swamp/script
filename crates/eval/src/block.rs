@@ -260,11 +260,11 @@ impl BlockScopes {
     #[inline]
     pub fn overwrite_existing_var_ref(
         &mut self,
-        relative_scope_index: usize,
-        variable_index: usize,
+        variable: &VariableRef,
         new_value_ref: ValueRef,
     ) -> Result<(), RuntimeError> {
-        let existing_var = &mut self.current_block_scopes[relative_scope_index].get(variable_index);
+        let existing_var =
+            &mut self.current_block_scopes[variable.scope_index].get(variable.variable_index);
 
         match existing_var {
             VariableValue::Reference(_) => {
@@ -281,11 +281,11 @@ impl BlockScopes {
     #[inline]
     pub fn overwrite_existing_var(
         &mut self,
-        relative_scope_index: usize,
-        variable_index: usize,
+        variable: &VariableRef,
         new_value: Value,
     ) -> Result<(), RuntimeError> {
-        let existing_var = &mut self.current_block_scopes[relative_scope_index].get(variable_index);
+        let existing_var =
+            &mut self.current_block_scopes[variable.scope_index].get(variable.variable_index);
 
         match existing_var {
             VariableValue::Reference(r) => {
@@ -306,14 +306,10 @@ impl BlockScopes {
         variable_value: VariableValue,
     ) -> Result<(), RuntimeError> {
         match variable_value {
-            VariableValue::Reference(reference) => self.overwrite_existing_var_ref(
-                variable.scope_index,
-                variable.variable_index,
-                reference,
-            ),
-            VariableValue::Value(value) => {
-                self.overwrite_existing_var(variable.scope_index, variable.variable_index, value)
+            VariableValue::Reference(reference) => {
+                self.overwrite_existing_var_ref(variable, reference)
             }
+            VariableValue::Value(value) => self.overwrite_existing_var(variable, value),
         }
     }
 }
