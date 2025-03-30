@@ -897,7 +897,9 @@ impl<'a> Analyzer<'a> {
         if let ExpressionKind::IntrinsicFunctionAccess(some_access) = &start.kind {
             assert_eq!(chain.postfixes.len(), 1);
             let call_postifx = &chain.postfixes[0];
-            if let swamp_ast::Postfix::FunctionCall(_member, arguments) = &call_postifx {
+            if let swamp_ast::Postfix::FunctionCall(_member, _generic_arguments, arguments) =
+                &call_postifx
+            {
                 let resolved_arguments = self.analyze_and_verify_parameters(
                     &start.node,
                     &some_access.signature.parameters,
@@ -940,7 +942,7 @@ impl<'a> Analyzer<'a> {
                     tv.resolved_type = return_type.clone();
                     // keep previous `is_mutable`
                 }
-                swamp_ast::Postfix::MemberCall(member_name, ast_arguments) => {
+                swamp_ast::Postfix::MemberCall(member_name, _generic_arguments, ast_arguments) => {
                     let member_name_str = self.get_text(member_name).to_string();
 
                     if let Some(_found_member) = self
@@ -965,7 +967,7 @@ impl<'a> Analyzer<'a> {
                         return Err(self.create_err(ErrorKind::UnknownMemberFunction, member_name));
                     }
                 }
-                swamp_ast::Postfix::FunctionCall(node, arguments) => {
+                swamp_ast::Postfix::FunctionCall(node, _generic_arguments, arguments) => {
                     if let Type::Function(signature) = &tv.resolved_type {
                         let resolved_node = self.to_node(node);
                         let resolved_arguments = self.analyze_and_verify_parameters(
@@ -2050,11 +2052,11 @@ impl<'a> Analyzer<'a> {
                     }
                 }
 
-                swamp_ast::Postfix::MemberCall(node, _) => {
+                swamp_ast::Postfix::MemberCall(node, _generic_arguments, _regular_args) => {
                     return Err(self.create_err(ErrorKind::CallsCanNotBePartOfChain, node));
                 }
 
-                swamp_ast::Postfix::FunctionCall(node, _) => {
+                swamp_ast::Postfix::FunctionCall(node, _generic_arguments, _regular_args) => {
                     return Err(self.create_err(ErrorKind::CallsCanNotBePartOfChain, node));
                 }
                 swamp_ast::Postfix::OptionalChainingOperator(node) => {

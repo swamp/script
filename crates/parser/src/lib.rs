@@ -5,7 +5,7 @@
 pub mod prelude;
 
 use pest::error::{Error, ErrorVariant, InputLocation};
-use pest::iterators::Pair;
+use pest::iterators::{Pair, Pairs};
 use pest::{Parser, Position};
 use pest_derive::Parser;
 use std::iter::Peekable;
@@ -646,24 +646,21 @@ impl AstParser {
                         }
 
                         Rule::function_call_postfix => {
-                            let args = self.parse_function_call_postfix(&child)?;
+                            let (maybe_generics, args) =
+                                self.parse_function_call_postfix(&child)?;
                             let node = self.to_node(&op_pair);
-                            postfixes.push(Postfix::FunctionCall(node, args));
+                            postfixes.push(Postfix::FunctionCall(node, maybe_generics, args));
                         }
 
                         Rule::member_call_postfix => {
-                            let mut inner = child.into_inner();
+                            let (member_identifier, maybe_generics, args) =
+                                self.parse_member_call_postfix(&child)?;
 
-                            let member_access = Self::next_pair(&mut inner)?;
-                            debug_assert_eq!(member_access.as_rule(), Rule::member_access_postfix);
-                            let mut ma_inner = member_access.into_inner();
-                            let dot_id = Self::next_pair(&mut ma_inner)?;
-                            let member_identifier = self.parse_dot_identifier(&dot_id)?;
-
-                            let args_pair = Self::next_pair(&mut inner)?;
-                            let args = self.parse_function_call_arguments(&args_pair)?;
-
-                            postfixes.push(Postfix::MemberCall(member_identifier.0, args));
+                            postfixes.push(Postfix::MemberCall(
+                                member_identifier.0,
+                                maybe_generics,
+                                args,
+                            ));
                         }
 
                         Rule::member_access_postfix => {
@@ -708,6 +705,44 @@ impl AstParser {
             }),
             pair,
         ))
+    }
+
+    fn parse_member_call_postfix(
+        &self,
+        pair: &Pair<Rule>,
+    ) -> Result<
+        (
+            FieldName,
+            Option<Vec<Type>>,
+            Vec<MutableOrImmutableExpression>,
+        ),
+        ParseError,
+    > {
+        debug_assert_eq!(pair.as_rule(), Rule::member_call_postfix);
+
+        let mut inner = pair.clone().into_inner();
+
+        let member_access = Self::next_pair(&mut inner)?;
+        debug_assert_eq!(member_access.as_rule(), Rule::member_access_postfix);
+        let mut ma_inner = member_access.into_inner();
+        let dot_id = Self::next_pair(&mut ma_inner)?;
+        let member_identifier = self.parse_dot_identifier(&dot_id)?;
+
+        let mut generic_args: Option<Vec<Type>> = None;
+        // Peek at the next rule without consuming it
+        if let Some(peeked_pair) = inner.peek() {
+            if peeked_pair.as_rule() == Rule::generic_arguments {
+                let generic_args_pair = Self::next_pair(&mut inner)?;
+                generic_args = Some(self.parse_generic_arguments(&generic_args_pair)?);
+            }
+        } else {
+            panic!("shouldn't happen in member_call_postfix")
+        }
+
+        let args_pair = Self::next_pair(&mut inner)?;
+        let args = self.parse_function_call_arguments(&args_pair)?;
+
+        Ok((member_identifier, generic_args, args))
     }
 
     fn parse_type_def(&self, pair: &Pair<Rule>) -> Result<Definition, ParseError> {
@@ -1393,6 +1428,7 @@ impl AstParser {
 
     #[allow(clippy::too_many_lines)]
     fn parse_variable_definition(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
+        debug_assert_eq!(pair.as_rule(), Rule::variable_definition);
         let mut inner = pair.clone().into_inner();
         let variable_item = Self::next_pair(&mut inner)?;
         let found_var = self.parse_variable_item(&variable_item)?;
@@ -2196,6 +2232,7 @@ impl AstParser {
         &self,
         pair: &Pair<Rule>,
     ) -> Result<MutableOrImmutableExpression, ParseError> {
+        debug_assert_eq!(pair.as_rule(), Rule::mut_expression);
         // The mut_expression rule is defined as { lvalue | expression }.
         // Its inner pair will be one of those alternatives.
         let mut inner = pair.clone().into_inner();
@@ -2226,13 +2263,40 @@ impl AstParser {
         }
     }
 
+    fn assert_end(pairs: &mut Pairs<Rule>) {
+        assert!(pairs.next().is_none());
+    }
+
     fn parse_function_call_postfix(
         &self,
         pair: &Pair<Rule>,
-    ) -> Result<Vec<MutableOrImmutableExpression>, ParseError> {
+    ) -> Result<(Option<Vec<Type>>, Vec<MutableOrImmutableExpression>), ParseError> {
         debug_assert_eq!(pair.as_rule(), Rule::function_call_postfix);
         let mut inner = pair.clone().into_inner();
-        self.parse_function_call_arguments(&Self::next_pair(&mut inner)?)
+
+        let mut generic_args: Option<Vec<Type>> = None;
+        let args_pair: Pair<Rule>; // To hold the function_call_args pair
+
+        if let Some(first_inner) = inner.peek() {
+            if first_inner.as_rule() == Rule::generic_arguments {
+                let generic_args_pair = Self::next_pair(&mut inner)?;
+                generic_args = Some(self.parse_generic_arguments(&generic_args_pair)?);
+
+                args_pair = Self::next_pair(&mut inner)?;
+            } else {
+                args_pair = Self::next_pair(&mut inner)?;
+            }
+        } else {
+            panic!("problem in function_call_postfix");
+        }
+
+        debug_assert_eq!(args_pair.as_rule(), Rule::function_call_args);
+
+        let regular_args = self.parse_function_call_arguments(&args_pair)?;
+
+        Self::assert_end(&mut inner);
+
+        Ok((generic_args, regular_args))
     }
 
     fn parse_function_call_arguments(

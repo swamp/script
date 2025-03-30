@@ -143,9 +143,9 @@ postfix_op = {
   | member_access_postfix
 }
 
-member_call_postfix = ${ member_access_postfix ~ function_call_args }
+member_call_postfix = ${ member_access_postfix ~ generic_arguments? ~ function_call_args }
 // No whitespace allowed before this rule
-function_call_postfix = ${ function_call_args }
+function_call_postfix = ${ generic_arguments? ~ function_call_args }
 // No whitespace allowed before this rule
 
 function_call_args = {

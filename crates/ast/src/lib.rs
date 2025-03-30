@@ -401,8 +401,8 @@ impl Debug for Expression {
 pub enum Postfix {
     FieldAccess(Node),
     Subscript(Expression),
-    MemberCall(Node, Vec<MutableOrImmutableExpression>),
-    FunctionCall(Node, Vec<MutableOrImmutableExpression>),
+    MemberCall(Node, Option<Vec<Type>>, Vec<MutableOrImmutableExpression>),
+    FunctionCall(Node, Option<Vec<Type>>, Vec<MutableOrImmutableExpression>),
     OptionalChainingOperator(Node),     // ?-postfix
     NoneCoalescingOperator(Expression), // ??-postfix
 }
