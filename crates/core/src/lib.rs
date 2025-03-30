@@ -1048,6 +1048,36 @@ fn add_intrinsic_vec_functions(core_ns: &mut SymbolTable) {
             .unwrap();
     }
 
+    let mut_self_int_to_value = Signature {
+        parameters: [
+            TypeForParameter {
+                name: "self".to_string(),
+                resolved_type: Type::Never,
+                is_mutable: true,
+                node: None,
+            },
+            TypeForParameter {
+                name: "i".to_string(),
+                resolved_type: Type::Int,
+                is_mutable: false,
+                node: None,
+            },
+        ]
+        .into(),
+        return_type: Box::new(Type::Never),
+    };
+    let mut_self_int_to_value_functions = [IntrinsicFunction::VecRemoveIndexGetValue];
+    for intrinsic_fn in mut_self_int_to_value_functions {
+        let name = intrinsic_fn.to_string();
+        core_ns
+            .add_intrinsic_function(IntrinsicFunctionDefinition {
+                name,
+                intrinsic: intrinsic_fn,
+                signature: mut_self_int_to_value.clone(),
+            })
+            .unwrap();
+    }
+
     let self_int_to_unit_value = Signature {
         parameters: [
             TypeForParameter {
@@ -1066,9 +1096,37 @@ fn add_intrinsic_vec_functions(core_ns: &mut SymbolTable) {
         .into(),
         return_type: Box::new(Type::Unit),
     };
+    let self_int_to_unit_value_functions = [IntrinsicFunction::VecRemoveIndex];
+    for intrinsic_fn in self_int_to_unit_value_functions {
+        let name = intrinsic_fn.to_string();
+        core_ns
+            .add_intrinsic_function(IntrinsicFunctionDefinition {
+                name,
+                intrinsic: intrinsic_fn,
+                signature: self_int_to_unit_value.clone(),
+            })
+            .unwrap();
+    }
 
-    let self_int_to_optional_value_functions = [IntrinsicFunction::VecRemoveIndex];
-
+    let self_int_to_optional_value = Signature {
+        parameters: [
+            TypeForParameter {
+                name: "self".to_string(),
+                resolved_type: Type::Never,
+                is_mutable: false,
+                node: None,
+            },
+            TypeForParameter {
+                name: "i".to_string(),
+                resolved_type: Type::Int,
+                is_mutable: false,
+                node: None,
+            },
+        ]
+        .into(),
+        return_type: Box::new(Type::Optional(Box::new(Type::Never))),
+    };
+    let self_int_to_optional_value_functions = [IntrinsicFunction::VecGet];
     for intrinsic_fn in self_int_to_optional_value_functions {
         let name = intrinsic_fn.to_string();
         core_ns
@@ -1080,26 +1138,24 @@ fn add_intrinsic_vec_functions(core_ns: &mut SymbolTable) {
             .unwrap();
     }
 
-    let self_to_unit = Signature {
+    let mut_self_to_unit = Signature {
         parameters: [TypeForParameter {
             name: "self".to_string(),
             resolved_type: Type::Never,
-            is_mutable: false,
+            is_mutable: true,
             node: None,
         }]
         .into(),
         return_type: Box::new(Type::Unit),
     };
-
-    let self_to_unit_functions = [IntrinsicFunction::VecClear];
-
-    for intrinsic_fn in self_to_unit_functions {
+    let mut_self_to_unit_functions = [IntrinsicFunction::VecClear];
+    for intrinsic_fn in mut_self_to_unit_functions {
         let name = intrinsic_fn.to_string();
         core_ns
             .add_intrinsic_function(IntrinsicFunctionDefinition {
                 name,
                 intrinsic: intrinsic_fn,
-                signature: self_to_unit.clone(),
+                signature: mut_self_to_unit.clone(),
             })
             .unwrap();
     }

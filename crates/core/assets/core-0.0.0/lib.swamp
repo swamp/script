@@ -596,14 +596,14 @@ impl Vec<T> {
     ///
     /// Uses intrinsic function `vec_remove` to remove and return the element at the given index.
     fn remove(mut self, index: Int) {
-        vec_remove(mut self, index)
+        vec_remove_index(mut self, index)
     }
 
     /// Clears all elements.
     ///
     /// Uses intrinsic function `vec_clear` to remove all elements from the vector.
-    fn clear(self) {
-        vec_clear(self)
+    fn clear(mut self) {
+        vec_clear(mut self)
     }
 
     /// Gets the length of the vector.
@@ -965,8 +965,8 @@ impl Stack<T> {
     /// Clears all elements.
     ///
     /// Uses intrinsic function `vec_clear` to remove all elements from the vector.
-    fn clear(self) {
-        vec_clear(self)
+    fn clear(mut self) {
+        vec_clear(mut self)
     }
 
     /// Gets the length of the vector.
@@ -982,6 +982,53 @@ impl Stack<T> {
     fn is_empty(self) -> Bool {
         vec_is_empty(self)
     }
+}
+
+/// Represents a First-In, First-Out (FIFO) queue.
+/// TODO: Currently implemented using a Vec, in the future a much faster version will be created
+struct Queue<T>
+
+
+impl Queue<T> {
+    /// Creates a new, empty queue.
+	fn new() -> Queue<T> {
+		vec_create()
+	}
+
+    /// Adds an element to the back (end) of the queue.
+	fn enqueue(mut self, item: T) {
+		vec_push(mut self, item)
+	}
+
+    /// Removes and returns the element from the front of the queue.
+	fn dequeue(mut self) -> T {
+		vec_remove_index_get_value(mut self, 0)
+	}
+
+    /// Returns an optional reference to the element at the front of the queue
+    /// without removing it.
+	fn peek(self) -> T? {
+		if vec_is_empty(self) {
+			none
+		} else {
+			vec_subscript(self, 0)
+		}
+	}
+
+    /// Checks if the queue contains no elements.
+	fn is_empty(mut self) -> Bool {
+		vec_is_empty(self)
+	}
+
+    /// Returns the number of elements currently in the queue.
+	fn len(mut self) -> Int {
+		vec_len(self)
+	}
+
+    /// Removes all elements from the queue, making it empty.
+	fn clear(mut self) {
+		vec_clear(mut self)
+	}
 }
 
 struct Grid<T>

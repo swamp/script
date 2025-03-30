@@ -1352,6 +1352,18 @@ impl<'a, C> Interpreter<'a, C> {
                 Value::Unit
             }
 
+            IntrinsicFunction::VecRemoveIndexGetValue => {
+                let index_val = self.evaluate_expression(&arguments[0])?.expect_int()?;
+
+                match &mut *value_ref.borrow_mut() {
+                    Value::Vec(_type_id, vector) => {
+                        let item = vector.remove(index_val as usize);
+                        item.borrow().clone()
+                    }
+                    _ => Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, node))?,
+                }
+            }
+
             IntrinsicFunction::VecClear => {
                 match &mut *value_ref.borrow_mut() {
                     Value::Vec(_type_id, vector) => {
@@ -1368,6 +1380,8 @@ impl<'a, C> Interpreter<'a, C> {
                 let (slice_type, values) = value_ref.borrow().expect_slice()?;
                 Value::Vec(slice_type, values)
             }
+
+            IntrinsicFunction::VecCreate => Value::Vec(Type::Unit, vec![]),
 
             IntrinsicFunction::VecPush => {
                 match &mut *value_ref.borrow_mut() {
@@ -1398,6 +1412,17 @@ impl<'a, C> Interpreter<'a, C> {
                             node,
                         ));
                     }
+                }
+                _ => {
+                    return Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, node))?;
+                }
+            },
+
+            IntrinsicFunction::VecGet => match &mut *value_ref.borrow_mut() {
+                Value::Vec(_type_id, vector) => {
+                    let index_int = self.evaluate_expression(&arguments[0])?.expect_int()?;
+                    let maybe_value = vector.get(index_int as usize);
+                    Value::Option(maybe_value.cloned())
                 }
                 _ => {
                     return Err(self.create_err(RuntimeErrorKind::OperationRequiresArray, node))?;
