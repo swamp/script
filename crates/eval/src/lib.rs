@@ -1448,7 +1448,7 @@ impl<'a, C> Interpreter<'a, C> {
                 Value::Unit
             }
 
-            IntrinsicFunction::VecFind => {
+            IntrinsicFunction::VecFindMap => {
                 let (variables, lambda_expression) =
                     self.prepare_lambda_and_initialize_variables(&arguments)?;
 

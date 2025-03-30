@@ -417,7 +417,7 @@ impl FunctionCodeGen<'_> {
             IntrinsicFunction::VecIterMut => todo!(),
             IntrinsicFunction::VecFor => todo!(),
             IntrinsicFunction::VecWhile => todo!(),
-            IntrinsicFunction::VecFind => todo!(),
+            IntrinsicFunction::VecFindMap => todo!(),
             IntrinsicFunction::VecSelfPush => todo!(),
             IntrinsicFunction::VecSelfExtend => todo!(),
             IntrinsicFunction::VecLen => todo!(),
@@ -497,6 +497,17 @@ impl FunctionCodeGen<'_> {
 
             IntrinsicFunction::SparseAdd => todo!(),
             IntrinsicFunction::SparseNew => todo!(),
+            IntrinsicFunction::VecAny => todo!(),
+            IntrinsicFunction::VecAll => todo!(),
+            IntrinsicFunction::VecMap => todo!(),
+            IntrinsicFunction::VecFilter => todo!(),
+            IntrinsicFunction::VecFilterMap => todo!(),
+            IntrinsicFunction::VecFind => todo!(),
+            IntrinsicFunction::VecSwap => todo!(),
+            IntrinsicFunction::VecInsert => todo!(),
+            IntrinsicFunction::VecFirst => todo!(),
+            IntrinsicFunction::VecLast => todo!(),
+            IntrinsicFunction::VecFold => todo!(),
         }
     }
 
@@ -2108,7 +2119,7 @@ impl FunctionCodeGen<'_> {
             IntrinsicFunction::VecPop => todo!(),
             IntrinsicFunction::VecFor => todo!(),
             IntrinsicFunction::VecWhile => todo!(),
-            IntrinsicFunction::VecFind => todo!(),
+            IntrinsicFunction::VecFindMap => todo!(),
             IntrinsicFunction::VecRemoveIndex => todo!(),
             IntrinsicFunction::VecClear => todo!(),
             IntrinsicFunction::VecCreate => {
@@ -2124,6 +2135,7 @@ impl FunctionCodeGen<'_> {
             IntrinsicFunction::VecIsEmpty => todo!(),
             IntrinsicFunction::VecSelfPush => todo!(),
             IntrinsicFunction::VecSelfExtend => todo!(),
+            IntrinsicFunction::VecFold => todo!(),
 
             // Map
             IntrinsicFunction::MapCreate => todo!(),
@@ -2168,6 +2180,16 @@ impl FunctionCodeGen<'_> {
 
             // Other
             IntrinsicFunction::Float2Magnitude => todo!(),
+            IntrinsicFunction::VecAny => todo!(),
+            IntrinsicFunction::VecAll => todo!(),
+            IntrinsicFunction::VecMap => todo!(),
+            IntrinsicFunction::VecFilter => todo!(),
+            IntrinsicFunction::VecFilterMap => todo!(),
+            IntrinsicFunction::VecFind => todo!(),
+            IntrinsicFunction::VecSwap => todo!(),
+            IntrinsicFunction::VecInsert => todo!(),
+            IntrinsicFunction::VecFirst => todo!(),
+            IntrinsicFunction::VecLast => todo!(),
         };
 
         Ok(())

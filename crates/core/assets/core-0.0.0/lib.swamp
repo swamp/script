@@ -310,22 +310,87 @@ impl Vec<T> {
         vec_iter_mut(self)
     }
 
-    // maybe call it `for_each`?
-    fn for(self, block: (T) -> ()) {
-        vec_for(self, block)
+    /// loops through all elements
+    /// predicate is only for side effects
+    /// maybe call it `for_each`?
+    fn for(self, predicate: (T) -> ()) {
+        vec_for(self, predicate)
     }
 
+    /// keeps looping as long as predicate is true
+    /// predicate is only for side effects
     // maybe call it `take_while`?
-    fn while(self, block: (T) -> Bool) {
-        vec_while(self, block)
+    fn while(self, predicate: (T) -> Bool) {
+        vec_while(self, predicate)
     }
 
-    fn find_map<R>(self, block: (T) -> R?) -> R? {
-        vec_find(self, block)
+    /// Creates a new collection by applying the lambda `transform` to each element.
+    fn map<R>(self, predicate: (T) -> R) -> Vec<R> {
+        vec_map(self, predicate)
     }
 
-    fn find(self, block: (T) -> T?) -> T? {
-        vec_find(self, block)
+    /// Creates a new collection containing only the elements for which the `predicate` returns `true`.
+    fn filter(self, predicate: (T) -> Bool) -> Vec<T> {
+        vec_filter(self, predicate)
+    }
+
+    /// Returns a new collection for all `Some` values the predicate returned
+    fn filter_map<R>(self, predicate: (T) -> R?) -> Vec<R> {
+        vec_filter_map(self, predicate)
+    }
+
+    /// Returns the first element where predicate is `true`
+    fn find(self, predicate: (T) -> Bool) -> T? {
+        vec_find(self, predicate)
+    }
+
+    /// returns the first value where the predicate is `Some` (None otherwise)
+    fn find_map<R>(self, predicate: (T) -> R?) -> R? {
+        vec_find_map(self, predicate)
+    }
+
+    /// Returns `true` if at least one element satisfies the `predicate`.
+    /// Returns `false` otherwise.
+    fn any(self, predicate: (T) -> Bool) -> Bool {
+        vec_any(self, predicate)
+    }
+
+    /// Returns `true` if all elements satisfy the `predicate`.
+    /// Returns `false` otherwise.
+    fn all(self, predicate: (T) -> Bool) -> Bool {
+        vec_all(self, predicate)
+    }
+
+    /// Swaps the elements at the given indices `index_a` and `index_b`.
+    /// Modifies the vector in place.
+    /// Panics if either index is out of bounds.
+    fn swap(mut self, index_a: Int, index_b: Int) {
+        vec_swap(mut self, index_a, index_b)
+    }
+
+    /// Inserts `element` at `index`, shifting subsequent elements to the right.
+    /// Panics if `index > self.len()`.
+    fn insert(mut self, index: Int, value: T) {
+        vec_insert(mut self, index, value)
+    }
+/*
+    /// Inserts at the first element. Maybe call it `unshift` or `insert_first` ?
+    /// Or is it needed at all?
+    fn prepend(mut self, value: T) {
+        self.insert(0, value)
+    }
+*/
+    fn first(self) -> T? {
+        vec_first(self)
+    }
+
+    fn last(self) -> T? {
+        vec_last(self)
+    }
+
+    /// Folds the elements using an initial accumulator value and a combining lambda.
+    fn fold<R>(self, initial_value: R, combine: (R, T) -> R) -> R {
+        vec_fold(self, initial_value, combine)
     }
 
     /// Adds an element at the end of the vector.
