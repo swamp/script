@@ -22,7 +22,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-swamp-parser = "0.1.11"
+swamp-parser = "0.1.12"
 ```
 
 ## License

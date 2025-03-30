@@ -1,6 +1,6 @@
 [package]
 name = "swamp-code-gen"
-version = "0.1.11"
+version = "0.1.12"
 edition = "2024"
 license = "MIT"
 description = "generates swamp-vm opcodes"
@@ -8,13 +8,13 @@ repository = "https://github.com/swamp/swamp"
 
 [dependencies]
 # Swamp VM
-swamp-vm-types = { path = "../vm-types", version = "0.1.11" }
-swamp-vm-instr-build = { path = "../vm-instr-build", version = "0.1.11" }
-swamp-vm-disasm = { path = "../vm-disasm", version = "0.1.11" }
+swamp-vm-types = { path = "../vm-types", version = "0.1.12" }
+swamp-vm-instr-build = { path = "../vm-instr-build", version = "0.1.12" }
+swamp-vm-disasm = { path = "../vm-disasm", version = "0.1.12" }
 
 # Swamp
-swamp-semantic = { path = "../semantic", version = "0.1.11" }
-swamp-types = { path = "../types", version = "0.1.11" }
+swamp-semantic = { path = "../semantic", version = "0.1.12" }
+swamp-types = { path = "../types", version = "0.1.12" }
 
 # Source Map
 source-map-node = "0.0.1"
