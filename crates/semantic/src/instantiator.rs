@@ -14,11 +14,11 @@ use std::rc::Rc;
 use swamp_types::{
     AnonymousStructType, GenericAwareSignature, NamedStructType, ParameterizedTypeBlueprint,
     ParameterizedTypeBlueprintInfo, ParameterizedTypeKind, Signature, StructTypeField, Type,
-    TypeForParameter, all_types_are_concrete, all_types_are_concrete_or_unit,
+    TypeForParameter, TypeVariable, all_types_are_concrete, all_types_are_concrete_or_unit,
 };
 use tracing::info;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TypeVariableScope {
     type_variables_private: SeqMap<String, Type>,
 }
@@ -29,6 +29,19 @@ impl TypeVariableScope {
         Self {
             type_variables_private: scope,
         }
+    }
+
+    pub fn with_variables(
+        &self,
+        type_variables: &[TypeVariable],
+    ) -> Result<TypeVariableScope, SemanticError> {
+        let mut new_scope = self.clone();
+
+        for type_variable in type_variables {
+            new_scope.add_type_variable(&type_variable.0)?;
+        }
+
+        Ok(new_scope)
     }
 
     /// # Errors
@@ -108,11 +121,25 @@ impl Instantiator {
                 .cloned();
             if let Some(found_member_functions) = maybe_member_functions {
                 for (func_name, func_ref) in &found_member_functions.functions {
-                    let new_signature = self.instantiate_signature(
-                        &instantiated_type,
-                        func_ref.signature(),
-                        &scope,
-                    )?;
+                    let maybe_generic_signature = match &**func_ref {
+                        Function::Internal(internal) => Some(&internal.signature),
+                        _ => None,
+                    };
+
+                    let new_signature = if let Some(generic_signature) = &maybe_generic_signature {
+                        self.instantiate_generic_signature(
+                            &instantiated_type,
+                            &generic_signature,
+                            &scope,
+                        )?
+                    } else {
+                        self.instantiate_signature(
+                            &instantiated_type,
+                            func_ref.signature(),
+                            &scope,
+                        )?
+                    };
+
                     let new_func = match &**func_ref {
                         Function::Internal(internal) => {
                             let func_ref = Rc::new(InternalFunctionDefinition {
@@ -218,6 +245,24 @@ impl Instantiator {
 
     /// # Errors
     ///
+    pub fn instantiate_generic_signature(
+        &mut self,
+        self_type: &Type,
+        signature: &GenericAwareSignature,
+        scope: &TypeVariableScope,
+    ) -> Result<Signature, SemanticError> {
+        info!(?signature, "instantiate generic signature");
+        let scope_to_use = if !signature.generic_type_variables.is_empty() {
+            &scope.with_variables(&signature.generic_type_variables)?
+        } else {
+            scope
+        };
+
+        self.instantiate_signature(self_type, &signature.signature, scope_to_use)
+    }
+
+    /// # Errors
+    ///
     pub fn instantiate_signature(
         &mut self,
         self_type: &Type,
@@ -225,6 +270,7 @@ impl Instantiator {
         scope: &TypeVariableScope,
     ) -> Result<Signature, SemanticError> {
         let mut instantiated_type_for_parameters = Vec::new();
+
         for type_for_parameter in &signature.parameters {
             let resolved = self.instantiate_type_in_signature(
                 self_type,
@@ -316,7 +362,7 @@ impl Instantiator {
                             info!(?type_variable, "could not get");
                             SemanticError::UnknownTypeVariable
                         })?;
-                assert!(found_type.is_concrete());
+                // TODO: Add check for concrete or placeholder                assert!(found_type.is_concrete());
                 found_type.clone()
             }
 

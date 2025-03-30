@@ -320,11 +320,9 @@ impl Vec<T> {
         vec_while(self, block)
     }
 
-/*
     fn find_map<R>(self, block: (T) -> R?) {
         vec_find(self, block)
     }
-*/
 
     fn find(self, block: (T) -> T?) -> T? {
         vec_find(self, block)

@@ -10,6 +10,7 @@ use swamp_semantic::{
     ExternalFunctionDefinition, Function, InternalFunctionDefinition, LocalIdentifier,
     SemanticError, UseItem,
 };
+use swamp_types::TypeVariable;
 use swamp_types::prelude::*;
 use swamp_types::{GenericAwareSignature, ParameterizedTypeBlueprint, ParameterizedTypeKind};
 
@@ -452,13 +453,23 @@ impl Analyzer<'_> {
                     self.analyze_function_body_expression(&function_data.body, &return_type)?;
                 self.scope.return_type = Type::Unit;
 
+                let converted_generic_variables = function_data
+                    .declaration
+                    .generic_variables
+                    .iter()
+                    .map(|ast_variable| {
+                        let name_str = self.get_text(&ast_variable.0).to_string();
+                        TypeVariable(name_str)
+                    })
+                    .collect();
+
                 let internal = InternalFunctionDefinition {
                     signature: GenericAwareSignature {
                         signature: Signature {
                             parameters,
                             return_type: Box::new(return_type),
                         },
-                        generic_type_variables: vec![],
+                        generic_type_variables: converted_generic_variables,
                     },
                     body: statements,
                     name: LocalIdentifier(self.to_node(&function_data.declaration.name)),
@@ -767,13 +778,23 @@ impl Analyzer<'_> {
                     self.shared.type_variables.pop_type_scope();
                 }
 
+                let converted_generic_variables = function_data
+                    .declaration
+                    .generic_variables
+                    .iter()
+                    .map(|ast_variable| {
+                        let name_str = self.get_text(&ast_variable.0).to_string();
+                        TypeVariable(name_str)
+                    })
+                    .collect();
+
                 let internal = InternalFunctionDefinition {
                     signature: GenericAwareSignature {
                         signature: Signature {
                             parameters,
                             return_type: Box::new(return_type),
                         },
-                        generic_type_variables: vec![],
+                        generic_type_variables: converted_generic_variables,
                     },
                     body: statements,
                     name: LocalIdentifier(self.to_node(&function_data.declaration.name)),
