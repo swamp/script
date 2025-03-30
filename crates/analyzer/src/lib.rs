@@ -2254,73 +2254,6 @@ impl<'a> Analyzer<'a> {
         }
     }
 
-    fn analyze_postfix_member_func_call(
-        &mut self,
-        resolved_node: &Node,
-        found_function: &FunctionRef,
-        encountered_self_type: &Type,
-        is_mutable: bool,
-        generic_arguments: &[Type],
-        arguments: &[swamp_ast::MutableOrImmutableExpression],
-    ) -> Result<Postfix, Error> {
-        let (maybe_generic, alternative_signature) = found_function.signatures();
-
-        let signature = if let Some(found_generic) = maybe_generic {
-            let mut seq_map = SeqMap::new();
-            if generic_arguments.len() != found_generic.generic_type_variables.len() {
-                return Err(self
-                    .create_err_resolved(ErrorKind::WrongNumberOfArguments(0, 0), resolved_node));
-            }
-            for (variable, generic_argument_type) in found_generic
-                .generic_type_variables
-                .iter()
-                .zip(generic_arguments)
-            {
-                info!(?variable, ?generic_argument_type, "SETTING VAR");
-                seq_map
-                    .insert(variable.0.to_string(), generic_argument_type.clone())
-                    .unwrap();
-            }
-            let scope = TypeVariableScope::new(seq_map);
-            let instantiated_signature = self
-                .shared
-                .state
-                .instantiator
-                .instantiate_generic_signature(encountered_self_type, found_generic, &scope)?
-                .clone();
-
-            info!(?instantiated_signature, "INSTANTIATED");
-            &instantiated_signature.clone()
-        } else {
-            alternative_signature
-        };
-
-        let self_type = &signature.parameters[0];
-        if !self_type
-            .resolved_type
-            .compatible_with(encountered_self_type)
-            || self_type.is_mutable && !is_mutable
-        {
-            return Err(self.create_err_resolved(ErrorKind::SelfNotCorrectType, resolved_node));
-        }
-
-        let resolved_arguments = self.analyze_and_verify_parameters(
-            resolved_node,
-            &signature.parameters[1..],
-            arguments,
-        )?;
-
-        let kind = PostfixKind::MemberCall(found_function.clone(), resolved_arguments);
-
-        let postfix = Postfix {
-            node: resolved_node.clone(),
-            ty: *signature.return_type.clone(),
-            kind,
-        };
-
-        Ok(postfix)
-    }
-
     fn analyze_postfix_member_call(
         &mut self,
         type_that_member_is_on: &Type,
@@ -2352,25 +2285,67 @@ impl<'a> Analyzer<'a> {
             .get_member_function(type_that_member_is_on, &field_name_str)
             .cloned();
 
-        let postfixes = match maybe_function {
-            Some(found_function_member) => {
-                let postfix = self.analyze_postfix_member_func_call(
-                    &resolved_node,
-                    &found_function_member,
-                    type_that_member_is_on,
-                    is_mutable,
-                    &generic_arguments,
-                    arguments,
-                )?;
-                vec![postfix]
-            }
-            _ => {
-                return Err(self.create_err(ErrorKind::NotValidLocationStartingPoint, member_name));
-            } // TODO: Support function calls
+        let Some(found_function) = maybe_function else {
+            return Err(self.create_err(ErrorKind::NotValidLocationStartingPoint, member_name));
         };
 
-        let last_type = postfixes.last().unwrap().ty.clone();
-        suffixes.extend(postfixes);
+        let (maybe_generic, alternative_signature) = found_function.signatures();
+
+        let signature = if let Some(found_generic) = maybe_generic {
+            let mut seq_map = SeqMap::new();
+            if generic_arguments.len() != found_generic.generic_type_variables.len() {
+                return Err(self
+                    .create_err_resolved(ErrorKind::WrongNumberOfArguments(0, 0), &resolved_node));
+            }
+            for (variable, generic_argument_type) in found_generic
+                .generic_type_variables
+                .iter()
+                .zip(generic_arguments)
+            {
+                info!(?variable, ?generic_argument_type, "SETTING VAR");
+                seq_map
+                    .insert(variable.0.to_string(), generic_argument_type.clone())
+                    .unwrap();
+            }
+            let scope = TypeVariableScope::new(seq_map);
+            let instantiated_signature = self
+                .shared
+                .state
+                .instantiator
+                .instantiate_generic_signature(type_that_member_is_on, found_generic, &scope)?
+                .clone();
+
+            info!(?instantiated_signature, "INSTANTIATED");
+            &instantiated_signature.clone()
+        } else {
+            alternative_signature
+        };
+
+        let self_type = &signature.parameters[0];
+        if !self_type
+            .resolved_type
+            .compatible_with(type_that_member_is_on)
+            || self_type.is_mutable && !is_mutable
+        {
+            return Err(self.create_err_resolved(ErrorKind::SelfNotCorrectType, &resolved_node));
+        }
+
+        let resolved_arguments = self.analyze_and_verify_parameters(
+            &resolved_node,
+            &signature.parameters[1..],
+            arguments,
+        )?;
+
+        let kind = PostfixKind::MemberCall(found_function.clone(), resolved_arguments);
+
+        let postfix = Postfix {
+            node: resolved_node.clone(),
+            ty: *signature.return_type.clone(),
+            kind,
+        };
+
+        let last_type = postfix.ty.clone();
+        suffixes.push(postfix);
 
         Ok(last_type)
     }

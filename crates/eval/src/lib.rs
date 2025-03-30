@@ -1224,9 +1224,9 @@ impl<'a, C> Interpreter<'a, C> {
 
     fn prepare_lambda(
         &mut self,
-        arguments: &[&Expression],
+        lambda_value_expression: &Expression,
     ) -> Result<(Vec<VariableRef>, Expression), RuntimeError> {
-        let lambda_value = self.evaluate_expression(arguments[0])?;
+        let lambda_value = self.evaluate_expression(lambda_value_expression)?;
         let Value::Lambda(variables, lambda_expression) = lambda_value else {
             panic!("need lambda value");
         };
@@ -1240,9 +1240,9 @@ impl<'a, C> Interpreter<'a, C> {
 
     fn prepare_lambda_and_initialize_variables(
         &mut self,
-        arguments: &[&Expression],
+        lambda_value_expression: &Expression,
     ) -> Result<(Vec<VariableRef>, Expression), RuntimeError> {
-        let (variable_infos, expression) = self.prepare_lambda(arguments)?;
+        let (variable_infos, expression) = self.prepare_lambda(lambda_value_expression)?;
 
         for target_var_info in &variable_infos {
             self.current_block_scopes.initialize_var(
@@ -1261,16 +1261,47 @@ impl<'a, C> Interpreter<'a, C> {
         value_ref: ValueRef,
         arguments: &[&Expression],
     ) -> Result<(Vec<ValueRef>, VariableRef, Expression), RuntimeError> {
-        let (variables, lambda_expression) =
-            self.prepare_lambda_and_initialize_variables(&arguments)?;
+        let (vector_elements, target_variables, lambda_expression) =
+            self.prepare_lambda_vec_ex(value_ref, arguments[0])?;
 
-        let target_var_info = &variables[0];
+        debug_assert_eq!(target_variables.len(), 1);
+        Ok((
+            vector_elements,
+            target_variables[0].clone(),
+            lambda_expression,
+        ))
+    }
+
+    fn prepare_lambda_vec_pair_lambda_as_second_param(
+        &mut self,
+        value_ref: ValueRef,
+        arguments: &[&Expression],
+    ) -> Result<(Vec<ValueRef>, VariableRef, VariableRef, Expression), RuntimeError> {
+        let (vector_elements, target_variables, lambda_expression) =
+            self.prepare_lambda_vec_ex(value_ref, &arguments[1])?;
+
+        debug_assert_eq!(target_variables.len(), 2);
+        Ok((
+            vector_elements,
+            target_variables[0].clone(),
+            target_variables[1].clone(),
+            lambda_expression,
+        ))
+    }
+
+    fn prepare_lambda_vec_ex(
+        &mut self,
+        value_ref: ValueRef,
+        lambda_value_expression: &Expression,
+    ) -> Result<(Vec<ValueRef>, Vec<VariableRef>, Expression), RuntimeError> {
+        let (variables, lambda_expression) =
+            self.prepare_lambda_and_initialize_variables(&lambda_value_expression)?;
 
         let Value::Vec(_vec_type, items) = &mut *value_ref.borrow_mut() else {
             panic!("borrow self");
         };
 
-        Ok((items.to_vec(), target_var_info.clone(), lambda_expression))
+        Ok((items.to_vec(), variables, lambda_expression))
     }
 
     fn clean_up_lambda(&mut self) {
@@ -1513,7 +1544,7 @@ impl<'a, C> Interpreter<'a, C> {
 
             IntrinsicFunction::VecFor => {
                 let (variables, lambda_expression) =
-                    self.prepare_lambda_and_initialize_variables(&*arguments)?;
+                    self.prepare_lambda_and_initialize_variables(&*arguments[0])?;
 
                 let target_var_info = &variables[0];
 
@@ -1542,7 +1573,7 @@ impl<'a, C> Interpreter<'a, C> {
 
             IntrinsicFunction::VecWhile => {
                 let (variables, lambda_expression) =
-                    self.prepare_lambda_and_initialize_variables(&arguments)?;
+                    self.prepare_lambda_and_initialize_variables(&arguments[0])?;
 
                 let target_var_info = &variables[0];
 
@@ -1567,7 +1598,7 @@ impl<'a, C> Interpreter<'a, C> {
 
             IntrinsicFunction::VecFindMap => {
                 let (variables, lambda_expression) =
-                    self.prepare_lambda_and_initialize_variables(&arguments)?;
+                    self.prepare_lambda_and_initialize_variables(&arguments[0])?;
 
                 let target_var_info = &variables[0];
 
@@ -1611,6 +1642,30 @@ impl<'a, C> Interpreter<'a, C> {
                 self.clean_up_lambda();
 
                 Value::Vec(Type::Unit, result_vec)
+            }
+
+            IntrinsicFunction::VecFold => {
+                // Must be first, after this the call stack is modified
+                let mut last_value = self.evaluate_expression(arguments[0])?;
+
+                let (items, target_left_var, target_right_var, lambda_expression) =
+                    self.prepare_lambda_vec_pair_lambda_as_second_param(value_ref, &arguments)?;
+
+                eprintln!("arguments: {arguments:?}");
+
+                for item in items {
+                    self.current_block_scopes
+                        .overwrite_existing_var(&target_left_var, last_value)?;
+
+                    self.current_block_scopes
+                        .overwrite_existing_var(&target_right_var, item.borrow().clone())?;
+
+                    last_value = self.evaluate_expression(&lambda_expression)?;
+                }
+
+                self.clean_up_lambda();
+
+                last_value
             }
 
             IntrinsicFunction::VecFilter => {
