@@ -1651,8 +1651,6 @@ impl<'a, C> Interpreter<'a, C> {
                 let (items, target_left_var, target_right_var, lambda_expression) =
                     self.prepare_lambda_vec_pair_lambda_as_second_param(value_ref, &arguments)?;
 
-                eprintln!("arguments: {arguments:?}");
-
                 for item in items {
                     self.current_block_scopes
                         .overwrite_existing_var(&target_left_var, last_value)?;

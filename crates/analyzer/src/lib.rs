@@ -2315,7 +2315,6 @@ impl<'a> Analyzer<'a> {
                 .instantiate_generic_signature(type_that_member_is_on, found_generic, &scope)?
                 .clone();
 
-            info!(?instantiated_signature, "INSTANTIATED");
             &instantiated_signature.clone()
         } else {
             alternative_signature

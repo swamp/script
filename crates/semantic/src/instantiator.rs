@@ -257,7 +257,6 @@ impl Instantiator {
         signature: &GenericAwareSignature,
         scope: &TypeVariableScope,
     ) -> Result<Signature, SemanticError> {
-        info!(?signature, "instantiate generic signature");
         let scope_to_use = if !signature.generic_type_variables.is_empty() {
             let mut has_all_generics = true;
 

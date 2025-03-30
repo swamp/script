@@ -504,6 +504,16 @@ impl Vec<T> {
     }
 
     /// Folds the elements using an initial accumulator value and a combining lambda.
+    ///
+    /// # Example
+    ///
+    /// ```
+    ///	vec = [1, 2, 3, 4, 5]
+    ///	sum = vec.fold<Point>(Point::new(0, 0), |acc, x| {
+    ///		print('x: {x} sum now: {acc} ')
+    ///		Point::new(acc.x + x, 0)
+    ///	})
+    ///	```
     fn fold<R>(self, initial_value: R, combine: (R, T) -> R) -> R {
         vec_fold(self, initial_value, combine)
     }
