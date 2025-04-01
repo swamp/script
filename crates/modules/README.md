@@ -17,7 +17,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-swamp-modules = "0.0.14"
+swamp-modules = "0.1.14"
 ```
 
 ## License
