@@ -114,6 +114,7 @@ pub enum IntrinsicFunction {
     VecLen,
     VecIsEmpty,
     SparseNew,
+    RuntimePanic,
 }
 
 pub type IntrinsicFunctionDefinitionRef = Rc<IntrinsicFunctionDefinition>;
@@ -232,6 +233,7 @@ impl fmt::Display for IntrinsicFunction {
 
             // Other
             Self::Float2Magnitude => "float2_magnitude",
+            Self::RuntimePanic => "runtime_panic",
         };
 
         write!(f, "{name}")

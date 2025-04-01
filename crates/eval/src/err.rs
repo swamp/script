@@ -57,4 +57,5 @@ pub enum RuntimeErrorKind {
     CouldNotConvertFromSignal,
     UnknownMutIntrinsic,
     UnknownGenericIntrinsic,
+    Panic(String),
 }

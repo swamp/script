@@ -510,6 +510,8 @@ impl FunctionCodeGen<'_> {
             IntrinsicFunction::VecFirst => todo!(),
             IntrinsicFunction::VecLast => todo!(),
             IntrinsicFunction::VecFold => todo!(),
+
+            IntrinsicFunction::RuntimePanic => todo!(),
         }
     }
 
@@ -2207,6 +2209,7 @@ impl FunctionCodeGen<'_> {
             IntrinsicFunction::VecInsert => todo!(),
             IntrinsicFunction::VecFirst => todo!(),
             IntrinsicFunction::VecLast => todo!(),
+            IntrinsicFunction::RuntimePanic => todo!(),
         };
 
         Ok(())

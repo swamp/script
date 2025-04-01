@@ -66,6 +66,9 @@ pub fn build_runtime_error(err: &RuntimeError) -> Builder<usize> {
         &RuntimeErrorKind::UnknownMutIntrinsic | &RuntimeErrorKind::UnknownGenericIntrinsic => {
             todo!()
         }
+        RuntimeErrorKind::Panic(panic_message) => {
+            Report::build(Kind::Error, 999, "panic ", span).with_note(panic_message)
+        }
     };
 
     b.error_module = "R".to_string();

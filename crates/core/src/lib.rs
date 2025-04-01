@@ -51,6 +51,31 @@ fn add_intrinsic_functions(core_ns: &mut SymbolTable) {
     add_intrinsic_map_functions(core_ns);
     add_intrinsic_map2_functions(core_ns);
     add_intrinsic_sparse_functions(core_ns);
+    add_intrinsic_debug_functions(core_ns);
+}
+
+fn add_intrinsic_debug_functions(core_ns: &mut SymbolTable) {
+    let string_unit = Signature {
+        parameters: [TypeForParameter {
+            name: "v".to_string(),
+            resolved_type: Type::Never,
+            is_mutable: false,
+            node: None,
+        }]
+        .into(),
+        return_type: Box::new(Type::Unit),
+    };
+    let string_unit_functions = [IntrinsicFunction::RuntimePanic];
+    for intrinsic_fn in string_unit_functions {
+        let name = intrinsic_fn.to_string();
+        core_ns
+            .add_intrinsic_function(IntrinsicFunctionDefinition {
+                name,
+                intrinsic: intrinsic_fn,
+                signature: string_unit.clone(),
+            })
+            .unwrap();
+    }
 }
 
 #[allow(clippy::too_many_lines)]

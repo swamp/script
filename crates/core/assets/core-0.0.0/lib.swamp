@@ -1138,3 +1138,25 @@ impl MutIterator<T> {
     }
 }
 */
+
+
+/// Immediately terminates program execution with an error message
+///
+/// # Parameters
+/// - `message`: The error message to display
+///
+/// Uses intrinsic function `runtime_panic` to terminate execution.
+fn panic(message: String) {
+    runtime_panic(message)
+}
+
+/// Asserts that a condition is true, panics with a message if false
+///
+/// # Parameters
+/// - `condition`: The condition to check
+/// - `message`: The error message to display if condition is false
+fn assert(condition: Bool, message: String) {
+    if !condition {
+        panic(message)
+    }
+}

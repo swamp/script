@@ -2366,7 +2366,29 @@ impl<'a, C> Interpreter<'a, C> {
                     return Err(self.create_err(RuntimeErrorKind::ExpectedTwoFloatTuple, node));
                 }
             },
-            _ => todo!("{intrinsic_function:?} not implemented"),
+
+            IntrinsicFunction::VecSubscriptMut => todo!(),
+            IntrinsicFunction::VecIter => todo!(),
+            IntrinsicFunction::VecIterMut => todo!(),
+            IntrinsicFunction::VecSelfPush => todo!(),
+            IntrinsicFunction::VecSelfExtend => todo!(),
+            IntrinsicFunction::MapIter => todo!(),
+            IntrinsicFunction::MapIterMut => todo!(),
+            IntrinsicFunction::MapSubscriptSet => todo!(),
+            IntrinsicFunction::MapSubscriptMut => todo!(),
+            IntrinsicFunction::MapSubscriptMutCreateIfNeeded => todo!(),
+            IntrinsicFunction::SparseCreate => todo!(),
+            IntrinsicFunction::SparseFromSlice => todo!(),
+            IntrinsicFunction::SparseIter => todo!(),
+            IntrinsicFunction::SparseIterMut => todo!(),
+            IntrinsicFunction::SparseSubscriptMut => todo!(),
+            IntrinsicFunction::SparseHas => todo!(),
+            IntrinsicFunction::GridFromSlice => todo!(),
+            IntrinsicFunction::SparseNew => todo!(),
+            IntrinsicFunction::RuntimePanic => {
+                let panic_string = value_ref.borrow().expect_string()?;
+                return Err(self.create_err(RuntimeErrorKind::Panic(panic_string), node));
+            }
         };
 
         Ok(val)
