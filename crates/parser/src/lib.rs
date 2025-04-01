@@ -11,6 +11,7 @@ use pest_derive::Parser;
 use std::iter::Peekable;
 use std::str::Chars;
 use swamp_ast::Function;
+use swamp_ast::LiteralKind;
 use swamp_ast::{
     AssignmentOperatorKind, BinaryOperatorKind, CompoundOperator, CompoundOperatorKind,
     EnumVariantLiteral, ExpressionKind, FieldExpression, FieldName, ForPattern, ForVar,
@@ -19,7 +20,6 @@ use swamp_ast::{
     QualifiedIdentifier, RangeMode, SpanWithoutFileId, StructTypeField, TypeForParameter,
     TypeVariable, VariableBinding, prelude::*,
 };
-use swamp_ast::{LiteralKind, MutableReferenceOrImmutableExpression};
 use swamp_ast::{Postfix, PostfixChain};
 use tracing::error;
 
@@ -523,7 +523,7 @@ impl AstParser {
         let variable = self.parse_variable_item(&inner.next().expect("variable missing"))?;
 
         let expression = match inner.next() {
-            Some(expr_pair) => Some(self.parse_mutable_reference_expressions(&expr_pair)?),
+            Some(expr_pair) => Some(self.parse_arg_expression(&expr_pair)?),
             _ => None,
         };
 
@@ -675,14 +675,7 @@ impl AstParser {
     fn parse_member_call_postfix(
         &self,
         pair: &Pair<Rule>,
-    ) -> Result<
-        (
-            FieldName,
-            Option<Vec<Type>>,
-            Vec<MutableReferenceOrImmutableExpression>,
-        ),
-        ParseError,
-    > {
+    ) -> Result<(FieldName, Option<Vec<Type>>, Vec<Expression>), ParseError> {
         debug_assert_eq!(pair.as_rule(), Rule::member_call_postfix);
 
         let mut inner = pair.clone().into_inner();
@@ -1127,7 +1120,7 @@ impl AstParser {
         };
 
         let next_pair = Self::next_pair(&mut inner)?;
-        let iterable_expression = self.parse_mutable_reference_expressions(&next_pair)?;
+        let iterable_expression = self.parse_arg_expression(&next_pair)?;
 
         let mut_expression = IterableExpression {
             expression: Box::new(iterable_expression),
@@ -1195,7 +1188,7 @@ impl AstParser {
             Rule::while_loop => self.parse_while_loop(sub),
 
             //            Rule::expression | Rule::literal => self.parse_expr(pair),
-            Rule::prefix_op | Rule::op_neg | Rule::op_not => {
+            Rule::prefix_op | Rule::op_neg | Rule::op_not | Rule::op_borrow_mut_ref => {
                 // TODO: maybe not called?
                 let op = self.parse_unary_operator(sub)?;
                 let expr = self.parse_postfix_expression(&self.next_inner_pair(sub)?)?;
@@ -1503,6 +1496,7 @@ impl AstParser {
         match op.as_rule() {
             Rule::op_neg => Ok(UnaryOperator::Negate(node)),
             Rule::op_not => Ok(UnaryOperator::Not(node)),
+            Rule::op_borrow_mut_ref => Ok(UnaryOperator::BorrowMutRef(node)),
             _ => Err(self.create_error_pair(
                 SpecificError::UnexpectedUnaryOperator(Self::pair_to_rule(op)),
                 op,
@@ -2193,33 +2187,6 @@ impl AstParser {
         ))
     }
 
-    fn parse_mutable_reference_expressions(
-        &self,
-        pair: &Pair<Rule>,
-    ) -> Result<MutableReferenceOrImmutableExpression, ParseError> {
-        debug_assert_eq!(pair.as_rule(), Rule::ref_mut_expression);
-        let mut inner = pair.clone().into_inner();
-        // Check if the first inner item is a reference operator
-        let mut is_mutable_ref: Option<Node> = None;
-        let expr_pair;
-
-        let first = Self::next_pair(&mut inner)?;
-        if first.as_rule() == Rule::reference_mut_op {
-            // If we found a reference operator, the next item is the actual expression
-            is_mutable_ref = Some(self.to_node(&first));
-            expr_pair = Self::next_pair(&mut inner)?;
-        } else {
-            expr_pair = first;
-        }
-
-        let expr = self.parse_expression(&expr_pair)?;
-
-        Ok(MutableReferenceOrImmutableExpression {
-            is_mutable: is_mutable_ref,
-            expression: expr,
-        })
-    }
-
     fn assert_end(pairs: &mut Pairs<Rule>) {
         assert!(pairs.next().is_none());
     }
@@ -2227,13 +2194,7 @@ impl AstParser {
     fn parse_function_call_postfix(
         &self,
         pair: &Pair<Rule>,
-    ) -> Result<
-        (
-            Option<Vec<Type>>,
-            Vec<MutableReferenceOrImmutableExpression>,
-        ),
-        ParseError,
-    > {
+    ) -> Result<(Option<Vec<Type>>, Vec<Expression>), ParseError> {
         debug_assert_eq!(pair.as_rule(), Rule::function_call_postfix);
         let mut inner = pair.clone().into_inner();
 
@@ -2262,24 +2223,24 @@ impl AstParser {
         Ok((generic_args, regular_args))
     }
 
+    fn parse_arg_expression(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
+        debug_assert_eq!(pair.as_rule(), Rule::arg_expression);
+        let mut inner = pair.clone().into_inner();
+        self.parse_logical(&inner.next().unwrap())
+    }
+
     fn parse_function_call_arguments(
         &self,
         pair: &Pair<Rule>,
-    ) -> Result<Vec<MutableReferenceOrImmutableExpression>, ParseError> {
+    ) -> Result<Vec<Expression>, ParseError> {
         debug_assert_eq!(pair.as_rule(), Rule::function_call_args);
         let inner = pair.clone().into_inner();
         let mut args = Vec::new();
 
         // Parse arguments
         for arg_pair in inner {
-            if arg_pair.as_rule() == Rule::ref_mut_expression {
-                let expr = self.parse_mutable_reference_expressions(&arg_pair)?;
-                args.push(expr);
-            } else {
-                return Err(
-                    self.create_error_pair(SpecificError::UnexpectedTokenInFunctionCall, &arg_pair)
-                );
-            }
+            let expr = self.parse_arg_expression(&arg_pair)?;
+            args.push(expr);
         }
 
         Ok(args)
@@ -2447,7 +2408,7 @@ impl AstParser {
 
     fn parse_match_expr(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
         let mut inner = Self::convert_into_iterator(pair);
-        let value = self.parse_mutable_reference_expressions(&Self::next_pair(&mut inner)?)?;
+        let value = self.parse_arg_expression(&Self::next_pair(&mut inner)?)?;
         let arms_pair = Self::next_pair(&mut inner)?;
         let mut arms = Vec::new();
 
@@ -2744,6 +2705,7 @@ impl AstParser {
     }
 
     fn parse_logical(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
+        debug_assert_eq!(pair.as_rule(), Rule::logical);
         let mut inner = pair.clone().into_inner();
         let mut expr = self.parse_range(&inner.next().unwrap())?;
         while let Some(op) = inner.next() {

@@ -784,7 +784,7 @@ impl FunctionCodeGen<'_> {
         ctx: &Context,
     ) -> Result<(), Error> {
         match &unary_operator.kind {
-            UnaryOperatorKind::Not => {}
+            UnaryOperatorKind::Not => todo!(),
             UnaryOperatorKind::Negate => match (&unary_operator.left.ty) {
                 Type::Int => {
                     let left_source = self.gen_expression_for_access(&unary_operator.left)?;
@@ -801,6 +801,7 @@ impl FunctionCodeGen<'_> {
                 }
                 _ => todo!(),
             },
+            UnaryOperatorKind::BorrowMutRef => todo!(),
         }
 
         Ok(())

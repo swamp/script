@@ -269,6 +269,7 @@ pub struct BinaryOperator {
 pub enum UnaryOperatorKind {
     Not,
     Negate,
+    BorrowMutRef,
 }
 #[derive(Debug, Clone)]
 pub struct UnaryOperator {

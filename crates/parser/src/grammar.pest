@@ -106,7 +106,7 @@ comparison     = { addition ~ ((op_lte | op_gte | op_eq | op_neq | op_lt | op_gt
 addition       = { multiplication ~ ((op_add | op_sub) ~ multiplication)* }
 multiplication = { prefix ~ ((op_mul | op_div | op_mod) ~ prefix)* }
 prefix         = { prefix_op* ~ postfix }
-prefix_op      = { op_not | op_neg }
+prefix_op      = { op_not | op_neg | op_borrow_mut_ref }
 
 exclusive_range_op = { ".." }
 inclusive_range_op = { "..=" }
@@ -123,9 +123,13 @@ op_add = { "+" }
 op_sub = { "-" }
 op_mul = { "*" }
 op_div = { "/" }
-op_not = { "!" }
-op_neg = { "-" }
 op_mod = { "%" }
+
+// Prefix op
+op_neg = { "-" }
+op_not = { "!" }
+op_borrow_mut_ref = { "&" }
+
 
 /*
     =============================================================
@@ -143,13 +147,13 @@ postfix_op = {
   | member_access_postfix
 }
 
-member_call_postfix = ${ member_access_postfix ~ generic_arguments? ~ function_call_args }
+member_call_postfix = { member_access_postfix ~ generic_arguments? ~ function_call_args }
 // No whitespace allowed before this rule
-function_call_postfix = ${ generic_arguments? ~ function_call_args }
+function_call_postfix = { generic_arguments? ~ function_call_args }
 // No whitespace allowed before this rule
 
 function_call_args = {
-    "(" ~ (ref_mut_expression ~ (COMMA ~ ref_mut_expression)* ~ TRAILING_COMMA)? ~ ")"
+    "(" ~ (arg_expression ~ (COMMA ~ arg_expression)* ~ TRAILING_COMMA)? ~ ")"
 }
 
 subscript_postfix     = { "[" ~ expression ~ "]" }
@@ -346,7 +350,7 @@ return_type    = { "->" ~ type_name }
     Loop Constructs and Control Flow
     =============================================================
 */
-for_loop    = {  "for"  ~ for_pattern   ~ "in"  ~ ref_mut_expression ~ ("|" ~ guard_clause)? ~ expression }
+for_loop    = {  "for"  ~ for_pattern   ~ "in"  ~ arg_expression ~ ("|" ~ guard_clause)? ~ expression }
 for_pattern = { for_pair | maybe_mut_identifier }
 for_pair    = { maybe_mut_identifier ~ COMMA ~ maybe_mut_identifier }
 
@@ -378,8 +382,6 @@ mul_assign_op      = { "*=" }
 div_assign_op      = { "/=" }
 modulo_assign_op   = { "%=" }
 
-reference_mut_op = { "&" }
-ref_mut_expression = { reference_mut_op? ~ expression }
 
 /*
     =============================================================
@@ -399,11 +401,12 @@ expression = {
   | destructuring_assignment
   | variable_definition
   | assignment
-  | postfix
   | block
 }
 
 assignment               = { logical ~ (assign_op ~ expression)? }
+
+arg_expression = { logical }
 destructuring_assignment = { at_least_two_variables_list ~ "=" ~ expression }
 
 parenthesized = { "(" ~ expression ~ ")" }
@@ -439,7 +442,7 @@ when_expr = { "when" ~ variable_binding_list ~ expression ~ ("else" ~ expression
     Match Expressions
     =============================================================
 */
-match_expr = { "match" ~ ref_mut_expression ~ "{" ~ match_arms ~ "}" }
+match_expr = { "match" ~ arg_expression ~ "{" ~ match_arms ~ "}" }
 match_arms = { match_arm ~ (COMMA ~ match_arm)* ~ TRAILING_COMMA }
 match_arm  = { match_pattern ~ "=>" ~ expression }
 
@@ -482,5 +485,4 @@ at_least_two_variables_list        = { variable_item ~ (COMMA ~ variable_item)+ 
 maybe_mut_identifier       = { mut_keyword? ~ identifier }
 variable_item              = { maybe_mut_identifier }
 variable_binding_list      = { variable_binding ~ (COMMA ~ variable_binding)* ~ TRAILING_COMMA }
-variable_binding           = { variable_item ~ ("=" ~ ref_mut_expression)? }
-
+variable_binding           = { variable_item ~ ("=" ~ arg_expression)? }

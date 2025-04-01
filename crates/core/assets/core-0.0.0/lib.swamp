@@ -444,7 +444,7 @@ impl Vec<T> {
 	/// vec.swamp(1, 4) // vec is modified to: [1, 5, 3, 4, 2]
     /// ```
     fn swap(mut self, index_a: Int, index_b: Int) {
-        vec_swap(mut self, index_a, index_b)
+        vec_swap(&self, index_a, index_b)
     }
 
     /// Inserts `element` at `index`, shifting subsequent elements to the right.
@@ -457,7 +457,7 @@ impl Vec<T> {
 	/// vec.insert(1, 2) // vec is modified to: [1, 2, 3, 4, 5]
     /// ```
     fn insert(mut self, index: Int, value: T) {
-        vec_insert(mut self, index, value)
+        vec_insert(&self, index, value)
     }
 
     /// Inserts at the first element
@@ -470,7 +470,7 @@ impl Vec<T> {
 	/// vec.prepend(1) // vec is modified to: [1, 2, 3, 4, 5]
     /// ```
     fn prepend(mut self, value: T) {
-        vec_insert(mut self, 0, value)
+        vec_insert(&self, 0, value)
     }
 
     /// Returns first element if it exists
@@ -525,14 +525,14 @@ impl Vec<T> {
     ///
     /// Uses intrinsic function `vec_push` to add the value.
     fn push(mut self, value: T) {
-        vec_push(mut self, value)
+        vec_push(&self, value)
     }
 
     /// Removed the top most element at the end of the stack.
     ///
     /// Uses intrinsic function `vec_pop` to add the value.
     fn pop(mut self) -> T {
-        vec_pop(mut self)
+        vec_pop(&self)
     }
 
 
@@ -560,7 +560,7 @@ impl Vec<T> {
     ///
     /// Uses intrinsic function `vec_subscript_mut` to fetch the mutable value.
     fn subscript_mut(mut self, index: Int) -> T {
-        vec_subscript_mut(mut self, index)
+        vec_subscript_mut(&self, index)
     }
 
 
@@ -585,7 +585,7 @@ impl Vec<T> {
     ///
     /// Uses intrinsic function `map_subscript_mut_create_if_needed` to fetch the mutable value.
     fn subscript_mut_create_if_needed(mut self, index: Int) -> T {
-        vec_subscript_mut(mut self, index)
+        vec_subscript_mut(&self, index)
     }
 
 
@@ -596,14 +596,14 @@ impl Vec<T> {
     ///
     /// Uses intrinsic function `vec_remove` to remove and return the element at the given index.
     fn remove(mut self, index: Int) {
-        vec_remove_index(mut self, index)
+        vec_remove_index(&self, index)
     }
 
     /// Clears all elements.
     ///
     /// Uses intrinsic function `vec_clear` to remove all elements from the vector.
     fn clear(mut self) {
-        vec_clear(mut self)
+        vec_clear(&self)
     }
 
     /// Gets the length of the vector.
@@ -672,7 +672,7 @@ impl Map<K, V> {
     ///
     /// Uses intrinsic function `map_subscript_mut` to fetch the mutable value.
     fn subscript_mut(mut self, key: K) -> V {
-        map_subscript_mut(mut self, key)
+        map_subscript_mut(&self, key)
     }
 
     /// Gets a mutable element with the specified key. Create a key if it doesn't exist
@@ -683,7 +683,7 @@ impl Map<K, V> {
     ///
     /// Uses intrinsic function `map_subscript_mut_create_if_needed` to fetch the mutable value.
     fn subscript_mut_create_if_needed(mut self, key: K) -> V {
-        map_subscript_mut_create_if_needed(mut self, key)
+        map_subscript_mut_create_if_needed(&self, key)
     }
 
 
@@ -719,7 +719,7 @@ impl Map<K, V> {
     ///
     /// Uses intrinsic function `map_remove` to remove the key and return the corresponding value if it exists.
     fn remove(mut self, key: K) {
-        map_remove(mut self, key)
+        map_remove(&self, key)
     }
 }
 
@@ -787,7 +787,7 @@ impl Map2<C, R, V> {
     /// map.remove(col_key, row_key);
     /// ```
     fn remove(mut self, column: C, row: R) {
-        map2_remove(mut self, column, row)
+        map2_remove(&self, column, row)
     }
 
     /// Sets the value of a cell at the specified column and row.
@@ -807,7 +807,7 @@ impl Map2<C, R, V> {
     /// map.set(col_key, row_key, new_value);
     /// ```
     fn set(mut self, column: C, row: R, value: V) {
-        map2_insert(mut self, column, row, value)
+        map2_insert(&self, column, row, value)
     }
 
     /// Retrieves the value stored in the cell at the specified column and row.
@@ -913,14 +913,14 @@ impl Stack<T> {
     ///
     /// Uses intrinsic function `vec_push` to add the value.
     fn push(mut self, value: T) {
-        vec_push(mut self, value)
+        vec_push(&self, value)
     }
 
     /// Removed the top most element at the end of the stack.
     ///
     /// Uses intrinsic function `vec_pop` to add the value.
     fn pop(mut self) -> T {
-        vec_pop(mut self)
+        vec_pop(&self)
     }
 
     /// Gets an element at the specified index
@@ -947,7 +947,7 @@ impl Stack<T> {
     ///
     /// Uses intrinsic function `vec_subscript_mut` to fetch the mutable value.
     fn subscript_mut(mut self, index: Int) -> T {
-        vec_subscript_mut(mut self, index)
+        vec_subscript_mut(&self, index)
     }
 
 
@@ -959,14 +959,14 @@ impl Stack<T> {
     ///
     /// Uses intrinsic function `map_subscript_mut_create_if_needed` to fetch the mutable value.
     fn subscript_mut_create_if_needed(mut self, index: Int) -> T {
-        vec_subscript_mut(mut self, index)
+        vec_subscript_mut(&self, index)
     }
 
     /// Clears all elements.
     ///
     /// Uses intrinsic function `vec_clear` to remove all elements from the vector.
     fn clear(mut self) {
-        vec_clear(mut self)
+        vec_clear(&self)
     }
 
     /// Gets the length of the vector.
@@ -997,12 +997,12 @@ impl Queue<T> {
 
     /// Adds an element to the back (end) of the queue.
 	fn enqueue(mut self, item: T) {
-		vec_push(mut self, item)
+		vec_push(&self, item)
 	}
 
     /// Removes and returns the element from the front of the queue.
 	fn dequeue(mut self) -> T {
-		vec_remove_index_get_value(mut self, 0)
+		vec_remove_index_get_value(&self, 0)
 	}
 
     /// Returns an optional reference to the element at the front of the queue
@@ -1016,7 +1016,7 @@ impl Queue<T> {
 	}
 
     /// Checks if the queue contains no elements.
-	fn is_empty(mut self) -> Bool {
+	fn is_empty(self) -> Bool {
 		vec_is_empty(self)
 	}
 
@@ -1027,7 +1027,7 @@ impl Queue<T> {
 
     /// Removes all elements from the queue, making it empty.
 	fn clear(mut self) {
-		vec_clear(mut self)
+		vec_clear(&self)
 	}
 }
 
@@ -1067,7 +1067,7 @@ impl Grid<T> {
     /// - `data`: The new value to store in the cell.
     ///
     fn set(mut self, x: Int, y: Int, data: T) {
-        grid_set(mut self, x, y, data)
+        grid_set(&self, x, y, data)
     }
 
     /// Retrieves the value from the grid at the specified coordinates.

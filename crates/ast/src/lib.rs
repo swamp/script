@@ -279,7 +279,7 @@ impl ForPattern {
 
 #[derive(Debug, Clone)]
 pub struct IterableExpression {
-    pub expression: Box<MutableReferenceOrImmutableExpression>,
+    pub expression: Box<Expression>,
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -291,7 +291,7 @@ pub struct Variable {
 #[derive(Debug, Clone)]
 pub struct VariableBinding {
     pub variable: Variable,
-    pub expression: Option<MutableReferenceOrImmutableExpression>,
+    pub expression: Option<Expression>,
 }
 
 impl Variable {
@@ -373,12 +373,6 @@ pub enum RangeMode {
     Exclusive,
 }
 
-#[derive(Debug, Clone)]
-pub struct MutableReferenceOrImmutableExpression {
-    pub is_mutable: Option<Node>,
-    pub expression: Expression,
-}
-
 #[derive(Clone)]
 pub struct Expression {
     pub kind: ExpressionKind,
@@ -395,16 +389,8 @@ impl Debug for Expression {
 pub enum Postfix {
     FieldAccess(Node),
     Subscript(Expression),
-    MemberCall(
-        Node,
-        Option<Vec<Type>>,
-        Vec<MutableReferenceOrImmutableExpression>,
-    ),
-    FunctionCall(
-        Node,
-        Option<Vec<Type>>,
-        Vec<MutableReferenceOrImmutableExpression>,
-    ),
+    MemberCall(Node, Option<Vec<Type>>, Vec<Expression>),
+    FunctionCall(Node, Option<Vec<Type>>, Vec<Expression>),
     OptionalChainingOperator(Node),     // ?-postfix
     NoneCoalescingOperator(Expression), // ??-postfix
 }
@@ -458,7 +444,7 @@ pub enum ExpressionKind {
 
     // Compare and Matching
     If(Box<Expression>, Box<Expression>, Option<Box<Expression>>),
-    Match(Box<MutableReferenceOrImmutableExpression>, Vec<MatchArm>),
+    Match(Box<Expression>, Vec<MatchArm>),
     Guard(Vec<GuardExpr>),
 
     InterpolatedString(Vec<StringPart>),
@@ -588,6 +574,7 @@ pub enum BinaryOperatorKind {
 pub enum UnaryOperator {
     Not(Node),
     Negate(Node),
+    BorrowMutRef(Node),
 }
 
 #[derive(Debug, Clone)]

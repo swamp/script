@@ -15,6 +15,7 @@ mod structure;
 pub mod types;
 pub mod variable;
 
+use crate::call::MaybeBorrowMutRefExpression;
 use crate::err::{Error, ErrorKind};
 use seq_map::SeqMap;
 use source_map_cache::SourceMap;
@@ -442,6 +443,29 @@ impl<'a> Analyzer<'a> {
         self.stop_function();
 
         Ok(main_expr)
+    }
+
+    fn analyze_maybe_ref_expression(
+        &mut self,
+        ast_expr: &swamp_ast::Expression,
+    ) -> Result<MaybeBorrowMutRefExpression, Error> {
+        if let swamp_ast::ExpressionKind::UnaryOp(found_unary, ast_inner_expression) =
+            &ast_expr.kind
+        {
+            if let swamp_ast::UnaryOperator::BorrowMutRef(node) = found_unary {
+                //let inner = self.analyze_expression(ast_inner_expression, context)?;
+                let resolved_node = self.to_node(node);
+                return Ok(MaybeBorrowMutRefExpression {
+                    ast_expression: *ast_inner_expression.clone(),
+                    has_borrow_mutable_reference: Some(resolved_node),
+                });
+            }
+        }
+
+        Ok(MaybeBorrowMutRefExpression {
+            ast_expression: ast_expr.clone(),
+            has_borrow_mutable_reference: None,
+        })
     }
 
     /// # Errors
@@ -1125,13 +1149,13 @@ impl<'a> Analyzer<'a> {
     fn analyze_iterable(
         &mut self,
         force_mut: Option<swamp_ast::Node>,
-        expression: &swamp_ast::MutableReferenceOrImmutableExpression,
+        expression: &swamp_ast::Expression,
     ) -> Result<Iterable, Error> {
         let any_context = TypeContext::new_anything_argument();
         let resolved_expression: MutRefOrImmutableExpression = if force_mut.is_some() {
             let resolved_node = self.to_node(&force_mut.unwrap());
             MutRefOrImmutableExpression::Location(self.analyze_to_location(
-                &expression.expression,
+                &expression,
                 &any_context,
                 LocationSide::Rhs,
             )?)
@@ -1157,16 +1181,11 @@ impl<'a> Analyzer<'a> {
                             (Some(tuple_items[0].clone()), tuple_items[1].clone())
                         }
                         _ => {
-                            return Err(self.create_err(
-                                ErrorKind::NotAnIterator,
-                                &expression.expression.node,
-                            ));
+                            return Err(self.create_err(ErrorKind::NotAnIterator, &expression.node));
                         }
                     }
                 } else {
-                    return Err(
-                        self.create_err(ErrorKind::NotAnIterator, &expression.expression.node)
-                    );
+                    return Err(self.create_err(ErrorKind::NotAnIterator, &expression.node));
                 }
             }
         };
@@ -1367,7 +1386,7 @@ impl<'a> Analyzer<'a> {
 
     fn analyze_match(
         &mut self,
-        scrutinee: &swamp_ast::MutableReferenceOrImmutableExpression,
+        scrutinee: &swamp_ast::Expression,
         default_context: &TypeContext,
         arms: &Vec<swamp_ast::MatchArm>,
     ) -> Result<(Match, Type), Error> {
@@ -1384,7 +1403,7 @@ impl<'a> Analyzer<'a> {
 
         // Ensure we have at least one arm
         if arms.is_empty() {
-            return Err(self.create_err(ErrorKind::EmptyMatch, &scrutinee.expression.node));
+            return Err(self.create_err(ErrorKind::EmptyMatch, &scrutinee.node));
         }
 
         let mut resolved_arms = Vec::with_capacity(arms.len());
@@ -1404,12 +1423,7 @@ impl<'a> Analyzer<'a> {
         }
 
         known_type.map_or_else(
-            || {
-                Err(self.create_err(
-                    ErrorKind::MatchArmsMustHaveTypes,
-                    &scrutinee.expression.node,
-                ))
-            },
+            || Err(self.create_err(ErrorKind::MatchArmsMustHaveTypes, &scrutinee.node)),
             |encountered_type| {
                 if matches!(encountered_type, Type::Never) {
                     Err(self.create_err(
@@ -1417,7 +1431,7 @@ impl<'a> Analyzer<'a> {
                             expected: Type::Never,
                             found: encountered_type,
                         },
-                        &scrutinee.expression.node,
+                        &scrutinee.node,
                     ))
                 } else {
                     Ok((
@@ -1641,14 +1655,9 @@ impl<'a> Analyzer<'a> {
             let must_have_expression = if let Some(x) = &variable.expression {
                 x
             } else {
-                &swamp_ast::MutableReferenceOrImmutableExpression {
-                    is_mutable: None,
-                    expression: swamp_ast::Expression {
-                        kind: swamp_ast::ExpressionKind::VariableReference(
-                            variable.variable.clone(),
-                        ),
-                        node: variable.variable.name.clone(),
-                    },
+                &swamp_ast::Expression {
+                    kind: swamp_ast::ExpressionKind::VariableReference(variable.variable.clone()),
+                    node: variable.variable.name.clone(),
                 }
 
                 // self.create_expr(ExpressionKind::VariableAccess())
@@ -2263,7 +2272,7 @@ impl<'a> Analyzer<'a> {
         is_mutable: bool,
         member_name: &swamp_ast::Node,
         ast_maybe_generic_arguments: Option<Vec<swamp_ast::Type>>,
-        arguments: &[swamp_ast::MutableReferenceOrImmutableExpression],
+        arguments: &[swamp_ast::Expression],
         suffixes: &mut Vec<Postfix>,
     ) -> Result<Type, Error> {
         let field_name_str = self.get_text(member_name).to_string();
