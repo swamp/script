@@ -1,6 +1,6 @@
 [package]
 name = "swamp-eval"
-version = "0.1.14"
+version = "0.1.15"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/swamp/swamp"
@@ -8,11 +8,11 @@ description = "Simple tree-walking interpreter for executing the Swamp Abstract 
 
 [dependencies]
 # Semantic
-swamp-semantic = { path = "../semantic", version = "0.1.14" }
-swamp-types = { path = "../types", version = "0.1.14" }
+swamp-semantic = { path = "../semantic", version = "0.1.15" }
+swamp-types = { path = "../types", version = "0.1.15" }
 
 # Runtime Implementation
-swamp-core-extra = { path = "../core-extra", version = "0.1.14" }
+swamp-core-extra = { path = "../core-extra", version = "0.1.15" }
 
 # Source Map
 source-map-node = "0.0.1"

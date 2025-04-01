@@ -1,18 +1,18 @@
 [package]
 name = "swamp-analyzer"
-version = "0.1.14"
+version = "0.1.15"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/swamp/swamp"
 description = "analyzer for swamp"
 
 [dependencies]
-swamp-semantic = { path = "../semantic", version = "0.1.14" }
-swamp-ast = { path = "../ast", version = "0.1.14" }
-swamp-types = { path = "../types", version = "0.1.14" }
+swamp-semantic = { path = "../semantic", version = "0.1.15" }
+swamp-ast = { path = "../ast", version = "0.1.15" }
+swamp-types = { path = "../types", version = "0.1.15" }
 source-map-node = "0.0.1"
 source-map-cache = "0.0.1"
-swamp-modules = { path = "../modules", version = "0.1.14" }
+swamp-modules = { path = "../modules", version = "0.1.15" }
 
 seq-map = "0.0.13"
 seq-set = "0.0.2"
