@@ -12,12 +12,12 @@ use std::iter::Peekable;
 use std::str::Chars;
 use swamp_ast::Function;
 use swamp_ast::{
-    prelude::*, AssignmentOperatorKind, BinaryOperatorKind, CompoundOperator,
-    CompoundOperatorKind, EnumVariantLiteral, ExpressionKind, FieldExpression, FieldName, ForPattern,
-    ForVar, ImportItems, IterableExpression,
-    LocalConstantIdentifier, LocalTypeIdentifierWithOptionalTypeVariables, Mod, NamedStructDef,
-    PatternElement, QualifiedIdentifier, RangeMode, SpanWithoutFileId, StructTypeField,
-    TypeForParameter, TypeVariable, VariableBinding,
+    AssignmentOperatorKind, BinaryOperatorKind, CompoundOperator, CompoundOperatorKind,
+    EnumVariantLiteral, ExpressionKind, FieldExpression, FieldName, ForPattern, ForVar,
+    ImportItems, IterableExpression, LocalConstantIdentifier,
+    LocalTypeIdentifierWithOptionalTypeVariables, Mod, NamedStructDef, PatternElement,
+    QualifiedIdentifier, RangeMode, SpanWithoutFileId, StructTypeField, TypeForParameter,
+    TypeVariable, VariableBinding, prelude::*,
 };
 use swamp_ast::{LiteralKind, MutableReferenceOrImmutableExpression};
 use swamp_ast::{Postfix, PostfixChain};
@@ -1413,8 +1413,7 @@ impl AstParser {
             None
         };
 
-        let rhs_expr =
-            self.parse_expression(&Self::next_pair(&mut inner)?)?;
+        let rhs_expr = self.parse_expression(&Self::next_pair(&mut inner)?)?;
 
         if maybe_annotation.is_some() || found_var.is_mutable.is_some() {
             Ok(self.create_expr(
@@ -2228,7 +2227,13 @@ impl AstParser {
     fn parse_function_call_postfix(
         &self,
         pair: &Pair<Rule>,
-    ) -> Result<(Option<Vec<Type>>, Vec<MutableReferenceOrImmutableExpression>), ParseError> {
+    ) -> Result<
+        (
+            Option<Vec<Type>>,
+            Vec<MutableReferenceOrImmutableExpression>,
+        ),
+        ParseError,
+    > {
         debug_assert_eq!(pair.as_rule(), Rule::function_call_postfix);
         let mut inner = pair.clone().into_inner();
 
@@ -2442,8 +2447,7 @@ impl AstParser {
 
     fn parse_match_expr(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
         let mut inner = Self::convert_into_iterator(pair);
-        let value =
-            self.parse_mutable_reference_expressions(&Self::next_pair(&mut inner)?)?;
+        let value = self.parse_mutable_reference_expressions(&Self::next_pair(&mut inner)?)?;
         let arms_pair = Self::next_pair(&mut inner)?;
         let mut arms = Vec::new();
 

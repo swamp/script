@@ -10,8 +10,8 @@ use swamp_modules::modules::{ModuleRef, Modules};
 use swamp_modules::symtbl::{FuncDef, Symbol, SymbolTable, TypeGenerator};
 use swamp_semantic::prelude::*;
 use swamp_semantic::{
-    ArgumentExpressionOrLocation, AssociatedImpls, MutReferenceOrImmutableExpression, Postfix, PostfixKind,
-    SingleLocationExpression, MutableReferenceKind, SingleMutLocationExpression,
+    AssociatedImpls, MutRefOrImmutableExpression, MutableReferenceKind, Postfix, PostfixKind,
+    SingleLocationExpression, TargetAssignmentLocation,
 };
 use swamp_types::*;
 use yansi::{Color, Paint};
@@ -358,14 +358,14 @@ impl SourceMapDisplay<'_> {
     fn show_mut_or_not_expression(
         &self,
         f: &mut Formatter,
-        mut_expr: &MutReferenceOrImmutableExpression,
+        mut_expr: &MutRefOrImmutableExpression,
         tabs: usize,
     ) -> std::fmt::Result {
-        if mut_expr.is_mutable.is_some() {
-            write!(f, "{}", "mut".red())?;
+        if mut_expr.is_mutable_reference() {
+            write!(f, "{}", "&".red())?;
         }
 
-        self.show_argument(f, &mut_expr.expression_or_location, tabs)
+        self.show_argument(f, &mut_expr, tabs)
     }
 
     #[allow(clippy::too_many_lines)]
@@ -869,7 +869,7 @@ impl SourceMapDisplay<'_> {
     fn show_arguments(
         &self,
         f: &mut Formatter,
-        arguments: &Vec<ArgumentExpressionOrLocation>,
+        arguments: &Vec<MutRefOrImmutableExpression>,
         tabs: usize,
     ) -> std::fmt::Result {
         for arg in arguments {
@@ -882,14 +882,14 @@ impl SourceMapDisplay<'_> {
     fn show_argument(
         &self,
         f: &mut Formatter,
-        arg: &ArgumentExpressionOrLocation,
+        arg: &MutRefOrImmutableExpression,
         tabs: usize,
     ) -> std::fmt::Result {
         match arg {
-            ArgumentExpressionOrLocation::Expression(expression) => {
+            MutRefOrImmutableExpression::Expression(expression) => {
                 self.show_expression(f, expression, tabs)
             }
-            ArgumentExpressionOrLocation::Location(location) => {
+            MutRefOrImmutableExpression::Location(location) => {
                 self.show_location(f, location, tabs)
             }
         }
@@ -898,7 +898,7 @@ impl SourceMapDisplay<'_> {
     fn show_mut_location(
         &self,
         f: &mut Formatter,
-        location: &SingleMutLocationExpression,
+        location: &TargetAssignmentLocation,
         tabs: usize,
     ) -> std::fmt::Result {
         /*

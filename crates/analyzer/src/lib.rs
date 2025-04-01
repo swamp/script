@@ -28,10 +28,9 @@ use swamp_semantic::instantiator::TypeVariableScope;
 use swamp_semantic::prelude::*;
 use swamp_semantic::type_var_stack::SemanticContext;
 use swamp_semantic::{
-    ArgumentExpressionOrLocation, BlockScope, BlockScopeMode, FunctionScopeState,
-    InternalMainExpression, LocationAccess, LocationAccessKind, MutReferenceOrImmutableExpression,
-    NormalPattern, Postfix, PostfixKind, SingleLocationExpression, MutableReferenceKind,
-    SingleMutLocationExpression, TypeWithMut, WhenBinding,
+    BlockScope, BlockScopeMode, FunctionScopeState, InternalMainExpression, LocationAccess,
+    LocationAccessKind, MutRefOrImmutableExpression, MutableReferenceKind, NormalPattern, Postfix,
+    PostfixKind, SingleLocationExpression, TargetAssignmentLocation, TypeWithMut, WhenBinding,
 };
 use swamp_types::all_types_are_concrete_or_unit;
 use swamp_types::prelude::*;
@@ -788,7 +787,7 @@ impl<'a> Analyzer<'a> {
     fn create_static_call(
         &mut self,
         function_name: &str,
-        arguments: &[ArgumentExpressionOrLocation],
+        arguments: &[MutRefOrImmutableExpression],
         node: &swamp_ast::Node,
         ty: &Type,
     ) -> Result<ExpressionKind, Error> {
@@ -1028,7 +1027,7 @@ impl<'a> Analyzer<'a> {
 
                         let return_type = *found.signature().return_type.clone();
 
-                        let argument = ArgumentExpressionOrLocation::Expression(analyzed_expr);
+                        let argument = MutRefOrImmutableExpression::Expression(analyzed_expr);
                         self.add_postfix(
                             &mut suffixes,
                             PostfixKind::MemberCall(cloned, vec![argument]),
@@ -1129,18 +1128,13 @@ impl<'a> Analyzer<'a> {
         expression: &swamp_ast::MutableReferenceOrImmutableExpression,
     ) -> Result<Iterable, Error> {
         let any_context = TypeContext::new_anything_argument();
-        let resolved_expression: MutReferenceOrImmutableExpression = if force_mut.is_some() {
+        let resolved_expression: MutRefOrImmutableExpression = if force_mut.is_some() {
             let resolved_node = self.to_node(&force_mut.unwrap());
-            MutReferenceOrImmutableExpression {
-                expression_or_location: ArgumentExpressionOrLocation::Location(
-                    self.analyze_to_location(
-                        &expression.expression,
-                        &any_context,
-                        LocationSide::Rhs,
-                    )?,
-                ),
-                is_mutable: Some(resolved_node),
-            }
+            MutRefOrImmutableExpression::Location(self.analyze_to_location(
+                &expression.expression,
+                &any_context,
+                LocationSide::Rhs,
+            )?)
         } else {
             self.analyze_mut_or_immutable_expression(expression, &any_context, LocationSide::Rhs)?
         };
@@ -1441,7 +1435,7 @@ impl<'a> Analyzer<'a> {
     fn analyze_arm(
         &mut self,
         arm: &swamp_ast::MatchArm,
-        _expression: &MutReferenceOrImmutableExpression,
+        _expression: &MutRefOrImmutableExpression,
         type_context: &TypeContext,
         expected_condition_type: &Type,
     ) -> Result<(MatchArm, bool), Error> {
@@ -1711,7 +1705,6 @@ impl<'a> Analyzer<'a> {
             } else {
                 let same_var = self.find_variable(&variable_binding.variable)?;
 
-                let is_mutable = same_var.mutable_node.clone();
                 let argument_expression = if same_var.is_mutable() {
                     let loc = SingleLocationExpression {
                         kind: MutableReferenceKind::MutVariableRef,
@@ -1720,7 +1713,7 @@ impl<'a> Analyzer<'a> {
                         starting_variable: same_var,
                         access_chain: vec![],
                     };
-                    ArgumentExpressionOrLocation::Location(loc)
+                    MutRefOrImmutableExpression::Location(loc)
                 } else {
                     let generated_expr_kind = ExpressionKind::VariableAccess(same_var.clone());
                     let generated_expression = self.create_expr(
@@ -1728,19 +1721,16 @@ impl<'a> Analyzer<'a> {
                         same_var.resolved_type.clone(),
                         &variable_binding.variable.name,
                     );
-                    ArgumentExpressionOrLocation::Expression(generated_expression)
+                    MutRefOrImmutableExpression::Expression(generated_expression)
                 };
 
-                MutReferenceOrImmutableExpression {
-                    expression_or_location: argument_expression,
-                    is_mutable,
-                }
+                argument_expression
             };
 
             let ty = mut_expr.ty();
 
             if let Type::Optional(found_ty) = ty {
-                let variable_ref = self.create_variable(&variable_binding.variable, found_ty)?;
+                let variable_ref = self.create_variable(&variable_binding.variable, &found_ty)?;
 
                 let binding = WhenBinding {
                     variable: variable_ref,
@@ -1893,10 +1883,7 @@ impl<'a> Analyzer<'a> {
 
         let context = TypeContext::new_unsure_argument(required_type.as_ref());
 
-        let source_expr = self.analyze_expression(
-            source_expression,
-            &context,
-        )?;
+        let source_expr = self.analyze_expression(source_expression, &context)?;
         let ty = source_expr.ty.clone();
         if !ty.is_concrete() {
             return Err(self.create_err(ErrorKind::VariableTypeMustBeConcrete, &variable.name));
@@ -1938,10 +1925,7 @@ impl<'a> Analyzer<'a> {
 
         let unsure_arg_context = TypeContext::new_unsure_argument(ty.as_ref());
 
-        let resolved_source = self.analyze_expression(
-            source_expression,
-            &unsure_arg_context,
-        )?;
+        let resolved_source = self.analyze_expression(source_expression, &unsure_arg_context)?;
 
         let var_ref = self.create_local_variable(
             &var.name,
@@ -2171,7 +2155,7 @@ impl<'a> Analyzer<'a> {
         let source_expr = self.analyze_expression(ast_source_expression, &any_argument_context)?;
         let source_expr_type_context = TypeContext::new_argument(&source_expr.ty);
 
-        let resolved_location = SingleMutLocationExpression(self.analyze_to_location(
+        let resolved_location = TargetAssignmentLocation(self.analyze_to_location(
             target_expression,
             &source_expr_type_context,
             LocationSide::Rhs,
@@ -2203,7 +2187,7 @@ impl<'a> Analyzer<'a> {
         let lhs_argument_context = TypeContext::new_argument(&ty);
         let source_expr = self.analyze_expression(ast_source_expression, &lhs_argument_context)?;
 
-        let mut_location = SingleMutLocationExpression(resolved_location);
+        let mut_location = TargetAssignmentLocation(resolved_location);
 
         let kind = ExpressionKind::Assignment(Box::from(mut_location), Box::from(source_expr));
 

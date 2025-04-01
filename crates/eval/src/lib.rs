@@ -23,16 +23,16 @@ use swamp_core_extra::grid::Grid;
 use swamp_core_extra::map2::Map2;
 use swamp_core_extra::prelude::ValueError;
 use swamp_core_extra::value::ValueRef;
-use swamp_core_extra::value::{convert_vec_to_rc_refcell, format_value, Value};
+use swamp_core_extra::value::{Value, convert_vec_to_rc_refcell, format_value};
 use swamp_semantic::prelude::*;
-use swamp_semantic::{ArgumentExpressionOrLocation, LocationAccess, LocationAccessKind};
 use swamp_semantic::{
     BinaryOperatorKind, CompoundOperatorKind, ConstantId, ForPattern, Function,
-    MutReferenceOrImmutableExpression, NormalPattern, PatternElement, PostfixKind, SingleLocationExpression,
-    MutableReferenceKind, UnaryOperatorKind,
+    MutRefOrImmutableExpression, MutableReferenceKind, NormalPattern, PatternElement, PostfixKind,
+    SingleLocationExpression, UnaryOperatorKind,
 };
 use swamp_semantic::{ExternalFunctionId, Postfix};
-use swamp_types::{same_anon_struct_ref, EnumVariantType, Type, TypeForParameter};
+use swamp_semantic::{LocationAccess, LocationAccessKind};
+use swamp_types::{EnumVariantType, Type, TypeForParameter, same_anon_struct_ref};
 
 impl From<ValueError> for RuntimeError {
     fn from(value: ValueError) -> Self {
@@ -336,7 +336,7 @@ impl<'a, C> Interpreter<'a, C> {
     fn evaluate_function_call(
         &mut self,
         function_expression: &Expression,
-        arguments: &[ArgumentExpressionOrLocation],
+        arguments: &[MutRefOrImmutableExpression],
     ) -> Result<Value, RuntimeError> {
         let func_val = self.evaluate_expression(function_expression)?;
         let evaluated_args = self.evaluate_args(arguments)?;
@@ -437,13 +437,13 @@ impl<'a, C> Interpreter<'a, C> {
 
     fn evaluate_mut_or_immutable_expression(
         &mut self,
-        expr: &MutReferenceOrImmutableExpression,
+        expr: &MutRefOrImmutableExpression,
     ) -> Result<VariableValue, RuntimeError> {
-        let var_value = match &expr.expression_or_location {
-            ArgumentExpressionOrLocation::Location(loc) => {
+        let var_value = match &expr {
+            MutRefOrImmutableExpression::Location(loc) => {
                 VariableValue::Reference(self.evaluate_location(loc)?)
             }
-            ArgumentExpressionOrLocation::Expression(expr) => {
+            MutRefOrImmutableExpression::Expression(expr) => {
                 VariableValue::Value(self.evaluate_expression(expr)?)
             }
         };
@@ -452,13 +452,13 @@ impl<'a, C> Interpreter<'a, C> {
 
     fn evaluate_argument(
         &mut self,
-        expr: &ArgumentExpressionOrLocation,
+        expr: &MutRefOrImmutableExpression,
     ) -> Result<VariableValue, RuntimeError> {
         let var_value = match expr {
-            ArgumentExpressionOrLocation::Location(mutable_location) => {
+            MutRefOrImmutableExpression::Location(mutable_location) => {
                 VariableValue::Reference(self.evaluate_location(mutable_location)?)
             }
-            ArgumentExpressionOrLocation::Expression(expr) => {
+            MutRefOrImmutableExpression::Expression(expr) => {
                 let value = self.evaluate_expression(expr)?;
                 VariableValue::Value(value)
             }
@@ -469,7 +469,7 @@ impl<'a, C> Interpreter<'a, C> {
 
     fn evaluate_args(
         &mut self,
-        args: &[ArgumentExpressionOrLocation],
+        args: &[MutRefOrImmutableExpression],
     ) -> Result<Vec<VariableValue>, RuntimeError> {
         let mut evaluated = Vec::with_capacity(args.len());
 
@@ -1229,7 +1229,7 @@ impl<'a, C> Interpreter<'a, C> {
         &mut self,
         node: &Node,
         intrinsic_function: &IntrinsicFunction,
-        arguments: &[ArgumentExpressionOrLocation],
+        arguments: &[MutRefOrImmutableExpression],
     ) -> Result<Value, RuntimeError> {
         self.eval_intrinsic_internal(node, intrinsic_function, arguments)
     }
@@ -1326,7 +1326,7 @@ impl<'a, C> Interpreter<'a, C> {
         &mut self,
         node: &Node,
         intrinsic_function: &IntrinsicFunction,
-        expressions: &[ArgumentExpressionOrLocation],
+        expressions: &[MutRefOrImmutableExpression],
     ) -> Result<Value, RuntimeError> {
         // Common case for most of the intrinsics
         let value_ref = if expressions.is_empty() {
@@ -1339,8 +1339,8 @@ impl<'a, C> Interpreter<'a, C> {
         if expressions.len() > 1 {
             for arg in &expressions[1..] {
                 match arg {
-                    ArgumentExpressionOrLocation::Location(_loc) => panic!("not supported"),
-                    ArgumentExpressionOrLocation::Expression(expr) => arguments.push(expr),
+                    MutRefOrImmutableExpression::Location(_loc) => panic!("not supported"),
+                    MutRefOrImmutableExpression::Expression(expr) => arguments.push(expr),
                 }
             }
         }
@@ -2511,7 +2511,7 @@ impl<'a, C> Interpreter<'a, C> {
         &mut self,
         node: &Node,
         function_val: &ValueRef,
-        arguments: &[ArgumentExpressionOrLocation],
+        arguments: &[MutRefOrImmutableExpression],
     ) -> Result<Value, RuntimeError> {
         let resolved_fn = match function_val.borrow().clone() {
             Value::InternalFunction(x) => Function::Internal(x),
@@ -2560,7 +2560,7 @@ impl<'a, C> Interpreter<'a, C> {
         self_value_ref: &ValueRef,
         is_mutable: bool,
         function_ref: &FunctionRef,
-        arguments: &[ArgumentExpressionOrLocation],
+        arguments: &[MutRefOrImmutableExpression],
     ) -> Result<Value, RuntimeError> {
         let parameters = &function_ref.signature().parameters;
 

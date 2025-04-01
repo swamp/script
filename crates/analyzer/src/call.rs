@@ -6,7 +6,7 @@ use crate::TypeContext;
 use crate::err::{Error, ErrorKind};
 use crate::{Analyzer, LocationSide};
 use source_map_node::Node;
-use swamp_semantic::{ArgumentExpressionOrLocation, MutReferenceOrImmutableExpression};
+use swamp_semantic::MutRefOrImmutableExpression;
 use swamp_types::prelude::*;
 
 impl Analyzer<'_> {
@@ -16,7 +16,7 @@ impl Analyzer<'_> {
         &mut self,
         fn_parameter: &TypeForParameter,
         argument_expr: &swamp_ast::MutableReferenceOrImmutableExpression,
-    ) -> Result<ArgumentExpressionOrLocation, Error> {
+    ) -> Result<MutRefOrImmutableExpression, Error> {
         let context = TypeContext::new_argument(&fn_parameter.resolved_type);
 
         let mut_or_immutable = if fn_parameter.is_mutable {
@@ -28,7 +28,7 @@ impl Analyzer<'_> {
             }
             let mut_location =
                 self.analyze_to_location(&argument_expr.expression, &context, LocationSide::Rhs)?;
-            ArgumentExpressionOrLocation::Location(mut_location)
+            MutRefOrImmutableExpression::Location(mut_location)
         } else {
             if argument_expr.is_mutable.is_some() {
                 return Err(self.create_err(
@@ -37,7 +37,7 @@ impl Analyzer<'_> {
                 ));
             }
             let resolved_expr = self.analyze_expression(&argument_expr.expression, &context)?;
-            ArgumentExpressionOrLocation::Expression(resolved_expr)
+            MutRefOrImmutableExpression::Expression(resolved_expr)
         };
 
         Ok(mut_or_immutable)
@@ -50,7 +50,7 @@ impl Analyzer<'_> {
         node: &Node,
         fn_parameters: &[TypeForParameter],
         arguments: &[swamp_ast::MutableReferenceOrImmutableExpression],
-    ) -> Result<Vec<ArgumentExpressionOrLocation>, Error> {
+    ) -> Result<Vec<MutRefOrImmutableExpression>, Error> {
         if fn_parameters.len() != arguments.len() {
             return Err(self.create_err_resolved(
                 ErrorKind::WrongNumberOfArguments(fn_parameters.len(), arguments.len()),
@@ -74,23 +74,20 @@ impl Analyzer<'_> {
         expr: &swamp_ast::MutableReferenceOrImmutableExpression,
         context: &TypeContext,
         location_side: LocationSide,
-    ) -> Result<MutReferenceOrImmutableExpression, Error> {
+    ) -> Result<MutRefOrImmutableExpression, Error> {
         let is_mutable = self.to_node_option(Option::from(&expr.is_mutable));
         let expression_or_location = if is_mutable.is_some() {
-            ArgumentExpressionOrLocation::Location(self.analyze_to_location(
+            MutRefOrImmutableExpression::Location(self.analyze_to_location(
                 &expr.expression,
                 context,
                 location_side,
             )?)
         } else {
-            ArgumentExpressionOrLocation::Expression(
+            MutRefOrImmutableExpression::Expression(
                 self.analyze_expression(&expr.expression, context)?,
             )
         };
 
-        Ok(MutReferenceOrImmutableExpression {
-            expression_or_location,
-            is_mutable,
-        })
+        Ok(expression_or_location)
     }
 }

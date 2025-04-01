@@ -7,7 +7,7 @@ use crate::TypeContext;
 use crate::err::{Error, ErrorKind};
 use swamp_semantic::Literal::BoolLiteral;
 use swamp_semantic::{
-    ArgumentExpressionOrLocation, Expression, ExpressionKind, Function, FunctionRef,
+    Expression, ExpressionKind, Function, FunctionRef, MutRefOrImmutableExpression,
 };
 use swamp_types::prelude::*;
 
@@ -111,9 +111,9 @@ impl Analyzer<'_> {
         let call_kind = self.create_static_call(
             "new",
             &[
-                ArgumentExpressionOrLocation::Expression(min),
-                ArgumentExpressionOrLocation::Expression(max),
-                ArgumentExpressionOrLocation::Expression(bool_expr),
+                MutRefOrImmutableExpression::Expression(min),
+                MutRefOrImmutableExpression::Expression(max),
+                MutRefOrImmutableExpression::Expression(bool_expr),
             ],
             ast_node,
             &range_type,

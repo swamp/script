@@ -8,9 +8,9 @@ use seq_map::SeqMap;
 use seq_set::SeqSet;
 use source_map_node::Node;
 use swamp_semantic::{
-    AnonymousStructLiteral, Expression, ExpressionKind, FunctionRef,
-    LocationAccess, LocationAccessKind, SingleLocationExpression,
-    MutableReferenceKind, SingleMutLocationExpression, StructInstantiation,
+    AnonymousStructLiteral, Expression, ExpressionKind, FunctionRef, LocationAccess,
+    LocationAccessKind, MutableReferenceKind, SingleLocationExpression, StructInstantiation,
+    TargetAssignmentLocation,
 };
 use swamp_types::prelude::*;
 
@@ -77,7 +77,7 @@ impl Analyzer<'_> {
                 access_chain: single_chain,
             };
 
-            let created_mut_location = SingleMutLocationExpression(created_location);
+            let created_mut_location = TargetAssignmentLocation(created_location);
 
             let overwrite_expression = self.create_expr_resolved(
                 ExpressionKind::Assignment(

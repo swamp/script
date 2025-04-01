@@ -22,12 +22,12 @@ use source_map_cache::{SourceMapLookup, SourceMapWrapper};
 use source_map_node::Node;
 use swamp_semantic::intr::IntrinsicFunction;
 use swamp_semantic::{
-    AnonymousStructLiteral, ArgumentExpressionOrLocation, BinaryOperator, BinaryOperatorKind,
-    BooleanExpression, CompoundOperatorKind, ConstantId, ConstantRef, EnumLiteralData, Expression,
-    ExpressionKind, ForPattern, Function, Guard, InternalFunctionDefinitionRef, InternalFunctionId,
-    InternalMainExpression, Iterable, Literal, Match, MutReferenceOrImmutableExpression, NormalPattern,
-    Pattern, Postfix, PostfixKind, SingleLocationExpression, SingleMutLocationExpression,
-    StructInstantiation, UnaryOperator, UnaryOperatorKind, VariableRef, WhenBinding,
+    AnonymousStructLiteral, BinaryOperator, BinaryOperatorKind, BooleanExpression,
+    CompoundOperatorKind, ConstantId, ConstantRef, EnumLiteralData, Expression, ExpressionKind,
+    ForPattern, Function, Guard, InternalFunctionDefinitionRef, InternalFunctionId,
+    InternalMainExpression, Iterable, Literal, Match, MutRefOrImmutableExpression, NormalPattern,
+    Pattern, Postfix, PostfixKind, SingleLocationExpression, StructInstantiation,
+    TargetAssignmentLocation, UnaryOperator, UnaryOperatorKind, VariableRef, WhenBinding,
 };
 use swamp_types::{AnonymousStructType, EnumVariantType, Signature, StructTypeField, Type};
 use swamp_vm_disasm::{disasm_color, disasm_instructions_color};
@@ -353,7 +353,7 @@ impl FunctionCodeGen<'_> {
         &mut self,
         intrinsic_fn: &IntrinsicFunction,
         self_addr: Option<FrameMemoryRegion>,
-        arguments: &[ArgumentExpressionOrLocation],
+        arguments: &[MutRefOrImmutableExpression],
         ctx: &Context,
     ) -> Result<(), Error> {
         match intrinsic_fn {
@@ -429,7 +429,7 @@ impl FunctionCodeGen<'_> {
             IntrinsicFunction::MapCreate => todo!(),
             IntrinsicFunction::MapFromSlicePair => {
                 let slice_pair_argument = &arguments[0];
-                let ArgumentExpressionOrLocation::Expression(expr) = slice_pair_argument else {
+                let MutRefOrImmutableExpression::Expression(expr) = slice_pair_argument else {
                     panic!();
                 };
 
@@ -455,7 +455,7 @@ impl FunctionCodeGen<'_> {
             }
             IntrinsicFunction::MapHas => todo!(),
             IntrinsicFunction::MapRemove => {
-                let ArgumentExpressionOrLocation::Expression(key_argument) = &arguments[0] else {
+                let MutRefOrImmutableExpression::Expression(key_argument) = &arguments[0] else {
                     panic!("must be expression for key");
                 };
                 self.gen_intrinsic_map_remove(self_addr.unwrap(), key_argument, ctx)
@@ -770,6 +770,7 @@ impl FunctionCodeGen<'_> {
             // --------- TO BE REMOVED
             ExpressionKind::IntrinsicFunctionAccess(_) => todo!(), // TODO: IntrinsicFunctionAccess should be reduced away in analyzer
             ExpressionKind::ExternalFunctionAccess(_) => todo!(), // TODO: ExternalFunctionAccess should be reduced away in analyzer
+            ExpressionKind::VariableBinding(_, _) => todo!(),
         };
 
         self.debug_instructions();
@@ -1076,7 +1077,7 @@ impl FunctionCodeGen<'_> {
     fn gen_variable_binding(
         &mut self,
         variable: &VariableRef,
-        mut_or_immutable_expression: &MutReferenceOrImmutableExpression,
+        mut_or_immutable_expression: &MutRefOrImmutableExpression,
         ctx: &Context,
     ) -> Result<(), Error> {
         let target_relative_frame_pointer = self
@@ -1092,7 +1093,7 @@ impl FunctionCodeGen<'_> {
 
     fn gen_assignment(
         &mut self,
-        lhs: &SingleMutLocationExpression,
+        lhs: &TargetAssignmentLocation,
         rhs: &Expression,
     ) -> Result<(), Error> {
         let lhs_addr = self.gen_lvalue_address(&lhs.0)?;
@@ -1127,7 +1128,7 @@ impl FunctionCodeGen<'_> {
         &mut self,
         signature: &Signature,
         maybe_self: Option<FrameMemoryRegion>,
-        arguments: &Vec<ArgumentExpressionOrLocation>,
+        arguments: &Vec<MutRefOrImmutableExpression>,
     ) -> Result<(), Error> {
         let arguments_memory_region = self.infinite_above_frame_size();
         let mut arguments_allocator = ScopeAllocator::new(arguments_memory_region);
@@ -1152,7 +1153,7 @@ impl FunctionCodeGen<'_> {
                 continue;
             }
 
-            if let ArgumentExpressionOrLocation::Location(found_location) = argument {
+            if let MutRefOrImmutableExpression::Location(found_location) = argument {
                 let argument_target = self.gen_lvalue_address(found_location)?;
                 self.state.builder.add_mov(
                     argument_target.addr,
@@ -1173,7 +1174,7 @@ impl FunctionCodeGen<'_> {
         &mut self,
         signature: &Signature,
         self_region: Option<FrameMemoryRegion>,
-        arguments: &Vec<ArgumentExpressionOrLocation>,
+        arguments: &Vec<MutRefOrImmutableExpression>,
     ) -> Result<FrameMemoryRegion, Error> {
         self.argument_allocator.reset();
         // Layout return and arguments, must be continuous space
@@ -1567,7 +1568,7 @@ impl FunctionCodeGen<'_> {
     fn gen_for_loop_vec(
         &mut self,
         for_pattern: &ForPattern,
-        collection_expr: &MutReferenceOrImmutableExpression,
+        collection_expr: &MutRefOrImmutableExpression,
     ) -> Result<(InstructionPosition, PatchPosition), Error> {
         let collection_region = self.gen_for_access_or_location(collection_expr)?;
 
@@ -1662,7 +1663,7 @@ impl FunctionCodeGen<'_> {
 
         // check if it has reached its end
 
-        let collection_type = &iterable.resolved_expression.expression_or_location.ty();
+        let collection_type = &iterable.resolved_expression.ty();
         let (jump_ip, placeholder_position) = match collection_type {
             Type::String => {
                 todo!();
@@ -1848,7 +1849,7 @@ impl FunctionCodeGen<'_> {
 
     fn compound_assignment(
         &mut self,
-        target_location: &SingleMutLocationExpression,
+        target_location: &TargetAssignmentLocation,
         op: &CompoundOperatorKind,
         source: &Expression,
         ctx: &Context,
@@ -2101,7 +2102,7 @@ impl FunctionCodeGen<'_> {
     fn gen_intrinsic_call_ex(
         &mut self,
         intrinsic_fn: &IntrinsicFunction,
-        arguments: &Vec<ArgumentExpressionOrLocation>,
+        arguments: &Vec<MutRefOrImmutableExpression>,
         ctx: &Context,
     ) -> Result<(), Error> {
         //        info!(?intrinsic_fn, "generating intrinsic call");
@@ -2218,7 +2219,7 @@ impl FunctionCodeGen<'_> {
         Ok(())
     }
 
-    fn gen_intrinsic_vec_create(&self, arguments: &Vec<ArgumentExpressionOrLocation>) {
+    fn gen_intrinsic_vec_create(&self, arguments: &Vec<MutRefOrImmutableExpression>) {
         for arg in arguments {
             info!(?arg, "argument");
         }
@@ -2226,10 +2227,10 @@ impl FunctionCodeGen<'_> {
 
     fn gen_intrinsic_vec_from_slice(
         &mut self,
-        arguments: &[ArgumentExpressionOrLocation],
+        arguments: &[MutRefOrImmutableExpression],
         ctx: &Context,
     ) -> Result<(), Error> {
-        if let ArgumentExpressionOrLocation::Expression(found_expr) = &arguments[0] {
+        if let MutRefOrImmutableExpression::Expression(found_expr) = &arguments[0] {
             let memory = self.gen_expression_for_access(found_expr)?;
             self.state.builder.add_vec_from_slice(
                 ctx.addr(),
@@ -2387,8 +2388,8 @@ impl FunctionCodeGen<'_> {
                 let var_ctx = Context::new(variable_region);
                 self.gen_mut_or_immute(&binding.expr, &var_ctx)?;
             } else {
-                let ArgumentExpressionOrLocation::Expression(variable_access_expression) =
-                    &binding.expr.expression_or_location
+                let MutRefOrImmutableExpression::Expression(variable_access_expression) =
+                    &binding.expr
                 else {
                     panic!("must be expression");
                 };

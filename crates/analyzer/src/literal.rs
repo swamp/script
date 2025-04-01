@@ -6,7 +6,7 @@ use crate::err::{Error, ErrorKind};
 use crate::{Analyzer, TypeContext};
 use source_map_node::Node;
 use swamp_semantic::ExpressionKind;
-use swamp_semantic::{ArgumentExpressionOrLocation, EnumLiteralData, Expression, Fp, Literal};
+use swamp_semantic::{EnumLiteralData, Expression, Fp, Literal, MutRefOrImmutableExpression};
 use swamp_types::prelude::*;
 
 impl Analyzer<'_> {
@@ -63,7 +63,7 @@ impl Analyzer<'_> {
                             ast_node,
                         );
                         let return_type = *found.signature.signature.return_type.clone();
-                        let arg = ArgumentExpressionOrLocation::Expression(expr);
+                        let arg = MutRefOrImmutableExpression::Expression(expr);
                         let call_kind = self.create_static_call(
                             "new_from_slice",
                             &[arg],
@@ -134,7 +134,7 @@ impl Analyzer<'_> {
                             ast_node,
                         );
                         let return_type = *found.signature.signature.return_type.clone();
-                        let arg = ArgumentExpressionOrLocation::Expression(expr);
+                        let arg = MutRefOrImmutableExpression::Expression(expr);
                         let call_kind = self.create_static_call(
                             "new_from_slice_pair",
                             &[arg],

@@ -6,29 +6,26 @@
 use crate::alloc::FrameMemoryRegion;
 use crate::ctx::Context;
 use crate::{Error, FunctionCodeGen};
-use swamp_semantic::{
-    ArgumentExpressionOrLocation, LocationAccessKind, MutReferenceOrImmutableExpression,
-    SingleLocationExpression,
-};
+use swamp_semantic::{LocationAccessKind, MutRefOrImmutableExpression, SingleLocationExpression};
 
 impl FunctionCodeGen<'_> {
     pub(crate) fn gen_for_access_or_location(
         &mut self,
-        mut_or_immutable_expression: &MutReferenceOrImmutableExpression,
+        mut_or_immutable_expression: &MutRefOrImmutableExpression,
     ) -> Result<FrameMemoryRegion, Error> {
-        self.gen_for_access_or_location_ex(&mut_or_immutable_expression.expression_or_location)
+        self.gen_for_access_or_location_ex(&mut_or_immutable_expression)
     }
 
     pub(crate) fn gen_mut_or_immute(
         &mut self,
-        mut_or_immutable_expression: &MutReferenceOrImmutableExpression,
+        mut_or_immutable_expression: &MutRefOrImmutableExpression,
         ctx: &Context,
     ) -> Result<(), Error> {
-        match &mut_or_immutable_expression.expression_or_location {
-            ArgumentExpressionOrLocation::Expression(found_expression) => {
+        match &mut_or_immutable_expression {
+            MutRefOrImmutableExpression::Expression(found_expression) => {
                 self.gen_expression(found_expression, ctx)?;
             }
-            ArgumentExpressionOrLocation::Location(location_expression) => {
+            MutRefOrImmutableExpression::Location(location_expression) => {
                 self.gen_lvalue_address(location_expression)?;
             }
         }
@@ -38,15 +35,15 @@ impl FunctionCodeGen<'_> {
 
     pub(crate) fn gen_argument(
         &mut self,
-        argument: &ArgumentExpressionOrLocation,
+        argument: &MutRefOrImmutableExpression,
         ctx: &Context,
         comment: &str,
     ) -> Result<(), Error> {
         match &argument {
-            ArgumentExpressionOrLocation::Expression(found_expression) => {
+            MutRefOrImmutableExpression::Expression(found_expression) => {
                 self.gen_expression(found_expression, ctx)?;
             }
-            ArgumentExpressionOrLocation::Location(location_expression) => {
+            MutRefOrImmutableExpression::Location(location_expression) => {
                 self.gen_location_argument(location_expression, ctx, comment)?;
             }
         }
@@ -55,13 +52,13 @@ impl FunctionCodeGen<'_> {
 
     pub(crate) fn gen_for_access_or_location_ex(
         &mut self,
-        mut_or_immutable_expression: &ArgumentExpressionOrLocation,
+        mut_or_immutable_expression: &MutRefOrImmutableExpression,
     ) -> Result<FrameMemoryRegion, Error> {
         match &mut_or_immutable_expression {
-            ArgumentExpressionOrLocation::Expression(found_expression) => {
+            MutRefOrImmutableExpression::Expression(found_expression) => {
                 self.gen_expression_for_access(found_expression)
             }
-            ArgumentExpressionOrLocation::Location(location_expression) => {
+            MutRefOrImmutableExpression::Location(location_expression) => {
                 self.gen_lvalue_address(location_expression)
             }
         }
