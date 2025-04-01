@@ -24,7 +24,7 @@ impl Analyzer<'_> {
         let expression = match &ast_literal_kind {
             swamp_ast::LiteralKind::Slice(items) => {
                 let (encountered_element_type, resolved_items) =
-                    self.analyze_slice_type_helper(ast_node, items)?;
+                    self.analyze_slice_type_helper(ast_node, items, &context)?;
 
                 let slice_type = Type::Slice(Box::new(encountered_element_type.clone()));
 

@@ -26,8 +26,8 @@ use swamp_semantic::{
     CompoundOperatorKind, ConstantId, ConstantRef, EnumLiteralData, Expression, ExpressionKind,
     ForPattern, Function, Guard, InternalFunctionDefinitionRef, InternalFunctionId,
     InternalMainExpression, Iterable, Literal, Match, MutRefOrImmutableExpression, NormalPattern,
-    Pattern, Postfix, PostfixKind, SingleLocationExpression, StructInstantiation,
-    TargetAssignmentLocation, UnaryOperator, UnaryOperatorKind, VariableRef, WhenBinding,
+    Pattern, Postfix, PostfixKind, SingleLocationExpression, TargetAssignmentLocation,
+    UnaryOperator, UnaryOperatorKind, VariableRef, WhenBinding,
 };
 use swamp_types::{AnonymousStructType, EnumVariantType, Signature, StructTypeField, Type};
 use swamp_vm_disasm::{disasm_color, disasm_instructions_color};
@@ -720,11 +720,8 @@ impl FunctionCodeGen<'_> {
             ExpressionKind::VariableReassignment(variable, expression) => self
                 .gen_variable_reassignment(variable, expression, ctx)
                 .map(|_| GeneratedExpressionResult::default()),
-            ExpressionKind::StructInstantiation(struct_literal) => self
-                .gen_struct_literal(struct_literal, ctx)
-                .map(|()| GeneratedExpressionResult::default()),
             ExpressionKind::AnonymousStructLiteral(anon_struct) => self
-                .gen_anonymous_struct_literal(anon_struct, ctx)
+                .gen_anonymous_struct_literal(anon_struct, &expr.ty, ctx)
                 .map(|_| GeneratedExpressionResult::default()),
             ExpressionKind::Literal(basic_literal) => self
                 .gen_literal(basic_literal, ctx)
@@ -1936,25 +1933,20 @@ impl FunctionCodeGen<'_> {
         FrameMemoryRegion::new(FrameMemoryAddress(self.frame_size.0), MemorySize(1024))
     }
 
-    fn gen_struct_literal(
-        &mut self,
-        struct_literal: &StructInstantiation,
-        ctx: &Context,
-    ) -> Result<(), Error> {
-        self.gen_struct_literal_helper(
-            &struct_literal.struct_type_ref.anon_struct_type,
-            &struct_literal.source_order_expressions,
-            ctx,
-        )
-    }
-
     fn gen_anonymous_struct_literal(
         &mut self,
         anon_struct_literal: &AnonymousStructLiteral,
+        ty: &Type,
         ctx: &Context,
     ) -> Result<(), Error> {
+        let anon_struct_type = match ty {
+            Type::NamedStruct(named_struct) => named_struct.anon_struct_type.clone(),
+            Type::AnonymousStruct(anon_struct_type) => anon_struct_type.clone(),
+            _ => panic!("internal error with struct literal"),
+        };
+
         self.gen_struct_literal_helper(
-            &anon_struct_literal.anonymous_struct_type,
+            &anon_struct_type,
             &anon_struct_literal.source_order_expressions,
             ctx,
         )
@@ -1963,7 +1955,7 @@ impl FunctionCodeGen<'_> {
     fn gen_struct_literal_helper(
         &mut self,
         struct_type_ref: &AnonymousStructType,
-        source_order_expressions: &Vec<(usize, Expression)>,
+        source_order_expressions: &Vec<(usize, Option<Node>, Expression)>,
         ctx: &Context,
     ) -> Result<(), Error> {
         let struct_type = Type::AnonymousStruct(struct_type_ref.clone());
@@ -1973,7 +1965,7 @@ impl FunctionCodeGen<'_> {
         }
         assert_eq!(ctx.target_size().0, whole_struct_size.0);
 
-        for (field_index, expression) in source_order_expressions {
+        for (field_index, _node, expression) in source_order_expressions {
             let (field_offset, field_size, field_alignment) =
                 struct_field_offset(*field_index, struct_type_ref);
             //info!(?field_offset, ?field_index, "field offset");

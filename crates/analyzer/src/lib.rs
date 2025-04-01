@@ -23,6 +23,7 @@ use source_map_node::{FileId, Node, Span};
 use std::mem::take;
 use std::num::{ParseFloatError, ParseIntError};
 use std::ops::Deref;
+use std::task::Context;
 use swamp_modules::prelude::*;
 use swamp_modules::symtbl::{SymbolTableRef, TypeGeneratorKind};
 use swamp_semantic::instantiator::TypeVariableScope;
@@ -604,7 +605,7 @@ impl<'a> Analyzer<'a> {
 
             // Creation
             swamp_ast::ExpressionKind::NamedStructLiteral(struct_identifier, fields, has_rest) => {
-                self.analyze_struct_instantiation(struct_identifier, fields, *has_rest)?
+                self.analyze_named_struct_literal(struct_identifier, fields, *has_rest)?
             }
 
             swamp_ast::ExpressionKind::AnonymousStructLiteral(fields, rest_was_specified) => self
@@ -1340,17 +1341,51 @@ impl<'a> Analyzer<'a> {
 
     fn analyze_slice_type_helper(
         &mut self,
-        _node: &swamp_ast::Node,
+        node: &swamp_ast::Node,
         items: &[swamp_ast::Expression],
+        context: &TypeContext,
     ) -> Result<(Type, Vec<Expression>), Error> {
-        let expressions = self.analyze_argument_expressions(None, items)?;
-        let element_type = if expressions.is_empty() {
-            Type::Unit
+        let maybe_expected_element_type = if let Some(expected_type) = context.expected_type {
+            if let Type::Slice(inner_type) = expected_type {
+                Some(*inner_type.clone())
+            } else {
+                info!(?expected_type, "EXPECTED TYPE");
+                if let Type::NamedStruct(named) = expected_type {
+                    Some(named.instantiated_type_parameters[0].clone())
+                } else {
+                    return Err(self.create_err(ErrorKind::ExpectedSlice, &node));
+                }
+            }
         } else {
-            expressions[0].ty.clone()
+            None
         };
 
-        Ok((element_type, expressions))
+        if items.is_empty() {
+            context.expected_type.map_or_else(
+                || Ok((Type::Unit, vec![])),
+                |expected_type| {
+                    if let Type::Slice(_inner_type) = expected_type {
+                        Ok((expected_type.clone(), vec![]))
+                    } else if let Type::NamedStruct(named) = expected_type {
+                        Ok((named.instantiated_type_parameters[0].clone(), vec![]))
+                    } else {
+                        Err(self.create_err(ErrorKind::ExpectedSlice, node))
+                    }
+                },
+            )
+        } else {
+            let maybe_context =
+                TypeContext::new_unsure_argument(maybe_expected_element_type.as_ref());
+            let first = self.analyze_expression(&items[0], &maybe_context)?;
+            let required_type = first.ty.clone();
+            let required_context = TypeContext::new_argument(&required_type);
+            let mut resolved_items = Vec::new();
+            for item in items {
+                let resolved_expr = self.analyze_expression(item, &required_context)?;
+                resolved_items.push(resolved_expr);
+            }
+            Ok((first.ty, resolved_items))
+        }
     }
 
     fn push_block_scope(&mut self, _debug_str: &str) {

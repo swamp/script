@@ -197,6 +197,9 @@ pub fn build_analyzer_error(err: &Error) -> Builder<usize> {
         ErrorKind::MissingMemberFunction(_) => {
             Report::build(Kind::Error, 59, "missing member function", span)
         }
+        &swamp_analyzer::err::ErrorKind::ExpectedSlice => {
+            Report::build(Kind::Error, 59, "expected slice", span)
+        }
     };
     b.error_module = "A".to_string();
     b

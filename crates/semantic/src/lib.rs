@@ -18,6 +18,7 @@ use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::rc::Rc;
 use swamp_types::GenericAwareSignature;
+use swamp_types::StructLikeType;
 use swamp_types::prelude::*;
 use tracing::error;
 
@@ -469,15 +470,9 @@ pub struct Iterable {
 }
 
 #[derive(Debug, Clone)]
-pub struct StructInstantiation {
-    pub source_order_expressions: Vec<(usize, Expression)>,
-    pub struct_type_ref: NamedStructType,
-}
-
-#[derive(Debug, Clone)]
 pub struct AnonymousStructLiteral {
-    pub source_order_expressions: Vec<(usize, Expression)>,
-    pub anonymous_struct_type: AnonymousStructType,
+    pub source_order_expressions: Vec<(usize, Option<Node>, Expression)>,
+    pub struct_like_type: StructLikeType,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -561,7 +556,7 @@ pub struct TargetAssignmentLocation(pub SingleLocationExpression);
 #[derive(Debug, Clone)]
 pub enum MutableReferenceKind {
     MutVariableRef,
-    MutStructFieldRef(NamedStructType, usize),
+    MutStructFieldRef(AnonymousStructType, usize),
 }
 
 #[derive(Debug, Clone)]
@@ -675,7 +670,6 @@ pub enum ExpressionKind {
         Box<Expression>,
     ),
 
-    StructInstantiation(StructInstantiation),
     AnonymousStructLiteral(AnonymousStructLiteral),
     Literal(Literal),
     Option(Option<Box<Expression>>), // Wrapping an expression in `Some()`

@@ -6,11 +6,12 @@ use crate::value::Value;
 use crate::value::ValueRef;
 use swamp_types::NamedStructType;
 
+/*
 pub fn overwrite_value(target: &ValueRef, source: Value) {
-    if let Value::NamedStruct(ref mut target_struct_type_ref, ref mut target_fields) =
+    if let Value::AnonymousStruct(ref mut target_struct_type_ref, ref mut target_fields) =
         *target.borrow_mut()
     {
-        if let Value::NamedStruct(source_struct_type_ref, source_fields) = source {
+        if let Value::AnonymousStruct(source_struct_type_ref, source_fields) = source {
             overwrite_struct(
                 target_struct_type_ref,
                 target_fields,
@@ -54,3 +55,4 @@ pub fn overwrite_struct(
         }
     }
 }
+*/

@@ -32,7 +32,7 @@ use swamp_semantic::{
 };
 use swamp_semantic::{ExternalFunctionId, Postfix};
 use swamp_semantic::{LocationAccess, LocationAccessKind};
-use swamp_types::{EnumVariantType, Type, TypeForParameter, same_anon_struct_ref};
+use swamp_types::{EnumVariantType, Type, TypeForParameter, compare_anonymous_struct_types};
 
 impl From<ValueError> for RuntimeError {
     fn from(value: ValueError) -> Self {
@@ -795,6 +795,7 @@ impl<'a, C> Interpreter<'a, C> {
             // Constructing
             ExpressionKind::Literal(lit) => self.evaluate_literal(&expr.node, lit)?,
 
+            /*
             ExpressionKind::StructInstantiation(struct_instantiation) => {
                 // Evaluate all field expressions and validate types
                 let mut field_values =
@@ -816,6 +817,7 @@ impl<'a, C> Interpreter<'a, C> {
                 )
             }
 
+             */
             ExpressionKind::AnonymousStructLiteral(struct_instantiation) => {
                 // Evaluate all field expressions and validate types
                 let mut field_values =
@@ -826,13 +828,13 @@ impl<'a, C> Interpreter<'a, C> {
                 );
 
                 // They are evaluated in source order, but an array_index is provided for the definition order
-                for (array_index, field_expr) in &struct_instantiation.source_order_expressions {
+                for (array_index, _, field_expr) in &struct_instantiation.source_order_expressions {
                     let value = self.evaluate_expression(field_expr)?;
                     field_values[*array_index] = value;
                 }
 
                 Value::AnonymousStruct(
-                    struct_instantiation.anonymous_struct_type.clone(),
+                    struct_instantiation.struct_like_type.clone(),
                     convert_vec_to_rc_refcell(field_values),
                 )
             }
@@ -1444,7 +1446,7 @@ impl<'a, C> Interpreter<'a, C> {
             IntrinsicFunction::VecSubscriptRange => match &mut *value_ref.borrow_mut() {
                 Value::Vec(type_id, vector) => {
                     let range_struct = self.evaluate_expression(arguments[0])?;
-                    let Value::NamedStruct(_, fields) = range_struct else {
+                    let Value::AnonymousStruct(_, fields) = range_struct else {
                         panic!("range is wrong");
                     };
 
@@ -2446,10 +2448,11 @@ impl<'a, C> Interpreter<'a, C> {
                         (struct_ref.clone(), fields_ref.clone())
                     };
 
-                    debug_assert!(same_anon_struct_ref(
-                        &encountered_struct_type,
-                        expected_struct_type
+                    debug_assert!(compare_anonymous_struct_types(
+                        expected_struct_type,
+                        &encountered_struct_type.anonymous_struct_type
                     ));
+
                     val_ref = fields[*index].clone();
                 }
 

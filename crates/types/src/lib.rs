@@ -654,6 +654,12 @@ impl Debug for NamedStructType {
     }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub struct StructLikeType {
+    pub assigned_name: String,
+    pub anonymous_struct_type: AnonymousStructType,
+}
+
 impl NamedStructType {
     #[must_use]
     pub fn new(
@@ -671,6 +677,13 @@ impl NamedStructType {
             assigned_name: assigned_name.to_string(),
             instantiated_type_parameters: Vec::default(),
             blueprint_info,
+        }
+    }
+
+    pub fn to_struct_like(&self) -> StructLikeType {
+        StructLikeType {
+            assigned_name: self.assigned_name.clone(),
+            anonymous_struct_type: self.anon_struct_type.clone(),
         }
     }
 

@@ -423,10 +423,12 @@ impl SourceMapDisplay<'_> {
             ExpressionKind::VariableReassignment(_, _) => {
                 write!(f, "VariableReassignment()")
             }
+            /*
             ExpressionKind::StructInstantiation(struct_literal) => {
                 self.show_struct_literal(f, struct_literal, tabs)
             }
 
+             */
             ExpressionKind::Literal(basic_literal) => {
                 self.show_basic_literal(f, basic_literal, tabs)
             }
@@ -938,6 +940,7 @@ impl SourceMapDisplay<'_> {
         }
     }
 
+    /*
     fn show_struct_literal(
         &self,
         f: &mut Formatter,
@@ -967,6 +970,8 @@ impl SourceMapDisplay<'_> {
 
         Ok(())
     }
+
+     */
 
     fn show_type_variable(
         &self,

@@ -82,6 +82,7 @@ pub enum ErrorKind {
     CanNotAttachFunctionsToType,
     MissingMemberFunction(String),
     ExpectedLambda,
+    ExpectedSlice,
 }
 
 impl From<SemanticError> for Error {
