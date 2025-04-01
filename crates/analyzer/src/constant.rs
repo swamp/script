@@ -8,7 +8,13 @@ use swamp_semantic::{Constant, ConstantRef, Expression, ExpressionKind};
 
 impl Analyzer<'_> {
     fn analyze_constant(&mut self, constant: &swamp_ast::ConstantInfo) -> Result<(), Error> {
-        let context = TypeContext::new_anything_argument();
+        let maybe_annotation_type = if let Some(found_ast_type) = &constant.annotation {
+            Some(self.analyze_type(&found_ast_type)?)
+        } else {
+            None
+        };
+
+        let context = TypeContext::new_unsure_argument(maybe_annotation_type.as_ref());
         let resolved_expr = self.analyze_expression(&constant.expression, &context)?;
         let resolved_type = resolved_expr.ty.clone();
         let name_node = self.to_node(&constant.constant_identifier.0);

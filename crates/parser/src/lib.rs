@@ -362,13 +362,18 @@ impl AstParser {
     }
 
     fn parse_const_info(&self, pair: &Pair<Rule>) -> Result<ConstantInfo, ParseError> {
-        let mut inner = Self::convert_into_iterator(pair);
+        let mut inner = pair.clone().into_inner(); // Self::convert_into_iterator(pair);
+
         let constant_identifier = self.expect_constant_identifier_next(&mut inner)?;
+
+        let maybe_annotation = self.parse_maybe_annotation(&mut inner)?;
+
         let expr_pair = Self::next_pair(&mut inner)?;
         let expression = self.parse_expression(&expr_pair)?;
 
         Ok(ConstantInfo {
             constant_identifier,
+            annotation: maybe_annotation,
             expression: Box::new(expression),
         })
     }
@@ -1197,10 +1202,13 @@ impl AstParser {
 
             //Rule::mut_expression => self.parse_mutable_or_immutable_expression(pair),
             Rule::postfix => self.parse_postfix_expression(sub), // TODO: maybe not called
-            _ => Err(self.create_error_pair(
-                SpecificError::UnexpectedExpressionType(Self::pair_to_rule(sub)),
-                sub,
-            )),
+            _ => {
+                error!(rule=?sub.as_rule(), "rule");
+                Err(self.create_error_pair(
+                    SpecificError::UnexpectedExpressionType(Self::pair_to_rule(sub)),
+                    sub,
+                ))
+            }
         }
     }
 
@@ -1384,14 +1392,8 @@ impl AstParser {
         Ok(kind)
     }
 
-    #[allow(clippy::too_many_lines)]
-    fn parse_variable_definition(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
-        debug_assert_eq!(pair.as_rule(), Rule::variable_definition);
-        let mut inner = pair.clone().into_inner();
-        let variable_item = Self::next_pair(&mut inner)?;
-        let found_var = self.parse_variable_item(&variable_item)?;
-
-        let maybe_annotation = if let Some(peeked) = inner.peek() {
+    fn parse_maybe_annotation(&self, inner: &mut Pairs<Rule>) -> Result<Option<Type>, ParseError> {
+        let result = if let Some(peeked) = inner.peek() {
             if peeked.as_rule() == Rule::type_coerce {
                 let type_coerce_pair = inner.next().unwrap();
                 let mut type_inner = type_coerce_pair.clone().into_inner();
@@ -1405,8 +1407,19 @@ impl AstParser {
         } else {
             None
         };
+        Ok(result)
+    }
 
-        let rhs_expr = self.parse_expression(&Self::next_pair(&mut inner)?)?;
+    #[allow(clippy::too_many_lines)]
+    fn parse_variable_definition(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
+        debug_assert_eq!(pair.as_rule(), Rule::variable_definition);
+        let mut inner = pair.clone().into_inner();
+        let variable_item = Self::next_pair(&mut inner)?;
+        let found_var = self.parse_variable_item(&variable_item)?;
+
+        let maybe_annotation = self.parse_maybe_annotation(&mut inner)?;
+
+        let rhs_expr = self.parse_expression(&inner.next().unwrap())?;
 
         if maybe_annotation.is_some() || found_var.is_mutable.is_some() {
             Ok(self.create_expr(

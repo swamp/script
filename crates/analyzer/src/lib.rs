@@ -1349,7 +1349,6 @@ impl<'a> Analyzer<'a> {
             if let Type::Slice(inner_type) = expected_type {
                 Some(*inner_type.clone())
             } else {
-                info!(?expected_type, "EXPECTED TYPE");
                 if let Type::NamedStruct(named) = expected_type {
                     Some(named.instantiated_type_parameters[0].clone())
                 } else {

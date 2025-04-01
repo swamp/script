@@ -297,7 +297,7 @@ normal_member_function = {
 }
 
 const_def = {
-     "const"  ~ constant_identifier ~ "=" ~ expression
+     "const"  ~ constant_identifier ~ type_coerce? ~ "=" ~ expression
 }
 
 all_imports = { "*" }

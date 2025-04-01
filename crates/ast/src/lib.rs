@@ -230,6 +230,7 @@ impl AnonymousStructType {
 #[derive(Debug, Clone)]
 pub struct ConstantInfo {
     pub constant_identifier: LocalConstantIdentifier,
+    pub annotation: Option<Type>,
     pub expression: Box<Expression>,
 }
 
