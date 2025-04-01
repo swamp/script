@@ -10,16 +10,16 @@ use pest::{Parser, Position};
 use pest_derive::Parser;
 use std::iter::Peekable;
 use std::str::Chars;
+use swamp_ast::Function;
 use swamp_ast::{
-    AssignmentOperatorKind, BinaryOperatorKind, CompoundOperator, CompoundOperatorKind,
-    EnumVariantLiteral, ExpressionKind, FieldExpression, FieldName, ForPattern, ForVar,
-    ImportItems, IterableExpression, LocalConstantIdentifier,
-    LocalTypeIdentifierWithOptionalTypeVariables, Mod, NamedStructDef, PatternElement,
-    QualifiedIdentifier, RangeMode, SpanWithoutFileId, StructTypeField, TypeForParameter,
-    TypeVariable, VariableBinding, prelude::*,
+    prelude::*, AssignmentOperatorKind, BinaryOperatorKind, CompoundOperator,
+    CompoundOperatorKind, EnumVariantLiteral, ExpressionKind, FieldExpression, FieldName, ForPattern,
+    ForVar, ImportItems, IterableExpression,
+    LocalConstantIdentifier, LocalTypeIdentifierWithOptionalTypeVariables, Mod, NamedStructDef,
+    PatternElement, QualifiedIdentifier, RangeMode, SpanWithoutFileId, StructTypeField,
+    TypeForParameter, TypeVariable, VariableBinding,
 };
-use swamp_ast::{Function, WhenBinding};
-use swamp_ast::{LiteralKind, MutableOrImmutableExpression};
+use swamp_ast::{LiteralKind, MutableReferenceOrImmutableExpression};
 use swamp_ast::{Postfix, PostfixChain};
 use tracing::error;
 
@@ -498,7 +498,7 @@ impl AstParser {
     fn parse_when_expr(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
         let mut inner = Self::convert_into_iterator(pair);
         let binding_list =
-            self.parse_when_variable_binding_list(&inner.next().expect("variable list missing"))?;
+            self.parse_variable_binding_list(&inner.next().expect("variable list missing"))?;
         let expr = self.parse_expression(&inner.next().expect("block missing"))?;
 
         let next = inner.next();
@@ -514,6 +514,25 @@ impl AstParser {
         ))
     }
 
+    fn parse_when_variable_binding(
+        &self,
+        pair: &Pair<Rule>,
+    ) -> Result<VariableBinding, ParseError> {
+        let mut inner = Self::convert_into_iterator(pair);
+
+        let variable = self.parse_variable_item(&inner.next().expect("variable missing"))?;
+
+        let expression = match inner.next() {
+            Some(expr_pair) => Some(self.parse_mutable_reference_expressions(&expr_pair)?),
+            _ => None,
+        };
+
+        Ok(VariableBinding {
+            variable,
+            expression,
+        })
+    }
+
     fn parse_variable_binding_list(
         &self,
         pair: &Pair<Rule>,
@@ -524,66 +543,12 @@ impl AstParser {
         // Each item in inner will be a variable_binding
         for binding_pair in inner {
             if binding_pair.as_rule() == Rule::variable_binding {
-                bindings.push(self.parse_variable_binding(&binding_pair)?);
-            }
-        }
-
-        Ok(bindings)
-    }
-
-    fn parse_variable_binding(&self, pair: &Pair<Rule>) -> Result<VariableBinding, ParseError> {
-        let mut inner = Self::convert_into_iterator(pair);
-
-        let variable = self.parse_variable_item(&inner.next().expect("variable missing"))?;
-
-        let expression = match inner.next() {
-            Some(expr_pair) => self.parse_mutable_or_immutable_expression(&expr_pair)?,
-            _ => MutableOrImmutableExpression {
-                expression: self
-                    .create_expr(ExpressionKind::VariableReference(variable.clone()), pair),
-                is_mutable: None,
-            },
-        };
-
-        Ok(VariableBinding {
-            variable,
-            expression,
-        })
-    }
-
-    fn parse_when_variable_binding(&self, pair: &Pair<Rule>) -> Result<WhenBinding, ParseError> {
-        let mut inner = Self::convert_into_iterator(pair);
-
-        let variable = self.parse_variable_item(&inner.next().expect("variable missing"))?;
-
-        let expression = match inner.next() {
-            Some(expr_pair) => Some(self.parse_mutable_or_immutable_expression(&expr_pair)?),
-            _ => None,
-        };
-
-        Ok(WhenBinding {
-            variable,
-            expression,
-        })
-    }
-
-    fn parse_when_variable_binding_list(
-        &self,
-        pair: &Pair<Rule>,
-    ) -> Result<Vec<WhenBinding>, ParseError> {
-        let inner = Self::convert_into_iterator(pair);
-        let mut bindings = Vec::new();
-
-        // Each item in inner will be a variable_binding
-        for binding_pair in inner {
-            if binding_pair.as_rule() == Rule::variable_when_binding {
                 bindings.push(self.parse_when_variable_binding(&binding_pair)?);
             }
         }
 
         Ok(bindings)
     }
-
     fn parse_if_expression(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
         let mut inner = Self::convert_into_iterator(pair);
         let condition = self.parse_expression(&Self::next_pair(&mut inner)?)?;
@@ -714,7 +679,7 @@ impl AstParser {
         (
             FieldName,
             Option<Vec<Type>>,
-            Vec<MutableOrImmutableExpression>,
+            Vec<MutableReferenceOrImmutableExpression>,
         ),
         ParseError,
     > {
@@ -1162,7 +1127,7 @@ impl AstParser {
         };
 
         let next_pair = Self::next_pair(&mut inner)?;
-        let iterable_expression = self.parse_mutable_or_immutable_expression(&next_pair)?;
+        let iterable_expression = self.parse_mutable_reference_expressions(&next_pair)?;
 
         let mut_expression = IterableExpression {
             expression: Box::new(iterable_expression),
@@ -1448,7 +1413,8 @@ impl AstParser {
             None
         };
 
-        let rhs_expr = self.parse_mutable_or_immutable_expression(&Self::next_pair(&mut inner)?)?;
+        let rhs_expr =
+            self.parse_expression(&Self::next_pair(&mut inner)?)?;
 
         if maybe_annotation.is_some() || found_var.is_mutable.is_some() {
             Ok(self.create_expr(
@@ -2228,39 +2194,31 @@ impl AstParser {
         ))
     }
 
-    fn parse_mutable_or_immutable_expression(
+    fn parse_mutable_reference_expressions(
         &self,
         pair: &Pair<Rule>,
-    ) -> Result<MutableOrImmutableExpression, ParseError> {
-        debug_assert_eq!(pair.as_rule(), Rule::mut_expression);
-        // The mut_expression rule is defined as { lvalue | expression }.
-        // Its inner pair will be one of those alternatives.
+    ) -> Result<MutableReferenceOrImmutableExpression, ParseError> {
+        debug_assert_eq!(pair.as_rule(), Rule::ref_mut_expression);
         let mut inner = pair.clone().into_inner();
+        // Check if the first inner item is a reference operator
+        let mut is_mutable_ref: Option<Node> = None;
+        let expr_pair;
+
         let first = Self::next_pair(&mut inner)?;
-        match first.as_rule() {
-            Rule::lvalue => {
-                let mut lvalue_inner = first.into_inner();
-                let mut_kw = Self::next_pair(&mut lvalue_inner)?;
-                let postfix = Self::next_pair(&mut lvalue_inner)?;
-                let expr = self.parse_postfix_expression(&postfix)?;
-                Ok(MutableOrImmutableExpression {
-                    is_mutable: Some(self.to_node(&mut_kw)),
-                    expression: expr,
-                })
-            }
-            Rule::expression => {
-                // Otherwise, if it’s an expression, parse it normally.
-                let expr = self.parse_expression(&first)?;
-                Ok(MutableOrImmutableExpression {
-                    is_mutable: None,
-                    expression: expr,
-                })
-            }
-            _ => {
-                Err(self
-                    .create_error_pair(SpecificError::UnexpectedTokenInMutableExpression, &first))
-            }
+        if first.as_rule() == Rule::reference_mut_op {
+            // If we found a reference operator, the next item is the actual expression
+            is_mutable_ref = Some(self.to_node(&first));
+            expr_pair = Self::next_pair(&mut inner)?;
+        } else {
+            expr_pair = first;
         }
+
+        let expr = self.parse_expression(&expr_pair)?;
+
+        Ok(MutableReferenceOrImmutableExpression {
+            is_mutable: is_mutable_ref,
+            expression: expr,
+        })
     }
 
     fn assert_end(pairs: &mut Pairs<Rule>) {
@@ -2270,7 +2228,7 @@ impl AstParser {
     fn parse_function_call_postfix(
         &self,
         pair: &Pair<Rule>,
-    ) -> Result<(Option<Vec<Type>>, Vec<MutableOrImmutableExpression>), ParseError> {
+    ) -> Result<(Option<Vec<Type>>, Vec<MutableReferenceOrImmutableExpression>), ParseError> {
         debug_assert_eq!(pair.as_rule(), Rule::function_call_postfix);
         let mut inner = pair.clone().into_inner();
 
@@ -2302,17 +2260,15 @@ impl AstParser {
     fn parse_function_call_arguments(
         &self,
         pair: &Pair<Rule>,
-    ) -> Result<Vec<MutableOrImmutableExpression>, ParseError> {
+    ) -> Result<Vec<MutableReferenceOrImmutableExpression>, ParseError> {
         debug_assert_eq!(pair.as_rule(), Rule::function_call_args);
         let inner = pair.clone().into_inner();
         let mut args = Vec::new();
 
         // Parse arguments
         for arg_pair in inner {
-            if arg_pair.as_rule() == Rule::mut_expression {
-                //let mut arg_inner = Self::convert_into_iterator(&arg_pair).peekable();
-
-                let expr = self.parse_mutable_or_immutable_expression(&arg_pair)?;
+            if arg_pair.as_rule() == Rule::ref_mut_expression {
+                let expr = self.parse_mutable_reference_expressions(&arg_pair)?;
                 args.push(expr);
             } else {
                 return Err(
@@ -2486,7 +2442,8 @@ impl AstParser {
 
     fn parse_match_expr(&self, pair: &Pair<Rule>) -> Result<Expression, ParseError> {
         let mut inner = Self::convert_into_iterator(pair);
-        let value = self.parse_mutable_or_immutable_expression(&Self::next_pair(&mut inner)?)?;
+        let value =
+            self.parse_mutable_reference_expressions(&Self::next_pair(&mut inner)?)?;
         let arms_pair = Self::next_pair(&mut inner)?;
         let mut arms = Vec::new();
 

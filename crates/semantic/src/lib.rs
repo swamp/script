@@ -416,7 +416,7 @@ pub struct BooleanExpression {
 #[derive(Debug, Clone)]
 pub struct Match {
     pub arms: Vec<MatchArm>,
-    pub expression: Box<MutOrImmutableExpression>,
+    pub expression: Box<MutReferenceOrImmutableExpression>,
 }
 
 impl Match {
@@ -464,7 +464,7 @@ pub struct Iterable {
     pub key_type: Option<Type>, // It does not have to support a key type
     pub value_type: Type,
 
-    pub resolved_expression: Box<MutOrImmutableExpression>,
+    pub resolved_expression: Box<MutReferenceOrImmutableExpression>,
 }
 
 #[derive(Debug, Clone)]
@@ -546,7 +546,7 @@ pub struct LocationAccess {
 
 #[derive(Debug, Clone)]
 pub struct SingleLocationExpression {
-    pub kind: SingleLocationExpressionKind,
+    pub kind: MutableReferenceKind,
     pub node: Node,
     pub ty: Type,
 
@@ -558,18 +558,18 @@ pub struct SingleLocationExpression {
 pub struct SingleMutLocationExpression(pub SingleLocationExpression);
 
 #[derive(Debug, Clone)]
-pub enum SingleLocationExpressionKind {
+pub enum MutableReferenceKind {
     MutVariableRef,
     MutStructFieldRef(NamedStructType, usize),
 }
 
 #[derive(Debug, Clone)]
-pub struct MutOrImmutableExpression {
+pub struct MutReferenceOrImmutableExpression {
     pub expression_or_location: ArgumentExpressionOrLocation,
     pub is_mutable: Option<Node>,
 }
 
-impl MutOrImmutableExpression {
+impl MutReferenceOrImmutableExpression {
     pub fn expect_immutable(self) -> Result<Expression, SemanticError> {
         match self.expression_or_location {
             ArgumentExpressionOrLocation::Expression(expr) => Ok(expr),
@@ -633,7 +633,7 @@ impl Debug for Expression {
 #[derive(Debug, Clone)]
 pub struct WhenBinding {
     pub variable: VariableRef,
-    pub expr: MutOrImmutableExpression,
+    pub expr: MutReferenceOrImmutableExpression,
 }
 
 impl WhenBinding {
@@ -680,8 +680,9 @@ pub enum ExpressionKind {
     InterpolatedString(Vec<StringPart>),
 
     // Constructing
-    VariableDefinition(VariableRef, Box<MutOrImmutableExpression>), // First time assignment
-    VariableReassignment(VariableRef, Box<MutOrImmutableExpression>),
+    VariableDefinition(VariableRef, Box<Expression>), // First time assignment
+    VariableReassignment(VariableRef, Box<Expression>),
+    VariableBinding(VariableRef, Box<MutReferenceOrImmutableExpression>),
     Assignment(Box<SingleMutLocationExpression>, Box<Expression>),
     CompoundAssignment(
         SingleMutLocationExpression,

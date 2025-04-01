@@ -8,9 +8,9 @@ use seq_map::SeqMap;
 use seq_set::SeqSet;
 use source_map_node::Node;
 use swamp_semantic::{
-    AnonymousStructLiteral, ArgumentExpressionOrLocation, Expression, ExpressionKind, FunctionRef,
-    LocationAccess, LocationAccessKind, MutOrImmutableExpression, SingleLocationExpression,
-    SingleLocationExpressionKind, SingleMutLocationExpression, StructInstantiation,
+    AnonymousStructLiteral, Expression, ExpressionKind, FunctionRef,
+    LocationAccess, LocationAccessKind, SingleLocationExpression,
+    MutableReferenceKind, SingleMutLocationExpression, StructInstantiation,
 };
 use swamp_types::prelude::*;
 
@@ -41,13 +41,7 @@ impl Analyzer<'_> {
         let static_call = self.create_expr(default_call_kind, return_type, node);
 
         let expr = self.create_expr(
-            ExpressionKind::VariableDefinition(
-                temp_var.clone(),
-                Box::new(MutOrImmutableExpression {
-                    expression_or_location: ArgumentExpressionOrLocation::Expression(static_call),
-                    is_mutable: None,
-                }),
-            ),
+            ExpressionKind::VariableDefinition(temp_var.clone(), Box::new(static_call)),
             Type::Unit,
             node,
         );
@@ -73,7 +67,7 @@ impl Analyzer<'_> {
             }];
 
             let created_location = SingleLocationExpression {
-                kind: SingleLocationExpressionKind::MutStructFieldRef(
+                kind: MutableReferenceKind::MutStructFieldRef(
                     struct_to_instantiate.clone(),
                     field_target_index,
                 ),

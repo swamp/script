@@ -6,7 +6,7 @@ use crate::TypeContext;
 use crate::err::{Error, ErrorKind};
 use crate::{Analyzer, LocationSide};
 use source_map_node::Node;
-use swamp_semantic::{ArgumentExpressionOrLocation, MutOrImmutableExpression};
+use swamp_semantic::{ArgumentExpressionOrLocation, MutReferenceOrImmutableExpression};
 use swamp_types::prelude::*;
 
 impl Analyzer<'_> {
@@ -15,7 +15,7 @@ impl Analyzer<'_> {
     pub fn analyze_argument(
         &mut self,
         fn_parameter: &TypeForParameter,
-        argument_expr: &swamp_ast::MutableOrImmutableExpression,
+        argument_expr: &swamp_ast::MutableReferenceOrImmutableExpression,
     ) -> Result<ArgumentExpressionOrLocation, Error> {
         let context = TypeContext::new_argument(&fn_parameter.resolved_type);
 
@@ -49,7 +49,7 @@ impl Analyzer<'_> {
         &mut self,
         node: &Node,
         fn_parameters: &[TypeForParameter],
-        arguments: &[swamp_ast::MutableOrImmutableExpression],
+        arguments: &[swamp_ast::MutableReferenceOrImmutableExpression],
     ) -> Result<Vec<ArgumentExpressionOrLocation>, Error> {
         if fn_parameters.len() != arguments.len() {
             return Err(self.create_err_resolved(
@@ -71,10 +71,10 @@ impl Analyzer<'_> {
     ///
     pub fn analyze_mut_or_immutable_expression(
         &mut self,
-        expr: &swamp_ast::MutableOrImmutableExpression,
+        expr: &swamp_ast::MutableReferenceOrImmutableExpression,
         context: &TypeContext,
         location_side: LocationSide,
-    ) -> Result<MutOrImmutableExpression, Error> {
+    ) -> Result<MutReferenceOrImmutableExpression, Error> {
         let is_mutable = self.to_node_option(Option::from(&expr.is_mutable));
         let expression_or_location = if is_mutable.is_some() {
             ArgumentExpressionOrLocation::Location(self.analyze_to_location(
@@ -88,7 +88,7 @@ impl Analyzer<'_> {
             )
         };
 
-        Ok(MutOrImmutableExpression {
+        Ok(MutReferenceOrImmutableExpression {
             expression_or_location,
             is_mutable,
         })

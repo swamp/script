@@ -23,16 +23,16 @@ use swamp_core_extra::grid::Grid;
 use swamp_core_extra::map2::Map2;
 use swamp_core_extra::prelude::ValueError;
 use swamp_core_extra::value::ValueRef;
-use swamp_core_extra::value::{Value, convert_vec_to_rc_refcell, format_value};
+use swamp_core_extra::value::{convert_vec_to_rc_refcell, format_value, Value};
 use swamp_semantic::prelude::*;
 use swamp_semantic::{ArgumentExpressionOrLocation, LocationAccess, LocationAccessKind};
 use swamp_semantic::{
     BinaryOperatorKind, CompoundOperatorKind, ConstantId, ForPattern, Function,
-    MutOrImmutableExpression, NormalPattern, PatternElement, PostfixKind, SingleLocationExpression,
-    SingleLocationExpressionKind, UnaryOperatorKind,
+    MutReferenceOrImmutableExpression, NormalPattern, PatternElement, PostfixKind, SingleLocationExpression,
+    MutableReferenceKind, UnaryOperatorKind,
 };
 use swamp_semantic::{ExternalFunctionId, Postfix};
-use swamp_types::{EnumVariantType, Type, TypeForParameter, same_anon_struct_ref};
+use swamp_types::{same_anon_struct_ref, EnumVariantType, Type, TypeForParameter};
 
 impl From<ValueError> for RuntimeError {
     fn from(value: ValueError) -> Self {
@@ -426,8 +426,8 @@ impl<'a, C> Interpreter<'a, C> {
         )?;
 
         let converted_value_ref = match &found_location_expr.kind {
-            SingleLocationExpressionKind::MutVariableRef => value_ref,
-            SingleLocationExpressionKind::MutStructFieldRef(_base_expression, _resolved_access) => {
+            MutableReferenceKind::MutVariableRef => value_ref,
+            MutableReferenceKind::MutStructFieldRef(_base_expression, _resolved_access) => {
                 value_ref
             }
         };
@@ -437,7 +437,7 @@ impl<'a, C> Interpreter<'a, C> {
 
     fn evaluate_mut_or_immutable_expression(
         &mut self,
-        expr: &MutOrImmutableExpression,
+        expr: &MutReferenceOrImmutableExpression,
     ) -> Result<VariableValue, RuntimeError> {
         let var_value = match &expr.expression_or_location {
             ArgumentExpressionOrLocation::Location(loc) => {
@@ -839,22 +839,34 @@ impl<'a, C> Interpreter<'a, C> {
 
             // ==================== ASSIGNMENT ====================
             ExpressionKind::VariableDefinition(target_var, source_expr) => {
+                let source_value_or_reference = self.evaluate_expression(source_expr)?;
+
+                self.current_block_scopes.initialize_var(
+                    target_var.scope_index,
+                    target_var.variable_index,
+                    source_value_or_reference.clone(),
+                    target_var.is_mutable(),
+                );
+
+                source_value_or_reference
+            }
+            ExpressionKind::VariableReassignment(variable_ref, source_expr) => {
+                let new_value = self.evaluate_expression(source_expr)?;
+
+                self.current_block_scopes
+                    .overwrite_existing_var(variable_ref, new_value)?;
+
+                Value::Unit
+            }
+
+            ExpressionKind::VariableBinding(target_var, source_expr) => {
                 let source_value_or_reference =
                     self.evaluate_mut_or_immutable_expression(source_expr)?;
 
                 self.current_block_scopes
                     .initialize_var_mem(target_var, source_value_or_reference.clone())?;
 
-                source_value_or_reference.to_value().clone()
-            }
-
-            ExpressionKind::VariableReassignment(variable_ref, source_expr) => {
-                let new_value = self.evaluate_mut_or_immutable_expression(source_expr)?;
-
-                self.current_block_scopes
-                    .overwrite_existing_var_mem(variable_ref, new_value)?;
-
-                Value::Unit
+                source_value_or_reference.to_value()
             }
             // ------------- LOOKUP ---------------------
             ExpressionKind::ConstantAccess(constant) => {

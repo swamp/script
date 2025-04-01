@@ -149,7 +149,7 @@ function_call_postfix = ${ generic_arguments? ~ function_call_args }
 // No whitespace allowed before this rule
 
 function_call_args = {
-    "(" ~ (mut_expression ~ (COMMA ~ mut_expression)* ~ TRAILING_COMMA)? ~ ")"
+    "(" ~ (ref_mut_expression ~ (COMMA ~ ref_mut_expression)* ~ TRAILING_COMMA)? ~ ")"
 }
 
 subscript_postfix     = { "[" ~ expression ~ "]" }
@@ -346,7 +346,7 @@ return_type    = { "->" ~ type_name }
     Loop Constructs and Control Flow
     =============================================================
 */
-for_loop    = {  "for"  ~ for_pattern   ~ "in"  ~ mut_expression ~ ("|" ~ guard_clause)? ~ expression }
+for_loop    = {  "for"  ~ for_pattern   ~ "in"  ~ ref_mut_expression ~ ("|" ~ guard_clause)? ~ expression }
 for_pattern = { for_pair | maybe_mut_identifier }
 for_pair    = { maybe_mut_identifier ~ COMMA ~ maybe_mut_identifier }
 
@@ -359,7 +359,7 @@ while_loop = { "while"  ~ expression ~ expression }
     =============================================================
 */
 variable_definition = {
-    variable_item ~ type_coerce? ~ "=" ~ mut_expression
+    variable_item ~ type_coerce? ~ "=" ~ expression
 }
 type_coerce         = { ":" ~ type_name }
 
@@ -378,9 +378,8 @@ mul_assign_op      = { "*=" }
 div_assign_op      = { "/=" }
 modulo_assign_op   = { "%=" }
 
-lvalue = { mut_keyword ~ postfix }
-// TODO: is ! negative lookahead needed here?
-mut_expression = !{ lvalue | expression }
+reference_mut_op = { "&" }
+ref_mut_expression = { reference_mut_op? ~ expression }
 
 /*
     =============================================================
@@ -431,17 +430,16 @@ lambda = {
 constant_reference = {  module_segments? ~ constant_identifier }
 
 if_expr = { "if" ~ expression ~ expression ~ ("else" ~ (if_expr | expression))? }
-// TODO: is second if_expr needed?
 block     = { "{" ~ expression* ~ "}" }
 with_expr = { "with" ~ variable_binding_list ~ expression }
-when_expr = { "when" ~ variable_when_binding_list ~ expression ~ ("else" ~ expression)? }
+when_expr = { "when" ~ variable_binding_list ~ expression ~ ("else" ~ expression)? }
 
 /*
     =============================================================
     Match Expressions
     =============================================================
 */
-match_expr = { "match" ~ mut_expression ~ "{" ~ match_arms ~ "}" }
+match_expr = { "match" ~ ref_mut_expression ~ "{" ~ match_arms ~ "}" }
 match_arms = { match_arm ~ (COMMA ~ match_arm)* ~ TRAILING_COMMA }
 match_arm  = { match_pattern ~ "=>" ~ expression }
 
@@ -484,6 +482,5 @@ at_least_two_variables_list        = { variable_item ~ (COMMA ~ variable_item)+ 
 maybe_mut_identifier       = { mut_keyword? ~ identifier }
 variable_item              = { maybe_mut_identifier }
 variable_binding_list      = { variable_binding ~ (COMMA ~ variable_binding)* ~ TRAILING_COMMA }
-variable_binding           = { variable_item ~ ("=" ~ mut_expression)? }
-variable_when_binding_list = { variable_when_binding ~ (COMMA ~ variable_when_binding)* ~ TRAILING_COMMA }
-variable_when_binding      = { variable_item ~ ("=" ~ mut_expression)? }
+variable_binding           = { variable_item ~ ("=" ~ ref_mut_expression)? }
+

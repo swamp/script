@@ -10,8 +10,8 @@ use swamp_modules::modules::{ModuleRef, Modules};
 use swamp_modules::symtbl::{FuncDef, Symbol, SymbolTable, TypeGenerator};
 use swamp_semantic::prelude::*;
 use swamp_semantic::{
-    ArgumentExpressionOrLocation, AssociatedImpls, MutOrImmutableExpression, Postfix, PostfixKind,
-    SingleLocationExpression, SingleLocationExpressionKind, SingleMutLocationExpression,
+    ArgumentExpressionOrLocation, AssociatedImpls, MutReferenceOrImmutableExpression, Postfix, PostfixKind,
+    SingleLocationExpression, MutableReferenceKind, SingleMutLocationExpression,
 };
 use swamp_types::*;
 use yansi::{Color, Paint};
@@ -358,7 +358,7 @@ impl SourceMapDisplay<'_> {
     fn show_mut_or_not_expression(
         &self,
         f: &mut Formatter,
-        mut_expr: &MutOrImmutableExpression,
+        mut_expr: &MutReferenceOrImmutableExpression,
         tabs: usize,
     ) -> std::fmt::Result {
         if mut_expr.is_mutable.is_some() {
@@ -418,7 +418,7 @@ impl SourceMapDisplay<'_> {
                     "let {} = ",
                     self.source_map.get_text(&a.name).bright_blue()
                 )?;
-                self.show_mut_or_not_expression(f, b, tabs)
+                self.show_expression(f, b, tabs)
             }
             ExpressionKind::VariableReassignment(_, _) => {
                 write!(f, "VariableReassignment()")
@@ -933,8 +933,8 @@ impl SourceMapDisplay<'_> {
         self.show_variable(f, &location.starting_variable)?;
         //  self.show_type(f, &location.ty, tabs);
         match location.kind {
-            SingleLocationExpressionKind::MutStructFieldRef(..) => write!(f, "mut_struct_field"),
-            SingleLocationExpressionKind::MutVariableRef => write!(f, "mut_var"),
+            MutableReferenceKind::MutStructFieldRef(..) => write!(f, "mut_struct_field"),
+            MutableReferenceKind::MutVariableRef => write!(f, "mut_var"),
         }
     }
 

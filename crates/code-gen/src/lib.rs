@@ -25,7 +25,7 @@ use swamp_semantic::{
     AnonymousStructLiteral, ArgumentExpressionOrLocation, BinaryOperator, BinaryOperatorKind,
     BooleanExpression, CompoundOperatorKind, ConstantId, ConstantRef, EnumLiteralData, Expression,
     ExpressionKind, ForPattern, Function, Guard, InternalFunctionDefinitionRef, InternalFunctionId,
-    InternalMainExpression, Iterable, Literal, Match, MutOrImmutableExpression, NormalPattern,
+    InternalMainExpression, Iterable, Literal, Match, MutReferenceOrImmutableExpression, NormalPattern,
     Pattern, Postfix, PostfixKind, SingleLocationExpression, SingleMutLocationExpression,
     StructInstantiation, UnaryOperator, UnaryOperatorKind, VariableRef, WhenBinding,
 };
@@ -1057,7 +1057,26 @@ impl FunctionCodeGen<'_> {
     fn gen_variable_assignment(
         &mut self,
         variable: &VariableRef,
-        mut_or_immutable_expression: &MutOrImmutableExpression,
+        expression: &Expression,
+        ctx: &Context,
+    ) -> Result<(), Error> {
+        let target_relative_frame_pointer = self
+            .variable_offsets
+            .get(&variable.unique_id_within_function)
+            .unwrap_or_else(|| panic!("{}", variable.assigned_name));
+
+        let init_ctx =
+            ctx.with_target(*target_relative_frame_pointer, "variable assignment target");
+
+        let _ = self.gen_expression(expression, &init_ctx)?;
+
+        Ok(())
+    }
+
+    fn gen_variable_binding(
+        &mut self,
+        variable: &VariableRef,
+        mut_or_immutable_expression: &MutReferenceOrImmutableExpression,
         ctx: &Context,
     ) -> Result<(), Error> {
         let target_relative_frame_pointer = self
@@ -1089,19 +1108,19 @@ impl FunctionCodeGen<'_> {
     fn gen_variable_definition(
         &mut self,
         variable: &VariableRef,
-        mut_or_immutable_expression: &MutOrImmutableExpression,
+        expression: &Expression,
         ctx: &Context,
     ) -> Result<(), Error> {
-        self.gen_variable_assignment(variable, mut_or_immutable_expression, ctx)
+        self.gen_variable_assignment(variable, expression, ctx)
     }
 
     fn gen_variable_reassignment(
         &mut self,
         variable: &VariableRef,
-        mut_or_immutable_expression: &Box<MutOrImmutableExpression>,
+        expression: &Expression,
         ctx: &Context,
     ) -> Result<(), Error> {
-        self.gen_variable_assignment(variable, mut_or_immutable_expression, ctx)
+        self.gen_variable_assignment(variable, expression, ctx)
     }
 
     fn copy_back_mutable_arguments(
@@ -1548,7 +1567,7 @@ impl FunctionCodeGen<'_> {
     fn gen_for_loop_vec(
         &mut self,
         for_pattern: &ForPattern,
-        collection_expr: &MutOrImmutableExpression,
+        collection_expr: &MutReferenceOrImmutableExpression,
     ) -> Result<(InstructionPosition, PatchPosition), Error> {
         let collection_region = self.gen_for_access_or_location(collection_expr)?;
 

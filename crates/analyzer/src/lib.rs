@@ -29,8 +29,8 @@ use swamp_semantic::prelude::*;
 use swamp_semantic::type_var_stack::SemanticContext;
 use swamp_semantic::{
     ArgumentExpressionOrLocation, BlockScope, BlockScopeMode, FunctionScopeState,
-    InternalMainExpression, LocationAccess, LocationAccessKind, MutOrImmutableExpression,
-    NormalPattern, Postfix, PostfixKind, SingleLocationExpression, SingleLocationExpressionKind,
+    InternalMainExpression, LocationAccess, LocationAccessKind, MutReferenceOrImmutableExpression,
+    NormalPattern, Postfix, PostfixKind, SingleLocationExpression, MutableReferenceKind,
     SingleMutLocationExpression, TypeWithMut, WhenBinding,
 };
 use swamp_types::all_types_are_concrete_or_unit;
@@ -1126,12 +1126,12 @@ impl<'a> Analyzer<'a> {
     fn analyze_iterable(
         &mut self,
         force_mut: Option<swamp_ast::Node>,
-        expression: &swamp_ast::MutableOrImmutableExpression,
+        expression: &swamp_ast::MutableReferenceOrImmutableExpression,
     ) -> Result<Iterable, Error> {
         let any_context = TypeContext::new_anything_argument();
-        let resolved_expression: MutOrImmutableExpression = if force_mut.is_some() {
+        let resolved_expression: MutReferenceOrImmutableExpression = if force_mut.is_some() {
             let resolved_node = self.to_node(&force_mut.unwrap());
-            MutOrImmutableExpression {
+            MutReferenceOrImmutableExpression {
                 expression_or_location: ArgumentExpressionOrLocation::Location(
                     self.analyze_to_location(
                         &expression.expression,
@@ -1373,7 +1373,7 @@ impl<'a> Analyzer<'a> {
 
     fn analyze_match(
         &mut self,
-        scrutinee: &swamp_ast::MutableOrImmutableExpression,
+        scrutinee: &swamp_ast::MutableReferenceOrImmutableExpression,
         default_context: &TypeContext,
         arms: &Vec<swamp_ast::MatchArm>,
     ) -> Result<(Match, Type), Error> {
@@ -1441,7 +1441,7 @@ impl<'a> Analyzer<'a> {
     fn analyze_arm(
         &mut self,
         arm: &swamp_ast::MatchArm,
-        _expression: &MutOrImmutableExpression,
+        _expression: &MutReferenceOrImmutableExpression,
         type_context: &TypeContext,
         expected_condition_type: &Type,
     ) -> Result<(MatchArm, bool), Error> {
@@ -1639,8 +1639,29 @@ impl<'a> Analyzer<'a> {
 
         for variable in variables {
             let any_context = TypeContext::new_anything_argument();
+
+            /*
+
+            */
+
+            let must_have_expression = if let Some(x) = &variable.expression {
+                x
+            } else {
+                &swamp_ast::MutableReferenceOrImmutableExpression {
+                    is_mutable: None,
+                    expression: swamp_ast::Expression {
+                        kind: swamp_ast::ExpressionKind::VariableReference(
+                            variable.variable.clone(),
+                        ),
+                        node: variable.variable.name.clone(),
+                    },
+                }
+
+                // self.create_expr(ExpressionKind::VariableAccess())
+            };
+
             let var = self.analyze_mut_or_immutable_expression(
-                &variable.expression,
+                &must_have_expression,
                 &any_context,
                 LocationSide::Rhs,
             )?;
@@ -1672,7 +1693,7 @@ impl<'a> Analyzer<'a> {
     fn analyze_when_expr(
         &mut self,
         context: &TypeContext,
-        variables: &[swamp_ast::WhenBinding],
+        variables: &[swamp_ast::VariableBinding],
         true_expr: &swamp_ast::Expression,
         else_expr: Option<&swamp_ast::Expression>,
     ) -> Result<Expression, Error> {
@@ -1693,7 +1714,7 @@ impl<'a> Analyzer<'a> {
                 let is_mutable = same_var.mutable_node.clone();
                 let argument_expression = if same_var.is_mutable() {
                     let loc = SingleLocationExpression {
-                        kind: SingleLocationExpressionKind::MutVariableRef,
+                        kind: MutableReferenceKind::MutVariableRef,
                         node: self.to_node(&variable_binding.variable.name),
                         ty: Type::MutableReference(Box::from(same_var.resolved_type.clone())),
                         starting_variable: same_var,
@@ -1710,7 +1731,7 @@ impl<'a> Analyzer<'a> {
                     ArgumentExpressionOrLocation::Expression(generated_expression)
                 };
 
-                MutOrImmutableExpression {
+                MutReferenceOrImmutableExpression {
                     expression_or_location: argument_expression,
                     is_mutable,
                 }
@@ -1862,7 +1883,7 @@ impl<'a> Analyzer<'a> {
     pub fn analyze_variable_assignment(
         &mut self,
         variable: &swamp_ast::Variable,
-        source_expression: &swamp_ast::MutableOrImmutableExpression,
+        source_expression: &swamp_ast::Expression,
     ) -> Result<Expression, Error> {
         let maybe_found_variable = self.try_find_variable(&variable.name);
 
@@ -1872,12 +1893,11 @@ impl<'a> Analyzer<'a> {
 
         let context = TypeContext::new_unsure_argument(required_type.as_ref());
 
-        let source_expr = self.analyze_mut_or_immutable_expression(
+        let source_expr = self.analyze_expression(
             source_expression,
             &context,
-            LocationSide::Rhs,
         )?;
-        let ty = source_expr.ty().clone();
+        let ty = source_expr.ty.clone();
         if !ty.is_concrete() {
             return Err(self.create_err(ErrorKind::VariableTypeMustBeConcrete, &variable.name));
         }
@@ -1908,7 +1928,7 @@ impl<'a> Analyzer<'a> {
         &mut self,
         var: &swamp_ast::Variable,
         annotation_type: Option<&swamp_ast::Type>,
-        source_expression: &swamp_ast::MutableOrImmutableExpression,
+        source_expression: &swamp_ast::Expression,
     ) -> Result<Expression, Error> {
         let ty = if let Some(found_ast_type) = annotation_type {
             Some(self.analyze_type(found_ast_type)?)
@@ -1918,19 +1938,18 @@ impl<'a> Analyzer<'a> {
 
         let unsure_arg_context = TypeContext::new_unsure_argument(ty.as_ref());
 
-        let resolved_source = self.analyze_mut_or_immutable_expression(
+        let resolved_source = self.analyze_expression(
             source_expression,
             &unsure_arg_context,
-            LocationSide::Rhs,
         )?;
 
         let var_ref = self.create_local_variable(
             &var.name,
             Option::from(&var.is_mutable),
-            resolved_source.ty(),
+            &resolved_source.ty,
         )?;
 
-        let resolved_type = resolved_source.ty().clone();
+        let resolved_type = resolved_source.ty.clone();
         assert_ne!(resolved_type, Type::Unit);
         let kind = ExpressionKind::VariableDefinition(var_ref, Box::from(resolved_source));
 
@@ -2086,7 +2105,7 @@ impl<'a> Analyzer<'a> {
         }
 
         let location = SingleLocationExpression {
-            kind: SingleLocationExpressionKind::MutVariableRef,
+            kind: MutableReferenceKind::MutVariableRef,
             node: self.to_node(&chain.base.node),
             ty,
             starting_variable: start_variable,
@@ -2109,7 +2128,7 @@ impl<'a> Analyzer<'a> {
                 let var = self.find_variable(variable)?;
                 if var.is_mutable() {
                     Ok(SingleLocationExpression {
-                        kind: SingleLocationExpressionKind::MutVariableRef,
+                        kind: MutableReferenceKind::MutVariableRef,
                         node: self.to_node(&variable.name),
                         ty: Type::MutableReference(Box::from(var.resolved_type.clone())),
                         starting_variable: var,
@@ -2127,7 +2146,7 @@ impl<'a> Analyzer<'a> {
                 let var = self.find_variable(&generated_var)?;
                 if var.is_mutable() {
                     Ok(SingleLocationExpression {
-                        kind: SingleLocationExpressionKind::MutVariableRef,
+                        kind: MutableReferenceKind::MutVariableRef,
                         node: self.to_node(&generated_var.name),
                         ty: Type::MutableReference(Box::from(var.resolved_type.clone())),
                         starting_variable: var,
@@ -2260,7 +2279,7 @@ impl<'a> Analyzer<'a> {
         is_mutable: bool,
         member_name: &swamp_ast::Node,
         ast_maybe_generic_arguments: Option<Vec<swamp_ast::Type>>,
-        arguments: &[swamp_ast::MutableOrImmutableExpression],
+        arguments: &[swamp_ast::MutableReferenceOrImmutableExpression],
         suffixes: &mut Vec<Postfix>,
     ) -> Result<Type, Error> {
         let field_name_str = self.get_text(member_name).to_string();

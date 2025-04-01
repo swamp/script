@@ -7,21 +7,21 @@ use crate::alloc::FrameMemoryRegion;
 use crate::ctx::Context;
 use crate::{Error, FunctionCodeGen};
 use swamp_semantic::{
-    ArgumentExpressionOrLocation, LocationAccessKind, MutOrImmutableExpression,
+    ArgumentExpressionOrLocation, LocationAccessKind, MutReferenceOrImmutableExpression,
     SingleLocationExpression,
 };
 
 impl FunctionCodeGen<'_> {
     pub(crate) fn gen_for_access_or_location(
         &mut self,
-        mut_or_immutable_expression: &MutOrImmutableExpression,
+        mut_or_immutable_expression: &MutReferenceOrImmutableExpression,
     ) -> Result<FrameMemoryRegion, Error> {
         self.gen_for_access_or_location_ex(&mut_or_immutable_expression.expression_or_location)
     }
 
     pub(crate) fn gen_mut_or_immute(
         &mut self,
-        mut_or_immutable_expression: &MutOrImmutableExpression,
+        mut_or_immutable_expression: &MutReferenceOrImmutableExpression,
         ctx: &Context,
     ) -> Result<(), Error> {
         match &mut_or_immutable_expression.expression_or_location {

@@ -279,7 +279,7 @@ impl ForPattern {
 
 #[derive(Debug, Clone)]
 pub struct IterableExpression {
-    pub expression: Box<MutableOrImmutableExpression>,
+    pub expression: Box<MutableReferenceOrImmutableExpression>,
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -291,13 +291,7 @@ pub struct Variable {
 #[derive(Debug, Clone)]
 pub struct VariableBinding {
     pub variable: Variable,
-    pub expression: MutableOrImmutableExpression,
-}
-
-#[derive(Debug, Clone)]
-pub struct WhenBinding {
-    pub variable: Variable,
-    pub expression: Option<MutableOrImmutableExpression>,
+    pub expression: Option<MutableReferenceOrImmutableExpression>,
 }
 
 impl Variable {
@@ -380,7 +374,7 @@ pub enum RangeMode {
 }
 
 #[derive(Debug, Clone)]
-pub struct MutableOrImmutableExpression {
+pub struct MutableReferenceOrImmutableExpression {
     pub is_mutable: Option<Node>,
     pub expression: Expression,
 }
@@ -401,8 +395,16 @@ impl Debug for Expression {
 pub enum Postfix {
     FieldAccess(Node),
     Subscript(Expression),
-    MemberCall(Node, Option<Vec<Type>>, Vec<MutableOrImmutableExpression>),
-    FunctionCall(Node, Option<Vec<Type>>, Vec<MutableOrImmutableExpression>),
+    MemberCall(
+        Node,
+        Option<Vec<Type>>,
+        Vec<MutableReferenceOrImmutableExpression>,
+    ),
+    FunctionCall(
+        Node,
+        Option<Vec<Type>>,
+        Vec<MutableReferenceOrImmutableExpression>,
+    ),
     OptionalChainingOperator(Node),     // ?-postfix
     NoneCoalescingOperator(Expression), // ??-postfix
 }
@@ -426,8 +428,8 @@ pub enum ExpressionKind {
     IdentifierReference(QualifiedIdentifier),
 
     // Assignments
-    VariableDefinition(Variable, Option<Type>, Box<MutableOrImmutableExpression>),
-    VariableAssignment(Variable, Box<MutableOrImmutableExpression>),
+    VariableDefinition(Variable, Option<Type>, Box<Expression>),
+    VariableAssignment(Variable, Box<Expression>),
     Assignment(Box<Expression>, Box<Expression>),
     CompoundAssignment(Box<Expression>, CompoundOperator, Box<Expression>),
     DestructuringAssignment(Vec<Variable>, Box<Expression>),
@@ -439,7 +441,11 @@ pub enum ExpressionKind {
     //
     Block(Vec<Expression>),
     With(Vec<VariableBinding>, Box<Expression>),
-    When(Vec<WhenBinding>, Box<Expression>, Option<Box<Expression>>),
+    When(
+        Vec<VariableBinding>,
+        Box<Expression>,
+        Option<Box<Expression>>,
+    ),
 
     // Control flow
     ForLoop(
@@ -452,7 +458,7 @@ pub enum ExpressionKind {
 
     // Compare and Matching
     If(Box<Expression>, Box<Expression>, Option<Box<Expression>>),
-    Match(Box<MutableOrImmutableExpression>, Vec<MatchArm>),
+    Match(Box<MutableReferenceOrImmutableExpression>, Vec<MatchArm>),
     Guard(Vec<GuardExpr>),
 
     InterpolatedString(Vec<StringPart>),
